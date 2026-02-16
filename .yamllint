@@ -1,0 +1,19 @@
+extends: default
+
+rules:
+  line-length:
+    max: 140
+    level: warning
+
+  truthy:
+    allowed-values: ["true", "false", "yes", "no", "on", "off"]
+
+  comments:
+    min-spaces-from-content: 1
+
+ignore: |
+  .git/
+  .github/
+  **/.venv/
+  **/venv/
+  **/__pycache__/
