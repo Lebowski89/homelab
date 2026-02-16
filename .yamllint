@@ -1,0 +1,14 @@
+extends: default
+
+rules:
+  line-length:
+    max: 140
+    level: warning
+
+ignore: |
+  .git/
+  .github/
+  ansible-venv/
+  discards/
+  roles/**/templates/
+  **/*.j2

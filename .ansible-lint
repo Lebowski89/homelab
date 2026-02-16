@@ -1,0 +1,10 @@
+profile: production
+
+exclude_paths:
+  - .git/
+  - .github/
+  - ansible-venv/
+  - discards/
+
+skip_list:
+  - yaml[line-length]
