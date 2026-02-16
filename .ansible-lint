@@ -1,0 +1,12 @@
+profile: production
+
+exclude_paths:
+  - .git/
+  - .github/
+  - "**/.venv/"
+  - "**/venv/"
+  - "**/__pycache__/"
+
+# If you use collections/roles locally, keep this.
+skip_list:
+  - yaml[line-length]   # let yamllint handle line length
