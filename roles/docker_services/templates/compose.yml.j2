@@ -1,0 +1,385 @@
+{%- macro include_safe(path, indent=0) -%}
+{%- set raw = lookup('template', path) | default('') -%}
+{%- set content = (raw if raw is string else '') | trim -%}
+{%- if content | length > 0 -%}
+{{ content | indent(indent, true) }}
+{%- endif -%}
+{%- endmacro -%}
+
+{# ------------------------------------------------ #}
+{# Stack-scoped defaults (Pattern A)                #}
+{# ------------------------------------------------ #}
+{# Prefer deploy_stack_type (passed by deploy task) #}
+{%- set _stack_type = (deploy_stack_type | default(stack_deploy_type | default('swarm', true), true) | string | trim) -%}
+
+{# Prefer stack-scoped network/volume dicts if passed in #}
+{%- set _stack_networks = (stack_networks | default({}, true)) -%}
+{%- set _stack_volumes  = (stack_volumes  | default({}, true)) -%}
+
+services:
+{% for service_name, svc in compose_services.items() %}
+  {{ service_name }}:
+    image: "{{ svc.image }}"
+{% if svc.container_name is defined and (svc.container_name | string | trim | length > 0) and _stack_type != 'swarm' %}
+    container_name: "{{ svc.container_name }}"
+{% endif %}
+{% if svc.pid is defined and (svc.pid | string | trim | length > 0) and _stack_type != 'swarm' %}
+    pid: {{ svc.pid }}
+{% endif %}
+    logging:
+      driver: "{{ svc.logging.driver }}"
+      options:
+{% for key, value in svc.logging.options.items() %}
+        {{ key }}: "{{ value }}"
+{% endfor %}
+{% if svc.network_mode is defined and (svc.network_mode | string | trim | length > 0) %}
+    network_mode: "{{ svc.network_mode }}"
+{% elif svc.networks is defined and (svc.networks | length > 0) %}
+    networks:
+{% for net in svc.networks %}
+      - {{ net }}
+{% endfor %}
+{% endif %}
+{% if svc.security_opt is defined and (svc.security_opt | length > 0) %}
+    security_opt:
+{% for opt in svc.security_opt %}
+      - "{{ opt }}"
+{% endfor %}
+{% endif %}
+{% if svc.depends_on is defined and (svc.depends_on | length > 0) %}
+    depends_on:
+{% for dep in svc.depends_on %}
+      - {{ dep }}
+{% endfor %}
+{% endif %}
+{% if svc.cap_add is defined and (svc.cap_add | length > 0) %}
+    cap_add:
+{% for cap in svc.cap_add %}
+      - {{ cap }}
+{% endfor %}
+{% endif %}
+{% if svc.cap_drop is defined and (svc.cap_drop | length > 0) %}
+    cap_drop:
+{% for cap in svc.cap_drop %}
+      - {{ cap }}
+{% endfor %}
+{% endif %}
+{% if svc.devices is defined and (svc.devices | length > 0) %}
+    devices:
+{% for dev in svc.devices %}
+      - {{ dev }}
+{% endfor %}
+{% endif %}
+
+{% if svc.healthcheck is defined
+   and svc.healthcheck.test is defined
+   and (
+     (svc.healthcheck.test is sequence and svc.healthcheck.test is not string and (svc.healthcheck.test | length > 0))
+     or
+     (svc.healthcheck.test is string and (svc.healthcheck.test | trim | length > 0))
+   )
+%}
+    healthcheck:
+{% if svc.healthcheck.test is sequence and svc.healthcheck.test is not string %}
+      test: {{ svc.healthcheck.test }}
+{% else %}
+      test: ["CMD-SHELL", "{{ svc.healthcheck.test | string | trim }}"]
+{% endif %}
+{% if svc.healthcheck.interval is defined and (svc.healthcheck.interval | string | trim | length > 0) %}
+      interval: {{ svc.healthcheck.interval }}
+{% endif %}
+{% if svc.healthcheck.timeout is defined and (svc.healthcheck.timeout | string | trim | length > 0) %}
+      timeout: {{ svc.healthcheck.timeout }}
+{% endif %}
+{% if svc.healthcheck.retries is defined %}
+      retries: {{ svc.healthcheck.retries }}
+{% endif %}
+{% if svc.healthcheck.start_period is defined and (svc.healthcheck.start_period | string | trim | length > 0) %}
+      start_period: {{ svc.healthcheck.start_period }}
+{% endif %}
+{% endif %}
+
+{% if svc.command is defined %}
+    command:
+{% if svc.command is string %}
+      {{ svc.command }}
+{% elif svc.command is iterable and (svc.command | length > 0) %}
+{% for cmd in svc.command %}
+      - "{{ cmd }}"
+{% endfor %}
+{% endif %}
+{% endif %}
+
+{% if svc.user is defined and (svc.user | string | trim | length > 0) %}
+    user: "{{ svc.user }}"
+{% endif %}
+
+{% if svc.environment is defined and (svc.environment | length > 0) %}
+    environment:
+{% for key, value in svc.environment.items() %}
+      {{ key }}: {{ value | to_json }}
+{% endfor %}
+{% endif %}
+
+{% if svc.env_file is defined and svc.env_file %}
+    env_file:
+{% if svc.env_file is string %}
+      - "{{ svc.env_file }}"
+{% else %}
+{% for f in svc.env_file %}
+      - "{{ f }}"
+{% endfor %}
+{% endif %}
+{% endif %}
+
+{% if svc.secrets is defined and (svc.secrets | length > 0) %}
+    secrets:
+{% for secret_name in svc.secrets %}
+      - source: {{ secret_name }}
+        target: {{ secret_name }}
+{% endfor %}
+{% endif %}
+
+{% if svc.ports is defined and (svc.ports | length > 0) %}
+    ports:
+{% for port in svc.ports %}
+{% if _stack_type != 'swarm' %}
+      - "{{ port.published }}:{{ port.target }}{{ ('/' ~ (port.protocol | default('tcp', true) | string | trim | lower)) if ((port.protocol | default('tcp', true) | string | trim | lower) != 'tcp') else '' }}"
+{% else %}
+      - target: {{ port.target }}
+        published: {{ port.published }}
+        protocol: {{ port.protocol | default('tcp', true) | string | trim | lower }}
+{% if port.mode is defined and (port.mode | string | trim | length > 0) %}
+        mode: {{ port.mode | string | trim }}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if svc.shm_size is defined and (svc.shm_size | string | trim | length > 0) %}
+    shm_size: "{{ svc.shm_size }}"
+{% endif %}
+
+{% if svc.volumes is defined and (svc.volumes | length > 0) %}
+    volumes:
+{% for vol in svc.volumes %}
+{% set _vtype = (vol.type | default('bind', true) | string | trim) %}
+{% if _vtype == 'bind' %}
+{% if _stack_type != 'swarm' %}
+      - "{{ vol.source }}:{{ vol.target }}{{ ':ro' if (vol.read_only | default(false)) else '' }}"
+{% else %}
+      - type: bind
+        source: {{ vol.source }}
+        target: {{ vol.target }}
+        read_only: {{ (vol.read_only | default(false)) | bool | lower }}
+{% endif %}
+{% elif _vtype == 'volume' %}
+{% if _stack_type != 'swarm' %}
+      - "{{ vol.source }}:{{ vol.target }}{{ ':ro' if (vol.read_only | default(false)) else '' }}"
+{% else %}
+      - type: volume
+        source: {{ vol.source }}
+        target: {{ vol.target }}
+        read_only: {{ (vol.read_only | default(false)) | bool | lower }}
+{% endif %}
+{% elif _vtype == 'tmpfs' %}
+{% if _stack_type != 'swarm' %}
+      - "{{ vol.target }}:tmpfs"
+{% else %}
+      - type: tmpfs
+        target: {{ vol.target }}
+        tmpfs:
+{% for k, v in vol.tmpfs.items() %}
+          {{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
+{% else %}
+{% if vol.host is defined and vol.container is defined %}
+      - "{{ vol.host }}:{{ vol.container }}"
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if _stack_type == 'swarm' and svc.configs is defined and (svc.configs | length > 0) %}
+    configs:
+{% for c in svc.configs %}
+      - source: {{ c.source }}
+{% if c.target is defined and (c.target | string | trim | length > 0) %}
+        target: {{ c.target }}
+{% endif %}
+{% if c.mode is defined %}
+        mode: {{ c.mode }}
+{% endif %}
+{% if c.uid is defined %}
+        uid: "{{ c.uid }}"
+{% endif %}
+{% if c.gid is defined %}
+        gid: "{{ c.gid }}"
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% if _stack_type == 'swarm' %}
+{% if svc.deploy is defined or (svc.labels is defined and (svc.labels | length > 0)) %}
+    deploy:
+{% if svc.deploy is defined and svc.deploy.mode is defined %}
+      mode: {{ svc.deploy.mode }}
+{% endif %}
+{% if svc.deploy is defined and svc.deploy.replicas is defined %}
+      replicas: {{ svc.deploy.replicas }}
+{% endif %}
+{% if svc.deploy is defined and svc.deploy.placement is defined and svc.deploy.placement.constraints is defined and (svc.deploy.placement.constraints | length > 0) %}
+      placement:
+        constraints:
+{% for c in svc.deploy.placement.constraints %}
+          - {{ c }}
+{% endfor %}
+{% endif %}
+{% if svc.deploy is defined and svc.deploy.restart_policy is defined and (svc.deploy.restart_policy | length > 0) %}
+      restart_policy:
+{% for k, v in svc.deploy.restart_policy.items() %}
+        {{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
+{% if svc.deploy is defined and svc.deploy.update_config is defined and (svc.deploy.update_config | length > 0) %}
+      update_config:
+{% for k, v in svc.deploy.update_config.items() %}
+        {{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
+{% if svc.deploy is defined and svc.deploy.rollback_config is defined and (svc.deploy.rollback_config | length > 0) %}
+      rollback_config:
+{% for k, v in svc.deploy.rollback_config.items() %}
+        {{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
+{% if svc.deploy is defined and svc.deploy.resources is defined and (svc.deploy.resources | length > 0) %}
+      resources:
+{% if svc.deploy.resources.limits is defined and (svc.deploy.resources.limits | length > 0) %}
+        limits:
+{% for k, v in svc.deploy.resources.limits.items() %}
+          {{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
+{% if svc.deploy.resources.reservations is defined and (svc.deploy.resources.reservations | length > 0) %}
+        reservations:
+{% for k, v in svc.deploy.resources.reservations.items() %}
+          {{ k }}: {{ v }}
+{% endfor %}
+{% endif %}
+{% endif %}
+{% if svc.labels is defined and (svc.labels | length > 0) %}
+      labels:
+{% for k, v in svc.labels.items() %}
+        {{ k }}: "{{ v }}"
+{% endfor %}
+{% endif %}
+{% endif %}
+{% else %}
+{% if svc.labels is defined and (svc.labels | length > 0) %}
+    labels:
+{% for k, v in svc.labels.items() %}
+      {{ k }}: "{{ v }}"
+{% endfor %}
+{% endif %}
+    restart: unless-stopped
+{% endif %}
+
+{% endfor %}
+
+{# ------------------------------- #}
+{# Top-level Networks              #}
+{# ------------------------------- #}
+{% if _stack_networks is defined and (_stack_networks is mapping) and (_stack_networks | length > 0) %}
+networks:
+{% for nname, ndef in (_stack_networks | dictsort) %}
+  {{ nname }}:
+{% set _external = (ndef.external | default(true)) | bool %}
+    external: {{ _external | lower }}
+{% if ndef.name is defined and (ndef.name | string | trim | length > 0) %}
+    name: "{{ ndef.name }}"
+{% endif %}
+{% if not _external %}
+{% if ndef.driver is defined and (ndef.driver | string | trim | length > 0) %}
+    driver: "{{ ndef.driver }}"
+{% endif %}
+{% if ndef.driver_opts is defined and (ndef.driver_opts is mapping) and (ndef.driver_opts | length > 0) %}
+    driver_opts:
+{% for k, v in (ndef.driver_opts | dictsort) %}
+      {{ k }}: "{{ v }}"
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{# ------------------------------- #}
+{# Top-level Volumes               #}
+{# ------------------------------- #}
+{% if _stack_volumes is defined and (_stack_volumes is mapping) and (_stack_volumes | length > 0) %}
+volumes:
+{% for vname, vdef in (_stack_volumes | dictsort) %}
+{% set _external = (vdef.external is not defined) or (vdef.external | bool) %}
+  {{ vname }}:
+    external: {{ _external | lower }}
+{% if vdef.name is defined and (vdef.name | string | trim | length > 0) %}
+    name: "{{ vdef.name }}"
+{% endif %}
+{% if not _external %}
+{% if vdef.driver is defined and (vdef.driver | string | trim | length > 0) %}
+    driver: "{{ vdef.driver }}"
+{% endif %}
+{% if vdef.driver_opts is defined and (vdef.driver_opts is mapping) and (vdef.driver_opts | length > 0) %}
+    driver_opts:
+{% for k, v in (vdef.driver_opts | dictsort) %}
+      {{ k }}: "{{ v }}"
+{% endfor %}
+{% endif %}
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{# ------------------------------- #}
+{# Top-level Configs               #}
+{# ------------------------------- #}
+{%- set all_service_configs = [] -%}
+{%- for _svc_name, _svc in compose_services.items() -%}
+{%- if _svc.configs is defined and (_svc.configs | length > 0) -%}
+{%- for c in _svc.configs -%}
+{%- if c.source is defined and (c.source not in all_service_configs) -%}
+{%- set _ = all_service_configs.append(c.source) -%}
+{%- endif -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endfor -%}
+
+{% if all_service_configs | length > 0 %}
+configs:
+{% for cfg_name in all_service_configs | sort %}
+  {{ cfg_name }}:
+    external: true
+{% endfor %}
+{% endif %}
+
+{# ------------------------------- #}
+{# Top-level Secrets               #}
+{# ------------------------------- #}
+{%- set all_service_secrets = [] -%}
+{%- for _svc_name, _svc in compose_services.items() -%}
+{%- if _svc.secrets is defined and (_svc.secrets | length > 0) -%}
+{%- for secret_name in _svc.secrets -%}
+{%- if secret_name not in all_service_secrets -%}
+{%- set _ = all_service_secrets.append(secret_name) -%}
+{%- endif -%}
+{%- endfor -%}
+{%- endif -%}
+{%- endfor -%}
+
+{% if all_service_secrets | length > 0 %}
+secrets:
+{% for secret_name in all_service_secrets | sort %}
+  {{ secret_name }}:
+    external: true
+{% endfor %}
+{% endif %}

@@ -1,0 +1,62 @@
+---
+
+- name: Preferences | Conduct preferences.xml tasks
+  block:
+    - name: Preferences | Default derived facts (safe defaults)
+      ansible.builtin.set_fact:
+        transcoder_path_fix: false
+        plex_server_claimed: false
+      delegate_facts: true
+
+    - name: Preferences | Check if Preferences.xml exists
+      ansible.builtin.stat:
+        path: "/opt/plex/Library/Application Support/Plex Media Server/Preferences.xml"
+      register: preferences_xml
+
+    - name: Preferences | Read Preferences.xml attributes
+      when: preferences_xml.stat.exists
+      community.general.xml:
+        path: "/opt/plex/Library/Application Support/Plex Media Server/Preferences.xml"
+        xpath: /Preferences
+        content: attribute
+      register: preferences_xml_resp
+
+    - name: Preferences | Remove Preferences.xml if malformed
+      when:
+        - preferences_xml.stat.exists
+        - preferences_xml_resp is failed
+      ansible.builtin.file:
+        path: "/opt/plex/Library/Application Support/Plex Media Server/Preferences.xml"
+        state: absent
+
+    - name: Preferences | Derive flags from Preferences.xml
+      when:
+        - preferences_xml.stat.exists
+        - preferences_xml_resp is succeeded
+        - (preferences_xml_resp.matches | default([]) | length) > 0
+      ansible.builtin.set_fact:
+        transcoder_path_fix: >-
+          {{
+            (preferences_xml_resp.matches[0].Preferences.TranscoderTempDirectory is defined)
+            and (preferences_xml_resp.matches[0].Preferences.TranscoderTempDirectory | trim == "/transcodes")
+          }}
+        plex_server_claimed: >-
+          {{
+            (preferences_xml_resp.matches[0].Preferences.PlexOnlineToken is defined)
+            and (preferences_xml_resp.matches[0].Preferences.PlexOnlineToken | trim | length > 0)
+          }}
+      delegate_facts: true
+
+    - name: Preferences | Fix "TranscoderTempDirectory"
+      when:
+        - preferences_xml.stat.exists
+        - (hostvars['localhost'].transcoder_path_fix | default(false)) | bool
+      community.general.xml:
+        path: "/opt/plex/Library/Application Support/Plex Media Server/Preferences.xml"
+        xpath: /Preferences
+        attribute: TranscoderTempDirectory
+        value: "/transcode"
+        state: present
+
+  delegate_to: "{{ _plex_host | default('plex') }}"
+  run_once: true

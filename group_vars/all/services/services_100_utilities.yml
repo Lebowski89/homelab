@@ -1,0 +1,215 @@
+---
+
+services_100_utilities:
+################################
+# ADMINER
+################################
+  adminer:
+    name: adminer
+    stack: utilities
+    image: adminer:5.4.1
+    named_networks:
+      overlay:
+        external: true
+    traefik:
+      enable: true
+      port: 8080
+      sso: authelia
+    deploy:
+      type: swarm
+      mode: replicated
+      replicas: 1
+      host: localhost
+      constraints:
+        - node.labels.ansible_host == localhost
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# CZKAWKA
+################################
+  czkawka:
+    name: czkawka
+    stack: utilities
+    image: jlesage/czkawka
+    named_networks:
+      overlay:
+        external: true 
+    environment:
+      TZ: "{{ timezone }}"
+      USER_ID: "99"
+      GROUP_ID: "100"
+      UMASK: "022"
+      DARK_MODE: "1"
+      WEB_FILE_MANAGER: "1"
+    paths:
+      - path: /mnt/user/appdata/czkawka
+        state: directory
+        owner: 99
+        group: 100
+        mode: 0755
+    volumes:
+      config:
+        type: bind
+        source: /mnt/user/appdata/czkawka
+        target: /config
+        read_only: false
+      media:
+        type: bind
+        source: /mnt/user/data
+        target: /storage
+        read_only: false
+    traefik:
+      enable: true
+      port: 5800
+      sso: authelia
+    deploy:
+      type: swarm
+      mode: replicated
+      replicas: 1
+      host: unraid
+      constraints:
+        - node.labels.ansible_host == unraid
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# DIUN
+################################
+  diun:
+    name: diun
+    stack: utilities
+    image: crazymax/diun:4.31.0
+    named_networks:
+      overlay:
+        external: true
+    command: serve
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+      LOG_LEVEL: "info"
+      DIUN_WATCH_WORKERS: "20"
+      DIUN_WATCH_SCHEDULE: "0 */6 * * *"
+      DIUN_WATCH_JITTER: "30s"
+      DIUN_PROVIDERS_SWARM: "true"
+      DIUN_PROVIDERS_SWARM_WATCHBYDEFAULT: "true"
+      DIUN_NOTIF_MAIL_HOST: "{{ smtp_host | default('__INFISICAL__:smtp_host', true) }}"
+      DIUN_NOTIF_MAIL_PORT: "{{ smtp_port | default('__INFISICAL__:smtp_port', true) }}"
+      DIUN_NOTIF_MAIL_SSL: "false"
+      DIUN_NOTIF_MAIL_USERNAMEFILE: /run/secrets/smtp_user_secret
+      DIUN_NOTIF_MAIL_PASSWORDFILE: /run/secrets/smtp_pass_secret
+      DIUN_NOTIF_MAIL_FROM: "{{ smtp_email | default('__INFISICAL__:smtp_email', true) }}"
+      DIUN_NOTIF_MAIL_TO: "{{ smtp_email | default('__INFISICAL__:smtp_email', true) }}"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: smtp_email, path: "/Porkbun", name: "SMTP_EMAIL" }      
+        - { var: smtp_host, path: "/Porkbun", name: "SMTP_HOST" }
+        - { var: smtp_username, path: "/Porkbun", name: "SMTP_USER", docker_secret: "smtp_user_secret" }
+        - { var: smtp_password, path: "/Porkbun", name: "SMTP_PASS", docker_secret: "smtp_pass_secret" }
+        - { var: smtp_port, path: "/Porkbun", name: "SMTP_PORT" }
+        - { var: smtp_sender, path: "/Porkbun", name: "SMTP_SENDER" }
+    secrets:
+      - smtp_user_secret
+      - smtp_pass_secret
+    paths:
+      - path: /opt/diun
+        state: directory
+        owner: 1000
+        group: 1000
+        mode: 0755
+    volumes:
+      config:
+        type: bind
+        source: /opt/diun
+        target: /data
+        read_only: false
+      docker_sock:
+        type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+    deploy:
+      type: swarm
+      mode: replicated
+      replicas: 1
+      host: localhost
+      constraints:
+        - node.labels.ansible_host == localhost
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# OMNI-TOOLS
+################################
+  omni_tools:
+    name: omni-tools
+    stack: utilities
+    image: iib0011/omni-tools:0.6.0
+    named_networks:
+      overlay:
+        external: true
+    traefik:
+      enable: true
+      port: 80
+      sso: authelia
+    deploy:
+      type: swarm
+      mode: global
+
+################################
+# THEMEPARK
+################################
+  themepark:
+    name: theme-park
+    stack: utilities
+    image: ghcr.io/themepark-dev/theme.park:1.22.0
+    named_networks:
+      overlay:
+        external: true 
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+    ports:
+      web:
+        published: 8089
+        target: 80
+        protocol: tcp
+        mode: ingress
+    paths:
+      - path: /opt/theme-park
+        state: directory
+        owner: 1000
+        group: 1000
+        mode: 0755
+    volumes:
+      config:
+        type: bind
+        source: /opt/theme-park
+        target: /config
+        read_only: false
+    deploy:
+      type: swarm
+      mode: replicated
+      replicas: 1
+      host: localhost
+      constraints:
+        - node.labels.ansible_host == localhost
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m

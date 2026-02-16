@@ -1,0 +1,81 @@
+---
+
+- name: Claim | Load token + client identifier from localhost facts
+  ansible.builtin.set_fact:
+    plex_auth_token: "{{ hostvars['localhost'].plex_auth_token | default('') }}"
+    plex_client_identifier: "{{ hostvars['localhost'].plex_client_identifier | default('') }}"
+
+- name: Claim | Assert required vars exist
+  ansible.builtin.assert:
+    that:
+      - plex_auth_token | string | trim | length > 0
+      - plex_client_identifier | string | trim | length > 0
+    fail_msg: >-
+      plex_auth_token and/or plex_client_identifier are missing on localhost.
+      Ensure token.yml ran first and stored these as facts on localhost.
+
+- name: Claim | Check if Plex server is already claimed (Preferences.xml)
+  ansible.builtin.stat:
+    path: "/opt/plex/Library/Application Support/Plex Media Server/Preferences.xml"
+  register: _prefs_stat
+
+- name: Claim | Read Preferences.xml (if it exists)
+  when: _prefs_stat.stat.exists
+  community.general.xml:
+    path: "/opt/plex/Library/Application Support/Plex Media Server/Preferences.xml"
+    xpath: /Preferences
+    content: attribute
+  register: _prefs_xml
+  failed_when: false
+
+- name: Claim | Determine claimed status
+  ansible.builtin.set_fact:
+    _plex_is_claimed: >-
+      {{
+        (_prefs_stat.stat.exists | bool)
+        and (_prefs_xml is succeeded)
+        and ((_prefs_xml.matches | default([])) | length > 0)
+        and (_prefs_xml.matches[0].Preferences.PlexOnlineToken is defined)
+        and (_prefs_xml.matches[0].Preferences.PlexOnlineToken | string | trim | length > 0)
+      }}
+
+- name: Claim | Request claim token from plex.tv (only if not claimed)
+  when: not _plex_is_claimed
+  ansible.builtin.uri:
+    url: "https://plex.tv/api/claim/token.json"
+    method: GET
+    return_content: true
+    body:
+      X-Plex-Version: "1.0.0"
+      X-Plex-Product: "plex"
+      X-Plex-Client-Identifier: "{{ plex_client_identifier }}"
+      X-Plex-Token: "{{ plex_auth_token }}"
+    body_format: form-urlencoded
+    headers:
+      Accept: "application/json"
+    status_code: 200
+  register: plex_claim
+
+- name: Claim | Persist claim code to localhost (so it is available everywhere)
+  when: not _plex_is_claimed
+  ansible.builtin.set_fact:
+    plex_claim_code: "{{ plex_claim.json.token | default('') | string | trim }}"
+  delegate_to: localhost
+  delegate_facts: true
+  run_once: true
+
+- name: Claim | Validate claim code
+  when: not _plex_is_claimed
+  ansible.builtin.assert:
+    that:
+      - hostvars['localhost'].plex_claim_code is defined
+      - hostvars['localhost'].plex_claim_code | string | trim | length > 0
+    fail_msg: "Failed to retrieve Plex claim code from plex.tv"
+
+- name: Claim | Debug claim status
+  ansible.builtin.debug:
+    msg: >-
+      Plex claim status: {{
+        'already claimed (no action)' if _plex_is_claimed else
+        'claim code retrieved: ' ~ (hostvars['localhost'].plex_claim_code | default(''))
+      }}

@@ -1,0 +1,337 @@
+---
+
+services_40_plex:
+################################
+# IMAGEMAID
+################################
+  imagemaid:
+    name: "imagemaid"
+    stack: plex
+    image: "kometateam/imagemaid:v1.1.1"
+    named_networks:
+      overlay:
+        external: true
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: plex_token, path: "/Plex", name: "TOKEN" }
+    paths:
+      - path: "/opt/imagemaid"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    templates:
+      - src: "configs/plex/imagemaid.j2"
+        dest: "/opt/imagemaid/.env"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: false
+    volumes:
+      config:
+        type: bind
+        source: "/opt/imagemaid"
+        target: "/config"
+        read_only: false
+      media:
+        type: bind
+        source: "/opt/plex/Library/Application Support/Plex Media Server"
+        target: "/plex"
+        read_only: false
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "plex"
+      constraints:
+        - "node.labels.ansible_host == plex"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# KOMETA
+################################
+  kometa:
+    name: "kometa"
+    stack: plex
+    image: "kometateam/kometa:v2.2.2"
+    named_networks:
+      overlay:
+        external: true
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: mdblist_api, path: "/Kometa", name: "MDBLIST_API" }
+        - { var: tmdb_api, path: "/Kometa", name: "TMDB_API" }
+        - { var: trakt_id, path: "/Kometa", name: "TRAKT_ID" }
+        - { var: trakt_secret, path: "/Kometa", name: "TRAKT_SECRET" }
+        - { var: radarr_api, path: "/Radarr", name: "API" }
+        - { var: sonarr_api, path: "/Sonarr", name: "API" }
+        - { var: tautulli_api, path: "/Tautulli", name: "API" }
+        - { var: plex_token, path: "/Plex", name: "TOKEN" }
+    paths:
+      - path: "/opt/kometa"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    templates:
+      - src: "configs/plex/kometa.yml.j2"
+        dest: "/opt/kometa/config.yml"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: false
+    volumes:
+      config:
+        type: bind
+        source: "/opt/kometa"
+        target: "/config"
+        read_only: false
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "plex"
+      constraints:
+        - "node.labels.ansible_host == plex"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# PLEX
+################################
+  plex:
+    name: "plex"
+    stack: plex
+    image: "lscr.io/linuxserver/plex:1.42.2"
+    named_networks:
+      overlay:
+        external: true
+    devices: 
+      - /dev/dri:/dev/dri
+    environment:
+      PUID: "1000"
+      PGID: "1000"
+      TZ: "{{ timezone }}"
+      VERSION: "docker"
+      PLEX_CLAIM: "{{ plex_claim_code | default(omit) }}"
+      ADVERTISE_IP: "192.168.80.59:32400"
+      TP_SCHEME: "http"
+      DOCKER_MODS: "ghcr.io/themepark-dev/theme.park:plex"
+      TP_DOMAIN: "192.168.80.45:8089"
+      TP_THEME: "hotline"
+    ports:
+      web:
+        published: 32400
+        target: 32400
+        protocol: tcp
+        mode: ingress
+      dlna_udp:
+        published: 1900
+        target: 1900
+        protocol: udp
+        mode: ingress
+      dlna_tcp:
+        published: 32469
+        target: 32469
+        protocol: tcp
+        mode: ingress
+      avahi:
+        published: 5353
+        target: 5353
+        protocol: udp
+        mode: ingress
+      roku:
+        published: 8324
+        target: 8324
+        protocol: tcp
+        mode: ingress
+      gdm_10:
+        published: 32410
+        target: 32410
+        protocol: udp
+        mode: ingress
+      gdm_12:
+        published: 32412
+        target: 32412
+        protocol: udp
+        mode: ingress
+      gdm_13:
+        published: 32413
+        target: 32413
+        protocol: udp
+        mode: ingress
+      gdm_14:
+        published: 32414
+        target: 32414
+        protocol: udp
+        mode: ingress
+    paths:
+      - path: "/opt/plex"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      - path: "/opt/plex/Library"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      - path: "/opt/plex/Library/Application Support"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      - path: "/opt/plex/Library/Application Support/Plex Media Server"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      - path: "/opt/plex/Library/Application Support/Plex Media Server/Plug-ins"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      - path: "/opt/plex/Library/Logs"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      - path: "/opt/plex/Library/Logs/Plex Media Server"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    named_volumes:
+      media_nfs:
+        external: true
+      # optional extras later:
+      # name: "media_nfs"
+      # driver: "local"
+      # driver_opts: { ... }
+    volumes:
+      config:
+        type: bind
+        source: "/opt/plex"
+        target: "/config"
+        read_only: false
+      transcode:
+        type: bind
+        source: "/dev/shm"
+        target: "/transcode"
+        read_only: false
+      media:
+        type: volume
+        source: "media_nfs"
+        target: "/data/media"
+        read_only: false
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "plex"
+      constraints:
+        - "node.labels.ansible_host == plex"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# TAUTULLI
+################################
+  tautulli:
+    name: "tautulli"
+    stack: plex
+    image: "ghcr.io/hotio/tautulli:release-2.16.0"
+    named_networks:
+      overlay:
+        external: true
+    healthcheck:
+      test:
+        - "CMD"
+        - "wget"
+        - "--spider"
+        - "-q"
+        - "http://127.0.0.1:8181/status"
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+      WEBUI_PORTS: "8181/tcp,8181/udp"
+      TP_SCHEME: "http"
+      TP_DOMAIN: "192.168.80.45:8089"
+      TP_HOTIO: "true"
+      TP_THEME: "hotline"
+    # ports:
+    #   web:
+    #     published: 8181
+    #     target: 8181
+    #     protocol: tcp
+    #     mode: ingress
+    paths:
+      - path: "/opt/tautulli"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    copies:
+      - src: "files/themepark/98-themepark-tautulli"
+        dest: "/opt/tautulli/98-themepark-tautulli"
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+        force: false
+        wait: true
+        wait_timeout: 30
+    volumes:
+      config:
+        type: bind
+        source: "/opt/tautulli"
+        target: "/config"
+        read_only: false
+      themepark:
+        type: bind
+        source: "/opt/tautulli/98-themepark-tautulli"
+        target: "/etc/cont-init.d/98-themepark"
+        read_only: false
+    traefik:
+      enable: true
+      port: 8181
+      api_rule: "PathPrefix(`/api`) || PathPrefix(`/newsletter`) || PathPrefix(`/image`) || PathPrefix(`/pms_image_proxy`)"
+      sso: authelia
+    themepark:
+      enable: true
+      theme: "hotpink"
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "plex"
+      constraints:
+        - "node.labels.ansible_host == plex"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m

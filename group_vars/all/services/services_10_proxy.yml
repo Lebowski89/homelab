@@ -1,0 +1,292 @@
+---
+
+services_10_proxy:
+################################
+# AUTHELIA
+################################
+  authelia:
+    name: "authelia"
+    stack: proxy
+    image: "authelia/authelia:4.39.15"
+    named_networks:
+      overlay:
+        external: true
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+      AUTHELIA_LOG_LEVEL: "debug"
+      AUTHELIA_LOG_FORMAT: "json"
+      AUTHELIA_SERVER_ADDRESS: "tcp://0.0.0.0:9091/"
+      AUTHELIA_SERVER_HEADERS_CSP_TEMPLATE: "default-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; script-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; script-src-elem 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; script-src-attr 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; style-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com 'nonce-$${NONCE}'; style-src-elem 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com 'nonce-$${NONCE}'; style-src-attr 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com 'nonce-$${NONCE}'; img-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; font-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; connect-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; media-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; object-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; child-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; frame-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; worker-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; frame-ancestors 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; form-action 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; base-uri 'self'"
+      AUTHELIA_SERVER_BUFFERS_READ: "4096"
+      AUTHELIA_SERVER_BUFFERS_WRITE: "4096"
+      AUTHELIA_SERVER_TIMEOUTS_READ: "6"
+      AUTHELIA_SERVER_TIMEOUTS_WRITE: "6"
+      AUTHELIA_SERVER_TIMEOUTS_IDLE: "30"
+      AUTHELIA_SERVER_ENDPOINTS_ENABLE_PPROF: "false"
+      AUTHELIA_SERVER_ENDPOINTS_ENABLE_EXPVARS: "false"
+      AUTHELIA_SERVER_DISABLE_HEALTHCHECK: "false"
+      AUTHELIA_SESSION_NAME: "authelia_session"
+      AUTHELIA_SESSION_SAME_SITE: "lax"
+      AUTHELIA_SESSION_EXPIRATION: "1h"
+      AUTHELIA_SESSION_INACTIVITY: "5m"
+      AUTHELIA_SESSION_REMEMBER_ME: "2m"
+      AUTHELIA_SESSION_SECRET_FILE: /run/secrets/authelia_session_key_secret
+      AUTHELIA_SESSION_REDIS_HOST: "authelia-redis"
+      AUTHELIA_SESSION_REDIS_PORT: "6379"
+      AUTHELIA_SESSION_REDIS_PASSWORD_FILE: /run/secrets/authelia_redis_secret
+      AUTHELIA_SESSION_REDIS_DATABASE_INDEX: "0"
+      AUTHELIA_SESSION_REDIS_MAXIMUM_ACTIVE_CONNECTIONS: "10"
+      AUTHELIA_SESSION_REDIS_MINIMUM_IDLE_CONNECTIONS: "0"
+      AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/authelia_storage_key_secret
+      AUTHELIA_STORAGE_POSTGRES_ADDRESS: "tcp://pg-ha:5433"
+      AUTHELIA_STORAGE_POSTGRES_DATABASE: "authelia"
+      AUTHELIA_STORAGE_POSTGRES_USERNAME: "{{ postgres_user | default('__INFISICAL__:postgres_user', true) }}"
+      AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE: /run/secrets/postgres_pass_secret
+      AUTHELIA_STORAGE_POSTGRES_TLS_SKIP_VERIFY: "true"
+      AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE: /run/secrets/authelia_jwt_key_secret
+      AUTHELIA_AUTHENTICATION_BACKEND_PASSWORD_RESET_DISABLE: "false"
+      AUTHELIA_AUTHENTICATION_BACKEND_REFRESH_INTERVAL: "5m"
+      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PATH: "/config/users_database.yml"
+      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PASSWORD_ALGORITHM: "argon2id"
+      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PASSWORD_ARGON2_ITERATIONS: "3"
+      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PASSWORD_ARGON2_MEMORY: "65536"
+      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PASSWORD_ARGON2_PARALLELISM: "4"
+      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PASSWORD_ARGON2_SALT_LENGTH: "16"
+      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PASSWORD_ARGON2_KEY_LENGTH: "32"
+      AUTHELIA_REGULATION_MAX_RETRIES: "3"
+      AUTHELIA_REGULATION_FIND_TIME: "10m"
+      AUTHELIA_REGULATION_BAN_TIME: "12h"
+      AUTHELIA_TOTP_ISSUER: "nosugarmaxtaste.com"
+      AUTHELIA_TOTP_PERIOD: "30"
+      AUTHELIA_TOTP_SKEW: "1"
+      AUTHELIA_TELEMETRY_METRICS_ENABLED: "true"
+      AUTHELIA_TELEMETRY_METRICS_ADDRESS: "tcp://:9959/metrics"
+      AUTHELIA_THEME: "dark"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: postgres_user, path: "/Postgres", name: "USER" }
+        - { var: postgres_pass, path: "/Postgres", name: "PASS", docker_secret: "postgres_pass_secret" }
+        - { var: authelia_user, path: "/Authelia", name: "USER" }
+        - { var: authelia_pass, path: "/Authelia", name: "PASS" }
+        - { var: authelia_display_name, path: "/Authelia", name: "DISPLAY_NAME" }
+        - { var: authelia_redis_key, path: "/Authelia", name: "REDIS_KEY", docker_secret: "authelia_redis_secret" }
+        - { var: authelia_storage_key, path: "/Authelia", name: "STORAGE_KEY", docker_secret: "authelia_storage_key_secret" }
+        - { var: smtp_email, path: "/Porkbun", name: "SMTP_EMAIL" }
+        - { var: smtp_host, path: "/Porkbun", name: "SMTP_HOST" }
+        - { var: smtp_password, path: "/Porkbun", name: "SMTP_PASS" }
+        - { var: smtp_port, path: "/Porkbun", name: "SMTP_PORT" }
+        - { var: smtp_sender, path: "/Porkbun", name: "SMTP_SENDER" }
+        - { var: smtp_username, path: "/Porkbun", name: "SMTP_USER" }
+    secrets:
+      - "authelia_session_key_secret"
+      - "authelia_storage_key_secret"
+      - "authelia_jwt_key_secret"
+      - "authelia_redis_secret"
+      - "postgres_pass_secret"
+    paths:
+      - path: "/opt/authelia"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    templates:
+      - src: "configs/proxy/authelia/config.yml.j2"
+        dest: "/opt/authelia/configuration.yml"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+      - src: "configs/proxy/authelia/users_database.yml.j2"
+        dest: "/opt/authelia/users_database.yml"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+    volumes:
+      config:
+        type: bind
+        source: "/opt/authelia"
+        target: "/config"
+        read_only: false
+    postgres:
+      enable: true
+      databases:
+        - "authelia"
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "localhost"
+      constraints:
+        - "node.labels.ansible_host == localhost"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# AUTHELIA-REDIS
+################################
+
+  authelia_redis:
+    name: "authelia-redis"
+    stack: authelia-redis
+    image: "redis:8.4-alpine"
+    named_networks:
+      overlay:
+        external: true
+    command:
+      - sh -c 'redis-server --requirepass "$$(cat /run/secrets/authelia_redis_secret)"'
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: authelia_redis_key, path: "/Authelia", name: "REDIS_KEY", docker_secret: "authelia_redis_secret" }
+    secrets:
+      - authelia_redis_secret
+    paths:
+      - path: "/opt/authelia/redis"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    volumes:
+      config:
+        type: bind
+        source: "/opt/authelia/redis"
+        target: "/data"
+        read_only: false
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "localhost"
+      constraints:
+        - "node.labels.ansible_host == localhost"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# TRAEFIK
+################################
+  traefik:
+    name: "traefik"
+    stack: proxy
+    image: "traefik:v3.6.7"
+    named_networks:
+      overlay:
+        external: true
+    healthcheck:
+      test:
+        - "CMD" 
+        - "wget"
+        - "--spider"
+        - "-q"
+        - "http://127.0.0.1:8081/ping"
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+      CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_secret
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: cloudflare_api, path: "/Cloudflare", name: "API", docker_secret: "cloudflare_api_secret" }
+    secrets:
+      - "cloudflare_api_secret"
+    ports:
+      web:
+        published: 80
+        target: 80
+        protocol: tcp
+        mode: host
+      web_secure:
+        published: 443
+        target: 443
+        protocol: tcp
+        mode: host
+    paths:
+      - path: "/opt/traefik"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      - path: "/opt/traefik/dynamic"
+        state: directory
+        owner: "1000"
+        group: "1000"
+      - path: "/opt/traefik/dynamic/services"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      - path: "/opt/traefik/acme.json"
+        state: touch
+        owner: "1000"
+        group: "1000"
+        mode: "0600"
+    templates:
+      - src: "configs/proxy/traefik/config.yml.j2"
+        dest: "/opt/traefik/traefik.yml"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+      - src: "configs/proxy/traefik/middlewares.yml.j2"
+        dest: "/opt/traefik/dynamic/middlewares.yml"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+      - src: "configs/proxy/authelia/middleware.yml.j2"
+        dest: "/opt/traefik/dynamic/authelia.yml"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+      - src: "configs/proxy/authelia/router.yml.j2"
+        dest: "/opt/traefik/dynamic/services/authelia.yml"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+      - src: "configs/proxy/traefik/dashboard.yml.j2"
+        dest: "/opt/traefik/dynamic/services/traefik-dashboard.yml"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+    volumes:
+      config:
+        type: bind
+        source: "/opt/traefik"
+        target: "/etc/traefik"
+        read_only: false
+      docker_sock:
+        type: bind
+        source: "/var/run/docker.sock"
+        target: "/var/run/docker.sock"
+        read_only: true
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "localhost"
+      constraints:
+        - "node.labels.ansible_host == localhost"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m

@@ -1,0 +1,63 @@
+---
+
+################################
+# PLEX PREP
+################################
+
+- name: Plex prep | Set plex host
+  ansible.builtin.set_fact:
+    _plex_host: "plex"
+  run_once: true
+
+################################
+# VOLUME (run on localhost once)
+################################
+
+- name: Plex prep | Create media volume (NFS)
+  community.docker.docker_volume:
+    volume_name: "media_nfs"
+    state: present
+    recreate: options-changed
+    driver: local
+    driver_options:
+      type: nfs
+      o: addr=192.168.80.20,rw,nfsvers=4.2
+      device: ":/mnt/user/data/media"
+  run_once: true
+  delegate_to: localhost
+
+################################
+# TOKEN (run on localhost once)
+################################
+
+- name: Plex prep | Include Plex token tasks (localhost, once)
+  ansible.builtin.include_tasks:
+    file: token.yml
+    apply:
+      delegate_to: localhost
+      run_once: true
+  run_once: true
+
+################################
+# PREFERENCES (run on plex host once)
+################################
+
+- name: Plex prep | Include Plex preferences.xml tasks (plex, once)
+  ansible.builtin.include_tasks:
+    file: pref.yml
+    apply:
+      delegate_to: "{{ _plex_host }}"
+      run_once: true
+  run_once: true
+
+################################
+# CLAIM (run on plex host once)
+################################
+
+- name: Plex prep | Include Plex claim tasks (plex, once)
+  ansible.builtin.include_tasks:
+    file: claim.yml
+    apply:
+      delegate_to: "{{ _plex_host }}"
+      run_once: true
+  run_once: true

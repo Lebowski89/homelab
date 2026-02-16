@@ -1,0 +1,49 @@
+---
+
+# helpers/prep/cloudflare_dns.yml
+# Requires:
+#   cloudflare_api, cloudflare_zone
+#   cloudflare_record (e.g. "sonarr" or "@")
+#   cloudflare_record_value
+# Optional:
+#   cloudflare_record_type (default "A")
+#   cloudflare_proxy (default false)
+#   cloudflare_solo (default true)
+
+- name: Cloudflare DNS | Normalize inputs
+  ansible.builtin.set_fact:
+    _cf_record: "{{ cloudflare_record | default('@', true) | string | trim }}"
+    _cf_type: "{{ cloudflare_record_type | default('A', true) | string | trim }}"
+    _cf_value: "{{ cloudflare_record_value | string | trim }}"
+    _cf_proxy: "{{ (cloudflare_proxy | default(false, true)) | bool }}"
+    _cf_solo: "{{ (cloudflare_solo | default(true, true)) | bool }}"
+
+# Optional: If you *really* want a hard remove first, keep this block.
+# I'd recommend leaving it OFF unless you have a specific reason.
+# - name: Cloudflare DNS | Remove existing record (optional)
+#   community.general.cloudflare_dns:
+#     api_token: "{{ cloudflare_api }}"
+#     zone: "{{ cloudflare_zone }}"
+#     state: absent
+#     type: "{{ _cf_type }}"
+#     record: "{{ _cf_record }}"
+
+- name: Cloudflare DNS | Add or update record
+  community.general.cloudflare_dns:
+    api_token: "{{ cloudflare_api }}"
+    zone: "{{ cloudflare_zone }}"
+    state: present
+    solo: "{{ _cf_solo }}"
+    proxied: "{{ _cf_proxy }}"
+    type: "{{ _cf_type }}"
+    value: "{{ _cf_value }}"
+    record: "{{ _cf_record }}"
+  register: _cf_result
+
+- name: Cloudflare DNS | Display status
+  when: _cf_result is succeeded
+  ansible.builtin.debug:
+    msg: >-
+      DNS {{ _cf_type }} record for
+      "{{ (_cf_record in ['@', cloudflare_zone]) | ternary(cloudflare_zone, _cf_record ~ '.' ~ cloudflare_zone) }}"
+      set to "{{ _cf_value }}". Proxy: {{ _cf_proxy }}

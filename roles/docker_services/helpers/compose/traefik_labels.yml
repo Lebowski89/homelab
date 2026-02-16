@@ -1,0 +1,319 @@
+---
+
+# helpers/compose/traefik_labels.yml
+# Generates Traefik labels for one or more routers.
+#
+# Supports:
+# - traefik_rtr_var.zone (optional): override DNS zone suffix (defaults to cloudflare_zone)
+# - traefik_rtr_var.alt_hosts (optional): additional FQDNs to include in Host() rule
+#   Accepts list OR comma-separated string.
+# - traefik_rtr_var.sso (optional): '' (none) or 'authelia' (adds authelia middleware)
+# - traefik_rtr_var.api (optional): extra rule fragment for an API router
+# - themepark middleware (optional): set themepark_app + themepark_theme
+#
+# IMPORTANT safety behavior:
+# - If router_sso is empty/falsey, we *strip* authelia middleware from base/append lists
+#   to prevent accidental auth being applied (or a stale global append).
+# - If service_name == 'authelia', we *always* strip authelia middleware (no self-forwardauth loops).
+
+- name: Ensure service_name is set
+  ansible.builtin.assert:
+    that:
+      - service_name is defined
+      - service_name | string | trim | length > 0
+    fail_msg: "service_name must be set before calling this helper"
+
+- name: Ensure traefik_routers is a list
+  ansible.builtin.set_fact:
+    traefik_routers: "{{ traefik_routers | default([]) | list }}"
+
+- name: Filter valid routers
+  ansible.builtin.set_fact:
+    traefik_routers_valid: >-
+      {{
+        traefik_routers
+        | rejectattr('name', 'equalto', None)
+        | rejectattr('subdomain', 'equalto', None)
+        | rejectattr('port', 'equalto', None)
+        | list
+      }}
+
+- name: Initialize Traefik labels accumulator
+  ansible.builtin.set_fact:
+    traefik_labels_accum: {}
+
+- name: Build Traefik labels for each router
+  ansible.builtin.set_fact:
+    traefik_labels_accum: "{{ traefik_labels_accum | combine(router_labels, recursive=true) }}"
+  vars:
+    # --- router basics ---
+    router_name: "{{ traefik_rtr_var.name | string | trim }}"
+    router_port: "{{ traefik_rtr_var.port | int }}"
+
+    # Allow per-router zone override; default to cloudflare_zone.
+    router_zone: "{{ traefik_rtr_var.zone | default(cloudflare_zone, true) | string | trim }}"
+    router_fqdn: "{{ (traefik_rtr_var.subdomain | string | trim) ~ '.' ~ router_zone }}"
+
+    # Optional additional hostnames (list OR comma-string)
+    alt_hosts_raw: "{{ traefik_rtr_var.alt_hosts | default([], true) }}"
+    alt_hosts_list: >-
+      {{
+        (
+          alt_hosts_raw.split(',')
+          if alt_hosts_raw is string
+          else (alt_hosts_raw | list)
+        )
+        | map('trim') | reject('equalto','') | list
+      }}
+
+    router_hosts: "{{ ([router_fqdn] + alt_hosts_list) | unique | list }}"
+
+    # Build Host() rule safely
+    router_host_rule: >-
+      {%- set parts = [] -%}
+      {%- for h in router_hosts -%}
+      {%- set hh = (h | string | trim) -%}
+      {%- if hh | length > 0 -%}
+      {%- set _ = parts.append('Host(`' ~ hh ~ '`)') -%}
+      {%- endif -%}
+      {%- endfor -%}
+      {{ parts | join(' || ') }}
+
+    # IMPORTANT: default('', true) converts real None -> '' (prevents "None" strings)
+    router_api: "{{ traefik_rtr_var.api | default('', true) | string | trim }}"
+    router_sso: "{{ traefik_rtr_var.sso | default('', true) | string | trim }}"
+    themepark_app: "{{ traefik_rtr_var.themepark_app | default('', true) | string | trim }}"
+    themepark_theme: "{{ traefik_rtr_var.themepark_theme | default('', true) | string | trim }}"
+
+    http_mw_base: "{{ traefik_rtr_var.http_middlewares | default('', true) | string | trim }}"
+    https_mw_base: "{{ traefik_rtr_var.https_middlewares | default('', true) | string | trim }}"
+
+    # Optional append middlewares (global + per-router). Accept list OR comma-string.
+    http_mw_append_global: "{{ traefik_http_middlewares_append | default([], true) }}"
+    https_mw_append_global: "{{ traefik_https_middlewares_append | default([], true) }}"
+    http_mw_append_router: "{{ traefik_rtr_var.http_middlewares_append | default([], true) }}"
+    https_mw_append_router: "{{ traefik_rtr_var.https_middlewares_append | default([], true) }}"
+
+    router_api_is_enabled: "{{ router_api | length > 0 }}"
+    router_themepark_is_enabled: "{{ (themepark_app | length > 0) and (themepark_theme | length > 0) }}"
+
+    # --- parse base comma-strings into clean lists ---
+    http_mw_base_list: >-
+      {{
+        (http_mw_base.split(',') if http_mw_base | length > 0 else [])
+        | map('trim') | reject('equalto','') | list
+      }}
+    https_mw_base_list: >-
+      {{
+        (https_mw_base.split(',') if https_mw_base | length > 0 else [])
+        | map('trim') | reject('equalto','') | list
+      }}
+
+    # --- parse appenders (list OR comma-string) into clean lists ---
+    http_mw_append_global_list: >-
+      {{
+        (
+          http_mw_append_global.split(',')
+          if http_mw_append_global is string
+          else (http_mw_append_global | list)
+        )
+        | map('trim') | reject('equalto','') | list
+      }}
+    https_mw_append_global_list: >-
+      {{
+        (
+          https_mw_append_global.split(',')
+          if https_mw_append_global is string
+          else (https_mw_append_global | list)
+        )
+        | map('trim') | reject('equalto','') | list
+      }}
+    http_mw_append_router_list: >-
+      {{
+        (
+          http_mw_append_router.split(',')
+          if http_mw_append_router is string
+          else (http_mw_append_router | list)
+        )
+        | map('trim') | reject('equalto','') | list
+      }}
+    https_mw_append_router_list: >-
+      {{
+        (
+          https_mw_append_router.split(',')
+          if https_mw_append_router is string
+          else (https_mw_append_router | list)
+        )
+        | map('trim') | reject('equalto','') | list
+      }}
+
+    # --- SSO middleware selection ---
+    # Default authelia middleware reference (overrideable)
+    sso_mw_authelia: "{{ traefik_sso_middleware_authelia | default('authelia@swarm', true) | string | trim }}"
+    # Never apply authelia middleware to the authelia service itself (prevents auth loop)
+    _is_authelia_service: "{{ (service_name | string | trim) == 'authelia' }}"
+
+    # If SSO is NOT explicitly authelia, or if the service IS authelia,
+    # strip authelia middleware from any base/append lists to prevent surprises.
+    _strip_authelia_mw: "{{ _is_authelia_service or (router_sso != 'authelia') }}"
+
+    http_mw_base_list_eff: >-
+      {{
+        (http_mw_base_list | reject('equalto', sso_mw_authelia) | list)
+        if _strip_authelia_mw else http_mw_base_list
+      }}
+    https_mw_base_list_eff: >-
+      {{
+        (https_mw_base_list | reject('equalto', sso_mw_authelia) | list)
+        if _strip_authelia_mw else https_mw_base_list
+      }}
+    http_mw_append_global_list_eff: >-
+      {{
+        (http_mw_append_global_list | reject('equalto', sso_mw_authelia) | list)
+        if _strip_authelia_mw else http_mw_append_global_list
+      }}
+    https_mw_append_global_list_eff: >-
+      {{
+        (https_mw_append_global_list | reject('equalto', sso_mw_authelia) | list)
+        if _strip_authelia_mw else https_mw_append_global_list
+      }}
+    http_mw_append_router_list_eff: >-
+      {{
+        (http_mw_append_router_list | reject('equalto', sso_mw_authelia) | list)
+        if _strip_authelia_mw else http_mw_append_router_list
+      }}
+    https_mw_append_router_list_eff: >-
+      {{
+        (https_mw_append_router_list | reject('equalto', sso_mw_authelia) | list)
+        if _strip_authelia_mw else https_mw_append_router_list
+      }}
+
+    # Add authelia middleware only when explicitly requested AND not the authelia service
+    http_sso_list: "{{ ([sso_mw_authelia] if (router_sso == 'authelia' and (not _is_authelia_service)) else []) }}"
+    https_sso_list: "{{ ([sso_mw_authelia] if (router_sso == 'authelia' and (not _is_authelia_service)) else []) }}"
+
+    # --- final middleware lists (append + dedup) ---
+    http_mw_list: >-
+      {{
+        (
+          http_mw_base_list_eff
+          + http_mw_append_global_list_eff
+          + http_mw_append_router_list_eff
+          + http_sso_list
+          + (['themepark-' ~ router_name] if router_themepark_is_enabled else [])
+        )
+        | unique
+        | list
+      }}
+    https_mw_list: >-
+      {{
+        (
+          https_mw_base_list_eff
+          + https_mw_append_global_list_eff
+          + https_mw_append_router_list_eff
+          + https_sso_list
+          + (['themepark-' ~ router_name] if router_themepark_is_enabled else [])
+        )
+        | unique
+        | list
+      }}
+
+    http_mw_final: "{{ http_mw_list | join(',') }}"
+    https_mw_final: "{{ https_mw_list | join(',') }}"
+
+    # Host rules
+    router_rule: "{{ router_host_rule }}"
+    router_api_rule: "{{ '(' ~ router_host_rule ~ ') && (' ~ router_api ~ ')' }}"
+
+    router_labels: >-
+      {{
+        {
+          'traefik.enable': 'true',
+
+          ('traefik.http.routers.' ~ router_name ~ '.entrypoints'): 'http',
+          ('traefik.http.routers.' ~ router_name ~ '.rule'): router_rule,
+          ('traefik.http.routers.' ~ router_name ~ '.priority'): '20',
+          ('traefik.http.routers.' ~ router_name ~ '.service'): (router_name ~ '-svc'),
+          ('traefik.http.services.' ~ router_name ~ '-svc.loadbalancer.server.port'): (router_port | string),
+
+          ('traefik.http.routers.' ~ router_name ~ '-secure.entrypoints'): 'https',
+          ('traefik.http.routers.' ~ router_name ~ '-secure.rule'): router_rule,
+          ('traefik.http.routers.' ~ router_name ~ '-secure.priority'): '20',
+          ('traefik.http.routers.' ~ router_name ~ '-secure.service'): (router_name ~ '-secure-svc'),
+          ('traefik.http.routers.' ~ router_name ~ '-secure.tls.certresolver'): 'dns-cloudflare',
+          ('traefik.http.routers.' ~ router_name ~ '-secure.tls.options'): 'securetls@file',
+          ('traefik.http.services.' ~ router_name ~ '-secure-svc.loadbalancer.server.port'): (router_port | string)
+        }
+        | combine(
+            (http_mw_final | length > 0)
+            | ternary({ ('traefik.http.routers.' ~ router_name ~ '.middlewares'): http_mw_final }, {})
+          )
+        | combine(
+            (https_mw_final | length > 0)
+            | ternary({ ('traefik.http.routers.' ~ router_name ~ '-secure.middlewares'): https_mw_final }, {})
+          )
+        | combine(
+            router_api_is_enabled
+            | ternary(
+                {
+                  ('traefik.http.routers.' ~ router_name ~ '-api.entrypoints'): 'http',
+                  ('traefik.http.routers.' ~ router_name ~ '-api.rule'): router_api_rule,
+                  ('traefik.http.routers.' ~ router_name ~ '-api.priority'): '30',
+                  ('traefik.http.routers.' ~ router_name ~ '-api.service'): (router_name ~ '-svc'),
+
+                  ('traefik.http.routers.' ~ router_name ~ '-api-secure.entrypoints'): 'https',
+                  ('traefik.http.routers.' ~ router_name ~ '-api-secure.rule'): router_api_rule,
+                  ('traefik.http.routers.' ~ router_name ~ '-api-secure.priority'): '30',
+                  ('traefik.http.routers.' ~ router_name ~ '-api-secure.service'): (router_name ~ '-secure-svc'),
+                  ('traefik.http.routers.' ~ router_name ~ '-api-secure.tls.certresolver'): 'dns-cloudflare',
+                  ('traefik.http.routers.' ~ router_name ~ '-api-secure.tls.options'): 'securetls@file'
+                }
+                | combine(
+                    (http_mw_final | length > 0)
+                    | ternary({ ('traefik.http.routers.' ~ router_name ~ '-api.middlewares'): http_mw_final }, {})
+                  )
+                | combine(
+                    (https_mw_final | length > 0)
+                    | ternary({ ('traefik.http.routers.' ~ router_name ~ '-api-secure.middlewares'): https_mw_final }, {})
+                  ),
+                {}
+            )
+          )
+        | combine(
+            router_themepark_is_enabled
+            | ternary(
+                {
+                  ('traefik.http.middlewares.themepark-' ~ router_name ~ '.plugin.themepark.app'): themepark_app,
+                  ('traefik.http.middlewares.themepark-' ~ router_name ~ '.plugin.themepark.theme'): themepark_theme
+                },
+                {}
+            )
+          )
+      }}
+  loop: "{{ traefik_routers_valid }}"
+  loop_control:
+    loop_var: traefik_rtr_var
+    label: "{{ traefik_rtr_var.name | default('router') }}"
+
+- name: Validate Traefik labels merge options
+  ansible.builtin.assert:
+    that:
+      - traefik_labels_action | default('append', true) in ['append', 'replace', 'append_unique']
+      - traefik_labels_precedence | default('new_wins', true) in ['new_wins', 'existing_wins']
+    fail_msg: >-
+      traefik_labels_action must be append|replace|append_unique and
+      traefik_labels_precedence must be new_wins|existing_wins
+
+- name: Traefik | Assert we generated labels when enabled
+  ansible.builtin.assert:
+    that:
+      - (traefik_labels_accum | default({}) | length) > 0
+    fail_msg: "Traefik is enabled for '{{ service_name }}' but generated zero labels."
+
+# Reuse the standard labels helper to avoid merge logic duplication + variable collisions
+- name: Traefik | Attach generated labels via labels helper
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/labels.yml"
+  vars:
+    labels_dict: "{{ traefik_labels_accum }}"
+    labels_action: "{{ traefik_labels_action | default('append_unique', true) }}"
+    labels_precedence: "{{ traefik_labels_precedence | default('new_wins', true) }}"

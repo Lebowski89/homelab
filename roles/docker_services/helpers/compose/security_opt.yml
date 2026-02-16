@@ -1,0 +1,69 @@
+---
+
+- name: Ensure service_name is set
+  ansible.builtin.assert:
+    that:
+      - service_name is defined
+      - service_name | string | trim | length > 0
+    fail_msg: "service_name must be set before calling this helper"
+
+- name: Ensure security_opt_action is valid
+  ansible.builtin.assert:
+    that:
+      - security_opt_action | default('append_unique') in ['append', 'replace', 'append_unique']
+    fail_msg: "security_opt_action must be 'append', 'replace', or 'append_unique'"
+
+- name: Normalize security_opt input
+  ansible.builtin.set_fact:
+    _security_opt_new: >-
+      {{
+        security_opt_list
+        | default([], true)
+        | list
+        | map('string')
+        | map('trim')
+        | reject('equalto', '')
+        | list
+      }}
+
+- name: Attach security_opt to service
+  ansible.builtin.set_fact:
+    compose_services: >-
+      {{
+        (compose_services | default({}))
+        | combine({
+            service_name: (
+              ((compose_services | default({})).get(service_name, {}))
+              | combine({
+                  'security_opt': (
+                    _security_opt_new
+                    if (security_opt_action | default('append_unique')) == 'replace'
+                    else
+                    (
+                      (
+                        ((compose_services | default({})).get(service_name, {}).get('security_opt', []))
+                        | default([], true)
+                        | list
+                      )
+                      +
+                      (
+                        _security_opt_new
+                        if (security_opt_action | default('append_unique')) == 'append'
+                        else
+                        (
+                          _security_opt_new
+                          | reject(
+                              'in',
+                              ((compose_services | default({})).get(service_name, {}).get('security_opt', [])
+                               | default([], true)
+                               | list)
+                            )
+                          | list
+                        )
+                      )
+                    )
+                  )
+                }, recursive=true)
+            )
+          }, recursive=true)
+      }}

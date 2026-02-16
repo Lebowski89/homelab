@@ -1,0 +1,155 @@
+---
+
+# roles/docker_services/tasks/sub_tasks/prep/hugo.yml
+
+- name: Hugo prep | Set derived vars (run once)
+  ansible.builtin.set_fact:
+    _hugo_host: "{{ (svc.deploy.host | default('localhost', true)) | string | trim }}"
+    _hugo_site_path: "/blog"
+    _hugo_theme_path: "/blog/themes/terminal"
+  when: inventory_hostname == "localhost"
+  run_once: true
+
+################################
+# SITE (CREATE IF MISSING)
+################################
+
+- name: Hugo prep | Check if site exists
+  ansible.builtin.stat:
+    path: "{{ _hugo_site_path }}"
+  register: _hugo_site_stat
+  when: inventory_hostname == "localhost"
+  delegate_to: "{{ _hugo_host }}"
+  run_once: true
+
+- name: Hugo prep | Generate new Hugo site (temp container)
+  when:
+    - inventory_hostname == "localhost"
+    - not _hugo_site_stat.stat.exists
+  run_once: true
+  delegate_to: "{{ _hugo_host }}"
+  block:
+    - name: Hugo prep | Run hugo new site
+      community.docker.docker_container:
+        name: hugo-new-site
+        image: "hugomods/hugo:debian-exts"
+        pull: true
+        state: started
+        container_default_behavior: compatibility
+        detach: false
+        command: "hugo new site blog"
+        volumes:
+          - "/:/src"
+        cleanup: true
+
+################################
+# GIT (INIT / THEME / REMOTE / INITIAL COMMIT)
+################################
+
+- name: Hugo prep | Check if repo already initialized
+  ansible.builtin.stat:
+    path: "{{ _hugo_site_path }}/.git"
+  register: _hugo_git_stat
+  when: inventory_hostname == "localhost"
+  delegate_to: "{{ _hugo_host }}"
+  run_once: true
+
+- name: Hugo prep | Init git repo (if missing)
+  when:
+    - inventory_hostname == "localhost"
+    - not _hugo_git_stat.stat.exists
+  run_once: true
+  delegate_to: "{{ _hugo_host }}"
+  block:
+    - name: Hugo prep | git init
+      ansible.builtin.command:
+        cmd: "git init"
+        chdir: "{{ _hugo_site_path }}"
+
+    # Repo-local identity (avoid --global)
+    - name: Hugo prep | set repo git identity
+      ansible.builtin.command:
+        cmd: "{{ item }}"
+        chdir: "{{ _hugo_site_path }}"
+      loop:
+        - "git config user.name \"{{ github_username }}\""
+        - "git config user.email \"{{ github_email }}\""
+
+- name: Hugo prep | Check if theme submodule exists
+  ansible.builtin.stat:
+    path: "{{ _hugo_theme_path }}"
+  register: _hugo_theme_stat
+  when: inventory_hostname == "localhost"
+  delegate_to: "{{ _hugo_host }}"
+  run_once: true
+
+- name: Hugo prep | Add Terminal theme submodule (if missing)
+  when:
+    - inventory_hostname == "localhost"
+    - not _hugo_theme_stat.stat.exists
+  run_once: true
+  delegate_to: "{{ _hugo_host }}"
+  ansible.builtin.command:
+    cmd: "git submodule add -f https://github.com/panr/hugo-theme-terminal.git themes/terminal"
+    chdir: "{{ _hugo_site_path }}"
+
+- name: Hugo prep | Check if origin remote exists
+  when: inventory_hostname == "localhost"
+  run_once: true
+  delegate_to: "{{ _hugo_host }}"
+  ansible.builtin.command:
+    cmd: "git remote get-url origin"
+    chdir: "{{ _hugo_site_path }}"
+  register: _hugo_origin
+  changed_when: false
+  failed_when: false
+
+- name: Hugo prep | Add origin remote (if missing)
+  when:
+    - inventory_hostname == "localhost"
+    - _hugo_origin.rc != 0
+  run_once: true
+  delegate_to: "{{ _hugo_host }}"
+  ansible.builtin.command:
+    cmd: "git remote add origin git@github.com:{{ github_username }}/blog.git"
+    chdir: "{{ _hugo_site_path }}"
+
+- name: Hugo prep | Check if repo has any commits
+  when: inventory_hostname == "localhost"
+  run_once: true
+  delegate_to: "{{ _hugo_host }}"
+  ansible.builtin.command:
+    cmd: "git rev-parse --verify HEAD"
+    chdir: "{{ _hugo_site_path }}"
+  register: _hugo_has_commit
+  changed_when: false
+  failed_when: false
+
+- name: Hugo prep | Initial commit + push (only if no commits yet)
+  when:
+    - inventory_hostname == "localhost"
+    - _hugo_has_commit.rc != 0
+  run_once: true
+  delegate_to: "{{ _hugo_host }}"
+  block:
+    - name: Hugo prep | git add
+      ansible.builtin.command:
+        cmd: "git add ."
+        chdir: "{{ _hugo_site_path }}"
+
+    - name: Hugo prep | git commit
+      ansible.builtin.command:
+        cmd: "git commit -m 'Initial commit'"
+        chdir: "{{ _hugo_site_path }}"
+
+    - name: Hugo prep | ensure main branch
+      ansible.builtin.command:
+        cmd: "git branch -M main"
+        chdir: "{{ _hugo_site_path }}"
+
+    # Optional: set hugo_push=true if you want this automated
+    - name: Hugo prep | git push
+      when: (hugo_push | default(false)) | bool
+      ansible.builtin.command:
+        cmd: "git push -u origin main"
+        chdir: "{{ _hugo_site_path }}"

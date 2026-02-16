@@ -1,0 +1,224 @@
+---
+
+# roles/docker_services/tasks/sub_tasks/prep/nzbhydra2.yml
+
+- name: NZBHydra2 prep | Set derived vars (run once)
+  ansible.builtin.set_fact:
+    _nh_host: "{{ (svc.deploy.host | default('unraid', true)) | string | trim }}"
+    _nh_config_dir: "/mnt/user/appdata/nzbhydra2"
+    _nh_config_path: "/mnt/user/appdata/nzbhydra2/nzbhydra.yml"
+    _nh_puid: "{{ (svc.environment.PUID | default(hostvars[(svc.deploy.host | default('unraid', true))].puid | default('99'))) | string }}"
+    _nh_pgid: "{{ (svc.environment.PGID | default(hostvars[(svc.deploy.host | default('unraid', true))].pgid | default('100'))) | string }}"
+  when: inventory_hostname == "localhost"
+  run_once: true
+
+################################
+# CONFIG (CREATE IF MISSING)
+################################
+
+- name: NZBHydra2 prep | Check config exists
+  ansible.builtin.stat:
+    path: "{{ _nh_config_path }}"
+  register: _nh_stat
+  when: inventory_hostname == "localhost"
+  delegate_to: "{{ _nh_host }}"
+  run_once: true
+
+- name: NZBHydra2 prep | Generate nzbhydra.yml (temp container)
+  when:
+    - inventory_hostname == "localhost"
+    - not _nh_stat.stat.exists
+  run_once: true
+  block:
+    - name: NZBHydra2 prep | Start temp container to generate config
+      community.docker.docker_container:
+        name: nzbhydra2-config
+        image: "{{ svc.image | default('ghcr.io/hotio/nzbhydra2:release-8.4.1') }}"
+        pull: true
+        state: started
+        container_default_behavior: compatibility
+        detach: true
+        env:
+          PUID: "{{ _nh_puid }}"
+          PGID: "{{ _nh_pgid }}"
+          TZ: "{{ timezone }}"
+          UMASK: "{{ svc.environment.UMASK | default('022') }}"
+        volumes:
+          - "{{ _nh_config_dir }}:/config"
+        restart_policy: "no"
+      delegate_to: "{{ _nh_host }}"
+
+    - name: NZBHydra2 prep | Wait for config to appear
+      ansible.builtin.wait_for:
+        path: "{{ _nh_config_path }}"
+        state: present
+        timeout: 180
+      delegate_to: "{{ _nh_host }}"
+
+    - name: NZBHydra2 prep | Give NZBHydra2 time to finish writing config
+      ansible.builtin.pause:
+        seconds: 5
+
+  always:
+    - name: NZBHydra2 prep | Remove temp config container
+      community.docker.docker_container:
+        container_default_behavior: compatibility
+        name: nzbhydra2-config
+        state: absent
+        stop_timeout: 10
+      register: _nh_remove_tmp
+      retries: 5
+      delay: 5
+      until: _nh_remove_tmp is succeeded
+      delegate_to: "{{ _nh_host }}"
+
+################################
+# CONFIG (FACTS)
+################################
+
+- name: NZBHydra2 prep | Build config facts (run once)
+  ansible.builtin.set_fact:
+    nzbhydra2_indexers:
+      - allCapsChecked: true
+        backend: NEWZNAB
+        state: ENABLED
+        name: altHUB
+        host: https://api.althub.co.za
+        username: "{{ althub_user }}"
+        apiKey: "{{ althub_api }}"
+        searchModuleType: NEWZNAB
+        categories: []
+        vipExpirationDate: "2026-05-26"
+
+      - allCapsChecked: true
+        backend: NEWZNAB
+        state: ENABLED
+        name: NZBGeek
+        host: https://api.nzbgeek.info
+        username: "{{ geek_user }}"
+        apiKey: "{{ geek_api }}"
+        searchModuleType: NEWZNAB
+        categories: []
+        vipExpirationDate: "2026-07-18"
+
+      - allCapsChecked: true
+        backend: NZEDB
+        state: ENABLED
+        name: "Drunken Slug"
+        host: https://api.drunkenslug.com
+        username: "{{ slug_user }}"
+        apiKey: "{{ slug_api }}"
+        searchModuleType: NEWZNAB
+        categories: []
+        vipExpirationDate: "2026-05-26"
+
+    nzbhydra2_downloaders:
+      - apiKey: "{{ sabnzbd_api }}"
+        downloadType: NZB
+        enabled: true
+        name: SABnzbd
+        nzbAddingType: UPLOAD
+        downloaderType: SABNZBD
+        url: http://sabnzbd:8080
+  when: inventory_hostname == "localhost"
+  run_once: true
+
+################################
+# CONFIG (YEDIT)
+################################
+
+- name: NZBHydra2 prep | Set auth user
+  yedit: # noqa fqcn[action]
+    src: "{{ _nh_config_path }}"
+    key: auth.users
+    value:
+      - username: "{{ nzbhydra2_user }}"
+        password: "{noop}{{ nzbhydra2_pass }}"
+    state: present
+  when: inventory_hostname == "localhost"
+  delegate_to: "{{ _nh_host }}"
+  run_once: true
+
+- name: NZBHydra2 prep | Set API key
+  yedit: # noqa fqcn[action]
+    src: "{{ _nh_config_path }}"
+    key: main.apiKey
+    value: "{{ nzbhydra2_api }}"
+    state: present
+  when: inventory_hostname == "localhost"
+  delegate_to: "{{ _nh_host }}"
+  run_once: true
+
+- name: NZBHydra2 prep | Replace downloaders list
+  when: inventory_hostname == "localhost"
+  run_once: true
+  delegate_to: "{{ _nh_host }}"
+  block:
+    - name: Remove existing downloaders
+      yedit: # noqa fqcn[action]
+        src: "{{ _nh_config_path }}"
+        key: downloading.downloaders
+        state: absent
+
+    - name: Write managed downloaders
+      yedit: # noqa fqcn[action]
+        src: "{{ _nh_config_path }}"
+        key: downloading.downloaders
+        value: "{{ nzbhydra2_downloaders | default([]) }}"
+        state: present
+
+- name: NZBHydra2 prep | Replace indexers list
+  when: inventory_hostname == "localhost"
+  run_once: true
+  delegate_to: "{{ _nh_host }}"
+  block:
+    - name: Remove existing indexers
+      yedit: # noqa fqcn[action]
+        src: "{{ _nh_config_path }}"
+        key: indexers
+        state: absent
+
+    - name: Write managed indexers
+      yedit: # noqa fqcn[action]
+        src: "{{ _nh_config_path }}"
+        key: indexers
+        value: "{{ nzbhydra2_indexers | default([]) }}"
+        state: present
+
+################################
+# ASSERTS (NO SILENT NO-OP)
+################################
+
+- name: NZBHydra2 prep | Slurp config
+  ansible.builtin.slurp:
+    src: "{{ _nh_config_path }}"
+  register: _nh_cfg_raw
+  when: inventory_hostname == "localhost"
+  delegate_to: "{{ _nh_host }}"
+  run_once: true
+  changed_when: false
+
+- name: NZBHydra2 prep | Parse config YAML
+  ansible.builtin.set_fact:
+    _nh_cfg: "{{ (_nh_cfg_raw.content | b64decode) | from_yaml }}"
+  when: inventory_hostname == "localhost"
+  run_once: true
+  changed_when: false
+
+- name: NZBHydra2 prep | Assert API key set
+  ansible.builtin.assert:
+    that:
+      - _nh_cfg is mapping
+      - (_nh_cfg.main.apiKey | default('')) == nzbhydra2_api
+    fail_msg: "nzbhydra2_api was not written to main.apiKey in {{ _nh_config_path }}"
+  when: inventory_hostname == "localhost"
+  run_once: true
+
+- name: NZBHydra2 prep | Assert at least 3 indexers are present
+  ansible.builtin.assert:
+    that:
+      - (_nh_cfg.indexers | default([])) is sequence
+      - (_nh_cfg.indexers | length) >= 3
+    fail_msg: "Expected >= 3 indexers in {{ _nh_config_path }}, got {{ (_nh_cfg.indexers | default([])) | length }}"
+  when: inventory_hostname == "localhost"
+  run_once: true

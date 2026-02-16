@@ -1,0 +1,72 @@
+---
+- name: Ensure service_name is set
+  ansible.builtin.assert:
+    that:
+      - service_name is defined
+      - service_name | string | trim | length > 0
+    fail_msg: "service_name must be set before calling this helper"
+
+- name: Normalize stack_deploy_type
+  ansible.builtin.set_fact:
+    _stack_deploy_type: "{{ stack_deploy_type | default('swarm', true) | string | trim }}"
+
+- name: Set base service definition
+  ansible.builtin.set_fact:
+    compose_services: >-
+      {{
+        (compose_services | default({}))
+        | combine({
+            service_name: (
+              ((compose_services | default({})).get(service_name, {}))
+              | combine({
+                  'image': image,
+
+                  'container_name': (
+                    container_name
+                    if (_stack_deploy_type != 'swarm'
+                        and (container_name is defined)
+                        and (container_name is not sameas omit)
+                        and (container_name | string | trim | length > 0))
+                    else omit
+                  ),
+
+                  'pid': (
+                    pid
+                    if (_stack_deploy_type != 'swarm'
+                        and (pid is defined)
+                        and (pid is not sameas omit)
+                        and (pid | string | trim | length > 0))
+                    else omit
+                  ),
+
+                  'logging': {
+                    'driver': 'json-file',
+                    'options': {
+                      'max-size': '50m',
+                      'max-file': '5',
+                      'compress': 'true'
+                    }
+                  },
+
+                  'networks': (
+                    networks
+                    if (networks is defined
+                        and (networks is not sameas omit)
+                        and (networks is sequence)
+                        and (networks is not string)
+                        and (networks | length > 0))
+                    else omit
+                  ),
+
+                  'network_mode': (
+                    network_mode
+                    if (_stack_deploy_type != 'swarm'
+                        and (network_mode is defined)
+                        and (network_mode is not sameas omit)
+                        and (network_mode | string | trim | length > 0))
+                    else omit
+                  )
+                }, recursive=true)
+            )
+          }, recursive=true)
+      }}

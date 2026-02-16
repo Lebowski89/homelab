@@ -1,0 +1,30 @@
+---
+
+# helpers/compose/validate.yml
+
+- name: Ensure compose_services is a dict
+  ansible.builtin.assert:
+    that:
+      - compose_services is defined
+      - compose_services is mapping
+    fail_msg: "compose_services must be a dict (mapping). Did you forget to initialize it?"
+
+# stack_deploy_type should be in scope from main.yml (derived from svc.deploy.type)
+- name: Ensure stack_deploy_type is valid
+  ansible.builtin.assert:
+    that:
+      - (stack_deploy_type | default('swarm', true) | string | trim) in ['swarm', 'container']
+    fail_msg: "stack_deploy_type must be 'swarm' or 'container'."
+
+- name: Validate each service definition
+  when: (compose_services | length) > 0
+  ansible.builtin.include_tasks: validate_service.yml
+  loop: "{{ compose_services | dict2items }}"
+  loop_control:
+    loop_var: _svc_item
+    label: "{{ _svc_item.key }}"
+  vars:
+    _svc_name: "{{ _svc_item.key }}"
+    _svc: "{{ _svc_item.value | default({}, true) }}"
+    # Use the role's derived deploy type (from svc schema), not compose output
+    _svc_deploy_type: "{{ stack_deploy_type | default('swarm', true) | string | trim }}"

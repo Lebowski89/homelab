@@ -1,0 +1,391 @@
+---
+
+services_00_core:
+################################
+# GITEA
+################################
+  gitea:
+    name: "gitea"
+    stack: gitea
+    image: "docker.gitea.com/gitea:1.24.0"
+    named_networks:
+      overlay:
+        external: true
+    healthcheck:
+      test:
+        - "CMD"
+        - "wget"
+        - "--spider"
+        - "-q"
+        - "http://127.0.0.1:3000/api/healthz"
+    environment:
+      TZ: "{{ timezone }}"
+      USER_UID: "1000"
+      USER_GID: "1000"
+      UMASK: "022"
+    env_file:
+      - "/opt/gitea/.env"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: postgres_user, path: "/Postgres", name: "USER" }
+        - { var: postgres_pass, path: "/Postgres", name: "PASS" }
+    ports:
+      web:
+        published: 3888
+        target: 3000
+        protocol: tcp
+        mode: ingress
+      ssh:
+        published: 2221
+        target: 22
+        protocol: tcp
+        mode: ingress
+    paths:
+      - path: "/opt/gitea"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    templates:
+      - src: "configs/core/gitea.env.j2"
+        dest: "/opt/gitea/.env"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+    volumes:
+      config:
+        type: bind
+        source: "/opt/gitea"
+        target: "/data"
+        read_only: false
+    postgres:
+      enable: true
+      databases:
+        - "gitea"
+    traefik:
+      enable: true
+      port: 3000
+      api_rule: ""
+      sso: authelia
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "localhost"
+      constraints: "node.labels.ansible_host == localhost"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# HOMEPAGE
+################################
+  homepage:
+    name: "homepage"
+    stack: homepage
+    image: "ghcr.io/gethomepage/homepage:v1.10.1"
+    named_networks:
+      overlay:
+        external: true
+    healthcheck:
+      test:
+        - "CMD"
+        - "wget"
+        - "--spider"
+        - "-q"
+        - "http://127.0.0.1:3000/"
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+      HOMEPAGE_ALLOWED_HOSTS: "homepage.home.nosugarmaxtaste.com,homepage.nosugarmaxtaste.com"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: autobrr_api, path: "/AutoBrr", name: "API" }
+        - { var: bazarr_api, path: "/Bazarr", name: "API" }
+        - { var: grafana_user, path: "/Grafana", name: "USER" }
+        - { var: grafana_pass, path: "/Grafana", name: "PASS" }
+        - { var: jellyseerr_api, path: "/Jellyseerr", name: "API" }
+        - { var: lidarr_api, path: "/Lidarr", name: "API" }
+        - { var: ombi_api, path: "/Ombi", name: "API" }
+        - { var: plex_token, path: "/Plex", name: "TOKEN" }
+        - { var: portainer_token, path: "/Portainer", name: "HOMEPAGE_TOKEN" }
+        - { var: prowlarr_api, path: "/Prowlarr", name: "API" }
+        - { var: qui_swarm_api, path: "/HomePage", name: "QUI_API_SWARM" }
+        - { var: qui_unraid_api, path: "/HomePage", name: "QUI_API_UNRAID" }
+        - { var: radarr_api, path: "/Radarr", name: "API" }
+        - { var: radarr_4k_api, path: "/Radarr-4K", name: "API" }
+        - { var: sabnzbd_api, path: "/SABnzbd", name: "API" }
+        - { var: sonarr_api, path: "/Sonarr", name: "API" }
+        - { var: sonarr_4k_api, path: "/Sonarr-4K", name: "API" }
+        - { var: stash_api, path: "/Stash", name: "API" }
+        - { var: tautulli_api, path: "/Tautulli", name: "API" }
+        - { var: unifi_user, path: "/Unifi", name: "USER" }
+        - { var: unifi_pass, path: "/Unifi", name: "PASS" }
+    ports:
+      web:
+        published: 3075
+        target: 3000
+        protocol: tcp
+        mode: ingress
+    paths:
+      - path: "/opt/homepage"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    templates:
+      - src: "configs/core/homepage/docker.yaml.j2"
+        dest: "/opt/homepage/docker.yaml"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+      - src: "configs/core/homepage/services.yaml.j2"
+        dest: "/opt/homepage/services.yaml"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+      - src: "configs/core/homepage/settings.yaml.j2"
+        dest: "/opt/homepage/settings.yaml"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+      - src: "configs/core/homepage/bookmarks.yaml.j2"
+        dest: "/opt/homepage/bookmarks.yaml"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+    volumes:
+      config:
+        type: bind
+        source: "/opt/homepage"
+        target: "/app/config"
+        read_only: false
+    traefik:
+      enable: true
+      port: 3000
+      api_rule: ""
+      sso: authelia
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "localhost"
+      constraints:
+        - "node.labels.ansible_host == localhost"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# PORTAINER
+################################
+  portainer:
+    name: portainer
+    stack: portainer
+    image: portainer/portainer-ce:2.38.0-linux-amd64-alpine
+    named_networks:
+      overlay:
+        external: true
+    command:
+      - "-H tcp://tasks.agent:9001 --tlsskipverify"
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+    paths:
+      - path: /opt/portainer
+        state: directory
+        owner: 1000
+        group: 1000
+        mode: 0755
+    volumes:
+      config:
+        type: bind
+        source: /opt/portainer
+        target: /data
+        read_only: false
+      docker_sock:
+        type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+    traefik:
+      enable: true
+      port: 9000
+      internal_api: true
+      internal_api_paths: /api
+      sso: authelia
+    deploy:
+      type: swarm
+      mode: replicated
+      replicas: 1
+      host: localhost
+      constraints:
+        - node.role == manager
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+  portainer_agent:
+    name: agent
+    stack: portainer
+    image: "portainer/agent:2.38.0-linux-amd64-alpine"
+    named_networks:
+      overlay:
+        external: true
+    volumes:
+      docker_volumes:
+        type: bind
+        source: /var/lib/docker/volumes
+        target: /var/lib/docker/volumes
+      docker_sock:
+        type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+    deploy:
+      type: swarm
+      mode: global
+      constraints:
+        - node.platform.os == linux
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# TECHNITIUM
+################################
+  technitium:
+    name: "technitium"
+    stack: technitium
+    image: "technitium/dns-server:14.3.0"
+    named_networks:
+      outside:
+        external: true
+        name: host   # Docker Swarm host networking workaround
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+      DNS_SERVER_ADMIN_PASSWORD_FILE: /run/secrets/technitium_admin_secret
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: technitium_admin_pass, path: "/Technitium", name: "ADMIN_PASS", docker_secret: "technitium_admin_secret" }
+    secrets:
+      - "technitium_admin_secret"
+    paths:
+      - path: "/opt/technitium"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    volumes:
+      config:
+        type: bind
+        source: "/opt/technitium"
+        target: "/etc/dns"
+        read_only: false
+    deploy:
+      type: "swarm"
+      mode: "global"
+      host: ["localhost", "plex"]
+      constraints:
+        - "node.labels.dns == technitium"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# VAULTWARDEN
+################################
+  vaultwarden:
+    name: "vaultwarden"
+    stack: vaultwarden
+    image: "vaultwarden/server:1.35.2"
+    named_networks:
+      overlay:
+        external: true
+    user: "1000:1000"
+    environment:
+      TZ: "{{ timezone }}"
+      ADMIN_TOKEN_FILE: /run/secrets/vaultwarden_admin_secret
+    env_file:
+      - "/opt/vaultwarden/.env"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: postgres_user, path: "/Postgres", name: "USER" }
+        - { var: postgres_pass, path: "/Postgres", name: "PASS" }
+        - { var: smtp_email, path: "/Porkbun", name: "SMTP_EMAIL" }      
+        - { var: smtp_host, path: "/Porkbun", name: "SMTP_HOST" }
+        - { var: smtp_password, path: "/Porkbun", name: "SMTP_PASS" }
+        - { var: smtp_port, path: "/Porkbun", name: "SMTP_PORT" }
+        - { var: smtp_sender, path: "/Porkbun", name: "SMTP_SENDER" }
+        - { var: smtp_username, path: "/Porkbun", name: "SMTP_USER" }
+    secrets:
+      - vaultwarden_admin_secret
+    # ports:
+    #   web:
+    #     published: 6423
+    #     target: 80
+    #     protocol: tcp
+    #     mode: ingress
+    paths:
+      - path: "/opt/vaultwarden"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    templates:
+      - src: "configs/core/vaultwarden.env.j2"
+        dest: "/opt/vaultwarden/.env"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+    volumes:
+      config:
+        type: bind
+        source: "/opt/vaultwarden"
+        target: "/data"
+        read_only: false
+    postgres:
+      enable: true
+      databases:
+        - "vaultwarden"
+    traefik:
+      enable: true
+      port: 80
+      sso: authelia
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "localhost"
+      constraints:
+        - "node.labels.ansible_host == localhost"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
