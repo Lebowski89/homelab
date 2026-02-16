@@ -2,13 +2,13 @@
 
 services_20_arrs:
 
-################################
-# BAZARR
-################################
+  ################################
+  # BAZARR
+  ################################
   bazarr:
-    name: "bazarr"
+    name: bazarr
     stack: arrs
-    image: "ghcr.io/hotio/bazarr:release-1.5.5"
+    image: ghcr.io/hotio/bazarr:release-1.5.5
     named_networks:
       overlay:
         external: true
@@ -31,48 +31,62 @@ services_20_arrs:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: bazarr_api, path: "/Bazarr", name: "API" }
-        - { var: opensubtitlescom_user, path: "/Bazarr", name: "OPENSUBSCOM_USER" }
-        - { var: opensubtitlescom_pass, path: "/Bazarr", name: "OPENSUBSCOM_PASS" }
-        - { var: radarr_api, path: "/Radarr", name: "API" }
-        - { var: sonarr_api, path: "/Sonarr", name: "API" }
-        - { var: postgres_user, path: "/Postgres", name: "USER" }
-        - { var: postgres_pass, path: "/Postgres", name: "PASS" }
+        - var: bazarr_api
+          path: "/Bazarr"
+          name: API
+        - var: opensubtitlescom_user
+          path: "/Bazarr"
+          name: OPENSUBSCOM_USER
+        - var: opensubtitlescom_pass
+          path: "/Bazarr"
+          name: OPENSUBSCOM_PASS
+        - var: radarr_api
+          path: "/Radarr"
+          name: API
+        - var: sonarr_api
+          path: "/Sonarr"
+          name: API
+        - var: postgres_user
+          path: "/Postgres"
+          name: USER
+        - var: postgres_pass
+          path: "/Postgres"
+          name: PASS
     paths:
-      - path: "/mnt/user/appdata/bazarr"
+      - path: /mnt/user/appdata/bazarr
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
-      - path: "/mnt/user/appdata/bazarr/config"
+        owner: 99
+        group: 100
+        mode: 0755
+      - path: /mnt/user/appdata/bazarr/config
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
+        owner: 99
+        group: 100
+        mode: 0755
     copies:
-      - src: "files/themepark/98-themepark-bazarr"
-        dest: "/mnt/user/appdata/bazarr/98-themepark-bazarr"
-        owner: "99"
-        group: "100"
-        mode: "0755"
+      - src: files/themepark/98-themepark-bazarr
+        dest: /mnt/user/appdata/bazarr/98-themepark-bazarr
+        owner: 99
+        group: 100
+        mode: 0755
         force: false
         wait: true
         wait_timeout: 30
     volumes:
       config:
         type: bind
-        source: "/mnt/user/appdata/bazarr"
-        target: "/config"
+        source: /mnt/user/appdata/bazarr
+        target: /config
         read_only: false
       media:
         type: bind
-        source: "/mnt/user/data"
-        target: "/data"
+        source: /mnt/user/data
+        target: /data
         read_only: false
       themepark:
         type: bind
-        source: "/mnt/user/appdata/bazarr/98-themepark-bazarr"
-        target: "/etc/cont-init.d/98-themepark"
+        source: /mnt/user/appdata/bazarr/98-themepark-bazarr
+        target: /etc/cont-init.d/98-themepark
         read_only: false
     traefik:
       enable: true
@@ -87,14 +101,14 @@ services_20_arrs:
     postgres:
       enable: true
       databases:
-        - "bazarr"
+        - bazarr
     deploy:
-      type: "swarm"
-      mode: "replicated"
+      type: swarm
+      mode: replicated
       replicas: 1
-      host: "unraid"
+      host: unraid
       constraints:
-        - "node.labels.ansible_host == unraid"
+        - node.labels.ansible_host == unraid
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -105,9 +119,9 @@ services_20_arrs:
 # LIDARR
 ################################
   lidarr:
-    name: "lidarr"
+    name: lidarr
     stack: arrs
-    image: "ghcr.io/hotio/lidarr:release-3.1.0.4875"
+    image: ghcr.io/hotio/lidarr:release-3.1.0.4875
     named_networks:
       overlay:
         external: true
@@ -137,43 +151,52 @@ services_20_arrs:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: lidarr_api, path: "/Lidarr", name: "API", docker_secret: "lidarr_api_secret" }
-        - { var: postgres_user, path: "/Postgres", name: "USER",  docker_secret: "postgres_user_secret" }
-        - { var: postgres_pass, path: "/Postgres", name: "PASS",  docker_secret: "postgres_pass_secret" }
+        - var: lidarr_api
+          path: "/Lidarr"
+          name: API
+          docker_secret: lidarr_api_secret
+        - var: postgres_user
+          path: "/Postgres"
+          name: USER
+          docker_secret: postgres_user_secret
+        - var: postgres_pass
+          path: "/Postgres"
+          name: PASS
+          docker_secret: postgres_pass_secret
     secrets:
       - lidarr_api_secret
       - postgres_user_secret
       - postgres_pass_secret
     paths:
-      - path: "/mnt/user/appdata/lidarr"
+      - path: /mnt/user/appdata/lidarr
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
+        owner: 99
+        group: 100
+        mode: 0755
     copies:
-      - src: "files/themepark/98-themepark-lidarr"
-        dest: "/mnt/user/appdata/lidarr/98-themepark-lidarr"
-        owner: "99"
-        group: "100"
-        mode: "0755"
+      - src: files/themepark/98-themepark-lidarr
+        dest: /mnt/user/appdata/lidarr/98-themepark-lidarr
+        owner: 99
+        group: 100
+        mode: 0755
         force: false
         wait: true
         wait_timeout: 30
     volumes:
       config:
         type: bind
-        source: "/mnt/user/appdata/lidarr"
-        target: "/config"
+        source: /mnt/user/appdata/lidarr
+        target: /config
         read_only: false
       media:
         type: bind
-        source: "/mnt/user/data"
-        target: "/data"
+        source: /mnt/user/data
+        target: /data
         read_only: false
       themepark:
         type: bind
-        source: "/mnt/user/appdata/lidarr/98-themepark-lidarr"
-        target: "/etc/cont-init.d/98-themepark"
+        source: /mnt/user/appdata/lidarr/98-themepark-lidarr
+        target: /etc/cont-init.d/98-themepark
         read_only: false
     traefik:
       enable: true
@@ -190,15 +213,15 @@ services_20_arrs:
     postgres:
       enable: true
       databases:
-        - "lidarr-main"
-        - "lidarr-log"
+        - lidarr-main
+        - lidarr-log
     deploy:
-      type: "swarm"
-      mode: "replicated"
+      type: swarm
+      mode: replicated
       replicas: 1
-      host: "unraid"
+      host: unraid
       constraints:
-        - "node.labels.ansible_host == unraid"
+        - node.labels.ansible_host == unraid
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -209,9 +232,9 @@ services_20_arrs:
 # PROWLARR
 ################################
   prowlarr:
-    name: "prowlarr"
+    name: prowlarr
     stack: arrs
-    image: "ghcr.io/hotio/prowlarr:release-2.3.0.5236"
+    image: ghcr.io/hotio/prowlarr:release-2.3.0.5236
     named_networks:
       overlay:
         external: true
@@ -222,6 +245,10 @@ services_20_arrs:
         - "--fail"
         - "http://localhost:9696"
     environment:
+      TZ: "{{ timezone }}"
+      PUID: "99"
+      PGID: "100"
+      UMASK: "022"
       PROWLARR__APP__INSTANCENAME: "Prowlarr"
       PROWLARR__SERVER__PORT: "9696"
       PROWLARR__AUTH__METHOD: "External"
@@ -239,43 +266,52 @@ services_20_arrs:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: prowlarr_api, path: "/Prowlarr", name: "API", docker_secret: "prowlarr_api_secret" }
-        - { var: postgres_user, path: "/Postgres", name: "USER", docker_secret: "postgres_user_secret" }
-        - { var: postgres_pass, path: "/Postgres", name: "PASS", docker_secret: "postgres_pass_secret" }
+        - var: prowlarr_api
+          path: "/Prowlarr"
+          name: API
+          docker_secret: prowlarr_api_secret
+        - var: postgres_user
+          path: "/Postgres"
+          name: USER
+          docker_secret: postgres_user_secret
+        - var: postgres_pass
+          path: "/Postgres"
+          name: PASS
+          docker_secret: postgres_pass_secret
     secrets:
       - prowlarr_api_secret
       - postgres_user_secret
       - postgres_pass_secret
     paths:
-      - path: "/mnt/user/appdata/prowlarr"
+      - path: /mnt/user/appdata/prowlarr
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
+        owner: 99
+        group: 100
+        mode: 0755
     copies:
-      - src: "files/themepark/98-themepark-prowlarr"
-        dest: "/mnt/user/appdata/prowlarr/98-themepark-prowlarr"
-        owner: "99"
-        group: "100"
-        mode: "0755"
+      - src: files/themepark/98-themepark-prowlarr
+        dest: /mnt/user/appdata/prowlarr/98-themepark-prowlarr
+        owner: 99
+        group: 100
+        mode: 0755
         force: false
         wait: true
         wait_timeout: 30
     volumes:
       config:
         type: bind
-        source: "/mnt/user/appdata/prowlarr"
-        target: "/config"
+        source: /mnt/user/appdata/prowlarr
+        target: /config
         read_only: false
       media:
         type: bind
-        source: "/mnt/user/data"
-        target: "/data"
+        source: /mnt/user/data
+        target: /data
         read_only: false
       themepark:
         type: bind
-        source: "/mnt/user/appdata/prowlarr/98-themepark-prowlarr"
-        target: "/etc/cont-init.d/98-themepark"
+        source: /mnt/user/appdata/prowlarr/98-themepark-prowlarr
+        target: /etc/cont-init.d/98-themepark
         read_only: false
     traefik:
       enable: true
@@ -293,16 +329,16 @@ services_20_arrs:
     postgres:
       enable: true
       databases:
-        - "prowlarr-main"
-        - "prowlarr-log"
+        - prowlarr-main
+        - prowlarr-log
       clean_sqlite: true
     deploy:
-      type: "swarm"
-      mode: "replicated"
+      type: swarm
+      mode: replicated
       replicas: 1
-      host: "unraid"
+      host: unraid
       constraints:
-        - "node.labels.ansible_host == unraid"
+        - node.labels.ansible_host == unraid
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -313,9 +349,9 @@ services_20_arrs:
 # RADARR
 ################################
   radarr:
-    name: "radarr"
+    name: radarr
     stack: arrs
-    image: "ghcr.io/hotio/radarr:release-6.0.4.10291"
+    image: ghcr.io/hotio/radarr:release-6.0.4.10291
     named_networks:
       overlay:
         external: true
@@ -345,43 +381,52 @@ services_20_arrs:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: radarr_api, path: "/Radarr", name: "API", docker_secret: "radarr_api_secret" }
-        - { var: postgres_user, path: "/Postgres", name: "USER", docker_secret: "postgres_user_secret" }
-        - { var: postgres_pass, path: "/Postgres", name: "PASS", docker_secret: "postgres_pass_secret" }
+        - var: radarr_api
+          path: "/Radarr"
+          name: API
+          docker_secret: radarr_api_secret
+        - var: postgres_user
+          path: "/Postgres"
+          name: USER
+          docker_secret: postgres_user_secret
+        - var: postgres_pass
+          path: "/Postgres"
+          name: PASS
+          docker_secret: postgres_pass_secret
     secrets:
       - radarr_api_secret
       - postgres_user_secret
       - postgres_pass_secret
     paths:
-      - path: "/mnt/user/appdata/radarr"
+      - path: /mnt/user/appdata/radarr
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
+        owner: 99
+        group: 100
+        mode: 0755
     copies:
-      - src: "files/themepark/98-themepark-radarr"
-        dest: "/mnt/user/appdata/radarr/98-themepark-radarr"
-        owner: "99"
-        group: "100"
-        mode: "0755"
+      - src: files/themepark/98-themepark-radarr
+        dest: /mnt/user/appdata/radarr/98-themepark-radarr
+        owner: 99
+        group: 100
+        mode: 0755
         force: false
         wait: true
         wait_timeout: 30
     volumes:
       config:
         type: bind
-        source: "/mnt/user/appdata/radarr"
-        target: "/config"
+        source: /mnt/user/appdata/radarr
+        target: /config
         read_only: false
       media:
         type: bind
-        source: "/mnt/user/data"
-        target: "/data"
+        source: /mnt/user/data
+        target: /data
         read_only: false
       themepark:
         type: bind
-        source: "/mnt/user/appdata/radarr/98-themepark-radarr"
-        target: "/etc/cont-init.d/98-themepark"
+        source: /mnt/user/appdata/radarr/98-themepark-radarr
+        target: /etc/cont-init.d/98-themepark
         read_only: false
     traefik:
       enable: true
@@ -398,16 +443,16 @@ services_20_arrs:
     postgres:
       enable: true
       databases:
-        - "radarr-main"
-        - "radarr-log"
+        - radarr-main
+        - radarr-log
       clean_sqlite: true
     deploy:
-      type: "swarm"
-      mode: "replicated"
+      type: swarm
+      mode: replicated
       replicas: 1
-      host: "unraid"
+      host: unraid
       constraints:
-        - "node.labels.ansible_host == unraid"
+        - node.labels.ansible_host == unraid
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -418,9 +463,9 @@ services_20_arrs:
 # RADARR-4K
 ################################
   radarr_4k:
-    name: "radarr-4k"
+    name: radarr-4k
     stack: arrs
-    image: "ghcr.io/hotio/radarr:release-6.0.4.10291"
+    image: ghcr.io/hotio/radarr:release-6.0.4.10291
     named_networks:
       overlay:
         external: true
@@ -450,66 +495,78 @@ services_20_arrs:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: radarr_4k_api, path: "/Radarr-4K", name: "API", docker_secret: "radarr_4k_api_secret" }
-        - { var: postgres_user, path: "/Postgres", name: "USER", docker_secret: "postgres_user_secret" }
-        - { var: postgres_pass, path: "/Postgres", name: "PASS", docker_secret: "postgres_pass_secret" }
+        - var: radarr_4k_api
+          path: "/Radarr-4K"
+          name: API
+          docker_secret: radarr_4k_api_secret
+        - var: postgres_user
+          path: "/Postgres"
+          name: USER
+          docker_secret: postgres_user_secret
+        - var: postgres_pass
+          path: "/Postgres"
+          name: PASS
+          docker_secret: postgres_pass_secret
     secrets:
       - radarr_4k_api_secret
       - postgres_user_secret
       - postgres_pass_secret
     paths:
-      - path: "/mnt/user/appdata/radarr-4k"
+      - path: /mnt/user/appdata/radarr-4k
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
+        owner: 99
+        group: 100
+        mode: 0755
     copies:
-      - src: "files/themepark/98-themepark-radarr"
-        dest: "/mnt/user/appdata/radarr-4k/98-themepark-radarr"
-        owner: "99"
-        group: "100"
-        mode: "0755"
+      - src: files/themepark/98-themepark-radarr
+        dest: /mnt/user/appdata/radarr-4k/98-themepark-radarr
+        owner: 99
+        group: 100
+        mode: 0755
         force: false
         wait: true
         wait_timeout: 30
     volumes:
       config:
         type: bind
-        source: "/mnt/user/appdata/radarr-4k"
-        target: "/config"
+        source: /mnt/user/appdata/radarr-4k
+        target: /config
         read_only: false
       media:
         type: bind
-        source: "/mnt/user/data"
-        target: "/data"
+        source: /mnt/user/data
+        target: /data
         read_only: false
       themepark:
         type: bind
-        source: "/mnt/user/appdata/radarr-4k/98-themepark-radarr"
-        target: "/etc/cont-init.d/98-themepark"
+        source: /mnt/user/appdata/radarr-4k/98-themepark-radarr
+        target: /etc/cont-init.d/98-themepark
         read_only: false
     traefik:
       enable: true
       port: 7878
-      internal_api: true
-      internal_api_paths: "/api,/feed,/ping"
       sso: authelia
+      internal_api: true
+      internal_api_rules:
+        - "PathPrefix(`/api`)"
+        - "PathPrefix(`/feed`)"
+        - "PathPrefix(`/ping`)"
     themepark:
       app: radarr
       theme: hotline
     postgres:
       enable: true
       databases:
-        - "radarr-4k-main"
-        - "radarr-4k-log"
+        - radarr-4k-main
+        - radarr-4k-log
       clean_sqlite: true
     deploy:
-      type: "swarm"
-      mode: "replicated"
+      type: swarm
+      mode: replicated
       replicas: 1
-      host: "unraid"
+      host: unraid
       constraints:
-        - "node.labels.ansible_host == unraid"
+        - node.labels.ansible_host == unraid
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -520,77 +577,85 @@ services_20_arrs:
 # RECYCLARR
 ################################
   recyclarr:
-    name: "recyclarr"
+    name: recyclarr
     stack: arrs
-    image: "ghcr.io/recyclarr/recyclarr:7.5.2"
+    image: ghcr.io/recyclarr/recyclarr:7.5.2
     named_networks:
       overlay:
         external: true
-    user: "99:100"
+    user: 99:100
     environment:
       TZ: "{{ timezone }}"
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: radarr_api, path: "/Radarr", name: "API" }
-        - { var: radarr_4k_api, path: "/Radarr-4K", name: "API" }
-        - { var: sonarr_api, path: "/Sonarr", name: "API" }
-        - { var: sonarr_4k_api, path: "/Sonarr-4K", name: "API" }
+        - var: radarr_api
+          path: "/Radarr"
+          name: API
+        - var: radarr_4k_api
+          path: "/Radarr-4K"
+          name: API
+        - var: sonarr_api
+          path: "/Sonarr"
+          name: API
+        - var: sonarr_4k_api
+          path: "/Sonarr-4K"
+          name: API
     paths:
-      - path: "/mnt/user/appdata/recyclarr"
+      - path: /mnt/user/appdata/recyclarr
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
-      - path: "/mnt/user/appdata/recyclarr/configs"
+        owner: 99
+        group: 100
+        mode: 0755
+      - path: /mnt/user/appdata/recyclarr/configs
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
+        owner: 99
+        group: 100
+        mode: 0755
     templates:
-      - src: "configs/arrs/recyclarr/secrets.yml.j2"
-        dest: "/mnt/user/appdata/recyclarr/secrets.yml"
-        owner: "99"
-        group: "100"
-        mode: "0664"
+      - src: configs/arrs/recyclarr/secrets.yml.j2
+        dest: /mnt/user/appdata/recyclarr/secrets.yml
+        owner: 99
+        group: 100
+        mode: 0664
         force: true
-      - src: "configs/arrs/recyclarr/config_radarr.yml.j2"
-        dest: "/mnt/user/appdata/recyclarr/configs/radarr.yml"
-        owner: "99"
-        group: "100"
-        mode: "0664"
+      - src: configs/arrs/recyclarr/config_radarr.yml.j2
+        dest: /mnt/user/appdata/recyclarr/configs/radarr.yml
+        owner: 99
+        group: 100
+        mode: 0664
         force: true
-      - src: "configs/arrs/recyclarr/config_radarr-4k.yml.j2"
-        dest: "/mnt/user/appdata/recyclarr/configs/radarr-4k.yml"
-        owner: "99"
-        group: "100"
-        mode: "0664"
+      - src: configs/arrs/recyclarr/config_radarr-4k.yml.j2
+        dest: /mnt/user/appdata/recyclarr/configs/radarr-4k.yml
+        owner: 99
+        group: 100
+        mode: 0664
         force: true
-      - src: "configs/arrs/recyclarr/config_sonarr.yml.j2"
-        dest: "/mnt/user/appdata/recyclarr/configs/sonarr.yml"
-        owner: "99"
-        group: "100"
-        mode: "0664"
+      - src: configs/arrs/recyclarr/config_sonarr.yml.j2
+        dest: /mnt/user/appdata/recyclarr/configs/sonarr.yml
+        owner: 99
+        group: 100
+        mode: 0664
         force: true
-      - src: "configs/arrs/recyclarr/config_sonarr-4k.yml.j2"
-        dest: "/mnt/user/appdata/recyclarr/configs/sonarr-4k.yml"
-        owner: "99"
-        group: "100"
-        mode: "0664"
+      - src: configs/arrs/recyclarr/config_sonarr-4k.yml.j2
+        dest: /mnt/user/appdata/recyclarr/configs/sonarr-4k.yml
+        owner: 99
+        group: 100
+        mode: 0664
         force: true
     volumes:
       config:
         type: bind
-        source: "/mnt/user/appdata/recyclarr"
-        target: "/config"
+        source: /mnt/user/appdata/recyclarr
+        target: /config
         read_only: false
     deploy:
-      type: "swarm"
-      mode: "replicated"
+      type: swarm
+      mode: replicated
       replicas: 1
-      host: "unraid"
+      host: unraid
       constraints:
-        - "node.labels.ansible_host == unraid"
+        - node.labels.ansible_host == unraid
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -613,8 +678,8 @@ services_20_arrs:
         - "touch /data/media/tv/.healthcheck && rm -f /data/media/tv/.healthcheck || exit 1"
     environment:
       TZ: "{{ timezone }}"
-      PUID: "99"
-      PGID: "100"
+      PUID: 99
+      PGID: 100
       UMASK: "022"
       SONARR__APP__INSTANCENAME: "Sonarr"
       SONARR__SERVER__PORT: "8989"
@@ -633,9 +698,9 @@ services_20_arrs:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: sonarr_api, path: "/Sonarr", name: "API", docker_secret: "sonarr_api_secret" }
-        - { var: postgres_user, path: "/Postgres", name: "USER", docker_secret: "postgres_user_secret" }
-        - { var: postgres_pass, path: "/Postgres", name: "PASS", docker_secret: "postgres_pass_secret" }
+        - var: sonarr_api, path: "/Sonarr", name: "API", docker_secret: "sonarr_api_secret" }
+        - var: postgres_user, path: "/Postgres", name: "USER", docker_secret: "postgres_user_secret" }
+        - var: postgres_pass, path: "/Postgres", name: "PASS", docker_secret: "postgres_pass_secret" }
     secrets:
       - sonarr_api_secret
       - postgres_user_secret
@@ -643,15 +708,15 @@ services_20_arrs:
     paths:
       - path: "/mnt/user/appdata/sonarr"
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
+        owner: 99
+        group: 100
+        mode: 0755
     copies:
       - src: "files/themepark/98-themepark-sonarr"
         dest: "/mnt/user/appdata/sonarr/98-themepark-sonarr"
-        owner: "99"
-        group: "100"
-        mode: "0755"
+        owner: 99
+        group: 100
+        mode: 0755
         force: false
         wait: true
         wait_timeout: 30
@@ -706,9 +771,9 @@ services_20_arrs:
 # SONARR-4K
 ################################
   sonarr_4k:
-    name: "sonarr-4k"
+    name: sonarr-4k
     stack: arrs
-    image: "ghcr.io/hotio/sonarr:release-4.0.16.2944"
+    image: ghcr.io/hotio/sonarr:release-4.0.16.2944
     named_networks:
       overlay:
         external: true
@@ -738,43 +803,52 @@ services_20_arrs:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: sonarr_4k_api, path: "/Sonarr-4K", name: "API", docker_secret: "sonarr_4k_api_secret" }
-        - { var: postgres_user, path: "/Postgres", name: "USER", docker_secret: "postgres_user_secret" }
-        - { var: postgres_pass, path: "/Postgres", name: "PASS", docker_secret: "postgres_pass_secret" }
+        - var: sonarr_4k_api
+          path: "/Sonarr-4K"
+          name: API
+          docker_secret: sonarr_4k_api_secret
+        - var: postgres_user
+          path: "/Postgres"
+          name: USER
+          docker_secret: postgres_user_secret
+        - var: postgres_pass
+          path: "/Postgres"
+          name: PASS
+          docker_secret: postgres_pass_secret
     secrets:
       - sonarr_4k_api_secret
       - postgres_user_secret
       - postgres_pass_secret
     paths:
-      - path: "/mnt/user/appdata/sonarr-4k"
+      - path: /mnt/user/appdata/sonarr-4k
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
+        owner: 99
+        group: 100
+        mode: 0755
     copies:
-      - src: "files/themepark/98-themepark-sonarr"
-        dest: "/mnt/user/appdata/sonarr-4k/98-themepark-sonarr"
-        owner: "99"
-        group: "100"
-        mode: "0755"
+      - src: files/themepark/98-themepark-sonarr
+        dest: /mnt/user/appdata/sonarr-4k/98-themepark-sonarr
+        owner: 99
+        group: 100
+        mode: 0755
         force: false
         wait: true
         wait_timeout: 30
     volumes:
       config:
         type: bind
-        source: "/mnt/user/appdata/sonarr-4k"
-        target: "/config"
+        source: /mnt/user/appdata/sonarr-4k
+        target: /config
         read_only: false
       media:
         type: bind
-        source: "/mnt/user/data"
-        target: "/data"
+        source: /mnt/user/data
+        target: /data
         read_only: false
       themepark:
         type: bind
-        source: "/mnt/user/appdata/sonarr-4k/98-themepark-sonarr"
-        target: "/etc/cont-init.d/98-themepark"
+        source: /mnt/user/appdata/sonarr-4k/98-themepark-sonarr
+        target: /etc/cont-init.d/98-themepark
         read_only: false
     traefik:
       enable: true
@@ -791,16 +865,16 @@ services_20_arrs:
     postgres:
       enable: true
       databases:
-        - "sonarr-4k-main"
-        - "sonarr-4k-log"
+        - sonarr-4k-main
+        - sonarr-4k-log
       clean_sqlite: true
     deploy:
-      type: "swarm"
-      mode: "replicated"
+      type: swarm
+      mode: replicated
       replicas: 1
-      host: "unraid"
+      host: unraid
       constraints:
-        - "node.labels.ansible_host == unraid"
+        - node.labels.ansible_host == unraid
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -811,9 +885,9 @@ services_20_arrs:
 # SPORTARR
 ################################
   sportarr:
-    name: "sportarr"
+    name: sportarr
     stack: arrs
-    image: "sportarr/sportarr:latest"
+    image: sportarr/sportarr:latest
     named_networks:
       overlay:
         external: true
@@ -823,26 +897,26 @@ services_20_arrs:
       PGID: "100"
       UMASK: "022"
     paths:
-      - path: "/mnt/user/appdata/sportarr"
+      - path: /mnt/user/appdata/sportarr
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
-      - path: "/mnt/user/appdata/sportarr/config"
+        owner: 99
+        group: 100
+        mode: 0755
+      - path: /mnt/user/appdata/sportarr/config
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
+        owner: 99
+        group: 100
+        mode: 0755
     volumes:
       config:
         type: bind
-        source: "/mnt/user/appdata/sportarr/config"
-        target: "/config"
+        source: /mnt/user/appdata/sportarr/config
+        target: /config
         read_only: false
       media:
         type: bind
-        source: "/mnt/user/data"
-        target: "/data"
+        source: /mnt/user/data
+        target: /data
         read_only: false
     traefik:
       enable: true
@@ -854,12 +928,12 @@ services_20_arrs:
         - "PathPrefix(`/feed`)"
         - "PathPrefix(`/ping`)"
     deploy:
-      type: "swarm"
-      mode: "replicated"
+      type: swarm
+      mode: replicated
       replicas: 1
-      host: "unraid"
+      host: unraid
       constraints:
-        - "node.labels.ansible_host == unraid"
+        - node.labels.ansible_host == unraid
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -870,9 +944,9 @@ services_20_arrs:
 # WHISPARR
 ################################
   whisparr: 
-    name: "whisparr"
+    name: whisparr
     stack: arrs
-    image: "ghcr.io/hotio/whisparr:v3-3.2.3-release.219"
+    image: ghcr.io/hotio/whisparr:v3-3.2.3-release.219
     named_networks:
       overlay:
         external: true
@@ -902,43 +976,52 @@ services_20_arrs:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: whisparr_api, path: "/Whisparr", name: "API", docker_secret: "whisparr_api_secret" }
-        - { var: postgres_user, path: "/Postgres", name: "USER", docker_secret: "postgres_user_secret" }
-        - { var: postgres_pass, path: "/Postgres", name: "PASS", docker_secret: "postgres_pass_secret" }
+        - var: whisparr_api
+          path: "/Whisparr"
+          name: API
+          docker_secret: whisparr_api_secret
+        - var: postgres_user
+          path: "/Postgres"
+          name: USER
+          docker_secret: postgres_user_secret
+        - var: postgres_pass
+          path: "/Postgres"
+          name: PASS
+          docker_secret: postgres_pass_secret
     secrets:
       - whisparr_api_secret
       - postgres_user_secret
       - postgres_pass_secret
     paths:
-      - path: "/mnt/user/appdata/whisparr"
+      - path: /mnt/user/appdata/whisparr
         state: directory
-        owner: "99"
-        group: "100"
-        mode: "0755"
+        owner: 99
+        group: 100
+        mode: 0755
     copies:
-      - src: "files/themepark/98-themepark-whisparr"
-        dest: "/mnt/user/appdata/whisparr/98-themepark-whisparr"
-        owner: "99"
-        group: "100"
-        mode: "0755"
+      - src: files/themepark/98-themepark-whisparr
+        dest: /mnt/user/appdata/whisparr/98-themepark-whisparr
+        owner: 99
+        group: 100
+        mode: 0755
         force: false
         wait: true
         wait_timeout: 30
     volumes:
       config:
         type: bind
-        source: "/mnt/user/appdata/whisparr"
-        target: "/config"
+        source: /mnt/user/appdata/whisparr
+        target: /config
         read_only: false
       media:
         type: bind
-        source: "/mnt/user/data"
-        target: "/data"
+        source: /mnt/user/data
+        target: /data
         read_only: false
       themepark:
         type: bind
-        source: "/mnt/user/appdata/whisparr/98-themepark-whisparr"
-        target: "/etc/cont-init.d/98-themepark"
+        source: /mnt/user/appdata/whisparr/98-themepark-whisparr
+        target: /etc/cont-init.d/98-themepark
         read_only: false
     traefik:
       enable: true
@@ -955,16 +1038,16 @@ services_20_arrs:
     postgres:
       enable: true
       databases:
-        - "whisparr-main-v3"
-        - "whisparr-log-v3"
+        - whisparr-main-v3
+        - whisparr-log-v3
       clean_sqlite: true
     deploy:
-      type: "swarm"
-      mode: "replicated"
+      type: swarm
+      mode: replicated
       replicas: 1
-      host: "unraid"
+      host: unraid
       constraints:
-        - "node.labels.ansible_host == unraid"
+        - node.labels.ansible_host == unraid
       restart_policy:
         condition: on-failure
         delay: 10s
