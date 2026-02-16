@@ -5,9 +5,9 @@ services_10_proxy:
 # AUTHELIA
 ################################
   authelia:
-    name: "authelia"
+    name: authelia
     stack: proxy
-    image: "authelia/authelia:4.39.15"
+    image: authelia/authelia:4.39.15
     named_networks:
       overlay:
         external: true
@@ -82,47 +82,47 @@ services_10_proxy:
         - { var: smtp_sender, path: "/Porkbun", name: "SMTP_SENDER" }
         - { var: smtp_username, path: "/Porkbun", name: "SMTP_USER" }
     secrets:
-      - "authelia_session_key_secret"
-      - "authelia_storage_key_secret"
-      - "authelia_jwt_key_secret"
-      - "authelia_redis_secret"
-      - "postgres_pass_secret"
+      - authelia_session_key_secret
+      - authelia_storage_key_secret
+      - authelia_jwt_key_secret
+      - authelia_redis_secret
+      - postgres_pass_secret
     paths:
-      - path: "/opt/authelia"
+      - path: /opt/authelia
         state: directory
-        owner: "1000"
-        group: "1000"
-        mode: "0755"
+        owner: 1000
+        group: 1000
+        mode: 0755
     templates:
-      - src: "configs/proxy/authelia/config.yml.j2"
-        dest: "/opt/authelia/configuration.yml"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
+      - src: configs/proxy/authelia/config.yml.j2
+        dest: /opt/authelia/configuration.yml
+        owner: 1000
+        group: 1000
+        mode: 0664
         force: true
-      - src: "configs/proxy/authelia/users_database.yml.j2"
-        dest: "/opt/authelia/users_database.yml"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
+      - src: configs/proxy/authelia/users_database.yml.j2
+        dest: /opt/authelia/users_database.yml
+        owner: 1000
+        group: 1000
+        mode: 0664
         force: true
     volumes:
       config:
         type: bind
-        source: "/opt/authelia"
-        target: "/config"
+        source: /opt/authelia
+        target: /config
         read_only: false
     postgres:
       enable: true
       databases:
-        - "authelia"
+        - authelia
     deploy:
-      type: "swarm"
-      mode: "replicated"
-      replicas: "1"
-      host: "localhost"
+      type: swarm
+      mode: replicated
+      replicas: 1
+      host: localhost
       constraints:
-        - "node.labels.ansible_host == localhost"
+        - node.labels.ansible_host == localhost
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -132,11 +132,10 @@ services_10_proxy:
 ################################
 # AUTHELIA-REDIS
 ################################
-
   authelia_redis:
-    name: "authelia-redis"
+    name: authelia-redis
     stack: authelia-redis
-    image: "redis:8.4-alpine"
+    image: redis:8.4-alpine
     named_networks:
       overlay:
         external: true
@@ -153,24 +152,24 @@ services_10_proxy:
     secrets:
       - authelia_redis_secret
     paths:
-      - path: "/opt/authelia/redis"
+      - path: /opt/authelia/redis
         state: directory
-        owner: "1000"
-        group: "1000"
-        mode: "0755"
+        owner: 1000
+        group: 1000
+        mode: 0755
     volumes:
       config:
         type: bind
-        source: "/opt/authelia/redis"
-        target: "/data"
+        source: /opt/authelia/redis
+        target: /data
         read_only: false
     deploy:
-      type: "swarm"
-      mode: "replicated"
-      replicas: "1"
-      host: "localhost"
+      type: swarm
+      mode: replicated
+      replicas: 1
+      host: localhost
       constraints:
-        - "node.labels.ansible_host == localhost"
+        - node.labels.ansible_host == localhost
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -181,9 +180,9 @@ services_10_proxy:
 # TRAEFIK
 ################################
   traefik:
-    name: "traefik"
+    name: traefik
     stack: proxy
-    image: "traefik:v3.6.7"
+    image: traefik:v3.6.7
     named_networks:
       overlay:
         external: true
@@ -205,7 +204,7 @@ services_10_proxy:
       secrets_map:
         - { var: cloudflare_api, path: "/Cloudflare", name: "API", docker_secret: "cloudflare_api_secret" }
     secrets:
-      - "cloudflare_api_secret"
+      - cloudflare_api_secret
     ports:
       web:
         published: 80
@@ -218,73 +217,73 @@ services_10_proxy:
         protocol: tcp
         mode: host
     paths:
-      - path: "/opt/traefik"
+      - path: /opt/traefik
         state: directory
-        owner: "1000"
-        group: "1000"
-        mode: "0755"
-      - path: "/opt/traefik/dynamic"
+        owner: 1000
+        group: 1000
+        mode: 0755
+      - path: /opt/traefik/dynamic
         state: directory
-        owner: "1000"
-        group: "1000"
-      - path: "/opt/traefik/dynamic/services"
+        owner: 1000
+        group: 1000
+      - path: /opt/traefik/dynamic/services
         state: directory
-        owner: "1000"
-        group: "1000"
-        mode: "0755"
-      - path: "/opt/traefik/acme.json"
+        owner: 1000
+        group: 1000
+        mode: 0755
+      - path: /opt/traefik/acme.json
         state: touch
-        owner: "1000"
-        group: "1000"
-        mode: "0600"
+        owner: 1000
+        group: 1000
+        mode: 0600
     templates:
-      - src: "configs/proxy/traefik/config.yml.j2"
-        dest: "/opt/traefik/traefik.yml"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
+      - src: configs/proxy/traefik/config.yml.j2
+        dest: /opt/traefik/traefik.yml
+        owner: 1000
+        group: 1000
+        mode: 0664
         force: true
-      - src: "configs/proxy/traefik/middlewares.yml.j2"
-        dest: "/opt/traefik/dynamic/middlewares.yml"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
+      - src: configs/proxy/traefik/middlewares.yml.j2
+        dest: /opt/traefik/dynamic/middlewares.yml
+        owner: 1000
+        group: 1000
+        mode: 0664
         force: true
-      - src: "configs/proxy/authelia/middleware.yml.j2"
-        dest: "/opt/traefik/dynamic/authelia.yml"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
-      - src: "configs/proxy/authelia/router.yml.j2"
-        dest: "/opt/traefik/dynamic/services/authelia.yml"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
+      - src: configs/proxy/authelia/middleware.yml.j2
+        dest: /opt/traefik/dynamic/authelia.yml
+        owner: 1000
+        group: 1000
+        mode: 0664
+      - src: configs/proxy/authelia/router.yml.j2
+        dest: /opt/traefik/dynamic/services/authelia.yml
+        owner: 1000
+        group: 1000
+        mode: 0664
         force: true
-      - src: "configs/proxy/traefik/dashboard.yml.j2"
-        dest: "/opt/traefik/dynamic/services/traefik-dashboard.yml"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
+      - src: configs/proxy/traefik/dashboard.yml.j2
+        dest: /opt/traefik/dynamic/services/traefik-dashboard.yml
+        owner: 1000
+        group: 1000
+        mode: 0664
         force: true
     volumes:
       config:
         type: bind
-        source: "/opt/traefik"
-        target: "/etc/traefik"
+        source: /opt/traefik
+        target: /etc/traefik
         read_only: false
       docker_sock:
         type: bind
-        source: "/var/run/docker.sock"
-        target: "/var/run/docker.sock"
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
         read_only: true
     deploy:
-      type: "swarm"
-      mode: "replicated"
-      replicas: "1"
-      host: "localhost"
+      type: swarm
+      mode: replicated
+      replicas: 1
+      host: localhost
       constraints:
-        - "node.labels.ansible_host == localhost"
+        - node.labels.ansible_host == localhost
       restart_policy:
         condition: on-failure
         delay: 10s

@@ -5,9 +5,9 @@ services_00_core:
 # GITEA
 ################################
   gitea:
-    name: "gitea"
+    name: gitea
     stack: gitea
-    image: "docker.gitea.com/gitea:1.24.0"
+    image: docker.gitea.com/gitea:1.24.0
     named_networks:
       overlay:
         external: true
@@ -24,57 +24,45 @@ services_00_core:
       USER_GID: "1000"
       UMASK: "022"
     env_file:
-      - "/opt/gitea/.env"
+      - /opt/gitea/.env
     infisical:
       fail_on_empty: true
       secrets_map:
         - { var: postgres_user, path: "/Postgres", name: "USER" }
         - { var: postgres_pass, path: "/Postgres", name: "PASS" }
-    ports:
-      web:
-        published: 3888
-        target: 3000
-        protocol: tcp
-        mode: ingress
-      ssh:
-        published: 2221
-        target: 22
-        protocol: tcp
-        mode: ingress
     paths:
-      - path: "/opt/gitea"
+      - path: /opt/gitea
         state: directory
-        owner: "1000"
-        group: "1000"
-        mode: "0755"
+        owner: 1000
+        group: 1000
+        mode: 0755
     templates:
-      - src: "configs/core/gitea.env.j2"
-        dest: "/opt/gitea/.env"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
+      - src: configs/core/gitea.env.j2
+        dest: /opt/gitea/.env
+        owner: 1000
+        group: 1000
+        mode: 0664
         force: true
     volumes:
       config:
         type: bind
-        source: "/opt/gitea"
-        target: "/data"
+        source: /opt/gitea
+        target: /data
         read_only: false
     postgres:
       enable: true
       databases:
-        - "gitea"
+        - gitea
     traefik:
       enable: true
       port: 3000
-      api_rule: ""
       sso: authelia
     deploy:
-      type: "swarm"
-      mode: "replicated"
-      replicas: "1"
-      host: "localhost"
-      constraints: "node.labels.ansible_host == localhost"
+      type: swarm
+      mode: replicated
+      replicas: 1
+      host: localhost
+      constraints: node.labels.ansible_host == localhost
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -85,9 +73,9 @@ services_00_core:
 # HOMEPAGE
 ################################
   homepage:
-    name: "homepage"
+    name: homepage
     stack: homepage
-    image: "ghcr.io/gethomepage/homepage:v1.10.1"
+    image: ghcr.io/gethomepage/homepage:v1.10.1
     named_networks:
       overlay:
         external: true
@@ -128,61 +116,54 @@ services_00_core:
         - { var: tautulli_api, path: "/Tautulli", name: "API" }
         - { var: unifi_user, path: "/Unifi", name: "USER" }
         - { var: unifi_pass, path: "/Unifi", name: "PASS" }
-    ports:
-      web:
-        published: 3075
-        target: 3000
-        protocol: tcp
-        mode: ingress
     paths:
-      - path: "/opt/homepage"
+      - path: /opt/homepage
         state: directory
-        owner: "1000"
-        group: "1000"
-        mode: "0755"
+        owner: 1000
+        group: 1000
+        mode: 0755
     templates:
-      - src: "configs/core/homepage/docker.yaml.j2"
-        dest: "/opt/homepage/docker.yaml"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
+      - src: configs/core/homepage/docker.yaml.j2
+        dest: /opt/homepage/docker.yaml
+        owner: 1000
+        group: 1000
+        mode: 0664
         force: true
-      - src: "configs/core/homepage/services.yaml.j2"
-        dest: "/opt/homepage/services.yaml"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
+      - src: configs/core/homepage/services.yaml.j2
+        dest: /opt/homepage/services.yaml
+        owner: 1000
+        group: 1000
+        mode: 0664
         force: true
-      - src: "configs/core/homepage/settings.yaml.j2"
-        dest: "/opt/homepage/settings.yaml"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
+      - src: configs/core/homepage/settings.yaml.j2
+        dest: /opt/homepage/settings.yaml
+        owner: 1000
+        group: 1000
+        mode: 0664
         force: true
-      - src: "configs/core/homepage/bookmarks.yaml.j2"
-        dest: "/opt/homepage/bookmarks.yaml"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
+      - src: configs/core/homepage/bookmarks.yaml.j2
+        dest: /opt/homepage/bookmarks.yaml
+        owner: 1000
+        group: 1000
+        mode: 0664
         force: true
     volumes:
       config:
         type: bind
-        source: "/opt/homepage"
-        target: "/app/config"
+        source: /opt/homepage
+        target: /app/config
         read_only: false
     traefik:
       enable: true
       port: 3000
-      api_rule: ""
       sso: authelia
     deploy:
-      type: "swarm"
-      mode: "replicated"
-      replicas: "1"
-      host: "localhost"
+      type: swarm
+      mode: replicated
+      replicas: 1
+      host: localhost
       constraints:
-        - "node.labels.ansible_host == localhost"
+        - node.labels.ansible_host == localhost
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -244,7 +225,7 @@ services_00_core:
   portainer_agent:
     name: agent
     stack: portainer
-    image: "portainer/agent:2.38.0-linux-amd64-alpine"
+    image: portainer/agent:2.38.0-linux-amd64-alpine
     named_networks:
       overlay:
         external: true
@@ -272,13 +253,13 @@ services_00_core:
 # TECHNITIUM
 ################################
   technitium:
-    name: "technitium"
+    name: technitium
     stack: technitium
-    image: "technitium/dns-server:14.3.0"
+    image: technitium/dns-server:14.3.0
     named_networks:
       outside:
         external: true
-        name: host   # Docker Swarm host networking workaround
+        name: host
     environment:
       TZ: "{{ timezone }}"
       PUID: "1000"
@@ -290,25 +271,25 @@ services_00_core:
       secrets_map:
         - { var: technitium_admin_pass, path: "/Technitium", name: "ADMIN_PASS", docker_secret: "technitium_admin_secret" }
     secrets:
-      - "technitium_admin_secret"
+      - technitium_admin_secret
     paths:
-      - path: "/opt/technitium"
+      - path: /opt/technitium
         state: directory
-        owner: "1000"
-        group: "1000"
-        mode: "0755"
+        owner: 1000
+        group: 1000
+        mode: 0755
     volumes:
       config:
         type: bind
-        source: "/opt/technitium"
-        target: "/etc/dns"
+        source: /opt/technitium
+        target: /etc/dns
         read_only: false
     deploy:
-      type: "swarm"
-      mode: "global"
-      host: ["localhost", "plex"]
+      type: swarm
+      mode: global
+      host: [localhost, plex]
       constraints:
-        - "node.labels.dns == technitium"
+        - node.labels.dns == technitium
       restart_policy:
         condition: on-failure
         delay: 10s
@@ -319,18 +300,18 @@ services_00_core:
 # VAULTWARDEN
 ################################
   vaultwarden:
-    name: "vaultwarden"
+    name: vaultwarden
     stack: vaultwarden
-    image: "vaultwarden/server:1.35.2"
+    image: vaultwarden/server:1.35.2
     named_networks:
       overlay:
         external: true
-    user: "1000:1000"
+    user: 1000:1000
     environment:
       TZ: "{{ timezone }}"
       ADMIN_TOKEN_FILE: /run/secrets/vaultwarden_admin_secret
     env_file:
-      - "/opt/vaultwarden/.env"
+      - /opt/vaultwarden/.env
     infisical:
       fail_on_empty: true
       secrets_map:
@@ -344,46 +325,40 @@ services_00_core:
         - { var: smtp_username, path: "/Porkbun", name: "SMTP_USER" }
     secrets:
       - vaultwarden_admin_secret
-    # ports:
-    #   web:
-    #     published: 6423
-    #     target: 80
-    #     protocol: tcp
-    #     mode: ingress
     paths:
-      - path: "/opt/vaultwarden"
+      - path: /opt/vaultwarden
         state: directory
-        owner: "1000"
-        group: "1000"
-        mode: "0755"
+        owner: 1000
+        group: 1000
+        mode: 0755
     templates:
-      - src: "configs/core/vaultwarden.env.j2"
-        dest: "/opt/vaultwarden/.env"
-        owner: "1000"
-        group: "1000"
-        mode: "0664"
+      - src: configs/core/vaultwarden.env.j2
+        dest: /opt/vaultwarden/.env
+        owner: 1000
+        group: 1000
+        mode: 0664
         force: true
     volumes:
       config:
         type: bind
-        source: "/opt/vaultwarden"
-        target: "/data"
+        source: /opt/vaultwarden
+        target: /data
         read_only: false
     postgres:
       enable: true
       databases:
-        - "vaultwarden"
+        - vaultwarden
     traefik:
       enable: true
       port: 80
       sso: authelia
     deploy:
-      type: "swarm"
-      mode: "replicated"
-      replicas: "1"
-      host: "localhost"
+      type: swarm
+      mode: replicated
+      replicas: 1
+      host: localhost
       constraints:
-        - "node.labels.ansible_host == localhost"
+        - node.labels.ansible_host == localhost
       restart_policy:
         condition: on-failure
         delay: 10s
