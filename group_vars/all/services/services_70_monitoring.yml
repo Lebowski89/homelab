@@ -7,7 +7,7 @@ services_70_monitoring:
   alloy:
     name: alloy
     stack: alloy
-    image: grafana/alloy:v1.11.3
+    image: grafana/alloy:v1.13.1
     named_networks:
       overlay:
         external: true

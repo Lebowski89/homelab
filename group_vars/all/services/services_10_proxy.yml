@@ -135,7 +135,7 @@ services_10_proxy:
   authelia_redis:
     name: authelia-redis
     stack: authelia-redis
-    image: redis:8.4-alpine
+    image: redis:8.6-alpine
     named_networks:
       overlay:
         external: true
@@ -182,7 +182,7 @@ services_10_proxy:
   traefik:
     name: traefik
     stack: proxy
-    image: traefik:v3.6.7
+    image: traefik:v3.6.8
     named_networks:
       overlay:
         external: true
