@@ -1,0 +1,96 @@
+---
+
+- name: Ensure service_name is set
+  ansible.builtin.assert:
+    that:
+      - service_name is defined
+      - service_name | string | trim | length > 0
+    fail_msg: "service_name must be set before calling this helper"
+
+- name: Ensure labels_action is valid
+  ansible.builtin.assert:
+    that:
+      - labels_action | default('append') in ['append', 'replace', 'append_unique']
+    fail_msg: "labels_action must be 'append', 'replace', or 'append_unique'"
+
+- name: Ensure labels_precedence is valid
+  ansible.builtin.assert:
+    that:
+      - labels_precedence | default('new_wins') in ['new_wins', 'existing_wins']
+    fail_msg: "labels_precedence must be 'new_wins' or 'existing_wins'"
+
+# Accept labels_dict as:
+# - mapping: {k: v}
+# - list: ["k=v", "k=v", ...]
+- name: Normalize labels input to mapping
+  ansible.builtin.set_fact:
+    _labels_h_action: "{{ labels_action | default('append', true) | string | trim }}"
+    _labels_h_precedence: "{{ labels_precedence | default('new_wins', true) | string | trim }}"
+    _labels_h_existing: "{{ (compose_services | default({})).get(service_name, {}).get('labels', {}) | default({}, true) }}"
+    _labels_h_new: >-
+      {%- set out = {} -%}
+      {%- if (labels_dict is mapping) -%}
+        {%- set out = labels_dict -%}
+      {%- elif (labels_dict is sequence) and (labels_dict is not string) -%}
+        {%- for s in (labels_dict | list) -%}
+          {%- set st = (s | string | trim) -%}
+          {%- if (st | length) > 0 -%}
+            {%- if '=' in st -%}
+              {%- set parts = st.split('=', 1) -%}
+              {%- set k = (parts[0] | string | trim) -%}
+              {%- set v = (parts[1] | string | trim) -%}
+              {%- if (k | length) > 0 -%}
+                {%- set _ = out.update({k: v}) -%}
+              {%- endif -%}
+            {%- endif -%}
+          {%- endif -%}
+        {%- endfor -%}
+      {%- endif -%}
+      {{ out }}
+
+- name: Build final labels dict
+  ansible.builtin.set_fact:
+    _labels_h_final: >-
+      {{
+        (
+          _labels_h_new
+          if _labels_h_action == 'replace'
+          else
+          (
+            _labels_h_existing | combine(
+              dict(
+                (_labels_h_new | dict2items)
+                | rejectattr('key', 'in', (_labels_h_existing.keys() | list))
+                | map(attribute='key')
+                | zip(
+                    (_labels_h_new | dict2items)
+                    | rejectattr('key', 'in', (_labels_h_existing.keys() | list))
+                    | map(attribute='value')
+                  )
+              ),
+              recursive=true
+            )
+            if _labels_h_action == 'append_unique'
+            else
+            (
+              (_labels_h_existing | combine(_labels_h_new, recursive=true))
+              if _labels_h_precedence == 'new_wins'
+              else
+              (_labels_h_new | combine(_labels_h_existing, recursive=true))
+            )
+          )
+        )
+      }}
+
+- name: Attach labels to service
+  ansible.builtin.set_fact:
+    compose_services: >-
+      {{
+        (compose_services | default({}))
+        | combine({
+            service_name: (
+              ((compose_services | default({})).get(service_name, {}))
+              | combine({ 'labels': _labels_h_final }, recursive=true)
+            )
+          }, recursive=true)
+      }}

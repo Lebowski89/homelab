@@ -1,0 +1,355 @@
+---
+
+# helpers/compose/validate_svc.yml
+
+- name: Validate | svc is defined
+  ansible.builtin.assert:
+    that:
+      - svc is defined
+      - svc is mapping
+    fail_msg: "svc must be defined as a mapping before calling validate_svc.yml"
+
+################################
+# BASIC REQUIRED FIELDS (loose)
+################################
+
+- name: Validate | svc.name (optional)
+  when: svc.name is defined
+  ansible.builtin.assert:
+    that:
+      - svc.name is string
+      - (svc.name | string | trim | length) > 0
+    fail_msg: "svc.name must be a non-empty string when provided."
+
+- name: Validate | svc.image (optional but recommended)
+  when: svc.image is defined
+  ansible.builtin.assert:
+    that:
+      - svc.image is string
+      - (svc.image | string | trim | length) > 0
+    fail_msg: "svc.image must be a non-empty string when provided."
+
+################################
+# deploy
+################################
+
+- name: Validate | svc.deploy shape (optional)
+  when: svc.deploy is defined
+  ansible.builtin.assert:
+    that:
+      - svc.deploy is mapping
+    fail_msg: "svc.deploy must be a mapping when provided."
+
+- name: Validate | svc.deploy.type (optional)
+  when: svc.deploy is defined and svc.deploy is mapping and svc.deploy.type is defined
+  ansible.builtin.assert:
+    that:
+      - (svc.deploy.type | string | trim) in ['swarm', 'container']
+    fail_msg: "svc.deploy.type must be 'swarm' or 'container' when provided."
+
+- name: Validate | svc.deploy.mode (optional)
+  when: svc.deploy is defined and svc.deploy is mapping and svc.deploy.mode is defined
+  ansible.builtin.assert:
+    that:
+      - (svc.deploy.mode | string | trim) in ['replicated', 'global']
+    fail_msg: "svc.deploy.mode must be 'replicated' or 'global' when provided."
+
+- name: Validate | svc.deploy.replicas (optional)
+  when: svc.deploy is defined and svc.deploy is mapping and svc.deploy.replicas is defined
+  ansible.builtin.assert:
+    that:
+      - (svc.deploy.replicas | int) >= 0
+    fail_msg: "svc.deploy.replicas must be an integer >= 0 when provided."
+
+- name: Validate | svc.deploy.host (optional)
+  when: svc.deploy is defined and svc.deploy is mapping and svc.deploy.host is defined
+  ansible.builtin.assert:
+    that:
+      - svc.deploy.host is string
+      - (svc.deploy.host | string | trim | length) > 0
+    fail_msg: "svc.deploy.host must be a non-empty string when provided."
+
+- name: Validate | svc.deploy.constraints (optional - string or list)
+  when: svc.deploy is defined and svc.deploy is mapping and svc.deploy.constraints is defined
+  ansible.builtin.assert:
+    that:
+      - svc.deploy.constraints is string
+        or (svc.deploy.constraints is sequence and svc.deploy.constraints is not string)
+    fail_msg: "svc.deploy.constraints must be a string or a list of strings."
+
+################################
+# named_networks / named_volumes
+################################
+
+- name: Validate | svc.named_networks (optional)
+  when: svc.named_networks is defined
+  ansible.builtin.assert:
+    that:
+      - svc.named_networks is mapping
+    fail_msg: "svc.named_networks must be a mapping when provided."
+
+- name: Validate | svc.named_volumes (optional)
+  when: svc.named_volumes is defined
+  ansible.builtin.assert:
+    that:
+      - svc.named_volumes is mapping
+    fail_msg: "svc.named_volumes must be a mapping when provided."
+
+################################
+# directories
+################################
+
+- name: Validate | svc.directories shape (optional)
+  when: svc.directories is defined
+  ansible.builtin.assert:
+    that:
+      - svc.directories is sequence
+      - svc.directories is not string
+    fail_msg: "svc.directories must be a list of directory specs."
+
+- name: Validate | svc.directories entries (optional)
+  when: svc.directories is defined and (svc.directories | length > 0)
+  ansible.builtin.assert:
+    that:
+      - (svc.directories | select('mapping') | list | length) == (svc.directories | length)
+      - (svc.directories | map(attribute='path') | select('defined') | list | length) == (svc.directories | length)
+      - (svc.directories | map(attribute='path') | map('string') | map('trim') | reject('equalto','') | list | length) == (svc.directories | length)
+    fail_msg: "svc.directories must be a list of dicts and each entry must contain a non-empty 'path'."
+
+- name: Validate | svc.directories mode formatting (optional)
+  when: svc.directories is defined and (svc.directories | length > 0)
+  ansible.builtin.assert:
+    that:
+      - >
+        (
+          svc.directories
+          | selectattr('mode','defined')
+          | map(attribute='mode')
+          | map('string')
+          | map('trim')
+          | map('regex_search', '^[0-7]{3,4}$')
+          | reject('equalto', None)
+          | list
+          | length
+        )
+        ==
+        (svc.directories | selectattr('mode','defined') | list | length)
+    fail_msg: "If provided, directories[].mode must look like '755' or '0755'."
+
+################################
+# templates
+################################
+
+- name: Validate | svc.templates shape (optional)
+  when: svc.templates is defined
+  ansible.builtin.assert:
+    that:
+      - svc.templates is sequence
+      - svc.templates is not string
+    fail_msg: "svc.templates must be a list of template specs."
+
+- name: Validate | svc.templates entries (optional)
+  when: svc.templates is defined and (svc.templates | length > 0)
+  ansible.builtin.assert:
+    that:
+      - (svc.templates | select('mapping') | list | length) == (svc.templates | length)
+      - (svc.templates | map(attribute='src') | select('defined') | list | length) == (svc.templates | length)
+      - (svc.templates | map(attribute='dest') | select('defined') | list | length) == (svc.templates | length)
+      - (svc.templates | map(attribute='src') | map('string') | map('trim') | reject('equalto','') | list | length) == (svc.templates | length)
+      - (svc.templates | map(attribute='dest') | map('string') | map('trim') | reject('equalto','') | list | length) == (svc.templates | length)
+    fail_msg: "svc.templates must be a list of dicts and each entry must contain non-empty 'src' and 'dest'."
+
+- name: Validate | svc.templates mode formatting (optional)
+  when: svc.templates is defined and (svc.templates | length > 0)
+  ansible.builtin.assert:
+    that:
+      - >
+        (
+          svc.templates
+          | selectattr('mode','defined')
+          | map(attribute='mode')
+          | map('string')
+          | map('trim')
+          | map('regex_search', '^[0-7]{3,4}$')
+          | reject('equalto', None)
+          | list
+          | length
+        )
+        ==
+        (svc.templates | selectattr('mode','defined') | list | length)
+    fail_msg: "If provided, templates[].mode must look like '664' or '0664'."
+
+################################
+# copies
+################################
+
+- name: Validate | svc.copies shape (optional)
+  when: svc.copies is defined
+  ansible.builtin.assert:
+    that:
+      - svc.copies is sequence
+      - svc.copies is not string
+    fail_msg: "svc.copies must be a list of copy specs."
+
+- name: Validate | svc.copies entries (optional)
+  when: svc.copies is defined and (svc.copies | length > 0)
+  ansible.builtin.assert:
+    that:
+      - (svc.copies | select('mapping') | list | length) == (svc.copies | length)
+      - (svc.copies | map(attribute='src') | select('defined') | list | length) == (svc.copies | length)
+      - (svc.copies | map(attribute='dest') | select('defined') | list | length) == (svc.copies | length)
+      - (svc.copies | map(attribute='src') | map('string') | map('trim') | reject('equalto','') | list | length) == (svc.copies | length)
+      - (svc.copies | map(attribute='dest') | map('string') | map('trim') | reject('equalto','') | list | length) == (svc.copies | length)
+    fail_msg: "svc.copies must be a list of dicts and each entry must contain non-empty 'src' and 'dest'."
+
+################################
+# infisical
+################################
+
+- name: Validate | svc.infisical shape (optional)
+  when: svc.infisical is defined
+  ansible.builtin.assert:
+    that:
+      - svc.infisical is mapping
+    fail_msg: "svc.infisical must be a mapping."
+
+- name: Validate | svc.infisical.secrets_map (optional)
+  when: svc.infisical is defined and svc.infisical.secrets_map is defined
+  ansible.builtin.assert:
+    that:
+      - svc.infisical.secrets_map is sequence
+      - svc.infisical.secrets_map is not string
+      - (svc.infisical.secrets_map | select('mapping') | list | length) == (svc.infisical.secrets_map | length)
+      - (svc.infisical.secrets_map | map(attribute='var')  | select('defined') | list | length) == (svc.infisical.secrets_map | length)
+      - (svc.infisical.secrets_map | map(attribute='path') | select('defined') | list | length) == (svc.infisical.secrets_map | length)
+      - (svc.infisical.secrets_map | map(attribute='name') | select('defined') | list | length) == (svc.infisical.secrets_map | length)
+    fail_msg: "svc.infisical.secrets_map must be a list of dicts each containing var/path/name."
+
+- name: Validate | svc.infisical.fail_on_empty is boolean-ish (optional)
+  when: svc.infisical is defined and svc.infisical.fail_on_empty is defined
+  ansible.builtin.assert:
+    that:
+      - (svc.infisical.fail_on_empty | bool) is not none
+    fail_msg: "svc.infisical.fail_on_empty must be boolean-ish."
+
+################################
+# postgres
+################################
+
+- name: Validate | svc.postgres shape (optional)
+  when: svc.postgres is defined
+  ansible.builtin.assert:
+    that:
+      - svc.postgres is mapping
+    fail_msg: "svc.postgres must be a mapping when provided."
+
+- name: Validate | svc.postgres.databases (optional - string or list)
+  when: svc.postgres is defined and svc.postgres is mapping and svc.postgres.databases is defined
+  ansible.builtin.assert:
+    that:
+      - svc.postgres.databases is string
+        or (svc.postgres.databases is sequence and svc.postgres.databases is not string)
+    fail_msg: "svc.postgres.databases must be a string or a list of strings."
+
+################################
+# ports (input can be mapping OR list)
+################################
+
+- name: Validate | svc.ports shape (optional)
+  when: svc.ports is defined
+  ansible.builtin.assert:
+    that:
+      - svc.ports is mapping
+        or (svc.ports is sequence and svc.ports is not string)
+    fail_msg: "svc.ports must be a mapping (named ports) or a list of port dicts."
+
+- name: Validate | svc.ports entries (optional)
+  when: svc.ports is defined
+  ansible.builtin.assert:
+    that:
+      - >
+        (
+          (svc.ports.values() | list) if (svc.ports is mapping)
+          else (svc.ports | list)
+        )
+        | select('mapping') | list | length
+        ==
+        (
+          (svc.ports.values() | list) if (svc.ports is mapping)
+          else (svc.ports | list)
+        ) | length
+      - >
+        (
+          (svc.ports.values() | list) if (svc.ports is mapping)
+          else (svc.ports | list)
+        )
+        | map(attribute='published') | select('defined') | list | length
+        ==
+        (
+          (svc.ports.values() | list) if (svc.ports is mapping)
+          else (svc.ports | list)
+        ) | length
+      - >
+        (
+          (svc.ports.values() | list) if (svc.ports is mapping)
+          else (svc.ports | list)
+        )
+        | map(attribute='target') | select('defined') | list | length
+        ==
+        (
+          (svc.ports.values() | list) if (svc.ports is mapping)
+          else (svc.ports | list)
+        ) | length
+    fail_msg: "svc.ports entries must be dicts and include 'published' and 'target'."
+
+################################
+# volumes (input can be mapping OR list)
+################################
+
+- name: Validate | svc.volumes shape (optional)
+  when: svc.volumes is defined
+  ansible.builtin.assert:
+    that:
+      - svc.volumes is mapping
+        or (svc.volumes is sequence and svc.volumes is not string)
+    fail_msg: "svc.volumes must be a mapping (named volumes) or a list of volume dicts."
+
+- name: Validate | svc.volumes entries basic (optional)
+  when: svc.volumes is defined
+  ansible.builtin.assert:
+    that:
+      - >
+        (
+          (svc.volumes.values() | list) if (svc.volumes is mapping)
+          else (svc.volumes | list)
+        )
+        | select('mapping') | list | length
+        ==
+        (
+          (svc.volumes.values() | list) if (svc.volumes is mapping)
+          else (svc.volumes | list)
+        ) | length
+    fail_msg: "svc.volumes entries must be dicts."
+
+- name: Validate | svc.volumes required keys by type (optional)
+  when: svc.volumes is defined
+  ansible.builtin.assert:
+    that:
+      - _t in ['bind','volume','tmpfs']
+      - (_t == 'tmpfs') or (_src | length > 0)
+      - (_t == 'tmpfs') or (_tgt | length > 0)
+      - (_t != 'tmpfs') or (_tgt | length > 0)
+    fail_msg: >-
+      Invalid volume entry for service '{{ svc.name | default('unknown', true) }}':
+      type='{{ _t }}', source='{{ _src }}', target='{{ _tgt }}'
+  vars:
+    _t: "{{ item.type | default('bind', true) | string | trim }}"
+    _src: "{{ item.source | default('', true) | string | trim }}"
+    _tgt: "{{ item.target | default('', true) | string | trim }}"
+  loop: >-
+    {{
+      (svc.volumes.values() | list) if (svc.volumes is mapping)
+      else (svc.volumes | list)
+    }}
+  loop_control:
+    loop_var: item

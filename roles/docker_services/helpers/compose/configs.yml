@@ -1,0 +1,35 @@
+---
+
+# helpers/compose/configs.yml
+# Attach swarm configs to the service definition (compose_services[service_name].configs)
+
+- name: Configs | Ensure service_name is set
+  ansible.builtin.assert:
+    that:
+      - service_name is defined
+      - service_name | string | trim | length > 0
+    fail_msg: "service_name must be set before calling helpers/compose/configs.yml"
+
+- name: Configs | Ensure configs_list is a list
+  ansible.builtin.assert:
+    that:
+      - configs_list is defined
+      - configs_list is sequence
+      - configs_list is not string
+      - configs_list | length > 0
+    fail_msg: "configs_list must be a non-empty list of config mount specs."
+
+- name: Configs | Attach configs to service (replace)
+  ansible.builtin.set_fact:
+    compose_services: >-
+      {{
+        (compose_services | default({}))
+        | combine({
+            service_name: (
+              (compose_services | default({})).get(service_name, {})
+              | combine({
+                  'configs': configs_list
+                }, recursive=true)
+            )
+          }, recursive=true)
+      }}

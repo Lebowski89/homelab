@@ -1,0 +1,23 @@
+---
+
+- name: Ensure service_name is set
+  ansible.builtin.assert:
+    that:
+      - service_name is defined
+      - service_name | trim | length > 0
+    fail_msg: "service_name must be set before calling this helper"
+
+- name: Set user for service
+  ansible.builtin.set_fact:
+    compose_services: >-
+      {{
+        (compose_services | default({}))
+        | combine({
+            service_name: (
+              ((compose_services | default({})).get(service_name, {}))
+              | combine({
+                  'user': user
+                }, recursive=true)
+            )
+          }, recursive=true)
+      }}

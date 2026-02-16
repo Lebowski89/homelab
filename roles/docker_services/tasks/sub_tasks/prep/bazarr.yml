@@ -1,0 +1,180 @@
+---
+
+# roles/docker_services/tasks/sub_tasks/prep/bazarr.yml
+
+################################
+# BAZARR PREP (ONCE)
+################################
+
+- name: Bazarr prep | Set paths + hosts
+  ansible.builtin.set_fact:
+    _bazarr_fs_host: "{{ svc.deploy.host | default('localhost', true) | string | trim }}"
+    _bazarr_config_dir: "/mnt/user/appdata/bazarr"
+    _bazarr_config_file: "/mnt/user/appdata/bazarr/config/config.yaml"
+    _bazarr_image: "ghcr.io/hotio/bazarr:release-1.5.5"
+    _bazarr_puid: "{{ hostvars[svc.deploy.host | default('localhost', true)].puid | default('1000') }}"
+    _bazarr_pgid: "{{ hostvars[svc.deploy.host | default('localhost', true)].pgid | default('1000') }}"
+  run_once: true
+
+################################
+# CONFIG (CREATE IF MISSING)
+################################
+
+- name: Bazarr prep | Ensure config dir exists
+  ansible.builtin.file:
+    path: "{{ _bazarr_config_dir }}"
+    state: directory
+    owner: "{{ _bazarr_puid }}"
+    group: "{{ _bazarr_pgid }}"
+    mode: "0755"
+  delegate_to: "{{ _bazarr_fs_host }}"
+  run_once: true
+
+- name: Bazarr prep | Check config exists
+  ansible.builtin.stat:
+    path: "{{ _bazarr_config_file }}"
+  register: _bazarr_cfg_stat
+  delegate_to: "{{ _bazarr_fs_host }}"
+  run_once: true
+
+- name: Bazarr prep | Generate Bazarr config (temp container)
+  when: not _bazarr_cfg_stat.stat.exists
+  block:
+    - name: Bazarr prep | Start temp container to generate config
+      community.docker.docker_container:
+        name: bazarr-config
+        image: "{{ _bazarr_image }}"
+        pull: true
+        state: started
+        container_default_behavior: compatibility
+        detach: true
+        env:
+          TZ: "{{ timezone }}"
+          PUID: "{{ _bazarr_puid }}"
+          PGID: "{{ _bazarr_pgid }}"
+        volumes:
+          - "{{ _bazarr_config_dir }}:/config"
+        restart_policy: "no"
+      delegate_to: "{{ _bazarr_fs_host }}"
+
+    - name: Bazarr prep | Wait for config.yaml to appear
+      ansible.builtin.wait_for:
+        path: "{{ _bazarr_config_file }}"
+        state: present
+        timeout: 180
+      delegate_to: "{{ _bazarr_fs_host }}"
+
+    - name: Bazarr prep | Give Bazarr time to finish writing config
+      ansible.builtin.pause:
+        seconds: 10
+  always:
+    - name: Bazarr prep | Remove temp config container
+      community.docker.docker_container:
+        container_default_behavior: compatibility
+        name: bazarr-config
+        state: absent
+        stop_timeout: 10
+      register: _bazarr_rm_tmp
+      retries: 5
+      delay: 5
+      until: _bazarr_rm_tmp is succeeded
+      delegate_to: "{{ _bazarr_fs_host }}"
+  run_once: true
+
+################################
+# CONFIG (BAZARR) - YEDIT
+################################
+
+- name: Bazarr prep | Configure api setting
+  yedit: # noqa fqcn[action]
+    src: "{{ _bazarr_config_file }}"
+    key: "auth.apikey"
+    value: "{{ bazarr_api }}"
+  delegate_to: "{{ _bazarr_fs_host }}"
+  run_once: true
+
+- name: Bazarr prep | Configure misc settings
+  yedit: # noqa fqcn[action]
+    src: "{{ _bazarr_config_file }}"
+    key: "{{ bazarr_settings_misc.key }}"
+    value: "{{ bazarr_settings_misc.value }}"
+  loop: "{{ _bazarr_misc_config | dict2items }}"
+  loop_control:
+    loop_var: bazarr_settings_misc
+  vars:
+    _bazarr_misc_config:
+      analytics.enabled: "false"
+      general.port: "6767"
+  delegate_to: "{{ _bazarr_fs_host }}"
+  run_once: true
+
+- name: Bazarr prep | Configure opensubtitlescom settings
+  yedit: # noqa fqcn[action]
+    src: "{{ _bazarr_config_file }}"
+    key: "{{ bazarr_settings_subtitles.key }}"
+    value: "{{ bazarr_settings_subtitles.value }}"
+  loop: "{{ _bazarr_opensubtitlescom_config | dict2items }}"
+  loop_control:
+    loop_var: bazarr_settings_subtitles
+  vars:
+    _bazarr_opensubtitlescom_config:
+      opensubtitlescom.username: "{{ opensubtitlescom_user }}"
+      opensubtitlescom.password: "{{ opensubtitlescom_pass }}"
+      opensubtitlescom.use_hash: "true"
+  delegate_to: "{{ _bazarr_fs_host }}"
+  run_once: true
+
+- name: Bazarr prep | Configure radarr settings
+  yedit: # noqa fqcn[action]
+    src: "{{ _bazarr_config_file }}"
+    key: "{{ bazarr_settings_radarr.key }}"
+    value: "{{ bazarr_settings_radarr.value }}"
+  loop: "{{ _bazarr_radarr_config | dict2items }}"
+  loop_control:
+    loop_var: bazarr_settings_radarr
+  vars:
+    _bazarr_radarr_config:
+      general.use_radarr: "true"
+      radarr.apikey: "{{ radarr_api }}"
+      radarr.ip: "radarr"
+      radarr.port: "7878"
+      radarr.ssl: "false"
+  delegate_to: "{{ _bazarr_fs_host }}"
+  run_once: true
+
+- name: Bazarr prep | Configure sonarr settings
+  yedit: # noqa fqcn[action]
+    src: "{{ _bazarr_config_file }}"
+    key: "{{ bazarr_settings_sonarr.key }}"
+    value: "{{ bazarr_settings_sonarr.value }}"
+  loop: "{{ _bazarr_sonarr_config | dict2items }}"
+  loop_control:
+    loop_var: bazarr_settings_sonarr
+  vars:
+    _bazarr_sonarr_config:
+      general.use_sonarr: "true"
+      sonarr.apikey: "{{ sonarr_api }}"
+      sonarr.ip: "sonarr"
+      sonarr.port: "8989"
+      sonarr.ssl: "false"
+  delegate_to: "{{ _bazarr_fs_host }}"
+  run_once: true
+
+- name: Bazarr prep | Configure postgres settings
+  yedit: # noqa fqcn[action]
+    src: "{{ _bazarr_config_file }}"
+    key: "{{ bazarr_settings_postgres.key }}"
+    value: "{{ bazarr_settings_postgres.value }}"
+  loop: "{{ _bazarr_postgres_config | dict2items }}"
+  loop_control:
+    loop_var: bazarr_settings_postgres
+  vars:
+    _bazarr_postgres_config:
+      postgresql.database: "bazarr"
+      postgresql.enabled: "true"
+      postgresql.host: "pg-ha"
+      postgresql.port: "5433"
+      postgresql.username: "{{ postgres_user }}"
+      postgresql.password: "{{ postgres_pass }}"
+  delegate_to: "{{ _bazarr_fs_host }}"
+  run_once: true

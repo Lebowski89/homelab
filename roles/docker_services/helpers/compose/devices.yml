@@ -1,0 +1,72 @@
+---
+
+- name: Ensure service_name is set
+  ansible.builtin.assert:
+    that:
+      - service_name is defined
+      - service_name | string | trim | length > 0
+    fail_msg: "service_name must be set before calling this helper"
+
+- name: Ensure devices_action is valid
+  ansible.builtin.assert:
+    that:
+      - devices_action | default('append') in ['append', 'replace', 'append_unique']
+    fail_msg: "devices_action must be 'append', 'replace', or 'append_unique'"
+
+# Accept either:
+# - device_list: [" /dev/dri:/dev/dri ", ...]
+# - device: "/dev/dri:/dev/dri"
+- name: Normalize devices input
+  ansible.builtin.set_fact:
+    _devices_new: >-
+      {{
+        (
+          device_list
+          if (device_list is defined)
+          else
+          ([device] if device is defined else [])
+        )
+        | default([], true)
+        | list
+        | map('string')
+        | map('trim')
+        | reject('equalto', '')
+        | list
+      }}
+
+- name: Add devices for service (append/replace/append_unique)
+  ansible.builtin.set_fact:
+    compose_services: >-
+      {{
+        (compose_services | default({}))
+        | combine({
+            service_name: (
+              ((compose_services | default({})).get(service_name, {}))
+              | combine({
+                  'devices': (
+                    _devices_new
+                    if (devices_action | default('append')) == 'replace'
+                    else
+                    (
+                      (
+                        ((compose_services | default({})).get(service_name, {}).get('devices', []))
+                        | default([], true)
+                        | list
+                      )
+                      +
+                      (
+                        _devices_new
+                        if (devices_action | default('append')) == 'append'
+                        else
+                        (
+                          _devices_new
+                          | reject('in', ((compose_services | default({})).get(service_name, {}).get('devices', []) | default([], true) | list))
+                          | list
+                        )
+                      )
+                    )
+                  )
+                }, recursive=true)
+            )
+          }, recursive=true)
+      }}

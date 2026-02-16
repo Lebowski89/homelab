@@ -1,0 +1,601 @@
+---
+
+services_30_media:
+################################
+# AUTOBRR
+################################
+  autobrr:
+    name: "autobrr"
+    stack: media
+    image: "ghcr.io/autobrr/autobrr:v1.72.1"
+    named_networks:
+      overlay:
+        external: true
+    healthcheck:
+      test: 
+        - "CMD-SHELL"
+        - "wget -qO- http://localhost:7474/ || exit 1"
+    user: "1000:1000"
+    environment:
+      TZ: "{{ timezone }}"
+      AUTOBRR__HOST: "0.0.0.0"
+      AUTOBRR__PORT: "7474"
+      AUTOBRR__LOG_LEVEL: "DEBUG"
+      AUTOBRR__CHECK_FOR_UPDATES: "true"
+      AUTOBRR__SESSION_SECRET: "{{ autobrr_session | default('__INFISICAL__:autobrr_session', true) }}"
+      AUTOBRR__DATABASE_TYPE: "postgres"
+      AUTOBRR__POSTGRES_HOST: "pg-ha"
+      AUTOBRR__POSTGRES_PORT: "5433"
+      AUTOBRR__POSTGRES_DATABASE: "autobrr"
+      AUTOBRR__POSTGRES_USER: "{{ postgres_user | default('__INFISICAL__:postgres_user', true) }}"
+      AUTOBRR__POSTGRES_PASS: "{{ postgres_pass | default('__INFISICAL__:postgres_pass', true) }}"
+      AUTOBRR__POSTGRES_SSLMODE: "disable"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: autobrr_session, path: "/AutoBrr", name: "SESSION_SECRET" }
+        - { var: postgres_user, path: "/Postgres", name: "USER" }
+        - { var: postgres_pass, path: "/Postgres", name: "PASS" }
+    # ports:
+    #   web:
+    #     published: 7474
+    #     target: 7474
+    #     protocol: tcp
+    #     mode: ingress
+    paths:
+      - path: "/mnt/user/appdata/autobrr"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    volumes:
+      config:
+        type: bind
+        source: "/mnt/user/appdata/autobrr"
+        target: "/config"
+        read_only: false
+    postgres:
+      enable: true
+      databases:
+        - "autobrr"
+    traefik:
+      enable: true
+      port: 7474
+      api_rule: "PathPrefix(`/api`)"
+      sso: authelia
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "localhost"
+      constraints:
+        - "node.labels.ansible_host == localhost"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# CHECKRR
+################################
+  checkrr_daily:
+    name: "checkrr-daily"
+    stack: "checkrr"
+    image: "aetaric/checkrr:latest"
+    named_networks:
+      overlay:
+        external: true
+    command: ["-c", "/etc/checkrr.yaml"]
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "99"
+      PGID: "100"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: lidarr_api, path: "/Lidarr", name: "API" }
+        - { var: radarr_api, path: "/Radarr", name: "API" }
+        - { var: radarr_4k_api, path: "/Radarr-4K", name: "API" }
+        - { var: sonarr_api, path: "/Sonarr", name: "API" }
+        - { var: sonarr_4k_api, path: "/Sonarr-4K", name: "API" }
+        - { var: whisparr_api, path: "/Whisparr", name: "API" }
+    ports:
+      web:
+        published: 8585
+        target: 8585
+        protocol: tcp
+        mode: ingress
+    paths:
+      - path: "/mnt/user/appdata/checkrr-daily"
+        state: directory
+        owner: "99"
+        group: "100"
+        mode: "0755"
+      - path: "/mnt/user/appdata/checkrr-daily/checkrr.db"
+        state: touch
+        owner: "99"
+        group: "100"
+        mode: "0664"
+    templates:
+      - src: "configs/media/checkrr-daily.yaml.j2"
+        dest: "/mnt/user/appdata/checkrr-daily/checkrr.yaml"
+        owner: "99"
+        group: "100"
+        mode: "0664"
+        force: true
+    volumes:
+      config:
+        type: bind
+        source: "/mnt/user/appdata/checkrr-daily/checkrr.yaml"
+        target: "/etc/checkrr.yaml"
+        read_only: false
+      database:
+        type: bind
+        source: "/mnt/user/appdata/checkrr-daily/checkrr.db"
+        target: "/checkrr.db"
+        read_only: false
+      media:
+        type: bind
+        source: "/mnt/user/data/media"
+        target: "/media"
+        read_only: false
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: 1
+      host: "unraid"
+      constraints:
+        - "node.labels.ansible_host == unraid"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+  checkrr_monthly:
+    name: "checkrr-monthly"
+    stack: "checkrr"
+    image: "aetaric/checkrr:latest"
+    named_networks:
+      overlay:
+        external: true
+    command: ["-c", "/etc/checkrr.yaml"]
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "99"
+      PGID: "100"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: lidarr_api, path: "/Lidarr", name: "API" }
+        - { var: radarr_api, path: "/Radarr", name: "API" }
+        - { var: radarr_4k_api, path: "/Radarr-4K", name: "API" }
+        - { var: sonarr_api, path: "/Sonarr", name: "API" }
+        - { var: sonarr_4k_api, path: "/Sonarr-4K", name: "API" }
+        - { var: whisparr_api, path: "/Whisparr", name: "API" }
+    ports:
+      web:
+        published: 8586
+        target: 8585
+        protocol: tcp
+        mode: ingress
+    paths:
+      - path: "/mnt/user/appdata/checkrr-monthly"
+        state: directory
+        owner: "99"
+        group: "100"
+        mode: "0755"
+      - path: "/mnt/user/appdata/checkrr-monthly/checkrr.db"
+        state: touch
+        owner: "99"
+        group: "100"
+        mode: "0664"
+    templates:
+      - src: "configs/media/checkrr-monthly.yaml.j2"
+        dest: "/mnt/user/appdata/checkrr-monthly/checkrr.yaml"
+        owner: "99"
+        group: "100"
+        mode: "0664"
+        force: true
+    volumes:
+      config:
+        type: bind
+        source: "/mnt/user/appdata/checkrr-monthly/checkrr.yaml"
+        target: "/etc/checkrr.yaml"
+        read_only: false
+      database:
+        type: bind
+        source: "/mnt/user/appdata/checkrr-monthly/checkrr.db"
+        target: "/checkrr.db"
+        read_only: false
+      media:
+        type: bind
+        source: "/mnt/user/data/media"
+        target: "/media"
+        read_only: false
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: 1
+      host: "unraid"
+      constraints:
+        - "node.labels.ansible_host == unraid"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# JELLYSEERR
+################################
+  jellyseerr:
+    name: "jellyseerr"
+    stack: media
+    image: "fallenbagel/jellyseerr:2.7.3"
+    named_networks:
+      overlay:
+        external: true
+    healthcheck:
+      test:
+        - "CMD"
+        - "wget"
+        - "--spider"
+        - "-q"
+        - "http://127.0.0.1:5055/api/v1/status"
+    environment8:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+      PORT: "5055"
+      DB_TYPE: "postgres"
+      DB_HOST: "pg-ha"
+      DB_PORT: "5433"
+      DB_USER: "{{ postgres_user | default('__INFISICAL__:postgres_user', true) }}"
+      DB_PASS: "{{ postgres_pass | default('__INFISICAL__:postgres_pass', true) }}"
+      DB_NAME: "jellyseerr"
+      DB_LOG_QUERIES: "false"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: postgres_user, path: "/Postgres", name: "USER" }
+        - { var: postgres_pass, path: "/Postgres", name: "PASS" }
+        - { var: jellyseerr_api, path: "/Jellyseerr", name: "API" }
+        - { var: jellyseerr_notifiarr_webhook, path: "/Jellyseerr", name: "NOTIFIARR_WEBHOOK" }
+        - { var: jellyseerr_notifiarr_payload, path: "/Jellyseerr", name: "WEBHOOK_PAYLOAD" }
+        - { var: tautulli_api, path: "/Tautulli", name: "API" }
+        - { var: radarr_api, path: "/Radarr", name: "API" }
+        - { var: radarr_4k_api, path: "/Radarr-4K", name: "API" }
+        - { var: sonarr_api, path: "/Sonarr", name: "API" }
+        - { var: sonarr_4k_api, path: "/Sonarr-4K", name: "API" }
+        - { var: smtp_email, path: "/Porkbun", name: "SMTP_EMAIL" }      
+        - { var: smtp_host, path: "/Porkbun", name: "SMTP_HOST" }
+        - { var: smtp_password, path: "/Porkbun", name: "SMTP_PASS" }
+        - { var: smtp_port, path: "/Porkbun", name: "SMTP_PORT" }
+        - { var: smtp_sender, path: "/Porkbun", name: "SMTP_SENDER" }
+        - { var: smtp_username, path: "/Porkbun", name: "SMTP_USER" }
+    # ports:
+    #   web:
+    #     published: 5055
+    #     target: 5055
+    #     protocol: tcp
+    #     mode: ingress
+    paths:
+      - path: "/mnt/user/appdata/jellyseerr"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    templates:
+      - src: "configs/media/jellyseerr.json.j2"
+        dest: "/mnt/user/appdata/jellyseerr/settings.json"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+    volumes:
+      config:
+        type: bind
+        source: "/mnt/user/appdata/jellyseerr"
+        target: "/app/config"
+        read_only: false
+    postgres:
+      enable: true
+      databases:
+        - "jellyseerr"
+    traefik:
+      enable: true
+      port: 5055
+      api_rule: ""
+      sso: authelia
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "localhost"
+      constraints:
+        - "node.labels.ansible_host == localhost"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# OMBI
+################################
+  ombi:
+    name: "ombi"
+    stack: media
+    image: "lscr.io/linuxserver/ombi:4.53.4"
+    named_networks:
+      overlay:
+        external: true
+    healthcheck:
+      test:
+        - "CMD"
+        - "curl"
+        - "-f"
+        - "http://localhost:3579/api/v1/Status"
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: postgres_user, path: "/Postgres", name: "USER", docker_secret: "postgres_user_secret" }
+        - { var: postgres_pass, path: "/Postgres", name: "PASS", docker_secret: "postgres_pass_secret" }
+    # ports:
+    #   web:
+    #     published: 3579
+    #     target: 3579
+    #     protocol: tcp
+    #     mode: ingress
+    paths:
+      - path: "/mnt/user/appdata/ombi"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+      - path: "/mnt/user/appdata/ombi/config"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    templates:
+      - src: "configs/media/ombi.json.j2"
+        dest: "/mnt/user/appdata/ombi/config/database.json"
+        owner: "1000"
+        group: "1000"
+        mode: "0664"
+        force: true
+    volumes:
+      config:
+        type: bind
+        source: "/mnt/user/appdata/ombi/config"
+        target: "/config"
+        read_only: false
+    postgres:
+      enable: true
+      databases:
+        - "Ombi"
+    traefik:
+      enable: true
+      port: 3579
+      api_rule: ""
+      sso: authelia
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "localhost"
+      constraints:
+        - "node.labels.ansible_host == localhost"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# STASH
+################################
+  stash:
+    name: "stash"
+    stack: media
+    image: "ghcr.io/hotio/stash:release-0.30.1"
+    named_networks:
+      overlay:
+        external: true
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "touch /data/media/adult/.healthcheck && rm -f /data/media/adult/.healthcheck || exit 1"
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "99"
+      PGID: "100"
+      UMASK: "022"
+      STASH_CONFIG_FILE: "/config/config.yml"
+      STASH_METADATA: "/config/metadata"
+    infisical:
+      fail_on_empty: true
+      secrets_map:
+        - { var: stash_api, path: "/Stash", name: "API" }
+        - { var: fansdb_api, path: "/Stash", name: "FANSDB_API" }
+        - { var: pmv_api, path: "/Stash", name: "PMV_API" }
+        - { var: porndb_api, path: "/Stash", name: "PORNDB_API" }
+        - { var: stashdb_api, path: "/Stash", name: "STASHDB_API" }
+    # ports:
+    #   web:
+    #     published: 9999
+    #     target: 9999
+    #     protocol: tcp
+    #     mode: ingress
+    paths:
+      - path: "/mnt/user/appdata/stash"
+        state: directory
+        owner: "99"
+        group: "100"
+        mode: "0755"
+      - path: "/mnt/user/appdata/stash/metadata"
+        state: directory
+        owner: "99"
+        group: "100"
+        mode: "0755"
+      - path: "/mnt/user/appdata/stash/cache"
+        state: directory
+        owner: "99"
+        group: "100"
+        mode: "0755"
+      - path: "/mnt/user/appdata/stash/blobs"
+        state: directory
+        owner: "99"
+        group: "100"
+        mode: "0755"
+      - path: "/mnt/user/appdata/stash/generated"
+        state: directory
+        owner: "99"
+        group: "100"
+        mode: "0755"
+    templates:
+      - src: "configs/media/stash.yml.j2"
+        dest: "/mnt/user/appdata/stash/config.yml"
+        owner: "99"
+        group: "100"
+        mode: "0664"
+        force: false
+    volumes:
+      config:
+        type: bind
+        source: "/mnt/user/appdata/stash"
+        target: "/config"
+        read_only: false
+      media:
+        type: bind
+        source: "/mnt/user/data"
+        target: "/data"
+        read_only: false
+    traefik:
+      enable: true
+      port: 9999
+      api_rule: ""
+      sso: authelia
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "unraid"
+      constraints:
+        - "node.labels.ansible_host == unraid"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# THELOUNGE
+################################
+  thelounge:
+    name: "thelounge"
+    stack: media
+    image: "lscr.io/linuxserver/thelounge:4.4.3"
+    named_networks:
+      overlay:
+        external: true 
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+    # ports:
+    #   web:
+    #     published: 9002
+    #     target: 9000
+    #     protocol: tcp
+    #     mode: ingress
+    paths:
+      - path: "/mnt/user/appdata/thelounge"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    volumes:
+      config:
+        type: bind
+        source: "/mnt/user/appdata/thelounge"
+        target: "/config"
+        read_only: false
+    traefik:
+      enable: true
+      port: 9000
+      api_rule: "PathPrefix(`/uploads`)"
+      sso: authelia
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "localhost"
+      constraints:
+        - "node.labels.ansible_host == localhost"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m
+
+################################
+# ZNC
+################################
+  znc:
+    name: "znc"
+    stack: media
+    image: "lscr.io/linuxserver/znc:1.10.1"
+    named_networks:
+      overlay:
+        external: true
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "1000"
+      PGID: "1000"
+      UMASK: "022"
+    # ports:
+    #   web:
+    #     published: 6501
+    #     target: 6501
+    #     protocol: tcp
+    #     mode: ingress
+    paths:
+      - path: "/mnt/user/appdata/znc"
+        state: directory
+        owner: "1000"
+        group: "1000"
+        mode: "0755"
+    volumes:
+      config:
+        type: bind
+        source: "/mnt/user/appdata/znc"
+        target: "/config"
+        read_only: false
+    traefik:
+      enable: true
+      port: 6501
+      api_rule: "PathPrefix(`/uploads`)"
+      sso: authelia
+    deploy:
+      type: "swarm"
+      mode: "replicated"
+      replicas: "1"
+      host: "localhost"
+      constraints:
+        - "node.labels.ansible_host == localhost"
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 5
+        window: 2m

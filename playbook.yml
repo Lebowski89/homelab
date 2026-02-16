@@ -1,0 +1,267 @@
+---
+
+- hosts: skynet
+  become: true
+
+  vars:
+    fact_hosts: ['localhost', 'plex']
+    docker_services:
+      ## services_00_core
+      - name: gitea
+        tags: [core, gitea]
+      - name: homepage
+        tags: [core, homepage]
+      - name: portainer
+        tags: [core, portainer]
+      - name: portainer_agent
+        tags: [core, portainer]
+      - name: technitium
+        tags: [core, technitium]
+      - name: vaultwarden
+        tags: [core, vaultwarden]
+
+      ## services_10_proxy
+      - name: authelia
+        tags: [proxy, authelia]
+      - name: authelia_redis
+        tags: [authelia-redis, authelia]
+      - name: traefik
+        tags: [proxy, traefik]
+
+      ## services_20_arrs
+      - name: bazarr
+        tags: [arrs, bazarr]
+      - name: lidarr
+        tags: [arrs, lidarr]
+      - name: prowlarr
+        tags: [arrs, prowlarr]
+      - name: radarr
+        tags: [arrs, radarr]
+      - name: radarr_4k
+        tags: [arrs, radarr4k]
+      - name: recyclarr
+        tags: [arrs, recyclarr]
+      - name: sonarr
+        tags: [arrs, sonarr]
+      - name: sonarr_4k
+        tags: [arrs, sonarr4k]
+      - name: sportarr
+        tags: [sportarr]
+      - name: whisparr
+        tags: [arrs, whisparr]
+
+      ## services_30_media
+      - name: autobrr
+        tags: [media, autobrr]
+      - name: checkrr_daily
+        tags: [media, checkrr]
+      - name: checkrr_monthly
+        tags: [media, checkrr]
+      - name: jellyseerr
+        tags: [media, jellyseerr]
+      - name: ombi
+        tags: [media, ombi]
+      - name: stash
+        tags: [media, stash]
+      - name: thelounge
+        tags: [media, thelounge]
+      - name: znc
+        tags: [media, znc]
+
+      ## services_40_plex
+      - name: imagemaid
+        tags: [plex, imagemaid]
+      - name: kometa
+        tags: [plex, kometa]
+      - name: plex
+        tags: [plex, plex_server]
+      - name: tautulli
+        tags: [plex, tautulli]
+
+      ## services_50_torrents
+      - name: qbittorrent
+        target: swarm
+        tags: [torrents, qbittorrent]
+      - name: qbittorrent
+        target: unraid
+        tags: [torrents, qbittorrent]
+      - name: qbit_manage
+        target: swarm
+        tags: [torrents, qbit_manage]
+      - name: qbit_manage
+        target: unraid
+        tags: [torrents, qbit_manage]
+      - name: qui
+        tags: [torrents, qui]
+      - name: unpackerr
+        tags: [torrents, unpackerr]
+
+      ## services_60_usenet
+      - name: nzbhydra2
+        tags: [usenet, nzbhydra2]
+      - name: sabnzbd
+        tags: [usenet, sabnzbd]
+
+      ## services_70_monitoring
+      - name: alloy
+        tags: [monitoring, alloy]
+      - name: grafana
+        tags: [monitoring, grafana]
+      - name: prometheus
+        tags: [monitoring, prometheus]
+
+      ## services_80_blog
+      - name: hugo
+        tags: [blog, hugo]
+      - name: obsidian
+        tags: [blog, obsidian]
+
+      ## services_90_gluetun
+      - name: gluetun
+        tags: [gluetun]
+      - name: jdownloader2
+        tags: [gluetun, jdownloader2]
+      - name: librewolf
+        tags: [gluetun, librewolf]
+
+      ## services_100_utilities
+      - name: adminer
+        tags: [utilities, adminer]
+      - name: czkawka
+        tags: [utilities, czkawka]
+      - name: diun
+        tags: [utilities, diun]
+      - name: omni_tools
+        tags: [utilities, omni_tools]
+      - name: themepark
+        tags: [utilities, themepark]
+
+      ## services_110_pgha
+      - name: etcd
+        target: pg01
+        tags: [pgha, etcd]
+      - name: etcd
+        target: pg02
+        tags: [pgha, etcd]
+      - name: etcd
+        target: pg03
+        tags: [pgha, etcd]
+      - name: patroni
+        target: pg01
+        tags: [pgha, patroni]
+      - name: patroni
+        target: pg02
+        tags: [pgha, patroni]
+      - name: patroni
+        target: pg03
+        tags: [pgha, patroni]
+      - name: pg_ha_proxy
+        tags: [pgha, pg_ha_proxy]
+
+  pre_tasks:
+    - name: Gather packages
+      when: inventory_hostname in fact_hosts
+      ansible.builtin.package_facts:
+        manager: auto
+      tags: always
+
+    - name: Gather IP geolocation data
+      when: inventory_hostname in fact_hosts
+      community.general.ipinfoio_facts:
+      tags: always
+
+    - name: Gather public IP data
+      when: inventory_hostname in fact_hosts
+      community.general.ipify_facts:
+        api_url: https://api64.ipify.org
+        timeout: 20
+      register: public_ip
+      tags: always
+
+    - name: Public IP output
+      when: inventory_hostname in fact_hosts
+      ansible.builtin.debug:
+        msg: '{{ ipify_public_ip }}'
+      tags: always
+
+    - name: Set Public IP
+      when: inventory_hostname in fact_hosts
+      ansible.builtin.set_fact:
+        public_ip: '{{ ipify_public_ip }}'
+      tags: always
+
+    - name: Set timezone variable
+      when: inventory_hostname in fact_hosts
+      ansible.builtin.set_fact:
+        timezone: '{{ ansible_facts.timezone }}'
+      tags: always
+
+    - name: Timezone output
+      when: inventory_hostname in fact_hosts
+      ansible.builtin.debug:
+        msg: '{{ timezone }}'
+      tags: always      
+
+    - name: Set Local IP
+      when: inventory_hostname in fact_hosts
+      ansible.builtin.set_fact:
+        local_ip: '{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}'
+      tags: always
+
+    - name: Local IP output
+      when: inventory_hostname in fact_hosts
+      ansible.builtin.debug:
+        msg: '{{ local_ip }}'
+      tags: always
+
+  tasks:
+    - name: Collect services_* blocks (simple lexical order)
+      ansible.builtin.set_fact:
+        service_blocks: "{{ query('ansible.builtin.varnames', '^services_[0-9]+_') | sort }}"
+      tags: always
+
+    - name: Process each docker service (last definition wins, without merging)
+      ansible.builtin.include_role:
+        name: docker_services
+        apply:
+          tags: "{{ [item.name] + (item.tags | default([])) }}"
+      vars:
+        deploy_deferred: true
+        # build list of matches WITHOUT lookup('vars', ...)
+        _matches: >-
+          {%- set out = [] -%}
+          {%- for b in service_blocks -%}
+            {%- set blk = hostvars[inventory_hostname].get(b, {}) -%}
+            {%- if blk is mapping and (blk.get(item.name) is not none) -%}
+              {%- set _ = out.append(blk.get(item.name)) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
+
+        service_cfg_found: "{{ (_matches | length) > 0 }}"
+        service_cfg: "{{ _matches | last }}"
+        role_prefix: "{{ item.name }}"
+        service_target: "{{ item.target | default('swarm') }}"
+      when:
+        - (ansible_run_tags | length == 0)
+          or (item.name in ansible_run_tags)
+          or ((item.tags | default([])) | intersect(ansible_run_tags) | length > 0)
+        - service_cfg_found | bool
+      loop: "{{ docker_services }}"
+      loop_control:
+        label: "{{ item.name }} ({{ item.target | default('default') }})"
+      tags: always
+
+    - name: Deploy stacks collected during this run
+      when: inventory_hostname == "localhost"
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/roles/docker_services/helpers/deploy/deploy_all.yml"
+        apply:
+          tags:
+            - always
+      tags: always
+
+    # - debug:
+    #     var: compose_stacks
+    #   when: inventory_hostname == 'localhost'
+    #   tags: always

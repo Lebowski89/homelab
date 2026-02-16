@@ -1,0 +1,17 @@
+
+
+# Build output
+.vscode/
+dist/
+build/
+ansible-venv/
+discards/
+filter_plugins/
+.ansible_become_pass
+hosts.ini
+group_vars/all/roles/
+group_vars/all/docker.yml
+group_vars/all/infisical.yml
+group_vars/all/vault.yml
+host_vars/
+roles/docker_services/templates/configs/

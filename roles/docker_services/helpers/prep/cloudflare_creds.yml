@@ -1,0 +1,118 @@
+---
+
+################################
+# CREDS (SELF-CONTAINED VIA INFISICAL)
+################################
+
+# Always set this so later "when: _is_hugo" never explodes
+- name: Cloudflare | Detect hugo service
+  ansible.builtin.set_fact:
+    _is_hugo: >-
+      {{
+        (service_name | default('') | string | trim) == 'hugo'
+        or
+        (role_prefix  | default('') | string | trim) == 'hugo'
+      }}
+
+- name: Cloudflare | Detect if creds are missing
+  ansible.builtin.set_fact:
+    _cf_creds_missing: >-
+      {{
+        (cloudflare_api | default('') | string | trim | length == 0)
+        or
+        (cloudflare_zone | default('') | string | trim | length == 0)
+      }}
+
+- name: Cloudflare | Select Infisical path/name (hugo override)
+  when: _cf_creds_missing | bool
+  ansible.builtin.set_fact:
+    _cf_infisical_path: >-
+      {{
+        (_is_hugo | bool)
+        | ternary('/Hugo', (cloudflare_infisical_path | default('/Cloudflare', true)))
+      }}
+    _cf_zone_name: >-
+      {{
+        (_is_hugo | bool)
+        | ternary('Domain', (cloudflare_infisical_zone_name | default('ZONE', true)))
+      }}
+    _cf_api_name: "{{ cloudflare_infisical_api_name | default('API', true) }}"
+
+- name: Cloudflare | Fetch cloudflare_api/cloudflare_zone from Infisical (only if missing)
+  when: _cf_creds_missing | bool
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/infisical/fetch.yml"
+  vars:
+    infisical_fail_on_empty: true
+    infisical_flatten: true
+    secrets_map:
+      - var: cloudflare_api
+        path: "{{ _cf_infisical_path }}"
+        name: "{{ _cf_api_name }}"
+      - var: cloudflare_zone
+        path: "{{ _cf_infisical_path }}"
+        name: "{{ _cf_zone_name }}"
+
+- name: Cloudflare | Assert creds are now present
+  ansible.builtin.assert:
+    that:
+      - (cloudflare_api  | default('') | string | trim | length) > 0
+      - (cloudflare_zone | default('') | string | trim | length) > 0
+    fail_msg: >-
+      cloudflare_api/cloudflare_zone are still empty after Infisical fetch.
+      api_len={{ (cloudflare_api | default('') | string | trim | length) }},
+      zone='{{ cloudflare_zone | default('') | string | trim }}'
+
+################################
+# DOCKER SECRET
+################################
+
+- name: Create Cloudflare API secret
+  when:
+    - inventory_hostname == "localhost"
+    - (cloudflare_api | default('') | string | trim | length) > 0
+  community.docker.docker_secret:
+    name: cloudflare_api_secret
+    data: "{{ cloudflare_api }}"
+    state: present
+
+################################
+# CLOUDFLARE DNS
+################################
+
+# Normal services: A record <svc.name> -> public_ip
+- name: Configure Cloudflare DNS (normal)
+  when:
+    - inventory_hostname == "localhost"
+    - not (_is_hugo | bool)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cloudflare_dns.yml"
+  vars:
+    cloudflare_record: "{{ svc.name }}"
+    cloudflare_record_value: "{{ public_ip }}"
+    cloudflare_record_type: "A"
+    cloudflare_proxy: false
+    cloudflare_solo: true
+
+# Hugo: root (@) records -> GitHub Pages IPs (A + AAAA)
+- name: Configure Cloudflare DNS (hugo root records)
+  when:
+    - inventory_hostname == "localhost"
+    - (_is_hugo | bool)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cloudflare_dns.yml"
+  vars:
+    cloudflare_record: "@"
+    cloudflare_record_value: "{{ hugo_dns.value }}"
+    cloudflare_record_type: "{{ hugo_dns.type }}"
+    cloudflare_proxy: false
+    cloudflare_solo: true
+  loop:
+    - { type: "A",    value: "185.199.108.153" }
+    - { type: "A",    value: "185.199.109.153" }
+    - { type: "A",    value: "185.199.110.153" }
+    - { type: "A",    value: "185.199.111.153" }
+    - { type: "AAAA", value: "2606:50c0:8000::153" }
+    - { type: "AAAA", value: "2606:50c0:8001::153" }
+    - { type: "AAAA", value: "2606:50c0:8002::153" }
+    - { type: "AAAA", value: "2606:50c0:8003::153" }
+  loop_control:
+    loop_var: hugo_dns
+    label: "{{ hugo_dns.type }}={{ hugo_dns.value }}"
