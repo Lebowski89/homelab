@@ -2,30 +2,33 @@
 
 services_110_pgha:
 
+################################
+# ETCD
+################################
   etcd:
-    name: "etcd"
+    name: etcd
     stack: pg-etcd
-    container_name: "etcd"
-    image: "quay.io/coreos/etcd:v3.5.16"
-    network_mode: "host"
+    container_name: etcd
+    image: quay.io/coreos/etcd:v3.5.27
+    network_mode: host
     paths:
-      - path: "/opt/etcd"
+      - path: /opt/etcd
         state: directory
-        owner: "1000"
-        group: "1000"
-        mode: "0755"
-      - path: "/opt/etcd/data"
+        owner: 1000
+        group: 1000
+        mode: 0755
+      - path: /opt/etcd/data
         state: directory
-        owner: "1000"
-        group: "1000"
-        mode: "0755"
+        owner: 1000
+        group: 1000
+        mode: 0755
     volumes:
       data:
         type: bind
-        source: "/opt/etcd/data"
-        target: "/var/lib/etcd"
+        source: /opt/etcd/data
+        target: /var/lib/etcd
         read_only: false
-    user: "1000:1000"
+    user: 1000:1000
     targets:
       pg01:
         environment:
@@ -40,11 +43,9 @@ services_110_pgha:
           ETCD_INITIAL_CLUSTER_TOKEN: "pg-ha-1"
           ETCD_ENABLE_V2: "true"
         deploy:
-          type: "container"
-          host: "pg01"
+          type: container
+          host: pg01
       pg02:
-        name: "etcd"
-        container_name: "etcd"
         environment:
           ETCD_NAME: "pg02"
           ETCD_DATA_DIR: "/var/lib/etcd"
@@ -57,11 +58,9 @@ services_110_pgha:
           ETCD_INITIAL_CLUSTER_TOKEN: "pg-ha-1"
           ETCD_ENABLE_V2: "true"
         deploy:
-          type: "container"
-          host: "pg02"
+          type: container
+          host: pg02
       pg03:
-        name: "etcd"
-        container_name: "etcd"
         environment:
           ETCD_NAME: "pg03"
           ETCD_DATA_DIR: "/var/lib/etcd"
@@ -74,9 +73,12 @@ services_110_pgha:
           ETCD_INITIAL_CLUSTER_TOKEN: "pg-ha-1"
           ETCD_ENABLE_V2: "true"
         deploy:
-          type: "container"
-          host: "pg03"
+          type: container
+          host: pg03
 
+################################
+# PATRONI
+################################
   patroni:
     name: patroni
     stack: pg-patroni
@@ -214,6 +216,9 @@ services_110_pgha:
           type: container
           host: pg03
 
+################################
+# HA-PROXY
+################################
   pg_ha_proxy:
     name: pg-ha
     stack: ha-proxy
@@ -238,7 +243,7 @@ services_110_pgha:
     deploy:
       type: swarm
       mode: global
-      host: ["localhost"]
+      host: localhost
       constraints:
         - node.labels.pgha_proxy == true
       restart_policy:
