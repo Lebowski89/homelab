@@ -3,10 +3,8 @@ profile: production
 exclude_paths:
   - .git/
   - .github/
-  - "**/.venv/"
-  - "**/venv/"
-  - "**/__pycache__/"
+  - ansible-venv/
+  - discards/
 
-# If you use collections/roles locally, keep this.
 skip_list:
-  - yaml[line-length]   # let yamllint handle line length
+  - yaml[line-length]

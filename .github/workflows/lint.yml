@@ -9,10 +9,6 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        working-directory: .
 
     steps:
       - uses: actions/checkout@v4
@@ -27,17 +23,15 @@ jobs:
           python -m pip install --upgrade pip
           pip install ansible-core ansible-lint yamllint
 
-      # Install collections/roles if you use requirements.yml
-      - name: Install Ansible Galaxy requirements (if present)
+      - name: Install Galaxy requirements (if present)
         run: |
           if [ -f requirements.yml ]; then
             ansible-galaxy collection install -r requirements.yml -p collections
             ansible-galaxy role install -r requirements.yml -p roles || true
           fi
 
-      - name: yamllint (YAML only)
+      - name: yamllint (tracked YAML files only)
         run: |
-          # Only lint real YAML files, not templates (.j2) etc.
           files=$(git ls-files '*.yml' '*.yaml')
           if [ -z "$files" ]; then
             echo "No YAML files found."
