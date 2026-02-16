@@ -1,3 +1,5 @@
+---
+
 name: Lint (Ansible + YAML)
 
 on:
@@ -7,6 +9,11 @@ on:
 jobs:
   lint:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: .
+
     steps:
       - uses: actions/checkout@v4
 
@@ -15,15 +22,31 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install linters
+      - name: Install tooling
         run: |
           python -m pip install --upgrade pip
-          pip install ansible-lint yamllint
+          pip install ansible-core ansible-lint yamllint
 
-      - name: yamllint
+      # Install collections/roles if you use requirements.yml
+      - name: Install Ansible Galaxy requirements (if present)
         run: |
-          yamllint .
+          if [ -f requirements.yml ]; then
+            ansible-galaxy collection install -r requirements.yml -p collections
+            ansible-galaxy role install -r requirements.yml -p roles || true
+          fi
+
+      - name: yamllint (YAML only)
+        run: |
+          # Only lint real YAML files, not templates (.j2) etc.
+          files=$(git ls-files '*.yml' '*.yaml')
+          if [ -z "$files" ]; then
+            echo "No YAML files found."
+            exit 0
+          fi
+          yamllint $files
 
       - name: ansible-lint
+        env:
+          ANSIBLE_CONFIG: ansible.cfg
         run: |
-          ansible-lint
+          ansible-lint -p
