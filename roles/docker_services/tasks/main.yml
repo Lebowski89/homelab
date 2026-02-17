@@ -1,8 +1,9 @@
 ---
 
-  ################################
-  # SERVICE VALIDATE
-  ################################
+################################
+# SERVICE VALIDATE
+################################
+
 - name: Ensure service_cfg is provided
   ansible.builtin.assert:
     that:
@@ -11,9 +12,10 @@
     fail_msg: "docker_services role requires service_cfg (mapping) to be passed from the playbook."
   tags: always
 
-  ################################
-  # SERVICE VALIDATE
-  ################################
+################################
+# SERVICE VALIDATE
+################################
+
 - name: Validate target exists when targets are defined
   ansible.builtin.assert:
     that:
@@ -109,9 +111,10 @@
     _is_deploy_host: "{{ inventory_hostname == _deploy_host_effective }}"
   tags: always
 
-  ################################
-  # PREP (CLEANUP)
-  ################################
+################################
+# PREP (CLEANUP)
+################################
+
 - name: Derive cleanup flags (stack-scoped)
   ansible.builtin.set_fact:
     _cleanup_enable: "{{ (svc.cleanup.enable | default(true)) | bool }}"
@@ -150,9 +153,10 @@
   ansible.builtin.set_fact:
     _stacks_cleaned: "{{ _stacks_cleaned + [stack_name_effective] }}"
 
-  ################################
-  # PREP (INFISICAL)
-  ################################
+################################
+# PREP (INFISICAL)
+################################
+
 - name: Prep | Fetch Infisical secrets (svc.infisical)
   when:
     - inventory_hostname == "localhost"
@@ -202,9 +206,10 @@
   delegate_to: "{{ _deploy_host_effective }}"
   delegate_facts: true
 
-  ################################
-  # PREP (DOCKER SECRETS)
-  ################################
+################################
+# PREP (DOCKER SECRETS)
+################################
+
 - name: Prep | Create docker secrets / files from Infisical secrets_map
   when:
     - svc.infisical is defined
@@ -213,9 +218,10 @@
     - (stack_deploy_type == 'swarm') | ternary(inventory_hostname == 'localhost', _is_deploy_host)
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/secrets.yml"
 
-  ################################
-  # PREP (SWARM CONFIGS)
-  ################################
+################################
+# PREP (SWARM CONFIGS)
+################################
+
 - name: Prep | Swarm configs
   when:
     - inventory_hostname == "localhost"
@@ -226,9 +232,10 @@
     swarm_configs: "{{ svc.swarm_configs }}"
     deploy_host: "{{ svc.swarm_config_host | default('localhost', true) }}"
 
-  ################################
-  # PREP (AUTHELIA)
-  ################################
+################################
+# PREP (AUTHELIA)
+################################
+
 - name: Prep | Authelia key material (argon2/session/jwt/storage)
   when:
     - inventory_hostname == "localhost"
@@ -237,9 +244,10 @@
   run_once: true
   tags: [authelia]
 
-  ################################
-  # PREP (POSTGRES)
-  ################################
+################################
+# PREP (POSTGRES)
+################################
+
 - name: Create Postgres database
   when:
     - inventory_hostname == "localhost"
