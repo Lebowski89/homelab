@@ -34,6 +34,7 @@ EXAMPLES = """
     protocol: tcp
 """
 
+
 def find_port(module, low_bound, high_bound, protocol):
     try:
         if high_bound <= low_bound:
@@ -43,10 +44,10 @@ def find_port(module, low_bound, high_bound, protocol):
         seq = set(range(low_bound, high_bound + 1))
 
         # Determine command based on protocol
-        if protocol == 'tcp':
+        if protocol == "tcp":
             cmd = "ss -Htan"
             awk_cmd = "awk '{print $4}'"
-        elif protocol == 'udp':
+        elif protocol == "udp":
             cmd = "ss -Huan"
             awk_cmd = "awk '{print $4}'"
         else:  # both
@@ -72,17 +73,23 @@ def find_port(module, low_bound, high_bound, protocol):
     except Exception as e:
         module.fail_json(msg=str(e))
 
+
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            low_bound=dict(type='int', required=True),
-            high_bound=dict(type='int', required=True),
-            protocol=dict(type='str', default='both', choices=['tcp', 'udp', 'both']),
+            low_bound=dict(type="int", required=True),
+            high_bound=dict(type="int", required=True),
+            protocol=dict(type="str", default="both", choices=["tcp", "udp", "both"]),
         ),
-        supports_check_mode=True
+        supports_check_mode=True,
     )
 
-    is_error, result = find_port(module, module.params['low_bound'], module.params['high_bound'], module.params['protocol'])
+    is_error, result = find_port(
+        module,
+        module.params["low_bound"],
+        module.params["high_bound"],
+        module.params["protocol"],
+    )
 
     if not is_error:
         module.exit_json(changed=False, meta=result)
@@ -90,5 +97,5 @@ def main():
         module.fail_json(msg="Error finding port", meta=result)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
