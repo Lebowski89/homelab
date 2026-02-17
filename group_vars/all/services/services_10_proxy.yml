@@ -128,7 +128,7 @@ services_10_proxy:
   authelia_redis:
     name: authelia-redis
     stack: authelia-redis
-    image: redis:8.4-alpine
+    image: redis:8.6-alpine
     named_networks:
       overlay:
         external: true
