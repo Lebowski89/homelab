@@ -53,10 +53,6 @@
       ## services_30_media
       - name: autobrr
         tags: [media, autobrr]
-      - name: checkrr_daily
-        tags: [media, checkrr]
-      - name: checkrr_monthly
-        tags: [media, checkrr]
       - name: jellyseerr
         tags: [media, jellyseerr]
       - name: ombi
@@ -129,8 +125,6 @@
         tags: [utilities, adminer]
       - name: czkawka
         tags: [utilities, czkawka]
-      - name: diun
-        tags: [utilities, diun]
       - name: omni_tools
         tags: [utilities, omni_tools]
       - name: themepark
@@ -260,8 +254,3 @@
           tags:
             - always
       tags: always
-
-    # - debug:
-    #     var: compose_stacks
-    #   when: inventory_hostname == 'localhost'
-    #   tags: always

@@ -12,7 +12,7 @@ services_20_arrs:
       overlay:
         external: true
     healthcheck:
-      test: 
+      test:
         - "CMD"
         - "curl"
         - "--fail"
@@ -951,7 +951,7 @@ services_20_arrs:
   ################################
   # WHISPARR
   ################################
-  whisparr: 
+  whisparr:
     name: whisparr
     stack: arrs
     image: ghcr.io/hotio/whisparr:v3-3.2.3-release.219
