@@ -3,7 +3,6 @@
   ################################
   # SERVICE VALIDATE
   ################################
-
 - name: Ensure service_cfg is provided
   ansible.builtin.assert:
     that:
@@ -15,7 +14,6 @@
   ################################
   # SERVICE VALIDATE
   ################################
-
 - name: Validate target exists when targets are defined
   ansible.builtin.assert:
     that:
@@ -114,7 +112,6 @@
   ################################
   # PREP (CLEANUP)
   ################################
-
 - name: Derive cleanup flags (stack-scoped)
   ansible.builtin.set_fact:
     _cleanup_enable: "{{ (svc.cleanup.enable | default(true)) | bool }}"
@@ -156,7 +153,6 @@
   ################################
   # PREP (INFISICAL)
   ################################
-
 - name: Prep | Fetch Infisical secrets (svc.infisical)
   when:
     - inventory_hostname == "localhost"
@@ -209,7 +205,6 @@
   ################################
   # PREP (DOCKER SECRETS)
   ################################
-
 - name: Prep | Create docker secrets / files from Infisical secrets_map
   when:
     - svc.infisical is defined
@@ -221,7 +216,6 @@
   ################################
   # PREP (SWARM CONFIGS)
   ################################
-
 - name: Prep | Swarm configs
   when:
     - inventory_hostname == "localhost"
@@ -235,7 +229,6 @@
   ################################
   # PREP (AUTHELIA)
   ################################
-
 - name: Prep | Authelia key material (argon2/session/jwt/storage)
   when:
     - inventory_hostname == "localhost"
@@ -247,7 +240,6 @@
   ################################
   # PREP (POSTGRES)
   ################################
-
 - name: Create Postgres database
   when:
     - inventory_hostname == "localhost"
