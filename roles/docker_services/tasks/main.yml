@@ -1,8 +1,8 @@
 ---
 
-################################
-# SERVICE VALIDATE
-################################
+  ################################
+  # SERVICE VALIDATE
+  ################################
 
 - name: Ensure service_cfg is provided
   ansible.builtin.assert:
@@ -12,9 +12,9 @@
     fail_msg: "docker_services role requires service_cfg (mapping) to be passed from the playbook."
   tags: always
 
-################################
-# SERVICE VALIDATE
-################################
+  ################################
+  # SERVICE VALIDATE
+  ################################
 
 - name: Validate target exists when targets are defined
   ansible.builtin.assert:
@@ -36,10 +36,6 @@
           )
       }}
   tags: always
-
-# - name: Validate svc schema (directories/templates/infisical/etc)
-#   when: inventory_hostname == "localhost"
-#   ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/validate_svc.yml"
 
 - name: Derive common service context
   ansible.builtin.set_fact:
@@ -63,8 +59,6 @@
       }}
   tags: always
 
-# REQUIRED: derive stack_name_effective early so cleanup/stack init/network registration
-# all operate on the same key that deploy uses (e.g. gluetun-unraid).
 - name: Derive effective stack key (avoid container host collisions)
   ansible.builtin.set_fact:
     stack_name_effective: >-
@@ -117,9 +111,9 @@
     _is_deploy_host: "{{ inventory_hostname == _deploy_host_effective }}"
   tags: always
 
-################################
-# PREP (CLEANUP)
-################################
+  ################################
+  # PREP (CLEANUP)
+  ################################
 
 - name: Derive cleanup flags (stack-scoped)
   ansible.builtin.set_fact:
@@ -159,9 +153,9 @@
   ansible.builtin.set_fact:
     _stacks_cleaned: "{{ _stacks_cleaned + [stack_name_effective] }}"
 
-################################
-# PREP (INFISICAL)
-################################
+  ################################
+  # PREP (INFISICAL)
+  ################################
 
 - name: Prep | Fetch Infisical secrets (svc.infisical)
   when:
@@ -179,7 +173,7 @@
     - inventory_hostname == _deploy_host_effective
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/resolve_env.yml"
 
-# Push the fetched vars to the deploy host as facts (flatten mode)
+  # Push the fetched vars to the deploy host as facts (flatten mode)
 - name: Prep | Propagate Infisical flattened vars to deploy host
   when:
     - inventory_hostname == "localhost"
@@ -196,7 +190,7 @@
   delegate_to: "{{ _deploy_host_effective }}"
   delegate_facts: true
 
-# Push dict-mode output too (if you ever use it)
+  # Push dict-mode output too (if you ever use it)
 - name: Prep | Propagate Infisical dict to deploy host
   when:
     - inventory_hostname == "localhost"
@@ -212,9 +206,9 @@
   delegate_to: "{{ _deploy_host_effective }}"
   delegate_facts: true
 
-################################
-# PREP (DOCKER SECRETS)
-################################
+  ################################
+  # PREP (DOCKER SECRETS)
+  ################################
 
 - name: Prep | Create docker secrets / files from Infisical secrets_map
   when:
@@ -224,9 +218,9 @@
     - (stack_deploy_type == 'swarm') | ternary(inventory_hostname == 'localhost', _is_deploy_host)
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/secrets.yml"
 
-################################
-# PREP (SWARM CONFIGS)
-################################
+  ################################
+  # PREP (SWARM CONFIGS)
+  ################################
 
 - name: Prep | Swarm configs
   when:
@@ -238,9 +232,9 @@
     swarm_configs: "{{ svc.swarm_configs }}"
     deploy_host: "{{ svc.swarm_config_host | default('localhost', true) }}"
 
-################################
-# PREP (AUTHELIA)
-################################
+  ################################
+  # PREP (AUTHELIA)
+  ################################
 
 - name: Prep | Authelia key material (argon2/session/jwt/storage)
   when:
@@ -250,10 +244,9 @@
   run_once: true
   tags: [authelia]
 
-################################
-# PREP (POSTGRES)
-################################
-# NOTE: As requested, these stay pinned to localhost (control-plane tasks).
+  ################################
+  # PREP (POSTGRES)
+  ################################
 
 - name: Create Postgres database
   when:
@@ -269,9 +262,9 @@
     - (svc.postgres.clean_sqlite | default(false)) | bool
   ansible.builtin.include_tasks: sub_tasks/sqlite.yml
 
-################################
-# PREP (DNS)
-################################
+  ################################
+  # PREP (DNS)
+  ################################
 
 - name: Ensure Cloudflare creds exist (Infisical when missing)
   when:
@@ -280,9 +273,9 @@
     - (svc.traefik.enable | default(false)) | bool
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cloudflare_creds.yml"
 
-################################
-# PREP (PATHS)
-################################
+  ################################
+  # PREP (PATHS)
+  ################################
 
 - name: Create filesystem paths (on filesystem hosts)
   when:
@@ -300,9 +293,9 @@
   loop_control:
     loop_var: _fs_target
 
-################################
-# PREP (COPY FILES)
-################################
+  ################################
+  # PREP (COPY FILES)
+  ################################
 
 - name: Copy static files (on filesystem hosts)
   when:
@@ -317,9 +310,9 @@
   loop_control:
     loop_var: _fs_target
 
-################################
-# PREP (TEMPLATES)
-################################
+  ################################
+  # PREP (TEMPLATES)
+  ################################
 
 - name: Render templates (on filesystem host)
   when:
@@ -336,9 +329,9 @@
   loop_control:
     loop_var: _fs_target
 
-################################
-# SERVICE PREP (MISC)
-################################
+  ################################
+  # SERVICE PREP (MISC)
+  ################################
 
 - name: Prep | Plex (claims/token/etc)
   when:
@@ -383,9 +376,9 @@
   run_once: true
   tags: [vaultwarden]
 
-################################
-# GLOBAL / CENTRAL STATE INIT
-################################
+  ################################
+  # GLOBAL / CENTRAL STATE INIT
+  ################################
 
 - name: Ensure compose_stacks exists on localhost
   ansible.builtin.set_fact:
@@ -394,9 +387,9 @@
   delegate_facts: true
   run_once: true
 
-################################
-# INITIALIZE STACK
-################################
+  ################################
+  # INITIALIZE STACK
+  ################################
 
 - name: Ensure compose_stacks is initialized on deploy host
   when: _is_deploy_host
@@ -414,11 +407,11 @@
         | default({}, true)
       }}
 
-################################
-# COMPOSE (BASE)
-################################
+  ################################
+  # COMPOSE (BASE)
+  ################################
 
-# Register top-level networks from svc.named_networks (if provided)
+  # Register top-level networks from svc.named_networks (if provided)
 - name: Register networks needed by this stack
   when:
     - _is_deploy_host
@@ -430,7 +423,7 @@
     stack_name: "{{ stack_name_effective }}"
     stack_network_names: "{{ svc.named_networks }}"
 
-# Register external volumes needed by this stack (move earlier so top-level exists before render)
+  # Register external volumes needed by this stack (move earlier so top-level exists before render)
 - name: Register external volumes needed by this stack
   when:
     - _is_deploy_host
@@ -452,11 +445,11 @@
   ansible.builtin.set_fact:
     _svc_has_network_mode: "{{ _svc_is_container and (_svc_network_mode | length > 0) }}"
 
-# Build networks list:
-# - if container has network_mode => none
-# - else prefer svc.networks (if you still use it)
-# - else use named_networks keys
-# - else default docker_network
+  # Build networks list:
+  # - if container has network_mode => none
+  # - else prefer svc.networks (if you still use it)
+  # - else use named_networks keys
+  # - else default docker_network
 - name: Build service networks list
   when: _is_deploy_host
   ansible.builtin.set_fact:
@@ -516,9 +509,9 @@
         | ternary(_svc_networks_list, omit)
       }}
 
-################################
-# COMPOSE (SECURITY_OPT)
-################################
+  ################################
+  # COMPOSE (SECURITY_OPT)
+  ################################
 
 - name: Set security_opt
   when:
@@ -530,9 +523,9 @@
   vars:
     security_opt_list: "{{ svc.security_opt }}"
 
-################################
-# COMPOSE (DEPENDS_ON)
-################################
+  ################################
+  # COMPOSE (DEPENDS_ON)
+  ################################
 
 - name: Set depends_on
   when:
@@ -544,9 +537,9 @@
   vars:
     depends_on_list: "{{ svc.depends_on }}"
 
-################################
-# COMPOSE (CAPS)
-################################
+  ################################
+  # COMPOSE (CAPS)
+  ################################
 
 - name: Add Linux capabilities (cap_add)
   when:
@@ -570,9 +563,9 @@
     caps_action: "append_unique"
     caps_list: "{{ svc.cap_drop }}"
 
-################################
-# COMPOSE (DEVICES)
-################################
+  ################################
+  # COMPOSE (DEVICES)
+  ################################
 
 - name: Add devices
   when:
@@ -584,9 +577,9 @@
     devices_action: "append_unique"
     device_list: "{{ svc.devices }}"
 
-################################
-# COMPOSE (COMMAND)
-################################
+  ################################
+  # COMPOSE (COMMAND)
+  ################################
 
 - name: Set command variable
   when:
@@ -597,9 +590,9 @@
     command: "{{ svc.command }}"
     command_action: "replace"
 
-################################
-# COMPOSE (HEALTHCHECK)
-################################
+  ################################
+  # COMPOSE (HEALTHCHECK)
+  ################################
 
 - name: Set healthcheck variable
   when:
@@ -619,9 +612,9 @@
     health_retries: "{{ svc.healthcheck.retries | default(3, true) }}"
     health_start_period: "{{ svc.healthcheck.start_period | default('30s', true) }}"
 
-################################
-# COMPOSE (USER)
-################################
+  ################################
+  # COMPOSE (USER)
+  ################################
 
 - name: Set user variable
   when:
@@ -632,9 +625,9 @@
   vars:
     user: "{{ svc.user }}"
 
-################################
-# COMPOSE (ENV)
-################################
+  ################################
+  # COMPOSE (ENV)
+  ################################
 
 - name: Set environment variables
   when:
@@ -645,9 +638,9 @@
   vars:
     environment_vars: "{{ svc.environment }}"
 
-################################
-# COMPOSE (ENV_FILE)
-################################
+  ################################
+  # COMPOSE (ENV_FILE)
+  ################################
 
 - name: Attach env_file to service
   when:
@@ -656,9 +649,9 @@
     - svc.env_file | length > 0
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/env_file.yml"
 
-################################
-# COMPOSE (SECRETS)
-################################
+  ################################
+  # COMPOSE (SECRETS)
+  ################################
 
 - name: Set secrets variable (svc format)
   when:
@@ -669,9 +662,9 @@
   vars:
     secrets: "{{ svc.secrets }}"
 
-################################
-# COMPOSE (CONFIGS)
-################################
+  ################################
+  # COMPOSE (CONFIGS)
+  ################################
 
 - name: Set configs variable (swarm only)
   when:
@@ -683,9 +676,9 @@
   vars:
     configs_list: "{{ svc.configs }}"
 
-################################
-# COMPOSE (PORTS)
-################################
+  ################################
+  # COMPOSE (PORTS)
+  ################################
 
 - name: Set ports variable
   when:
@@ -697,9 +690,9 @@
     ports: "{{ svc.ports }}"
     ports_action: "replace"
 
-################################
-# COMPOSE (VOLUMES)
-################################
+  ################################
+  # COMPOSE (VOLUMES)
+  ################################
 
 - name: Set volumes variable
   when:
@@ -737,9 +730,9 @@
   vars:
     shm_size: "{{ svc.shm_size }}"
 
-################################
-# COMPOSE (LABELS)
-################################
+  ################################
+  # COMPOSE (LABELS)
+  ################################
 
 - name: Attach labels (service-level)
   when:
@@ -753,25 +746,9 @@
     labels_action: "append"
     labels_precedence: "new_wins"
 
-##################################
-# COMPOSE (TRAEFIK SERVICE LABELS)
-##################################
-
-- name: Attach Traefik service labels
-  when:
-    - _is_deploy_host
-    - svc.traefik_service_labels is defined
-    - (svc.traefik_service_labels is mapping)
-    - (svc.traefik_service_labels | length > 0)
-  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/labels.yml"
-  vars:
-    labels_dict: "{{ svc.traefik_service_labels }}"
-    labels_action: "append"
-    labels_precedence: "new_wins"
-
-################################
-# COMPOSE (TRAEFIK LABELS)
-################################
+  ################################
+  # COMPOSE (TRAEFIK MIDDLEWARES)
+  ################################
 
 - name: Render Traefik app router file (on traefik host)
   when:
@@ -816,9 +793,9 @@
     tr_backend_address: "http://{{ svc.traefik.backend_host | default(svc.name) }}:{{ tr_port }}"
   delegate_to: localhost
 
-################################
-# DEPLOY
-################################
+  ################################
+  # DEPLOY
+  ################################
 
 - name: Set deploy config
   when:
@@ -856,9 +833,9 @@
   delegate_to: localhost
   delegate_facts: true
 
-# - name: Validate compose_services before rendering
-#   when: _is_deploy_host
-#   ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/validate.yml"
+  # - name: Validate compose_services before rendering
+  #   when: _is_deploy_host
+  #   ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/validate.yml"
 
 - name: Debug env_file + svc keys
   when: inventory_hostname == "localhost"
@@ -867,8 +844,6 @@
       env_file: "{{ svc.env_file | default('UNDEFINED') }}"
       keys: "{{ svc.keys() | list | sort }}"
 
-# REQUIRED: feed deploy/render from the centralized compose_stacks entry so DeployOne
-# always receives networks/volumes even for container stacks like gluetun-unraid.
 - name: Prepare stack render inputs from compose_stacks (networks/volumes/services)
   when: _is_deploy_host
   ansible.builtin.set_fact:
@@ -885,8 +860,3 @@
   vars:
     deploy_stack_name: "{{ stack_name_effective }}"
     deploy_stack_type: "{{ stack_deploy_type }}"
-
-- name: Debug stack networks being rendered
-  when: _is_deploy_host
-  ansible.builtin.debug:
-    var: stack_networks

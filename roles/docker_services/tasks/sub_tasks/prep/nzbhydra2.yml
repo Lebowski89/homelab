@@ -1,7 +1,5 @@
 ---
 
-# roles/docker_services/tasks/sub_tasks/prep/nzbhydra2.yml
-
 - name: NZBHydra2 prep | Set derived vars (run once)
   ansible.builtin.set_fact:
     _nh_host: "{{ (svc.deploy.host | default('unraid', true)) | string | trim }}"
@@ -12,9 +10,9 @@
   when: inventory_hostname == "localhost"
   run_once: true
 
-################################
-# CONFIG (CREATE IF MISSING)
-################################
+  ################################
+  # CONFIG (CREATE IF MISSING)
+  ################################
 
 - name: NZBHydra2 prep | Check config exists
   ansible.builtin.stat:
@@ -72,9 +70,9 @@
       until: _nh_remove_tmp is succeeded
       delegate_to: "{{ _nh_host }}"
 
-################################
-# CONFIG (FACTS)
-################################
+  ################################
+  # CONFIG (FACTS)
+  ################################
 
 - name: NZBHydra2 prep | Build config facts (run once)
   ansible.builtin.set_fact:
@@ -123,9 +121,9 @@
   when: inventory_hostname == "localhost"
   run_once: true
 
-################################
-# CONFIG (YEDIT)
-################################
+  ################################
+  # CONFIG (YEDIT)
+  ################################
 
 - name: NZBHydra2 prep | Set auth user
   yedit: # noqa fqcn[action]
@@ -185,9 +183,9 @@
         value: "{{ nzbhydra2_indexers | default([]) }}"
         state: present
 
-################################
-# ASSERTS (NO SILENT NO-OP)
-################################
+  ################################
+  # ASSERTS (NO SILENT NO-OP)
+  ################################
 
 - name: NZBHydra2 prep | Slurp config
   ansible.builtin.slurp:

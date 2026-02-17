@@ -1,10 +1,8 @@
 ---
 
-# roles/docker_services/tasks/sub_tasks/prep/bazarr.yml
-
-################################
-# BAZARR PREP (ONCE)
-################################
+  ################################
+  # BAZARR PREP (ONCE)
+  ################################
 
 - name: Bazarr prep | Set paths + hosts
   ansible.builtin.set_fact:
@@ -16,9 +14,9 @@
     _bazarr_pgid: "{{ hostvars[svc.deploy.host | default('localhost', true)].pgid | default('1000') }}"
   run_once: true
 
-################################
-# CONFIG (CREATE IF MISSING)
-################################
+  ################################
+  # CONFIG (CREATE IF MISSING)
+  ################################
 
 - name: Bazarr prep | Ensure config dir exists
   ansible.builtin.file:
@@ -81,9 +79,9 @@
       delegate_to: "{{ _bazarr_fs_host }}"
   run_once: true
 
-################################
-# CONFIG (BAZARR) - YEDIT
-################################
+  ################################
+  # CONFIG (BAZARR) - YEDIT
+  ################################
 
 - name: Bazarr prep | Configure api setting
   yedit: # noqa fqcn[action]

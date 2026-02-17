@@ -1,9 +1,9 @@
 ---
 
-# Vaultwarden prep (admin token -> swarm secret)
-# - reads/creates token files on the filesystem host
-# - ensures docker secret exists on swarm manager
-# - run once per run
+  # Vaultwarden prep (admin token -> swarm secret)
+  # - reads/creates token files on the filesystem host
+  # - ensures docker secret exists on swarm manager
+  # - run once per run
 
 - name: Vaultwarden prep | Set derived vars (run once)
   ansible.builtin.set_fact:
@@ -17,9 +17,9 @@
   when: inventory_hostname == "localhost"
   run_once: true
 
-################################
-# TOKEN FILE (FS HOST)
-################################
+  ################################
+  # TOKEN FILE (FS HOST)
+  ################################
 
 - name: Vaultwarden prep | Ensure vaultwarden dir exists (FS host)
   become: true
@@ -98,9 +98,9 @@
   when: inventory_hostname == "localhost"
   run_once: true
 
-################################
-# SWARM SECRET (MANAGER)
-################################
+  ################################
+  # SWARM SECRET (MANAGER)
+  ################################
 
 - name: Vaultwarden prep | Ensure docker secret exists (swarm manager)
   community.docker.docker_secret:
@@ -111,7 +111,7 @@
   delegate_to: "{{ _vw_swarm_mgr }}"
   run_once: true
 
-# Optional sanity check (won't reveal token)
+  # Optional sanity check (won't reveal token)
 - name: Vaultwarden prep | Assert token looks like PHC argon2 string
   ansible.builtin.assert:
     that:
