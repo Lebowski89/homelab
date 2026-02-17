@@ -10,9 +10,9 @@
   when: inventory_hostname == "localhost"
   run_once: true
 
-  ################################
-  # CONFIG (CREATE IF MISSING)
-  ################################
+################################
+# CONFIG (CREATE IF MISSING)
+################################
 
 - name: NZBHydra2 prep | Check config exists
   ansible.builtin.stat:
@@ -70,9 +70,9 @@
       until: _nh_remove_tmp is succeeded
       delegate_to: "{{ _nh_host }}"
 
-  ################################
-  # CONFIG (FACTS)
-  ################################
+################################
+# CONFIG (FACTS)
+################################
 
 - name: NZBHydra2 prep | Build config facts (run once)
   ansible.builtin.set_fact:
@@ -121,12 +121,12 @@
   when: inventory_hostname == "localhost"
   run_once: true
 
-  ################################
-  # CONFIG (YEDIT)
-  ################################
+################################
+# CONFIG (YEDIT)
+################################
 
 - name: NZBHydra2 prep | Set auth user
-  yedit: # noqa fqcn[action]
+  yedit:
     src: "{{ _nh_config_path }}"
     key: auth.users
     value:
@@ -138,7 +138,7 @@
   run_once: true
 
 - name: NZBHydra2 prep | Set API key
-  yedit: # noqa fqcn[action]
+  yedit:
     src: "{{ _nh_config_path }}"
     key: main.apiKey
     value: "{{ nzbhydra2_api }}"
@@ -153,13 +153,13 @@
   delegate_to: "{{ _nh_host }}"
   block:
     - name: Remove existing downloaders
-      yedit: # noqa fqcn[action]
+      yedit:
         src: "{{ _nh_config_path }}"
         key: downloading.downloaders
         state: absent
 
     - name: Write managed downloaders
-      yedit: # noqa fqcn[action]
+      yedit:
         src: "{{ _nh_config_path }}"
         key: downloading.downloaders
         value: "{{ nzbhydra2_downloaders | default([]) }}"
@@ -171,21 +171,21 @@
   delegate_to: "{{ _nh_host }}"
   block:
     - name: Remove existing indexers
-      yedit: # noqa fqcn[action]
+      yedit:
         src: "{{ _nh_config_path }}"
         key: indexers
         state: absent
 
     - name: Write managed indexers
-      yedit: # noqa fqcn[action]
+      yedit:
         src: "{{ _nh_config_path }}"
         key: indexers
         value: "{{ nzbhydra2_indexers | default([]) }}"
         state: present
 
-  ################################
-  # ASSERTS (NO SILENT NO-OP)
-  ################################
+################################
+# ASSERTS (NO SILENT NO-OP)
+################################
 
 - name: NZBHydra2 prep | Slurp config
   ansible.builtin.slurp:

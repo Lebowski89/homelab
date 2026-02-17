@@ -194,7 +194,7 @@
       when: inventory_hostname in fact_hosts
       ansible.builtin.debug:
         msg: '{{ timezone }}'
-      tags: always      
+      tags: always
 
     - name: Set Local IP
       when: inventory_hostname in fact_hosts

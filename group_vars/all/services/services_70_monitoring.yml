@@ -95,13 +95,13 @@ services_70_monitoring:
       mode: replicated
       replicas: 1
       host: localhost
-      constraints: 
+      constraints:
         - node.labels.ansible_host == localhost
       restart_policy:
         condition: on-failure
         delay: 10s
         max_attempts: 5
-        window: 2m  
+        window: 2m
 ################################
 # GRAFANA
 ################################

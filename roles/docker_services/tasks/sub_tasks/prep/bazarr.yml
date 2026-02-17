@@ -1,8 +1,8 @@
 ---
 
-  ################################
-  # BAZARR PREP (ONCE)
-  ################################
+################################
+# BAZARR PREP (ONCE)
+################################
 
 - name: Bazarr prep | Set paths + hosts
   ansible.builtin.set_fact:
@@ -14,9 +14,9 @@
     _bazarr_pgid: "{{ hostvars[svc.deploy.host | default('localhost', true)].pgid | default('1000') }}"
   run_once: true
 
-  ################################
-  # CONFIG (CREATE IF MISSING)
-  ################################
+################################
+# CONFIG (CREATE IF MISSING)
+################################
 
 - name: Bazarr prep | Ensure config dir exists
   ansible.builtin.file:
@@ -79,12 +79,12 @@
       delegate_to: "{{ _bazarr_fs_host }}"
   run_once: true
 
-  ################################
-  # CONFIG (BAZARR) - YEDIT
-  ################################
+################################
+# CONFIG (BAZARR) - YEDIT
+################################
 
 - name: Bazarr prep | Configure api setting
-  yedit: # noqa fqcn[action]
+  yedit:
     src: "{{ _bazarr_config_file }}"
     key: "auth.apikey"
     value: "{{ bazarr_api }}"
@@ -92,7 +92,7 @@
   run_once: true
 
 - name: Bazarr prep | Configure misc settings
-  yedit: # noqa fqcn[action]
+  yedit:
     src: "{{ _bazarr_config_file }}"
     key: "{{ bazarr_settings_misc.key }}"
     value: "{{ bazarr_settings_misc.value }}"
@@ -107,7 +107,7 @@
   run_once: true
 
 - name: Bazarr prep | Configure opensubtitlescom settings
-  yedit: # noqa fqcn[action]
+  yedit:
     src: "{{ _bazarr_config_file }}"
     key: "{{ bazarr_settings_subtitles.key }}"
     value: "{{ bazarr_settings_subtitles.value }}"
@@ -123,7 +123,7 @@
   run_once: true
 
 - name: Bazarr prep | Configure radarr settings
-  yedit: # noqa fqcn[action]
+  yedit:
     src: "{{ _bazarr_config_file }}"
     key: "{{ bazarr_settings_radarr.key }}"
     value: "{{ bazarr_settings_radarr.value }}"
@@ -141,7 +141,7 @@
   run_once: true
 
 - name: Bazarr prep | Configure sonarr settings
-  yedit: # noqa fqcn[action]
+  yedit:
     src: "{{ _bazarr_config_file }}"
     key: "{{ bazarr_settings_sonarr.key }}"
     value: "{{ bazarr_settings_sonarr.value }}"
@@ -159,7 +159,7 @@
   run_once: true
 
 - name: Bazarr prep | Configure postgres settings
-  yedit: # noqa fqcn[action]
+  yedit:
     src: "{{ _bazarr_config_file }}"
     key: "{{ bazarr_settings_postgres.key }}"
     value: "{{ bazarr_settings_postgres.value }}"

@@ -8,9 +8,9 @@
   when: inventory_hostname == "localhost"
   run_once: true
 
-  ################################
-  # SITE (CREATE IF MISSING)
-  ################################
+################################
+# SITE (CREATE IF MISSING)
+################################
 
 - name: Hugo prep | Check if site exists
   ansible.builtin.stat:
@@ -40,9 +40,9 @@
           - "/:/src"
         cleanup: true
 
-  ################################
-  # GIT (INIT / THEME / REMOTE)
-  ################################
+################################
+# GIT (INIT / THEME / REMOTE)
+################################
 
 - name: Hugo prep | Check if repo already initialized
   ansible.builtin.stat:

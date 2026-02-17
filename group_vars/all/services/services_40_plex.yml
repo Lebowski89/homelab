@@ -125,7 +125,7 @@ services_40_plex:
     named_networks:
       overlay:
         external: true
-    devices: 
+    devices:
       - /dev/dri:/dev/dri
     environment:
       PUID: "1000"
