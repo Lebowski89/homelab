@@ -184,7 +184,7 @@ services_10_proxy:
         external: true
     healthcheck:
       test:
-        - "CMD" 
+        - "CMD"
         - "wget"
         - "--spider"
         - "-q"
