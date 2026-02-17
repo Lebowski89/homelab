@@ -37,10 +37,6 @@
       }}
   tags: always
 
-# - name: Validate svc schema (directories/templates/infisical/etc)
-#   when: inventory_hostname == "localhost"
-#   ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/validate_svc.yml"
-
 - name: Derive common service context
   ansible.builtin.set_fact:
     service_name: "{{ svc.name | default(role_prefix, true) | string | trim }}"
@@ -63,8 +59,6 @@
       }}
   tags: always
 
-# REQUIRED: derive stack_name_effective early so cleanup/stack init/network registration
-# all operate on the same key that deploy uses (e.g. gluetun-unraid).
 - name: Derive effective stack key (avoid container host collisions)
   ansible.builtin.set_fact:
     stack_name_effective: >-
@@ -179,7 +173,6 @@
     - inventory_hostname == _deploy_host_effective
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/resolve_env.yml"
 
-# Push the fetched vars to the deploy host as facts (flatten mode)
 - name: Prep | Propagate Infisical flattened vars to deploy host
   when:
     - inventory_hostname == "localhost"
@@ -196,7 +189,6 @@
   delegate_to: "{{ _deploy_host_effective }}"
   delegate_facts: true
 
-# Push dict-mode output too (if you ever use it)
 - name: Prep | Propagate Infisical dict to deploy host
   when:
     - inventory_hostname == "localhost"
@@ -253,7 +245,6 @@
 ################################
 # PREP (POSTGRES)
 ################################
-# NOTE: As requested, these stay pinned to localhost (control-plane tasks).
 
 - name: Create Postgres database
   when:
@@ -418,7 +409,6 @@
 # COMPOSE (BASE)
 ################################
 
-# Register top-level networks from svc.named_networks (if provided)
 - name: Register networks needed by this stack
   when:
     - _is_deploy_host
@@ -430,7 +420,6 @@
     stack_name: "{{ stack_name_effective }}"
     stack_network_names: "{{ svc.named_networks }}"
 
-# Register external volumes needed by this stack (move earlier so top-level exists before render)
 - name: Register external volumes needed by this stack
   when:
     - _is_deploy_host
@@ -452,11 +441,6 @@
   ansible.builtin.set_fact:
     _svc_has_network_mode: "{{ _svc_is_container and (_svc_network_mode | length > 0) }}"
 
-# Build networks list:
-# - if container has network_mode => none
-# - else prefer svc.networks (if you still use it)
-# - else use named_networks keys
-# - else default docker_network
 - name: Build service networks list
   when: _is_deploy_host
   ansible.builtin.set_fact:
@@ -753,24 +737,8 @@
     labels_action: "append"
     labels_precedence: "new_wins"
 
-##################################
-# COMPOSE (TRAEFIK SERVICE LABELS)
-##################################
-
-- name: Attach Traefik service labels
-  when:
-    - _is_deploy_host
-    - svc.traefik_service_labels is defined
-    - (svc.traefik_service_labels is mapping)
-    - (svc.traefik_service_labels | length > 0)
-  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/labels.yml"
-  vars:
-    labels_dict: "{{ svc.traefik_service_labels }}"
-    labels_action: "append"
-    labels_precedence: "new_wins"
-
 ################################
-# COMPOSE (TRAEFIK LABELS)
+# COMPOSE (TRAEFIK MIDDLEWARES)
 ################################
 
 - name: Render Traefik app router file (on traefik host)
@@ -810,7 +778,12 @@
           else []
         )
       }}
-    tr_theme_enable: "{{ (svc.traefik.themepark.app | default('')) | length > 0 and (svc.traefik.themepark.theme | default('')) | length > 0 }}"
+    tr_theme_enable: >-
+      {{
+        (svc.traefik.themepark.app | default('')) | length > 0
+        and
+        (svc.traefik.themepark.theme | default('')) | length > 0
+      }}
     tr_theme_app: "{{ svc.traefik.themepark.app | default('') }}"
     tr_theme_theme: "{{ svc.traefik.themepark.theme | default('') }}"
     tr_backend_address: "http://{{ svc.traefik.backend_host | default(svc.name) }}:{{ tr_port }}"
@@ -856,9 +829,9 @@
   delegate_to: localhost
   delegate_facts: true
 
-# - name: Validate compose_services before rendering
-#   when: _is_deploy_host
-#   ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/validate.yml"
+  # - name: Validate compose_services before rendering
+  #   when: _is_deploy_host
+  #   ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/validate.yml"
 
 - name: Debug env_file + svc keys
   when: inventory_hostname == "localhost"
@@ -867,8 +840,6 @@
       env_file: "{{ svc.env_file | default('UNDEFINED') }}"
       keys: "{{ svc.keys() | list | sort }}"
 
-# REQUIRED: feed deploy/render from the centralized compose_stacks entry so DeployOne
-# always receives networks/volumes even for container stacks like gluetun-unraid.
 - name: Prepare stack render inputs from compose_stacks (networks/volumes/services)
   when: _is_deploy_host
   ansible.builtin.set_fact:
@@ -885,8 +856,3 @@
   vars:
     deploy_stack_name: "{{ stack_name_effective }}"
     deploy_stack_type: "{{ stack_deploy_type }}"
-
-- name: Debug stack networks being rendered
-  when: _is_deploy_host
-  ansible.builtin.debug:
-    var: stack_networks

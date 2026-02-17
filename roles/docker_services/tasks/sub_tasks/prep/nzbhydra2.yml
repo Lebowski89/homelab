@@ -1,7 +1,5 @@
 ---
 
-# roles/docker_services/tasks/sub_tasks/prep/nzbhydra2.yml
-
 - name: NZBHydra2 prep | Set derived vars (run once)
   ansible.builtin.set_fact:
     _nh_host: "{{ (svc.deploy.host | default('unraid', true)) | string | trim }}"
@@ -128,7 +126,7 @@
 ################################
 
 - name: NZBHydra2 prep | Set auth user
-  yedit: # noqa fqcn[action]
+  yedit:
     src: "{{ _nh_config_path }}"
     key: auth.users
     value:
@@ -140,7 +138,7 @@
   run_once: true
 
 - name: NZBHydra2 prep | Set API key
-  yedit: # noqa fqcn[action]
+  yedit:
     src: "{{ _nh_config_path }}"
     key: main.apiKey
     value: "{{ nzbhydra2_api }}"
@@ -155,13 +153,13 @@
   delegate_to: "{{ _nh_host }}"
   block:
     - name: Remove existing downloaders
-      yedit: # noqa fqcn[action]
+      yedit:
         src: "{{ _nh_config_path }}"
         key: downloading.downloaders
         state: absent
 
     - name: Write managed downloaders
-      yedit: # noqa fqcn[action]
+      yedit:
         src: "{{ _nh_config_path }}"
         key: downloading.downloaders
         value: "{{ nzbhydra2_downloaders | default([]) }}"
@@ -173,13 +171,13 @@
   delegate_to: "{{ _nh_host }}"
   block:
     - name: Remove existing indexers
-      yedit: # noqa fqcn[action]
+      yedit:
         src: "{{ _nh_config_path }}"
         key: indexers
         state: absent
 
     - name: Write managed indexers
-      yedit: # noqa fqcn[action]
+      yedit:
         src: "{{ _nh_config_path }}"
         key: indexers
         value: "{{ nzbhydra2_indexers | default([]) }}"

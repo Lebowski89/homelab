@@ -1,7 +1,5 @@
 ---
 
-# roles/docker_services/tasks/sub_tasks/prep/hugo.yml
-
 - name: Hugo prep | Set derived vars (run once)
   ansible.builtin.set_fact:
     _hugo_host: "{{ (svc.deploy.host | default('localhost', true)) | string | trim }}"
@@ -43,7 +41,7 @@
         cleanup: true
 
 ################################
-# GIT (INIT / THEME / REMOTE / INITIAL COMMIT)
+# GIT (INIT / THEME / REMOTE)
 ################################
 
 - name: Hugo prep | Check if repo already initialized

@@ -35,7 +35,7 @@
     file: deploy_one.yml
     apply:
       tags:
-        - always    
+        - always
   loop: "{{ _deploy_stack_items }}"
   loop_control:
     loop_var: _stack_item

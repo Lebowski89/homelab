@@ -37,7 +37,7 @@ services_100_utilities:
     image: jlesage/czkawka
     named_networks:
       overlay:
-        external: true 
+        external: true
     environment:
       TZ: "{{ timezone }}"
       USER_ID: "99"
@@ -111,7 +111,7 @@ services_100_utilities:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: smtp_email, path: "/Porkbun", name: "SMTP_EMAIL" }      
+        - { var: smtp_email, path: "/Porkbun", name: "SMTP_EMAIL" }
         - { var: smtp_host, path: "/Porkbun", name: "SMTP_HOST" }
         - { var: smtp_username, path: "/Porkbun", name: "SMTP_USER", docker_secret: "smtp_user_secret" }
         - { var: smtp_password, path: "/Porkbun", name: "SMTP_PASS", docker_secret: "smtp_pass_secret" }
@@ -177,7 +177,7 @@ services_100_utilities:
     image: ghcr.io/themepark-dev/theme.park:1.22.0
     named_networks:
       overlay:
-        external: true 
+        external: true
     environment:
       TZ: "{{ timezone }}"
       PUID: "1000"

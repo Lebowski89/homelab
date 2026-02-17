@@ -12,7 +12,7 @@ services_30_media:
       overlay:
         external: true
     healthcheck:
-      test: 
+      test:
         - "CMD-SHELL"
         - "wget -qO- http://localhost:7474/ || exit 1"
     user: "1000:1000"

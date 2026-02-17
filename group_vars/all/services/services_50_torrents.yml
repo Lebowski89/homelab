@@ -181,8 +181,8 @@ services_50_torrents:
 
 #    vault:
 #      username: "{{ qbittorrent_user.value }}"
-#      password: "{{ qbittorrent_hashed_passwd.msg }}" 
- 
+#      password: "{{ qbittorrent_hashed_passwd.msg }}"
+
 #    wireguard:
 #      addresses: "{{ qbittorrent_wg_addr_swarm.value }}"
 #      dns: "{{ qbittorrent_wg_dns_swarm.value }}"
@@ -462,7 +462,7 @@ services_50_torrents:
         external: true
     healthcheck:
       test:
-        - "CMD-SHELL" 
+        - "CMD-SHELL"
         - "test -d /config && test -r /config && test -w /config && (tmp=/config/.healthcheck.$$.tmp && : > \"$tmp\" && rm -f \"$tmp\")"
     environment:
       TZ: "{{ timezone }}"
