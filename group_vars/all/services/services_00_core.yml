@@ -7,7 +7,7 @@ services_00_core:
   gitea:
     name: gitea
     stack: gitea
-    image: docker.gitea.com/gitea:1.24.0
+    image: docker.gitea.com/gitea:1.25.4
     named_networks:
       overlay:
         external: true
