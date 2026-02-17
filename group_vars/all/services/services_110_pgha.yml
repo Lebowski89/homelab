@@ -222,7 +222,7 @@ services_110_pgha:
   pg_ha_proxy:
     name: pg-ha
     stack: ha-proxy
-    image: haproxy:3.1-alpine
+    image: haproxy:3.3-alpine
     named_networks:
       overlay:
         external: true
