@@ -178,7 +178,7 @@ services_10_proxy:
   traefik:
     name: traefik
     stack: proxy
-    image: traefik:v3.6.7
+    image: traefik:v3.6.8
     named_networks:
       overlay:
         external: true
