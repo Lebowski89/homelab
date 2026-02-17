@@ -7,7 +7,7 @@ services_100_utilities:
   adminer:
     name: adminer
     stack: utilities
-    image: adminer:5.4.1
+    image: adminer:5.4.2
     named_networks:
       overlay:
         external: true
