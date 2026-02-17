@@ -1,7 +1,6 @@
 ---
 
 services_20_arrs:
-
   ################################
   # BAZARR
   ################################
@@ -13,7 +12,7 @@ services_20_arrs:
       overlay:
         external: true
     healthcheck:
-      test: 
+      test:
         - "CMD"
         - "curl"
         - "--fail"
@@ -115,9 +114,9 @@ services_20_arrs:
         max_attempts: 5
         window: 2m
 
-################################
-# LIDARR
-################################
+  ################################
+  # LIDARR
+  ################################
   lidarr:
     name: lidarr
     stack: arrs
@@ -228,9 +227,9 @@ services_20_arrs:
         max_attempts: 5
         window: 2m
 
-################################
-# PROWLARR
-################################
+  ################################
+  # PROWLARR
+  ################################
   prowlarr:
     name: prowlarr
     stack: arrs
@@ -345,9 +344,9 @@ services_20_arrs:
         max_attempts: 5
         window: 2m
 
-################################
-# RADARR
-################################
+  ################################
+  # RADARR
+  ################################
   radarr:
     name: radarr
     stack: arrs
@@ -459,9 +458,9 @@ services_20_arrs:
         max_attempts: 5
         window: 2m
 
-################################
-# RADARR-4K
-################################
+  ################################
+  # RADARR-4K
+  ################################
   radarr_4k:
     name: radarr-4k
     stack: arrs
@@ -573,9 +572,9 @@ services_20_arrs:
         max_attempts: 5
         window: 2m
 
-################################
-# RECYCLARR
-################################
+  ################################
+  # RECYCLARR
+  ################################
   recyclarr:
     name: recyclarr
     stack: arrs
@@ -662,13 +661,13 @@ services_20_arrs:
         max_attempts: 5
         window: 2m
 
-################################
-# SONARR
-################################
+  ################################
+  # SONARR
+  ################################
   sonarr:
-    name: "sonarr"
+    name: sonarr
     stack: arrs
-    image: "ghcr.io/hotio/sonarr:release-4.0.16.2944"
+    image: ghcr.io/hotio/sonarr:release-4.0.16.2944
     named_networks:
       overlay:
         external: true
@@ -678,8 +677,8 @@ services_20_arrs:
         - "touch /data/media/tv/.healthcheck && rm -f /data/media/tv/.healthcheck || exit 1"
     environment:
       TZ: "{{ timezone }}"
-      PUID: 99
-      PGID: 100
+      PUID: "99"
+      PGID: "100"
       UMASK: "022"
       SONARR__APP__INSTANCENAME: "Sonarr"
       SONARR__SERVER__PORT: "8989"
@@ -698,22 +697,31 @@ services_20_arrs:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - var: sonarr_api, path: "/Sonarr", name: "API", docker_secret: "sonarr_api_secret" }
-        - var: postgres_user, path: "/Postgres", name: "USER", docker_secret: "postgres_user_secret" }
-        - var: postgres_pass, path: "/Postgres", name: "PASS", docker_secret: "postgres_pass_secret" }
+        - var: sonarr_api
+          path: "/Sonarr"
+          name: API
+          docker_secret: sonarr_api_secret
+        - var: postgres_user
+          path: "/Postgres"
+          name: USER
+          docker_secret: postgres_user_secret
+        - var: postgres_pass
+          path: "/Postgres"
+          name: PASS
+          docker_secret: postgres_pass_secret
     secrets:
       - sonarr_api_secret
       - postgres_user_secret
       - postgres_pass_secret
     paths:
-      - path: "/mnt/user/appdata/sonarr"
+      - path: /mnt/user/appdata/sonarr
         state: directory
         owner: 99
         group: 100
         mode: 0755
     copies:
-      - src: "files/themepark/98-themepark-sonarr"
-        dest: "/mnt/user/appdata/sonarr/98-themepark-sonarr"
+      - src: files/themepark/98-themepark-sonarr
+        dest: /mnt/user/appdata/sonarr/98-themepark-sonarr
         owner: 99
         group: 100
         mode: 0755
@@ -723,18 +731,18 @@ services_20_arrs:
     volumes:
       config:
         type: bind
-        source: "/mnt/user/appdata/sonarr"
-        target: "/config"
+        source: /mnt/user/appdata/sonarr
+        target: /config
         read_only: false
       media:
         type: bind
-        source: "/mnt/user/data"
-        target: "/data"
+        source: /mnt/user/data
+        target: /data
         read_only: false
       themepark:
         type: bind
-        source: "/mnt/user/appdata/sonarr/98-themepark-sonarr"
-        target: "/etc/cont-init.d/98-themepark"
+        source: /mnt/user/appdata/sonarr/98-themepark-sonarr
+        target: /etc/cont-init.d/98-themepark
         read_only: false
     traefik:
       enable: true
@@ -751,25 +759,25 @@ services_20_arrs:
     postgres:
       enable: true
       databases:
-        - "sonarr-main"
-        - "sonarr-log"
+        - sonarr-main
+        - sonarr-log
       clean_sqlite: true
     deploy:
-      type: "swarm"
-      mode: "replicated"
+      type: swarm
+      mode: replicated
       replicas: 1
-      host: "unraid"
+      host: unraid
       constraints:
-        - "node.labels.ansible_host == unraid"
+        - node.labels.ansible_host == unraid
       restart_policy:
         condition: on-failure
         delay: 10s
         max_attempts: 5
         window: 2m
 
-################################
-# SONARR-4K
-################################
+  ################################
+  # SONARR-4K
+  ################################
   sonarr_4k:
     name: sonarr-4k
     stack: arrs
@@ -881,9 +889,9 @@ services_20_arrs:
         max_attempts: 5
         window: 2m
 
-################################
-# SPORTARR
-################################
+  ################################
+  # SPORTARR
+  ################################
   sportarr:
     name: sportarr
     stack: arrs
@@ -940,10 +948,10 @@ services_20_arrs:
         max_attempts: 5
         window: 2m
 
-################################
-# WHISPARR
-################################
-  whisparr: 
+  ################################
+  # WHISPARR
+  ################################
+  whisparr:
     name: whisparr
     stack: arrs
     image: ghcr.io/hotio/whisparr:v3-3.2.3-release.219
