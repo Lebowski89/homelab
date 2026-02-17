@@ -63,7 +63,7 @@ services_40_plex:
   kometa:
     name: "kometa"
     stack: plex
-    image: "kometateam/kometa:v2.2.2"
+    image: "kometateam/kometa:v2.3.0"
     named_networks:
       overlay:
         external: true
