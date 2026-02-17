@@ -1,11 +1,11 @@
-<center>
-  
-# Infrastructure (Homelab) by Code
-+ Driven by Ansible, Infisical and Docker Swarm
-+ Media-centric by nature
-+ Built around the arrs and various companion apps
-</center>
+````md
+## Infrastructure (Homelab) by Code
 
+- Driven by Ansible, Infisical and Docker Swarm
+- Media-centric by nature
+- Built around the arrs and various companion apps
+
+```mermaid
 flowchart TB
   subgraph Unraid["UnRaid VM (Swarm Worker)"]
     Lidarr
