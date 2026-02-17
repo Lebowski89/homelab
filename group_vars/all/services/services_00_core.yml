@@ -1,9 +1,9 @@
 ---
 
 services_00_core:
-################################
-# GITEA
-################################
+  ################################
+  # GITEA
+  ################################
   gitea:
     name: gitea
     stack: gitea
@@ -73,9 +73,9 @@ services_00_core:
         max_attempts: 5
         window: 2m
 
-################################
-# HOMEPAGE
-################################
+  ################################
+  # HOMEPAGE
+  ################################
   homepage:
     name: homepage
     stack: homepage
@@ -99,27 +99,69 @@ services_00_core:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: autobrr_api, path: "/AutoBrr", name: "API" }
-        - { var: bazarr_api, path: "/Bazarr", name: "API" }
-        - { var: grafana_user, path: "/Grafana", name: "USER" }
-        - { var: grafana_pass, path: "/Grafana", name: "PASS" }
-        - { var: jellyseerr_api, path: "/Jellyseerr", name: "API" }
-        - { var: lidarr_api, path: "/Lidarr", name: "API" }
-        - { var: ombi_api, path: "/Ombi", name: "API" }
-        - { var: plex_token, path: "/Plex", name: "TOKEN" }
-        - { var: portainer_token, path: "/Portainer", name: "HOMEPAGE_TOKEN" }
-        - { var: prowlarr_api, path: "/Prowlarr", name: "API" }
-        - { var: qui_swarm_api, path: "/HomePage", name: "QUI_API_SWARM" }
-        - { var: qui_unraid_api, path: "/HomePage", name: "QUI_API_UNRAID" }
-        - { var: radarr_api, path: "/Radarr", name: "API" }
-        - { var: radarr_4k_api, path: "/Radarr-4K", name: "API" }
-        - { var: sabnzbd_api, path: "/SABnzbd", name: "API" }
-        - { var: sonarr_api, path: "/Sonarr", name: "API" }
-        - { var: sonarr_4k_api, path: "/Sonarr-4K", name: "API" }
-        - { var: stash_api, path: "/Stash", name: "API" }
-        - { var: tautulli_api, path: "/Tautulli", name: "API" }
-        - { var: unifi_user, path: "/Unifi", name: "USER" }
-        - { var: unifi_pass, path: "/Unifi", name: "PASS" }
+        - var: autobrr_api
+          path: "/AutoBrr"
+          name: API
+        - var: bazarr_api
+          path: "/Bazarr"
+          name: API
+        - var: grafana_user
+          path: "/Grafana"
+          name: USER
+        - var: grafana_pass
+          path: "/Grafana"
+          name: PASS
+        - var: jellyseerr_api
+          path: "/Jellyseerr"
+          name: API
+        - var: lidarr_api
+          path: "/Lidarr"
+          name: API
+        - var: ombi_api
+          path: "/Ombi"
+          name: API
+        - var: plex_token
+          path: "/Plex"
+          name: TOKEN
+        - var: portainer_token
+          path: "/Portainer"
+          name: HOMEPAGE_TOKEN
+        - var: prowlarr_api
+          path: "/Prowlarr"
+          name: API
+        - var: qui_swarm_api
+          path: "/HomePage"
+          name: QUI_API_SWARM
+        - var: qui_unraid_api
+          path: "/HomePage"
+          name: QUI_API_UNRAID
+        - var: radarr_api
+          path: "/Radarr"
+          name: API
+        - var: radarr_4k_api
+          path: "/Radarr-4K"
+          name: API
+        - var: sabnzbd_api
+          path: "/SABnzbd"
+          name: API
+        - var: sonarr_api
+          path: "/Sonarr"
+          name: API
+        - var: sonarr_4k_api
+          path: "/Sonarr-4K"
+          name: API
+        - var: stash_api
+          path: "/Stash"
+          name: API
+        - var: tautulli_api
+          path: "/Tautulli"
+          name: API
+        - var: unifi_user
+          path: "/Unifi"
+          name: USER
+        - var: unifi_pass
+          path: "/Unifi"
+          name: PASS
     paths:
       - path: /opt/homepage
         state: directory
@@ -174,9 +216,9 @@ services_00_core:
         max_attempts: 5
         window: 2m
 
-################################
-# PORTAINER
-################################
+  ################################
+  # PORTAINER
+  ################################
   portainer:
     name: portainer
     stack: portainer
@@ -253,9 +295,9 @@ services_00_core:
         max_attempts: 5
         window: 2m
 
-################################
-# TECHNITIUM
-################################
+  ################################
+  # TECHNITIUM
+  ################################
   technitium:
     name: technitium
     stack: technitium
@@ -273,7 +315,10 @@ services_00_core:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: technitium_admin_pass, path: "/Technitium", name: "ADMIN_PASS", docker_secret: "technitium_admin_secret" }
+        - var: technitium_admin_pass
+          path: "/Technitium"
+          name: ADMIN_PASS
+          docker_secret: technitium_admin_secret
     secrets:
       - technitium_admin_secret
     paths:
@@ -300,9 +345,9 @@ services_00_core:
         max_attempts: 5
         window: 2m
 
-################################
-# VAULTWARDEN
-################################
+  ################################
+  # VAULTWARDEN
+  ################################
   vaultwarden:
     name: vaultwarden
     stack: vaultwarden
@@ -319,14 +364,30 @@ services_00_core:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: postgres_user, path: "/Postgres", name: "USER" }
-        - { var: postgres_pass, path: "/Postgres", name: "PASS" }
-        - { var: smtp_email, path: "/Porkbun", name: "SMTP_EMAIL" }      
-        - { var: smtp_host, path: "/Porkbun", name: "SMTP_HOST" }
-        - { var: smtp_password, path: "/Porkbun", name: "SMTP_PASS" }
-        - { var: smtp_port, path: "/Porkbun", name: "SMTP_PORT" }
-        - { var: smtp_sender, path: "/Porkbun", name: "SMTP_SENDER" }
-        - { var: smtp_username, path: "/Porkbun", name: "SMTP_USER" }
+        - var: postgres_user
+          path: "/Postgres"
+          name: USER
+        - var: postgres_pass
+          path: "/Postgres"
+          name: PASS
+        - var: smtp_email
+          path: "/Porkbun"
+          name: SMTP_EMAIL     
+        - var: smtp_host
+          path: "/Porkbun"
+          name: SMTP_HOST
+        - var: smtp_password
+          path: "/Porkbun"
+          name: SMTP_PASS
+        - var: smtp_port
+          path: "/Porkbun"
+          name: SMTP_PORT
+        - var: smtp_sender
+          path: "/Porkbun"
+          name: SMTP_SENDER
+        - var: smtp_username
+          path: "/Porkbun"
+          name: SMTP_USER
     secrets:
       - vaultwarden_admin_secret
     paths:
