@@ -1,54 +1,61 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
+
+  "extends": ["config:recommended"],
+
   "timezone": "Australia/Melbourne",
   "dependencyDashboard": true,
+
+  "labels": ["renovate"],
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
-  "labels": [
-    "renovate"
-  ],
+
   "rangeStrategy": "pin",
+
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+
+  "commitBodyTable": true,
+
+  "prBodyNotes": [
+    "Homelab note: review upstream release notes/changelog before merging."
+  ],
+
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": [
-        "/\\.ya?ml$/"
-      ],
+      "managerFilePatterns": ["/\\.ya?ml$/"],
       "matchStrings": [
         "image:\\s*[\"']?(?<depName>[^\"'\\s:@]+(?:\\/[^\"'\\s:@]+)*)\\s*:\\s*(?<currentValue>[^\"'\\s@]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?[\"']?"
       ],
       "datasourceTemplate": "docker"
     }
   ],
+
   "packageRules": [
     {
-      "matchDatasources": [
-        "docker"
-      ],
-      "groupName": "Docker image updates",
-      "separateMajorMinor": true
-    },
-    {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchUpdateTypes": [
-        "major"
-      ],
+      "matchDatasources": ["docker"],
+      "groupName": null,
       "automerge": false
     },
     {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "patch"
-      ],
-      "automerge": false
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["renovate", "major"],
+      "prPriority": 10
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor"],
+      "labels": ["renovate", "minor"],
+      "prPriority": 0
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["patch"],
+      "labels": ["renovate", "patch"],
+      "prPriority": -1
     }
   ]
 }
