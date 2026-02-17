@@ -9,7 +9,7 @@ services_90_gluetun:
     name: gluetun
     stack: gluetun
     container_name: gluetun
-    image: qmcgaw/gluetun:v3.41.0
+    image: qmcgaw/gluetun:v3.41.1
     named_networks:
       overlay:
         external: true
