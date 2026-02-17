@@ -372,7 +372,7 @@ services_00_core:
           name: PASS
         - var: smtp_email
           path: "/Porkbun"
-          name: SMTP_EMAIL     
+          name: SMTP_EMAIL
         - var: smtp_host
           path: "/Porkbun"
           name: SMTP_HOST

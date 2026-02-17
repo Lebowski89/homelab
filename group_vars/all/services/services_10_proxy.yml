@@ -1,9 +1,9 @@
 ---
 
 services_10_proxy:
-################################
-# AUTHELIA
-################################
+  ################################
+  # AUTHELIA
+  ################################
   authelia:
     name: authelia
     stack: proxy
@@ -16,71 +16,58 @@ services_10_proxy:
       PUID: "1000"
       PGID: "1000"
       UMASK: "022"
-      AUTHELIA_LOG_LEVEL: "debug"
-      AUTHELIA_LOG_FORMAT: "json"
-      AUTHELIA_SERVER_ADDRESS: "tcp://0.0.0.0:9091/"
-      AUTHELIA_SERVER_HEADERS_CSP_TEMPLATE: "default-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; script-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; script-src-elem 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; script-src-attr 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; style-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com 'nonce-$${NONCE}'; style-src-elem 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com 'nonce-$${NONCE}'; style-src-attr 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com 'nonce-$${NONCE}'; img-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; font-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; connect-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; media-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; object-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; child-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; frame-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; worker-src 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; frame-ancestors 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; form-action 'self' *.nosugarmaxtaste.com nosugarmaxtaste.com; base-uri 'self'"
-      AUTHELIA_SERVER_BUFFERS_READ: "4096"
-      AUTHELIA_SERVER_BUFFERS_WRITE: "4096"
-      AUTHELIA_SERVER_TIMEOUTS_READ: "6"
-      AUTHELIA_SERVER_TIMEOUTS_WRITE: "6"
-      AUTHELIA_SERVER_TIMEOUTS_IDLE: "30"
-      AUTHELIA_SERVER_ENDPOINTS_ENABLE_PPROF: "false"
-      AUTHELIA_SERVER_ENDPOINTS_ENABLE_EXPVARS: "false"
-      AUTHELIA_SERVER_DISABLE_HEALTHCHECK: "false"
-      AUTHELIA_SESSION_NAME: "authelia_session"
-      AUTHELIA_SESSION_SAME_SITE: "lax"
-      AUTHELIA_SESSION_EXPIRATION: "1h"
-      AUTHELIA_SESSION_INACTIVITY: "5m"
-      AUTHELIA_SESSION_REMEMBER_ME: "2m"
       AUTHELIA_SESSION_SECRET_FILE: /run/secrets/authelia_session_key_secret
-      AUTHELIA_SESSION_REDIS_HOST: "authelia-redis"
-      AUTHELIA_SESSION_REDIS_PORT: "6379"
       AUTHELIA_SESSION_REDIS_PASSWORD_FILE: /run/secrets/authelia_redis_secret
-      AUTHELIA_SESSION_REDIS_DATABASE_INDEX: "0"
-      AUTHELIA_SESSION_REDIS_MAXIMUM_ACTIVE_CONNECTIONS: "10"
-      AUTHELIA_SESSION_REDIS_MINIMUM_IDLE_CONNECTIONS: "0"
       AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/authelia_storage_key_secret
-      AUTHELIA_STORAGE_POSTGRES_ADDRESS: "tcp://pg-ha:5433"
-      AUTHELIA_STORAGE_POSTGRES_DATABASE: "authelia"
-      AUTHELIA_STORAGE_POSTGRES_USERNAME: "{{ postgres_user | default('__INFISICAL__:postgres_user', true) }}"
       AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE: /run/secrets/postgres_pass_secret
-      AUTHELIA_STORAGE_POSTGRES_TLS_SKIP_VERIFY: "true"
       AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE: /run/secrets/authelia_jwt_key_secret
-      AUTHELIA_AUTHENTICATION_BACKEND_PASSWORD_RESET_DISABLE: "false"
-      AUTHELIA_AUTHENTICATION_BACKEND_REFRESH_INTERVAL: "5m"
-      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PATH: "/config/users_database.yml"
-      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PASSWORD_ALGORITHM: "argon2id"
-      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PASSWORD_ARGON2_ITERATIONS: "3"
-      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PASSWORD_ARGON2_MEMORY: "65536"
-      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PASSWORD_ARGON2_PARALLELISM: "4"
-      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PASSWORD_ARGON2_SALT_LENGTH: "16"
-      AUTHELIA_AUTHENTICATION_BACKEND_FILE_PASSWORD_ARGON2_KEY_LENGTH: "32"
-      AUTHELIA_REGULATION_MAX_RETRIES: "3"
-      AUTHELIA_REGULATION_FIND_TIME: "10m"
-      AUTHELIA_REGULATION_BAN_TIME: "12h"
-      AUTHELIA_TOTP_ISSUER: "nosugarmaxtaste.com"
-      AUTHELIA_TOTP_PERIOD: "30"
-      AUTHELIA_TOTP_SKEW: "1"
-      AUTHELIA_TELEMETRY_METRICS_ENABLED: "true"
-      AUTHELIA_TELEMETRY_METRICS_ADDRESS: "tcp://:9959/metrics"
-      AUTHELIA_THEME: "dark"
+    env_file:
+      - /opt/authelia/.env
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: postgres_user, path: "/Postgres", name: "USER" }
-        - { var: postgres_pass, path: "/Postgres", name: "PASS", docker_secret: "postgres_pass_secret" }
-        - { var: authelia_user, path: "/Authelia", name: "USER" }
-        - { var: authelia_pass, path: "/Authelia", name: "PASS" }
-        - { var: authelia_display_name, path: "/Authelia", name: "DISPLAY_NAME" }
-        - { var: authelia_redis_key, path: "/Authelia", name: "REDIS_KEY", docker_secret: "authelia_redis_secret" }
-        - { var: authelia_storage_key, path: "/Authelia", name: "STORAGE_KEY", docker_secret: "authelia_storage_key_secret" }
-        - { var: smtp_email, path: "/Porkbun", name: "SMTP_EMAIL" }
-        - { var: smtp_host, path: "/Porkbun", name: "SMTP_HOST" }
-        - { var: smtp_password, path: "/Porkbun", name: "SMTP_PASS" }
-        - { var: smtp_port, path: "/Porkbun", name: "SMTP_PORT" }
-        - { var: smtp_sender, path: "/Porkbun", name: "SMTP_SENDER" }
-        - { var: smtp_username, path: "/Porkbun", name: "SMTP_USER" }
+        - var: postgres_user
+          path: "/Postgres"
+          name: USER
+        - var: postgres_pass
+          path: "/Postgres"
+          name: PASS
+          docker_secret: postgres_pass_secret
+        - var: authelia_user
+          path: "/Authelia"
+          name: USER
+        - var: authelia_pass
+          path: "/Authelia"
+          name: PASS
+        - var: authelia_display_name
+          path: "/Authelia"
+          name: DISPLAY_NAME
+        - var: authelia_redis_key
+          path: "/Authelia"
+          name: REDIS_KEY
+          docker_secret: authelia_redis_secret
+        - var: authelia_storage_key
+          path: "/Authelia"
+          name: STORAGE_KEY
+          docker_secret: authelia_storage_key_secret
+        - var: smtp_email
+          path: "/Porkbun"
+          name: SMTP_EMAIL
+        - var: smtp_host
+          path: "/Porkbun"
+          name: SMTP_HOST
+        - var: smtp_password
+          path: "/Porkbun"
+          name: SMTP_PASS
+        - var: smtp_port
+          path: "/Porkbun"
+          name: SMTP_PORT
+        - var: smtp_sender
+          path: "/Porkbun"
+          name: SMTP_SENDER
+        - var: smtp_username
+          path: "/Porkbun"
+          name: SMTP_USER
     secrets:
       - authelia_session_key_secret
       - authelia_storage_key_secret
@@ -102,6 +89,12 @@ services_10_proxy:
         force: true
       - src: configs/proxy/authelia/users_database.yml.j2
         dest: /opt/authelia/users_database.yml
+        owner: 1000
+        group: 1000
+        mode: 0664
+        force: true
+      - src: configs/proxy/authelia/authelia.env.j2
+        dest: /opt/authelia/.env
         owner: 1000
         group: 1000
         mode: 0664
@@ -129,9 +122,9 @@ services_10_proxy:
         max_attempts: 5
         window: 2m
 
-################################
-# AUTHELIA-REDIS
-################################
+  ################################
+  # AUTHELIA-REDIS
+  ################################
   authelia_redis:
     name: authelia-redis
     stack: authelia-redis
@@ -148,7 +141,10 @@ services_10_proxy:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: authelia_redis_key, path: "/Authelia", name: "REDIS_KEY", docker_secret: "authelia_redis_secret" }
+        - var: authelia_redis_key
+          path: "/Authelia"
+          name: REDIS_KEY
+          docker_secret: authelia_redis_secret
     secrets:
       - authelia_redis_secret
     paths:
@@ -176,9 +172,9 @@ services_10_proxy:
         max_attempts: 5
         window: 2m
 
-################################
-# TRAEFIK
-################################
+  ################################
+  # TRAEFIK
+  ################################
   traefik:
     name: traefik
     stack: proxy
@@ -202,7 +198,10 @@ services_10_proxy:
     infisical:
       fail_on_empty: true
       secrets_map:
-        - { var: cloudflare_api, path: "/Cloudflare", name: "API", docker_secret: "cloudflare_api_secret" }
+        - var: cloudflare_api
+          path: "/Cloudflare"
+          name: API
+          docker_secret: cloudflare_api_secret
     secrets:
       - cloudflare_api_secret
     ports:
