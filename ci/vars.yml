@@ -40,7 +40,7 @@ services_00_ci:
   demo_compose:
     name: demo_compose
     stack: ci
-    image: "nginx:1.27-alpine"
+    image: "nginx:1.29-alpine"
     deploy:
       type: swarm
       host: localhost
