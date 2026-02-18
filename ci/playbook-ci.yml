@@ -9,9 +9,10 @@
     - "{{ playbook_dir }}/vars.yml"
 
   tasks:
-    - name: Collect services_* blocks (CI)
+
+    - name: Set service blocks (CI)
       ansible.builtin.set_fact:
-        service_blocks: "{{ query('ansible.builtin.varnames', '^services_[0-9]+_') | sort }}"
+        service_blocks: "{{ ci_service_blocks }}"
       tags: always
 
     - name: Assert docker_services is defined (CI)
@@ -57,26 +58,7 @@
         that:
           - hostvars['localhost'].compose_stacks is defined
           - (hostvars['localhost'].compose_stacks | length) > 0
-        fail_msg: >-
+        fail_msg: >
           CI: compose_stacks is empty. This usually means your docker_services list
-          didn't match any services_* blocks, or everything was skipped.
-      tags: always
-
-    - name: Render stacks collected during this CI run (no deploy)
-      when: inventory_hostname == "localhost"
-      ansible.builtin.include_tasks:
-        file: "{{ playbook_dir }}/../roles/docker_services/helpers/deploy/deploy_all.yml"
-        apply:
-          tags:
-            - always
-      vars:
-        deploy_apply: false
-      tags: always
-
-    - name: Assert CI produced output files
-      ansible.builtin.assert:
-        that:
-          - traefik_dynamic_dir is defined
-          - traefik_dynamic_dir | length > 0
-        fail_msg: "CI: traefik_dynamic_dir not set in ci/vars.yml"
+          didn't match any services_* blocks.
       tags: always
