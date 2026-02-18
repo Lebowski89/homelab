@@ -1,6 +1,8 @@
 ---
 
 ci_mode: true
+ci_service_blocks:
+  - services_00_ci
 deploy_deferred: true
 
 docker_network: overlay

@@ -1,51 +1,38 @@
 ---
 
-#
 # Deploy all stacks collected into compose_stacks during this play run.
-# Expects compose_stacks like:
-#   compose_stacks:
-#     arrs:
-#       type: container|swarm
-#       deploy_host: localhost|<host>
-#       services: { ... }
-#       networks: { ... }   (optional)
-#       volumes:  { ... }   (optional)
+# Expected shape (on localhost facts):
+# compose_stacks:
+#   <stack_key>:
+#     type: swarm|container
+#     deploy_host: <host>
+#     services: {...}
+#     networks: {...}
+#     volumes: {...}
 
-- name: DeployAll | Ensure compose_stacks is a mapping
+- name: DeployAll | Ensure compose_stacks exists
   ansible.builtin.set_fact:
-    _compose_stacks_effective: "{{ compose_stacks if (compose_stacks is defined and compose_stacks is mapping) else {} }}"
-
-- name: DeployAll | Build stack items
-  ansible.builtin.set_fact:
-    _deploy_stack_items: "{{ _compose_stacks_effective | dict2items }}"
-
-- name: DeployAll | Show stacks queued for deploy
-  ansible.builtin.debug:
-    msg: >-
-      DeployAll: {{ _deploy_stack_items | length }} stack(s):
+    _compose_stacks_effective: >-
       {{
-        _deploy_stack_items
-        | map(attribute='key')
-        | list
+        hostvars['localhost'].compose_stacks
+        if (hostvars['localhost'].compose_stacks is defined and hostvars['localhost'].compose_stacks is mapping)
+        else {}
       }}
+  run_once: true
 
 - name: DeployAll | Deploy each stack
-  when: _deploy_stack_items | length > 0
-  ansible.builtin.include_tasks:
-    file: deploy_one.yml
-    apply:
-      tags:
-        - always
-  loop: "{{ _deploy_stack_items }}"
+  when: (_compose_stacks_effective | length) > 0
+  ansible.builtin.include_tasks: deploy_one.yml
+  loop: "{{ _compose_stacks_effective | dict2items }}"
   loop_control:
     loop_var: _stack_item
     label: "{{ _stack_item.key }}"
   vars:
     deploy_stack_name: "{{ _stack_item.key }}"
     _stack_def: "{{ _stack_item.value | default({}, true) }}"
-    deploy_stack_type: "{{ (_stack_def.type | default('swarm', true) | string | trim) }}"
-    deploy_host: "{{ (_stack_def.deploy_host | default('localhost', true) | string | trim) }}"
+    deploy_stack_type: "{{ _stack_def.type | default('swarm', true) | string | trim }}"
+    deploy_host: "{{ _stack_def.deploy_host | default('localhost', true) | string | trim }}"
+    compose_services: "{{ _stack_def.services | default({}, true) }}"
     stack_networks: "{{ _stack_def.networks | default({}, true) }}"
     stack_volumes: "{{ _stack_def.volumes | default({}, true) }}"
-    # This is what your compose template expects:
-    compose_services: "{{ _stack_def.services | default({}, true) }}"
+  run_once: true

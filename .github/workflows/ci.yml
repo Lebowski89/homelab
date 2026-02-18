@@ -29,10 +29,12 @@ jobs:
             ansible-galaxy collection install -r requirements.yml
           fi
 
-      - name: Run playbook compile test (CI fixture)
+      - name: Run ansible-playbook (check mode)
         run: |
           ansible-playbook \
             -i ci/inventory.ini \
-            playbook.yml \
-            --check \
-            -e @ci/vars.yml
+            ci/playbook-ci.yml \
+            --check
+        env:
+          ANSIBLE_CONFIG: ci/ansible.cfg
+          ANSIBLE_LOG_PATH: /dev/null
