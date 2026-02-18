@@ -1,15 +1,9 @@
 ---
 
-################################
-# AUTHELIA PREP (LOCALHOST ONCE)
-################################
-
 - name: Authelia prep | Generate argon2 + secrets (once)
   when: inventory_hostname == "localhost"
   run_once: true
   block:
-
-    # 1) Argon2 digest (NOT a docker secret)
     - name: Authelia prep | Generate argon2 digest (users_database)
       ansible.builtin.include_tasks: keys.yml
       vars:
@@ -20,7 +14,6 @@
         authelia_key_command: "authelia crypto hash generate argon2 --password {{ authelia_pass | quote }}"
         authelia_key_echo: "Digest"
 
-    # 2) Session secret
     - name: Authelia prep | Ensure session key secret
       ansible.builtin.include_tasks: keys.yml
       vars:
@@ -31,7 +24,6 @@
         authelia_key_command: "authelia crypto rand --length 64 --charset alphanumeric"
         authelia_key_echo: "Random Value"
 
-    # 3) Storage key (Infisical preferred)
     - name: Authelia prep | Ensure storage key secret
       ansible.builtin.include_tasks: keys.yml
       vars:
@@ -63,7 +55,6 @@
           Value:
           {{ hostvars['localhost'].authelia_storage_key }}
 
-    # 4) JWT reset secret
     - name: Authelia prep | Ensure JWT reset key secret
       ansible.builtin.include_tasks: keys.yml
       vars:

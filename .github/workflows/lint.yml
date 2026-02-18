@@ -41,6 +41,7 @@ jobs:
 
       - name: ansible-lint
         env:
+          ANSIBLE_LIBRARY: ${{ github.workspace }}/roles/docker_services/library
           ANSIBLE_CONFIG: ansible.cfg
         run: |
           ansible-lint -p

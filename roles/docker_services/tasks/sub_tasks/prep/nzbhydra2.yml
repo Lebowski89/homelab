@@ -1,6 +1,6 @@
 ---
 
-- name: NZBHydra2 prep | Set derived vars (run once)
+- name: NZBHydra2 prep | Set derived vars
   ansible.builtin.set_fact:
     _nh_host: "{{ (svc.deploy.host | default('unraid', true)) | string | trim }}"
     _nh_config_dir: "/mnt/user/appdata/nzbhydra2"

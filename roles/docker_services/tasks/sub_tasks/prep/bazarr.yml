@@ -1,7 +1,7 @@
 ---
 
 ################################
-# BAZARR PREP (ONCE)
+# BAZARR PREP
 ################################
 
 - name: Bazarr prep | Set paths + hosts

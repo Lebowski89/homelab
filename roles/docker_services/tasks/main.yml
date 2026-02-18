@@ -253,13 +253,6 @@
     - (svc.postgres.enable | default(false)) | bool
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/postgres.yml"
 
-- name: Cleanup sqlite databases
-  when:
-    - inventory_hostname == "localhost"
-    - svc.postgres is defined
-    - (svc.postgres.clean_sqlite | default(false)) | bool
-  ansible.builtin.include_tasks: sub_tasks/sqlite.yml
-
 ################################
 # PREP (DNS)
 ################################
@@ -267,6 +260,7 @@
 - name: Ensure Cloudflare creds exist (Infisical when missing)
   when:
     - inventory_hostname == "localhost"
+    - not (ci_mode | default(false)) | bool
     - svc.traefik is defined
     - (svc.traefik.enable | default(false)) | bool
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cloudflare_creds.yml"
@@ -747,7 +741,7 @@
     - (svc.traefik.enable | default(false)) | bool
   ansible.builtin.template:
     src: templates/configs/proxy/traefik/router_template.yml.j2
-    dest: "/opt/traefik/dynamic/{{ svc.name }}-middleware.yml"
+    dest: "{{ traefik_dynamic_dir }}/{{ svc.name }}-middleware.yml"
     owner: "1000"
     group: "1000"
     mode: "0644"
