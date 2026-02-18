@@ -1,0 +1,407 @@
+---
+
+################################
+# GLOBAL / CENTRAL STATE INIT
+################################
+
+- name: Ensure compose_stacks exists on localhost
+  ansible.builtin.set_fact:
+    compose_stacks: "{{ compose_stacks | default({}) }}"
+  delegate_to: localhost
+  delegate_facts: true
+  run_once: true
+
+- name: Load this stack's current compose_services
+  when: _is_deploy_host
+  ansible.builtin.set_fact:
+    compose_services: >-
+      {{
+        (compose_stacks | default({}))
+        .get(stack_name_effective, {})
+        .get('services', {})
+        | default({}, true)
+      }}
+
+################################
+# COMPOSE (BASE)
+################################
+
+- name: Register networks needed by this stack
+  when:
+    - _is_deploy_host
+    - svc.named_networks is defined
+    - (svc.named_networks is mapping)
+    - (svc.named_networks | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/stack_networks.yml"
+  vars:
+    stack_name: "{{ stack_name_effective }}"
+    stack_network_names: "{{ svc.named_networks }}"
+
+- name: Register external volumes needed by this stack
+  when:
+    - _is_deploy_host
+    - svc.named_volumes is defined
+    - (svc.named_volumes | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/stack_volumes.yml"
+  vars:
+    stack_name: "{{ stack_name_effective }}"
+    stack_volume_names: "{{ svc.named_volumes }}"
+
+- name: Normalize network_mode for container deploys (derive network_mode + is_container)
+  when: _is_deploy_host
+  ansible.builtin.set_fact:
+    _svc_network_mode: "{{ svc.network_mode | default('', true) | string | trim }}"
+    _svc_is_container: "{{ (stack_deploy_type | default('swarm', true) | string | trim) != 'swarm' }}"
+
+- name: Normalize network_mode for container deploys (derive has_network_mode)
+  when: _is_deploy_host
+  ansible.builtin.set_fact:
+    _svc_has_network_mode: "{{ _svc_is_container and (_svc_network_mode | length > 0) }}"
+
+- name: Build service networks list
+  when: _is_deploy_host
+  ansible.builtin.set_fact:
+    _svc_networks_list: >-
+      {{
+        [] if _svc_has_network_mode else
+        (
+          (svc.networks | default([], true))
+          if (svc.networks is defined and svc.networks is sequence and svc.networks is not string and (svc.networks | length > 0))
+          else
+          (
+            (svc.named_networks.keys() | list)
+            if (svc.named_networks is defined and svc.named_networks is mapping and (svc.named_networks | length > 0))
+            else
+            [docker_network]
+          )
+        )
+      }}
+
+- name: Set base service variables
+  when: _is_deploy_host
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/service_base.yml"
+  vars:
+    image: "{{ svc.image | string }}"
+    container_name: >-
+      {{
+        (
+          _svc_is_container
+          and (svc.container_name is defined)
+          and (svc.container_name | string | trim | length > 0)
+        )
+        | ternary((svc.container_name | string | trim), omit)
+      }}
+    pid: >-
+      {{
+        (
+          _svc_is_container
+          and (svc.pid is defined)
+          and (svc.pid | string | trim | length > 0)
+        )
+        | ternary((svc.pid | string | trim), omit)
+      }}
+    network_mode: >-
+      {{
+        (
+          _svc_is_container
+          and (_svc_network_mode | length > 0)
+        )
+        | ternary(_svc_network_mode, omit)
+      }}
+    networks: >-
+      {{
+        (
+          (not _svc_has_network_mode)
+          and (_svc_networks_list | length > 0)
+        )
+        | ternary(_svc_networks_list, omit)
+      }}
+
+################################
+# COMPOSE (SECURITY_OPT)
+################################
+
+- name: Set security_opt
+  when:
+    - _is_deploy_host
+    - stack_deploy_type != 'swarm'
+    - svc.security_opt is defined
+    - (svc.security_opt | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/security_opt.yml"
+  vars:
+    security_opt_list: "{{ svc.security_opt }}"
+
+################################
+# COMPOSE (DEPENDS_ON)
+################################
+
+- name: Set depends_on
+  when:
+    - _is_deploy_host
+    - stack_deploy_type != 'swarm'
+    - svc.depends_on is defined
+    - (svc.depends_on | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/depends_on.yml"
+  vars:
+    depends_on_list: "{{ svc.depends_on }}"
+
+################################
+# COMPOSE (CAPS)
+################################
+
+- name: Add Linux capabilities (cap_add)
+  when:
+    - _is_deploy_host
+    - svc.cap_add is defined
+    - (svc.cap_add | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/caps.yml"
+  vars:
+    caps_target: "cap_add"
+    caps_action: "append_unique"
+    caps_list: "{{ svc.cap_add }}"
+
+- name: Drop Linux capabilities (cap_drop)
+  when:
+    - _is_deploy_host
+    - svc.cap_drop is defined
+    - (svc.cap_drop | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/caps.yml"
+  vars:
+    caps_target: "cap_drop"
+    caps_action: "append_unique"
+    caps_list: "{{ svc.cap_drop }}"
+
+################################
+# COMPOSE (DEVICES)
+################################
+
+- name: Add devices
+  when:
+    - _is_deploy_host
+    - svc.devices is defined
+    - (svc.devices | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/devices.yml"
+  vars:
+    devices_action: "append_unique"
+    device_list: "{{ svc.devices }}"
+
+################################
+# COMPOSE (COMMAND)
+################################
+
+- name: Set command variable
+  when:
+    - _is_deploy_host
+    - svc.command is defined
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/command.yml"
+  vars:
+    command: "{{ svc.command }}"
+    command_action: "replace"
+
+################################
+# COMPOSE (HEALTHCHECK)
+################################
+
+- name: Set healthcheck variable
+  when:
+    - _is_deploy_host
+    - svc.healthcheck is defined
+    - svc.healthcheck.test is defined
+    - (
+        (svc.healthcheck.test is sequence and svc.healthcheck.test is not string and (svc.healthcheck.test | length > 0))
+        or
+        (svc.healthcheck.test is string and (svc.healthcheck.test | trim | length > 0))
+      )
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/healthcheck.yml"
+  vars:
+    health_test: "{{ svc.healthcheck.test }}"
+    health_interval: "{{ svc.healthcheck.interval | default('1m', true) }}"
+    health_timeout: "{{ svc.healthcheck.timeout | default('15s', true) }}"
+    health_retries: "{{ svc.healthcheck.retries | default(3, true) }}"
+    health_start_period: "{{ svc.healthcheck.start_period | default('30s', true) }}"
+
+################################
+# COMPOSE (USER)
+################################
+
+- name: Set user variable
+  when:
+    - _is_deploy_host
+    - svc.user is defined
+    - (svc.user | string | trim | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/user.yml"
+  vars:
+    user: "{{ svc.user }}"
+
+################################
+# COMPOSE (ENV)
+################################
+
+- name: Set environment variables
+  when:
+    - _is_deploy_host
+    - svc.environment is defined
+    - (svc.environment | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/environment.yml"
+  vars:
+    environment_vars: "{{ svc.environment }}"
+
+################################
+# COMPOSE (ENV_FILE)
+################################
+
+- name: Attach env_file to service
+  when:
+    - _is_deploy_host
+    - svc.env_file is defined
+    - svc.env_file | length > 0
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/env_file.yml"
+
+################################
+# COMPOSE (SECRETS)
+################################
+
+- name: Set secrets variable (svc format)
+  when:
+    - _is_deploy_host
+    - svc.secrets is defined
+    - (svc.secrets | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/secrets.yml"
+  vars:
+    secrets: "{{ svc.secrets }}"
+
+################################
+# COMPOSE (CONFIGS)
+################################
+
+- name: Set configs variable (swarm only)
+  when:
+    - _is_deploy_host
+    - stack_deploy_type == 'swarm'
+    - svc.configs is defined
+    - (svc.configs | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/configs.yml"
+  vars:
+    configs_list: "{{ svc.configs }}"
+
+################################
+# COMPOSE (PORTS)
+################################
+
+- name: Set ports variable
+  when:
+    - _is_deploy_host
+    - svc.ports is defined
+    - (svc.ports | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/ports.yml"
+  vars:
+    ports: "{{ svc.ports }}"
+    ports_action: "replace"
+
+################################
+# COMPOSE (VOLUMES)
+################################
+
+- name: Set volumes variable
+  when:
+    - _is_deploy_host
+    - svc.volumes is defined
+    - (svc.volumes | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/volumes.yml"
+  vars:
+    volumes: "{{ svc.volumes }}"
+    volumes_action: "append_unique"
+
+- name: Add /dev/shm tmpfs for swarm
+  when:
+    - _is_deploy_host
+    - stack_deploy_type == "swarm"
+    - svc.shm_tmpfs_size is defined
+    - (svc.shm_tmpfs_size | int) > 0
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/volumes.yml"
+  vars:
+    volumes_action: append_unique
+    volumes:
+      shm:
+        type: tmpfs
+        target: /dev/shm
+        tmpfs:
+          size: "{{ svc.shm_tmpfs_size | int }}"
+
+- name: Set SHM size (compose only)
+  when:
+    - _is_deploy_host
+    - stack_deploy_type != "swarm"
+    - svc.shm_size is defined
+    - (svc.shm_size | string | trim | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/shm.yml"
+  vars:
+    shm_size: "{{ svc.shm_size }}"
+
+################################
+# COMPOSE (LABELS)
+################################
+
+- name: Attach labels (service-level)
+  when:
+    - _is_deploy_host
+    - svc.labels is defined
+    - (svc.labels is mapping) or (svc.labels is sequence and svc.labels is not string)
+    - (svc.labels | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/labels.yml"
+  vars:
+    labels_dict: "{{ svc.labels }}"
+    labels_action: "append"
+    labels_precedence: "new_wins"
+
+################################
+# COMPOSE (SERVICE MIDDLEWARES)
+################################
+
+- name: Render Traefik app router file (on traefik host)
+  when:
+    - svc.traefik is defined
+    - (svc.traefik.enable | default(false)) | bool
+  ansible.builtin.template:
+    src: templates/configs/proxy/traefik/router_template.yml.j2
+    dest: "{{ traefik_dynamic_dir }}/{{ svc.name }}-middleware.yml"
+    owner: "1000"
+    group: "1000"
+    mode: "0644"
+    force: true
+  vars:
+    tr_router_name: "{{ svc.name }}"
+    tr_address: >-
+      {{
+        (svc.traefik.subdomain | default(svc.name, true))
+        ~ '.'
+        ~ (
+            svc.traefik.zone
+            | default(hostvars['localhost'].cloudflare_zone, true)
+          )
+      }}
+    tr_port: "{{ (svc.traefik.port | default(svc.ports.web.target)) | int }}"
+    tr_authelia_enable: "{{ (svc.traefik.sso | default('')) == 'authelia' and svc.name != 'authelia' }}"
+    tr_internal_api: "{{ (svc.traefik.internal_api | default(false)) | bool }}"
+    tr_internal_api_matchers: >-
+      {{
+        (
+          svc.traefik.internal_api_rules
+          if (
+            svc.traefik.internal_api_rules is defined
+            and svc.traefik.internal_api_rules is sequence
+            and svc.traefik.internal_api_rules is not string
+          )
+          else []
+        )
+      }}
+    tr_theme_enable: >-
+      {{
+        (svc.traefik.themepark.app | default('')) | length > 0
+        and
+        (svc.traefik.themepark.theme | default('')) | length > 0
+      }}
+    tr_theme_app: "{{ svc.traefik.themepark.app | default('') }}"
+    tr_theme_theme: "{{ svc.traefik.themepark.theme | default('') }}"
+    tr_backend_address: "http://{{ svc.traefik.backend_host | default(svc.name) }}:{{ tr_port }}"
+  delegate_to: localhost

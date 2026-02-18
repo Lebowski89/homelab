@@ -1,0 +1,55 @@
+---
+
+################################
+# DEPLOY (QUEUE STACK)
+################################
+
+- name: Set deploy config (swarm only, compose structure)
+  when:
+    - _is_deploy_host
+    - (svc.deploy is defined)
+    - ((svc.deploy.type | default('swarm')) == 'swarm')
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/deploy.yml"
+  vars:
+    deploy_mode: "{{ svc.deploy.mode | default('replicated') }}"
+    deploy_replicas: "{{ svc.deploy.replicas | default(1) }}"
+    deploy_constraints: "{{ svc.deploy.constraints | default([]) }}"
+    deploy_restart_policy: "{{ svc.deploy.restart_policy | default(omit) }}"
+    deploy_update_config: "{{ svc.deploy.update_config | default(omit) }}"
+    deploy_rollback_config: "{{ svc.deploy.rollback_config | default(omit) }}"
+    deploy_resources: "{{ svc.deploy.resources | default(omit) }}"
+
+- name: Persist compose into compose_stacks[stack_name_effective] (centralized queue)
+  when: _is_deploy_host
+  ansible.builtin.set_fact:
+    compose_stacks: >-
+      {{
+        (hostvars['localhost'].compose_stacks | default({}))
+        | combine({
+            stack_name_effective: (
+              (hostvars['localhost'].compose_stacks | default({}))
+              .get(stack_name_effective, {})
+              | combine({
+                  'type': (stack_deploy_type | string | trim),
+                  'deploy_host': (_deploy_host_effective | string | trim),
+                  'services': (compose_services | default({}, true)),
+                  'networks': (stack_networks | default({}, true)),
+                  'volumes': (stack_volumes | default({}, true))
+                }, recursive=true)
+            )
+          }, recursive=true)
+      }}
+  delegate_to: localhost
+  delegate_facts: true
+
+################################
+# CENTRALIZED DEPLOY (RUN ONCE)
+################################
+
+- name: Deploy all stacks (centralized)
+  when:
+    - inventory_hostname == "localhost"
+    - not (deploy_deferred | default(false) | bool)
+    - not (ci_mode | default(false) | bool)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/deploy/deploy_all.yml"
+  run_once: true
