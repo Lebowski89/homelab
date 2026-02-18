@@ -82,7 +82,7 @@ services_00_ci:
   demo_traefik:
     name: demo_traefik
     stack: ci
-    image: "traefik/whoami:v1.10.3"
+    image: "traefik/whoami:v1.11.0"
     deploy:
       type: swarm
       host: localhost
