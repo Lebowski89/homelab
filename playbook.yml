@@ -247,7 +247,9 @@
       tags: always
 
     - name: Deploy stacks collected during this run
-      when: inventory_hostname == "localhost"
+      when:
+        - inventory_hostname == "localhost"
+        - not (ci_mode | default(false)) | bool
       ansible.builtin.include_tasks:
         file: "{{ playbook_dir }}/roles/docker_services/helpers/deploy/deploy_all.yml"
         apply:
