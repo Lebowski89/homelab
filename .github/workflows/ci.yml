@@ -33,8 +33,8 @@ jobs:
         run: |
           ansible-playbook \
             -i ci/inventory.ini \
-            playbook.yml \
-            --check \
-            -e @ci/vars.yml
+            ci/playbook-ci.yml \
+            --check
         env:
           ANSIBLE_CONFIG: ci/ansible.cfg
+          ANSIBLE_LOG_PATH: /dev/null

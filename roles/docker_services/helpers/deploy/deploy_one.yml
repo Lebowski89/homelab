@@ -1,93 +1,64 @@
 ---
 
-- name: DeployOne | Ensure deploy_stack_name is set
+---
+- name: DeployOne | Validate inputs
   ansible.builtin.assert:
     that:
       - deploy_stack_name is defined
       - deploy_stack_name | string | trim | length > 0
-    fail_msg: "deploy_stack_name must be set"
-
-- name: DeployOne | Ensure deploy_stack_type is set
-  ansible.builtin.assert:
-    that:
       - deploy_stack_type is defined
       - (deploy_stack_type | string | trim) in ['swarm', 'container']
-    fail_msg: "deploy_stack_type must be 'swarm' or 'container'"
-
-- name: DeployOne | Derive effective deploy host (swarm always local manager)
-  ansible.builtin.set_fact:
-    _deploy_host_effective: "{{ 'localhost' if deploy_stack_type == 'swarm' else (deploy_host | default('localhost', true) | string | trim) }}"
-
-- name: DeployOne | Ensure template inputs exist
-  ansible.builtin.assert:
-    that:
-      - compose_services is defined
       - compose_services is mapping
-      - stack_networks is defined
       - stack_networks is mapping
-      - stack_volumes is defined
       - stack_volumes is mapping
-    fail_msg: >-
-      Missing or invalid template inputs for {{ deploy_stack_name }}:
-      compose_services/stack_networks/stack_volumes must be mappings.
+    fail_msg: "Invalid deploy inputs for stack={{ deploy_stack_name | default('UNSET') }}"
 
-- name: DeployOne | Ensure stacks directory exists
+- name: DeployOne | Derive effective deploy host
+  ansible.builtin.set_fact:
+    _deploy_host_effective: >-
+      {{
+        'localhost'
+        if (deploy_stack_type | string | trim) == 'swarm'
+        else (deploy_host | default('localhost', true) | string | trim)
+      }}
+
+- name: DeployOne | Ensure /opt/stacks exists
   ansible.builtin.file:
-    path: "/opt/stacks"
+    path: /opt/stacks
     state: directory
     owner: "{{ hostvars[_deploy_host_effective].puid | default('1000') }}"
     group: "{{ hostvars[_deploy_host_effective].pgid | default('1000') }}"
     mode: "0755"
   delegate_to: "{{ _deploy_host_effective }}"
 
-- name: DeployOne | Debug stack networks/volumes inputs
-  ansible.builtin.debug:
-    msg:
-      deploy_stack_name: "{{ deploy_stack_name }}"
-      deploy_stack_type: "{{ deploy_stack_type }}"
-      stack_networks: "{{ stack_networks | default('UNDEFINED') }}"
-      stack_volumes: "{{ stack_volumes | default('UNDEFINED') }}"
-      compose_services_keys: "{{ (compose_services | default({})).keys() | list }}"
+- name: DeployOne | Render compose/stack file
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/compose.yml.j2"
+    dest: >-
+      {{
+        '/opt/stacks/' ~ deploy_stack_name ~
+        ( '-stack.yml' if (deploy_stack_type | string | trim) == 'swarm' else '-compose.yml' )
+      }}
+    owner: "{{ hostvars[_deploy_host_effective].puid | default('1000') }}"
+    group: "{{ hostvars[_deploy_host_effective].pgid | default('1000') }}"
+    mode: "0664"
+    force: true
   delegate_to: "{{ _deploy_host_effective }}"
 
-- name: DeployOne | Container stack (docker compose)
-  when: deploy_stack_type != 'swarm'
-  block:
-    - name: DeployOne | Render compose file
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/roles/docker_services/templates/compose.yml.j2"
-        dest: "/opt/stacks/{{ deploy_stack_name }}-compose.yml"
-        force: true
-        owner: "{{ hostvars[_deploy_host_effective].puid | default('1000') }}"
-        group: "{{ hostvars[_deploy_host_effective].pgid | default('1000') }}"
-        mode: "0664"
-      delegate_to: "{{ _deploy_host_effective }}"
+- name: DeployOne | Swarm deploy
+  when: (deploy_stack_type | string | trim) == 'swarm'
+  community.docker.docker_stack:
+    state: present
+    name: "{{ deploy_stack_name }}"
+    compose:
+      - "/opt/stacks/{{ deploy_stack_name }}-stack.yml"
+  delegate_to: "{{ _deploy_host_effective }}"
 
-    - name: DeployOne | Compose up (project name = stack name)
-      community.docker.docker_compose_v2:
-        project_src: "/opt/stacks"
-        files: "{{ deploy_stack_name }}-compose.yml"
-        project_name: "{{ deploy_stack_name }}"
-        state: present
-      delegate_to: "{{ _deploy_host_effective }}"
-
-- name: DeployOne | Swarm stack
-  when: deploy_stack_type == 'swarm'
-  block:
-    - name: DeployOne | Render stack file
-      ansible.builtin.template:
-        src: "{{ playbook_dir }}/roles/docker_services/templates/compose.yml.j2"
-        dest: "/opt/stacks/{{ deploy_stack_name }}-stack.yml"
-        force: true
-        owner: "{{ hostvars[_deploy_host_effective].puid | default('1000') }}"
-        group: "{{ hostvars[_deploy_host_effective].pgid | default('1000') }}"
-        mode: "0664"
-      delegate_to: "{{ _deploy_host_effective }}"
-
-    - name: DeployOne | Deploy swarm stack
-      community.docker.docker_stack:
-        state: present
-        name: "{{ deploy_stack_name }}"
-        compose:
-          - "/opt/stacks/{{ deploy_stack_name }}-stack.yml"
-      delegate_to: "{{ _deploy_host_effective }}"
+- name: DeployOne | Compose deploy
+  when: (deploy_stack_type | string | trim) != 'swarm'
+  community.docker.docker_compose_v2:
+    project_src: /opt/stacks
+    project_name: "{{ deploy_stack_name }}"
+    files: "{{ deploy_stack_name }}-compose.yml"
+    state: present
+  delegate_to: "{{ _deploy_host_effective }}"

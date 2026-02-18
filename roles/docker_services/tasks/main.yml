@@ -732,7 +732,7 @@
     labels_precedence: "new_wins"
 
 ################################
-# COMPOSE (TRAEFIK MIDDLEWARES)
+# COMPOSE (SERVICE MIDDLEWARES)
 ################################
 
 - name: Render Traefik app router file (on traefik host)
@@ -784,13 +784,14 @@
   delegate_to: localhost
 
 ################################
-# DEPLOY
+# DEPLOY (QUEUE STACK)
 ################################
 
-- name: Set deploy config
+- name: Set deploy config (swarm only, compose structure)
   when:
     - _is_deploy_host
-    - (svc.deploy is defined) and ((svc.deploy.type | default('swarm')) == 'swarm')
+    - (svc.deploy is defined)
+    - ((svc.deploy.type | default('swarm')) == 'swarm')
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/deploy.yml"
   vars:
     deploy_mode: "{{ svc.deploy.mode | default('replicated') }}"
@@ -801,7 +802,7 @@
     deploy_rollback_config: "{{ svc.deploy.rollback_config | default(omit) }}"
     deploy_resources: "{{ svc.deploy.resources | default(omit) }}"
 
-- name: Persist compose into compose_stacks[stack_name_effective] (centralized)
+- name: Persist compose into compose_stacks[stack_name_effective] (centralized queue)
   when: _is_deploy_host
   ansible.builtin.set_fact:
     compose_stacks: >-
@@ -809,13 +810,14 @@
         (hostvars['localhost'].compose_stacks | default({}))
         | combine({
             stack_name_effective: (
-              (hostvars['localhost'].compose_stacks | default({})).get(stack_name_effective, {})
+              (hostvars['localhost'].compose_stacks | default({}))
+              .get(stack_name_effective, {})
               | combine({
                   'type': (stack_deploy_type | string | trim),
                   'deploy_host': (_deploy_host_effective | string | trim),
-                  'services': (compose_services | default({})),
-                  'networks': (stack_networks | default({})),
-                  'volumes': (stack_volumes | default({}))
+                  'services': (compose_services | default({}, true)),
+                  'networks': (stack_networks | default({}, true)),
+                  'volumes': (stack_volumes | default({}, true))
                 }, recursive=true)
             )
           }, recursive=true)
@@ -823,30 +825,14 @@
   delegate_to: localhost
   delegate_facts: true
 
-  # - name: Validate compose_services before rendering
-  #   when: _is_deploy_host
-  #   ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/validate.yml"
+################################
+# CENTRALIZED DEPLOY (RUN ONCE)
+################################
 
-- name: Debug env_file + svc keys
-  when: inventory_hostname == "localhost"
-  ansible.builtin.debug:
-    msg:
-      env_file: "{{ svc.env_file | default('UNDEFINED') }}"
-      keys: "{{ svc.keys() | list | sort }}"
-
-- name: Prepare stack render inputs from compose_stacks (networks/volumes/services)
-  when: _is_deploy_host
-  ansible.builtin.set_fact:
-    _stack_def_effective: "{{ (hostvars['localhost'].compose_stacks | default({})).get(stack_name_effective, {}) }}"
-    stack_networks: "{{ _stack_def_effective.networks | default({}, true) }}"
-    stack_volumes: "{{ _stack_def_effective.volumes | default({}, true) }}"
-    compose_services: "{{ _stack_def_effective.services | default({}, true) }}"
-
-- name: Render and deploy stack
+- name: Deploy all stacks (centralized)
   when:
-    - _is_deploy_host
+    - inventory_hostname == "localhost"
     - not (deploy_deferred | default(false) | bool)
-  ansible.builtin.include_tasks: "{{ role_path }}/helpers/deploy/deploy.yml"
-  vars:
-    deploy_stack_name: "{{ stack_name_effective }}"
-    deploy_stack_type: "{{ stack_deploy_type }}"
+    - not (ci_mode | default(false) | bool)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/deploy/deploy_all.yml"
+  run_once: true
