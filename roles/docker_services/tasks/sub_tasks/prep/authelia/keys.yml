@@ -1,7 +1,5 @@
 ---
 
-# roles/docker_services/tasks/sub_tasks/prep/authelia/keys.yml
-#
 # Purpose:
 # - If authelia_key is provided => optionally ensure docker secret
 # - If not provided => run a temporary authelia container to generate it

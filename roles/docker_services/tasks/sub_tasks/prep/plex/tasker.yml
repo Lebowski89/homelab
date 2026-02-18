@@ -10,7 +10,7 @@
   run_once: true
 
 ################################
-# VOLUME (run on localhost once)
+# DOCKER VOLUME
 ################################
 
 - name: Plex prep | Create media volume (NFS)
@@ -27,10 +27,10 @@
   delegate_to: localhost
 
 ################################
-# TOKEN (run on localhost once)
+# PLEX TOKEN
 ################################
 
-- name: Plex prep | Include Plex token tasks (localhost, once)
+- name: Plex prep | Include Plex token tasks
   ansible.builtin.include_tasks:
     file: token.yml
     apply:
@@ -39,10 +39,10 @@
   run_once: true
 
 ################################
-# PREFERENCES (run on plex host once)
+# PLEX PREFERENCES
 ################################
 
-- name: Plex prep | Include Plex preferences.xml tasks (plex, once)
+- name: Plex prep | Include Plex preferences.xml tasks
   ansible.builtin.include_tasks:
     file: pref.yml
     apply:
@@ -51,10 +51,10 @@
   run_once: true
 
 ################################
-# CLAIM (run on plex host once)
+# PLEX CLAIM SERVER
 ################################
 
-- name: Plex prep | Include Plex claim tasks (plex, once)
+- name: Plex prep | Include Plex claim tasks
   ansible.builtin.include_tasks:
     file: claim.yml
     apply:

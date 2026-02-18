@@ -6,5 +6,13 @@ exclude_paths:
   - ansible-venv/
   - discards/
 
+mock_modules:
+  - yedit
+  - find_open_port
+  - qbittorrent_passwd
+
+warn_list:
+  - fqcn-builtins
+
 skip_list:
   - yaml[line-length]
