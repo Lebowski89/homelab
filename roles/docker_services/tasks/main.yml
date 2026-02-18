@@ -253,13 +253,6 @@
     - (svc.postgres.enable | default(false)) | bool
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/postgres.yml"
 
-- name: Cleanup sqlite databases
-  when:
-    - inventory_hostname == "localhost"
-    - svc.postgres is defined
-    - (svc.postgres.clean_sqlite | default(false)) | bool
-  ansible.builtin.include_tasks: sub_tasks/sqlite.yml
-
 ################################
 # PREP (DNS)
 ################################
