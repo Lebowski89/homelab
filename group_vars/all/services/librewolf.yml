@@ -1,0 +1,37 @@
+---
+
+librewolf:
+  name: librewolf
+  stack: gluetun
+  container_name: librewolf
+  image: lscr.io/linuxserver/librewolf:147.0.3-2-ls127
+  security_opt:
+    - "seccomp:unconfined"
+  depends_on:
+    - gluetun
+  network_mode: "service:gluetun"
+  environment:
+    PUID: "99"
+    PGID: "100"
+    LIBREWOLF_CLI: "http://192.168.80.20:3075"
+  paths:
+    - path: /mnt/user/appdata/librewolf
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+  volumes:
+    config:
+      type: bind
+      source: /mnt/user/appdata/librewolf
+      target: /config
+      read_only: false
+    downloads:
+      type: bind
+      source: /mnt/user/data/media/gluetun
+      target: /downloads
+      read_only: false
+  shm_size: 1gb
+  deploy:
+    type: container
+    host: unraid

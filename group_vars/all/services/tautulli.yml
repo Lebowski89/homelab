@@ -1,0 +1,77 @@
+---
+
+tautulli:
+  name: tautulli
+  stack: plex
+  image: ghcr.io/hotio/tautulli:release-2.16.0
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD"
+      - "wget"
+      - "--spider"
+      - "-q"
+      - "http://127.0.0.1:8181/status"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "1000"
+    PGID: "1000"
+    UMASK: "022"
+    WEBUI_PORTS: "8181/tcp,8181/udp"
+    TP_SCHEME: "http"
+    TP_DOMAIN: "192.168.80.45:8089"
+    TP_HOTIO: "true"
+    TP_THEME: "hotline"
+  paths:
+    - path: /opt/tautulli
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  copies:
+    - src: files/themepark/98-themepark-tautulli
+      dest: /opt/tautulli/98-themepark-tautulli
+      owner: 1000
+      group: 1000
+      mode: 0755
+      force: false
+      wait: true
+      wait_timeout: 30
+  volumes:
+    config:
+      type: bind
+      source: /opt/tautulli
+      target: /config
+      read_only: false
+    themepark:
+      type: bind
+      source: /opt/tautulli/98-themepark-tautulli
+      target: /etc/cont-init.d/98-themepark
+      read_only: false
+  traefik:
+    enable: true
+    port: 8181
+    sso: authelia
+    internal_api: true
+    internal_api_rules:
+      - "PathPrefix(`/api`)"
+      - "PathPrefix(`/newsletter`)"
+      - "PathPrefix(`/image`)"
+      - "PathPrefix(`/pms_image_proxy`)"
+  themepark:
+    app: tautulli
+    theme: hotpink
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: plex
+    constraints:
+      - node.labels.ansible_host == plex
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

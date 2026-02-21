@@ -1,0 +1,45 @@
+---
+
+znc:
+  name: znc
+  stack: media
+  image: lscr.io/linuxserver/znc:1.10.1
+  named_networks:
+    overlay:
+      external: true
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "1000"
+    PGID: "1000"
+    UMASK: "022"
+  paths:
+    - path: /mnt/user/appdata/znc
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  volumes:
+    config:
+      type: bind
+      source: /mnt/user/appdata/znc
+      target: /config
+      read_only: false
+  traefik:
+    enable: true
+    port: 6501
+    sso: authelia
+    internal_api: true
+    internal_api_rules:
+      - "PathPrefix(`/uploads`)"
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

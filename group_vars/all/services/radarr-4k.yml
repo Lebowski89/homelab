@@ -1,0 +1,112 @@
+---
+
+radarr_4k:
+  name: radarr-4k
+  stack: arrs
+  image: ghcr.io/hotio/radarr:release-6.0.4.10291
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD-SHELL"
+      - "touch /data/media/movies-4k/.healthcheck && rm -f /data/media/movies-4k/.healthcheck || exit 1"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "99"
+    PGID: "100"
+    UMASK: "022"
+    RADARR__APP__INSTANCENAME: "Radarr-4K"
+    RADARR__SERVER__PORT: "7878"
+    RADARR__AUTH__METHOD: "External"
+    FILE__RADARR__AUTH__APIKEY: /run/secrets/radarr_4k_api_secret
+    RADARR__POSTGRES__HOST: "pg-ha"
+    RADARR__POSTGRES__PORT: "5433"
+    FILE__RADARR__POSTGRES__USER: /run/secrets/postgres_user_secret
+    FILE__RADARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
+    RADARR__POSTGRES__MAINDB: "radarr-4k-main"
+    RADARR__POSTGRES__LOGDB: "radarr-4k-log"
+    TP_SCHEME: "http"
+    TP_DOMAIN: "192.168.80.45:8089"
+    TP_HOTIO: "true"
+    TP_THEME: "hotline"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: radarr_4k_api
+        path: "/Radarr-4K"
+        name: API
+        docker_secret: radarr_4k_api_secret
+      - var: postgres_user
+        path: "/Postgres"
+        name: USER
+        docker_secret: postgres_user_secret
+      - var: postgres_pass
+        path: "/Postgres"
+        name: PASS
+        docker_secret: postgres_pass_secret
+  secrets:
+    - radarr_4k_api_secret
+    - postgres_user_secret
+    - postgres_pass_secret
+  paths:
+    - path: /mnt/user/appdata/radarr-4k
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+  copies:
+    - src: files/themepark/98-themepark-radarr
+      dest: /mnt/user/appdata/radarr-4k/98-themepark-radarr
+      owner: 99
+      group: 100
+      mode: 0755
+      force: false
+      wait: true
+      wait_timeout: 30
+  volumes:
+    config:
+      type: bind
+      source: /mnt/user/appdata/radarr-4k
+      target: /config
+      read_only: false
+    media:
+      type: bind
+      source: /mnt/user/data
+      target: /data
+      read_only: false
+    themepark:
+      type: bind
+      source: /mnt/user/appdata/radarr-4k/98-themepark-radarr
+      target: /etc/cont-init.d/98-themepark
+      read_only: false
+  traefik:
+    enable: true
+    port: 7878
+    sso: authelia
+    internal_api: true
+    internal_api_rules:
+      - "PathPrefix(`/api`)"
+      - "PathPrefix(`/feed`)"
+      - "PathPrefix(`/ping`)"
+  themepark:
+    app: radarr
+    theme: hotline
+  postgres:
+    enable: true
+    databases:
+      - radarr-4k-main
+      - radarr-4k-log
+    clean_sqlite: true
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints:
+      - node.labels.ansible_host == unraid
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

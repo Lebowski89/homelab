@@ -2,4 +2,4 @@
 
 collections:
   - name: community.general
-    version: '==12.3.0'
+  - name: infisical.vault

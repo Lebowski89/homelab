@@ -1,0 +1,169 @@
+---
+
+sabnzbd:
+  name: sabnzbd
+  stack: usenet
+  image: ghcr.io/hotio/sabnzbd:release-4.5.5
+  named_networks:
+    overlay:
+      external: true
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "99"
+    PGID: "100"
+    UMASK: "022"
+    WEBUI_PORTS: "8080/tcp,8080/udp"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: sabnzbd_user
+        path: "/SABnzbd"
+        name: USER
+      - var: sabnzbd_pass
+        path: "/SABnzbd"
+        name: PASS
+      - var: sabnzbd_api
+        path: "/SABnzbd"
+        name: API
+      - var: sabnzbd_nzb
+        path: "/SABnzbd"
+        name: NZB
+      - var: frugal_user
+        path: "/SABnzbd"
+        name: FRUGAL_USER
+      - var: frugal_pass
+        path: "/SABnzbd"
+        name: FRUGAL_PASS
+      - var: eweka_user
+        path: "/SABnzbd"
+        name: EWEKA_USER
+      - var: eweka_pass
+        path: "/SABnzbd"
+        name: EWEKA_PASS
+      - var: easynews_user
+        path: "/SABnzbd"
+        name: EASYNEWS_USER
+      - var: easynews_pass
+        path: "/SABnzbd"
+        name: EASYNEWS_PASS
+  paths:
+    - path: /mnt/user/appdata/sabnzbd
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet/watch
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet/.nzb
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet/incomplete
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet/complete
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet/complete/lidarr
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet/complete/radarr
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet/complete/radarr-4k
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet/complete/sonarr
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet/complete/sonarr-4k
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet/complete/sportarr
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet/complete/whisparr
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/data/usenet/complete/nzbhydra
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/appdata/sabnzbd/sabnzbd.ini.bak
+      state: absent
+  copies:
+    - src: files/themepark/98-themepark-sabnzbd
+      dest: /mnt/user/appdata/sabnzbd/98-themepark-sabnzbd
+      owner: 99
+      group: 100
+      mode: 0755
+      force: false
+      wait: true
+      wait_timeout: 30
+  templates:
+    - src: configs/usenet/sabnzbd.ini.j2
+      dest: /mnt/user/appdata/sabnzbd/sabnzbd.ini
+      owner: 99
+      group: 100
+      mode: 0664
+      force: true
+  volumes:
+    config:
+      type: bind
+      source: /mnt/user/appdata/sabnzbd
+      target: /config
+      read_only: false
+    downloads:
+      type: bind
+      source: /mnt/user/data/usenet
+      target: /data/usenet
+      read_only: false
+    themepark:
+      type: bind
+      source: /mnt/user/appdata/sabnzbd/98-themepark-sabnzbd
+      target: /etc/cont-init.d/98-themepark
+      read_only: false
+  traefik:
+    enable: true
+    port: 8080
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints:
+      - node.labels.ansible_host == unraid
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

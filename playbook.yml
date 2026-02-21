@@ -4,21 +4,19 @@
   become: true
 
   vars:
-    fact_hosts: ['localhost', 'plex']
     docker_services:
-      ## services_00_core
       - name: gitea
-        tags: [core, gitea]
+        tags: [apps, gitea]
       - name: homepage
-        tags: [core, homepage]
+        tags: [apps, homepage]
       - name: portainer
-        tags: [core, portainer]
+        tags: [apps, portainer]
       - name: portainer_agent
-        tags: [core, portainer]
+        tags: [apps, portainer]
       - name: technitium
-        tags: [core, technitium]
+        tags: [apps, technitium]
       - name: vaultwarden
-        tags: [core, vaultwarden]
+        tags: [apps, vaultwarden]
 
       ## services_10_proxy
       - name: authelia
@@ -76,10 +74,10 @@
 
       ## services_50_torrents
       - name: qbittorrent
-        target: swarm
+        target: unraid
         tags: [torrents, qbittorrent]
       - name: qbittorrent
-        target: unraid
+        target: unraid_xs
         tags: [torrents, qbittorrent]
       - name: qbit_manage
         target: swarm
@@ -140,32 +138,32 @@
       - name: etcd
         target: pg03
         tags: [pgha, etcd]
-      - name: patroni
+      - name: spilo
         target: pg01
-        tags: [pgha, patroni]
-      - name: patroni
+        tags: [pgha, spilo]
+      - name: spilo
         target: pg02
-        tags: [pgha, patroni]
-      - name: patroni
+        tags: [pgha, spilo]
+      - name: spilo
         target: pg03
-        tags: [pgha, patroni]
+        tags: [pgha, spilo]
       - name: pg_ha_proxy
         tags: [pgha, pg_ha_proxy]
 
   pre_tasks:
     - name: Gather packages
-      when: inventory_hostname in fact_hosts
+      when: inventory_hostname == "localhost"
       ansible.builtin.package_facts:
         manager: auto
       tags: always
 
     - name: Gather IP geolocation data
-      when: inventory_hostname in fact_hosts
+      when: inventory_hostname == "localhost"
       community.general.ipinfoio_facts:
       tags: always
 
     - name: Gather public IP data
-      when: inventory_hostname in fact_hosts
+      when: inventory_hostname == "localhost"
       community.general.ipify_facts:
         api_url: https://api64.ipify.org
         timeout: 20
@@ -173,75 +171,81 @@
       tags: always
 
     - name: Public IP output
-      when: inventory_hostname in fact_hosts
+      when: inventory_hostname == "localhost"
       ansible.builtin.debug:
         msg: '{{ ipify_public_ip }}'
       tags: always
 
     - name: Set Public IP
-      when: inventory_hostname in fact_hosts
+      when: inventory_hostname == "localhost"
       ansible.builtin.set_fact:
         public_ip: '{{ ipify_public_ip }}'
       tags: always
 
     - name: Set timezone variable
-      when: inventory_hostname in fact_hosts
+      when: inventory_hostname == "localhost"
       ansible.builtin.set_fact:
         timezone: '{{ ansible_facts.timezone }}'
       tags: always
 
     - name: Timezone output
-      when: inventory_hostname in fact_hosts
+      when: inventory_hostname == "localhost"
       ansible.builtin.debug:
         msg: '{{ timezone }}'
       tags: always
 
-    - name: Set Local IP
-      when: inventory_hostname in fact_hosts
-      ansible.builtin.set_fact:
-        local_ip: '{{ ansible_default_ipv4.address | default(ansible_all_ipv4_addresses[0]) }}'
-      tags: always
-
-    - name: Local IP output
-      when: inventory_hostname in fact_hosts
-      ansible.builtin.debug:
-        msg: '{{ local_ip }}'
-      tags: always
-
   tasks:
-    - name: Collect services_* blocks (simple lexical order)
-      ansible.builtin.set_fact:
-        service_blocks: "{{ query('ansible.builtin.varnames', '^services_[0-9]+_') | sort }}"
+    - name: Load all service definitions from group_vars/all/services/*.yml
+      ansible.builtin.include_vars:
+        dir: "{{ playbook_dir }}/group_vars/all/services"
+        files_matching: ".*\\.ya?ml$"
+        ignore_unknown_extensions: true
+        extensions: [yml, yaml]
+        name: svcfiles
       tags: always
 
-    - name: Process each docker service (last definition wins, without merging)
+    - name: Assert svcfiles loaded
+      ansible.builtin.assert:
+        that:
+          - svcfiles is defined
+          - (svcfiles | type_debug) == 'dict'
+          - (svcfiles | length) > 0
+        fail_msg: "svcfiles is empty or not a dict. include_vars did not load your service files."
+      tags: always
+
+    - name: Use svcfiles as the services mapping
+      ansible.builtin.set_fact:
+        services: "{{ svcfiles }}"
+      tags: always
+
+    - name: Process each docker service
       ansible.builtin.include_role:
         name: docker_services
         apply:
           tags: "{{ [item.name] + (item.tags | default([])) }}"
       vars:
-        deploy_deferred: true
-        # build list of matches WITHOUT lookup('vars', ...)
-        _matches: >-
-          {%- set out = [] -%}
-          {%- for b in service_blocks -%}
-            {%- set blk = hostvars[inventory_hostname].get(b, {}) -%}
-            {%- if blk is mapping and (blk.get(item.name) is not none) -%}
-              {%- set _ = out.append(blk.get(item.name)) -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ out }}
-
-        service_cfg_found: "{{ (_matches | length) > 0 }}"
-        service_cfg: "{{ _matches | last }}"
+        service_cfg_found: "{{ (services is mapping) and (services.get(item.name) is not none) }}"
+        service_cfg: "{{ services.get(item.name, {}) }}"
         role_prefix: "{{ item.name }}"
         service_target: "{{ item.target | default('swarm') }}"
       when:
+        - service_cfg_found | bool
         - (ansible_run_tags | length == 0)
           or (item.name in ansible_run_tags)
           or ((item.tags | default([])) | intersect(ansible_run_tags) | length > 0)
-        - service_cfg_found | bool
       loop: "{{ docker_services }}"
       loop_control:
-        label: "{{ item.name }} ({{ item.target | default('default') }})"
+        label: "{{ item.name }}"
+      tags: always
+
+    - name: Deploy all stacks
+      when:
+        - inventory_hostname == "localhost"
+        - not (ci_mode | default(false) | bool)
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/roles/docker_services/helpers/deploy/deploy_all.yml"
+        apply:
+          tags:
+            - always
+      run_once: true
       tags: always

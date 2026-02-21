@@ -1,0 +1,48 @@
+---
+
+technitium:
+  name: technitium
+  stack: technitium
+  image: technitium/dns-server:14.3.0
+  named_networks:
+    outside:
+      external: true
+      name: host
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "1000"
+    PGID: "1000"
+    UMASK: "022"
+    DNS_SERVER_ADMIN_PASSWORD_FILE: /run/secrets/technitium_admin_secret
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: technitium_admin_pass
+        path: "/Technitium"
+        name: ADMIN_PASS
+        docker_secret: technitium_admin_secret
+  secrets:
+    - technitium_admin_secret
+  paths:
+    - path: /opt/technitium
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  volumes:
+    config:
+      type: bind
+      source: /opt/technitium
+      target: /etc/dns
+      read_only: false
+  deploy:
+    type: swarm
+    mode: global
+    host: [localhost, plex]
+    constraints:
+      - node.labels.dns == technitium
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

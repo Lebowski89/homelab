@@ -1,0 +1,112 @@
+---
+
+whisparr:
+  name: whisparr
+  stack: arrs
+  image: ghcr.io/hotio/whisparr:v3-3.2.3-release.219
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD-SHELL"
+      - "touch /data/media/adult/.healthcheck && rm -f /data/media/adult/.healthcheck || exit 1"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "99"
+    PGID: "100"
+    UMASK: "022"
+    WHISPARR__APP__INSTANCENAME: "Whisparr"
+    WHISPARR__SERVER__PORT: "6969"
+    WHISPARR__AUTH__METHOD: "External"
+    FILE__WHISPARR__AUTH__APIKEY: /run/secrets/whisparr_api_secret
+    WHISPARR__POSTGRES__HOST: "pg-ha"
+    WHISPARR__POSTGRES__PORT: "5433"
+    FILE__WHISPARR__POSTGRES__USER: /run/secrets/postgres_user_secret
+    FILE__WHISPARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
+    WHISPARR__POSTGRES__MAINDB: "whisparr-main-v3"
+    WHISPARR__POSTGRES__LOGDB: "whisparr-log-v3"
+    TP_SCHEME: "http"
+    TP_DOMAIN: "192.168.80.45:8089"
+    TP_HOTIO: "true"
+    TP_THEME: "hotline"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: whisparr_api
+        path: "/Whisparr"
+        name: API
+        docker_secret: whisparr_api_secret
+      - var: postgres_user
+        path: "/Postgres"
+        name: USER
+        docker_secret: postgres_user_secret
+      - var: postgres_pass
+        path: "/Postgres"
+        name: PASS
+        docker_secret: postgres_pass_secret
+  secrets:
+    - whisparr_api_secret
+    - postgres_user_secret
+    - postgres_pass_secret
+  paths:
+    - path: /mnt/user/appdata/whisparr
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+  copies:
+    - src: files/themepark/98-themepark-whisparr
+      dest: /mnt/user/appdata/whisparr/98-themepark-whisparr
+      owner: 99
+      group: 100
+      mode: 0755
+      force: false
+      wait: true
+      wait_timeout: 30
+  volumes:
+    config:
+      type: bind
+      source: /mnt/user/appdata/whisparr
+      target: /config
+      read_only: false
+    media:
+      type: bind
+      source: /mnt/user/data
+      target: /data
+      read_only: false
+    themepark:
+      type: bind
+      source: /mnt/user/appdata/whisparr/98-themepark-whisparr
+      target: /etc/cont-init.d/98-themepark
+      read_only: false
+  traefik:
+    enable: true
+    port: 6969
+    sso: authelia
+    internal_api: true
+    internal_api_rules:
+      - "PathPrefix(`/api`)"
+      - "PathPrefix(`/feed`)"
+      - "PathPrefix(`/ping`)"
+  themepark:
+    app: whisparr
+    theme: hotline
+  postgres:
+    enable: true
+    databases:
+      - whisparr-main-v3
+      - whisparr-log-v3
+    clean_sqlite: true
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints:
+      - node.labels.ansible_host == unraid
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

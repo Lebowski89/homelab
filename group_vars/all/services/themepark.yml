@@ -1,0 +1,44 @@
+---
+
+themepark:
+  name: theme-park
+  stack: utilities
+  image: ghcr.io/themepark-dev/theme.park:1.22.0
+  named_networks:
+    overlay:
+      external: true
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "1000"
+    PGID: "1000"
+    UMASK: "022"
+  ports:
+    web:
+      published: 8089
+      target: 80
+      protocol: tcp
+      mode: ingress
+  paths:
+    - path: /opt/theme-park
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  volumes:
+    config:
+      type: bind
+      source: /opt/theme-park
+      target: /config
+      read_only: false
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

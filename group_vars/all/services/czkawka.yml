@@ -1,0 +1,49 @@
+---
+
+czkawka:
+  name: czkawka
+  stack: utilities
+  image: jlesage/czkawka
+  named_networks:
+    overlay:
+      external: true
+  environment:
+    TZ: "{{ timezone }}"
+    USER_ID: "99"
+    GROUP_ID: "100"
+    UMASK: "022"
+    DARK_MODE: "1"
+    WEB_FILE_MANAGER: "1"
+  paths:
+    - path: /mnt/user/appdata/czkawka
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+  volumes:
+    config:
+      type: bind
+      source: /mnt/user/appdata/czkawka
+      target: /config
+      read_only: false
+    media:
+      type: bind
+      source: /mnt/user/data
+      target: /storage
+      read_only: false
+  traefik:
+    enable: true
+    port: 5800
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints:
+      - node.labels.ansible_host == unraid
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

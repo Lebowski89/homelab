@@ -1,0 +1,98 @@
+---
+
+stash:
+  name: stash
+  stack: media
+  image: ghcr.io/hotio/stash:release-0.30.1
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD-SHELL"
+      - "touch /data/media/adult/.healthcheck && rm -f /data/media/adult/.healthcheck || exit 1"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "99"
+    PGID: "100"
+    UMASK: "022"
+    STASH_CONFIG_FILE: "/config/config.yml"
+    STASH_METADATA: "/config/metadata"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: stash_api
+        path: "/Stash"
+        name: API
+      - var: fansdb_api
+        path: "/Stash"
+        name: FANSDB_API
+      - var: pmv_api
+        path: "/Stash"
+        name: PMV_API
+      - var: porndb_api
+        path: "/Stash"
+        name: PORNDB_API
+      - var: stashdb_api
+        path: "/Stash"
+        name: STASHDB_API
+  paths:
+    - path: /mnt/user/appdata/stash
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/appdata/stash/metadata
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/appdata/stash/cache
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/appdata/stash/blobs
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/appdata/stash/generated
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+  templates:
+    - src: configs/media/stash.yml.j2
+      dest: /mnt/user/appdata/stash/config.yml
+      owner: 99
+      group: 100
+      mode: 0664
+      force: false
+  volumes:
+    config:
+      type: bind
+      source: /mnt/user/appdata/stash
+      target: /config
+      read_only: false
+    media:
+      type: bind
+      source: /mnt/user/data
+      target: /data
+      read_only: false
+  traefik:
+    enable: true
+    port: 9999
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints:
+      - node.labels.ansible_host == unraid
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m
