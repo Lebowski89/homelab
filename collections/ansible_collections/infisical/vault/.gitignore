@@ -1,8 +1,11 @@
 .venv/**/*
 ansible.cfg
+*_vars.yml
+*_vars.yaml
 inventory
 test.yml
 __pycache__
-infisical-vault-1.0.0.tar.gz
+*.tar.gz
 
 .vscode
+.DS_Store

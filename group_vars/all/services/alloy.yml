@@ -1,0 +1,96 @@
+---
+
+alloy:
+  name: alloy
+  stack: alloy
+  image: grafana/alloy:v1.13.1
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD"
+      - "wget"
+      - "--spider"
+      - "-q"
+      - "http://127.0.0.1:12345/-/ready"
+  command:
+    - "run"
+    - "--server.http.listen-addr=0.0.0.0:12345"
+    - "--storage.path=/etc/alloy/data"
+    - "/etc/alloy/config.alloy"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "1000"
+    PGID: "1000"
+    UMASK: "022"
+  paths:
+    - path: /opt/alloy
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: /opt/alloy/data
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  templates:
+    - src: configs/monitoring/alloy_config.alloy.j2
+      dest: /opt/alloy/config.alloy
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+  volumes:
+    config:
+      type: bind
+      source: /opt/alloy
+      target: /etc/alloy
+      read_only: false
+    rootfs:
+      type: bind
+      source: /
+      target: /rootfs
+      read_only: true
+    run:
+      type: bind
+      source: /run
+      target: /run
+      read_only: true
+    udev:
+      type: bind
+      source: /run/udev/data
+      target: /run/udev/data
+      read_only: true
+    sys:
+      type: bind
+      source: /sys
+      target: /sys
+      read_only: true
+    var_log:
+      type: bind
+      source: /var/log
+      target: /var/log
+      read_only: true
+    var_lib_docker:
+      type: bind
+      source: /var/lib/docker
+      target: /var/lib/docker
+      read_only: true
+  traefik:
+    enable: true
+    port: 12345
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

@@ -82,6 +82,16 @@
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/service_base.yml"
   vars:
     image: "{{ svc.image | string }}"
+
+    hostname: >-
+      {{
+        (
+          svc.hostname is defined
+          and (svc.hostname | string | trim | length > 0)
+        )
+        | ternary((svc.hostname | string | trim), omit)
+      }}
+
     container_name: >-
       {{
         (
@@ -91,6 +101,7 @@
         )
         | ternary((svc.container_name | string | trim), omit)
       }}
+
     pid: >-
       {{
         (
@@ -100,6 +111,7 @@
         )
         | ternary((svc.pid | string | trim), omit)
       }}
+
     network_mode: >-
       {{
         (
@@ -108,6 +120,7 @@
         )
         | ternary(_svc_network_mode, omit)
       }}
+
     networks: >-
       {{
         (
@@ -130,6 +143,20 @@
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/security_opt.yml"
   vars:
     security_opt_list: "{{ svc.security_opt }}"
+
+################################
+# COMPOSE (SYSCTLS)
+################################
+
+- name: Set sysctls
+  when:
+    - _is_deploy_host
+    - svc.sysctls is defined
+    - (svc.sysctls is mapping)
+    - (svc.sysctls | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/sysctls.yml"
+  vars:
+    sysctls_dict: "{{ svc.sysctls }}"
 
 ################################
 # COMPOSE (DEPENDS_ON)

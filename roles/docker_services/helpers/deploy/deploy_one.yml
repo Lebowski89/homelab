@@ -1,6 +1,5 @@
 ---
 
----
 - name: DeployOne | Validate inputs
   ansible.builtin.assert:
     that:
@@ -33,7 +32,7 @@
 
 - name: DeployOne | Render compose/stack file
   ansible.builtin.template:
-    src: "{{ role_path }}/templates/compose.yml.j2"
+    src: "{{ playbook_dir }}/roles/docker_services/templates/compose.yml.j2"
     dest: >-
       {{
         '/opt/stacks/' ~ deploy_stack_name ~

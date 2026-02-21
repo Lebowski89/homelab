@@ -1,0 +1,75 @@
+---
+
+ombi:
+  name: ombi
+  stack: media
+  image: lscr.io/linuxserver/ombi:4.53.4
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD"
+      - "curl"
+      - "-f"
+      - "http://localhost:3579/api/v1/Status"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "1000"
+    PGID: "1000"
+    UMASK: "022"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: postgres_user
+        path: "/Postgres"
+        name: USER
+        docker_secret: postgres_user_secret
+      - var: postgres_pass
+        path: "/Postgres"
+        name: PASS
+        docker_secret: postgres_pass_secret
+  paths:
+    - path: /opt/ombi
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: /opt/ombi/config
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  templates:
+    - src: configs/media/ombi.json.j2
+      dest: /opt/ombi/config/database.json
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+  volumes:
+    config:
+      type: bind
+      source: /opt/ombi/config
+      target: /config
+      read_only: false
+  postgres:
+    enable: true
+    databases:
+      - Ombi
+  traefik:
+    enable: true
+    port: 3579
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

@@ -1,0 +1,33 @@
+---
+
+jdownloader2:
+  name: jdownloader-2
+  stack: gluetun
+  container_name: jdownloader-2
+  image: jlesage/jdownloader-2:v26.01.1
+  depends_on:
+    - gluetun
+  network_mode: "service:gluetun"
+  environment:
+    USER_ID: "99"
+    GROUP_ID: "100"
+  paths:
+    - path: /mnt/user/appdata/jdownloader-2
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+  volumes:
+    config:
+      type: bind
+      source: /mnt/user/appdata/jdownloader-2
+      target: /config
+      read_only: false
+    downloads:
+      type: bind
+      source: /mnt/user/data/media/jdownloader-2
+      target: /downloads
+      read_only: false
+  deploy:
+    type: container
+    host: unraid

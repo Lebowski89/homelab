@@ -1,0 +1,262 @@
+---
+
+qbittorrent:
+  image: ghcr.io/hotio/qbittorrent:release-5.1.4
+  stack: qbittorrent
+  named_networks:
+    overlay:
+      external: true
+  cap_add:
+    - NET_ADMIN
+  devices:
+    - "/dev/net/tun:/dev/net/tun"
+  sysctls:
+    net.ipv4.conf.all.src_valid_mark: "1"
+    net.ipv6.conf.all.disable_ipv6: "1"
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints:
+      - node.labels.ansible_host == unraid
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m
+  targets:
+    unraid:
+      name: qbittorrent
+      hostname: qbittorrent.internal
+      healthcheck:
+        test:
+          - "CMD"
+          - "wget"
+          - "--spider"
+          - "-q"
+          - "http://127.0.0.1:8090/"
+      environment:
+        TZ: "{{ timezone }}"
+        PUID: "99"
+        PGID: "100"
+        WEBUI_PORTS: "8090/tcp,8090/udp"
+        VPN_ENABLED: "true"
+        VPN_CONF: "wg0"
+        VPN_PROVIDER: "proton"
+        VPN_LAN_NETWORK: "192.168.80.0/24"
+        VPN_LAN_LEAK_ENABLED: "false"
+        VPN_AUTO_PORT_FORWARD: "true"
+        VPN_FIREWALL_TYPE: "auto"
+      infisical:
+        fail_on_empty: true
+        secrets_map:
+          - var: qbittorrent_user
+            path: "/qBittorrent"
+            name: USER
+          - var: qbittorrent_pass
+            path: "/qBittorrent"
+            name: PASS
+          - var: qbittorrent_wg_privkey
+            path: "/qBittorrent"
+            name: WG_PRIVATE_KEY
+          - var: qbittorrent_wg_pubkey
+            path: "/qBittorrent"
+            name: WG_PUBLIC_KEY
+          - var: qbittorrent_wg_addr
+            path: "/qBittorrent"
+            name: WG_ADDRESSES
+          - var: qbittorrent_wg_dns
+            path: "/qBittorrent"
+            name: WG_DNS
+          - var: qbittorrent_wg_endpoint
+            path: "/qBittorrent"
+            name: WG_ENDPOINT
+      paths:
+        - path: /mnt/user/appdata/qbittorrent
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+        - path: /mnt/user/appdata/qbittorrent/config
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+        - path: /mnt/user/appdata/qbittorrent/wireguard
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+        - path: /mnt/user/data/torrents
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+        - path: /mnt/user/data/torrents/completed
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+        - path: /mnt/user/data/torrents/incoming
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+        - path: /mnt/user/data/torrents/watched
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+      templates:
+        - src: configs/qbittorrent/qBittorrent.conf.j2
+          dest: /mnt/user/appdata/qbittorrent/config/qBittorrent.conf
+          owner: 99
+          group: 100
+          mode: 0664
+          force: true
+        - src: configs/qbittorrent/wg0.conf.j2
+          dest: /mnt/user/appdata/qbittorrent/wireguard/wg0.conf
+          owner: 99
+          group: 100
+          mode: 0664
+          force: true
+      volumes:
+        config:
+          type: bind
+          source: /mnt/user/appdata/qbittorrent
+          target: /config
+          read_only: false
+        media:
+          type: bind
+          source: /mnt/user/data/torrents
+          target: /data/torrents
+          read_only: false
+      traefik:
+        enable: true
+        port: 8090
+        sso: authelia
+        internal_api: true
+        internal_api_rules:
+          - "PathPrefix(`/api`)"
+          - "PathPrefix(`/command`)"
+          - "PathPrefix(`/query`)"
+          - "PathPrefix(`/login`)"
+          - "PathPrefix(`/sync`)"
+    unraid_xs:
+      name: qbittorrent-xs
+      hostname: qbittorrent-xs.internal
+      healthcheck:
+        test:
+          - "CMD"
+          - "wget"
+          - "--spider"
+          - "-q"
+          - "http://127.0.0.1:8091/"
+      environment:
+        PUID: "99"
+        PGID: "100"
+        TZ: '{{ timezone }}'
+        WEBUI_PORTS: "8091/tcp,8091/udp"
+        VPN_ENABLED: "true"
+        VPN_CONF: "wg0"
+        VPN_PROVIDER: "proton"
+        VPN_LAN_NETWORK: "192.168.80.0/24"
+        VPN_LAN_LEAK_ENABLED: "false"
+        VPN_AUTO_PORT_FORWARD: "true"
+        VPN_FIREWALL_TYPE: "auto"
+      infisical:
+        fail_on_empty: true
+        secrets_map:
+          - var: qbittorrent_xs_user
+            path: "/qBittorrent-XS"
+            name: USER
+          - var: qbittorrent_xs_pass
+            path: "/qBittorrent-XS"
+            name: PASS
+          - var: qbittorrent_xs_wg_privkey
+            path: "/qBittorrent-XS"
+            name: WG_PRIVATE_KEY
+          - var: qbittorrent_xs_wg_pubkey
+            path: "/qBittorrent-XS"
+            name: WG_PUBLIC_KEY
+          - var: qbittorrent_xs_wg_addr
+            path: "/qBittorrent-XS"
+            name: WG_ADDRESSES
+          - var: qbittorrent_xs_wg_dns
+            path: "/qBittorrent-XS"
+            name: WG_DNS
+          - var: qbittorrent_xs_wg_endpoint
+            path: "/qBittorrent-XS"
+            name: WG_ENDPOINT
+      paths:
+        - path: /mnt/user/appdata/qbittorrent-xs
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+        - path: /mnt/user/appdata/qbittorrent-xs/config
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+        - path: /mnt/user/appdata/qbittorrent-xs/wireguard
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+        - path: /mnt/user/data/seeds
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+        - path: /mnt/user/data/seeds/completed
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+        - path: /mnt/user/data/seeds/incoming
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+        - path: /mnt/user/data/seeds/watched
+          state: directory
+          owner: 99
+          group: 100
+          mode: 0755
+      templates:
+        - src: configs/qbittorrent/qBittorrent-xs.conf.j2
+          dest: /mnt/user/appdata/qbittorrent-xs/config/qBittorrent.conf
+          owner: 99
+          group: 100
+          mode: 0664
+          force: true
+        - src: configs/qbittorrent/wg0-xs.conf.j2
+          dest: /mnt/user/appdata/qbittorrent-xs/wireguard/wg0.conf
+          owner: 99
+          group: 100
+          mode: 0664
+          force: true
+      volumes:
+        config:
+          type: bind
+          source: /mnt/user/appdata/qbittorrent-xs
+          target: /config
+          read_only: false
+        media:
+          type: bind
+          source: /mnt/user/data/seeds
+          target: /data/seeds
+          read_only: false
+      traefik:
+        enable: true
+        port: 8091
+        sso: authelia
+        internal_api: true
+        internal_api_rules:
+          - "PathPrefix(`/api`)"
+          - "PathPrefix(`/command`)"
+          - "PathPrefix(`/query`)"
+          - "PathPrefix(`/login`)"
+          - "PathPrefix(`/sync`)"

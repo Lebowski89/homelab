@@ -1,0 +1,118 @@
+---
+
+hugo:
+  name: hugo
+  stack: blog
+  image: hugomods/hugo:debian-exts
+  named_networks:
+    overlay:
+      external: true
+  command:
+    - "server -D"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "1000"
+    PGID: "1000"
+    UMASK: "022"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: cloudflare_zone
+        path: "/Hugo"
+        name: DOMAIN
+      - var: github_email
+        path: "/Hugo"
+        name: GITHUB_EMAIL
+      - var: github_username
+        path: "/Hugo"
+        name: GITHUB_USER
+  ports:
+    web:
+      published: 1313
+      target: 1313
+      protocol: tcp
+      mode: ingress
+  paths:
+    - path: /opt/hugo
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: /blog
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: /blog/.github
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: /blog/.github/workflows
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  copies:
+    - src: files/hugo/favicon.png
+      dest: /blog/static/favicon.png
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: false
+      wait: true
+      wait_timeout: 30
+    - src: files/hugo/og-image.png
+      dest: /blog/static/og-image.png
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: false
+      wait: true
+      wait_timeout: 30
+    - src: files/hugo/terminal.css
+      dest: /blog/static/terminal.css
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: false
+      wait: true
+      wait_timeout: 30
+    - src: files/hugo/pages.yaml
+      dest: /blog/.github/workflows/hugo.yaml
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: false
+      wait: true
+      wait_timeout: 30
+  templates:
+    - src: configs/blog/hugo.yaml.j2
+      dest: /blog/hugo.yaml
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+  volumes:
+    cache:
+      type: bind
+      source: /opt/hugo
+      target: /tmp/hugo_cache
+      read_only: false
+    blog:
+      type: bind
+      source: /blog
+      target: /src
+      read_only: false
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

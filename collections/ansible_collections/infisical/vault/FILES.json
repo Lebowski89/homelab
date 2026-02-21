@@ -8,24 +8,17 @@
    "format": 1
   },
   {
-   "name": "README.md",
-   "ftype": "file",
-   "chksum_type": "sha256",
-   "chksum_sha256": "39f3b169581b5eb0b8e9944a7c5bf915235cf43aa0bc1dcfe7bf10960ffff576",
-   "format": 1
-  },
-  {
-   "name": "docker",
+   "name": "meta",
    "ftype": "dir",
    "chksum_type": null,
    "chksum_sha256": null,
    "format": 1
   },
   {
-   "name": "docker/Dockerfile",
+   "name": "meta/runtime.yml",
    "ftype": "file",
    "chksum_type": "sha256",
-   "chksum_sha256": "f2b5dd67fa084a664a8c761491ca15e4d2d64df1e5d346f1fa97e573f4f5d484",
+   "chksum_sha256": "fb2f619a80d7862e21b470cdf5898c2bc4bb2cc36cc8026338454d88296b6099",
    "format": 1
   },
   {
@@ -50,6 +43,41 @@
    "format": 1
   },
   {
+   "name": ".DS_Store",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "a7bd454fb88731c6ec3389e02247641c71eea6561f85ef3dccd63ae1a5d5164e",
+   "format": 1
+  },
+  {
+   "name": "docker",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "docker/Dockerfile",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "f2b5dd67fa084a664a8c761491ca15e4d2d64df1e5d346f1fa97e573f4f5d484",
+   "format": 1
+  },
+  {
+   "name": ".gitignore",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "37d0051c626d129332462aef1c4f3a5c7fa4f7aca47b562b5cd8c3c490f1e1f3",
+   "format": 1
+  },
+  {
+   "name": "README.md",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "478d24102fdf7ef04fde22c79e6d179119f0324ab9d39e3ec4f0575af219e367",
+   "format": 1
+  },
+  {
    "name": "plugins",
    "ftype": "dir",
    "chksum_type": null,
@@ -64,38 +92,150 @@
    "format": 1
   },
   {
+   "name": "plugins/lookup/login.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "ab74d628a1e974ecd63a4121818aabf4aed906eedc539824236359c297b1a2aa",
+   "format": 1
+  },
+  {
    "name": "plugins/lookup/read_secrets.py",
    "ftype": "file",
    "chksum_type": "sha256",
-   "chksum_sha256": "e246b26f2f938069e891ed44502d6a787d299feb1ab79a8db623c779d749856f",
+   "chksum_sha256": "d12cbea380707e819814f016482c6b5489c031cf805273eee8266bc200e0d149",
    "format": 1
   },
   {
-   "name": ".gitignore",
-   "ftype": "file",
-   "chksum_type": "sha256",
-   "chksum_sha256": "c5a94b9530502b6d55666f0426444dc56b8f1bae1c5fa944abd749143fbe52ca",
-   "format": 1
-  },
-  {
-   "name": ".DS_Store",
-   "ftype": "file",
-   "chksum_type": "sha256",
-   "chksum_sha256": "a7bd454fb88731c6ec3389e02247641c71eea6561f85ef3dccd63ae1a5d5164e",
-   "format": 1
-  },
-  {
-   "name": "meta",
+   "name": "plugins/doc_fragments",
    "ftype": "dir",
    "chksum_type": null,
    "chksum_sha256": null,
    "format": 1
   },
   {
-   "name": "meta/runtime.yml",
+   "name": "plugins/doc_fragments/auth.py",
    "ftype": "file",
    "chksum_type": "sha256",
-   "chksum_sha256": "fb2f619a80d7862e21b470cdf5898c2bc4bb2cc36cc8026338454d88296b6099",
+   "chksum_sha256": "719cc91d761c52d874b69a1e285d2458978b788c76fa8b17f161d32390784898",
+   "format": 1
+  },
+  {
+   "name": "plugins/module_utils",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "plugins/module_utils/_secrets.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "014947f9bac2c69e44e64b50b3a7ff58826bb998c239b68930cdb5b8bc6e0e9e",
+   "format": 1
+  },
+  {
+   "name": "plugins/module_utils/_authenticator.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "72b39af800f04f9bd5d0d15dd7a0758d63db9236e5365014b61f00d3c15b2b87",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules",
+   "ftype": "dir",
+   "chksum_type": null,
+   "chksum_sha256": null,
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/renew_dynamic_secret_lease.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "1e72667c0b654fe7631928d0fdedd9090b19ffcafe98b9d46470eadb209d49e6",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/create_dynamic_secret_lease.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "657bbc7bd88556a7e3fb628f3e97723f5ebc7b1d988699b8729a9d38b0800c64",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/get_dynamic_secret.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "cc16d6c15903db8361834a9054f98e0e636e2aa740821e0199d61c860db56b5d",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/delete_dynamic_secret_lease.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "51488000b81e1b82c369ef8526c96b3ff96fc817c8a5fdfc34a53c304b7a8d7d",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/delete_dynamic_secret.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "6ea4bc84f8364f3a7d66e69a01db35df94620fd53d961181e95284ab0214d09d",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/delete_secret.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "d265c6d32e40e371282cd123387f736894a6375064d83ee6d282008d5453aa1a",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/create_dynamic_secret.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "b58680a22b1ed9c3572a7d2c5464a4ad6886ccc6ea79384726ed40d7fbadc6d4",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/login.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "ea7a272a761ea098d76896cd34ca6de6418c68d1eb307899e99d4a422e2918c3",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/get_dynamic_secret_lease.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "207ed421ae5e98e80e07036706844b6afaaffbf2a1fd413c491d14a963c19826",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/update_dynamic_secret.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "15d2b9672054aadfebc938fdd3b5de457a202b4bf7fc1ffa00d598f4a57a13e6",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/create_secret.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "5e89fb79bb88f89afb198ed9dc89f3cb3846fd90ee41bfa81fa177cd4bd6d5e4",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/update_secret.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "b924eb55a5f5baebb22e84c1e3314139ff5262226191a45422364dda783efe86",
+   "format": 1
+  },
+  {
+   "name": "plugins/modules/read_secrets.py",
+   "ftype": "file",
+   "chksum_type": "sha256",
+   "chksum_sha256": "f38b6a133bf6d422660031a2e3b2d8ab54d7ab3df8a90f635bb5802c68e3dc02",
    "format": 1
   }
  ],

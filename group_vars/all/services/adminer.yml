@@ -1,0 +1,25 @@
+---
+
+adminer:
+  name: adminer
+  stack: utilities
+  image: adminer:5.4.2
+  named_networks:
+    overlay:
+      external: true
+  traefik:
+    enable: true
+    port: 8080
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

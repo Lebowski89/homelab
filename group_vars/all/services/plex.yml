@@ -1,0 +1,139 @@
+---
+
+plex:
+  name: plex
+  stack: plex
+  image: lscr.io/linuxserver/plex:1.43.0
+  named_networks:
+    overlay:
+      external: true
+  devices:
+    - /dev/dri:/dev/dri
+  environment:
+    PUID: "1000"
+    PGID: "1000"
+    TZ: "{{ timezone }}"
+    VERSION: "docker"
+    PLEX_CLAIM: "{{ plex_claim_code | default(omit) }}"
+    ADVERTISE_IP: "192.168.80.59:32400"
+    TP_SCHEME: "http"
+    DOCKER_MODS: "ghcr.io/themepark-dev/theme.park:plex"
+    TP_DOMAIN: "192.168.80.45:8089"
+    TP_THEME: "hotline"
+  ports:
+    web:
+      published: 32400
+      target: 32400
+      protocol: tcp
+      mode: host
+    dlna_udp:
+      published: 1900
+      target: 1900
+      protocol: udp
+      mode: host
+    dlna_tcp:
+      published: 32469
+      target: 32469
+      protocol: tcp
+      mode: host
+    avahi:
+      published: 5353
+      target: 5353
+      protocol: udp
+      mode: host
+    roku:
+      published: 8324
+      target: 8324
+      protocol: tcp
+      mode: host
+    gdm_10:
+      published: 32410
+      target: 32410
+      protocol: udp
+      mode: host
+    gdm_12:
+      published: 32412
+      target: 32412
+      protocol: udp
+      mode: host
+    gdm_13:
+      published: 32413
+      target: 32413
+      protocol: udp
+      mode: host
+    gdm_14:
+      published: 32414
+      target: 32414
+      protocol: udp
+      mode: host
+  paths:
+    - path: /opt/plex
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: /opt/plex/Library
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: "/opt/plex/Library/Application Support"
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: "/opt/plex/Library/Application Support/Plex Media Server"
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: "/opt/plex/Library/Application Support/Plex Media Server/Plug-ins"
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: /opt/plex/Library/Logs
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: "/opt/plex/Library/Logs/Plex Media Server"
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  named_volumes:
+    media_nfs:
+      external: true
+    # optional extras later:
+    # name: "media_nfs"
+    # driver: "local"
+    # driver_opts: { ... }
+  volumes:
+    config:
+      type: bind
+      source: /opt/plex
+      target: /config
+      read_only: false
+    transcode:
+      type: bind
+      source: /dev/shm
+      target: /transcode
+      read_only: false
+    media:
+      type: volume
+      source: media_nfs
+      target: /data/media
+      read_only: false
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: plex
+    constraints:
+      - node.labels.ansible_host == plex
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

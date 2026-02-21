@@ -1,4 +1,5 @@
 ---
+
 - name: Ensure service_name is set
   ansible.builtin.assert:
     that:
@@ -20,6 +21,14 @@
               ((compose_services | default({})).get(service_name, {}))
               | combine({
                   'image': image,
+
+                  'hostname': (
+                    hostname
+                    if (hostname is defined)
+                       and (hostname is not sameas omit)
+                       and (hostname | string | trim | length > 0)
+                    else omit
+                  ),
 
                   'container_name': (
                     container_name

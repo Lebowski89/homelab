@@ -1,0 +1,31 @@
+---
+
+################################
+# QBITORRENT PREP
+################################
+
+- name: qBittorrent prep | Set qBittorrent hosts
+  ansible.builtin.set_fact:
+    _qbittorrent_host: "plex"
+    _qbittorrent_xs_host: "plex"
+  run_once: true
+
+################################
+# HASH PASSWORD
+################################
+
+- name: qBittorrent prep | Generate pass
+  when: (svc.name | default('') | string | trim) == "qbittorrent"
+  qbittorrent_passwd:
+    password: '{{ qbittorrent_pass }}'
+  register: qbittorrent_pass_pbkdf2
+  delegate_to: "{{ _qbittorrent_host }}"
+  run_once: true
+
+- name: qBittorrent prep | Generate xs-instance pass
+  when: (svc.name | default('') | string | trim) == "qbittorrent-xs"
+  qbittorrent_passwd:
+    password: '{{ qbittorrent_xs_pass }}'
+  register: qbittorrent_xs_pass_pbkdf2
+  delegate_to: "{{ _qbittorrent_xs_host }}"
+  run_once: true
