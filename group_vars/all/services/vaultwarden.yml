@@ -1,0 +1,83 @@
+---
+
+vaultwarden:
+  name: vaultwarden
+  stack: vaultwarden
+  image: vaultwarden/server:1.35.3
+  named_networks:
+    overlay:
+      external: true
+  user: 1000:1000
+  environment:
+    TZ: "{{ timezone }}"
+    ADMIN_TOKEN_FILE: /run/secrets/vaultwarden_admin_secret
+  env_file:
+    - /opt/vaultwarden/.env
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: postgres_user
+        path: "/Postgres"
+        name: USER
+      - var: postgres_pass
+        path: "/Postgres"
+        name: PASS
+      - var: smtp_email
+        path: "/Porkbun"
+        name: SMTP_EMAIL
+      - var: smtp_host
+        path: "/Porkbun"
+        name: SMTP_HOST
+      - var: smtp_password
+        path: "/Porkbun"
+        name: SMTP_PASS
+      - var: smtp_port
+        path: "/Porkbun"
+        name: SMTP_PORT
+      - var: smtp_sender
+        path: "/Porkbun"
+        name: SMTP_SENDER
+      - var: smtp_username
+        path: "/Porkbun"
+        name: SMTP_USER
+  secrets:
+    - vaultwarden_admin_secret
+  paths:
+    - path: /opt/vaultwarden
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  templates:
+    - src: configs/core/vaultwarden.env.j2
+      dest: /opt/vaultwarden/.env
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+  volumes:
+    config:
+      type: bind
+      source: /opt/vaultwarden
+      target: /data
+      read_only: false
+  postgres:
+    enable: true
+    databases:
+      - vaultwarden
+  traefik:
+    enable: true
+    port: 80
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

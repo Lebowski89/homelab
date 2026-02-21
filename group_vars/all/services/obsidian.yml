@@ -1,0 +1,62 @@
+---
+
+obsidian:
+  name: obsidian
+  stack: blog
+  image: lscr.io/linuxserver/obsidian:v1.11.7-ls110
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD"
+      - "curl"
+      - "--fail"
+      - "http://localhost:1314"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "1000"
+    PGID: "1000"
+    UMASK: "022"
+    CUSTOM_PORT: "1314"
+    CUSTOM_HTTPS_PORT: "1315"
+  paths:
+    - path: /opt/obsidian
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: /opt/obsidian/vault
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: /opt/obsidian/vault/posts
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  volumes:
+    config:
+      type: bind
+      source: /opt/obsidian
+      target: /config
+      read_only: false
+  shm_size: 2gb
+  shm_tmpfs_size: 1073741824
+  traefik:
+    enable: true
+    port: 1314
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

@@ -1,0 +1,67 @@
+---
+
+prometheus:
+  name: prometheus
+  stack: prometheus
+  image: prom/prometheus:main
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD"
+      - "wget"
+      - "--spider"
+      - "-q"
+      - "http://127.0.0.1:9090/-/ready"
+  command:
+    - "--config.file=/etc/prometheus/prometheus.yml"
+    - "--web.enable-remote-write-receiver"
+  user: 1000:1000
+  environment:
+    TZ: "{{ timezone }}"
+  paths:
+    - path: /opt/prometheus
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: /opt/prometheus/data
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  templates:
+    - src: configs/monitoring/prometheus.yml.j2
+      dest: /opt/prometheus/prometheus.yml
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+  volumes:
+    config:
+      type: bind
+      source: /opt/prometheus
+      target: /etc/prometheus
+      read_only: false
+    data:
+      type: bind
+      source: /opt/prometheus/data
+      target: /prometheus
+      read_only: false
+  traefik:
+    enable: true
+    port: 9090
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

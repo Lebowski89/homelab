@@ -1,0 +1,46 @@
+---
+
+qui:
+  name: qui
+  stack: qui
+  image: ghcr.io/hotio/qui:v1.13.1
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD"
+      - "wget"
+      - "--spider"
+      - "-q"
+      - "http://127.0.0.1:7476/"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "99"
+    PGID: "100"
+    UMASK: "022"
+    QUI__METRICS_ENABLED: "true"
+    QUI__METRICS_HOST: "0.0.0.0"
+    QUI__METRICS_PORT: "9074"
+  paths:
+    - path: /mnt/user/appdata/qui
+      state: directory
+      owner: 100
+      group: 99
+      mode: 0755
+  volumes:
+    config:
+      type: bind
+      source: /mnt/user/appdata/qui
+      target: /config
+      read_only: false
+  traefik:
+    enable: true
+    port: 7476
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints: node.labels.ansible_host == unraid

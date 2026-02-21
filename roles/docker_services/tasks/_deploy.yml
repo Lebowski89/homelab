@@ -41,15 +41,3 @@
       }}
   delegate_to: localhost
   delegate_facts: true
-
-################################
-# CENTRALIZED DEPLOY (RUN ONCE)
-################################
-
-- name: Deploy all stacks (centralized)
-  when:
-    - inventory_hostname == "localhost"
-    - not (deploy_deferred | default(false) | bool)
-    - not (ci_mode | default(false) | bool)
-  ansible.builtin.include_tasks: "{{ role_path }}/helpers/deploy/deploy_all.yml"
-  run_once: true

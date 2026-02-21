@@ -1,0 +1,141 @@
+---
+
+homepage:
+  name: homepage
+  stack: homepage
+  image: ghcr.io/gethomepage/homepage:v1.10.1
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD"
+      - "wget"
+      - "--spider"
+      - "-q"
+      - "http://127.0.0.1:3000/"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "1000"
+    PGID: "1000"
+    UMASK: "022"
+    HOMEPAGE_ALLOWED_HOSTS: "homepage.home.nosugarmaxtaste.com,homepage.nosugarmaxtaste.com"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: autobrr_api
+        path: "/AutoBrr"
+        name: API
+      - var: bazarr_api
+        path: "/Bazarr"
+        name: API
+      - var: grafana_user
+        path: "/Grafana"
+        name: USER
+      - var: grafana_pass
+        path: "/Grafana"
+        name: PASS
+      - var: jellyseerr_api
+        path: "/Jellyseerr"
+        name: API
+      - var: lidarr_api
+        path: "/Lidarr"
+        name: API
+      - var: ombi_api
+        path: "/Ombi"
+        name: API
+      - var: plex_token
+        path: "/Plex"
+        name: TOKEN
+      - var: portainer_token
+        path: "/Portainer"
+        name: HOMEPAGE_TOKEN
+      - var: prowlarr_api
+        path: "/Prowlarr"
+        name: API
+      - var: qui_swarm_api
+        path: "/HomePage"
+        name: QUI_API_SWARM
+      - var: qui_unraid_api
+        path: "/HomePage"
+        name: QUI_API_UNRAID
+      - var: radarr_api
+        path: "/Radarr"
+        name: API
+      - var: radarr_4k_api
+        path: "/Radarr-4K"
+        name: API
+      - var: sabnzbd_api
+        path: "/SABnzbd"
+        name: API
+      - var: sonarr_api
+        path: "/Sonarr"
+        name: API
+      - var: sonarr_4k_api
+        path: "/Sonarr-4K"
+        name: API
+      - var: stash_api
+        path: "/Stash"
+        name: API
+      - var: tautulli_api
+        path: "/Tautulli"
+        name: API
+      - var: unifi_user
+        path: "/Unifi"
+        name: USER
+      - var: unifi_pass
+        path: "/Unifi"
+        name: PASS
+  paths:
+    - path: /opt/homepage
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  templates:
+    - src: configs/core/homepage/docker.yaml.j2
+      dest: /opt/homepage/docker.yaml
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+    - src: configs/core/homepage/services.yaml.j2
+      dest: /opt/homepage/services.yaml
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+    - src: configs/core/homepage/settings.yaml.j2
+      dest: /opt/homepage/settings.yaml
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+    - src: configs/core/homepage/bookmarks.yaml.j2
+      dest: /opt/homepage/bookmarks.yaml
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+  volumes:
+    config:
+      type: bind
+      source: /opt/homepage
+      target: /app/config
+      read_only: false
+  traefik:
+    enable: true
+    port: 3000
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

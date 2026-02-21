@@ -20,6 +20,9 @@ services:
 {% for service_name, svc in compose_services.items() %}
   {{ service_name }}:
     image: "{{ svc.image }}"
+{% if svc.hostname is defined and (svc.hostname | string | trim | length > 0) %}
+    hostname: "{{ svc.hostname }}"
+{% endif %}
 {% if svc.container_name is defined and (svc.container_name | string | trim | length > 0) and _stack_type != 'swarm' %}
     container_name: "{{ svc.container_name }}"
 {% endif %}
@@ -44,6 +47,12 @@ services:
     security_opt:
 {% for opt in svc.security_opt %}
       - "{{ opt }}"
+{% endfor %}
+{% endif %}
+{% if svc.sysctls is defined and (svc.sysctls is mapping) and (svc.sysctls | length > 0) %}
+    sysctls:
+{% for key, value in svc.sysctls.items() %}
+      {{ key }}: {{ value | to_json }}
 {% endfor %}
 {% endif %}
 {% if svc.depends_on is defined and (svc.depends_on | length > 0) %}

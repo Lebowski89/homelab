@@ -14,7 +14,7 @@
   ansible.builtin.set_fact:
     _stacks_cleaned: "{{ _stacks_cleaned | default([]) }}"
 
-- name: Cleanup | Determine if stack cleanup should run
+- name: Cleanup | Determine if stack cleanup should run (once per stack)
   when: _is_deploy_host
   ansible.builtin.set_fact:
     _do_stack_cleanup: >-
@@ -22,22 +22,20 @@
         _cleanup_enable
         and (
           _cleanup_force
-          or (not (deploy_deferred | default(false) | bool))
           or (stack_name_effective not in _stacks_cleaned)
         )
       }}
 
-- name: Remove existing stack (optional, once per stack when deferred)
+- name: Remove existing stack (optional, once per stack)
   when:
     - _is_deploy_host
     - _do_stack_cleanup | bool
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cleanup.yml"
 
-- name: Mark stack as cleaned (only when deferred)
+- name: Mark stack as cleaned
   when:
     - _is_deploy_host
     - _do_stack_cleanup | bool
-    - (deploy_deferred | default(false) | bool)
     - (stack_name_effective not in _stacks_cleaned)
   ansible.builtin.set_fact:
     _stacks_cleaned: "{{ _stacks_cleaned + [stack_name_effective] }}"
@@ -140,6 +138,16 @@
     - svc.postgres is defined
     - (svc.postgres.enable | default(false)) | bool
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/postgres.yml"
+
+################################
+# PREP (QBITTORRENT)
+################################
+
+- name: Hash qBittorrent passwords
+  when:
+    - inventory_hostname == "localhost"
+    - (svc.stack | default('') | string | trim) == "qbittorrent"  
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/sub_tasks/prep/qbittorrent.yml"
 
 ################################
 # PREP (DNS)

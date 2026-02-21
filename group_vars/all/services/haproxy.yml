@@ -1,0 +1,34 @@
+---
+
+haproxy:
+  name: haproxy
+  stack: haproxy
+  image: haproxy:3.3-alpine
+  named_networks:
+    overlay:
+      external: true
+  swarm_configs:
+    - name: haproxy_cfg
+      src: files/haproxy/haproxy.cfg
+      data_is_template: false
+  configs:
+    - source: haproxy_cfg
+      target: /usr/local/etc/haproxy/haproxy.cfg
+      mode: 0444
+  ports:
+    postgres:
+      published: 5433
+      target: 5433
+      protocol: tcp
+      mode: host
+  deploy:
+    type: swarm
+    mode: global
+    host: localhost
+    constraints:
+      - node.labels.haproxy_proxy == true
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

@@ -1,0 +1,110 @@
+---
+
+traefik:
+  name: traefik
+  stack: proxy
+  image: traefik:v3.6.8
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD"
+      - "wget"
+      - "--spider"
+      - "-q"
+      - "http://127.0.0.1:8081/ping"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "1000"
+    PGID: "1000"
+    UMASK: "022"
+    CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_secret
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: cloudflare_api
+        path: "/Cloudflare"
+        name: API
+        docker_secret: cloudflare_api_secret
+  secrets:
+    - cloudflare_api_secret
+  ports:
+    web:
+      published: 80
+      target: 80
+      protocol: tcp
+      mode: host
+    web_secure:
+      published: 443
+      target: 443
+      protocol: tcp
+      mode: host
+  paths:
+    - path: /opt/traefik
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: /opt/traefik/dynamic
+      state: directory
+      owner: 1000
+      group: 1000
+    - path: /opt/traefik/dynamic/services
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+    - path: /opt/traefik/acme.json
+      state: touch
+      owner: 1000
+      group: 1000
+      mode: 0600
+  templates:
+    - src: configs/proxy/traefik/config.yml.j2
+      dest: /opt/traefik/traefik.yml
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+    - src: configs/proxy/traefik/middlewares.yml.j2
+      dest: /opt/traefik/dynamic/middlewares.yml
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+    - src: configs/proxy/authelia/middleware.yml.j2
+      dest: /opt/traefik/dynamic/authelia.yml
+      owner: 1000
+      group: 1000
+      mode: 0664
+    - src: configs/proxy/authelia/router.yml.j2
+      dest: /opt/traefik/dynamic/services/authelia.yml
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+    - src: configs/proxy/traefik/dashboard.yml.j2
+      dest: /opt/traefik/dynamic/services/traefik-dashboard.yml
+      owner: 1000
+      group: 1000
+      mode: 0664
+      force: true
+  volumes:
+    config:
+      type: bind
+      source: /opt/traefik
+      target: /etc/traefik
+      read_only: false
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

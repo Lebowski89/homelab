@@ -1,0 +1,57 @@
+---
+
+sportarr:
+  name: sportarr
+  stack: arrs
+  image: sportarr/sportarr:latest
+  named_networks:
+    overlay:
+      external: true
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "99"
+    PGID: "100"
+    UMASK: "022"
+  paths:
+    - path: /mnt/user/appdata/sportarr
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+    - path: /mnt/user/appdata/sportarr/config
+      state: directory
+      owner: 99
+      group: 100
+      mode: 0755
+  volumes:
+    config:
+      type: bind
+      source: /mnt/user/appdata/sportarr/config
+      target: /config
+      read_only: false
+    media:
+      type: bind
+      source: /mnt/user/data
+      target: /data
+      read_only: false
+  traefik:
+    enable: true
+    port: 1867
+    sso: authelia
+    internal_api: true
+    internal_api_rules:
+      - "PathPrefix(`/api`)"
+      - "PathPrefix(`/feed`)"
+      - "PathPrefix(`/ping`)"
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints:
+      - node.labels.ansible_host == unraid
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

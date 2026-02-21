@@ -1,0 +1,51 @@
+---
+
+portainer:
+  name: portainer
+  stack: portainer
+  image: portainer/portainer-ce:2.38.1-linux-amd64-alpine
+  named_networks:
+    overlay:
+      external: true
+  command:
+    - "-H tcp://tasks.agent:9001 --tlsskipverify"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "1000"
+    PGID: "1000"
+    UMASK: "022"
+  paths:
+    - path: /opt/portainer
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: 0755
+  volumes:
+    config:
+      type: bind
+      source: /opt/portainer
+      target: /data
+      read_only: false
+    docker_sock:
+      type: bind
+      source: /var/run/docker.sock
+      target: /var/run/docker.sock
+      read_only: true
+  traefik:
+    enable: true
+    port: 9000
+    internal_api: true
+    internal_api_paths: /api
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.role == manager
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

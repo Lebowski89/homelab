@@ -1,0 +1,6 @@
+---
+
+local_ip: "192.168.80.20"
+puid: "99"
+pgid: "100"
+appdata_path: "/mnt/user/appdata"
