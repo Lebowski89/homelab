@@ -6,7 +6,7 @@
 
 - name: Plex prep | Set plex host
   ansible.builtin.set_fact:
-    _plex_host: "plex"
+    docker_services_plex_host: "plex"
   run_once: true
 
 ################################
@@ -46,7 +46,7 @@
   ansible.builtin.include_tasks:
     file: pref.yml
     apply:
-      delegate_to: "{{ _plex_host }}"
+      delegate_to: "{{ docker_services_plex_host }}"
       run_once: true
   run_once: true
 
@@ -58,6 +58,6 @@
   ansible.builtin.include_tasks:
     file: claim.yml
     apply:
-      delegate_to: "{{ _plex_host }}"
+      delegate_to: "{{ docker_services_plex_host }}"
       run_once: true
   run_once: true

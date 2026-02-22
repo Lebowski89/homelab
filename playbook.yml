@@ -1,6 +1,7 @@
 ---
 
-- hosts: skynet
+- name: Deploy homelab services
+  hosts: skynet
   become: true
 
   vars:

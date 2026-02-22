@@ -13,51 +13,51 @@
 - name: Token | Check if plex.ini exists
   ansible.builtin.stat:
     path: "/opt/stacks/plex.ini"
-  register: plex_ini
+  register: docker_services_plex_ini
   delegate_to: localhost
   run_once: true
 
 - name: Token | Set client identifier fact
-  when: plex_ini.stat.exists
+  when: docker_services_plex_ini.stat.exists
+  delegate_to: localhost
+  run_once: true
   block:
     - name: Token | Lookup client_identifier
       ansible.builtin.set_fact:
-        plex_client_identifier: "{{ lookup('ini', 'client_identifier section=plex file=/opt/stacks/plex.ini') }}"
-        plex_client_identifier_missing: false
+        docker_services_plex_client_identifier: "{{ lookup('ini', 'client_identifier section=plex file=/opt/stacks/plex.ini') }}"
+        docker_services_plex_client_identifier_missing: false
       delegate_facts: true
   rescue:
     - name: Token | Set identifier to empty string
       ansible.builtin.set_fact:
-        plex_client_identifier: ""
-        plex_client_identifier_missing: true
+        docker_services_plex_client_identifier: ""
+        docker_services_plex_client_identifier_missing: true
       delegate_facts: true
-  delegate_to: localhost
-  run_once: true
 
 - name: Token | Generate new identifier
-  when: (not plex_ini.stat.exists) or (hostvars['localhost'].plex_client_identifier_missing | default(false))
+  when: (not docker_services_plex_ini.stat.exists) or (hostvars['localhost'].docker_services_plex_client_identifier_missing | default(false))
   ansible.builtin.set_fact:
-    plex_client_identifier: "{{ 'plex' + (lookup('password', '/dev/null', chars=['ascii_lowercase', 'digits'], length=8)) }}"
+    docker_services_plex_client_identifier: "{{ 'plex' + (lookup('password', '/dev/null', chars=['ascii_lowercase', 'digits'], length=8)) }}"
   delegate_to: localhost
   delegate_facts: true
   run_once: true
 
 - name: Token | Set token variable if previously saved
   when:
-    - plex_ini.stat.exists
-    - not (hostvars['localhost'].plex_client_identifier_missing | default(false))
+    - docker_services_plex_ini.stat.exists
+    - not (hostvars['localhost'].docker_services_plex_client_identifier_missing | default(false))
   ansible.builtin.set_fact:
-    plex_auth_token: "{{ lookup('ini', 'token section=plex file=/opt/stacks/plex.ini') | regex_replace('\n', '') }}"
+    docker_services_plex_auth_token: "{{ lookup('ini', 'token section=plex file=/opt/stacks/plex.ini') | regex_replace('\n', '') }}"
   delegate_to: localhost
   delegate_facts: true
   run_once: true
 
-- name: Token | Set plex_no_token status
+- name: Token | Set docker_services_plex_no_token status
   ansible.builtin.set_fact:
-    plex_no_token: >-
+    docker_services_plex_no_token: >-
       {{
-        (not plex_ini.stat.exists)
-        or (hostvars['localhost'].plex_client_identifier_missing | default(false))
+        (not docker_services_plex_ini.stat.exists)
+        or (hostvars['localhost'].docker_services_plex_client_identifier_missing | default(false))
       }}
   delegate_to: localhost
   delegate_facts: true
@@ -65,18 +65,18 @@
 
 - name: Token | Check if Token is valid
   when:
-    - plex_ini.stat.exists
-    - not (hostvars['localhost'].plex_client_identifier_missing | default(false))
-    - (hostvars['localhost'].plex_auth_token | default('') | string | length) > 0
+    - docker_services_plex_ini.stat.exists
+    - not (hostvars['localhost'].docker_services_plex_client_identifier_missing | default(false))
+    - (hostvars['localhost'].docker_services_plex_auth_token | default('') | string | length) > 0
   ansible.builtin.uri:
     url: "https://plex.tv/api/v2/user"
     method: GET
     return_content: true
     body:
-      X-Plex-Token: "{{ hostvars['localhost'].plex_auth_token }}"
+      X-Plex-Token: "{{ hostvars['localhost'].docker_services_plex_auth_token }}"
       X-Plex-Version: "1.0.0"
       X-Plex-Product: "plex"
-      X-Plex-Client-Identifier: "{{ hostvars['localhost'].plex_client_identifier }}"
+      X-Plex-Client-Identifier: "{{ hostvars['localhost'].docker_services_plex_client_identifier }}"
       X-Plex-Platform: "linux"
       X-Plex-Platform-Version: "1.0.0"
       X-Plex-Device: "Debian {{ ansible_distribution_version }} - {{ ansible_kernel }}"
@@ -85,14 +85,16 @@
     headers:
       Accept: "application/json"
     status_code: [200, 401]
-  register: plex_token
+  register: docker_services_plex_token
   delegate_to: localhost
   run_once: true
 
 - name: Token | Generate New Token
   when:
-    - (hostvars['localhost'].plex_no_token | default(true)) | bool
-      or ((plex_token is defined) and (plex_token.status | default(0) | int) == 401)
+    - (hostvars['localhost'].docker_services_plex_no_token | default(true)) | bool
+      or ((docker_services_plex_token is defined) and (docker_services_plex_token.status | default(0) | int) == 401)
+  delegate_to: localhost
+  run_once: true
   block:
     - name: Token | Generate PIN
       ansible.builtin.uri:
@@ -103,7 +105,7 @@
           strong: "true"
           X-Plex-Version: "1.0.0"
           X-Plex-Product: "plex"
-          X-Plex-Client-Identifier: "{{ hostvars['localhost'].plex_client_identifier }}"
+          X-Plex-Client-Identifier: "{{ hostvars['localhost'].docker_services_plex_client_identifier }}"
           X-Plex-Platform: "linux"
           X-Plex-Platform-Version: "1.0.0"
           X-Plex-Device: "Debian {{ ansible_distribution_version }} - {{ ansible_kernel }}"
@@ -112,30 +114,30 @@
         headers:
           Accept: "application/json"
         status_code: 201
-      register: plex_pin
+      register: docker_services_plex_pin
 
     - name: Token | Login prompt
       ansible.builtin.pause:
         prompt: >-
-          Please open https://app.plex.tv/auth#?clientID={{ plex_pin.json.clientIdentifier }}&code={{ plex_pin.json.code }}&context%5Bdevice%5D%5Bproduct%5D={{ plex_pin.json.product }}
+          Please open https://app.plex.tv/auth#?clientID={{ docker_services_plex_pin.json.clientIdentifier }}&code={{ docker_services_plex_pin.json.code }}&context%5Bdevice%5D%5Bproduct%5D={{ docker_services_plex_pin.json.product }}
           and login. Hit enter after having logged in
 
     - name: Token | Check PIN
       ansible.builtin.uri:
-        url: "https://plex.tv/api/v2/pins/{{ plex_pin.json.id }}"
+        url: "https://plex.tv/api/v2/pins/{{ docker_services_plex_pin.json.id }}"
         method: GET
         return_content: true
         body:
-          X-Plex-Client-Identifier: "{{ hostvars['localhost'].plex_client_identifier }}"
+          X-Plex-Client-Identifier: "{{ hostvars['localhost'].docker_services_plex_client_identifier }}"
         body_format: form-urlencoded
         headers:
           Accept: "application/json"
         status_code: 200
-      register: plex_token_new
+      register: docker_services_plex_token_new
 
-    - name: Token | Set plex_auth_token variable
+    - name: Token | Set docker_services_plex_auth_token variable
       ansible.builtin.set_fact:
-        plex_auth_token: "{{ plex_token_new.json.authToken | regex_replace('\n', '') }}"
+        docker_services_plex_auth_token: "{{ docker_services_plex_token_new.json.authToken | regex_replace('\n', '') }}"
       delegate_facts: true
 
     - name: Token | Check if new Token is valid
@@ -144,10 +146,10 @@
         method: GET
         return_content: true
         body:
-          X-Plex-Token: "{{ hostvars['localhost'].plex_auth_token }}"
+          X-Plex-Token: "{{ hostvars['localhost'].docker_services_plex_auth_token }}"
           X-Plex-Version: "1.0.0"
           X-Plex-Product: "plex"
-          X-Plex-Client-Identifier: "{{ hostvars['localhost'].plex_client_identifier }}"
+          X-Plex-Client-Identifier: "{{ hostvars['localhost'].docker_services_plex_client_identifier }}"
           X-Plex-Platform: "linux"
           X-Plex-Platform-Version: "1.0.0"
           X-Plex-Device: "Debian {{ ansible_distribution_version }} - {{ ansible_kernel }}"
@@ -156,10 +158,10 @@
         headers:
           Accept: "application/json"
         status_code: [200, 401]
-      register: plex_new_token
+      register: docker_services_plex_new_token
 
     - name: Token | Fail if new token is invalid
-      when: (plex_new_token.status | int) == 401
+      when: (docker_services_plex_new_token.status | int) == 401
       ansible.builtin.fail:
         msg: "Something went wrong with the creation of the new token"
 
@@ -168,7 +170,7 @@
         path: "/opt/stacks/plex.ini"
         section: "plex"
         option: "client_identifier"
-        value: "{{ hostvars['localhost'].plex_client_identifier }}"
+        value: "{{ hostvars['localhost'].docker_services_plex_client_identifier }}"
         create: true
         owner: "{{ hostvars['localhost'].puid | default('1000') }}"
         group: "{{ hostvars['localhost'].pgid | default('1000') }}"
@@ -179,16 +181,14 @@
         path: "/opt/stacks/plex.ini"
         section: "plex"
         option: "token"
-        value: "{{ hostvars['localhost'].plex_auth_token }}"
+        value: "{{ hostvars['localhost'].docker_services_plex_auth_token }}"
         create: true
         owner: "{{ hostvars['localhost'].puid | default('1000') }}"
         group: "{{ hostvars['localhost'].pgid | default('1000') }}"
         mode: "0664"
-  delegate_to: localhost
-  run_once: true
 
 - name: Token | Display Token
   ansible.builtin.debug:
-    msg: "Plex Auth Token: {{ hostvars['localhost'].plex_auth_token | default('') }}"
+    msg: "Plex Auth Token: {{ hostvars['localhost'].docker_services_plex_auth_token | default('') }}"
   delegate_to: localhost
   run_once: true

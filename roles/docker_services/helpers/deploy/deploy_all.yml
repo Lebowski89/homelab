@@ -1,21 +1,21 @@
 ---
 
-# Deploy all stacks collected into compose_stacks during this play run.
+# Deploy all stacks collected into docker_services_compose_stacks during this play run.
 # Expected shape (on localhost facts):
-# compose_stacks:
+# docker_services_compose_stacks:
 #   <stack_key>:
 #     type: swarm|container
-#     deploy_host: <host>
+#     docker_services_deploy_host: <host>
 #     services: {...}
 #     networks: {...}
 #     volumes: {...}
 
-- name: DeployAll | Ensure compose_stacks exists
+- name: DeployAll | Ensure docker_services_compose_stacks exists
   ansible.builtin.set_fact:
     _compose_stacks_effective: >-
       {{
-        hostvars['localhost'].compose_stacks
-        if (hostvars['localhost'].compose_stacks is defined and hostvars['localhost'].compose_stacks is mapping)
+        hostvars['localhost'].docker_services_compose_stacks
+        if (hostvars['localhost'].docker_services_compose_stacks is defined and hostvars['localhost'].docker_services_compose_stacks is mapping)
         else {}
       }}
   run_once: true
@@ -31,8 +31,8 @@
     deploy_stack_name: "{{ _stack_item.key }}"
     _stack_def: "{{ _stack_item.value | default({}, true) }}"
     deploy_stack_type: "{{ _stack_def.type | default('swarm', true) | string | trim }}"
-    deploy_host: "{{ _stack_def.deploy_host | default('localhost', true) | string | trim }}"
-    compose_services: "{{ _stack_def.services | default({}, true) }}"
+    docker_services_deploy_host: "{{ _stack_def.docker_services_deploy_host | default('localhost', true) | string | trim }}"
+    docker_services_compose_services: "{{ _stack_def.services | default({}, true) }}"
     stack_networks: "{{ _stack_def.networks | default({}, true) }}"
     stack_volumes: "{{ _stack_def.volumes | default({}, true) }}"
   run_once: true

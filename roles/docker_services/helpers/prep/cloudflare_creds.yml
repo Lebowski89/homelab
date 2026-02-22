@@ -9,7 +9,7 @@
   ansible.builtin.set_fact:
     _is_hugo: >-
       {{
-        (service_name | default('') | string | trim) == 'hugo'
+        (docker_services_service_name | default('') | string | trim) == 'hugo'
         or
         (role_prefix  | default('') | string | trim) == 'hugo'
       }}
@@ -40,7 +40,7 @@
 
 - name: Cloudflare | Fetch cloudflare_api/cloudflare_zone from Infisical (only if missing)
   when: _cf_creds_missing | bool
-  ansible.builtin.include_tasks: "{{ role_path }}/helpers/infisical/fetch.yml"
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/infisical.yml"
   vars:
     infisical_fail_on_empty: true
     infisical_flatten: true
@@ -79,14 +79,14 @@
 # CLOUDFLARE DNS
 ################################
 
-# Normal services: A record <svc.name> -> public_ip
+# Normal services: A record <docker_services_svc.name> -> public_ip
 - name: Configure Cloudflare DNS (normal)
   when:
     - inventory_hostname == "localhost"
     - not (_is_hugo | bool)
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cloudflare_dns.yml"
   vars:
-    cloudflare_record: "{{ svc.name }}"
+    cloudflare_record: "{{ docker_services_svc.name }}"
     cloudflare_record_value: "{{ public_ip }}"
     cloudflare_record_type: "A"
     cloudflare_proxy: false
@@ -105,14 +105,14 @@
     cloudflare_proxy: false
     cloudflare_solo: true
   loop:
-    - { type: "A",    value: "185.199.108.153" }
-    - { type: "A",    value: "185.199.109.153" }
-    - { type: "A",    value: "185.199.110.153" }
-    - { type: "A",    value: "185.199.111.153" }
-    - { type: "AAAA", value: "2606:50c0:8000::153" }
-    - { type: "AAAA", value: "2606:50c0:8001::153" }
-    - { type: "AAAA", value: "2606:50c0:8002::153" }
-    - { type: "AAAA", value: "2606:50c0:8003::153" }
+    - {type: "A", value: "185.199.108.153"}
+    - {type: "A", value: "185.199.109.153"}
+    - {type: "A", value: "185.199.110.153"}
+    - {type: "A", value: "185.199.111.153"}
+    - {type: "AAAA", value: "2606:50c0:8000::153"}
+    - {type: "AAAA", value: "2606:50c0:8001::153"}
+    - {type: "AAAA", value: "2606:50c0:8002::153"}
+    - {type: "AAAA", value: "2606:50c0:8003::153"}
   loop_control:
     loop_var: hugo_dns
     label: "{{ hugo_dns.type }}={{ hugo_dns.value }}"

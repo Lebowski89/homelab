@@ -23,7 +23,7 @@
 
     - name: Postgres | Fetch postgres_user/postgres_pass from Infisical (only if missing)
       when: _pg_creds_missing | bool
-      ansible.builtin.include_tasks: "{{ role_path }}/helpers/infisical/fetch.yml"
+      ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/infisical.yml"
       vars:
         infisical_fail_on_empty: true
         infisical_flatten: true
@@ -57,19 +57,19 @@
 # DATABASE
 ################################
 
-- name: Normalize postgres database list from svc schema
+- name: Normalize postgres database list from docker_services_svc schema
   when:
     - inventory_hostname == "localhost"
-    - svc.postgres is defined
-    - (svc.postgres.enable | default(false)) | bool
+    - docker_services_svc.postgres is defined
+    - (docker_services_svc.postgres.enable | default(false)) | bool
   ansible.builtin.set_fact:
     _postgres_databases: >-
       {{
-        (svc.postgres.databases | list)
-        if (svc.postgres.databases is defined and svc.postgres.databases is sequence and svc.postgres.databases is not string)
+        (docker_services_svc.postgres.databases | list)
+        if (docker_services_svc.postgres.databases is defined and docker_services_svc.postgres.databases is sequence and docker_services_svc.postgres.databases is not string)
         else
-        ([ (svc.postgres.databases | string | trim) ]
-          if (svc.postgres.databases is defined and (svc.postgres.databases | string | trim | length > 0))
+        ([ (docker_services_svc.postgres.databases | string | trim) ]
+          if (docker_services_svc.postgres.databases is defined and (docker_services_svc.postgres.databases | string | trim | length > 0))
           else
           [])
       }}

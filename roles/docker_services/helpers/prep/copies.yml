@@ -8,10 +8,10 @@
       - copies is not string
     fail_msg: "copies must be a list of copy definitions."
 
-# Default deploy_host to localhost if not provided (safe for swarm managers)
+# Default docker_services_deploy_host to localhost if not provided (safe for swarm managers)
 - name: Normalize deploy host
   ansible.builtin.set_fact:
-    _deploy_host: "{{ deploy_host | default('localhost', true) | string | trim }}"
+    _deploy_host: "{{ docker_services_deploy_host | default('localhost', true) | string | trim }}"
 
 - name: Validate each copy copy_prep has src/dest
   ansible.builtin.assert:

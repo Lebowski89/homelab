@@ -1,29 +1,29 @@
 ---
 
 # helpers/compose/env_file.yml
-- name: Ensure service_name is set
+- name: Ensure docker_services_service_name is set
   ansible.builtin.assert:
     that:
-      - service_name is defined
-      - service_name | string | trim | length > 0
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
 
 - name: Normalize env_file to list
   ansible.builtin.set_fact:
     _env_file_final: >-
       {{
-        [svc.env_file | string | trim]
-        if svc.env_file is string
-        else (svc.env_file | list)
+        [docker_services_svc.env_file | string | trim]
+        if docker_services_svc.env_file is string
+        else (docker_services_svc.env_file | list)
       }}
 
 - name: Attach env_file to service
   ansible.builtin.set_fact:
-    compose_services: >-
+    docker_services_compose_services: >-
       {{
-        (compose_services | default({}))
+        (docker_services_compose_services | default({}))
         | combine({
-            service_name: (
-              ((compose_services | default({})).get(service_name, {}))
+            docker_services_service_name: (
+              ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
               | combine({ 'env_file': _env_file_final }, recursive=true)
             )
           }, recursive=true)
