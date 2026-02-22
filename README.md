@@ -74,3 +74,17 @@ Below is a grouped list of Ansible modules currently used in this repository, wi
 > Notes:
 > - This list is derived from module invocations in playbooks and role task files.
 > - `qbittorrent_passwd` and `yedit` are used in short-form names in this repo (non-FQCN form).
+
+
+### Dependency notes (`requirements.yml` vs Python deps)
+
+- `requirements.yml` is for **Ansible Galaxy collections/roles**.
+- Some modules also need **Python libraries on the Ansible control node** (for example `community.postgresql.*` needs `psycopg2`).
+- Controller-side Python dependencies are listed in `requirements.txt`.
+
+Install both before running playbooks:
+
+```bash
+ansible-galaxy collection install -r requirements.yml
+pip install -r requirements.txt
+```
