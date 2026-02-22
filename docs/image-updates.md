@@ -2,7 +2,7 @@
 
 This project uses the renovate (repo) bot to monitor and to create pull requests for updates to Docker apps I use (in addition to python and other dependencies). For this reason, when and where possible each Docker image is pinned to a version number. 
 
-I am enjoying this method of updating. In the past I have tried it all, which has been quite a learning experience. And while I don't have the horror stories some seem to have with things such as automatic updates (and I ran Watchtower for quite some time), I find that I am better equipped to keep up and maintain large numbers of concurrent apps. Simply put, being in control of when updates occur gives me the time to read changelogs and make the changes required to keep up.
+I am enjoying this method of updating. In the past I have tried it all, which has been quite a learning experience. And while I don't have the horror stories some seem to have with things such as automatic updates (and I ran Watchtower for quite some time), I find that I am better equipped to keep up and maintain large numbers of concurrent apps. Simply put, being in control of when updates occur gives me the time to read changelogs and make the changes required to keep up with ever-evolving apps.
 
 Note: This repo does not store templated compose files, so the renovate.json is configured to read my service yml files:
 

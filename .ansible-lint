@@ -16,8 +16,3 @@ warn_list:
 
 skip_list:
   - yaml[line-length]
-  - var-naming[no-role-prefix]
-  - name[casing]
-  - key-order[task]
-  - command-instead-of-module
-  - no-changed-when
