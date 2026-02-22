@@ -105,14 +105,14 @@
     cloudflare_proxy: false
     cloudflare_solo: true
   loop:
-    - { type: "A",    value: "185.199.108.153" }
-    - { type: "A",    value: "185.199.109.153" }
-    - { type: "A",    value: "185.199.110.153" }
-    - { type: "A",    value: "185.199.111.153" }
-    - { type: "AAAA", value: "2606:50c0:8000::153" }
-    - { type: "AAAA", value: "2606:50c0:8001::153" }
-    - { type: "AAAA", value: "2606:50c0:8002::153" }
-    - { type: "AAAA", value: "2606:50c0:8003::153" }
+    - {type: "A", value: "185.199.108.153"}
+    - {type: "A", value: "185.199.109.153"}
+    - {type: "A", value: "185.199.110.153"}
+    - {type: "A", value: "185.199.111.153"}
+    - {type: "AAAA", value: "2606:50c0:8000::153"}
+    - {type: "AAAA", value: "2606:50c0:8001::153"}
+    - {type: "AAAA", value: "2606:50c0:8002::153"}
+    - {type: "AAAA", value: "2606:50c0:8003::153"}
   loop_control:
     loop_var: hugo_dns
     label: "{{ hugo_dns.type }}={{ hugo_dns.value }}"
