@@ -23,7 +23,7 @@
 
     - name: Postgres | Fetch postgres_user/postgres_pass from Infisical (only if missing)
       when: _pg_creds_missing | bool
-      ansible.builtin.include_tasks: "{{ role_path }}/helpers/infisical/fetch.yml"
+      ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/infisical.yml"
       vars:
         infisical_fail_on_empty: true
         infisical_flatten: true

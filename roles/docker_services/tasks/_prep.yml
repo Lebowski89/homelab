@@ -50,7 +50,7 @@
     - svc.infisical is defined
     - svc.infisical.secrets_map is defined
     - (svc.infisical.secrets_map | length > 0)
-  ansible.builtin.include_tasks: "{{ role_path }}/helpers/infisical/fetch.yml"
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/infisical.yml"
   vars:
     infisical_fail_on_empty: "{{ svc.infisical.fail_on_empty | default(true) }}"
     secrets_map: "{{ svc.infisical.secrets_map }}"
