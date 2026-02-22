@@ -1,11 +1,11 @@
 ---
 
-- name: Ensure service_name is set
+- name: Ensure docker_services_service_name is set
   ansible.builtin.assert:
     that:
-      - service_name is defined
-      - service_name | string | trim | length > 0
-    fail_msg: "service_name must be set before calling this helper"
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
+    fail_msg: "docker_services_service_name must be set before calling this helper"
 
 # caps_target: cap_add | cap_drop
 - name: Ensure caps_target is valid
@@ -44,12 +44,12 @@
 
 - name: Add caps for service (append/replace/append_unique)
   ansible.builtin.set_fact:
-    compose_services: >-
+    docker_services_compose_services: >-
       {{
-        (compose_services | default({}))
+        (docker_services_compose_services | default({}))
         | combine({
-            service_name: (
-              ((compose_services | default({})).get(service_name, {}))
+            docker_services_service_name: (
+              ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
               | combine({
                   (caps_target | string | trim): (
                     _caps_new
@@ -57,7 +57,7 @@
                     else
                     (
                       (
-                        ((compose_services | default({})).get(service_name, {}).get((caps_target | string | trim), []))
+                        ((docker_services_compose_services | default({})).get(docker_services_service_name, {}).get((caps_target | string | trim), []))
                         | default([], true)
                         | list
                       )
@@ -68,7 +68,7 @@
                         else
                         (
                           _caps_new
-                          | reject('in', ((compose_services | default({})).get(service_name, {}).get((caps_target | string | trim), []) | default([], true) | list))
+                          | reject('in', ((docker_services_compose_services | default({})).get(docker_services_service_name, {}).get((caps_target | string | trim), []) | default([], true) | list))
                           | list
                         )
                       )

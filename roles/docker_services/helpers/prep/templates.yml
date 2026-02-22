@@ -8,9 +8,9 @@
       - templates is not string
     fail_msg: "templates must be a list of template specs."
 
-- name: Ensure deploy_host is set
+- name: Ensure docker_services_deploy_host is set
   ansible.builtin.set_fact:
-    _deploy_host: "{{ deploy_host | default('localhost', true) | string | trim }}"
+    _deploy_host: "{{ docker_services_deploy_host | default('localhost', true) | string | trim }}"
 
 - name: Render templates on deploy host
   ansible.builtin.template:

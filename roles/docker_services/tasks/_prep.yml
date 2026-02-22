@@ -6,89 +6,89 @@
 
 - name: Derive cleanup flags (stack-scoped)
   ansible.builtin.set_fact:
-    _cleanup_enable: "{{ (svc.cleanup.enable | default(true)) | bool }}"
-    _cleanup_force: "{{ (svc.cleanup.force | default(false)) | bool }}"
+    docker_services_cleanup_enable: "{{ (docker_services_svc.cleanup.enable | default(true)) | bool }}"
+    docker_services_cleanup_force: "{{ (docker_services_svc.cleanup.force | default(false)) | bool }}"
 
 - name: Init cleaned-stacks tracker
-  when: _is_deploy_host
+  when: docker_services_is_deploy_host
   ansible.builtin.set_fact:
-    _stacks_cleaned: "{{ _stacks_cleaned | default([]) }}"
+    docker_services_stacks_cleaned: "{{ docker_services_stacks_cleaned | default([]) }}"
 
 - name: Cleanup | Determine if stack cleanup should run (once per stack)
-  when: _is_deploy_host
+  when: docker_services_is_deploy_host
   ansible.builtin.set_fact:
-    _do_stack_cleanup: >-
+    docker_services_do_stack_cleanup: >-
       {{
-        _cleanup_enable
+        docker_services_cleanup_enable
         and (
-          _cleanup_force
-          or (stack_name_effective not in _stacks_cleaned)
+          docker_services_cleanup_force
+          or (docker_services_stack_name_effective not in docker_services_stacks_cleaned)
         )
       }}
 
 - name: Remove existing stack (optional, once per stack)
   when:
-    - _is_deploy_host
-    - _do_stack_cleanup | bool
+    - docker_services_is_deploy_host
+    - docker_services_do_stack_cleanup | bool
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cleanup.yml"
 
 - name: Mark stack as cleaned
   when:
-    - _is_deploy_host
-    - _do_stack_cleanup | bool
-    - (stack_name_effective not in _stacks_cleaned)
+    - docker_services_is_deploy_host
+    - docker_services_do_stack_cleanup | bool
+    - (docker_services_stack_name_effective not in docker_services_stacks_cleaned)
   ansible.builtin.set_fact:
-    _stacks_cleaned: "{{ _stacks_cleaned + [stack_name_effective] }}"
+    docker_services_stacks_cleaned: "{{ docker_services_stacks_cleaned + [docker_services_stack_name_effective] }}"
 
 ################################
 # PREP (INFISICAL)
 ################################
 
-- name: Prep | Fetch Infisical secrets (svc.infisical)
+- name: Prep | Fetch Infisical secrets (docker_services_svc.infisical)
   when:
     - inventory_hostname == "localhost"
-    - svc.infisical is defined
-    - svc.infisical.secrets_map is defined
-    - (svc.infisical.secrets_map | length > 0)
-  ansible.builtin.include_tasks: "{{ role_path }}/helpers/infisical/fetch.yml"
+    - docker_services_svc.infisical is defined
+    - docker_services_svc.infisical.secrets_map is defined
+    - (docker_services_svc.infisical.secrets_map | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/infisical.yml"
   vars:
-    infisical_fail_on_empty: "{{ svc.infisical.fail_on_empty | default(true) }}"
-    secrets_map: "{{ svc.infisical.secrets_map }}"
+    infisical_fail_on_empty: "{{ docker_services_svc.infisical.fail_on_empty | default(true) }}"
+    secrets_map: "{{ docker_services_svc.infisical.secrets_map }}"
 
-- name: Prep | Resolve Infisical placeholders in svc.environment
+- name: Prep | Resolve Infisical placeholders in docker_services_svc.environment
   when:
-    - inventory_hostname == _deploy_host_effective
+    - inventory_hostname == docker_services_deploy_host_effective
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/resolve_env.yml"
 
 - name: Prep | Propagate Infisical flattened vars to deploy host
   when:
     - inventory_hostname == "localhost"
-    - svc.infisical is defined
-    - (svc.infisical.secrets_map | default([]) | length) > 0
-    - (_deploy_host_effective != "localhost")
+    - docker_services_svc.infisical is defined
+    - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
+    - (docker_services_deploy_host_effective != "localhost")
     - (infisical_flatten | default(true)) | bool
   ansible.builtin.set_fact:
     "{{ inf_item.var }}": "{{ hostvars['localhost'][inf_item.var] | default('') }}"
-  loop: "{{ svc.infisical.secrets_map }}"
+  loop: "{{ docker_services_svc.infisical.secrets_map }}"
   loop_control:
     loop_var: inf_item
     label: "{{ inf_item.var }}"
-  delegate_to: "{{ _deploy_host_effective }}"
+  delegate_to: "{{ docker_services_deploy_host_effective }}"
   delegate_facts: true
 
 - name: Prep | Propagate Infisical dict to deploy host
   when:
     - inventory_hostname == "localhost"
-    - svc.infisical is defined
-    - (svc.infisical.secrets_map | default([]) | length) > 0
-    - (_deploy_host_effective != "localhost")
+    - docker_services_svc.infisical is defined
+    - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
+    - (docker_services_deploy_host_effective != "localhost")
     - not (infisical_flatten | default(true)) | bool
   ansible.builtin.set_fact:
     "{{ infisical_out_var | default('infisical_secrets') }}": >-
       {{
         hostvars['localhost'][infisical_out_var | default('infisical_secrets')] | default({})
       }}
-  delegate_to: "{{ _deploy_host_effective }}"
+  delegate_to: "{{ docker_services_deploy_host_effective }}"
   delegate_facts: true
 
 ################################
@@ -97,10 +97,10 @@
 
 - name: Prep | Create docker secrets / files from Infisical secrets_map
   when:
-    - svc.infisical is defined
-    - (svc.infisical.secrets_map | default([]) | length) > 0
+    - docker_services_svc.infisical is defined
+    - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
     # Swarm secrets must be created on manager (your localhost controller)
-    - (stack_deploy_type == 'swarm') | ternary(inventory_hostname == 'localhost', _is_deploy_host)
+    - (docker_services_stack_deploy_type == 'swarm') | ternary(inventory_hostname == 'localhost', docker_services_is_deploy_host)
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/secrets.yml"
 
 ################################
@@ -110,12 +110,12 @@
 - name: Prep | Swarm configs
   when:
     - inventory_hostname == "localhost"
-    - svc.swarm_configs is defined
-    - (svc.swarm_configs | length) > 0
+    - docker_services_svc.swarm_configs is defined
+    - (docker_services_svc.swarm_configs | length) > 0
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/swarm_configs.yml"
   vars:
-    swarm_configs: "{{ svc.swarm_configs }}"
-    deploy_host: "{{ svc.swarm_config_host | default('localhost', true) }}"
+    swarm_configs: "{{ docker_services_svc.swarm_configs }}"
+    docker_services_deploy_host: "{{ docker_services_svc.swarm_config_host | default('localhost', true) }}"
 
 ################################
 # PREP (AUTHELIA)
@@ -124,7 +124,7 @@
 - name: Prep | Authelia key material (argon2/session/jwt/storage)
   when:
     - inventory_hostname == "localhost"
-    - (svc.name | default('') | string | trim) == "authelia"
+    - (docker_services_svc.name | default('') | string | trim) == "authelia"
   ansible.builtin.include_tasks: "{{ role_path }}/tasks/sub_tasks/prep/authelia/tasker.yml"
   run_once: true
 
@@ -135,8 +135,8 @@
 - name: Create Postgres database
   when:
     - inventory_hostname == "localhost"
-    - svc.postgres is defined
-    - (svc.postgres.enable | default(false)) | bool
+    - docker_services_svc.postgres is defined
+    - (docker_services_svc.postgres.enable | default(false)) | bool
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/postgres.yml"
 
 ################################
@@ -146,7 +146,7 @@
 - name: Hash qBittorrent passwords
   when:
     - inventory_hostname == "localhost"
-    - (svc.stack | default('') | string | trim) == "qbittorrent"  
+    - (docker_services_svc.stack | default('') | string | trim) == "qbittorrent"
   ansible.builtin.include_tasks: "{{ role_path }}/tasks/sub_tasks/prep/qbittorrent.yml"
 
 ################################
@@ -157,8 +157,8 @@
   when:
     - inventory_hostname == "localhost"
     - not (ci_mode | default(false)) | bool
-    - svc.traefik is defined
-    - (svc.traefik.enable | default(false)) | bool
+    - docker_services_svc.traefik is defined
+    - (docker_services_svc.traefik.enable | default(false)) | bool
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cloudflare_creds.yml"
 
 ################################
@@ -168,16 +168,16 @@
 - name: Create filesystem paths (on filesystem hosts)
   when:
     - inventory_hostname == "localhost"
-    - svc.paths is defined
-    - (svc.paths | length > 0)
+    - docker_services_svc.paths is defined
+    - (docker_services_svc.paths | length > 0)
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/paths.yml"
   vars:
-    paths: "{{ svc.paths }}"
-    deploy_host: "{{ _fs_target }}"
+    paths: "{{ docker_services_svc.paths }}"
+    docker_services_deploy_host: "{{ _fs_target }}"
     default_owner: "{{ hostvars[_fs_target].puid | default('1000') }}"
     default_group: "{{ hostvars[_fs_target].pgid | default('1000') }}"
     default_mode: "0755"
-  loop: "{{ _fs_hosts_effective }}"
+  loop: "{{ docker_services_fs_hosts_effective }}"
   loop_control:
     loop_var: _fs_target
 
@@ -188,13 +188,13 @@
 - name: Copy static files (on filesystem hosts)
   when:
     - inventory_hostname == "localhost"
-    - svc.copies is defined
-    - (svc.copies | length > 0)
+    - docker_services_svc.copies is defined
+    - (docker_services_svc.copies | length > 0)
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/copies.yml"
   vars:
-    copies: "{{ svc.copies }}"
-    deploy_host: "{{ _fs_target }}"
-  loop: "{{ _fs_hosts_effective }}"
+    copies: "{{ docker_services_svc.copies }}"
+    docker_services_deploy_host: "{{ _fs_target }}"
+  loop: "{{ docker_services_fs_hosts_effective }}"
   loop_control:
     loop_var: _fs_target
 
@@ -205,15 +205,15 @@
 - name: Render templates (on filesystem host)
   when:
     - inventory_hostname == "localhost"
-    - svc.templates is defined
-    - (svc.templates | length > 0)
+    - docker_services_svc.templates is defined
+    - (docker_services_svc.templates | length > 0)
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/templates.yml"
   vars:
-    templates: "{{ svc.templates }}"
-    deploy_host: "{{ _fs_target }}"
+    templates: "{{ docker_services_svc.templates }}"
+    docker_services_deploy_host: "{{ _fs_target }}"
     default_owner: "{{ puid }}"
     default_group: "{{ pgid }}"
-  loop: "{{ _fs_hosts_effective }}"
+  loop: "{{ docker_services_fs_hosts_effective }}"
   loop_control:
     loop_var: _fs_target
 
@@ -224,34 +224,34 @@
 - name: Prep | Plex (claims/token/etc)
   when:
     - inventory_hostname == "localhost"
-    - (svc.name | default('') | string | trim) == "plex"
+    - (docker_services_svc.name | default('') | string | trim) == "plex"
   ansible.builtin.include_tasks: "{{ role_path }}/tasks/sub_tasks/prep/plex/tasker.yml"
   run_once: true
 
 - name: Prep | Bazarr
   when:
     - inventory_hostname == "localhost"
-    - svc.name  | default('') == "bazarr"
+    - docker_services_svc.name  | default('') == "bazarr"
   ansible.builtin.include_tasks: "{{ role_path }}/tasks/sub_tasks/prep/bazarr.yml"
   run_once: true
 
 - name: Prep | Hugo (blog)
   when:
     - inventory_hostname == "localhost"
-    - (svc.name | default('') | string | trim) == "hugo"
+    - (docker_services_svc.name | default('') | string | trim) == "hugo"
   ansible.builtin.include_tasks: "{{ role_path }}/tasks/sub_tasks/prep/hugo.yml"
   run_once: true
 
 - name: Prep | NZBHydra2
   when:
     - inventory_hostname == "localhost"
-    - svc.name  | default('') == "nzbhydra2"
+    - docker_services_svc.name  | default('') == "nzbhydra2"
   ansible.builtin.include_tasks: "{{ role_path }}/tasks/sub_tasks/prep/nzbhydra2.yml"
   run_once: true
 
 - name: Prep | Vaultwarden
   when:
     - inventory_hostname == "localhost"
-    - svc.name == "vaultwarden"
+    - docker_services_svc.name == "vaultwarden"
   ansible.builtin.include_tasks: "{{ role_path }}/tasks/sub_tasks/prep/vaultwarden.yml"
   run_once: true
