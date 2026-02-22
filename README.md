@@ -6,7 +6,7 @@
 + HA PostgreSQL (Patroni + etcd) as primary database storage
 + A large focus on media-centric services (especially arrs and companion apps).
 
-# Goal
+## Goals
 
 + To automate the deployment of docker apps/services (using Ansible/Infisical/Docker Swarm, etc)
 + To automate all settings/configs/database needs I have for an app/service during a single run

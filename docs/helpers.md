@@ -2,7 +2,7 @@
 
 This project uses helpers (aka builders) that ready each docker service/stack for deployment. The facts in the service vars are sent through these helpers and the end result is a complete compose file ready to run with everything it needs (with desired settings).
 
-## `compose/`
+### `compose/`
 
 - `caps.yml`: Adds or replaces Linux capabilities (`cap_add` / `cap_drop`) for a service, with append and unique-append merge modes.
 - `command.yml`: Sets a service `command` with normalization for string/list input and optional append semantics when list-based commands are used.
@@ -27,17 +27,17 @@ This project uses helpers (aka builders) that ready each docker service/stack fo
 - `validate_svc.yml`: Validates normalized service fields (name/image/deploy/environment/ports/etc.) for schema correctness.
 - `volumes.yml`: Normalizes, validates, and merges service volume mounts from mapping, list, or legacy inputs.
 
-## `deploy/`
+### `deploy/`
 
 - `deploy_all.yml`: Iterates through all prepared stacks and deploys each one.
 - `deploy_one.yml`: Renders stack compose artifacts and deploys a single stack on the effective deploy host.
 
-## `infisical/`
+### `infisical/`
 
 - `distribute.yml`: Copies fetched secret values from a source host into host variables, either from flattened keys or a source dictionary.
 - `fetch.yml`: Looks up secrets from Infisical based on a `secrets_map`, outputting flattened vars and/or a dictionary.
 
-## `prep/`
+### `prep/`
 
 - `cleanup.yml`: Removes existing apps/services for the current deploy mode (compose/container or swarm).
 - `cloudflare_creds.yml`: Ensures Cloudflare credentials/zone values exist, fetching from Infisical when needed.
