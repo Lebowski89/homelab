@@ -1,11 +1,11 @@
 ---
 
-- name: Ensure service_name is set
+- name: Ensure docker_services_service_name is set
   ansible.builtin.assert:
     that:
-      - service_name is defined
-      - service_name | string | trim | length > 0
-    fail_msg: "service_name must be set before calling this helper"
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
+    fail_msg: "docker_services_service_name must be set before calling this helper"
 
 - name: Ensure ports_action is valid
   ansible.builtin.assert:
@@ -13,9 +13,9 @@
       - ports_action | default('append') in ['append', 'replace', 'append_unique']
     fail_msg: "ports_action must be 'append', 'replace', or 'append_unique'"
 
-- name: Normalize stack_deploy_type
+- name: Normalize docker_services_stack_deploy_type
   ansible.builtin.set_fact:
-    _stack_deploy_type: "{{ stack_deploy_type | default('swarm', true) | string | trim }}"
+    _stack_deploy_type: "{{ docker_services_stack_deploy_type | default('swarm', true) | string | trim }}"
 
 # Accept:
 #   - ports: mapping of named entries OR list of entries
@@ -88,7 +88,7 @@
 - name: Compute merged ports list
   ansible.builtin.set_fact:
     _ports_merged: >-
-      {%- set existing = ((compose_services | default({})).get(service_name, {}).get('ports', []) | default([], true) | list) -%}
+      {%- set existing = ((docker_services_compose_services | default({})).get(docker_services_service_name, {}).get('ports', []) | default([], true) | list) -%}
       {%- set existing_canon = [] -%}
       {%- for e in existing -%}
       {%- if e is mapping and e.published is defined and e.target is defined -%}
@@ -124,12 +124,12 @@
 
 - name: Attach ports to service
   ansible.builtin.set_fact:
-    compose_services: >-
+    docker_services_compose_services: >-
       {{
-        (compose_services | default({}))
+        (docker_services_compose_services | default({}))
         | combine({
-            service_name: (
-              ((compose_services | default({})).get(service_name, {}))
+            docker_services_service_name: (
+              ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
               | combine({ 'ports': _ports_merged }, recursive=true)
             )
           }, recursive=true)

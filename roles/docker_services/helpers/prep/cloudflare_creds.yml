@@ -9,7 +9,7 @@
   ansible.builtin.set_fact:
     _is_hugo: >-
       {{
-        (service_name | default('') | string | trim) == 'hugo'
+        (docker_services_service_name | default('') | string | trim) == 'hugo'
         or
         (role_prefix  | default('') | string | trim) == 'hugo'
       }}
@@ -79,14 +79,14 @@
 # CLOUDFLARE DNS
 ################################
 
-# Normal services: A record <svc.name> -> public_ip
+# Normal services: A record <docker_services_svc.name> -> public_ip
 - name: Configure Cloudflare DNS (normal)
   when:
     - inventory_hostname == "localhost"
     - not (_is_hugo | bool)
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cloudflare_dns.yml"
   vars:
-    cloudflare_record: "{{ svc.name }}"
+    cloudflare_record: "{{ docker_services_svc.name }}"
     cloudflare_record_value: "{{ public_ip }}"
     cloudflare_record_type: "A"
     cloudflare_proxy: false

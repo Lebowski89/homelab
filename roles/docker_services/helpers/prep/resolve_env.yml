@@ -2,36 +2,36 @@
 
 # helpers/prep/resolve_env.yml
 #
-# Resolve "__INFISICAL__:varname" placeholders in svc.environment
+# Resolve "__INFISICAL__:varname" placeholders in docker_services_svc.environment
 # after Infisical fetch has populated vars on localhost.
 #
-# This is needed because svc is set_fact'ed BEFORE Infisical fetch, so any
+# This is needed because docker_services_svc is set_fact'ed BEFORE Infisical fetch, so any
 # "{{ postgres_user | default('__INFISICAL__:postgres_user') }}" gets rendered
-# into the placeholder string and "sticks" in svc.environment.
+# into the placeholder string and "sticks" in docker_services_svc.environment.
 
-- name: EnvResolve | Ensure svc.environment is a mapping when present
+- name: EnvResolve | Ensure docker_services_svc.environment is a mapping when present
   ansible.builtin.assert:
     that:
-      - svc.environment is not defined or (svc.environment is mapping)
-    fail_msg: "svc.environment must be a mapping when defined."
+      - docker_services_svc.environment is not defined or (docker_services_svc.environment is mapping)
+    fail_msg: "docker_services_svc.environment must be a mapping when defined."
 
 - name: EnvResolve | Determine fail-on-empty behavior
   ansible.builtin.set_fact:
-    _env_fail_on_empty: "{{ (svc.infisical.fail_on_empty | default(true)) | bool }}"
-  when: svc.infisical is defined
+    _env_fail_on_empty: "{{ (docker_services_svc.infisical.fail_on_empty | default(true)) | bool }}"
+  when: docker_services_svc.infisical is defined
 
 - name: EnvResolve | Initialize resolved environment + placeholder key list
   when:
-    - svc.environment is defined
-    - (svc.environment | length) > 0
+    - docker_services_svc.environment is defined
+    - (docker_services_svc.environment | length) > 0
   ansible.builtin.set_fact:
     _env_resolved: {}
     _env_placeholder_keys: []
 
 - name: EnvResolve | Resolve placeholders into _env_resolved
   when:
-    - svc.environment is defined
-    - (svc.environment | length) > 0
+    - docker_services_svc.environment is defined
+    - (docker_services_svc.environment | length) > 0
   ansible.builtin.set_fact:
     _env_resolved: "{{ _env_resolved | combine({ env_kv.key: _resolved_val }) }}"
     _env_placeholder_keys: >-
@@ -56,30 +56,30 @@
           )
         )
       }}
-  loop: "{{ svc.environment | dict2items }}"
+  loop: "{{ docker_services_svc.environment | dict2items }}"
   loop_control:
     loop_var: env_kv
     label: "{{ env_kv.key }}"
 
-- name: EnvResolve | Replace svc.environment with resolved values
+- name: EnvResolve | Replace docker_services_svc.environment with resolved values
   when: _env_resolved is defined
   ansible.builtin.set_fact:
-    svc: "{{ svc | combine({'environment': _env_resolved}, recursive=true) }}"
+    docker_services_svc: "{{ docker_services_svc | combine({'environment': _env_resolved}, recursive=true) }}"
 
 - name: EnvResolve | Fail if any placeholders remain (means resolver didn't run)
   when:
     - (_env_fail_on_empty | default(true)) | bool
-    - svc.environment is defined
-    - (svc.environment | dict2items
+    - docker_services_svc.environment is defined
+    - (docker_services_svc.environment | dict2items
        | selectattr('value','string')
        | selectattr('value','match','^__INFISICAL__:.+$')
        | list
        | length) > 0
   ansible.builtin.fail:
     msg: >-
-      Unresolved Infisical placeholders in svc.environment for service '{{ service_name }}':
+      Unresolved Infisical placeholders in docker_services_svc.environment for service '{{ docker_services_service_name }}':
       {{
-        svc.environment
+        docker_services_svc.environment
         | dict2items
         | selectattr('value','string')
         | selectattr('value','match','^__INFISICAL__:.+$')
@@ -93,8 +93,8 @@
     - (_env_placeholder_keys | default([]) | length) > 0
   ansible.builtin.assert:
     that:
-      - (svc.environment[env_key] | default('') | string | trim | length) > 0
-    fail_msg: "Empty environment values after Infisical resolution for service '{{ service_name }}': {{ env_key }}"
+      - (docker_services_svc.environment[env_key] | default('') | string | trim | length) > 0
+    fail_msg: "Empty environment values after Infisical resolution for service '{{ docker_services_service_name }}': {{ env_key }}"
   loop: "{{ _env_placeholder_keys }}"
   loop_control:
     loop_var: env_key
