@@ -1,6 +1,8 @@
 ---
 
 - name: Preferences | Conduct preferences.xml tasks
+  delegate_to: "{{ docker_services_plex_host | default('plex') }}"
+  run_once: true
   block:
     - name: Preferences | Default derived facts (safe defaults)
       ansible.builtin.set_fact:
@@ -57,6 +59,3 @@
         attribute: TranscoderTempDirectory
         value: "/transcode"
         state: present
-
-  delegate_to: "{{ docker_services_plex_host | default('plex') }}"
-  run_once: true
