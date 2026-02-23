@@ -42,9 +42,12 @@ jobs:
           fi
           yamllint $files
 
+      - name: Prepare ansible log dir
+        run: mkdir -p .ansible
+
       - name: ansible-lint
         env:
           ANSIBLE_LIBRARY: ${{ github.workspace }}/roles/docker_services/library
           ANSIBLE_CONFIG: ansible.cfg
         run: |
-          ansible-lint -p
+          ansible-lint --format=pep8

@@ -41,33 +41,33 @@ stash:
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
     - path: /mnt/user/appdata/stash/metadata
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
     - path: /mnt/user/appdata/stash/cache
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
     - path: /mnt/user/appdata/stash/blobs
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
     - path: /mnt/user/appdata/stash/generated
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
   templates:
-    - src: configs/media/stash.yml.j2
+    - src: configs/stash.yml.j2
       dest: /mnt/user/appdata/stash/config.yml
       owner: 99
       group: 100
-      mode: 0664
+      mode: "0664"
       force: false
   volumes:
     config:

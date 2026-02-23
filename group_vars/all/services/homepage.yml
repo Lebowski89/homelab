@@ -19,7 +19,8 @@ homepage:
     PUID: "1000"
     PGID: "1000"
     UMASK: "022"
-    HOMEPAGE_ALLOWED_HOSTS: "homepage.home.nosugarmaxtaste.com,homepage.nosugarmaxtaste.com"
+  env_file:
+    - /opt/homepage/.env
   infisical:
     fail_on_empty: true
     secrets_map:
@@ -91,31 +92,37 @@ homepage:
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
   templates:
-    - src: configs/core/homepage/docker.yaml.j2
+    - src: configs/homepage/docker.yaml.j2
       dest: /opt/homepage/docker.yaml
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
-    - src: configs/core/homepage/services.yaml.j2
+    - src: configs/homepage/services.yaml.j2
       dest: /opt/homepage/services.yaml
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
-    - src: configs/core/homepage/settings.yaml.j2
+    - src: configs/homepage/settings.yaml.j2
       dest: /opt/homepage/settings.yaml
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
-    - src: configs/core/homepage/bookmarks.yaml.j2
+    - src: configs/homepage/bookmarks.yaml.j2
       dest: /opt/homepage/bookmarks.yaml
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
+      force: true
+    - src: configs/homepage/homepage.env.j2
+      dest: /opt/homepage/.env
+      owner: 1000
+      group: 1000
+      mode: "0664"
       force: true
   volumes:
     config:

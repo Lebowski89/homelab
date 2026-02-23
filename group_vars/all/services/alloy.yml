@@ -29,18 +29,18 @@ alloy:
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
     - path: /opt/alloy/data
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
   templates:
-    - src: configs/monitoring/alloy_config.alloy.j2
+    - src: configs/alloy_config.alloy.j2
       dest: /opt/alloy/config.alloy
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
   volumes:
     config:

@@ -34,18 +34,18 @@ ombi:
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
     - path: /opt/ombi/config
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
   templates:
-    - src: configs/media/ombi.json.j2
+    - src: configs/ombi.json.j2
       dest: /opt/ombi/config/database.json
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
   volumes:
     config:

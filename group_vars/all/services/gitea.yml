@@ -35,13 +35,13 @@ gitea:
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
   templates:
-    - src: configs/core/gitea.env.j2
+    - src: configs/gitea.env.j2
       dest: /opt/gitea/.env
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
   volumes:
     config:

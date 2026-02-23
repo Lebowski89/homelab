@@ -23,13 +23,13 @@ imagemaid:
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
   templates:
-    - src: configs/plex/imagemaid.j2
+    - src: configs/imagemaid.j2
       dest: /opt/imagemaid/.env
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: false
   volumes:
     config:

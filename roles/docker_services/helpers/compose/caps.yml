@@ -57,9 +57,13 @@
                     else
                     (
                       (
-                        ((docker_services_compose_services | default({})).get(docker_services_service_name, {}).get((caps_target | string | trim), []))
-                        | default([], true)
-                        | list
+                        (
+                          (docker_services_compose_services | default({}))
+                          .get(docker_services_service_name, {})
+                          .get((caps_target | string | trim), [])
+                          | default([], true)
+                          | list
+                        )
                       )
                       +
                       (
@@ -68,7 +72,16 @@
                         else
                         (
                           _caps_new
-                          | reject('in', ((docker_services_compose_services | default({})).get(docker_services_service_name, {}).get((caps_target | string | trim), []) | default([], true) | list))
+                          | reject(
+                              'in',
+                              (
+                                (docker_services_compose_services | default({}))
+                                .get(docker_services_service_name, {})
+                                .get((caps_target | string | trim), [])
+                                | default([], true)
+                                | list
+                              )
+                            )
                           | list
                         )
                       )
