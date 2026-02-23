@@ -34,7 +34,7 @@
         docker_services__matches: >-
           {%- set out = [] -%}
           {%- for b in (ci_service_blocks | default([])) -%}
-            {%- set blk = hostvars[inventory_hostname].get(b, {}) -%}
+            {%- set blk = lookup('ansible.builtin.vars', b, default={}) -%}
             {%- if (blk | type_debug) == 'dict' and (blk.get(item.name) is not none) -%}
               {%- set _ = out.append(blk.get(item.name)) -%}
             {%- endif -%}
@@ -46,8 +46,8 @@
         docker_services_role_prefix: "{{ item.name }}"
         docker_services_service_target: "{{ item.target | default('swarm') }}"
       when:
-        - docker_services_service_cfg_found | bool
-        - (ansible_run_tags | length == 0)
+        - ('all' in ansible_run_tags)
+          or (ansible_run_tags | length == 0)
           or (item.name in ansible_run_tags)
           or ((item.tags | default([])) | intersect(ansible_run_tags) | length > 0)
       loop: "{{ docker_services }}"
@@ -60,4 +60,16 @@
         that:
           - docker_services_compose_stacks is defined
           - docker_services_compose_stacks is mapping
+          - docker_services_compose_stacks.ci is defined
+          - docker_services_compose_stacks.ci.type == 'swarm'
+          - docker_services_compose_stacks.ci.services.demo_targets is defined
+          - docker_services_compose_stacks.ci.services.demo_compose is defined
+          - docker_services_compose_stacks.ci.services.demo_traefik is defined
+          - docker_services_compose_stacks.ci.services.demo_targets.environment.FOO == 'from-swarm-target'
+          - docker_services_compose_stacks.ci.services.demo_compose.ports is defined
+          - docker_services_compose_stacks.ci.services.demo_compose.ports | length > 0
+          - docker_services_compose_stacks.ci.services.demo_compose.volumes is defined
+          - docker_services_compose_stacks.ci.services.demo_compose.volumes | length > 0
+          - docker_services_compose_stacks.ci.services.demo_traefik.labels is defined
+          - docker_services_compose_stacks.ci.services.demo_traefik.labels['traefik.enable'] == 'true'
       tags: always

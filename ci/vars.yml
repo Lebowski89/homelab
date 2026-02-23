@@ -95,13 +95,7 @@ services_00_ci:
     ports:
       web:
         target: 80
-    traefik:
-      enable: true
-      subdomain: demo
-      zone: example.com
-      port: 80
-      sso: ""   # keep off in CI
-      internal_api: true
-      internal_api_rules:
-        - "PathPrefix(`/api`)"
-        - "PathRegexp(`/[0-9]+/api`)"
+        published: 8089
+    labels:
+      traefik.enable: "true"
+      traefik.http.routers.demo.rule: "Host(`demo.example.com`)"
