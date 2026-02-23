@@ -14,7 +14,7 @@
         apply:
           tags: "{{ [item.name] + (item.tags | default([])) }}"
       vars:
-        docker_services__matches: >-
+        docker_services_matches: >-
           {{
             (
               ci_service_blocks | default([])
@@ -26,12 +26,11 @@
               | list
             )
           }}
-        docker_services_service_cfg_found: "{{ (docker_services__matches | length) > 0 }}"
-        docker_services_service_cfg: "{{ docker_services__matches | last }}"
+        docker_services_service_cfg: "{{ docker_services_matches | last | default({}, true) }}"
         docker_services_role_prefix: "{{ item.name }}"
         docker_services_service_target: "{{ item.target | default('swarm') }}"
       when:
-        - docker_services_service_cfg_found | bool
+        - docker_services_matches | length > 0
         - (ansible_run_tags | length == 0)
           or (item.name in ansible_run_tags)
           or ((item.tags | default([])) | intersect(ansible_run_tags) | length > 0)
@@ -40,10 +39,10 @@
         label: "{{ item.name }}"
       tags: always
 
-    - name: CI | Assert compose_stacks is present
+    - name: CI | Assert docker_services_compose_stacks is present
       when: inventory_hostname == "localhost"
       ansible.builtin.assert:
         that:
-          - compose_stacks is defined
-          - compose_stacks is mapping
+          - docker_services_compose_stacks is defined
+          - docker_services_compose_stacks is mapping
       tags: always
