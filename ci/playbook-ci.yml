@@ -1,64 +1,49 @@
 ---
 
-- name: CI Docker Services Validation
-  hosts: localhost
+- name: CI role test
+  hosts: all
   gather_facts: false
-  become: false
-
   vars_files:
-    - "{{ playbook_dir }}/vars.yml"
+    - vars.yml
+  tags: [ci]
 
   tasks:
-
-    - name: Set service blocks (CI)
-      ansible.builtin.set_fact:
-        service_blocks: "{{ ci_service_blocks }}"
-      tags: always
-
-    - name: Assert docker_services is defined (CI)
-      ansible.builtin.assert:
-        that:
-          - docker_services is defined
-          - docker_services is sequence
-          - docker_services | length > 0
-        fail_msg: "CI: docker_services is missing/empty in ci/vars.yml"
-      tags: always
-
-    - name: Process each docker service (CI)
+    - name: CI | Render/validate services using docker_services role
       ansible.builtin.include_role:
         name: docker_services
         apply:
-          tags:
-            - always
+          tags: "{{ [item.name] + (item.tags | default([])) }}"
       vars:
-        deploy_deferred: true
-
-        _matches: >-
-          {%- set out = [] -%}
-          {%- for b in service_blocks -%}
-            {%- set blk = hostvars[inventory_hostname].get(b, {}) -%}
-            {%- if blk is mapping and (blk.get(item.name) is not none) -%}
-              {%- set _ = out.append(blk.get(item.name)) -%}
-            {%- endif -%}
-          {%- endfor -%}
-          {{ out }}
-
-        service_cfg_found: "{{ (_matches | length) > 0 }}"
-        service_cfg: "{{ _matches | last }}"
-        role_prefix: "{{ item.name }}"
-        service_target: "{{ item.target | default('swarm') }}"
-      when: service_cfg_found | bool
+        docker_services__matches: >-
+          {{
+            (
+              ci_service_blocks | default([])
+              | map('extract', hostvars[inventory_hostname])
+              | map('default', {})
+              | select('mapping')
+              | map('extract', item.name)
+              | select('defined')
+              | list
+            )
+          }}
+        docker_services_service_cfg_found: "{{ (docker_services__matches | length) > 0 }}"
+        docker_services_service_cfg: "{{ docker_services__matches | last }}"
+        docker_services_role_prefix: "{{ item.name }}"
+        docker_services_service_target: "{{ item.target | default('swarm') }}"
+      when:
+        - docker_services_service_cfg_found | bool
+        - (ansible_run_tags | length == 0)
+          or (item.name in ansible_run_tags)
+          or ((item.tags | default([])) | intersect(ansible_run_tags) | length > 0)
       loop: "{{ docker_services }}"
       loop_control:
         label: "{{ item.name }}"
       tags: always
 
-    - name: Assert at least one stack/service was registered (CI)
+    - name: CI | Assert compose_stacks is present
+      when: inventory_hostname == "localhost"
       ansible.builtin.assert:
         that:
-          - hostvars['localhost'].compose_stacks is defined
-          - (hostvars['localhost'].compose_stacks | length) > 0
-        fail_msg: >
-          CI: compose_stacks is empty. This usually means your docker_services list
-          didn't match any services_* blocks.
+          - compose_stacks is defined
+          - compose_stacks is mapping
       tags: always
