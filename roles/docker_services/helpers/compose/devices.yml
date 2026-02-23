@@ -60,7 +60,16 @@
                         else
                         (
                           _devices_new
-                          | reject('in', ((docker_services_compose_services | default({})).get(docker_services_service_name, {}).get('devices', []) | default([], true) | list))
+                          | reject(
+                              'in',
+                              (
+                                (docker_services_compose_services | default({}))
+                                .get(docker_services_service_name, {})
+                                .get('devices', [])
+                                | default([], true)
+                                | list
+                              )
+                            )
                           | list
                         )
                       )

@@ -17,7 +17,13 @@
   ansible.builtin.set_fact:
     _env_action: "{{ environment_action | default('append', true) | string | trim }}"
     _env_new: "{{ environment_vars | default({}, true) }}"
-    _env_existing: "{{ (docker_services_compose_services | default({})).get(docker_services_service_name, {}).get('environment', {}) | default({}, true) }}"
+    _env_existing: >-
+      {{
+        (docker_services_compose_services | default({}))
+        .get(docker_services_service_name, {})
+        .get('environment', {})
+        | default({}, true)
+      }}
 
 - name: Build final environment dict
   ansible.builtin.set_fact:
