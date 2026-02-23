@@ -2,6 +2,9 @@ name: CI
 
 on:
   pull_request:
+  push:
+    branches:
+      - main
   workflow_dispatch:
 
 jobs:
@@ -15,27 +18,36 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.14.3"
+          python-version: '3.12'
 
-      - name: Install Ansible
+      - name: Install Ansible and Python dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ansible-core
+          pip install ansible-core ansible docker
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          fi
 
-      - name: Install Ansible
-        run: |
-          python -m pip install --upgrade pip
-          pip install ansible docker
-
-      - name: Install collections (if any)
+      - name: Install Galaxy requirements
         run: |
           if [ -f requirements.yml ]; then
             ansible-galaxy collection install -r requirements.yml -p collections
+            ansible-galaxy role install -r requirements.yml -p roles || true
           fi
 
-      - name: Run ansible-playbook (check mode)
+      - name: Validate CI inventory and playbook syntax
         env:
           ANSIBLE_CONFIG: ci/ansible.cfg
           ANSIBLE_LOG_PATH: /dev/null
+          ANSIBLE_LIBRARY: ${{ github.workspace }}/roles/docker_services/library
         run: |
-          ansible-playbook -i ci/inventory.ini ci/playbook-ci.yml --check
+          ansible-inventory -i ci/inventory.ini --list > /dev/null
+          ansible-playbook -i ci/inventory.ini ci/playbook-ci.yml --syntax-check
+
+      - name: Run docker_services role CI scenario (check mode)
+        env:
+          ANSIBLE_CONFIG: ci/ansible.cfg
+          ANSIBLE_LOG_PATH: /dev/null
+          ANSIBLE_LIBRARY: ${{ github.workspace }}/roles/docker_services/library
+        run: |
+          ansible-playbook -i ci/inventory.ini ci/playbook-ci.yml --check --diff
