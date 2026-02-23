@@ -105,10 +105,10 @@ plex:
   named_volumes:
     media_nfs:
       external: true
-    # optional extras later:
-    # name: "media_nfs"
-    # driver: "local"
-    # driver_opts: { ... }
+      # optional extras later:
+      # name: "media_nfs"
+      # driver: "local"
+      # driver_opts: { ... }
   volumes:
     config:
       type: bind
