@@ -63,6 +63,7 @@
   delegate_to: "{{ docker_services_hugo_host }}"
   run_once: true
   changed_when: true
+  # noqa: command-instead-of-module
 
 # Repo-local identity (avoid --global)
 - name: Hugo prep | Set repo git user.name
