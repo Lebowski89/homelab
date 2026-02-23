@@ -56,7 +56,13 @@
 # Read existing command (may be string/list/undefined) — do NOT use omit here
 - name: Read existing command
   ansible.builtin.set_fact:
-    _cmd_existing: "{{ (docker_services_compose_services | default({})).get(docker_services_service_name, {}).get('command') | default(none, true) }}"
+    _cmd_existing: >-
+      {{
+        (docker_services_compose_services | default({}))
+        .get(docker_services_service_name, {})
+        .get('command')
+        | default(none, true)
+      }}
 
 # Merge rules:
 # - replace: always _cmd_new

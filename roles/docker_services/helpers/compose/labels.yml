@@ -26,7 +26,13 @@
   ansible.builtin.set_fact:
     _labels_h_action: "{{ labels_action | default('append', true) | string | trim }}"
     _labels_h_precedence: "{{ labels_precedence | default('new_wins', true) | string | trim }}"
-    _labels_h_existing: "{{ (docker_services_compose_services | default({})).get(docker_services_service_name, {}).get('labels', {}) | default({}, true) }}"
+    _labels_h_existing: >-
+      {{
+        (docker_services_compose_services | default({}))
+        .get(docker_services_service_name, {})
+        .get('labels', {})
+        | default({}, true)
+      }}
     _labels_h_new: >-
       {%- set out = {} -%}
       {%- if (labels_dict is mapping) -%}
