@@ -27,7 +27,7 @@ qui:
       state: directory
       owner: 100
       group: 99
-      mode: 0755
+      mode: "0755"
   volumes:
     config:
       type: bind

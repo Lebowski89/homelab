@@ -44,13 +44,13 @@ kometa:
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
   templates:
-    - src: configs/plex/kometa.yml.j2
+    - src: configs/kometa.yml.j2
       dest: /opt/kometa/config.yml
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: false
   volumes:
     config:

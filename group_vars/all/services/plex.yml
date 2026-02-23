@@ -71,37 +71,37 @@ plex:
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
     - path: /opt/plex/Library
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
     - path: "/opt/plex/Library/Application Support"
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
     - path: "/opt/plex/Library/Application Support/Plex Media Server"
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
     - path: "/opt/plex/Library/Application Support/Plex Media Server/Plug-ins"
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
     - path: /opt/plex/Library/Logs
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
     - path: "/opt/plex/Library/Logs/Plex Media Server"
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
   named_volumes:
     media_nfs:
       external: true

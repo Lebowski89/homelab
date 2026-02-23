@@ -20,7 +20,7 @@ lidarr:
     LIDARR__SERVER__PORT: "8686"
     LIDARR__AUTH__METHOD: "External"
     FILE__LIDARR__AUTH__APIKEY: /run/secrets/lidarr_api_secret
-    LIDARR__POSTGRES__HOST: "pg-ha"
+    LIDARR__POSTGRES__HOST: "spilo"
     LIDARR__POSTGRES__PORT: "5433"
     FILE__LIDARR__POSTGRES__USER: /run/secrets/postgres_user_secret
     FILE__LIDARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
@@ -54,13 +54,13 @@ lidarr:
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
   copies:
     - src: files/themepark/98-themepark-lidarr
       dest: /mnt/user/appdata/lidarr/98-themepark-lidarr
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
       force: false
       wait: true
       wait_timeout: 30

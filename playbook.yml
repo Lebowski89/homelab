@@ -6,6 +6,7 @@
 
   vars:
     docker_services:
+      ## services (core)
       - name: gitea
         tags: [apps, gitea]
       - name: homepage
@@ -19,15 +20,15 @@
       - name: vaultwarden
         tags: [apps, vaultwarden]
 
-      ## services_10_proxy
+      ## services (proxy)
       - name: authelia
         tags: [proxy, authelia]
       - name: authelia_redis
-        tags: [authelia-redis, authelia]
+        tags: [proxy, authelia-redis]
       - name: traefik
         tags: [proxy, traefik]
 
-      ## services_20_arrs
+      ## services (arrs)
       - name: bazarr
         tags: [arrs, bazarr]
       - name: lidarr
@@ -35,21 +36,25 @@
       - name: prowlarr
         tags: [arrs, prowlarr]
       - name: radarr
+        target: radarr
         tags: [arrs, radarr]
-      - name: radarr_4k
-        tags: [arrs, radarr4k]
+      - name: radarr
+        target: radarr_4k
+        tags: [arrs, radarr]
       - name: recyclarr
         tags: [arrs, recyclarr]
       - name: sonarr
+        target: sonarr
         tags: [arrs, sonarr]
-      - name: sonarr_4k
-        tags: [arrs, sonarr4k]
+      - name: sonarr
+        target: sonarr_4k
+        tags: [arrs, sonarr]
       - name: sportarr
         tags: [sportarr]
       - name: whisparr
         tags: [arrs, whisparr]
 
-      ## services_30_media
+      ## services (media)
       - name: autobrr
         tags: [media, autobrr]
       - name: jellyseerr
@@ -63,7 +68,7 @@
       - name: znc
         tags: [media, znc]
 
-      ## services_40_plex
+      ## services (plex)
       - name: imagemaid
         tags: [plex, imagemaid]
       - name: kometa
@@ -73,7 +78,7 @@
       - name: tautulli
         tags: [plex, tautulli]
 
-      ## services_50_torrents
+      ## services (torrents)
       - name: qbittorrent
         target: unraid
         tags: [torrents, qbittorrent]
@@ -91,13 +96,13 @@
       - name: unpackerr
         tags: [torrents, unpackerr]
 
-      ## services_60_usenet
+      ## services (usenet)
       - name: nzbhydra2
         tags: [usenet, nzbhydra2]
       - name: sabnzbd
         tags: [usenet, sabnzbd]
 
-      ## services_70_monitoring
+      ## services (monitoring)
       - name: alloy
         tags: [monitoring, alloy]
       - name: grafana
@@ -105,13 +110,13 @@
       - name: prometheus
         tags: [monitoring, prometheus]
 
-      ## services_80_blog
+      ## services (blog)
       - name: hugo
         tags: [blog, hugo]
       - name: obsidian
         tags: [blog, obsidian]
 
-      ## services_90_gluetun
+      ## services (gluetun)
       - name: gluetun
         tags: [gluetun]
       - name: jdownloader2
@@ -119,7 +124,7 @@
       - name: librewolf
         tags: [gluetun, librewolf]
 
-      ## services_100_utilities
+      ## services (utilities)
       - name: adminer
         tags: [utilities, adminer]
       - name: czkawka
@@ -129,7 +134,7 @@
       - name: themepark
         tags: [utilities, themepark]
 
-      ## services_110_pgha
+      ## services (postgres cluster)
       - name: etcd
         target: pg01
         tags: [pgha, etcd]

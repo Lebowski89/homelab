@@ -62,12 +62,12 @@ gluetun:
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
     - path: /mnt/user/data/media/gluetun
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
   volumes:
     config:
       type: bind

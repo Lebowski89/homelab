@@ -30,47 +30,35 @@ recyclarr:
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
     - path: /mnt/user/appdata/recyclarr/configs
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
     - path: /mnt/user/appdata/recyclarr/includes
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
   templates:
-    - src: configs/arrs/recyclarr/secrets.yml.j2
+    - src: configs/recyclarr/secrets.yml.j2
       dest: /mnt/user/appdata/recyclarr/secrets.yml
       owner: 99
       group: 100
-      mode: 0664
+      mode: "0664"
       force: true
-    - src: configs/arrs/recyclarr/config_radarr.yml.j2
+    - src: configs/recyclarr/config_radarr.yml.j2
       dest: /mnt/user/appdata/recyclarr/configs/radarr.yml
       owner: 99
       group: 100
-      mode: 0664
+      mode: "0664"
       force: true
-    - src: configs/arrs/recyclarr/config_radarr-4k.yml.j2
-      dest: /mnt/user/appdata/recyclarr/configs/radarr-4k.yml
-      owner: 99
-      group: 100
-      mode: 0664
-      force: true
-    - src: configs/arrs/recyclarr/config_sonarr.yml.j2
+    - src: configs/recyclarr/config_sonarr.yml.j2
       dest: /mnt/user/appdata/recyclarr/configs/sonarr.yml
       owner: 99
       group: 100
-      mode: 0664
-      force: true
-    - src: configs/arrs/recyclarr/config_sonarr-4k.yml.j2
-      dest: /mnt/user/appdata/recyclarr/configs/sonarr-4k.yml
-      owner: 99
-      group: 100
-      mode: 0664
+      mode: "0664"
       force: true
   volumes:
     config:

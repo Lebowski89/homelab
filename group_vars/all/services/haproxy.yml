@@ -14,7 +14,7 @@ haproxy:
   configs:
     - source: haproxy_cfg
       target: /usr/local/etc/haproxy/haproxy.cfg
-      mode: 0444
+      mode: "0444"
   ports:
     postgres:
       published: 5433

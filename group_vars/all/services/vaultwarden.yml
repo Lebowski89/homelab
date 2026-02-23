@@ -47,13 +47,13 @@ vaultwarden:
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
   templates:
-    - src: configs/core/vaultwarden.env.j2
+    - src: configs/vaultwarden.env.j2
       dest: /opt/vaultwarden/.env
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
   volumes:
     config:

@@ -21,7 +21,7 @@ jellyseerr:
     UMASK: "022"
     PORT: "5055"
     DB_TYPE: "postgres"
-    DB_HOST: "pg-ha"
+    DB_HOST: "spilo"
     DB_PORT: "5433"
     DB_USER: "{{ postgres_user | default('__INFISICAL__:postgres_user', true) }}"
     DB_PASS: "{{ postgres_pass | default('__INFISICAL__:postgres_pass', true) }}"
@@ -83,13 +83,13 @@ jellyseerr:
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
   templates:
-    - src: configs/media/jellyseerr.json.j2
+    - src: configs/jellyseerr.json.j2
       dest: /opt/jellyseerr/settings.json
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
   volumes:
     config:

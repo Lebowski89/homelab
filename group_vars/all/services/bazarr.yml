@@ -52,18 +52,18 @@ bazarr:
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
     - path: /mnt/user/appdata/bazarr/config
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
   copies:
     - src: files/themepark/98-themepark-bazarr
       dest: /mnt/user/appdata/bazarr/98-themepark-bazarr
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
       force: false
       wait: true
       wait_timeout: 30
