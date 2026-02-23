@@ -1,36 +1,52 @@
 ---
 
 - name: CI role test
-  hosts: all
+  hosts: ci
   gather_facts: false
+  become: false
   vars_files:
     - vars.yml
   tags: [ci]
 
   tasks:
+    - name: CI | Ensure ci_service_blocks is defined
+      ansible.builtin.assert:
+        that:
+          - ci_service_blocks is defined
+          - ci_service_blocks is sequence
+          - ci_service_blocks | length > 0
+      tags: always
+
+    - name: CI | Ensure docker_services is defined
+      ansible.builtin.assert:
+        that:
+          - docker_services is defined
+          - docker_services is sequence
+          - docker_services | length > 0
+      tags: always
+
     - name: CI | Render/validate services using docker_services role
       ansible.builtin.include_role:
         name: docker_services
         apply:
           tags: "{{ [item.name] + (item.tags | default([])) }}"
       vars:
-        docker_services_matches: >-
-          {{
-            (
-              ci_service_blocks | default([])
-              | map('extract', hostvars[inventory_hostname])
-              | map('default', {})
-              | select('mapping')
-              | map('extract', item.name)
-              | select('defined')
-              | list
-            )
-          }}
-        docker_services_service_cfg: "{{ docker_services_matches | last | default({}, true) }}"
+        docker_services__matches: >-
+          {%- set out = [] -%}
+          {%- for b in (ci_service_blocks | default([])) -%}
+            {%- set blk = hostvars[inventory_hostname].get(b, {}) -%}
+            {%- if (blk | type_debug) == 'dict' and (blk.get(item.name) is not none) -%}
+              {%- set _ = out.append(blk.get(item.name)) -%}
+            {%- endif -%}
+          {%- endfor -%}
+          {{ out }}
+
+        docker_services_service_cfg_found: "{{ (docker_services__matches | length) > 0 }}"
+        docker_services_service_cfg: "{{ docker_services__matches | last }}"
         docker_services_role_prefix: "{{ item.name }}"
         docker_services_service_target: "{{ item.target | default('swarm') }}"
       when:
-        - docker_services_matches | length > 0
+        - docker_services_service_cfg_found | bool
         - (ansible_run_tags | length == 0)
           or (item.name in ansible_run_tags)
           or ((item.tags | default([])) | intersect(ansible_run_tags) | length > 0)
@@ -40,7 +56,6 @@
       tags: always
 
     - name: CI | Assert docker_services_compose_stacks is present
-      when: inventory_hostname == "localhost"
       ansible.builtin.assert:
         that:
           - docker_services_compose_stacks is defined
