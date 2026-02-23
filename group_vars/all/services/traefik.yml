@@ -45,50 +45,51 @@ traefik:
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
     - path: /opt/traefik/dynamic
       state: directory
       owner: 1000
       group: 1000
+      mode: "0755"
     - path: /opt/traefik/dynamic/services
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
     - path: /opt/traefik/acme.json
       state: touch
       owner: 1000
       group: 1000
-      mode: 0600
+      mode: "0600"
   templates:
     - src: configs/proxy/traefik/config.yml.j2
       dest: /opt/traefik/traefik.yml
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
     - src: configs/proxy/traefik/middlewares.yml.j2
       dest: /opt/traefik/dynamic/middlewares.yml
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
     - src: configs/proxy/authelia/middleware.yml.j2
       dest: /opt/traefik/dynamic/authelia.yml
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
     - src: configs/proxy/authelia/router.yml.j2
       dest: /opt/traefik/dynamic/services/authelia.yml
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
     - src: configs/proxy/traefik/dashboard.yml.j2
       dest: /opt/traefik/dynamic/services/traefik-dashboard.yml
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
   volumes:
     config:

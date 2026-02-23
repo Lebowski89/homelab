@@ -75,25 +75,25 @@ authelia:
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
   templates:
     - src: configs/proxy/authelia/config.yml.j2
       dest: /opt/authelia/configuration.yml
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
     - src: configs/proxy/authelia/users_database.yml.j2
       dest: /opt/authelia/users_database.yml
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
     - src: configs/proxy/authelia/authelia.env.j2
       dest: /opt/authelia/.env
       owner: 1000
       group: 1000
-      mode: 0664
+      mode: "0664"
       force: true
   volumes:
     config:

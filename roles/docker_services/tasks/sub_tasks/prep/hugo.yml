@@ -56,22 +56,35 @@
   when:
     - inventory_hostname == "localhost"
     - not docker_services_hugo_git_stat.stat.exists
-  run_once: true
+  ansible.builtin.command:
+    cmd: "git init"
+    chdir: "{{ docker_services_hugo_site_path }}"
+    creates: "{{ docker_services_hugo_site_path }}/.git/config"
   delegate_to: "{{ docker_services_hugo_host }}"
-  block:
-    - name: Hugo prep | git init
-      ansible.builtin.command:
-        cmd: "git init"
-        chdir: "{{ docker_services_hugo_site_path }}"
+  run_once: true
+  changed_when: true
+  # noqa: command-instead-of-module
 
-    # Repo-local identity (avoid --global)
-    - name: Hugo prep | set repo git identity
-      ansible.builtin.command:
-        cmd: "{{ item }}"
-        chdir: "{{ docker_services_hugo_site_path }}"
-      loop:
-        - "git config user.name \"{{ github_username }}\""
-        - "git config user.email \"{{ github_email }}\""
+# Repo-local identity (avoid --global)
+- name: Hugo prep | Set repo git user.name
+  when: inventory_hostname == "localhost"
+  community.general.git_config:
+    scope: local
+    repo: "{{ docker_services_hugo_site_path }}"
+    name: user.name
+    value: "{{ github_username }}"
+  delegate_to: "{{ docker_services_hugo_host }}"
+  run_once: true
+
+- name: Hugo prep | Set repo git user.email
+  when: inventory_hostname == "localhost"
+  community.general.git_config:
+    scope: local
+    repo: "{{ docker_services_hugo_site_path }}"
+    name: user.email
+    value: "{{ github_email }}"
+  delegate_to: "{{ docker_services_hugo_host }}"
+  run_once: true
 
 - name: Hugo prep | Check if theme submodule exists
   ansible.builtin.stat:
@@ -85,69 +98,71 @@
   when:
     - inventory_hostname == "localhost"
     - not docker_services_hugo_theme_stat.stat.exists
-  run_once: true
-  delegate_to: "{{ docker_services_hugo_host }}"
   ansible.builtin.command:
     cmd: "git submodule add -f https://github.com/panr/hugo-theme-terminal.git themes/terminal"
     chdir: "{{ docker_services_hugo_site_path }}"
+    creates: "{{ docker_services_hugo_site_path }}/.gitmodules"
+  delegate_to: "{{ docker_services_hugo_host }}"
+  run_once: true
+  changed_when: true
+  # This is legitimately a CLI action; there isn't a submodule-add module.
+  # noqa: command-instead-of-module
 
-- name: Hugo prep | Check if origin remote exists
+# Set origin remote idempotently (no need to 'git remote get-url')
+- name: Hugo prep | Ensure origin remote is set
   when: inventory_hostname == "localhost"
-  run_once: true
+  community.general.git_config:
+    scope: local
+    repo: "{{ docker_services_hugo_site_path }}"
+    name: remote.origin.url
+    value: "git@github.com:{{ github_username }}/blog.git"
   delegate_to: "{{ docker_services_hugo_host }}"
-  ansible.builtin.command:
-    cmd: "git remote get-url origin"
-    chdir: "{{ docker_services_hugo_site_path }}"
-  register: docker_services_hugo_origin
-  changed_when: false
-  failed_when: false
-
-- name: Hugo prep | Add origin remote (if missing)
-  when:
-    - inventory_hostname == "localhost"
-    - docker_services_hugo_origin.rc != 0
   run_once: true
-  delegate_to: "{{ docker_services_hugo_host }}"
-  ansible.builtin.command:
-    cmd: "git remote add origin git@github.com:{{ github_username }}/blog.git"
-    chdir: "{{ docker_services_hugo_site_path }}"
 
 - name: Hugo prep | Check if repo has any commits
   when: inventory_hostname == "localhost"
-  run_once: true
-  delegate_to: "{{ docker_services_hugo_host }}"
   ansible.builtin.command:
     cmd: "git rev-parse --verify HEAD"
     chdir: "{{ docker_services_hugo_site_path }}"
   register: docker_services_hugo_has_commit
+  delegate_to: "{{ docker_services_hugo_host }}"
+  run_once: true
   changed_when: false
   failed_when: false
+  # noqa: command-instead-of-module
 
 - name: Hugo prep | Initial commit + push (only if no commits yet)
   when:
     - inventory_hostname == "localhost"
     - docker_services_hugo_has_commit.rc != 0
-  run_once: true
   delegate_to: "{{ docker_services_hugo_host }}"
+  run_once: true
   block:
     - name: Hugo prep | git add
       ansible.builtin.command:
         cmd: "git add ."
         chdir: "{{ docker_services_hugo_site_path }}"
+      changed_when: true
+      # noqa: command-instead-of-module
 
     - name: Hugo prep | git commit
       ansible.builtin.command:
         cmd: "git commit -m 'Initial commit'"
         chdir: "{{ docker_services_hugo_site_path }}"
+      changed_when: true
+      # noqa: command-instead-of-module
 
     - name: Hugo prep | ensure main branch
       ansible.builtin.command:
         cmd: "git branch -M main"
         chdir: "{{ docker_services_hugo_site_path }}"
+      changed_when: true
+      # noqa: command-instead-of-module
 
-    # Optional: set hugo_push=true if you want this automated
     - name: Hugo prep | git push
       when: (hugo_push | default(false)) | bool
       ansible.builtin.command:
         cmd: "git push -u origin main"
         chdir: "{{ docker_services_hugo_site_path }}"
+      changed_when: true
+      # noqa: command-instead-of-module

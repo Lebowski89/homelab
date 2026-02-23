@@ -4,7 +4,7 @@ jdownloader2:
   name: jdownloader-2
   stack: gluetun
   container_name: jdownloader-2
-  image: jlesage/jdownloader-2:v26.02.2
+  image: jlesage/jdownloader-2:v26.02.3
   depends_on:
     - gluetun
   network_mode: "service:gluetun"
@@ -16,7 +16,7 @@ jdownloader2:
       state: directory
       owner: 99
       group: 100
-      mode: 0755
+      mode: "0755"
   volumes:
     config:
       type: bind

@@ -17,7 +17,7 @@ thelounge:
       state: directory
       owner: 1000
       group: 1000
-      mode: 0755
+      mode: "0755"
   volumes:
     config:
       type: bind

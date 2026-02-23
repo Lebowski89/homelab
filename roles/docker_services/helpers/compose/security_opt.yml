@@ -54,9 +54,13 @@
                           _security_opt_new
                           | reject(
                               'in',
-                              ((docker_services_compose_services | default({})).get(docker_services_service_name, {}).get('security_opt', [])
-                               | default([], true)
-                               | list)
+                              (
+                                (docker_services_compose_services | default({}))
+                                .get(docker_services_service_name, {})
+                                .get('security_opt', [])
+                                | default([], true)
+                                | list
+                              )
                             )
                           | list
                         )
