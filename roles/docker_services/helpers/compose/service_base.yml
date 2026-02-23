@@ -1,24 +1,24 @@
 ---
 
-- name: Ensure service_name is set
+- name: Ensure docker_services_service_name is set
   ansible.builtin.assert:
     that:
-      - service_name is defined
-      - service_name | string | trim | length > 0
-    fail_msg: "service_name must be set before calling this helper"
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
+    fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Normalize stack_deploy_type
+- name: Normalize docker_services_stack_deploy_type
   ansible.builtin.set_fact:
-    _stack_deploy_type: "{{ stack_deploy_type | default('swarm', true) | string | trim }}"
+    _stack_deploy_type: "{{ docker_services_stack_deploy_type | default('swarm', true) | string | trim }}"
 
 - name: Set base service definition
   ansible.builtin.set_fact:
-    compose_services: >-
+    docker_services_compose_services: >-
       {{
-        (compose_services | default({}))
+        (docker_services_compose_services | default({}))
         | combine({
-            service_name: (
-              ((compose_services | default({})).get(service_name, {}))
+            docker_services_service_name: (
+              ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
               | combine({
                   'image': image,
 

@@ -2,12 +2,12 @@
 
 # helpers/compose/command.yml
 
-- name: Ensure service_name is set
+- name: Ensure docker_services_service_name is set
   ansible.builtin.assert:
     that:
-      - service_name is defined
-      - service_name | string | trim | length > 0
-    fail_msg: "service_name must be set before calling this helper"
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
+    fail_msg: "docker_services_service_name must be set before calling this helper"
 
 - name: Ensure command_action is valid
   ansible.builtin.assert:
@@ -56,7 +56,7 @@
 # Read existing command (may be string/list/undefined) — do NOT use omit here
 - name: Read existing command
   ansible.builtin.set_fact:
-    _cmd_existing: "{{ (compose_services | default({})).get(service_name, {}).get('command') | default(none, true) }}"
+    _cmd_existing: "{{ (docker_services_compose_services | default({})).get(docker_services_service_name, {}).get('command') | default(none, true) }}"
 
 # Merge rules:
 # - replace: always _cmd_new
@@ -93,12 +93,12 @@
 
 - name: Set command for service (append/replace/append_unique)
   ansible.builtin.set_fact:
-    compose_services: >-
+    docker_services_compose_services: >-
       {{
-        (compose_services | default({}))
+        (docker_services_compose_services | default({}))
         | combine({
-            service_name: (
-              ((compose_services | default({})).get(service_name, {}))
+            docker_services_service_name: (
+              ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
               | combine({ 'command': _cmd_final }, recursive=true)
             )
           }, recursive=true)

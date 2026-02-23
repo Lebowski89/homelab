@@ -2,13 +2,13 @@
 
 - name: Vaultwarden prep | Set derived vars (run once)
   ansible.builtin.set_fact:
-    _vw_fs_host: "{{ (svc.deploy.host | default('unraid', true)) | string | trim }}"
-    _vw_dir: "/opt/vaultwarden"
-    _vw_token_file: "/opt/vaultwarden/vaultwarden_token.txt"
-    _vw_password_file: "/opt/vaultwarden/vaultwarden_password.txt"
-    _vw_secret_name: "vaultwarden_admin_secret"
+    docker_services_vw_fs_host: "{{ (docker_services_svc.deploy.host | default('unraid', true)) | string | trim }}"
+    docker_services_vw_dir: "/opt/vaultwarden"
+    docker_services_vw_token_file: "/opt/vaultwarden/docker_services_vaultwarden_token.txt"
+    docker_services_vw_password_file: "/opt/vaultwarden/vaultwarden_password.txt"
+    docker_services_vw_secret_name: "vaultwarden_admin_secret"
     # Where to run docker_secret (must be a swarm manager). Usually the node running ansible.
-    _vw_swarm_mgr: "{{ (svc.swarm_manager_host | default('localhost', true)) | string | trim }}"
+    docker_services_vw_swarm_mgr: "{{ (docker_services_svc.swarm_manager_host | default('localhost', true)) | string | trim }}"
   when: inventory_hostname == "localhost"
   run_once: true
 
@@ -19,50 +19,50 @@
 - name: Vaultwarden prep | Ensure vaultwarden dir exists (FS host)
   become: true
   ansible.builtin.file:
-    path: "{{ _vw_dir }}"
+    path: "{{ docker_services_vw_dir }}"
     state: directory
     mode: "0700"
   when: inventory_hostname == "localhost"
-  delegate_to: "{{ _vw_fs_host }}"
+  delegate_to: "{{ docker_services_vw_fs_host }}"
   run_once: true
 
 - name: Vaultwarden prep | Check if admin token file exists (FS host)
   become: true
   ansible.builtin.stat:
-    path: "{{ _vw_token_file }}"
-  register: _vw_token_stat
+    path: "{{ docker_services_vw_token_file }}"
+  register: docker_services_vw_token_stat
   when: inventory_hostname == "localhost"
-  delegate_to: "{{ _vw_fs_host }}"
+  delegate_to: "{{ docker_services_vw_fs_host }}"
   run_once: true
 
 - name: Vaultwarden prep | Read existing token (FS host)
   become: true
   ansible.builtin.slurp:
-    src: "{{ _vw_token_file }}"
-  register: _vw_token_raw
+    src: "{{ docker_services_vw_token_file }}"
+  register: docker_services_vw_token_raw
   when:
     - inventory_hostname == "localhost"
-    - _vw_token_stat.stat.exists
-  delegate_to: "{{ _vw_fs_host }}"
+    - docker_services_vw_token_stat.stat.exists
+  delegate_to: "{{ docker_services_vw_fs_host }}"
   run_once: true
 
 - name: Vaultwarden prep | Create new admin token (FS host)
   when:
     - inventory_hostname == "localhost"
-    - not _vw_token_stat.stat.exists
-  delegate_to: "{{ _vw_fs_host }}"
+    - not docker_services_vw_token_stat.stat.exists
+  delegate_to: "{{ docker_services_vw_fs_host }}"
   run_once: true
   become: true
   block:
     - name: Generate random password (base64 32)
       ansible.builtin.command: "openssl rand -base64 32"
-      register: _vw_password
+      register: docker_services_vw_password
       changed_when: false
 
     - name: Save generated password
       ansible.builtin.copy:
-        dest: "{{ _vw_password_file }}"
-        content: "{{ _vw_password.stdout | trim }}\n"
+        dest: "{{ docker_services_vw_password_file }}"
+        content: "{{ docker_services_vw_password.stdout | trim }}\n"
         mode: "0600"
 
     # Produces an argon2id PHC string suitable for Vaultwarden ADMIN_TOKEN
@@ -70,25 +70,25 @@
       ansible.builtin.shell: |
         set -euo pipefail
         salt="$(openssl rand -base64 32)"
-        echo -n "{{ _vw_password.stdout | trim }}" | argon2 "$salt" -e -id -k 65540 -t 3 -p 4
+        echo -n "{{ docker_services_vw_password.stdout | trim }}" | argon2 "$salt" -e -id -k 65540 -t 3 -p 4
       args:
         executable: /bin/bash
-      register: _vw_token_new
+      register: docker_services_vw_token_new
       changed_when: false
 
     - name: Save argon2 token
       ansible.builtin.copy:
-        dest: "{{ _vw_token_file }}"
-        content: "{{ _vw_token_new.stdout | trim }}\n"
+        dest: "{{ docker_services_vw_token_file }}"
+        content: "{{ docker_services_vw_token_new.stdout | trim }}\n"
         mode: "0600"
 
-- name: Vaultwarden prep | Set vaultwarden_token fact (run once)
+- name: Vaultwarden prep | Set docker_services_vaultwarden_token fact (run once)
   ansible.builtin.set_fact:
-    vaultwarden_token: >-
+    docker_services_vaultwarden_token: >-
       {{
-        (_vw_token_raw.content | b64decode | trim)
-        if (_vw_token_stat.stat.exists | default(false))
-        else (_vw_token_new.stdout | trim)
+        (docker_services_vw_token_raw.content | b64decode | trim)
+        if (docker_services_vw_token_stat.stat.exists | default(false))
+        else (docker_services_vw_token_new.stdout | trim)
       }}
   when: inventory_hostname == "localhost"
   run_once: true
@@ -99,18 +99,18 @@
 
 - name: Vaultwarden prep | Ensure docker secret exists (swarm manager)
   community.docker.docker_secret:
-    name: "{{ _vw_secret_name }}"
-    data: "{{ vaultwarden_token }}"
+    name: "{{ docker_services_vw_secret_name }}"
+    data: "{{ docker_services_vaultwarden_token }}"
     state: present
   when: inventory_hostname == "localhost"
-  delegate_to: "{{ _vw_swarm_mgr }}"
+  delegate_to: "{{ docker_services_vw_swarm_mgr }}"
   run_once: true
 
   # Optional sanity check (won't reveal token)
 - name: Vaultwarden prep | Assert token looks like PHC argon2 string
   ansible.builtin.assert:
     that:
-      - vaultwarden_token is match('^\\$argon2(id|i|d)\\$.*')
-    fail_msg: "vaultwarden_token does not look like an argon2 PHC string. Check argon2 availability on {{ _vw_fs_host }}."
+      - docker_services_vaultwarden_token is match('^\\$argon2(id|i|d)\\$.*')
+    fail_msg: "docker_services_vaultwarden_token does not look like an argon2 PHC string. Check argon2 availability on {{ docker_services_vw_fs_host }}."
   when: inventory_hostname == "localhost"
   run_once: true

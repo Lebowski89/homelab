@@ -1,14 +1,14 @@
 ---
 
 # helpers/compose/configs.yml
-# Attach swarm configs to the service definition (compose_services[service_name].configs)
+# Attach swarm configs to the service definition (docker_services_compose_services[docker_services_service_name].configs)
 
-- name: Configs | Ensure service_name is set
+- name: Configs | Ensure docker_services_service_name is set
   ansible.builtin.assert:
     that:
-      - service_name is defined
-      - service_name | string | trim | length > 0
-    fail_msg: "service_name must be set before calling helpers/compose/configs.yml"
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
+    fail_msg: "docker_services_service_name must be set before calling helpers/compose/configs.yml"
 
 - name: Configs | Ensure configs_list is a list
   ansible.builtin.assert:
@@ -21,12 +21,12 @@
 
 - name: Configs | Attach configs to service (replace)
   ansible.builtin.set_fact:
-    compose_services: >-
+    docker_services_compose_services: >-
       {{
-        (compose_services | default({}))
+        (docker_services_compose_services | default({}))
         | combine({
-            service_name: (
-              (compose_services | default({})).get(service_name, {})
+            docker_services_service_name: (
+              (docker_services_compose_services | default({})).get(docker_services_service_name, {})
               | combine({
                   'configs': configs_list
                 }, recursive=true)

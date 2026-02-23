@@ -7,28 +7,28 @@
       - deploy_stack_name | string | trim | length > 0
       - deploy_stack_type is defined
       - (deploy_stack_type | string | trim) in ['swarm', 'container']
-      - compose_services is mapping
+      - docker_services_compose_services is mapping
       - stack_networks is mapping
       - stack_volumes is mapping
     fail_msg: "Invalid deploy inputs for stack={{ deploy_stack_name | default('UNSET') }}"
 
 - name: DeployOne | Derive effective deploy host
   ansible.builtin.set_fact:
-    _deploy_host_effective: >-
+    docker_services_deploy_host_effective: >-
       {{
         'localhost'
         if (deploy_stack_type | string | trim) == 'swarm'
-        else (deploy_host | default('localhost', true) | string | trim)
+        else (docker_services_deploy_host | default('localhost', true) | string | trim)
       }}
 
 - name: DeployOne | Ensure /opt/stacks exists
   ansible.builtin.file:
     path: /opt/stacks
     state: directory
-    owner: "{{ hostvars[_deploy_host_effective].puid | default('1000') }}"
-    group: "{{ hostvars[_deploy_host_effective].pgid | default('1000') }}"
+    owner: "{{ hostvars[docker_services_deploy_host_effective].puid | default('1000') }}"
+    group: "{{ hostvars[docker_services_deploy_host_effective].pgid | default('1000') }}"
     mode: "0755"
-  delegate_to: "{{ _deploy_host_effective }}"
+  delegate_to: "{{ docker_services_deploy_host_effective }}"
 
 - name: DeployOne | Render compose/stack file
   ansible.builtin.template:
@@ -38,11 +38,11 @@
         '/opt/stacks/' ~ deploy_stack_name ~
         ( '-stack.yml' if (deploy_stack_type | string | trim) == 'swarm' else '-compose.yml' )
       }}
-    owner: "{{ hostvars[_deploy_host_effective].puid | default('1000') }}"
-    group: "{{ hostvars[_deploy_host_effective].pgid | default('1000') }}"
+    owner: "{{ hostvars[docker_services_deploy_host_effective].puid | default('1000') }}"
+    group: "{{ hostvars[docker_services_deploy_host_effective].pgid | default('1000') }}"
     mode: "0664"
     force: true
-  delegate_to: "{{ _deploy_host_effective }}"
+  delegate_to: "{{ docker_services_deploy_host_effective }}"
 
 - name: DeployOne | Swarm deploy
   when: (deploy_stack_type | string | trim) == 'swarm'
@@ -51,7 +51,7 @@
     name: "{{ deploy_stack_name }}"
     compose:
       - "/opt/stacks/{{ deploy_stack_name }}-stack.yml"
-  delegate_to: "{{ _deploy_host_effective }}"
+  delegate_to: "{{ docker_services_deploy_host_effective }}"
 
 - name: DeployOne | Compose deploy
   when: (deploy_stack_type | string | trim) != 'swarm'
@@ -60,4 +60,4 @@
     project_name: "{{ deploy_stack_name }}"
     files: "{{ deploy_stack_name }}-compose.yml"
     state: present
-  delegate_to: "{{ _deploy_host_effective }}"
+  delegate_to: "{{ docker_services_deploy_host_effective }}"

@@ -2,46 +2,46 @@
 
 # sub_tasks/cleanup.yml
 
-- name: Ensure stack_name is set
+- name: Ensure docker_services_stack_name is set
   ansible.builtin.assert:
     that:
-      - stack_name is defined
-      - stack_name | string | trim | length > 0
-    fail_msg: "stack_name must be set before calling cleanup.yml"
+      - docker_services_stack_name is defined
+      - docker_services_stack_name | string | trim | length > 0
+    fail_msg: "docker_services_stack_name must be set before calling cleanup.yml"
 
 - name: Normalize deploy type
   ansible.builtin.set_fact:
-    _cleanup_stack_type: "{{ stack_deploy_type | default('swarm', true) | string | trim }}"
+    _cleanup_stack_type: "{{ docker_services_stack_deploy_type | default('swarm', true) | string | trim }}"
 
 - name: Cleanup container stack (compose)
   when: _cleanup_stack_type != 'swarm'
   block:
     - name: Check if compose file exists
       ansible.builtin.stat:
-        path: "/opt/stacks/{{ stack_name }}-compose.yml"
+        path: "/opt/stacks/{{ docker_services_stack_name }}-compose.yml"
       register: _existing_compose_yaml
 
     - name: Compose down
       when: _existing_compose_yaml.stat.exists
       community.docker.docker_compose_v2:
         project_src: "/opt/stacks"
-        project_name: "{{ stack_name }}"
-        files: "{{ stack_name }}-compose.yml"
+        project_name: "{{ docker_services_stack_name }}"
+        files: "{{ docker_services_stack_name }}-compose.yml"
         state: absent
 
     - name: Remove compose file
       ansible.builtin.file:
-        path: "/opt/stacks/{{ stack_name }}-compose.yml"
+        path: "/opt/stacks/{{ docker_services_stack_name }}-compose.yml"
         state: absent
 
     - name: Remove container secret files directory (per-stack)
       ansible.builtin.file:
-        path: "/opt/stacks/{{ stack_name }}/secrets"
+        path: "/opt/stacks/{{ docker_services_stack_name }}/secrets"
         state: absent
 
     - name: Remove stack directory if empty (optional)
       ansible.builtin.file:
-        path: "/opt/stacks/{{ stack_name }}"
+        path: "/opt/stacks/{{ docker_services_stack_name }}"
         state: absent
 
 - name: Cleanup swarm stack
@@ -49,10 +49,10 @@
   block:
     - name: Stack down
       community.docker.docker_stack:
-        name: "{{ stack_name }}"
+        name: "{{ docker_services_stack_name }}"
         state: absent
 
     - name: Remove stack file
       ansible.builtin.file:
-        path: "/opt/stacks/{{ stack_name }}-stack.yml"
+        path: "/opt/stacks/{{ docker_services_stack_name }}-stack.yml"
         state: absent

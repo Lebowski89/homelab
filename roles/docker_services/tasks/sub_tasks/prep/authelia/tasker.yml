@@ -36,12 +36,12 @@
 
     - name: Authelia prep | IMPORTANT | Persist storage key in Infisical
       when:
-        - (_authelia_generated_this_run | default(false)) | bool
+        - (docker_services_authelia_generated_this_run | default(false)) | bool
         - (hostvars['localhost'].authelia_storage_key | default('') | string | trim | length) > 0
-        - (svc.infisical is not defined)
-          or (svc.infisical.secrets_map is not defined)
+        - (docker_services_svc.infisical is not defined)
+          or (docker_services_svc.infisical.secrets_map is not defined)
           or (
-              svc.infisical.secrets_map
+              docker_services_svc.infisical.secrets_map
               | selectattr('var', 'equalto', 'authelia_storage_key')
               | list
               | length == 0
