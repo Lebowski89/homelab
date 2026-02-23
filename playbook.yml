@@ -225,12 +225,13 @@
         apply:
           tags: "{{ [item.name] + (item.tags | default([])) }}"
       vars:
-        service_cfg_found: "{{ (services is mapping) and (services.get(item.name) is not none) }}"
-        service_cfg: "{{ services.get(item.name, {}) }}"
-        role_prefix: "{{ item.name }}"
-        service_target: "{{ item.target | default('swarm') }}"
+        docker_services_deploy_deferred: true
+        docker_services_service_cfg_found: "{{ services[item.name] is defined }}"
+        docker_services_service_cfg: "{{ services[item.name] }}"
+        docker_services_role_prefix: "{{ item.name }}"
+        docker_services_service_target: "{{ item.target | default('swarm') }}"
       when:
-        - service_cfg_found | bool
+        - docker_services_service_cfg_found | bool
         - (ansible_run_tags | length == 0)
           or (item.name in ansible_run_tags)
           or ((item.tags | default([])) | intersect(ansible_run_tags) | length > 0)

@@ -1,10 +1,7 @@
 ---
 
-- name: Validate service input
-  ansible.builtin.include_tasks: _validate.yml
-
-- name: Normalize service config
-  ansible.builtin.include_tasks: _normalize.yml
+- name: Init (validate + normalize)
+  ansible.builtin.import_tasks: _init.yml
 
 - name: Run prep phase
   ansible.builtin.include_tasks: _prep.yml
