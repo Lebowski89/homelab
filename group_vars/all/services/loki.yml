@@ -1,0 +1,46 @@
+---
+
+loki:
+  name: loki
+  stack: loki
+  image: grafana/loki:main
+  named_networks:
+    overlay:
+      external: true
+  command:
+    - "-config.file=/etc/loki/loki-config.yaml"
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "1000"
+    PGID: "1000"
+  paths:
+    - path: /opt/loki
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: "0755"
+  templates:
+    - src: configs/loki-config.yaml.j2
+      dest: /opt/loki/loki-config.yaml
+      owner: 1000
+      group: 1000
+      mode: "0664"
+      force: true
+  volumes:
+    config:
+      type: bind
+      source: /opt/loki
+      target: /etc/loki
+      read_only: false
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

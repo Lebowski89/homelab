@@ -9,7 +9,7 @@ haproxy:
       external: true
   swarm_configs:
     - name: haproxy_cfg
-      src: files/haproxy/haproxy.cfg
+      src: files/haproxy.cfg
       data_is_template: false
   configs:
     - source: haproxy_cfg

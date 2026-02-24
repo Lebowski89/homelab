@@ -1,0 +1,71 @@
+---
+
+autopulse:
+  name: autopulse
+  stack: autopulse
+  image: ghcr.io/dan-online/autopulse:latest-postgres
+  named_networks:
+    overlay:
+      external: true
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "99"
+    PGID: "100"
+    UMASK: "022"
+    AUTOPULSE__AUTH__USERNAME__FILE: /run/secrets/autopulse_user_secret
+    AUTOPULSE__AUTH__PASSWORD__USER: /run/secrets/autopulse_pass_secret
+    AUTOPULSE__TARGETS__PLEX__TOKEN__FILE: /run/secrets/plex_token_secret
+  env_file:
+    - /mnt/user/appdata/autopulse/.env
+infisical:
+  fail_on_empty: true
+  secrets_map:
+    - var: autopulse_user
+      path: "/Autopulse"
+      name: USER
+      docker_secret: autopulse_user_secret
+    - var: autopulse_pass
+      path: "/Autopulse"
+      name: PASS
+      docker_secret: autopulse_pass_secret
+    - var: plex_token
+      path: "/Plex"
+      name: TOKEN
+      docker_secret: plex_token_secret
+  secrets:
+    - autopulse_user_secret
+    - autopulse_pass_secret
+    - plex_token_secret
+  paths:
+    - path: /mnt/user/appdata/autopulse
+      state: directory
+      owner: 99
+      group: 100
+      mode: "0755"
+    - path: /mnt/user/appdata/autopulse/config.yaml
+      state: touch
+      owner: 99
+      group: 100
+      mode: "0664"
+  volumes:
+    config:
+      type: bind
+      source: /mnt/user/appdata/autopulse/config.yaml
+      target: /app/config.yaml
+      read_only: false
+  postgres:
+    enable: true
+    databases:
+      - "autopulse"
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints:
+      - node.labels.ansible_host == unraid
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

@@ -1,0 +1,55 @@
+---
+
+cross_seed:
+  name: cross-seed
+  stack: cross-seed
+  image: ghcr.io/cross-seed/cross-seed:master
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD"
+      - "wget"
+      - "--spider"
+      - "-q"
+      - "http://127.0.0.1:2468/api/ping"
+  user: "99:100"
+  environment:
+    TZ: "{{ timezone }}"
+  paths:
+    - path: /mnt/user/appdata/cross-seed
+      state: directory
+      owner: 99
+      group: 100
+      mode: "0755"
+  templates:
+    - src: configs/cross_seed_config.j2
+      dest: /mnt/user/appdata/cross-seed/config.js
+      owner: 99
+      group: 100
+      mode: "0664"
+      force: true
+  volumes:
+    config:
+      type: bind
+      source: /mnt/user/appdata/cross-seed
+      target: /config
+      read_only: false
+    media:
+      type: bind
+      source: /mnt/user/data
+      target: /data
+      read_only: false
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints:
+      - node.labels.ansible_host == unraid
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

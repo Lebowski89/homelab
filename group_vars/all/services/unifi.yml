@@ -1,0 +1,79 @@
+---
+
+unifi:
+  name: unifi
+  stack: unifi
+  image: lscr.io/linuxserver/unifi-network-application:10.1.85-ls117
+  named_networks:
+    overlay:
+      external: true
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "{{ puid }}"
+    PGID: "{{ pgid }}"
+    MONGO_DBNAME: "unifi-db"
+    MONGO_HOST: "unifi-db"
+    FILE__MONGO_USER: /run/secrets/unifi_user_secret
+    FILE__MONGO_PASS: /run/secrets/unifi_pass_secret
+    MONGO_PORT: "27017"
+    MONGO_AUTHSOURCE: "admin"
+    MEM_LIMIT: "1024"
+    MEM_STARTUP: "1024"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: unifi_user
+        path: "/Unifi"
+        name: USER
+        docker_secret: unifi_user_secret
+      - var: unifi_pass
+        path: "/Unifi"
+        name: PASS
+        docker_secret: unifi_pass_secret
+  secrets:
+    - unifi_user_secret
+    - unifi_pass_secret
+  ports:
+    stun:
+      published: 3478
+      target: 3478
+      protocol: udp
+      mode: host
+    discovery:
+      published: 10001
+      target: 10001
+      protocol: udp
+      mode: host
+    communication:
+      published: 8080
+      target: 8080
+      protocol: tcp
+      mode: host
+  paths:
+    - path: /opt/unifi
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: "0755"
+  volumes:
+    config:
+      type: bind
+      source: /opt/unifi
+      target: /config
+      read_only: false
+  traefik:
+    enable: true
+    port: 8443
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: localhost
+    constraints:
+      - node.labels.ansible_host == localhost
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m
