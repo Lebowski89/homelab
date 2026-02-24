@@ -2,6 +2,7 @@
 
 autopulse_ui:
   name: autopulse-ui
+  stack: autopulse
   image: danonline/autopulse:ui
   named_networks:
     overlay:
