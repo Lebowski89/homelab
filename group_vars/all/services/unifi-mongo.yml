@@ -3,7 +3,7 @@
 unifi_db:
   name: unifi-db
   stack: unifi
-  image: docker.io/mongo:8.0
+  image: docker.io/mongo:8.2
   named_networks:
     overlay:
       external: true
