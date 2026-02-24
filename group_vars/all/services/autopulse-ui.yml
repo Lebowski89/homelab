@@ -1,0 +1,27 @@
+---
+
+autopulse_ui:
+  name: autopulse-ui
+  stack: autopulse
+  image: danonline/autopulse:ui
+  named_networks:
+    overlay:
+      external: true
+  environment:
+    ORIGIN: "http://localhost:2880"
+  traefik:
+    enable: true
+    port: 2880
+    sso: authelia
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints:
+      - node.labels.ansible_host == unraid
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

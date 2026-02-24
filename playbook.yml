@@ -69,6 +69,10 @@
         tags: [media, znc]
 
       ## services (plex)
+      - name: autopulse
+        tags: [plex, autopulse]
+      - name: autopulse_ui
+        tags: [plex, autopulse]
       - name: imagemaid
         tags: [plex, imagemaid]
       - name: kometa
@@ -155,6 +159,12 @@
         tags: [pgha, spilo]
       - name: pg_ha_proxy
         tags: [pgha, pg_ha_proxy]
+
+      ## services (unifi)
+      - name: unifi_db
+        tags: [apps, unifi, unifi_db]
+      - name: unifi
+        tags: [apps, unifi]
 
   pre_tasks:
     - name: Gather packages

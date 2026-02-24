@@ -3,7 +3,7 @@
 vaultwarden:
   name: vaultwarden
   stack: vaultwarden
-  image: vaultwarden/server:1.35.3
+  image: vaultwarden/server:1.35.4
   named_networks:
     overlay:
       external: true
