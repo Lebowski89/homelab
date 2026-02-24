@@ -160,6 +160,12 @@
       - name: pg_ha_proxy
         tags: [pgha, pg_ha_proxy]
 
+      ## services (unifi)
+      - name: unifi_db
+        tags: [apps, unifi, unifi_db]
+      - name: unifi
+        tags: [apps, unifi]
+
   pre_tasks:
     - name: Gather packages
       when: inventory_hostname == "localhost"
