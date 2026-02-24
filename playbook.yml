@@ -69,6 +69,10 @@
         tags: [media, znc]
 
       ## services (plex)
+      - name: autopulse
+        tags: [plex, autopulse]
+      - name: autopulse_ui
+        tags: [plex, autopulse]
       - name: imagemaid
         tags: [plex, imagemaid]
       - name: kometa
