@@ -210,6 +210,12 @@
         msg: '{{ timezone }}'
       tags: always
 
+    - name: Share localhost timezone to all hosts
+      when: inventory_hostname != "localhost"
+      ansible.builtin.set_fact:
+        timezone: "{{ hostvars['localhost'].timezone }}"
+      tags: always
+
   tasks:
     - name: Load all service definitions from group_vars/all/services/*.yml
       ansible.builtin.include_vars:
