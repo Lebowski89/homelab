@@ -108,6 +108,8 @@ authelia:
     enable: true
     databases:
       - authelia
+  cloudflare:
+    enable: true
   deploy:
     type: swarm
     mode: replicated
