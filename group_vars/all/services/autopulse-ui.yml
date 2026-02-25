@@ -7,12 +7,12 @@ autopulse_ui:
   named_networks:
     overlay:
       external: true
-  environment:
-    ORIGIN: "http://localhost:2880"
   traefik:
     enable: true
     port: 2880
     sso: authelia
+  cloudflare:
+    enable: true
   deploy:
     type: swarm
     mode: replicated

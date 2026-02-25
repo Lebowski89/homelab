@@ -23,6 +23,13 @@
         (cloudflare_zone | default('') | string | trim | length == 0)
       }}
 
+- name: Cloudflare | Apply service-level Cloudflare overrides
+  ansible.builtin.set_fact:
+    cloudflare_zone: "{{ docker_services_svc.cloudflare.zone }}"
+  when:
+    - docker_services_svc.cloudflare is defined
+    - (docker_services_svc.cloudflare.zone | default('') | string | trim | length) > 0
+
 - name: Cloudflare | Select Infisical path/name (hugo override)
   when: _cf_creds_missing | bool
   ansible.builtin.set_fact:
@@ -86,11 +93,29 @@
     - not (_is_hugo | bool)
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cloudflare_dns.yml"
   vars:
-    cloudflare_record: "{{ docker_services_svc.name }}"
-    cloudflare_record_value: "{{ public_ip }}"
-    cloudflare_record_type: "A"
-    cloudflare_proxy: false
-    cloudflare_solo: true
+    cloudflare_record: >-
+      {{
+        docker_services_svc.cloudflare.record
+        | default(docker_services_svc.name, true)
+      }}
+    cloudflare_record_value: >-
+      {{
+        docker_services_svc.cloudflare.value
+        | default(public_ip, true)
+      }}
+    cloudflare_record_type: >-
+      {{
+        docker_services_svc.cloudflare.type
+        | default('A', true)
+      }}
+    cloudflare_proxy: >-
+      {{
+        (docker_services_svc.cloudflare.proxy | default(false, true)) | bool
+      }}
+    cloudflare_solo: >-
+      {{
+        (docker_services_svc.cloudflare.solo | default(true, true)) | bool
+      }}
 
 # Hugo: root (@) records -> GitHub Pages IPs (A + AAAA)
 - name: Configure Cloudflare DNS (hugo root records)

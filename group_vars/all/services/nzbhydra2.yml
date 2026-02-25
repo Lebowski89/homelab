@@ -75,6 +75,8 @@ nzbhydra2:
       - "PathPrefix(`/gettorrent`)"
       - "PathPrefix(`/rss`)"
       - "PathPrefix(`/torznab/api`)"
+  cloudflare:
+    enable: true
   deploy:
     type: swarm
     mode: replicated

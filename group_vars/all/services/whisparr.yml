@@ -20,7 +20,7 @@ whisparr:
     WHISPARR__SERVER__PORT: "6969"
     WHISPARR__AUTH__METHOD: "External"
     FILE__WHISPARR__AUTH__APIKEY: /run/secrets/whisparr_api_secret
-    WHISPARR__POSTGRES__HOST: "spilo"
+    WHISPARR__POSTGRES__HOST: "haproxy"
     WHISPARR__POSTGRES__PORT: "5433"
     FILE__WHISPARR__POSTGRES__USER: /run/secrets/postgres_user_secret
     FILE__WHISPARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
@@ -89,6 +89,8 @@ whisparr:
       - "PathPrefix(`/api`)"
       - "PathPrefix(`/feed`)"
       - "PathPrefix(`/ping`)"
+  cloudflare:
+    enable: true
   themepark:
     app: whisparr
     theme: hotline

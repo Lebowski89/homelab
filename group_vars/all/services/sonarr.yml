@@ -15,6 +15,8 @@ sonarr:
       - "PathPrefix(`/api`)"
       - "PathPrefix(`/feed`)"
       - "PathPrefix(`/ping`)"
+  cloudflare:
+    enable: true
   themepark:
     app: sonarr
     theme: hotline
@@ -46,7 +48,7 @@ sonarr:
         SONARR__SERVER__PORT: "8989"
         SONARR__AUTH__METHOD: "External"
         FILE__SONARR__AUTH__APIKEY: /run/secrets/sonarr_api_secret
-        SONARR__POSTGRES__HOST: "spilo"
+        SONARR__POSTGRES__HOST: "haproxy"
         SONARR__POSTGRES__PORT: "5433"
         FILE__SONARR__POSTGRES__USER: /run/secrets/postgres_user_secret
         FILE__SONARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
@@ -126,7 +128,7 @@ sonarr:
         SONARR__SERVER__PORT: "8989"
         SONARR__AUTH__METHOD: "External"
         FILE__SONARR__AUTH__APIKEY: /run/secrets/sonarr_4k_api_secret
-        SONARR__POSTGRES__HOST: "spilo"
+        SONARR__POSTGRES__HOST: "haproxy"
         SONARR__POSTGRES__PORT: "5433"
         FILE__SONARR__POSTGRES__USER: /run/secrets/postgres_user_secret
         FILE__SONARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret

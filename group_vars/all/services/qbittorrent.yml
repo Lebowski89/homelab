@@ -143,6 +143,8 @@ qbittorrent:
           - "PathPrefix(`/query`)"
           - "PathPrefix(`/login`)"
           - "PathPrefix(`/sync`)"
+      cloudflare:
+        enable: true
     unraid_xs:
       name: qbittorrent-xs
       hostname: qbittorrent-xs.internal
@@ -260,3 +262,5 @@ qbittorrent:
           - "PathPrefix(`/query`)"
           - "PathPrefix(`/login`)"
           - "PathPrefix(`/sync`)"
+      cloudflare:
+        enable: true

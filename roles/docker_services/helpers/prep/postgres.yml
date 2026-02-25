@@ -79,7 +79,7 @@
     - inventory_hostname == "localhost"
     - (_postgres_databases | default([]) | length) > 0
   community.postgresql.postgresql_ping:
-    login_host: "{{ local_ip }}"
+    login_host: 192.168.80.45
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_pass }}"
     login_port: 5433
@@ -96,7 +96,7 @@
     - postgres_ping_result is defined
     - not (postgres_ping_result.is_available | default(false))
   community.postgresql.postgresql_db:
-    login_host: "{{ local_ip }}"
+    login_host: 192.168.80.45
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_pass }}"
     login_port: 5433
