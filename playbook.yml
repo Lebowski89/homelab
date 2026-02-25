@@ -133,32 +133,30 @@
         tags: [utilities, adminer]
       - name: czkawka
         tags: [utilities, czkawka]
-      - name: omni_tools
-        tags: [utilities, omni_tools]
       - name: themepark
         tags: [utilities, themepark]
 
       ## services (postgres cluster)
       - name: etcd
         target: pg01
-        tags: [pgha, etcd]
+        tags: [pgha, etcd, pg01]
       - name: etcd
         target: pg02
-        tags: [pgha, etcd]
+        tags: [pgha, etcd, pg02]
       - name: etcd
         target: pg03
-        tags: [pgha, etcd]
+        tags: [pgha, etcd, pg03]
       - name: spilo
         target: pg01
-        tags: [pgha, spilo]
+        tags: [pgha, spilo, pg01]
       - name: spilo
         target: pg02
-        tags: [pgha, spilo]
+        tags: [pgha, spilo, pg02]
       - name: spilo
         target: pg03
-        tags: [pgha, spilo]
-      - name: pg_ha_proxy
-        tags: [pgha, pg_ha_proxy]
+        tags: [pgha, spilo, pg03]
+      - name: haproxy
+        tags: [pgha, haproxy]
 
       ## services (unifi)
       - name: unifi_db
