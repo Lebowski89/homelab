@@ -69,6 +69,8 @@ vaultwarden:
     enable: true
     port: 80
     sso: authelia
+  cloudflare:
+    enable: true
   deploy:
     type: swarm
     mode: replicated

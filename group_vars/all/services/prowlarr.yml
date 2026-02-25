@@ -92,6 +92,8 @@ prowlarr:
       - "PathRegexp(`^/[0-9]+/download`)"
       - "PathPrefix(`/api`)"
       - "PathPrefix(`/ping`)"
+  cloudflare:
+    enable: true
   themepark:
     app: prowlarr
     theme: hotline

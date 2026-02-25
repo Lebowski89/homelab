@@ -13,6 +13,8 @@ autopulse_ui:
     enable: true
     port: 2880
     sso: authelia
+  cloudflare:
+    enable: true
   deploy:
     type: swarm
     mode: replicated

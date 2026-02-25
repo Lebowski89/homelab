@@ -84,6 +84,8 @@ stash:
     enable: true
     port: 9999
     sso: authelia
+  cloudflare:
+    enable: true
   deploy:
     type: swarm
     mode: replicated
