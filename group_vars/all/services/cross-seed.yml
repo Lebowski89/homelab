@@ -17,6 +17,36 @@ cross_seed:
   user: "99:100"
   environment:
     TZ: "{{ timezone }}"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: cross_seed_api
+        path: "/Cross-Seed"
+        name: API
+      - var: cross_seed_notifiarr_webhook
+        path: "/Cross-Seed"
+        name: NOTIFIARR_WEBHOOK
+      - var: qbittorrent_xs_user
+        path: "/qBittorrent-XS"
+        name: USER
+      - var: qbittorrent_xs_pass
+        path: "/qBittorrent-XS"
+        name: PASS
+      - var: prowlarr_api
+        path: "/Prowlarr"
+        name: API
+      - var: radarr_api
+        path: "/Radarr"
+        name: API
+      - var: radarr_4k_api
+        path: "/Radarr-4K"
+        name: API
+      - var: sonarr_api
+        path: "/Sonarr"
+        name: API
+      - var: sonarr_4k_api
+        path: "/Sonarr-4K"
+        name: API
   paths:
     - path: /mnt/user/appdata/cross-seed
       state: directory
