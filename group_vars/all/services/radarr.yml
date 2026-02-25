@@ -15,6 +15,8 @@ radarr:
       - "PathPrefix(`/api`)"
       - "PathPrefix(`/feed`)"
       - "PathPrefix(`/ping`)"
+  cloudflare:
+    enable: true
   themepark:
     app: radarr
     theme: hotline

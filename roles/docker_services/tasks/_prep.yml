@@ -157,8 +157,8 @@
   when:
     - inventory_hostname == "localhost"
     - not (ci_mode | default(false)) | bool
-    - docker_services_svc.traefik is defined
-    - (docker_services_svc.traefik.enable | default(false)) | bool
+    - docker_services_svc.cloudflare is defined
+    - (docker_services_svc.cloudflare.enable | default(false)) | bool
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cloudflare_creds.yml"
 
 ################################

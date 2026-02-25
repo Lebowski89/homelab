@@ -37,6 +37,8 @@ portainer:
     internal_api: true
     internal_api_paths: /api
     sso: authelia
+  cloudflare:
+    enable: true
   deploy:
     type: swarm
     mode: replicated
