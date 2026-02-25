@@ -65,6 +65,8 @@ unifi:
     enable: true
     port: 8443
     sso: authelia
+  cloudflare:
+    enable: true
   deploy:
     type: swarm
     mode: replicated

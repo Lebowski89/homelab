@@ -16,8 +16,10 @@
 {%- set _stack_networks = (stack_networks | default({}, true)) -%}
 {%- set _stack_volumes  = (stack_volumes  | default({}, true)) -%}
 
+{%- set _compose_services = (docker_services_compose_services | default(compose_services | default({}, true), true)) -%}
+
 services:
-{% for service_name, svc in compose_services.items() %}
+{% for service_name, svc in _compose_services.items() %}
   {{ service_name }}:
     image: "{{ svc.image }}"
 {% if svc.hostname is defined and (svc.hostname | string | trim | length > 0) %}
@@ -353,7 +355,7 @@ volumes:
 {# Top-level Configs               #}
 {# ------------------------------- #}
 {%- set all_service_configs = [] -%}
-{%- for _svc_name, _svc in compose_services.items() -%}
+{%- for _svc_name, _svc in _compose_services.items() -%}
 {%- if _svc.configs is defined and (_svc.configs | length > 0) -%}
 {%- for c in _svc.configs -%}
 {%- if c.source is defined and (c.source not in all_service_configs) -%}
@@ -375,7 +377,7 @@ configs:
 {# Top-level Secrets               #}
 {# ------------------------------- #}
 {%- set all_service_secrets = [] -%}
-{%- for _svc_name, _svc in compose_services.items() -%}
+{%- for _svc_name, _svc in _compose_services.items() -%}
 {%- if _svc.secrets is defined and (_svc.secrets | length > 0) -%}
 {%- for secret_name in _svc.secrets -%}
 {%- if secret_name not in all_service_secrets -%}

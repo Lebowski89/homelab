@@ -3,7 +3,7 @@
 portainer_agent:
   name: agent
   stack: portainer
-  image: portainer/agent:2.38.1-linux-amd64-alpine
+  image: portainer/agent:2.39.0-linux-amd64-alpine
   named_networks:
     overlay:
       external: true
