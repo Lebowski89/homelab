@@ -3,7 +3,7 @@
 portainer:
   name: portainer
   stack: portainer
-  image: portainer/portainer-ce:2.38.1-linux-amd64-alpine
+  image: portainer/portainer-ce:2.39.0-linux-amd64-alpine
   named_networks:
     overlay:
       external: true
