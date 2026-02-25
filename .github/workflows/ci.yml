@@ -14,7 +14,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: '3.12.12'
+          python-version: '3.14.3'
 
       - name: Install Ansible and Python dependencies
         run: |
