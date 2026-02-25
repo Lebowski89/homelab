@@ -21,7 +21,7 @@ jellyseerr:
     UMASK: "022"
     PORT: "5055"
     DB_TYPE: "postgres"
-    DB_HOST: "spilo"
+    DB_HOST: "haproxy"
     DB_PORT: "5433"
     DB_USER: "{{ postgres_user | default('__INFISICAL__:postgres_user', true) }}"
     DB_PASS: "{{ postgres_pass | default('__INFISICAL__:postgres_pass', true) }}"

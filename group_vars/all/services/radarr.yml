@@ -46,7 +46,7 @@ radarr:
         RADARR__SERVER__PORT: "7878"
         RADARR__AUTH__METHOD: "External"
         FILE__RADARR__AUTH__APIKEY: /run/secrets/radarr_api_secret
-        RADARR__POSTGRES__HOST: "spilo"
+        RADARR__POSTGRES__HOST: "haproxy"
         RADARR__POSTGRES__PORT: "5433"
         FILE__RADARR__POSTGRES__USER: /run/secrets/postgres_user_secret
         FILE__RADARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
@@ -126,7 +126,7 @@ radarr:
         RADARR__SERVER__PORT: "7878"
         RADARR__AUTH__METHOD: "External"
         FILE__RADARR__AUTH__APIKEY: /run/secrets/radarr_4k_api_secret
-        RADARR__POSTGRES__HOST: "spilo"
+        RADARR__POSTGRES__HOST: "haproxy"
         RADARR__POSTGRES__PORT: "5433"
         FILE__RADARR__POSTGRES__USER: /run/secrets/postgres_user_secret
         FILE__RADARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret

@@ -170,7 +170,7 @@
     _bazarr_postgres_config:
       postgresql.database: "bazarr"
       postgresql.enabled: "true"
-      postgresql.host: "pg-ha"
+      postgresql.host: "haproxy"
       postgresql.port: "5433"
       postgresql.username: "{{ postgres_user }}"
       postgresql.password: "{{ postgres_pass }}"
