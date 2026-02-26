@@ -127,6 +127,7 @@
     - (docker_services_svc.name | default('') | string | trim) == "authelia"
   ansible.builtin.include_tasks: "{{ role_path }}/tasks/sub_tasks/prep/authelia/tasker.yml"
   run_once: true
+  tags: install
 
 ################################
 # PREP (POSTGRES)
@@ -138,6 +139,7 @@
     - docker_services_svc.postgres is defined
     - (docker_services_svc.postgres.enable | default(false)) | bool
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/postgres.yml"
+  tags: [install, update]
 
 ################################
 # PREP (QBITTORRENT)
