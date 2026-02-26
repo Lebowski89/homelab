@@ -7,8 +7,6 @@ autopulse_ui:
   named_networks:
     overlay:
       external: true
-  environment:
-    ORIGIN: "http://localhost:2880"
   traefik:
     enable: true
     port: 2880
