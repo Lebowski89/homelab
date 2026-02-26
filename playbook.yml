@@ -241,23 +241,20 @@
     - name: Process each docker service
       ansible.builtin.include_role:
         name: docker_services
-        apply:
-          tags: "{{ [item.name] + (item.tags | default([])) }}"
       vars:
-        docker_services_deploy_deferred: true
-        docker_services_service_cfg_found: "{{ services[item.name] is defined }}"
-        docker_services_service_cfg: "{{ services[item.name] }}"
+        docker_services_service_cfg: "{{ services[item.name] | default({}) }}"
+        docker_services_service_target: "{{ item.target | default(omit) }}"
         docker_services_role_prefix: "{{ item.name }}"
-        docker_services_service_target: "{{ item.target | default('swarm') }}"
+        docker_services_service_cfg_found: "{{ (services[item.name] is defined) | bool }}"
+      loop: "{{ docker_services }}"
+      loop_control:
+        label: "{{ item.name }}{{ ':' ~ item.target if item.target is defined else '' }}"
       when:
         - docker_services_service_cfg_found | bool
         - ('all' in (ansible_run_tags | default([])))
           or (ansible_run_tags | length == 0)
           or (item.name in (ansible_run_tags | default([])))
           or ((item.tags | default([])) | intersect(ansible_run_tags | default([])) | length > 0)
-      loop: "{{ docker_services }}"
-      loop_control:
-        label: "{{ item.name }}"
       tags: always
 
     - name: Deploy all stacks

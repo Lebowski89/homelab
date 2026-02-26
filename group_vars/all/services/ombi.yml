@@ -2,7 +2,7 @@
 
 ombi:
   name: ombi
-  stack: media
+  stack: ombi
   image: lscr.io/linuxserver/ombi:4.53.4
   named_networks:
     overlay:

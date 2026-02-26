@@ -2,7 +2,7 @@
 
 hugo:
   name: hugo
-  stack: blog
+  stack: hugo
   image: hugomods/hugo:debian-exts
   named_networks:
     overlay:

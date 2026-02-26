@@ -2,7 +2,7 @@
 
 sportarr:
   name: sportarr
-  stack: arrs
+  stack: sportarr
   image: sportarr/sportarr:latest
   named_networks:
     overlay:

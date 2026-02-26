@@ -1,7 +1,7 @@
 ---
 
 sonarr:
-  stack: arrs
+  stack: sonarr
   image: ghcr.io/hotio/sonarr:release-4.0.16.2944
   named_networks:
     overlay:

@@ -2,7 +2,7 @@
 
 prowlarr:
   name: prowlarr
-  stack: arrs
+  stack: prowlarr
   image: ghcr.io/hotio/prowlarr:release-2.3.0.5236
   named_networks:
     overlay:

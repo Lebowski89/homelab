@@ -2,6 +2,7 @@
 
 grafana:
   name: grafana
+  stack: grafana
   image: grafana/grafana-oss:main-ubuntu
   named_networks:
     overlay:

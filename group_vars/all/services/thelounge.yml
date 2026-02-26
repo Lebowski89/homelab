@@ -2,7 +2,7 @@
 
 thelounge:
   name: thelounge
-  stack: media
+  stack: thelounge
   image: lscr.io/linuxserver/thelounge:4.4.3
   named_networks:
     overlay:

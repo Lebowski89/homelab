@@ -2,7 +2,7 @@
 
 adminer:
   name: adminer
-  stack: utilities
+  stack: adminer
   image: adminer:5.4.2
   named_networks:
     overlay:
