@@ -2,7 +2,7 @@
 
 stash:
   name: stash
-  stack: media
+  stack: stash
   image: ghcr.io/hotio/stash:release-0.30.1
   named_networks:
     overlay:

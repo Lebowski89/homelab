@@ -1,0 +1,134 @@
+---
+
+qbit_manage:
+  image: ghcr.io/stuffanthings/qbit_manage:latest
+  stack: qbm
+  named_networks:
+    overlay:
+      external: true
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "99"
+    PGID: "100"
+    UMASK: "022"
+    QBT_WEB_SERVER: "true"
+    QBT_PORT: "8080"
+    QBT_RUN: "true"
+    QBT_SCHEDULE: "1440"
+    QBT_CONFIG_DIR: "/config"
+    QBT_RECHECK: "true"
+    QBT_CAT_UPDATE: "true"
+    QBT_TAG_UPDATE: "true"
+    QBT_REM_UNREGISTERED: "true"
+    QBT_REM_ORPHANED: "true"
+    QBT_TAG_TRACKER_ERROR: "true"
+    QBT_TAG_NOHARDLINKS: "true"
+    QBT_SHARE_LIMITS: "true"
+    QBT_SKIP_CLEANUP: "false"
+    QBT_DRY_RUN: "false"
+    QBT_STARTUP_DELAY: "0"
+    QBT_SKIP_QB_VERSION_CHECK: "false"
+    QBT_DEBUG: "false"
+    QBT_TRACE: "false"
+    QBT_LOG_LEVEL: "INFO"
+    QBT_LOG_SIZE: "10"
+    QBT_LOG_COUNT: "5"
+    QBT_DIVIDER: "="
+    QBT_WIDTH: "100"
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints:
+      - node.labels.ansible_host == unraid
+    restart_policy:
+      condition: on-failure
+      max_attempts: 2
+  targets:
+    downloads:
+      name: qbit-manage-downloads
+      infisical:
+        fail_on_empty: true
+        secrets_map:
+          - var: qbittorrent_user
+            path: "/qBittorrent"
+            name: USER
+          - var: qbittorrent_pass
+            path: "/qBittorrent"
+            name: PASS
+          - var: notifiarr_webhook
+            path: "/Qbit-Manage"
+            name: NOTIFIARR_WEBHOOK
+      paths:
+        - path: /mnt/user/appdata/qbit-manage
+          state: directory
+          owner: 99
+          group: 100
+          mode: "0755"
+        - path: /mnt/user/appdata/qbit-manage/downloads
+          state: directory
+          owner: 99
+          group: 100
+          mode: "0755"
+      templates:
+        - src: configs/qbit-manage/downloads-config.yml.j2
+          dest: /mnt/user/appdata/qbit-manage/downloads/config.yml
+          owner: 99
+          group: 100
+          mode: "0664"
+          force: true
+      volumes:
+        config:
+          type: bind
+          source: /mnt/user/appdata/qbit-manage/downloads
+          target: /config
+          read_only: false
+        media:
+          type: bind
+          source: /mnt/user/data/torrents
+          target: /data/torrents
+          read_only: false
+    seeds:
+      name: qbit-manage-seeds
+      infisical:
+        fail_on_empty: true
+        secrets_map:
+          - var: qbittorrent_xs_user
+            path: "/qBittorrent-XS"
+            name: USER
+          - var: qbittorrent_xs_pass
+            path: "/qBittorrent-XS"
+            name: PASS
+          - var: notifiarr_webhook
+            path: "/Qbit-Manage"
+            name: NOTIFIARR_WEBHOOK
+      paths:
+        - path: /mnt/user/appdata/qbit-manage
+          state: directory
+          owner: 99
+          group: 100
+          mode: "0755"
+        - path: /mnt/user/appdata/qbit-manage/seeds
+          state: directory
+          owner: 99
+          group: 100
+          mode: "0755"
+      templates:
+        - src: configs/qbit-manage/seeds-config.yml.j2
+          dest: /mnt/user/appdata/qbit-manage/seeds/config.yml
+          owner: 99
+          group: 100
+          mode: "0664"
+          force: true
+      volumes:
+        config:
+          type: bind
+          source: /mnt/user/appdata/qbit-manage/seeds
+          target: /config
+          read_only: false
+        media:
+          type: bind
+          source: /mnt/user/data/seeds
+          target: /data/seeds
+          read_only: false

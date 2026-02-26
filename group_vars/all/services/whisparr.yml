@@ -2,7 +2,7 @@
 
 whisparr:
   name: whisparr
-  stack: arrs
+  stack: whisparr
   image: ghcr.io/hotio/whisparr:v3-3.2.3-release.219
   named_networks:
     overlay:

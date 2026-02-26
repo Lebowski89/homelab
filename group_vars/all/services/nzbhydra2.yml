@@ -2,7 +2,7 @@
 
 nzbhydra2:
   name: nzbhydra2
-  stack: usenet
+  stack: nzbhydra2
   image: ghcr.io/hotio/nzbhydra2:release-8.4.1
   named_networks:
     overlay:

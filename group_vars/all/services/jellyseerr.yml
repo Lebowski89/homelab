@@ -2,7 +2,7 @@
 
 jellyseerr:
   name: jellyseerr
-  stack: media
+  stack: jellyseerr
   image: fallenbagel/jellyseerr:2.7.3
   named_networks:
     overlay:

@@ -2,7 +2,7 @@
 
 lidarr:
   name: lidarr
-  stack: arrs
+  stack: lidarr
   image: ghcr.io/hotio/lidarr:release-3.1.0.4875
   named_networks:
     overlay:

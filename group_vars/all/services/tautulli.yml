@@ -2,7 +2,7 @@
 
 tautulli:
   name: tautulli
-  stack: plex
+  stack: tautulli
   image: ghcr.io/hotio/tautulli:release-2.16.0
   named_networks:
     overlay:

@@ -2,7 +2,7 @@
 
 traefik:
   name: traefik
-  stack: proxy
+  stack: traefik
   image: traefik:v3.6.9
   named_networks:
     overlay:

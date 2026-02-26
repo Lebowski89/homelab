@@ -2,7 +2,7 @@
 
 czkawka:
   name: czkawka
-  stack: utilities
+  stack: czkawka
   image: jlesage/czkawka
   named_networks:
     overlay:

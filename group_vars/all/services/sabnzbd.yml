@@ -2,7 +2,7 @@
 
 sabnzbd:
   name: sabnzbd
-  stack: usenet
+  stack: sabnzbd
   image: ghcr.io/hotio/sabnzbd:release-4.5.5
   named_networks:
     overlay:

@@ -1,0 +1,22 @@
+---
+
+http:
+  routers:
+    authelia:
+      entryPoints: ["https"]
+      rule: "Host(`authelia.{{ cloudflare_zone }}`)"
+      priority: 50
+      tls:
+        options: "securetls@file"
+      # IMPORTANT: do NOT include authelia@file here (would create an auth loop)
+      middlewares:
+        - "secure-headers@file"
+        - "hsts@file"
+        - "gzip@file"
+      service: "authelia-svc"
+
+  services:
+    authelia-svc:
+      loadBalancer:
+        servers:
+          - url: "http://authelia:9091"

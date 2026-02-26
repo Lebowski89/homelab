@@ -2,7 +2,7 @@
 
 themepark:
   name: theme-park
-  stack: utilities
+  stack: themepark
   image: ghcr.io/themepark-dev/theme.park:1.22.0
   named_networks:
     overlay:
