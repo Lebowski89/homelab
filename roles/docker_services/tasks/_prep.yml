@@ -218,6 +218,23 @@
     loop_var: _fs_target
 
 ################################
+# PREP (SWARM ENV TEMPLATES)
+################################
+
+- name: Render swarm env templates (always on localhost manager)
+  when:
+    - inventory_hostname == "localhost"
+    - (docker_services_stack_deploy_type | string | trim) == "swarm"
+    - docker_services_svc.swarm_env_templates is defined
+    - (docker_services_svc.swarm_env_templates | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/templates.yml"
+  vars:
+    templates: "{{ docker_services_svc.swarm_env_templates }}"
+    docker_services_deploy_host: "localhost"
+    default_owner: "{{ hostvars['localhost'].puid | default('1000') }}"
+    default_group: "{{ hostvars['localhost'].pgid | default('1000') }}"
+
+################################
 # PREP (TEMPLATE MIDDLEWARES)
 ################################
 
