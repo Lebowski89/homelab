@@ -35,9 +35,16 @@
       delegate_facts: true
 
 - name: Token | Generate new identifier
-  when: (not docker_services_plex_ini.stat.exists) or (hostvars['localhost'].docker_services_plex_client_identifier_missing | default(false))
+  when: >-
+    (not docker_services_plex_ini.stat.exists)
+    or
+    (hostvars['localhost'].docker_services_plex_client_identifier_missing | default(false))
   ansible.builtin.set_fact:
-    docker_services_plex_client_identifier: "{{ 'plex' + (lookup('password', '/dev/null', chars=['ascii_lowercase', 'digits'], length=8)) }}"
+    docker_services_plex_client_identifier: >-
+      {{
+        'plex' +
+        (lookup('password', '/dev/null', chars=['ascii_lowercase', 'digits'], length=8))
+      }}
   delegate_to: localhost
   delegate_facts: true
   run_once: true
@@ -119,7 +126,13 @@
     - name: Token | Login prompt
       ansible.builtin.pause:
         prompt: >-
-          Please open https://app.plex.tv/auth#?clientID={{ docker_services_plex_pin.json.clientIdentifier }}&code={{ docker_services_plex_pin.json.code }}&context%5Bdevice%5D%5Bproduct%5D={{ docker_services_plex_pin.json.product }}
+          {% set plex_auth_url =
+            'https://app.plex.tv/auth#?clientID=' ~ docker_services_plex_pin.json.clientIdentifier
+            ~ '&code=' ~ docker_services_plex_pin.json.code
+            ~ '&context%5Bdevice%5D%5Bproduct%5D=' ~ docker_services_plex_pin.json.product
+          %}
+          Please open
+          {{ plex_auth_url }}
           and login. Hit enter after having logged in
 
     - name: Token | Check PIN

@@ -47,7 +47,9 @@
   ansible.builtin.assert:
     that:
       - (vars[infisical_secret_item.var] | default('') | string | trim | length) > 0
-    fail_msg: "Infisical secret {{ infisical_secret_item.path }}/{{ infisical_secret_item.name }} (var {{ infisical_secret_item.var }}) is empty"
+    fail_msg: >-
+      Infisical secret {{ infisical_secret_item.path }}/{{ infisical_secret_item.name }}
+      (var {{ infisical_secret_item.var }}) is empty
   loop: "{{ secrets_map }}"
   loop_control:
     loop_var: infisical_secret_item
@@ -82,7 +84,9 @@
   ansible.builtin.assert:
     that:
       - (vars[infisical_out_var | default('infisical_secrets')][infisical_secret_item.var] | default('') | string | trim | length) > 0
-    fail_msg: "Infisical secret {{ infisical_secret_item.path }}/{{ infisical_secret_item.name }} (key {{ infisical_secret_item.var }}) is empty"
+    fail_msg: >-
+      Infisical secret {{ infisical_secret_item.path }}/{{ infisical_secret_item.name }}
+      (key {{ infisical_secret_item.var }}) is empty
   loop: "{{ secrets_map }}"
   loop_control:
     loop_var: infisical_secret_item

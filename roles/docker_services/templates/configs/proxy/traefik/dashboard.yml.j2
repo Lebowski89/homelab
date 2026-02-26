@@ -1,0 +1,20 @@
+http:
+  middlewares:
+    traefik-dashboard-chain:
+      chain:
+        middlewares:
+          - "authelia@file"
+          - "secure-headers@file"
+          - "hsts@file"
+          - "gzip@file"
+
+  routers:
+    traefik-dashboard:
+      entryPoints: ["https"]
+      rule: "Host(`traefik.{{ cloudflare_zone }}.com`)"
+      priority: 10
+      tls:
+        options: "securetls@file"
+      middlewares:
+        - "traefik-dashboard-chain"
+      service: "api@internal"

@@ -2,7 +2,7 @@
 
 bazarr:
   name: bazarr
-  stack: arrs
+  stack: bazarr
   image: ghcr.io/hotio/bazarr:release-1.5.5
   named_networks:
     overlay:

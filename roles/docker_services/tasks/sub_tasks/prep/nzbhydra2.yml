@@ -5,8 +5,20 @@
     docker_services_nh_host: "{{ (docker_services_svc.deploy.host | default('unraid', true)) | string | trim }}"
     docker_services_nh_config_dir: "/mnt/user/appdata/nzbhydra2"
     docker_services_nh_config_path: "/mnt/user/appdata/nzbhydra2/nzbhydra.yml"
-    docker_services_nh_puid: "{{ (docker_services_svc.environment.PUID | default(hostvars[(docker_services_svc.deploy.host | default('unraid', true))].puid | default('99'))) | string }}"
-    docker_services_nh_pgid: "{{ (docker_services_svc.environment.PGID | default(hostvars[(docker_services_svc.deploy.host | default('unraid', true))].pgid | default('100'))) | string }}"
+    docker_services_nh_puid: >-
+      {{
+        (docker_services_svc.environment.PUID |
+        default(hostvars[(docker_services_svc.deploy.host | default('unraid', true))].puid |
+        default('99')))
+        | string
+      }}
+    docker_services_nh_pgid: >-
+      {{
+        (docker_services_svc.environment.PGID |
+        default(hostvars[(docker_services_svc.deploy.host | default('unraid', true))].pgid |
+        default('100')))
+        | string
+      }}
   when: inventory_hostname == "localhost"
   run_once: true
 
@@ -217,6 +229,8 @@
     that:
       - (docker_services_nh_cfg.indexers | default([])) is sequence
       - (docker_services_nh_cfg.indexers | length) >= 3
-    fail_msg: "Expected >= 3 indexers in {{ docker_services_nh_config_path }}, got {{ (docker_services_nh_cfg.indexers | default([])) | length }}"
+    fail_msg: >-
+      Expected >= 3 indexers in {{ docker_services_nh_config_path }}, got
+      {{ (docker_services_nh_cfg.indexers | default([])) | length }}
   when: inventory_hostname == "localhost"
   run_once: true

@@ -2,7 +2,7 @@
 
 kometa:
   name: kometa
-  stack: plex
+  stack: kometa
   image: kometateam/kometa:v2.3.0
   named_networks:
     overlay:

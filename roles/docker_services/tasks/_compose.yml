@@ -66,11 +66,20 @@
         [] if docker_services_svc_has_network_mode else
         (
           (docker_services_svc.networks | default([], true))
-          if (docker_services_svc.networks is defined and docker_services_svc.networks is sequence and docker_services_svc.networks is not string and (docker_services_svc.networks | length > 0))
+          if (
+            docker_services_svc.networks is defined
+            and docker_services_svc.networks is sequence
+            and docker_services_svc.networks is not string
+            and (docker_services_svc.networks | length > 0)
+          )
           else
           (
             (docker_services_svc.named_networks.keys() | list)
-            if (docker_services_svc.named_networks is defined and docker_services_svc.named_networks is mapping and (docker_services_svc.named_networks | length > 0))
+            if (
+              docker_services_svc.named_networks is defined
+              and docker_services_svc.named_networks is mapping
+              and (docker_services_svc.named_networks | length > 0)
+            )
             else
             [docker_network]
           )
@@ -235,7 +244,11 @@
     - docker_services_svc.healthcheck is defined
     - docker_services_svc.healthcheck.test is defined
     - (
-        (docker_services_svc.healthcheck.test is sequence and docker_services_svc.healthcheck.test is not string and (docker_services_svc.healthcheck.test | length > 0))
+        (
+          docker_services_svc.healthcheck.test is sequence
+          and docker_services_svc.healthcheck.test is not string
+          and (docker_services_svc.healthcheck.test | length > 0)
+        )
         or
         (docker_services_svc.healthcheck.test is string and (docker_services_svc.healthcheck.test | trim | length > 0))
       )

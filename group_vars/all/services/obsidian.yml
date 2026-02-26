@@ -2,7 +2,7 @@
 
 obsidian:
   name: obsidian
-  stack: blog
+  stack: obsidian
   image: lscr.io/linuxserver/obsidian:v1.11.7-ls110
   named_networks:
     overlay:

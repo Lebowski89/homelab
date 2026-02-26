@@ -1,0 +1,71 @@
+baseURL: https://{{ cloudflare_zone }}/
+
+languageCode: en-us
+
+title: Le Tour De Blog
+
+theme: terminal
+
+pagination:
+  pagerSize: 5
+
+enableEmoji: true
+
+markup:
+  defaultMarkdownHandler: goldmark
+  goldmark:
+    renderer:
+      unsafe: true
+
+params:
+  autoCover: true
+  centerTheme: true
+  contentTypeName: posts
+  fullWidthTheme: false
+  readingTime: true
+  showLastUpdated: true
+  showLanguageSelector: false
+  subtitle: A simple, retro theme for Hugo
+  owner: "Lebowski89"
+  keywords: ""
+  menuMore: "Show More"
+  readMore: "Read More"
+  readOtherPosts: "Read Other"
+  newerPosts: "Newer"
+  olderPosts: "Older"
+  missingContentMessage: "Shits fucked..."
+  missingBackButtonLabel: "Back to the Future"
+  minuteReadingTime: "min read"
+  words: "words"
+  Toc: true
+  TocTitle: Contents
+  logo:
+    logoText: "Le Tour De Blog"
+  favicon: favicon.png
+
+menu:
+  main:
+  - identifier: about
+    name: About
+    url: /about/
+    weight: 1
+  - identifier: playbook
+    name: Playbook
+    url: /playbook/
+    weight: 2
+  - identifier: roles
+    name: Roles
+    url: /roles/
+    weight: 3
+  - identifier: common
+    name: Common-Tasks
+    url: /common/
+    weight: 4
+  - identifier: misc
+    name: Misc
+    url: /misc/
+    weight: 5
+
+caches:
+  images:
+    dir: :cacheDir/images

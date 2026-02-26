@@ -2,7 +2,7 @@
 
 authelia:
   name: authelia
-  stack: proxy
+  stack: authelia
   image: authelia/authelia:4.39.15
   named_networks:
     overlay:

@@ -2,7 +2,7 @@
 
 imagemaid:
   name: imagemaid
-  stack: plex
+  stack: imagemaid
   image: kometateam/imagemaid:v1.1.1
   named_networks:
     overlay:
