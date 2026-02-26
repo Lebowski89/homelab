@@ -2,12 +2,16 @@
 
 - name: Init (validate + normalize)
   ansible.builtin.import_tasks: _init.yml
+  tags: [install, update]
 
 - name: Run prep phase
   ansible.builtin.include_tasks: _prep.yml
+  tags: [install, update]
 
 - name: Build compose definition
   ansible.builtin.include_tasks: _compose.yml
+  tags: [install, update]
 
 - name: Run centralized deploy (once)
   ansible.builtin.include_tasks: _deploy.yml
+  tags: [install, update]

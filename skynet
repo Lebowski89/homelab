@@ -1,0 +1,222 @@
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PLAYBOOK="${PLAYBOOK:-$REPO_ROOT/playbook.yml}"
+INVENTORY="${INVENTORY:-$REPO_ROOT/hosts.ini}"
+ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-$REPO_ROOT/ansible.cfg}"
+
+usage() {
+  cat <<'EOF'
+Usage:
+  skynet install <tag> [tag2 ...]
+  skynet update <tag|all> [tag2 ...]
+  skynet check <tag> [tag2 ...]
+  skynet doctor [--ping]
+  skynet limit <hostpattern> <install|update|check|raw> ...
+  skynet tags
+  skynet raw <ansible-playbook args...>
+  skynet help
+
+Examples:
+  skynet install autopulse
+  skynet install pgha
+  skynet update all
+  skynet update authelia traefik
+  skynet check radarr
+  skynet limit pg01 install etcd
+  skynet doctor
+  skynet doctor --ping
+EOF
+  exit 1
+}
+
+die() { echo "Error: $*" >&2; exit 1; }
+
+join_csv() {
+  local IFS=,
+  echo "$*"
+}
+
+run_playbook() {
+  ANSIBLE_CONFIG="$ANSIBLE_CONFIG" ansible-playbook -i "$INVENTORY" "$PLAYBOOK" "$@"
+}
+
+print_tags() {
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$PLAYBOOK" <<'PY'
+import sys
+from collections import OrderedDict
+p = sys.argv[1]
+try:
+    import yaml
+except Exception:
+    yaml = None
+
+tags = OrderedDict()
+def add(x):
+    if isinstance(x, str):
+        x = x.strip()
+        if x and x not in tags:
+            tags[x] = True
+
+if yaml:
+    with open(p, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or []
+    if isinstance(data, list):
+        for play in data:
+            if not isinstance(play, dict):
+                continue
+            ds = (play.get("vars") or {}).get("docker_services", [])
+            if isinstance(ds, list):
+                for item in ds:
+                    if not isinstance(item, dict):
+                        continue
+                    add(item.get("name"))
+                    for t in (item.get("tags") or []):
+                        add(t)
+    for t in tags:
+        print(t)
+else:
+    # fallback (best effort)
+    import re
+    with open(p, "r", encoding="utf-8") as f:
+        for line in f:
+            m = re.match(r'^\s*-\s*name:\s*(.+?)\s*$', line)
+            if m:
+                add(m.group(1))
+            m = re.match(r'^\s*tags:\s*\[(.*?)\]\s*$', line)
+            if m:
+                for t in m.group(1).split(","):
+                    add(t)
+    for t in tags:
+        print(t)
+PY
+  else
+    grep -E '^\s*- name:|^\s*tags:\s*\[' "$PLAYBOOK" \
+      | sed -E 's/^\s*- name:\s*//; s/^\s*tags:\s*\[//; s/\]\s*$//' \
+      | tr ',' '\n' | sed 's/^ *//; s/ *$//' | sort -u
+  fi
+}
+
+doctor() {
+  local do_ping="${1:-false}"
+
+  echo "[INFO] Repo root: $REPO_ROOT"
+
+  [[ -f "$PLAYBOOK" ]] && echo "[OK] playbook found: $PLAYBOOK" || die "Missing playbook: $PLAYBOOK"
+  [[ -f "$INVENTORY" ]] && echo "[OK] inventory found: $INVENTORY" || die "Missing inventory: $INVENTORY"
+  [[ -f "$ANSIBLE_CONFIG" ]] && echo "[OK] ansible.cfg found: $ANSIBLE_CONFIG" || die "Missing ansible.cfg: $ANSIBLE_CONFIG"
+
+  command -v ansible-playbook >/dev/null 2>&1 || die "ansible-playbook not found in PATH"
+  command -v ansible-inventory >/dev/null 2>&1 || die "ansible-inventory not found in PATH"
+
+  echo "[OK] ansible-playbook: $(command -v ansible-playbook)"
+  if ansible-playbook --version >/dev/null 2>&1; then
+    echo "[OK] ansible-playbook version check passed"
+  else
+    die "ansible-playbook --version failed"
+  fi
+
+  if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" ansible-inventory -i "$INVENTORY" --list >/dev/null 2>&1; then
+    echo "[OK] inventory parses"
+  else
+    die "ansible-inventory --list failed"
+  fi
+
+  if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" ansible-playbook -i "$INVENTORY" "$PLAYBOOK" --syntax-check >/dev/null 2>&1; then
+    echo "[OK] playbook syntax check passed"
+  else
+    die "playbook syntax check failed"
+  fi
+
+  if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" ansible-playbook -i "$INVENTORY" "$PLAYBOOK" --list-tags >/dev/null 2>&1; then
+    echo "[OK] --list-tags works"
+  else
+    echo "[WARN] --list-tags failed"
+  fi
+
+  if command -v ansible-galaxy >/dev/null 2>&1; then
+    if ansible-galaxy collection list 2>/dev/null | grep -q 'community.docker'; then
+      echo "[OK] community.docker collection found"
+    else
+      echo "[WARN] community.docker collection not found"
+    fi
+  else
+    echo "[WARN] ansible-galaxy not found (skipping collection checks)"
+  fi
+
+  if [[ "$do_ping" == "true" ]]; then
+    if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" ansible -i "$INVENTORY" skynet -m ping >/dev/null 2>&1; then
+      echo "[OK] ansible ping to group 'skynet' passed"
+    else
+      echo "[WARN] ansible ping to group 'skynet' failed"
+    fi
+  fi
+
+  echo "[OK] doctor complete"
+}
+
+LIMIT_ARGS=()
+
+CMD="${1:-}"
+[[ -n "$CMD" ]] || usage
+shift || true
+
+if [[ "$CMD" == "limit" ]]; then
+  [[ $# -ge 2 ]] || die "Usage: skynet limit <hostpattern> <command> ..."
+  LIMIT_ARGS=(--limit "$1")
+  shift
+  CMD="$1"
+  shift
+fi
+
+case "$CMD" in
+  install)
+    [[ $# -ge 1 ]] || die "install requires at least one tag"
+    TAGS="$(join_csv "$@")"
+    run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    ;;
+
+  update)
+    [[ $# -ge 1 ]] || die "update requires at least one tag or 'all'"
+    if [[ "$1" == "all" ]]; then
+      run_playbook "${LIMIT_ARGS[@]}" --tags "update"
+    else
+      TAGS="update,$(join_csv "$@")"
+      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    fi
+    ;;
+
+  check|dry-run)
+    [[ $# -ge 1 ]] || die "check requires at least one tag"
+    TAGS="$(join_csv "$@")"
+    run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$TAGS"
+    ;;
+
+  doctor)
+    if [[ "${1:-}" == "--ping" ]]; then
+      doctor true
+    else
+      doctor false
+    fi
+    ;;
+
+  tags|list)
+    print_tags
+    ;;
+
+  raw)
+    [[ $# -ge 1 ]] || die "raw requires ansible-playbook args"
+    run_playbook "${LIMIT_ARGS[@]}" "$@"
+    ;;
+
+  help|-h|--help)
+    usage
+    ;;
+
+  *)
+    die "Unknown command: $CMD"
+    ;;
+esac

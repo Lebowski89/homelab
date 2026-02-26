@@ -251,9 +251,10 @@
         docker_services_service_target: "{{ item.target | default('swarm') }}"
       when:
         - docker_services_service_cfg_found | bool
-        - (ansible_run_tags | length == 0)
-          or (item.name in ansible_run_tags)
-          or ((item.tags | default([])) | intersect(ansible_run_tags) | length > 0)
+        - ('all' in (ansible_run_tags | default([])))
+          or (ansible_run_tags | length == 0)
+          or (item.name in (ansible_run_tags | default([])))
+          or ((item.tags | default([])) | intersect(ansible_run_tags | default([])) | length > 0)
       loop: "{{ docker_services }}"
       loop_control:
         label: "{{ item.name }}"
