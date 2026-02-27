@@ -2,7 +2,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+  SCRIPT_DIR="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
+  SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+  [[ "$SCRIPT_PATH" != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+REPO_ROOT="$(cd -P "$(dirname "$SCRIPT_PATH")" && pwd)"
 PLAYBOOK="${PLAYBOOK:-$REPO_ROOT/playbook.yml}"
 INVENTORY="${INVENTORY:-$REPO_ROOT/hosts.ini}"
 ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-$REPO_ROOT/ansible.cfg}"
