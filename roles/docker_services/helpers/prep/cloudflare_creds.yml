@@ -1,68 +1,112 @@
 ---
 
 ################################
-# CREDS (SELF-CONTAINED VIA INFISICAL)
+# PUBLIC IP (ONLY IF NEEDED)
 ################################
 
-# Always set this so later "when: _is_hugo" never explodes
-- name: Cloudflare | Detect hugo service
+- name: Cloudflare | Determine whether public IP lookup is needed
   ansible.builtin.set_fact:
-    _is_hugo: >-
+    docker_services_cf_needs_public_ip: >-
       {{
-        (docker_services_service_name | default('') | string | trim) == 'hugo'
+        (
+          docker_services_svc.cloudflare.records is not defined
+          and (docker_services_svc.cloudflare.value is not defined)
+        )
         or
-        (role_prefix  | default('') | string | trim) == 'hugo'
+        (
+          docker_services_svc.cloudflare.records is defined
+          and (
+            (
+              docker_services_svc.cloudflare.records is mapping
+              and (docker_services_svc.cloudflare.records.value is not defined)
+            )
+            or
+            (
+              docker_services_svc.cloudflare.records is sequence
+              and docker_services_svc.cloudflare.records is not string
+              and (
+                docker_services_svc.cloudflare.records
+                | selectattr('value', 'defined')
+                | list
+                | length
+              ) < (docker_services_svc.cloudflare.records | length)
+            )
+          )
+        )
       }}
+
+- name: Cloudflare | Gather public IP facts (only when needed)
+  when: docker_services_cf_needs_public_ip | bool
+  block:
+    - name: Gather IP geolocation data
+      community.general.ipinfoio_facts:
+
+    - name: Gather public IP data
+      community.general.ipify_facts:
+        api_url: https://api64.ipify.org
+        timeout: 20
+      register: docker_services_public_ip_result
+
+    - name: Public IP output
+      ansible.builtin.debug:
+        msg: "{{ ipify_public_ip }}"
+
+    - name: Set public_ip fact
+      ansible.builtin.set_fact:
+        public_ip: "{{ ipify_public_ip }}"
+
+################################
+# API (VIA INFISICAL)
+################################
 
 - name: Cloudflare | Detect if creds are missing
   ansible.builtin.set_fact:
-    _cf_creds_missing: >-
+    docker_services_cf_api_missing: >-
       {{
         (cloudflare_api | default('') | string | trim | length == 0)
-        or
-        (cloudflare_zone | default('') | string | trim | length == 0)
       }}
 
-- name: Cloudflare | Apply service-level Cloudflare overrides
-  ansible.builtin.set_fact:
-    cloudflare_zone: "{{ docker_services_svc.cloudflare.zone }}"
-  when:
-    - docker_services_svc.cloudflare is defined
-    - (docker_services_svc.cloudflare.zone | default('') | string | trim | length) > 0
-
-- name: Cloudflare | Select Infisical path/name (hugo override)
-  when: _cf_creds_missing | bool
-  ansible.builtin.set_fact:
-    _cf_infisical_path: >-
-      {{
-        (_is_hugo | bool)
-        | ternary('/Hugo', (cloudflare_infisical_path | default('/Cloudflare', true)))
-      }}
-    _cf_zone_name: >-
-      {{
-        (_is_hugo | bool)
-        | ternary('Domain', (cloudflare_infisical_zone_name | default('ZONE', true)))
-      }}
-    _cf_api_name: "{{ cloudflare_infisical_api_name | default('API', true) }}"
-
-- name: Cloudflare | Fetch cloudflare_api/cloudflare_zone from Infisical (only if missing)
-  when: _cf_creds_missing | bool
+- name: Cloudflare | Fetch cloudflare_api from Infisical (only if missing)
+  when: docker_services_cf_api_missing | bool
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/infisical.yml"
   vars:
     infisical_fail_on_empty: true
     infisical_flatten: true
     secrets_map:
       - var: cloudflare_api
-        path: "{{ _cf_infisical_path }}"
-        name: "{{ _cf_api_name }}"
+        path: "/Cloudflare"
+        name: API
+
+################################
+# ZONE (VIA INFISICAL)
+################################
+
+- name: Cloudflare | Detect if creds are missing
+  ansible.builtin.set_fact:
+    docker_services_cf_zone_missing: >-
+      {{
+        (cloudflare_zone | default('') | string | trim | length == 0)
+      }}
+
+- name: Cloudflare | Fetch cloudflare_zone from Infisical (only if missing)
+  when: docker_services_cf_zone_missing | bool
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/infisical.yml"
+  vars:
+    infisical_fail_on_empty: true
+    infisical_flatten: true
+    secrets_map:
       - var: cloudflare_zone
-        path: "{{ _cf_infisical_path }}"
-        name: "{{ _cf_zone_name }}"
+        path: "/Cloudflare"
+        name: ZONE
+
+################################
+# CREDS (ASSERT)
+################################
 
 - name: Cloudflare | Assert creds are now present
   ansible.builtin.assert:
     that:
-      - (cloudflare_api  | default('') | string | trim | length) > 0
+      - (cloudflare_api | default('') | string | trim | length) > 0
       - (cloudflare_zone | default('') | string | trim | length) > 0
     fail_msg: >-
       cloudflare_api/cloudflare_zone are still empty after Infisical fetch.
@@ -74,70 +118,80 @@
 ################################
 
 - name: Create Cloudflare API secret
-  when:
-    - inventory_hostname == "localhost"
-    - (cloudflare_api | default('') | string | trim | length) > 0
   community.docker.docker_secret:
     name: cloudflare_api_secret
     data: "{{ cloudflare_api }}"
     state: present
 
 ################################
-# CLOUDFLARE DNS
+# DNS TASKER
 ################################
 
-# Normal services: A record <docker_services_svc.name> -> public_ip
-- name: Configure Cloudflare DNS (normal)
-  when:
-    - inventory_hostname == "localhost"
-    - not (_is_hugo | bool)
-  ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cloudflare_dns.yml"
-  vars:
-    cloudflare_record: >-
+- name: Build Cloudflare records list (single or multiple)
+  ansible.builtin.set_fact:
+    docker_services_cloudflare_records_effective: >-
       {{
-        docker_services_svc.cloudflare.record
-        | default(docker_services_svc.name, true)
-      }}
-    cloudflare_record_value: >-
-      {{
-        docker_services_svc.cloudflare.value
-        | default(public_ip, true)
-      }}
-    cloudflare_record_type: >-
-      {{
-        docker_services_svc.cloudflare.type
-        | default('A', true)
-      }}
-    cloudflare_proxy: >-
-      {{
-        (docker_services_svc.cloudflare.proxy | default(false, true)) | bool
-      }}
-    cloudflare_solo: >-
-      {{
-        (docker_services_svc.cloudflare.solo | default(true, true)) | bool
+        (
+          [docker_services_svc.cloudflare.records]
+          if (
+            docker_services_svc.cloudflare.records is defined
+            and docker_services_svc.cloudflare.records is mapping
+          )
+          else (
+            docker_services_svc.cloudflare.records
+            if (
+              docker_services_svc.cloudflare.records is defined
+              and docker_services_svc.cloudflare.records is sequence
+              and docker_services_svc.cloudflare.records is not string
+            )
+            else [
+              {
+                'record': (
+                  docker_services_svc.cloudflare.record
+                  | default(docker_services_svc.name | default(docker_services_service_name, true), true)
+                ),
+                'value': (
+                  docker_services_svc.cloudflare.value
+                  | default(public_ip, true)
+                ),
+                'type': (
+                  docker_services_svc.cloudflare.type
+                  | default('A', true)
+                ),
+                'proxy': (
+                  docker_services_svc.cloudflare.proxy
+                  | default(false, true)
+                ),
+                'solo': (
+                  docker_services_svc.cloudflare.solo
+                  | default(true, true)
+                )
+              }
+            ]
+          )
+        )
       }}
 
-# Hugo: root (@) records -> GitHub Pages IPs (A + AAAA)
-- name: Configure Cloudflare DNS (hugo root records)
-  when:
-    - inventory_hostname == "localhost"
-    - (_is_hugo | bool)
+- name: Configure Cloudflare DNS records
   ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/cloudflare_dns.yml"
   vars:
-    cloudflare_record: "@"
-    cloudflare_record_value: "{{ hugo_dns.value }}"
-    cloudflare_record_type: "{{ hugo_dns.type }}"
-    cloudflare_proxy: false
-    cloudflare_solo: true
-  loop:
-    - {type: "A", value: "185.199.108.153"}
-    - {type: "A", value: "185.199.109.153"}
-    - {type: "A", value: "185.199.110.153"}
-    - {type: "A", value: "185.199.111.153"}
-    - {type: "AAAA", value: "2606:50c0:8000::153"}
-    - {type: "AAAA", value: "2606:50c0:8001::153"}
-    - {type: "AAAA", value: "2606:50c0:8002::153"}
-    - {type: "AAAA", value: "2606:50c0:8003::153"}
+    cloudflare_record: "{{ docker_services_cf_record.record }}"
+    cloudflare_record_value: "{{ docker_services_cf_record.value | default(public_ip, true) }}"
+    cloudflare_record_type: "{{ docker_services_cf_record.type | default('A', true) }}"
+    cloudflare_proxy: "{{ (docker_services_cf_record.proxy | default(false, true)) | bool }}"
+    cloudflare_solo: "{{ (docker_services_cf_record.solo | default(true, true)) | bool }}"
+  loop: "{{ docker_services_cloudflare_records_effective }}"
   loop_control:
-    loop_var: hugo_dns
-    label: "{{ hugo_dns.type }}={{ hugo_dns.value }}"
+    loop_var: docker_services_cf_record
+    label: >-
+      {{
+        (docker_services_cf_record.type | default('A', true))
+        ~ ' '
+        ~ docker_services_cf_record.record
+        ~ ' -> '
+        ~ (
+          docker_services_cf_record.value
+          | default(public_ip, true)
+          | string
+        )
+      }}
