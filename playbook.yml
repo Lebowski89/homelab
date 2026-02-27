@@ -22,65 +22,65 @@
 
       ## services (proxy)
       - name: authelia
-        tags: [proxy, authelia]
+        tags: [apps, proxy, authelia]
       - name: authelia_redis
-        tags: [proxy, authelia-redis]
+        tags: [apps, proxy, authelia-redis]
       - name: traefik
-        tags: [proxy, traefik]
+        tags: [apps, proxy, traefik]
 
       ## services (arrs)
       - name: bazarr
-        tags: [arrs, bazarr]
+        tags: [apps, arrs, bazarr]
       - name: lidarr
-        tags: [arrs, lidarr]
+        tags: [apps, arrs, lidarr]
       - name: prowlarr
-        tags: [arrs, prowlarr]
+        tags: [apps, arrs, prowlarr]
       - name: radarr
         target: radarr
-        tags: [arrs, radarr]
+        tags: [apps, arrs, radarr]
       - name: radarr
         target: radarr_4k
-        tags: [arrs, radarr]
+        tags: [apps, arrs, radarr]
       - name: recyclarr
-        tags: [arrs, recyclarr]
+        tags: [apps, arrs, recyclarr]
       - name: sonarr
         target: sonarr
-        tags: [arrs, sonarr]
+        tags: [apps, arrs, sonarr]
       - name: sonarr
         target: sonarr_4k
-        tags: [arrs, sonarr]
+        tags: [apps, arrs, sonarr]
       - name: sportarr
-        tags: [sportarr]
+        tags: [apps, arrs, sportarr]
       - name: whisparr
-        tags: [arrs, whisparr]
+        tags: [apps, arrs, whisparr]
 
       ## services (media)
       - name: autobrr
-        tags: [media, autobrr]
+        tags: [apps, media, autobrr]
       - name: jellyseerr
-        tags: [media, jellyseerr]
+        tags: [apps, media, jellyseerr]
       - name: ombi
-        tags: [media, ombi]
+        tags: [apps, media, ombi]
       - name: stash
-        tags: [media, stash]
+        tags: [apps, media, stash]
       - name: thelounge
-        tags: [media, thelounge]
+        tags: [apps, media, thelounge]
       - name: znc
-        tags: [media, znc]
+        tags: [apps, media, znc]
 
       ## services (plex)
       - name: autopulse
-        tags: [plex, autopulse]
+        tags: [apps, plex, autopulse]
       - name: autopulse_ui
-        tags: [plex, autopulse]
+        tags: [apps, plex, autopulse]
       - name: imagemaid
-        tags: [plex, imagemaid]
+        tags: [apps, plex, imagemaid]
       - name: kometa
-        tags: [plex, kometa]
+        tags: [apps, plex, kometa]
       - name: plex
-        tags: [plex, plex_server]
+        tags: [apps, plex, plex_server]
       - name: tautulli
-        tags: [plex, tautulli]
+        tags: [apps, plex, tautulli]
 
       ## services (torrents)
       - name: qbittorrent
@@ -102,39 +102,39 @@
 
       ## services (usenet)
       - name: nzbhydra2
-        tags: [usenet, nzbhydra2]
+        tags: [apps, usenet, nzbhydra2]
       - name: sabnzbd
-        tags: [usenet, sabnzbd]
+        tags: [apps, usenet, sabnzbd]
 
       ## services (monitoring)
       - name: alloy
-        tags: [monitoring, alloy]
+        tags: [apps, monitoring, alloy]
       - name: grafana
-        tags: [monitoring, grafana]
+        tags: [apps, monitoring, grafana]
       - name: prometheus
-        tags: [monitoring, prometheus]
+        tags: [apps, monitoring, prometheus]
 
       ## services (blog)
       - name: hugo
-        tags: [blog, hugo]
+        tags: [apps, blog, hugo]
       - name: obsidian
-        tags: [blog, obsidian]
+        tags: [apps, blog, obsidian]
 
       ## services (gluetun)
       - name: gluetun
-        tags: [gluetun]
+        tags: [apps, gluetun]
       - name: jdownloader2
-        tags: [gluetun, jdownloader2]
+        tags: [apps, gluetun, jdownloader2]
       - name: librewolf
-        tags: [gluetun, librewolf]
+        tags: [apps, gluetun, librewolf]
 
       ## services (utilities)
       - name: adminer
-        tags: [utilities, adminer]
+        tags: [apps, utilities, adminer]
       - name: czkawka
-        tags: [utilities, czkawka]
+        tags: [apps, utilities, czkawka]
       - name: themepark
-        tags: [utilities, themepark]
+        tags: [apps, utilities, themepark]
 
       ## services (postgres cluster)
       - name: etcd
@@ -160,7 +160,7 @@
 
       ## services (unifi)
       - name: unifi_db
-        tags: [apps, unifi, unifi_db]
+        tags: [apps, unifi, unifi-db]
       - name: unifi
         tags: [apps, unifi]
 
@@ -171,35 +171,10 @@
         manager: auto
       tags: always
 
-    - name: Gather IP geolocation data
-      when: inventory_hostname == "localhost"
-      community.general.ipinfoio_facts:
-      tags: always
-
-    - name: Gather public IP data
-      when: inventory_hostname == "localhost"
-      community.general.ipify_facts:
-        api_url: https://api64.ipify.org
-        timeout: 20
-      register: public_ip
-      tags: always
-
-    - name: Public IP output
-      when: inventory_hostname == "localhost"
-      ansible.builtin.debug:
-        msg: '{{ ipify_public_ip }}'
-      tags: always
-
-    - name: Set Public IP
-      when: inventory_hostname == "localhost"
-      ansible.builtin.set_fact:
-        public_ip: '{{ ipify_public_ip }}'
-      tags: always
-
     - name: Set timezone variable
       when: inventory_hostname == "localhost"
       ansible.builtin.set_fact:
-        timezone: '{{ ansible_facts.timezone }}'
+        timezone: "{{ ansible_facts.timezone | default('Australia/Melbourne') }}"
       tags: always
 
     - name: Timezone output
@@ -212,6 +187,24 @@
       when: inventory_hostname != "localhost"
       ansible.builtin.set_fact:
         timezone: "{{ hostvars['localhost'].timezone }}"
+      tags: always
+
+    - name: Ensure skynet script is executable
+      when: inventory_hostname == "localhost"
+      ansible.builtin.file:
+        path: "{{ playbook_dir }}/skynet"
+        mode: "0755"
+        state: file
+      tags: always
+
+    - name: Create skynet symlink in /usr/local/bin
+      when: inventory_hostname == "localhost"
+      become: true
+      ansible.builtin.file:
+        src: "{{ playbook_dir }}/skynet"
+        dest: /usr/local/bin/skynet
+        state: link
+        force: true
       tags: always
 
   tasks:
