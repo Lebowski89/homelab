@@ -40,6 +40,11 @@ qui:
       source: /mnt/user/appdata/qui
       target: /config
       read_only: false
+    media:
+      type: bind
+      source: /mnt/user/data
+      target: /data
+      read_only: false
   traefik:
     enable: true
     port: 7476
