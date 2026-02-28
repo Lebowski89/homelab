@@ -1,0 +1,14 @@
+---
+###############################################################
+#                         Users Database                      #
+###############################################################
+
+users:
+  {{ authelia_user }}:
+    disabled: false
+    displayname: '{{ authelia_display_name }}'
+    password: '{{ authelia_argon2_password }}'
+    email: "{{ smtp_email }}"
+    groups:
+      - admins
+...

@@ -1,0 +1,14 @@
+[Interface]
+# Bouncing = 9
+# NetShield = 0
+# Moderate NAT = off
+# NAT-PMP (Port Forwarding) = on
+# VPN Accelerator = on
+PrivateKey = {{ qbittorrent_xs_wg_privkey }}
+Address = {{ qbittorrent_xs_wg_addr }}
+DNS = {{ qbittorrent_xs_wg_dns }}
+
+[Peer]
+PublicKey = {{ qbittorrent_xs_wg_pubkey }}
+AllowedIPs = 0.0.0.0/0
+Endpoint = {{ qbittorrent_xs_wg_endpoint }}

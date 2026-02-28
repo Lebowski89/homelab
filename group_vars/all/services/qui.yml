@@ -3,7 +3,7 @@
 qui:
   name: qui
   stack: qui
-  image: ghcr.io/hotio/qui:v1.13.1
+  image: ghcr.io/hotio/qui:pr-1530
   named_networks:
     overlay:
       external: true
@@ -19,15 +19,21 @@ qui:
     PUID: "99"
     PGID: "100"
     UMASK: "022"
-    QUI__METRICS_ENABLED: "true"
-    QUI__METRICS_HOST: "0.0.0.0"
-    QUI__METRICS_PORT: "9074"
+  env_file:
+    - /opt/stacks/qui.env
   paths:
     - path: /mnt/user/appdata/qui
       state: directory
       owner: 100
       group: 99
       mode: "0755"
+  swarm_env_templates:
+    - src: configs/qui.env.j2
+      dest: /opt/stacks/qui.env
+      owner: 1000
+      group: 1000
+      mode: "0600"
+      force: true
   volumes:
     config:
       type: bind
@@ -40,6 +46,10 @@ qui:
     sso: authelia
   cloudflare:
     enable: true
+  postgres:
+    enable: true
+    databases:
+      - qui
   deploy:
     type: swarm
     mode: replicated

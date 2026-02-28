@@ -1,0 +1,294 @@
+commands:
+  # The commands defined below will OVERRIDE any commands used in command line and docker env variables.
+  dry_run: False
+  recheck: True
+  cat_update: True
+  tag_update: True
+  rem_unregistered: True
+  tag_tracker_error: True
+  rem_orphaned: True
+  tag_nohardlinks: True
+  share_limits: True
+  skip_qb_version_check: False
+  skip_cleanup: False
+
+qbt:
+  host: {{ qui_swarm_api }}
+
+settings:
+  force_auto_tmm: True
+  force_auto_tmm_ignore_tags:
+    - cross-seed
+  tracker_error_tag: issue
+  nohardlinks_tag: noHL
+  stalled_tag: stalledDL
+  share_limits_tag: ~share_limit
+  share_limits_min_seeding_time_tag: MinSeedTimeNotReached
+  share_limits_min_num_seeds_tag: MinSeedsNotMet
+  share_limits_last_active_tag: LastActiveLimitNotReached
+  cat_filter_completed: True
+  share_limits_filter_completed: True
+  tag_nohardlinks_filter_completed: True
+  rem_unregistered_filter_completed: False
+  cat_update_all: True
+  disable_qbt_default_share_limits: True
+  rem_unregistered_grace_minutes: 10
+
+directory:
+  root_dir: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}
+  recycle_bin: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/.RecycleBin
+  orphaned_dir: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/orphaned_data
+
+cat:
+  lidarr: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/completed/lidarr
+  lidarr-imported: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/completed/lidarr-imported
+  radarr: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/completed/radarr
+  radarr-imported: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/completed/radarr-imported
+  radarr-4k: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/completed/radarr-4k
+  radarr-4k-imported: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/completed/radarr-4k-imported
+  sonarr: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/completed/sonarr
+  sonarr-imported: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/completed/sonarr-imported
+  sonarr-4k: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/completed/sonarr-4k
+  sonarr-4k-imported: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/completed/sonarr-4k-imported
+  whisparr: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/completed/whisparr
+  whisparr-imported: {{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/completed/whisparr-imported
+
+tracker:
+  52pt:
+    tag: 52PT
+    notifiarr: 52PT
+  aither:
+    tag: Aither
+    notifiarr: Aither
+  alpharatio:
+    tag: AR
+    notifiarr: AlphaRatio
+  anthelion:
+    tag: ANT
+    notifiarr: Anthelion
+  avistaz:
+    tag: AvistaZ
+    notifiarr: AvistaZ
+  back-ups:
+    tag: BACK-UPS
+    notifiarr: BACK-UPS
+  beyond-hd:
+    tag: BHD
+    notifiarr: BeyondHD
+  bitporn:
+    tag: BitPorn
+    notifiarr: BitPorn
+  digitalcore:
+    tag: DC
+    notifiarr: DigitalCore
+  cinemageddon:
+    tag: Cinemageddon
+    notifiarr: Cinemageddon
+  cinemaz:
+    tag: CinemaZ
+    notifiarr: CinemaZ
+  estone:
+    tag: eStone
+    notifiarr: eStone
+  exoticaz:
+    tag: ExoticaZ
+    notifiarr: ExoticaZ
+  filelist | thefl:
+    tag: FL
+    notifiarr: FileList
+  haidan:
+    tag: HaiDan
+    notifiarr: HaiDan
+  happyfappy:
+    tag: HF
+    notifiarr: HappyFappy
+  hdts:
+    tag: HDT
+    notifiarr: HD-Torrents
+  stackoverflow | bgp.technology | empirehost.me:
+    tag: IPT
+    notifiarr: IP-Torrents
+  kufirc:
+    tag: Kufirc
+    notifiarr: Kufirc
+  lst:
+    tag: LST
+    notifiarr: LST
+  milkie:
+    tag: Milkie
+    notifiarr: Milkie
+  opsfet:
+    tag: Orpheus
+    notifiarr: Orpheus
+  privatehd:
+    tag: PHD
+    notifiarr: PrivateHD
+  reelflix:
+    tag: ReelFLiX
+    notifiarr: ReelFLiX
+  torrentleech | tleechreload:
+    tag: TL
+    notifiarr: TorrentLeech
+  uhdbits:
+    tag: UHDBits
+    notifiarr: UHDBits
+  upload.cx:
+    tag: ULCX
+    notifiarr: ULCX
+  yu-scene:
+    tag: YUSCENE
+    notifiarr: YUSCENE
+  other:
+    tag: other
+
+nohardlinks:
+  lidarr:
+  lidarr-imported:
+  radarr:
+  radarr-imported:
+  radarr-4k:
+  radarr-4k-imported:
+  sonarr:
+  sonarr-imported:
+  sonarr-4k:
+  sonarr-4k-imported:
+  whisparr:
+  whisparr-imported:
+
+share_limits:
+  Standard:
+    priority: 1
+    include_all_tags:
+      - noHL
+    include_any_tags:
+      - 52PT
+      - Aither
+      - AR
+      - ANT
+      - BACK-UPS
+      - BHD
+      - BitPorn
+      - Cinemageddon
+      - DC
+      - eStone
+      - FL
+      - HaiDan
+      - HF
+      - HDT
+      - Kufirc
+      - LST
+      - Milkie
+      - Orpheus
+      - ReelFLiX
+      - TL
+      - UHDBits
+      - ULCX
+      - YUSCENE
+    categories:
+      - lidarr
+      - lidarr-imported
+      - radarr
+      - radarr-imported
+      - radarr-4k
+      - radarr-4k-imported
+      - sonarr
+      - sonarr-imported
+      - sonarr-4k
+      - sonarr-4k-imported
+      - whisparr
+      - whisparr-imported
+    max_ratio: -1
+    max_seeding_time: 7d
+    cleanup: true
+
+  AvistaZ:
+    priority: 2
+    include_all_tags:
+      - noHL
+    include_any_tags:
+      - AvistaZ
+      - CinemaZ
+      - ExoticaZ
+      - PHD
+    categories:
+      - lidarr
+      - lidarr-imported
+      - radarr
+      - radarr-imported
+      - radarr-4k
+      - radarr-4k-imported
+      - sonarr
+      - sonarr-imported
+      - sonarr-4k
+      - sonarr-4k-imported
+      - whisparr
+      - whisparr-imported
+    max_ratio: -1
+    max_seeding_time: 20d
+    cleanup: true
+
+  IPT:
+    priority: 3
+    include_all_tags:
+      - noHL
+    include_any_tags:
+      - IPT
+    categories:
+      - lidarr
+      - lidarr-imported
+      - radarr
+      - radarr-imported
+      - radarr-4k
+      - radarr-4k-imported
+      - sonarr
+      - sonarr-imported
+      - sonarr-4k
+      - sonarr-4k-imported
+      - whisparr
+      - whisparr-imported
+    max_ratio: -1
+    max_seeding_time: 14d
+    cleanup: true
+
+  default:
+    priority: 999
+    max_ratio: -1
+    max_seeding_time: -1
+    cleanup: false
+
+recyclebin:
+  enabled: true
+  empty_after_x_days: 1
+  save_torrents: false
+  split_by_category: false
+
+orphaned:
+  empty_after_x_days: 1
+  min_file_age_minutes: 1440
+  exclude_patterns:
+    - "**/.DS_Store"
+    - "**/Thumbs.db"
+    - "**/@eaDir"
+    - "{{ vars | get_role_var(role_prefix, 'paths_swarm_media_container') }}/incoming/**"
+    - "**/*.!qB"
+    - "**/*_unpackerred"
+  max_orphaned_files_to_delete: 50
+
+notifiarr:
+  apikey: {{ notifiarr_webhook }}
+  instance: Swarm
+
+webhooks:
+  error: notifiarr
+  run_start: notifiarr
+  run_end: notifiarr
+  function:
+    recheck: notifiarr
+    cat_update: notifiarr
+    tag_update: notifiarr
+    rem_unregistered: notifiarr
+    tag_tracker_error: notifiarr
+    rem_orphaned: notifiarr
+    tag_nohardlinks: notifiarr
+    share_limits: notifiarr
+    cleanup_dirs: notifiarr

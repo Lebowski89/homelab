@@ -14,4 +14,3 @@ group_vars/all/roles/
 group_vars/all/docker.yml
 group_vars/all/infisical.yml
 group_vars/all/vault.yml
-roles/docker_services/templates/configs/
