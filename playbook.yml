@@ -84,16 +84,16 @@
 
       ## services (torrents)
       - name: qbittorrent
-        target: unraid
+        target: downloads
         tags: [torrents, qbittorrent]
       - name: qbittorrent
-        target: unraid_xs
+        target: seeds
         tags: [torrents, qbittorrent]
       - name: qbit_manage
-        target: swarm
+        target: downloads
         tags: [torrents, qbit_manage]
       - name: qbit_manage
-        target: unraid
+        target: seeds
         tags: [torrents, qbit_manage]
       - name: qui
         tags: [torrents, qui]
