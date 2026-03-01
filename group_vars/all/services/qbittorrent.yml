@@ -26,7 +26,7 @@ qbittorrent:
       max_attempts: 5
       window: 2m
   targets:
-    unraid:
+    downloads:
       name: qbittorrent
       hostname: qbittorrent.internal
       healthcheck:
@@ -145,7 +145,7 @@ qbittorrent:
           - "PathPrefix(`/sync`)"
       cloudflare:
         enable: true
-    unraid_xs:
+    seeds:
       name: qbittorrent-xs
       hostname: qbittorrent-xs.internal
       healthcheck:
