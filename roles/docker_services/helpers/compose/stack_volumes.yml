@@ -50,7 +50,10 @@
       {%- set st = (hostvars['localhost'].docker_services_compose_stacks | default({})) -%}
       {%- set existing_stack = st.get(docker_services_stack_name, {}) -%}
       {%- set existing_vols = existing_stack.get('volumes', {}) | default({}, true) -%}
-      {%- set merged_stack = existing_stack | combine({'volumes': (existing_vols | combine(_stack_volumes_new, recursive=true))}, recursive=true) -%}
+      {%- set merged_stack = existing_stack | combine(
+        {'volumes': (existing_vols | combine(_stack_volumes_new, recursive=true))},
+        recursive=true
+      ) -%}
       {{ st | combine({ docker_services_stack_name: merged_stack }, recursive=true) }}
   delegate_to: localhost
   delegate_facts: true

@@ -50,8 +50,15 @@
   ansible.builtin.assert:
     that:
       - (docker_services_svc.directories | select('mapping') | list | length) == (docker_services_svc.directories | length)
-      - (docker_services_svc.directories | map(attribute='path') | select('defined') | list | length) == (docker_services_svc.directories | length)
-      - (docker_services_svc.directories | map(attribute='path') | map('string') | map('trim') | reject('equalto','') | list | length) == (docker_services_svc.directories | length)
+      - >-
+        (docker_services_svc.directories | map(attribute='path') | select('defined') | list | length)
+        ==
+        (docker_services_svc.directories | length)
+      - >-
+        (docker_services_svc.directories | map(attribute='path') | map('string') | map('trim') |
+        reject('equalto','') | list | length)
+        ==
+        (docker_services_svc.directories | length)
     fail_msg: >-
       docker_services_svc.directories must be a list of dicts and each entry must contain a non-empty 'path'.
 
@@ -99,10 +106,24 @@
   ansible.builtin.assert:
     that:
       - (docker_services_svc.templates | select('mapping') | list | length) == (docker_services_svc.templates | length)
-      - (docker_services_svc.templates | map(attribute='src') | select('defined') | list | length) == (docker_services_svc.templates | length)
-      - (docker_services_svc.templates | map(attribute='dest') | select('defined') | list | length) == (docker_services_svc.templates | length)
-      - (docker_services_svc.templates | map(attribute='src') | map('string') | map('trim') | reject('equalto','') | list | length) == (docker_services_svc.templates | length)
-      - (docker_services_svc.templates | map(attribute='dest') | map('string') | map('trim') | reject('equalto','') | list | length) == (docker_services_svc.templates | length)
+      - >-
+        (docker_services_svc.templates | map(attribute='src') | select('defined') | list | length)
+        ==
+        (docker_services_svc.templates | length)
+      - >-
+        (docker_services_svc.templates | map(attribute='dest') | select('defined') | list | length)
+        ==
+        (docker_services_svc.templates | length)
+      - >-
+        (docker_services_svc.templates | map(attribute='src') | map('string') | map('trim') |
+        reject('equalto','') | list | length)
+        ==
+        (docker_services_svc.templates | length)
+      - >-
+        (docker_services_svc.templates | map(attribute='dest') | map('string') | map('trim') |
+        reject('equalto','') | list | length)
+        ==
+        (docker_services_svc.templates | length)
     fail_msg: >-
       docker_services_svc.templates must be a list of dicts and each entry must contain non-empty 'src' and 'dest'.
 
@@ -170,10 +191,25 @@
     that:
       - docker_services_svc.infisical.secrets_map is sequence
       - docker_services_svc.infisical.secrets_map is not string
-      - (docker_services_svc.infisical.secrets_map | select('mapping') | list | length) == (docker_services_svc.infisical.secrets_map | length)
-      - (docker_services_svc.infisical.secrets_map | map(attribute='var')  | select('defined') | list | length) == (docker_services_svc.infisical.secrets_map | length)
-      - (docker_services_svc.infisical.secrets_map | map(attribute='path') | select('defined') | list | length) == (docker_services_svc.infisical.secrets_map | length)
-      - (docker_services_svc.infisical.secrets_map | map(attribute='name') | select('defined') | list | length) == (docker_services_svc.infisical.secrets_map | length)
+      - >-
+        (docker_services_svc.infisical.secrets_map | select('mapping') | list | length)
+        ==
+        (docker_services_svc.infisical.secrets_map | length)
+      - >-
+        (docker_services_svc.infisical.secrets_map | map(attribute='var') | select('defined') |
+        list | length)
+        ==
+        (docker_services_svc.infisical.secrets_map | length)
+      - >-
+        (docker_services_svc.infisical.secrets_map | map(attribute='path') | select('defined') |
+        list | length)
+        ==
+        (docker_services_svc.infisical.secrets_map | length)
+      - >-
+        (docker_services_svc.infisical.secrets_map | map(attribute='name') | select('defined') |
+        list | length)
+        ==
+        (docker_services_svc.infisical.secrets_map | length)
     fail_msg: "docker_services_svc.infisical.secrets_map must be a list of dicts each containing var/path/name."
 
 - name: Validate | docker_services_svc.infisical.fail_on_empty is boolean-ish (optional)
@@ -483,8 +519,16 @@
   when: _svc.cap_add is defined or _svc.cap_drop is defined
   ansible.builtin.assert:
     that:
-      - (_svc.cap_add is not defined) or ((_svc.cap_add | map('string') | map('trim') | reject('equalto','') | list | length) == (_svc.cap_add | length))
-      - (_svc.cap_drop is not defined) or ((_svc.cap_drop | map('string') | map('trim') | reject('equalto','') | list | length) == (_svc.cap_drop | length))
+      - >-
+        (_svc.cap_add is not defined)
+        or
+        ((_svc.cap_add | map('string') | map('trim') | reject('equalto','') | list | length)
+        == (_svc.cap_add | length))
+      - >-
+        (_svc.cap_drop is not defined)
+        or
+        ((_svc.cap_drop | map('string') | map('trim') | reject('equalto','') | list | length)
+        == (_svc.cap_drop | length))
     fail_msg: "Service '{{ _svc_name }}' cap_add/cap_drop must be lists of non-empty strings."
 
 ################################
@@ -512,22 +556,39 @@
         - name: Validate secrets list items are strings or dicts
           ansible.builtin.assert:
             that:
-              - (_svc.secrets | select('string') | list | length) + (_svc.secrets | select('mapping') | list | length) == (_svc.secrets | length)
+              - >-
+                (_svc.secrets | select('string') | list | length)
+                +
+                (_svc.secrets | select('mapping') | list | length)
+                ==
+                (_svc.secrets | length)
             fail_msg: "Service '{{ _svc_name }}' secrets entries must be strings or dicts."
 
         - name: Validate secret strings are non-empty
           when: (_svc.secrets | select('string') | list | length) > 0
           ansible.builtin.assert:
             that:
-              - (_svc.secrets | select('string') | map('trim') | reject('equalto','') | list | length) == (_svc.secrets | select('string') | list | length)
+              - >-
+                (_svc.secrets | select('string') | map('trim') | reject('equalto','') |
+                list | length)
+                ==
+                (_svc.secrets | select('string') | list | length)
             fail_msg: "Service '{{ _svc_name }}' secrets string entries must be non-empty."
 
         - name: Validate secret dicts have source and target
           when: (_svc.secrets | select('mapping') | list | length) > 0
           ansible.builtin.assert:
             that:
-              - (_svc.secrets | select('mapping') | map(attribute='source') | select('defined') | list | length) == (_svc.secrets | select('mapping') | list | length)
-              - (_svc.secrets | select('mapping') | map(attribute='target') | select('defined') | list | length) == (_svc.secrets | select('mapping') | list | length)
+              - >-
+                (_svc.secrets | select('mapping') | map(attribute='source') |
+                select('defined') | list | length)
+                ==
+                (_svc.secrets | select('mapping') | list | length)
+              - >-
+                (_svc.secrets | select('mapping') | map(attribute='target') |
+                select('defined') | list | length)
+                ==
+                (_svc.secrets | select('mapping') | list | length)
             fail_msg: "Service '{{ _svc_name }}' secrets dict entries must include source and target."
 
 ################################

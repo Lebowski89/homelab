@@ -15,7 +15,10 @@
     _compose_stacks_effective: >-
       {{
         hostvars['localhost'].docker_services_compose_stacks
-        if (hostvars['localhost'].docker_services_compose_stacks is defined and hostvars['localhost'].docker_services_compose_stacks is mapping)
+        if (
+          hostvars['localhost'].docker_services_compose_stacks is defined
+          and hostvars['localhost'].docker_services_compose_stacks is mapping
+        )
         else {}
       }}
   run_once: true
