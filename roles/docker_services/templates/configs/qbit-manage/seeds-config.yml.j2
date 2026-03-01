@@ -1,0 +1,211 @@
+commands:
+  # The commands defined below will OVERRIDE any commands used in command line and docker env variables.
+  dry_run: False
+  recheck: True
+  cat_update: True
+  tag_update: True
+  rem_unregistered: True
+  tag_tracker_error: True
+  rem_orphaned: True
+  tag_nohardlinks: True
+  share_limits: True
+  skip_qb_version_check: False
+  skip_cleanup: False
+
+qbt:
+  host: qbittorrent-xs.internal:8091
+  user: {{ qbittorrent_xs_user }}
+  pass: {{ qbittorrent_xs_pass }}
+
+settings:
+  force_auto_tmm: True
+  force_auto_tmm_ignore_tags:
+    - cross-seed
+  private_tag: privateTR
+  tracker_error_tag: issue
+  nohardlinks_tag: noHL
+  tag_stalled_torrents: true
+  stalled_tag: stalledDL
+  share_limits_tag: ~share_limit
+  share_limits_min_seeding_time_tag: MinSeedTimeNotReached
+  share_limits_min_num_seeds_tag: MinSeedsNotMet
+  share_limits_last_active_tag: LastActiveLimitNotReached
+  cat_filter_completed: True
+  share_limits_filter_completed: True
+  tag_nohardlinks_filter_completed: True
+  rem_unregistered_filter_completed: False
+  cat_update_all: True
+  disable_qbt_default_share_limits: True
+  rem_unregistered_grace_minutes: 10
+  rem_unregistered_ignore_list: []
+  rem_unregistered_max_torrents: 10
+
+directory:
+  root_dir: /data/seeds
+  torrents_dir:
+  recycle_bin: /data/seeds/.RecycleBin
+  orphaned_dir: /data/seeds/orphaned_data
+
+cat:
+  manual: /data/seeds/manual
+  cross-seed-link: /data/seeds/links/*
+
+tracker:
+  52pt:
+    tag: [52PT, 7days]
+    notifiarr: 52PT
+  aither:
+    tag: [Aither, 7days]
+    notifiarr: Aither
+  alpharatio:
+    tag: [AR, 7days]
+    notifiarr: AlphaRatio
+  anthelion:
+    tag: [ANT, 7days]
+    notifiarr: Anthelion
+  avistaz:
+    tag: [AvistaZ, 20days]
+    notifiarr: AvistaZ
+  back-ups:
+    tag: [BACK-UPS, 7days]
+    notifiarr: BACK-UPS
+  beyond-hd:
+    tag: [BHD, 7days]
+    notifiarr: BeyondHD
+  digitalcore:
+    tag: [DC, 7days]
+    notifiarr: DigitalCore
+  cinemageddon:
+    tag: [Cinemageddon, 7days]
+    notifiarr: Cinemageddon
+  cinemaz:
+    tag: [CinemaZ, 20days]
+    notifiarr: CinemaZ
+  estone:
+    tag: [eStone, 7days]
+    notifiarr: eStone
+  exoticaz:
+    tag: [ExoticaZ, 20days]
+    notifiarr: ExoticaZ
+  filelist | thefl:
+    tag: [FL, 7days]
+    notifiarr: FileList
+  haidan:
+    tag: [HaiDan, 7days]
+    notifiarr: HaiDan
+  hdts:
+    tag: [HDT, 7days]
+    notifiarr: HD-Torrents
+  stackoverflow | bgp.technology | empirehost.me:
+    tag: [IPT, 14days]
+    notifiarr: IP-Torrents
+  kufirc:
+    tag: [Kufirc, 7days]
+    notifiarr: Kufirc
+  lst:
+    tag: [LST, 7days]
+    notifiarr: LST
+  milkie:
+    tag: [Milkie, 7days]
+    notifiarr: Milkie
+  opsfet:
+    tag: [Orpheus, 7days]
+    notifiarr: Orpheus
+  privatehd:
+    tag: [PHD, 20days]
+    notifiarr: PrivateHD
+  reelflix:
+    tag: [ReelFLiX, 7days]
+    notifiarr: ReelFLiX
+  torrentleech | tleechreload:
+    tag: [TL, 7days]
+    notifiarr: TorrentLeech
+  upload.cx:
+    tag: [ULCX, 7days]
+    notifiarr: ULCX
+  yu-scene:
+    tag: [YUSCENE, 7days]
+    notifiarr: YUSCENE
+  other:
+    tag: other
+
+nohardlinks:
+  manual:
+  cross-seed-link:
+
+share_limits:
+  Standard:
+    priority: 1
+    include_all_tags:
+      - noHL
+      - 7days
+    categories:
+      - cross-seed-link
+    max_ratio: -1
+    max_seeding_time: 7d
+    cleanup: true
+
+  AvistaZ:
+    priority: 2
+    include_all_tags:
+      - noHL
+      - 20days
+    categories:
+      - cross-seed-link
+    max_ratio: -1
+    max_seeding_time: 20d
+    cleanup: true
+
+  IPT:
+    priority: 3
+    include_all_tags:
+      - noHL
+      - 14days
+    categories:
+      - cross-seed-link
+    max_ratio: -1
+    max_seeding_time: 14d
+    cleanup: true
+
+  default:
+    priority: 999
+    max_ratio: -1
+    max_seeding_time: -1
+    cleanup: false
+
+recyclebin:
+  enabled: true
+  empty_after_x_days: 1
+  save_torrents: false
+  split_by_category: false
+
+orphaned:
+  empty_after_x_days: 1
+  min_file_age_minutes: 1440
+  exclude_patterns:
+    - "**/.DS_Store"
+    - "**/Thumbs.db"
+    - "**/@eaDir"
+    - "/data/seeds/incoming/**"
+    - "**/*.!qB"
+    - "**/*_unpackerred"
+  max_orphaned_files_to_delete: 50
+
+notifiarr:
+  apikey: {{ notifiarr_webhook }}
+  instance: XS
+
+webhooks:
+  error: notifiarr
+  run_start: notifiarr
+  run_end: notifiarr
+  function:
+    recheck: notifiarr
+    cat_update: notifiarr
+    tag_update: notifiarr
+    rem_unregistered: notifiarr
+    tag_tracker_error: notifiarr
+    rem_orphaned: notifiarr
+    tag_nohardlinks: notifiarr
+    share_limits: notifiarr
+    cleanup_dirs: notifiarr

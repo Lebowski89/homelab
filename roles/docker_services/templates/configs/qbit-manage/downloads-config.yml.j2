@@ -13,14 +13,18 @@ commands:
   skip_cleanup: False
 
 qbt:
-  host: {{ qui_unraid_api }}
+  host: qbittorrent.internal:8090
+  user: {{ qbittorrent_user }}
+  pass: {{ qbittorrent_pass }}
 
 settings:
   force_auto_tmm: True
   force_auto_tmm_ignore_tags:
     - cross-seed
+  private_tag: privateTR
   tracker_error_tag: issue
   nohardlinks_tag: noHL
+  tag_stalled_torrents: true
   stalled_tag: stalledDL
   share_limits_tag: ~share_limit
   share_limits_min_seeding_time_tag: MinSeedTimeNotReached
@@ -33,139 +37,132 @@ settings:
   cat_update_all: True
   disable_qbt_default_share_limits: True
   rem_unregistered_grace_minutes: 10
+  rem_unregistered_ignore_list: []
+  rem_unregistered_max_torrents: 10
 
 directory:
-  root_dir: {{ vars | get_role_var(role_prefix, 'paths_unraid_media_container') }}
-  recycle_bin: {{ vars | get_role_var(role_prefix, 'paths_unraid_media_container') }}/.RecycleBin
-  orphaned_dir: {{ vars | get_role_var(role_prefix, 'paths_unraid_media_container') }}/orphaned_data
+  root_dir: /data/torrents
+  torrents_dir:
+  recycle_bin: /data/torrents/.RecycleBin
+  orphaned_dir: /data/torrents/orphaned_data
 
 cat:
-  manual: {{ vars | get_role_var(role_prefix, 'paths_unraid_media_container') }}/manual
-  cross-seed-link: {{ vars | get_role_var(role_prefix, 'paths_unraid_media_container') }}/links/*
+  lidarr: /data/torrents/completed/lidarr
+  lidarr-imported: /data/torrents/completed/lidarr-imported
+  radarr: /data/torrents/completed/radarr
+  radarr-imported: /data/torrents/completed/radarr-imported
+  radarr-4k: /data/torrents/completed/radarr-4k
+  radarr-4k-imported: /data/torrents/completed/radarr-4k-imported
+  sonarr: /data/torrents/completed/sonarr
+  sonarr-imported: /data/torrents/completed/sonarr-imported
+  sonarr-4k: /data/torrents/completed/sonarr-4k
+  sonarr-4k-imported: /data/torrents/completed/sonarr-4k-imported
+  sportarr: /data/torrents/completed/sportarr
+  sportarr-imported: /data/torrents/completed/sportarr-imported
+  whisparr: /data/torrents/completed/whisparr
+  whisparr-imported: /data/torrents/completed/whisparr-imported
 
 tracker:
   52pt:
-    tag: 52PT
+    tag: [52PT, 7days]
     notifiarr: 52PT
   aither:
-    tag: Aither
+    tag: [Aither, 7days]
     notifiarr: Aither
   alpharatio:
-    tag: AR
+    tag: [AR, 7days]
     notifiarr: AlphaRatio
   anthelion:
-    tag: ANT
+    tag: [ANT, 7days]
     notifiarr: Anthelion
   avistaz:
-    tag: AvistaZ
+    tag: [AvistaZ, 20days]
     notifiarr: AvistaZ
   back-ups:
-    tag: BACK-UPS
+    tag: [BACK-UPS, 7days]
     notifiarr: BACK-UPS
   beyond-hd:
-    tag: BHD
+    tag: [BHD, 7days]
     notifiarr: BeyondHD
-  bitporn:
-    tag: BitPorn
-    notifiarr: BitPorn
   digitalcore:
-    tag: DC
+    tag: [DC, 7days]
     notifiarr: DigitalCore
   cinemageddon:
-    tag: Cinemageddon
+    tag: [Cinemageddon, 7days]
     notifiarr: Cinemageddon
   cinemaz:
-    tag: CinemaZ
+    tag: [CinemaZ, 20days]
     notifiarr: CinemaZ
   estone:
-    tag: eStone
+    tag: [eStone, 7days]
     notifiarr: eStone
   exoticaz:
-    tag: ExoticaZ
+    tag: [ExoticaZ, 20days]
     notifiarr: ExoticaZ
   filelist | thefl:
-    tag: FL
+    tag: [FL, 7days]
     notifiarr: FileList
   haidan:
-    tag: HaiDan
+    tag: [HaiDan, 7days]
     notifiarr: HaiDan
-  happyfappy:
-    tag: HF
-    notifiarr: HappyFappy
   hdts:
-    tag: HDT
+    tag: [HDT, 7days]
     notifiarr: HD-Torrents
   stackoverflow | bgp.technology | empirehost.me:
-    tag: IPT
+    tag: [IPT, 14days]
     notifiarr: IP-Torrents
   kufirc:
-    tag: Kufirc
+    tag: [Kufirc, 7days]
     notifiarr: Kufirc
   lst:
-    tag: LST
+    tag: [LST, 7days]
     notifiarr: LST
   milkie:
-    tag: Milkie
+    tag: [Milkie, 7days]
     notifiarr: Milkie
   opsfet:
-    tag: Orpheus
+    tag: [Orpheus, 7days]
     notifiarr: Orpheus
   privatehd:
-    tag: PHD
+    tag: [PHD, 20days]
     notifiarr: PrivateHD
   reelflix:
-    tag: ReelFLiX
+    tag: [ReelFLiX, 7days]
     notifiarr: ReelFLiX
   torrentleech | tleechreload:
-    tag: TL
+    tag: [TL, 7days]
     notifiarr: TorrentLeech
-  uhdbits:
-    tag: UHDBits
-    notifiarr: UHDBits
   upload.cx:
-    tag: ULCX
+    tag: [ULCX, 7days]
     notifiarr: ULCX
   yu-scene:
-    tag: YUSCENE
+    tag: [YUSCENE, 7days]
     notifiarr: YUSCENE
   other:
     tag: other
 
 nohardlinks:
-  manual:
-  cross-seed-link:
+  lidarr-imported:
+  radarr-imported:
+  radarr-4k-imported:
+  sonarr-imported:
+  sonarr-4k-imported:
+  sportarr-imported:
+  whisparr-imported:
 
 share_limits:
   Standard:
     priority: 1
     include_all_tags:
-      - noHL
-    include_any_tags:
-      - 52PT
-      - Aither
-      - AR
-      - ANT
-      - BACK-UPS
-      - BHD
-      - BitPorn
-      - Cinemageddon
-      - DC
-      - eStone
-      - FL
-      - HaiDan
-      - HF
-      - HDT
-      - Kufirc
-      - LST
-      - Milkie
-      - Orpheus
-      - ReelFLiX
-      - TL
-      - UHDBits
-      - ULCX
-      - YUSCENE
+      - 7days
     categories:
-      - cross-seed-link
+      - lidarr-imported
+      - radarr-imported
+      - radarr-4k-imported
+      - sonarr-imported
+      - sonarr-4k-imported
+      - sportarr-imported
+      - whisparr-imported
     max_ratio: -1
     max_seeding_time: 7d
     cleanup: true
@@ -173,14 +170,15 @@ share_limits:
   AvistaZ:
     priority: 2
     include_all_tags:
-      - noHL
-    include_any_tags:
-      - AvistaZ
-      - CinemaZ
-      - ExoticaZ
-      - PHD
+      - 20days
     categories:
-      - cross-seed-link
+      - lidarr-imported
+      - radarr-imported
+      - radarr-4k-imported
+      - sonarr-imported
+      - sonarr-4k-imported
+      - sportarr-imported
+      - whisparr-imported
     max_ratio: -1
     max_seeding_time: 20d
     cleanup: true
@@ -188,11 +186,15 @@ share_limits:
   IPT:
     priority: 3
     include_all_tags:
-      - noHL
-    include_any_tags:
-      - IPT
+      - 14days
     categories:
-      - cross-seed-link
+      - lidarr-imported
+      - radarr-imported
+      - radarr-4k-imported
+      - sonarr-imported
+      - sonarr-4k-imported
+      - sportarr-imported
+      - whisparr-imported
     max_ratio: -1
     max_seeding_time: 14d
     cleanup: true
@@ -216,14 +218,14 @@ orphaned:
     - "**/.DS_Store"
     - "**/Thumbs.db"
     - "**/@eaDir"
-    - "{{ vars | get_role_var(role_prefix, 'paths_unraid_media_container') }}/incoming/**"
+    - "/data/torrents/incoming/**"
     - "**/*.!qB"
     - "**/*_unpackerred"
   max_orphaned_files_to_delete: 50
 
 notifiarr:
   apikey: {{ notifiarr_webhook }}
-  instance: UnRaid
+  instance: DL
 
 webhooks:
   error: notifiarr
