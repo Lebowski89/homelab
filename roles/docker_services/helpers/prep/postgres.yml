@@ -66,7 +66,11 @@
     _postgres_databases: >-
       {{
         (docker_services_svc.postgres.databases | list)
-        if (docker_services_svc.postgres.databases is defined and docker_services_svc.postgres.databases is sequence and docker_services_svc.postgres.databases is not string)
+        if (
+          docker_services_svc.postgres.databases is defined
+          and docker_services_svc.postgres.databases is sequence
+          and docker_services_svc.postgres.databases is not string
+        )
         else
         ([ (docker_services_svc.postgres.databases | string | trim) ]
           if (docker_services_svc.postgres.databases is defined and (docker_services_svc.postgres.databases | string | trim | length > 0))

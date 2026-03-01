@@ -111,6 +111,8 @@
   ansible.builtin.assert:
     that:
       - docker_services_vaultwarden_token is match('^\\$argon2(id|i|d)\\$.*')
-    fail_msg: "docker_services_vaultwarden_token does not look like an argon2 PHC string. Check argon2 availability on {{ docker_services_vw_fs_host }}."
+    fail_msg: >-
+      docker_services_vaultwarden_token does not look like an argon2 PHC string.
+      Check argon2 availability on {{ docker_services_vw_fs_host }}.
   when: inventory_hostname == "localhost"
   run_once: true
