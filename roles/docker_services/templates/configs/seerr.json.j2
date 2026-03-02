@@ -1,10 +1,10 @@
 {
- "clientId": "",
- "vapidPrivate": "",
- "vapidPublic": "",
+ "clientId": "{{ seerr_client_id }}",
+ "vapidPrivate": "{{ seerr_vapid_private }}",
+ "vapidPublic": "{{ seerr_vapid_public }}",
  "main": {
-  "apiKey": "{{ jellyseerr_api }}",
-  "applicationTitle": "Jellyseerr",
+  "apiKey": "{{ seerr_api }}",
+  "applicationTitle": "Seerr",
   "applicationUrl": "",
   "cacheImages": false,
   "defaultPermissions": 32,
@@ -13,16 +13,20 @@
    "tv": {}
   },
   "hideAvailable": false,
+  "hideBlocklisted": false,
   "localLogin": true,
   "mediaServerLogin": true,
   "newPlexLogin": true,
   "discoverRegion": "",
   "streamingRegion": "AU",
   "originalLanguage": "",
+  "blocklistedTags": "",
+  "blocklistedTagsLimit": 50,
   "mediaServerType": 1,
   "partialRequestsEnabled": true,
   "enableSpecialEpisodes": false,
   "locale": "en",
+  "youtubeUrl": "",
   "dnsServers": ""
  },
  "plex": {
@@ -36,14 +40,14 @@
     "name": "Movies",
     "enabled": true,
     "type": "movie",
-    "lastScan": ""
+    "lastScan": 1772484900023
    },
    {
     "id": "2",
     "name": "TV Shows",
     "enabled": true,
     "type": "show",
-    "lastScan": ""
+    "lastScan": 1772484900044
    }
   ],
   "machineId": ""
@@ -64,7 +68,11 @@
   "hostname": "tautulli",
   "port": 8181,
   "apiKey": "{{ tautulli_api }}",
-  "externalUrl": "https://tautulli.{{ cloudflare_zone }}.com"
+  "externalUrl": "https://tautulli.{{ cloudflare_zone }}"
+ },
+ "metadataSettings": {
+  "tv": "tmdb",
+  "anime": "tmdb"
  },
  "radarr": [
   {
@@ -74,33 +82,34 @@
    "apiKey": "{{ radarr_api }}",
    "useSsl": false,
    "baseUrl": "",
-   "activeProfileId": 7,
+   "activeProfileId": 8,
    "activeProfileName": "Remux + WEB 1080p",
    "activeDirectory": "/data/media/movies",
    "is4k": false,
    "minimumAvailability": "released",
    "tags": [],
    "isDefault": true,
-   "externalUrl": "https://radarr.{{ cloudflare_zone }}.com",
+   "externalUrl": "https://radarr.{{ cloudflare_zone }}",
    "syncEnabled": true,
    "preventSearch": false,
    "tagRequests": false,
    "id": 0
   },
   {
-   "name": "Radarr-4k",
+   "name": "Radarr-4K",
    "hostname": "radarr-4k",
    "port": 7878,
    "apiKey": "{{ radarr_4k_api }}",
    "useSsl": false,
-   "activeProfileId": 7,
+   "baseUrl": "",
+   "activeProfileId": 8,
    "activeProfileName": "Remux + WEB 2160p",
    "activeDirectory": "/data/media/movies-4k",
    "is4k": true,
    "minimumAvailability": "released",
    "tags": [],
    "isDefault": true,
-   "externalUrl": "https://radarr-4k.{{ cloudflare_zone }}.com",
+   "externalUrl": "https://radarr-4k.{{ cloudflare_zone }}",
    "syncEnabled": true,
    "preventSearch": false,
    "tagRequests": false,
@@ -114,10 +123,12 @@
    "port": 8989,
    "apiKey": "{{ sonarr_api }}",
    "useSsl": false,
-   "activeProfileId": 7,
+   "baseUrl": "",
+   "activeProfileId": 10,
    "activeProfileName": "WEB-1080p (Alternative)",
    "activeDirectory": "/data/media/tv",
-   "activeAnimeProfileId": 7,
+   "animeSeriesType": "anime",
+   "activeAnimeProfileId": 11,
    "activeAnimeProfileName": "[Anime] Remux-1080p",
    "activeAnimeDirectory": "/data/media/tv",
    "tags": [],
@@ -125,7 +136,7 @@
    "is4k": false,
    "isDefault": true,
    "enableSeasonFolders": false,
-   "externalUrl": "https://sonarr.{{ cloudflare_zone }}.com",
+   "externalUrl": "https://sonarr.{{ cloudflare_zone }}",
    "syncEnabled": true,
    "preventSearch": false,
    "tagRequests": false,
@@ -137,10 +148,12 @@
    "port": 8989,
    "apiKey": "{{ sonarr_4k_api }}",
    "useSsl": false,
-   "activeProfileId": 7,
+   "baseUrl": "",
+   "activeProfileId": 9,
    "activeProfileName": "WEB-2160p",
    "activeDirectory": "/data/media/tv-4k",
-   "activeAnimeProfileId": 7,
+   "animeSeriesType": "anime",
+   "activeAnimeProfileId": 9,
    "activeAnimeProfileName": "WEB-2160p",
    "activeAnimeDirectory": "/data/media/tv-4k",
    "tags": [],
@@ -148,7 +161,7 @@
    "is4k": true,
    "isDefault": true,
    "enableSeasonFolders": false,
-   "externalUrl": "https://sonarr-4k.{{ cloudflare_zone }}.com",
+   "externalUrl": "https://sonarr-4k.{{ cloudflare_zone }}",
    "syncEnabled": true,
    "preventSearch": false,
    "tagRequests": false,
@@ -162,6 +175,7 @@
   "agents": {
    "email": {
     "enabled": true,
+    "embedPoster": true,
     "options": {
      "userEmailRequired": false,
      "emailFrom": "{{ smtp_email }}",
@@ -170,14 +184,15 @@
      "secure": false,
      "ignoreTls": false,
      "requireTls": false,
-     "authUser": "{{ smtp_username }}",
-     "authPass": "{{ smtp_password }}",
      "allowSelfSigned": false,
-     "senderName": "{{ smtp_sender }}"
+     "senderName": "{{ smtp_sender }}",
+     "authUser": "{{ smtp_username }}",
+     "authPass": "{{ smtp_password }}"
     }
    },
    "discord": {
     "enabled": false,
+    "embedPoster": true,
     "types": 0,
     "options": {
      "webhookUrl": "",
@@ -185,15 +200,9 @@
      "enableMentions": true
     }
    },
-   "lunasea": {
-    "enabled": false,
-    "types": 0,
-    "options": {
-     "webhookUrl": ""
-    }
-   },
    "slack": {
     "enabled": false,
+    "embedPoster": true,
     "types": 0,
     "options": {
      "webhookUrl": ""
@@ -201,6 +210,7 @@
    },
    "telegram": {
     "enabled": false,
+    "embedPoster": true,
     "types": 0,
     "options": {
      "botAPI": "",
@@ -211,6 +221,7 @@
    },
    "pushbullet": {
     "enabled": false,
+    "embedPoster": false,
     "types": 0,
     "options": {
      "accessToken": ""
@@ -218,6 +229,7 @@
    },
    "pushover": {
     "enabled": false,
+    "embedPoster": true,
     "types": 0,
     "options": {
      "accessToken": "",
@@ -227,22 +239,35 @@
    },
    "webhook": {
     "enabled": true,
+    "embedPoster": true,
     "types": 4062,
     "options": {
-     "webhookUrl": "{{ jellyseerr_notifiarr_webhook }}",
-     "jsonPayload": "{{ jellyseerr_notifiarr_payload }}"
+     "webhookUrl": "{{ seerr_notifiarr_webhook }}",
+     "jsonPayload": "{{ seerr_notifiarr_payload }}"
     }
    },
    "webpush": {
     "enabled": false,
+    "embedPoster": true,
     "options": {}
    },
    "gotify": {
     "enabled": false,
+    "embedPoster": false,
     "types": 0,
     "options": {
      "url": "",
-     "token": ""
+     "token": "",
+     "priority": 0
+    }
+   },
+   "ntfy": {
+    "enabled": false,
+    "embedPoster": true,
+    "types": 0,
+    "options": {
+     "url": "",
+     "topic": ""
     }
    }
   }
@@ -283,12 +308,15 @@
   },
   "image-cache-cleanup": {
    "schedule": "0 0 5 * * *"
+  },
+  "process-blocklisted-tags": {
+   "schedule": "0 30 1 */7 * *"
   }
  },
  "network": {
   "csrfProtection": false,
-  "trustProxy": false,
   "forceIpv4First": false,
+  "trustProxy": false,
   "proxy": {
    "enabled": false,
    "hostname": "",
@@ -298,6 +326,16 @@
    "password": "",
    "bypassFilter": "",
    "bypassLocalAddresses": true
-  }
- }
+  },
+  "dnsCache": {
+   "enabled": false,
+   "forceMinTtl": 0,
+   "forceMaxTtl": -1
+  },
+  "apiRequestTimeout": 10000
+ },
+ "migrations": [
+  "0007_migrate_arr_tags",
+  "0008_migrate_blacklist_to_blocklist"
+ ]
 }
