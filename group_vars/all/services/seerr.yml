@@ -25,7 +25,7 @@ seerr:
     DB_PORT: "5433"
     DB_USER: "{{ postgres_user | default('__INFISICAL__:postgres_user', true) }}"
     DB_PASS: "{{ postgres_pass | default('__INFISICAL__:postgres_pass', true) }}"
-    DB_NAME: "jellyseerr"
+    DB_NAME: "seerr"
     DB_LOG_QUERIES: "false"
   infisical:
     fail_on_empty: true
@@ -36,14 +36,14 @@ seerr:
       - var: postgres_pass
         path: "/Postgres"
         name: PASS
-      - var: jellyseerr_api
-        path: "/Jellyseerr"
+      - var: seerr_api
+        path: "/Seerr"
         name: API
-      - var: jellyseerr_notifiarr_webhook
-        path: "/Jellyseerr"
+      - var: seerr_notifiarr_webhook
+        path: "/Seerr"
         name: NOTIFIARR_WEBHOOK
-      - var: jellyseerr_notifiarr_payload
-        path: "/Jellyseerr"
+      - var: seerr_notifiarr_payload
+        path: "/Seerr"
         name: WEBHOOK_PAYLOAD
       - var: tautulli_api
         path: "/Tautulli"
@@ -100,7 +100,7 @@ seerr:
   postgres:
     enable: true
     databases:
-      - jellyseerr
+      - seerr
   traefik:
     enable: true
     port: 5055
