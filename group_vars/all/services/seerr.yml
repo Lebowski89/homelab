@@ -1,9 +1,9 @@
 ---
 
-jellyseerr:
-  name: jellyseerr
-  stack: jellyseerr
-  image: fallenbagel/jellyseerr:2.7.3
+seerr:
+  name: seerr
+  stack: seerr
+  image: ghcr.io/seerr-team/seerr:v3.1.0
   named_networks:
     overlay:
       external: true
@@ -79,14 +79,14 @@ jellyseerr:
         path: "/Porkbun"
         name: SMTP_USER
   paths:
-    - path: /opt/jellyseerr
+    - path: /opt/seerr
       state: directory
       owner: 1000
       group: 1000
       mode: "0755"
   templates:
-    - src: configs/jellyseerr.json.j2
-      dest: /opt/jellyseerr/settings.json
+    - src: configs/seerr.json.j2
+      dest: /opt/seerr/settings.json
       owner: 1000
       group: 1000
       mode: "0664"
@@ -94,7 +94,7 @@ jellyseerr:
   volumes:
     config:
       type: bind
-      source: /opt/jellyseerr
+      source: /opt/seerr
       target: /app/config
       read_only: false
   postgres:
