@@ -39,6 +39,15 @@ seerr:
       - var: seerr_api
         path: "/Seerr"
         name: API
+      - var: seerr_client_id
+        path: "/Seerr"
+        name: CLIENT_ID
+      - var: seerr_vapid_private
+        path: "/Seerr"
+        name: VAPID_PRIVATE
+      - var: seerr_vapid_public
+        path: "/Seerr"
+        name: VAPID_PUBLIC
       - var: seerr_notifiarr_webhook
         path: "/Seerr"
         name: NOTIFIARR_WEBHOOK
