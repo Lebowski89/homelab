@@ -1,83 +1,166 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-
-  "extends": ["config:recommended"],
-
+  "extends": [
+    "config:recommended"
+  ],
   "timezone": "Australia/Melbourne",
   "dependencyDashboard": true,
-
-  "labels": ["renovate"],
+  "labels": [
+    "renovate"
+  ],
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
-
   "rangeStrategy": "pin",
-
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",
   "semanticCommitScope": "deps",
-
   "commitBodyTable": true,
-
   "prBodyNotes": [
     "Homelab note: review upstream release notes/changelog before merging."
   ],
-
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": ["/\\.ya?ml$/"],
+      "managerFilePatterns": [
+        "/\\.ya?ml$/"
+      ],
       "matchStrings": [
         "image:\\s*[\"']?(?<depName>[^\"'\\s:@]+(?:\\/[^\"'\\s:@]+)*)\\s*:(?<currentValue>[^\"'\\s@]+)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?[\"']?"
       ],
       "datasourceTemplate": "docker"
     }
   ],
-
   "packageRules": [
     {
-      "matchDatasources": ["docker"],
+      "matchDatasources": [
+        "docker"
+      ],
       "groupName": null,
       "automerge": false
     },
-
     {
-      "matchDatasources": ["docker"],
-      "matchPackagePrefixes": ["ghcr.io/hotio/"],
-      "versioning": "loose"
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/hotio/bazarr",
+        "ghcr.io/hotio/nzbhydra2",
+        "ghcr.io/hotio/qbittorrent",
+        "ghcr.io/hotio/sabnzbd",
+        "ghcr.io/hotio/seerr",
+        "ghcr.io/hotio/slskd",
+        "ghcr.io/hotio/stash",
+        "ghcr.io/hotio/tautulli",
+        "ghcr.io/hotio/unpackerr"
+      ],
+      "versioning": "regex:^release-v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
     },
     {
-      "matchDatasources": ["docker"],
-      "matchPackagePrefixes": ["lscr.io/linuxserver/"],
-      "versioning": "loose"
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/hotio/lidarr",
+        "ghcr.io/hotio/prowlarr",
+        "ghcr.io/hotio/radarr",
+        "ghcr.io/hotio/sonarr"
+      ],
+      "versioning": "regex:^release-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)$"
     },
     {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["ghcr.io/zalando/spilo-17"],
-      "versioning": "loose"
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/hotio/whisparr"
+      ],
+      "versioning": "regex:^(?<compatibility>v\\d+)-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-release\\.(?<build>\\d+)$"
     },
     {
-      "matchDatasources": ["docker"],
-      "matchPackageNames": ["traefik", "ghcr.io/seerr-team/seerr"],
-      "extractVersion": "^v(?<version>.*)$",
-      "versioning": "semver"
+      "matchDatasources": [
+        "docker"
+      ],
+      "allowedVersions": "!/^development-.*$/",
+      "matchPackageNames": [
+        "lscr.io/linuxserver/{/,}**"
+      ]
     },
-
     {
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["major"],
-      "labels": ["renovate", "major"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/obsidian",
+        "lscr.io/linuxserver/ombi",
+        "lscr.io/linuxserver/syncthing",
+        "lscr.io/linuxserver/thelounge"
+      ],
+      "versioning": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$"
+    },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/unifi-network-application"
+      ],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$"
+    },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/znc"
+      ],
+      "versioning": "regex:^znc-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$"
+    },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/librewolf"
+      ],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-(?<patch>\\d+)-ls(?<build>\\d+)$"
+    },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "labels": [
+        "renovate",
+        "major"
+      ],
       "prPriority": 10
     },
     {
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["minor"],
-      "labels": ["renovate", "minor"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "labels": [
+        "renovate",
+        "minor"
+      ],
       "prPriority": 0
     },
     {
-      "matchDatasources": ["docker"],
-      "matchUpdateTypes": ["patch"],
-      "labels": ["renovate", "patch"],
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "labels": [
+        "renovate",
+        "patch"
+      ],
       "prPriority": -1
     }
   ]
