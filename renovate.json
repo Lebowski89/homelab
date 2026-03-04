@@ -27,7 +27,7 @@
       "customType": "regex",
       "managerFilePatterns": ["/\\.ya?ml$/"],
       "matchStrings": [
-        "image:\\s*[\"']?(?<depName>[^\"'\\s:@]+(?:\\/[^\"'\\s:@]+)*)\\s*:\\s*(?<currentValue>[^\"'\\s@]+)(?:@(?<currentDigest>sha256:[a-f0-9]+))?[\"']?"
+        "image:\\s*[\"']?(?<depName>[^\"'\\s@]+)(?::(?<currentValue>[^\"'\\s@]+))?(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?[\"']?"
       ],
       "datasourceTemplate": "docker"
     }
@@ -39,6 +39,29 @@
       "groupName": null,
       "automerge": false
     },
+
+    {
+      "matchDatasources": ["docker"],
+      "matchPackagePrefixes": ["ghcr.io/hotio/"],
+      "versioning": "loose"
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchPackagePrefixes": ["lscr.io/linuxserver/"],
+      "versioning": "loose"
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/zalando/spilo-17"],
+      "versioning": "loose"
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["traefik", "ghcr.io/seerr-team/seerr"],
+      "extractVersion": "^v(?<version>.*)$",
+      "versioning": "semver"
+    },
+
     {
       "matchDatasources": ["docker"],
       "matchUpdateTypes": ["major"],
