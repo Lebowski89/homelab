@@ -3,7 +3,7 @@
 tautulli:
   name: tautulli
   stack: tautulli
-  image: ghcr.io/hotio/tautulli:release-2.16.0
+  image: ghcr.io/hotio/tautulli:release-v2.16.1
   named_networks:
     overlay:
       external: true
