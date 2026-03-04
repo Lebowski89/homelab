@@ -1,118 +1,83 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
+
+  "extends": ["config:recommended"],
+
   "timezone": "Australia/Melbourne",
   "dependencyDashboard": true,
-  "labels": [
-    "renovate"
-  ],
+
+  "labels": ["renovate"],
   "prConcurrentLimit": 5,
   "prHourlyLimit": 2,
+
   "rangeStrategy": "pin",
+
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",
   "semanticCommitScope": "deps",
+
   "commitBodyTable": true,
+
   "prBodyNotes": [
     "Homelab note: review upstream release notes/changelog before merging."
   ],
+
   "customManagers": [
     {
       "customType": "regex",
-      "managerFilePatterns": [
-        "/\\.ya?ml$/"
-      ],
+      "managerFilePatterns": ["/\\.ya?ml$/"],
       "matchStrings": [
-        "image:\\s*[\"']?(?<depName>[^\"'\\s@]+)(?::(?<currentValue>[^\"'\\s@]+))?(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?[\"']?"
+        "image:\\s*[\"']?(?<depName>[^\"'\\s:@]+(?:\\/[^\"'\\s:@]+)*)\\s*:(?<currentValue>[^\"'\\s@]+)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?[\"']?"
       ],
       "datasourceTemplate": "docker"
     }
   ],
+
   "packageRules": [
     {
-      "matchDatasources": [
-        "docker"
-      ],
+      "matchDatasources": ["docker"],
       "groupName": null,
       "automerge": false
     },
+
     {
-      "matchDatasources": [
-        "docker"
-      ],
-      "versioning": "loose",
-      "matchPackageNames": [
-        "ghcr.io/hotio/{/,}**"
-      ]
-    },
-    {
-      "matchDatasources": [
-        "docker"
-      ],
-      "versioning": "loose",
-      "matchPackageNames": [
-        "lscr.io/linuxserver/{/,}**"
-      ]
-    },
-    {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "ghcr.io/zalando/spilo-17"
-      ],
+      "matchDatasources": ["docker"],
+      "matchPackagePrefixes": ["ghcr.io/hotio/"],
       "versioning": "loose"
     },
     {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "traefik",
-        "ghcr.io/seerr-team/seerr"
-      ],
+      "matchDatasources": ["docker"],
+      "matchPackagePrefixes": ["lscr.io/linuxserver/"],
+      "versioning": "loose"
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["ghcr.io/zalando/spilo-17"],
+      "versioning": "loose"
+    },
+    {
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["traefik", "ghcr.io/seerr-team/seerr"],
       "extractVersion": "^v(?<version>.*)$",
       "versioning": "semver"
     },
+
     {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "labels": [
-        "renovate",
-        "major"
-      ],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["major"],
+      "labels": ["renovate", "major"],
       "prPriority": 10
     },
     {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchUpdateTypes": [
-        "minor"
-      ],
-      "labels": [
-        "renovate",
-        "minor"
-      ],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["minor"],
+      "labels": ["renovate", "minor"],
       "prPriority": 0
     },
     {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchUpdateTypes": [
-        "patch"
-      ],
-      "labels": [
-        "renovate",
-        "patch"
-      ],
+      "matchDatasources": ["docker"],
+      "matchUpdateTypes": ["patch"],
+      "labels": ["renovate", "patch"],
       "prPriority": -1
     }
   ]
