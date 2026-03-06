@@ -3,7 +3,7 @@
 recyclarr:
   name: recyclarr
   stack: recyclarr
-  image: ghcr.io/recyclarr/recyclarr:8.3.2
+  image: ghcr.io/recyclarr/recyclarr:8.4.0
   named_networks:
     overlay:
       external: true
