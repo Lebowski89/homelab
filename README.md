@@ -1,5 +1,7 @@
 # Infrastructure (Homelab) as Code
 
+![ansible](https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/ansible.svg)
+
 + Driven by Ansible and Docker Swarm
 + Infisical for Secrets Management
 + Authelia and Traefik for SSO/Reverse Proxy
