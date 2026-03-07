@@ -16,6 +16,8 @@ Detailed documentation is available in the `docs` folder.
 
 ## Apps in Use
 
+(Logos sourced from selfh.st <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/selfh-st.svg" alt="selfh-st" width="24" />)
+
 <table>
   <tr>
     <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/adminer.svg" alt="Adminer" width="36"><br>adminer</td>
