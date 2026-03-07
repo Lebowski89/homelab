@@ -10,7 +10,7 @@
 
 - Automate deployment of Docker apps and services
 - Automate app settings, configs, databases, dns, and other needs in a single Ansible run
-- Run against a fresh OS or VM and reliably deploy an app or service with my preferred settings every time
+- Run against a fresh Debian-based <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/debian.svg" alt="Debian" width="24" /> OS or VM and reliably deploy an app or service with my preferred settings every time
 
 Detailed documentation is available in the `docs` folder.
 
