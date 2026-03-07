@@ -1,6 +1,4 @@
-<p align="left">
-  <img src="https://github.com/user-attachments/assets/28184777-b3df-485b-985e-93225bfd7797" alt="Homelab as Code" width="560" />
-</p>
+## <img width="560" height="360" alt="homelab_repo_banner_cropped" src="https://github.com/user-attachments/assets/ac402bb7-f469-44cf-a602-ff3ddf2c4160" />
 
 - Powered by Ansible <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/ansible.svg" alt="Ansible" width="24" /> and Docker Swarm <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/docker.svg" alt="Docker" width="24" />
 - Uses Infisical <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/infisical.svg" alt="Infisical" width="24" /> for secret management
@@ -12,7 +10,7 @@
 
 - Automate deployment of Docker apps and services
 - Automate app settings, configs, databases, dns, and other needs in a single Ansible run
-- Run against a fresh Debian-based <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/debian.svg" alt="Debian" width="24" /> OS or VM and reliably deploy an app or service with my preferred settings every time
+- Run on fresh Debian-based <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/debian.svg" alt="Debian" width="24" /> OS/VM and reliably deploy an app or service with my preferred settings
 
 Detailed documentation is available in the `docs` folder.
 
