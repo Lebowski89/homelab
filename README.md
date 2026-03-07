@@ -1,4 +1,4 @@
-## <img width="560" height="360" alt="homelab_repo_banner_cropped" src="https://github.com/user-attachments/assets/ac402bb7-f469-44cf-a602-ff3ddf2c4160" />
+## <img width="720" height="360" alt="homelab_repo_banner_cropped" src="https://github.com/user-attachments/assets/ac402bb7-f469-44cf-a602-ff3ddf2c4160" />
 
 - Powered by Ansible <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/ansible.svg" alt="Ansible" width="24" /> and Docker Swarm <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/docker.svg" alt="Docker" width="24" />
 - Uses Infisical <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/infisical.svg" alt="Infisical" width="24" /> for secret management
