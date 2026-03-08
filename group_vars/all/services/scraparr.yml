@@ -3,7 +3,7 @@
 scraparr:
   name: scraparr
   stack: scraparr
-  image: ghcr.io/thecfu/scraparr:latest
+  image: thegameprofi/scraparr:3.0.3
   named_networks:
     overlay:
       external: true

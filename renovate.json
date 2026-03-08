@@ -46,6 +46,7 @@
         "ghcr.io/hotio/bazarr",
         "ghcr.io/hotio/nzbhydra2",
         "ghcr.io/hotio/qbittorrent",
+        "ghcr.io/hotio/qbitmanage",
         "ghcr.io/hotio/sabnzbd",
         "ghcr.io/hotio/seerr",
         "ghcr.io/hotio/slskd",
