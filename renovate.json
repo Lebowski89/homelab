@@ -80,10 +80,10 @@
       "matchDatasources": [
         "docker"
       ],
-      "matchPackagePrefixes": [
-        "lscr.io/linuxserver/"
-      ],
-      "allowedVersions": "!/^development-.*$/"
+      "allowedVersions": "!/^development-.*$/",
+      "matchPackageNames": [
+        "lscr.io/linuxserver/{/,}**"
+      ]
     },
     {
       "matchDatasources": [
