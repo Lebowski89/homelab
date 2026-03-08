@@ -3,7 +3,7 @@
 unpackerr:
   name: unpackerr
   stack: unpackerr
-  image: ghcr.io/hotio/unpackerr:release-v0.15.0
+  image: ghcr.io/hotio/unpackerr:release-v0.15.2
   named_networks:
     overlay:
       external: true
