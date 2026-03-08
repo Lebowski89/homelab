@@ -38,44 +38,94 @@
       "groupName": null,
       "automerge": false
     },
-    {
-      "matchDatasources": [
-        "docker"
-      ],
-      "versioning": "loose",
-      "matchPackageNames": [
-        "ghcr.io/hotio/{/,}**"
-      ]
-    },
-    {
-      "matchDatasources": [
-        "docker"
-      ],
-      "versioning": "loose",
-      "matchPackageNames": [
-        "lscr.io/linuxserver/{/,}**"
-      ]
-    },
+
     {
       "matchDatasources": [
         "docker"
       ],
       "matchPackageNames": [
-        "ghcr.io/zalando/spilo-17"
+        "ghcr.io/hotio/bazarr",
+        "ghcr.io/hotio/nzbhydra2",
+        "ghcr.io/hotio/qbittorrent",
+        "ghcr.io/hotio/sabnzbd",
+        "ghcr.io/hotio/seerr",
+        "ghcr.io/hotio/slskd",
+        "ghcr.io/hotio/stash",
+        "ghcr.io/hotio/tautulli",
+        "ghcr.io/hotio/unpackerr"
       ],
-      "versioning": "loose"
+      "versioning": "regex:^release-v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
     },
     {
       "matchDatasources": [
         "docker"
       ],
       "matchPackageNames": [
-        "traefik",
-        "ghcr.io/seerr-team/seerr"
+        "ghcr.io/hotio/lidarr",
+        "ghcr.io/hotio/prowlarr",
+        "ghcr.io/hotio/radarr",
+        "ghcr.io/hotio/sonarr"
       ],
-      "extractVersion": "^v(?<version>.*)$",
-      "versioning": "semver"
+      "versioning": "regex:^release-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)$"
     },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/hotio/whisparr"
+      ],
+      "versioning": "regex:^(?<compatibility>v\\d+)-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-release\\.(?<build>\\d+)$"
+    },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackagePrefixes": [
+        "lscr.io/linuxserver/"
+      ],
+      "allowedVersions": "!/^development-.*$/"
+    },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/obsidian",
+        "lscr.io/linuxserver/ombi",
+        "lscr.io/linuxserver/syncthing",
+        "lscr.io/linuxserver/thelounge"
+      ],
+      "versioning": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$"
+    },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/unifi-network-application"
+      ],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$"
+    },
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/znc"
+      ],
+      "versioning": "regex:^znc-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$"
+    }
+    {
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/librewolf"
+      ],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-(?<patch>\\d+)-ls(?<build>\\d+)$"
+    },
+
     {
       "matchDatasources": [
         "docker"
