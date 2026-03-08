@@ -3,7 +3,7 @@
 czkawka:
   name: czkawka
   stack: czkawka
-  image: jlesage/czkawka
+  image: jlesage/czkawka:v26.02.3
   named_networks:
     overlay:
       external: true

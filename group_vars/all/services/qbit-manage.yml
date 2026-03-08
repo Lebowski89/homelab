@@ -1,7 +1,7 @@
 ---
 
 qbit_manage:
-  image: ghcr.io/stuffanthings/qbit_manage:latest
+  image: ghcr.io/hotio/qbitmanage:release-4.6.5
   stack: qbm
   named_networks:
     overlay:
