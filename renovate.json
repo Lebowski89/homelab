@@ -38,7 +38,6 @@
       "groupName": null,
       "automerge": false
     },
-
     {
       "matchDatasources": [
         "docker"
@@ -115,7 +114,7 @@
         "lscr.io/linuxserver/znc"
       ],
       "versioning": "regex:^znc-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$"
-    }
+    },
     {
       "matchDatasources": [
         "docker"
@@ -125,7 +124,6 @@
       ],
       "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-(?<patch>\\d+)-ls(?<build>\\d+)$"
     },
-
     {
       "matchDatasources": [
         "docker"
