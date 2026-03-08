@@ -3,7 +3,7 @@
 autopulse_ui:
   name: autopulse-ui
   stack: autopulse
-  image: danonline/autopulse:ui@sha256:18d8e9beef53a04d87155b0bbf4a6a051fc4cb3b68d4be457f203652753ddaa7
+  image: danonline/autopulse:ui@sha256:2a2686154cb5d18fdf62a5034462d6e35ed488e27ffd0fb7a1ff275dc095b9a2
   named_networks:
     overlay:
       external: true
