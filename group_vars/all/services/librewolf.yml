@@ -4,7 +4,7 @@ librewolf:
   name: librewolf
   stack: gluetun
   container_name: librewolf
-  image: lscr.io/linuxserver/librewolf:148.0-1-ls132
+  image: lscr.io/linuxserver/librewolf:148.0-1-ls133
   security_opt:
     - "seccomp:unconfined"
   depends_on:
