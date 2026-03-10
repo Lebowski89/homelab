@@ -1,0 +1,124 @@
+---
+
+opencloud:
+  name: opencloud
+  stack: opencloud
+  image: opencloudeu/opencloud-rolling:5.2.0
+  named_networks:
+    overlay:
+      external: true
+  entrypoint:
+    - /bin/sh
+  command:
+    - -c
+    - "opencloud init || true; opencloud server"
+  user: "1000:1000"
+  environment:
+    TZ: "{{ timezone }}"
+  env_file:
+    - /opt/stacks/opencloud.env
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: opencloud_admin_pass
+        path: "/OpenCloud"
+        name: IDM_ADMIN_PASS
+      - var: smtp_host
+        path: "/Porkbun"
+        name: SMTP_HOST
+      - var: smtp_password
+        path: "/Porkbun"
+        name: SMTP_PASS
+      - var: smtp_port
+        path: "/Porkbun"
+        name: SMTP_PORT
+      - var: smtp_sender
+        path: "/Porkbun"
+        name: SMTP_SENDER
+      - var: smtp_username
+        path: "/Porkbun"
+        name: SMTP_USER
+  paths:
+    - path: /mnt/user/appdata/opencloud
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: "0751"
+    - path: /mnt/user/appdata/opencloud/config
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: "0751"
+    - path: /mnt/user/opencloud/data
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: "0751"
+    - path: /mnt/user/appdata/opencloud/apps
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: "0751"
+  templates:
+    - src: configs/opencloud/csp.yaml.j2
+      dest: /mnt/user/appdata/opencloud/config/csp.yaml
+      owner: 1000
+      group: 1000
+      mode: "0664"
+      force: true
+    - src: configs/opencloud/banned-password-list.txt.j2
+      dest: /mnt/user/appdata/opencloud/config/banned-password-list.txt
+      owner: 1000
+      group: 1000
+      mode: "0664"
+      force: true
+  swarm_env_templates:
+    - src: configs/opencloud/opencloud.env.j2
+      dest: /opt/stacks/opencloud.env
+      owner: 1000
+      group: 1000
+      mode: "0600"
+      force: true
+  volumes:
+    csp:
+      type: bind
+      source: /mnt/user/appdata/opencloud/config/csp.yaml
+      target: /etc/opencloud/csp.yaml
+      read_only: true
+    banned_passwords:
+      type: bind
+      source: /mnt/user/appdata/opencloud/config/banned-password-list.txt
+      target: /etc/opencloud/banned-password-list.txt
+      read_only: true
+    opencloud_config:
+      type: bind
+      source: /mnt/user/appdata/opencloud/config
+      target: /etc/opencloud
+      read_only: false
+    opencloud_data:
+      type: bind
+      source: /mnt/user/opencloud/data
+      target: /var/lib/opencloud
+      read_only: false
+    opencloud_apps:
+      type: bind
+      source: /mnt/user/appdata/opencloud/apps
+      target: /var/lib/opencloud/web/assets/apps
+      read_only: false
+  traefik:
+    enable: true
+    port: 9200
+  cloudflare:
+    enable: true
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: unraid
+    constraints:
+      - node.labels.ansible_host == unraid
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

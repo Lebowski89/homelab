@@ -110,6 +110,17 @@ services:
 {% endif %}
 {% endif %}
 
+{% if svc.entrypoint is defined %}
+    entrypoint:
+{% if svc.entrypoint is string %}
+      {{ svc.entrypoint }}
+{% elif svc.entrypoint is iterable and (svc.entrypoint | length > 0) %}
+{% for ep in svc.entrypoint %}
+      - "{{ ep }}"
+{% endfor %}
+{% endif %}
+{% endif %}
+
 {% if svc.command is defined %}
     command:
 {% if svc.command is string %}

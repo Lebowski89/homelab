@@ -121,6 +121,26 @@
         | ternary((docker_services_svc.pid | string | trim), omit)
       }}
 
+    entrypoint: >-
+      {{
+        (
+          docker_services_svc.entrypoint is defined
+          and (
+            (
+              docker_services_svc.entrypoint is string
+              and (docker_services_svc.entrypoint | string | trim | length > 0)
+            )
+            or
+            (
+              docker_services_svc.entrypoint is sequence
+              and docker_services_svc.entrypoint is not string
+              and (docker_services_svc.entrypoint | length > 0)
+            )
+          )
+        )
+        | ternary(docker_services_svc.entrypoint, omit)
+      }}
+
     network_mode: >-
       {{
         (

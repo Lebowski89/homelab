@@ -61,6 +61,8 @@
         tags: [apps, media, seerr]
       - name: ombi
         tags: [apps, media, ombi]
+      - name: opencloud
+        tags: [apps, opencloud]
       - name: stash
         tags: [apps, media, stash]
       - name: thelounge

@@ -21,9 +21,7 @@ alloy:
     - "/etc/alloy/config.alloy"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "1000"
-    PGID: "1000"
-    UMASK: "022"
+  user: "1000:1000"
   paths:
     - path: /opt/alloy
       state: directory
@@ -40,7 +38,7 @@ alloy:
       dest: /opt/alloy/config.alloy
       owner: 1000
       group: 1000
-      mode: "0664"
+      mode: "0644"
       force: true
   volumes:
     config:
@@ -48,35 +46,10 @@ alloy:
       source: /opt/alloy
       target: /etc/alloy
       read_only: false
-    rootfs:
+    docker_sock:
       type: bind
-      source: /
-      target: /rootfs
-      read_only: true
-    run:
-      type: bind
-      source: /run
-      target: /run
-      read_only: true
-    udev:
-      type: bind
-      source: /run/udev/data
-      target: /run/udev/data
-      read_only: true
-    sys:
-      type: bind
-      source: /sys
-      target: /sys
-      read_only: true
-    var_log:
-      type: bind
-      source: /var/log
-      target: /var/log
-      read_only: true
-    var_lib_docker:
-      type: bind
-      source: /var/lib/docker
-      target: /var/lib/docker
+      source: /var/run/docker.sock
+      target: /var/run/docker.sock
       read_only: true
   traefik:
     enable: true
