@@ -48,6 +48,18 @@
                     else omit
                   ),
 
+                  'entrypoint': (
+                    entrypoint
+                    if (entrypoint is defined)
+                      and (entrypoint is not sameas omit)
+                      and (
+                        ((entrypoint is string) and (entrypoint | trim | length > 0))
+                        or
+                        ((entrypoint is sequence) and (entrypoint is not string) and (entrypoint | length > 0))
+                      )
+                    else omit
+                  ),
+
                   'logging': {
                     'driver': 'json-file',
                     'options': {
