@@ -1,153 +1,32 @@
-/* Grafana Alloy Configuration
-// ============================================================================
-// REMOTE ENDPOINTS
-// ============================================================================
+logging {
+  level  = "info"
+  format = "logfmt"
+}
 
-/* Loki Write Endpoint */
 loki.write "default" {
   endpoint {
     url = "http://loki:3100/loki/api/v1/push"
   }
-  external_labels = {}
 }
 
-/* Prometheus Remote Write Endpoint */
-prometheus.remote_write "default" {
-  endpoint {
-    url = "http://prometheus:9090/api/v1/write"
-  }
-}
-
-// ============================================================================
-// LOG COLLECTION
-// ============================================================================
-
-/* Docker Container Logs */
-discovery.docker "dockerlogs" {
+discovery.docker "docker" {
   host = "unix:///var/run/docker.sock"
 }
 
-discovery.relabel "dockerlogs" {
+discovery.relabel "docker_logs" {
   targets = []
 
   rule {
     source_labels = ["__meta_docker_container_name"]
-    regex = "/(.*)"
-    target_label = "service_name"
+    regex         = "/(.*)"
+    target_label  = "container"
   }
 }
 
-loki.source.docker "default" {
-  host       = "unix:///var/run/docker.sock"
-  targets    = discovery.docker.dockerlogs.targets
-  labels     = {"platform" = "docker"}
-  relabel_rules = discovery.relabel.dockerlogs.rules
-  forward_to = [loki.write.default.receiver]
-}
-
-/* System Logs & Journal */
-loki.source.journal "journal" {
-  max_age       = "24h0m0s"
-  relabel_rules = discovery.relabel.journal.rules
+loki.source.docker "docker" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.docker.targets
+  labels        = { job = "docker", host = constants.hostname }
+  relabel_rules = discovery.relabel.docker_logs.rules
   forward_to    = [loki.write.default.receiver]
-  labels        = {component = string.format("%s-journal", constants.hostname)}
-  // NOTE: This is important to fix https://github.com/grafana/alloy/issues/924
-  path          = "/var/log/journal"
-}
-
-local.file_match "system" {
-  path_targets = [{
-    __address__ = "localhost",
-    __path__    = "/var/log/{syslog,messages,*.log}",
-    instance    = constants.hostname,
-    job         = string.format("%s-logs", constants.hostname),
-  }]
-}
-
-discovery.relabel "journal" {
-  targets = []
-  rule {
-    source_labels = ["__journal__systemd_unit"]
-    target_label  = "unit"
-  }
-  rule {
-    source_labels = ["__journal__boot_id"]
-    target_label  = "boot_id"
-  }
-  rule {
-    source_labels = ["__journal__transport"]
-    target_label  = "transport"
-  }
-  rule {
-    source_labels = ["__journal_priority_keyword"]
-    target_label  = "level"
-  }
-}
-
-loki.source.file "system" {
-  targets    = local.file_match.system.targets
-  forward_to = [loki.write.default.receiver]
-}
-
-// ============================================================================
-// METRICS COLLECTION
-// ============================================================================
-
-/* Docker Container Metrics (cAdvisor) */
-prometheus.exporter.cadvisor "dockermetrics" {
-  docker_host = "unix:///var/run/docker.sock"
-  storage_duration = "5m"
-}
-
-/* Relabel component to drop container_spec metrics that often have NaN values */
-prometheus.relabel "docker_filter" {
-  forward_to = [prometheus.remote_write.default.receiver]
-  
-  rule {
-    source_labels = ["__name__"]
-    regex = "container_spec_(cpu_period|cpu_quota|cpu_shares|memory_limit_bytes|memory_swap_limit_bytes|memory_reservation_limit_bytes)"
-    action = "drop"
-  }
-}
-
-prometheus.scrape "dockermetrics" {
-  targets    = prometheus.exporter.cadvisor.dockermetrics.targets
-  forward_to = [prometheus.relabel.docker_filter.receiver]
-  scrape_interval = "10s"
-}
-
-/* System (Node) Metrics */
-discovery.relabel "metrics" {
-  targets = prometheus.exporter.unix.metrics.targets
-  rule {
-    target_label = "instance"
-    replacement  = constants.hostname
-  }
-  rule {
-    target_label = "job"
-    replacement = string.format("%s-metrics", constants.hostname)
-  }
-}
-
-prometheus.exporter.unix "metrics" {
-  disable_collectors = ["ipvs", "btrfs", "infiniband", "xfs", "zfs"]
-  enable_collectors = ["meminfo"]
-  rootfs_path = "/rootfs"
-  filesystem {
-    fs_types_exclude     = "^(autofs|binfmt_misc|bpf|cgroup2?|configfs|debugfs|devpts|devtmpfs|tmpfs|fusectl|hugetlbfs|iso9660|mqueue|nsfs|overlay|proc|procfs|pstore|rpc_pipefs|securityfs|selinuxfs|squashfs|sysfs|tracefs)$"
-    mount_points_exclude = "^/(dev|proc|run/credentials/.+|sys|var/lib/docker/.+)($|/)"
-    mount_timeout        = "5s"
-  }
-  netclass {
-    ignored_devices = "^(veth.*|cali.*|[a-f0-9]{15})$"
-  }
-  netdev {
-    device_exclude = "^(veth.*|cali.*|[a-f0-9]{15})$"
-  }
-}
-
-prometheus.scrape "metrics" {
-  scrape_interval = "15s"
-  targets    = discovery.relabel.metrics.output
-  forward_to = [prometheus.remote_write.default.receiver]
 }

@@ -9,12 +9,16 @@ loki:
       external: true
   command:
     - "-config.file=/etc/loki/loki-config.yaml"
+  user: "1000:1000"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "1000"
-    PGID: "1000"
   paths:
     - path: /opt/loki
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: "0755"
+    - path: /opt/loki/data
       state: directory
       owner: 1000
       group: 1000
@@ -24,13 +28,18 @@ loki:
       dest: /opt/loki/loki-config.yaml
       owner: 1000
       group: 1000
-      mode: "0664"
+      mode: "0644"
       force: true
   volumes:
     config:
       type: bind
       source: /opt/loki
       target: /etc/loki
+      read_only: true
+    data:
+      type: bind
+      source: /opt/loki/data
+      target: /loki
       read_only: false
   deploy:
     type: swarm

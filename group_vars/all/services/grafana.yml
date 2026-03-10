@@ -3,7 +3,7 @@
 grafana:
   name: grafana
   stack: grafana
-  image: grafana/grafana-oss:13.0.0-22696220628-ubuntu
+  image: grafana/grafana:13.0.0-ubuntu
   named_networks:
     overlay:
       external: true
@@ -17,19 +17,8 @@ grafana:
   user: "0"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "1000"
-    PGID: "1000"
-    UMASK: "022"
     GF_SECURITY_ADMIN_USER__FILE: /run/secrets/grafana_admin_user_secret
     GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_pass_secret
-    GF_PLUGINS_PREINSTALL: "marcusolsson-hourly-heatmap-panel"
-    GF_DATE_FORMATS_FULL_DATE: "MMM Do, YYYY - hh:mm:ss a"
-    GF_DATE_FORMATS_INTERVAL_SECOND: "hh:mm:ss a"
-    GF_DATE_FORMATS_INTERVAL_MINUTE: "hh:mm a"
-    GF_DATE_FORMATS_INTERVAL_HOUR: "MMM DD hh:mm a"
-    GF_DATE_FORMATS_INTERVAL_DAY: "MMM DD"
-    GF_DATE_FORMATS_INTERVAL_MONTH: "YYYY-MM"
-    GF_DATE_FORMATS_INTERVAL_YEAR: "YYY"
   infisical:
     fail_on_empty: true
     secrets_map:
@@ -49,7 +38,7 @@ grafana:
       group: 1000
       mode: "0755"
   volumes:
-    config:
+    data:
       type: bind
       source: /opt/grafana
       target: /var/lib/grafana

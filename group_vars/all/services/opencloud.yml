@@ -4,7 +4,6 @@ opencloud:
   name: opencloud
   stack: opencloud
   image: opencloudeu/opencloud-rolling:5.1.0
-  user: "1000:1000"
   named_networks:
     overlay:
       external: true
@@ -13,6 +12,7 @@ opencloud:
   command:
     - -c
     - "opencloud init || true; opencloud server"
+  user: "1000:1000"
   environment:
     TZ: "{{ timezone }}"
   env_file:
