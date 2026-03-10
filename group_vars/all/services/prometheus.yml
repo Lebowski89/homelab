@@ -16,8 +16,9 @@ prometheus:
       - "http://127.0.0.1:9090/-/ready"
   command:
     - "--config.file=/etc/prometheus/prometheus.yml"
+    - "--storage.tsdb.path=/prometheus"
     - "--web.enable-remote-write-receiver"
-  user: 1000:1000
+  user: "1000:1000"
   environment:
     TZ: "{{ timezone }}"
   paths:
@@ -36,14 +37,14 @@ prometheus:
       dest: /opt/prometheus/prometheus.yml
       owner: 1000
       group: 1000
-      mode: "0664"
+      mode: "0644"
       force: true
   volumes:
     config:
       type: bind
       source: /opt/prometheus
       target: /etc/prometheus
-      read_only: false
+      read_only: true
     data:
       type: bind
       source: /opt/prometheus/data
