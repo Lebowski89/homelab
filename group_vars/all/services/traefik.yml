@@ -97,6 +97,8 @@ traefik:
       source: /opt/traefik
       target: /etc/traefik
       read_only: false
+  cloudflare:
+    enable: true
   deploy:
     type: swarm
     mode: replicated

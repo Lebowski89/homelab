@@ -1,0 +1,37 @@
+---
+
+- name: Ensure /ansible exists
+  ansible.builtin.file:
+    path: /ansible
+    state: directory
+    owner: "{{ puid }}"
+    group: "{{ pgid }}"
+    mode: "0755"
+
+- name: Create Ansible virtualenv
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - venv
+      - /ansible/ansible-venv
+  args:
+    creates: /ansible/ansible-venv/bin/python
+
+- name: Upgrade pip tooling in Ansible virtualenv
+  ansible.builtin.pip:
+    name:
+      - pip
+      - setuptools
+      - wheel
+    state: latest
+    virtualenv: /ansible/ansible-venv
+
+- name: Install Python packages in Ansible virtualenv
+  ansible.builtin.pip:
+    name:
+      - docker
+      - requests
+      - PyYAML
+      - jmespath
+    virtualenv: /ansible/ansible-venv

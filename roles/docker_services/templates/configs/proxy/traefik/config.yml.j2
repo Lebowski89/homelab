@@ -55,9 +55,9 @@ entryPoints:
         options: securetls@file
         certResolver: dns-cloudflare
         domains:
-          - main: {{ cloudflare_zone }}.com
+          - main: {{ cloudflare_zone }}
             sans:
-              - "*.{{ cloudflare_zone }}.com"
+              - "*.{{ cloudflare_zone }}"
     forwardedHeaders:
       insecure: false
       trustedIPs:
@@ -114,13 +114,6 @@ providers:
   file:
     directory: /etc/traefik/dynamic
     watch: true
-  swarm:
-    endpoint: "unix:///var/run/docker.sock"
-    watch: true
-    exposedByDefault: false
-    network: overlay
-    refreshSeconds: 15s
-    useBindPortIP: true
 
 experimental:
   plugins:

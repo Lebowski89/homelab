@@ -14,6 +14,7 @@ INVENTORY="${INVENTORY:-$REPO_ROOT/hosts.ini}"
 ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-$REPO_ROOT/ansible.cfg}"
 BECOME_PASS_FILE="${BECOME_PASS_FILE:-$REPO_ROOT/.ansible_become_pass}"
 DOCTOR_PING_TARGET="${SKYNET_DOCTOR_PING_TARGET:-skynet}"
+DOCKER_SERVICES_VARS="${DOCKER_SERVICES_VARS:-$REPO_ROOT/group_vars/all/docker_services.yml}"
 
 # Prefer repo-local ansible venv binaries if present, otherwise fall back to PATH.
 if [[ -x "$REPO_ROOT/ansible-venv/bin/ansible-playbook" ]]; then
@@ -68,6 +69,7 @@ Optional env vars:
   INVENTORY                   Override inventory path
   ANSIBLE_CONFIG              Override ansible.cfg path
   BECOME_PASS_FILE            Override become password file path
+  DOCKER_SERVICES_VARS        Override docker services vars path
   ANSIBLE_PLAYBOOK_BIN        Override ansible-playbook binary
   ANSIBLE_INVENTORY_BIN       Override ansible-inventory binary
   ANSIBLE_GALAXY_BIN          Override ansible-galaxy binary
@@ -99,10 +101,13 @@ run_playbook() {
 
 print_tags() {
   if command -v python3 >/dev/null 2>&1; then
-    python3 - "$PLAYBOOK" <<'PY'
+    python3 - "$PLAYBOOK" "$DOCKER_SERVICES_VARS" <<'PY'
 import sys
 from collections import OrderedDict
-p = sys.argv[1]
+
+playbook_path = sys.argv[1]
+docker_services_path = sys.argv[2]
+
 try:
     import yaml
 except Exception:
@@ -116,8 +121,12 @@ def add(x):
         if x and x not in tags:
             tags[x] = True
 
-if yaml:
-    with open(p, "r", encoding="utf-8") as f:
+if not yaml:
+    sys.exit("python yaml module is required for skynet tags")
+
+# Fallback: preserve support for docker_services still defined in playbook vars
+try:
+    with open(playbook_path, "r", encoding="utf-8") as f:
         data = yaml.safe_load(f) or []
     if isinstance(data, list):
         for play in data:
@@ -131,24 +140,29 @@ if yaml:
                     add(item.get("name"))
                     for t in (item.get("tags") or []):
                         add(t)
-    for t in tags:
-        print(t)
-else:
-    # fallback (best effort)
-    import re
-    with open(p, "r", encoding="utf-8") as f:
-        for line in f:
-            m = re.match(r'^\s*-\s*name:\s*(.+?)\s*$', line)
-            if m:
-                add(m.group(1))
-            m = re.match(r'^\s*tags:\s*\[(.*?)\]\s*$', line)
-            if m:
-                for t in m.group(1).split(","):
-                    add(t)
-    for t in tags:
-        print(t)
+except FileNotFoundError:
+    pass
+
+# Primary source: group_vars/all/docker_services.yml
+try:
+    with open(docker_services_path, "r", encoding="utf-8") as f:
+        gv = yaml.safe_load(f) or {}
+    ds = gv.get("docker_services", [])
+    if isinstance(ds, list):
+        for item in ds:
+            if not isinstance(item, dict):
+                continue
+            add(item.get("name"))
+            for t in (item.get("tags") or []):
+                add(t)
+except FileNotFoundError:
+    pass
+
+for t in tags:
+    print(t)
 PY
   else
+    echo "[WARN] python3 not found; falling back to best-effort tag parsing from playbook only" >&2
     grep -E '^\s*- name:|^\s*tags:\s*\[' "$PLAYBOOK" \
       | sed -E 's/^\s*- name:\s*//; s/^\s*tags:\s*\[//; s/\]\s*$//' \
       | tr ',' '\n' | sed 's/^ *//; s/ *$//' | sort -u
@@ -190,6 +204,12 @@ doctor() {
     echo "[OK] --list-tags works"
   else
     echo "[WARN] --list-tags failed"
+  fi
+
+  if [[ -f "$DOCKER_SERVICES_VARS" ]]; then
+    echo "[OK] docker services vars found: $DOCKER_SERVICES_VARS"
+  else
+    echo "[WARN] docker services vars not found: $DOCKER_SERVICES_VARS"
   fi
 
   if [[ -x "$ANSIBLE_GALAXY_BIN" ]]; then
@@ -247,7 +267,7 @@ case "$CMD" in
   update)
     [[ $# -ge 1 ]] || die "update requires at least one tag or 'all'"
     if [[ "$1" == "all" ]]; then
-      run_playbook "${LIMIT_ARGS[@]}" --tags "update"
+      run_playbook "${LIMIT_ARGS[@]}" --tags "update,all"
     else
       TAGS="update,$(join_csv "$@")"
       run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
