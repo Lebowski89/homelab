@@ -1,6 +1,11 @@
 ---
 
-local_ip: "192.168.80.45"
-puid: "1000"
-pgid: "1000"
-appdata_path: "/opt"
+puid: 1000
+
+pgid: 1000
+
+local_ip: 192.168.80.45
+
+docker_manage_user: true
+
+docker_user: "swarm"
