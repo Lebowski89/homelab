@@ -1,0 +1,5 @@
+---
+
+apt_env_vars:
+  DEBIAN_FRONTEND: noninteractive
+  DEBIAN_PRIORITY: critical

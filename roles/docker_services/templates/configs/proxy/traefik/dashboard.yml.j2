@@ -11,7 +11,7 @@ http:
   routers:
     traefik-dashboard:
       entryPoints: ["https"]
-      rule: "Host(`traefik.{{ cloudflare_zone }}.com`)"
+      rule: "Host(`traefik.{{ cloudflare_zone }}`)"
       priority: 10
       tls:
         options: "securetls@file"

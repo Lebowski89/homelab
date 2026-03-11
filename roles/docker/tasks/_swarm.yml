@@ -1,0 +1,110 @@
+---
+
+- name: Ensure this host is part of the swarm inventory
+  ansible.builtin.set_fact:
+    docker_swarm_enabled: "{{ inventory_hostname in groups['swarm'] | default([]) }}"
+  tags:
+    - docker_swarm
+
+- name: End swarm tasks for non-swarm hosts
+  ansible.builtin.meta: end_host
+  when: not docker_swarm_enabled | bool
+  tags:
+    - docker_swarm
+
+- name: Assert primary swarm manager is defined
+  ansible.builtin.assert:
+    that:
+      - docker_swarm_primary_manager is defined
+      - docker_swarm_primary_manager in groups['swarm_managers']
+    fail_msg: "docker_swarm_primary_manager must be defined and be a member of swarm_managers."
+  tags:
+    - docker_swarm
+
+- name: Assert local_ip is defined for swarm node
+  ansible.builtin.assert:
+    that:
+      - local_ip is defined
+      - local_ip | length > 0
+    fail_msg: "local_ip must be defined for each swarm node."
+  tags:
+    - docker_swarm
+
+- name: Initialise swarm on primary manager
+  community.docker.docker_swarm:
+    state: present
+    advertise_addr: "{{ local_ip }}"
+  when: inventory_hostname == docker_swarm_primary_manager
+  register: docker_swarm_init_result
+  tags:
+    - docker_swarm
+    - docker_swarm_init
+
+- name: Get worker join token from primary manager
+  ansible.builtin.command:
+    argv:
+      - docker
+      - swarm
+      - join-token
+      - -q
+      - worker
+  delegate_to: "{{ docker_swarm_primary_manager }}"
+  run_once: true
+  register: docker_swarm_worker_token_cmd
+  changed_when: false
+  tags:
+    - docker_swarm
+    - docker_swarm_join
+
+- name: Get manager join token from primary manager
+  ansible.builtin.command:
+    argv:
+      - docker
+      - swarm
+      - join-token
+      - -q
+      - manager
+  delegate_to: "{{ docker_swarm_primary_manager }}"
+  run_once: true
+  register: docker_swarm_manager_token_cmd
+  changed_when: false
+  tags:
+    - docker_swarm
+    - docker_swarm_join
+
+- name: Store join tokens on primary manager hostvars
+  ansible.builtin.set_fact:
+    docker_swarm_worker_join_token: "{{ docker_swarm_worker_token_cmd.stdout }}"
+    docker_swarm_manager_join_token: "{{ docker_swarm_manager_token_cmd.stdout }}"
+  delegate_to: "{{ docker_swarm_primary_manager }}"
+  delegate_facts: true
+  run_once: true
+  tags:
+    - docker_swarm
+    - docker_swarm_join
+
+- name: Join additional managers to swarm
+  community.docker.docker_swarm:
+    state: join
+    advertise_addr: "{{ local_ip }}"
+    remote_addrs:
+      - "{{ hostvars[docker_swarm_primary_manager].local_ip }}:2377"
+    join_token: "{{ hostvars[docker_swarm_primary_manager].docker_swarm_manager_join_token }}"
+  when:
+    - inventory_hostname in groups['swarm_managers']
+    - inventory_hostname != docker_swarm_primary_manager
+  tags:
+    - docker_swarm
+    - docker_swarm_join
+
+- name: Join workers to swarm
+  community.docker.docker_swarm:
+    state: join
+    advertise_addr: "{{ local_ip }}"
+    remote_addrs:
+      - "{{ hostvars[docker_swarm_primary_manager].local_ip }}:2377"
+    join_token: "{{ hostvars[docker_swarm_primary_manager].docker_swarm_worker_join_token }}"
+  when: inventory_hostname in groups['swarm_workers']
+  tags:
+    - docker_swarm
+    - docker_swarm_join

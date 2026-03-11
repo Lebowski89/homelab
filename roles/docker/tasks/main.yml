@@ -1,0 +1,25 @@
+---
+
+- name: Install Docker
+  ansible.builtin.include_tasks:
+    file: _install.yml
+    apply:
+      tags:
+        - docker
+        - docker_install
+  tags:
+    - docker
+    - docker_install
+
+- name: Configure Docker Swarm
+  ansible.builtin.include_tasks:
+    file: _swarm.yml
+    apply:
+      tags:
+        - docker
+        - docker_swarm
+  tags:
+    - docker
+    - docker_swarm
+    - docker_swarm_init
+    - docker_swarm_join

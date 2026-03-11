@@ -1,0 +1,60 @@
+---
+
+- name: Assert supported OS
+  ansible.builtin.assert:
+    that:
+      - ansible_os_family == "Debian"
+      - ansible_distribution == "Ubuntu"
+    fail_msg: "This role currently supports Ubuntu only."
+
+- name: Ensure apt prerequisites are installed
+  ansible.builtin.apt:
+    name: "{{ docker_prereq_packages }}"
+    state: present
+    update_cache: true
+
+- name: Ensure Docker keyring directory exists
+  ansible.builtin.file:
+    path: "{{ docker_keyring_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download Docker GPG key
+  ansible.builtin.get_url:
+    url: "{{ docker_repo_url }}/gpg"
+    dest: "{{ docker_keyring_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add Docker apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [arch={{ docker_apt_arch }} signed-by={{ docker_keyring_file }}]
+      {{ docker_repo_url }}
+      {{ ansible_distribution_release }} {{ docker_repo_channel }}
+    filename: "{{ docker_repo_filename }}"
+    state: present
+    update_cache: true
+
+- name: Install Docker packages
+  ansible.builtin.apt:
+    name: "{{ docker_packages }}"
+    state: present
+
+- name: Ensure docker group exists
+  when: docker_manage_user
+  ansible.builtin.group:
+    name: docker
+    state: present
+
+- name: Add user to docker group
+  when:
+    - docker_manage_user
+    - docker_user | length > 0
+  ansible.builtin.user:
+    name: "{{ docker_user }}"
+    groups: docker
+    append: true
