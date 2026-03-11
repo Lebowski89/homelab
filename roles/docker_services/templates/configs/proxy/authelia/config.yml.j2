@@ -8,7 +8,7 @@ access_control:
   rules:
 #    # LAN: bypass auth for any app host
 #    - domain:
-#        - "*.{{ cloudflare_zone }}.com"
+#        - "*.{{ cloudflare_zone }}"
 #      policy: bypass
 #      networks:
 #        - "127.0.0.1/32"
@@ -19,8 +19,8 @@ access_control:
 
     # WAN: require auth
     - domain:
-        - "*.{{ cloudflare_zone }}.com"
-        - "{{ cloudflare_zone }}.com"
+        - "*.{{ cloudflare_zone }}"
+        - "{{ cloudflare_zone }}"
       policy: one_factor
 
 server:
@@ -31,9 +31,9 @@ server:
 
 session:
   cookies:
-    - domain: "{{ cloudflare_zone }}.com"
-      authelia_url: "https://authelia.{{ cloudflare_zone }}.com"
-      default_redirection_url: "https://www.{{ cloudflare_zone }}.com"
+    - domain: "{{ cloudflare_zone }}"
+      authelia_url: "https://authelia.{{ cloudflare_zone }}"
+      default_redirection_url: "https://www.{{ cloudflare_zone }}"
 
 notifier:
   disable_startup_check: false

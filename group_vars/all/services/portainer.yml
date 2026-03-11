@@ -34,9 +34,10 @@ portainer:
   traefik:
     enable: true
     port: 9000
-    internal_api: true
-    internal_api_paths: /api
     sso: authelia
+    internal_api: true
+    internal_api_rules:
+      - "PathPrefix(`/api`)"
   cloudflare:
     enable: true
   deploy:
