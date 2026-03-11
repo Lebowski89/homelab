@@ -21,17 +21,18 @@
 - name: Upgrade pip tooling in Ansible virtualenv
   ansible.builtin.pip:
     name:
-      - pip
-      - setuptools
-      - wheel
-    state: latest
+      - pip==25.2
+      - setuptools==80.9.0
+      - wheel==0.45.1
+    state: present
     virtualenv: /ansible/ansible-venv
 
 - name: Install Python packages in Ansible virtualenv
   ansible.builtin.pip:
     name:
-      - docker
-      - requests
-      - PyYAML
-      - jmespath
+      - docker==7.1.0
+      - requests==2.32.5
+      - PyYAML==6.0.3
+      - jmespath==1.1.0
+    state: present
     virtualenv: /ansible/ansible-venv

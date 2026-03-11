@@ -13,7 +13,7 @@
       - apt-utils
     state: present
     update_cache: true
-  environment: "{{ apt_env_vars }}"
+  environment: "{{ ubuntu_apt_env_vars }}"
 
 - name: Install common packages
   ansible.builtin.apt:
@@ -48,7 +48,7 @@
       - man-db
       - unrar-free
     state: present
-  environment: "{{ apt_env_vars }}"
+  environment: "{{ ubuntu_apt_env_vars }}"
 
 - name: Upgrade installed packages
   ansible.builtin.apt:
@@ -56,7 +56,7 @@
     update_cache: true
     autoremove: false
     autoclean: false
-  environment: "{{ apt_env_vars }}"
+  environment: "{{ ubuntu_apt_env_vars }}"
 
 - name: Remove unnecessary packages
   ansible.builtin.apt:
