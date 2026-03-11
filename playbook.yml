@@ -4,168 +4,6 @@
   hosts: skynet
   become: true
 
-  vars:
-    docker_services:
-      ## services (core)
-      - name: gitea
-        tags: [apps, gitea]
-      - name: homepage
-        tags: [apps, homepage]
-      - name: portainer
-        tags: [apps, portainer]
-      - name: portainer_agent
-        tags: [apps, portainer]
-      - name: technitium
-        tags: [apps, technitium]
-      - name: vaultwarden
-        tags: [apps, vaultwarden]
-
-      ## services (proxy)
-      - name: authelia
-        tags: [apps, proxy, authelia]
-      - name: authelia_redis
-        tags: [apps, proxy, authelia-redis]
-      - name: traefik
-        tags: [apps, proxy, traefik]
-
-      ## services (arrs)
-      - name: bazarr
-        tags: [apps, arrs, bazarr]
-      - name: lidarr
-        tags: [apps, arrs, lidarr]
-      - name: prowlarr
-        tags: [apps, arrs, prowlarr]
-      - name: radarr
-        target: radarr
-        tags: [apps, arrs, radarr]
-      - name: radarr
-        target: radarr_4k
-        tags: [apps, arrs, radarr]
-      - name: recyclarr
-        tags: [apps, arrs, recyclarr]
-      - name: sonarr
-        target: sonarr
-        tags: [apps, arrs, sonarr]
-      - name: sonarr
-        target: sonarr_4k
-        tags: [apps, arrs, sonarr]
-      - name: sportarr
-        tags: [apps, arrs, sportarr]
-      - name: whisparr
-        tags: [apps, arrs, whisparr]
-
-      ## services (media)
-      - name: autobrr
-        tags: [apps, media, autobrr]
-      - name: seerr
-        tags: [apps, media, seerr]
-      - name: ombi
-        tags: [apps, media, ombi]
-      - name: opencloud
-        tags: [apps, opencloud]
-      - name: stash
-        tags: [apps, media, stash]
-      - name: thelounge
-        tags: [apps, media, thelounge]
-      - name: znc
-        tags: [apps, media, znc]
-
-      ## services (plex)
-      - name: autopulse
-        tags: [apps, plex, autopulse]
-      - name: autopulse_ui
-        tags: [apps, plex, autopulse]
-      - name: imagemaid
-        tags: [apps, plex, imagemaid]
-      - name: kometa
-        tags: [apps, plex, kometa]
-      - name: plex
-        tags: [apps, plex, plex_server]
-      - name: tautulli
-        tags: [apps, plex, tautulli]
-
-      ## services (torrents)
-      - name: qbittorrent
-        target: downloads
-        tags: [torrents, qbittorrent]
-      - name: qbittorrent
-        target: seeds
-        tags: [torrents, qbittorrent]
-      - name: qbit_manage
-        target: downloads
-        tags: [torrents, qbit_manage]
-      - name: qbit_manage
-        target: seeds
-        tags: [torrents, qbit_manage]
-      - name: qui
-        tags: [torrents, qui]
-      - name: unpackerr
-        tags: [torrents, unpackerr]
-
-      ## services (usenet)
-      - name: nzbhydra2
-        tags: [apps, usenet, nzbhydra2]
-      - name: sabnzbd
-        tags: [apps, usenet, sabnzbd]
-
-      ## services (monitoring)
-      - name: alloy
-        tags: [apps, monitoring, alloy]
-      - name: grafana
-        tags: [apps, monitoring, grafana]
-      - name: prometheus
-        tags: [apps, monitoring, prometheus]
-
-      ## services (blog)
-      - name: hugo
-        tags: [apps, blog, hugo]
-      - name: obsidian
-        tags: [apps, blog, obsidian]
-
-      ## services (gluetun)
-      - name: gluetun
-        tags: [apps, gluetun]
-      - name: jdownloader2
-        tags: [apps, gluetun, jdownloader2]
-      - name: librewolf
-        tags: [apps, gluetun, librewolf]
-
-      ## services (utilities)
-      - name: adminer
-        tags: [apps, utilities, adminer]
-      - name: czkawka
-        tags: [apps, utilities, czkawka]
-      - name: themepark
-        tags: [apps, utilities, themepark]
-
-      ## services (postgres cluster)
-      - name: etcd
-        target: pg01
-        tags: [pgha, etcd, pg01]
-      - name: etcd
-        target: pg02
-        tags: [pgha, etcd, pg02]
-      - name: etcd
-        target: pg03
-        tags: [pgha, etcd, pg03]
-      - name: spilo
-        target: pg01
-        tags: [pgha, spilo, pg01]
-      - name: spilo
-        target: pg02
-        tags: [pgha, spilo, pg02]
-      - name: spilo
-        target: pg03
-        tags: [pgha, spilo, pg03]
-      - name: haproxy
-        tags: [pgha, haproxy]
-
-      ## services (unifi)
-      - name: unifi_db
-        tags: [apps, unifi, unifi-db]
-      - name: unifi
-        tags: [apps, unifi]
-
   pre_tasks:
     - name: Gather packages
       when: inventory_hostname == "localhost"
@@ -177,19 +15,19 @@
       when: inventory_hostname == "localhost"
       ansible.builtin.set_fact:
         timezone: "{{ ansible_facts.timezone | default('Australia/Melbourne') }}"
-      tags: always
+      tags: [deploy, update, remove, recreate, bootstrap]
 
     - name: Timezone output
       when: inventory_hostname == "localhost"
       ansible.builtin.debug:
-        msg: '{{ timezone }}'
-      tags: always
+        msg: "{{ timezone }}"
+      tags: [deploy, update, remove, recreate, bootstrap]
 
     - name: Share localhost timezone to all hosts
       when: inventory_hostname != "localhost"
       ansible.builtin.set_fact:
         timezone: "{{ hostvars['localhost'].timezone }}"
-      tags: always
+      tags: [deploy, update, remove, recreate, bootstrap]
 
     - name: Ensure skynet script is executable
       when: inventory_hostname == "localhost"
@@ -210,6 +48,42 @@
       tags: always
 
   tasks:
+    - name: Configure Ubuntu settings and packages
+      ansible.builtin.include_role:
+        name: ubuntu
+      tags:
+        - base
+        - apt
+        - venv
+
+    - name: Install and configure Docker
+      ansible.builtin.include_role:
+        name: docker
+      tags:
+        - docker
+        - docker_install
+        - docker_swarm
+        - docker_swarm_init
+        - docker_swarm_join
+
+    - name: Remove dangling Docker images
+      ansible.builtin.command: docker image prune -f
+      register: docker_image_prune_result
+      changed_when: "'Total reclaimed space' in docker_image_prune_result.stdout"
+      tags: docker-prune-dangling
+
+    - name: Remove unused Docker images
+      ansible.builtin.command: docker image prune -af
+      register: docker_image_prune_all_result
+      changed_when: "'Total reclaimed space' in docker_image_prune_all_result.stdout"
+      tags: docker-prune-unused
+
+    - name: Remove unused Docker volumes
+      ansible.builtin.command: docker volume prune -f
+      register: docker_volume_prune_result
+      changed_when: "'Total reclaimed space' in docker_volume_prune_result.stdout"
+      tags: docker-prune-volumes
+
     - name: Load all service definitions from group_vars/all/services/*.yml
       ansible.builtin.include_vars:
         dir: "{{ playbook_dir }}/group_vars/all/services"
@@ -217,21 +91,21 @@
         ignore_unknown_extensions: true
         extensions: [yml, yaml]
         name: svcfiles
-      tags: always
+      tags: [deploy, update, remove, recreate, bootstrap]
 
     - name: Assert svcfiles loaded
       ansible.builtin.assert:
         that:
           - svcfiles is defined
-          - (svcfiles | type_debug) == 'dict'
+          - (svcfiles | type_debug) == "dict"
           - (svcfiles | length) > 0
         fail_msg: "svcfiles is empty or not a dict. include_vars did not load your service files."
-      tags: always
+      tags: [deploy, update, remove, recreate, bootstrap]
 
     - name: Use svcfiles as the services mapping
       ansible.builtin.set_fact:
         services: "{{ svcfiles }}"
-      tags: always
+      tags: [deploy, update, remove, recreate, bootstrap]
 
     - name: Process each docker service
       ansible.builtin.include_role:
@@ -250,7 +124,7 @@
           or (ansible_run_tags | length == 0)
           or (item.name in (ansible_run_tags | default([])))
           or ((item.tags | default([])) | intersect(ansible_run_tags | default([])) | length > 0)
-      tags: always
+      tags: [deploy, update, remove, recreate, bootstrap]
 
     - name: Deploy all stacks
       when:
@@ -259,7 +133,6 @@
       ansible.builtin.include_tasks:
         file: "{{ playbook_dir }}/roles/docker_services/helpers/deploy/deploy_all.yml"
         apply:
-          tags:
-            - always
+          tags: [deploy, update, recreate]
       run_once: true
-      tags: always
+      tags: [deploy, update, recreate]

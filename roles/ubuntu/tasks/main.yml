@@ -1,0 +1,23 @@
+---
+
+- name: Install Python and Common packages
+  ansible.builtin.include_tasks:
+    file: _apt.yml
+    apply:
+      tags:
+        - base
+        - apt
+  tags:
+    - base
+    - apt
+
+- name: Setup Python virtual environment
+  ansible.builtin.include_tasks:
+    file: _venv.yml
+    apply:
+      tags:
+        - base
+        - venv
+  tags:
+    - base
+    - venv
