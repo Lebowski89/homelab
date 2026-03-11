@@ -3,7 +3,8 @@
 scraparr:
   name: scraparr
   stack: scraparr
-  image: thegameprofi/scraparr:3.0.3
+  # image: thegameprofi/scraparr:3.0.3
+  image: scraparr-secrets:latest
   named_networks:
     overlay:
       external: true
@@ -12,25 +13,71 @@ scraparr:
     PUID: "1000"
     PGID: "1000"
     UMASK: "022"
-  paths:
-    - path: /mnt/user/appdata/scraparr
-      state: directory
-      owner: 1000
-      group: 1000
-      mode: "0755"
-  templates:
-    - src: configs/scraparr-config.yaml.j2
-      dest: /opt/scraparr/config.yaml
-      owner: 1000
-      group: 1000
-      mode: "0664"
-      force: true
-  volumes:
-    config:
-      type: bind
-      source: /opt/scraparr/config.yaml
-      target: /scraparr/config/config.yaml
-      read_only: false
+    GENERAL_PORT: "7100"
+    BAZARR_URL: "http://bazarr:6767"
+    BAZARR_API_KEY_FILE: /run/secrets/bazarr_api_secret
+    BAZARR_ALIAS: "bazarr"
+    LIDARR_URL: "http://lidarr:8686"
+    LIDARR_API_KEY_FILE: /run/secrets/lidarr_api_secret
+    LIDARR_ALIAS: "lidarr"
+    PROWLARR_URL: "http://prowlarr:9696"
+    PROWLARR_API_KEY_FILE: /run/secrets/prowlarr_api_secret
+    PROWLARR_ALIAS: "prowlarr"
+    RADARR_MAIN_URL: "http://radarr:7878"
+    RADARR_MAIN_API_KEY_FILE: /run/secrets/radarr_api_secret
+    RADARR_MAIN_ALIAS: "radarr"
+    RADARR_SECONDARY_URL: "http://radarr-4k:7878"
+    RADARR_SECONDARY_API_KEY_FILE: /run/secrets/radarr_4k_api_secret
+    RADARR_SECONDARY_ALIAS: "radarr-4k"
+    RADARR_WHISPARR_URL: "http://whisparr:6969"
+    RADARR_WHISPARR_API_KEY_FILE: /run/secrets/whisparr_api_secret
+    RADARR_WHISPARR_ALIAS: "whisparr"
+    SONARR_MAIN_URL: "http://sonarr:8989"
+    SONARR_MAIN_API_KEY_FILE: /run/secrets/sonarr_api_secret
+    SONARR_MAIN_ALIAS: "sonarr"
+    SONARR_SECONDARY_URL: "http://sonarr-4k:8989"
+    SONARR_SECONDARY_API_KEY_FILE: /run/secrets/sonarr_4k_api_secret
+    SONARR_SECONDARY_ALIAS: "sonarr-4k"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: lidarr_api
+        path: "/Lidarr"
+        name: API
+        docker_secret: lidarr_api_secret
+      - var: prowlarr_api
+        path: "/Prowlarr"
+        name: API
+        docker_secret: prowlarr_api_secret
+      - var: radarr_api
+        path: "/Radarr"
+        name: API
+        docker_secret: radarr_api_secret
+      - var: radarr_4k_api
+        path: "/Radarr-4K"
+        name: API
+        docker_secret: radarr_4k_api_secret
+      - var: sonarr_api
+        path: "/Sonarr"
+        name: API
+        docker_secret: sonarr_api_secret
+      - var: sonarr_4k_api
+        path: "/Sonarr-4K"
+        name: API
+        docker_secret: sonarr_4k_api_secret
+      - var: whisparr_api
+        path: "/Whisparr"
+        name: API
+        docker_secret: whisparr_api_secret
+  secrets:
+    - bazarr_api_secret
+    - lidarr_api_secret
+    - prowlarr_api_secret
+    - radarr_api_secret
+    - radarr_4k_api_secret
+    - sonarr_api_secret
+    - sonarr_4k_api_secret
+    - whisparr_api_secret
   deploy:
     type: swarm
     mode: replicated
