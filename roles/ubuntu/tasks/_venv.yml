@@ -22,7 +22,7 @@
   ansible.builtin.pip:
     name:
       - pip==25.2
-      - setuptools==80.9.0
+      - setuptools==80.10.2
       - wheel==0.45.1
     state: present
     virtualenv: /ansible/ansible-venv
