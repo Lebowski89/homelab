@@ -28,6 +28,17 @@
         "image:\\s*[\"']?(?<depName>[^\"'\\s:@]+(?:\\/[^\"'\\s:@]+)*)\\s*:(?<currentValue>[^\"'\\s@]+)(?:@(?<currentDigest>sha256:[a-f0-9]{64}))?[\"']?"
       ],
       "datasourceTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "/roles\\/ubuntu\\/tasks\\/.*\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "-\\s*(?<depName>[A-Za-z0-9._-]+)==(?<currentValue>[^\\s\"']+)"
+      ],
+      "datasourceTemplate": "pypi",
+      "versioningTemplate": "pep440"
     }
   ],
   "packageRules": [
