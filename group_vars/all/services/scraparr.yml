@@ -31,7 +31,7 @@ scraparr:
     RADARR_SECONDARY_ALIAS: "radarr-4k"
     RADARR_WHISPARR_URL: "http://whisparr:6969"
     RADARR_WHISPARR_API_KEY_FILE: /run/secrets/whisparr_api_secret
-    RADARR_WHISPARR_ALIAS: "whisparr" 
+    RADARR_WHISPARR_ALIAS: "whisparr"
     SONARR_MAIN_URL: "http://sonarr:8989"
     SONARR_MAIN_API_KEY_FILE: /run/secrets/sonarr_api_secret
     SONARR_MAIN_ALIAS: "sonarr"
@@ -78,25 +78,6 @@ scraparr:
     - sonarr_api_secret
     - sonarr_4k_api_secret
     - whisparr_api_secret
-  #  paths:
-  #    - path: /mnt/user/appdata/scraparr
-  #      state: directory
-  #      owner: 1000
-  #      group: 1000
-  #      mode: "0755"
-  #  templates:
-  #    - src: configs/scraparr-config.yaml.j2
-  #      dest: /opt/scraparr/config.yaml
-  #      owner: 1000
-  #      group: 1000
-  #      mode: "0664"
-  #      force: true
-  #  volumes:
-  #    config:
-  #      type: bind
-  #      source: /opt/scraparr/config.yaml
-  #      target: /scraparr/config/config.yaml
-  #      read_only: false
   deploy:
     type: swarm
     mode: replicated
