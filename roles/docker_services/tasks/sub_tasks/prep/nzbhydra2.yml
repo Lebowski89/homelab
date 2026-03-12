@@ -43,7 +43,7 @@
     - name: NZBHydra2 prep | Start temp container to generate config
       community.docker.docker_container:
         name: nzbhydra2-config
-        image: "{{ docker_services_svc.image | default('ghcr.io/hotio/nzbhydra2:release-8.4.1') }}"
+        image: ghcr.io/hotio/nzbhydra2:release-v8.5.1
         pull: true
         state: started
         container_default_behavior: compatibility

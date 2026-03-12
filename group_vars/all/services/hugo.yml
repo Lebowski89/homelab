@@ -3,7 +3,7 @@
 hugo:
   name: hugo
   stack: hugo
-  image: hugomods/hugo:debian-exts-0.154.5
+  image: ghcr.io/gohugoio/hugo:v0.157.0
   named_networks:
     overlay:
       external: true

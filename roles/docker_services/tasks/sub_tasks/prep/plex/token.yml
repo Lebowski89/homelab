@@ -12,7 +12,7 @@
 
 - name: Token | Check if plex.ini exists
   ansible.builtin.stat:
-    path: "/opt/stacks/plex.ini"
+    path: /opt/stacks/plex.ini
   register: docker_services_plex_ini
   delegate_to: localhost
   run_once: true

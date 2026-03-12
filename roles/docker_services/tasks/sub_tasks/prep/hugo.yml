@@ -30,7 +30,7 @@
     - name: Hugo prep | Run hugo new site
       community.docker.docker_container:
         name: hugo-new-site
-        image: "hugomods/hugo:debian-exts"
+        image: ghcr.io/gohugoio/hugo:v0.157.0
         pull: true
         state: started
         container_default_behavior: compatibility
