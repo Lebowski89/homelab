@@ -21,7 +21,7 @@
 - name: Upgrade pip tooling in Ansible virtualenv
   ansible.builtin.pip:
     name:
-      - pip==25.2
+      - pip==25.3
       - setuptools==80.10.2
       - wheel==0.45.1
     state: present
