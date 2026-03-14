@@ -17,4 +17,6 @@ These functions are accessed via the use of the following run-tags:
 
 Due to their destructive/situational nature/potential for data loss, these tasks are excluded from the `docker` tag.
 
-Note: I prefer bind mounts whenever. If you're someone who heavily utilises local Docker volumes, you'd probably take more precautions about removing unused volumes.
+Note:
+- I prefer bind mounts whenever possible and only use an NFS Docker volume for Plex
+- Those that heavily utilise local Docker volumes would probably take more precautions when pruning unused volumes.
