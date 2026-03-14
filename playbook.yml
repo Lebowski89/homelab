@@ -49,12 +49,19 @@
 
   tasks:
     - name: Configure Ubuntu settings and packages
+      when:
+        - ansible_os_family == "Debian"
+        - ansible_distribution == "Ubuntu"
       ansible.builtin.include_role:
         name: ubuntu
       tags:
-        - base
-        - apt
-        - venv
+        - ubuntu
+        - ubuntu_apt
+        - ubuntu_venv
+        - ubuntu_sysctl
+        - ubuntu_pam
+        - ubuntu_network
+        - ubuntu_netplan
 
     - name: Install and configure Docker
       ansible.builtin.include_role:
@@ -62,27 +69,14 @@
       tags:
         - docker
         - docker_install
+        - docker_prune
+        - docker_prune_dangling
+        - docker_prune_unused
+        - docker_prune_volumes
         - docker_swarm
         - docker_swarm_init
         - docker_swarm_join
-
-    - name: Remove dangling Docker images
-      ansible.builtin.command: docker image prune -f
-      register: docker_image_prune_result
-      changed_when: "'Total reclaimed space' in docker_image_prune_result.stdout"
-      tags: docker-prune-dangling
-
-    - name: Remove unused Docker images
-      ansible.builtin.command: docker image prune -af
-      register: docker_image_prune_all_result
-      changed_when: "'Total reclaimed space' in docker_image_prune_all_result.stdout"
-      tags: docker-prune-unused
-
-    - name: Remove unused Docker volumes
-      ansible.builtin.command: docker volume prune -f
-      register: docker_volume_prune_result
-      changed_when: "'Total reclaimed space' in docker_volume_prune_result.stdout"
-      tags: docker-prune-volumes
+        - docker_swarm_network
 
     - name: Load all service definitions from group_vars/all/services/*.yml
       ansible.builtin.include_vars:

@@ -3,3 +3,65 @@
 ubuntu_apt_env_vars:
   DEBIAN_FRONTEND: noninteractive
   DEBIAN_PRIORITY: critical
+
+ubuntu_sysctl_file: /etc/sysctl.d/99-ubuntu-tuning.conf
+
+ubuntu_sysctl_settings:
+  fs.inotify.max_user_watches: 524288
+  net.core.default_qdisc: fq
+  net.core.netdev_budget: 50000
+  net.core.netdev_max_backlog: 100000
+  net.core.rmem_max: 67108864
+  net.core.somaxconn: 4096
+  net.core.wmem_max: 67108864
+  net.ipv4.conf.all.accept_redirects: 0
+  net.ipv4.conf.all.accept_source_route: 0
+  net.ipv4.conf.all.secure_redirects: 0
+  net.ipv4.tcp_adv_win_scale: 2
+  net.ipv4.tcp_congestion_control: bbr
+  net.ipv4.tcp_fin_timeout: 10
+  net.ipv4.tcp_max_syn_backlog: 30000
+  net.ipv4.tcp_max_tw_buckets: 2000000
+  net.ipv4.tcp_mtu_probing: 1
+  net.ipv4.tcp_rfc1337: 1
+  net.ipv4.tcp_rmem: "4096 87380 33554432"
+  net.ipv4.tcp_sack: 1
+  net.ipv4.tcp_slow_start_after_idle: 0
+  net.ipv4.tcp_tw_reuse: 2
+  net.ipv4.tcp_window_scaling: 1
+  net.ipv4.tcp_wmem: "4096 87380 33554432"
+  net.ipv4.udp_rmem_min: 8192
+  net.ipv4.udp_wmem_min: 8192
+  vm.dirty_background_ratio: 10
+  vm.dirty_ratio: 15
+  vm.swappiness: 10
+  net.ipv4.neigh.default.gc_thresh1: 1024
+  net.ipv4.neigh.default.gc_thresh2: 2048
+  net.ipv4.neigh.default.gc_thresh3: 4096
+
+ubuntu_pam_limits:
+  - domain: "*"
+    limit_type: "-"
+    limit_item: "nofile"
+    value: "100000"
+  - domain: "*"
+    limit_type: "soft"
+    limit_item: "memlock"
+    value: "unlimited"
+  - domain: "*"
+    limit_type: "hard"
+    limit_item: "memlock"
+    value: "unlimited"
+
+ubuntu_defaults_netplan_config: netplan-config.yaml
+ubuntu_netplan_config_path: "/etc/netplan/{{ ubuntu_defaults_netplan_config }}"
+
+ubuntu_defaults_netplan_gateway: 192.168.80.1
+ubuntu_defaults_netplan_nameservers:
+  - 192.168.80.45
+  - 192.168.80.59
+
+ubuntu_netplan_prefix: 24
+
+ubuntu_nic_tuning_enabled: true
+ubuntu_vnstat_enabled: true

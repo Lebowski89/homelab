@@ -55,6 +55,11 @@ whisparr:
       owner: 99
       group: 100
       mode: "0755"
+    - path: /mnt/user/data/media/adult
+      state: directory
+      owner: 99
+      group: 100
+      mode: "0755"
   copies:
     - src: files/themepark/98-themepark-whisparr
       dest: /mnt/user/appdata/whisparr/98-themepark-whisparr
