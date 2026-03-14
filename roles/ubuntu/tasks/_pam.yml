@@ -1,0 +1,10 @@
+---
+
+- name: Configure PAM limits
+  community.general.pam_limits:
+    dest: /etc/security/limits.d/99-ubuntu.conf
+    domain: "{{ item.domain }}"
+    limit_type: "{{ item.limit_type }}"
+    limit_item: "{{ item.limit_item }}"
+    value: "{{ item.value }}"
+  loop: "{{ ubuntu_pam_limits }}"

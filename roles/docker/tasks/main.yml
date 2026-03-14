@@ -23,3 +23,18 @@
     - docker_swarm
     - docker_swarm_init
     - docker_swarm_join
+    - docker_swarm_network
+
+- name: Docker Prune
+  ansible.builtin.include_tasks:
+    file: _prune.yml
+    apply:
+      tags:
+        - docker
+        - docker_prune
+  tags:
+    - docker
+    - docker_prune
+    - docker_prune_dangling
+    - docker_prune_unused
+    - docker_prune_volumes

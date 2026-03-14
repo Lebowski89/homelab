@@ -1,0 +1,41 @@
+---
+
+- name: Assert local_ip is defined for netplan
+  ansible.builtin.assert:
+    that:
+      - local_ip is defined
+      - local_ip | length > 0
+    fail_msg: "local_ip must be defined in host_vars for static netplan configuration."
+
+- name: Find existing netplan configs
+  ansible.builtin.find:
+    paths: /etc/netplan
+    patterns:
+      - "*.yml"
+      - "*.yaml"
+    file_type: file
+  register: ubuntu_netplan_configs
+
+- name: Remove unmanaged netplan configs
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ ubuntu_netplan_configs.files }}"
+  when: item.path != ubuntu_netplan_config_path
+
+- name: Render netplan config
+  ansible.builtin.template:
+    src: netplan-config.yaml.j2
+    dest: "{{ ubuntu_netplan_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  register: ubuntu_netplan_template
+
+- name: Generate netplan config
+  ansible.builtin.command: netplan generate
+  when: ubuntu_netplan_template.changed
+
+- name: Apply netplan changes
+  ansible.builtin.command: netplan apply
+  when: ubuntu_netplan_template.changed

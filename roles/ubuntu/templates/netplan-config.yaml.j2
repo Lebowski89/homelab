@@ -1,0 +1,17 @@
+---
+
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    {{ ansible_default_ipv4.interface }}:
+      addresses:
+        - {{ local_ip }}/{{ ubuntu_netplan_prefix }}
+      nameservers:
+        addresses:
+{% for ns in ubuntu_defaults_netplan_nameservers %}
+          - {{ ns }}
+{% endfor %}
+      routes:
+        - to: default
+          via: {{ ubuntu_defaults_netplan_gateway }}

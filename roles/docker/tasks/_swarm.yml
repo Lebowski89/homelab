@@ -3,14 +3,10 @@
 - name: Ensure this host is part of the swarm inventory
   ansible.builtin.set_fact:
     docker_swarm_enabled: "{{ inventory_hostname in groups['swarm'] | default([]) }}"
-  tags:
-    - docker_swarm
 
 - name: End swarm tasks for non-swarm hosts
   ansible.builtin.meta: end_host
   when: not docker_swarm_enabled | bool
-  tags:
-    - docker_swarm
 
 - name: Assert primary swarm manager is defined
   ansible.builtin.assert:
@@ -18,8 +14,6 @@
       - docker_swarm_primary_manager is defined
       - docker_swarm_primary_manager in groups['swarm_managers']
     fail_msg: "docker_swarm_primary_manager must be defined and be a member of swarm_managers."
-  tags:
-    - docker_swarm
 
 - name: Assert local_ip is defined for swarm node
   ansible.builtin.assert:
@@ -27,8 +21,6 @@
       - local_ip is defined
       - local_ip | length > 0
     fail_msg: "local_ip must be defined for each swarm node."
-  tags:
-    - docker_swarm
 
 - name: Initialise swarm on primary manager
   community.docker.docker_swarm:
@@ -36,9 +28,7 @@
     advertise_addr: "{{ local_ip }}"
   when: inventory_hostname == docker_swarm_primary_manager
   register: docker_swarm_init_result
-  tags:
-    - docker_swarm
-    - docker_swarm_init
+  tags: docker_swarm_init
 
 - name: Get worker join token from primary manager
   ansible.builtin.command:
@@ -52,9 +42,7 @@
   run_once: true
   register: docker_swarm_worker_token_cmd
   changed_when: false
-  tags:
-    - docker_swarm
-    - docker_swarm_join
+  tags: docker_swarm_join
 
 - name: Get manager join token from primary manager
   ansible.builtin.command:
@@ -68,9 +56,7 @@
   run_once: true
   register: docker_swarm_manager_token_cmd
   changed_when: false
-  tags:
-    - docker_swarm
-    - docker_swarm_join
+  tags: docker_swarm_join
 
 - name: Store join tokens on primary manager hostvars
   ansible.builtin.set_fact:
@@ -79,9 +65,7 @@
   delegate_to: "{{ docker_swarm_primary_manager }}"
   delegate_facts: true
   run_once: true
-  tags:
-    - docker_swarm
-    - docker_swarm_join
+  tags: docker_swarm_join
 
 - name: Join additional managers to swarm
   community.docker.docker_swarm:
@@ -93,9 +77,7 @@
   when:
     - inventory_hostname in groups['swarm_managers']
     - inventory_hostname != docker_swarm_primary_manager
-  tags:
-    - docker_swarm
-    - docker_swarm_join
+  tags: docker_swarm_join
 
 - name: Join workers to swarm
   community.docker.docker_swarm:
@@ -105,6 +87,25 @@
       - "{{ hostvars[docker_swarm_primary_manager].local_ip }}:2377"
     join_token: "{{ hostvars[docker_swarm_primary_manager].docker_swarm_worker_join_token }}"
   when: inventory_hostname in groups['swarm_workers']
-  tags:
-    - docker_swarm
-    - docker_swarm_join
+  tags: docker_swarm_join
+
+- name: Conduct overlay network tasks
+  block:
+    - name: Register overlay network
+      community.docker.docker_network_info:
+        name: "{{ docker_network }}"
+      register: docker_network_result
+
+    - name: Create overlay network
+      when: not docker_network_result.exists
+      community.docker.docker_network:
+        name: "{{ docker_network }}"
+        driver: "{{ docker_network_driver }}"
+        attachable: true
+        ipam_config:
+          - subnet: "{{ docker_network_subnet }}"
+
+  delegate_to: "{{ docker_swarm_primary_manager }}"
+  delegate_facts: true
+  run_once: true
+  tags: docker_swarm_network
