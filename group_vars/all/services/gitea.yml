@@ -3,7 +3,7 @@
 gitea:
   name: gitea
   stack: gitea
-  image: gitea/gitea:1.25.4
+  image: gitea/gitea:1.25.5
   named_networks:
     overlay:
       external: true
