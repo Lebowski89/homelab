@@ -1,6 +1,6 @@
 ## Updating Docker Images
 
-This project uses renovate (repo bot) to monitor and create pull requests for updates to Docker apps I use (in addition other dependencies). 
+This project uses renovate (repo bot) to monitor and create pull requests for updates to Docker services I use (in addition other dependencies). 
 
 This is achieved by:
 
