@@ -53,6 +53,16 @@ cross_seed:
       owner: 99
       group: 100
       mode: "0755"
+    - path: /mnt/user/data/seeds
+      state: directory
+      owner: 99
+      group: 100
+      mode: "0755"
+    - path: /mnt/user/data/seeds/links
+      state: directory
+      owner: 99
+      group: 100
+      mode: "0755"
   templates:
     - src: configs/cross_seed_config.j2
       dest: /mnt/user/appdata/cross-seed/config.js
