@@ -1,6 +1,7 @@
 ---
 
 - name: Install Docker
+  when: inventory_hostname != "unraid"
   ansible.builtin.include_tasks:
     file: _install.yml
     apply:
