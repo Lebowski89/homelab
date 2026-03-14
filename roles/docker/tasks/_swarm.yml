@@ -90,6 +90,10 @@
   tags: docker_swarm_join
 
 - name: Conduct overlay network tasks
+  delegate_to: "{{ docker_swarm_primary_manager }}"
+  delegate_facts: true
+  run_once: true
+  tags: docker_swarm_network
   block:
     - name: Register overlay network
       community.docker.docker_network_info:
@@ -104,8 +108,3 @@
         attachable: true
         ipam_config:
           - subnet: "{{ docker_network_subnet }}"
-
-  delegate_to: "{{ docker_swarm_primary_manager }}"
-  delegate_facts: true
-  run_once: true
-  tags: docker_swarm_network

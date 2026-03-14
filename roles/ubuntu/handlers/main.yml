@@ -1,0 +1,9 @@
+---
+
+- name: Generate netplan
+  ansible.builtin.command: netplan generate
+  changed_when: false
+
+- name: Apply netplan
+  ansible.builtin.command: netplan apply
+  changed_when: false
