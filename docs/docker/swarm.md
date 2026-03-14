@@ -47,7 +47,7 @@ docker_network_driver: 'overlay'
 docker_network_subnet: '172.98.0.0/24'
 ```
 
-In the past I used to have a variety of bridge networks to isolate backend communication to services that actually need to communicate with each other. But I cannot be bothered with this now and don't see much upside for doing so.
+Previously, I used a variety of bridge networks to restrict backend communication to services that need to communicate with each other. But I cannot be bothered with this now and don't see much upside for doing so.
 
 ## Why Swarm?
 
