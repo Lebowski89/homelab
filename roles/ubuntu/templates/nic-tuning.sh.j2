@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -e
+
+{% if 'X710' in ubuntu_lspci.stdout %}
+ethtool -K {{ ansible_default_ipv4.interface }} disable-fw-lldp on rx-udp-gro-forwarding on rx-gro-list off
+{% else %}
+ethtool -K {{ ansible_default_ipv4.interface }} rx-udp-gro-forwarding on rx-gro-list off
+{% endif %}

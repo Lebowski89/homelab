@@ -83,6 +83,11 @@ sonarr:
           owner: 99
           group: 100
           mode: "0755"
+        - path: /mnt/user/data/media/tv
+          state: directory
+          owner: 99
+          group: 100
+          mode: "0755"
       copies:
         - src: files/themepark/98-themepark-sonarr
           dest: /mnt/user/appdata/sonarr/98-themepark-sonarr
@@ -159,6 +164,11 @@ sonarr:
         - postgres_pass_secret
       paths:
         - path: /mnt/user/appdata/sonarr-4k
+          state: directory
+          owner: 99
+          group: 100
+          mode: "0755"
+        - path: /mnt/user/data/media/tv-4k
           state: directory
           owner: 99
           group: 100

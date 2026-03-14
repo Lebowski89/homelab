@@ -55,6 +55,11 @@ lidarr:
       owner: 99
       group: 100
       mode: "0755"
+    - path: /mnt/user/data/media/music
+      state: directory
+      owner: 99
+      group: 100
+      mode: "0755"
   copies:
     - src: files/themepark/98-themepark-lidarr
       dest: /mnt/user/appdata/lidarr/98-themepark-lidarr

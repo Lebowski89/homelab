@@ -1,0 +1,36 @@
+---
+
+- name: Apply sysctl settings
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value | string }}"
+    state: present
+    sysctl_file: "{{ ubuntu_sysctl_file }}"
+    reload: true
+    ignoreerrors: true
+  loop: "{{ ubuntu_sysctl_settings | dict2items }}"
+
+- name: Check whether netdev_budget_usecs exists
+  ansible.builtin.stat:
+    path: /proc/sys/net/core/netdev_budget_usecs
+  register: ubuntu_netdev_budget_usecs
+
+- name: Apply netdev_budget_usecs
+  ansible.posix.sysctl:
+    name: net.core.netdev_budget_usecs
+    value: "{{ ubuntu_defaults_sysctl_netdev_budget_usecs | string }}"
+    state: present
+    sysctl_file: "{{ ubuntu_sysctl_file }}"
+    reload: true
+    ignoreerrors: true
+  when:
+    - ubuntu_netdev_budget_usecs.stat.exists
+    - ubuntu_defaults_sysctl_netdev_budget_usecs is defined
+
+- name: Remove fs.file-max override
+  ansible.posix.sysctl:
+    name: fs.file-max
+    state: absent
+    sysctl_file: "{{ ubuntu_sysctl_file }}"
+    reload: true
+    ignoreerrors: true

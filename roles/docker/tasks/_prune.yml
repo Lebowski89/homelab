@@ -1,0 +1,19 @@
+---
+
+- name: Remove dangling Docker images
+  ansible.builtin.command: docker image prune -f
+  register: docker_image_prune_result
+  changed_when: "'Total reclaimed space' in docker_image_prune_result.stdout"
+  tags: docker_prune_dangling
+
+- name: Remove unused Docker images
+  ansible.builtin.command: docker image prune -af
+  register: docker_image_prune_all_result
+  changed_when: "'Total reclaimed space' in docker_image_prune_all_result.stdout"
+  tags: docker_prune_unused
+
+- name: Remove unused Docker volumes
+  ansible.builtin.command: docker volume prune -f
+  register: docker_volume_prune_result
+  changed_when: "'Total reclaimed space' in docker_volume_prune_result.stdout"
+  tags: docker_prune_volumes

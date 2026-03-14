@@ -83,6 +83,11 @@ radarr:
           owner: 99
           group: 100
           mode: "0755"
+        - path: /mnt/user/data/media/movies
+          state: directory
+          owner: 99
+          group: 100
+          mode: "0755"
       copies:
         - src: files/themepark/98-themepark-radarr
           dest: /mnt/user/appdata/radarr/98-themepark-radarr
@@ -159,6 +164,11 @@ radarr:
         - postgres_pass_secret
       paths:
         - path: /mnt/user/appdata/radarr-4k
+          state: directory
+          owner: 99
+          group: 100
+          mode: "0755"
+        - path: /mnt/user/data/media/movies-4k
           state: directory
           owner: 99
           group: 100

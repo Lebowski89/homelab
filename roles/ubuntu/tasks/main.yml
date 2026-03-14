@@ -1,23 +1,67 @@
 ---
 
-- name: Install Python and Common packages
+- name: Install common apt packages
   ansible.builtin.include_tasks:
     file: _apt.yml
     apply:
       tags:
-        - base
-        - apt
+        - ubuntu
+        - ubuntu_apt
   tags:
-    - base
-    - apt
+    - ubuntu
+    - ubuntu_apt
 
-- name: Setup Python virtual environment
+- name: Setup Python venv
   ansible.builtin.include_tasks:
     file: _venv.yml
     apply:
       tags:
-        - base
-        - venv
+        - ubuntu
+        - ubuntu_venv
   tags:
-    - base
-    - venv
+    - ubuntu
+    - ubuntu_venv
+
+- name: Tune sysctl settings
+  ansible.builtin.include_tasks:
+    file: _sysctl.yml
+    apply:
+      tags:
+        - ubuntu
+        - ubuntu_sysctl
+  tags:
+    - ubuntu
+    - ubuntu_sysctl
+
+- name: Set PAM limits
+  ansible.builtin.include_tasks:
+    file: _pam.yml
+    apply:
+      tags:
+        - ubuntu
+        - ubuntu_pam
+  tags:
+    - ubuntu
+    - ubuntu_pam
+
+- name: Configure network tuning
+  ansible.builtin.include_tasks:
+    file: _network.yml
+    apply:
+      tags:
+        - ubuntu
+        - ubuntu_network
+  tags:
+    - ubuntu
+    - ubuntu_network
+
+- name: Configure netplan
+  ansible.builtin.include_tasks:
+    file: _netplan.yml
+    apply:
+      tags:
+        - ubuntu
+        - ubuntu_netplan
+  tags:
+    - ubuntu
+    - ubuntu_netplan
