@@ -49,6 +49,9 @@
 
   tasks:
     - name: Configure Ubuntu settings and packages
+      when:
+        - ansible_os_family == "Debian"
+        - ansible_distribution == "Ubuntu"
       ansible.builtin.include_role:
         name: ubuntu
       tags:
@@ -61,9 +64,6 @@
         - ubuntu_netplan
 
     - name: Install and configure Docker
-      when:
-        - ansible_os_family == "Debian"
-        - ansible_distribution == "Ubuntu"
       ansible.builtin.include_role:
         name: docker
       tags:
