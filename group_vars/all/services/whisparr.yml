@@ -3,7 +3,7 @@
 whisparr:
   name: whisparr
   stack: whisparr
-  image: ghcr.io/hotio/whisparr:v3-3.3.1-release.579
+  image: ghcr.io/hotio/whisparr:v3-3.3.2-release.604
   named_networks:
     overlay:
       external: true
