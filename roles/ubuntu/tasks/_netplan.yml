@@ -22,6 +22,9 @@
     state: absent
   loop: "{{ ubuntu_netplan_configs.files }}"
   when: item.path != ubuntu_netplan_config_path
+  notify:
+    - Generate netplan
+    - Apply netplan
 
 - name: Render netplan config
   ansible.builtin.template:
@@ -30,12 +33,6 @@
     owner: root
     group: root
     mode: "0600"
-  register: ubuntu_netplan_template
-
-- name: Generate netplan config
-  ansible.builtin.command: netplan generate
-  when: ubuntu_netplan_template.changed
-
-- name: Apply netplan changes
-  ansible.builtin.command: netplan apply
-  when: ubuntu_netplan_template.changed
+  notify:
+    - Generate netplan
+    - Apply netplan
