@@ -1,6 +1,6 @@
 ## Helpers
 
-This project uses helpers (aka builders) that ready each docker service/stack for deployment. The facts in the service vars are sent through these helpers and the end result is a complete compose file ready to run with everything it needs (with desired settings).
+The Docker Services role uses 'helpers' (builders) to prepare services/stacks for deployment. Basically, the service_vars are sent through helpers, resulting in a complete Compose file and a service ready to run with desired settings.
 
 ### `compose/`
 

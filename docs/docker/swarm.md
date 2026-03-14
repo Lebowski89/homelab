@@ -4,6 +4,7 @@ The `docker` role includes tasks that:
 
 1) Initiate Docker Swarm on the target management machine
 2) Join target worker (and additional manager) nodes to the Swarm
+3) Create an overlay Docker network for internal app communication
 
 These Swarm tasks make use of group_vars and run tags during the init and join process:
 
@@ -11,6 +12,7 @@ These Swarm tasks make use of group_vars and run tags during the init and join p
 - `skynet raw --tags docker_swarm` (Initiates and then joins managers and workers)
 - `skynet limit (target_host) raw --tags docker_swarm_init` (Initiates the Swarm on a single manager)
 - `skynet limit (target_host) raw --tags docker_swarm_join` (Joins a single worker or manager to the Swarm)
+- `skynet raw --tags docker_swarm_network` (Creates the Overlay Network. Delegated to the `docker_swarm_primary_manager`)
 
 Swarm managers and workers are defined in the hosts.ini file:
 
@@ -28,7 +30,26 @@ swarm_managers
 swarm_workers
 ```
 
-# Why Swarm?
+## Docker Swarm Network
+
+All Swarm/Non-Swarm services are connected to a single Docker overlay network. 
+
+This network allows:
+
+- Backend communication between services across all the Docker Swarm nodes
+- No exposed ports at all for most services when combined with Traefik.
+
+The following vars are included in the docker role defaults:
+
+```yaml
+docker_network: 'overlay'
+docker_network_driver: 'overlay'
+docker_network_subnet: '172.98.0.0/24'
+```
+
+In the past I used to have a variety of bridge networks to isolate backend communication to services that actually need to communicate with each other. But I cannot be bothered with this now and don't see much upside for doing so.
+
+## Why Swarm?
 
 Why not? It's simple, it's stable and perfect for a Homelab.
 
@@ -55,7 +76,7 @@ Non-Swarm:
 For my use-case, even Swarm is often over-kill, as:
 
 1) I typically only need a single replica - high availability is not too important for most apps
-2) Each machine / VM is purpose built with certain apps in mind (download apps on UnRaid, Plex apps on QuickSync Mini-PC, etc)
+2) Each machine / VM is purpose built with certain services in mind (downloaders on UnRaid, Plex on QuickSync Mini-PC, etc)
 
 Even my high-available Postgres cluster is formed primarily of non-swarm containers with a global HAProxy service.
 
