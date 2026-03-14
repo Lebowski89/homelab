@@ -3,7 +3,7 @@
 authelia:
   name: authelia
   stack: authelia
-  image: authelia/authelia:4.39.15
+  image: authelia/authelia:4.39.16
   named_networks:
     overlay:
       external: true
