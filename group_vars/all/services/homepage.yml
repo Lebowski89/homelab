@@ -54,12 +54,12 @@ homepage:
       - var: prowlarr_api
         path: "/Prowlarr"
         name: API
-      - var: qui_swarm_api
+      - var: qui_downloads_api
         path: "/HomePage"
-        name: QUI_API_SWARM
-      - var: qui_unraid_api
+        name: QUI_API_DOWNLOADS
+      - var: qui_seeds_api
         path: "/HomePage"
-        name: QUI_API_UNRAID
+        name: QUI_API_SEEDS
       - var: radarr_api
         path: "/Radarr"
         name: API
