@@ -54,10 +54,10 @@ homepage:
       - var: prowlarr_api
         path: "/Prowlarr"
         name: API
-      - var: qui_downloads_api
+      - var: qui_downloads_token
         path: "/HomePage"
         name: QUI_DOWNLOADS_TOKEN
-      - var: qui_seeds_api
+      - var: qui_seeds_token
         path: "/HomePage"
         name: QUI_SEEDS_TOKEN
       - var: radarr_api
