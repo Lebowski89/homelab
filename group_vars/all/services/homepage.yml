@@ -56,10 +56,10 @@ homepage:
         name: API
       - var: qui_downloads_api
         path: "/HomePage"
-        name: QUI_API_DOWNLOADS
+        name: QUI_DOWNLOADS_TOKEN
       - var: qui_seeds_api
         path: "/HomePage"
-        name: QUI_API_SEEDS
+        name: QUI_SEEDS_TOKEN
       - var: radarr_api
         path: "/Radarr"
         name: API
@@ -81,6 +81,9 @@ homepage:
       - var: tautulli_api
         path: "/Tautulli"
         name: API
+      - var: technitium_token
+        path: "/HomePage"
+        name: TECHNITIUM_TOKEN
       - var: unifi_user
         path: "/Unifi"
         name: USER

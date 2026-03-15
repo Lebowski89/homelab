@@ -2,190 +2,188 @@
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/services/
 
+- core:
+    - Portainer:
+        icon: portainer.svg
+        href: https://portainer.{{ cloudflare_zone }}
+        siteMonitor: http://portainer:9000
+        description: Docker Manager
+        widget:
+          type: portainer
+          url: http://portainer:9000
+          env: 1
+          key: {{ portainer_token }}
+          fields: ["running", "stopped", "total"]
+    - Technitium:
+        icon: technitium.png
+        href: http://192.168.80.45:5380
+        siteMonitor: http://192.168.80.45:5380
+        description: Technitium DNS
+        widget:
+          type: technitium
+          url: http://192.168.80.45:5380
+          key: {{ technitium_token }}
+          fields: ["totalQueries", "totalRecursive", "totalBlocked", "totalClients"]
+          range: LastDay
+    - Vaultwarden:
+        icon: znc.png
+        href: https://vaultwarden.{{ cloudflare_zone }}
+        siteMonitor: http://vaultwarden:80
+        description: Password Manager
+
+- proxy:
+    - Traefik:
+        icon: traefik-proxy.svg
+        href: https://traefik.{{ cloudflare_zone }}
+        siteMonitor: http://traefik:8081
+        description: Traefik Reverse Proxy
+        widget:
+          type: traefik
+          url: http://traefik:8081
+          fields: ["routers", "services", "middleware"]
+
 - arrs:
     - Bazarr:
         icon: bazarr.svg
         href: https://bazarr.{{ cloudflare_zone }}
-        siteMonitor: https://bazarr.{{ cloudflare_zone }}
+        siteMonitor: http://bazarr:6767
         description: PVR (Subtitles)
         widget:
           type: bazarr
-          url: https://bazarr.{{ cloudflare_zone }}
+          url: http://bazarr:6767
           key: {{ bazarr_api }}
           fields: ["missingEpisodes", "missingMovies"]
     - Lidarr:
         icon: lidarr.svg
         href: https://lidarr.{{ cloudflare_zone }}
-        siteMonitor: https://lidarr.{{ cloudflare_zone }}
+        siteMonitor: http://lidarr:8686
         description: PVR (Music)
         widget:
           type: lidarr
-          url: https://lidarr.{{ cloudflare_zone }}
+          url: http://lidarr:8686
           key: {{ lidarr_api }}
           fields: ["wanted", "queued", "artists"]
     - Prowlarr:
         icon: prowlarr.svg
         href: https://prowlarr.{{ cloudflare_zone }}
-        siteMonitor: https://prowlarr.{{ cloudflare_zone }}
+        siteMonitor: http://prowlarr:9696
         description: The Middleman
         widget:
           type: prowlarr
-          url: https://prowlarr.{{ cloudflare_zone }}
+          url: http://prowlarr:9696
           key: {{ prowlarr_api }}
           fields: ["numberOfGrabs", "numberOfQueries", "numberOfFailGrabs", "numberOfFailQueries"]
     - Radarr:
         icon: radarr.svg
         href: https://radarr.{{ cloudflare_zone }}
-        siteMonitor: https://radarr.{{ cloudflare_zone }}
+        siteMonitor: http://radarr:7878
         description: PVR (Movies)
         widget:
           type: radarr
-          url: https://radarr.{{ cloudflare_zone }}
+          url: http://radarr:7878
           key: {{ radarr_api }}
           fields: ["wanted", "missing", "queued", "movies"]
           enableQueue: false
     - Radarr-4K:
         icon: radarr.svg
         href: https://radarr-4k.{{ cloudflare_zone }}
-        siteMonitor: https://radarr-4k.{{ cloudflare_zone }}
+        siteMonitor: http://radarr-4k:7878
         description: PVR (4K-Movies)
         widget:
           type: radarr
-          url: https://radarr-4k.{{ cloudflare_zone }}
+          url: http://radarr-4k:7878
           key: {{ radarr_4k_api }}
           fields: ["wanted", "missing", "queued", "movies"]
           enableQueue: false
     - Sonarr:
         icon: sonarr.svg
         href: https://sonarr.{{ cloudflare_zone }}
-        siteMonitor: https://sonarr.{{ cloudflare_zone }}
+        siteMonitor: http://sonarr:8989
         description: PVR (TV)
         widget:
           type: sonarr
-          url: https://sonarr.{{ cloudflare_zone }}
+          url: http://sonarr:8989
           key: {{ sonarr_api }}
           fields: ["wanted", "queued", "series"]
           enableQueue: false
     - Sonarr-4K:
         icon: sonarr.svg
         href: https://sonarr-4k.{{ cloudflare_zone }}
-        siteMonitor: https://sonarr-4k.{{ cloudflare_zone }}
+        siteMonitor: http://sonarr-4k:8989
         description: PVR (4K-TV)
         widget:
           type: sonarr
-          url: https://sonarr-4k.{{ cloudflare_zone }}
+          url: http://sonarr-4k:8989
           key: {{ sonarr_4k_api }}
           fields: ["wanted", "queued", "series"]
           enableQueue: false
+    - Sportarr:
+        icon: docker.svg
+        href: https://sportarr.{{ cloudflare_zone }}
+        siteMonitor: http://sportarr:1867
+        description: PVR (Sport)
     - Whisparr:
         icon: whisparr.svg
         href: https://whisparr.{{ cloudflare_zone }}
-        siteMonitor: https://whisparr.{{ cloudflare_zone }}
+        siteMonitor: http://whisparr:6969
         description: PVR (Adult)
 
-- companions:
+- media:
     - Autobrr:
         icon: autobrr.svg
         href: https://autobrr.{{ cloudflare_zone }}
-        siteMonitor: https://autobrr.{{ cloudflare_zone }}
+        siteMonitor: http://autobrr:7474
         description: Download automation tool for torrents
         widget:
           type: autobrr
-          url: https://autobrr.{{ cloudflare_zone }}
+          url: http://autobrr:7474
           key: {{ autobrr_api }}
           fields: ["approvedPushes", "rejectedPushes", "filters", "indexers"]
     - Seerr:
         icon: seerr.svg
         href: https://seerr.{{ cloudflare_zone }}
-        siteMonitor: https://seerr.{{ cloudflare_zone }}
+        siteMonitor: http://seerr:5055
         description: Content Requests for Plex/Emby/Jellyfin
         widget:
           type: seerr
-          url: https://seerr.{{ cloudflare_zone }}
+          url: http://seerr:5055
           key: {{ seerr_api }}
           fields: ["pending", "approved", "available", "completed", "processing", "issues"]
     - Ombi:
         icon: ombi.svg
-        href: https://ombi.{{ cloudflare_zone }}
-        siteMonitor: https://ombi.{{ cloudflare_zone }}
+        href: http://ombi.{{ cloudflare_zone }}
+        siteMonitor: https://ombi:3579
         description: Content Requests for Plex/Emby
         widget:
           type: ombi
-          url: https://ombi.{{ cloudflare_zone }}
+          url: http://ombi:3579
           key: {{ ombi_api }}
           fields: ["pending", "approved", "available"]
+    - OpenCloud:
+        icon: open-cloud.svg
+        href: https://opencloud.{{ cloudflare_zone }}
+        siteMonitor: http://opencloud:9200
+        description: Cloud Storage.. but Local
     - Stash:
         icon: stash.svg
-        href: http://
-        siteMonitor: https://stash.{{ cloudflare_zone }}
+        href: https://stash.{{ cloudflare_zone }}
+        siteMonitor: http://stash:9999
         description: Plex for P*rn
         widget:
           type: stash
-          url: https://stash.{{ cloudflare_zone }}
+          url: http://stash:9999
           key: {{ stash_api }}
           fields: ["scenes", "images"]
     - TheLounge:
         icon: thelounge.svg
         href: https://thelounge.{{ cloudflare_zone }}
-        siteMonitor: https://thelounge.{{ cloudflare_zone }}
+        siteMonitor: http://thelounge:9000
         description: IRC Client
     - ZNC:
         icon: znc.png
         href: https://znc.{{ cloudflare_zone }}
-        siteMonitor: https://znc.{{ cloudflare_zone }}
+        siteMonitor: http://znc:6501
         description: IRC Bouncer
-
-- downloads:
-    - qBittorrent:
-        icon: qbittorrent.svg
-        href: https://qbittorrent.{{ cloudflare_zone }}/
-        description: Torrent download client
-        widget:
-          type: qbittorrent
-          url: {{ qui_downloads_api }}
-          fields: ["leech", "download", "seed", "upload"]
-          enableLeechProgress: true
-    - qBittorrent-XS:
-        icon: qbittorrent.svg
-        href: https://qbittorrent-xs.{{ cloudflare_zone }}
-        description: Torrent download client
-        widget:
-          type: qbittorrent
-          url: {{ qui_seeds_api }}
-          fields: ["leech", "download", "seed", "upload"]
-          enableLeechProgress: true
-    - SABnzbd:
-        icon: sabnzbd.svg
-        href: https://sabnzbd.{{ cloudflare_zone }}
-        siteMonitor: https://sabnzbd.{{ cloudflare_zone }}
-        description: Usenet download client
-        widget:
-          type: sabnzbd
-          url: https://sabnzbd.{{ cloudflare_zone }}
-          key: {{ sabnzbd_api }}
-          fields: ["rate", "queue", "timeleft"]
-
-- metrics:
-    - Grafana:
-        icon: grafana.svg
-        href: https://grafana.{{ cloudflare_zone }}
-        siteMonitor: https://grafana.{{ cloudflare_zone }}
-        description: Data visualization platform
-        widget:
-          type: grafana
-          url: https://grafana.{{ cloudflare_zone }}
-          username: {{ grafana_user }}
-          password: {{ grafana_pass }}
-          fields: ["dashboards", "datasources", "totalalerts", "alertstriggered"]
-    - Prometheus:
-        icon: prometheus.svg
-        href: https://prometheus.{{ cloudflare_zone }}
-        siteMonitor: https://prometheus.{{ cloudflare_zone }}
-        description: Metrics monitoring system
-        widget:
-          type: prometheus
-          url: https://prometheus.{{ cloudflare_zone }}
-          fields: ["targets_up", "targets_down", "targets_total"]
 
 - plex:
     - Plex:
@@ -195,46 +193,77 @@
         description: Plex Media Server
         widget:
           type: plex
-          url: http://192.168.80.59:32400
+          url: http://plex:32400
           key: {{ plex_token }}
           fields: ["streams", "albums", "movies", "tv"]
     - Tautulli:
         icon: tautulli.svg
         href: https://tautulli.{{ cloudflare_zone }}
-        siteMonitor: https://tautulli.{{ cloudflare_zone }}
+        siteMonitor: http://tautulli:8181
         description: Plex Monitoring
         widget:
           type: tautulli
-          url: https://tautulli.{{ cloudflare_zone }}
+          url: http://tautulli:8181
           key: {{ tautulli_api }}
           enableUser: true
           showEpisodeNumber: true
           expandOneStreamToTwoRows: true
 
-- traefik:
-    - Traefik:
-        icon: traefik-proxy.svg
-        href: https://traefik.{{ cloudflare_zone }}
-        siteMonitor: https://traefik.{{ cloudflare_zone }}
-        description: Traefik Reverse Proxy
+- torrents:
+    - qBittorrent:
+        icon: qbittorrent.svg
+        href: https://qbittorrent.{{ cloudflare_zone }}/
+        description: Torrent download client
         widget:
-          type: traefik
-          url: https://traefik.{{ cloudflare_zone }}
-          fields: ["routers", "services", "middleware"]
-
-- misc:
-    - Portainer:
-        icon: portainer.svg
-        href: https://portainer.{{ cloudflare_zone }}
-        siteMonitor: https://portainer.{{ cloudflare_zone }}
-        description: Docker Manager
+          type: qbittorrent
+          url: {{ qui_downloads_token }}
+          fields: ["leech", "download", "seed", "upload"]
+          enableLeechProgress: true
+    - qBittorrent-XS:
+        icon: qbittorrent.svg
+        href: https://qbittorrent-xs.{{ cloudflare_zone }}
+        description: Torrent download client
         widget:
-          type: portainer
-          url: https://portainer.{{ cloudflare_zone }}
-          env: 1
-          key: {{ portainer_token }}
-          fields: ["running", "stopped", "total"]
+          type: qbittorrent
+          url: {{ qui_seeds_token }}
+          fields: ["leech", "download", "seed", "upload"]
+          enableLeechProgress: true
 
+- usenet:
+    - SABnzbd:
+        icon: sabnzbd.svg
+        href: https://sabnzbd.{{ cloudflare_zone }}
+        siteMonitor: http://sabnzbd:8080
+        description: Usenet download client
+        widget:
+          type: sabnzbd
+          url: http://sabnzbd:8080
+          key: {{ sabnzbd_api }}
+          fields: ["rate", "queue", "timeleft"]
+
+- monitoring:
+    - Grafana:
+        icon: grafana.svg
+        href: https://grafana.{{ cloudflare_zone }}
+        siteMonitor: http://grafana:3000
+        description: Data visualization platform
+        widget:
+          type: grafana
+          url: http://grafana:3000
+          username: {{ grafana_user }}
+          password: {{ grafana_pass }}
+          fields: ["dashboards", "datasources", "totalalerts", "alertstriggered"]
+    - Prometheus:
+        icon: prometheus.svg
+        href: https://prometheus.{{ cloudflare_zone }}
+        siteMonitor: http://prometheus:9090
+        description: Metrics monitoring system
+        widget:
+          type: prometheus
+          url: http://prometheus:9090
+          fields: ["targets_up", "targets_down", "targets_total"]
+
+- unifi:
     - Unifi:
         icon: unifi.svg
         href: http://192.168.80.45:8443
@@ -242,7 +271,7 @@
         description: Unifi Controller
         widget:
           type: unifi
-          url: http://192.168.80.45:8443
+          url: http://unifi:8443
           username: {{ unifi_user }}
           password: {{ unifi_pass }}
           fields: ["uptime", "wlan", "wlan_users", "wlan_devices"]
