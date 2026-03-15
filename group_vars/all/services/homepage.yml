@@ -36,8 +36,8 @@ homepage:
       - var: grafana_pass
         path: "/Grafana"
         name: PASS
-      - var: jellyseerr_api
-        path: "/Jellyseerr"
+      - var: seerr_api
+        path: "/Seerr"
         name: API
       - var: lidarr_api
         path: "/Lidarr"
