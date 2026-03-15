@@ -36,8 +36,8 @@ homepage:
       - var: grafana_pass
         path: "/Grafana"
         name: PASS
-      - var: jellyseerr_api
-        path: "/Jellyseerr"
+      - var: seerr_api
+        path: "/Seerr"
         name: API
       - var: lidarr_api
         path: "/Lidarr"
@@ -54,12 +54,12 @@ homepage:
       - var: prowlarr_api
         path: "/Prowlarr"
         name: API
-      - var: qui_swarm_api
+      - var: qui_downloads_token
         path: "/HomePage"
-        name: QUI_API_SWARM
-      - var: qui_unraid_api
+        name: QUI_DOWNLOADS_TOKEN
+      - var: qui_seeds_token
         path: "/HomePage"
-        name: QUI_API_UNRAID
+        name: QUI_SEEDS_TOKEN
       - var: radarr_api
         path: "/Radarr"
         name: API
@@ -81,6 +81,9 @@ homepage:
       - var: tautulli_api
         path: "/Tautulli"
         name: API
+      - var: technitium_token
+        path: "/HomePage"
+        name: TECHNITIUM_TOKEN
       - var: unifi_user
         path: "/Unifi"
         name: USER
