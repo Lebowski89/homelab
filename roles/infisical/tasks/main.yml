@@ -6,20 +6,20 @@
 
 - name: Check if compose file exists
   ansible.builtin.stat:
-    path: /opt/infisical/infisical-compose.yml
-  register: _existing_infisical_compose_yaml
+    path: "{{ infisical_path }}/infisical-compose.yml"
+  register: infisical_existing_compose_yaml
 
 - name: Infisical compose down
-  when: _existing_infisical_compose_yaml.stat.exists
+  when: infisical_existing_compose_yaml.stat.exists
   community.docker.docker_compose_v2:
-    project_src: /opt/infisical
+    project_src: "{{ infisical_path }}"
     project_name: infisical
     files: infisical-compose.yml
     state: absent
 
 - name: Remove compose file
   ansible.builtin.file:
-    path: /opt/stacks/infisical-compose.yml
+    path: "{{ infisical_path }}/infisical-compose.yml"
     state: absent
 
 ################################
