@@ -2,7 +2,7 @@
 
 - name: Vaultwarden prep | Set derived vars (run once)
   ansible.builtin.set_fact:
-    docker_services_vw_fs_host: "{{ (docker_services_svc.deploy.host | default('unraid', true)) | string | trim }}"
+    docker_services_vw_fs_host: "{{ (docker_services_svc.deploy.host | default('mgt', true)) | string | trim }}"
     docker_services_vw_dir: "/opt/vaultwarden"
     docker_services_vw_token_file: "/opt/vaultwarden/docker_services_vaultwarden_token.txt"
     docker_services_vw_password_file: "/opt/vaultwarden/vaultwarden_password.txt"

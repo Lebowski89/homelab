@@ -51,11 +51,6 @@ traefik:
       owner: 1000
       group: 1000
       mode: "0755"
-    - path: /opt/traefik/dynamic/services
-      state: directory
-      owner: 1000
-      group: 1000
-      mode: "0755"
     - path: /opt/traefik/acme.json
       state: touch
       owner: 1000
@@ -75,18 +70,18 @@ traefik:
       mode: "0664"
       force: true
     - src: configs/proxy/authelia/middleware.yml.j2
-      dest: /opt/traefik/dynamic/authelia.yml
+      dest: /opt/traefik/dynamic/authelia-middleware.yml
       owner: 1000
       group: 1000
       mode: "0664"
     - src: configs/proxy/authelia/router.yml.j2
-      dest: /opt/traefik/dynamic/services/authelia.yml
+      dest: /opt/traefik/dynamic/authelia-router.yml
       owner: 1000
       group: 1000
       mode: "0664"
       force: true
     - src: configs/proxy/traefik/dashboard.yml.j2
-      dest: /opt/traefik/dynamic/services/traefik-dashboard.yml
+      dest: /opt/traefik/dynamic/traefik-dashboard.yml
       owner: 1000
       group: 1000
       mode: "0664"
@@ -103,9 +98,9 @@ traefik:
     type: swarm
     mode: replicated
     replicas: 1
-    host: localhost
+    host: mgt
     constraints:
-      - node.labels.ansible_host == localhost
+      - node.labels.ansible_host == mgt
     restart_policy:
       condition: on-failure
       delay: 10s
