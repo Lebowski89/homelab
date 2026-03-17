@@ -3,8 +3,9 @@
 - name: Hugo prep | Set derived vars (run once)
   ansible.builtin.set_fact:
     docker_services_hugo_host: "{{ (docker_services_svc.deploy.host | default('localhost', true)) | string | trim }}"
-    docker_services_hugo_site_path: "/blog"
-    docker_services_hugo_theme_path: "/blog/themes/terminal"
+    docker_services_hugo_root_path: /home/mgt
+    docker_services_hugo_site_path: /home/mgt/blog
+    docker_services_hugo_theme_path: /home/mgt/blog/themes/terminal
   when: inventory_hostname == "localhost"
   run_once: true
 
@@ -37,7 +38,7 @@
         detach: false
         command: "hugo new site blog"
         volumes:
-          - "/:/src"
+          - "{{ docker_services_hugo_root_path }}:/src"
         cleanup: true
 
 ################################
