@@ -22,7 +22,7 @@ infisical_jwt_key: !vault |
           3162386236633133663262633434353332396463323934653434
 
 infisical_postgres_name: infisical-postgres
-infisical_postgres_image: postgres:17
+infisical_postgres_image: postgres:18
 infisical_postgres_port: 5432
 infisical_postgres_path: "{{ infisical_path }}/postgres"
 infisical_postgres_user: !vault |
