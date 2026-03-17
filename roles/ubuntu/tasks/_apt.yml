@@ -27,6 +27,7 @@
       - tree
       - lsof
       - git
+      - argon2
       - pwgen
       - rsync
       - logrotate

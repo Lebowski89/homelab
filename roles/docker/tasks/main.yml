@@ -25,6 +25,7 @@
     - docker_swarm_init
     - docker_swarm_join
     - docker_swarm_network
+    - docker_swarm_labels
 
 - name: Docker Prune
   ansible.builtin.include_tasks:
