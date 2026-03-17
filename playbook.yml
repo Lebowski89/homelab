@@ -57,6 +57,7 @@
       tags:
         - ubuntu
         - ubuntu_apt
+        - ubuntu_repo
         - ubuntu_venv
         - ubuntu_sysctl
         - ubuntu_pam
