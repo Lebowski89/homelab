@@ -1,33 +1,25 @@
 ---
 
-- name: Ensure /ansible exists
-  ansible.builtin.file:
-    path: /ansible
-    state: directory
-    owner: "{{ puid }}"
-    group: "{{ pgid }}"
-    mode: "0755"
-
-- name: Create Ansible virtualenv
+- name: Create Python virtualenv
   ansible.builtin.command:
     argv:
       - python3
       - -m
       - venv
-      - /ansible/ansible-venv
+      - "{{ ubuntu_ansible_venv_path }}"
   args:
-    creates: /ansible/ansible-venv/bin/python
+    creates: "{{ ubuntu_ansible_venv_path }}/bin/python"
 
-- name: Upgrade pip tooling in Ansible virtualenv
+- name: Upgrade pip tooling in virtualenv
   ansible.builtin.pip:
     name:
       - pip==26.0.1
       - setuptools==82.0.1
       - wheel==0.46.3
     state: present
-    virtualenv: /ansible/ansible-venv
+    virtualenv: "{{ ubuntu_ansible_venv_path }}"
 
-- name: Install Python packages in Ansible virtualenv
+- name: Install Python packages in virtualenv
   ansible.builtin.pip:
     name:
       - docker==7.1.0
@@ -35,4 +27,4 @@
       - PyYAML==6.0.3
       - jmespath==1.1.0
     state: present
-    virtualenv: /ansible/ansible-venv
+    virtualenv: "{{ ubuntu_ansible_venv_path }}"

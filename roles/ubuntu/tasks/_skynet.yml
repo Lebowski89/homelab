@@ -1,0 +1,17 @@
+---
+
+- name: Assert skynet install path is defined
+  ansible.builtin.assert:
+    that:
+      - ubuntu_skynet_install_path is defined
+      - ubuntu_skynet_install_path | length > 0
+    fail_msg: "ubuntu_skynet_install_path must be defined."
+
+- name: Install templated skynet wrapper
+  ansible.builtin.template:
+    src: skynet.j2
+    dest: "{{ ubuntu_skynet_install_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: ubuntu_skynet_install | bool

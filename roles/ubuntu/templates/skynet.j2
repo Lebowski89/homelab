@@ -1,0 +1,290 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+PLAYBOOK="${PLAYBOOK:-{{ ubuntu_ansible_repo_path }}/playbook.yml}"
+INVENTORY="${INVENTORY:-{{ ubuntu_ansible_repo_path }}/hosts.ini}"
+ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-{{ ubuntu_ansible_repo_path }}/ansible.cfg}"
+BECOME_PASS_FILE="${BECOME_PASS_FILE:-{{ ubuntu_skynet_become_pass_file }}}"
+DOCTOR_PING_TARGET="${SKYNET_DOCTOR_PING_TARGET:-{{ ubuntu_skynet_doctor_ping_target }}}"
+DOCKER_SERVICES_VARS="${DOCKER_SERVICES_VARS:-{{ ubuntu_skynet_docker_services_vars }}}"
+ANSIBLE_VENV_PATH="${ANSIBLE_VENV_PATH:-{{ ubuntu_ansible_venv_path }}}"
+
+if [[ -x "$ANSIBLE_VENV_PATH/bin/ansible-playbook" ]]; then
+  ANSIBLE_PLAYBOOK_BIN="${ANSIBLE_PLAYBOOK_BIN:-$ANSIBLE_VENV_PATH/bin/ansible-playbook}"
+  ANSIBLE_INVENTORY_BIN="${ANSIBLE_INVENTORY_BIN:-$ANSIBLE_VENV_PATH/bin/ansible-inventory}"
+  ANSIBLE_GALAXY_BIN="${ANSIBLE_GALAXY_BIN:-$ANSIBLE_VENV_PATH/bin/ansible-galaxy}"
+  ANSIBLE_BIN="${ANSIBLE_BIN:-$ANSIBLE_VENV_PATH/bin/ansible}"
+else
+  ANSIBLE_PLAYBOOK_BIN="${ANSIBLE_PLAYBOOK_BIN:-ansible-playbook}"
+  ANSIBLE_INVENTORY_BIN="${ANSIBLE_INVENTORY_BIN:-ansible-inventory}"
+  ANSIBLE_GALAXY_BIN="${ANSIBLE_GALAXY_BIN:-ansible-galaxy}"
+  ANSIBLE_BIN="${ANSIBLE_BIN:-ansible}"
+fi
+
+usage() {
+  cat <<'EOF'
+Usage:
+  skynet deploy <tag> [tag2 ...]
+  skynet update <tag|all> [tag2 ...]
+  skynet remove <tag> [tag2 ...]
+  skynet recreate <tag> [tag2 ...]
+  skynet bootstrap <tag> [tag2 ...]
+  skynet check <tag> [tag2 ...]
+  skynet doctor [--ping]
+  skynet limit <hostpattern> <deploy|update|remove|recreate|bootstrap|check|raw> ...
+  skynet tags
+  skynet raw <ansible-playbook args...>
+  skynet help
+
+Aliases:
+  skynet install  -> deploy
+  skynet reset    -> remove
+EOF
+  exit 1
+}
+
+die() { echo "Error: $*" >&2; exit 1; }
+
+join_csv() {
+  local IFS=,
+  echo "$*"
+}
+
+run_playbook() {
+  local -a args=()
+  args=(-i "$INVENTORY" "$PLAYBOOK")
+
+  if [[ -f "$BECOME_PASS_FILE" ]]; then
+    args+=(--become-password-file "$BECOME_PASS_FILE")
+  else
+    echo "[WARN] Become password file not found: $BECOME_PASS_FILE"
+    echo "[WARN] If sudo requires a password, set BECOME_PASS_FILE or create .ansible_become_pass"
+  fi
+
+  ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_PLAYBOOK_BIN" "${args[@]}" "$@"
+}
+
+print_tags() {
+  if command -v python3 >/dev/null 2>&1; then
+    python3 - "$PLAYBOOK" "$DOCKER_SERVICES_VARS" <<'PY'
+import sys
+from collections import OrderedDict
+
+playbook_path = sys.argv[1]
+docker_services_path = sys.argv[2]
+
+try:
+    import yaml
+except Exception:
+    yaml = None
+
+tags = OrderedDict()
+
+def add(x):
+    if isinstance(x, str):
+        x = x.strip()
+        if x and x not in tags:
+            tags[x] = True
+
+if not yaml:
+    sys.exit("python yaml module is required for skynet tags")
+
+try:
+    with open(playbook_path, "r", encoding="utf-8") as f:
+        data = yaml.safe_load(f) or []
+    if isinstance(data, list):
+        for play in data:
+            if not isinstance(play, dict):
+                continue
+            ds = (play.get("vars") or {}).get("docker_services", [])
+            if isinstance(ds, list):
+                for item in ds:
+                    if not isinstance(item, dict):
+                        continue
+                    add(item.get("name"))
+                    for t in (item.get("tags") or []):
+                        add(t)
+except FileNotFoundError:
+    pass
+
+try:
+    with open(docker_services_path, "r", encoding="utf-8") as f:
+        gv = yaml.safe_load(f) or {}
+    ds = gv.get("docker_services", [])
+    if isinstance(ds, list):
+        for item in ds:
+            if not isinstance(item, dict):
+                continue
+            add(item.get("name"))
+            for t in (item.get("tags") or []):
+                add(t)
+except FileNotFoundError:
+    pass
+
+for t in tags:
+    print(t)
+PY
+  else
+    echo "[WARN] python3 not found; falling back to best-effort tag parsing from playbook only" >&2
+    grep -E '^\s*- name:|^\s*tags:\s*\[' "$PLAYBOOK" \
+      | sed -E 's/^\s*- name:\s*//; s/^\s*tags:\s*\[//; s/\]\s*$//' \
+      | tr ',' '\n' | sed 's/^ *//; s/ *$//' | sort -u
+  fi
+}
+
+doctor() {
+  local do_ping="${1:-false}"
+
+  echo "[INFO] playbook: $PLAYBOOK"
+  echo "[INFO] inventory: $INVENTORY"
+  echo "[INFO] ansible config: $ANSIBLE_CONFIG"
+  echo "[INFO] ansible venv path: $ANSIBLE_VENV_PATH"
+
+  [[ -f "$PLAYBOOK" ]] && echo "[OK] playbook found: $PLAYBOOK" || die "Missing playbook: $PLAYBOOK"
+  [[ -f "$INVENTORY" ]] && echo "[OK] inventory found: $INVENTORY" || die "Missing inventory: $INVENTORY"
+  [[ -f "$ANSIBLE_CONFIG" ]] && echo "[OK] ansible.cfg found: $ANSIBLE_CONFIG" || die "Missing ansible.cfg: $ANSIBLE_CONFIG"
+
+  [[ -x "$ANSIBLE_PLAYBOOK_BIN" ]] || die "ansible-playbook not executable: $ANSIBLE_PLAYBOOK_BIN"
+  [[ -x "$ANSIBLE_INVENTORY_BIN" ]] || die "ansible-inventory not executable: $ANSIBLE_INVENTORY_BIN"
+
+  echo "[OK] ansible-playbook: $ANSIBLE_PLAYBOOK_BIN"
+  if "$ANSIBLE_PLAYBOOK_BIN" --version >/dev/null 2>&1; then
+    echo "[OK] ansible-playbook version check passed"
+  else
+    die "ansible-playbook --version failed"
+  fi
+
+  if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_INVENTORY_BIN" -i "$INVENTORY" --list >/dev/null 2>&1; then
+    echo "[OK] inventory parses"
+  else
+    die "ansible-inventory --list failed"
+  fi
+
+  if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_PLAYBOOK_BIN" -i "$INVENTORY" "$PLAYBOOK" --syntax-check >/dev/null 2>&1; then
+    echo "[OK] playbook syntax check passed"
+  else
+    die "playbook syntax check failed"
+  fi
+
+  if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_PLAYBOOK_BIN" -i "$INVENTORY" "$PLAYBOOK" --list-tags >/dev/null 2>&1; then
+    echo "[OK] --list-tags works"
+  else
+    echo "[WARN] --list-tags failed"
+  fi
+
+  if [[ -f "$DOCKER_SERVICES_VARS" ]]; then
+    echo "[OK] docker services vars found: $DOCKER_SERVICES_VARS"
+  else
+    echo "[WARN] docker services vars not found: $DOCKER_SERVICES_VARS"
+  fi
+
+  if [[ -x "$ANSIBLE_GALAXY_BIN" ]]; then
+    if "$ANSIBLE_GALAXY_BIN" collection list 2>/dev/null | grep -q 'community.docker'; then
+      echo "[OK] community.docker collection found"
+    else
+      echo "[WARN] community.docker collection not found"
+    fi
+  else
+    echo "[WARN] ansible-galaxy not found/executable at '$ANSIBLE_GALAXY_BIN' (skipping collection checks)"
+  fi
+
+  if [[ "$do_ping" == "true" ]]; then
+    if [[ -x "$ANSIBLE_BIN" ]]; then
+      if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_BIN" -i "$INVENTORY" "$DOCTOR_PING_TARGET" -m ping >/dev/null 2>&1; then
+        echo "[OK] ansible ping to '$DOCTOR_PING_TARGET' passed"
+      else
+        echo "[WARN] ansible ping to '$DOCTOR_PING_TARGET' failed"
+      fi
+    else
+      echo "[WARN] ansible binary not executable at '$ANSIBLE_BIN' (skipping ping)"
+    fi
+  fi
+
+  echo "[OK] doctor complete"
+}
+
+LIMIT_ARGS=()
+
+CMD="${1:-}"
+[[ -n "$CMD" ]] || usage
+shift || true
+
+if [[ "$CMD" == "limit" ]]; then
+  [[ $# -ge 2 ]] || die "Usage: skynet limit <hostpattern> <command> ..."
+  LIMIT_ARGS=(--limit "$1")
+  shift
+  CMD="$1"
+  shift
+fi
+
+case "$CMD" in
+  install) CMD="deploy" ;;
+  reset)   CMD="remove" ;;
+esac
+
+case "$CMD" in
+  deploy)
+    [[ $# -ge 1 ]] || die "deploy requires at least one tag"
+    TAGS="deploy,$(join_csv "$@")"
+    run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    ;;
+
+  update)
+    [[ $# -ge 1 ]] || die "update requires at least one tag or 'all'"
+    if [[ "$1" == "all" ]]; then
+      run_playbook "${LIMIT_ARGS[@]}" --tags "update,all"
+    else
+      TAGS="update,$(join_csv "$@")"
+      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    fi
+    ;;
+
+  remove)
+    [[ $# -ge 1 ]] || die "remove requires at least one tag"
+    TAGS="remove,$(join_csv "$@")"
+    run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    ;;
+
+  recreate)
+    [[ $# -ge 1 ]] || die "recreate requires at least one tag"
+    TAGS="recreate,$(join_csv "$@")"
+    run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    ;;
+
+  bootstrap)
+    [[ $# -ge 1 ]] || die "bootstrap requires at least one tag"
+    TAGS="bootstrap,$(join_csv "$@")"
+    run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    ;;
+
+  check|dry-run)
+    [[ $# -ge 1 ]] || die "check requires at least one tag"
+    TAGS="deploy,$(join_csv "$@")"
+    run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$TAGS"
+    ;;
+
+  doctor)
+    if [[ "${1:-}" == "--ping" ]]; then
+      doctor true
+    else
+      doctor false
+    fi
+    ;;
+
+  tags|list)
+    print_tags
+    ;;
+
+  raw)
+    [[ $# -ge 1 ]] || die "raw requires ansible-playbook args"
+    run_playbook "${LIMIT_ARGS[@]}" "$@"
+    ;;
+
+  help|-h|--help)
+    usage
+    ;;
+
+  *)
+    die "Unknown command: $CMD"
+    ;;
+esac
