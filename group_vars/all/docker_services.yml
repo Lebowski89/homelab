@@ -16,10 +16,10 @@ docker_services:
     tags: [apps, vaultwarden]
 
   ## services (proxy)
+  - name: authelia_redis
+    tags: [apps, proxy, authelia]
   - name: authelia
     tags: [apps, proxy, authelia]
-  - name: authelia_redis
-    tags: [apps, proxy, authelia-redis]
   - name: traefik
     tags: [apps, proxy, traefik]
 
@@ -108,6 +108,8 @@ docker_services:
     tags: [apps, monitoring, alloy]
   - name: grafana
     tags: [apps, monitoring, grafana]
+  - name: loki
+    tags: [apps, monitoring, loki]
   - name: prometheus
     tags: [apps, monitoring, prometheus]
   - name: scraparr

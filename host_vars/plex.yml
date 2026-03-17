@@ -1,11 +1,16 @@
 ---
 
 puid: 1000
-
 pgid: 1000
 
 local_ip: 192.168.80.59
 
 docker_manage_user: true
-
 docker_user: "plex"
+
+docker_swarm_hostname: "plex"
+
+docker_swarm_node_labels:
+  role: worker
+  ansible_host: plex
+  haproxy: "true"

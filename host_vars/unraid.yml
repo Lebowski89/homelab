@@ -1,7 +1,13 @@
 ---
 
 puid: 99
-
 pgid: 100
 
 local_ip: 192.168.80.20
+
+docker_swarm_hostname: "unraid"
+
+docker_swarm_node_labels:
+  role: worker
+  ansible_host: unraid
+  haproxy: "true"

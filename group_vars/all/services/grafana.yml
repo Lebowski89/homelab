@@ -53,9 +53,9 @@ grafana:
     type: swarm
     mode: replicated
     replicas: 1
-    host: localhost
+    host: mgt
     constraints:
-      - node.labels.ansible_host == localhost
+      - node.labels.ansible_host == mgt
     restart_policy:
       condition: on-failure
       delay: 10s
