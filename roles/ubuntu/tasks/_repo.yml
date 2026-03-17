@@ -1,0 +1,17 @@
+---
+
+- name: Ensure Ansible root exists
+  ansible.builtin.file:
+    path: "{{ ubuntu_ansible_root }}"
+    state: directory
+    owner: "{{ puid }}"
+    group: "{{ pgid }}"
+    mode: "0755"
+
+- name: Clone homelab repo
+  when: ubuntu_manage_repo_clone | bool
+  ansible.builtin.git:
+    repo: "{{ ubuntu_repo_url }}"
+    dest: "{{ ubuntu_ansible_repo_path }}"
+    version: "{{ ubuntu_repo_version }}"
+    update: true

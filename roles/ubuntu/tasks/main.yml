@@ -11,7 +11,20 @@
     - ubuntu
     - ubuntu_apt
 
+- name: Clone Homelab repo
+  when: inventory_hostname in groups['ansible_managers']
+  ansible.builtin.include_tasks:
+    file: _repo.yml
+    apply:
+      tags:
+        - ubuntu
+        - ubuntu_repo
+  tags:
+    - ubuntu
+    - ubuntu_repo
+
 - name: Setup Python venv
+  when: inventory_hostname in groups['ansible_managers']
   ansible.builtin.include_tasks:
     file: _venv.yml
     apply:
@@ -21,6 +34,18 @@
   tags:
     - ubuntu
     - ubuntu_venv
+
+- name: Install Skynet wrapper
+  when: inventory_hostname in groups['ansible_managers']
+  ansible.builtin.include_tasks:
+    file: _skynet.yml
+    apply:
+      tags:
+        - ubuntu
+        - ubuntu_skynet
+  tags:
+    - ubuntu
+    - ubuntu_skynet
 
 - name: Tune sysctl settings
   ansible.builtin.include_tasks:
@@ -55,7 +80,7 @@
     - ubuntu
     - ubuntu_network
 
-- name: Configure netplan
+- name: Configure Netplan
   ansible.builtin.include_tasks:
     file: _netplan.yml
     apply:

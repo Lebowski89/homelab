@@ -10,4 +10,3 @@ discards/
 filter_plugins/
 .ansible_become_pass
 hosts.ini
-group_vars/all/infisical.yml

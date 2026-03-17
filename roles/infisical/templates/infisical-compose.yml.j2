@@ -1,0 +1,92 @@
+services:
+  {{ infisical_postgres_name }}:
+    image: {{ infisical_postgres_image }}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        compress: "true"
+    networks:
+      - {{ docker_network }}
+    environment:
+      TZ: "{{ timezone }}"
+      POSTGRES_USER_FILE: /run/secrets/postgres_user_secret
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_pass_secret
+    user: "{{ puid }}:{{ pgid }}"
+    secrets:
+      - source: infisical_postgres_user_secret
+        target: postgres_user_secret
+      - source: infisical_postgres_pass_secret
+        target: postgres_pass_secret
+    ports:
+      - "{{ infisical_postgres_port }}:5432"
+    volumes:
+      - {{ infisical_postgres_path }}:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  {{ infisical_name }}:
+    image: {{ infisical_image }}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        compress: "true"
+    depends_on:
+      - {{ infisical_postgres_name }}
+      - {{ infisical_redis_name }}
+    networks:
+      - {{ docker_network }}
+    environment:
+      PUID: "{{ puid }}"
+      PGID: "{{ pgid }}"
+      TZ: "{{ timezone }}"
+      NODE_ENV: "production"
+    env_file:
+      - .env
+    ports:
+      - "{{ infisical_port }}:8080"
+    restart: unless-stopped
+
+  {{ infisical_redis_name }}:
+    image: {{ infisical_redis_image }}
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+        compress: "true"
+    networks:
+      - {{ docker_network }}
+    command:
+      - sh
+      - -c
+      - redis-server --requirepass "$$(cat /run/secrets/infisical_redis_key_secret)"
+    environment:
+      TZ: "{{ timezone }}"
+      PUID: "{{ puid }}"
+      PGID: "{{ pgid }}"
+      REDIS_PASSWORD_FILE: /run/secrets/infisical_redis_key_secret
+    secrets:
+      - source: infisical_redis_key_secret
+        target: infisical_redis_key_secret
+    ports:
+      - "{{ infisical_redis_port }}:6379"
+    volumes:
+      - {{ infisical_redis_path }}:/data
+    restart: unless-stopped
+
+networks:
+  {{ docker_network }}:
+    external: true
+
+secrets:
+  infisical_postgres_user_secret:
+    file: ./postgres_user.txt
+
+  infisical_postgres_pass_secret:
+    file: ./postgres_pass.txt
+
+  infisical_redis_key_secret:
+    file: ./redis_key.txt

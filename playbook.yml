@@ -59,6 +59,7 @@
         - ubuntu_apt
         - ubuntu_repo
         - ubuntu_venv
+        - ubuntu_skynet
         - ubuntu_sysctl
         - ubuntu_pam
         - ubuntu_network
@@ -78,6 +79,15 @@
         - docker_swarm_init
         - docker_swarm_join
         - docker_swarm_network
+
+    - name: Deploy Infisical on Manager
+      when: inventory_hostname == "mgt"
+      ansible.builtin.include_role:
+        name: infisical
+        apply:
+          tags: infisical
+      tags:
+        - infisical
 
     - name: Load all service definitions from group_vars/all/services/*.yml
       ansible.builtin.include_vars:

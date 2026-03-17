@@ -1,0 +1,89 @@
+---
+
+################################
+# CLEAN UP
+################################
+
+- name: Check if compose file exists
+  ansible.builtin.stat:
+    path: "{{ infisical_path }}/infisical-compose.yml"
+  register: infisical_existing_compose_yaml
+
+- name: Infisical compose down
+  when: infisical_existing_compose_yaml.stat.exists
+  community.docker.docker_compose_v2:
+    project_src: "{{ infisical_path }}"
+    project_name: infisical
+    files: infisical-compose.yml
+    state: absent
+
+- name: Remove compose file
+  ansible.builtin.file:
+    path: "{{ infisical_path }}/infisical-compose.yml"
+    state: absent
+
+################################
+# DIRECTORIES
+################################
+
+- name: Create directories
+  ansible.builtin.file:
+    path: "{{ _infisical_dirs }}"
+    state: directory
+    owner: "{{ puid }}"
+    group: "{{ pgid }}"
+    mode: "0755"
+  loop:
+    - "{{ infisical_path }}"
+    - "{{ infisical_postgres_path }}"
+    - "{{ infisical_redis_path }}"
+  loop_control:
+    loop_var: _infisical_dirs
+
+################################
+# CONFIG
+################################
+
+- name: Template env file
+  ansible.builtin.template:
+    src: '{{ role_path }}/templates/infisical.env.j2'
+    dest: '{{ infisical_path }}/.env'
+    force: false
+    owner: "{{ puid }}"
+    group: "{{ pgid }}"
+    mode: "0664"
+
+################################
+# SECRETS
+################################
+
+- name: Create Infisical secret files
+  ansible.builtin.copy:
+    dest: "{{ infisical_path }}/{{ _infisical_secrets_files.key }}"
+    content: "{{ _infisical_secrets_files.value }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ infisical_secret_files | dict2items }}"
+  loop_control:
+    loop_var: _infisical_secrets_files
+  no_log: true
+
+################################
+# DEPLOY
+################################
+
+- name: Import Infisical compose file
+  ansible.builtin.template:
+    src: '{{ role_path }}/templates/infisical-compose.yml.j2'
+    dest: "{{ infisical_path }}/infisical-compose.yml"
+    force: true
+    owner: "{{ puid }}"
+    group: "{{ pgid }}"
+    mode: "0664"
+
+- name: Infisical compose stack up
+  community.docker.docker_compose_v2:
+    project_src: "{{ infisical_path }}"
+    files: infisical-compose.yml
+    state: present
