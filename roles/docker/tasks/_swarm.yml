@@ -108,3 +108,15 @@
         attachable: true
         ipam_config:
           - subnet: "{{ docker_network_subnet }}"
+
+- name: Apply swarm node labels
+  community.docker.docker_node:
+    hostname: "{{ docker_swarm_hostname }}"
+    labels: "{{ docker_swarm_node_labels }}"
+    labels_state: merge
+  delegate_to: "{{ docker_swarm_primary_manager }}"
+  when:
+    - inventory_hostname in groups['swarm']
+    - docker_swarm_node_labels is defined
+    - docker_swarm_node_labels | length > 0
+  tags: docker_swarm_labels
