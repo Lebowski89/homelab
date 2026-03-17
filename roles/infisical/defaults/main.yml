@@ -43,7 +43,7 @@ infisical_postgres_pass: !vault |
 infisical_redis_name: infisical-redis
 infisical_redis_image: redis:8.6-alpine
 infisical_redis_port: 6390
-infiaical_redis_path: "{{ infisical_path }}/redis"
+infisical_redis_path: "{{ infisical_path }}/redis"
 infisical_redis_key: !vault |
           $ANSIBLE_VAULT;1.1;AES256
           33623361653331623538306134353933313533333734383464373763363765326362373233623262

@@ -28,7 +28,7 @@
 
 - name: Create directories
   ansible.builtin.file:
-    path: '{{ _infisical_dirs }}'
+    path: "{{ _infisical_dirs }}"
     state: directory
     owner: "{{ puid }}"
     group: "{{ pgid }}"
@@ -37,7 +37,8 @@
     - "{{ infisical_path }}"
     - "{{ infisical_postgres_path }}"
     - "{{ infisical_redis_path }}"
-  loop_var: _infisical_dirs
+  loop_control:
+    loop_var: _infisical_dirs
 
 ################################
 # CONFIG
@@ -64,7 +65,8 @@
     group: root
     mode: "0600"
   loop: "{{ infisical_secret_files | dict2items }}"
-  loop_var: _infisical_secrets_files
+  loop_control:
+    loop_var: _infisical_secrets_files
   no_log: true
 
 ################################
