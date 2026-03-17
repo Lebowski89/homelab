@@ -41,7 +41,7 @@ infisical_postgres_pass: !vault |
           6631
 
 infisical_redis_name: infisical-redis
-infisical_redis_image: redis:alpine
+infisical_redis_image: redis:8.6-alpine
 infisical_redis_port: 6390
 infiaical_redis_path: "{{ infisical_path }}/redis"
 infisical_redis_key: !vault |
@@ -84,3 +84,8 @@ infisical_smtp_sender: !vault |
           6566306235336331360a653036343932373963363561323163383534383463303038636361343266
           36356565353632366439336662333238393936636230633364653865336163656161666338663363
           6234303034316665663430353664346163376362613762326331
+
+infisical_secret_files:
+  postgres_user.txt: "{{ infisical_postgres_user }}"
+  postgres_pass.txt: "{{ infisical_postgres_pass }}"
+  redis_key.txt: "{{ infisical_redis_key }}"

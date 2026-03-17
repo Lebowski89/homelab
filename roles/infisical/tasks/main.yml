@@ -34,9 +34,9 @@
     group: "{{ pgid }}"
     mode: "0755"
   loop:
-    - /opt/infisical
-    - /opt/infisical/postgres
-    - /opt/infisical/redis
+    - "{{ infisical_path }}"
+    - "{{ infisical_postgres_path }}"
+    - "{{ infisical_redis_path }}"
   loop_var: _infisical_dirs
 
 ################################
@@ -46,7 +46,7 @@
 - name: Template env file
   ansible.builtin.template:
     src: '{{ role_path }}/templates/infisical.env.j2'
-    dest: '{{ infisical_location }}/.env'
+    dest: '{{ infisical_path }}/.env'
     force: false
     owner: "{{ puid }}"
     group: "{{ pgid }}"
@@ -56,19 +56,16 @@
 # SECRETS
 ################################
 
-- name: Prepare docker secrets
-  community.docker.docker_secret:
-    name: "{{ _infisical_docker_secrets.name }}"
-    data: "{{ _infisical_docker_secrets.secret }}"
-    state: present
-  loop:
-    - name: infisical_postgres_user_secret
-      secret: "{{ infisical_postgres_user }}"
-    - name: infisical_postgres_pass_secret
-      secret: "{{ infisical_postgres_pass }}"
-    - name: infisical_redis_key_secret
-      secret: "{{ infisical_redis_key }}"
-  loop_var: _infisical_docker_secrets
+- name: Create Infisical secret files
+  ansible.builtin.copy:
+    dest: "{{ infisical_path }}/{{ _infisical_secrets_files.key }}"
+    content: "{{ _infisical_secrets_files.value }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ infisical_secret_files | dict2items }}"
+  loop_var: _infisical_secrets_files
+  no_log: true
 
 ################################
 # DEPLOY
@@ -77,7 +74,7 @@
 - name: Import Infisical compose file
   ansible.builtin.template:
     src: '{{ role_path }}/templates/infisical-compose.yml.j2'
-    dest: /opt/infisical/infisical-compose.yml
+    dest: "{{ infisical_path }}/infisical-compose.yml"
     force: true
     owner: "{{ puid }}"
     group: "{{ pgid }}"
@@ -85,6 +82,6 @@
 
 - name: Infisical compose stack up
   community.docker.docker_compose_v2:
-    project_src: /opt/infisical
+    project_src: "{{ infisical_path }}"
     files: infisical-compose.yml
     state: present
