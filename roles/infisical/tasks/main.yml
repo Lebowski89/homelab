@@ -8,7 +8,7 @@
   ansible.builtin.stat:
     path: "{{ infisical_path }}/infisical-compose.yml"
   register: infisical_existing_compose_yaml
-  tags: 
+  tags:
     - infisical_recreate
     - infisical_remove
 
