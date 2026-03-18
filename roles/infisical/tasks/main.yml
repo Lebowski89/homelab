@@ -8,6 +8,9 @@
   ansible.builtin.stat:
     path: "{{ infisical_path }}/infisical-compose.yml"
   register: infisical_existing_compose_yaml
+  tags: 
+    - infisical_recreate
+    - infisical_remove
 
 - name: Infisical compose down
   when: infisical_existing_compose_yaml.stat.exists
@@ -16,11 +19,17 @@
     project_name: infisical
     files: infisical-compose.yml
     state: absent
+  tags:
+    - infisical_recreate
+    - infisical_remove
 
 - name: Remove compose file
   ansible.builtin.file:
     path: "{{ infisical_path }}/infisical-compose.yml"
     state: absent
+  tags:
+    - infisical_recreate
+    - infisical_remove
 
 ################################
 # DIRECTORIES
@@ -28,17 +37,30 @@
 
 - name: Create directories
   ansible.builtin.file:
-    path: "{{ _infisical_dirs }}"
+    path: "{{ _infisical_dir.path }}"
     state: directory
-    owner: "{{ puid }}"
-    group: "{{ pgid }}"
-    mode: "0755"
+    owner: "{{ _infisical_dir.owner }}"
+    group: "{{ _infisical_dir.group }}"
+    mode: "{{ _infisical_dir.mode }}"
   loop:
-    - "{{ infisical_path }}"
-    - "{{ infisical_postgres_path }}"
-    - "{{ infisical_redis_path }}"
+    - path: "{{ infisical_path }}"
+      owner: "{{ puid }}"
+      group: "{{ pgid }}"
+      mode: "0755"
+    - path: "{{ infisical_postgres_path }}"
+      owner: "999"
+      group: "999"
+      mode: "0700"
+    - path: "{{ infisical_redis_path }}"
+      owner: "{{ puid }}"
+      group: "{{ pgid }}"
+      mode: "0755"
   loop_control:
-    loop_var: _infisical_dirs
+    loop_var: _infisical_dir
+  tags:
+    - infisical_bootstrap
+    - infisical_deploy
+    - infisical_recreate
 
 ################################
 # CONFIG
@@ -48,10 +70,15 @@
   ansible.builtin.template:
     src: '{{ role_path }}/templates/infisical.env.j2'
     dest: '{{ infisical_path }}/.env'
-    force: false
+    force: true
     owner: "{{ puid }}"
     group: "{{ pgid }}"
     mode: "0664"
+  no_log: true
+  tags:
+    - infisical_bootstrap
+    - infisical_deploy
+    - infisical_recreate
 
 ################################
 # SECRETS
@@ -68,6 +95,10 @@
   loop_control:
     loop_var: _infisical_secrets_files
   no_log: true
+  tags:
+    - infisical_bootstrap
+    - infisical_deploy
+    - infisical_recreate
 
 ################################
 # DEPLOY
@@ -81,9 +112,15 @@
     owner: "{{ puid }}"
     group: "{{ pgid }}"
     mode: "0664"
+  tags:
+    - infisical_deploy
+    - infisical_recreate
 
 - name: Infisical compose stack up
   community.docker.docker_compose_v2:
     project_src: "{{ infisical_path }}"
     files: infisical-compose.yml
     state: present
+  tags:
+    - infisical_deploy
+    - infisical_recreate
