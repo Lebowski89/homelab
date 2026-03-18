@@ -1,5 +1,13 @@
 ---
 
+- name: Ensure Ansible root exists
+  ansible.builtin.file:
+    path: "{{ ubuntu_ansible_root }}"
+    state: directory
+    owner: "{{ puid }}"
+    group: "{{ pgid }}"
+    mode: "0755"
+
 - name: Create Python virtualenv
   ansible.builtin.command:
     argv:
