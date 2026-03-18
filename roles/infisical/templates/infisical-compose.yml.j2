@@ -13,7 +13,6 @@ services:
       TZ: "{{ timezone }}"
       POSTGRES_USER_FILE: /run/secrets/postgres_user_secret
       POSTGRES_PASSWORD_FILE: /run/secrets/postgres_pass_secret
-    user: "{{ puid }}:{{ pgid }}"
     secrets:
       - source: infisical_postgres_user_secret
         target: postgres_user_secret
@@ -22,7 +21,7 @@ services:
     ports:
       - "{{ infisical_postgres_port }}:5432"
     volumes:
-      - {{ infisical_postgres_path }}:/var/lib/postgresql/data
+      - {{ infisical_postgres_path }}:/var/lib/postgresql
     restart: unless-stopped
 
   {{ infisical_name }}:
