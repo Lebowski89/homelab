@@ -3,7 +3,7 @@
 cross_seed:
   name: cross-seed
   stack: cross-seed
-  image: ghcr.io/cross-seed/cross-seed:master@sha256:b570bfa5e62804a74428326c3751e8384f1352168dafcd1ce396c02b53d0f65e
+  image: ghcr.io/cross-seed/cross-seed:master@sha256:f4365cc50c1c292951840070cc543bdb7062244ef33f9a15d62f55a90ddd3e22
   named_networks:
     overlay:
       external: true
