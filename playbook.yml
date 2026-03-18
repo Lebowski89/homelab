@@ -15,37 +15,19 @@
       when: inventory_hostname == "localhost"
       ansible.builtin.set_fact:
         timezone: "{{ ansible_facts.timezone | default('Australia/Melbourne') }}"
-      tags: [deploy, update, remove, recreate, bootstrap]
+      tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
 
     - name: Timezone output
       when: inventory_hostname == "localhost"
       ansible.builtin.debug:
         msg: "{{ timezone }}"
-      tags: [deploy, update, remove, recreate, bootstrap]
+      tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
 
     - name: Share localhost timezone to all hosts
       when: inventory_hostname != "localhost"
       ansible.builtin.set_fact:
         timezone: "{{ hostvars['localhost'].timezone }}"
-      tags: [deploy, update, remove, recreate, bootstrap]
-
-    - name: Ensure skynet script is executable
-      when: inventory_hostname == "localhost"
-      ansible.builtin.file:
-        path: "{{ playbook_dir }}/skynet"
-        mode: "0755"
-        state: file
-      tags: always
-
-    - name: Create skynet symlink in /usr/local/bin
-      when: inventory_hostname == "localhost"
-      become: true
-      ansible.builtin.file:
-        src: "{{ playbook_dir }}/skynet"
-        dest: /usr/local/bin/skynet
-        state: link
-        force: true
-      tags: always
+      tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
 
   tasks:
     - name: Configure Ubuntu settings and packages
@@ -84,10 +66,11 @@
       when: inventory_hostname == "mgt"
       ansible.builtin.include_role:
         name: infisical
-        apply:
-          tags: infisical
       tags:
-        - infisical
+        - infisical_bootstrap
+        - infisical_deploy
+        - infisical_recreate
+        - infisical_remove
 
     - name: Load all service definitions from group_vars/all/services/*.yml
       ansible.builtin.include_vars:

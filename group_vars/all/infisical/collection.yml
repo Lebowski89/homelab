@@ -6,7 +6,7 @@ infisical_lookup_default_params:
   universal_auth_client_secret: "{{ infisical_auth_client_secret }}"
   project_id: "{{ infisical_project_id }}"
   env_slug: "prod"
-  url: "http://192.168.80.45:8066"
+  url: "http://192.168.80.48:8066"
 
 infisical_auth_client_id: !vault |
           $ANSIBLE_VAULT;1.1;AES256
