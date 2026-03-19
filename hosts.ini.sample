@@ -1,0 +1,27 @@
+
+[skynet]
+mgt ansible_connection=local ansible_user= ansible_python_interpreter=
+unraid ansible_host= ansible_user=
+plex ansible_host= ansible_user=
+pg01 ansible_host= ansible_user=
+pg02 ansible_host= ansible_user=
+pg03 ansible_host= ansible_user=
+
+[ansible_managers]
+mgt
+
+[swarm_managers]
+mgt
+
+[swarm_workers]
+unraid
+plex
+
+[swarm:children]
+swarm_managers
+swarm_workers
+
+[pgha]
+pg01
+pg02
+pg03
