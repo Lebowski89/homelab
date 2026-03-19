@@ -3,7 +3,7 @@
 obsidian:
   name: obsidian
   stack: obsidian
-  image: lscr.io/linuxserver/obsidian:v1.12.4-ls115
+  image: lscr.io/linuxserver/obsidian:v1.12.4-ls116
   named_networks:
     overlay:
       external: true
