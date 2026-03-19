@@ -8,8 +8,8 @@
     docker_services_vw_password_file: "/opt/vaultwarden/vaultwarden_password.txt"
     docker_services_vw_secret_name: "vaultwarden_admin_secret"
     # Where to run docker_secret (must be a swarm manager). Usually the node running ansible.
-    docker_services_vw_swarm_mgr: "{{ (docker_services_svc.swarm_manager_host | default('localhost', true)) | string | trim }}"
-  when: inventory_hostname == "localhost"
+    docker_services_vw_swarm_mgr: "{{ (docker_services_svc.swarm_manager_host | default('mgt', true)) | string | trim }}"
+  when: inventory_hostname == "mgt"
   run_once: true
 
 ################################
@@ -22,7 +22,7 @@
     path: "{{ docker_services_vw_dir }}"
     state: directory
     mode: "0700"
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   delegate_to: "{{ docker_services_vw_fs_host }}"
   run_once: true
 
@@ -31,7 +31,7 @@
   ansible.builtin.stat:
     path: "{{ docker_services_vw_token_file }}"
   register: docker_services_vw_token_stat
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   delegate_to: "{{ docker_services_vw_fs_host }}"
   run_once: true
 
@@ -41,14 +41,14 @@
     src: "{{ docker_services_vw_token_file }}"
   register: docker_services_vw_token_raw
   when:
-    - inventory_hostname == "localhost"
+    - inventory_hostname == "mgt"
     - docker_services_vw_token_stat.stat.exists
   delegate_to: "{{ docker_services_vw_fs_host }}"
   run_once: true
 
 - name: Vaultwarden prep | Create new admin token (FS host)
   when:
-    - inventory_hostname == "localhost"
+    - inventory_hostname == "mgt"
     - not docker_services_vw_token_stat.stat.exists
   delegate_to: "{{ docker_services_vw_fs_host }}"
   run_once: true
@@ -90,7 +90,7 @@
         if (docker_services_vw_token_stat.stat.exists | default(false))
         else (docker_services_vw_token_new.stdout | trim)
       }}
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   run_once: true
 
 ################################
@@ -102,7 +102,7 @@
     name: "{{ docker_services_vw_secret_name }}"
     data: "{{ docker_services_vaultwarden_token }}"
     state: present
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   delegate_to: "{{ docker_services_vw_swarm_mgr }}"
   run_once: true
 
@@ -114,5 +114,5 @@
     fail_msg: >-
       docker_services_vaultwarden_token does not look like an argon2 PHC string.
       Check argon2 availability on {{ docker_services_vw_fs_host }}.
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   run_once: true

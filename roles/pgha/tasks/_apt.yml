@@ -1,0 +1,49 @@
+---
+
+- name: Ensure PostgreSQL common prerequisites are installed
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+    update_cache: true
+
+- name: Ensure PGDG keyring directory exists
+  ansible.builtin.file:
+    path: /usr/share/postgresql-common/pgdg
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download PGDG repository signing key
+  ansible.builtin.get_url:
+    url: https://www.postgresql.org/media/keys/ACCC4CF8.asc
+    dest: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Add PGDG repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc]
+      https://apt.postgresql.org/pub/repos/apt
+      {{ ansible_distribution_release }}-pgdg main
+    filename: pgdg
+    state: present
+    update_cache: true
+
+- name: Install PostgreSQL 18 and Patroni packages
+  ansible.builtin.apt:
+    name:
+      - postgresql-18
+      - postgresql-client-18
+      - postgresql-contrib-18
+      - patroni
+      - patroni-etcd
+      - python3-psycopg2
+      - etcd-client
+    state: present

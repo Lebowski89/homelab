@@ -3,7 +3,7 @@
 # helpers/prep/resolve_env.yml
 #
 # Resolve "__INFISICAL__:varname" placeholders in docker_services_svc.environment
-# after Infisical fetch has populated vars on localhost.
+# after Infisical fetch has populated vars on mgt.
 #
 # This is needed because docker_services_svc is set_fact'ed BEFORE Infisical fetch, so any
 # "{{ postgres_user | default('__INFISICAL__:postgres_user') }}" gets rendered
@@ -50,8 +50,8 @@
           vars[_varname]
           if (_is_placeholder and (_varname in vars) and ((vars[_varname] | string | length) > 0))
           else (
-            hostvars['localhost'][_varname]
-            if (_is_placeholder and (_varname in hostvars['localhost']) and ((hostvars['localhost'][_varname] | string | length) > 0))
+            hostvars['mgt'][_varname]
+            if (_is_placeholder and (_varname in hostvars['mgt']) and ((hostvars['mgt'][_varname] | string | length) > 0))
             else _raw_val
           )
         )

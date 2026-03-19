@@ -1,0 +1,55 @@
+---
+
+scope: {{ patroni_scope }}
+namespace: {{ patroni_namespace }}
+name: {{ patroni_node_name }}
+
+restapi:
+  listen: 0.0.0.0:{{ patroni_restapi_port }}
+  connect_address: {{ local_ip }}:{{ patroni_restapi_port }}
+
+etcd3:
+  hosts:
+{% for host in patroni_etcd_hosts %}
+    - {{ host }}
+{% endfor %}
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+{% for key, value in patroni_postgresql_parameters.items() %}
+        {{ key }}: {{ value }}
+{% endfor %}
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+
+postgresql:
+  listen: 0.0.0.0:{{ patroni_postgres_port }}
+  connect_address: {{ local_ip }}:{{ patroni_postgres_port }}
+  data_dir: {{ patroni_data_dir }}
+  bin_dir: {{ patroni_bin_dir }}
+  authentication:
+    superuser:
+      username: {{ patroni_superuser_name }}
+      password: {{ patroni_superuser_password }}
+    replication:
+      username: {{ patroni_replication_name }}
+      password: {{ patroni_replication_password }}
+  parameters:
+{% for key, value in patroni_postgresql_parameters.items() %}
+    {{ key }}: {{ value }}
+{% endfor %}
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+  nosync: false

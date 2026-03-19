@@ -1,0 +1,59 @@
+---
+
+- name: Query Patroni cluster state from first PGHA node
+  ansible.builtin.uri:
+    url: "http://{{ hostvars[groups['pgha'][0]].local_ip }}:{{ patroni_restapi_port }}/cluster"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: patroni_cluster_state
+  run_once: true
+  delegate_to: mgt
+
+- name: Determine Patroni leader member
+  ansible.builtin.set_fact:
+    patroni_leader_member: >-
+      {{
+        (patroni_cluster_state.json.members
+         | selectattr('role', 'equalto', 'leader')
+         | list
+         | first)
+      }}
+  run_once: true
+  delegate_to: mgt
+
+- name: Assert Patroni leader was found
+  ansible.builtin.assert:
+    that:
+      - patroni_leader_member is defined
+      - patroni_leader_member.name is defined
+      - patroni_leader_member.host is defined
+    fail_msg: "Could not determine Patroni leader from REST API."
+  run_once: true
+  delegate_to: mgt
+
+- name: Build Patroni admin role flags
+  ansible.builtin.set_fact:
+    patroni_admin_role_flags: >-
+      {{
+        []
+        + (['LOGIN'] if patroni_admin_role_login else [])
+        + (['CREATEDB'] if patroni_admin_role_createdb else [])
+        + (['CREATEROLE'] if patroni_admin_role_createrole else [])
+      }}
+  run_once: true
+  delegate_to: mgt
+
+- name: Ensure dedicated Patroni admin role exists on leader
+  community.postgresql.postgresql_user:
+    login_host: "{{ patroni_leader_member.host }}"
+    login_port: "{{ patroni_postgres_port }}"
+    login_user: "{{ patroni_superuser_name }}"
+    login_password: "{{ patroni_superuser_password }}"
+    name: "{{ patroni_admin_role_name }}"
+    password: "{{ patroni_admin_role_password }}"
+    role_attr_flags: "{{ patroni_admin_role_flags | join(',') }}"
+    state: present
+  run_once: true
+  delegate_to: mgt
+  no_log: true
