@@ -1,8 +1,6 @@
 ---
 
-patroni_manage: true
-
-patroni_superuser_password: ""
-patroni_replication_password: ""
-
-patroni_admin_role_password: ""
+pgha_patroni_manage: true
+pgha_patroni_superuser_pass: ""
+pgha_patroni_replication_pass: ""
+pgha_patroni_admin_role_pass: ""
