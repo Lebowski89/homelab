@@ -1,0 +1,53 @@
+---
+
+etcd_cluster_token: pg-ha-1
+etcd_data_dir: /var/lib/etcd
+etcd_config_path: /etc/etcd/etcd.conf.yml
+
+etcd_initial_cluster: >-
+  pg01=http://192.168.80.92:2380,
+  pg02=http://192.168.80.93:2380,
+  pg03=http://192.168.80.94:2380
+
+etcd_client_port: 2379
+etcd_peer_port: 2380
+
+patroni_scope: pg-cluster
+patroni_namespace: /service
+
+patroni_restapi_port: 8008
+patroni_postgres_port: 5433
+
+patroni_etcd_hosts:
+  - 192.168.80.92:2379
+  - 192.168.80.93:2379
+  - 192.168.80.94:2379
+
+patroni_data_dir: /var/lib/postgresql/18/main
+patroni_bin_dir: /usr/lib/postgresql/18/bin
+
+patroni_superuser_name: postgres
+patroni_replication_name: replicator
+
+patroni_postgresql_parameters:
+  max_connections: 100
+  shared_buffers: 1GB
+  wal_level: replica
+  hot_standby: "on"
+  max_wal_senders: 10
+  max_replication_slots: 10
+  wal_keep_size: 1GB
+  max_worker_processes: 8
+  max_locks_per_transaction: 64
+  max_prepared_transactions: 0
+  track_commit_timestamp: "off"
+  password_encryption: scram-sha-256
+
+patroni_superuser_password: "{{ vault_patroni_superuser_password }}"
+
+patroni_replication_password: "{{ vault_patroni_replication_password }}"
+
+patroni_admin_role_name: ansible_pg_admin
+patroni_admin_role_login: true
+patroni_admin_role_createdb: true
+patroni_admin_role_createrole: false
