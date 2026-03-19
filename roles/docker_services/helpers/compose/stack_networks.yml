@@ -43,11 +43,11 @@
       {%- endfor -%}
       {{ out }}
 
-# IMPORTANT: store stack networks centrally on localhost so deploy/render can always access them
-- name: Merge into docker_services_compose_stacks[docker_services_stack_name].networks (centralized on localhost)
+# IMPORTANT: store stack networks centrally on mgt so deploy/render can always access them
+- name: Merge into docker_services_compose_stacks[docker_services_stack_name].networks (centralized on mgt)
   ansible.builtin.set_fact:
     docker_services_compose_stacks: >-
-      {%- set st = (hostvars['localhost'].docker_services_compose_stacks | default({})) -%}
+      {%- set st = (hostvars['mgt'].docker_services_compose_stacks | default({})) -%}
       {%- set existing_stack = st.get(docker_services_stack_name, {}) -%}
       {%- set existing_nets = existing_stack.get('networks', {}) | default({}, true) -%}
       {%- set merged_stack = existing_stack | combine(
@@ -55,6 +55,6 @@
         recursive=true
       ) -%}
       {{ st | combine({ docker_services_stack_name: merged_stack }, recursive=true) }}
-  delegate_to: localhost
+  delegate_to: mgt
   delegate_facts: true
   run_once: true

@@ -24,7 +24,7 @@
       o: addr=192.168.80.20,rw,nfsvers=4.2
       device: ":/mnt/user/data/media"
   run_once: true
-  delegate_to: localhost
+  delegate_to: mgt
 
 ################################
 # PLEX TOKEN
@@ -34,7 +34,7 @@
   ansible.builtin.include_tasks:
     file: token.yml
     apply:
-      delegate_to: localhost
+      delegate_to: mgt
       run_once: true
   run_once: true
 

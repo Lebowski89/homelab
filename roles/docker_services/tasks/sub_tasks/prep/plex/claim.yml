@@ -1,9 +1,9 @@
 ---
 
-- name: Claim | Load token + client identifier from localhost facts
+- name: Claim | Load token + client identifier from mgt facts
   ansible.builtin.set_fact:
-    docker_services_plex_auth_token: "{{ hostvars['localhost'].docker_services_plex_auth_token | default('') }}"
-    docker_services_plex_client_identifier: "{{ hostvars['localhost'].docker_services_plex_client_identifier | default('') }}"
+    docker_services_plex_auth_token: "{{ hostvars['mgt'].docker_services_plex_auth_token | default('') }}"
+    docker_services_plex_client_identifier: "{{ hostvars['mgt'].docker_services_plex_client_identifier | default('') }}"
 
 - name: Claim | Assert required vars exist
   ansible.builtin.assert:
@@ -11,8 +11,8 @@
       - docker_services_plex_auth_token | string | trim | length > 0
       - docker_services_plex_client_identifier | string | trim | length > 0
     fail_msg: >-
-      docker_services_plex_auth_token and/or docker_services_plex_client_identifier are missing on localhost.
-      Ensure token.yml ran first and stored these as facts on localhost.
+      docker_services_plex_auth_token and/or docker_services_plex_client_identifier are missing on mgt.
+      Ensure token.yml ran first and stored these as facts on mgt.
 
 - name: Claim | Check if Plex server is already claimed (Preferences.xml)
   ansible.builtin.stat:
@@ -56,11 +56,11 @@
     status_code: 200
   register: docker_services_plex_claim
 
-- name: Claim | Persist claim code to localhost (so it is available everywhere)
+- name: Claim | Persist claim code to mgt (so it is available everywhere)
   when: not docker_services_plex_is_claimed
   ansible.builtin.set_fact:
     docker_services_plex_claim_code: "{{ docker_services_plex_claim.json.token | default('') | string | trim }}"
-  delegate_to: localhost
+  delegate_to: mgt
   delegate_facts: true
   run_once: true
 
@@ -68,8 +68,8 @@
   when: not docker_services_plex_is_claimed
   ansible.builtin.assert:
     that:
-      - hostvars['localhost'].docker_services_plex_claim_code is defined
-      - hostvars['localhost'].docker_services_plex_claim_code | string | trim | length > 0
+      - hostvars['mgt'].docker_services_plex_claim_code is defined
+      - hostvars['mgt'].docker_services_plex_claim_code | string | trim | length > 0
     fail_msg: "Failed to retrieve Plex claim code from plex.tv"
 
 - name: Claim | Debug claim status
@@ -77,5 +77,5 @@
     msg: >-
       Plex claim status: {{
         'already claimed (no action)' if docker_services_plex_is_claimed else
-        'claim code retrieved: ' ~ (hostvars['localhost'].docker_services_plex_claim_code | default(''))
+        'claim code retrieved: ' ~ (hostvars['mgt'].docker_services_plex_claim_code | default(''))
       }}
