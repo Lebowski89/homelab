@@ -5,6 +5,7 @@ PLAYBOOK="${PLAYBOOK:-{{ ubuntu_ansible_repo_path }}/playbook.yml}"
 INVENTORY="${INVENTORY:-{{ ubuntu_ansible_repo_path }}/hosts.ini}"
 ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-{{ ubuntu_ansible_repo_path }}/ansible.cfg}"
 BECOME_PASS_FILE="${BECOME_PASS_FILE:-{{ ubuntu_skynet_become_pass_file }}}"
+VAULT_PASS_FILE="${VAULT_PASS_FILE:-{{ ubuntu_skynet_vault_pass_file }}}"
 DOCTOR_PING_TARGET="${SKYNET_DOCTOR_PING_TARGET:-{{ ubuntu_skynet_doctor_ping_target }}}"
 DOCKER_SERVICES_VARS="${DOCKER_SERVICES_VARS:-{{ ubuntu_skynet_docker_services_vars }}}"
 ANSIBLE_VENV_PATH="${ANSIBLE_VENV_PATH:-{{ ubuntu_ansible_venv_path }}}"
@@ -39,6 +40,20 @@ Usage:
 Aliases:
   skynet install  -> deploy
   skynet reset    -> remove
+
+Optional env vars:
+  PLAYBOOK                    Override playbook path
+  INVENTORY                   Override inventory path
+  ANSIBLE_CONFIG              Override ansible.cfg path
+  BECOME_PASS_FILE            Override become password file path
+  VAULT_PASS_FILE             Override Ansible Vault password file path
+  DOCKER_SERVICES_VARS        Override docker services vars path
+  ANSIBLE_VENV_PATH           Override Ansible virtualenv path
+  SKYNET_DOCTOR_PING_TARGET   Inventory target for 'skynet doctor --ping'
+  ANSIBLE_PLAYBOOK_BIN        Override ansible-playbook binary
+  ANSIBLE_INVENTORY_BIN       Override ansible-inventory binary
+  ANSIBLE_GALAXY_BIN          Override ansible-galaxy binary
+  ANSIBLE_BIN                 Override ansible binary (for ping)
 EOF
   exit 1
 }
@@ -59,6 +74,13 @@ run_playbook() {
   else
     echo "[WARN] Become password file not found: $BECOME_PASS_FILE"
     echo "[WARN] If sudo requires a password, set BECOME_PASS_FILE or create .ansible_become_pass"
+  fi
+
+  if [[ -f "$VAULT_PASS_FILE" ]]; then
+    args+=(--vault-password-file "$VAULT_PASS_FILE")
+  else
+    echo "[WARN] Vault password file not found: $VAULT_PASS_FILE"
+    echo "[WARN] If vaulted vars are used, set VAULT_PASS_FILE or create .ansible_vault_pass"
   fi
 
   ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_PLAYBOOK_BIN" "${args[@]}" "$@"
@@ -176,6 +198,12 @@ doctor() {
     echo "[OK] docker services vars found: $DOCKER_SERVICES_VARS"
   else
     echo "[WARN] docker services vars not found: $DOCKER_SERVICES_VARS"
+  fi
+
+  if [[ -f "$VAULT_PASS_FILE" ]]; then
+    echo "[OK] vault password file found: $VAULT_PASS_FILE"
+  else
+    echo "[WARN] vault password file not found: $VAULT_PASS_FILE"
   fi
 
   if [[ -x "$ANSIBLE_GALAXY_BIN" ]]; then

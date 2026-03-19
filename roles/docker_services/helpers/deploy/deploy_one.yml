@@ -16,9 +16,9 @@
   ansible.builtin.set_fact:
     docker_services_deploy_host_effective: >-
       {{
-        'localhost'
+        'mgt'
         if (deploy_stack_type | string | trim) == 'swarm'
-        else (docker_services_deploy_host | default('localhost', true) | string | trim)
+        else (docker_services_deploy_host | default('mgt', true) | string | trim)
       }}
 
 - name: DeployOne | Ensure /opt/stacks exists

@@ -1,0 +1,45 @@
+---
+
+- name: Install PGHA packages
+  ansible.builtin.include_tasks:
+    file: _apt.yml
+    apply:
+      tags:
+        - pgha
+        - pgha_apt
+  tags:
+    - pgha
+    - pgha_apt
+
+- name: Configure etcd
+  ansible.builtin.include_tasks:
+    file: _etcd.yml
+    apply:
+      tags:
+        - pgha
+        - pgha_etcd
+  tags:
+    - pgha
+    - pgha_etcd
+
+- name: Configure Patroni
+  ansible.builtin.include_tasks:
+    file: _patroni.yml
+    apply:
+      tags:
+        - pgha
+        - pgha_patroni
+  tags:
+    - pgha
+    - pgha_patroni
+
+- name: Ensure dedicated PostgreSQL admin role exists
+  ansible.builtin.include_tasks:
+    file: _pg_admin.yml
+    apply:
+      tags:
+        - pgha
+        - pgha_admin
+  tags:
+    - pgha
+    - pgha_admin

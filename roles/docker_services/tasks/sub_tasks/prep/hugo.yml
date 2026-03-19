@@ -2,11 +2,11 @@
 
 - name: Hugo prep | Set derived vars (run once)
   ansible.builtin.set_fact:
-    docker_services_hugo_host: "{{ (docker_services_svc.deploy.host | default('localhost', true)) | string | trim }}"
+    docker_services_hugo_host: "{{ (docker_services_svc.deploy.host | default('mgt', true)) | string | trim }}"
     docker_services_hugo_root_path: /home/mgt
     docker_services_hugo_site_path: /home/mgt/blog
     docker_services_hugo_theme_path: /home/mgt/blog/themes/terminal
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   run_once: true
 
 ################################
@@ -17,13 +17,13 @@
   ansible.builtin.stat:
     path: "{{ docker_services_hugo_site_path }}"
   register: docker_services_hugo_site_stat
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   delegate_to: "{{ docker_services_hugo_host }}"
   run_once: true
 
 - name: Hugo prep | Generate new Hugo site (temp container)
   when:
-    - inventory_hostname == "localhost"
+    - inventory_hostname == "mgt"
     - not docker_services_hugo_site_stat.stat.exists
   run_once: true
   delegate_to: "{{ docker_services_hugo_host }}"
@@ -49,13 +49,13 @@
   ansible.builtin.stat:
     path: "{{ docker_services_hugo_site_path }}/.git"
   register: docker_services_hugo_git_stat
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   delegate_to: "{{ docker_services_hugo_host }}"
   run_once: true
 
 - name: Hugo prep | Init git repo (if missing)
   when:
-    - inventory_hostname == "localhost"
+    - inventory_hostname == "mgt"
     - not docker_services_hugo_git_stat.stat.exists
   ansible.builtin.command:
     cmd: "git init"
@@ -68,7 +68,7 @@
 
 # Repo-local identity (avoid --global)
 - name: Hugo prep | Set repo git user.name
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   community.general.git_config:
     scope: local
     repo: "{{ docker_services_hugo_site_path }}"
@@ -78,7 +78,7 @@
   run_once: true
 
 - name: Hugo prep | Set repo git user.email
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   community.general.git_config:
     scope: local
     repo: "{{ docker_services_hugo_site_path }}"
@@ -91,13 +91,13 @@
   ansible.builtin.stat:
     path: "{{ docker_services_hugo_theme_path }}"
   register: docker_services_hugo_theme_stat
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   delegate_to: "{{ docker_services_hugo_host }}"
   run_once: true
 
 - name: Hugo prep | Add Terminal theme submodule (if missing)
   when:
-    - inventory_hostname == "localhost"
+    - inventory_hostname == "mgt"
     - not docker_services_hugo_theme_stat.stat.exists
   ansible.builtin.command:
     cmd: "git submodule add -f https://github.com/panr/hugo-theme-terminal.git themes/terminal"
@@ -111,7 +111,7 @@
 
 # Set origin remote idempotently (no need to 'git remote get-url')
 - name: Hugo prep | Ensure origin remote is set
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   community.general.git_config:
     scope: local
     repo: "{{ docker_services_hugo_site_path }}"
@@ -121,7 +121,7 @@
   run_once: true
 
 - name: Hugo prep | Check if repo has any commits
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   ansible.builtin.command:
     cmd: "git rev-parse --verify HEAD"
     chdir: "{{ docker_services_hugo_site_path }}"
@@ -134,7 +134,7 @@
 
 - name: Hugo prep | Initial commit + push (only if no commits yet)
   when:
-    - inventory_hostname == "localhost"
+    - inventory_hostname == "mgt"
     - docker_services_hugo_has_commit.rc != 0
   delegate_to: "{{ docker_services_hugo_host }}"
   run_once: true

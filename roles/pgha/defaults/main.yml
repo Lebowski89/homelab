@@ -1,0 +1,8 @@
+---
+
+patroni_manage: true
+
+patroni_superuser_password: ""
+patroni_replication_password: ""
+
+patroni_admin_role_password: ""

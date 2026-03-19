@@ -6,27 +6,27 @@
 
   pre_tasks:
     - name: Gather packages
-      when: inventory_hostname == "localhost"
+      when: inventory_hostname == "mgt"
       ansible.builtin.package_facts:
         manager: auto
       tags: always
 
-    - name: Set timezone variable
-      when: inventory_hostname == "localhost"
+    - name: Set timezone variable on manager
+      when: inventory_hostname == "mgt"
       ansible.builtin.set_fact:
         timezone: "{{ ansible_facts.timezone | default('Australia/Melbourne') }}"
       tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
 
     - name: Timezone output
-      when: inventory_hostname == "localhost"
+      when: inventory_hostname == "mgt"
       ansible.builtin.debug:
         msg: "{{ timezone }}"
       tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
 
-    - name: Share localhost timezone to all hosts
-      when: inventory_hostname != "localhost"
+    - name: Share timezone to all hosts
+      when: inventory_hostname != "mgt"
       ansible.builtin.set_fact:
-        timezone: "{{ hostvars['localhost'].timezone }}"
+        timezone: "{{ hostvars['mgt'].timezone }}"
       tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
 
   tasks:
@@ -72,6 +72,15 @@
         - infisical_recreate
         - infisical_remove
 
+    - name: Configure Patroni PostgreSQL cluster
+      ansible.builtin.include_role:
+        name: pgha
+      when: inventory_hostname in groups['pgha']
+      tags:
+        - pgha_apt
+        - pgha_patroni
+        - pgha_etcd
+
     - name: Load all service definitions from group_vars/all/services/*.yml
       ansible.builtin.include_vars:
         dir: "{{ playbook_dir }}/group_vars/all/services"
@@ -116,7 +125,7 @@
 
     - name: Deploy all stacks
       when:
-        - inventory_hostname == "localhost"
+        - inventory_hostname == "mgt"
         - not (ci_mode | default(false) | bool)
       ansible.builtin.include_tasks:
         file: "{{ playbook_dir }}/roles/docker_services/helpers/deploy/deploy_all.yml"

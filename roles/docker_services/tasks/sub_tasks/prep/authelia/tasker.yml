@@ -1,7 +1,7 @@
 ---
 
 - name: Authelia prep | Generate argon2 + secrets (once)
-  when: inventory_hostname == "localhost"
+  when: inventory_hostname == "mgt"
   run_once: true
   block:
     - name: Authelia prep | Generate argon2 digest (users_database)
@@ -9,7 +9,7 @@
       vars:
         authelia_job: "UserDB Password"
         authelia_fact_name: "authelia_argon2_password"
-        authelia_key: "{{ hostvars['localhost'].authelia_argon2_password | default('') }}"
+        authelia_key: "{{ hostvars['mgt'].authelia_argon2_password | default('') }}"
         authelia_key_secret: ""
         authelia_key_command: "authelia crypto hash generate argon2 --password {{ authelia_pass | quote }}"
         authelia_key_echo: "Digest"
@@ -19,7 +19,7 @@
       vars:
         authelia_job: "Session Key"
         authelia_fact_name: "authelia_session_key"
-        authelia_key: "{{ hostvars['localhost'].authelia_session_key | default('') }}"
+        authelia_key: "{{ hostvars['mgt'].authelia_session_key | default('') }}"
         authelia_key_secret: "authelia_session_key_secret"
         authelia_key_command: "authelia crypto rand --length 64 --charset alphanumeric"
         authelia_key_echo: "Random Value"
@@ -29,7 +29,7 @@
       vars:
         authelia_job: "Storage Key"
         authelia_fact_name: "authelia_storage_key"
-        authelia_key: "{{ hostvars['localhost'].authelia_storage_key | default('') }}"
+        authelia_key: "{{ hostvars['mgt'].authelia_storage_key | default('') }}"
         authelia_key_secret: "authelia_storage_key_secret"
         authelia_key_command: "authelia crypto rand --length 64 --charset alphanumeric"
         authelia_key_echo: "Random Value"
@@ -37,7 +37,7 @@
     - name: Authelia prep | IMPORTANT | Persist storage key in Infisical
       when:
         - (docker_services_authelia_generated_this_run | default(false)) | bool
-        - (hostvars['localhost'].authelia_storage_key | default('') | string | trim | length) > 0
+        - (hostvars['mgt'].authelia_storage_key | default('') | string | trim | length) > 0
         - (docker_services_svc.infisical is not defined)
           or (docker_services_svc.infisical.secrets_map is not defined)
           or (
@@ -53,14 +53,14 @@
             Path: /Authelia
             Name: STORAGE_KEY
           Value:
-          {{ hostvars['localhost'].authelia_storage_key }}
+          {{ hostvars['mgt'].authelia_storage_key }}
 
     - name: Authelia prep | Ensure JWT reset key secret
       ansible.builtin.include_tasks: keys.yml
       vars:
         authelia_job: "JWT Key"
         authelia_fact_name: "authelia_jwt_reset_key"
-        authelia_key: "{{ hostvars['localhost'].authelia_jwt_reset_key | default('') }}"
+        authelia_key: "{{ hostvars['mgt'].authelia_jwt_reset_key | default('') }}"
         authelia_key_secret: "authelia_jwt_key_secret"
         authelia_key_command: "authelia crypto rand --length 64 --charset alphanumeric"
         authelia_key_echo: "Random Value"

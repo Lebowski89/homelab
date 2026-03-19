@@ -1,0 +1,58 @@
+---
+
+- name: Assert Patroni node vars are defined
+  ansible.builtin.assert:
+    that:
+      - patroni_node_name is defined
+      - patroni_node_name | length > 0
+      - local_ip is defined
+      - local_ip | length > 0
+      - patroni_superuser_password is defined
+      - patroni_superuser_password | length > 0
+      - patroni_replication_password is defined
+      - patroni_replication_password | length > 0
+    fail_msg: "Required Patroni variables are missing."
+
+- name: Ensure Patroni config directory exists
+  ansible.builtin.file:
+    path: /etc/patroni
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure Patroni data directory exists
+  ansible.builtin.file:
+    path: "{{ patroni_data_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0700"
+
+- name: Stop and disable default PostgreSQL service
+  ansible.builtin.systemd:
+    name: postgresql
+    state: stopped
+    enabled: false
+
+- name: Template Patroni config
+  ansible.builtin.template:
+    src: patroni.yml.j2
+    dest: "{{ patroni_config_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  notify: Restart patroni
+  no_log: true
+
+- name: Enable and start Patroni
+  ansible.builtin.systemd:
+    name: patroni
+    state: started
+    enabled: true
+
+- name: Wait for Patroni REST API
+  ansible.builtin.wait_for:
+    host: "{{ local_ip }}"
+    port: "{{ patroni_restapi_port }}"
+    timeout: 60

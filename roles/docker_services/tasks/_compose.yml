@@ -4,10 +4,10 @@
 # GLOBAL / CENTRAL STATE INIT
 ################################
 
-- name: Ensure docker_services_compose_stacks exists on localhost
+- name: Ensure docker_services_compose_stacks exists on mgt
   ansible.builtin.set_fact:
     docker_services_compose_stacks: "{{ docker_services_compose_stacks | default({}) }}"
-  delegate_to: localhost
+  delegate_to: mgt
   delegate_facts: true
   run_once: true
 
