@@ -8,5 +8,4 @@ ansible-venv/
 collections/
 discards/
 filter_plugins/
-.ansible_become_pass
 hosts.ini
