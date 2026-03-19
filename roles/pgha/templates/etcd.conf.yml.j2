@@ -1,14 +1,14 @@
 ---
 
-name: {{ etcd_node_name }}
-data-dir: {{ etcd_data_dir }}
+name: {{ pgha_etcd_node_name }}
+data-dir: {{ pgha_etcd_data_dir }}
 
-listen-client-urls: http://{{ local_ip }}:{{ etcd_client_port }},http://127.0.0.1:{{ etcd_client_port }}
-advertise-client-urls: http://{{ local_ip }}:{{ etcd_client_port }}
+listen-client-urls: http://{{ local_ip }}:{{ pgha_etcd_client_port }},http://127.0.0.1:{{ pgha_etcd_client_port }}
+advertise-client-urls: http://{{ local_ip }}:{{ pgha_etcd_client_port }}
 
-listen-peer-urls: http://{{ local_ip }}:{{ etcd_peer_port }}
-initial-advertise-peer-urls: http://{{ local_ip }}:{{ etcd_peer_port }}
+listen-peer-urls: http://{{ local_ip }}:{{ pgha_etcd_peer_port }}
+initial-advertise-peer-urls: http://{{ local_ip }}:{{ pgha_etcd_peer_port }}
 
-initial-cluster: {{ etcd_initial_cluster | replace(' ', '') }}
+initial-cluster: {{ pgha_etcd_initial_cluster | replace(' ', '') }}
 initial-cluster-state: new
-initial-cluster-token: {{ etcd_cluster_token }}
+initial-cluster-token: {{ pgha_etcd_cluster_token }}

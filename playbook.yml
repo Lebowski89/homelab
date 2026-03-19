@@ -77,9 +77,11 @@
         name: pgha
       when: inventory_hostname in groups['pgha']
       tags:
+        - pgha
         - pgha_apt
-        - pgha_patroni
         - pgha_etcd
+        - pgha_patroni
+        - pgha_admin
 
     - name: Load all service definitions from group_vars/all/services/*.yml
       ansible.builtin.include_vars:

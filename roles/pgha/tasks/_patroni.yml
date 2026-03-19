@@ -3,19 +3,19 @@
 - name: Assert Patroni node vars are defined
   ansible.builtin.assert:
     that:
-      - patroni_node_name is defined
-      - patroni_node_name | length > 0
+      - pgha_patroni_node_name is defined
+      - pgha_patroni_node_name | length > 0
       - local_ip is defined
       - local_ip | length > 0
-      - patroni_superuser_password is defined
-      - patroni_superuser_password | length > 0
-      - patroni_replication_password is defined
-      - patroni_replication_password | length > 0
+      - pgha_patroni_superuser_pass is defined
+      - pgha_patroni_superuser_pass | length > 0
+      - pgha_patroni_replication_pass is defined
+      - pgha_patroni_replication_pass | length > 0
     fail_msg: "Required Patroni variables are missing."
 
 - name: Ensure Patroni config directory exists
   ansible.builtin.file:
-    path: /etc/patroni
+    path: "{{ pgha_patroni_config_dir }}"
     state: directory
     owner: root
     group: root
@@ -23,7 +23,7 @@
 
 - name: Ensure Patroni data directory exists
   ansible.builtin.file:
-    path: "{{ patroni_data_dir }}"
+    path: "{{ pgha_patroni_data_dir }}"
     state: directory
     owner: postgres
     group: postgres
@@ -38,7 +38,7 @@
 - name: Template Patroni config
   ansible.builtin.template:
     src: patroni.yml.j2
-    dest: "{{ patroni_config_path }}"
+    dest: "{{ pgha_patroni_config_path }}"
     owner: root
     group: root
     mode: "0600"
@@ -54,5 +54,5 @@
 - name: Wait for Patroni REST API
   ansible.builtin.wait_for:
     host: "{{ local_ip }}"
-    port: "{{ patroni_restapi_port }}"
+    port: "{{ pgha_patroni_restapi_port }}"
     timeout: 60

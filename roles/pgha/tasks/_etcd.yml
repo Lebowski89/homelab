@@ -3,17 +3,17 @@
 - name: Assert etcd vars are defined
   ansible.builtin.assert:
     that:
-      - etcd_node_name is defined
-      - etcd_node_name | length > 0
+      - pgha_etcd_node_name is defined
+      - pgha_etcd_node_name | length > 0
       - local_ip is defined
       - local_ip | length > 0
-      - etcd_initial_cluster is defined
-      - etcd_initial_cluster | length > 0
+      - pgha_etcd_initial_cluster is defined
+      - pgha_etcd_initial_cluster | length > 0
     fail_msg: "Required etcd variables are missing."
 
 - name: Ensure etcd config directory exists
   ansible.builtin.file:
-    path: /etc/etcd
+    path: "{{ pgha_etcd_config_dir }}"
     state: directory
     owner: root
     group: root
@@ -21,7 +21,7 @@
 
 - name: Ensure etcd data directory exists
   ansible.builtin.file:
-    path: "{{ etcd_data_dir }}"
+    path: "{{ pgha_etcd_data_dir }}"
     state: directory
     owner: etcd
     group: etcd
@@ -30,7 +30,7 @@
 - name: Template etcd config
   ansible.builtin.template:
     src: etcd.conf.yml.j2
-    dest: "{{ etcd_config_path }}"
+    dest: "{{ pgha_etcd_config_path }}"
     owner: root
     group: root
     mode: "0644"
@@ -45,5 +45,5 @@
 - name: Wait for etcd client port
   ansible.builtin.wait_for:
     host: "{{ local_ip }}"
-    port: "{{ etcd_client_port }}"
+    port: "{{ pgha_etcd_client_port }}"
     timeout: 60

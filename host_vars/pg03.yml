@@ -3,8 +3,7 @@
 puid: 1000
 pgid: 1000
 
-etcd_node_name: pg03
-
-patroni_node_name: pg03
-
 local_ip: 192.168.80.94
+
+pgha_etcd_node_name: pg03
+pgha_patroni_node_name: pg03
