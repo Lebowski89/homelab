@@ -24,10 +24,10 @@
   ansible.builtin.set_fact:
     docker_services_compose_stacks: >-
       {{
-        (hostvars['localhost'].docker_services_compose_stacks | default({}))
+        (hostvars['mgt'].docker_services_compose_stacks | default({}))
         | combine({
             docker_services_stack_name_effective: (
-              (hostvars['localhost'].docker_services_compose_stacks | default({}))
+              (hostvars['mgt'].docker_services_compose_stacks | default({}))
               .get(docker_services_stack_name_effective, {})
               | combine({
                   'type': (docker_services_stack_deploy_type | string | trim),
@@ -39,5 +39,5 @@
             )
           }, recursive=true)
       }}
-  delegate_to: localhost
+  delegate_to: mgt
   delegate_facts: true
