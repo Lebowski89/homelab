@@ -7,6 +7,40 @@
       - ubuntu_skynet_install_path | length > 0
     fail_msg: "ubuntu_skynet_install_path must be defined."
 
+- name: Ensure Ansible secrets directory exists
+  ansible.builtin.file:
+    path: "{{ ubuntu_ansible_secrets_path }}"
+    state: directory
+    owner: "{{ puid }}"
+    group: "{{ pgid }}"
+    mode: "0700"
+
+- name: Check for become password file
+  ansible.builtin.stat:
+    path: "{{ ubuntu_skynet_become_pass_file }}"
+  register: ubuntu_become_pass_file_stat
+
+- name: Fail if become password file is missing
+  ansible.builtin.fail:
+    msg: >-
+      Missing become password file: {{ ubuntu_skynet_become_pass_file }}.
+      Create it manually on this ansible manager before using skynet.
+  when: not ubuntu_become_pass_file_stat.stat.exists
+
+- name: Check for vault password file
+  ansible.builtin.stat:
+    path: "{{ ubuntu_skynet_vault_pass_file }}"
+  register: ubuntu_vault_pass_file_stat
+
+- name: Fail if vault password file is missing
+  ansible.builtin.fail:
+    msg: >-
+      Missing vault password file: {{ ubuntu_skynet_vault_pass_file }}.
+      Create it manually on this ansible manager before using skynet.
+  when:
+    - inventory_hostname in groups['ansible_managers']
+    - not ubuntu_vault_pass_file_stat.stat.exists
+
 - name: Install templated skynet wrapper
   ansible.builtin.template:
     src: skynet.j2
