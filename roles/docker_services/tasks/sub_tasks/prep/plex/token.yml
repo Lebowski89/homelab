@@ -12,7 +12,7 @@
 
 - name: Token | Check if plex.ini exists
   ansible.builtin.stat:
-    path: /opt/stacks/plex.ini
+    path: /opt/plex/plex.ini
   register: docker_services_plex_ini
   delegate_to: mgt
   run_once: true
@@ -24,7 +24,7 @@
   block:
     - name: Token | Lookup client_identifier
       ansible.builtin.set_fact:
-        docker_services_plex_client_identifier: "{{ lookup('ini', 'client_identifier section=plex file=/opt/stacks/plex.ini') }}"
+        docker_services_plex_client_identifier: "{{ lookup('ini', 'client_identifier section=plex file=/opt/plex/plex.ini') }}"
         docker_services_plex_client_identifier_missing: false
       delegate_facts: true
   rescue:
@@ -54,7 +54,7 @@
     - docker_services_plex_ini.stat.exists
     - not (hostvars['mgt'].docker_services_plex_client_identifier_missing | default(false))
   ansible.builtin.set_fact:
-    docker_services_plex_auth_token: "{{ lookup('ini', 'token section=plex file=/opt/stacks/plex.ini') | regex_replace('\n', '') }}"
+    docker_services_plex_auth_token: "{{ lookup('ini', 'token section=plex file=/opt/plex/plex.ini') | regex_replace('\n', '') }}"
   delegate_to: mgt
   delegate_facts: true
   run_once: true
@@ -180,7 +180,7 @@
 
     - name: Token | Add Client Identifier to plex.ini
       community.general.ini_file:
-        path: "/opt/stacks/plex.ini"
+        path: "/opt/plex/plex.ini"
         section: "plex"
         option: "client_identifier"
         value: "{{ hostvars['mgt'].docker_services_plex_client_identifier }}"
@@ -191,7 +191,7 @@
 
     - name: Token | Add Token to plex.ini
       community.general.ini_file:
-        path: "/opt/stacks/plex.ini"
+        path: "/opt/plex/plex.ini"
         section: "plex"
         option: "token"
         value: "{{ hostvars['mgt'].docker_services_plex_auth_token }}"

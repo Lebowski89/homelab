@@ -1,7 +1,7 @@
 ---
 
 - name: Install Docker
-  when: inventory_hostname != "unraid"
+  when: inventory_hostname in groups['docker_install']
   ansible.builtin.include_tasks:
     file: _install.yml
     apply:
@@ -13,6 +13,7 @@
     - docker_install
 
 - name: Configure Docker Swarm
+  when: inventory_hostname in groups['swarm']
   ansible.builtin.include_tasks:
     file: _swarm.yml
     apply:

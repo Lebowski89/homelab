@@ -30,7 +30,7 @@
     mode: "0700"
 
 - name: Stop and disable default PostgreSQL service
-  ansible.builtin.systemd:
+  ansible.builtin.systemd_service:
     name: postgresql
     state: stopped
     enabled: false
@@ -46,7 +46,7 @@
   no_log: true
 
 - name: Enable and start Patroni
-  ansible.builtin.systemd:
+  ansible.builtin.systemd_service:
     name: patroni
     state: started
     enabled: true

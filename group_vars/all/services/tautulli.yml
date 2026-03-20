@@ -21,7 +21,7 @@ tautulli:
     UMASK: "022"
     WEBUI_PORTS: "8181/tcp,8181/udp"
     TP_SCHEME: "http"
-    TP_DOMAIN: "192.168.80.45:8089"
+    TP_DOMAIN: "192.168.80.48:8089"
     TP_HOTIO: "true"
     TP_THEME: "hotline"
   paths:

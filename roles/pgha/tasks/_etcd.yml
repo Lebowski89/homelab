@@ -37,7 +37,7 @@
   notify: Restart etcd
 
 - name: Enable and start etcd
-  ansible.builtin.systemd:
+  ansible.builtin.systemd_service:
     name: etcd
     state: started
     enabled: true

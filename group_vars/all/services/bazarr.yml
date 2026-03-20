@@ -20,7 +20,7 @@ bazarr:
     UMASK: "022"
     WEBUI_PORTS: "6767/tcp,6767/udp"
     TP_SCHEME: "http"
-    TP_DOMAIN: "192.168.80.45:8089"
+    TP_DOMAIN: "192.168.80.48:8089"
     TP_HOTIO: "true"
     TP_THEME: "hotline"
   infisical:

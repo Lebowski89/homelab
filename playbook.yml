@@ -41,6 +41,7 @@
         - ubuntu_apt
         - ubuntu_repo
         - ubuntu_venv
+        - ubuntu_requirements
         - ubuntu_skynet
         - ubuntu_sysctl
         - ubuntu_pam
@@ -48,6 +49,7 @@
         - ubuntu_netplan
 
     - name: Install and configure Docker
+      when: inventory_hostname in groups['docker']
       ansible.builtin.include_role:
         name: docker
       tags:

@@ -38,7 +38,7 @@ technitium:
   deploy:
     type: swarm
     mode: global
-    host: [localhost, plex]
+    host: [mgt, plex]
     constraints:
       - node.labels.dns == technitium
     restart_policy:

@@ -1,11 +1,11 @@
 ---
 
 - name: Restart etcd
-  ansible.builtin.systemd:
+  ansible.builtin.systemd_service:
     name: etcd
     state: restarted
 
 - name: Restart patroni
-  ansible.builtin.systemd:
+  ansible.builtin.systemd_service:
     name: patroni
     state: restarted
