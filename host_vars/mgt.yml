@@ -5,19 +5,8 @@ pgid: 1000
 
 local_ip: 192.168.80.48
 
-ubuntu_ansible_root: /opt
-
-ubuntu_manage_repo_clone: true
-ubuntu_ansible_repo_dirname: homelab
-ubuntu_ansible_repo_path: "{{ ubuntu_ansible_root }}/{{ ubuntu_ansible_repo_dirname }}"
-
-ubuntu_ansible_secrets_path: "{{ ubuntu_ansible_root }}/.secrets"
-ubuntu_skynet_become_pass_file: "{{ ubuntu_ansible_secrets_path }}/.ansible_become_pass"
-ubuntu_skynet_vault_pass_file: "{{ ubuntu_ansible_secrets_path }}/.ansible_vault_pass"
-
 docker_manage_user: true
 docker_user: "mgt"
-
 docker_swarm_hostname: "mgt"
 
 docker_swarm_node_labels:

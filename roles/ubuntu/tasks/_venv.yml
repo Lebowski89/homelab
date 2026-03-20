@@ -1,8 +1,8 @@
 ---
 
-- name: Ensure Ansible root exists
+- name: Ensure Ansible opt path exists
   ansible.builtin.file:
-    path: "{{ ubuntu_ansible_root }}"
+    path: "{{ ubuntu_ansible_opt_path }}"
     state: directory
     owner: "{{ puid }}"
     group: "{{ pgid }}"

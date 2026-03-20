@@ -1,8 +1,8 @@
 ---
 
-- name: Ensure Ansible root exists
+- name: Ensure repo root exists
   ansible.builtin.file:
-    path: "{{ ubuntu_ansible_root }}"
+    path: "{{ ubuntu_ansible_repo_root }}"
     state: directory
     owner: "{{ puid }}"
     group: "{{ pgid }}"
