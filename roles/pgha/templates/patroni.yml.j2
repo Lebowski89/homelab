@@ -1,16 +1,16 @@
 ---
 
-scope: {{ patroni_scope }}
-namespace: {{ patroni_namespace }}
-name: {{ patroni_node_name }}
+scope: {{ pgha_patroni_scope }}
+namespace: {{ pgha_patroni_namespace }}
+name: {{ pgha_patroni_node_name }}
 
 restapi:
-  listen: 0.0.0.0:{{ patroni_restapi_port }}
-  connect_address: {{ local_ip }}:{{ patroni_restapi_port }}
+  listen: 0.0.0.0:{{ pgha_patroni_restapi_port }}
+  connect_address: {{ local_ip }}:{{ pgha_patroni_restapi_port }}
 
 etcd3:
   hosts:
-{% for host in patroni_etcd_hosts %}
+{% for host in pgha_patroni_etcd_hosts %}
     - {{ host }}
 {% endfor %}
 
@@ -24,7 +24,7 @@ bootstrap:
       use_pg_rewind: true
       use_slots: true
       parameters:
-{% for key, value in patroni_postgresql_parameters.items() %}
+{% for key, value in pgha_patroni_postgresql_parameters.items() %}
         {{ key }}: {{ value }}
 {% endfor %}
   initdb:
@@ -32,19 +32,19 @@ bootstrap:
     - data-checksums
 
 postgresql:
-  listen: 0.0.0.0:{{ patroni_postgres_port }}
-  connect_address: {{ local_ip }}:{{ patroni_postgres_port }}
-  data_dir: {{ patroni_data_dir }}
-  bin_dir: {{ patroni_bin_dir }}
+  listen: 0.0.0.0:{{ pgha_patroni_postgres_port }}
+  connect_address: {{ local_ip }}:{{ pgha_patroni_postgres_port }}
+  data_dir: {{ pgha_patroni_data_dir }}
+  bin_dir: {{ pgha_patroni_bin_dir }}
   authentication:
     superuser:
-      username: {{ patroni_superuser_name }}
-      password: {{ patroni_superuser_password }}
+      username: {{ pgha_patroni_superuser_name }}
+      password: {{ pgha_patroni_superuser_pass }}
     replication:
-      username: {{ patroni_replication_name }}
-      password: {{ patroni_replication_password }}
+      username: {{ pgha_patroni_replication_name }}
+      password: {{ pgha_patroni_replication_pass }}
   parameters:
-{% for key, value in patroni_postgresql_parameters.items() %}
+{% for key, value in pgha_patroni_postgresql_parameters.items() %}
     {{ key }}: {{ value }}
 {% endfor %}
 
