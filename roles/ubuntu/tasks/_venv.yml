@@ -27,15 +27,18 @@
     state: present
     virtualenv: "{{ ubuntu_ansible_venv_path }}"
 
-- name: Install Python packages in virtualenv
+- name: Assert requirements.txt exists
+  ansible.builtin.stat:
+    path: "{{ ubuntu_ansible_repo_path }}/requirements.txt"
+  register: ubuntu_requirements_txt
+
+- name: Fail if requirements.txt is missing
+  ansible.builtin.fail:
+    msg: "Missing requirements.txt at {{ ubuntu_ansible_repo_path }}/requirements.txt"
+  when: not ubuntu_requirements_txt.stat.exists
+
+- name: Install Python packages from requirements.txt
   ansible.builtin.pip:
-    name:
-      - docker==7.1.0
-      - jmespath==1.1.0
-      - infisicalsdk==1.0.16
-      - lxml==6.0.2
-      - psycopg2-binary==2.9.11
-      - PyYAML==6.0.3
-      - requests==2.32.5
+    requirements: "{{ ubuntu_ansible_repo_path }}/requirements.txt"
     state: present
     virtualenv: "{{ ubuntu_ansible_venv_path }}"
