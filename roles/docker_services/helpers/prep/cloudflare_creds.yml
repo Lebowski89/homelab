@@ -49,11 +49,11 @@
 
     - name: Public IP output
       ansible.builtin.debug:
-        msg: "{{ ipify_public_ip }}"
+        msg: "{{ ansible_facts['ipify_public_ip'] }}"
 
     - name: Set public_ip fact
       ansible.builtin.set_fact:
-        public_ip: "{{ ipify_public_ip }}"
+        public_ip: "{{ ansible_facts['ipify_public_ip'] }}"
 
 ################################
 # API (VIA INFISICAL)

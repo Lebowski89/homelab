@@ -4,19 +4,22 @@ ubuntu_apt_env_vars:
   DEBIAN_FRONTEND: noninteractive
   DEBIAN_PRIORITY: critical
 
-ubuntu_ansible_root: /opt
+ubuntu_ansible_repo_root: /opt
 ubuntu_ansible_repo_dirname: homelab
-ubuntu_ansible_repo_path: "{{ ubuntu_ansible_root }}/{{ ubuntu_ansible_repo_dirname }}"
+ubuntu_ansible_repo_path: "{{ ubuntu_ansible_repo_root }}/{{ ubuntu_ansible_repo_dirname }}"
 
-ubuntu_manage_repo_clone: false
+ubuntu_manage_repo_clone: true
 ubuntu_repo_url: "https://github.com/Lebowski89/homelab.git"
 ubuntu_repo_version: "main"
 
-ubuntu_ansible_venv_path: "{{ ubuntu_ansible_repo_path }}/ansible-venv"
+ubuntu_ansible_opt_path: /opt/ansible
+ubuntu_ansible_venv_path: "{{ ubuntu_ansible_opt_path }}/ansible-venv"
+ubuntu_ansible_secrets_path: "{{ ubuntu_ansible_opt_path }}/.secrets"
+ubuntu_ansible_become_pass_file: "{{ ubuntu_ansible_secrets_path }}/.ansible_become_pass"
+ubuntu_ansible_vault_pass_file: "{{ ubuntu_ansible_secrets_path }}/.ansible_vault_pass"
 
 ubuntu_skynet_install: true
 ubuntu_skynet_install_path: /usr/local/bin/skynet
-ubuntu_skynet_become_pass_file: "{{ ubuntu_ansible_repo_path }}/.ansible_become_pass"
 ubuntu_skynet_doctor_ping_target: skynet
 ubuntu_skynet_docker_services_vars: "{{ ubuntu_ansible_repo_path }}/group_vars/all/docker_services.yml"
 
@@ -74,7 +77,7 @@ ubuntu_netplan_config_path: "/etc/netplan/{{ ubuntu_defaults_netplan_config }}"
 
 ubuntu_defaults_netplan_gateway: 192.168.80.1
 ubuntu_defaults_netplan_nameservers:
-  - 192.168.80.45
+  - 192.168.80.48
   - 192.168.80.59
 
 ubuntu_netplan_prefix: 24

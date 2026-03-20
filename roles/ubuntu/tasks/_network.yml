@@ -57,14 +57,14 @@
       when: ubuntu_nic_tuning_enabled | bool
 
     - name: Reload systemd
-      ansible.builtin.systemd:
+      ansible.builtin.systemd_service:
         daemon_reload: true
       when:
         - ubuntu_nic_tuning_enabled | bool
         - ubuntu_nic_tuning_unit.changed
 
     - name: Enable and run NIC tuning service
-      ansible.builtin.systemd:
+      ansible.builtin.systemd_service:
         name: nic-tuning.service
         enabled: true
         state: started

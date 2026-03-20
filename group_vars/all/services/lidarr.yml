@@ -27,7 +27,7 @@ lidarr:
     LIDARR__POSTGRES__MAINDB: "lidarr-main"
     LIDARR__POSTGRES__LOGDB: "lidarr-log"
     TP_SCHEME: "http"
-    TP_DOMAIN: "192.168.80.45:8089"
+    TP_DOMAIN: "192.168.80.48:8089"
     TP_HOTIO: "true"
     TP_THEME: "hotline"
   infisical:
