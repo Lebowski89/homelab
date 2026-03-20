@@ -3,7 +3,7 @@
 unifi:
   name: unifi
   stack: unifi
-  image: lscr.io/linuxserver/unifi-network-application:10.1.85-ls120
+  image: lscr.io/linuxserver/unifi-network-application:10.1.89-ls121
   named_networks:
     overlay:
       external: true
