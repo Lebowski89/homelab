@@ -1,8 +1,3 @@
 ansible
 ansible-lint
 yamllint
-# Python packages for controller-side Ansible modules used in this repo.
-# Install with: pip install -r requirements.txt
-psycopg2-binary==2.9.11
-Docker==7.1.0
-lxml==6.0.2
