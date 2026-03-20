@@ -26,19 +26,3 @@
       - wheel==0.46.3
     state: present
     virtualenv: "{{ ubuntu_ansible_venv_path }}"
-
-- name: Assert requirements.txt exists
-  ansible.builtin.stat:
-    path: "{{ ubuntu_ansible_repo_path }}/requirements.txt"
-  register: ubuntu_requirements_txt
-
-- name: Fail if requirements.txt is missing
-  ansible.builtin.fail:
-    msg: "Missing requirements.txt at {{ ubuntu_ansible_repo_path }}/requirements.txt"
-  when: not ubuntu_requirements_txt.stat.exists
-
-- name: Install Python packages from requirements.txt
-  ansible.builtin.pip:
-    requirements: "{{ ubuntu_ansible_repo_path }}/requirements.txt"
-    state: present
-    virtualenv: "{{ ubuntu_ansible_venv_path }}"

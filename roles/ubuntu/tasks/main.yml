@@ -35,6 +35,18 @@
     - ubuntu
     - ubuntu_venv
 
+- name: Install required collections and pip packages
+  when: inventory_hostname in groups['ansible_managers']
+  ansible.builtin.include_tasks:
+    file: _requirements.yml
+    apply:
+      tags:
+        - ubuntu
+        - ubuntu_requirements
+  tags:
+    - ubuntu
+    - ubuntu_requirements
+
 - name: Install Skynet wrapper
   when: inventory_hostname in groups['ansible_managers']
   ansible.builtin.include_tasks:

@@ -41,6 +41,7 @@
         - ubuntu_apt
         - ubuntu_repo
         - ubuntu_venv
+        - ubuntu_requirements
         - ubuntu_skynet
         - ubuntu_sysctl
         - ubuntu_pam
