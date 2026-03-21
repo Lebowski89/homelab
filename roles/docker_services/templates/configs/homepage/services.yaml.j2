@@ -16,12 +16,12 @@
           fields: ["running", "stopped", "total"]
     - Technitium:
         icon: technitium.png
-        href: http://192.168.80.45:5380
-        siteMonitor: http://192.168.80.45:5380
+        href: http://192.168.80.48:5380
+        siteMonitor: http://192.168.80.48:5380
         description: Technitium DNS
         widget:
           type: technitium
-          url: http://192.168.80.45:5380
+          url: http://192.168.80.48:5380
           key: {{ technitium_token }}
           fields: ["totalQueries", "totalRecursive", "totalBlocked", "totalClients"]
           range: LastDay
@@ -266,7 +266,7 @@
 - unifi:
     - Unifi:
         icon: unifi.svg
-        href: http://192.168.80.45:8443
+        href: http://192.168.80.48:8443
         siteMonitor: http://unifi:8443
         description: Unifi Controller
         widget:

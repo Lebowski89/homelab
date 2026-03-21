@@ -55,7 +55,7 @@ sonarr:
         SONARR__POSTGRES__MAINDB: "sonarr-main"
         SONARR__POSTGRES__LOGDB: "sonarr-log"
         TP_SCHEME: "http"
-        TP_DOMAIN: "192.168.80.45:8089"
+        TP_DOMAIN: "192.168.80.48:8089"
         TP_HOTIO: "true"
         TP_THEME: "hotline"
       infisical:
@@ -140,7 +140,7 @@ sonarr:
         SONARR__POSTGRES__MAINDB: "sonarr-4k-main"
         SONARR__POSTGRES__LOGDB: "sonarr-4k-log"
         TP_SCHEME: "http"
-        TP_DOMAIN: "192.168.80.45:8089"
+        TP_DOMAIN: "192.168.80.48:8089"
         TP_HOTIO: "true"
         TP_THEME: "hotline"
       infisical:
