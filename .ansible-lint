@@ -5,8 +5,6 @@ profile: production
 exclude_paths:
   - .git/
   - .github/
-  - ansible-venv/
-  - discards/
 
 mock_modules:
   - yedit
