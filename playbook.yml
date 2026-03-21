@@ -49,6 +49,7 @@
         - ubuntu_netplan
 
     - name: Install and configure Docker
+      when: inventory_hostname in groups['docker']
       ansible.builtin.include_role:
         name: docker
       tags:

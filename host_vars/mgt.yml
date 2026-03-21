@@ -13,3 +13,4 @@ docker_swarm_node_labels:
   role: manager
   ansible_host: mgt
   haproxy: "true"
+  dns: technitium
