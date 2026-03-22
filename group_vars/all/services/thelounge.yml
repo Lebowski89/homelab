@@ -13,7 +13,7 @@ thelounge:
     PGID: "1000"
     UMASK: "022"
   paths:
-    - path: /mnt/user/appdata/thelounge
+    - path: /opt/thelounge
       state: directory
       owner: 1000
       group: 1000
@@ -21,7 +21,7 @@ thelounge:
   volumes:
     config:
       type: bind
-      source: /mnt/user/appdata/thelounge
+      source: /opt/thelounge
       target: /config
       read_only: false
   traefik:

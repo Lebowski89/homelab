@@ -13,6 +13,15 @@ qbittorrent:
   sysctls:
     net.ipv4.conf.all.src_valid_mark: "1"
     net.ipv6.conf.all.disable_ipv6: "1"
+  environment:
+    PUID: "99"
+    PGID: "100"
+    TZ: "{{ timezone }}"
+    FILE__VPN_PIA_USER: /run/secrets/qbittorrent_pia_user_secret
+    FILE__VPN_PIA_PASS: /run/secrets/qbittorrent_pia_pass_secret
+  secrets:
+    - qbittorrent_pia_user_secret
+    - qbittorrent_pia_pass_secret
   deploy:
     type: swarm
     mode: replicated
@@ -36,18 +45,8 @@ qbittorrent:
           - "--spider"
           - "-q"
           - "http://127.0.0.1:8090/"
-      environment:
-        TZ: "{{ timezone }}"
-        PUID: "99"
-        PGID: "100"
-        WEBUI_PORTS: "8090/tcp,8090/udp"
-        VPN_ENABLED: "true"
-        VPN_CONF: "wg0"
-        VPN_PROVIDER: "proton"
-        VPN_LAN_NETWORK: "192.168.80.0/24"
-        VPN_LAN_LEAK_ENABLED: "false"
-        VPN_AUTO_PORT_FORWARD: "true"
-        VPN_FIREWALL_TYPE: "auto"
+      env_file:
+        - /opt/stacks/qbittorrent.env
       infisical:
         fail_on_empty: true
         secrets_map:
@@ -57,21 +56,14 @@ qbittorrent:
           - var: qbittorrent_pass
             path: "/qBittorrent"
             name: PASS
-          - var: qbittorrent_wg_privkey
-            path: "/qBittorrent"
-            name: WG_PRIVATE_KEY
-          - var: qbittorrent_wg_pubkey
-            path: "/qBittorrent"
-            name: WG_PUBLIC_KEY
-          - var: qbittorrent_wg_addr
-            path: "/qBittorrent"
-            name: WG_ADDRESSES
-          - var: qbittorrent_wg_dns
-            path: "/qBittorrent"
-            name: WG_DNS
-          - var: qbittorrent_wg_endpoint
-            path: "/qBittorrent"
-            name: WG_ENDPOINT
+          - var: qbittorrent_pia_user
+            path: "/PIA"
+            name: USER
+            docker_secret: qbittorrent_pia_user_secret
+          - var: qbittorrent_pia_pass
+            path: "/PIA"
+            name: PASS
+            docker_secret: qbittorrent_pia_pass_secret
       paths:
         - path: /mnt/user/appdata/qbittorrent
           state: directory
@@ -115,11 +107,12 @@ qbittorrent:
           group: 100
           mode: "0664"
           force: true
-        - src: configs/qbittorrent/wg0.conf.j2
-          dest: /mnt/user/appdata/qbittorrent/wireguard/wg0.conf
-          owner: 99
-          group: 100
-          mode: "0664"
+      swarm_env_templates:
+        - src: configs/qbittorrent/qBittorrent.env.j2
+          dest: /opt/stacks/qbittorrent.env
+          owner: 1000
+          group: 1000
+          mode: "0600"
           force: true
       volumes:
         config:
@@ -155,18 +148,8 @@ qbittorrent:
           - "--spider"
           - "-q"
           - "http://127.0.0.1:8091/"
-      environment:
-        PUID: "99"
-        PGID: "100"
-        TZ: '{{ timezone }}'
-        WEBUI_PORTS: "8091/tcp,8091/udp"
-        VPN_ENABLED: "true"
-        VPN_CONF: "wg0"
-        VPN_PROVIDER: "proton"
-        VPN_LAN_NETWORK: "192.168.80.0/24"
-        VPN_LAN_LEAK_ENABLED: "false"
-        VPN_AUTO_PORT_FORWARD: "true"
-        VPN_FIREWALL_TYPE: "auto"
+      env_file:
+        - /opt/stacks/qbittorrent-xs.env
       infisical:
         fail_on_empty: true
         secrets_map:
@@ -176,21 +159,14 @@ qbittorrent:
           - var: qbittorrent_xs_pass
             path: "/qBittorrent-XS"
             name: PASS
-          - var: qbittorrent_xs_wg_privkey
-            path: "/qBittorrent-XS"
-            name: WG_PRIVATE_KEY
-          - var: qbittorrent_xs_wg_pubkey
-            path: "/qBittorrent-XS"
-            name: WG_PUBLIC_KEY
-          - var: qbittorrent_xs_wg_addr
-            path: "/qBittorrent-XS"
-            name: WG_ADDRESSES
-          - var: qbittorrent_xs_wg_dns
-            path: "/qBittorrent-XS"
-            name: WG_DNS
-          - var: qbittorrent_xs_wg_endpoint
-            path: "/qBittorrent-XS"
-            name: WG_ENDPOINT
+          - var: qbittorrent_pia_user
+            path: "/PIA"
+            name: USER
+            docker_secret: qbittorrent_pia_user_secret
+          - var: qbittorrent_pia_pass
+            path: "/PIA"
+            name: PASS
+            docker_secret: qbittorrent_pia_pass_secret
       paths:
         - path: /mnt/user/appdata/qbittorrent-xs
           state: directory
@@ -234,11 +210,12 @@ qbittorrent:
           group: 100
           mode: "0664"
           force: true
-        - src: configs/qbittorrent/wg0-xs.conf.j2
-          dest: /mnt/user/appdata/qbittorrent-xs/wireguard/wg0.conf
-          owner: 99
-          group: 100
-          mode: "0664"
+      swarm_env_templates:
+        - src: configs/qbittorrent/qBittorrent-xs.env.j2
+          dest: /opt/stacks/qbittorrent-xs.env
+          owner: 1000
+          group: 1000
+          mode: "0600"
           force: true
       volumes:
         config:

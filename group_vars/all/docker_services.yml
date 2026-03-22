@@ -106,6 +106,8 @@ docker_services:
   ## services (monitoring)
   - name: alloy
     tags: [apps, monitoring, alloy]
+  - name: gotify
+    tags: [apps, monitoring, gotify]
   - name: grafana
     tags: [apps, monitoring, grafana]
   - name: loki
@@ -140,24 +142,24 @@ docker_services:
   ## services (postgres cluster)
   - name: etcd
     target: pg01
-    tags: [pgha, etcd, pg01]
+    tags: [etcd, pg01]
   - name: etcd
     target: pg02
-    tags: [pgha, etcd, pg02]
+    tags: [etcd, pg02]
   - name: etcd
     target: pg03
-    tags: [pgha, etcd, pg03]
+    tags: [etcd, pg03]
   - name: spilo
     target: pg01
-    tags: [pgha, spilo, pg01]
+    tags: [spilo, pg01]
   - name: spilo
     target: pg02
-    tags: [pgha, spilo, pg02]
+    tags: [spilo, pg02]
   - name: spilo
     target: pg03
-    tags: [pgha, spilo, pg03]
+    tags: [spilo, pg03]
   - name: haproxy
-    tags: [pgha, haproxy]
+    tags: [haproxy]
 
   ## services (unifi)
   - name: unifi_db
