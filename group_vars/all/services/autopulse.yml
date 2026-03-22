@@ -3,7 +3,7 @@
 autopulse:
   name: autopulse
   stack: autopulse
-  image: danonline/autopulse:latest-postgres@sha256:fa9f88be7296da88f5d569ba47e1cb2e4f1f24a12f4f6f7fe7d0e226a175dc2b
+  image: danonline/autopulse:latest-postgres@sha256:f895c5b10e49dea69c0b3c28078d293eaca8f62060c4bcb8385a8dfc6a2ae0f8
   named_networks:
     overlay:
       external: true
