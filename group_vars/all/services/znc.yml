@@ -13,7 +13,7 @@ znc:
     PGID: "1000"
     UMASK: "022"
   paths:
-    - path: /mnt/user/appdata/znc
+    - path: /opt/znc
       state: directory
       owner: 1000
       group: 1000
@@ -21,7 +21,7 @@ znc:
   volumes:
     config:
       type: bind
-      source: /mnt/user/appdata/znc
+      source: /opt/znc
       target: /config
       read_only: false
   traefik:
