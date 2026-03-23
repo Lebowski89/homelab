@@ -106,6 +106,8 @@ docker_services:
   ## services (monitoring)
   - name: alloy
     tags: [apps, monitoring, alloy]
+  - name: gotify
+    tags: [apps, monitoring, gotify]
   - name: grafana
     tags: [apps, monitoring, grafana]
   - name: loki
