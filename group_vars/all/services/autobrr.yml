@@ -3,7 +3,7 @@
 autobrr:
   name: autobrr
   stack: autobrr
-  image: ghcr.io/autobrr/autobrr:v1.74.0
+  image: ghcr.io/autobrr/autobrr:v1.75.0
   named_networks:
     overlay:
       external: true
