@@ -41,23 +41,35 @@ opencloud:
   paths:
     - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud"
       state: directory
+      owner: 1000
+      group: 1000
       mode: "0751"
     - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud/config"
       state: directory
+      owner: 1000
+      group: 1000
       mode: "0751"
-    - path: /mnt/user/opencloud/data
+    - path: "{{ hostvars['unraid'].docker_host_opencloud_data_root }}"
       state: directory
+      owner: 1000
+      group: 1000
       mode: "0751"
     - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud/apps"
       state: directory
+      owner: 1000
+      group: 1000
       mode: "0751"
   templates:
     - src: configs/opencloud/csp.yaml.j2
       dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud/config/csp.yaml"
+      owner: 1000
+      group: 1000
       mode: "0664"
       force: true
     - src: configs/opencloud/banned-password-list.txt.j2
       dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud/config/banned-password-list.txt"
+      owner: 1000
+      group: 1000
       mode: "0664"
       force: true
   swarm_env_templates:
@@ -85,7 +97,7 @@ opencloud:
       read_only: false
     opencloud_data:
       type: bind
-      source: /mnt/user/opencloud/data
+      source: "{{ hostvars['unraid'].docker_host_opencloud_data_root }}"
       target: /var/lib/opencloud
       read_only: false
     opencloud_apps:

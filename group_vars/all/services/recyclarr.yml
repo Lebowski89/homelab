@@ -7,7 +7,7 @@ recyclarr:
   named_networks:
     overlay:
       external: true
-  user: 99:100
+  user: "{{ hostvars['unraid'].docker_host_puid | string }}:{{ hostvars['unraid'].docker_host_pgid | string }}"
   environment:
     TZ: "{{ timezone }}"
   infisical:

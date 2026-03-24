@@ -9,8 +9,8 @@ czkawka:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    USER_ID: "99"
-    GROUP_ID: "100"
+    USER_ID: "{{ hostvars['unraid'].docker_host_puid | string }}"
+    GROUP_ID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
     UMASK: "022"
     DARK_MODE: "1"
     WEB_FILE_MANAGER: "1"

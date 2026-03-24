@@ -9,8 +9,8 @@ jdownloader2:
     - gluetun
   network_mode: "service:gluetun"
   environment:
-    USER_ID: "99"
-    GROUP_ID: "100"
+    USER_ID: "{{ hostvars['unraid'].docker_host_puid | string }}"
+    GROUP_ID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
   paths:
     - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/jdownloader-2"
       state: directory
