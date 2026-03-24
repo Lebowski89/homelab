@@ -44,11 +44,17 @@
     _is_placeholder: "{{ (_raw_val is string) and (_raw_val is match('^__INFISICAL__:.+$')) }}"
     _placeholder_key: "{{ env_kv.key }}"
     _varname: "{{ (_raw_val | regex_replace('^__INFISICAL__:(.+)$', '\\1')) if _is_placeholder else '' }}"
+    _local_var_val: "{{ lookup('ansible.builtin.vars', _varname, default='') if _is_placeholder else '' }}"
+    _local_var_exists: >-
+      {{
+        _is_placeholder and
+        ((query('ansible.builtin.varnames', '^' ~ (_varname | regex_escape) ~ '$') | length) > 0)
+      }}
     _resolved_val: >-
       {{
         (
-          vars[_varname]
-          if (_is_placeholder and (_varname in vars) and ((vars[_varname] | string | length) > 0))
+          _local_var_val
+          if (_local_var_exists and ((_local_var_val | string | length) > 0))
           else (
             hostvars['mgt'][_varname]
             if (_is_placeholder and (_varname in hostvars['mgt']) and ((hostvars['mgt'][_varname] | string | length) > 0))

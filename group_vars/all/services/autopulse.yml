@@ -9,8 +9,8 @@ autopulse:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "99"
-    PGID: "100"
+    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
+    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
     UMASK: "022"
     AUTOPULSE__AUTH__USERNAME__FILE: /run/secrets/autopulse_user_secret
     AUTOPULSE__AUTH__PASSWORD__FILE: /run/secrets/autopulse_pass_secret
@@ -37,15 +37,11 @@ autopulse:
     - autopulse_pass_secret
     - plex_token_secret
   paths:
-    - path: /mnt/user/appdata/autopulse
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/autopulse"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
-    - path: /mnt/user/appdata/autopulse/config.yaml
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/autopulse/config.yaml"
       state: touch
-      owner: 99
-      group: 100
       mode: "0664"
   swarm_env_templates:
     - src: configs/autopulse.env.j2
@@ -57,7 +53,7 @@ autopulse:
   volumes:
     config:
       type: bind
-      source: /mnt/user/appdata/autopulse/config.yaml
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/autopulse/config.yaml"
       target: /app/config.yaml
       read_only: false
   postgres:
