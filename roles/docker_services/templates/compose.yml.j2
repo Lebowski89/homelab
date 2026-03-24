@@ -185,6 +185,13 @@ services:
     shm_size: "{{ svc.shm_size }}"
 {% endif %}
 
+{% if svc.tmpfs is defined and (svc.tmpfs | length > 0) and _stack_type != 'swarm' %}
+    tmpfs:
+{% for mount in svc.tmpfs %}
+      - "{{ mount }}"
+{% endfor %}
+{% endif %}
+
 {% if svc.volumes is defined and (svc.volumes | length > 0) %}
     volumes:
 {% for vol in svc.volumes %}
