@@ -24,7 +24,6 @@ plex:
     web:
       published: 32400
       target: 32400
-      protocol: tcp
       mode: host
     dlna_udp:
       published: 1900
@@ -34,7 +33,6 @@ plex:
     dlna_tcp:
       published: 32469
       target: 32469
-      protocol: tcp
       mode: host
     avahi:
       published: 5353
@@ -44,7 +42,6 @@ plex:
     roku:
       published: 8324
       target: 8324
-      protocol: tcp
       mode: host
     gdm_10:
       published: 32410

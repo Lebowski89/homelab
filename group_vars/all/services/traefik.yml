@@ -33,12 +33,10 @@ traefik:
     web:
       published: 80
       target: 80
-      protocol: tcp
       mode: host
     web_secure:
       published: 443
       target: 443
-      protocol: tcp
       mode: host
   paths:
     - path: /opt/traefik

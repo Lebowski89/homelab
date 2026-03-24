@@ -30,8 +30,7 @@ hugo:
     web:
       published: 1313
       target: 1313
-      protocol: tcp
-      mode: ingress
+      mode: host
   paths:
     - path: /opt/hugo
       state: directory

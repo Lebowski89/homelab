@@ -40,23 +40,15 @@ gluetun:
     web:
       published: 6881
       target: 6881
-      protocol: tcp
-      mode: ingress
     jd2_web:
       published: 5800
       target: 5800
-      protocol: tcp
-      mode: ingress
     librewolf_web:
       published: 3008
       target: 3000
-      protocol: tcp
-      mode: ingress
     librewolf_web_secure:
       published: 3009
       target: 3001
-      protocol: tcp
-      mode: ingress
   paths:
     - path: /mnt/user/appdata/gluetun
       state: directory
