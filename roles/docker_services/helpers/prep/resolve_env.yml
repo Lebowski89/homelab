@@ -56,8 +56,8 @@
           _local_var_val
           if (_local_var_exists and ((_local_var_val | string | length) > 0))
           else (
-            hostvars['mgt'][_varname]
-            if (_is_placeholder and (_varname in hostvars['mgt']) and ((hostvars['mgt'][_varname] | string | length) > 0))
+            hostvars[docker_swarm_primary_manager][_varname]
+            if (_is_placeholder and (_varname in hostvars[docker_swarm_primary_manager]) and ((hostvars[docker_swarm_primary_manager][_varname] | string | length) > 0))
             else _raw_val
           )
         )

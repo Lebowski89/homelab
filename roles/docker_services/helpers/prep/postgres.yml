@@ -10,7 +10,7 @@
 # postgres_infisical_pass_name: "PASS"
 
 - name: Postgres | Ensure creds exist (fetch from Infisical if missing)
-  when: inventory_hostname == "mgt"
+  when: inventory_hostname == docker_swarm_primary_manager
   block:
     - name: Postgres | Detect if creds are missing
       ansible.builtin.set_fact:
@@ -47,7 +47,7 @@
 ################################
 
 - name: Prepare Postgres docker secret
-  when: inventory_hostname == "mgt"
+  when: inventory_hostname == docker_swarm_primary_manager
   community.docker.docker_secret:
     name: postgres_pass_secret
     data: "{{ postgres_pass }}"
@@ -59,7 +59,7 @@
 
 - name: Normalize postgres database list from docker_services_svc schema
   when:
-    - inventory_hostname == "mgt"
+    - inventory_hostname == docker_swarm_primary_manager
     - docker_services_svc.postgres is defined
     - (docker_services_svc.postgres.enable | default(false)) | bool
   ansible.builtin.set_fact:
@@ -80,7 +80,7 @@
 
 - name: Ping for existing database(s)
   when:
-    - inventory_hostname == "mgt"
+    - inventory_hostname == docker_swarm_primary_manager
     - (_postgres_databases | default([]) | length) > 0
   community.postgresql.postgresql_ping:
     login_host: 192.168.80.48
@@ -95,7 +95,7 @@
 
 - name: Create postgres database(s) if missing
   when:
-    - inventory_hostname == "mgt"
+    - inventory_hostname == docker_swarm_primary_manager
     - postgres_ping_results is defined
     - postgres_ping_result is defined
     - not (postgres_ping_result.is_available | default(false))

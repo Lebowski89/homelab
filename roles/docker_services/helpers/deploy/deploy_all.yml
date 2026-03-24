@@ -14,10 +14,10 @@
   ansible.builtin.set_fact:
     _compose_stacks_effective: >-
       {{
-        hostvars['mgt'].docker_services_compose_stacks
+        hostvars[docker_swarm_primary_manager].docker_services_compose_stacks
         if (
-          hostvars['mgt'].docker_services_compose_stacks is defined
-          and hostvars['mgt'].docker_services_compose_stacks is mapping
+          hostvars[docker_swarm_primary_manager].docker_services_compose_stacks is defined
+          and hostvars[docker_swarm_primary_manager].docker_services_compose_stacks is mapping
         )
         else {}
       }}
@@ -34,7 +34,7 @@
     deploy_stack_name: "{{ _stack_item.key }}"
     _stack_def: "{{ _stack_item.value | default({}, true) }}"
     deploy_stack_type: "{{ _stack_def.type | default('swarm', true) | string | trim }}"
-    docker_services_deploy_host: "{{ _stack_def.docker_services_deploy_host | default('mgt', true) | string | trim }}"
+    docker_services_deploy_host: "{{ _stack_def.docker_services_deploy_host | default(docker_swarm_primary_manager, true) | string | trim }}"
     docker_services_compose_services: "{{ _stack_def.services | default({}, true) }}"
     stack_networks: "{{ _stack_def.networks | default({}, true) }}"
     stack_volumes: "{{ _stack_def.volumes | default({}, true) }}"

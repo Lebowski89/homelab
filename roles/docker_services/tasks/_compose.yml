@@ -7,7 +7,7 @@
 - name: Ensure docker_services_compose_stacks exists on mgt
   ansible.builtin.set_fact:
     docker_services_compose_stacks: "{{ docker_services_compose_stacks | default({}) }}"
-  delegate_to: mgt
+  delegate_to: "{{ docker_swarm_primary_manager }}"
   delegate_facts: true
   run_once: true
 
