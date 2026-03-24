@@ -9,8 +9,8 @@ unpackerr:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "99"
-    PGID: "100"
+    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
+    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
     UMASK: "022"
     UN_WEBSERVER_METRICS: "true"
     UN_WEBSERVER_UPSTREAMS: "172.98.0.0/24"
@@ -81,7 +81,7 @@ unpackerr:
   volumes:
     media:
       type: bind
-      source: /mnt/user/data
+      source: "{{ hostvars['unraid'].docker_host_data_root }}"
       target: /data
       read_only: false
   deploy:

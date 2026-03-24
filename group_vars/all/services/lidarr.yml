@@ -13,8 +13,8 @@ lidarr:
       - "touch /data/media/music/.healthcheck && rm -f /data/media/music/.healthcheck || exit 1"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "99"
-    PGID: "100"
+    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
+    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
     UMASK: "022"
     LIDARR__APP__INSTANCENAME: "Lidarr"
     LIDARR__SERVER__PORT: "8686"
@@ -50,21 +50,15 @@ lidarr:
     - postgres_user_secret
     - postgres_pass_secret
   paths:
-    - path: /mnt/user/appdata/lidarr
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/lidarr"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
-    - path: /mnt/user/data/media/music
+    - path: "{{ hostvars['unraid'].docker_host_data_root }}/media/music"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
   copies:
     - src: files/themepark/98-themepark-lidarr
-      dest: /mnt/user/appdata/lidarr/98-themepark-lidarr
-      owner: 99
-      group: 100
+      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/lidarr/98-themepark-lidarr"
       mode: "0755"
       force: false
       wait: true
@@ -72,17 +66,17 @@ lidarr:
   volumes:
     config:
       type: bind
-      source: /mnt/user/appdata/lidarr
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/lidarr"
       target: /config
       read_only: false
     media:
       type: bind
-      source: /mnt/user/data
+      source: "{{ hostvars['unraid'].docker_host_data_root }}"
       target: /data
       read_only: false
     themepark:
       type: bind
-      source: /mnt/user/appdata/lidarr/98-themepark-lidarr
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/lidarr/98-themepark-lidarr"
       target: /etc/cont-init.d/98-themepark
       read_only: false
   traefik:

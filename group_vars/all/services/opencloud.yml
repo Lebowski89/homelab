@@ -39,37 +39,25 @@ opencloud:
         path: "/Porkbun"
         name: SMTP_USER
   paths:
-    - path: /mnt/user/appdata/opencloud
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0751"
-    - path: /mnt/user/appdata/opencloud/config
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud/config"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0751"
     - path: /mnt/user/opencloud/data
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0751"
-    - path: /mnt/user/appdata/opencloud/apps
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud/apps"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0751"
   templates:
     - src: configs/opencloud/csp.yaml.j2
-      dest: /mnt/user/appdata/opencloud/config/csp.yaml
-      owner: 1000
-      group: 1000
+      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud/config/csp.yaml"
       mode: "0664"
       force: true
     - src: configs/opencloud/banned-password-list.txt.j2
-      dest: /mnt/user/appdata/opencloud/config/banned-password-list.txt
-      owner: 1000
-      group: 1000
+      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud/config/banned-password-list.txt"
       mode: "0664"
       force: true
   swarm_env_templates:
@@ -82,17 +70,17 @@ opencloud:
   volumes:
     csp:
       type: bind
-      source: /mnt/user/appdata/opencloud/config/csp.yaml
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud/config/csp.yaml"
       target: /etc/opencloud/csp.yaml
       read_only: true
     banned_passwords:
       type: bind
-      source: /mnt/user/appdata/opencloud/config/banned-password-list.txt
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud/config/banned-password-list.txt"
       target: /etc/opencloud/banned-password-list.txt
       read_only: true
     opencloud_config:
       type: bind
-      source: /mnt/user/appdata/opencloud/config
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud/config"
       target: /etc/opencloud
       read_only: false
     opencloud_data:
@@ -102,7 +90,7 @@ opencloud:
       read_only: false
     opencloud_apps:
       type: bind
-      source: /mnt/user/appdata/opencloud/apps
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/opencloud/apps"
       target: /var/lib/opencloud/web/assets/apps
       read_only: false
   traefik:

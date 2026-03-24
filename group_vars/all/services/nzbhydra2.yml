@@ -16,8 +16,8 @@ nzbhydra2:
       - "http://127.0.0.1:5076/actuator/health/ping"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "99"
-    PGID: "100"
+    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
+    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
     UMASK: "022"
   infisical:
     fail_on_empty: true
@@ -53,15 +53,13 @@ nzbhydra2:
         path: "/SABnzbd"
         name: API
   paths:
-    - path: /mnt/user/appdata/nzbhydra2
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/nzbhydra2"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: /mnt/user/appdata/nzbhydra2
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/nzbhydra2"
       target: /config
       read_only: false
   traefik:
