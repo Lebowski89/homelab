@@ -1,0 +1,140 @@
+---
+
+unifi:
+  name: unifi
+  stack: unifi
+  container_name: unifi
+  image: ghcr.io/lemker/unifi-os-server:5.0.6
+  named_networks:
+    overlay:
+      external: true
+  cgroup: host
+  cap_add:
+    - NET_RAW
+    - NET_ADMIN
+  environment:
+    TZ: "{{ timezone }}"
+    UOS_SYSTEM_IP: "192.168.80.48"
+  ports:
+    ## UniFi OS Server GUI/API
+    gui:
+      published: 11443
+      target: 443
+    ## Device and application communication
+    communication:
+      published: 8080
+      target: 8080
+    ## STUN for device adoption and communication (also required for Remote Management)
+    stun:
+      published: 3478
+      target: 3478
+      protocol: udp
+    ## Device discovery during adoption
+    adoption:
+      published: 10003
+      target: 10003
+      protocol: udp
+    #
+    ### Optional Ports ###
+    #
+    ##  RTP (Real-time Transport Protocol) control protocol
+     #  rtp:
+     #    published: 5005
+     #    target: 5005
+    ##  UniFi Identity Hub
+     #  identify:
+     #    published: 9543
+     #    target: 9543
+    ##  UniFi mobile speed test
+     #  speed:
+     #    published: 6789
+     #    target: 6789
+    ##  UniFi Network Application GUI/API
+     #  network_gui:
+     #    published: 8443
+     #    target: 8443
+    ##  Secure Portal for Hotspot
+     #  hotspot_portal:
+     #    published: 8444
+     #    target: 8444
+    ##  Remote syslog capture
+     #  syslog:
+     #    published: 5514
+     #    target: 5514
+     #    protocol: udp
+    ##  UniFi Site Supervisor
+     #  site:
+     #    published: 11084
+     #    target: 11084
+    ##  AQMPS
+     #  aqmps:
+     #    published: 5671
+     #    target: 5671
+    ##  Hotspot portal redirection (HTTP)
+     #  hotspot_redirection_1:
+     #    published: 8880
+     #    target: 8880
+    ##  Hotspot portal redirection (HTTP)
+     #  hotspot_redirection_2:
+     #    published: 8881
+     #    target: 8881
+    ##  Hotspot portal redirection (HTTP)
+     #  hotspot_redirection_3:
+     #    published: 8882
+     #    target: 8882
+  paths:
+    - path: /opt/unifi-os
+      state: directory
+      owner: 1000
+      group: 1000
+      mode: "0755"
+  tmpfs:
+    - /run:exec
+    - /run/lock
+    - /tmp:exec
+    - /var/lib/journal
+    - /var/opt/unifi/tmp:size=64m
+  volumes:
+    cgroup:
+      type: bind
+      source: /sys/fs/cgroup
+      target: /sys/fs/cgroup
+      read_only: false
+    persistent:
+      type: bind
+      source: /opt/unifi-os/persistent
+      target: /persistent
+      read_only: false
+    var_log:
+      type: bind
+      source: /opt/unifi-os/var-log
+      target: /var/log
+      read_only: false
+    data:
+      type: bind
+      source: /opt/unifi-os/data
+      target: /data
+      read_only: false
+    srv:
+      type: bind
+      source: /opt/unifi-os/srv
+      target: /srv
+      read_only: false
+    var_lib_unifi:
+      type: bind
+      source: /opt/unifi-os/var-lib-unifi
+      target: /var/lib/unifi
+      read_only: false
+    var_lib_mongodb:
+      type: bind
+      source: /opt/unifi-os/var-lib-mongodb
+      target: /var/lib/mongodb
+      read_only: false
+    rabbitmq:
+      type: bind
+      source: /opt/unifi-os/etc-rabbitmq-ssl
+      target: /etc/rabbitmq/ssl
+      read_only: false
+  deploy:
+    type: container
+    host: mgt

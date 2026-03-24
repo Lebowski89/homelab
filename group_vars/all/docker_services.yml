@@ -162,7 +162,5 @@ docker_services:
     tags: [haproxy]
 
   ## services (unifi)
-  - name: unifi_db
-    tags: [apps, unifi, unifi-db]
   - name: unifi
     tags: [apps, unifi]
