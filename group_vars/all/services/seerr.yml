@@ -14,7 +14,7 @@ seerr:
       - "--spider"
       - "-q"
       - "http://127.0.0.1:5055/api/v1/status"
-  environment8:
+  environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars['mgt'].docker_host_puid | string }}"
     PGID: "{{ hostvars['mgt'].docker_host_pgid | string }}"
