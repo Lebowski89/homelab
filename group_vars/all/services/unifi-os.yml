@@ -83,10 +83,29 @@ unifi:
      #    published: 8882
      #    target: 8882
   paths:
-    - path: /opt/unifi-os
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os"
       state: directory
-      owner: 1000
-      group: 1000
+      mode: "0755"
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/persistent"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/var-log"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/data"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/srv"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/var-lib-unifi"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/var-lib-mongodb"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/etc-rabbitmq-ssl"
+      state: directory
       mode: "0755"
   tmpfs:
     - /run:exec
@@ -102,37 +121,37 @@ unifi:
       read_only: false
     persistent:
       type: bind
-      source: /opt/unifi-os/persistent
+      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/persistent"
       target: /persistent
       read_only: false
     var_log:
       type: bind
-      source: /opt/unifi-os/var-log
+      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/var-log"
       target: /var/log
       read_only: false
     data:
       type: bind
-      source: /opt/unifi-os/data
+      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/data"
       target: /data
       read_only: false
     srv:
       type: bind
-      source: /opt/unifi-os/srv
+      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/srv"
       target: /srv
       read_only: false
     var_lib_unifi:
       type: bind
-      source: /opt/unifi-os/var-lib-unifi
+      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/var-lib-unifi"
       target: /var/lib/unifi
       read_only: false
     var_lib_mongodb:
       type: bind
-      source: /opt/unifi-os/var-lib-mongodb
+      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/var-lib-mongodb"
       target: /var/lib/mongodb
       read_only: false
     rabbitmq:
       type: bind
-      source: /opt/unifi-os/etc-rabbitmq-ssl
+      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/unifi-os/etc-rabbitmq-ssl"
       target: /etc/rabbitmq/ssl
       read_only: false
   deploy:
