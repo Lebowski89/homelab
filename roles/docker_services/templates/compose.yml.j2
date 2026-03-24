@@ -31,13 +31,16 @@ services:
 {% if svc.pid is defined and (svc.pid | string | trim | length > 0) and _stack_type != 'swarm' %}
     pid: {{ svc.pid }}
 {% endif %}
+{% if svc.cgroup is defined and (svc.cgroup | string | trim | length > 0) and _stack_type != 'swarm' %}
+    cgroup: "{{ svc.cgroup }}"
+{% endif %}
     logging:
       driver: "{{ svc.logging.driver }}"
       options:
 {% for key, value in svc.logging.options.items() %}
         {{ key }}: "{{ value }}"
 {% endfor %}
-{% if svc.network_mode is defined and (svc.network_mode | string | trim | length > 0) %}
+{% if svc.network_mode is defined and (svc.network_mode | string | trim | length > 0) and _stack_type != 'swarm' %}
     network_mode: "{{ svc.network_mode }}"
 {% elif svc.networks is defined and (svc.networks | length > 0) %}
     networks:

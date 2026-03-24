@@ -121,6 +121,16 @@
         | ternary((docker_services_svc.pid | string | trim), omit)
       }}
 
+    cgroup: >-
+      {{
+        (
+          docker_services_svc_is_container
+          and (docker_services_svc.cgroup is defined)
+          and ((docker_services_svc.cgroup | string | trim) in ['host', 'private'])
+        )
+        | ternary((docker_services_svc.cgroup | string | trim), omit)
+      }}
+
     entrypoint: >-
       {{
         (
