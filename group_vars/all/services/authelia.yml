@@ -9,8 +9,8 @@ authelia:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "1000"
-    PGID: "1000"
+    PUID: "{{ hostvars['mgt'].docker_host_puid | string }}"
+    PGID: "{{ hostvars['mgt'].docker_host_pgid | string }}"
     UMASK: "022"
     AUTHELIA_SESSION_SECRET_FILE: /run/secrets/authelia_session_key_secret
     AUTHELIA_SESSION_REDIS_PASSWORD_FILE: /run/secrets/authelia_redis_secret
@@ -18,7 +18,7 @@ authelia:
     AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE: /run/secrets/postgres_pass_secret
     AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE: /run/secrets/authelia_jwt_key_secret
   env_file:
-    - /opt/authelia/.env
+    - "{{ hostvars['mgt'].docker_host_appdata_root }}/authelia/.env"
   infisical:
     fail_on_empty: true
     secrets_map:
@@ -74,34 +74,26 @@ authelia:
     - authelia_redis_secret
     - postgres_pass_secret
   paths:
-    - path: /opt/authelia
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/authelia"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
   templates:
     - src: configs/proxy/authelia/config.yml.j2
-      dest: /opt/authelia/configuration.yml
-      owner: 1000
-      group: 1000
+      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/authelia/configuration.yml"
       mode: "0664"
       force: true
     - src: configs/proxy/authelia/users_database.yml.j2
-      dest: /opt/authelia/users_database.yml
-      owner: 1000
-      group: 1000
+      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/authelia/users_database.yml"
       mode: "0664"
       force: true
     - src: configs/proxy/authelia/authelia.env.j2
-      dest: /opt/authelia/.env
-      owner: 1000
-      group: 1000
+      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/authelia/.env"
       mode: "0664"
       force: true
   volumes:
     config:
       type: bind
-      source: /opt/authelia
+      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/authelia"
       target: /config
       read_only: false
   postgres:
