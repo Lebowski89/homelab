@@ -16,7 +16,6 @@ syncthing:
     listening_tcp:
       published: 22000
       target: 22000
-      protocol: tcp
       mode: host
     listening_udp:
       published: 22000

@@ -16,8 +16,7 @@ themepark:
     web:
       published: 8089
       target: 80
-      protocol: tcp
-      mode: ingress
+      mode: host
   paths:
     - path: /opt/theme-park
       state: directory

@@ -19,7 +19,6 @@ haproxy:
     postgres:
       published: 5433
       target: 5433
-      protocol: tcp
       mode: host
   deploy:
     type: swarm

@@ -48,6 +48,15 @@
                     else omit
                   ),
 
+                  'cgroup': (
+                    cgroup
+                    if (_stack_deploy_type != 'swarm'
+                        and (cgroup is defined)
+                        and (cgroup is not sameas omit)
+                        and (cgroup | string | trim | length > 0))
+                    else omit
+                  ),
+
                   'entrypoint': (
                     entrypoint
                     if (entrypoint is defined)

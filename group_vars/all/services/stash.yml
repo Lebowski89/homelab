@@ -36,12 +36,6 @@ stash:
       - var: stashdb_api
         path: "/Stash"
         name: STASHDB_API
-  ports:
-    web:
-      published: 9999
-      target: 9999
-      protocol: tcp
-      mode: ingress
   paths:
     - path: /mnt/user/appdata/stash
       state: directory

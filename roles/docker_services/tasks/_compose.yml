@@ -121,6 +121,16 @@
         | ternary((docker_services_svc.pid | string | trim), omit)
       }}
 
+    cgroup: >-
+      {{
+        (
+          docker_services_svc_is_container
+          and (docker_services_svc.cgroup is defined)
+          and ((docker_services_svc.cgroup | string | trim) in ['host', 'private'])
+        )
+        | ternary((docker_services_svc.cgroup | string | trim), omit)
+      }}
+
     entrypoint: >-
       {{
         (
@@ -357,6 +367,21 @@
   vars:
     ports: "{{ docker_services_svc.ports }}"
     ports_action: "replace"
+
+################################
+# COMPOSE (TMPFS)
+################################
+
+- name: Set tmpfs variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type != "swarm"
+    - docker_services_svc.tmpfs is defined
+    - (docker_services_svc.tmpfs | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/tmpfs.yml"
+  vars:
+    tmpfs: "{{ docker_services_svc.tmpfs }}"
+    tmpfs_action: "replace"
 
 ################################
 # COMPOSE (VOLUMES)
