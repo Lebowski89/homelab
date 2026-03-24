@@ -52,7 +52,7 @@
     - name: Preferences | Fix "TranscoderTempDirectory"
       when:
         - docker_services_preferences_xml.stat.exists
-        - (hostvars['mgt'].docker_services_transcoder_path_fix | default(false)) | bool
+        - (hostvars[docker_swarm_primary_manager].docker_services_transcoder_path_fix | default(false)) | bool
       community.general.xml:
         path: "/opt/plex/Library/Application Support/Plex Media Server/Preferences.xml"
         xpath: /Preferences
