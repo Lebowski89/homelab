@@ -46,7 +46,7 @@
     - (infisical_fail_on_empty | default(true)) | bool
   ansible.builtin.assert:
     that:
-      - (vars[infisical_secret_item.var] | default('') | string | trim | length) > 0
+      - (lookup('ansible.builtin.vars', infisical_secret_item.var, default='') | string | trim | length) > 0
     fail_msg: >-
       Infisical secret {{ infisical_secret_item.path }}/{{ infisical_secret_item.name }}
       (var {{ infisical_secret_item.var }}) is empty
@@ -62,7 +62,7 @@
   ansible.builtin.set_fact:
     "{{ infisical_out_var | default('infisical_secrets') }}": >-
       {{
-        (vars[infisical_out_var | default('infisical_secrets')] | default({}))
+        (lookup('ansible.builtin.vars', infisical_out_var | default('infisical_secrets'), default={}))
         | combine({
             infisical_secret_item.var: lookup(
               'infisical.vault.read_secrets',
@@ -83,7 +83,13 @@
     - (infisical_fail_on_empty | default(true)) | bool
   ansible.builtin.assert:
     that:
-      - (vars[infisical_out_var | default('infisical_secrets')][infisical_secret_item.var] | default('') | string | trim | length) > 0
+      - (
+          lookup('ansible.builtin.vars', infisical_out_var | default('infisical_secrets'), default={})
+          .get(infisical_secret_item.var, '')
+          | string
+          | trim
+          | length
+        ) > 0
     fail_msg: >-
       Infisical secret {{ infisical_secret_item.path }}/{{ infisical_secret_item.name }}
       (key {{ infisical_secret_item.var }}) is empty
