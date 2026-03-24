@@ -9,8 +9,17 @@
 # postgres_infisical_user_name: "USER"
 # postgres_infisical_pass_name: "PASS"
 
+- name: Postgres | Resolve control host and DB endpoint
+  ansible.builtin.set_fact:
+    _docker_services_control_host: "{{ docker_services_control_host | default('mgt', true) | string | trim }}"
+    _postgres_login_host: >-
+      {{
+        hostvars[_docker_services_control_host].local_ip
+        | default(_docker_services_control_host, true)
+      }}
+
 - name: Postgres | Ensure creds exist (fetch from Infisical if missing)
-  when: inventory_hostname == "mgt"
+  when: inventory_hostname == _docker_services_control_host
   block:
     - name: Postgres | Detect if creds are missing
       ansible.builtin.set_fact:
@@ -40,14 +49,16 @@
         that:
           - (postgres_user | default('') | string | trim | length) > 0
           - (postgres_pass | default('') | string | trim | length) > 0
-        fail_msg: "postgres_user/postgres_pass are still empty on mgt after Infisical fetch."
+        fail_msg: >-
+          postgres_user/postgres_pass are still empty on {{ _docker_services_control_host }}
+          after Infisical fetch.
 
 ################################
 # DOCKER SECRET
 ################################
 
 - name: Prepare Postgres docker secret
-  when: inventory_hostname == "mgt"
+  when: inventory_hostname == _docker_services_control_host
   community.docker.docker_secret:
     name: postgres_pass_secret
     data: "{{ postgres_pass }}"
@@ -59,7 +70,7 @@
 
 - name: Normalize postgres database list from docker_services_svc schema
   when:
-    - inventory_hostname == "mgt"
+    - inventory_hostname == _docker_services_control_host
     - docker_services_svc.postgres is defined
     - (docker_services_svc.postgres.enable | default(false)) | bool
   ansible.builtin.set_fact:
@@ -80,10 +91,10 @@
 
 - name: Ping for existing database(s)
   when:
-    - inventory_hostname == "mgt"
+    - inventory_hostname == _docker_services_control_host
     - (_postgres_databases | default([]) | length) > 0
   community.postgresql.postgresql_ping:
-    login_host: 192.168.80.48
+    login_host: "{{ _postgres_login_host }}"
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_pass }}"
     login_port: 5433
@@ -95,12 +106,12 @@
 
 - name: Create postgres database(s) if missing
   when:
-    - inventory_hostname == "mgt"
+    - inventory_hostname == _docker_services_control_host
     - postgres_ping_results is defined
     - postgres_ping_result is defined
     - not (postgres_ping_result.is_available | default(false))
   community.postgresql.postgresql_db:
-    login_host: 192.168.80.48
+    login_host: "{{ _postgres_login_host }}"
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_pass }}"
     login_port: 5433
