@@ -41,8 +41,8 @@ sonarr:
           - "touch /data/media/tv/.healthcheck && rm -f /data/media/tv/.healthcheck || exit 1"
       environment:
         TZ: "{{ timezone }}"
-        PUID: "99"
-        PGID: "100"
+        PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
+        PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
         UMASK: "022"
         SONARR__APP__INSTANCENAME: "Sonarr"
         SONARR__SERVER__PORT: "8989"
@@ -78,21 +78,15 @@ sonarr:
         - postgres_user_secret
         - postgres_pass_secret
       paths:
-        - path: /mnt/user/appdata/sonarr
+        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/sonarr"
           state: directory
-          owner: 99
-          group: 100
           mode: "0755"
-        - path: /mnt/user/data/media/tv
+        - path: "{{ hostvars['unraid'].docker_host_data_root }}/media/tv"
           state: directory
-          owner: 99
-          group: 100
           mode: "0755"
       copies:
         - src: files/themepark/98-themepark-sonarr
-          dest: /mnt/user/appdata/sonarr/98-themepark-sonarr
-          owner: 99
-          group: 100
+          dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/sonarr/98-themepark-sonarr"
           mode: "0755"
           force: false
           wait: true
@@ -100,17 +94,17 @@ sonarr:
       volumes:
         config:
           type: bind
-          source: /mnt/user/appdata/sonarr
+          source: "{{ hostvars['unraid'].docker_host_appdata_root }}/sonarr"
           target: /config
           read_only: false
         media:
           type: bind
-          source: /mnt/user/data
+          source: "{{ hostvars['unraid'].docker_host_data_root }}"
           target: /data
           read_only: false
         themepark:
           type: bind
-          source: /mnt/user/appdata/sonarr/98-themepark-sonarr
+          source: "{{ hostvars['unraid'].docker_host_appdata_root }}/sonarr/98-themepark-sonarr"
           target: /etc/cont-init.d/98-themepark
           read_only: false
       postgres:
@@ -126,8 +120,8 @@ sonarr:
           - "touch /data/media/tv-4k/.healthcheck && rm -f /data/media/tv-4k/.healthcheck || exit 1"
       environment:
         TZ: "{{ timezone }}"
-        PUID: "99"
-        PGID: "100"
+        PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
+        PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
         UMASK: "022"
         SONARR__APP__INSTANCENAME: "Sonarr-4K"
         SONARR__SERVER__PORT: "8989"
@@ -163,21 +157,15 @@ sonarr:
         - postgres_user_secret
         - postgres_pass_secret
       paths:
-        - path: /mnt/user/appdata/sonarr-4k
+        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/sonarr-4k"
           state: directory
-          owner: 99
-          group: 100
           mode: "0755"
-        - path: /mnt/user/data/media/tv-4k
+        - path: "{{ hostvars['unraid'].docker_host_data_root }}/media/tv-4k"
           state: directory
-          owner: 99
-          group: 100
           mode: "0755"
       copies:
         - src: files/themepark/98-themepark-sonarr
-          dest: /mnt/user/appdata/sonarr-4k/98-themepark-sonarr
-          owner: 99
-          group: 100
+          dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/sonarr-4k/98-themepark-sonarr"
           mode: "0755"
           force: false
           wait: true
@@ -185,17 +173,17 @@ sonarr:
       volumes:
         config:
           type: bind
-          source: /mnt/user/appdata/sonarr-4k
+          source: "{{ hostvars['unraid'].docker_host_appdata_root }}/sonarr-4k"
           target: /config
           read_only: false
         media:
           type: bind
-          source: /mnt/user/data
+          source: "{{ hostvars['unraid'].docker_host_data_root }}"
           target: /data
           read_only: false
         themepark:
           type: bind
-          source: /mnt/user/appdata/sonarr-4k/98-themepark-sonarr
+          source: "{{ hostvars['unraid'].docker_host_appdata_root }}/sonarr-4k/98-themepark-sonarr"
           target: /etc/cont-init.d/98-themepark
           read_only: false
       postgres:

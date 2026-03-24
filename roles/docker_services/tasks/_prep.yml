@@ -219,8 +219,8 @@
   vars:
     paths: "{{ docker_services_svc.paths }}"
     docker_services_deploy_host: "{{ _fs_target }}"
-    default_owner: "{{ hostvars[_fs_target].puid | default('1000') }}"
-    default_group: "{{ hostvars[_fs_target].pgid | default('1000') }}"
+    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default(hostvars[_fs_target].puid | default('1000')) }}"
+    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default(hostvars[_fs_target].pgid | default('1000')) }}"
     default_mode: "0755"
   loop: "{{ docker_services_fs_hosts_effective }}"
   loop_control:
@@ -264,8 +264,8 @@
   vars:
     templates: "{{ docker_services_svc.templates }}"
     docker_services_deploy_host: "{{ _fs_target }}"
-    default_owner: "{{ puid }}"
-    default_group: "{{ pgid }}"
+    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default(hostvars[_fs_target].puid | default('1000')) }}"
+    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default(hostvars[_fs_target].pgid | default('1000')) }}"
   loop: "{{ docker_services_fs_hosts_effective }}"
   loop_control:
     loop_var: _fs_target

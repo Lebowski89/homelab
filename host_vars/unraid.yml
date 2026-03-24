@@ -7,6 +7,11 @@ local_ip: 192.168.80.20
 
 docker_swarm_hostname: "unraid"
 
+docker_host_puid: 99
+docker_host_pgid: 100
+docker_host_appdata_root: /mnt/user/appdata
+docker_host_data_root: /mnt/user/data
+
 docker_swarm_node_labels:
   role: worker
   ansible_host: unraid
