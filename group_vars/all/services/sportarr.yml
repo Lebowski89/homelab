@@ -9,34 +9,28 @@ sportarr:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "99"
-    PGID: "100"
+    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
+    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
     UMASK: "022"
   paths:
-    - path: /mnt/user/appdata/sportarr
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/sportarr"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
-    - path: /mnt/user/appdata/sportarr/config
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/sportarr/config"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
-    - path: /mnt/user/data/media/sport
+    - path: "{{ hostvars['unraid'].docker_host_data_root }}/media/sport"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: /mnt/user/appdata/sportarr/config
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/sportarr/config"
       target: /config
       read_only: false
     media:
       type: bind
-      source: /mnt/user/data
+      source: "{{ hostvars['unraid'].docker_host_data_root }}"
       target: /data
       read_only: false
   traefik:

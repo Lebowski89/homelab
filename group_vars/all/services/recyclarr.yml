@@ -26,44 +26,32 @@ recyclarr:
         path: "/Sonarr-4K"
         name: API
   paths:
-    - path: /mnt/user/appdata/recyclarr
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
-    - path: /mnt/user/appdata/recyclarr/configs
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr/configs"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
-    - path: /mnt/user/appdata/recyclarr/includes
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr/includes"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
   templates:
     - src: configs/recyclarr/secrets.yml.j2
-      dest: /mnt/user/appdata/recyclarr/secrets.yml
-      owner: 99
-      group: 100
+      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr/secrets.yml"
       mode: "0664"
       force: true
     - src: configs/recyclarr/config_radarr.yml.j2
-      dest: /mnt/user/appdata/recyclarr/configs/radarr.yml
-      owner: 99
-      group: 100
+      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr/configs/radarr.yml"
       mode: "0664"
       force: true
     - src: configs/recyclarr/config_sonarr.yml.j2
-      dest: /mnt/user/appdata/recyclarr/configs/sonarr.yml
-      owner: 99
-      group: 100
+      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr/configs/sonarr.yml"
       mode: "0664"
       force: true
   volumes:
     config:
       type: bind
-      source: /mnt/user/appdata/recyclarr
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr"
       target: /config
       read_only: false
   deploy:
