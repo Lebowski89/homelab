@@ -10,8 +10,8 @@ plex:
   devices:
     - /dev/dri:/dev/dri
   environment:
-    PUID: "1000"
-    PGID: "1000"
+    PUID: "{{ hostvars['plex'].docker_host_puid | string }}"
+    PGID: "{{ hostvars['plex'].docker_host_pgid | string }}"
     TZ: "{{ timezone }}"
     VERSION: "docker"
     PLEX_CLAIM: "{{ plex_claim_code | default(omit) }}"
@@ -64,40 +64,26 @@ plex:
       protocol: udp
       mode: host
   paths:
-    - path: /opt/plex
+    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
-    - path: /opt/plex/Library
+    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
-    - path: "/opt/plex/Library/Application Support"
+    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library/Application Support"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
-    - path: "/opt/plex/Library/Application Support/Plex Media Server"
+    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library/Application Support/Plex Media Server"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
-    - path: "/opt/plex/Library/Application Support/Plex Media Server/Plug-ins"
+    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library/Application Support/Plex Media Server/Plug-ins"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
-    - path: /opt/plex/Library/Logs
+    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library/Logs"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
-    - path: "/opt/plex/Library/Logs/Plex Media Server"
+    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library/Logs/Plex Media Server"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
   named_volumes:
     media_nfs:
@@ -109,7 +95,7 @@ plex:
   volumes:
     config:
       type: bind
-      source: /opt/plex
+      source: "{{ hostvars['plex'].docker_host_appdata_root }}/plex"
       target: /config
       read_only: false
     transcode:
