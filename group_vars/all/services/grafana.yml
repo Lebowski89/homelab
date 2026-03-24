@@ -32,15 +32,13 @@ grafana:
     - grafana_admin_user_secret
     - grafana_admin_pass_secret
   paths:
-    - path: /opt/grafana
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/grafana"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
   volumes:
     data:
       type: bind
-      source: /opt/grafana
+      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/grafana"
       target: /var/lib/grafana
       read_only: false
   traefik:

@@ -13,8 +13,8 @@ whisparr:
       - "touch /data/media/adult/.healthcheck && rm -f /data/media/adult/.healthcheck || exit 1"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "99"
-    PGID: "100"
+    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
+    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
     UMASK: "022"
     WHISPARR__APP__INSTANCENAME: "Whisparr"
     WHISPARR__SERVER__PORT: "6969"
@@ -50,21 +50,15 @@ whisparr:
     - postgres_user_secret
     - postgres_pass_secret
   paths:
-    - path: /mnt/user/appdata/whisparr
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/whisparr"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
-    - path: /mnt/user/data/media/adult
+    - path: "{{ hostvars['unraid'].docker_host_data_root }}/media/adult"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
   copies:
     - src: files/themepark/98-themepark-whisparr
-      dest: /mnt/user/appdata/whisparr/98-themepark-whisparr
-      owner: 99
-      group: 100
+      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/whisparr/98-themepark-whisparr"
       mode: "0755"
       force: false
       wait: true
@@ -72,17 +66,17 @@ whisparr:
   volumes:
     config:
       type: bind
-      source: /mnt/user/appdata/whisparr
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/whisparr"
       target: /config
       read_only: false
     media:
       type: bind
-      source: /mnt/user/data
+      source: "{{ hostvars['unraid'].docker_host_data_root }}"
       target: /data
       read_only: false
     themepark:
       type: bind
-      source: /mnt/user/appdata/whisparr/98-themepark-whisparr
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/whisparr/98-themepark-whisparr"
       target: /etc/cont-init.d/98-themepark
       read_only: false
   traefik:

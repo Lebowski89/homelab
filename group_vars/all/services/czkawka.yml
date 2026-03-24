@@ -9,26 +9,24 @@ czkawka:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    USER_ID: "99"
-    GROUP_ID: "100"
+    USER_ID: "{{ hostvars['unraid'].docker_host_puid | string }}"
+    GROUP_ID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
     UMASK: "022"
     DARK_MODE: "1"
     WEB_FILE_MANAGER: "1"
   paths:
-    - path: /mnt/user/appdata/czkawka
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/czkawka"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: /mnt/user/appdata/czkawka
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/czkawka"
       target: /config
       read_only: false
     media:
       type: bind
-      source: /mnt/user/data
+      source: "{{ hostvars['unraid'].docker_host_data_root }}"
       target: /storage
       read_only: false
   traefik:

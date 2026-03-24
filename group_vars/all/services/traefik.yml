@@ -16,8 +16,8 @@ traefik:
       - "http://127.0.0.1:8081/ping"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "1000"
-    PGID: "1000"
+    PUID: "{{ hostvars['mgt'].docker_host_puid | string }}"
+    PGID: "{{ hostvars['mgt'].docker_host_pgid | string }}"
     UMASK: "022"
     CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_secret
   infisical:
@@ -39,55 +39,39 @@ traefik:
       target: 443
       mode: host
   paths:
-    - path: /opt/traefik
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
-    - path: /opt/traefik/dynamic
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/dynamic"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
-    - path: /opt/traefik/acme.json
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/acme.json"
       state: touch
-      owner: 1000
-      group: 1000
       mode: "0600"
   templates:
     - src: configs/proxy/traefik/config.yml.j2
-      dest: /opt/traefik/traefik.yml
-      owner: 1000
-      group: 1000
+      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/traefik.yml"
       mode: "0664"
       force: true
     - src: configs/proxy/traefik/middlewares.yml.j2
-      dest: /opt/traefik/dynamic/middlewares.yml
-      owner: 1000
-      group: 1000
+      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/dynamic/middlewares.yml"
       mode: "0664"
       force: true
     - src: configs/proxy/authelia/middleware.yml.j2
-      dest: /opt/traefik/dynamic/authelia-middleware.yml
-      owner: 1000
-      group: 1000
+      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/dynamic/authelia-middleware.yml"
       mode: "0664"
     - src: configs/proxy/authelia/router.yml.j2
-      dest: /opt/traefik/dynamic/authelia-router.yml
-      owner: 1000
-      group: 1000
+      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/dynamic/authelia-router.yml"
       mode: "0664"
       force: true
     - src: configs/proxy/traefik/dashboard.yml.j2
-      dest: /opt/traefik/dynamic/traefik-dashboard.yml
-      owner: 1000
-      group: 1000
+      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/dynamic/traefik-dashboard.yml"
       mode: "0664"
       force: true
   volumes:
     config:
       type: bind
-      source: /opt/traefik
+      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik"
       target: /etc/traefik
       read_only: false
   cloudflare:

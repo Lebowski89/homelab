@@ -16,8 +16,8 @@ tautulli:
       - "http://127.0.0.1:8181/status"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "1000"
-    PGID: "1000"
+    PUID: "{{ hostvars['plex'].docker_host_puid | string }}"
+    PGID: "{{ hostvars['plex'].docker_host_pgid | string }}"
     UMASK: "022"
     WEBUI_PORTS: "8181/tcp,8181/udp"
     TP_SCHEME: "http"
@@ -25,16 +25,12 @@ tautulli:
     TP_HOTIO: "true"
     TP_THEME: "hotline"
   paths:
-    - path: /opt/tautulli
+    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/tautulli"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
   copies:
     - src: files/themepark/98-themepark-tautulli
-      dest: /opt/tautulli/98-themepark-tautulli
-      owner: 1000
-      group: 1000
+      dest: "{{ hostvars['plex'].docker_host_appdata_root }}/tautulli/98-themepark-tautulli"
       mode: "0755"
       force: false
       wait: true
@@ -42,12 +38,12 @@ tautulli:
   volumes:
     config:
       type: bind
-      source: /opt/tautulli
+      source: "{{ hostvars['plex'].docker_host_appdata_root }}/tautulli"
       target: /config
       read_only: false
     themepark:
       type: bind
-      source: /opt/tautulli/98-themepark-tautulli
+      source: "{{ hostvars['plex'].docker_host_appdata_root }}/tautulli/98-themepark-tautulli"
       target: /etc/cont-init.d/98-themepark
       read_only: false
   traefik:

@@ -9,8 +9,8 @@ themepark:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "1000"
-    PGID: "1000"
+    PUID: "{{ hostvars['mgt'].docker_host_puid | string }}"
+    PGID: "{{ hostvars['mgt'].docker_host_pgid | string }}"
     UMASK: "022"
   ports:
     web:
@@ -18,15 +18,13 @@ themepark:
       target: 80
       mode: host
   paths:
-    - path: /opt/theme-park
+    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/theme-park"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: /opt/theme-park
+      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/theme-park"
       target: /config
       read_only: false
   deploy:

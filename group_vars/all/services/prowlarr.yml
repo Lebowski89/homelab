@@ -15,8 +15,8 @@ prowlarr:
       - "http://localhost:9696"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "99"
-    PGID: "100"
+    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
+    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
     UMASK: "022"
     PROWLARR__APP__INSTANCENAME: "Prowlarr"
     PROWLARR__SERVER__PORT: "9696"
@@ -52,16 +52,12 @@ prowlarr:
     - postgres_user_secret
     - postgres_pass_secret
   paths:
-    - path: /mnt/user/appdata/prowlarr
+    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/prowlarr"
       state: directory
-      owner: 99
-      group: 100
       mode: "0755"
   copies:
     - src: files/themepark/98-themepark-prowlarr
-      dest: /mnt/user/appdata/prowlarr/98-themepark-prowlarr
-      owner: 99
-      group: 100
+      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/prowlarr/98-themepark-prowlarr"
       mode: "0755"
       force: false
       wait: true
@@ -69,17 +65,17 @@ prowlarr:
   volumes:
     config:
       type: bind
-      source: /mnt/user/appdata/prowlarr
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/prowlarr"
       target: /config
       read_only: false
     media:
       type: bind
-      source: /mnt/user/data
+      source: "{{ hostvars['unraid'].docker_host_data_root }}"
       target: /data
       read_only: false
     themepark:
       type: bind
-      source: /mnt/user/appdata/prowlarr/98-themepark-prowlarr
+      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/prowlarr/98-themepark-prowlarr"
       target: /etc/cont-init.d/98-themepark
       read_only: false
   traefik:
