@@ -1,5 +1,7 @@
 ---
 
+docker_services_primary_manager: mgt
+
 docker_services:
   ## services (core)
   - name: gitea

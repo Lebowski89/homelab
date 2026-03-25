@@ -11,9 +11,9 @@
 - name: Assert primary swarm manager is defined
   ansible.builtin.assert:
     that:
-      - docker_services_primary_manager is defined
-      - docker_services_primary_manager in groups['swarm_managers']
-    fail_msg: "docker_services_primary_manager must be defined and be a member of swarm_managers."
+      - docker_swarm_primary_manager is defined
+      - docker_swarm_primary_manager in groups['swarm_managers']
+    fail_msg: "docker_swarm_primary_manager must be defined and be a member of swarm_managers."
 
 - name: Assert local_ip is defined for swarm node
   ansible.builtin.assert:
@@ -26,7 +26,7 @@
   community.docker.docker_swarm:
     state: present
     advertise_addr: "{{ local_ip }}"
-  when: inventory_hostname == docker_services_primary_manager
+  when: inventory_hostname == docker_swarm_primary_manager
   register: docker_swarm_init_result
   tags: docker_swarm_init
 
@@ -38,7 +38,7 @@
       - join-token
       - -q
       - worker
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ docker_swarm_primary_manager }}"
   run_once: true
   register: docker_swarm_worker_token_cmd
   changed_when: false
@@ -52,7 +52,7 @@
       - join-token
       - -q
       - manager
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ docker_swarm_primary_manager }}"
   run_once: true
   register: docker_swarm_manager_token_cmd
   changed_when: false
@@ -62,7 +62,7 @@
   ansible.builtin.set_fact:
     docker_swarm_worker_join_token: "{{ docker_swarm_worker_token_cmd.stdout }}"
     docker_swarm_manager_join_token: "{{ docker_swarm_manager_token_cmd.stdout }}"
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ docker_swarm_primary_manager }}"
   delegate_facts: true
   run_once: true
   tags: docker_swarm_join
@@ -72,11 +72,11 @@
     state: join
     advertise_addr: "{{ local_ip }}"
     remote_addrs:
-      - "{{ hostvars[docker_services_primary_manager].local_ip }}:2377"
-    join_token: "{{ hostvars[docker_services_primary_manager].docker_swarm_manager_join_token }}"
+      - "{{ hostvars[docker_swarm_primary_manager].local_ip }}:2377"
+    join_token: "{{ hostvars[docker_swarm_primary_manager].docker_swarm_manager_join_token }}"
   when:
     - inventory_hostname in groups['swarm_managers']
-    - inventory_hostname != docker_services_primary_manager
+    - inventory_hostname != docker_swarm_primary_manager
   tags: docker_swarm_join
 
 - name: Join workers to swarm
@@ -84,13 +84,13 @@
     state: join
     advertise_addr: "{{ local_ip }}"
     remote_addrs:
-      - "{{ hostvars[docker_services_primary_manager].local_ip }}:2377"
-    join_token: "{{ hostvars[docker_services_primary_manager].docker_swarm_worker_join_token }}"
+      - "{{ hostvars[docker_swarm_primary_manager].local_ip }}:2377"
+    join_token: "{{ hostvars[docker_swarm_primary_manager].docker_swarm_worker_join_token }}"
   when: inventory_hostname in groups['swarm_workers']
   tags: docker_swarm_join
 
 - name: Conduct overlay network tasks
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ docker_swarm_primary_manager }}"
   delegate_facts: true
   run_once: true
   tags: docker_swarm_network
@@ -114,7 +114,7 @@
     hostname: "{{ docker_swarm_hostname }}"
     labels: "{{ docker_swarm_node_labels }}"
     labels_state: merge
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ docker_swarm_primary_manager }}"
   when:
     - inventory_hostname in groups['swarm']
     - docker_swarm_node_labels is defined

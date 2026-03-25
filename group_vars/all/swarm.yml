@@ -1,5 +1,5 @@
 ---
 
-docker_services_primary_manager: mgt
+docker_swarm_primary_manager: mgt
 
 docker_network: overlay
