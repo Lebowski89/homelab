@@ -9,10 +9,10 @@ gotify:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['mgt'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['mgt'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | string }}"
   env_file:
-    - "{{ hostvars['mgt'].docker_host_appdata_root }}/gotify/.env"
+    - "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify/.env"
   infisical:
     fail_on_empty: true
     secrets_map:
@@ -23,24 +23,24 @@ gotify:
         path: "/Postgres"
         name: PASS
   paths:
-    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/gotify"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/gotify/images"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify/images"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/gotify/plugins"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify/plugins"
       state: directory
       mode: "0755"
   templates:
     - src: configs/gotify.env.j2
-      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/gotify/.env"
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify/.env"
       mode: "0664"
       force: true
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/gotify"
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify"
       target: /app/data
       read_only: false
   postgres:
@@ -56,8 +56,9 @@ gotify:
     type: swarm
     mode: replicated
     replicas: 1
-    host: mgt
-    constraints: node.labels.ansible_host == mgt
+    host: "{{ docker_services_primary_manager }}"
+    constraints:
+      - node.labels.docker_services_host == docker_services_primary_manager
     restart_policy:
       condition: on-failure
       delay: 10s

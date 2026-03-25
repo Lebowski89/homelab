@@ -16,13 +16,13 @@ qui:
       - "http://127.0.0.1:7476/"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
     UMASK: "022"
   env_file:
     - /opt/stacks/qui.env
   paths:
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/qui"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qui"
       state: directory
       mode: "0755"
   swarm_env_templates:
@@ -35,12 +35,12 @@ qui:
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/qui"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qui"
       target: /config
       read_only: false
     media:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_data_root }}"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}"
       target: /data
       read_only: false
   traefik:
@@ -57,5 +57,6 @@ qui:
     type: swarm
     mode: replicated
     replicas: 1
-    host: unraid
-    constraints: node.labels.ansible_host == unraid
+    host: "{{ docker_services_unraid_host }}"
+    constraints:
+      - node.labels.docker_services_host == docker_services_unraid_host

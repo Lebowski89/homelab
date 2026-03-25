@@ -1,0 +1,145 @@
+---
+
+################################
+# PREP (PATHS)
+################################
+
+- name: Create filesystem paths (on filesystem hosts)
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - docker_services_svc.paths is defined
+    - (docker_services_svc.paths | length > 0)
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/helpers/prep/paths.yml"
+    apply:
+      tags: [deploy, update, recreate]
+  vars:
+    paths: "{{ docker_services_svc.paths }}"
+    docker_services_deploy_host: "{{ _fs_target }}"
+    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default(hostvars[_fs_target].puid | default('1000')) }}"
+    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default(hostvars[_fs_target].pgid | default('1000')) }}"
+    default_mode: "0755"
+  loop: "{{ docker_services_fs_hosts_effective }}"
+  loop_control:
+    loop_var: _fs_target
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (COPY FILES)
+################################
+
+- name: Copy static files (on filesystem hosts)
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - docker_services_svc.copies is defined
+    - (docker_services_svc.copies | length > 0)
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/helpers/prep/copies.yml"
+    apply:
+      tags: [deploy, update, recreate]
+  vars:
+    copies: "{{ docker_services_svc.copies }}"
+    docker_services_deploy_host: "{{ _fs_target }}"
+    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default(hostvars[_fs_target].puid | default('1000')) }}"
+    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default(hostvars[_fs_target].pgid | default('1000')) }}"
+  loop: "{{ docker_services_fs_hosts_effective }}"
+  loop_control:
+    loop_var: _fs_target
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (TEMPLATES)
+################################
+
+- name: Render templates (on filesystem host)
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - docker_services_svc.templates is defined
+    - (docker_services_svc.templates | length > 0)
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/helpers/prep/templates.yml"
+    apply:
+      tags: [deploy, update, recreate]
+  vars:
+    templates: "{{ docker_services_svc.templates }}"
+    docker_services_deploy_host: "{{ _fs_target }}"
+    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default(hostvars[_fs_target].puid | default('1000')) }}"
+    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default(hostvars[_fs_target].pgid | default('1000')) }}"
+  loop: "{{ docker_services_fs_hosts_effective }}"
+  loop_control:
+    loop_var: _fs_target
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (SWARM ENV TEMPLATES)
+################################
+
+- name: Render swarm env templates (always on services manager)
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - (docker_services_stack_deploy_type | string | trim) == "swarm"
+    - docker_services_svc.swarm_env_templates is defined
+    - (docker_services_svc.swarm_env_templates | length > 0)
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/helpers/prep/templates.yml"
+    apply:
+      tags: [deploy, update, recreate]
+  vars:
+    templates: "{{ docker_services_svc.swarm_env_templates }}"
+    docker_services_deploy_host: "{{ docker_services_primary_manager }}"
+    default_owner: "{{ hostvars[docker_services_primary_manager].docker_host_puid | default(hostvars[docker_services_primary_manager].puid | default('1000')) }}"
+    default_group: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | default(hostvars[docker_services_primary_manager].pgid | default('1000')) }}"
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (TEMPLATE MIDDLEWARES)
+################################
+
+- name: Render Traefik app router file (on traefik host)
+  when:
+    - docker_services_svc.traefik is defined
+    - (docker_services_svc.traefik.enable | default(false)) | bool
+  ansible.builtin.template:
+    src: templates/configs/proxy/traefik/router_template.yml.j2
+    dest: "/opt/traefik/dynamic/{{ docker_services_svc.name }}-middleware.yml"
+    owner: "1000"
+    group: "1000"
+    mode: "0644"
+    force: true
+  vars:
+    tr_router_name: "{{ docker_services_svc.name }}"
+    tr_address: >-
+      {{
+        (docker_services_svc.traefik.subdomain | default(docker_services_svc.name, true))
+        ~ '.'
+        ~ (
+            docker_services_svc.traefik.zone
+            | default(hostvars[docker_services_primary_manager].cloudflare_zone, true)
+          )
+      }}
+    tr_port: "{{ (docker_services_svc.traefik.port | default(docker_services_svc.ports.web.target)) | int }}"
+    tr_authelia_enable: "{{ (docker_services_svc.traefik.sso | default('')) == 'authelia' }}"
+    tr_internal_api: "{{ (docker_services_svc.traefik.internal_api | default(false)) | bool }}"
+    tr_internal_api_matchers: >-
+      {{
+        (
+          docker_services_svc.traefik.internal_api_rules
+          if (
+            docker_services_svc.traefik.internal_api_rules is defined
+            and docker_services_svc.traefik.internal_api_rules is sequence
+            and docker_services_svc.traefik.internal_api_rules is not string
+          )
+          else []
+        )
+      }}
+    tr_theme_enable: >-
+      {{
+        (docker_services_svc.traefik.themepark.app | default('')) | length > 0
+        and
+        (docker_services_svc.traefik.themepark.theme | default('')) | length > 0
+      }}
+    tr_theme_app: "{{ docker_services_svc.traefik.themepark.app | default('') }}"
+    tr_theme_theme: "{{ docker_services_svc.traefik.themepark.theme | default('') }}"
+    tr_backend_address: "http://{{ docker_services_svc.traefik.backend_host | default(docker_services_svc.name) }}:{{ tr_port }}"
+  delegate_to: "{{ docker_services_primary_manager }}"
+  tags: [deploy, update, recreate]

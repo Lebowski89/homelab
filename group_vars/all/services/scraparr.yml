@@ -10,8 +10,8 @@ scraparr:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['mgt'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['mgt'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | string }}"
     UMASK: "022"
     GENERAL_PORT: "7100"
     BAZARR_URL: "http://bazarr:6767"
@@ -82,9 +82,9 @@ scraparr:
     type: swarm
     mode: replicated
     replicas: 1
-    host: mgt
+    host: "{{ docker_services_primary_manager }}"
     constraints:
-      - node.labels.ansible_host == mgt
+      - node.labels.docker_services_host == docker_services_primary_manager
     restart_policy:
       condition: on-failure
       delay: 10s

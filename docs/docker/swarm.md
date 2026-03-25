@@ -8,11 +8,11 @@ The `docker` role includes tasks that:
 
 These Swarm tasks make use of group_vars and run tags during the init and join process:
 
-- `docker_swarm_primary_manager` (group_var - designates the primary Swarm manager)
+- `docker_services_primary_manager` (group_var - designates the primary Swarm manager)
 - `skynet raw --tags docker_swarm` (Initiates and then joins managers and workers)
 - `skynet limit (target_host) raw --tags docker_swarm_init` (Initiates the Swarm on a single manager)
 - `skynet limit (target_host) raw --tags docker_swarm_join` (Joins a single worker or manager to the Swarm)
-- `skynet raw --tags docker_swarm_network` (Creates the Overlay Network. Delegated to the `docker_swarm_primary_manager`)
+- `skynet raw --tags docker_swarm_network` (Creates the Overlay Network. Delegated to the `docker_services_primary_manager`)
 
 Swarm managers and workers are defined in the hosts.ini file:
 

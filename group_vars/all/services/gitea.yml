@@ -20,7 +20,7 @@ gitea:
     USER_GID: "1000"
     UMASK: "022"
   env_file:
-    - "{{ hostvars['mgt'].docker_host_appdata_root }}/gitea/.env"
+    - "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gitea/.env"
   infisical:
     fail_on_empty: true
     secrets_map:
@@ -31,18 +31,18 @@ gitea:
         path: "/Postgres"
         name: PASS
   paths:
-    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/gitea"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gitea"
       state: directory
       mode: "0755"
   templates:
     - src: configs/gitea.env.j2
-      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/gitea/.env"
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gitea/.env"
       mode: "0664"
       force: true
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/gitea"
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gitea"
       target: /data
       read_only: false
   postgres:
@@ -59,8 +59,9 @@ gitea:
     type: swarm
     mode: replicated
     replicas: 1
-    host: mgt
-    constraints: node.labels.ansible_host == mgt
+    host: "{{ docker_services_primary_manager }}"
+    constraints:
+      - node.labels.docker_services_host == docker_services_primary_manager
     restart_policy:
       condition: on-failure
       delay: 10s

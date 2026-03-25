@@ -39,13 +39,13 @@ autobrr:
         path: "/Postgres"
         name: PASS
   paths:
-    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/autobrr"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/autobrr"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/autobrr"
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/autobrr"
       target: /config
       read_only: false
   postgres:
@@ -65,9 +65,9 @@ autobrr:
     type: swarm
     mode: replicated
     replicas: 1
-    host: mgt
+    host: "{{ docker_services_primary_manager }}"
     constraints:
-      - node.labels.ansible_host == mgt
+      - node.labels.docker_services_host == docker_services_primary_manager
     restart_policy:
       condition: on-failure
       delay: 10s

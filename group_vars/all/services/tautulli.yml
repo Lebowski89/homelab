@@ -16,8 +16,8 @@ tautulli:
       - "http://127.0.0.1:8181/status"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['plex'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['plex'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_plex_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_plex_host].docker_host_pgid | string }}"
     UMASK: "022"
     WEBUI_PORTS: "8181/tcp,8181/udp"
     TP_SCHEME: "http"
@@ -25,12 +25,12 @@ tautulli:
     TP_HOTIO: "true"
     TP_THEME: "hotline"
   paths:
-    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/tautulli"
+    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/tautulli"
       state: directory
       mode: "0755"
   copies:
     - src: files/themepark/98-themepark-tautulli
-      dest: "{{ hostvars['plex'].docker_host_appdata_root }}/tautulli/98-themepark-tautulli"
+      dest: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/tautulli/98-themepark-tautulli"
       mode: "0755"
       force: false
       wait: true
@@ -38,12 +38,12 @@ tautulli:
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['plex'].docker_host_appdata_root }}/tautulli"
+      source: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/tautulli"
       target: /config
       read_only: false
     themepark:
       type: bind
-      source: "{{ hostvars['plex'].docker_host_appdata_root }}/tautulli/98-themepark-tautulli"
+      source: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/tautulli/98-themepark-tautulli"
       target: /etc/cont-init.d/98-themepark
       read_only: false
   traefik:
@@ -65,9 +65,9 @@ tautulli:
     type: swarm
     mode: replicated
     replicas: 1
-    host: plex
+    host: "{{ docker_services_plex_host }}"
     constraints:
-      - node.labels.ansible_host == plex
+      - node.labels.docker_services_host == docker_services_plex_host
     restart_policy:
       condition: on-failure
       delay: 10s

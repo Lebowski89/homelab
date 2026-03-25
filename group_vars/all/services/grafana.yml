@@ -32,13 +32,13 @@ grafana:
     - grafana_admin_user_secret
     - grafana_admin_pass_secret
   paths:
-    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/grafana"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana"
       state: directory
       mode: "0755"
   volumes:
     data:
       type: bind
-      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/grafana"
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana"
       target: /var/lib/grafana
       read_only: false
   traefik:
@@ -51,9 +51,9 @@ grafana:
     type: swarm
     mode: replicated
     replicas: 1
-    host: mgt
+    host: "{{ docker_services_primary_manager }}"
     constraints:
-      - node.labels.ansible_host == mgt
+      - node.labels.docker_services_host == docker_services_primary_manager
     restart_policy:
       condition: on-failure
       delay: 10s

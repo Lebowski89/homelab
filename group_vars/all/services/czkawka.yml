@@ -9,24 +9,24 @@ czkawka:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    USER_ID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    GROUP_ID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    USER_ID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    GROUP_ID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
     UMASK: "022"
     DARK_MODE: "1"
     WEB_FILE_MANAGER: "1"
   paths:
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/czkawka"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/czkawka"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/czkawka"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/czkawka"
       target: /config
       read_only: false
     media:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_data_root }}"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}"
       target: /storage
       read_only: false
   traefik:
@@ -39,9 +39,9 @@ czkawka:
     type: swarm
     mode: replicated
     replicas: 1
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"
     constraints:
-      - node.labels.ansible_host == unraid
+      - node.labels.docker_services_host == docker_services_unraid_host
     restart_policy:
       condition: on-failure
       delay: 10s

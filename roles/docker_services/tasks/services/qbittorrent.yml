@@ -6,8 +6,8 @@
 
 - name: Qbit prep | Set qBittorrent hosts
   ansible.builtin.set_fact:
-    docker_services_qbittorrent_host: "plex"
-    docker_services_qbittorrent_xs_host: "plex"
+    docker_services_qbittorrent_host: "unraid"
+    docker_services_qbittorrent_xs_host: "unraid"
   run_once: true
 
 ################################
