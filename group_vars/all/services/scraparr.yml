@@ -10,8 +10,8 @@ scraparr:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['mgt'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['mgt'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_swarm_primary_manager].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_swarm_primary_manager].docker_host_pgid | string }}"
     UMASK: "022"
     GENERAL_PORT: "7100"
     BAZARR_URL: "http://bazarr:6767"
