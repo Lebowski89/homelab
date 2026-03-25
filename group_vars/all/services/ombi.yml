@@ -15,8 +15,8 @@ ombi:
       - "http://localhost:3579/api/v1/Status"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_swarm_primary_manager].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_swarm_primary_manager].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | string }}"
     UMASK: "022"
   infisical:
     fail_on_empty: true
@@ -30,21 +30,21 @@ ombi:
         name: PASS
         docker_secret: postgres_pass_secret
   paths:
-    - path: "{{ hostvars[docker_swarm_primary_manager].docker_host_appdata_root }}/ombi"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/ombi"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_swarm_primary_manager].docker_host_appdata_root }}/ombi/config"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/ombi/config"
       state: directory
       mode: "0755"
   templates:
     - src: configs/ombi.json.j2
-      dest: "{{ hostvars[docker_swarm_primary_manager].docker_host_appdata_root }}/ombi/config/database.json"
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/ombi/config/database.json"
       mode: "0664"
       force: true
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_swarm_primary_manager].docker_host_appdata_root }}/ombi/config"
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/ombi/config"
       target: /config
       read_only: false
   postgres:

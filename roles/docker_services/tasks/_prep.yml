@@ -54,7 +54,7 @@
 
 - name: Prep | Fetch Infisical secrets (docker_services_svc.infisical)
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.infisical is defined
     - docker_services_svc.infisical.secrets_map is defined
     - (docker_services_svc.infisical.secrets_map | length > 0)
@@ -78,13 +78,13 @@
 
 - name: Prep | Propagate Infisical flattened vars to deploy host
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.infisical is defined
     - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
-    - (docker_services_deploy_host_effective != docker_swarm_primary_manager)
+    - (docker_services_deploy_host_effective != docker_services_primary_manager)
     - (infisical_flatten | default(true)) | bool
   ansible.builtin.set_fact:
-    "{{ inf_item.var }}": "{{ hostvars[docker_swarm_primary_manager][inf_item.var] | default('') }}"
+    "{{ inf_item.var }}": "{{ hostvars[docker_services_primary_manager][inf_item.var] | default('') }}"
   loop: "{{ docker_services_svc.infisical.secrets_map }}"
   loop_control:
     loop_var: inf_item
@@ -95,15 +95,15 @@
 
 - name: Prep | Propagate Infisical dict to deploy host
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.infisical is defined
     - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
-    - (docker_services_deploy_host_effective != docker_swarm_primary_manager)
+    - (docker_services_deploy_host_effective != docker_services_primary_manager)
     - not (infisical_flatten | default(true)) | bool
   ansible.builtin.set_fact:
     "{{ infisical_out_var | default('infisical_secrets') }}": >-
       {{
-        hostvars[docker_swarm_primary_manager][infisical_out_var | default('infisical_secrets')] | default({})
+        hostvars[docker_services_primary_manager][infisical_out_var | default('infisical_secrets')] | default({})
       }}
   delegate_to: "{{ docker_services_deploy_host_effective }}"
   delegate_facts: true
@@ -118,7 +118,7 @@
     - docker_services_svc.infisical is defined
     - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
     # Swarm secrets must be created on manager (your mgt controller)
-    - (docker_services_stack_deploy_type == 'swarm') | ternary(inventory_hostname == docker_swarm_primary_manager, docker_services_is_deploy_host)
+    - (docker_services_stack_deploy_type == 'swarm') | ternary(inventory_hostname == docker_services_primary_manager, docker_services_is_deploy_host)
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/helpers/prep/secrets.yml"
     apply:
@@ -131,7 +131,7 @@
 
 - name: Prep | Swarm configs
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.swarm_configs is defined
     - (docker_services_svc.swarm_configs | length) > 0
   ansible.builtin.include_tasks:
@@ -140,7 +140,7 @@
       tags: [deploy, update, recreate]
   vars:
     swarm_configs: "{{ docker_services_svc.swarm_configs }}"
-    docker_services_deploy_host: "{{ docker_services_svc.swarm_config_host | default(docker_swarm_primary_manager, true) }}"
+    docker_services_deploy_host: "{{ docker_services_svc.swarm_config_host | default(docker_services_primary_manager, true) }}"
   tags: [deploy, update, recreate]
 
 ################################
@@ -149,7 +149,7 @@
 
 - name: Prep | Authelia key material (argon2/session/jwt/storage)
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - (docker_services_svc.name | default('') | string | trim) == "authelia"
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/tasks/sub_tasks/prep/authelia/tasker.yml"
@@ -164,7 +164,7 @@
 
 - name: Create Postgres database
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.postgres is defined
     - (docker_services_svc.postgres.enable | default(false)) | bool
   ansible.builtin.include_tasks:
@@ -179,7 +179,7 @@
 
 - name: Hash qBittorrent passwords
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - (docker_services_svc.stack | default('') | string | trim) == "qbittorrent"
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/tasks/sub_tasks/prep/qbittorrent.yml"
@@ -193,7 +193,7 @@
 
 - name: Ensure Cloudflare creds exist (Infisical when missing)
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - not (ci_mode | default(false)) | bool
     - docker_services_svc.cloudflare is defined
     - (docker_services_svc.cloudflare.enable | default(false)) | bool
@@ -209,7 +209,7 @@
 
 - name: Create filesystem paths (on filesystem hosts)
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.paths is defined
     - (docker_services_svc.paths | length > 0)
   ansible.builtin.include_tasks:
@@ -233,7 +233,7 @@
 
 - name: Copy static files (on filesystem hosts)
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.copies is defined
     - (docker_services_svc.copies | length > 0)
   ansible.builtin.include_tasks:
@@ -256,7 +256,7 @@
 
 - name: Render templates (on filesystem host)
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.templates is defined
     - (docker_services_svc.templates | length > 0)
   ansible.builtin.include_tasks:
@@ -279,7 +279,7 @@
 
 - name: Render swarm env templates (always on mgt manager)
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - (docker_services_stack_deploy_type | string | trim) == "swarm"
     - docker_services_svc.swarm_env_templates is defined
     - (docker_services_svc.swarm_env_templates | length > 0)
@@ -289,9 +289,9 @@
       tags: [deploy, update, recreate]
   vars:
     templates: "{{ docker_services_svc.swarm_env_templates }}"
-    docker_services_deploy_host: "{{ docker_swarm_primary_manager }}"
-    default_owner: "{{ hostvars[docker_swarm_primary_manager].docker_host_puid | default(hostvars[docker_swarm_primary_manager].puid | default('1000')) }}"
-    default_group: "{{ hostvars[docker_swarm_primary_manager].docker_host_pgid | default(hostvars[docker_swarm_primary_manager].pgid | default('1000')) }}"
+    docker_services_deploy_host: "{{ docker_services_primary_manager }}"
+    default_owner: "{{ hostvars[docker_services_primary_manager].docker_host_puid | default(hostvars[docker_services_primary_manager].puid | default('1000')) }}"
+    default_group: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | default(hostvars[docker_services_primary_manager].pgid | default('1000')) }}"
   tags: [deploy, update, recreate]
 
 ################################
@@ -317,7 +317,7 @@
         ~ '.'
         ~ (
             docker_services_svc.traefik.zone
-            | default(hostvars[docker_swarm_primary_manager].cloudflare_zone, true)
+            | default(hostvars[docker_services_primary_manager].cloudflare_zone, true)
           )
       }}
     tr_port: "{{ (docker_services_svc.traefik.port | default(docker_services_svc.ports.web.target)) | int }}"
@@ -344,7 +344,7 @@
     tr_theme_app: "{{ docker_services_svc.traefik.themepark.app | default('') }}"
     tr_theme_theme: "{{ docker_services_svc.traefik.themepark.theme | default('') }}"
     tr_backend_address: "http://{{ docker_services_svc.traefik.backend_host | default(docker_services_svc.name) }}:{{ tr_port }}"
-  delegate_to: "{{ docker_swarm_primary_manager }}"
+  delegate_to: "{{ docker_services_primary_manager }}"
   tags: [deploy, update, recreate]
 
 ################################
@@ -353,7 +353,7 @@
 
 - name: Prep | Plex (claims/token/etc)
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - (docker_services_svc.name | default('') | string | trim) == "plex"
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/tasks/sub_tasks/prep/plex/tasker.yml"
@@ -364,7 +364,7 @@
 
 - name: Prep | Bazarr
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.name  | default('') == "bazarr"
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/tasks/sub_tasks/prep/bazarr.yml"
@@ -375,7 +375,7 @@
 
 - name: Prep | Hugo (blog)
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - (docker_services_svc.name | default('') | string | trim) == "hugo"
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/tasks/sub_tasks/prep/hugo.yml"
@@ -386,7 +386,7 @@
 
 - name: Prep | NZBHydra2
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.name  | default('') == "nzbhydra2"
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/tasks/sub_tasks/prep/nzbhydra2.yml"
@@ -397,7 +397,7 @@
 
 - name: Prep | Vaultwarden
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.name == "vaultwarden"
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/tasks/sub_tasks/prep/vaultwarden.yml"

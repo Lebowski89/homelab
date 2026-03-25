@@ -9,17 +9,17 @@ thelounge:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_swarm_primary_manager].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_swarm_primary_manager].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | string }}"
     UMASK: "022"
   paths:
-    - path: "{{ hostvars[docker_swarm_primary_manager].docker_host_appdata_root }}/thelounge"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/thelounge"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_swarm_primary_manager].docker_host_appdata_root }}/thelounge"
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/thelounge"
       target: /config
       read_only: false
   traefik:

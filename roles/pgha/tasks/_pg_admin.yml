@@ -8,7 +8,7 @@
     status_code: 200
   register: pgha_patroni_cluster_state
   run_once: true
-  delegate_to: "{{ docker_swarm_primary_manager }}"
+  delegate_to: "{{ docker_services_primary_manager }}"
 
 - name: Determine Patroni leader member
   ansible.builtin.set_fact:
@@ -20,7 +20,7 @@
          | first)
       }}
   run_once: true
-  delegate_to: "{{ docker_swarm_primary_manager }}"
+  delegate_to: "{{ docker_services_primary_manager }}"
 
 - name: Assert Patroni leader was found
   ansible.builtin.assert:
@@ -30,7 +30,7 @@
       - pgha_patroni_leader_member.host is defined
     fail_msg: "Could not determine Patroni leader from REST API."
   run_once: true
-  delegate_to: "{{ docker_swarm_primary_manager }}"
+  delegate_to: "{{ docker_services_primary_manager }}"
 
 - name: Build Patroni admin role flags
   ansible.builtin.set_fact:
@@ -42,7 +42,7 @@
         + (['CREATEROLE'] if pgha_patroni_admin_role_createrole else [])
       }}
   run_once: true
-  delegate_to: "{{ docker_swarm_primary_manager }}"
+  delegate_to: "{{ docker_services_primary_manager }}"
 
 - name: Ensure dedicated Patroni admin role exists on leader
   community.postgresql.postgresql_user:
@@ -55,5 +55,5 @@
     role_attr_flags: "{{ pgha_patroni_admin_role_flags | join(',') }}"
     state: present
   run_once: true
-  delegate_to: "{{ docker_swarm_primary_manager }}"
+  delegate_to: "{{ docker_services_primary_manager }}"
   no_log: true

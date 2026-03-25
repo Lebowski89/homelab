@@ -6,12 +6,12 @@
 
 - name: Bazarr prep | Set paths + hosts
   ansible.builtin.set_fact:
-    docker_services_bazarr_fs_host: "{{ docker_services_svc.deploy.host | default(docker_swarm_primary_manager, true) | string | trim }}"
+    docker_services_bazarr_fs_host: "{{ docker_services_svc.deploy.host | default(docker_services_primary_manager, true) | string | trim }}"
     docker_services_bazarr_config_dir: "/mnt/user/appdata/bazarr"
     docker_services_bazarr_config_file: "/mnt/user/appdata/bazarr/config/config.yaml"
     docker_services_bazarr_image: "ghcr.io/hotio/bazarr:release-v1.5.6"
-    docker_services_bazarr_puid: "{{ hostvars[docker_services_svc.deploy.host | default(docker_swarm_primary_manager, true)].puid | default('1000') }}"
-    docker_services_bazarr_pgid: "{{ hostvars[docker_services_svc.deploy.host | default(docker_swarm_primary_manager, true)].pgid | default('1000') }}"
+    docker_services_bazarr_puid: "{{ hostvars[docker_services_svc.deploy.host | default(docker_services_primary_manager, true)].puid | default('1000') }}"
+    docker_services_bazarr_pgid: "{{ hostvars[docker_services_svc.deploy.host | default(docker_services_primary_manager, true)].pgid | default('1000') }}"
   run_once: true
 
 ################################
