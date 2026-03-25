@@ -16,8 +16,8 @@ seerr:
       - "http://127.0.0.1:5055/api/v1/status"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['mgt'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['mgt'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_swarm_primary_manager].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_swarm_primary_manager].docker_host_pgid | string }}"
     UMASK: "022"
     PORT: "5055"
     DB_TYPE: "postgres"
@@ -88,18 +88,18 @@ seerr:
         path: "/Porkbun"
         name: SMTP_USER
   paths:
-    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/seerr"
+    - path: "{{ hostvars[docker_swarm_primary_manager].docker_host_appdata_root }}/seerr"
       state: directory
       mode: "0755"
   templates:
     - src: configs/seerr.json.j2
-      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/seerr/settings.json"
+      dest: "{{ hostvars[docker_swarm_primary_manager].docker_host_appdata_root }}/seerr/settings.json"
       mode: "0664"
       force: true
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/seerr"
+      source: "{{ hostvars[docker_swarm_primary_manager].docker_host_appdata_root }}/seerr"
       target: /app/config
       read_only: false
   postgres:
