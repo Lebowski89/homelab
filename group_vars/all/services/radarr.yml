@@ -24,9 +24,9 @@ radarr:
     type: swarm
     mode: replicated
     replicas: 1
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"
     constraints:
-      - node.labels.ansible_host == unraid
+      - node.labels.docker_services_host == docker_services_unraid_host
     restart_policy:
       condition: on-failure
       delay: 10s
@@ -41,8 +41,8 @@ radarr:
           - "touch /data/media/movies/.healthcheck && rm -f /data/media/movies/.healthcheck || exit 1"
       environment:
         TZ: "{{ timezone }}"
-        PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-        PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+        PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+        PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
         UMASK: "022"
         RADARR__APP__INSTANCENAME: "Radarr"
         RADARR__SERVER__PORT: "7878"
@@ -78,15 +78,15 @@ radarr:
         - postgres_user_secret
         - postgres_pass_secret
       paths:
-        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/radarr"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/radarr"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_data_root }}/media/movies"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/media/movies"
           state: directory
           mode: "0755"
       copies:
         - src: files/themepark/98-themepark-radarr
-          dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/radarr/98-themepark-radarr"
+          dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/radarr/98-themepark-radarr"
           mode: "0755"
           force: false
           wait: true
@@ -94,17 +94,17 @@ radarr:
       volumes:
         config:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_appdata_root }}/radarr"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/radarr"
           target: /config
           read_only: false
         media:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_data_root }}"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}"
           target: /data
           read_only: false
         themepark:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_appdata_root }}/radarr/98-themepark-radarr"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/radarr/98-themepark-radarr"
           target: /etc/cont-init.d/98-themepark
           read_only: false
       postgres:
@@ -120,8 +120,8 @@ radarr:
           - "touch /data/media/movies-4k/.healthcheck && rm -f /data/media/movies-4k/.healthcheck || exit 1"
       environment:
         TZ: "{{ timezone }}"
-        PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-        PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+        PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+        PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
         UMASK: "022"
         RADARR__APP__INSTANCENAME: "Radarr-4K"
         RADARR__SERVER__PORT: "7878"
@@ -157,15 +157,15 @@ radarr:
         - postgres_user_secret
         - postgres_pass_secret
       paths:
-        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/radarr-4k"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/radarr-4k"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_data_root }}/media/movies-4k"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/media/movies-4k"
           state: directory
           mode: "0755"
       copies:
         - src: files/themepark/98-themepark-radarr
-          dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/radarr-4k/98-themepark-radarr"
+          dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/radarr-4k/98-themepark-radarr"
           mode: "0755"
           force: false
           wait: true
@@ -173,17 +173,17 @@ radarr:
       volumes:
         config:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_appdata_root }}/radarr-4k"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/radarr-4k"
           target: /config
           read_only: false
         media:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_data_root }}"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}"
           target: /data
           read_only: false
         themepark:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_appdata_root }}/radarr-4k/98-themepark-radarr"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/radarr-4k/98-themepark-radarr"
           target: /etc/cont-init.d/98-themepark
           read_only: false
       postgres:

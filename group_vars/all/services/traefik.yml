@@ -16,8 +16,8 @@ traefik:
       - "http://127.0.0.1:8081/ping"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['mgt'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['mgt'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | string }}"
     UMASK: "022"
     CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_secret
   infisical:
@@ -39,39 +39,39 @@ traefik:
       target: 443
       mode: host
   paths:
-    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/dynamic"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/acme.json"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/acme.json"
       state: touch
       mode: "0600"
   templates:
     - src: configs/proxy/traefik/config.yml.j2
-      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/traefik.yml"
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/traefik.yml"
       mode: "0664"
       force: true
     - src: configs/proxy/traefik/middlewares.yml.j2
-      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/dynamic/middlewares.yml"
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic/middlewares.yml"
       mode: "0664"
       force: true
     - src: configs/proxy/authelia/middleware.yml.j2
-      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/dynamic/authelia-middleware.yml"
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic/authelia-middleware.yml"
       mode: "0664"
     - src: configs/proxy/authelia/router.yml.j2
-      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/dynamic/authelia-router.yml"
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic/authelia-router.yml"
       mode: "0664"
       force: true
     - src: configs/proxy/traefik/dashboard.yml.j2
-      dest: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik/dynamic/traefik-dashboard.yml"
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic/traefik-dashboard.yml"
       mode: "0664"
       force: true
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/traefik"
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik"
       target: /etc/traefik
       read_only: false
   cloudflare:
@@ -80,9 +80,9 @@ traefik:
     type: swarm
     mode: replicated
     replicas: 1
-    host: mgt
+    host: "{{ docker_services_primary_manager }}"
     constraints:
-      - node.labels.ansible_host == mgt
+      - node.labels.docker_services_host == docker_services_primary_manager
     restart_policy:
       condition: on-failure
       delay: 10s

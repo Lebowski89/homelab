@@ -1,0 +1,135 @@
+---
+
+################################
+# COMPOSE (SECURITY_OPT)
+################################
+
+- name: Set security_opt
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type != 'swarm'
+    - docker_services_svc.security_opt is defined
+    - (docker_services_svc.security_opt | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/security_opt.yml"
+  vars:
+    security_opt_list: "{{ docker_services_svc.security_opt }}"
+
+################################
+# COMPOSE (SYSCTLS)
+################################
+
+- name: Set sysctls
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.sysctls is defined
+    - (docker_services_svc.sysctls is mapping)
+    - (docker_services_svc.sysctls | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/sysctls.yml"
+  vars:
+    sysctls_dict: "{{ docker_services_svc.sysctls }}"
+
+################################
+# COMPOSE (DEPENDS_ON)
+################################
+
+- name: Set depends_on
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type != 'swarm'
+    - docker_services_svc.depends_on is defined
+    - (docker_services_svc.depends_on | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/depends_on.yml"
+  vars:
+    depends_on_list: "{{ docker_services_svc.depends_on }}"
+
+################################
+# COMPOSE (CAPS)
+################################
+
+- name: Add Linux capabilities (cap_add)
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.cap_add is defined
+    - (docker_services_svc.cap_add | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/caps.yml"
+  vars:
+    caps_target: "cap_add"
+    caps_action: "append_unique"
+    caps_list: "{{ docker_services_svc.cap_add }}"
+
+- name: Drop Linux capabilities (cap_drop)
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.cap_drop is defined
+    - (docker_services_svc.cap_drop | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/caps.yml"
+  vars:
+    caps_target: "cap_drop"
+    caps_action: "append_unique"
+    caps_list: "{{ docker_services_svc.cap_drop }}"
+
+################################
+# COMPOSE (DEVICES)
+################################
+
+- name: Add devices
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.devices is defined
+    - (docker_services_svc.devices | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/devices.yml"
+  vars:
+    devices_action: "append_unique"
+    device_list: "{{ docker_services_svc.devices }}"
+
+################################
+# COMPOSE (COMMAND)
+################################
+
+- name: Set command variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.command is defined
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/command.yml"
+  vars:
+    command: "{{ docker_services_svc.command }}"
+    command_action: "replace"
+
+################################
+# COMPOSE (HEALTHCHECK)
+################################
+
+- name: Set healthcheck variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.healthcheck is defined
+    - docker_services_svc.healthcheck.test is defined
+    - (
+        (
+          docker_services_svc.healthcheck.test is sequence
+          and docker_services_svc.healthcheck.test is not string
+          and (docker_services_svc.healthcheck.test | length > 0)
+        )
+        or
+        (docker_services_svc.healthcheck.test is string and (docker_services_svc.healthcheck.test | trim | length > 0))
+      )
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/healthcheck.yml"
+  vars:
+    health_test: "{{ docker_services_svc.healthcheck.test }}"
+    health_interval: "{{ docker_services_svc.healthcheck.interval | default('1m', true) }}"
+    health_timeout: "{{ docker_services_svc.healthcheck.timeout | default('15s', true) }}"
+    health_retries: "{{ docker_services_svc.healthcheck.retries | default(3, true) }}"
+    health_start_period: "{{ docker_services_svc.healthcheck.start_period | default('30s', true) }}"
+
+################################
+# COMPOSE (USER)
+################################
+
+- name: Set user variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.user is defined
+    - (docker_services_svc.user | string | trim | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/user.yml"
+  vars:
+    user: "{{ docker_services_svc.user }}"

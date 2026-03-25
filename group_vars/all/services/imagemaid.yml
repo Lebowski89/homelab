@@ -9,8 +9,8 @@ imagemaid:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['plex'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['plex'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_plex_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_plex_host].docker_host_pgid | string }}"
     UMASK: "022"
   infisical:
     fail_on_empty: true
@@ -19,32 +19,32 @@ imagemaid:
         path: "/Plex"
         name: TOKEN
   paths:
-    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/imagemaid"
+    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/imagemaid"
       state: directory
       mode: "0755"
   templates:
     - src: configs/imagemaid.j2
-      dest: "{{ hostvars['plex'].docker_host_appdata_root }}/imagemaid/.env"
+      dest: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/imagemaid/.env"
       mode: "0664"
       force: false
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['plex'].docker_host_appdata_root }}/imagemaid"
+      source: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/imagemaid"
       target: /config
       read_only: false
     media:
       type: bind
-      source: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library/Application Support/Plex Media Server"
+      source: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library/Application Support/Plex Media Server"
       target: /plex
       read_only: false
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
-    host: plex
+    host: "{{ docker_services_plex_host }}"
     constraints:
-      - node.labels.ansible_host == plex
+      - node.labels.docker_services_host == docker_services_plex_host
     restart_policy:
       condition: on-failure
       delay: 10s

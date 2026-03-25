@@ -19,7 +19,7 @@
         default('100')))
         | string
       }}
-  when: inventory_hostname == docker_swarm_primary_manager
+  when: inventory_hostname == docker_services_primary_manager
   run_once: true
 
 ################################
@@ -30,13 +30,13 @@
   ansible.builtin.stat:
     path: "{{ docker_services_nh_config_path }}"
   register: docker_services_nh_stat
-  when: inventory_hostname == docker_swarm_primary_manager
+  when: inventory_hostname == docker_services_primary_manager
   delegate_to: "{{ docker_services_nh_host }}"
   run_once: true
 
 - name: NZBHydra2 prep | Generate nzbhydra.yml (temp container)
   when:
-    - inventory_hostname == docker_swarm_primary_manager
+    - inventory_hostname == docker_services_primary_manager
     - not docker_services_nh_stat.stat.exists
   run_once: true
   block:
@@ -130,7 +130,7 @@
         nzbAddingType: UPLOAD
         downloaderType: SABNZBD
         url: http://sabnzbd:8080
-  when: inventory_hostname == docker_swarm_primary_manager
+  when: inventory_hostname == docker_services_primary_manager
   run_once: true
 
 ################################
@@ -145,7 +145,7 @@
       - username: "{{ nzbhydra2_user }}"
         password: "{noop}{{ nzbhydra2_pass }}"
     state: present
-  when: inventory_hostname == docker_swarm_primary_manager
+  when: inventory_hostname == docker_services_primary_manager
   delegate_to: "{{ docker_services_nh_host }}"
   run_once: true
 
@@ -155,12 +155,12 @@
     key: main.apiKey
     value: "{{ nzbhydra2_api }}"
     state: present
-  when: inventory_hostname == docker_swarm_primary_manager
+  when: inventory_hostname == docker_services_primary_manager
   delegate_to: "{{ docker_services_nh_host }}"
   run_once: true
 
 - name: NZBHydra2 prep | Replace downloaders list
-  when: inventory_hostname == docker_swarm_primary_manager
+  when: inventory_hostname == docker_services_primary_manager
   run_once: true
   delegate_to: "{{ docker_services_nh_host }}"
   block:
@@ -178,7 +178,7 @@
         state: present
 
 - name: NZBHydra2 prep | Replace indexers list
-  when: inventory_hostname == docker_swarm_primary_manager
+  when: inventory_hostname == docker_services_primary_manager
   run_once: true
   delegate_to: "{{ docker_services_nh_host }}"
   block:
@@ -203,7 +203,7 @@
   ansible.builtin.slurp:
     src: "{{ docker_services_nh_config_path }}"
   register: docker_services_nh_cfg_raw
-  when: inventory_hostname == docker_swarm_primary_manager
+  when: inventory_hostname == docker_services_primary_manager
   delegate_to: "{{ docker_services_nh_host }}"
   run_once: true
   changed_when: false
@@ -211,7 +211,7 @@
 - name: NZBHydra2 prep | Parse config YAML
   ansible.builtin.set_fact:
     docker_services_nh_cfg: "{{ (docker_services_nh_cfg_raw.content | b64decode) | from_yaml }}"
-  when: inventory_hostname == docker_swarm_primary_manager
+  when: inventory_hostname == docker_services_primary_manager
   run_once: true
   changed_when: false
 
@@ -221,7 +221,7 @@
       - docker_services_nh_cfg is mapping
       - (docker_services_nh_cfg.main.apiKey | default('')) == nzbhydra2_api
     fail_msg: "nzbhydra2_api was not written to main.apiKey in {{ docker_services_nh_config_path }}"
-  when: inventory_hostname == docker_swarm_primary_manager
+  when: inventory_hostname == docker_services_primary_manager
   run_once: true
 
 - name: NZBHydra2 prep | Assert at least 3 indexers are present
@@ -232,5 +232,5 @@
     fail_msg: >-
       Expected >= 3 indexers in {{ docker_services_nh_config_path }}, got
       {{ (docker_services_nh_cfg.indexers | default([])) | length }}
-  when: inventory_hostname == docker_swarm_primary_manager
+  when: inventory_hostname == docker_services_primary_manager
   run_once: true

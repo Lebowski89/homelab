@@ -46,7 +46,7 @@
     docker_services_stack_deploy_type: >-
       {{ docker_services_svc.deploy.type | default('swarm', true) | string | trim }}
     # NOTE: deploy.host is for prep host(s) only; can be string OR list OR group name
-    docker_services_deploy_host: "{{ docker_services_svc.deploy.host | default(docker_swarm_primary_manager, true) }}"
+    docker_services_deploy_host: "{{ docker_services_svc.deploy.host | default(docker_services_primary_manager, true) }}"
 
 - name: Derive stack name (multi-service per stack)
   ansible.builtin.set_fact:
@@ -57,9 +57,9 @@
   ansible.builtin.set_fact:
     docker_services_deploy_host_effective: >-
       {{
-        docker_swarm_primary_manager
+        docker_services_primary_manager
         if (docker_services_stack_deploy_type | string | trim) == 'swarm'
-        else (docker_services_deploy_host | default(docker_swarm_primary_manager, true) | string | trim)
+        else (docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim)
       }}
 
 - name: Derive effective stack key (avoid container host collisions)
@@ -77,7 +77,7 @@
       {{
         docker_services_deploy_host
         if (docker_services_deploy_host is sequence and docker_services_deploy_host is not string)
-        else [ (docker_services_deploy_host | default(docker_swarm_primary_manager, true) | string | trim) ]
+        else [ (docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim) ]
       }}
 
 - name: Expand filesystem hosts if a group name was provided

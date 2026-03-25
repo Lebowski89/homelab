@@ -53,8 +53,8 @@
     _has_value: >-
       {{
         _is_placeholder and
-        (_varname in hostvars[docker_swarm_primary_manager]) and
-        ((hostvars[docker_swarm_primary_manager][_varname] | string | length) > 0)
+        (_varname in hostvars[docker_services_primary_manager]) and
+        ((hostvars[docker_services_primary_manager][_varname] | string | length) > 0)
       }}
     _resolved_val: >-
       {{
@@ -62,7 +62,7 @@
           _local_var_val
           if (_local_var_exists and ((_local_var_val | string | length) > 0))
           else (
-            hostvars[docker_swarm_primary_manager][_varname]
+            hostvars[docker_services_primary_manager][_varname]
             if _has_value
             else _raw_val
           )

@@ -23,7 +23,7 @@ haproxy:
   deploy:
     type: swarm
     mode: global
-    host: localhost
+    host: "{{ docker_services_primary_manager }}"
     constraints:
       - node.labels.haproxy == true
     restart_policy:

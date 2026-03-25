@@ -11,8 +11,8 @@ authelia_redis:
     - sh -c 'redis-server --requirepass "$$(cat /run/secrets/authelia_redis_secret)"'
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['mgt'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['mgt'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | string }}"
   infisical:
     fail_on_empty: true
     secrets_map:
@@ -23,22 +23,22 @@ authelia_redis:
   secrets:
     - authelia_redis_secret
   paths:
-    - path: "{{ hostvars['mgt'].docker_host_appdata_root }}/authelia/redis"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/redis"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['mgt'].docker_host_appdata_root }}/authelia/redis"
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/redis"
       target: /data
       read_only: false
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
-    host: mgt
+    host: "{{ docker_services_primary_manager }}"
     constraints:
-      - node.labels.ansible_host == mgt
+      - node.labels.docker_services_host == docker_services_primary_manager
     restart_policy:
       condition: on-failure
       delay: 10s

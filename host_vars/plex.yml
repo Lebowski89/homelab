@@ -16,5 +16,6 @@ docker_host_appdata_root: /opt
 docker_swarm_node_labels:
   role: worker
   ansible_host: plex
+  docker_services_host: docker_services_plex_host
   haproxy: "true"
   dns: technitium

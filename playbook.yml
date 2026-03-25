@@ -6,27 +6,27 @@
 
   pre_tasks:
     - name: Gather packages
-      when: inventory_hostname == docker_swarm_primary_manager
+      when: inventory_hostname == docker_services_primary_manager
       ansible.builtin.package_facts:
         manager: auto
       tags: always
 
     - name: Set timezone variable on manager
-      when: inventory_hostname == docker_swarm_primary_manager
+      when: inventory_hostname == docker_services_primary_manager
       ansible.builtin.set_fact:
         timezone: "{{ ansible_facts.timezone | default('Australia/Melbourne') }}"
       tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
 
     - name: Timezone output
-      when: inventory_hostname == docker_swarm_primary_manager
+      when: inventory_hostname == docker_services_primary_manager
       ansible.builtin.debug:
         msg: "{{ timezone }}"
       tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
 
     - name: Share timezone to all hosts
-      when: inventory_hostname != docker_swarm_primary_manager
+      when: inventory_hostname != docker_services_primary_manager
       ansible.builtin.set_fact:
-        timezone: "{{ hostvars[docker_swarm_primary_manager].timezone }}"
+        timezone: "{{ hostvars[docker_services_primary_manager].timezone }}"
       tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
 
   tasks:
@@ -65,7 +65,7 @@
         - docker_swarm_network
 
     - name: Deploy Infisical on Manager
-      when: inventory_hostname == docker_swarm_primary_manager
+      when: inventory_hostname == docker_services_primary_manager
       ansible.builtin.include_role:
         name: infisical
       tags:
@@ -129,7 +129,7 @@
 
     - name: Deploy all stacks
       when:
-        - inventory_hostname == docker_swarm_primary_manager
+        - inventory_hostname == docker_services_primary_manager
         - not (ci_mode | default(false) | bool)
       ansible.builtin.include_tasks:
         file: "{{ playbook_dir }}/roles/docker_services/helpers/deploy/deploy_all.yml"

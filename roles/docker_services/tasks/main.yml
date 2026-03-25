@@ -1,5 +1,9 @@
 ---
 
+################################
+# INIT
+################################
+
 - name: Init (validate + normalize)
   ansible.builtin.include_tasks:
     file: _init.yml
@@ -7,16 +11,68 @@
       tags: [deploy, update, remove, recreate, bootstrap]
   tags: [deploy, update, remove, recreate, bootstrap]
 
-- name: Run prep phase
-  ansible.builtin.include_tasks: _prep.yml
-  tags: [deploy, update, remove, recreate, bootstrap]
+################################
+# PREP
+################################
 
-- name: Build compose definition
+- name: Prep | cleanup tasks
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/prep/_00_cleanup.yml"
+  tags: [remove, recreate]
+
+- name: Prep | Pre-template tasks
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/prep/_01_pre_filesystem.yml"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Prep | filesystem tasks
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/prep/_02_filesystem.yml"
+  tags: [deploy, update, recreate]
+
+- name: Prep | Relevant services tasks
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/prep/_03_post_filesystem.yml"
+  tags: [deploy, update, recreate, bootstrap]
+
+################################
+# COMPOSE
+################################
+
+- name: Compose | Init tasks
   ansible.builtin.include_tasks:
-    file: _compose.yml
+    file: "{{ role_path }}/tasks/compose/_00_init.yml"
     apply:
       tags: [deploy, update, recreate]
   tags: [deploy, update, recreate]
+
+- name: Compose | Service Base tasks
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/compose/_01_base.yml"
+    apply:
+      tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate]
+
+- name: Compose | Runtime tasks
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/compose/_02_runtime.yml"
+    apply:
+      tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate]
+
+- name: Compose | Input-Output tasks
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/compose/_03_io.yml"
+    apply:
+      tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate]
+
+- name: Compose | Metadata tasks
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/compose/_04_metadata.yml"
+    apply:
+      tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate]
+
+################################
+# DEPLOY
+################################
 
 - name: Run centralized deploy (once)
   ansible.builtin.include_tasks:

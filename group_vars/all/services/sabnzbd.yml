@@ -9,8 +9,8 @@ sabnzbd:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
     UMASK: "022"
     WEBUI_PORTS: "8080/tcp,8080/udp"
   infisical:
@@ -47,76 +47,76 @@ sabnzbd:
         path: "/SABnzbd"
         name: EASYNEWS_PASS
   paths:
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/sabnzbd"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/sabnzbd"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet/watch"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet/watch"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet/.nzb"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet/.nzb"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet/incomplete"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet/incomplete"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet/complete"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet/complete"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet/complete/lidarr"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet/complete/lidarr"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet/complete/radarr"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet/complete/radarr"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet/complete/radarr-4k"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet/complete/radarr-4k"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet/complete/sonarr"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet/complete/sonarr"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet/complete/sonarr-4k"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet/complete/sonarr-4k"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet/complete/sportarr"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet/complete/sportarr"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet/complete/whisparr"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet/complete/whisparr"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/usenet/complete/nzbhydra"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet/complete/nzbhydra"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/sabnzbd/sabnzbd.ini.bak"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/sabnzbd/sabnzbd.ini.bak"
       state: absent
   copies:
     - src: files/themepark/98-themepark-sabnzbd
-      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/sabnzbd/98-themepark-sabnzbd"
+      dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/sabnzbd/98-themepark-sabnzbd"
       mode: "0755"
       force: false
       wait: true
       wait_timeout: 30
   templates:
     - src: configs/sabnzbd.ini.j2
-      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/sabnzbd/sabnzbd.ini"
+      dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/sabnzbd/sabnzbd.ini"
       mode: "0664"
       force: true
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/sabnzbd"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/sabnzbd"
       target: /config
       read_only: false
     downloads:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_data_root }}/usenet"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/usenet"
       target: /data/usenet
       read_only: false
     themepark:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/sabnzbd/98-themepark-sabnzbd"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/sabnzbd/98-themepark-sabnzbd"
       target: /etc/cont-init.d/98-themepark
       read_only: false
   traefik:
@@ -129,9 +129,9 @@ sabnzbd:
     type: swarm
     mode: replicated
     replicas: 1
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"
     constraints:
-      - node.labels.ansible_host == unraid
+      - node.labels.docker_services_host == docker_services_unraid_host
     restart_policy:
       condition: on-failure
       delay: 10s
