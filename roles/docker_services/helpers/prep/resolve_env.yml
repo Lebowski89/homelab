@@ -50,6 +50,12 @@
         _is_placeholder and
         ((query('ansible.builtin.varnames', '^' ~ (_varname | regex_escape) ~ '$') | length) > 0)
       }}
+    _has_value: >-
+      {{
+        _is_placeholder and
+        (_varname in hostvars[docker_swarm_primary_manager]) and
+        ((hostvars[docker_swarm_primary_manager][_varname] | string | length) > 0)
+      }}
     _resolved_val: >-
       {{
         (
@@ -57,7 +63,7 @@
           if (_local_var_exists and ((_local_var_val | string | length) > 0))
           else (
             hostvars[docker_swarm_primary_manager][_varname]
-            if (_is_placeholder and (_varname in hostvars[docker_swarm_primary_manager]) and ((hostvars[docker_swarm_primary_manager][_varname] | string | length) > 0))
+            if _has_value
             else _raw_val
           )
         )
