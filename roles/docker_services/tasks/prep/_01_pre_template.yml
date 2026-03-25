@@ -104,7 +104,7 @@
     - inventory_hostname == docker_services_primary_manager
     - (docker_services_svc.name | default('') | string | trim) == "authelia"
   ansible.builtin.include_tasks:
-    file: "{{ role_path }}/tasks/sub_tasks/prep/authelia/tasker.yml"
+    file: "{{ role_path }}/tasks/services/authelia/tasker.yml"
     apply:
       tags: [deploy, bootstrap, recreate]
   run_once: true
@@ -134,7 +134,7 @@
     - inventory_hostname == docker_services_primary_manager
     - (docker_services_svc.stack | default('') | string | trim) == "qbittorrent"
   ansible.builtin.include_tasks:
-    file: "{{ role_path }}/tasks/sub_tasks/prep/qbittorrent.yml"
+    file: "{{ role_path }}/tasks/services/qbittorrent.yml"
     apply:
       tags: [deploy, update, recreate]
   tags: [deploy, update, recreate]
