@@ -11,7 +11,7 @@
 # Default docker_services_deploy_host to mgt if not provided (safe for swarm managers)
 - name: Normalize deploy host
   ansible.builtin.set_fact:
-    _deploy_host: "{{ docker_services_deploy_host | default(docker_swarm_primary_manager, true) | string | trim }}"
+    _deploy_host: "{{ docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim }}"
 
 - name: Validate each copy copy_prep has src/dest
   ansible.builtin.assert:

@@ -47,7 +47,7 @@
 - name: Merge into docker_services_compose_stacks[docker_services_stack_name].volumes (centralized on mgt)
   ansible.builtin.set_fact:
     docker_services_compose_stacks: >-
-      {%- set st = (hostvars[docker_swarm_primary_manager].docker_services_compose_stacks | default({})) -%}
+      {%- set st = (hostvars[docker_services_primary_manager].docker_services_compose_stacks | default({})) -%}
       {%- set existing_stack = st.get(docker_services_stack_name, {}) -%}
       {%- set existing_vols = existing_stack.get('volumes', {}) | default({}, true) -%}
       {%- set merged_stack = existing_stack | combine(
@@ -55,6 +55,6 @@
         recursive=true
       ) -%}
       {{ st | combine({ docker_services_stack_name: merged_stack }, recursive=true) }}
-  delegate_to: "{{ docker_swarm_primary_manager }}"
+  delegate_to: "{{ docker_services_primary_manager }}"
   delegate_facts: true
   run_once: true
