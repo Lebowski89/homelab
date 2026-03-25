@@ -20,7 +20,7 @@
   tags: [remove, recreate]
 
 - name: Prep | Pre-template tasks
-  ansible.builtin.include_tasks: "{{ role_path }}/tasks/prep/_01_pre_template.yml"
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/prep/_01_pre_filesystem.yml"
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Prep | filesystem tasks
@@ -28,7 +28,7 @@
   tags: [deploy, update, recreate]
 
 - name: Prep | Relevant services tasks
-  ansible.builtin.include_tasks: "{{ role_path }}/tasks/prep/_03_misc_service_prep.yml"
+  ansible.builtin.include_tasks: "{{ role_path }}/tasks/prep/_03_post_filesystem.yml"
   tags: [deploy, update, recreate, bootstrap]
 
 ################################
@@ -44,28 +44,28 @@
 
 - name: Compose | Service Base tasks
   ansible.builtin.include_tasks:
-    file: "{{ role_path }}/tasks/prep/_01_base.yml"
+    file: "{{ role_path }}/tasks/compose/_01_base.yml"
     apply:
       tags: [deploy, update, recreate]
   tags: [deploy, update, recreate]
 
 - name: Compose | Runtime tasks
   ansible.builtin.include_tasks:
-    file: "{{ role_path }}/tasks/prep/_02_runtime.yml"
+    file: "{{ role_path }}/tasks/compose/_02_runtime.yml"
     apply:
       tags: [deploy, update, recreate]
   tags: [deploy, update, recreate]
 
 - name: Compose | Input-Output tasks
   ansible.builtin.include_tasks:
-    file: "{{ role_path }}/tasks/prep/_03_io.yml"
+    file: "{{ role_path }}/tasks/compose/_03_io.yml"
     apply:
       tags: [deploy, update, recreate]
   tags: [deploy, update, recreate]
 
 - name: Compose | Metadata tasks
   ansible.builtin.include_tasks:
-    file: "{{ role_path }}/tasks/prep/_04_metadata.yml"
+    file: "{{ role_path }}/tasks/compose/_04_metadata.yml"
     apply:
       tags: [deploy, update, recreate]
   tags: [deploy, update, recreate]
