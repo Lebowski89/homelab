@@ -179,29 +179,58 @@
         msg: "Something went wrong with the creation of the new token"
 
     - name: Token | Add Client Identifier to plex.ini
+      vars:
+        _mgt_host: "{{ docker_services_primary_manager }}"
+        _plex_owner: >-
+          {{
+            hostvars[_mgt_host].docker_host_puid
+            | default(hostvars[_mgt_host].puid | default('1000'))
+          }}
+        _plex_group: >-
+          {{
+            hostvars[_mgt_host].docker_host_pgid
+            | default(hostvars[_mgt_host].pgid | default('1000'))
+          }}
       community.general.ini_file:
         path: "/opt/plex/plex.ini"
         section: "plex"
         option: "client_identifier"
         value: "{{ hostvars[docker_services_primary_manager].docker_services_plex_client_identifier }}"
         create: true
-        owner: "{{ hostvars[docker_services_primary_manager].docker_host_puid | default(hostvars[docker_services_primary_manager].puid | default('1000')) }}"
-        group: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | default(hostvars[docker_services_primary_manager].pgid | default('1000')) }}"
+        owner: "{{ _plex_owner }}"
+        group: "{{ _plex_group }}"
         mode: "0664"
 
     - name: Token | Add Token to plex.ini
+      vars:
+        _mgt_host: "{{ docker_services_primary_manager }}"
+        _plex_owner: >-
+          {{
+            hostvars[_mgt_host].docker_host_puid
+            | default(hostvars[_mgt_host].puid | default('1000'))
+          }}
+        _plex_group: >-
+          {{
+            hostvars[_mgt_host].docker_host_pgid
+            | default(hostvars[_mgt_host].pgid | default('1000'))
+          }}
       community.general.ini_file:
         path: "/opt/plex/plex.ini"
         section: "plex"
         option: "token"
         value: "{{ hostvars[docker_services_primary_manager].docker_services_plex_auth_token }}"
         create: true
-        owner: "{{ hostvars[docker_services_primary_manager].docker_host_puid | default(hostvars[docker_services_primary_manager].puid | default('1000')) }}"
-        group: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | default(hostvars[docker_services_primary_manager].pgid | default('1000')) }}"
+        owner: "{{ _plex_owner }}"
+        group: "{{ _plex_group }}"
         mode: "0664"
 
 - name: Token | Display Token
   ansible.builtin.debug:
-    msg: "Plex Auth Token: {{ hostvars[docker_services_primary_manager].docker_services_plex_auth_token | default('') }}"
+    msg: >-
+      Plex auth token present:
+      {{
+        'yes' if (hostvars[docker_services_primary_manager].docker_services_plex_auth_token | default('') | length > 0)
+        else 'no'
+      }}
   delegate_to: "{{ docker_services_primary_manager }}"
   run_once: true
