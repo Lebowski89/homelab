@@ -5,7 +5,7 @@
   run_once: true
   block:
     - name: Authelia prep | Generate argon2 digest (users_database)
-      ansible.builtin.include_tasks: keys.yml
+      ansible.builtin.include_tasks: _keys.yml
       vars:
         authelia_job: "UserDB Password"
         authelia_fact_name: "authelia_argon2_password"
@@ -15,7 +15,7 @@
         authelia_key_echo: "Digest"
 
     - name: Authelia prep | Ensure session key secret
-      ansible.builtin.include_tasks: keys.yml
+      ansible.builtin.include_tasks: _keys.yml
       vars:
         authelia_job: "Session Key"
         authelia_fact_name: "authelia_session_key"
@@ -25,7 +25,7 @@
         authelia_key_echo: "Random Value"
 
     - name: Authelia prep | Ensure storage key secret
-      ansible.builtin.include_tasks: keys.yml
+      ansible.builtin.include_tasks: _keys.yml
       vars:
         authelia_job: "Storage Key"
         authelia_fact_name: "authelia_storage_key"
@@ -56,7 +56,7 @@
           {{ hostvars[docker_services_primary_manager].authelia_storage_key }}
 
     - name: Authelia prep | Ensure JWT reset key secret
-      ansible.builtin.include_tasks: keys.yml
+      ansible.builtin.include_tasks: _keys.yml
       vars:
         authelia_job: "JWT Key"
         authelia_fact_name: "authelia_jwt_reset_key"

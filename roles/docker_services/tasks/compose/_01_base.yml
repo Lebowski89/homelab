@@ -1,0 +1,148 @@
+---
+
+################################
+# COMPOSE (BASE)
+################################
+
+- name: Register networks needed by this stack
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.named_networks is defined
+    - (docker_services_svc.named_networks is mapping)
+    - (docker_services_svc.named_networks | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/stack_networks.yml"
+  vars:
+    docker_services_stack_name: "{{ docker_services_stack_name_effective }}"
+    stack_network_names: "{{ docker_services_svc.named_networks }}"
+
+- name: Register external volumes needed by this stack
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.named_volumes is defined
+    - (docker_services_svc.named_volumes | length > 0)
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/stack_volumes.yml"
+  vars:
+    docker_services_stack_name: "{{ docker_services_stack_name_effective }}"
+    stack_volume_names: "{{ docker_services_svc.named_volumes }}"
+
+- name: Normalize network_mode for container deploys (derive network_mode + is_container)
+  when: docker_services_is_deploy_host
+  ansible.builtin.set_fact:
+    docker_services_svc_network_mode: "{{ docker_services_svc.network_mode | default('', true) | string | trim }}"
+    docker_services_svc_is_container: "{{ (docker_services_stack_deploy_type | default('swarm', true) | string | trim) != 'swarm' }}"
+
+- name: Normalize network_mode for container deploys (derive has_network_mode)
+  when: docker_services_is_deploy_host
+  ansible.builtin.set_fact:
+    docker_services_svc_has_network_mode: "{{ docker_services_svc_is_container and (docker_services_svc_network_mode | length > 0) }}"
+
+- name: Build service networks list
+  when: docker_services_is_deploy_host
+  ansible.builtin.set_fact:
+    docker_services_svc_networks_list: >-
+      {{
+        [] if docker_services_svc_has_network_mode else
+        (
+          (docker_services_svc.networks | default([], true))
+          if (
+            docker_services_svc.networks is defined
+            and docker_services_svc.networks is sequence
+            and docker_services_svc.networks is not string
+            and (docker_services_svc.networks | length > 0)
+          )
+          else
+          (
+            (docker_services_svc.named_networks.keys() | list)
+            if (
+              docker_services_svc.named_networks is defined
+              and docker_services_svc.named_networks is mapping
+              and (docker_services_svc.named_networks | length > 0)
+            )
+            else
+            [docker_network]
+          )
+        )
+      }}
+
+- name: Set base service variables
+  when: docker_services_is_deploy_host
+  ansible.builtin.include_tasks: "{{ role_path }}/helpers/compose/service_base.yml"
+  vars:
+    image: "{{ docker_services_svc.image | string }}"
+
+    hostname: >-
+      {{
+        (
+          docker_services_svc.hostname is defined
+          and (docker_services_svc.hostname | string | trim | length > 0)
+        )
+        | ternary((docker_services_svc.hostname | string | trim), omit)
+      }}
+
+    container_name: >-
+      {{
+        (
+          docker_services_svc_is_container
+          and (docker_services_svc.container_name is defined)
+          and (docker_services_svc.container_name | string | trim | length > 0)
+        )
+        | ternary((docker_services_svc.container_name | string | trim), omit)
+      }}
+
+    pid: >-
+      {{
+        (
+          docker_services_svc_is_container
+          and (docker_services_svc.pid is defined)
+          and (docker_services_svc.pid | string | trim | length > 0)
+        )
+        | ternary((docker_services_svc.pid | string | trim), omit)
+      }}
+
+    cgroup: >-
+      {{
+        (
+          docker_services_svc_is_container
+          and (docker_services_svc.cgroup is defined)
+          and ((docker_services_svc.cgroup | string | trim) in ['host', 'private'])
+        )
+        | ternary((docker_services_svc.cgroup | string | trim), omit)
+      }}
+
+    entrypoint: >-
+      {{
+        (
+          docker_services_svc.entrypoint is defined
+          and (
+            (
+              docker_services_svc.entrypoint is string
+              and (docker_services_svc.entrypoint | string | trim | length > 0)
+            )
+            or
+            (
+              docker_services_svc.entrypoint is sequence
+              and docker_services_svc.entrypoint is not string
+              and (docker_services_svc.entrypoint | length > 0)
+            )
+          )
+        )
+        | ternary(docker_services_svc.entrypoint, omit)
+      }}
+
+    network_mode: >-
+      {{
+        (
+          docker_services_svc_is_container
+          and (docker_services_svc_network_mode | length > 0)
+        )
+        | ternary(docker_services_svc_network_mode, omit)
+      }}
+
+    networks: >-
+      {{
+        (
+          (not docker_services_svc_has_network_mode)
+          and (docker_services_svc_networks_list | length > 0)
+        )
+        | ternary(docker_services_svc_networks_list, omit)
+      }}

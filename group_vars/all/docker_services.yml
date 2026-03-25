@@ -1,6 +1,8 @@
 ---
 
 docker_services_primary_manager: mgt
+docker_services_plex_host: plex
+docker_services_unraid_host: unraid
 
 docker_services:
   ## services (core)
