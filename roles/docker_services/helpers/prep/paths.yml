@@ -10,7 +10,7 @@
 
 - name: Ensure docker_services_deploy_host is set
   ansible.builtin.set_fact:
-    _deploy_host: "{{ docker_services_deploy_host | default('mgt', true) | string | trim }}"
+    _deploy_host: "{{ docker_services_deploy_host | default(docker_swarm_primary_manager, true) | string | trim }}"
 
 - name: Validate each path spec
   ansible.builtin.assert:

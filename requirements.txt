@@ -1,5 +1,5 @@
-ansible==13.4.0
-ansible-lint==26.3.0
+ansible==11.13.0
+ansible-lint==24.12.2
 docker==7.1.0
 jmespath==1.1.0
 jsondiff==2.2.1

@@ -48,7 +48,7 @@
 
 - name: Swarm configs | Resolve deploy host (swarm manager)
   ansible.builtin.set_fact:
-    _swarm_cfg_host: "{{ docker_services_deploy_host | default('mgt', true) | string | trim }}"
+    _swarm_cfg_host: "{{ docker_services_deploy_host | default(docker_swarm_primary_manager, true) | string | trim }}"
 
 - name: Swarm configs | Validate each config spec
   ansible.builtin.assert:

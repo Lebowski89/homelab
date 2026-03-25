@@ -43,7 +43,7 @@
     name: "{{ authelia_key_secret }}"
     data: "{{ authelia_key | string }}"
     state: present
-  delegate_to: mgt
+  delegate_to: "{{ docker_swarm_primary_manager }}"
   run_once: true
 
 # Generate when missing
@@ -63,7 +63,7 @@
           - "/opt/authelia:/config"
         cleanup: true
       register: docker_services_authelia_key_register
-      delegate_to: mgt
+      delegate_to: "{{ docker_swarm_primary_manager }}"
       run_once: true
 
     - name: Authelia keys | Extract generated value
@@ -75,13 +75,13 @@
         executable: /bin/bash
       register: docker_services_authelia_key_sanitised_output
       changed_when: false
-      delegate_to: mgt
+      delegate_to: "{{ docker_swarm_primary_manager }}"
       run_once: true
 
     - name: Authelia keys | Mark generated this run
       ansible.builtin.set_fact:
         docker_services_authelia_generated_this_run: true
-      delegate_to: mgt
+      delegate_to: "{{ docker_swarm_primary_manager }}"
       run_once: true
 
     - name: Authelia keys | Fail if generation produced empty output
@@ -91,7 +91,7 @@
         fail_msg: >-
           Authelia keys: generated output was empty for job '{{ authelia_job }}'.
           Command: {{ authelia_key_command }}
-      delegate_to: mgt
+      delegate_to: "{{ docker_swarm_primary_manager }}"
       run_once: true
 
     # Save to a fact on mgt so templates / later tasks can use it
@@ -101,7 +101,7 @@
         - (authelia_fact_name | string | trim | length) > 0
       ansible.builtin.set_fact:
         "{{ authelia_fact_name }}": "{{ docker_services_authelia_key_sanitised_output.stdout | string | trim }}"
-      delegate_to: mgt
+      delegate_to: "{{ docker_swarm_primary_manager }}"
       delegate_facts: true
       run_once: true
 
@@ -112,7 +112,7 @@
         name: "{{ authelia_key_secret }}"
         data: "{{ docker_services_authelia_key_sanitised_output.stdout | string | trim }}"
         state: present
-      delegate_to: mgt
+      delegate_to: "{{ docker_swarm_primary_manager }}"
       run_once: true
 
   always:
@@ -126,6 +126,6 @@
       retries: 5
       delay: 5
       until: docker_services_remove_keys_container is succeeded
-      delegate_to: mgt
+      delegate_to: "{{ docker_swarm_primary_manager }}"
       run_once: true
       failed_when: false
