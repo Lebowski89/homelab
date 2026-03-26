@@ -9,23 +9,23 @@ jdownloader2:
     - gluetun
   network_mode: "service:gluetun"
   environment:
-    USER_ID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    GROUP_ID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    USER_ID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    GROUP_ID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
   paths:
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/jdownloader-2"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/jdownloader-2"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/jdownloader-2"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/jdownloader-2"
       target: /config
       read_only: false
     downloads:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_data_root }}/media/jdownloader-2"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/media/jdownloader-2"
       target: /downloads
       read_only: false
   deploy:
     type: container
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"

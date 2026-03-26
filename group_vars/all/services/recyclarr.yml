@@ -7,7 +7,7 @@ recyclarr:
   named_networks:
     overlay:
       external: true
-  user: "{{ hostvars['unraid'].docker_host_puid | string }}:{{ hostvars['unraid'].docker_host_pgid | string }}"
+  user: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}:{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
   environment:
     TZ: "{{ timezone }}"
   infisical:
@@ -26,41 +26,41 @@ recyclarr:
         path: "/Sonarr-4K"
         name: API
   paths:
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/recyclarr"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr/configs"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/recyclarr/configs"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr/includes"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/recyclarr/includes"
       state: directory
       mode: "0755"
   templates:
     - src: configs/recyclarr/secrets.yml.j2
-      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr/secrets.yml"
+      dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/recyclarr/secrets.yml"
       mode: "0664"
       force: true
     - src: configs/recyclarr/config_radarr.yml.j2
-      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr/configs/radarr.yml"
+      dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/recyclarr/configs/radarr.yml"
       mode: "0664"
       force: true
     - src: configs/recyclarr/config_sonarr.yml.j2
-      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr/configs/sonarr.yml"
+      dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/recyclarr/configs/sonarr.yml"
       mode: "0664"
       force: true
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/recyclarr"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/recyclarr"
       target: /config
       read_only: false
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"
     constraints:
-      - node.labels.ansible_host == unraid
+      - node.labels.docker_services_host == docker_services_unraid_host
     restart_policy:
       condition: on-failure
       delay: 10s

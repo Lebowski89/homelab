@@ -9,8 +9,8 @@ unpackerr:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
     UMASK: "022"
     UN_WEBSERVER_METRICS: "true"
     UN_WEBSERVER_UPSTREAMS: "172.98.0.0/24"
@@ -81,13 +81,13 @@ unpackerr:
   volumes:
     media:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_data_root }}"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}"
       target: /data
       read_only: false
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"
     constraints:
-      - node.labels.ansible_host == unraid
+      - node.labels.docker_services_host == docker_services_unraid_host

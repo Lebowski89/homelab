@@ -19,7 +19,7 @@ autopulse_ui:
     replicas: 1
     host: unraid
     constraints:
-      - node.labels.ansible_host == unraid
+      - node.labels.docker_services_host == docker_services_unraid_host
     restart_policy:
       condition: on-failure
       delay: 10s

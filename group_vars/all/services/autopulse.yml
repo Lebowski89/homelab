@@ -9,8 +9,8 @@ autopulse:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
     UMASK: "022"
     AUTOPULSE__AUTH__USERNAME__FILE: /run/secrets/autopulse_user_secret
     AUTOPULSE__AUTH__PASSWORD__FILE: /run/secrets/autopulse_pass_secret
@@ -37,10 +37,10 @@ autopulse:
     - autopulse_pass_secret
     - plex_token_secret
   paths:
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/autopulse"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/autopulse"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/autopulse/config.yaml"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/autopulse/config.yaml"
       state: touch
       mode: "0664"
   swarm_env_templates:
@@ -53,7 +53,7 @@ autopulse:
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/autopulse/config.yaml"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/autopulse/config.yaml"
       target: /app/config.yaml
       read_only: false
   postgres:
@@ -64,9 +64,9 @@ autopulse:
     type: swarm
     mode: replicated
     replicas: 1
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"
     constraints:
-      - node.labels.ansible_host == unraid
+      - node.labels.docker_services_host == docker_services_unraid_host
     restart_policy:
       condition: on-failure
       delay: 10s

@@ -8,8 +8,8 @@ qbit_manage:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
     UMASK: "022"
     QBT_WEB_SERVER: "true"
     QBT_PORT: "8080"
@@ -39,9 +39,9 @@ qbit_manage:
     type: swarm
     mode: replicated
     replicas: 1
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"
     constraints:
-      - node.labels.ansible_host == unraid
+      - node.labels.docker_services_host == docker_services_unraid_host
     restart_policy:
       condition: on-failure
       max_attempts: 2
@@ -61,26 +61,26 @@ qbit_manage:
             path: "/Qbit-Manage"
             name: NOTIFIARR_WEBHOOK
       paths:
-        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbit-manage"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbit-manage"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbit-manage/downloads"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbit-manage/downloads"
           state: directory
           mode: "0755"
       templates:
         - src: configs/qbit-manage/downloads-config.yml.j2
-          dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbit-manage/downloads/config.yml"
+          dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbit-manage/downloads/config.yml"
           mode: "0664"
           force: true
       volumes:
         config:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbit-manage/downloads"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbit-manage/downloads"
           target: /config
           read_only: false
         media:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_data_root }}/torrents"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/torrents"
           target: /data/torrents
           read_only: false
     seeds:
@@ -98,25 +98,25 @@ qbit_manage:
             path: "/Qbit-Manage"
             name: NOTIFIARR_WEBHOOK
       paths:
-        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbit-manage"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbit-manage"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbit-manage/seeds"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbit-manage/seeds"
           state: directory
           mode: "0755"
       templates:
         - src: configs/qbit-manage/seeds-config.yml.j2
-          dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbit-manage/seeds/config.yml"
+          dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbit-manage/seeds/config.yml"
           mode: "0664"
           force: true
       volumes:
         config:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbit-manage/seeds"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbit-manage/seeds"
           target: /config
           read_only: false
         media:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_data_root }}/seeds"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/seeds"
           target: /data/seeds
           read_only: false

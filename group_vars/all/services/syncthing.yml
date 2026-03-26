@@ -9,8 +9,8 @@ syncthing:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
     UMASK: "022"
   ports:
     listening_tcp:
@@ -28,18 +28,18 @@ syncthing:
       protocol: udp
       mode: host
   paths:
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/syncthing"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/syncthing"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/syncthing"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/syncthing"
       target: /config
       read_only: false
     media:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_data_root }}"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}"
       target: /data
       read_only: false
   traefik:
@@ -52,9 +52,9 @@ syncthing:
     type: swarm
     mode: replicated
     replicas: 1
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"
     constraints:
-      - node.labels.ansible_host == unraid
+      - node.labels.docker_services_host == docker_services_unraid_host
     restart_policy:
       condition: on-failure
       delay: 10s

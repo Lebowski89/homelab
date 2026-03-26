@@ -14,8 +14,8 @@ gluetun:
     - "/dev/net/tun:/dev/net/tun"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
     UMASK: "022"
     FIREWALL_OUTBOUND_SUBNETS: "192.168.80.0/24"
     UPDATER_PERIOD: "24h"
@@ -50,18 +50,18 @@ gluetun:
       published: 3009
       target: 3001
   paths:
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/gluetun"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/gluetun"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_data_root }}/media/gluetun"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/media/gluetun"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/gluetun"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/gluetun"
       target: /gluetun
       read_only: false
   deploy:
     type: container
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"

@@ -14,8 +14,8 @@ qbittorrent:
     net.ipv4.conf.all.src_valid_mark: "1"
     net.ipv6.conf.all.disable_ipv6: "1"
   environment:
-    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
     TZ: "{{ timezone }}"
     FILE__VPN_PIA_USER: /run/secrets/qbittorrent_pia_user_secret
     FILE__VPN_PIA_PASS: /run/secrets/qbittorrent_pia_pass_secret
@@ -26,9 +26,9 @@ qbittorrent:
     type: swarm
     mode: replicated
     replicas: 1
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"
     constraints:
-      - node.labels.ansible_host == unraid
+      - node.labels.docker_services_host == docker_services_unraid_host
     restart_policy:
       condition: on-failure
       delay: 10s
@@ -65,30 +65,30 @@ qbittorrent:
             name: PASS
             docker_secret: qbittorrent_pia_pass_secret
       paths:
-        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbittorrent"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbittorrent/config"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent/config"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbittorrent/wireguard"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent/wireguard"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_data_root }}/torrents"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/torrents"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_data_root }}/torrents/completed"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/torrents/completed"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_data_root }}/torrents/incoming"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/torrents/incoming"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_data_root }}/torrents/watched"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/torrents/watched"
           state: directory
           mode: "0755"
       templates:
         - src: configs/qbittorrent/qBittorrent.conf.j2
-          dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbittorrent/config/qBittorrent.conf"
+          dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent/config/qBittorrent.conf"
           mode: "0664"
           force: true
       swarm_env_templates:
@@ -101,12 +101,12 @@ qbittorrent:
       volumes:
         config:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbittorrent"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent"
           target: /config
           read_only: false
         media:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_data_root }}/torrents"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/torrents"
           target: /data/torrents
           read_only: false
       traefik:
@@ -152,30 +152,30 @@ qbittorrent:
             name: PASS
             docker_secret: qbittorrent_pia_pass_secret
       paths:
-        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbittorrent-xs"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent-xs"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbittorrent-xs/config"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent-xs/config"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbittorrent-xs/wireguard"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent-xs/wireguard"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_data_root }}/seeds"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/seeds"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_data_root }}/seeds/completed"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/seeds/completed"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_data_root }}/seeds/incoming"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/seeds/incoming"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars['unraid'].docker_host_data_root }}/seeds/watched"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/seeds/watched"
           state: directory
           mode: "0755"
       templates:
         - src: configs/qbittorrent/qBittorrent-xs.conf.j2
-          dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbittorrent-xs/config/qBittorrent.conf"
+          dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent-xs/config/qBittorrent.conf"
           mode: "0664"
           force: true
       swarm_env_templates:
@@ -188,12 +188,12 @@ qbittorrent:
       volumes:
         config:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_appdata_root }}/qbittorrent-xs"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent-xs"
           target: /config
           read_only: false
         media:
           type: bind
-          source: "{{ hostvars['unraid'].docker_host_data_root }}/seeds"
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/seeds"
           target: /data/seeds
           read_only: false
       traefik:
