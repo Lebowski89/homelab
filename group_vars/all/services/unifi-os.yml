@@ -4,7 +4,7 @@ unifi:
   name: unifi
   stack: unifi
   container_name: unifi
-  image: ghcr.io/lemker/unifi-os-server:5.0.6
+  image: ghcr.io/lemker/unifi-os-server:v1.0.0
   named_networks:
     overlay:
       external: true
@@ -33,6 +33,14 @@ unifi:
     adoption:
       published: 10003
       target: 10003
+      protocol: udp
+    test_1:
+      published: 10001
+      target: 10001
+      protocol: udp
+    test_2:
+      published: 1900
+      target: 1900
       protocol: udp
     #
     ### Optional Ports ###

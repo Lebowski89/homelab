@@ -60,3 +60,8 @@ qui:
     host: "{{ docker_services_unraid_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_unraid_host
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m
