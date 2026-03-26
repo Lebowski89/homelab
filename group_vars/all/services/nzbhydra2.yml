@@ -16,8 +16,8 @@ nzbhydra2:
       - "http://127.0.0.1:5076/actuator/health/ping"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
     UMASK: "022"
   infisical:
     fail_on_empty: true
@@ -53,13 +53,13 @@ nzbhydra2:
         path: "/SABnzbd"
         name: API
   paths:
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/nzbhydra2"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/nzbhydra2"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/nzbhydra2"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/nzbhydra2"
       target: /config
       read_only: false
   traefik:
@@ -79,9 +79,9 @@ nzbhydra2:
     type: swarm
     mode: replicated
     replicas: 1
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"
     constraints:
-      - node.labels.ansible_host == unraid
+      - node.labels.docker_services_host == docker_services_unraid_host
     restart_policy:
       condition: on-failure
       delay: 10s

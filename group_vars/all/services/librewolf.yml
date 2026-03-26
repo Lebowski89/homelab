@@ -11,25 +11,25 @@ librewolf:
     - gluetun
   network_mode: "service:gluetun"
   environment:
-    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
     LIBREWOLF_CLI: "http://192.168.80.20:3075"
   paths:
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/librewolf"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/librewolf"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/librewolf"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/librewolf"
       target: /config
       read_only: false
     downloads:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_data_root }}/media/gluetun"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/media/gluetun"
       target: /downloads
       read_only: false
   shm_size: 1gb
   deploy:
     type: container
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"

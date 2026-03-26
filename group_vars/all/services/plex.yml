@@ -10,8 +10,8 @@ plex:
   devices:
     - /dev/dri:/dev/dri
   environment:
-    PUID: "{{ hostvars['plex'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['plex'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_plex_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_plex_host].docker_host_pgid | string }}"
     TZ: "{{ timezone }}"
     VERSION: "docker"
     PLEX_CLAIM: "{{ plex_claim_code | default(omit) }}"
@@ -64,25 +64,25 @@ plex:
       protocol: udp
       mode: host
   paths:
-    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex"
+    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library"
+    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library/Application Support"
+    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library/Application Support"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library/Application Support/Plex Media Server"
+    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library/Application Support/Plex Media Server"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library/Application Support/Plex Media Server/Plug-ins"
+    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library/Application Support/Plex Media Server/Plug-ins"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library/Logs"
+    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library/Logs"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['plex'].docker_host_appdata_root }}/plex/Library/Logs/Plex Media Server"
+    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library/Logs/Plex Media Server"
       state: directory
       mode: "0755"
   named_volumes:
@@ -95,7 +95,7 @@ plex:
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['plex'].docker_host_appdata_root }}/plex"
+      source: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex"
       target: /config
       read_only: false
     transcode:
@@ -112,9 +112,9 @@ plex:
     type: swarm
     mode: replicated
     replicas: 1
-    host: plex
+    host: "{{ docker_services_plex_host }}"
     constraints:
-      - node.labels.ansible_host == plex
+      - node.labels.docker_services_host == docker_services_plex_host
     restart_policy:
       condition: on-failure
       delay: 10s

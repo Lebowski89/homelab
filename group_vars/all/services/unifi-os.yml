@@ -156,4 +156,4 @@ unifi:
       read_only: false
   deploy:
     type: container
-    host: mgt
+    host: "{{ docker_services_primary_manager }}"

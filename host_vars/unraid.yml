@@ -16,4 +16,5 @@ docker_host_opencloud_data_root: /mnt/user/opencloud/data
 docker_swarm_node_labels:
   role: worker
   ansible_host: unraid
+  docker_services_host: docker_services_unraid_host
   haproxy: "true"

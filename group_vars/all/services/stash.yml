@@ -13,8 +13,8 @@ stash:
       - "touch /data/media/adult/.healthcheck && rm -f /data/media/adult/.healthcheck || exit 1"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars['unraid'].docker_host_puid | string }}"
-    PGID: "{{ hostvars['unraid'].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
     UMASK: "022"
     STASH_CONFIG_FILE: "/config/config.yml"
     STASH_METADATA: "/config/metadata"
@@ -37,35 +37,35 @@ stash:
         path: "/Stash"
         name: STASHDB_API
   paths:
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/stash"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/stash"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/stash/metadata"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/stash/metadata"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/stash/cache"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/stash/cache"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/stash/blobs"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/stash/blobs"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars['unraid'].docker_host_appdata_root }}/stash/generated"
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/stash/generated"
       state: directory
       mode: "0755"
   templates:
     - src: configs/stash.yml.j2
-      dest: "{{ hostvars['unraid'].docker_host_appdata_root }}/stash/config.yml"
+      dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/stash/config.yml"
       mode: "0664"
       force: false
   volumes:
     config:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_appdata_root }}/stash"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/stash"
       target: /config
       read_only: false
     media:
       type: bind
-      source: "{{ hostvars['unraid'].docker_host_data_root }}"
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}"
       target: /data
       read_only: false
   traefik:
@@ -78,9 +78,9 @@ stash:
     type: swarm
     mode: replicated
     replicas: 1
-    host: unraid
+    host: "{{ docker_services_unraid_host }}"
     constraints:
-      - node.labels.ansible_host == unraid
+      - node.labels.docker_services_host == docker_services_unraid_host
     restart_policy:
       condition: on-failure
       delay: 10s
