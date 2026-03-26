@@ -1,4 +1,4 @@
-ansible==13.4.0
+ansible==13.5.0
 ansible-lint==26.3.0
 docker==7.1.0
 jmespath==1.1.0
