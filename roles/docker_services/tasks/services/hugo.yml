@@ -31,7 +31,7 @@
     - name: Hugo prep | Run hugo new site
       community.docker.docker_container:
         name: hugo-new-site
-        image: ghcr.io/gohugoio/hugo:v0.159.0
+        image: ghcr.io/gohugoio/hugo:v0.159.1
         pull: true
         state: started
         container_default_behavior: compatibility
