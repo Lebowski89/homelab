@@ -14,7 +14,9 @@ cross_seed:
       - "--spider"
       - "-q"
       - "http://127.0.0.1:2468/api/ping"
-  user: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}:{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
+  user: >-
+    {{ hostvars[docker_services_unraid_host].docker_host_puid | string }}:{{
+    hostvars[docker_services_unraid_host].docker_host_pgid | string }}
   environment:
     TZ: "{{ timezone }}"
   infisical:
