@@ -3,7 +3,7 @@
 loki:
   name: loki
   stack: loki
-  image: grafana/loki:3.6.7
+  image: grafana/loki:3.7.1
   named_networks:
     overlay:
       external: true
