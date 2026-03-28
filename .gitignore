@@ -1,11 +1,4 @@
 
-
-# Build output
 .vscode/
-dist/
-build/
-ansible-venv/
 collections/
-discards/
-filter_plugins/
 hosts.ini
