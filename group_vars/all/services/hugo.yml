@@ -3,7 +3,7 @@
 hugo:
   name: hugo
   stack: hugo
-  image: ghcr.io/gohugoio/hugo:v0.159.0
+  image: ghcr.io/gohugoio/hugo:v0.159.1
   named_networks:
     overlay:
       external: true
