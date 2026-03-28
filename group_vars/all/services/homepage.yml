@@ -3,7 +3,7 @@
 homepage:
   name: homepage
   stack: homepage
-  image: ghcr.io/gethomepage/homepage:v1.11.0
+  image: ghcr.io/gethomepage/homepage:v1.12.1
   named_networks:
     overlay:
       external: true
