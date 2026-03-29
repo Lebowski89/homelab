@@ -1,54 +1,76 @@
 ---
 
 portainer:
-  name: portainer
   stack: portainer
-  image: portainer/portainer-ce:2.40.0-linux-amd64-alpine
   named_networks:
     overlay:
       external: true
-  command:
-    - "-H tcp://tasks.agent:9001 --tlsskipverify"
-  environment:
-    TZ: "{{ timezone }}"
-    PUID: "1000"
-    PGID: "1000"
-    UMASK: "022"
-  paths:
-    - path: /opt/portainer
-      state: directory
-      owner: 1000
-      group: 1000
-      mode: "0755"
-  volumes:
-    config:
-      type: bind
-      source: /opt/portainer
-      target: /data
-      read_only: false
-    docker_sock:
-      type: bind
-      source: /var/run/docker.sock
-      target: /var/run/docker.sock
-      read_only: true
-  traefik:
-    enable: true
-    port: 9000
-    sso: authelia
-    internal_api: true
-    internal_api_rules:
-      - "PathPrefix(`/api`)"
-  cloudflare:
-    enable: true
-  deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    host: "{{ docker_services_primary_manager }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
-    restart_policy:
-      condition: on-failure
-      delay: 10s
-      max_attempts: 5
-      window: 2m
+  targets:
+    agent:
+      name: agent
+      image: portainer/agent:2.40.0-linux-amd64-alpine
+      volumes:
+        docker_volumes:
+          type: bind
+          source: /var/lib/docker/volumes
+          target: /var/lib/docker/volumes
+        docker_sock:
+          type: bind
+          source: /var/run/docker.sock
+          target: /var/run/docker.sock
+      deploy:
+        type: swarm
+        mode: global
+        constraints:
+          - node.platform.os == linux
+        restart_policy:
+          condition: on-failure
+          delay: 10s
+          max_attempts: 5
+          window: 2m
+    main:
+      name: portainer
+      image: portainer/portainer-ce:2.40.0-linux-amd64-alpine
+      command:
+        - "-H tcp://tasks.agent:9001 --tlsskipverify"
+      environment:
+        TZ: "{{ timezone }}"
+        PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
+        PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
+        UMASK: "022"
+      paths:
+        - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/portainer"
+          state: directory
+          mode: "0755"
+      volumes:
+        config:
+          type: bind
+          source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/portainer"
+          target: /data
+          read_only: false
+        docker_sock:
+          type: bind
+          source: /var/run/docker.sock
+          target: /var/run/docker.sock
+          read_only: true
+      traefik:
+        enable: true
+        port: 9000
+        sso: authelia
+        internal_api: true
+        internal_api_rules:
+          - "PathPrefix(`/api`)"
+      cloudflare:
+        enable: true
+      deploy:
+        type: swarm
+        mode: replicated
+        replicas: 1
+        host: "{{ docker_services_primary_manager }}"
+        constraints:
+          - node.labels.docker_services_host == docker_services_primary_manager
+        restart_policy:
+          condition: on-failure
+          delay: 10s
+          max_attempts: 5
+          window: 2m

@@ -14,8 +14,8 @@ gluetun:
     - "/dev/net/tun:/dev/net/tun"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
     UMASK: "022"
     FIREWALL_OUTBOUND_SUBNETS: "192.168.80.0/24"
     UPDATER_PERIOD: "24h"

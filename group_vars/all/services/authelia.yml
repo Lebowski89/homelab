@@ -1,107 +1,10 @@
 ---
 
 authelia:
-  name: authelia
   stack: authelia
-  image: authelia/authelia:4.39.16
   named_networks:
     overlay:
       external: true
-  environment:
-    TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | string }}"
-    UMASK: "022"
-    AUTHELIA_SESSION_SECRET_FILE: /run/secrets/authelia_session_key_secret
-    AUTHELIA_SESSION_REDIS_PASSWORD_FILE: /run/secrets/authelia_redis_secret
-    AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/authelia_storage_key_secret
-    AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE: /run/secrets/postgres_pass_secret
-    AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE: /run/secrets/authelia_jwt_key_secret
-  env_file:
-    - "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/.env"
-  infisical:
-    fail_on_empty: true
-    secrets_map:
-      - var: postgres_user
-        path: "/Postgres"
-        name: USER
-      - var: postgres_pass
-        path: "/Postgres"
-        name: PASS
-        docker_secret: postgres_pass_secret
-      - var: authelia_user
-        path: "/Authelia"
-        name: USER
-      - var: authelia_pass
-        path: "/Authelia"
-        name: PASS
-      - var: authelia_display_name
-        path: "/Authelia"
-        name: DISPLAY_NAME
-      - var: authelia_redis_key
-        path: "/Authelia"
-        name: REDIS_KEY
-        docker_secret: authelia_redis_secret
-      - var: authelia_storage_key
-        path: "/Authelia"
-        name: STORAGE_KEY
-        docker_secret: authelia_storage_key_secret
-      - var: smtp_email
-        path: "/Porkbun"
-        name: SMTP_EMAIL
-      - var: smtp_host
-        path: "/Porkbun"
-        name: SMTP_HOST
-      - var: smtp_password
-        path: "/Porkbun"
-        name: SMTP_PASS
-      - var: smtp_port
-        path: "/Porkbun"
-        name: SMTP_PORT
-      - var: smtp_sender
-        path: "/Porkbun"
-        name: SMTP_SENDER
-      - var: smtp_username
-        path: "/Porkbun"
-        name: SMTP_USER
-      - var: cloudflare_zone
-        path: "/Cloudflare"
-        name: ZONE
-  secrets:
-    - authelia_session_key_secret
-    - authelia_storage_key_secret
-    - authelia_jwt_key_secret
-    - authelia_redis_secret
-    - postgres_pass_secret
-  paths:
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia"
-      state: directory
-      mode: "0755"
-  templates:
-    - src: configs/proxy/authelia/config.yml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/configuration.yml"
-      mode: "0664"
-      force: true
-    - src: configs/proxy/authelia/users_database.yml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/users_database.yml"
-      mode: "0664"
-      force: true
-    - src: configs/proxy/authelia/authelia.env.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/.env"
-      mode: "0664"
-      force: true
-  volumes:
-    config:
-      type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia"
-      target: /config
-      read_only: false
-  postgres:
-    enable: true
-    databases:
-      - authelia
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated
@@ -114,3 +17,130 @@ authelia:
       delay: 10s
       max_attempts: 5
       window: 2m
+  targets:
+    redis:
+      name: authelia-redis
+      image: redis:8.6-alpine
+      command:
+        - sh -c 'redis-server --requirepass "$$(cat /run/secrets/authelia_redis_secret)"'
+      environment:
+        TZ: "{{ timezone }}"
+        PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
+        PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
+      infisical:
+        fail_on_empty: true
+        secrets_map:
+          - var: authelia_redis_key
+            path: "/Authelia"
+            name: REDIS_KEY
+            docker_secret: authelia_redis_secret
+      secrets:
+        - authelia_redis_secret
+      paths:
+        - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/redis"
+          state: directory
+          mode: "0755"
+      volumes:
+        config:
+          type: bind
+          source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/redis"
+          target: /data
+          read_only: false
+    main:
+      name: authelia
+      image: authelia/authelia:4.39.16
+      environment:
+        TZ: "{{ timezone }}"
+        PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
+        PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
+        UMASK: "022"
+        AUTHELIA_SESSION_SECRET_FILE: /run/secrets/authelia_session_key_secret
+        AUTHELIA_SESSION_REDIS_PASSWORD_FILE: /run/secrets/authelia_redis_secret
+        AUTHELIA_STORAGE_ENCRYPTION_KEY_FILE: /run/secrets/authelia_storage_key_secret
+        AUTHELIA_STORAGE_POSTGRES_PASSWORD_FILE: /run/secrets/postgres_pass_secret
+        AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE: /run/secrets/authelia_jwt_key_secret
+      env_file:
+        - "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/.env"
+      infisical:
+        fail_on_empty: true
+        secrets_map:
+          - var: postgres_user
+            path: "/Postgres"
+            name: USER
+          - var: postgres_pass
+            path: "/Postgres"
+            name: PASS
+            docker_secret: postgres_pass_secret
+          - var: authelia_user
+            path: "/Authelia"
+            name: USER
+          - var: authelia_pass
+            path: "/Authelia"
+            name: PASS
+          - var: authelia_display_name
+            path: "/Authelia"
+            name: DISPLAY_NAME
+          - var: authelia_redis_key
+            path: "/Authelia"
+            name: REDIS_KEY
+            docker_secret: authelia_redis_secret
+          - var: authelia_storage_key
+            path: "/Authelia"
+            name: STORAGE_KEY
+            docker_secret: authelia_storage_key_secret
+          - var: smtp_email
+            path: "/Porkbun"
+            name: SMTP_EMAIL
+          - var: smtp_host
+            path: "/Porkbun"
+            name: SMTP_HOST
+          - var: smtp_password
+            path: "/Porkbun"
+            name: SMTP_PASS
+          - var: smtp_port
+            path: "/Porkbun"
+            name: SMTP_PORT
+          - var: smtp_sender
+            path: "/Porkbun"
+            name: SMTP_SENDER
+          - var: smtp_username
+            path: "/Porkbun"
+            name: SMTP_USER
+          - var: cloudflare_zone
+            path: "/Cloudflare"
+            name: ZONE
+      secrets:
+        - authelia_session_key_secret
+        - authelia_storage_key_secret
+        - authelia_jwt_key_secret
+        - authelia_redis_secret
+        - postgres_pass_secret
+      paths:
+        - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia"
+          state: directory
+          mode: "0755"
+      templates:
+        - src: configs/proxy/authelia/config.yml.j2
+          dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/configuration.yml"
+          mode: "0664"
+          force: true
+        - src: configs/proxy/authelia/users_database.yml.j2
+          dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/users_database.yml"
+          mode: "0664"
+          force: true
+        - src: configs/proxy/authelia/authelia.env.j2
+          dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/.env"
+          mode: "0664"
+          force: true
+      volumes:
+        config:
+          type: bind
+          source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia"
+          target: /config
+          read_only: false
+      postgres:
+        enable: true
+        databases:
+          - authelia
+      cloudflare:
+        enable: true
