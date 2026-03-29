@@ -1,65 +1,14 @@
 ---
 
 autopulse:
-  name: autopulse
   stack: autopulse
+<<<<<<< HEAD
   image: danonline/autopulse:latest-postgres@sha256:19901fa97fe29a907d0b680894b92e140beef6f40b538b9a8e4d9dc5894511bd
+=======
+>>>>>>> e88826c (service_vars  -fixes/changes/targets/use more host_vars)
   named_networks:
     overlay:
       external: true
-  environment:
-    TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
-    UMASK: "022"
-    AUTOPULSE__AUTH__USERNAME__FILE: /run/secrets/autopulse_user_secret
-    AUTOPULSE__AUTH__PASSWORD__FILE: /run/secrets/autopulse_pass_secret
-    AUTOPULSE__TARGETS__PLEX__TOKEN__FILE: /run/secrets/plex_token_secret
-  env_file:
-    - /opt/stacks/autopulse.env
-  infisical:
-    fail_on_empty: true
-    secrets_map:
-      - var: autopulse_user
-        path: "/Autopulse"
-        name: USER
-        docker_secret: autopulse_user_secret
-      - var: autopulse_pass
-        path: "/Autopulse"
-        name: PASS
-        docker_secret: autopulse_pass_secret
-      - var: plex_token
-        path: "/Plex"
-        name: TOKEN
-        docker_secret: plex_token_secret
-  secrets:
-    - autopulse_user_secret
-    - autopulse_pass_secret
-    - plex_token_secret
-  paths:
-    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/autopulse"
-      state: directory
-      mode: "0755"
-    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/autopulse/config.yaml"
-      state: touch
-      mode: "0664"
-  swarm_env_templates:
-    - src: configs/autopulse.env.j2
-      dest: /opt/stacks/autopulse.env
-      owner: 1000
-      group: 1000
-      mode: "0600"
-      force: true
-  volumes:
-    config:
-      type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/autopulse/config.yaml"
-      target: /app/config.yaml
-      read_only: false
-  postgres:
-    enable: true
-    databases:
-      - "autopulse"
   deploy:
     type: swarm
     mode: replicated
@@ -72,3 +21,67 @@ autopulse:
       delay: 10s
       max_attempts: 5
       window: 2m
+  targets:
+    user_interface:     
+      name: autopulse-ui
+      image: danonline/autopulse:ui@sha256:0afcb9fa36016fd49ca48d7dfb5fa0cbc9ecfa05c141c5079952dfbb755febe4
+      traefik:
+        enable: true
+        port: 2880
+        sso: authelia
+      cloudflare:
+        enable: true
+    main:
+      name: autopulse
+      image: danonline/autopulse:latest-postgres@sha256:f895c5b10e49dea69c0b3c28078d293eaca8f62060c4bcb8385a8dfc6a2ae0f8
+      environment:
+        TZ: "{{ timezone }}"
+        PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
+        PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
+        UMASK: "022"
+        AUTOPULSE__AUTH__USERNAME__FILE: /run/secrets/autopulse_user_secret
+        AUTOPULSE__AUTH__PASSWORD__FILE: /run/secrets/autopulse_pass_secret
+        AUTOPULSE__TARGETS__PLEX__TOKEN__FILE: /run/secrets/plex_token_secret
+      env_file:
+        - /opt/stacks/autopulse.env
+      infisical:
+        fail_on_empty: true
+        secrets_map:
+          - var: autopulse_user
+            path: "/Autopulse"
+            name: USER
+            docker_secret: autopulse_user_secret
+          - var: autopulse_pass
+            path: "/Autopulse"
+            name: PASS
+            docker_secret: autopulse_pass_secret
+          - var: plex_token
+            path: "/Plex"
+            name: TOKEN
+            docker_secret: plex_token_secret
+      secrets:
+        - autopulse_user_secret
+        - autopulse_pass_secret
+        - plex_token_secret
+      paths:
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/autopulse"
+          state: directory
+          mode: "0755"
+        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/autopulse/config.yaml"
+          state: touch
+          mode: "0664"
+      swarm_env_templates:
+        - src: configs/autopulse.env.j2
+          dest: /opt/stacks/autopulse.env
+          mode: "0600"
+          force: true
+      volumes:
+        config:
+          type: bind
+          source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/autopulse/config.yaml"
+          target: /app/config.yaml
+          read_only: false
+      postgres:
+        enable: true
+        databases:
+          - "autopulse"

@@ -16,8 +16,8 @@ qui:
       - "http://127.0.0.1:7476/"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
     UMASK: "022"
   env_file:
     - /opt/stacks/qui.env
@@ -28,8 +28,6 @@ qui:
   swarm_env_templates:
     - src: configs/qui.env.j2
       dest: /opt/stacks/qui.env
-      owner: 1000
-      group: 1000
       mode: "0600"
       force: true
   volumes:
