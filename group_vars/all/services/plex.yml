@@ -18,7 +18,7 @@ plex:
     ADVERTISE_IP: "http://192.168.80.59:32400/"
     TP_SCHEME: "http"
     DOCKER_MODS: "ghcr.io/themepark-dev/theme.park:plex"
-    TP_DOMAIN: "192.168.80.48:8089"
+    TP_DOMAIN: "{{ hostvars[docker_services_primary_manager].local_ip }}:8089"
     TP_THEME: "hotline"
   ports:
     web:

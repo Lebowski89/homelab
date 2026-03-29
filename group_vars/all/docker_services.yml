@@ -11,8 +11,10 @@ docker_services:
   - name: homepage
     tags: [apps, homepage]
   - name: portainer
+    target: agent
     tags: [apps, portainer]
-  - name: portainer_agent
+  - name: portainer
+    target: main
     tags: [apps, portainer]
   - name: technitium
     tags: [apps, technitium]
@@ -20,9 +22,11 @@ docker_services:
     tags: [apps, vaultwarden]
 
   ## services (proxy)
-  - name: authelia_redis
+  - name: authelia
+    target: redis
     tags: [apps, proxy, authelia]
   - name: authelia
+    target: main
     tags: [apps, proxy, authelia]
   - name: traefik
     tags: [apps, proxy, traefik]
@@ -71,8 +75,10 @@ docker_services:
 
   ## services (plex)
   - name: autopulse
+    target: user_interface
     tags: [apps, plex, autopulse]
-  - name: autopulse_ui
+  - name: autopulse
+    target: main
     tags: [apps, plex, autopulse]
   - name: imagemaid
     tags: [apps, plex, imagemaid]

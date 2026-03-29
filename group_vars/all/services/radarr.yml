@@ -41,8 +41,8 @@ radarr:
           - "touch /data/media/movies/.healthcheck && rm -f /data/media/movies/.healthcheck || exit 1"
       environment:
         TZ: "{{ timezone }}"
-        PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
-        PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
+        PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
+        PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
         UMASK: "022"
         RADARR__APP__INSTANCENAME: "Radarr"
         RADARR__SERVER__PORT: "7878"
@@ -55,7 +55,7 @@ radarr:
         RADARR__POSTGRES__MAINDB: "radarr-main"
         RADARR__POSTGRES__LOGDB: "radarr-log"
         TP_SCHEME: "http"
-        TP_DOMAIN: "192.168.80.48:8089"
+        TP_DOMAIN: "{{ hostvars[docker_services_primary_manager].local_ip }}:8089"
         TP_HOTIO: "true"
         TP_THEME: "hotline"
       infisical:
@@ -120,8 +120,8 @@ radarr:
           - "touch /data/media/movies-4k/.healthcheck && rm -f /data/media/movies-4k/.healthcheck || exit 1"
       environment:
         TZ: "{{ timezone }}"
-        PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
-        PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
+        PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
+        PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
         UMASK: "022"
         RADARR__APP__INSTANCENAME: "Radarr-4K"
         RADARR__SERVER__PORT: "7878"
@@ -134,7 +134,7 @@ radarr:
         RADARR__POSTGRES__MAINDB: "radarr-4k-main"
         RADARR__POSTGRES__LOGDB: "radarr-4k-log"
         TP_SCHEME: "http"
-        TP_DOMAIN: "192.168.80.48:8089"
+        TP_DOMAIN: "{{ hostvars[docker_services_primary_manager].local_ip }}:8089"
         TP_HOTIO: "true"
         TP_THEME: "hotline"
       infisical:

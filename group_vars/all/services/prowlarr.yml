@@ -15,8 +15,8 @@ prowlarr:
       - "http://localhost:9696"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
     UMASK: "022"
     PROWLARR__APP__INSTANCENAME: "Prowlarr"
     PROWLARR__SERVER__PORT: "9696"
@@ -29,7 +29,7 @@ prowlarr:
     PROWLARR__POSTGRES__MAINDB: "prowlarr-main"
     PROWLARR__POSTGRES__LOGDB: "prowlarr-log"
     TP_SCHEME: "http"
-    TP_DOMAIN: "192.168.80.48:8089"
+    TP_DOMAIN: "{{ hostvars[docker_services_primary_manager].local_ip }}:8089"
     TP_HOTIO: "true"
     TP_THEME: "hotline"
   infisical:

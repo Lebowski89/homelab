@@ -16,8 +16,8 @@ traefik:
       - "http://127.0.0.1:8081/ping"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
+    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
     UMASK: "022"
     CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_secret
   infisical:

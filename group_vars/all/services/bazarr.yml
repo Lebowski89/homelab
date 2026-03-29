@@ -15,12 +15,12 @@ bazarr:
       - "http://localhost:6767"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
     UMASK: "022"
     WEBUI_PORTS: "6767/tcp,6767/udp"
     TP_SCHEME: "http"
-    TP_DOMAIN: "192.168.80.48:8089"
+    TP_DOMAIN: "{{ hostvars[docker_services_primary_manager].local_ip }}:8089"
     TP_HOTIO: "true"
     TP_THEME: "hotline"
   infisical:

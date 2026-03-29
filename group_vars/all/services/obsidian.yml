@@ -15,8 +15,8 @@ obsidian:
       - "http://localhost:1314"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
+    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
     UMASK: "022"
     CUSTOM_PORT: "1314"
     CUSTOM_HTTPS_PORT: "1315"

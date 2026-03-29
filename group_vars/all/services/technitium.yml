@@ -10,8 +10,8 @@ technitium:
       name: host
   environment:
     TZ: "{{ timezone }}"
-    PUID: "1000"
-    PGID: "1000"
+    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
+    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
     UMASK: "022"
     DNS_SERVER_ADMIN_PASSWORD_FILE: /run/secrets/technitium_admin_secret
   infisical:
@@ -24,21 +24,19 @@ technitium:
   secrets:
     - technitium_admin_secret
   paths:
-    - path: /opt/technitium
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/technitium"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: /opt/technitium
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/technitium"
       target: /etc/dns
       read_only: false
   deploy:
     type: swarm
     mode: global
-    host: [mgt, plex]
+    host: ["{{ docker_services_primary_manager }}", "{{ docker_services_plex_host }}"]
     constraints:
       - node.labels.dns == technitium
     restart_policy:
