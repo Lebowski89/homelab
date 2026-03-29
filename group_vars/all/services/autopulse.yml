@@ -18,7 +18,7 @@ autopulse:
       max_attempts: 5
       window: 2m
   targets:
-    user_interface:     
+    user_interface:
       name: autopulse-ui
       image: danonline/autopulse:ui@sha256:0afcb9fa36016fd49ca48d7dfb5fa0cbc9ecfa05c141c5079952dfbb755febe4
       traefik:

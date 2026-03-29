@@ -7,7 +7,8 @@ vaultwarden:
   named_networks:
     overlay:
       external: true
-  user: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}:{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
+  user: >-
+    {{ hostvars[docker_services_primary_manager].docker_host_puid }}:{{ hostvars[docker_services_primary_manager].docker_host_pgid }}
   environment:
     TZ: "{{ timezone }}"
     ADMIN_TOKEN_FILE: /run/secrets/vaultwarden_admin_secret
