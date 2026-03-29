@@ -12,7 +12,8 @@ opencloud:
   command:
     - -c
     - "opencloud init || true; opencloud server"
-  user: "1000:1000"
+  user: >-
+    {{ hostvars[docker_services_unraid_host].docker_host_opencloud_puid }}:{{ hostvars[docker_services_unraid_host].docker_host_opencloud_pgid }}
   environment:
     TZ: "{{ timezone }}"
   env_file:
@@ -41,42 +42,28 @@ opencloud:
   paths:
     - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/opencloud"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0751"
     - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/opencloud/config"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0751"
     - path: "{{ hostvars[docker_services_unraid_host].docker_host_opencloud_data_root }}"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0751"
     - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/opencloud/apps"
       state: directory
-      owner: 1000
-      group: 1000
       mode: "0751"
   templates:
     - src: configs/opencloud/csp.yaml.j2
       dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/opencloud/config/csp.yaml"
-      owner: 1000
-      group: 1000
       mode: "0664"
       force: true
     - src: configs/opencloud/banned-password-list.txt.j2
       dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/opencloud/config/banned-password-list.txt"
-      owner: 1000
-      group: 1000
       mode: "0664"
       force: true
   swarm_env_templates:
     - src: configs/opencloud/opencloud.env.j2
       dest: /opt/stacks/opencloud.env
-      owner: 1000
-      group: 1000
       mode: "0600"
       force: true
   volumes:

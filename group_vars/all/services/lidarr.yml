@@ -13,8 +13,8 @@ lidarr:
       - "touch /data/media/music/.healthcheck && rm -f /data/media/music/.healthcheck || exit 1"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
     UMASK: "022"
     LIDARR__APP__INSTANCENAME: "Lidarr"
     LIDARR__SERVER__PORT: "8686"
@@ -27,7 +27,7 @@ lidarr:
     LIDARR__POSTGRES__MAINDB: "lidarr-main"
     LIDARR__POSTGRES__LOGDB: "lidarr-log"
     TP_SCHEME: "http"
-    TP_DOMAIN: "192.168.80.48:8089"
+    TP_DOMAIN: "{{ hostvars[docker_services_primary_manager].local_ip }}:8089"
     TP_HOTIO: "true"
     TP_THEME: "hotline"
   infisical:

@@ -13,8 +13,8 @@ stash:
       - "touch /data/media/adult/.healthcheck && rm -f /data/media/adult/.healthcheck || exit 1"
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
+    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
     UMASK: "022"
     STASH_CONFIG_FILE: "/config/config.yml"
     STASH_METADATA: "/config/metadata"

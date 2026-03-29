@@ -9,8 +9,8 @@ gotify:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
+    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
   env_file:
     - "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify/.env"
   infisical:
