@@ -2,10 +2,6 @@
 
 autopulse:
   stack: autopulse
-<<<<<<< HEAD
-  image: danonline/autopulse:latest-postgres@sha256:19901fa97fe29a907d0b680894b92e140beef6f40b538b9a8e4d9dc5894511bd
-=======
->>>>>>> e88826c (service_vars  -fixes/changes/targets/use more host_vars)
   named_networks:
     overlay:
       external: true
