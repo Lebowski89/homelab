@@ -9,7 +9,7 @@ terraform_keyring_dir: /usr/share/keyrings
 terraform_keyring_file_ascii: /usr/share/keyrings/hashicorp-archive-keyring.asc
 terraform_keyring_file: /usr/share/keyrings/hashicorp-archive-keyring.gpg
 terraform_repo_filename: hashicorp
-terraform_apt_arch: "{{ 'amd64' if ansible_architecture in ['x86_64', 'amd64'] else ansible_architecture }}"
+terraform_apt_arch: "{{ 'amd64' if ansible_facts['architecture'] in ['x86_64', 'amd64'] else ansible_facts['architecture'] }}"
 
 terraform_packages:
   - terraform

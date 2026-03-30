@@ -2,3 +2,6 @@
 
 terraform_api_user: terraform@pve
 terraform_api_token_name: "terraform-token"
+
+proxmox_api_bootstrap_user: "root@pam"
+proxmox_api_bootstrap_password: "Parsnip8992"

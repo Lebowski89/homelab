@@ -3,8 +3,8 @@
 - name: Assert supported OS
   ansible.builtin.assert:
     that:
-      - ansible_os_family == "Debian"
-      - ansible_distribution == "Ubuntu"
+      - ansible_facts["os_family"] == "Debian"
+      - ansible_facts["distribution"] == "Ubuntu"
     fail_msg: "This role currently supports Ubuntu only."
 
 - name: Ensure apt prerequisites are installed
@@ -43,7 +43,7 @@
     repo: >-
       deb [arch={{ terraform_apt_arch }} signed-by={{ terraform_keyring_file }}]
       {{ terraform_repo_url }}
-      {{ ansible_distribution_release }} main
+      {{ ansible_facts["distribution_release"] }} main
     filename: "{{ terraform_repo_filename }}"
     state: present
     update_cache: true

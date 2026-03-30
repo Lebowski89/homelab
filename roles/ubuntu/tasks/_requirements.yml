@@ -36,3 +36,4 @@
       - "{{ ubuntu_ansible_repo_path }}/requirements.yml"
       - --force
   changed_when: false
+  become: false

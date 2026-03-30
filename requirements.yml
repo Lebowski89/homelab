@@ -4,4 +4,5 @@ collections:
   - name: community.docker
   - name: community.general
   - name: community.postgresql
+  - name: community.proxmox
   - name: infisical.vault
