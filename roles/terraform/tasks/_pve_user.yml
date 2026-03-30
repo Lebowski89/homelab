@@ -33,3 +33,39 @@
     propagate: true
     state: present
   delegate_to: "{{ terraform_primary_manager }}"
+
+- name: List existing Terraform API tokens
+  ansible.builtin.command:
+    cmd: >-
+      pveum user token list
+      {{ hostvars[terraform_pve_host].terraform_api_user }}
+      --output-format json
+  register: terraform_pve_token_list
+  changed_when: false
+  become: true
+
+- name: Create Terraform API token if missing
+  ansible.builtin.command:
+    cmd: >-
+      pveum user token add
+      {{ hostvars[terraform_pve_host].terraform_api_user }}
+      {{ hostvars[terraform_pve_host].terraform_api_token_name }}
+      --privsep=0
+      --output-format json
+  register: terraform_pve_token_create
+  become: true
+  when: >
+    (
+      terraform_pve_token_list.stdout | from_json
+      | selectattr('tokenid', 'equalto', hostvars[terraform_pve_host].terraform_api_token_name)
+      | list
+      | length
+    ) == 0
+
+- name: Show Terraform API token secret once when created
+  ansible.builtin.debug:
+    msg: >-
+      Save this token secret now:
+      {{ (terraform_pve_token_create.stdout | from_json).value }}
+  when: terraform_pve_token_create is changed
+  no_log: true

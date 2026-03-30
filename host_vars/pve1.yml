@@ -1,3 +1,4 @@
 ---
 
 terraform_api_user: terraform@pve
+terraform_api_token_name: "terraform-token"

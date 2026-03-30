@@ -13,7 +13,7 @@
     - terraform_install
 
 - name: Configure Proxmox Terraform API access
-  when: inventory_hostname in groups['terraform_pve_user']
+  when: inventory_hostname in groups['terraform_pve_template']
   ansible.builtin.include_tasks:
     file: _pve_template.yml
     apply:
