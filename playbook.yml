@@ -30,7 +30,7 @@
       tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
 
   tasks:
-    - name: Configure Ubuntu settings and packages
+    - name: Include Ubuntu role
       when:
         - ansible_os_family == "Debian"
         - ansible_distribution == "Ubuntu"
@@ -48,7 +48,7 @@
         - ubuntu_network
         - ubuntu_netplan
 
-    - name: Install and configure Docker
+    - name: Include Docker role
       when: inventory_hostname in groups['docker']
       ansible.builtin.include_role:
         name: docker
@@ -64,7 +64,7 @@
         - docker_swarm_join
         - docker_swarm_network
 
-    - name: Deploy Infisical on Manager
+    - name: Include Infisical role
       when: inventory_hostname == docker_services_primary_manager
       ansible.builtin.include_role:
         name: infisical
@@ -74,7 +74,17 @@
         - infisical_recreate
         - infisical_remove
 
-    - name: Configure Patroni PostgreSQL cluster
+    - name: Include Terraform role
+      ansible.builtin.include_role:
+        name: terraform
+      when: inventory_hostname in groups['terraform']
+      tags:
+        - terraform
+        - terraform_install
+        - terraform_pve_template
+        - terraform_pve_user
+
+    - name: Include Postgres-cluster role
       ansible.builtin.include_role:
         name: pgha
       when: inventory_hostname in groups['pgha']

@@ -1,0 +1,37 @@
+---
+
+- name: Install Terraform on supported hosts
+  when: inventory_hostname in groups['terraform_install']
+  ansible.builtin.include_tasks:
+    file: _install.yml
+    apply:
+      tags:
+        - terraform
+        - terraform_install
+  tags:
+    - terraform
+    - terraform_install
+
+- name: Configure Proxmox Terraform API access
+  when: inventory_hostname in groups['terraform_pve_user']
+  ansible.builtin.include_tasks:
+    file: _pve_template.yml
+    apply:
+      tags:
+        - terraform
+        - terraform_pve_template
+  tags:
+    - terraform
+    - terraform_pve_template
+
+- name: Configure Proxmox Terraform API access
+  when: inventory_hostname in groups['terraform_pve_user']
+  ansible.builtin.include_tasks:
+    file: _pve_user.yml
+    apply:
+      tags:
+        - terraform
+        - terraform_pve_user
+  tags:
+    - terraform
+    - terraform_pve_user
