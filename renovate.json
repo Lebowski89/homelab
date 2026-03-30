@@ -18,6 +18,9 @@
   "prBodyNotes": [
     "Homelab note: review upstream release notes/changelog before merging."
   ],
+  "lockFileMaintenance": {
+    "enabled": true
+  },
   "customManagers": [
     {
       "customType": "regex",
@@ -42,6 +45,24 @@
     }
   ],
   "packageRules": [
+    {
+      "matchManagers": ["terraform"],
+      "groupName": "terraform",
+      "labels": ["renovate", "terraform"]
+    },
+    {
+      "matchManagers": ["terraform"],
+      "matchDepTypes": ["required_version"],
+      "groupName": "terraform core",
+      "labels": ["renovate", "terraform", "terraform-core"]
+    },
+    {
+      "matchManagers": ["terraform"],
+      "matchDepTypes": ["required_provider", "module"],
+      "groupName": "terraform providers and modules",
+      "labels": ["renovate", "terraform"]
+    },
+
     {
       "matchDatasources": [
         "docker"

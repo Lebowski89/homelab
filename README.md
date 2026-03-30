@@ -1,14 +1,15 @@
 ## <img width="720" height="360" alt="homelab_repo_banner_cropped" src="https://github.com/user-attachments/assets/ac402bb7-f469-44cf-a602-ff3ddf2c4160" />
 
-- Powered by Ansible <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/ansible.svg" alt="Ansible" width="24" /> and Docker Swarm <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/docker.svg" alt="Docker" width="24" />
-- Uses Infisical <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/infisical.svg" alt="Infisical" width="24" /> for secrets management
+- Powered by Ansible <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/ansible.svg" alt="Ansible" width="24" />, Docker <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/docker.svg" alt="Docker" width="24" /> and Terraform <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/hashicorp-terraform.svg" alt="Terraform" width="24" />
+- Uses Ansible Vault and Infisical <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/infisical.svg" alt="Infisical" width="24" /> for secrets management
 - Uses Authelia <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/authelia.svg" alt="Authelia" width="24" /> and Traefik <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/traefik.svg" alt="Traefik" width="24" /> for SSO and reverse proxy
 - Uses highly available PostgreSQL <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/postgresql.svg" alt="PostgreSQL" width="24" /> (PostgreSQL + Patroni + etcd + HAProxy)
 - Strong focus on media-centric services, especially arrs apps and companion services
 
 ## Goals
 
-- Automate deployment of apps and services
+- Automate deployment of Proxmox <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/proxmox.svg" alt="Promox" width="24" /> VM
+- Automate deployment of apps and services, primarily via Docker and Docker Swarm
 - Automate app settings, configs, databases, dns, and other needs in a single Ansible run
 - Run on fresh Debian-based <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/debian.svg" alt="Debian" width="24" /> OS/VM and reliably deploy an app or service with my preferred settings
 

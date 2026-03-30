@@ -1,0 +1,55 @@
+---
+
+scope: {{ postgres_patroni_scope }}
+namespace: {{ postgres_patroni_namespace }}
+name: {{ postgres_patroni_node_name }}
+
+restapi:
+  listen: 0.0.0.0:{{ postgres_patroni_restapi_port }}
+  connect_address: {{ local_ip }}:{{ postgres_patroni_restapi_port }}
+
+etcd3:
+  hosts:
+{% for host in postgres_patroni_etcd_hosts %}
+    - {{ host }}
+{% endfor %}
+
+bootstrap:
+  dcs:
+    ttl: 30
+    loop_wait: 10
+    retry_timeout: 10
+    maximum_lag_on_failover: 1048576
+    postgresql:
+      use_pg_rewind: true
+      use_slots: true
+      parameters:
+{% for key, value in postgres_patroni_postgresql_parameters.items() %}
+        {{ key }}: {{ value }}
+{% endfor %}
+  initdb:
+    - encoding: UTF8
+    - data-checksums
+
+postgresql:
+  listen: 0.0.0.0:{{ postgres_patroni_postgres_port }}
+  connect_address: {{ local_ip }}:{{ postgres_patroni_postgres_port }}
+  data_dir: {{ postgres_patroni_data_dir }}
+  bin_dir: {{ postgres_patroni_bin_dir }}
+  authentication:
+    superuser:
+      username: {{ postgres_patroni_superuser_name }}
+      password: {{ postgres_patroni_superuser_pass }}
+    replication:
+      username: {{ postgres_patroni_replication_name }}
+      password: {{ postgres_patroni_replication_pass }}
+  parameters:
+{% for key, value in postgres_patroni_postgresql_parameters.items() %}
+    {{ key }}: {{ value }}
+{% endfor %}
+
+tags:
+  nofailover: false
+  noloadbalance: false
+  clonefrom: false
+  nosync: false
