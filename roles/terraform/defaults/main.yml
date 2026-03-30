@@ -1,0 +1,22 @@
+---
+
+terraform_prereq_packages:
+  - gnupg
+  - software-properties-common
+
+terraform_repo_url: "https://apt.releases.hashicorp.com"
+terraform_keyring_dir: /usr/share/keyrings
+terraform_keyring_file_ascii: /usr/share/keyrings/hashicorp-archive-keyring.asc
+terraform_keyring_file: /usr/share/keyrings/hashicorp-archive-keyring.gpg
+terraform_repo_filename: hashicorp
+terraform_apt_arch: "{{ 'amd64' if ansible_architecture in ['x86_64', 'amd64'] else ansible_architecture }}"
+
+terraform_packages:
+  - terraform
+
+terraform_pve_template_vmid: 9000
+terraform_pve_template_name: ubuntu-2404-cloudinit-template
+terraform_pve_template_image_url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
+terraform_pve_template_image_path: /root/noble-server-cloudimg-amd64.img
+terraform_pve_template_storage: local-zfs
+terraform_pve_template_bridge: vmbr0
