@@ -2,3 +2,7 @@
 .vscode/
 collections/
 hosts.ini
+*.tfstate
+*.tfstate.*
+.terraform/
+secrets.auto.tfvars
