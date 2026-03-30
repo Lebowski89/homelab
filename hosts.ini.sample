@@ -22,7 +22,7 @@ pve1
 
 [terraform:children]
 terraform_install
-terraform_template
+terraform_pve_template
 terraform_pve_user
 
 [ansible_managers]
