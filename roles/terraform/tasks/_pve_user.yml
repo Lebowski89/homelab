@@ -1,5 +1,14 @@
 ---
 
+- name: Assert required Terraform Proxmox user vars are defined
+  ansible.builtin.assert:
+    that:
+      - terraform_primary_manager is defined
+      - terraform_pve_host is defined
+      - hostvars[terraform_pve_host].terraform_api_user is defined
+      - hostvars[terraform_pve_host].terraform_api_token_name is defined
+    fail_msg: "Required Terraform Proxmox user vars are missing."
+
 - name: Ensure Terraform Proxmox role exists
   community.proxmox.proxmox_role:
     name: terraform
@@ -63,9 +72,13 @@
     ) == 0
 
 - name: Show Terraform API token secret once when created
+  when: terraform_pve_token_create is changed
   ansible.builtin.debug:
     msg: >-
       Save this token secret now:
       {{ (terraform_pve_token_create.stdout | from_json).value }}
+
+- name: Pause so operator can copy token
   when: terraform_pve_token_create is changed
-  no_log: true
+  ansible.builtin.pause:
+    prompt: "Copy the Terraform API token now, then press Enter to continue."
