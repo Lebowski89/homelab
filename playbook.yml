@@ -84,16 +84,16 @@
         - terraform_pve_template
         - terraform_pve_user
 
-    - name: Include Postgres-cluster role
+    - name: Include Postgres Cluster role
       ansible.builtin.include_role:
-        name: pgha
-      when: inventory_hostname in groups['pgha']
+        name: postgres
+      when: inventory_hostname in groups['postgres_cluster']
       tags:
-        - pgha
-        - pgha_apt
-        - pgha_etcd
-        - pgha_patroni
-        - pgha_admin
+        - postgres
+        - postgres_apt
+        - postgres_etcd
+        - postgres_patroni
+        - postgres_admin
 
     - name: Load all service definitions from group_vars/all/services/*.yml
       ansible.builtin.include_vars:
