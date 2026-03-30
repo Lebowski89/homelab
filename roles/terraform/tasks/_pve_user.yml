@@ -1,0 +1,35 @@
+---
+
+- name: Ensure Terraform Proxmox role exists
+  community.proxmox.proxmox_role:
+    name: terraform
+    privs: >-
+      Datastore.AllocateSpace Datastore.AllocateTemplate Datastore.Audit
+      Pool.Allocate Pool.Audit
+      Sys.Audit Sys.Console Sys.Modify
+      VM.Allocate VM.Audit VM.Clone
+      VM.Config.CDROM VM.Config.Cloudinit VM.Config.CPU VM.Config.Disk
+      VM.Config.HWType VM.Config.Memory VM.Config.Network VM.Config.Options
+      VM.Migrate VM.PowerMgmt
+      SDN.Use
+    state: present
+  delegate_to: "{{ terraform_primary_manager }}"
+
+- name: Ensure Terraform Proxmox user exists
+  community.proxmox.proxmox_user:
+    userid: "{{ hostvars[terraform_pve_host].terraform_api_user }}"
+    state: present
+    enable: true
+    comment: "Terraform automation user"
+  delegate_to: "{{ terraform_primary_manager }}"
+
+- name: Ensure Terraform role is assigned at root path
+  community.proxmox.proxmox_access_acl:
+    path: /
+    roles:
+      - terraform
+    users:
+      - "{{ hostvars[terraform_pve_host].terraform_api_user }}"
+    propagate: true
+    state: present
+  delegate_to: "{{ terraform_primary_manager }}"

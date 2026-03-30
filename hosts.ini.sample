@@ -3,12 +3,27 @@
 mgt ansible_connection=local ansible_user= ansible_python_interpreter=
 unraid ansible_host= ansible_user=
 plex ansible_host= ansible_user=
+pve1 ansible_host= ansible_user=
 pg01 ansible_host= ansible_user=
 pg02 ansible_host= ansible_user=
 pg03 ansible_host= ansible_user=
 
+[terraform_install]
+mgt
+
+[terraform_pve_user]
+pve1
+
+[terraform:children]
+terraform_install
+terraform_pve_user
+
 [ansible_managers]
 mgt
+
+[docker_install]
+mgt
+plex
 
 [swarm_managers]
 mgt
@@ -18,6 +33,11 @@ unraid
 plex
 
 [swarm:children]
+swarm_managers
+swarm_workers
+
+[docker:children]
+docker_install
 swarm_managers
 swarm_workers
 
