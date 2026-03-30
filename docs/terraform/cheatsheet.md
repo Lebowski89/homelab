@@ -22,8 +22,8 @@ terraform fmt -recursive
 terraform validate
 ```
 
-`terraform fmt` - reformats Terraform files to standard style
-`terraform validate` - checks whether the configuration is valid.
++ `terraform fmt` - reformats Terraform files to standard style
++ `terraform validate` - checks whether the configuration is valid.
 
 ### Initialize a working directory
 
@@ -33,9 +33,9 @@ terraform init -upgrade
 terraform init -reconfigure
 ```
 
-`terraform init` - downloads providers and prepares the directory
-`terraform init -upgrade` - upgrades providers/modules within your version constraints
-`terraform init -reconfigure` - reinitializes backend/provider settings.
++ `terraform init` - downloads providers and prepares the directory
++ `terraform init -upgrade` - upgrades providers/modules within your version constraints
++ `terraform init -reconfigure` - reinitializes backend/provider settings.
 
 ### See what Terraform will do
 
@@ -45,9 +45,9 @@ terraform plan -out=tfplan
 terraform show tfplan
 ```
 
-`terraform plan` - shows the proposed changes
-`terraform plan -out=tfplan` - saves the exact plan to a file
-`terraform show tfplan` - displays a saved plan.
++ `terraform plan` - shows the proposed changes
++ `terraform plan -out=tfplan` - saves the exact plan to a file
++ `terraform show tfplan` - displays a saved plan.
 
 ### Apply changes
 
@@ -56,8 +56,8 @@ terraform apply
 terraform apply tfplan
 ```
 
-`terraform apply` - creates or updates infrastructure
-`terraform apply tfplan` - Applying a saved plan file ensures you execute exactly what was planned.
++ `terraform apply` - creates or updates infrastructure
++ `terraform apply tfplan` - Applying a saved plan file ensures you execute exactly what was planned.
 
 ### Destroy infrastructure
 
@@ -94,9 +94,9 @@ terraform state show proxmox_vm_qemu.postgres["pg95"]
 terraform show
 ```
 
-`terraform state` - list lists resources in state
-`terraform state` - show shows one resource from state
-`terraform show` - displays the current state or a saved plan.
++ `terraform state` - list lists resources in state
++ `terraform state` - show shows one resource from state
++ `terraform show` - displays the current state or a saved plan.
 
 ### Import an existing resource into state
 
@@ -104,13 +104,13 @@ terraform show
 terraform import <resource_address> <real_world_id>
 ```
 
-Example:
+**Example:**
 
 ```bash
 terraform import 'proxmox_vm_qemu.postgres["pg95"]' 9205
 ```
 
-`terraform import` - associates an existing real resource with a Terraform resource address.
++ `terraform import` - associates an existing real resource with a Terraform resource address.
 
 ### Open the Terraform console
 
@@ -118,14 +118,14 @@ terraform import 'proxmox_vm_qemu.postgres["pg95"]' 9205
 terraform console
 ```
 
-Useful for testing expressions:
+**Useful for testing expressions:**
 
 ```bash
 keys(var.postgres_vms)
 file(var.ssh_public_key_path)
 ```
 
-`terraform console` - opens an interactive expression console.
++ `terraform console` - opens an interactive expression console.
 
 ## Useful targeting and debugging commands
 
@@ -153,7 +153,7 @@ terraform refresh
 terraform show
 ```
 
-`refresh` - updates state to match remote systems.
++ `refresh` - updates state to match remote systems.
 
 ## Workspace commands
 
@@ -174,8 +174,8 @@ terraform modules
 terraform modules -json
 ```
 
-`terraform modules` shows declared modules in the current working directory.
-Note: This command requires Terraform v1.10.0 or later.
++ `terraform modules` - shows declared modules in the current working directory.
++ Requires Terraform v1.10.0 or later.
 
 ## Common file layout
 
@@ -191,15 +191,15 @@ Note: This command requires Terraform v1.10.0 or later.
 └── .terraform.lock.hcl
 ```
 
-Typical purpose of each file:
-`versions.tf` — Terraform and provider version constraints
-`provider.tf` — provider configuration
-`variables.tf` — input variable declarations
-`main.tf` — resources, data sources, modules
-`outputs.tf` — output values
-`terraform.tfvars` — normal variable values
-`secrets.auto.tfvars` — local secret values, not committed
-`.terraform.lock.hcl` — provider dependency lock file
+**Typical purpose of each file:**
++ `versions.tf` — Terraform and provider version constraints
++ `provider.tf` — provider configuration
++ `variables.tf` — input variable declarations
++ `main.tf` — resources, data sources, modules
++ `outputs.tf` — output values
++ `terraform.tfvars` — normal variable values
++ `secrets.auto.tfvars` — local secret values, not committed
++ `.terraform.lock.hcl` — provider dependency lock file
 
 ## Useful flags
 
@@ -235,7 +235,7 @@ terraform apply -no-color
 
 ### Good pattern
 
-Commit normal config:
+**Commit normal config:**
 
 ```bash
 # terraform.tfvars
@@ -246,7 +246,7 @@ vm_storage      = "local-zfs"
 
 ```
 
-Keep secrets local and gitignored:
+**Keep secrets local and gitignored:**
 
 ```bash
 # secrets.auto.tfvars
@@ -254,14 +254,14 @@ pm_api_token_id     = "terraform@pve!terraform"
 pm_api_token_secret = "REDACTED"
 ```
 
-Important note:
+**Important note:**
 
 Marking a variable as `sensitive = true` hides it from normal CLI output... 
 ...but sensitive values can still end up in state and plan files. Protect your state files.
 
 ## State safety
 
-Files to protect or ignore:
+**Files to protect or ignore:**
 
 ```bash
 .terraform/
@@ -288,7 +288,7 @@ terraform state show <resource>
 terraform destroy
 ```
 
-For one-resource testing:
+**For one-resource testing:**
 
 ```bash
 terraform plan -target='proxmox_vm_qemu.postgres["pg95"]'
@@ -338,11 +338,11 @@ terraform destroy
 
 
 ## Quick mental model
-`fmt` = clean formatting
-`init` = download/setup
-`validate` = syntax/schema check
-`plan` = preview
-`apply` = do it
-`output` = read outputs
-`state` = inspect Terraform’s memory
-`destroy` = remove managed infra
++ `fmt` = clean formatting
++ `init` = download/setup
++ `validate` = syntax/schema check
++ `plan` = preview
++ `apply` = do it
++ `output` = read outputs
++ `state` = inspect Terraform’s memory
++ `destroy` = remove managed infra
