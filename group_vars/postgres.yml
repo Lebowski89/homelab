@@ -1,0 +1,20 @@
+---
+
+postgres_etcd_initial_cluster: >-
+  pg95=http://192.168.80.95:2380,
+  pg96=http://192.168.80.96:2380,
+  pg97=http://192.168.80.97:2380
+
+postgres_patroni_etcd_hosts:
+  - 192.168.80.95:2379
+  - 192.168.80.96:2379
+  - 192.168.80.97:2379
+
+postgres_patroni_superuser_name: postgres
+postgres_patroni_superuser_pass: ""
+
+postgres_patroni_replication_name: replicator
+postgres_patroni_replication_pass: ""
+
+postgres_patroni_admin_role_name: admin
+postgres_patroni_admin_role_pass: ""

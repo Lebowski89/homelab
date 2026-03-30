@@ -1,0 +1,59 @@
+---
+
+- name: Query Patroni cluster state from first postgres node
+  ansible.builtin.uri:
+    url: "http://{{ hostvars[groups['postgres_cluster'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: postgres_patroni_cluster_state
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Determine Patroni leader member
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_member: >-
+      {{
+        (postgres_patroni_cluster_state.json.members
+         | selectattr('role', 'equalto', 'leader')
+         | list
+         | first)
+      }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Assert Patroni leader was found
+  ansible.builtin.assert:
+    that:
+      - postgres_patroni_leader_member is defined
+      - postgres_patroni_leader_member.name is defined
+      - postgres_patroni_leader_member.host is defined
+    fail_msg: "Could not determine Patroni leader from REST API."
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Build Patroni admin role flags
+  ansible.builtin.set_fact:
+    postgres_patroni_admin_role_flags: >-
+      {{
+        []
+        + (['LOGIN'] if postgres_patroni_admin_role_login else [])
+        + (['CREATEDB'] if postgres_patroni_admin_role_createdb else [])
+        + (['CREATEROLE'] if postgres_patroni_admin_role_createrole else [])
+      }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Ensure dedicated Patroni admin role exists on leader
+  community.postgresql.postgresql_user:
+    login_host: "{{ postgres_patroni_leader_member.host }}"
+    login_port: "{{ postgres_patroni_postgres_port }}"
+    login_user: "{{ postgres_patroni_superuser_name }}"
+    login_password: "{{ postgres_patroni_superuser_pass }}"
+    name: "{{ postgres_patroni_admin_role_name }}"
+    password: "{{ postgres_patroni_admin_role_pass }}"
+    role_attr_flags: "{{ postgres_patroni_admin_role_flags | join(',') }}"
+    state: present
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+  no_log: true

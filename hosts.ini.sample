@@ -7,15 +7,22 @@ pve1 ansible_host= ansible_user=
 pg01 ansible_host= ansible_user=
 pg02 ansible_host= ansible_user=
 pg03 ansible_host= ansible_user=
+pg95 ansible_host= ansible_user=
+pg96 ansible_host= ansible_user=
+pg97 ansible_host= ansible_user=
 
 [terraform_install]
 mgt
+
+[terraform_pve_template]
+pve1
 
 [terraform_pve_user]
 pve1
 
 [terraform:children]
 terraform_install
+terraform_template
 terraform_pve_user
 
 [ansible_managers]
@@ -41,7 +48,7 @@ docker_install
 swarm_managers
 swarm_workers
 
-[pgha]
-pg01
-pg02
-pg03
+[postgres_cluster]
+pg95
+pg96
+pg97

@@ -1,0 +1,41 @@
+---
+
+postgres_etcd_cluster_token: pg-ha-1
+postgres_etcd_data_dir: /var/lib/etcd
+postgres_etcd_config_dir: /etc/etcd
+postgres_etcd_config_path: "{{ postgres_etcd_config_dir }}/etcd.conf.yml"
+
+postgres_etcd_client_port: 2379
+postgres_etcd_peer_port: 2380
+
+postgres_patroni_scope: pg-cluster
+postgres_patroni_namespace: /service
+
+postgres_patroni_restapi_port: 8008
+postgres_patroni_postgres_port: 5433
+
+postgres_patroni_data_dir: /var/lib/postgresql/18/main
+postgres_patroni_bin_dir: /usr/lib/postgresql/18/bin
+postgres_patroni_config_dir: /etc/patroni
+postgres_patroni_config_path: "{{ postgres_patroni_config_dir }}/patroni.yml"
+
+postgres_patroni_superuser_name: postgres
+postgres_patroni_replication_name: replicator
+
+postgres_patroni_postgresql_parameters:
+  max_connections: 100
+  shared_buffers: 1GB
+  wal_level: replica
+  hot_standby: "on"
+  max_wal_senders: 10
+  max_replication_slots: 10
+  wal_keep_size: 1GB
+  max_worker_processes: 8
+  max_locks_per_transaction: 64
+  max_prepared_transactions: 0
+  track_commit_timestamp: "off"
+  password_encryption: scram-sha-256
+
+postgres_patroni_admin_role_login: true
+postgres_patroni_admin_role_createdb: true
+postgres_patroni_admin_role_createrole: false
