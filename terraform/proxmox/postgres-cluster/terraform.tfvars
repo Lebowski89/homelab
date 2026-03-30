@@ -1,14 +1,14 @@
-pm_api_url          = "https://192.168.80.80:8006/api2/json"
-pm_tls_insecure     = true
+pm_api_url      = "https://192.168.80.80:8006/api2/json"
+pm_tls_insecure = true
 
-target_node    = "pve01"
+target_node    = "pve1"
 clone_template = "ubuntu-2404-cloudinit-template"
-vm_storage = "local-zfs"
+vm_storage     = "local-zfs"
 
-vm_bridge      = "vmbr0"
-vm_gateway     = "192.168.80.1"
-vm_cidr        = 24
-vm_nameserver  = "192.168.80.48 192.168.80.59"
+vm_bridge       = "vmbr0"
+vm_gateway      = "192.168.80.1"
+vm_cidr         = 24
+vm_nameserver   = "192.168.80.48 192.168.80.59"
 vm_searchdomain = "home.arpa"
 
 ci_user = "ubuntu"

@@ -31,40 +31,34 @@ variable "clone_template" {
   description = "Name of the Ubuntu 24.04 Cloud-Init VM template in Proxmox"
 }
 
-variable "vm_pool" {
-  type        = string
-  default     = null
-  description = "Optional Proxmox pool"
-}
-
 variable "vm_bridge" {
-  type        = string
-  default     = "vmbr0"
+  type    = string
+  default = "vmbr0"
 }
 
 variable "vm_gateway" {
-  type        = string
-  default     = "192.168.80.1"
+  type    = string
+  default = "192.168.80.1"
 }
 
 variable "vm_cidr" {
-  type        = number
-  default     = 24
+  type    = number
+  default = 24
 }
 
 variable "vm_nameserver" {
-  type        = string
-  default     = "192.168.80.48"
+  type    = string
+  default = "192.168.80.48"
 }
 
 variable "vm_searchdomain" {
-  type        = string
-  default     = ""
+  type    = string
+  default = ""
 }
 
 variable "ci_user" {
-  type        = string
-  default     = "postgres"
+  type    = string
+  default = "ubuntu"
 }
 
 variable "ssh_public_key_path" {
@@ -72,21 +66,26 @@ variable "ssh_public_key_path" {
 }
 
 variable "default_tags" {
+  type    = string
+  default = "terraform;postgres;patroni"
+}
+
+variable "vm_storage" {
   type        = string
-  default     = "terraform;postgres;patroni"
+  description = "Proxmox storage name for VM disks and cloud-init disks"
 }
 
 variable "postgres_vms" {
   description = "Postgres cluster VM definitions"
   type = map(object({
-    vmid        = number
-    ip          = string
-    cores       = number
-    sockets     = number
-    memory      = number
+    vmid         = number
+    ip           = string
+    cores        = number
+    sockets      = number
+    memory       = number
     disk_size_gb = number
-    vlan_tag    = optional(number)
-    onboot      = optional(bool, true)
-    ci_user     = optional(string)
+    vlan_tag     = optional(number)
+    onboot       = optional(bool, true)
+    ci_user      = optional(string)
   }))
 }
