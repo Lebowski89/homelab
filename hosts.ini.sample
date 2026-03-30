@@ -14,11 +14,15 @@ pg97 ansible_host= ansible_user=
 [terraform_install]
 mgt
 
+[terraform_pve_template]
+pve1
+
 [terraform_pve_user]
 pve1
 
 [terraform:children]
 terraform_install
+terraform_template
 terraform_pve_user
 
 [ansible_managers]
