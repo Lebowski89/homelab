@@ -1,0 +1,6 @@
+---
+
+local_ip: 192.168.80.96
+
+postgres_etcd_node_name: pg96
+postgres_patroni_node_name: pg96
