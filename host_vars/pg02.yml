@@ -4,6 +4,3 @@ puid: 1000
 pgid: 1000
 
 local_ip: 192.168.80.93
-
-pgha_etcd_node_name: pg02
-pgha_patroni_node_name: pg02
