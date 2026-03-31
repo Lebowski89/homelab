@@ -4,14 +4,35 @@
 # BAZARR PREP
 ################################
 
-- name: Bazarr prep | Set paths + hosts
+- name: Bazarr prep | Set keys + paths + hosts
   ansible.builtin.set_fact:
-    docker_services_bazarr_fs_host: "{{ docker_services_svc.deploy.host | default(docker_services_primary_manager, true) | string | trim }}"
+    ## bazarr
+    docker_services_bazarr_host: "{{ docker_services_svc.deploy.host | string | trim }}"
     docker_services_bazarr_config_dir: "/mnt/user/appdata/bazarr"
     docker_services_bazarr_config_file: "/mnt/user/appdata/bazarr/config/config.yaml"
     docker_services_bazarr_image: "ghcr.io/hotio/bazarr:release-v1.5.6"
-    docker_services_bazarr_puid: "{{ hostvars[docker_services_svc.deploy.host | default(docker_services_primary_manager, true)].puid | default('1000') }}"
-    docker_services_bazarr_pgid: "{{ hostvars[docker_services_svc.deploy.host | default(docker_services_primary_manager, true)].pgid | default('1000') }}"
+    docker_services_bazarr_timezone: "{{ timezone }}"
+    docker_services_bazarr_puid: "{{ hostvars[docker_services_svc.deploy.host].docker_host_puid | default('1000') }}"
+    docker_services_bazarr_pgid: "{{ hostvars[docker_services_svc.deploy.host].docker_host_pgid | default('1000') }}"
+    docker_services_bazarr_api_key: "{{ bazarr_api | default('') }}"
+    docker_services_bazarr_port: "6767"
+    ## opensubtitles.com
+    docker_services_bazarr_opensubtitlescom_user: "{{ opensubtitlescom_user | default('') }}"
+    docker_services_bazarr_opensubtitlescom_pass: "{{ opensubtitlescom_pass | default('') }}"
+    ## radarr
+    docker_services_bazarr_radarr_api_key: "{{ radarr_api | default('') }}"
+    docker_services_bazarr_radarr_ip: "radarr"
+    docker_services_bazarr_radarr_port: "7878"
+    ## sonarr
+    docker_services_bazarr_sonarr_api_key: "{{ sonarr_api | default('') }}"
+    docker_services_bazarr_sonarr_ip: "sonarr"
+    docker_services_bazarr_sonarr_port: "8989"
+    ## postgres
+    docker_services_bazarr_pg_db: "bazarr"
+    docker_services_bazarr_pg_host: "haproxy"
+    docker_services_bazarr_pg_port: "5433"
+    docker_services_bazarr_pg_user: "{{ postgres_user }}"
+    docker_services_bazarr_pg_pass: "{{ postgres_pass }}"
   run_once: true
 
 ################################
@@ -25,14 +46,14 @@
     owner: "{{ docker_services_bazarr_puid }}"
     group: "{{ docker_services_bazarr_pgid }}"
     mode: "0755"
-  delegate_to: "{{ docker_services_bazarr_fs_host }}"
+  delegate_to: "{{ docker_services_bazarr_host }}"
   run_once: true
 
 - name: Bazarr prep | Check config exists
   ansible.builtin.stat:
     path: "{{ docker_services_bazarr_config_file }}"
   register: docker_services_bazarr_cfg_stat
-  delegate_to: "{{ docker_services_bazarr_fs_host }}"
+  delegate_to: "{{ docker_services_bazarr_host }}"
   run_once: true
 
 - name: Bazarr prep | Generate Bazarr config (temp container)
@@ -48,20 +69,20 @@
         container_default_behavior: compatibility
         detach: true
         env:
-          TZ: "{{ timezone }}"
+          TZ: "{{ docker_services_bazarr_timezone }}"
           PUID: "{{ docker_services_bazarr_puid }}"
           PGID: "{{ docker_services_bazarr_pgid }}"
         volumes:
           - "{{ docker_services_bazarr_config_dir }}:/config"
         restart_policy: "no"
-      delegate_to: "{{ docker_services_bazarr_fs_host }}"
+      delegate_to: "{{ docker_services_bazarr_host }}"
 
     - name: Bazarr prep | Wait for config.yaml to appear
       ansible.builtin.wait_for:
         path: "{{ docker_services_bazarr_config_file }}"
         state: present
         timeout: 180
-      delegate_to: "{{ docker_services_bazarr_fs_host }}"
+      delegate_to: "{{ docker_services_bazarr_host }}"
 
     - name: Bazarr prep | Give Bazarr time to finish writing config
       ansible.builtin.pause:
@@ -77,7 +98,7 @@
       retries: 5
       delay: 5
       until: docker_services_bazarr_rm_tmp is succeeded
-      delegate_to: "{{ docker_services_bazarr_fs_host }}"
+      delegate_to: "{{ docker_services_bazarr_host }}"
 
 ################################
 # CONFIG (BAZARR) - YEDIT
@@ -87,8 +108,8 @@
   yedit:
     src: "{{ docker_services_bazarr_config_file }}"
     key: "auth.apikey"
-    value: "{{ bazarr_api }}"
-  delegate_to: "{{ docker_services_bazarr_fs_host }}"
+    value: "{{ docker_services_bazarr_api_key }}"
+  delegate_to: "{{ docker_services_bazarr_host }}"
   run_once: true
 
 - name: Bazarr prep | Configure misc settings
@@ -102,8 +123,8 @@
   vars:
     _bazarr_misc_config:
       analytics.enabled: "false"
-      general.port: "6767"
-  delegate_to: "{{ docker_services_bazarr_fs_host }}"
+      general.port: "{{ docker_services_bazarr_port }}"
+  delegate_to: "{{ docker_services_bazarr_host }}"
   run_once: true
 
 - name: Bazarr prep | Configure opensubtitlescom settings
@@ -116,10 +137,10 @@
     loop_var: bazarr_settings_subtitles
   vars:
     _bazarr_opensubtitlescom_config:
-      opensubtitlescom.username: "{{ opensubtitlescom_user }}"
-      opensubtitlescom.password: "{{ opensubtitlescom_pass }}"
+      opensubtitlescom.username: "{{ docker_services_bazarr_opensubtitlescom_user }}"
+      opensubtitlescom.password: "{{ docker_services_bazarr_opensubtitlescom_pass }}"
       opensubtitlescom.use_hash: "true"
-  delegate_to: "{{ docker_services_bazarr_fs_host }}"
+  delegate_to: "{{ docker_services_bazarr_host }}"
   run_once: true
 
 - name: Bazarr prep | Configure radarr settings
@@ -133,11 +154,11 @@
   vars:
     _bazarr_radarr_config:
       general.use_radarr: "true"
-      radarr.apikey: "{{ radarr_api }}"
-      radarr.ip: "radarr"
-      radarr.port: "7878"
+      radarr.apikey: "{{ docker_services_bazarr_radarr_api_key }}"
+      radarr.ip: "{{ docker_services_bazarr_radarr_ip }}"
+      radarr.port: "{{ docker_services_bazarr_radarr_port }}"
       radarr.ssl: "false"
-  delegate_to: "{{ docker_services_bazarr_fs_host }}"
+  delegate_to: "{{ docker_services_bazarr_host }}"
   run_once: true
 
 - name: Bazarr prep | Configure sonarr settings
@@ -151,11 +172,11 @@
   vars:
     _bazarr_sonarr_config:
       general.use_sonarr: "true"
-      sonarr.apikey: "{{ sonarr_api }}"
-      sonarr.ip: "sonarr"
-      sonarr.port: "8989"
+      sonarr.apikey: "{{ docker_services_bazarr_sonarr_api_key }}"
+      sonarr.ip: "{{ docker_services_bazarr_sonarr_ip }}"
+      sonarr.port: "{{ docker_services_bazarr_sonarr_port }}"
       sonarr.ssl: "false"
-  delegate_to: "{{ docker_services_bazarr_fs_host }}"
+  delegate_to: "{{ docker_services_bazarr_host }}"
   run_once: true
 
 - name: Bazarr prep | Configure postgres settings
@@ -168,11 +189,11 @@
     loop_var: bazarr_settings_postgres
   vars:
     _bazarr_postgres_config:
-      postgresql.database: "bazarr"
+      postgresql.database: "{{ docker_services_bazarr_pg_db }}"
       postgresql.enabled: "true"
-      postgresql.host: "haproxy"
-      postgresql.port: "5433"
-      postgresql.username: "{{ postgres_user }}"
-      postgresql.password: "{{ postgres_pass }}"
-  delegate_to: "{{ docker_services_bazarr_fs_host }}"
+      postgresql.host: "{{ docker_services_bazarr_pg_host }}"
+      postgresql.port: "{{ docker_services_bazarr_pg_port }}"
+      postgresql.username: "{{ docker_services_bazarr_pg_user }}"
+      postgresql.password: "{{ docker_services_bazarr_pg_pass }}"
+  delegate_to: "{{ docker_services_bazarr_host }}"
   run_once: true
