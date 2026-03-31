@@ -44,6 +44,10 @@ hugo:
     - path: /home/mgt/blog/.github/workflows
       state: directory
       mode: "0755"
+  paths_blog:
+    root_path: /home/mgt
+    site_path: /home/mgt/blog
+    theme_path: /home/mgt/blog/themes/terminal
   copies:
     - src: files/hugo/favicon.png
       dest: /home/mgt/blog/static/favicon.png

@@ -1,0 +1,33 @@
+---
+
+- name: Sysctls | Validate input
+  ansible.builtin.assert:
+    that:
+      - docker_services_service_name is defined
+      - (docker_services_service_name | string | trim | length) > 0
+      - sysctls_dict is defined
+      - sysctls_dict is mapping
+    fail_msg: "sysctls_dict must be a mapping for service '{{ docker_services_service_name | default(role_prefix) }}'."
+
+- name: Sysctls | Normalize sysctls dict (drop empty/omit, stringify values)
+  ansible.builtin.set_fact:
+    docker_services_sysctls_clean: >-
+      {%- set out = {} -%}
+      {%- for k, v in (sysctls_dict | default({})).items() -%}
+        {%- if v is not none and (v is not sameas omit) and ((v | string | trim) | length > 0) -%}
+          {%- set _ = out.update({ (k | string): (v | string | trim) }) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Sysctls | Attach sysctls to service
+  when: (docker_services_sysctls_clean | length) > 0
+  ansible.builtin.set_fact:
+    docker_services_compose_services: >-
+      {{
+        (docker_services_compose_services | default({}))
+        | combine(
+            { (docker_services_service_name): { 'sysctls': docker_services_sysctls_clean } },
+            recursive=true
+          )
+      }}
