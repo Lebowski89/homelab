@@ -3,7 +3,7 @@
 kometa:
   name: kometa
   stack: kometa
-  image: kometateam/kometa:v2.3.0
+  image: kometateam/kometa:v2.3.1
   named_networks:
     overlay:
       external: true
