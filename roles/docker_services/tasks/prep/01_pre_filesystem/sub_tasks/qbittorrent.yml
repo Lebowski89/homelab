@@ -1,0 +1,39 @@
+---
+
+################################
+# QBITTORRENT PREP
+################################
+
+- name: Qbit prep | Set derived vars
+  ansible.builtin.set_fact:
+    docker_services_qbittorrent_downloads_fs_host: >-
+      {{
+        docker_services_svc.targets.downloads.host
+        | default(docker_services_fs_hosts_effective | first, true)
+      }}
+    docker_services_qbittorrent_seeds_fs_host: >-
+      {{
+        docker_services_svc.targets.seeds.host
+        | default(docker_services_fs_hosts_effective | first, true)
+      }}
+  run_once: true
+
+################################
+# HASH PASSWORD
+################################
+
+- name: Qbit prep | Generate downloads-instance pass
+  when: (docker_services_svc.name | default('') | string | trim) == "qbittorrent"
+  qbittorrent_passwd:
+    password: "{{ qbittorrent_pass | default('') }}"
+  register: docker_services_qbittorrent_pass_pbkdf2
+  delegate_to: "{{ docker_services_qbittorrent_downloads_fs_host }}"
+  run_once: true
+
+- name: Qbit prep | Generate seeds-instance pass
+  when: (docker_services_svc.name | default('') | string | trim) == "qbittorrent-xs"
+  qbittorrent_passwd:
+    password: "{{ qbittorrent_xs_pass | default('') }}"
+  register: docker_services_qbittorrent_xs_pass_pbkdf2
+  delegate_to: "{{ docker_services_qbittorrent_seeds_fs_host }}"
+  run_once: true

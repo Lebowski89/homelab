@@ -47,6 +47,13 @@ vaultwarden:
     - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/vaultwarden"
       state: directory
       mode: "0755"
+  paths_vault:
+    vault_dir: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/vaultwarden"
+    vault_token_file: >-
+      {{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/vaultwarden/token.txt
+    vault_pass_file: >-
+      {{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/vaultwarden/password.txt
+    vault_secret_name: vaultwarden_admin_secret
   templates:
     - src: configs/vaultwarden.env.j2
       dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/vaultwarden/.env"
