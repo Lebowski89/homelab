@@ -16,8 +16,8 @@
   vars:
     paths: "{{ docker_services_svc.paths }}"
     docker_services_deploy_host: "{{ _fs_target }}"
-    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default(hostvars[_fs_target].puid | default('1000')) }}"
-    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default(hostvars[_fs_target].pgid | default('1000')) }}"
+    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default('1000')) }}"
+    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default('1000')) }}"
     default_mode: "0755"
   loop: "{{ docker_services_fs_hosts_effective }}"
   loop_control:
@@ -40,8 +40,8 @@
   vars:
     copies: "{{ docker_services_svc.copies }}"
     docker_services_deploy_host: "{{ _fs_target }}"
-    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default(hostvars[_fs_target].puid | default('1000')) }}"
-    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default(hostvars[_fs_target].pgid | default('1000')) }}"
+    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default('1000')) }}"
+    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default('1000')) }}"
   loop: "{{ docker_services_fs_hosts_effective }}"
   loop_control:
     loop_var: _fs_target
@@ -63,8 +63,8 @@
   vars:
     templates: "{{ docker_services_svc.templates }}"
     docker_services_deploy_host: "{{ _fs_target }}"
-    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default(hostvars[_fs_target].puid | default('1000')) }}"
-    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default(hostvars[_fs_target].pgid | default('1000')) }}"
+    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default('1000')) }}"
+    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default('1000')) }}"
   loop: "{{ docker_services_fs_hosts_effective }}"
   loop_control:
     loop_var: _fs_target
@@ -87,8 +87,8 @@
   vars:
     templates: "{{ docker_services_svc.swarm_env_templates }}"
     docker_services_deploy_host: "{{ docker_services_primary_manager }}"
-    default_owner: "{{ hostvars[docker_services_primary_manager].docker_host_puid | default(hostvars[docker_services_primary_manager].puid | default('1000')) }}"
-    default_group: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | default(hostvars[docker_services_primary_manager].pgid | default('1000')) }}"
+    default_owner: "{{ hostvars[docker_services_primary_manager].docker_host_puid | default('1000')) }}"
+    default_group: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | default('1000')) }}"
   tags: [deploy, update, recreate]
 
 ################################

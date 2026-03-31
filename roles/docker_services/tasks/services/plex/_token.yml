@@ -185,8 +185,8 @@
         option: "client_identifier"
         value: "{{ hostvars[docker_services_primary_manager].docker_services_plex_client_identifier }}"
         create: true
-        owner: "{{ hostvars[docker_services_primary_manager].docker_host_puid | default(hostvars[docker_services_primary_manager].puid | default('1000')) }}"
-        group: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | default(hostvars[docker_services_primary_manager].pgid | default('1000')) }}"
+        owner: "{{ hostvars[docker_services_primary_manager].docker_host_puid | default('1000')) }}"
+        group: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | default('1000')) }}"
         mode: "0664"
 
     - name: Token | Add Token to plex.ini
@@ -196,8 +196,8 @@
         option: "token"
         value: "{{ hostvars[docker_services_primary_manager].docker_services_plex_auth_token }}"
         create: true
-        owner: "{{ hostvars[docker_services_primary_manager].docker_host_puid | default(hostvars[docker_services_primary_manager].puid | default('1000')) }}"
-        group: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | default(hostvars[docker_services_primary_manager].pgid | default('1000')) }}"
+        owner: "{{ hostvars[docker_services_primary_manager].docker_host_puid | default('1000')) }}"
+        group: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | default('1000')) }}"
         mode: "0664"
 
 - name: Token | Display Token
