@@ -3,7 +3,7 @@
 opencloud:
   name: opencloud
   stack: opencloud
-  image: opencloudeu/opencloud-rolling:5.2.0
+  image: opencloudeu/opencloud-rolling:6.0.0
   named_networks:
     overlay:
       external: true
