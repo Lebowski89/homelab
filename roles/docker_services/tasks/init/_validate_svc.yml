@@ -62,7 +62,7 @@
       - (docker_services_svc.command | length) > 0
       - >-
         (docker_services_svc.command | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        reject('equalto', '') | list | length)
         == (docker_services_svc.command | length)
     fail_msg: "docker_services_svc.command list form must contain only non-empty strings."
 
@@ -93,7 +93,7 @@
       - (docker_services_svc.env_file | length) > 0
       - >-
         (docker_services_svc.env_file | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        reject('equalto', '') | list | length)
         == (docker_services_svc.env_file | length)
     fail_msg: "docker_services_svc.env_file list form must contain only non-empty strings."
 
@@ -105,7 +105,7 @@
       - docker_services_svc.devices is not string
       - >-
         (docker_services_svc.devices | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        reject('equalto', '') | list | length)
         == (docker_services_svc.devices | length)
     fail_msg: "docker_services_svc.devices must be a list of non-empty strings."
 
@@ -117,7 +117,7 @@
       - docker_services_svc.cap_add is not string
       - >-
         (docker_services_svc.cap_add | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        reject('equalto', '') | list | length)
         == (docker_services_svc.cap_add | length)
     fail_msg: "docker_services_svc.cap_add must be a list of non-empty strings."
 
@@ -129,7 +129,7 @@
       - docker_services_svc.cap_drop is not string
       - >-
         (docker_services_svc.cap_drop | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        reject('equalto', '') | list | length)
         == (docker_services_svc.cap_drop | length)
     fail_msg: "docker_services_svc.cap_drop must be a list of non-empty strings."
 
@@ -262,7 +262,7 @@
       - (docker_services_svc.paths | map(attribute='path') | select('defined') | list | length) == (docker_services_svc.paths | length)
       - >-
         (docker_services_svc.paths | map(attribute='path') | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        reject('equalto', '') | list | length)
         == (docker_services_svc.paths | length)
     fail_msg: "docker_services_svc.paths must be a list of dicts and each entry must contain a non-empty 'path'."
 
@@ -303,15 +303,19 @@
   ansible.builtin.assert:
     that:
       - (docker_services_svc.templates | select('mapping') | list | length) == (docker_services_svc.templates | length)
-      - (docker_services_svc.templates | map(attribute='src') | select('defined') | list | length) == (docker_services_svc.templates | length)
-      - (docker_services_svc.templates | map(attribute='dest') | select('defined') | list | length) == (docker_services_svc.templates | length)
+      - >-
+        (docker_services_svc.templates | map(attribute='src') | select('defined') | list | length)
+        == (docker_services_svc.templates | length)
+      - >-
+        (docker_services_svc.templates | map(attribute='dest') | select('defined') | list | length)
+        == (docker_services_svc.templates | length)
       - >-
         (docker_services_svc.templates | map(attribute='src') | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        reject('equalto', '') | list | length)
         == (docker_services_svc.templates | length)
       - >-
         (docker_services_svc.templates | map(attribute='dest') | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        reject('equalto', '') | list | length)
         == (docker_services_svc.templates | length)
     fail_msg: "docker_services_svc.templates must be a list of dicts and each entry must contain non-empty 'src' and 'dest'."
 
@@ -356,11 +360,11 @@
       - (docker_services_svc.copies | map(attribute='dest') | select('defined') | list | length) == (docker_services_svc.copies | length)
       - >-
         (docker_services_svc.copies | map(attribute='src') | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        reject('equalto', '') | list | length)
         == (docker_services_svc.copies | length)
       - >-
         (docker_services_svc.copies | map(attribute='dest') | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        reject('equalto', '') | list | length)
         == (docker_services_svc.copies | length)
     fail_msg: "docker_services_svc.copies must be a list of dicts and each entry must contain non-empty 'src' and 'dest'."
 
@@ -429,7 +433,11 @@
       - docker_services_svc.healthcheck.test is defined
       - >
         (
-          (docker_services_svc.healthcheck.test is sequence and docker_services_svc.healthcheck.test is not string and (docker_services_svc.healthcheck.test | length > 0))
+          (
+            docker_services_svc.healthcheck.test is sequence
+            and docker_services_svc.healthcheck.test is not string
+            and (docker_services_svc.healthcheck.test | length > 0)
+          )
           or
           (docker_services_svc.healthcheck.test is string and (docker_services_svc.healthcheck.test | trim | length > 0))
         )
@@ -491,7 +499,7 @@
     that:
       - >-
         (docker_services_svc.secrets | select('string') | map('trim') |
-        reject('equalto','') | list | length)
+        reject('equalto', '') | list | length)
         ==
         (docker_services_svc.secrets | select('string') | list | length)
     fail_msg: "docker_services_svc.secrets string entries must be non-empty."
@@ -543,8 +551,12 @@
   ansible.builtin.assert:
     that:
       - (docker_services_validate_ports_items | select('mapping') | list | length) == (docker_services_validate_ports_items | length)
-      - (docker_services_validate_ports_items | map(attribute='published') | select('defined') | list | length) == (docker_services_validate_ports_items | length)
-      - (docker_services_validate_ports_items | map(attribute='target') | select('defined') | list | length) == (docker_services_validate_ports_items | length)
+      - >-
+        (docker_services_validate_ports_items | map(attribute='published') | select('defined') | list | length)
+        == (docker_services_validate_ports_items | length)
+      - >-
+        (docker_services_validate_ports_items | map(attribute='target') | select('defined') | list | length)
+        == (docker_services_validate_ports_items | length)
     fail_msg: "docker_services_svc.ports entries must be dicts and include 'published' and 'target'."
 
 ################################

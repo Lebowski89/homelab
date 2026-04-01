@@ -51,9 +51,9 @@
       ansible.builtin.debug:
         msg: "{{ ansible_facts['ipify_public_ip'] }}"
 
-    - name: Set public_ip fact
+    - name: Set docker_services_public_ip fact
       ansible.builtin.set_fact:
-        public_ip: "{{ ansible_facts['ipify_public_ip'] }}"
+        docker_services_public_ip: "{{ ansible_facts['ipify_public_ip'] }}"
 
 ################################
 # API (VIA INFISICAL)
@@ -152,7 +152,7 @@
                 ),
                 'value': (
                   docker_services_svc.cloudflare.value
-                  | default(public_ip, true)
+                  | default(docker_services_public_ip, true)
                 ),
                 'type': (
                   docker_services_svc.cloudflare.type
@@ -176,7 +176,7 @@
   ansible.builtin.include_tasks: _cloudflare_dns_2.yml
   vars:
     cloudflare_record: "{{ docker_services_cf_record.record }}"
-    cloudflare_record_value: "{{ docker_services_cf_record.value | default(public_ip, true) }}"
+    cloudflare_record_value: "{{ docker_services_cf_record.value | default(docker_services_public_ip, true) }}"
     cloudflare_record_type: "{{ docker_services_cf_record.type | default('A', true) }}"
     cloudflare_proxy: "{{ (docker_services_cf_record.proxy | default(false, true)) | bool }}"
     cloudflare_solo: "{{ (docker_services_cf_record.solo | default(true, true)) | bool }}"
@@ -191,7 +191,7 @@
         ~ ' -> '
         ~ (
           docker_services_cf_record.value
-          | default(public_ip, true)
+          | default(docker_services_public_ip, true)
           | string
         )
       }}

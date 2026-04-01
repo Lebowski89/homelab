@@ -18,7 +18,7 @@
 
 - name: Normalize healthcheck test into list form
   ansible.builtin.set_fact:
-    _health_test: >-
+    docker_services_health_test: >-
       {{
         (health_test | list)
         if (health_test is sequence and health_test is not string)
@@ -36,7 +36,7 @@
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
               | combine({
                   'healthcheck': {
-                    'test': _health_test,
+                    'test': docker_services_health_test,
                     'interval': (health_interval | default('1m', true)),
                     'timeout': (health_timeout | default('15s', true)),
                     'retries': (health_retries | default(3, true)) | int,

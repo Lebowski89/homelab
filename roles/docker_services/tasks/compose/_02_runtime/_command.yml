@@ -15,7 +15,7 @@
 
 - name: Select command input
   ansible.builtin.set_fact:
-    _cmd_in: >-
+    docker_services_cmd_in: >-
       {{
         command
         if (command is defined)
@@ -24,27 +24,27 @@
       }}
 
 - name: Fail if no command provided
-  when: _cmd_in is none
+  when: docker_services_cmd_in is none
   ansible.builtin.fail:
     msg: "You must pass 'command' (string or list) or legacy 'command_list'."
 
 - name: Normalize command
   ansible.builtin.set_fact:
-    _cmd_new: >-
-      {%- if (_cmd_in is sequence and _cmd_in is not string) -%}
-      {%- set lst = (_cmd_in | map('string') | map('trim') | reject('equalto','') | list) -%}
+    docker_services_cmd_new: >-
+      {%- if (docker_services_cmd_in is sequence and docker_services_cmd_in is not string) -%}
+      {%- set lst = (docker_services_cmd_in | map('string') | map('trim') | reject('equalto', '') | list) -%}
       {%- if (lst | length) == 1 and (' ' in lst[0]) -%}
       {{ lst[0] }}
       {%- else -%}
       {{ lst }}
       {%- endif -%}
       {%- else -%}
-      {{ _cmd_in | string | trim }}
+      {{ docker_services_cmd_in | string | trim }}
       {%- endif -%}
 
 - name: Read existing command
   ansible.builtin.set_fact:
-    _cmd_existing: >-
+    docker_services_cmd_existing: >-
       {{
         (docker_services_compose_services | default({}))
         .get(docker_services_service_name, {})
@@ -54,29 +54,29 @@
 
 - name: Compute final command
   ansible.builtin.set_fact:
-    _cmd_final: >-
+    docker_services_cmd_final: >-
       {{
         (
-          _cmd_new
+          docker_services_cmd_new
           if (command_action | default('replace')) == 'replace'
           else
           (
             (
-              (_cmd_existing is sequence and _cmd_existing is not string)
-              and (_cmd_new is sequence and _cmd_new is not string)
+              (docker_services_cmd_existing is sequence and docker_services_cmd_existing is not string)
+              and (docker_services_cmd_new is sequence and docker_services_cmd_new is not string)
             )
             | ternary(
                 (
-                  _cmd_existing
+                  docker_services_cmd_existing
                   +
                   (
-                    _cmd_new
+                    docker_services_cmd_new
                     if (command_action | default('replace')) == 'append'
                     else
-                    (_cmd_new | reject('in', _cmd_existing) | list)
+                    (docker_services_cmd_new | reject('in', docker_services_cmd_existing) | list)
                   )
                 ),
-                _cmd_new
+                docker_services_cmd_new
               )
           )
         )
@@ -90,7 +90,7 @@
         | combine({
             docker_services_service_name: (
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
-              | combine({ 'command': _cmd_final }, recursive=true)
+              | combine({ 'command': docker_services_cmd_final }, recursive=true)
             )
           }, recursive=true)
       }}

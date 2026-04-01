@@ -18,24 +18,24 @@
 
 - name: Normalize stack volumes input into a mapping
   ansible.builtin.set_fact:
-    _stack_volumes_new: >-
+    docker_services_stack_volumes_new: >-
       {%- if stack_volume_names is mapping -%}
       {{ stack_volume_names }}
       {%- else -%}
       {%- set out = {} -%}
-      {%- for vname in (stack_volume_names | map('string') | map('trim') | reject('equalto','') | list) -%}
+      {%- for vname in (stack_volume_names | map('string') | map('trim') | reject('equalto', '') | list) -%}
       {%- set _ = out.update({ vname: {'external': true} }) -%}
       {%- endfor -%}
       {{ out }}
       {%- endif -%}
 
 - name: Default external=true for any volume defs that omit it
-  when: _stack_volumes_new is mapping and (_stack_volumes_new | length > 0)
+  when: docker_services_stack_volumes_new is mapping and (docker_services_stack_volumes_new | length > 0)
   ansible.builtin.set_fact:
-    _stack_volumes_new: >-
+    docker_services_stack_volumes_new: >-
       {%- set out = {} -%}
-      {%- for k, v in (_stack_volumes_new | default({}) | dictsort) -%}
-      {%- set vv = (v if (v is mapping) else {}) -%}
+      {%- for k, v in (docker_services_stack_volumes_new | default({}) | dictsort) -%}
+      {%- set vv = v if (v is mapping) else {} -%}
       {%- if vv.external is not defined -%}
       {%- set vv = vv | combine({'external': true}, recursive=true) -%}
       {%- endif -%}
@@ -50,7 +50,7 @@
       {%- set existing_stack = st.get(docker_services_stack_name, {}) -%}
       {%- set existing_vols = existing_stack.get('volumes', {}) | default({}, true) -%}
       {%- set merged_stack = existing_stack | combine(
-        {'volumes': (existing_vols | combine(_stack_volumes_new, recursive=true))},
+        {'volumes': (existing_vols | combine(docker_services_stack_volumes_new, recursive=true))},
         recursive=true
       ) -%}
       {{ st | combine({ docker_services_stack_name: merged_stack }, recursive=true) }}

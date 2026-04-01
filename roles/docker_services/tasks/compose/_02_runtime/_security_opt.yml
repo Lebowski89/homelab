@@ -15,7 +15,7 @@
 
 - name: Normalize security_opt input
   ansible.builtin.set_fact:
-    _security_opt_new: >-
+    docker_services_security_opt_new: >-
       {{
         security_opt_list
         | default([], true)
@@ -36,7 +36,7 @@
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
               | combine({
                   'security_opt': (
-                    _security_opt_new
+                    docker_services_security_opt_new
                     if (security_opt_action | default('append_unique')) == 'replace'
                     else
                     (
@@ -47,11 +47,11 @@
                       )
                       +
                       (
-                        _security_opt_new
+                        docker_services_security_opt_new
                         if (security_opt_action | default('append_unique')) == 'append'
                         else
                         (
-                          _security_opt_new
+                          docker_services_security_opt_new
                           | reject(
                               'in',
                               (

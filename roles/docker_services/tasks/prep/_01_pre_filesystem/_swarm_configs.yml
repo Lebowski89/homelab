@@ -10,7 +10,7 @@
 
 - name: Swarm configs | Resolve deploy host (swarm manager)
   ansible.builtin.set_fact:
-    _swarm_cfg_host: "{{ docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim }}"
+    docker_services_swarm_cfg_host: "{{ docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim }}"
 
 - name: Swarm configs | Validate each config spec
   ansible.builtin.assert:
@@ -43,7 +43,7 @@
     loop_var: cfg
     label: "{{ cfg.name }} [absent]"
   when: (cfg.state | default('present', true)) == 'present'
-  delegate_to: "{{ _swarm_cfg_host }}"
+  delegate_to: "{{ docker_services_swarm_cfg_host }}"
 
 - name: Swarm configs | Create config (Option A)
   community.docker.docker_config:
@@ -70,4 +70,4 @@
     loop_var: cfg
     label: "{{ cfg.name }} [present]"
   when: (cfg.state | default('present', true)) == 'present'
-  delegate_to: "{{ _swarm_cfg_host }}"
+  delegate_to: "{{ docker_services_swarm_cfg_host }}"

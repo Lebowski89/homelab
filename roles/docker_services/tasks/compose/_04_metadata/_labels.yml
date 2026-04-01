@@ -21,22 +21,22 @@
 
 - name: Normalize labels input to mapping
   ansible.builtin.set_fact:
-    _labels_h_action: "{{ labels_action | default('append', true) | string | trim }}"
-    _labels_h_precedence: "{{ labels_precedence | default('new_wins', true) | string | trim }}"
-    _labels_h_existing: >-
+    docker_services_labels_h_action: "{{ labels_action | default('append', true) | string | trim }}"
+    docker_services_labels_h_precedence: "{{ labels_precedence | default('new_wins', true) | string | trim }}"
+    docker_services_labels_h_existing: >-
       {{
         (docker_services_compose_services | default({}))
         .get(docker_services_service_name, {})
         .get('labels', {})
         | default({}, true)
       }}
-    _labels_h_new: >-
+    docker_services_labels_h_new: >-
       {%- set out = {} -%}
       {%- if (labels_dict is mapping) -%}
         {%- set out = labels_dict -%}
       {%- elif (labels_dict is sequence) and (labels_dict is not string) -%}
         {%- for s in (labels_dict | list) -%}
-          {%- set st = (s | string | trim) -%}
+          {%- set st = s | string | trim -%}
           {%- if (st | length) > 0 -%}
             {%- if '=' in st -%}
               {%- set parts = st.split('=', 1) -%}
@@ -53,33 +53,33 @@
 
 - name: Build final labels dict
   ansible.builtin.set_fact:
-    _labels_h_final: >-
+    docker_services_labels_h_final: >-
       {{
         (
-          _labels_h_new
-          if _labels_h_action == 'replace'
+          docker_services_labels_h_new
+          if docker_services_labels_h_action == 'replace'
           else
           (
-            _labels_h_existing | combine(
+            docker_services_labels_h_existing | combine(
               dict(
-                (_labels_h_new | dict2items)
-                | rejectattr('key', 'in', (_labels_h_existing.keys() | list))
+                (docker_services_labels_h_new | dict2items)
+                | rejectattr('key', 'in', (docker_services_labels_h_existing.keys() | list))
                 | map(attribute='key')
                 | zip(
-                    (_labels_h_new | dict2items)
-                    | rejectattr('key', 'in', (_labels_h_existing.keys() | list))
+                    (docker_services_labels_h_new | dict2items)
+                    | rejectattr('key', 'in', (docker_services_labels_h_existing.keys() | list))
                     | map(attribute='value')
                   )
               ),
               recursive=true
             )
-            if _labels_h_action == 'append_unique'
+            if docker_services_labels_h_action == 'append_unique'
             else
             (
-              (_labels_h_existing | combine(_labels_h_new, recursive=true))
-              if _labels_h_precedence == 'new_wins'
+              (docker_services_labels_h_existing | combine(docker_services_labels_h_new, recursive=true))
+              if docker_services_labels_h_precedence == 'new_wins'
               else
-              (_labels_h_new | combine(_labels_h_existing, recursive=true))
+              (docker_services_labels_h_new | combine(docker_services_labels_h_existing, recursive=true))
             )
           )
         )
@@ -93,7 +93,7 @@
         | combine({
             docker_services_service_name: (
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
-              | combine({ 'labels': _labels_h_final }, recursive=true)
+              | combine({ 'labels': docker_services_labels_h_final }, recursive=true)
             )
           }, recursive=true)
       }}

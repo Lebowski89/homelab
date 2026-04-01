@@ -9,18 +9,18 @@
 
 - name: Normalize deploy type
   ansible.builtin.set_fact:
-    _cleanup_stack_type: "{{ docker_services_stack_deploy_type | default('swarm', true) | string | trim }}"
+    docker_services_cleanup_stack_type: "{{ docker_services_stack_deploy_type | default('swarm', true) | string | trim }}"
 
 - name: Cleanup container stack (compose)
-  when: _cleanup_stack_type != 'swarm'
+  when: docker_services_cleanup_stack_type != 'swarm'
   block:
     - name: Check if compose file exists
       ansible.builtin.stat:
         path: "/opt/stacks/{{ docker_services_stack_name }}-compose.yml"
-      register: _existing_compose_yaml
+      register: docker_services_existing_compose_yaml
 
     - name: Compose down
-      when: _existing_compose_yaml.stat.exists
+      when: docker_services_existing_compose_yaml.stat.exists
       community.docker.docker_compose_v2:
         project_src: "/opt/stacks"
         project_name: "{{ docker_services_stack_name }}"
@@ -43,7 +43,7 @@
         state: absent
 
 - name: Cleanup swarm stack
-  when: _cleanup_stack_type == 'swarm'
+  when: docker_services_cleanup_stack_type == 'swarm'
   block:
     - name: Stack down
       community.docker.docker_stack:

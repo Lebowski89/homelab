@@ -15,9 +15,9 @@
 
 - name: Normalize environment inputs
   ansible.builtin.set_fact:
-    _env_action: "{{ environment_action | default('append', true) | string | trim }}"
-    _env_new: "{{ environment_vars | default({}, true) }}"
-    _env_existing: >-
+    docker_services_env_action: "{{ environment_action | default('append', true) | string | trim }}"
+    docker_services_env_new: "{{ environment_vars | default({}, true) }}"
+    docker_services_env_existing: >-
       {{
         (docker_services_compose_services | default({}))
         .get(docker_services_service_name, {})
@@ -27,16 +27,16 @@
 
 - name: Build final environment dict
   ansible.builtin.set_fact:
-    _env_final: >-
+    docker_services_env_final: >-
       {{
-        _env_new
-        if _env_action == 'replace'
+        docker_services_env_new
+        if docker_services_env_action == 'replace'
         else
         (
-          (_env_existing | combine(_env_new, recursive=true))
-          if _env_action == 'append'
+          (docker_services_env_existing | combine(docker_services_env_new, recursive=true))
+          if docker_services_env_action == 'append'
           else
-          (_env_new | combine(_env_existing, recursive=true))
+          (docker_services_env_new | combine(docker_services_env_existing, recursive=true))
         )
       }}
 
@@ -48,7 +48,7 @@
         | combine({
             docker_services_service_name: (
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
-              | combine({ 'environment': _env_final }, recursive=true)
+              | combine({ 'environment': docker_services_env_final }, recursive=true)
             )
           }, recursive=true)
       }}

@@ -15,7 +15,7 @@
 
 - name: Normalize devices input
   ansible.builtin.set_fact:
-    _devices_new: >-
+    docker_services_devices_new: >-
       {{
         (
           device_list
@@ -41,7 +41,7 @@
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
               | combine({
                   'devices': (
-                    _devices_new
+                    docker_services_devices_new
                     if (devices_action | default('append')) == 'replace'
                     else
                     (
@@ -52,11 +52,11 @@
                       )
                       +
                       (
-                        _devices_new
+                        docker_services_devices_new
                         if (devices_action | default('append')) == 'append'
                         else
                         (
-                          _devices_new
+                          docker_services_devices_new
                           | reject(
                               'in',
                               (

@@ -11,7 +11,7 @@
 
 - name: Sysctls | Normalize sysctls dict (drop empty/omit, stringify values)
   ansible.builtin.set_fact:
-    _sysctls_clean: >-
+    docker_services_sysctls_clean: >-
       {%- set out = {} -%}
       {%- for k, v in (sysctls_dict | default({})).items() -%}
         {%- if v is not none and (v is not sameas omit) and ((v | string | trim) | length > 0) -%}
@@ -21,13 +21,13 @@
       {{ out }}
 
 - name: Sysctls | Attach sysctls to service
-  when: (_sysctls_clean | length) > 0
+  when: (docker_services_sysctls_clean | length) > 0
   ansible.builtin.set_fact:
     docker_services_compose_services: >-
       {{
         (docker_services_compose_services | default({}))
         | combine(
-            { (docker_services_service_name): { 'sysctls': _sysctls_clean } },
+            { (docker_services_service_name): { 'sysctls': docker_services_sysctls_clean } },
             recursive=true
           )
       }}

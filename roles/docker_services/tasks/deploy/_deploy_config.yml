@@ -9,18 +9,18 @@
 
 - name: Normalize and validate deploy mode
   ansible.builtin.set_fact:
-    _deploy_mode: "{{ deploy_mode | default('replicated', true) | string | trim }}"
-    _deploy_replicas: "{{ deploy_replicas | default(1, true) | int }}"
+    docker_services_deploy_mode: "{{ deploy_mode | default('replicated', true) | string | trim }}"
+    docker_services_deploy_replicas: "{{ deploy_replicas | default(1, true) | int }}"
 
 - name: Validate deploy mode
   ansible.builtin.assert:
     that:
-      - _deploy_mode in ['replicated', 'global']
-    fail_msg: "deploy_mode must be 'replicated' or 'global' (got '{{ _deploy_mode }}')."
+      - docker_services_deploy_mode in ['replicated', 'global']
+    fail_msg: "deploy_mode must be 'replicated' or 'global' (got '{{ docker_services_deploy_mode }}')."
 
 - name: Normalize deploy constraints into list
   ansible.builtin.set_fact:
-    _deploy_constraints: >-
+    docker_services_deploy_constraints: >-
       {{
         (
           [] if (deploy_constraints is not defined or deploy_constraints is none) else
@@ -32,49 +32,49 @@
             )
           )
         )
-        | map('string') | map('trim') | reject('equalto','') | list
+        | map('string') | map('trim') | reject('equalto', '') | list
       }}
 
 - name: Normalize optional deploy sub-dicts (treat omit as empty)
   ansible.builtin.set_fact:
-    _deploy_restart_policy: "{{ deploy_restart_policy if (deploy_restart_policy is mapping) else {} }}"
-    _deploy_update_config: "{{ deploy_update_config if (deploy_update_config is mapping) else {} }}"
-    _deploy_rollback_config: "{{ deploy_rollback_config if (deploy_rollback_config is mapping) else {} }}"
-    _deploy_resources: "{{ deploy_resources if (deploy_resources is mapping) else {} }}"
+    docker_services_deploy_restart_policy: "{{ deploy_restart_policy if (deploy_restart_policy is mapping) else {} }}"
+    docker_services_deploy_update_config: "{{ deploy_update_config if (deploy_update_config is mapping) else {} }}"
+    docker_services_deploy_rollback_config: "{{ deploy_rollback_config if (deploy_rollback_config is mapping) else {} }}"
+    docker_services_deploy_resources: "{{ deploy_resources if (deploy_resources is mapping) else {} }}"
 
 - name: Build deploy dict
   ansible.builtin.set_fact:
-    _deploy_dict: >-
+    docker_services_deploy_dict: >-
       {{
-        { 'mode': _deploy_mode }
+        { 'mode': docker_services_deploy_mode }
         | combine(
-            (_deploy_mode == 'replicated')
-            | ternary({ 'replicas': _deploy_replicas }, {}),
+            (docker_services_deploy_mode == 'replicated')
+            | ternary({ 'replicas': docker_services_deploy_replicas }, {}),
             recursive=true
           )
         | combine(
-            (_deploy_constraints | length > 0)
-            | ternary({ 'placement': { 'constraints': _deploy_constraints } }, {}),
+            (docker_services_deploy_constraints | length > 0)
+            | ternary({ 'placement': { 'constraints': docker_services_deploy_constraints } }, {}),
             recursive=true
           )
         | combine(
-            (_deploy_restart_policy | length > 0)
-            | ternary({ 'restart_policy': _deploy_restart_policy }, {}),
+            (docker_services_deploy_restart_policy | length > 0)
+            | ternary({ 'restart_policy': docker_services_deploy_restart_policy }, {}),
             recursive=true
           )
         | combine(
-            (_deploy_update_config | length > 0)
-            | ternary({ 'update_config': _deploy_update_config }, {}),
+            (docker_services_deploy_update_config | length > 0)
+            | ternary({ 'update_config': docker_services_deploy_update_config }, {}),
             recursive=true
           )
         | combine(
-            (_deploy_rollback_config | length > 0)
-            | ternary({ 'rollback_config': _deploy_rollback_config }, {}),
+            (docker_services_deploy_rollback_config | length > 0)
+            | ternary({ 'rollback_config': docker_services_deploy_rollback_config }, {}),
             recursive=true
           )
         | combine(
-            (_deploy_resources | length > 0)
-            | ternary({ 'resources': _deploy_resources }, {}),
+            (docker_services_deploy_resources | length > 0)
+            | ternary({ 'resources': docker_services_deploy_resources }, {}),
             recursive=true
           )
       }}
@@ -87,7 +87,7 @@
         | combine({
             docker_services_service_name: (
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
-              | combine({ 'deploy': _deploy_dict }, recursive=true)
+              | combine({ 'deploy': docker_services_deploy_dict }, recursive=true)
             )
           }, recursive=true)
       }}
