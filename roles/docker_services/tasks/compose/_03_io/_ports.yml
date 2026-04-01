@@ -1,0 +1,134 @@
+---
+
+- name: Ensure docker_services_service_name is set
+  ansible.builtin.assert:
+    that:
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
+    fail_msg: "docker_services_service_name must be set before calling this helper"
+
+- name: Ensure ports_action is valid
+  ansible.builtin.assert:
+    that:
+      - ports_action | default('append') in ['append', 'replace', 'append_unique']
+    fail_msg: "ports_action must be 'append', 'replace', or 'append_unique'"
+
+- name: Normalize docker_services_stack_deploy_type
+  ansible.builtin.set_fact:
+    _stack_deploy_type: "{{ docker_services_stack_deploy_type | default('swarm', true) | string | trim }}"
+
+- name: Build new port entries (ports/ports_list/legacy single)
+  ansible.builtin.set_fact:
+    _ports_new_raw: >-
+      {{
+        (
+          (ports.values() | list) if (ports is defined and ports is mapping)
+          else (ports | list) if (ports is defined)
+          else (ports_list | default([], true) | list) if (ports_list is defined)
+          else
+          [
+            {
+              'target': (ports_container | int),
+              'published': (ports_host | int),
+              'protocol': (ports_protocol | default('tcp', true) | string | trim),
+              'mode': (ports_mode | default('ingress', true) | string | trim)
+            }
+          ]
+        )
+      }}
+
+- name: Validate new ports entries are dicts with required keys
+  ansible.builtin.assert:
+    that:
+      - (_ports_new_raw | select('mapping') | list | length) == (_ports_new_raw | length)
+      - (_ports_new_raw | map(attribute='target') | select('defined') | list | length) == (_ports_new_raw | length)
+      - (_ports_new_raw | map(attribute='published') | select('defined') | list | length) == (_ports_new_raw | length)
+    fail_msg: "ports must be a list (or mapping) of dicts with 'published' and 'target'."
+
+- name: Reset working ports list (prevent cross-service bleed)
+  ansible.builtin.set_fact:
+    _ports_new: []
+
+- name: Canonicalise new ports (types + defaults)
+  ansible.builtin.set_fact:
+    _ports_new: "{{ _ports_new + [ _canon ] }}"
+  vars:
+    _proto: "{{ (p.protocol | default('tcp', true) | string | trim | lower) }}"
+    _canon: >-
+      {{
+        {
+          'target': (p.target | int),
+          'published': (p.published | int),
+          'protocol': _proto
+        }
+        | combine(
+            (_stack_deploy_type == 'swarm')
+            | ternary({'mode': (p.mode | default('ingress', true) | string | trim)}, {}),
+            recursive=true
+          )
+      }}
+  loop: "{{ _ports_new_raw }}"
+  loop_control:
+    loop_var: p
+
+- name: Validate port protocols are tcp/udp
+  ansible.builtin.assert:
+    that:
+      - (_ports_new | map(attribute='protocol') | reject('in', ['tcp','udp']) | list | length) == 0
+    fail_msg: "ports.protocol must be 'tcp' or 'udp' (got: {{ _ports_new | map(attribute='protocol') | unique | list }})."
+
+- name: Compute merged ports list
+  ansible.builtin.set_fact:
+    _ports_merged: >-
+      {%- set existing = (
+            (docker_services_compose_services | default({}))
+            .get(docker_services_service_name, {})
+            .get('ports', [])
+            | default([], true)
+            | list
+          ) -%}
+      {%- set existing_canon = [] -%}
+      {%- for e in existing -%}
+      {%- if e is mapping and e.published is defined and e.target is defined -%}
+      {%- set item = {
+            'target': (e.target | int),
+            'published': (e.published | int),
+            'protocol': (e.protocol | default('tcp', true) | string | trim | lower)
+          } -%}
+      {%- if _stack_deploy_type == 'swarm' -%}
+      {%- set item = item | combine({'mode': (e.mode | default('ingress', true) | string | trim)}, recursive=true) -%}
+      {%- endif -%}
+      {%- set _ = existing_canon.append(item) -%}
+      {%- endif -%}
+      {%- endfor -%}
+
+      {%- if (ports_action | default('append')) == 'replace' -%}
+      {{ _ports_new }}
+      {%- elif (ports_action | default('append')) == 'append' -%}
+      {{ existing_canon + _ports_new }}
+      {%- else -%} {# append_unique #}
+      {%- set seen = {} -%}
+      {%- set out = [] -%}
+      {%- for e in existing_canon -%}
+      {%- set k = (e.published|string) ~ '/' ~ (e.target|string) ~ '/' ~ e.protocol ~ '/' ~ (e.mode | default('')) -%}
+      {%- if k not in seen -%}{%- set _ = seen.update({k: true}) -%}{%- set _ = out.append(e) -%}{%- endif -%}
+      {%- endfor -%}
+      {%- for n in _ports_new -%}
+      {%- set k = (n.published|string) ~ '/' ~ (n.target|string) ~ '/' ~ n.protocol ~ '/' ~ (n.mode | default('')) -%}
+      {%- if k not in seen -%}{%- set _ = seen.update({k: true}) -%}{%- set _ = out.append(n) -%}{%- endif -%}
+      {%- endfor -%}
+      {{ out }}
+      {%- endif -%}
+
+- name: Attach ports to service
+  ansible.builtin.set_fact:
+    docker_services_compose_services: >-
+      {{
+        (docker_services_compose_services | default({}))
+        | combine({
+            docker_services_service_name: (
+              ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
+              | combine({ 'ports': _ports_merged }, recursive=true)
+            )
+          }, recursive=true)
+      }}

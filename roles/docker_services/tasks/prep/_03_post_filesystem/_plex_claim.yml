@@ -1,0 +1,91 @@
+---
+
+- name: Claim | Set derived vars
+  ansible.builtin.set_fact:
+    docker_services_plex_claim_token_host: >-
+      {{ docker_swarm_primary_manager | default(docker_services_primary_manager, true) | string | trim }}
+    docker_services_plex_preferences_file: >-
+      /opt/plex/Library/Application Support/Plex Media Server/Preferences.xml
+
+- name: Claim | Load token + client identifier from token host
+  ansible.builtin.set_fact:
+    docker_services_plex_auth_token: >-
+      {{ hostvars[docker_services_plex_claim_token_host].docker_services_plex_auth_token | default('') }}
+    docker_services_plex_client_identifier: >-
+      {{ hostvars[docker_services_plex_claim_token_host].docker_services_plex_client_identifier | default('') }}
+
+- name: Claim | Assert required vars exist
+  ansible.builtin.assert:
+    that:
+      - docker_services_plex_auth_token | string | trim | length > 0
+      - docker_services_plex_client_identifier | string | trim | length > 0
+    fail_msg: >-
+      docker_services_plex_auth_token and/or docker_services_plex_client_identifier are missing.
+      Ensure _plex_token.yml ran first and stored these facts on the Plex token host.
+
+- name: Claim | Check if Plex server is already claimed
+  ansible.builtin.stat:
+    path: "{{ docker_services_plex_preferences_file }}"
+  register: docker_services_prefs_stat
+
+- name: Claim | Read Preferences.xml
+  when: docker_services_prefs_stat.stat.exists
+  community.general.xml:
+    path: "{{ docker_services_plex_preferences_file }}"
+    xpath: /Preferences
+    content: attribute
+  register: docker_services_prefs_xml
+  failed_when: false
+
+- name: Claim | Determine claimed status
+  ansible.builtin.set_fact:
+    docker_services_plex_is_claimed: >-
+      {{
+        (docker_services_prefs_stat.stat.exists | bool)
+        and (docker_services_prefs_xml is succeeded)
+        and ((docker_services_prefs_xml.matches | default([])) | length > 0)
+        and (docker_services_prefs_xml.matches[0].Preferences.PlexOnlineToken is defined)
+        and (docker_services_prefs_xml.matches[0].Preferences.PlexOnlineToken | string | trim | length > 0)
+      }}
+
+- name: Claim | Request claim token from plex.tv
+  when: not docker_services_plex_is_claimed
+  ansible.builtin.uri:
+    url: "https://plex.tv/api/claim/token.json"
+    method: GET
+    return_content: true
+    body:
+      X-Plex-Version: "1.0.0"
+      X-Plex-Product: "plex"
+      X-Plex-Client-Identifier: "{{ docker_services_plex_client_identifier }}"
+      X-Plex-Token: "{{ docker_services_plex_auth_token }}"
+    body_format: form-urlencoded
+    headers:
+      Accept: "application/json"
+    status_code: 200
+  register: docker_services_plex_claim
+
+- name: Claim | Persist claim code to token host
+  when: not docker_services_plex_is_claimed
+  ansible.builtin.set_fact:
+    docker_services_plex_claim_code: "{{ docker_services_plex_claim.json.token | default('') | string | trim }}"
+  delegate_to: "{{ docker_services_plex_claim_token_host }}"
+  delegate_facts: true
+  run_once: true
+
+- name: Claim | Validate claim code
+  when: not docker_services_plex_is_claimed
+  ansible.builtin.assert:
+    that:
+      - hostvars[docker_services_plex_claim_token_host].docker_services_plex_claim_code is defined
+      - hostvars[docker_services_plex_claim_token_host].docker_services_plex_claim_code | string | trim | length > 0
+    fail_msg: "Failed to retrieve Plex claim code from plex.tv"
+
+- name: Claim | Report claim status
+  ansible.builtin.debug:
+    msg: >-
+      Plex claim status: {{
+        'already claimed (no action)'
+        if docker_services_plex_is_claimed
+        else 'claim code retrieved and stored on token host'
+      }}

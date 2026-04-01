@@ -1,0 +1,31 @@
+---
+
+- name: DeployAll | Ensure docker_services_compose_stacks exists
+  ansible.builtin.set_fact:
+    _compose_stacks_effective: >-
+      {{
+        hostvars[docker_services_primary_manager].docker_services_compose_stacks
+        if (
+          hostvars[docker_services_primary_manager].docker_services_compose_stacks is defined
+          and hostvars[docker_services_primary_manager].docker_services_compose_stacks is mapping
+        )
+        else {}
+      }}
+  run_once: true
+
+- name: DeployAll | Deploy each stack
+  when: (_compose_stacks_effective | length) > 0
+  ansible.builtin.include_tasks: _deploy_one.yml
+  loop: "{{ _compose_stacks_effective | dict2items }}"
+  loop_control:
+    loop_var: _stack_item
+    label: "{{ _stack_item.key }}"
+  vars:
+    deploy_stack_name: "{{ _stack_item.key }}"
+    _stack_def: "{{ _stack_item.value | default({}, true) }}"
+    deploy_stack_type: "{{ _stack_def.type | default('swarm', true) | string | trim }}"
+    docker_services_deploy_host: "{{ _stack_def.docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim }}"
+    docker_services_compose_services: "{{ _stack_def.services | default({}, true) }}"
+    stack_networks: "{{ _stack_def.networks | default({}, true) }}"
+    stack_volumes: "{{ _stack_def.volumes | default({}, true) }}"
+  run_once: true

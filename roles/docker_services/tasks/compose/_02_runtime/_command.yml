@@ -1,0 +1,96 @@
+---
+
+- name: Ensure docker_services_service_name is set
+  ansible.builtin.assert:
+    that:
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
+    fail_msg: "docker_services_service_name must be set before calling this helper"
+
+- name: Ensure command_action is valid
+  ansible.builtin.assert:
+    that:
+      - command_action | default('replace') in ['append', 'replace', 'append_unique']
+    fail_msg: "command_action must be 'append', 'replace', or 'append_unique'"
+
+- name: Select command input
+  ansible.builtin.set_fact:
+    _cmd_in: >-
+      {{
+        command
+        if (command is defined)
+        else
+        (command_list if (command_list is defined) else none)
+      }}
+
+- name: Fail if no command provided
+  when: _cmd_in is none
+  ansible.builtin.fail:
+    msg: "You must pass 'command' (string or list) or legacy 'command_list'."
+
+- name: Normalize command
+  ansible.builtin.set_fact:
+    _cmd_new: >-
+      {%- if (_cmd_in is sequence and _cmd_in is not string) -%}
+      {%- set lst = (_cmd_in | map('string') | map('trim') | reject('equalto','') | list) -%}
+      {%- if (lst | length) == 1 and (' ' in lst[0]) -%}
+      {{ lst[0] }}
+      {%- else -%}
+      {{ lst }}
+      {%- endif -%}
+      {%- else -%}
+      {{ _cmd_in | string | trim }}
+      {%- endif -%}
+
+- name: Read existing command
+  ansible.builtin.set_fact:
+    _cmd_existing: >-
+      {{
+        (docker_services_compose_services | default({}))
+        .get(docker_services_service_name, {})
+        .get('command')
+        | default(none, true)
+      }}
+
+- name: Compute final command
+  ansible.builtin.set_fact:
+    _cmd_final: >-
+      {{
+        (
+          _cmd_new
+          if (command_action | default('replace')) == 'replace'
+          else
+          (
+            (
+              (_cmd_existing is sequence and _cmd_existing is not string)
+              and (_cmd_new is sequence and _cmd_new is not string)
+            )
+            | ternary(
+                (
+                  _cmd_existing
+                  +
+                  (
+                    _cmd_new
+                    if (command_action | default('replace')) == 'append'
+                    else
+                    (_cmd_new | reject('in', _cmd_existing) | list)
+                  )
+                ),
+                _cmd_new
+              )
+          )
+        )
+      }}
+
+- name: Set command for service (append/replace/append_unique)
+  ansible.builtin.set_fact:
+    docker_services_compose_services: >-
+      {{
+        (docker_services_compose_services | default({}))
+        | combine({
+            docker_services_service_name: (
+              ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
+              | combine({ 'command': _cmd_final }, recursive=true)
+            )
+          }, recursive=true)
+      }}

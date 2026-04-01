@@ -1,0 +1,155 @@
+---
+
+################################
+# PREP (INFISICAL)
+################################
+
+- name: Prep | Fetch Infisical secrets (docker_services_svc.infisical)
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - docker_services_svc.infisical is defined
+    - docker_services_svc.infisical.secrets_map is defined
+    - (docker_services_svc.infisical.secrets_map | length > 0)
+  ansible.builtin.include_tasks:
+    file: _infisical_fetch.yml
+    apply:
+      tags: [deploy, update, recreate]
+  vars:
+    infisical_fail_on_empty: "{{ docker_services_svc.infisical.fail_on_empty | default(true) }}"
+    secrets_map: "{{ docker_services_svc.infisical.secrets_map }}"
+  tags: [deploy, update, recreate]
+
+- name: Prep | Resolve Infisical placeholders in docker_services_svc.environment
+  when:
+    - inventory_hostname == docker_services_deploy_host_effective
+  ansible.builtin.include_tasks:
+    file: _infisical_resolver.yml
+    apply:
+      tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate]
+
+- name: Prep | Propagate Infisical flattened vars to deploy host
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - docker_services_svc.infisical is defined
+    - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
+    - (docker_services_deploy_host_effective != docker_services_primary_manager)
+    - (infisical_flatten | default(true)) | bool
+  ansible.builtin.set_fact:
+    "{{ inf_item.var }}": "{{ hostvars[docker_services_primary_manager][inf_item.var] | default('') }}"
+  loop: "{{ docker_services_svc.infisical.secrets_map }}"
+  loop_control:
+    loop_var: inf_item
+    label: "{{ inf_item.var }}"
+  delegate_to: "{{ docker_services_deploy_host_effective }}"
+  delegate_facts: true
+  tags: [deploy, update, recreate]
+
+- name: Prep | Propagate Infisical dict to deploy host
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - docker_services_svc.infisical is defined
+    - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
+    - (docker_services_deploy_host_effective != docker_services_primary_manager)
+    - not (infisical_flatten | default(true)) | bool
+  ansible.builtin.set_fact:
+    "{{ infisical_out_var | default('infisical_secrets') }}": >-
+      {{
+        hostvars[docker_services_primary_manager][infisical_out_var | default('infisical_secrets')] | default({})
+      }}
+  delegate_to: "{{ docker_services_deploy_host_effective }}"
+  delegate_facts: true
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (DOCKER SECRETS)
+################################
+
+- name: Prep | Create docker secrets / files from Infisical secrets_map
+  when:
+    - docker_services_svc.infisical is defined
+    - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
+    - (docker_services_stack_deploy_type == 'swarm') | ternary(inventory_hostname == docker_services_primary_manager, docker_services_is_deploy_host)
+  ansible.builtin.include_tasks:
+    file: _docker_secrets.yml
+    apply:
+      tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (SWARM CONFIGS)
+################################
+
+- name: Prep | Swarm configs
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - docker_services_svc.swarm_configs is defined
+    - (docker_services_svc.swarm_configs | length) > 0
+  ansible.builtin.include_tasks:
+    file: _swarm_configs.yml
+    apply:
+      tags: [deploy, update, recreate]
+  vars:
+    swarm_configs: "{{ docker_services_svc.swarm_configs }}"
+    docker_services_deploy_host: "{{ docker_services_svc.swarm_config_host | default(docker_services_primary_manager, true) }}"
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (AUTHELIA)
+################################
+
+- name: Prep | Authelia key material (argon2/session/jwt/storage)
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - (docker_services_svc.name | default('') | string | trim) == "authelia"
+  ansible.builtin.include_tasks:
+    file: _authelia_keys_1.yml
+    apply:
+      tags: [deploy, bootstrap, recreate]
+  run_once: true
+  tags: [deploy, bootstrap, recreate]
+
+################################
+# PREP (POSTGRES)
+################################
+
+- name: Create Postgres database
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - docker_services_svc.postgres is defined
+    - (docker_services_svc.postgres.enable | default(false)) | bool
+  ansible.builtin.include_tasks:
+    file: _postgres.yml
+    apply:
+      tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (QBITTORRENT)
+################################
+
+- name: Hash qBittorrent passwords
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - (docker_services_svc.stack | default('') | string | trim) == "qbittorrent"
+  ansible.builtin.include_tasks:
+    file: _qbittorrent.yml
+    apply:
+      tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (DNS)
+################################
+
+- name: Ensure Cloudflare creds exist (Infisical when missing)
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - not (ci_mode | default(false)) | bool
+    - docker_services_svc.cloudflare is defined
+    - (docker_services_svc.cloudflare.enable | default(false)) | bool
+  ansible.builtin.include_tasks:
+    file: _cloudflare_dns_1.yml
+    apply:
+      tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate]

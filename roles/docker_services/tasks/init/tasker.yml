@@ -1,0 +1,110 @@
+---
+
+- name: Normalize role interface vars (compat with old names)
+  ansible.builtin.set_fact:
+    docker_services_service_cfg: "{{ docker_services_service_cfg | default(service_cfg, true) }}"
+    docker_services_service_target: "{{ docker_services_service_target | default(service_target, true) }}"
+    docker_services_role_prefix: "{{ docker_services_role_prefix | default(role_prefix, true) }}"
+    docker_services_service_cfg_found: "{{ docker_services_service_cfg_found | default(service_cfg_found, true) }}"
+
+- name: Ensure docker_services_service_cfg is provided
+  ansible.builtin.assert:
+    that:
+      - docker_services_service_cfg is defined
+      - docker_services_service_cfg is mapping
+    fail_msg: >-
+      docker_services role requires docker_services_service_cfg (mapping) to be passed from the playbook.
+
+- name: Validate target exists when targets are defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_service_cfg.targets is not defined
+        or (docker_services_service_target | default('swarm')) in docker_services_service_cfg.targets
+    fail_msg: >-
+      Service '{{ docker_services_role_prefix | default("docker_services") }}' has targets,
+      but target '{{ docker_services_service_target | default("swarm") }}' is not defined.
+
+- name: Normalize service config (targets aware)
+  ansible.builtin.set_fact:
+    docker_services_svc: >-
+      {{
+        docker_services_service_cfg
+        | combine(
+            (docker_services_service_cfg.targets is defined)
+            | ternary(
+                docker_services_service_cfg.targets[docker_services_service_target | default('swarm')],
+                {}
+              ),
+            recursive=true
+          )
+      }}
+
+- name: Validate normalized service config
+  ansible.builtin.include_tasks: _validate_svc.yml
+
+- name: Derive common service context
+  ansible.builtin.set_fact:
+    docker_services_service_name: >-
+      {{ docker_services_svc.name | default(docker_services_role_prefix, true) | string | trim }}
+    docker_services_stack_deploy_type: >-
+      {{ docker_services_svc.deploy.type | default('swarm', true) | string | trim }}
+    # NOTE: deploy.host is for prep host(s) only; can be string OR list OR group name
+    docker_services_deploy_host: "{{ docker_services_svc.deploy.host | default(docker_services_primary_manager, true) }}"
+
+- name: Derive stack name (multi-service per stack)
+  ansible.builtin.set_fact:
+    docker_services_stack_name: >-
+      {{ docker_services_svc.stack | default(docker_services_service_name, true) | string | trim }}
+
+- name: Derive effective deploy host (swarm always on mgt)
+  ansible.builtin.set_fact:
+    docker_services_deploy_host_effective: >-
+      {{
+        docker_services_primary_manager
+        if (docker_services_stack_deploy_type | string | trim) == 'swarm'
+        else (docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim)
+      }}
+
+- name: Derive effective stack key (avoid container host collisions)
+  ansible.builtin.set_fact:
+    docker_services_stack_name_effective: >-
+      {{
+        docker_services_stack_name
+        if (docker_services_stack_deploy_type | string | trim) == 'swarm'
+        else (docker_services_stack_name ~ '-' ~ docker_services_deploy_host_effective)
+      }}
+
+- name: Derive effective filesystem hosts (dirs/templates/copies)
+  ansible.builtin.set_fact:
+    docker_services_fs_hosts_effective: >-
+      {{
+        docker_services_deploy_host
+        if (docker_services_deploy_host is sequence and docker_services_deploy_host is not string)
+        else [ (docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim) ]
+      }}
+
+- name: Expand filesystem hosts if a group name was provided
+  when:
+    - docker_services_fs_hosts_effective | length == 1
+    - docker_services_fs_hosts_effective[0] in groups
+  ansible.builtin.set_fact:
+    docker_services_fs_hosts_effective: "{{ groups[docker_services_fs_hosts_effective[0]] | list }}"
+
+- name: De-dupe filesystem hosts
+  ansible.builtin.set_fact:
+    docker_services_fs_hosts_effective: "{{ docker_services_fs_hosts_effective | unique | list }}"
+
+- name: Assert container deploy has a single deploy.host
+  when: (docker_services_stack_deploy_type | string | trim) != 'swarm'
+  ansible.builtin.assert:
+    that:
+      - docker_services_deploy_host is string
+      - (docker_services_deploy_host | string | trim | length) > 0
+      - (docker_services_deploy_host | string | trim) not in groups
+    fail_msg: >-
+      Container deploys require deploy.host to be a single hostname (not a group or list).
+      Got: {{ docker_services_deploy_host }}
+
+- name: Determine if this host should build/deploy compose artifacts
+  ansible.builtin.set_fact:
+    docker_services_is_deploy_host: "{{ inventory_hostname == docker_services_deploy_host_effective }}"
