@@ -22,7 +22,7 @@
 
 - name: Normalize caps input
   ansible.builtin.set_fact:
-    _caps_new: >-
+    docker_services_caps_new: >-
       {{
         (
           caps_list
@@ -48,7 +48,7 @@
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
               | combine({
                   (caps_target | string | trim): (
-                    _caps_new
+                    docker_services_caps_new
                     if (caps_action | default('append')) == 'replace'
                     else
                     (
@@ -63,11 +63,11 @@
                       )
                       +
                       (
-                        _caps_new
+                        docker_services_caps_new
                         if (caps_action | default('append')) == 'append'
                         else
                         (
-                          _caps_new
+                          docker_services_caps_new
                           | reject(
                               'in',
                               (

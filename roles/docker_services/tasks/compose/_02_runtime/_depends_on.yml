@@ -15,7 +15,7 @@
 
 - name: Normalize depends_on input
   ansible.builtin.set_fact:
-    _depends_on_new: >-
+    docker_services_depends_on_new: >-
       {{
         depends_on_list
         | default([], true)
@@ -36,7 +36,7 @@
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
               | combine({
                   'depends_on': (
-                    _depends_on_new
+                    docker_services_depends_on_new
                     if (depends_on_action | default('append_unique')) == 'replace'
                     else
                     (
@@ -47,11 +47,11 @@
                       )
                       +
                       (
-                        _depends_on_new
+                        docker_services_depends_on_new
                         if (depends_on_action | default('append_unique')) == 'append'
                         else
                         (
-                          _depends_on_new
+                          docker_services_depends_on_new
                           | reject(
                               'in',
                               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}).get('depends_on', [])

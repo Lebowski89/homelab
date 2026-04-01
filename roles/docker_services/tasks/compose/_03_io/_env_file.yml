@@ -8,7 +8,7 @@
 
 - name: Normalize env_file to list
   ansible.builtin.set_fact:
-    _env_file_final: >-
+    docker_services_env_file_final: >-
       {{
         [docker_services_svc.env_file | string | trim]
         if docker_services_svc.env_file is string
@@ -23,7 +23,7 @@
         | combine({
             docker_services_service_name: (
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
-              | combine({ 'env_file': _env_file_final }, recursive=true)
+              | combine({ 'env_file': docker_services_env_file_final }, recursive=true)
             )
           }, recursive=true)
       }}

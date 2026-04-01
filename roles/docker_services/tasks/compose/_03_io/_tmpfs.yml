@@ -9,7 +9,7 @@
 
 - name: Normalise tmpfs entries to list
   ansible.builtin.set_fact:
-    _tmpfs_entries: >-
+    docker_services_tmpfs_entries: >-
       {%- set ns = namespace(items=[]) -%}
       {%- if tmpfs is string -%}
         {%- set item = tmpfs | string | trim -%}
@@ -43,14 +43,14 @@
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
               | combine({
                   'tmpfs': (
-                    _tmpfs_entries
+                    docker_services_tmpfs_entries
                     if tmpfs_action == 'replace'
                     else (
                       (
                         (
                           ((docker_services_compose_services | default({})).get(docker_services_service_name, {})).get('tmpfs', [])
                         )
-                        + _tmpfs_entries
+                        + docker_services_tmpfs_entries
                       ) | unique
                     )
                   )

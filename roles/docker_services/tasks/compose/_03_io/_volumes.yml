@@ -15,7 +15,7 @@
 
 - name: Build raw volume entries (mapping OR list OR legacy single)
   ansible.builtin.set_fact:
-    _volumes_new_raw: >-
+    docker_services_volumes_new_raw: >-
       {{
         (
           (volumes.values() | list) if (volumes is defined and volumes is mapping)
@@ -36,16 +36,16 @@
 - name: Validate raw volume entries are dicts
   ansible.builtin.assert:
     that:
-      - (_volumes_new_raw | select('mapping') | list | length) == (_volumes_new_raw | length)
+      - (docker_services_volumes_new_raw | select('mapping') | list | length) == (docker_services_volumes_new_raw | length)
     fail_msg: "volumes must be a list (or mapping) of dicts."
 
 - name: Reset working volumes list (prevent cross-service bleed)
   ansible.builtin.set_fact:
-    _volumes_new: []
+    docker_services_volumes_new: []
 
 - name: Canonicalise new volume entries
   ansible.builtin.set_fact:
-    _volumes_new: "{{ _volumes_new | default([]) + [ _canon ] }}"
+    docker_services_volumes_new: "{{ docker_services_volumes_new | default([]) + [_canon] }}"
   vars:
     _t: "{{ (v.type | default('bind', true) | string | trim) }}"
     _src: "{{ (v.source | default('', true) | string | trim) }}"
@@ -82,7 +82,7 @@
         }
       }}
       {%- endif -%}
-  loop: "{{ _volumes_new_raw }}"
+  loop: "{{ docker_services_volumes_new_raw }}"
   loop_control:
     loop_var: v
 
@@ -112,13 +112,13 @@
           )
         )
       }}
-  loop: "{{ _volumes_new }}"
+  loop: "{{ docker_services_volumes_new }}"
   loop_control:
     loop_var: vcanon
 
 - name: Capture existing volumes list
   ansible.builtin.set_fact:
-    _volumes_existing: >-
+    docker_services_volumes_existing: >-
       {{
         ((docker_services_compose_services | default({})).get(docker_services_service_name, {}).get('volumes', []))
         | default([], true)
@@ -127,17 +127,17 @@
 
 - name: Compute merged volumes list (append/replace/append_unique)
   ansible.builtin.set_fact:
-    _volumes_merged: >-
+    docker_services_volumes_merged: >-
       {%- set action = (volumes_action | default('append')) -%}
       {%- if action == 'replace' -%}
-      {{ _volumes_new }}
+      {{ docker_services_volumes_new }}
       {%- elif action == 'append' -%}
-      {{ _volumes_existing + _volumes_new }}
+      {{ docker_services_volumes_existing + docker_services_volumes_new }}
       {%- else -%}
       {%- set seen = {} -%}
       {%- set out = [] -%}
 
-      {%- for v in _volumes_existing -%}
+      {%- for v in docker_services_volumes_existing -%}
       {%- set t = (v.type | default('bind', true) | string | trim) -%}
       {%- if t in ['bind','volume'] -%}
       {%- set k = t ~ ':' ~ (v.source | default('') | string) ~ '->' ~ (v.target | default('') | string) -%}
@@ -152,7 +152,7 @@
       {%- endif -%}
       {%- endfor -%}
 
-      {%- for v in _volumes_new -%}
+      {%- for v in docker_services_volumes_new -%}
       {%- set t = (v.type | default('bind', true) | string | trim) -%}
       {%- if t in ['bind','volume'] -%}
       {%- set k = t ~ ':' ~ (v.source | default('') | string) ~ '->' ~ (v.target | default('') | string) -%}
@@ -178,7 +178,7 @@
         | combine({
             docker_services_service_name: (
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
-              | combine({ 'volumes': _volumes_merged }, recursive=true)
+              | combine({ 'volumes': docker_services_volumes_merged }, recursive=true)
             )
           }, recursive=true)
       }}

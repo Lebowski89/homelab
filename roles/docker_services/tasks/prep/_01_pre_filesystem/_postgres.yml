@@ -9,7 +9,7 @@
   block:
     - name: Postgres | Detect if creds are missing
       ansible.builtin.set_fact:
-        _pg_creds_missing: >-
+        docker_services_pg_creds_missing: >-
           {{
             (postgres_user | default('') | string | trim | length == 0)
             or
@@ -17,7 +17,7 @@
           }}
 
     - name: Postgres | Fetch postgres_user/postgres_pass from Infisical (only if missing)
-      when: _pg_creds_missing | bool
+      when: docker_services_pg_creds_missing | bool
       ansible.builtin.include_tasks: "{{ role_path }}/helpers/prep/infisical.yml"
       vars:
         infisical_fail_on_empty: true
@@ -58,7 +58,7 @@
     - docker_services_svc.postgres is defined
     - (docker_services_svc.postgres.enable | default(false)) | bool
   ansible.builtin.set_fact:
-    _postgres_databases: >-
+    docker_services_postgres_databases: >-
       {{
         (docker_services_svc.postgres.databases | list)
         if (
@@ -76,22 +76,22 @@
 - name: Ping for existing database(s)
   when:
     - inventory_hostname == docker_services_primary_manager
-    - (_postgres_databases | default([]) | length) > 0
+    - (docker_services_postgres_databases | default([]) | length) > 0
   community.postgresql.postgresql_ping:
     login_host: 192.168.80.48
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_pass }}"
     login_port: 5433
     login_db: "{{ postgres_db_item }}"
-  loop: "{{ _postgres_databases }}"
+  loop: "{{ docker_services_postgres_databases }}"
   loop_control:
     loop_var: postgres_db_item
-  register: postgres_ping_results
+  register: docker_services_postgres_ping_results
 
 - name: Create postgres database(s) if missing
   when:
     - inventory_hostname == docker_services_primary_manager
-    - postgres_ping_results is defined
+    - docker_services_postgres_ping_results is defined
     - postgres_ping_result is defined
     - not (postgres_ping_result.is_available | default(false))
   community.postgresql.postgresql_db:
@@ -101,7 +101,7 @@
     login_port: 5433
     name: "{{ postgres_ping_result.postgres_db_item }}"
     state: present
-  loop: "{{ postgres_ping_results.results | default([]) }}"
+  loop: "{{ docker_services_postgres_ping_results.results | default([]) }}"
   loop_control:
     loop_var: postgres_ping_result
     label: "{{ postgres_ping_result.postgres_db_item }}"

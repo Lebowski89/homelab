@@ -8,7 +8,7 @@
 
 - name: EnvResolve | Determine fail-on-empty behavior
   ansible.builtin.set_fact:
-    _env_fail_on_empty: "{{ (docker_services_svc.infisical.fail_on_empty | default(true)) | bool }}"
+    docker_services_env_fail_on_empty: "{{ (docker_services_svc.infisical.fail_on_empty | default(true)) | bool }}"
   when: docker_services_svc.infisical is defined
 
 - name: EnvResolve | Initialize resolved environment + placeholder key list
@@ -16,18 +16,18 @@
     - docker_services_svc.environment is defined
     - (docker_services_svc.environment | length) > 0
   ansible.builtin.set_fact:
-    _env_resolved: {}
-    _env_placeholder_keys: []
+    docker_services_env_resolved: {}
+    docker_services_env_placeholder_keys: []
 
-- name: EnvResolve | Resolve placeholders into _env_resolved
+- name: EnvResolve | Resolve placeholders into docker_services_env_resolved
   when:
     - docker_services_svc.environment is defined
     - (docker_services_svc.environment | length) > 0
   ansible.builtin.set_fact:
-    _env_resolved: "{{ _env_resolved | combine({ env_kv.key: _resolved_val }) }}"
-    _env_placeholder_keys: >-
+    docker_services_env_resolved: "{{ docker_services_env_resolved | combine({env_kv.key: _resolved_val}) }}"
+    docker_services_env_placeholder_keys: >-
       {{
-        _env_placeholder_keys +
+        docker_services_env_placeholder_keys +
         ([_placeholder_key] if _is_placeholder else [])
       }}
   vars:
@@ -65,17 +65,17 @@
     label: "{{ env_kv.key }}"
 
 - name: EnvResolve | Replace docker_services_svc.environment with resolved values
-  when: _env_resolved is defined
+  when: docker_services_env_resolved is defined
   ansible.builtin.set_fact:
-    docker_services_svc: "{{ docker_services_svc | combine({'environment': _env_resolved}, recursive=true) }}"
+    docker_services_svc: "{{ docker_services_svc | combine({'environment': docker_services_env_resolved}, recursive=true) }}"
 
 - name: EnvResolve | Fail if any placeholders remain (means resolver didn't run)
   when:
-    - (_env_fail_on_empty | default(true)) | bool
+    - (docker_services_env_fail_on_empty | default(true)) | bool
     - docker_services_svc.environment is defined
     - (docker_services_svc.environment | dict2items
-       | selectattr('value','string')
-       | selectattr('value','match','^__INFISICAL__:.+$')
+       | selectattr('value', 'string')
+       | selectattr('value', 'match', '^__INFISICAL__:.+$')
        | list
        | length) > 0
   ansible.builtin.fail:
@@ -84,21 +84,21 @@
       {{
         docker_services_svc.environment
         | dict2items
-        | selectattr('value','string')
-        | selectattr('value','match','^__INFISICAL__:.+$')
+        | selectattr('value', 'string')
+        | selectattr('value', 'match', '^__INFISICAL__:.+$')
         | map(attribute='key')
         | list
       }}
 
 - name: EnvResolve | Fail if any placeholder-resolved env key is empty
   when:
-    - (_env_fail_on_empty | default(true)) | bool
-    - (_env_placeholder_keys | default([]) | length) > 0
+    - (docker_services_env_fail_on_empty | default(true)) | bool
+    - (docker_services_env_placeholder_keys | default([]) | length) > 0
   ansible.builtin.assert:
     that:
       - (docker_services_svc.environment[env_key] | default('') | string | trim | length) > 0
     fail_msg: "Empty environment values after Infisical resolution for service '{{ docker_services_service_name }}': {{ env_key }}"
-  loop: "{{ _env_placeholder_keys }}"
+  loop: "{{ docker_services_env_placeholder_keys }}"
   loop_control:
     loop_var: env_key
     label: "{{ env_key }}"

@@ -7,9 +7,9 @@
       - docker_services_service_name | string | trim | length > 0
     fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Normalize docker_services_stack_deploy_type
+- name: Normalize effective stack deploy type
   ansible.builtin.set_fact:
-    _stack_deploy_type: "{{ docker_services_stack_deploy_type | default('swarm', true) | string | trim }}"
+    docker_services_stack_deploy_type_effective: "{{ docker_services_stack_deploy_type | default('swarm', true) | string | trim }}"
 
 - name: Set base service definition
   ansible.builtin.set_fact:
@@ -32,7 +32,7 @@
 
                   'container_name': (
                     container_name
-                    if (_stack_deploy_type != 'swarm'
+                    if (docker_services_stack_deploy_type_effective != 'swarm'
                         and (container_name is defined)
                         and (container_name is not sameas omit)
                         and (container_name | string | trim | length > 0))
@@ -41,7 +41,7 @@
 
                   'pid': (
                     pid
-                    if (_stack_deploy_type != 'swarm'
+                    if (docker_services_stack_deploy_type_effective != 'swarm'
                         and (pid is defined)
                         and (pid is not sameas omit)
                         and (pid | string | trim | length > 0))
@@ -50,7 +50,7 @@
 
                   'cgroup': (
                     cgroup
-                    if (_stack_deploy_type != 'swarm'
+                    if (docker_services_stack_deploy_type_effective != 'swarm'
                         and (cgroup is defined)
                         and (cgroup is not sameas omit)
                         and (cgroup | string | trim | length > 0))
@@ -90,7 +90,7 @@
 
                   'network_mode': (
                     network_mode
-                    if (_stack_deploy_type != 'swarm'
+                    if (docker_services_stack_deploy_type_effective != 'swarm'
                         and (network_mode is defined)
                         and (network_mode is not sameas omit)
                         and (network_mode | string | trim | length > 0))
