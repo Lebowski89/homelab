@@ -20,14 +20,12 @@
   ansible.builtin.set_fact:
     docker_services_stack_networks_new: >-
       {%- if stack_network_names is mapping -%}
-      {{ stack_network_names }}
-      {%- else -%}
+      {{ stack_network_names }}{%- else -%}
       {%- set out = {} -%}
       {%- for n in (stack_network_names | map('string') | map('trim') | reject('equalto', '') | list) -%}
-      {%- set _ = out.update({ n: {'external': true} }) -%}
+      {%- set _ = out.update({n: {'external': true}}) -%}
       {%- endfor -%}
-      {{ out }}
-      {%- endif -%}
+      {{ out }}{%- endif -%}
 
 - name: Default external=true for any network defs that omit it
   when: docker_services_stack_networks_new is mapping and (docker_services_stack_networks_new | length > 0)

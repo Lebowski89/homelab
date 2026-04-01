@@ -40,8 +40,8 @@
           {%- if (st | length) > 0 -%}
             {%- if '=' in st -%}
               {%- set parts = st.split('=', 1) -%}
-              {%- set k = (parts[0] | string | trim) -%}
-              {%- set v = (parts[1] | string | trim) -%}
+              {%- set k = parts[0] | string | trim -%}
+              {%- set v = parts[1] | string | trim -%}
               {%- if (k | length) > 0 -%}
                 {%- set _ = out.update({k: v}) -%}
               {%- endif -%}
