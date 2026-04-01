@@ -20,14 +20,12 @@
   ansible.builtin.set_fact:
     docker_services_stack_volumes_new: >-
       {%- if stack_volume_names is mapping -%}
-      {{ stack_volume_names }}
-      {%- else -%}
+      {{ stack_volume_names }}{%- else -%}
       {%- set out = {} -%}
       {%- for vname in (stack_volume_names | map('string') | map('trim') | reject('equalto', '') | list) -%}
-      {%- set _ = out.update({ vname: {'external': true} }) -%}
+      {%- set _ = out.update({vname: {'external': true}}) -%}
       {%- endfor -%}
-      {{ out }}
-      {%- endif -%}
+      {{ out }}{%- endif -%}
 
 - name: Default external=true for any volume defs that omit it
   when: docker_services_stack_volumes_new is mapping and (docker_services_stack_volumes_new | length > 0)
