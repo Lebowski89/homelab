@@ -86,12 +86,12 @@
   loop: "{{ docker_services_postgres_databases }}"
   loop_control:
     loop_var: postgres_db_item
-  register: postgres_ping_results
+  register: docker_services_postgres_ping_results
 
 - name: Create postgres database(s) if missing
   when:
     - inventory_hostname == docker_services_primary_manager
-    - postgres_ping_results is defined
+    - docker_services_postgres_ping_results is defined
     - postgres_ping_result is defined
     - not (postgres_ping_result.is_available | default(false))
   community.postgresql.postgresql_db:
@@ -101,7 +101,7 @@
     login_port: 5433
     name: "{{ postgres_ping_result.postgres_db_item }}"
     state: present
-  loop: "{{ postgres_ping_results.results | default([]) }}"
+  loop: "{{ docker_services_postgres_ping_results.results | default([]) }}"
   loop_control:
     loop_var: postgres_ping_result
     label: "{{ postgres_ping_result.postgres_db_item }}"

@@ -53,7 +53,7 @@
 
     - name: Set public_ip fact
       ansible.builtin.set_fact:
-        public_ip: "{{ ansible_facts['ipify_public_ip'] }}"
+        docker_services_public_ip: "{{ ansible_facts['ipify_public_ip'] }}"
 
 ################################
 # API (VIA INFISICAL)
@@ -68,7 +68,8 @@
 
 - name: Cloudflare | Fetch cloudflare_api from Infisical (only if missing)
   when: docker_services_cf_api_missing | bool
-  ansible.builtin.include_tasks: _infisical_fetch.yml
+  ansible.builtin.include_tasks: >-
+    {{ role_path }}/tasks/prep/01_pre_filesystem/sub_tasks/infisical/_fetch.yml
   vars:
     infisical_fail_on_empty: true
     infisical_flatten: true
@@ -90,7 +91,8 @@
 
 - name: Cloudflare | Fetch cloudflare_zone from Infisical (only if missing)
   when: docker_services_cf_zone_missing | bool
-  ansible.builtin.include_tasks: _infisical_fetch.yml
+  ansible.builtin.include_tasks: >-
+    {{ role_path }}/tasks/prep/01_pre_filesystem/sub_tasks/infisical/_fetch.yml
   vars:
     infisical_fail_on_empty: true
     infisical_flatten: true
@@ -152,7 +154,7 @@
                 ),
                 'value': (
                   docker_services_svc.cloudflare.value
-                  | default(public_ip, true)
+                  | default(docker_services_public_ip, true)
                 ),
                 'type': (
                   docker_services_svc.cloudflare.type
@@ -173,10 +175,10 @@
       }}
 
 - name: Configure Cloudflare DNS records
-  ansible.builtin.include_tasks: _cloudflare_dns_2.yml
+  ansible.builtin.include_tasks: _dns.yml
   vars:
     cloudflare_record: "{{ docker_services_cf_record.record }}"
-    cloudflare_record_value: "{{ docker_services_cf_record.value | default(public_ip, true) }}"
+    cloudflare_record_value: "{{ docker_services_cf_record.value | default(docker_services_public_ip, true) }}"
     cloudflare_record_type: "{{ docker_services_cf_record.type | default('A', true) }}"
     cloudflare_proxy: "{{ (docker_services_cf_record.proxy | default(false, true)) | bool }}"
     cloudflare_solo: "{{ (docker_services_cf_record.solo | default(true, true)) | bool }}"
@@ -191,7 +193,7 @@
         ~ ' -> '
         ~ (
           docker_services_cf_record.value
-          | default(public_ip, true)
+          | default(docker_services_public_ip, true)
           | string
         )
       }}
