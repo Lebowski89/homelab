@@ -8,7 +8,7 @@
   ansible.builtin.set_fact:
     docker_services_vaultwarden_fs_host: "{{ docker_services_fs_hosts_effective | first }}"
     docker_services_vaultwarden_dir: "{{ docker_services_svc.paths_vault.vault_dir }}"
-    docker_services_vaultwarden_token: "{{ docker_services_svc.paths_vault.vault_token_file }}"
+    docker_services_vaultwarden_token_file: "{{ docker_services_svc.paths_vault.vault_token_file }}"
     docker_services_vaultwarden_pass: "{{ docker_services_svc.paths_vault.vault_pass_file }}"
     docker_services_vaultwarden_secrets_host: "{{ docker_services_primary_manager | default('mgt') }}"
     docker_services_vaultwarden_secret_name: "{{ docker_services_svc.paths_vault.vault_secret_name }}"
@@ -30,7 +30,7 @@
 - name: Vaultwarden prep | Check if admin token file exists
   become: true
   ansible.builtin.stat:
-    path: "{{ docker_services_vaultwarden_token }}"
+    path: "{{ docker_services_vaultwarden_token_file }}"
   register: docker_services_vaultwarden_token_stat
   delegate_to: "{{ docker_services_vaultwarden_fs_host }}"
   run_once: true
@@ -38,7 +38,7 @@
 - name: Vaultwarden prep | Read existing token
   become: true
   ansible.builtin.slurp:
-    src: "{{ docker_services_vaultwarden_token }}"
+    src: "{{ docker_services_vaultwarden_token_file }}"
   register: docker_services_vaultwarden_token_raw
   when: docker_services_vaultwarden_token_stat.stat.exists
   delegate_to: "{{ docker_services_vaultwarden_fs_host }}"
@@ -73,7 +73,7 @@
 
     - name: Vaultwarden prep | Save argon2 token
       ansible.builtin.copy:
-        dest: "{{ docker_services_vaultwarden_token }}"
+        dest: "{{ docker_services_vaultwarden_token_file }}"
         content: "{{ docker_services_vaultwarden_token_new.stdout | trim }}\n"
         mode: "0600"
 
