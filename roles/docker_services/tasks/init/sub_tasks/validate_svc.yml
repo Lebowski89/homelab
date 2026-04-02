@@ -303,8 +303,12 @@
   ansible.builtin.assert:
     that:
       - (docker_services_svc.templates | select('mapping') | list | length) == (docker_services_svc.templates | length)
-      - (docker_services_svc.templates | map(attribute='src') | select('defined') | list | length) == (docker_services_svc.templates | length)
-      - (docker_services_svc.templates | map(attribute='dest') | select('defined') | list | length) == (docker_services_svc.templates | length)
+      - >-
+        (docker_services_svc.templates | map(attribute='src') | select('defined') | list | length)
+        == (docker_services_svc.templates | length)
+      - >-
+        (docker_services_svc.templates | map(attribute='dest') | select('defined') | list | length)
+        == (docker_services_svc.templates | length)
       - >-
         (docker_services_svc.templates | map(attribute='src') | map('string') | map('trim') |
         reject('equalto','') | list | length)
@@ -429,9 +433,16 @@
       - docker_services_svc.healthcheck.test is defined
       - >
         (
-          (docker_services_svc.healthcheck.test is sequence and docker_services_svc.healthcheck.test is not string and (docker_services_svc.healthcheck.test | length > 0))
+          (
+            docker_services_svc.healthcheck.test is sequence
+            and docker_services_svc.healthcheck.test is not string
+            and (docker_services_svc.healthcheck.test | length > 0)
+          )
           or
-          (docker_services_svc.healthcheck.test is string and (docker_services_svc.healthcheck.test | trim | length > 0))
+          (
+            docker_services_svc.healthcheck.test is string
+            and (docker_services_svc.healthcheck.test | trim | length > 0)
+          )
         )
     fail_msg: "docker_services_svc.healthcheck must be a mapping with a non-empty test (string or list)."
 
@@ -543,8 +554,12 @@
   ansible.builtin.assert:
     that:
       - (docker_services_validate_ports_items | select('mapping') | list | length) == (docker_services_validate_ports_items | length)
-      - (docker_services_validate_ports_items | map(attribute='published') | select('defined') | list | length) == (docker_services_validate_ports_items | length)
-      - (docker_services_validate_ports_items | map(attribute='target') | select('defined') | list | length) == (docker_services_validate_ports_items | length)
+      - >-
+        (docker_services_validate_ports_items | map(attribute='published') | select('defined') | list | length)
+        == (docker_services_validate_ports_items | length)
+      - >-
+        (docker_services_validate_ports_items | map(attribute='target') | select('defined') | list | length)
+        == (docker_services_validate_ports_items | length)
     fail_msg: "docker_services_svc.ports entries must be dicts and include 'published' and 'target'."
 
 ################################

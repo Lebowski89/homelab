@@ -65,7 +65,12 @@
   when:
     - docker_services_svc.infisical is defined
     - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
-    - (docker_services_stack_deploy_type == 'swarm') | ternary(inventory_hostname == docker_services_primary_manager, docker_services_is_deploy_host)
+    - >-
+      (docker_services_stack_deploy_type == 'swarm')
+      | ternary(
+          inventory_hostname == docker_services_primary_manager,
+          docker_services_is_deploy_host
+        )
   ansible.builtin.include_tasks:
     file: _secrets.yml
     apply:

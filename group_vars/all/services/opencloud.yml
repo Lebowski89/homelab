@@ -13,7 +13,11 @@ opencloud:
     - -c
     - "opencloud init || true; opencloud server"
   user: >-
-    {{ hostvars[docker_services_unraid_host].docker_host_opencloud_puid }}:{{ hostvars[docker_services_unraid_host].docker_host_opencloud_pgid }}
+    {{
+      hostvars[docker_services_unraid_host].docker_host_opencloud_puid
+    }}:{{
+      hostvars[docker_services_unraid_host].docker_host_opencloud_pgid
+    }}
   environment:
     TZ: "{{ timezone }}"
   env_file:

@@ -25,5 +25,8 @@
   ansible.builtin.debug:
     msg: >-
       DNS {{ docker_services_cf_type }} record for
-      "{{ (docker_services_cf_record in ['@', cloudflare_zone]) | ternary(cloudflare_zone, docker_services_cf_record ~ '.' ~ cloudflare_zone) }}"
+      "{{
+        (docker_services_cf_record in ['@', cloudflare_zone])
+        | ternary(cloudflare_zone, docker_services_cf_record ~ '.' ~ cloudflare_zone)
+      }}"
       set to "{{ docker_services_cf_value }}". Proxy: {{ docker_services_cf_proxy }}
