@@ -41,7 +41,6 @@
       {%- endfor -%}
       {{ out }}
 
-# IMPORTANT: store stack networks centrally on mgt so deploy/render can always access them
 - name: Merge into docker_services_compose_stacks[docker_services_stack_name].networks (centralized on mgt)
   ansible.builtin.set_fact:
     docker_services_compose_stacks: >-

@@ -609,3 +609,26 @@
   loop: "{{ docker_services_validate_volume_items }}"
   loop_control:
     loop_var: validate_volume_item
+
+################################
+# ENV
+################################
+
+- name: Validate | docker_services_svc.environment shape
+  when: docker_services_svc.environment is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.environment is mapping
+    fail_msg: "docker_services_svc.environment must be a mapping when provided."
+
+################################
+# LABELS
+################################
+
+- name: Validate | docker_services_svc.labels shape
+  when: docker_services_svc.labels is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.labels is mapping
+        or (docker_services_svc.labels is sequence and docker_services_svc.labels is not string)
+    fail_msg: "docker_services_svc.labels must be a mapping or a list when provided."

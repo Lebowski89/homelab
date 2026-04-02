@@ -1,13 +1,5 @@
 ---
 
-- name: Ensure paths is a list
-  ansible.builtin.assert:
-    that:
-      - paths is defined
-      - paths is sequence
-      - paths is not string
-    fail_msg: "paths must be a list of path specs."
-
 - name: Validate each path spec
   ansible.builtin.assert:
     that:

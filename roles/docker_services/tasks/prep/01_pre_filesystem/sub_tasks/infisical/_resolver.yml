@@ -1,11 +1,5 @@
 ---
 
-- name: EnvResolve | Ensure docker_services_svc.environment is a mapping when present
-  ansible.builtin.assert:
-    that:
-      - docker_services_svc.environment is not defined or (docker_services_svc.environment is mapping)
-    fail_msg: "docker_services_svc.environment must be a mapping when defined."
-
 - name: EnvResolve | Determine fail-on-empty behavior
   ansible.builtin.set_fact:
     docker_services_env_fail_on_empty: >-

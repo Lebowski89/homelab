@@ -1,13 +1,5 @@
 ---
 
-- name: Ensure templates is a list
-  ansible.builtin.assert:
-    that:
-      - templates is defined
-      - templates is sequence
-      - templates is not string
-    fail_msg: "templates must be a list of template specs."
-
 - name: Render templates on deploy host
   ansible.builtin.template:
     src: "{{ role_path }}/templates/{{ temp_prep.src }}"

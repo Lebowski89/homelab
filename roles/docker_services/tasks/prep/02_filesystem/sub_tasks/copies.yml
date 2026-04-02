@@ -1,27 +1,5 @@
 ---
 
-- name: Ensure copies is provided
-  ansible.builtin.assert:
-    that:
-      - copies is defined
-      - copies is sequence
-      - copies is not string
-    fail_msg: "copies must be a list of copy definitions."
-
-- name: Validate each copy copy_prep has src/dest
-  ansible.builtin.assert:
-    that:
-      - copy_prep is mapping
-      - copy_prep.src is defined
-      - (copy_prep.src | string | trim | length > 0)
-      - copy_prep.dest is defined
-      - (copy_prep.dest | string | trim | length > 0)
-    fail_msg: "Each copies[] entry must be a dict with non-empty src and dest."
-  loop: "{{ copies }}"
-  loop_control:
-    loop_var: copy_prep
-    label: "{{ (copy_prep.dest | default('')) }}"
-
 - name: Copy files (role-relative src)
   ansible.builtin.copy:
     src: "{{ role_path }}/{{ copy_prep.src | string | trim }}"
