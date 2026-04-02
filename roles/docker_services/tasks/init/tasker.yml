@@ -40,7 +40,7 @@
       }}
 
 - name: Validate normalized service config
-  ansible.builtin.include_tasks: _validate_svc.yml
+  ansible.builtin.include_tasks: sub_tasks/validate_svc.yml
 
 - name: Derive common service context
   ansible.builtin.set_fact:

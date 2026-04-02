@@ -9,7 +9,7 @@
     - docker_services_is_deploy_host
     - (docker_services_svc.deploy is defined)
     - ((docker_services_svc.deploy.type | default('swarm')) == 'swarm')
-  ansible.builtin.include_tasks: _deploy_config.yml
+  ansible.builtin.include_tasks: sub_tasks/deploy_config.yml
   vars:
     deploy_mode: "{{ docker_services_svc.deploy.mode | default('replicated') }}"
     deploy_replicas: "{{ docker_services_svc.deploy.replicas | default(1) }}"
@@ -39,5 +39,5 @@
             )
           }, recursive=true)
       }}
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ docker_services_primary_manager | default('mgt') }}"
   delegate_facts: true

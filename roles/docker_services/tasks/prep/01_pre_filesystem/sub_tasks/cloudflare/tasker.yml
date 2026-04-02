@@ -1,0 +1,197 @@
+---
+
+################################
+# PUBLIC IP (ONLY IF NEEDED)
+################################
+
+- name: Cloudflare | Determine whether public IP lookup is needed
+  ansible.builtin.set_fact:
+    docker_services_cf_needs_public_ip: >-
+      {{
+        (
+          docker_services_svc.cloudflare.records is not defined
+          and (docker_services_svc.cloudflare.value is not defined)
+        )
+        or
+        (
+          docker_services_svc.cloudflare.records is defined
+          and (
+            (
+              docker_services_svc.cloudflare.records is mapping
+              and (docker_services_svc.cloudflare.records.value is not defined)
+            )
+            or
+            (
+              docker_services_svc.cloudflare.records is sequence
+              and docker_services_svc.cloudflare.records is not string
+              and (
+                docker_services_svc.cloudflare.records
+                | selectattr('value', 'defined')
+                | list
+                | length
+              ) < (docker_services_svc.cloudflare.records | length)
+            )
+          )
+        )
+      }}
+
+- name: Cloudflare | Gather public IP facts (only when needed)
+  when: docker_services_cf_needs_public_ip | bool
+  block:
+    - name: Gather IP geolocation data
+      community.general.ipinfoio_facts:
+
+    - name: Gather public IP data
+      community.general.ipify_facts:
+        api_url: https://api64.ipify.org
+        timeout: 20
+      register: docker_services_public_ip_result
+
+    - name: Public IP output
+      ansible.builtin.debug:
+        msg: "{{ ansible_facts['ipify_public_ip'] }}"
+
+    - name: Set public_ip fact
+      ansible.builtin.set_fact:
+        public_ip: "{{ ansible_facts['ipify_public_ip'] }}"
+
+################################
+# API (VIA INFISICAL)
+################################
+
+- name: Cloudflare | Detect if creds are missing
+  ansible.builtin.set_fact:
+    docker_services_cf_api_missing: >-
+      {{
+        (cloudflare_api | default('') | string | trim | length == 0)
+      }}
+
+- name: Cloudflare | Fetch cloudflare_api from Infisical (only if missing)
+  when: docker_services_cf_api_missing | bool
+  ansible.builtin.include_tasks: _infisical_fetch.yml
+  vars:
+    infisical_fail_on_empty: true
+    infisical_flatten: true
+    secrets_map:
+      - var: cloudflare_api
+        path: "/Cloudflare"
+        name: API
+
+################################
+# ZONE (VIA INFISICAL)
+################################
+
+- name: Cloudflare | Detect if creds are missing
+  ansible.builtin.set_fact:
+    docker_services_cf_zone_missing: >-
+      {{
+        (cloudflare_zone | default('') | string | trim | length == 0)
+      }}
+
+- name: Cloudflare | Fetch cloudflare_zone from Infisical (only if missing)
+  when: docker_services_cf_zone_missing | bool
+  ansible.builtin.include_tasks: _infisical_fetch.yml
+  vars:
+    infisical_fail_on_empty: true
+    infisical_flatten: true
+    secrets_map:
+      - var: cloudflare_zone
+        path: "/Cloudflare"
+        name: ZONE
+
+################################
+# CREDS (ASSERT)
+################################
+
+- name: Cloudflare | Assert creds are now present
+  ansible.builtin.assert:
+    that:
+      - (cloudflare_api | default('') | string | trim | length) > 0
+      - (cloudflare_zone | default('') | string | trim | length) > 0
+    fail_msg: >-
+      cloudflare_api/cloudflare_zone are still empty after Infisical fetch.
+      api_len={{ (cloudflare_api | default('') | string | trim | length) }},
+      zone='{{ cloudflare_zone | default('') | string | trim }}'
+
+################################
+# DOCKER SECRET
+################################
+
+- name: Create Cloudflare API secret
+  community.docker.docker_secret:
+    name: cloudflare_api_secret
+    data: "{{ cloudflare_api }}"
+    state: present
+
+################################
+# DNS TASKER
+################################
+
+- name: Build Cloudflare records list (single or multiple)
+  ansible.builtin.set_fact:
+    docker_services_cloudflare_records_effective: >-
+      {{
+        (
+          [docker_services_svc.cloudflare.records]
+          if (
+            docker_services_svc.cloudflare.records is defined
+            and docker_services_svc.cloudflare.records is mapping
+          )
+          else (
+            docker_services_svc.cloudflare.records
+            if (
+              docker_services_svc.cloudflare.records is defined
+              and docker_services_svc.cloudflare.records is sequence
+              and docker_services_svc.cloudflare.records is not string
+            )
+            else [
+              {
+                'record': (
+                  docker_services_svc.cloudflare.record
+                  | default(docker_services_svc.name | default(docker_services_service_name, true), true)
+                ),
+                'value': (
+                  docker_services_svc.cloudflare.value
+                  | default(public_ip, true)
+                ),
+                'type': (
+                  docker_services_svc.cloudflare.type
+                  | default('A', true)
+                ),
+                'proxy': (
+                  docker_services_svc.cloudflare.proxy
+                  | default(false, true)
+                ),
+                'solo': (
+                  docker_services_svc.cloudflare.solo
+                  | default(true, true)
+                )
+              }
+            ]
+          )
+        )
+      }}
+
+- name: Configure Cloudflare DNS records
+  ansible.builtin.include_tasks: _cloudflare_dns_2.yml
+  vars:
+    cloudflare_record: "{{ docker_services_cf_record.record }}"
+    cloudflare_record_value: "{{ docker_services_cf_record.value | default(public_ip, true) }}"
+    cloudflare_record_type: "{{ docker_services_cf_record.type | default('A', true) }}"
+    cloudflare_proxy: "{{ (docker_services_cf_record.proxy | default(false, true)) | bool }}"
+    cloudflare_solo: "{{ (docker_services_cf_record.solo | default(true, true)) | bool }}"
+  loop: "{{ docker_services_cloudflare_records_effective }}"
+  loop_control:
+    loop_var: docker_services_cf_record
+    label: >-
+      {{
+        (docker_services_cf_record.type | default('A', true))
+        ~ ' '
+        ~ docker_services_cf_record.record
+        ~ ' -> '
+        ~ (
+          docker_services_cf_record.value
+          | default(public_ip, true)
+          | string
+        )
+      }}

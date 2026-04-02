@@ -1,0 +1,125 @@
+---
+
+################################
+# COMPOSE (ENV)
+################################
+
+- name: Set environment variables
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.environment is defined
+    - (docker_services_svc.environment | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/env.yml
+  vars:
+    environment_vars: "{{ docker_services_svc.environment }}"
+
+################################
+# COMPOSE (ENV_FILE)
+################################
+
+- name: Attach env_file to service
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.env_file is defined
+    - docker_services_svc.env_file | length > 0
+  ansible.builtin.include_tasks: sub_tasks/env_file.yml
+
+################################
+# COMPOSE (SECRETS)
+################################
+
+- name: Set secrets variable (docker_services_svc format)
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.secrets is defined
+    - (docker_services_svc.secrets | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/secrets.yml
+  vars:
+    secrets: "{{ docker_services_svc.secrets }}"
+
+################################
+# COMPOSE (CONFIGS)
+################################
+
+- name: Set configs variable (swarm only)
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type == 'swarm'
+    - docker_services_svc.configs is defined
+    - (docker_services_svc.configs | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/configs.yml
+  vars:
+    configs_list: "{{ docker_services_svc.configs }}"
+
+################################
+# COMPOSE (PORTS)
+################################
+
+- name: Set ports variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.ports is defined
+    - (docker_services_svc.ports | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/ports.yml
+  vars:
+    ports: "{{ docker_services_svc.ports }}"
+    ports_action: "replace"
+
+################################
+# COMPOSE (TMPFS)
+################################
+
+- name: Set tmpfs variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type != "swarm"
+    - docker_services_svc.tmpfs is defined
+    - (docker_services_svc.tmpfs | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/tmpfs.yml
+  vars:
+    tmpfs: "{{ docker_services_svc.tmpfs }}"
+    tmpfs_action: "replace"
+
+################################
+# COMPOSE (VOLUMES)
+################################
+
+- name: Set volumes variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.volumes is defined
+    - (docker_services_svc.volumes | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/volumes.yml
+  vars:
+    volumes: "{{ docker_services_svc.volumes }}"
+    volumes_action: "append_unique"
+
+- name: Add /dev/shm tmpfs for swarm
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type == "swarm"
+    - docker_services_svc.shm_tmpfs_size is defined
+    - (docker_services_svc.shm_tmpfs_size | int) > 0
+  ansible.builtin.include_tasks: sub_tasks/volumes.yml
+  vars:
+    volumes_action: append_unique
+    volumes:
+      shm:
+        type: tmpfs
+        target: /dev/shm
+        tmpfs:
+          size: "{{ docker_services_svc.shm_tmpfs_size | int }}"
+
+################################
+# COMPOSE (SHM)
+################################
+
+- name: Set SHM size (compose only)
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type != "swarm"
+    - docker_services_svc.shm_size is defined
+    - (docker_services_svc.shm_size | string | trim | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/shm.yml
+  vars:
+    shm_size: "{{ docker_services_svc.shm_size }}"
