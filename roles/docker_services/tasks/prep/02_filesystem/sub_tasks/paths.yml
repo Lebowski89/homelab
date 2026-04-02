@@ -8,10 +8,6 @@
       - paths is not string
     fail_msg: "paths must be a list of path specs."
 
-- name: Ensure docker_services_deploy_host is set
-  ansible.builtin.set_fact:
-    _deploy_host: "{{ docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim }}"
-
 - name: Validate each path spec
   ansible.builtin.assert:
     that:
@@ -54,4 +50,4 @@
   loop_control:
     loop_var: path_item
     label: "{{ path_item.path }} [{{ path_item.state | default('directory') }}]"
-  delegate_to: "{{ _deploy_host }}"
+  delegate_to: "{{ docker_services_deploy_host | default('mgt') }}"
