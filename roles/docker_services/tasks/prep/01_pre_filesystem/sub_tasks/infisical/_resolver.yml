@@ -25,7 +25,7 @@
     - docker_services_svc.environment is defined
     - (docker_services_svc.environment | length) > 0
   ansible.builtin.set_fact:
-    docker_services_env_resolved: "{{ docker_services_env_resolved | combine({ env_kv.key: _resolved_val }) }}"
+    docker_services_env_resolved: "{{ docker_services_env_resolved | combine({env_kv.key: _resolved_val}) }}"
     docker_services_env_placeholder_keys: >-
       {{
         docker_services_env_placeholder_keys +
