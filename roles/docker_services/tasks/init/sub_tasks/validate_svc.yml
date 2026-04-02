@@ -181,7 +181,7 @@
       - (docker_services_svc.deploy.replicas | int) >= 0
     fail_msg: "docker_services_svc.deploy.replicas must be an integer >= 0 when provided."
 
-- name: Validate | docker_services_svc.deploy.host
+- name: Validate | docker_services_svc.deploy.host (optional)
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -189,8 +189,30 @@
   ansible.builtin.assert:
     that:
       - docker_services_svc.deploy.host is string
-      - (docker_services_svc.deploy.host | string | trim | length) > 0
-    fail_msg: "docker_services_svc.deploy.host must be a non-empty string when provided."
+        or (docker_services_svc.deploy.host is sequence and docker_services_svc.deploy.host is not string)
+      - >-
+        (
+          docker_services_svc.deploy.host is string
+          and (docker_services_svc.deploy.host | string | trim | length) > 0
+        )
+        or
+        (
+          docker_services_svc.deploy.host is sequence
+          and docker_services_svc.deploy.host is not string
+          and (docker_services_svc.deploy.host | length) > 0
+          and
+          (
+            docker_services_svc.deploy.host
+            | map('string')
+            | map('trim')
+            | reject('equalto', '')
+            | list
+            | length
+          ) == (docker_services_svc.deploy.host | length)
+        )
+    fail_msg: >-
+      docker_services_svc.deploy.host controls prep/filesystem target hosts and must be
+      a non-empty string, or a non-empty list of non-empty strings, when provided.
 
 - name: Validate | docker_services_svc.deploy.constraints
   when:

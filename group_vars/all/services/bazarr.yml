@@ -94,7 +94,7 @@ bazarr:
     databases:
       - bazarr
   prep:
-  ## used in tasks/prep/_03_post_filesystem/bazarr.yml
+  ## used in tasks/prep/03_post_filesystem/sub_tasks/bazarr.yml
     radarr:
       host: "radarr"
       port: "7878"
