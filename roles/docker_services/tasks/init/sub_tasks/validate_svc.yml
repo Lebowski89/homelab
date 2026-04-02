@@ -178,10 +178,18 @@
     - docker_services_svc.deploy.replicas is defined
   ansible.builtin.assert:
     that:
+      - >
+        (
+          docker_services_svc.deploy.replicas is integer
+          or (
+            docker_services_svc.deploy.replicas is string
+            and (docker_services_svc.deploy.replicas | trim | regex_search('^[0-9]+$')) is not none
+          )
+        )
       - (docker_services_svc.deploy.replicas | int) >= 0
     fail_msg: "docker_services_svc.deploy.replicas must be an integer >= 0 when provided."
 
-- name: Validate | docker_services_svc.deploy.host
+- name: Validate | docker_services_svc.deploy.host (optional)
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -189,8 +197,30 @@
   ansible.builtin.assert:
     that:
       - docker_services_svc.deploy.host is string
-      - (docker_services_svc.deploy.host | string | trim | length) > 0
-    fail_msg: "docker_services_svc.deploy.host must be a non-empty string when provided."
+        or (docker_services_svc.deploy.host is sequence and docker_services_svc.deploy.host is not string)
+      - >-
+        (
+          docker_services_svc.deploy.host is string
+          and (docker_services_svc.deploy.host | string | trim | length) > 0
+        )
+        or
+        (
+          docker_services_svc.deploy.host is sequence
+          and docker_services_svc.deploy.host is not string
+          and (docker_services_svc.deploy.host | length) > 0
+          and
+          (
+            docker_services_svc.deploy.host
+            | map('string')
+            | map('trim')
+            | reject('equalto', '')
+            | list
+            | length
+          ) == (docker_services_svc.deploy.host | length)
+        )
+    fail_msg: >-
+      docker_services_svc.deploy.host controls prep/filesystem target hosts and must be
+      a non-empty string, or a non-empty list of non-empty strings, when provided.
 
 - name: Validate | docker_services_svc.deploy.constraints
   when:
@@ -199,8 +229,27 @@
     - docker_services_svc.deploy.constraints is defined
   ansible.builtin.assert:
     that:
-      - docker_services_svc.deploy.constraints is string
-        or (docker_services_svc.deploy.constraints is sequence and docker_services_svc.deploy.constraints is not string)
+      - >
+        (
+          docker_services_svc.deploy.constraints is string
+          and (docker_services_svc.deploy.constraints | trim | length) > 0
+        )
+        or
+        (
+          docker_services_svc.deploy.constraints is sequence
+          and docker_services_svc.deploy.constraints is not string
+          and docker_services_svc.deploy.constraints is not mapping
+          and (docker_services_svc.deploy.constraints | length) > 0
+          and
+          (
+            docker_services_svc.deploy.constraints
+            | select('string')
+            | map('trim')
+            | reject('equalto', '')
+            | list
+            | length
+          ) == (docker_services_svc.deploy.constraints | length)
+        )
     fail_msg: "docker_services_svc.deploy.constraints must be a string or a list of strings."
 
 ################################
@@ -380,7 +429,9 @@
     fail_msg: "docker_services_svc.infisical must be a mapping."
 
 - name: Validate | docker_services_svc.infisical.secrets_map
-  when: docker_services_svc.infisical is defined and docker_services_svc.infisical.secrets_map is defined
+  when:
+    - docker_services_svc.infisical is defined
+    - docker_services_svc.infisical.secrets_map is defined
   ansible.builtin.assert:
     that:
       - docker_services_svc.infisical.secrets_map is sequence
@@ -398,6 +449,53 @@
         (docker_services_svc.infisical.secrets_map | map(attribute='name') | select('defined') | list | length)
         == (docker_services_svc.infisical.secrets_map | length)
     fail_msg: "docker_services_svc.infisical.secrets_map must be a list of dicts each containing var/path/name."
+
+- name: Validate | docker_services_svc.infisical.secrets_map var names
+  when:
+    - docker_services_svc.infisical is defined
+    - docker_services_svc.infisical.secrets_map is defined
+    - (docker_services_svc.infisical.secrets_map | length > 0)
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          docker_services_svc.infisical.secrets_map
+          | map(attribute='var')
+          | map('string')
+          | map('trim')
+          | map('regex_search', '^[A-Za-z_][A-Za-z0-9_]*$')
+          | reject('equalto', None)
+          | list
+          | length
+        )
+        ==
+        (docker_services_svc.infisical.secrets_map | length)
+    fail_msg: >-
+      docker_services_svc.infisical.secrets_map[].var must be a valid Ansible variable
+      name matching ^[A-Za-z_][A-Za-z0-9_]*$.
+
+- name: Validate | docker_services_svc.infisical.secrets_map docker_secret names
+  when:
+    - docker_services_svc.infisical is defined
+    - docker_services_svc.infisical.secrets_map is defined
+    - (docker_services_svc.infisical.secrets_map | length > 0)
+    - (docker_services_svc.infisical.secrets_map | selectattr('docker_secret', 'defined') | list | length) > 0
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          docker_services_svc.infisical.secrets_map
+          | selectattr('docker_secret', 'defined')
+          | map(attribute='docker_secret')
+          | map('string')
+          | map('trim')
+          | reject('equalto', '')
+          | list
+          | length
+        )
+        ==
+        (docker_services_svc.infisical.secrets_map | selectattr('docker_secret', 'defined') | list | length)
+    fail_msg: "docker_services_svc.infisical.secrets_map[].docker_secret must be non-empty when provided."
 
 ################################
 # POSTGRES

@@ -42,6 +42,17 @@
     docker_services_deploy_rollback_config: "{{ deploy_rollback_config if (deploy_rollback_config is mapping) else {} }}"
     docker_services_deploy_resources: "{{ deploy_resources if (deploy_resources is mapping) else {} }}"
 
+- name: Validate normalized deploy inputs
+  ansible.builtin.assert:
+    that:
+      - docker_services_deploy_mode != 'replicated' or docker_services_deploy_replicas >= 0
+      - deploy_restart_policy is not defined or deploy_restart_policy is none or deploy_restart_policy is mapping
+      - deploy_update_config is not defined or deploy_update_config is none or deploy_update_config is mapping
+      - deploy_rollback_config is not defined or deploy_rollback_config is none or deploy_rollback_config is mapping
+      - deploy_resources is not defined or deploy_resources is none or deploy_resources is mapping
+    fail_msg: >-
+      deploy_replicas must be >= 0 for replicated services, and deploy_* overrides must be mappings when defined.
+
 - name: Build deploy dict
   ansible.builtin.set_fact:
     docker_services_deploy_dict: >-
