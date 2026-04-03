@@ -221,8 +221,27 @@
     - docker_services_svc.deploy.constraints is defined
   ansible.builtin.assert:
     that:
-      - docker_services_svc.deploy.constraints is string
-        or (docker_services_svc.deploy.constraints is sequence and docker_services_svc.deploy.constraints is not string)
+      - >
+        (
+          docker_services_svc.deploy.constraints is string
+          and (docker_services_svc.deploy.constraints | trim | length) > 0
+        )
+        or
+        (
+          docker_services_svc.deploy.constraints is sequence
+          and docker_services_svc.deploy.constraints is not string
+          and docker_services_svc.deploy.constraints is not mapping
+          and (docker_services_svc.deploy.constraints | length) > 0
+          and
+          (
+            docker_services_svc.deploy.constraints
+            | select('string')
+            | map('trim')
+            | reject('equalto', '')
+            | list
+            | length
+          ) == (docker_services_svc.deploy.constraints | length)
+        )
     fail_msg: "docker_services_svc.deploy.constraints must be a string or a list of strings."
 
 ################################
