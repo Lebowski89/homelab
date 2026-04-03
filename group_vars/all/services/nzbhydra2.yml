@@ -37,18 +37,27 @@ nzbhydra2:
       - var: althub_api
         path: "/NZBHydra2"
         name: ALTHUB_API
+      - var: althub_vip_expiration
+        path: "/NZBHydra2"
+        name: ALTHUB_VIP_EXPIRY
       - var: geek_user
         path: "/NZBHydra2"
         name: GEEK_USER
       - var: geek_api
         path: "/NZBHydra2"
         name: GEEK_API
+      - var: geek_vip_expiration
+        path: "/NZBHydra2"
+        name: GEEK_VIP_EXPIRY
       - var: slug_user
         path: "/NZBHydra2"
         name: SLUG_USER
       - var: slug_api
         path: "/NZBHydra2"
         name: SLUG_API
+      - var: slug_vip_expiration
+        path: "/NZBHydra2"
+        name: SLUG_VIP_EXPIRY
       - var: sabnzbd_api
         path: "/SABnzbd"
         name: API
