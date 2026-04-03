@@ -8,7 +8,7 @@
     fail_msg: "docker_services_stack_name must be set before calling cleanup.yml"
 
 - name: Cleanup container stack (compose)
-  when: docker_services_stack_deploy_type != 'swarm'
+  when: (docker_services_stack_deploy_type | default('swarm', true) | string | trim) != 'swarm'
   block:
     - name: Check if compose file exists
       ansible.builtin.stat:
@@ -39,7 +39,7 @@
         state: absent
 
 - name: Cleanup swarm stack
-  when: docker_services_stack_deploy_type == 'swarm'
+  when: (docker_services_stack_deploy_type | default('swarm', true) | string | trim) == 'swarm'
   block:
     - name: Stack down
       community.docker.docker_stack:
