@@ -183,9 +183,34 @@
         timeout: 180
       delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
 
-    - name: NZBHydra2 prep | Give NZBHydra2 time to finish writing config
-      ansible.builtin.pause:
-        seconds: 5
+    - name: NZBHydra2 prep | Wait for config file size to stabilize
+      ansible.builtin.shell: |
+        set -euo pipefail
+        prev_size=-1
+        stable_count=0
+
+        for _ in $(seq 1 12); do
+          if [ -f "{{ docker_services_nzbhydra2_config_path }}" ]; then
+            curr_size="$(stat -c %s "{{ docker_services_nzbhydra2_config_path }}")"
+            if [ "$curr_size" -gt 0 ] && [ "$curr_size" -eq "$prev_size" ]; then
+              stable_count=$((stable_count + 1))
+              if [ "$stable_count" -ge 2 ]; then
+                exit 0
+              fi
+            else
+              stable_count=0
+            fi
+            prev_size="$curr_size"
+          fi
+          sleep 5
+        done
+
+        echo "Config file did not stabilize in time: {{ docker_services_nzbhydra2_config_path }}" >&2
+        exit 1
+      args:
+        executable: /bin/bash
+      delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
+      changed_when: false
 
   always:
     - name: NZBHydra2 prep | Remove temp config container
