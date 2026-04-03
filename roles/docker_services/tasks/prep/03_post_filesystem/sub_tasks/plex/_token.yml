@@ -26,16 +26,49 @@
   delegate_to: "{{ docker_services_plex_token_host }}"
   run_once: true
 
+- name: Token | Read plex.ini content
+  when: docker_services_plex_ini.stat.exists
+  ansible.builtin.slurp:
+    src: "{{ docker_services_plex_token_ini_file }}"
+  register: docker_services_plex_ini_raw
+  delegate_to: "{{ docker_services_plex_token_host }}"
+  run_once: true
+
 - name: Token | Set client identifier fact
   when: docker_services_plex_ini.stat.exists
   delegate_to: "{{ docker_services_plex_token_host }}"
   run_once: true
   block:
-    - name: Token | Lookup client_identifier
+    - name: Token | Extract client_identifier
       ansible.builtin.set_fact:
         docker_services_plex_client_identifier: >-
-          {{ lookup('ini', 'client_identifier section=plex file=' ~ docker_services_plex_token_ini_file) }}
-        docker_services_plex_client_identifier_missing: false
+          {{
+            (
+              docker_services_plex_ini_raw.content
+              | b64decode
+              | regex_search('(?m)^client_identifier=(.+)$', '\\1')
+              | default([])
+              | first
+              | default('')
+              | string
+              | trim
+            )
+          }}
+        docker_services_plex_client_identifier_missing: >-
+          {{
+            (
+              (
+                docker_services_plex_ini_raw.content
+                | b64decode
+                | regex_search('(?m)^client_identifier=(.+)$', '\\1')
+                | default([])
+                | first
+                | default('')
+                | string
+                | trim
+              ) == ''
+            )
+          }}
       delegate_facts: true
   rescue:
     - name: Token | Set identifier to empty string
@@ -65,7 +98,18 @@
     - not (hostvars[docker_services_plex_token_host].docker_services_plex_client_identifier_missing | default(false))
   ansible.builtin.set_fact:
     docker_services_plex_auth_token: >-
-      {{ lookup('ini', 'token section=plex file=' ~ docker_services_plex_token_ini_file) | regex_replace('\n', '') }}
+      {{
+        (
+          docker_services_plex_ini_raw.content
+          | b64decode
+          | regex_search('(?m)^token=(.+)$', '\\1')
+          | default([])
+          | first
+          | default('')
+          | string
+          | trim
+        )
+      }}
   delegate_to: "{{ docker_services_plex_token_host }}"
   delegate_facts: true
   run_once: true
