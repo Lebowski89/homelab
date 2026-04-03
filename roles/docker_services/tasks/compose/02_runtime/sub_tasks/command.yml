@@ -31,16 +31,16 @@
 - name: Normalize command
   ansible.builtin.set_fact:
     docker_services_cmd_new: >-
-      {%- if (docker_services_cmd_in is sequence and docker_services_cmd_in is not string) -%}
-      {%- set lst = docker_services_cmd_in | map('string') | map('trim') | reject('equalto', '') | list -%}
-      {%- if (lst | length) == 1 and (' ' in lst[0]) -%}
+      {% if docker_services_cmd_in is sequence and docker_services_cmd_in is not string -%}
+      {% set lst = docker_services_cmd_in | map('string') | map('trim') | reject('equalto', '') | list -%}
+      {% if (lst | length) == 1 and (' ' in lst[0]) -%}
       {{ lst[0] }}
-      {%- else -%}
+      {% else -%}
       {{ lst }}
-      {%- endif -%}
-      {%- else -%}
+      {% endif -%}
+      {% else -%}
       {{ docker_services_cmd_in | string | trim }}
-      {%- endif -%}
+      {% endif %}
 
 - name: Read existing command
   ansible.builtin.set_fact:
