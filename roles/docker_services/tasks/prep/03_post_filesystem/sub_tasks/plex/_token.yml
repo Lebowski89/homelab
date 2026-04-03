@@ -54,21 +54,12 @@
               | trim
             )
           }}
+      delegate_facts: true
+
+    - name: Token | Set client_identifier missing flag
+      ansible.builtin.set_fact:
         docker_services_plex_client_identifier_missing: >-
-          {{
-            (
-              (
-                docker_services_plex_ini_raw.content
-                | b64decode
-                | regex_search('(?m)^client_identifier=(.+)$', '\\1')
-                | default([])
-                | first
-                | default('')
-                | string
-                | trim
-              ) == ''
-            )
-          }}
+          {{ docker_services_plex_client_identifier == '' }}
       delegate_facts: true
   rescue:
     - name: Token | Set identifier to empty string
