@@ -7,7 +7,8 @@
 - name: Plex prep | Set derived vars
   ansible.builtin.set_fact:
     docker_services_plex_fs_host: "{{ (docker_services_fs_hosts_effective | default([]) | first) | default('') }}"
-    docker_services_plex_swarm_mgr: "{{ docker_services_primary_manager | default('mgt') }}"
+    docker_services_plex_swarm_mgr: >-
+      {{ docker_services_primary_manager | string | trim }}
   run_once: true
 
 - name: Plex prep | Assert derived hosts are valid

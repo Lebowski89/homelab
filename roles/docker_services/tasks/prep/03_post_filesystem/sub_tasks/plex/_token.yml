@@ -7,8 +7,8 @@
 - name: Token | Set derived vars
   ansible.builtin.set_fact:
     docker_services_plex_token_host: >-
-      {{ docker_swarm_primary_manager | default(docker_services_primary_manager, true) | string | trim }}
-    docker_services_plex_token_ini_file: "/opt/plex/plex.ini"
+      {{ docker_services_primary_manager | string | trim }}
+    docker_services_plex_token_ini_file: /opt/plex/plex.ini
   run_once: true
 
 - name: Token | Assert token host is valid
@@ -76,6 +76,7 @@
       {{
         (not docker_services_plex_ini.stat.exists)
         or (hostvars[docker_services_plex_token_host].docker_services_plex_client_identifier_missing | default(false))
+        or ((hostvars[docker_services_plex_token_host].docker_services_plex_auth_token | default('') | string | trim) == '')
       }}
   delegate_to: "{{ docker_services_plex_token_host }}"
   delegate_facts: true
@@ -90,7 +91,8 @@
     url: "https://plex.tv/api/v2/user"
     method: GET
     return_content: true
-    body:
+    headers:
+      Accept: "application/json"
       X-Plex-Token: "{{ hostvars[docker_services_plex_token_host].docker_services_plex_auth_token }}"
       X-Plex-Version: "1.0.0"
       X-Plex-Product: "plex"
@@ -99,9 +101,6 @@
       X-Plex-Platform-Version: "1.0.0"
       X-Plex-Device: "Debian {{ ansible_distribution_version }} - {{ ansible_kernel }}"
       X-Plex-Device-Name: "Media Server"
-    body_format: form-urlencoded
-    headers:
-      Accept: "application/json"
     status_code: [200, 401]
   register: docker_services_plex_token
   delegate_to: "{{ docker_services_plex_token_host }}"
@@ -121,6 +120,9 @@
         return_content: true
         body:
           strong: "true"
+        body_format: form-urlencoded
+        headers:
+          Accept: "application/json"
           X-Plex-Version: "1.0.0"
           X-Plex-Product: "plex"
           X-Plex-Client-Identifier: "{{ hostvars[docker_services_plex_token_host].docker_services_plex_client_identifier }}"
@@ -128,9 +130,6 @@
           X-Plex-Platform-Version: "1.0.0"
           X-Plex-Device: "Debian {{ ansible_distribution_version }} - {{ ansible_kernel }}"
           X-Plex-Device-Name: "Media Server"
-        body_format: form-urlencoded
-        headers:
-          Accept: "application/json"
         status_code: 201
       register: docker_services_plex_pin
 
@@ -151,11 +150,9 @@
         url: "https://plex.tv/api/v2/pins/{{ docker_services_plex_pin.json.id }}"
         method: GET
         return_content: true
-        body:
-          X-Plex-Client-Identifier: "{{ hostvars[docker_services_plex_token_host].docker_services_plex_client_identifier }}"
-        body_format: form-urlencoded
         headers:
           Accept: "application/json"
+          X-Plex-Client-Identifier: "{{ hostvars[docker_services_plex_token_host].docker_services_plex_client_identifier }}"
         status_code: 200
       register: docker_services_plex_token_new
 
@@ -169,7 +166,8 @@
         url: "https://plex.tv/api/v2/user"
         method: GET
         return_content: true
-        body:
+        headers:
+          Accept: "application/json"
           X-Plex-Token: "{{ hostvars[docker_services_plex_token_host].docker_services_plex_auth_token }}"
           X-Plex-Version: "1.0.0"
           X-Plex-Product: "plex"
@@ -178,9 +176,6 @@
           X-Plex-Platform-Version: "1.0.0"
           X-Plex-Device: "Debian {{ ansible_distribution_version }} - {{ ansible_kernel }}"
           X-Plex-Device-Name: "Media Server"
-        body_format: form-urlencoded
-        headers:
-          Accept: "application/json"
         status_code: [200, 401]
       register: docker_services_plex_new_token
 
