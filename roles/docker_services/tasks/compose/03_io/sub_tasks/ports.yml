@@ -41,13 +41,9 @@
   ansible.builtin.assert:
     that:
       - (docker_services_ports_new_raw | select('mapping') | list | length) == (docker_services_ports_new_raw | length)
-      - >-
-        (docker_services_ports_new_raw | map(attribute='target') | select('defined') | list | length)
-        == (docker_services_ports_new_raw | length)
-      - >-
-        (docker_services_ports_new_raw | map(attribute='published') | select('defined') | list | length)
-        == (docker_services_ports_new_raw | length)
-    fail_msg: "ports must be a list (or mapping) of dicts with 'published' and 'target'."
+      - (docker_services_ports_new_raw | selectattr('target', 'defined') | list | length) == (docker_services_ports_new_raw | length)
+      - (docker_services_ports_new_raw | selectattr('published', 'defined') | list | length) == (docker_services_ports_new_raw | length)
+    fail_msg: "docker_services_ports_new_raw entries must be dicts and include 'target' and 'published'."
 
 - name: Reset working ports list (prevent cross-service bleed)
   ansible.builtin.set_fact:
