@@ -534,7 +534,8 @@
           docker_services_svc.postgres.databases is sequence
           and docker_services_svc.postgres.databases is not string
           and (docker_services_svc.postgres.databases | length) > 0
-          and (docker_services_svc.postgres.databases | select('string') | list | length) == (docker_services_svc.postgres.databases | length)
+          and (docker_services_svc.postgres.databases | select('string') | list | length)
+              == (docker_services_svc.postgres.databases | length)
           and
           (
             docker_services_svc.postgres.databases
@@ -563,6 +564,18 @@
             docker_services_svc.healthcheck.test is sequence
             and docker_services_svc.healthcheck.test is not string
             and (docker_services_svc.healthcheck.test | length > 0)
+            and
+            (docker_services_svc.healthcheck.test | select('string') | list | length)
+            == (docker_services_svc.healthcheck.test | length)
+            and
+            (
+              docker_services_svc.healthcheck.test
+              | select('string')
+              | map('trim')
+              | reject('equalto', '')
+              | list
+              | length
+            ) == (docker_services_svc.healthcheck.test | length)
           )
           or
           (
@@ -570,7 +583,10 @@
             and (docker_services_svc.healthcheck.test | trim | length > 0)
           )
         )
-    fail_msg: "docker_services_svc.healthcheck must be a mapping with a non-empty test (string or list)."
+    fail_msg: >-
+      docker_services_svc.healthcheck must be a mapping with a non-empty test,
+      where string form must be non-empty and list form must contain only
+      non-empty strings.
 
 ################################
 # SECRETS

@@ -150,9 +150,13 @@
                 }
               }, recursive=true)
           }}
-
-    - name: Swarm configs | Track changed versioned config
-      when: docker_services_swarm_cfg_create is changed
-      ansible.builtin.set_fact:
         docker_services_swarm_configs_changed: >-
-          {{ docker_services_swarm_configs_changed + [docker_services_swarm_cfg_effective_name] }}
+          {{
+            docker_services_swarm_configs_changed
+            +
+            (
+              [docker_services_swarm_cfg_effective_name]
+              if (docker_services_swarm_cfg_create.changed | default(false) | bool)
+              else []
+            )
+          }}
