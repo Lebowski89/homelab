@@ -52,6 +52,6 @@
         recursive=true
       ) -%}
       {{ st | combine({ docker_services_stack_name: merged_stack }, recursive=true) }}
-  delegate_to: "{{ docker_services_primary_manager | default('mgt') }}"
+  delegate_to: "{{ docker_services_primary_manager }}"
   delegate_facts: true
   run_once: true

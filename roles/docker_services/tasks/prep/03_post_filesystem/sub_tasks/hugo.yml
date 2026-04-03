@@ -119,7 +119,7 @@
     scope: local
     repo: "{{ docker_services_hugo_site_path }}"
     name: remote.origin.url
-    value: "git@github.com:{{ github_username }}/blog.git"
+    value: "git@github.com:{{ docker_services_hugo_github_user }}/blog.git"
   delegate_to: "{{ docker_services_hugo_fs_host }}"
   run_once: true
 
