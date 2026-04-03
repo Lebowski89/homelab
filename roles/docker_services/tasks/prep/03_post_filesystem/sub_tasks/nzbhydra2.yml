@@ -5,6 +5,7 @@
 ################################
 
 - name: NZBHydra2 prep | Set derived vars
+  no_log: true
   ansible.builtin.set_fact:
     docker_services_nzbhydra2_fs_host: "{{ docker_services_fs_hosts_effective | first }}"
     docker_services_nzbhydra2_fs_hostvars: "{{ hostvars[docker_services_fs_hosts_effective | first] }}"
@@ -64,6 +65,7 @@
   run_once: true
 
 - name: NZBHydra2 prep | Assert required secrets are present
+  no_log: true
   ansible.builtin.assert:
     that:
       - docker_services_nzbhydra2_user | string | trim | length > 0
@@ -76,6 +78,7 @@
   run_once: true
 
 - name: NZBHydra2 prep | Assert altHUB secrets are complete when used
+  no_log: true
   ansible.builtin.assert:
     that:
       - >-
@@ -93,6 +96,7 @@
   run_once: true
 
 - name: NZBHydra2 prep | Assert NZBGeek secrets are complete when used
+  no_log: true
   ansible.builtin.assert:
     that:
       - >-
@@ -110,6 +114,7 @@
   run_once: true
 
 - name: NZBHydra2 prep | Assert Drunken Slug secrets are complete when used
+  no_log: true
   ansible.builtin.assert:
     that:
       - >-
@@ -198,6 +203,7 @@
 ################################
 
 - name: NZBHydra2 prep | Build config facts
+  no_log: true
   ansible.builtin.set_fact:
     docker_services_nzbhydra2_expected_indexer_count: >-
       {{
@@ -276,6 +282,7 @@
 ################################
 
 - name: NZBHydra2 prep | Set auth user
+  no_log: true
   yedit:
     src: "{{ docker_services_nzbhydra2_config_path }}"
     key: auth.users
@@ -287,6 +294,7 @@
   run_once: true
 
 - name: NZBHydra2 prep | Set API key
+  no_log: true
   yedit:
     src: "{{ docker_services_nzbhydra2_config_path }}"
     key: main.apiKey
@@ -296,6 +304,7 @@
   run_once: true
 
 - name: NZBHydra2 prep | Replace downloaders list
+  no_log: true
   run_once: true
   delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
   block:
@@ -313,6 +322,7 @@
         state: present
 
 - name: NZBHydra2 prep | Replace indexers list
+  no_log: true
   run_once: true
   delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
   block:
@@ -348,6 +358,7 @@
 ################################
 
 - name: NZBHydra2 prep | Slurp config
+  no_log: true
   ansible.builtin.slurp:
     src: "{{ docker_services_nzbhydra2_config_path }}"
   register: docker_services_nzbhydra2_cfg_raw
@@ -356,12 +367,14 @@
   changed_when: false
 
 - name: NZBHydra2 prep | Parse config YAML
+  no_log: true
   ansible.builtin.set_fact:
     docker_services_nzbhydra2_cfg: "{{ (docker_services_nzbhydra2_cfg_raw.content | b64decode) | from_yaml }}"
   run_once: true
   changed_when: false
 
 - name: NZBHydra2 prep | Assert API key set
+  no_log: true
   ansible.builtin.assert:
     that:
       - docker_services_nzbhydra2_cfg is mapping
