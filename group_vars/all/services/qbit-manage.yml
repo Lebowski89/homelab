@@ -12,7 +12,7 @@ qbit_manage:
     PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
     UMASK: "022"
     QBT_WEB_SERVER: "true"
-    QBT_PORT: "8080"
+    QBT_PORT: "8181"
     QBT_RUN: "true"
     QBT_SCHEDULE: "1440"
     QBT_CONFIG_DIR: "/config"
@@ -35,6 +35,12 @@ qbit_manage:
     QBT_LOG_COUNT: "5"
     QBT_DIVIDER: "="
     QBT_WIDTH: "100"
+  traefik:
+    enable: true
+    port: 8181
+    sso: authelia
+  cloudflare:
+    enable: true
   deploy:
     type: swarm
     mode: replicated
