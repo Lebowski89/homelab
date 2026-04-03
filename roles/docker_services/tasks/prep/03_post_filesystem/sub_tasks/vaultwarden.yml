@@ -9,7 +9,7 @@
     docker_services_vaultwarden_fs_host: "{{ docker_services_fs_hosts_effective | first }}"
     docker_services_vaultwarden_dir: "{{ docker_services_svc.paths_vault.vault_dir }}"
     docker_services_vaultwarden_token_file: "{{ docker_services_svc.paths_vault.vault_token_file }}"
-    docker_services_vaultwarden_pass: "{{ docker_services_svc.paths_vault.vault_pass_file }}"
+    docker_services_vaultwarden_pass_file: "{{ docker_services_svc.paths_vault.vault_pass_file }}"
     docker_services_vaultwarden_secrets_host: "{{ docker_services_primary_manager | default('mgt') }}"
     docker_services_vaultwarden_secret_name: "{{ docker_services_svc.paths_vault.vault_secret_name }}"
   run_once: true
@@ -56,28 +56,45 @@
       ansible.builtin.command: "openssl rand -base64 32"
       register: docker_services_vaultwarden_password
       changed_when: false
+      no_log: true
 
     - name: Vaultwarden prep | Save generated password
       ansible.builtin.copy:
-        dest: "{{ docker_services_vaultwarden_pass }}"
+        dest: "{{ docker_services_vaultwarden_pass_file }}"
         content: "{{ docker_services_vaultwarden_password.stdout | trim }}\n"
         mode: "0600"
+      no_log: true
+
+    - name: Vaultwarden prep | Generate random salt
+      ansible.builtin.command: "openssl rand -base64 32"
+      register: docker_services_vaultwarden_salt
+      changed_when: false
+      no_log: true
 
     - name: Vaultwarden prep | Generate Argon2 PHC string
-      ansible.builtin.shell: |
-        set -euo pipefail
-        salt="$(openssl rand -base64 32)"
-        echo -n "{{ docker_services_vaultwarden_password.stdout | trim }}" | argon2 "$salt" -e -id -k 65540 -t 3 -p 4
-      args:
-        executable: /bin/bash
+      ansible.builtin.command:
+        argv:
+          - argon2
+          - "{{ docker_services_vaultwarden_salt.stdout | trim }}"
+          - -e
+          - -id
+          - -k
+          - "65540"
+          - -t
+          - "3"
+          - -p
+          - "4"
+        stdin: "{{ docker_services_vaultwarden_password.stdout | trim }}"
       register: docker_services_vaultwarden_token_new
       changed_when: false
+      no_log: true
 
     - name: Vaultwarden prep | Save argon2 token
       ansible.builtin.copy:
         dest: "{{ docker_services_vaultwarden_token_file }}"
         content: "{{ docker_services_vaultwarden_token_new.stdout | trim }}\n"
         mode: "0600"
+      no_log: true
 
 - name: Vaultwarden prep | Set admin token fact
   no_log: true
@@ -86,7 +103,7 @@
       {{
         (docker_services_vaultwarden_token_raw.content | b64decode | trim)
         if (docker_services_vaultwarden_token_stat.stat.exists | default(false))
-        else (docker_services_vaultwarden_token_new.stdout | default('') | trim)
+        else (docker_services_vaultwarden_token_new.stdout | trim)
       }}
   run_once: true
 
