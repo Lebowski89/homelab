@@ -23,6 +23,22 @@
     docker_services_bazarr_radarr_port: "{{ docker_services_svc.prep.radarr.port }}"
     docker_services_bazarr_sonarr_ip: "{{ docker_services_svc.prep.sonarr.host }}"
     docker_services_bazarr_sonarr_port: "{{ docker_services_svc.prep.sonarr.port }}"
+  run_once: true
+
+- name: Bazarr prep | Set secret vars
+  no_log: true
+  ansible.builtin.set_fact:
+    docker_services_bazarr_api_key: "{{ bazarr_api | default('') }}"
+    docker_services_bazarr_opensubtitlescom_user: "{{ opensubtitlescom_user | default('') }}"
+    docker_services_bazarr_opensubtitlescom_pass: "{{ opensubtitlescom_pass | default('') }}"
+    docker_services_bazarr_radarr_api_key: "{{ radarr_api | default('') }}"
+    docker_services_bazarr_sonarr_api_key: "{{ sonarr_api | default('') }}"
+  run_once: true
+
+- name: Bazarr prep | Set postgres vars
+  when: (docker_services_svc.postgres.enable | default(false)) | bool
+  no_log: true
+  ansible.builtin.set_fact:
     docker_services_bazarr_pg_db: >-
       {{
         (
@@ -39,21 +55,12 @@
       }}
     docker_services_bazarr_pg_host: "{{ docker_services_svc.prep.postgres.host }}"
     docker_services_bazarr_pg_port: "{{ docker_services_svc.prep.postgres.port }}"
-  run_once: true
-
-- name: Bazarr prep | Set secret vars
-  no_log: true
-  ansible.builtin.set_fact:
-    docker_services_bazarr_api_key: "{{ bazarr_api | default('') }}"
-    docker_services_bazarr_opensubtitlescom_user: "{{ opensubtitlescom_user | default('') }}"
-    docker_services_bazarr_opensubtitlescom_pass: "{{ opensubtitlescom_pass | default('') }}"
-    docker_services_bazarr_radarr_api_key: "{{ radarr_api | default('') }}"
-    docker_services_bazarr_sonarr_api_key: "{{ sonarr_api | default('') }}"
     docker_services_bazarr_pg_user: "{{ postgres_user | default('') }}"
     docker_services_bazarr_pg_pass: "{{ postgres_pass | default('') }}"
   run_once: true
 
 - name: Bazarr prep | Assert postgres inputs are complete
+  when: (docker_services_svc.postgres.enable | default(false)) | bool
   no_log: true
   ansible.builtin.assert:
     that:
@@ -224,11 +231,11 @@
     loop_var: bazarr_settings_postgres
   vars:
     _bazarr_postgres_config:
-      postgresql.database: "{{ docker_services_bazarr_pg_db }}"
-      postgresql.enabled: "true"
-      postgresql.host: "{{ docker_services_bazarr_pg_host }}"
-      postgresql.port: "{{ docker_services_bazarr_pg_port }}"
-      postgresql.username: "{{ docker_services_bazarr_pg_user }}"
-      postgresql.password: "{{ docker_services_bazarr_pg_pass }}"
+      postgresql.database: "{{ docker_services_bazarr_pg_db | default('bazarr') }}"
+      postgresql.enabled: "{{ ((docker_services_svc.postgres.enable | default(false)) | bool) | ternary('true', 'false') }}"
+      postgresql.host: "{{ docker_services_bazarr_pg_host | default('') }}"
+      postgresql.port: "{{ docker_services_bazarr_pg_port | default('') }}"
+      postgresql.username: "{{ docker_services_bazarr_pg_user | default('') }}"
+      postgresql.password: "{{ docker_services_bazarr_pg_pass | default('') }}"
   delegate_to: "{{ docker_services_bazarr_fs_host }}"
   run_once: true
