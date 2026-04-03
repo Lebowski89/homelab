@@ -5,6 +5,7 @@
 ################################
 
 - name: NZBHydra2 prep | Set derived vars
+  no_log: true
   ansible.builtin.set_fact:
     docker_services_nzbhydra2_fs_host: "{{ docker_services_fs_hosts_effective | first }}"
     docker_services_nzbhydra2_fs_hostvars: "{{ hostvars[docker_services_fs_hosts_effective | first] }}"
@@ -42,7 +43,7 @@
       {{
         (
           (docker_services_svc.environment | default({})).UMASK
-          | default('022')
+          | default('027')
         )
         | string
       }}
@@ -60,7 +61,76 @@
     docker_services_nzbhydra2_slug_user: "{{ slug_user | default('') }}"
     docker_services_nzbhydra2_slug_api: "{{ slug_api | default('') }}"
     docker_services_nzbhydra2_slug_vip_exp: "{{ slug_vip_expiration | default('') }}"
+
+    docker_services_nzbhydra2_sabnzbd_url: "{{ docker_services_svc.prep.sabnzbd.url | default('http://sabnzbd:8080') }}"
     docker_services_nzbhydra2_sabnzbd_api: "{{ sabnzbd_api | default('') }}"
+  run_once: true
+
+- name: NZBHydra2 prep | Assert required secrets are present
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - docker_services_nzbhydra2_user | string | trim | length > 0
+      - docker_services_nzbhydra2_pass | string | trim | length > 0
+      - docker_services_nzbhydra2_api | string | trim | length > 0
+      - docker_services_nzbhydra2_sabnzbd_api | string | trim | length > 0
+    fail_msg: >-
+      Required NZBHydra2 credentials are missing. Ensure nzbhydra2_user,
+      nzbhydra2_pass, nzbhydra2_api, and sabnzbd_api are populated before prep runs.
+  run_once: true
+
+- name: NZBHydra2 prep | Assert altHUB secrets are complete when used
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          (docker_services_nzbhydra2_althub_user | string | trim == '')
+          and
+          (docker_services_nzbhydra2_althub_api | string | trim == '')
+        )
+        or
+        (
+          docker_services_nzbhydra2_althub_user | string | trim | length > 0
+          and docker_services_nzbhydra2_althub_api | string | trim | length > 0
+        )
+    fail_msg: "altHUB must be either fully configured (user + api) or omitted entirely."
+  run_once: true
+
+- name: NZBHydra2 prep | Assert NZBGeek secrets are complete when used
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          (docker_services_nzbhydra2_geek_user | string | trim == '')
+          and
+          (docker_services_nzbhydra2_geek_api | string | trim == '')
+        )
+        or
+        (
+          docker_services_nzbhydra2_geek_user | string | trim | length > 0
+          and docker_services_nzbhydra2_geek_api | string | trim | length > 0
+        )
+    fail_msg: "NZBGeek must be either fully configured (user + api) or omitted entirely."
+  run_once: true
+
+- name: NZBHydra2 prep | Assert Drunken Slug secrets are complete when used
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          (docker_services_nzbhydra2_slug_user | string | trim == '')
+          and
+          (docker_services_nzbhydra2_slug_api | string | trim == '')
+        )
+        or
+        (
+          docker_services_nzbhydra2_slug_user | string | trim | length > 0
+          and docker_services_nzbhydra2_slug_api | string | trim | length > 0
+        )
+    fail_msg: "Drunken Slug must be either fully configured (user + api) or omitted entirely."
   run_once: true
 
 ################################
@@ -135,40 +205,69 @@
 ################################
 
 - name: NZBHydra2 prep | Build config facts
+  no_log: true
   ansible.builtin.set_fact:
-    docker_services_nzbhydra2_indexers:
-      - allCapsChecked: true
-        backend: NEWZNAB
-        state: ENABLED
-        name: altHUB
-        host: https://api.althub.co.za
-        username: "{{ docker_services_nzbhydra2_althub_user }}"
-        apiKey: "{{ docker_services_nzbhydra2_althub_api }}"
-        searchModuleType: NEWZNAB
-        categories: []
-        vipExpirationDate: "{{ docker_services_nzbhydra2_althub_vip_exp }}"
+    docker_services_nzbhydra2_expected_indexer_count: >-
+      {{
+        [
+          (docker_services_nzbhydra2_althub_user | string | trim | length > 0),
+          (docker_services_nzbhydra2_geek_user | string | trim | length > 0),
+          (docker_services_nzbhydra2_slug_user | string | trim | length > 0)
+        ]
+        | select('equalto', true)
+        | list
+        | length
+      }}
 
-      - allCapsChecked: true
-        backend: NEWZNAB
-        state: ENABLED
-        name: NZBGeek
-        host: https://api.nzbgeek.info
-        username: "{{ docker_services_nzbhydra2_geek_user }}"
-        apiKey: "{{ docker_services_nzbhydra2_geek_api }}"
-        searchModuleType: NEWZNAB
-        categories: []
-        vipExpirationDate: "{{ docker_services_nzbhydra2_geek_vip_exp }}"
+    docker_services_nzbhydra2_indexers: >-
+      {%- set out = [] -%}
 
-      - allCapsChecked: true
-        backend: NZEDB
-        state: ENABLED
-        name: "Drunken Slug"
-        host: https://api.drunkenslug.com
-        username: "{{ docker_services_nzbhydra2_slug_user }}"
-        apiKey: "{{ docker_services_nzbhydra2_slug_api }}"
-        searchModuleType: NEWZNAB
-        categories: []
-        vipExpirationDate: "{{ docker_services_nzbhydra2_slug_vip_exp }}"
+      {%- if docker_services_nzbhydra2_althub_user | string | trim | length > 0 -%}
+      {%- set _ = out.append({
+            'allCapsChecked': true,
+            'backend': 'NEWZNAB',
+            'state': 'ENABLED',
+            'name': 'altHUB',
+            'host': 'https://api.althub.co.za',
+            'username': docker_services_nzbhydra2_althub_user,
+            'apiKey': docker_services_nzbhydra2_althub_api,
+            'searchModuleType': 'NEWZNAB',
+            'categories': [],
+            'vipExpirationDate': docker_services_nzbhydra2_althub_vip_exp
+          }) -%}
+      {%- endif -%}
+
+      {%- if docker_services_nzbhydra2_geek_user | string | trim | length > 0 -%}
+      {%- set _ = out.append({
+            'allCapsChecked': true,
+            'backend': 'NEWZNAB',
+            'state': 'ENABLED',
+            'name': 'NZBGeek',
+            'host': 'https://api.nzbgeek.info',
+            'username': docker_services_nzbhydra2_geek_user,
+            'apiKey': docker_services_nzbhydra2_geek_api,
+            'searchModuleType': 'NEWZNAB',
+            'categories': [],
+            'vipExpirationDate': docker_services_nzbhydra2_geek_vip_exp
+          }) -%}
+      {%- endif -%}
+
+      {%- if docker_services_nzbhydra2_slug_user | string | trim | length > 0 -%}
+      {%- set _ = out.append({
+            'allCapsChecked': true,
+            'backend': 'NZEDB',
+            'state': 'ENABLED',
+            'name': 'Drunken Slug',
+            'host': 'https://api.drunkenslug.com',
+            'username': docker_services_nzbhydra2_slug_user,
+            'apiKey': docker_services_nzbhydra2_slug_api,
+            'searchModuleType': 'NEWZNAB',
+            'categories': [],
+            'vipExpirationDate': docker_services_nzbhydra2_slug_vip_exp
+          }) -%}
+      {%- endif -%}
+
+      {{ out }}
 
     docker_services_nzbhydra2_downloaders:
       - apiKey: "{{ docker_services_nzbhydra2_sabnzbd_api }}"
@@ -177,7 +276,7 @@
         name: SABnzbd
         nzbAddingType: UPLOAD
         downloaderType: SABNZBD
-        url: http://sabnzbd:8080
+        url: "{{ docker_services_nzbhydra2_sabnzbd_url }}"
   run_once: true
 
 ################################
@@ -185,6 +284,7 @@
 ################################
 
 - name: NZBHydra2 prep | Set auth user
+  no_log: true
   yedit:
     src: "{{ docker_services_nzbhydra2_config_path }}"
     key: auth.users
@@ -196,6 +296,7 @@
   run_once: true
 
 - name: NZBHydra2 prep | Set API key
+  no_log: true
   yedit:
     src: "{{ docker_services_nzbhydra2_config_path }}"
     key: main.apiKey
@@ -205,6 +306,7 @@
   run_once: true
 
 - name: NZBHydra2 prep | Replace downloaders list
+  no_log: true
   run_once: true
   delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
   block:
@@ -218,10 +320,11 @@
       yedit:
         src: "{{ docker_services_nzbhydra2_config_path }}"
         key: downloading.downloaders
-        value: "{{ docker_services_nzbhydra2_downloaders | default([]) }}"
+        value: "{{ docker_services_nzbhydra2_downloaders }}"
         state: present
 
 - name: NZBHydra2 prep | Replace indexers list
+  no_log: true
   run_once: true
   delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
   block:
@@ -235,14 +338,29 @@
       yedit:
         src: "{{ docker_services_nzbhydra2_config_path }}"
         key: indexers
-        value: "{{ docker_services_nzbhydra2_indexers | default([]) }}"
+        value: "{{ docker_services_nzbhydra2_indexers }}"
         state: present
+
+################################
+# PERMS
+################################
+
+- name: NZBHydra2 prep | Ensure config file permissions are restricted
+  ansible.builtin.file:
+    path: "{{ docker_services_nzbhydra2_config_path }}"
+    owner: "{{ docker_services_nzbhydra2_puid }}"
+    group: "{{ docker_services_nzbhydra2_pgid }}"
+    mode: "0640"
+    state: file
+  delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
+  run_once: true
 
 ################################
 # ASSERTS (NO SILENT NO-OP)
 ################################
 
 - name: NZBHydra2 prep | Slurp config
+  no_log: true
   ansible.builtin.slurp:
     src: "{{ docker_services_nzbhydra2_config_path }}"
   register: docker_services_nzbhydra2_cfg_raw
@@ -251,25 +369,31 @@
   changed_when: false
 
 - name: NZBHydra2 prep | Parse config YAML
+  no_log: true
   ansible.builtin.set_fact:
     docker_services_nzbhydra2_cfg: "{{ (docker_services_nzbhydra2_cfg_raw.content | b64decode) | from_yaml }}"
   run_once: true
   changed_when: false
 
 - name: NZBHydra2 prep | Assert API key set
+  no_log: true
   ansible.builtin.assert:
     that:
       - docker_services_nzbhydra2_cfg is mapping
-      - (docker_services_nzbhydra2_cfg.main.apiKey | default('')) == docker_services_nzbhydra2_api
-    fail_msg: "nzbhydra2_api was not written to main.apiKey in {{ docker_services_nzbhydra2_config_path }}"
+      - (docker_services_nzbhydra2_api | string | trim | length) > 0
+      - (docker_services_nzbhydra2_cfg.main.apiKey | default('') | string | trim | length) > 0
+      - (docker_services_nzbhydra2_cfg.main.apiKey | string | trim) == (docker_services_nzbhydra2_api | string | trim)
+    fail_msg: "nzbhydra2_api was not written correctly to main.apiKey in {{ docker_services_nzbhydra2_config_path }}"
   run_once: true
 
-- name: NZBHydra2 prep | Assert at least 3 indexers are present
+- name: NZBHydra2 prep | Assert configured indexers were written
+  no_log: true
   ansible.builtin.assert:
     that:
       - (docker_services_nzbhydra2_cfg.indexers | default([])) is sequence
-      - (docker_services_nzbhydra2_cfg.indexers | length) >= 3
+      - (docker_services_nzbhydra2_cfg.indexers | length) == docker_services_nzbhydra2_expected_indexer_count
     fail_msg: >-
-      Expected >= 3 indexers in {{ docker_services_nzbhydra2_config_path }}, got
+      Expected {{ docker_services_nzbhydra2_expected_indexer_count }} configured indexers
+      in {{ docker_services_nzbhydra2_config_path }}, got
       {{ (docker_services_nzbhydra2_cfg.indexers | default([])) | length }}
   run_once: true

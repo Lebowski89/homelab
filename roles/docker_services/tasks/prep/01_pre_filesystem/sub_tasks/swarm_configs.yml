@@ -10,7 +10,13 @@
 
 - name: Swarm configs | Resolve deploy host (swarm manager)
   ansible.builtin.set_fact:
-    docker_services_swarm_cfg_host: "{{ docker_services_primary_manager | default('mgt') }}"
+    docker_services_swarm_cfg_host: "{{ docker_services_primary_manager | string | trim }}"
+
+- name: Swarm configs | Initialize effective config maps
+  ansible.builtin.set_fact:
+    docker_services_swarm_configs_effective: {}
+    docker_services_swarm_configs_changed: []
+  run_once: true
 
 - name: Swarm configs | Validate each config spec
   ansible.builtin.assert:
@@ -34,22 +40,72 @@
     loop_var: cfg
     label: "{{ cfg.name | default('MISSING') }}"
 
-- name: Swarm configs | Remove config (Option A)
-  community.docker.docker_config:
-    name: "{{ cfg.name | string | trim }}"
-    state: absent
+- name: Swarm configs | Process absent configs
+  when: (cfg.state | default('present', true)) == 'absent'
   loop: "{{ swarm_configs }}"
   loop_control:
     loop_var: cfg
     label: "{{ cfg.name }} [absent]"
-  when: (cfg.state | default('present', true)) == 'present'
   delegate_to: "{{ docker_services_swarm_cfg_host }}"
+  block:
+    - name: Swarm configs | List existing swarm config names
+      ansible.builtin.command:
+        argv:
+          - docker
+          - config
+          - ls
+          - --format
+          - "{{ '{{ .Name }}' }}"
+      register: docker_services_swarm_cfg_ls
+      changed_when: false
 
-- name: Swarm configs | Create config (Option A)
-  community.docker.docker_config:
-    name: "{{ cfg.name | string | trim }}"
-    state: present
-    data: "{{ (
+    - name: Swarm configs | Find matching configs for absent base name
+      ansible.builtin.set_fact:
+        docker_services_swarm_cfg_absent_matches: >-
+          {{
+            docker_services_swarm_cfg_ls.stdout_lines
+            | select('match', '^' ~ (cfg.name | string | trim | regex_escape) ~ '(-.*)?$')
+            | list
+          }}
+
+    - name: Swarm configs | Record absent config base name
+      ansible.builtin.set_fact:
+        docker_services_swarm_configs_effective: >-
+          {{
+            docker_services_swarm_configs_effective
+            | combine({
+                (cfg.name | string | trim): {
+                  'state': 'absent',
+                  'base_name': (cfg.name | string | trim),
+                  'effective_name': (cfg.name | string | trim),
+                  'matched_names': docker_services_swarm_cfg_absent_matches
+                }
+              }, recursive=true)
+          }}
+
+    - name: Swarm configs | Remove absent configs by base-name match
+      when: (docker_services_swarm_cfg_absent_matches | length) > 0
+      community.docker.docker_config:
+        name: "{{ absent_cfg_name }}"
+        state: absent
+      loop: "{{ docker_services_swarm_cfg_absent_matches }}"
+      loop_control:
+        loop_var: absent_cfg_name
+        label: "{{ absent_cfg_name }}"
+
+- name: Swarm configs | Process present configs
+  when: (cfg.state | default('present', true)) == 'present'
+  loop: "{{ swarm_configs }}"
+  loop_control:
+    loop_var: cfg
+    label: "{{ cfg.name }} [present]"
+  delegate_to: "{{ docker_services_swarm_cfg_host }}"
+  block:
+    - name: Swarm configs | Render desired config content
+      ansible.builtin.set_fact:
+        docker_services_swarm_cfg_rendered: >-
+          {{
+            (
               (
                 (cfg.data | string)
                 if (cfg.data is defined)
@@ -63,11 +119,40 @@
               | regex_replace('\r\n', '\n')
               | regex_replace('\\s+\\Z', '')
               | regex_replace('\\\\n\\Z', '')
-            ) ~ '\n' }}"
-    labels: "{{ cfg.labels | default(omit, true) }}"
-  loop: "{{ swarm_configs }}"
-  loop_control:
-    loop_var: cfg
-    label: "{{ cfg.name }} [present]"
-  when: (cfg.state | default('present', true)) == 'present'
-  delegate_to: "{{ docker_services_swarm_cfg_host }}"
+            ) ~ '\n'
+          }}
+
+    - name: Swarm configs | Hash rendered content
+      ansible.builtin.set_fact:
+        docker_services_swarm_cfg_hash: "{{ docker_services_swarm_cfg_rendered | hash('sha1') | truncate(12, True, '') }}"
+        docker_services_swarm_cfg_effective_name: >-
+          {{ (cfg.name | string | trim) ~ '-' ~ (docker_services_swarm_cfg_rendered | hash('sha1') | truncate(12, True, '')) }}
+
+    - name: Swarm configs | Ensure versioned config exists
+      community.docker.docker_config:
+        name: "{{ docker_services_swarm_cfg_effective_name }}"
+        state: present
+        data: "{{ docker_services_swarm_cfg_rendered }}"
+        labels: "{{ cfg.labels | default(omit, true) }}"
+      register: docker_services_swarm_cfg_create
+
+    - name: Swarm configs | Store effective config mapping
+      ansible.builtin.set_fact:
+        docker_services_swarm_configs_effective: >-
+          {{
+            docker_services_swarm_configs_effective
+            | combine({
+                (cfg.name | string | trim): {
+                  'state': 'present',
+                  'base_name': (cfg.name | string | trim),
+                  'effective_name': docker_services_swarm_cfg_effective_name,
+                  'hash': docker_services_swarm_cfg_hash
+                }
+              }, recursive=true)
+          }}
+
+    - name: Swarm configs | Track changed versioned config
+      when: docker_services_swarm_cfg_create is changed
+      ansible.builtin.set_fact:
+        docker_services_swarm_configs_changed: >-
+          {{ docker_services_swarm_configs_changed + [docker_services_swarm_cfg_effective_name] }}

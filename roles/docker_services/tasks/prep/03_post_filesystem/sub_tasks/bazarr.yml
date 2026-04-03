@@ -48,6 +48,16 @@
     docker_services_bazarr_pg_pass: "{{ postgres_pass | default('') }}"
   run_once: true
 
+- name: Bazarr prep | Assert postgres inputs are complete
+  ansible.builtin.assert:
+    that:
+      - docker_services_bazarr_pg_host | string | trim | length > 0
+      - docker_services_bazarr_pg_port | string | trim | length > 0
+      - docker_services_bazarr_pg_user | string | trim | length > 0
+      - docker_services_bazarr_pg_pass | string | trim | length > 0
+    fail_msg: "Bazarr postgres settings are incomplete."
+  run_once: true
+
 ################################
 # CONFIG (CREATE IF MISSING)
 ################################
