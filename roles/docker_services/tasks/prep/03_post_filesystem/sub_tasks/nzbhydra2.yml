@@ -53,10 +53,13 @@
 
     docker_services_nzbhydra2_althub_user: "{{ althub_user | default('') }}"
     docker_services_nzbhydra2_althub_api: "{{ althub_api | default('') }}"
+    docker_services_nzbhydra2_althub_vip_exp: "{{ althub_vip_expiration | default('') }}"
     docker_services_nzbhydra2_geek_user: "{{ geek_user | default('') }}"
     docker_services_nzbhydra2_geek_api: "{{ geek_api | default('') }}"
+    docker_services_nzbhydra2_geek_vip_exp: "{{ geek_vip_expiration | default('') }}"
     docker_services_nzbhydra2_slug_user: "{{ slug_user | default('') }}"
     docker_services_nzbhydra2_slug_api: "{{ slug_api | default('') }}"
+    docker_services_nzbhydra2_slug_vip_exp: "{{ slug_vip_expiration | default('') }}"
     docker_services_nzbhydra2_sabnzbd_api: "{{ sabnzbd_api | default('') }}"
   run_once: true
 
@@ -143,7 +146,7 @@
         apiKey: "{{ docker_services_nzbhydra2_althub_api }}"
         searchModuleType: NEWZNAB
         categories: []
-        vipExpirationDate: "2026-05-26"
+        vipExpirationDate: "{{ docker_services_nzbhydra2_althub_vip_exp }}"
 
       - allCapsChecked: true
         backend: NEWZNAB
@@ -154,7 +157,7 @@
         apiKey: "{{ docker_services_nzbhydra2_geek_api }}"
         searchModuleType: NEWZNAB
         categories: []
-        vipExpirationDate: "2026-07-18"
+        vipExpirationDate: "{{ docker_services_nzbhydra2_geek_vip_exp }}"
 
       - allCapsChecked: true
         backend: NZEDB
@@ -165,7 +168,7 @@
         apiKey: "{{ docker_services_nzbhydra2_slug_api }}"
         searchModuleType: NEWZNAB
         categories: []
-        vipExpirationDate: "2026-05-26"
+        vipExpirationDate: "{{ docker_services_nzbhydra2_slug_vip_exp }}"
 
     docker_services_nzbhydra2_downloaders:
       - apiKey: "{{ docker_services_nzbhydra2_sabnzbd_api }}"
