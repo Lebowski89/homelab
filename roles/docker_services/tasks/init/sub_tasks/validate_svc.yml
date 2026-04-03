@@ -534,7 +534,8 @@
           docker_services_svc.postgres.databases is sequence
           and docker_services_svc.postgres.databases is not string
           and (docker_services_svc.postgres.databases | length) > 0
-          and (docker_services_svc.postgres.databases | select('string') | list | length) == (docker_services_svc.postgres.databases | length)
+          and (docker_services_svc.postgres.databases | select('string') | list | length)
+              == (docker_services_svc.postgres.databases | length)
           and
           (
             docker_services_svc.postgres.databases
