@@ -60,9 +60,10 @@
   ansible.builtin.assert:
     that:
       - (docker_services_svc.command | length) > 0
+      - (docker_services_svc.command | select('string') | list | length) == (docker_services_svc.command | length)
       - >-
-        (docker_services_svc.command | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        (docker_services_svc.command | select('string') | map('trim') |
+        reject('equalto', '') | list | length)
         == (docker_services_svc.command | length)
     fail_msg: "docker_services_svc.command list form must contain only non-empty strings."
 
@@ -91,9 +92,10 @@
   ansible.builtin.assert:
     that:
       - (docker_services_svc.env_file | length) > 0
+      - (docker_services_svc.env_file | select('string') | list | length) == (docker_services_svc.env_file | length)
       - >-
-        (docker_services_svc.env_file | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        (docker_services_svc.env_file | select('string') | map('trim') |
+        reject('equalto', '') | list | length)
         == (docker_services_svc.env_file | length)
     fail_msg: "docker_services_svc.env_file list form must contain only non-empty strings."
 
@@ -103,9 +105,10 @@
     that:
       - docker_services_svc.devices is sequence
       - docker_services_svc.devices is not string
+      - (docker_services_svc.devices | select('string') | list | length) == (docker_services_svc.devices | length)
       - >-
-        (docker_services_svc.devices | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        (docker_services_svc.devices | select('string') | map('trim') |
+        reject('equalto', '') | list | length)
         == (docker_services_svc.devices | length)
     fail_msg: "docker_services_svc.devices must be a list of non-empty strings."
 
@@ -115,9 +118,10 @@
     that:
       - docker_services_svc.cap_add is sequence
       - docker_services_svc.cap_add is not string
+      - (docker_services_svc.cap_add | select('string') | list | length) == (docker_services_svc.cap_add | length)
       - >-
-        (docker_services_svc.cap_add | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        (docker_services_svc.cap_add | select('string') | map('trim') |
+        reject('equalto', '') | list | length)
         == (docker_services_svc.cap_add | length)
     fail_msg: "docker_services_svc.cap_add must be a list of non-empty strings."
 
@@ -127,9 +131,10 @@
     that:
       - docker_services_svc.cap_drop is sequence
       - docker_services_svc.cap_drop is not string
+      - (docker_services_svc.cap_drop | select('string') | list | length) == (docker_services_svc.cap_drop | length)
       - >-
-        (docker_services_svc.cap_drop | map('string') | map('trim') |
-        reject('equalto','') | list | length)
+        (docker_services_svc.cap_drop | select('string') | map('trim') |
+        reject('equalto', '') | list | length)
         == (docker_services_svc.cap_drop | length)
     fail_msg: "docker_services_svc.cap_drop must be a list of non-empty strings."
 
@@ -208,10 +213,11 @@
           docker_services_svc.deploy.host is sequence
           and docker_services_svc.deploy.host is not string
           and (docker_services_svc.deploy.host | length) > 0
+          and (docker_services_svc.deploy.host | select('string') | list | length) == (docker_services_svc.deploy.host | length)
           and
           (
             docker_services_svc.deploy.host
-            | map('string')
+            | select('string')
             | map('trim')
             | reject('equalto', '')
             | list
@@ -518,9 +524,28 @@
     - docker_services_svc.postgres.databases is defined
   ansible.builtin.assert:
     that:
-      - docker_services_svc.postgres.databases is string
-        or (docker_services_svc.postgres.databases is sequence and docker_services_svc.postgres.databases is not string)
-    fail_msg: "docker_services_svc.postgres.databases must be a string or a list of strings."
+      - >
+        (
+          docker_services_svc.postgres.databases is string
+          and (docker_services_svc.postgres.databases | trim | length) > 0
+        )
+        or
+        (
+          docker_services_svc.postgres.databases is sequence
+          and docker_services_svc.postgres.databases is not string
+          and (docker_services_svc.postgres.databases | length) > 0
+          and (docker_services_svc.postgres.databases | select('string') | list | length) == (docker_services_svc.postgres.databases | length)
+          and
+          (
+            docker_services_svc.postgres.databases
+            | select('string')
+            | map('trim')
+            | reject('equalto', '')
+            | list
+            | length
+          ) == (docker_services_svc.postgres.databases | length)
+        )
+    fail_msg: "docker_services_svc.postgres.databases must be a non-empty string or a list of non-empty strings."
 
 ################################
 # HEALTHCHECK
@@ -656,10 +681,10 @@
     that:
       - (docker_services_validate_ports_items | select('mapping') | list | length) == (docker_services_validate_ports_items | length)
       - >-
-        (docker_services_validate_ports_items | map(attribute='published') | select('defined') | list | length)
+        (docker_services_validate_ports_items | selectattr('published', 'defined') | list | length)
         == (docker_services_validate_ports_items | length)
       - >-
-        (docker_services_validate_ports_items | map(attribute='target') | select('defined') | list | length)
+        (docker_services_validate_ports_items | selectattr('target', 'defined') | list | length)
         == (docker_services_validate_ports_items | length)
     fail_msg: "docker_services_svc.ports entries must be dicts and include 'published' and 'target'."
 
