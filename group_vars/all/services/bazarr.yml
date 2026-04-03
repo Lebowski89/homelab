@@ -93,6 +93,17 @@ bazarr:
     enable: true
     databases:
       - bazarr
+  prep:
+  ## used in tasks/prep/03_post_filesystem/sub_tasks/bazarr.yml
+    radarr:
+      host: "radarr"
+      port: "7878"
+    sonarr:
+      host: "sonarr"
+      port: "8989"
+    postgres:
+      host: "haproxy"
+      port: "5433"
   deploy:
     type: swarm
     mode: replicated

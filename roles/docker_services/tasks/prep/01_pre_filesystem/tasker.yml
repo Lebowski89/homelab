@@ -1,0 +1,87 @@
+---
+
+################################
+# PREP (INFISICAL)
+################################
+
+- name: Prep | Infisical Secrets
+  ansible.builtin.include_tasks: sub_tasks/infisical/tasker.yml
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (SWARM CONFIGS)
+################################
+
+- name: Prep | Swarm configs
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - docker_services_svc.swarm_configs is defined
+    - (docker_services_svc.swarm_configs | length) > 0
+  ansible.builtin.include_tasks:
+    file: sub_tasks/swarm_configs.yml
+    apply:
+      tags: [deploy, update, recreate]
+  vars:
+    swarm_configs: "{{ docker_services_svc.swarm_configs }}"
+    docker_services_deploy_host: "{{ docker_services_svc.swarm_config_host | default(docker_services_primary_manager, true) }}"
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (AUTHELIA)
+################################
+
+- name: Prep | Authelia key material (argon2/session/jwt/storage)
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - (docker_services_svc.name | default('') | string | trim) == "authelia"
+  ansible.builtin.include_tasks:
+    file: sub_tasks/authelia/tasker.yml
+    apply:
+      tags: [deploy, bootstrap, recreate]
+  run_once: true
+  tags: [deploy, bootstrap, recreate]
+
+################################
+# PREP (POSTGRES)
+################################
+
+- name: Create Postgres database
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - docker_services_svc.postgres is defined
+    - (docker_services_svc.postgres.enable | default(false)) | bool
+  ansible.builtin.include_tasks:
+    file: sub_tasks/postgres.yml
+    apply:
+      tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (QBITTORRENT)
+################################
+
+- name: Hash qBittorrent passwords
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - (docker_services_svc.stack | default('') | string | trim) == "qbittorrent"
+  ansible.builtin.include_tasks:
+    file: sub_tasks/qbittorrent.yml
+    apply:
+      tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate]
+
+################################
+# PREP (DNS)
+################################
+
+- name: Ensure Cloudflare creds exist (Infisical when missing)
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - not (ci_mode | default(false)) | bool
+    - docker_services_svc.cloudflare is defined
+    - (docker_services_svc.cloudflare.enable | default(false)) | bool
+  ansible.builtin.include_tasks:
+    file: sub_tasks/cloudflare/tasker.yml
+    apply:
+      tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate]

@@ -1,0 +1,91 @@
+---
+
+- name: Ensure secrets_map is defined
+  ansible.builtin.assert:
+    that:
+      - secrets_map is defined
+      - secrets_map | length > 0
+    fail_msg: "secrets_map must be defined and non-empty"
+
+- name: Ensure infisical_lookup_default_params is defined
+  ansible.builtin.assert:
+    that:
+      - infisical_lookup_default_params is defined
+      - infisical_lookup_default_params is mapping
+    fail_msg: "infisical_lookup_default_params must be defined (host_vars/group_vars) and be a dict"
+
+- name: Initialize dict output (optional)
+  when: not (infisical_flatten | default(true)) | bool
+  ansible.builtin.set_fact:
+    "{{ infisical_out_var | default('infisical_secrets') }}": "{{ {} }}"
+
+- name: Fetch secrets from Infisical (flattened vars)
+  when: (infisical_flatten | default(true)) | bool
+  ansible.builtin.set_fact:
+    "{{ infisical_secret_item.var }}": >-
+      {{
+        lookup(
+          'infisical.vault.read_secrets',
+          **(infisical_lookup_default_params | combine({
+            'path': infisical_secret_item.path,
+            'secret_name': infisical_secret_item.name
+          }))
+        ).value
+      }}
+  loop: "{{ secrets_map }}"
+  loop_control:
+    loop_var: infisical_secret_item
+
+- name: Fail if any fetched secret is empty (flattened)
+  when:
+    - (infisical_flatten | default(true)) | bool
+    - (infisical_fail_on_empty | default(true)) | bool
+  ansible.builtin.assert:
+    that:
+      - (lookup('ansible.builtin.vars', infisical_secret_item.var, default='') | string | trim | length) > 0
+    fail_msg: >-
+      Infisical secret {{ infisical_secret_item.path }}/{{ infisical_secret_item.name }}
+      (var {{ infisical_secret_item.var }}) is empty
+  loop: "{{ secrets_map }}"
+  loop_control:
+    loop_var: infisical_secret_item
+
+- name: Fetch secrets from Infisical (dict output)
+  when: not (infisical_flatten | default(true)) | bool
+  ansible.builtin.set_fact:
+    "{{ infisical_out_var | default('infisical_secrets') }}": >-
+      {{
+        (lookup('ansible.builtin.vars', infisical_out_var | default('infisical_secrets'), default={}))
+        | combine({
+            infisical_secret_item.var: lookup(
+              'infisical.vault.read_secrets',
+              **(infisical_lookup_default_params | combine({
+                'path': infisical_secret_item.path,
+                'secret_name': infisical_secret_item.name
+              }))
+            ).value
+          })
+      }}
+  loop: "{{ secrets_map }}"
+  loop_control:
+    loop_var: infisical_secret_item
+
+- name: Fail if any fetched secret is empty (dict output)
+  when:
+    - not (infisical_flatten | default(true)) | bool
+    - (infisical_fail_on_empty | default(true)) | bool
+  ansible.builtin.assert:
+    that:
+      - (
+          lookup('ansible.builtin.vars', infisical_out_var | default('infisical_secrets'), default={})
+          .get(infisical_secret_item.var, '')
+          | string
+          | trim
+          | length
+        ) > 0
+    fail_msg: >-
+      Infisical secret {{ infisical_secret_item.path }}/{{ infisical_secret_item.name }}
+      (key {{ infisical_secret_item.var }}) is empty
+  loop: "{{ secrets_map }}"
+  loop_control:
+    loop_var: infisical_secret_item

@@ -1,0 +1,32 @@
+---
+
+- name: Configs | Ensure docker_services_service_name is set
+  ansible.builtin.assert:
+    that:
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
+    fail_msg: "docker_services_service_name must be set before the configs sub-tasks"
+
+- name: Configs | Ensure configs_list is a list
+  ansible.builtin.assert:
+    that:
+      - configs_list is defined
+      - configs_list is sequence
+      - configs_list is not string
+      - configs_list | length > 0
+    fail_msg: "configs_list must be a non-empty list of config mount specs."
+
+- name: Configs | Attach configs to service (replace)
+  ansible.builtin.set_fact:
+    docker_services_compose_services: >-
+      {{
+        (docker_services_compose_services | default({}))
+        | combine({
+            docker_services_service_name: (
+              (docker_services_compose_services | default({})).get(docker_services_service_name, {})
+              | combine({
+                  'configs': configs_list
+                }, recursive=true)
+            )
+          }, recursive=true)
+      }}

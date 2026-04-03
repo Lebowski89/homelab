@@ -1,0 +1,76 @@
+---
+
+################################
+# PUBLIC IP (ONLY IF NEEDED)
+################################
+
+- name: Cloudflare | Normalize record values for public IP check
+  when:
+    - docker_services_svc.cloudflare.records is defined
+    - docker_services_svc.cloudflare.records is sequence
+    - docker_services_svc.cloudflare.records is not string
+  ansible.builtin.set_fact:
+    docker_services_cf_record_values_normalized: >-
+      {{
+        docker_services_svc.cloudflare.records
+        | map(attribute='value')
+        | map('default', '')
+        | map('string')
+        | map('trim')
+        | list
+      }}
+
+- name: Cloudflare | Determine whether public IP lookup is needed
+  ansible.builtin.set_fact:
+    docker_services_cf_needs_public_ip: >-
+      {{
+        (
+          docker_services_svc.cloudflare.records is not defined
+          and (
+            (docker_services_svc.cloudflare.value is not defined)
+            or ((docker_services_svc.cloudflare.value | default('') | string | trim) == '')
+          )
+        )
+        or
+        (
+          docker_services_svc.cloudflare.records is defined
+          and (
+            (
+              docker_services_svc.cloudflare.records is mapping
+              and (
+                (docker_services_svc.cloudflare.records.value is not defined)
+                or ((docker_services_svc.cloudflare.records.value | default('') | string | trim) == '')
+              )
+            )
+            or
+            (
+              docker_services_svc.cloudflare.records is sequence
+              and docker_services_svc.cloudflare.records is not string
+              and (
+                (docker_services_cf_record_values_normalized | reject('equalto', '') | list | length)
+                < (docker_services_cf_record_values_normalized | length)
+              )
+            )
+          )
+        )
+      }}
+
+- name: Cloudflare | Gather public IP facts
+  when: docker_services_cf_needs_public_ip | bool
+  block:
+    - name: Gather IP geolocation data
+      community.general.ipinfoio_facts:
+
+    - name: Gather public IP data
+      community.general.ipify_facts:
+        api_url: https://api64.ipify.org
+        timeout: 20
+      register: docker_services_public_ip_result
+
+    - name: Public IP output
+      ansible.builtin.debug:
+        msg: "{{ ansible_facts['ipify_public_ip'] }}"
+
+    - name: Set public_ip fact
+      ansible.builtin.set_fact:
+        docker_services_public_ip: "{{ ansible_facts['ipify_public_ip'] }}"

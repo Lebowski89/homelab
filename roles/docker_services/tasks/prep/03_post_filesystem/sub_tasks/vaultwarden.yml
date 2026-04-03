@@ -1,0 +1,131 @@
+---
+
+################################
+# VAULTWARDEN PREP
+################################
+
+- name: Vaultwarden prep | Set derived vars
+  ansible.builtin.set_fact:
+    docker_services_vaultwarden_fs_host: "{{ docker_services_fs_hosts_effective | first }}"
+    docker_services_vaultwarden_dir: "{{ docker_services_svc.paths_vault.vault_dir }}"
+    docker_services_vaultwarden_token_file: "{{ docker_services_svc.paths_vault.vault_token_file }}"
+    docker_services_vaultwarden_pass_file: "{{ docker_services_svc.paths_vault.vault_pass_file }}"
+    docker_services_vaultwarden_secrets_host: >-
+      {{ docker_services_primary_manager | string | trim }}
+    docker_services_vaultwarden_secret_name: "{{ docker_services_svc.paths_vault.vault_secret_name }}"
+  run_once: true
+
+################################
+# TOKEN FILE (FS HOST)
+################################
+
+- name: Vaultwarden prep | Ensure vaultwarden dir exists
+  become: true
+  ansible.builtin.file:
+    path: "{{ docker_services_vaultwarden_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: "{{ docker_services_vaultwarden_fs_host }}"
+  run_once: true
+
+- name: Vaultwarden prep | Check if admin token file exists
+  become: true
+  ansible.builtin.stat:
+    path: "{{ docker_services_vaultwarden_token_file }}"
+  register: docker_services_vaultwarden_token_stat
+  delegate_to: "{{ docker_services_vaultwarden_fs_host }}"
+  run_once: true
+
+- name: Vaultwarden prep | Read existing token
+  no_log: true
+  become: true
+  ansible.builtin.slurp:
+    src: "{{ docker_services_vaultwarden_token_file }}"
+  register: docker_services_vaultwarden_token_raw
+  when: docker_services_vaultwarden_token_stat.stat.exists
+  delegate_to: "{{ docker_services_vaultwarden_fs_host }}"
+  run_once: true
+
+- name: Vaultwarden prep | Create new admin token
+  no_log: true
+  when: not docker_services_vaultwarden_token_stat.stat.exists
+  delegate_to: "{{ docker_services_vaultwarden_fs_host }}"
+  run_once: true
+  become: true
+  block:
+    - name: Vaultwarden prep | Generate random password
+      ansible.builtin.command: "openssl rand -base64 32"
+      register: docker_services_vaultwarden_password
+      changed_when: false
+      no_log: true
+
+    - name: Vaultwarden prep | Save generated password
+      ansible.builtin.copy:
+        dest: "{{ docker_services_vaultwarden_pass_file }}"
+        content: "{{ docker_services_vaultwarden_password.stdout | trim }}\n"
+        mode: "0600"
+      no_log: true
+
+    - name: Vaultwarden prep | Generate random salt
+      ansible.builtin.command: "openssl rand -base64 32"
+      register: docker_services_vaultwarden_salt
+      changed_when: false
+      no_log: true
+
+    - name: Vaultwarden prep | Generate Argon2 PHC string
+      ansible.builtin.command:
+        argv:
+          - argon2
+          - "{{ docker_services_vaultwarden_salt.stdout | trim }}"
+          - -e
+          - -id
+          - -k
+          - "65540"
+          - -t
+          - "3"
+          - -p
+          - "4"
+        stdin: "{{ docker_services_vaultwarden_password.stdout | trim }}"
+      register: docker_services_vaultwarden_token_new
+      changed_when: false
+      no_log: true
+
+    - name: Vaultwarden prep | Save argon2 token
+      ansible.builtin.copy:
+        dest: "{{ docker_services_vaultwarden_token_file }}"
+        content: "{{ docker_services_vaultwarden_token_new.stdout | trim }}\n"
+        mode: "0600"
+      no_log: true
+
+- name: Vaultwarden prep | Set admin token fact
+  no_log: true
+  ansible.builtin.set_fact:
+    docker_services_vaultwarden_token: >-
+      {{
+        (docker_services_vaultwarden_token_raw.content | b64decode | trim)
+        if (docker_services_vaultwarden_token_stat.stat.exists | default(false))
+        else (docker_services_vaultwarden_token_new.stdout | trim)
+      }}
+  run_once: true
+
+- name: Vaultwarden prep | Assert token looks like PHC argon2 string
+  ansible.builtin.assert:
+    that:
+      - docker_services_vaultwarden_token is match('^\\$argon2(id|i|d)\\$.*')
+    fail_msg: >-
+      docker_services_vaultwarden_token does not look like an argon2 PHC string.
+      Check argon2 availability on {{ docker_services_vaultwarden_fs_host }}.
+  run_once: true
+
+################################
+# SWARM SECRET (MANAGER)
+################################
+
+- name: Vaultwarden prep | Ensure docker secret exists
+  no_log: true
+  community.docker.docker_secret:
+    name: "{{ docker_services_vaultwarden_secret_name }}"
+    data: "{{ docker_services_vaultwarden_token }}"
+    state: present
+  delegate_to: "{{ docker_services_vaultwarden_secrets_host }}"
+  run_once: true

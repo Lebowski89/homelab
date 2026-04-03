@@ -142,7 +142,7 @@
         - inventory_hostname == docker_services_primary_manager
         - not (ci_mode | default(false) | bool)
       ansible.builtin.include_tasks:
-        file: "{{ playbook_dir }}/roles/docker_services/helpers/deploy/deploy_all.yml"
+        file: "{{ playbook_dir }}/roles/docker_services/tasks/deploy/sub_tasks/deploy_all.yml"
         apply:
           tags: [deploy, update, recreate]
       run_once: true

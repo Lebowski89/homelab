@@ -1,0 +1,48 @@
+---
+
+- name: Ensure docker_services_service_name is set
+  ansible.builtin.assert:
+    that:
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
+    fail_msg: "docker_services_service_name must be set before calling this helper"
+
+- name: Ensure health_test is provided
+  ansible.builtin.assert:
+    that:
+      - health_test is defined
+      - health_test is not none
+      - (health_test is string and (health_test | string | trim | length > 0)) or
+        (health_test is sequence and health_test is not string and (health_test | length > 0))
+    fail_msg: "health_test must be a non-empty string or a non-empty list."
+
+- name: Normalize healthcheck test into list form
+  ansible.builtin.set_fact:
+    docker_services_health_test: >-
+      {{
+        (health_test | list)
+        if (health_test is sequence and health_test is not string)
+        else
+        ['CMD-SHELL', (health_test | string | trim)]
+      }}
+
+- name: Attach healthcheck to service
+  ansible.builtin.set_fact:
+    docker_services_compose_services: >-
+      {{
+        (docker_services_compose_services | default({}))
+        | combine({
+            docker_services_service_name: (
+              ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
+              | combine({
+                  'healthcheck': {
+                    'test': docker_services_health_test,
+                    'interval': (health_interval | default('1m', true)),
+                    'timeout': (health_timeout | default('15s', true)),
+                    'retries': (health_retries | default(3, true)) | int,
+                    'start_period': (health_start_period | default('30s', true))
+                  }
+                }, recursive=true)
+            )
+          }, recursive=true)
+      }}
