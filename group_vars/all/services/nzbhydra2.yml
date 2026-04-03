@@ -75,6 +75,10 @@ nzbhydra2:
       - "PathPrefix(`/torznab/api`)"
   cloudflare:
     enable: true
+  prep:
+  ## used in tasks/prep/03_post_filesystem/sub_tasks/nzbhydra2.yml
+    sabnzbd:
+      url: "http://sabnzbd:8080"
   deploy:
     type: swarm
     mode: replicated

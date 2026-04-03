@@ -61,6 +61,8 @@
     docker_services_nzbhydra2_slug_user: "{{ slug_user | default('') }}"
     docker_services_nzbhydra2_slug_api: "{{ slug_api | default('') }}"
     docker_services_nzbhydra2_slug_vip_exp: "{{ slug_vip_expiration | default('') }}"
+
+    docker_services_nzbhydra2_sabnzbd_url: "{{ docker_services_svc.prep.sabnzbd.url | default('http://sabnzbd:8080') }}"
     docker_services_nzbhydra2_sabnzbd_api: "{{ sabnzbd_api | default('') }}"
   run_once: true
 
@@ -274,7 +276,7 @@
         name: SABnzbd
         nzbAddingType: UPLOAD
         downloaderType: SABNZBD
-        url: http://sabnzbd:8080
+        url: "{{ docker_services_nzbhydra2_sabnzbd_url }}"
   run_once: true
 
 ################################
