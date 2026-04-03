@@ -204,6 +204,7 @@
       ansible.builtin.set_fact:
         docker_services_plex_auth_token: "{{ docker_services_plex_token_new.json.authToken | regex_replace('\n', '') }}"
       delegate_facts: true
+      no_log: true
 
     - name: Token | Check if new token is valid
       ansible.builtin.uri:
@@ -249,6 +250,7 @@
         owner: "{{ hostvars[docker_services_plex_token_host].docker_host_puid | default('1000') }}"
         group: "{{ hostvars[docker_services_plex_token_host].docker_host_pgid | default('1000') }}"
         mode: "0664"
+      no_log: true
 
 - name: Token | Assert auth token is set
   ansible.builtin.assert:
