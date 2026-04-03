@@ -17,15 +17,10 @@
       {{ hostvars[docker_services_fs_hosts_effective | first].docker_host_puid | default('1000') }}
     docker_services_bazarr_pgid: >-
       {{ hostvars[docker_services_fs_hosts_effective | first].docker_host_pgid | default('1000') }}
-    docker_services_bazarr_api_key: "{{ bazarr_api | default('') }}"
     docker_services_bazarr_port: >-
       {{ docker_services_svc.traefik.port | default('6767') | string }}
-    docker_services_bazarr_opensubtitlescom_user: "{{ opensubtitlescom_user | default('') }}"
-    docker_services_bazarr_opensubtitlescom_pass: "{{ opensubtitlescom_pass | default('') }}"
-    docker_services_bazarr_radarr_api_key: "{{ radarr_api | default('') }}"
     docker_services_bazarr_radarr_ip: "{{ docker_services_svc.prep.radarr.host }}"
     docker_services_bazarr_radarr_port: "{{ docker_services_svc.prep.radarr.port }}"
-    docker_services_bazarr_sonarr_api_key: "{{ sonarr_api | default('') }}"
     docker_services_bazarr_sonarr_ip: "{{ docker_services_svc.prep.sonarr.host }}"
     docker_services_bazarr_sonarr_port: "{{ docker_services_svc.prep.sonarr.port }}"
     docker_services_bazarr_pg_db: >-
@@ -44,11 +39,22 @@
       }}
     docker_services_bazarr_pg_host: "{{ docker_services_svc.prep.postgres.host }}"
     docker_services_bazarr_pg_port: "{{ docker_services_svc.prep.postgres.port }}"
+  run_once: true
+
+- name: Bazarr prep | Set secret vars
+  no_log: true
+  ansible.builtin.set_fact:
+    docker_services_bazarr_api_key: "{{ bazarr_api | default('') }}"
+    docker_services_bazarr_opensubtitlescom_user: "{{ opensubtitlescom_user | default('') }}"
+    docker_services_bazarr_opensubtitlescom_pass: "{{ opensubtitlescom_pass | default('') }}"
+    docker_services_bazarr_radarr_api_key: "{{ radarr_api | default('') }}"
+    docker_services_bazarr_sonarr_api_key: "{{ sonarr_api | default('') }}"
     docker_services_bazarr_pg_user: "{{ postgres_user | default('') }}"
     docker_services_bazarr_pg_pass: "{{ postgres_pass | default('') }}"
   run_once: true
 
 - name: Bazarr prep | Assert postgres inputs are complete
+  no_log: true
   ansible.builtin.assert:
     that:
       - docker_services_bazarr_pg_host | string | trim | length > 0
@@ -129,6 +135,7 @@
 ################################
 
 - name: Bazarr prep | Configure api setting
+  no_log: true
   yedit:
     src: "{{ docker_services_bazarr_config_file }}"
     key: "auth.apikey"
@@ -152,6 +159,7 @@
   run_once: true
 
 - name: Bazarr prep | Configure opensubtitlescom settings
+  no_log: true
   yedit:
     src: "{{ docker_services_bazarr_config_file }}"
     key: "{{ bazarr_settings_subtitles.key }}"
@@ -168,6 +176,7 @@
   run_once: true
 
 - name: Bazarr prep | Configure radarr settings
+  no_log: true
   yedit:
     src: "{{ docker_services_bazarr_config_file }}"
     key: "{{ bazarr_settings_radarr.key }}"
@@ -186,6 +195,7 @@
   run_once: true
 
 - name: Bazarr prep | Configure sonarr settings
+  no_log: true
   yedit:
     src: "{{ docker_services_bazarr_config_file }}"
     key: "{{ bazarr_settings_sonarr.key }}"
@@ -204,6 +214,7 @@
   run_once: true
 
 - name: Bazarr prep | Configure postgres settings
+  no_log: true
   yedit:
     src: "{{ docker_services_bazarr_config_file }}"
     key: "{{ bazarr_settings_postgres.key }}"
