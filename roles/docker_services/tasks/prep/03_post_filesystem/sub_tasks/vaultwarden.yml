@@ -36,6 +36,7 @@
   run_once: true
 
 - name: Vaultwarden prep | Read existing token
+  no_log: true
   become: true
   ansible.builtin.slurp:
     src: "{{ docker_services_vaultwarden_token_file }}"
@@ -45,6 +46,7 @@
   run_once: true
 
 - name: Vaultwarden prep | Create new admin token
+  no_log: true
   when: not docker_services_vaultwarden_token_stat.stat.exists
   delegate_to: "{{ docker_services_vaultwarden_fs_host }}"
   run_once: true
@@ -78,6 +80,7 @@
         mode: "0600"
 
 - name: Vaultwarden prep | Set admin token fact
+  no_log: true
   ansible.builtin.set_fact:
     docker_services_vaultwarden_token: >-
       {{
@@ -101,6 +104,7 @@
 ################################
 
 - name: Vaultwarden prep | Ensure docker secret exists
+  no_log: true
   community.docker.docker_secret:
     name: "{{ docker_services_vaultwarden_secret_name }}"
     data: "{{ docker_services_vaultwarden_token }}"
