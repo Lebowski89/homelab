@@ -3,7 +3,7 @@
 sportarr:
   name: sportarr
   stack: sportarr
-  image: sportarr/sportarr:4.0.994.1071
+  image: sportarr/sportarr:4.0.994.1073
   named_networks:
     overlay:
       external: true
