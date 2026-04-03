@@ -178,6 +178,14 @@
     - docker_services_svc.deploy.replicas is defined
   ansible.builtin.assert:
     that:
+      - >
+        (
+          docker_services_svc.deploy.replicas is integer
+          or (
+            docker_services_svc.deploy.replicas is string
+            and (docker_services_svc.deploy.replicas | trim | regex_search('^[0-9]+$')) is not none
+          )
+        )
       - (docker_services_svc.deploy.replicas | int) >= 0
     fail_msg: "docker_services_svc.deploy.replicas must be an integer >= 0 when provided."
 
