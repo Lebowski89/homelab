@@ -489,13 +489,16 @@
           | map(attribute='docker_secret')
           | map('string')
           | map('trim')
-          | reject('equalto', '')
+          | map('regex_search', '^[A-Za-z0-9._-]+$')
+          | reject('equalto', None)
           | list
           | length
         )
         ==
         (docker_services_svc.infisical.secrets_map | selectattr('docker_secret', 'defined') | list | length)
-    fail_msg: "docker_services_svc.infisical.secrets_map[].docker_secret must be non-empty when provided."
+    fail_msg: >-
+      docker_services_svc.infisical.secrets_map[].docker_secret must contain only
+      letters, numbers, dot, underscore, or hyphen.
 
 ################################
 # POSTGRES
