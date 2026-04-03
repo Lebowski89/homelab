@@ -143,7 +143,7 @@
       X-Plex-Client-Identifier: "{{ hostvars[docker_services_plex_token_host].docker_services_plex_client_identifier }}"
       X-Plex-Platform: "linux"
       X-Plex-Platform-Version: "1.0.0"
-      X-Plex-Device: "Debian {{ ansible_distribution_version }} - {{ ansible_kernel }}"
+      X-Plex-Device: "Debian {{ hostvars[docker_services_plex_token_host].ansible_distribution_version }} - {{ hostvars[docker_services_plex_token_host].ansible_kernel }}"
       X-Plex-Device-Name: "Media Server"
     status_code: [200, 401]
   register: docker_services_plex_token
