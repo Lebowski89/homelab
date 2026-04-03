@@ -411,6 +411,34 @@
     fail_msg: "nzbhydra2_api was not written correctly to main.apiKey in {{ docker_services_nzbhydra2_config_path }}"
   run_once: true
 
+- name: NZBHydra2 prep | Assert SABnzbd downloader is set
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - docker_services_nzbhydra2_cfg is mapping
+      - docker_services_nzbhydra2_cfg.downloading is defined
+      - docker_services_nzbhydra2_cfg.downloading.downloaders is defined
+      - (docker_services_nzbhydra2_cfg.downloading.downloaders | default([])) is sequence
+      - (docker_services_nzbhydra2_cfg.downloading.downloaders | length) > 0
+      - (docker_services_nzbhydra2_sabnzbd_url | string | trim | length) > 0
+      - (docker_services_nzbhydra2_sabnzbd_api | string | trim | length) > 0
+      - >-
+        (
+          docker_services_nzbhydra2_cfg.downloading.downloaders
+          | selectattr('url', 'defined')
+          | selectattr('apiKey', 'defined')
+          | selectattr('url', 'equalto', docker_services_nzbhydra2_sabnzbd_url)
+          | selectattr('apiKey', 'equalto', docker_services_nzbhydra2_sabnzbd_api)
+          | list
+          | length
+        ) > 0
+    fail_msg: >-
+      SABnzbd downloader was not written correctly to
+      {{ docker_services_nzbhydra2_config_path }}.
+      Expected a downloader entry with url={{ docker_services_nzbhydra2_sabnzbd_url }}
+      and the configured API key.
+  run_once: true
+
 - name: NZBHydra2 prep | Assert configured indexers were written
   no_log: true
   ansible.builtin.assert:
