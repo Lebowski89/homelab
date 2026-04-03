@@ -86,7 +86,7 @@
       {{
         (docker_services_vaultwarden_token_raw.content | b64decode | trim)
         if (docker_services_vaultwarden_token_stat.stat.exists | default(false))
-        else (docker_services_vaultwarden_token_new.stdout | trim)
+        else (docker_services_vaultwarden_token_new.stdout | default('') | trim)
       }}
   run_once: true
 
