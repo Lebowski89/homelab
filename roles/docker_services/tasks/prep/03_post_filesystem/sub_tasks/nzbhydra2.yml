@@ -385,6 +385,7 @@
   run_once: true
 
 - name: NZBHydra2 prep | Assert configured indexers were written
+  no_log: true
   ansible.builtin.assert:
     that:
       - (docker_services_nzbhydra2_cfg.indexers | default([])) is sequence
