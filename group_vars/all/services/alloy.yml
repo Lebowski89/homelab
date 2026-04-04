@@ -27,7 +27,7 @@ alloy:
       src: files/alloy_config.alloy
       data_is_template: false
   configs:
-    - source: "{{ docker_services_swarm_configs_effective['alloy_config'].effective_name }}"
+    - source: alloy_config
       target: /etc/alloy/config.alloy
       mode: "0644"
   volumes:

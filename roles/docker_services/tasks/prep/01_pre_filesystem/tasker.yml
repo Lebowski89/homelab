@@ -18,7 +18,7 @@
     - docker_services_svc.swarm_configs is defined
     - (docker_services_svc.swarm_configs | length) > 0
   ansible.builtin.include_tasks:
-    file: sub_tasks/swarm_configs.yml
+    file: sub_tasks/swarm_configs/tasker.yml
     apply:
       tags: [deploy, update, recreate]
   vars:
