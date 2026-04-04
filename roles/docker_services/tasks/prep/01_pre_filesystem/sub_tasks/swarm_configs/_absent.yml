@@ -1,0 +1,48 @@
+---
+
+- name: Swarm configs | List existing swarm config names
+  ansible.builtin.command:
+    argv:
+      - docker
+      - config
+      - ls
+      - --format
+      - "{{ '{{ .Name }}' }}"
+  register: docker_services_swarm_cfg_ls
+  changed_when: false
+  delegate_to: "{{ docker_services_swarm_cfg_host }}"
+
+- name: Swarm configs | Find matching configs for absent base name
+  ansible.builtin.set_fact:
+    docker_services_swarm_cfg_absent_matches: >-
+      {{
+        docker_services_swarm_cfg_ls.stdout_lines
+        | select('match', '^' ~ (cfg.name | string | trim | regex_escape) ~ '(-.*)?$')
+        | list
+      }}
+
+- name: Swarm configs | Record absent config base name
+  ansible.builtin.set_fact:
+    docker_services_swarm_configs_effective: >-
+      {{
+        docker_services_swarm_configs_effective
+        | combine({
+            (cfg.name | string | trim): {
+              'state': 'absent',
+              'base_name': (cfg.name | string | trim),
+              'effective_name': (cfg.name | string | trim),
+              'matched_names': docker_services_swarm_cfg_absent_matches
+            }
+          }, recursive=true)
+      }}
+
+- name: Swarm configs | Remove absent configs by base-name match
+  when: (docker_services_swarm_cfg_absent_matches | length) > 0
+  community.docker.docker_config:
+    name: "{{ absent_cfg_name }}"
+    state: absent
+  loop: "{{ docker_services_swarm_cfg_absent_matches }}"
+  loop_control:
+    loop_var: absent_cfg_name
+    label: "{{ absent_cfg_name }}"
+  delegate_to: "{{ docker_services_swarm_cfg_host }}"

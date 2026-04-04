@@ -127,10 +127,10 @@ services:
 {% if svc.command is defined %}
     command:
 {% if svc.command is string %}
-      {{ svc.command }}
-{% elif svc.command is iterable and (svc.command | length > 0) %}
+      {{ svc.command | trim }}
+{% elif svc.command is sequence and svc.command is not string and (svc.command | length > 0) %}
 {% for cmd in svc.command %}
-      - "{{ cmd }}"
+      - "{{ cmd | string | trim }}"
 {% endfor %}
 {% endif %}
 {% endif %}
