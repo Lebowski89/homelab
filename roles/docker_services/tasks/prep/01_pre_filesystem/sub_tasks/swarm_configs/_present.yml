@@ -16,9 +16,9 @@
             )
           )
           | regex_replace('\r\n', '\n')
-          | regex_replace('\\s+\\Z', '')
-          | regex_replace('\\\\n\\Z', '')
-        ) ~ '\n'
+          | regex_replace('\\\\n+$', '')
+          | regex_replace('\n+$', '')
+        )
       }}
 
 - name: Swarm configs | Hash rendered content
