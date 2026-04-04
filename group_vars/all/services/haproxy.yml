@@ -12,7 +12,7 @@ haproxy:
       src: files/haproxy.cfg
       data_is_template: false
   configs:
-    - source: "{{ docker_services_swarm_configs_effective['haproxy_cfg'].effective_name }}"
+    - source: haproxy_cfg
       target: /usr/local/etc/haproxy/haproxy.cfg
       mode: "0444"
   ports:
