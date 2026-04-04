@@ -1,0 +1,62 @@
+---
+
+- name: Swarm configs | Render desired config content
+  ansible.builtin.set_fact:
+    docker_services_swarm_cfg_rendered: >-
+      {{
+        (
+          (
+            (cfg.data | string)
+            if (cfg.data is defined)
+            else
+            (
+              lookup('template', cfg.src)
+              if ((cfg.data_is_template | default(false)) | bool) or ((cfg.src | string).endswith('.j2'))
+              else lookup('file', cfg.src)
+            )
+          )
+          | regex_replace('\r\n', '\n')
+          | regex_replace('\\s+\\Z', '')
+          | regex_replace('\\\\n\\Z', '')
+        ) ~ '\n'
+      }}
+
+- name: Swarm configs | Hash rendered content
+  ansible.builtin.set_fact:
+    docker_services_swarm_cfg_hash: "{{ docker_services_swarm_cfg_rendered | hash('sha1') | truncate(12, True, '') }}"
+    docker_services_swarm_cfg_effective_name: >-
+      {{ (cfg.name | string | trim) ~ '-' ~ (docker_services_swarm_cfg_rendered | hash('sha1') | truncate(12, True, '')) }}
+
+- name: Swarm configs | Ensure versioned config exists
+  community.docker.docker_config:
+    name: "{{ docker_services_swarm_cfg_effective_name }}"
+    state: present
+    data: "{{ docker_services_swarm_cfg_rendered }}"
+    labels: "{{ cfg.labels | default(omit, true) }}"
+  register: docker_services_swarm_cfg_create
+  delegate_to: "{{ docker_services_swarm_cfg_host }}"
+
+- name: Swarm configs | Store effective config mapping
+  ansible.builtin.set_fact:
+    docker_services_swarm_configs_effective: >-
+      {{
+        docker_services_swarm_configs_effective
+        | combine({
+            (cfg.name | string | trim): {
+              'state': 'present',
+              'base_name': (cfg.name | string | trim),
+              'effective_name': docker_services_swarm_cfg_effective_name,
+              'hash': docker_services_swarm_cfg_hash
+            }
+          }, recursive=true)
+      }}
+    docker_services_swarm_configs_changed: >-
+      {{
+        docker_services_swarm_configs_changed
+        +
+        (
+          [docker_services_swarm_cfg_effective_name]
+          if (docker_services_swarm_cfg_create.changed | default(false) | bool)
+          else []
+        )
+      }}
