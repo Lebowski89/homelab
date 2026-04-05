@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Unraid VM is a special-case VM, as:
+The Unraid VM is a special-case VM, as:
 - it is imported into Terraform, rather than based on a cloud-init template
 - it uses a manually attached UnRaid boot USB (aka no vdisk)
 - it uses pre-existing resource mappings for HBA/NIC/Cache drive
@@ -21,7 +21,7 @@ Terraform manages and tracks:
 
 **What it isn't for: Casual destroy/create.**
 
-## Proxmox prerequisites before Terraform
+## Proxmox Prerequisites
 
 Before using this Terraform root, create the required Proxmox resource mappings manually.
 
@@ -33,7 +33,7 @@ The VM uses the following PCI resource mappings in Proxmox:
 - `X710-UnRaid` - NIC passthrough
 - `FireCuda-Swarm` - Cache (NVME) passthrough
 
-**Note: Handle manually `before` the VM creation.**
+**Note: Handle manually _before_ the VM creation.**
 
 ### USB boot device
 
@@ -44,7 +44,7 @@ Currently, this mapping is:
 ```text
 usb0: host=6-3
 ```
-**Note: Set manually `after` VM creation.**
+**Note: Set manually _after_ VM creation.**
 
 ## Terraform workflow
 
