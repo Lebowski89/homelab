@@ -1,6 +1,3 @@
-# Sub-tasks
-
-Purpose:
 
 `plex`:
   - Creates Docker NFS volume so Plex can access media on the UnRaid host.

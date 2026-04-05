@@ -1,6 +1,3 @@
-# Sub-tasks
-
-Purpose:
 
 `authelia`: Generate (via spinning up temporary containers) the various keys required by Authelia.
 `cloudflare`:

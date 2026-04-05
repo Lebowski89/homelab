@@ -1,6 +1,3 @@
-# Sub-tasks
-
-The purpose of these are pretty self-explanatory from their filename:
 
 - `caps.yml`: Adds or replaces Linux capabilities (`cap_add` / `cap_drop`) for a service, with append/unique-append/merge modes.
 - `command.yml`: Sets a service `command` with normalization for string/list input and optional append semantics.

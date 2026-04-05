@@ -1,6 +1,3 @@
-# Sub-tasks
-
-The purpose of these are pretty self-explanatory from their filename:
 
 - `configs.yml`: Attaches Docker configs to a service definition.
 - `env_file.yml`: Normalizes and attaches one or more `env_file` entries to a service.
