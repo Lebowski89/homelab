@@ -1,0 +1,19 @@
+pm_api_url      = "https://192.168.80.80:8006/api2/json"
+pm_tls_insecure = true
+target_node     = "pve1"
+
+unraid_vmid          = 100
+unraid_name          = "UnRaid"
+unraid_cores         = 8
+unraid_sockets       = 1
+unraid_memory        = 32045
+unraid_machine       = "q35"
+unraid_bios          = "seabios"
+unraid_boot_order    = "order=usb0"
+unraid_scsihw        = "virtio-scsi-single"
+unraid_qemu_os       = "l26"
+unraid_uuid          = "ebfa68e3-e312-42de-8c08-a3c400754edb"
+unraid_vga_type      = "qxl"
+unraid_efi_storage   = "local-zfs"
+unraid_tpm_storage   = "local-zfs"
+unraid_raw_disk_path = "/dev/sdj"
