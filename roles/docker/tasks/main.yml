@@ -3,7 +3,7 @@
 - name: Install Docker
   when: inventory_hostname in groups['docker_install']
   ansible.builtin.include_tasks:
-    file: _install.yml
+    file: sub_tasks/install.yml
     apply:
       tags:
         - docker
@@ -15,7 +15,7 @@
 - name: Configure Docker Swarm
   when: inventory_hostname in groups['swarm']
   ansible.builtin.include_tasks:
-    file: _swarm.yml
+    file: sub_tasks/swarm.yml
     apply:
       tags:
         - docker
@@ -30,7 +30,7 @@
 
 - name: Docker Prune
   ansible.builtin.include_tasks:
-    file: _prune.yml
+    file: sub_tasks/prune.yml
     apply:
       tags:
         - docker_prune
