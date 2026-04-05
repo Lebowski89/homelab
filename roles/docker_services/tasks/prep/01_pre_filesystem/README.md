@@ -1,5 +1,6 @@
+# Tasks
 
-**authelia:** Generate (via spinning up temporary containers) the various keys required by Authelia.
+**authelia:** Generates (via spinning up temporary containers) the various keys required by Authelia.
 
 **cloudflare:**
   - Ensures Cloudflare credentials/zone values exist, fetching from Infisical when needed.
@@ -12,6 +13,6 @@
 
 **swarm_configs:** Creates/removes Docker Swarm configs from inline data or source files/templates.
 
-**postgres.yml:** Ensures Postgres credentials/secrets are available and can ping/create requested databases.
+**postgres:** Ensures Postgres credentials/secrets are available and can ping/create requested databases.
 
-**qbittorrent.yml:** Uses the `qbittorrent_passwd` module to hash the qBittorrent webui passwords.
+**qbittorrent:** Uses the `qbittorrent_passwd` module to hash the qBittorrent webui passwords.
