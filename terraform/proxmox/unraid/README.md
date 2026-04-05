@@ -6,7 +6,7 @@ Unraid VM is a special-case VM, as:
 - it is imported into Terraform, rather than based on a cloud-init template
 - it uses a manually attached UnRaid boot USB (aka no vdisk)
 - it uses pre-existing resource mappings for HBA/NIC/Cache drive
-- it requires settings that require root permissions to be set manually after VM creation.
+- it uses settings that require root permissions to be set manually after VM creation.
 
 Terraform manages and tracks:
 
@@ -19,7 +19,7 @@ Terraform manages and tracks:
 - protection flag
 - general VM config that is safe to track
 
-What it isn't for: Casual destroy/create.
+**What it isn't for: Casual destroy/create.**
 
 ## Proxmox prerequisites before Terraform
 
@@ -33,7 +33,7 @@ The VM uses the following PCI resource mappings in Proxmox:
 - `X710-UnRaid` - NIC passthrough
 - `FireCuda-Swarm` - Cache (NVME) passthrough
 
-Note: Handle manually `before` the VM creation.
+**Note: Handle manually `before` the VM creation.**
 
 ### USB boot device
 
@@ -44,7 +44,7 @@ Currently, this mapping is:
 ```text
 usb0: host=6-3
 ```
-Note: Set manually `after` VM creation.
+**Note: Set manually `after` VM creation.**
 
 ## Terraform workflow
 
@@ -75,7 +75,7 @@ terraform plan
 ```bash
 qm set <VMID> --usb0 host=6-3  # Attach boot USB manually
 qm set <VMID> --boot order=usb0  # Set boot order
-qm config <VMID> | egrep 'boot|usb0|args|hostpci'  ## Verify boot order
+qm config <VMID> | egrep 'boot|usb0|args|hostpci'  # Verify boot order
 qm set <VMID> --args "-device amd-iommu"  # Set manual args
 ```
 
