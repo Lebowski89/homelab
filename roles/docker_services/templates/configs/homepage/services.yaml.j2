@@ -262,16 +262,3 @@
           type: prometheus
           url: http://prometheus:9090
           fields: ["targets_up", "targets_down", "targets_total"]
-
-- unifi:
-    - Unifi:
-        icon: unifi.svg
-        href: http://192.168.80.48:8443
-        siteMonitor: http://unifi:8443
-        description: Unifi Controller
-        widget:
-          type: unifi
-          url: http://unifi:8443
-          username: {{ unifi_user }}
-          password: {{ unifi_pass }}
-          fields: ["uptime", "wlan", "wlan_users", "wlan_devices"]

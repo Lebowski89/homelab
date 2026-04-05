@@ -42,7 +42,7 @@
     name: "{{ authelia_key_secret }}"
     data: "{{ authelia_key | string }}"
     state: present
-    delegate_to: "{{ docker_services_authelia_keys_host }}"
+  delegate_to: "{{ docker_services_authelia_keys_host }}"
   run_once: true
 
 - name: Authelia keys | Generate key (temporary container)
