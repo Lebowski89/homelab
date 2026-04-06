@@ -1,0 +1,18 @@
+---
+
+opentofu_prereq_packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - software-properties-common
+
+opentofu_source_url: "https://packages.opentofu.org/opentofu/tofu/any/"
+opentofu_source_suite: any
+opentofu_keyring_dir: /etc/apt/keyrings
+opentofu_keyring_file: /etc/apt/keyrings/opentofu.gpg
+opentofu_keyring_file_repo: /etc/apt/keyrings/opentofu-repo.gpg
+opentofu_repo_filename: opentofu
+
+opentofu_packages:
+  - tofu

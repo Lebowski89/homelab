@@ -48,8 +48,15 @@
       - ethtool
       - man-db
       - unrar-free
+      - qemu-guest-agent
     state: present
   environment: "{{ ubuntu_apt_env_vars }}"
+
+- name: Ensure qemu-guest-agent is enabled and running
+  ansible.builtin.systemd:
+    name: qemu-guest-agent
+    enabled: true
+    state: started
 
 - name: Upgrade installed packages
   ansible.builtin.apt:

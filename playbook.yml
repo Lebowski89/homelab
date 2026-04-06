@@ -74,15 +74,14 @@
         - infisical_recreate
         - infisical_remove
 
-    - name: Include Terraform role
+    - name: Include OpenTofu role
       ansible.builtin.include_role:
-        name: terraform
-      when: inventory_hostname in groups['terraform']
+        name: opentofu
+      when: inventory_hostname in groups['opentofu']
       tags:
-        - terraform
-        - terraform_install
-        - terraform_pve_template
-        - terraform_pve_user
+        - opentofu
+        - opentofu_install
+        - opentofu_pve_user
 
     - name: Include Postgres Cluster role
       ansible.builtin.include_role:

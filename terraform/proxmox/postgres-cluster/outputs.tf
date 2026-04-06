@@ -1,5 +1,5 @@
 output "postgres_vm_names" {
-  value = keys(proxmox_vm_qemu.postgres)
+  value = keys(proxmox_virtual_environment_vm.postgres)
 }
 
 output "postgres_vm_ips" {
