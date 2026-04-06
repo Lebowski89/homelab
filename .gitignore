@@ -7,5 +7,4 @@ hosts.ini
 .terraform/
 crash.log
 crash.*.log
-*.tfvars
 secrets.auto.tfvars
