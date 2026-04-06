@@ -1,0 +1,4 @@
+---
+
+opentofu_primary_manager: mgt
+opentofu_pve_host: pve1

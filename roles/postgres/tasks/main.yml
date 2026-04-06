@@ -2,7 +2,7 @@
 
 - name: Install postgres packages
   ansible.builtin.include_tasks:
-    file: _apt.yml
+    file: sub_tasks/apt.yml
     apply:
       tags:
         - postgres
@@ -13,7 +13,7 @@
 
 - name: Configure etcd
   ansible.builtin.include_tasks:
-    file: _etcd.yml
+    file: sub_tasks/etcd.yml
     apply:
       tags:
         - postgres
@@ -24,7 +24,7 @@
 
 - name: Configure Patroni
   ansible.builtin.include_tasks:
-    file: _patroni.yml
+    file: sub_tasks/patroni.yml
     apply:
       tags:
         - postgres
@@ -35,7 +35,7 @@
 
 - name: Ensure dedicated PostgreSQL admin role exists
   ansible.builtin.include_tasks:
-    file: _pg_admin.yml
+    file: sub_tasks/pg_admin.yml
     apply:
       tags:
         - postgres

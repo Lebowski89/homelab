@@ -12,7 +12,7 @@ postgres_patroni_scope: pg-cluster
 postgres_patroni_namespace: /service
 
 postgres_patroni_restapi_port: 8008
-postgres_patroni_postgres_port: 5433
+postgres_patroni_postgres_port: 5432
 
 postgres_patroni_data_dir: /var/lib/postgresql/18/main
 postgres_patroni_bin_dir: /usr/lib/postgresql/18/bin

@@ -2,7 +2,7 @@
 
 - name: Install common apt packages
   ansible.builtin.include_tasks:
-    file: _apt.yml
+    file: sub_tasks/apt.yml
     apply:
       tags:
         - ubuntu
@@ -14,7 +14,7 @@
 - name: Clone Homelab repo
   when: inventory_hostname in groups['ansible_managers']
   ansible.builtin.include_tasks:
-    file: _repo.yml
+    file: sub_tasks/repo.yml
     apply:
       tags:
         - ubuntu
@@ -26,7 +26,7 @@
 - name: Setup Python venv
   when: inventory_hostname in groups['ansible_managers']
   ansible.builtin.include_tasks:
-    file: _venv.yml
+    file: sub_tasks/venv.yml
     apply:
       tags:
         - ubuntu
@@ -38,7 +38,7 @@
 - name: Install required collections and pip packages
   when: inventory_hostname in groups['ansible_managers']
   ansible.builtin.include_tasks:
-    file: _requirements.yml
+    file: sub_tasks/requirements.yml
     apply:
       tags:
         - ubuntu
@@ -50,7 +50,7 @@
 - name: Install Skynet wrapper
   when: inventory_hostname in groups['ansible_managers']
   ansible.builtin.include_tasks:
-    file: _skynet.yml
+    file: sub_tasks/skynet.yml
     apply:
       tags:
         - ubuntu
@@ -61,7 +61,7 @@
 
 - name: Tune sysctl settings
   ansible.builtin.include_tasks:
-    file: _sysctl.yml
+    file: sub_tasks/sysctl.yml
     apply:
       tags:
         - ubuntu
@@ -72,7 +72,7 @@
 
 - name: Set PAM limits
   ansible.builtin.include_tasks:
-    file: _pam.yml
+    file: sub_tasks/pam.yml
     apply:
       tags:
         - ubuntu
@@ -83,7 +83,7 @@
 
 - name: Configure network tuning
   ansible.builtin.include_tasks:
-    file: _network.yml
+    file: sub_tasks/network.yml
     apply:
       tags:
         - ubuntu
@@ -93,8 +93,9 @@
     - ubuntu_network
 
 - name: Configure Netplan
+  when: inventory_hostname not in (groups['opentofu_managed'] | default([]))
   ansible.builtin.include_tasks:
-    file: _netplan.yml
+    file: sub_tasks/netplan.yml
     apply:
       tags:
         - ubuntu

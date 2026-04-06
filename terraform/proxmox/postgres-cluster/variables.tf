@@ -1,17 +1,11 @@
 variable "pm_api_url" {
   type        = string
-  description = "Proxmox API URL, e.g. https://pve.example.com:8006/api2/json"
+  description = "Proxmox API URL, e.g. https://pve.example.com:8006/"
 }
 
-variable "pm_api_token_id" {
+variable "pm_api_token" {
   type        = string
-  description = "Terraform Proxmox API token ID"
-  sensitive   = true
-}
-
-variable "pm_api_token_secret" {
-  type        = string
-  description = "Terraform Proxmox API token secret"
+  description = "Terraform Proxmox API token in format user@realm!tokenid=secret"
   sensitive   = true
 }
 
@@ -21,14 +15,28 @@ variable "pm_tls_insecure" {
   description = "Set true if using self-signed Proxmox certs"
 }
 
+variable "pm_ssh_username" {
+  type    = string
+  default = "root"
+}
+
+variable "pm_ssh_host" {
+  type = string
+}
+
+variable "tailscale_auth_key" {
+  type      = string
+  sensitive = true
+}
+
 variable "target_node" {
   type        = string
   description = "Proxmox node to place the VMs on"
 }
 
-variable "clone_template" {
-  type        = string
-  description = "Name of the Ubuntu 24.04 Cloud-Init VM template in Proxmox"
+variable "clone_template_vmid" {
+  type        = number
+  description = "VMID of the Ubuntu 24.04 Cloud-Init template in Proxmox"
 }
 
 variable "vm_bridge" {
@@ -72,7 +80,7 @@ variable "default_tags" {
 
 variable "vm_storage" {
   type        = string
-  description = "Proxmox storage name for VM disks and cloud-init disks"
+  description = "Proxmox datastore for VM disks and cloud-init disks"
 }
 
 variable "postgres_vms" {

@@ -1,0 +1,67 @@
+---
+
+- name: Assert supported OS
+  ansible.builtin.assert:
+    that:
+      - ansible_facts["os_family"] == "Debian"
+      - ansible_facts["distribution"] == "Ubuntu"
+    fail_msg: "This role currently supports Ubuntu only."
+
+- name: Ensure apt prerequisites are installed
+  ansible.builtin.apt:
+    name: "{{ opentofu_prereq_packages }}"
+    state: present
+    update_cache: true
+
+- name: Ensure OpenTofu keyring directory exists
+  ansible.builtin.file:
+    path: "{{ opentofu_keyring_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Download OpenTofu package signing key
+  ansible.builtin.get_url:
+    url: https://get.opentofu.org/opentofu.gpg
+    dest: "{{ opentofu_keyring_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Download OpenTofu repository key
+  ansible.builtin.get_url:
+    url: https://packages.opentofu.org/opentofu/tofu/gpgkey
+    dest: /tmp/opentofu-repo.gpg.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Dearmor OpenTofu repository key
+  ansible.builtin.command:
+    cmd: >-
+      gpg --dearmor
+      -o {{ opentofu_keyring_file_repo }}
+      /tmp/opentofu-repo.gpg.asc
+  args:
+    creates: "{{ opentofu_keyring_file_repo }}"
+
+- name: Remove temporary OpenTofu repository key file
+  ansible.builtin.file:
+    path: /tmp/opentofu-repo.gpg.asc
+    state: absent
+
+- name: Add OpenTofu apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by={{ opentofu_keyring_file }},{{ opentofu_keyring_file_repo }}]
+      {{ opentofu_source_url }}
+      {{ opentofu_source_suite }} main
+    filename: "{{ opentofu_repo_filename }}"
+    state: present
+    update_cache: true
+
+- name: Install OpenTofu packages
+  ansible.builtin.apt:
+    name: "{{ opentofu_packages }}"
+    state: present
