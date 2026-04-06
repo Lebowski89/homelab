@@ -20,7 +20,7 @@ autopulse:
   targets:
     user_interface:
       name: autopulse-ui
-      image: danonline/autopulse:ui@sha256:8753857566184fdfacf8c47b4e2c95f46ff27e4fe796a3fb114050ce36a3fbe4
+      image: danonline/autopulse:ui@sha256:db01ffb3a74aff4b93a58da4d930d1b949e83256b19fa03d2ea43e025f41816d
       traefik:
         enable: true
         port: 2880
