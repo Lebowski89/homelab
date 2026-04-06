@@ -1,17 +1,30 @@
-resource "proxmox_vm_qemu" "postgres" {
+locals {
+  vm_nameservers = [for ns in split(" ", trimspace(var.vm_nameserver)) : ns if ns != ""]
+}
+
+resource "proxmox_virtual_environment_vm" "postgres" {
   for_each = var.postgres_vms
 
   name        = each.key
-  vmid        = each.value.vmid
+  vm_id       = each.value.vmid
   description = "Postgres HA node ${each.key} managed by Terraform"
-  target_node = var.target_node
-  clone       = var.clone_template
+  node_name   = var.target_node
 
-  agent              = 1
-  start_at_node_boot = try(each.value.onboot, true)
-  os_type            = "cloud-init"
+  clone {
+    vm_id   = var.clone_template_vmid
+    full    = true
+    retries = 3
+  }
 
-  tags = var.default_tags
+  tags = split(";", var.default_tags)
+
+  agent {
+    enabled = true
+  }
+
+  on_boot       = try(each.value.onboot, true)
+  boot_order    = ["scsi0"]
+  scsi_hardware = "virtio-scsi-single"
 
   cpu {
     cores   = each.value.cores
@@ -19,44 +32,49 @@ resource "proxmox_vm_qemu" "postgres" {
     type    = "host"
   }
 
-  memory   = each.value.memory
-  scsihw   = "virtio-scsi-single"
-  boot     = "order=scsi0"
-  bootdisk = "scsi0"
-
-  network {
-    id     = 0
-    model  = "virtio"
-    bridge = var.vm_bridge
-    tag    = try(each.value.vlan_tag, null)
+  memory {
+    dedicated = each.value.memory
+    floating  = 0
   }
 
-  disks {
-    ide {
-      ide2 {
-        cloudinit {
-          storage = var.vm_storage
-        }
+  serial_device {
+    device = "socket"
+  }
+
+  disk {
+    datastore_id = var.vm_storage
+    interface    = "scsi0"
+    size         = each.value.disk_size_gb
+    iothread     = true
+  }
+
+  initialization {
+    datastore_id = var.vm_storage
+
+    ip_config {
+      ipv4 {
+        address = "${each.value.ip}/${var.vm_cidr}"
+        gateway = var.vm_gateway
       }
     }
 
-    scsi {
-      scsi0 {
-        disk {
-          storage  = var.vm_storage
-          size     = "${each.value.disk_size_gb}G"
-          iothread = true
-          discard  = true
-          backup   = true
-        }
-      }
+    dns {
+      domain  = var.vm_searchdomain
+      servers = local.vm_nameservers
+    }
+
+    user_account {
+      username = try(each.value.ci_user, var.ci_user)
+      keys     = [trimspace(file(pathexpand(var.ssh_public_key_path)))]
     }
   }
 
-  ciuser                 = try(each.value.ci_user, var.ci_user)
-  sshkeys                = file(var.ssh_public_key_path)
-  nameserver             = var.vm_nameserver
-  searchdomain           = var.vm_searchdomain
-  ipconfig0              = "ip=${each.value.ip}/${var.vm_cidr},gw=${var.vm_gateway}"
-  define_connection_info = false
+  network_device {
+    bridge  = var.vm_bridge
+    vlan_id = try(each.value.vlan_tag, null)
+  }
+
+  operating_system {
+    type = "l26"
+  }
 }
