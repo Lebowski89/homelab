@@ -1,10 +1,6 @@
 pm_api_url      = "https://192.168.80.80:8006/"
 pm_tls_insecure = true
 
-# bpg/proxmox provider expects a single token string in the form
-# user@realm!tokenid=secret. Set this via tfvars/env instead of committing secrets.
-pm_api_token = "terraform@pve!provider=replace-me"
-
 target_node          = "pve1"
 clone_template_vmid = 9000
 vm_storage           = "local-zfs"
@@ -17,7 +13,7 @@ vm_searchdomain = "home.arpa"
 
 ci_user = "ubuntu"
 
-ssh_public_key_path = "/home/mgt/.ssh/proxmox_terraform.pub"
+ssh_public_key_path = "~/.ssh/proxmox_terraform.pub"
 
 postgres_vms = {
   pg95 = {
