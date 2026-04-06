@@ -20,7 +20,7 @@ autopulse:
   targets:
     user_interface:
       name: autopulse-ui
-      image: danonline/autopulse:ui@sha256:8753857566184fdfacf8c47b4e2c95f46ff27e4fe796a3fb114050ce36a3fbe4
+      image: danonline/autopulse:ui@sha256:db01ffb3a74aff4b93a58da4d930d1b949e83256b19fa03d2ea43e025f41816d
       traefik:
         enable: true
         port: 2880
@@ -29,7 +29,7 @@ autopulse:
         enable: true
     main:
       name: autopulse
-      image: danonline/autopulse:latest-postgres@sha256:19901fa97fe29a907d0b680894b92e140beef6f40b538b9a8e4d9dc5894511bd
+      image: danonline/autopulse:latest-postgres@sha256:04db221fe789a43a21a0652b4b248f9905dab3fb9bdcdb263eb8ab8600c02e03
       environment:
         TZ: "{{ timezone }}"
         PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
