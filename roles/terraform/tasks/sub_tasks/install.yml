@@ -13,7 +13,7 @@
     state: present
     update_cache: true
 
-- name: Ensure HashiCorp keyring directory exists
+- name: Ensure OpenTofu keyring directory exists
   ansible.builtin.file:
     path: "{{ terraform_keyring_dir }}"
     state: directory
@@ -21,34 +21,47 @@
     group: root
     mode: "0755"
 
-- name: Download HashiCorp GPG key
+- name: Download OpenTofu package signing key
   ansible.builtin.get_url:
-    url: "{{ terraform_repo_url }}/gpg"
-    dest: "{{ terraform_keyring_file_ascii }}"
+    url: https://get.opentofu.org/opentofu.gpg
+    dest: "{{ terraform_keyring_file_opentofu }}"
     owner: root
     group: root
     mode: "0644"
 
-- name: Dearmor HashiCorp GPG key
+- name: Download OpenTofu repository key
+  ansible.builtin.get_url:
+    url: https://packages.opentofu.org/opentofu/tofu/gpgkey
+    dest: /tmp/opentofu-repo.gpg.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Dearmor OpenTofu repository key
   ansible.builtin.command:
     cmd: >-
       gpg --dearmor
-      -o {{ terraform_keyring_file }}
-      {{ terraform_keyring_file_ascii }}
+      -o {{ terraform_keyring_file_repo }}
+      /tmp/opentofu-repo.gpg.asc
   args:
-    creates: "{{ terraform_keyring_file }}"
+    creates: "{{ terraform_keyring_file_repo }}"
 
-- name: Add HashiCorp apt repository
+- name: Remove temporary OpenTofu repository key file
+  ansible.builtin.file:
+    path: /tmp/opentofu-repo.gpg.asc
+    state: absent
+
+- name: Add OpenTofu apt repository
   ansible.builtin.apt_repository:
     repo: >-
-      deb [arch={{ terraform_apt_arch }} signed-by={{ terraform_keyring_file }}]
-      {{ terraform_repo_url }}
-      {{ ansible_facts["distribution_release"] }} main
+      deb [signed-by={{ terraform_keyring_file_opentofu }},{{ terraform_keyring_file_repo }}]
+      {{ terraform_opentofu_source_url }}
+      {{ terraform_opentofu_source_suite }} main
     filename: "{{ terraform_repo_filename }}"
     state: present
     update_cache: true
 
-- name: Install Terraform packages
+- name: Install OpenTofu packages
   ansible.builtin.apt:
     name: "{{ terraform_packages }}"
     state: present
