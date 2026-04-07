@@ -9,13 +9,13 @@
 
 - name: Ensure apt prerequisites are installed
   ansible.builtin.apt:
-    name: "{{ terraform_prereq_packages }}"
+    name: "{{ opentofu_prereq_packages }}"
     state: present
     update_cache: true
 
 - name: Ensure OpenTofu keyring directory exists
   ansible.builtin.file:
-    path: "{{ terraform_keyring_dir }}"
+    path: "{{ opentofu_keyring_dir }}"
     state: directory
     owner: root
     group: root
@@ -24,7 +24,7 @@
 - name: Download OpenTofu package signing key
   ansible.builtin.get_url:
     url: https://get.opentofu.org/opentofu.gpg
-    dest: "{{ terraform_keyring_file_opentofu }}"
+    dest: "{{ opentofu_keyring_file }}"
     owner: root
     group: root
     mode: "0644"
@@ -41,10 +41,10 @@
   ansible.builtin.command:
     cmd: >-
       gpg --dearmor
-      -o {{ terraform_keyring_file_repo }}
+      -o {{ opentofu_keyring_file_repo }}
       /tmp/opentofu-repo.gpg.asc
   args:
-    creates: "{{ terraform_keyring_file_repo }}"
+    creates: "{{ opentofu_keyring_file_repo }}"
 
 - name: Remove temporary OpenTofu repository key file
   ansible.builtin.file:
@@ -54,14 +54,14 @@
 - name: Add OpenTofu apt repository
   ansible.builtin.apt_repository:
     repo: >-
-      deb [signed-by={{ terraform_keyring_file_opentofu }},{{ terraform_keyring_file_repo }}]
-      {{ terraform_opentofu_source_url }}
-      {{ terraform_opentofu_source_suite }} main
-    filename: "{{ terraform_repo_filename }}"
+      deb [signed-by={{ opentofu_keyring_file }},{{ opentofu_keyring_file_repo }}]
+      {{ opentofu_source_url }}
+      {{ opentofu_source_suite }} main
+    filename: "{{ opentofu_repo_filename }}"
     state: present
     update_cache: true
 
 - name: Install OpenTofu packages
   ansible.builtin.apt:
-    name: "{{ terraform_packages }}"
+    name: "{{ opentofu_packages }}"
     state: present

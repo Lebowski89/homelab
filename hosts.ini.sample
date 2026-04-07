@@ -8,19 +8,20 @@ pg95 ansible_host= ansible_user=
 pg96 ansible_host= ansible_user=
 pg97 ansible_host= ansible_user=
 
-[terraform_install]
+[opentofu_install]
 mgt
 
-[terraform_pve_template]
+[opentofu_pve_user]
 pve1
 
-[terraform_pve_user]
-pve1
+[opentofu_managed]
+pg95
+pg96
+pg97
 
-[terraform:children]
-terraform_install
-terraform_pve_template
-terraform_pve_user
+[opentofu:children]
+opentofu_install
+opentofu_pve_user
 
 [ansible_managers]
 mgt

@@ -86,7 +86,7 @@ resource "proxmox_virtual_environment_vm" "postgres" {
     }
 
     user_account {
-      username = try(each.value.ci_user, var.ci_user)
+      username = coalesce(try(each.value.ci_user, null), var.ci_user, "ubuntu")
       keys     = [trimspace(file(pathexpand(var.ssh_public_key_path)))]
     }
   }
