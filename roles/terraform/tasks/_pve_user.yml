@@ -24,6 +24,7 @@
       community.proxmox.proxmox_role:
         roleid: terraform
         privs:
+          - Datastore.Allocate
           - Datastore.AllocateSpace
           - Datastore.AllocateTemplate
           - Datastore.Audit

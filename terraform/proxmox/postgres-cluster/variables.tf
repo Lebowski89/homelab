@@ -15,6 +15,20 @@ variable "pm_tls_insecure" {
   description = "Set true if using self-signed Proxmox certs"
 }
 
+variable "pm_ssh_username" {
+  type    = string
+  default = "root"
+}
+
+variable "pm_ssh_host" {
+  type = string
+}
+
+variable "tailscale_auth_key" {
+  type      = string
+  sensitive = true
+}
+
 variable "target_node" {
   type        = string
   description = "Proxmox node to place the VMs on"

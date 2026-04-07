@@ -2,6 +2,26 @@ locals {
   vm_nameservers = [for ns in split(" ", trimspace(var.vm_nameserver)) : ns if ns != ""]
 }
 
+resource "proxmox_virtual_environment_file" "tailscale_cloudinit" {
+  content_type = "snippets"
+  datastore_id = "local"
+  node_name    = var.target_node
+
+  source_raw {
+    file_name = "tailscale-bootstrap.yaml"
+    data      = <<-EOF
+      #cloud-config
+      package_update: true
+      package_upgrade: false
+
+      runcmd:
+        - curl -fsSL https://tailscale.com/install.sh | sh
+        - systemctl enable --now tailscaled
+        - tailscale up --auth-key='${var.tailscale_auth_key}' --hostname="$(hostname)" --ssh
+    EOF
+  }
+}
+
 resource "proxmox_virtual_environment_vm" "postgres" {
   for_each = var.postgres_vms
 
@@ -49,7 +69,9 @@ resource "proxmox_virtual_environment_vm" "postgres" {
   }
 
   initialization {
-    datastore_id = var.vm_storage
+    datastore_id        = var.vm_storage
+    vendor_data_file_id = proxmox_virtual_environment_file.tailscale_cloudinit.id
+
 
     ip_config {
       ipv4 {
