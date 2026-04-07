@@ -4,9 +4,6 @@ mgt ansible_connection=local ansible_user= ansible_python_interpreter=
 unraid ansible_host= ansible_user=
 plex ansible_host= ansible_user=
 pve1 ansible_host= ansible_user=
-pg01 ansible_host= ansible_user=
-pg02 ansible_host= ansible_user=
-pg03 ansible_host= ansible_user=
 pg95 ansible_host= ansible_user=
 pg96 ansible_host= ansible_user=
 pg97 ansible_host= ansible_user=
