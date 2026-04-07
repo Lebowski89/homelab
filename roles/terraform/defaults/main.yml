@@ -13,10 +13,3 @@ terraform_apt_arch: "{{ 'amd64' if ansible_facts['architecture'] in ['x86_64', '
 
 terraform_packages:
   - terraform
-
-terraform_pve_template_vmid: 9000
-terraform_pve_template_name: ubuntu-2404-cloudinit-template
-terraform_pve_template_image_url: https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img
-terraform_pve_template_image_path: /root/noble-server-cloudimg-amd64.img
-terraform_pve_template_storage: local-zfs
-terraform_pve_template_bridge: vmbr0
