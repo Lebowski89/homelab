@@ -5,7 +5,7 @@ target_node         = "pve1"
 clone_template_vmid = 9002
 vm_storage          = "local-zfs"
 
-vm_bridge       = "vmbr0"
+vm_bridge       = "vmbr1"
 vm_gateway      = "192.168.80.1"
 vm_cidr         = 24
 vm_nameserver   = "192.168.80.48 192.168.80.59"
