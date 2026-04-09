@@ -28,6 +28,8 @@
           - Datastore.AllocateSpace
           - Datastore.AllocateTemplate
           - Datastore.Audit
+          - Mapping.Audit
+          - Mapping.Modify
           - Pool.Allocate
           - Pool.Audit
           - Sys.Audit
