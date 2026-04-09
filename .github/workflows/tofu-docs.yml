@@ -1,0 +1,40 @@
+---
+
+name: OpenTofu Docs
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**/*.tf"
+      - ".github/workflows/tofu-docs.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform/**/*.tf"
+      - ".github/workflows/tofu-docs.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Render terraform docs
+        uses: terraform-docs/gh-actions@v1.4.1
+        with:
+          working-dir: .
+          find-dir: terraform/proxmox
+          recursive: true
+          recursive-path: .
+          output-file: README.md
+          output-method: inject
+          git-push: "true"
