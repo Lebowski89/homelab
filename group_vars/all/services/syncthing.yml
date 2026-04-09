@@ -3,7 +3,7 @@
 syncthing:
   name: syncthing
   stack: syncthing
-  image: lscr.io/linuxserver/syncthing:v2.0.15-ls212
+  image: lscr.io/linuxserver/syncthing:v2.0.16-ls213
   named_networks:
     overlay:
       external: true
