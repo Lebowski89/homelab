@@ -13,7 +13,7 @@ cloud_image_node_name = "pve1"
 
 template_cores   = 2
 template_memory  = 2048
-template_bridge  = "vmbr0"
+template_bridge  = "vmbr1"
 template_ci_user = "ubuntu"
 
 ssh_public_key_path = "~/.ssh/proxmox_terraform.pub"
