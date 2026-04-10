@@ -39,7 +39,7 @@ resource "proxmox_virtual_environment_vm" "postgres" {
   tags = split(";", var.default_tags)
 
   agent {
-    enabled = false
+    enabled = true
   }
 
   on_boot       = try(each.value.onboot, true)

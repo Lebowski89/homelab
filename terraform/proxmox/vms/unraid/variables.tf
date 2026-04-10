@@ -2,12 +2,7 @@ variable "pm_api_url" {
   type = string
 }
 
-variable "pm_api_token_id" {
-  type      = string
-  sensitive = true
-}
-
-variable "pm_api_token_secret" {
+variable "pm_api_token" {
   type      = string
   sensitive = true
 }
@@ -41,6 +36,11 @@ variable "unraid_sockets" {
   default = 1
 }
 
+variable "unraid_cpu_flags" {
+  type    = list(string)
+  default = ["+pcid"]
+}
+
 variable "unraid_memory" {
   type    = number
   default = 32045
@@ -57,8 +57,8 @@ variable "unraid_bios" {
 }
 
 variable "unraid_boot_order" {
-  type    = string
-  default = "order=usb0"
+  type    = list(string)
+  default = ["usb0"]
 }
 
 variable "unraid_scsihw" {
@@ -76,22 +76,32 @@ variable "unraid_vga_type" {
   default = "qxl"
 }
 
-variable "unraid_efi_storage" {
-  type    = string
-  default = "local-zfs"
-}
-
-variable "unraid_tpm_storage" {
-  type    = string
-  default = "local-zfs"
-}
-
-variable "unraid_raw_disk_path" {
-  type    = string
-  default = "/dev/sdj"
-}
-
 variable "unraid_uuid" {
   type    = string
   default = "ebfa68e3-e312-42de-8c08-a3c400754edb"
+}
+
+variable "unraid_boot_mapping" {
+  type    = string
+  default = "UnRaid-Boot"
+}
+
+variable "unraid_hba_mapping" {
+  type    = string
+  default = "UnRaid-HBA"
+}
+
+variable "unraid_nic_mapping" {
+  type    = string
+  default = "UnRaid-NIC"
+}
+
+variable "unraid_cache_mapping" {
+  type    = string
+  default = "UnRaid-Cache"
+}
+
+variable "unraid_kvm_arguments" {
+  type    = string
+  default = "-device amd-iommu"
 }
