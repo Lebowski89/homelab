@@ -1,0 +1,70 @@
+---
+
+name: Generate Ansible Docs
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ansible/roles/**'
+      - '.github/workflows/ansible-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  generate_docs:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install Docsible
+        run: |
+          python -m pip install --upgrade pip
+          pip install docsible
+
+      - name: Generate documentation for all supported roles
+        run: |
+          shopt -s nullglob
+          for role in ansible/roles/*; do
+            [ -d "$role" ] || continue
+            role_name="$(basename "$role")"
+
+            case "$role_name" in
+              docker_services)
+                echo "Skipping $role_name (hand-written docs)"
+                continue
+                ;;
+            esac
+
+            echo "Generating docs for $role"
+            docsible \
+              --role "$role" \
+              --comments \
+              --graph \
+              --repository-url detect \
+              --output README.md
+          done
+
+      - name: Commit updated docs
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add ansible/roles/**/README.md ansible/roles/**/.docsible
+
+          if git diff --cached --quiet; then
+            echo "No documentation changes to commit"
+          else
+            git commit -m "docs(ansible): regenerate role docs"
+            git push
+          fi

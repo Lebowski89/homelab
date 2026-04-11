@@ -1,4 +1,8 @@
-# Tasks
+# Deploy
+
+**Summary:** These tasks template the final compose file and bring up the services (both Swarm and non-Swarm)
+
+## Tasks
 
 **deploy_all:** Iterates through all prepared stacks and deploys each one.
 
