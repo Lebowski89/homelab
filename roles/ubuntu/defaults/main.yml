@@ -7,6 +7,8 @@ ubuntu_apt_env_vars:
 ubuntu_ansible_repo_root: /opt
 ubuntu_ansible_repo_dirname: homelab
 ubuntu_ansible_repo_path: "{{ ubuntu_ansible_repo_root }}/{{ ubuntu_ansible_repo_dirname }}"
+ubuntu_ansible_dirname: ansible
+ubuntu_ansible_path: "{{ ubuntu_ansible_repo_path }}/{{ ubuntu_ansible_dirname }}"
 
 ubuntu_manage_repo_clone: true
 ubuntu_repo_url: "https://github.com/Lebowski89/homelab.git"
@@ -21,7 +23,7 @@ ubuntu_ansible_vault_pass_file: "{{ ubuntu_ansible_secrets_path }}/.ansible_vaul
 ubuntu_skynet_install: true
 ubuntu_skynet_install_path: /usr/local/bin/skynet
 ubuntu_skynet_doctor_ping_target: skynet
-ubuntu_skynet_docker_services_vars: "{{ ubuntu_ansible_repo_path }}/group_vars/all/docker_services.yml"
+ubuntu_skynet_docker_services_vars: "{{ ubuntu_ansible_path }}/group_vars/all/docker_services.yml"
 
 ubuntu_sysctl_file: /etc/sysctl.d/99-ubuntu-tuning.conf
 
