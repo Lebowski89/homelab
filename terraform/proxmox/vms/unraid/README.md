@@ -28,7 +28,7 @@ The VM uses the following PCI resource mappings in Proxmox:
 - `UnRaid-HBA` - SAS HBA passthrough
 - `UnRaid-NIC` - SFP+ NIC passthrough
 
-**Note: I create these via the mappings/resources role**
+**Note: I create these via the mappings/resources module**
 
 ## Terraform workflow
 
@@ -73,3 +73,6 @@ hostpci1: mapping=UnRaid-HBA
 hostpci2: mapping=UnRaid-NIC
 usb0: mapping=UnRaid-Boot
 ```
+
+<!-- BEGIN_TF_DOCS -->
+<!-- END_TF_DOCS -->

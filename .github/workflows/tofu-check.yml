@@ -1,0 +1,60 @@
+---
+
+name: OpenTofu Check
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**/*.tf"
+      - "terraform/**/*.tfvars"
+      - "terraform/**/*.tftest.hcl"
+      - ".github/workflows/tofu-check.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "terraform/**/*.tf"
+      - "terraform/**/*.tfvars"
+      - "terraform/**/*.tftest.hcl"
+      - ".github/workflows/tofu-check.yml"
+
+concurrency:
+  group: tofu-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tofu-check:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        root:
+          - terraform/proxmox/mappings/resources
+          - terraform/proxmox/settings/pve1
+          - terraform/proxmox/templates/ubuntu-2404
+          - terraform/proxmox/vms/postgres-cluster
+          - terraform/proxmox/vms/unraid
+
+    defaults:
+      run:
+        shell: bash
+        working-directory: ${{ matrix.root }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup OpenTofu
+        uses: opentofu/setup-opentofu@v2
+
+      - name: Show version
+        run: tofu version
+
+      - name: Check formatting
+        run: tofu fmt -check -recursive
+
+      - name: Init
+        run: tofu init -backend=false
+
+      - name: Validate
+        run: tofu validate
