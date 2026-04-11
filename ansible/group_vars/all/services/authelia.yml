@@ -48,7 +48,7 @@ authelia:
           read_only: false
     main:
       name: authelia
-      image: authelia/authelia:4.39.16
+      image: authelia/authelia:4.39.18
       environment:
         TZ: "{{ timezone }}"
         PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
