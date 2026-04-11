@@ -1,7 +1,7 @@
 
 .vscode/
-collections/
-hosts.ini
+ansible/collections/
+**/hosts.ini
 **/.terraform/*
 **/*.tfstate
 **/*.tfstate.*

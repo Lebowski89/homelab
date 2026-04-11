@@ -35,7 +35,7 @@
     {
       "customType": "regex",
       "managerFilePatterns": [
-        "/roles\\/ubuntu\\/tasks\\/.*\\.ya?ml$/"
+        "/ansible\\/roles\\/ubuntu\\/tasks\\/.*\\.ya?ml$/"
       ],
       "matchStrings": [
         "-\\s*(?<depName>[A-Za-z0-9._-]+)==(?<currentValue>[^\\s\"']+)"
