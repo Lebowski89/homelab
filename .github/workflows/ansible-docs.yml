@@ -1,30 +1,29 @@
 ---
 
-name: ansible-docs
+name: Generate Ansible Docs
 
 on:
-  pull_request:
-    paths:
-      - 'ansible/roles/**'
-      - 'ansible/playbook.yml'
-      - '.github/workflows/ansible-docs.yml'
   push:
-    branches: [main]
+    branches:
+      - main
     paths:
       - 'ansible/roles/**'
-      - 'ansible/playbook.yml'
       - '.github/workflows/ansible-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  docsible:
+  generate_docs:
     runs-on: ubuntu-24.04
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v5
 
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: '3.12'
 
@@ -33,11 +32,30 @@ jobs:
           python -m pip install --upgrade pip
           pip install docsible
 
-      - name: Generate role docs
+      - name: Generate documentation for all roles
         run: |
-          docsible --role ansible/roles/ubuntu --comments --graph --repository-url detect --output README.md
-          docsible --role ansible/roles/docker_services --comments --graph --repository-url detect --output README.md
+          shopt -s nullglob
+          for role in ansible/roles/*; do
+            [ -d "$role" ] || continue
+            echo "Generating docs for $role"
+            docsible \
+              --role "$role" \
+              --comments \
+              --graph \
+              --repository-url detect \
+              --output README.md
+          done
 
-      - name: Check for uncommitted doc changes
+      - name: Commit updated docs
         run: |
-          git diff --exit-code
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add ansible/roles/**/README.md ansible/roles/**/.docsible
+
+          if git diff --cached --quiet; then
+            echo "No documentation changes to commit"
+          else
+            git commit -m "docs(ansible): regenerate role docs"
+            git push
+          fi
