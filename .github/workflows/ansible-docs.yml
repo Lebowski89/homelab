@@ -32,11 +32,20 @@ jobs:
           python -m pip install --upgrade pip
           pip install docsible
 
-      - name: Generate documentation for all roles
+      - name: Generate documentation for all supported roles
         run: |
           shopt -s nullglob
           for role in ansible/roles/*; do
             [ -d "$role" ] || continue
+            role_name="$(basename "$role")"
+
+            case "$role_name" in
+              docker_services)
+                echo "Skipping $role_name (hand-written docs)"
+                continue
+                ;;
+            esac
+
             echo "Generating docs for $role"
             docsible \
               --role "$role" \
