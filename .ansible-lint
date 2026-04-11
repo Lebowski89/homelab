@@ -5,6 +5,7 @@ profile: production
 exclude_paths:
   - .git/
   - .github/
+  - ansible/collections/
 
 mock_modules:
   - yedit

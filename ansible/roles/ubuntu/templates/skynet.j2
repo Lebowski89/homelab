@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PLAYBOOK="${PLAYBOOK:-{{ ubuntu_ansible_repo_path }}/playbook.yml}"
-INVENTORY="${INVENTORY:-{{ ubuntu_ansible_repo_path }}/hosts.ini}"
-ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-{{ ubuntu_ansible_repo_path }}/ansible.cfg}"
+PLAYBOOK="${PLAYBOOK:-{{ ubuntu_ansible_path }}/playbook.yml}"
+INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/hosts.ini}"
+ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-{{ ubuntu_ansible_path }}/ansible.cfg}"
 BECOME_PASS_FILE="${BECOME_PASS_FILE:-{{ ubuntu_ansible_become_pass_file }}}"
 VAULT_PASS_FILE="${VAULT_PASS_FILE:-{{ ubuntu_ansible_vault_pass_file }}}"
 DOCTOR_PING_TARGET="${SKYNET_DOCTOR_PING_TARGET:-{{ ubuntu_skynet_doctor_ping_target }}}"

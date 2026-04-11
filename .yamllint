@@ -18,5 +18,5 @@ rules:
 ignore: |
   .git/
   .github/
-  roles/**/templates/
+  ansible/collections/
   **/*.j2
