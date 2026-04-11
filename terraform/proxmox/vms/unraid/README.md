@@ -4,9 +4,7 @@
 
 The Unraid VM is a special-case VM, as:
 - it is imported into Terraform, rather than based on a cloud-init template
-- it uses a manually attached UnRaid boot USB (aka no vdisk)
-- it uses pre-existing resource mappings for HBA/NIC/Cache drive
-- it uses settings that require root permissions to be set manually after VM creation.
+- it uses pre-existing resource mappings for Boot/HBA/NIC/Cache drive
 
 Terraform manages and tracks:
 
@@ -21,36 +19,22 @@ Terraform manages and tracks:
 
 **What it isn't for: Casual destroy/create.**
 
-## Proxmox Prerequisites
-
-Before using this Terraform root, create the required Proxmox resource mappings manually.
-
 ### Required PCI mappings
 
 The VM uses the following PCI resource mappings in Proxmox:
 
-- `Adaptec-UnRaid` - HBA passthrough
-- `X710-UnRaid` - NIC passthrough
-- `FireCuda-Swarm` - Cache (NVME) passthrough
+- `UnRaid-Boot` - USB Boot Key
+- `UnRaid-Cache` - Cache (NVME) passthrough
+- `UnRaid-HBA` - SAS HBA passthrough
+- `UnRaid-NIC` - SFP+ NIC passthrough
 
-**Note: Handle manually _before_ the VM creation.**
-
-### USB boot device
-
-The VM uses a raw passthrough for the UnRaid boot USB
-
-Currently, this mapping is:
-
-```text
-usb0: host=6-3
-```
-**Note: Set manually _after_ VM creation.**
+**Note: I create these via the mappings/resources role**
 
 ## Terraform workflow
 
-From the `terraform/proxmox/unraid/` directory:
+From the `terraform/proxmox/vms/unraid/` directory:
 
-If the VM doesn't exist:
+New:
 
 ```bash
 terraform fmt
@@ -60,7 +44,7 @@ terraform plan
 terraform apply
 ```
 
-If importing an existing VM:
+Import existing:
 
 ```bash
 terraform fmt
@@ -84,8 +68,8 @@ qm set <VMID> --args "-device amd-iommu"  # Set manual args
 ```text
 args: -device amd-iommu
 boot: order=usb0
-hostpci0: mapping=Adaptec-UnRaid
-hostpci1: mapping=X710-UnRaid
-hostpci2: mapping=FireCuda-Swarm
-usb0: host=6-3
+hostpci0: mapping=UnRaid-Cache
+hostpci1: mapping=UnRaid-HBA
+hostpci2: mapping=UnRaid-NIC
+usb0: mapping=UnRaid-Boot
 ```
