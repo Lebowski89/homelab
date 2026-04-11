@@ -1,0 +1,43 @@
+---
+
+name: ansible-docs
+
+on:
+  pull_request:
+    paths:
+      - 'ansible/roles/**'
+      - 'ansible/playbook.yml'
+      - '.github/workflows/ansible-docs.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'ansible/roles/**'
+      - 'ansible/playbook.yml'
+      - '.github/workflows/ansible-docs.yml'
+
+jobs:
+  docsible:
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Docsible
+        run: |
+          python -m pip install --upgrade pip
+          pip install docsible
+
+      - name: Generate role docs
+        run: |
+          docsible --role ansible/roles/ubuntu --comments --graph --repository-url detect --output README.md
+          docsible --role ansible/roles/docker_services --comments --graph --repository-url detect --output README.md
+
+      - name: Check for uncommitted doc changes
+        run: |
+          git diff --exit-code
