@@ -20,15 +20,6 @@ permissions:
 jobs:
   docs:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        root:
-          - terraform/proxmox/mappings/resources
-          - terraform/proxmox/settings/pve1
-          - terraform/proxmox/templates/ubuntu-2404
-          - terraform/proxmox/vms/postgres-cluster
-          - terraform/proxmox/vms/unraid
 
     steps:
       - name: Checkout
@@ -40,7 +31,9 @@ jobs:
       - name: Render terraform docs
         uses: terraform-docs/gh-actions@v1.4.1
         with:
-          working-dir: ${{ matrix.root }}
+          working-dir: .
+          find-dir: terraform/proxmox
+          recursive: true
           output-file: README.md
           output-method: inject
           git-push: "true"
