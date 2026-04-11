@@ -18,5 +18,4 @@ rules:
 ignore: |
   .git/
   .github/
-  roles/**/templates/
   **/*.j2
