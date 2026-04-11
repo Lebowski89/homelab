@@ -14,6 +14,9 @@ on:
       - "terraform/**/*.tf"
       - ".github/workflows/tofu-docs.yml"
 
+permissions:
+  contents: write
+
 jobs:
   docs:
     runs-on: ubuntu-latest
@@ -31,7 +34,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
-          ref: ${{ github.event.pull_request.head.ref || github.ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Render terraform docs
         uses: terraform-docs/gh-actions@v1.4.1
