@@ -13,6 +13,7 @@ This file lists the Ansible modules invoked by this role's task and handler file
 - `ansible.builtin.include_tasks`
 - `ansible.builtin.pause`
 - `ansible.builtin.set_fact`
+- `ansible.builtin.shell`
 - `ansible.builtin.slurp`
 - `ansible.builtin.stat`
 - `ansible.builtin.template`
@@ -36,6 +37,11 @@ This file lists the Ansible modules invoked by this role's task and handler file
 - `community.general.ipify_facts`
 - `community.general.ipinfoio_facts`
 - `community.general.xml`
+
+### `community.postgresql`
+
+- `community.postgresql.postgresql_db`
+- `community.postgresql.postgresql_ping`
 
 ### `custom`
 
