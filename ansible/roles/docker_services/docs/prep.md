@@ -1,6 +1,6 @@
 # Prep
 
-The tasks/prep (preparation) tasks are broken down into the following categories:
+The prep (preparation) tasks are broken down into the following categories:
 
 ## Cleanup
 
