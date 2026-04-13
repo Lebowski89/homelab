@@ -51,7 +51,7 @@
     - name: Authelia keys | Run generator container
       community.docker.docker_container:
         name: authelia-key-container
-        image: authelia/authelia:4.39.18
+        image: authelia/authelia:4.39.19
         pull: true
         state: started
         container_default_behavior: compatibility
