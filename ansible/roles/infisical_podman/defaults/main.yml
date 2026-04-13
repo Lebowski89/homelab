@@ -1,38 +1,34 @@
 ---
 
-infisical_podman_name: infisical
-infisical_podman_image: infisical/infisical:v0.159.1
-infisical_podman_port: 8066
-infisical_podman_path: "/opt/{{ infisical_podman_name }}"
-infisical_podman_enc_key: ""
-infisical_podman_jwt_key: ""
+infisical_name: infisical
+infisical_image: infisical/infisical:v0.159.1
+infisical_port: 8066
+infisical_path: "/opt/{{ infisical_name }}"
+infisical_enc_key: ""
+infisical_jwt_key: ""
 
-timezone: "UTC"
-puid: 1000
-pgid: 1000
+infisical_network: infisical
 
-infisical_podman_network: infisical
+infisical_postgres_name: infisical-postgres
+infisical_postgres_image: postgres:18.3
+infisical_postgres_port: 5432
+infisical_postgres_path: "{{ infisical_path }}/postgres"
+infisical_postgres_user: ""
+infisical_postgres_pass: ""
+infisical_expose_postgres: false
 
-infisical_podman_postgres_name: infisical-postgres
-infisical_podman_postgres_image: postgres:18.3
-infisical_podman_postgres_port: 5432
-infisical_podman_postgres_path: "{{ infisical_podman_path }}/postgres"
-infisical_podman_postgres_user: ""
-infisical_podman_postgres_pass: ""
-infisical_podman_expose_postgres: false
+infisical_redis_name: infisical-redis
+infisical_redis_image: redis:8.6.2-alpine3.23
+infisical_redis_port: 6390
+infisical_redis_path: "{{ infisical_path }}/redis"
+infisical_redis_key: ""
+infisical_expose_redis: false
 
-infisical_podman_redis_name: infisical-redis
-infisical_podman_redis_image: redis:8.6.2-alpine3.23
-infisical_podman_redis_port: 6390
-infisical_podman_redis_path: "{{ infisical_podman_path }}/redis"
-infisical_podman_redis_key: ""
-infisical_podman_expose_redis: false
+infisical_smtp_email: ""
+infisical_smtp_host: ""
+infisical_smtp_port: ""
+infisical_smtp_user: ""
+infisical_smtp_pass: ""
+infisical_smtp_sender: ""
 
-infisical_podman_smtp_email: ""
-infisical_podman_smtp_host: ""
-infisical_podman_smtp_port: ""
-infisical_podman_smtp_user: ""
-infisical_podman_smtp_pass: ""
-infisical_podman_smtp_sender: ""
-
-infisical_podman_site_url: "http://localhost:8080"
+infisical_site_url: "http://localhost:8080"

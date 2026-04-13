@@ -1,19 +1,19 @@
 [Unit]
 Description=Infisical Redis container
-After=network-online.target {{ infisical_podman_network }}-network.service
+After=network-online.target {{ infisical_network }}-network.service
 Wants=network-online.target
-Requires={{ infisical_podman_network }}-network.service
+Requires={{ infisical_network }}-network.service
 
 [Container]
-ContainerName={{ infisical_podman_redis_name }}
-Image={{ infisical_podman_redis_image }}
-Network={{ infisical_podman_network }}
-{% if infisical_podman_expose_redis %}
-PublishPort={{ infisical_podman_redis_port }}:6379
+ContainerName={{ infisical_redis_name }}
+Image={{ infisical_redis_image }}
+Network={{ infisical_network }}
+{% if infisical_expose_redis %}
+PublishPort={{ infisical_redis_port }}:6379
 {% endif %}
 Environment=TZ={{ timezone }}
-EnvironmentFile={{ infisical_podman_path }}/.env
-Volume={{ infisical_podman_redis_path }}:/data:Z
+EnvironmentFile={{ infisical_path }}/.env
+Volume={{ infisical_redis_path }}:/data:Z
 Exec=sh -c 'redis-server --appendonly yes --requirepass "$INFISICAL_REDIS_KEY"'
 
 [Service]
