@@ -74,6 +74,19 @@
         - infisical_recreate
         - infisical_remove
 
+    - name: Include Infisical Podman role
+      when:
+        - inventory_hostname == docker_services_primary_manager
+        - infisical_podman_enabled | default(false) | bool
+      ansible.builtin.include_role:
+        name: infisical_podman
+      tags:
+        - infisical_podman_bootstrap
+        - infisical_podman_deploy
+        - infisical_podman_recreate
+        - infisical_podman_remove
+
+
     - name: Include OpenTofu role
       ansible.builtin.include_role:
         name: opentofu

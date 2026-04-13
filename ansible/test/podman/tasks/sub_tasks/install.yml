@@ -1,0 +1,24 @@
+---
+
+- name: Podman install | Assert supported OS
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family == 'Debian'
+      - ansible_facts.distribution == 'Ubuntu'
+    fail_msg: "podman_install currently supports Ubuntu only."
+
+- name: Podman install | Install Podman packages
+  become: true
+  ansible.builtin.apt:
+    name: "{{ podman_packages + podman_install_extra_packages }}"
+    state: "{{ podman_state }}"
+    update_cache: "{{ podman_update_cache }}"
+    cache_valid_time: "{{ podman_cache_valid_time }}"
+
+- name: Podman install | Check Podman version
+  ansible.builtin.command:
+    argv:
+      - podman
+      - --version
+  register: podman_version
+  changed_when: false
