@@ -8,12 +8,14 @@ Requires={{ infisical_podman_network }}-network.service
 ContainerName={{ infisical_podman_postgres_name }}
 Image={{ infisical_podman_postgres_image }}
 Network={{ infisical_podman_network }}
+{% if infisical_podman_expose_postgres %}
 PublishPort={{ infisical_podman_postgres_port }}:5432
+{% endif %}
 Environment=TZ={{ timezone }}
 EnvironmentFile={{ infisical_podman_path }}/.env
 Environment=POSTGRES_DB=infisical
 Volume={{ infisical_podman_postgres_path }}:/var/lib/postgresql/data:Z
-HealthCmd=pg_isready -U ${POSTGRES_USER}
+HealthCmd=pg_isready -U {{ infisical_podman_postgres_user }}
 HealthInterval=30s
 HealthRetries=10
 HealthStartPeriod=30s

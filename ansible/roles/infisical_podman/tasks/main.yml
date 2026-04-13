@@ -35,6 +35,12 @@
     - infisical_podman_recreate
     - infisical_podman_remove
 
+- name: Reload systemd after quadlet removal
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  tags:
+    - infisical_podman_remove
+
 ################################
 # DIRECTORIES
 ################################
@@ -56,8 +62,8 @@
       group: "999"
       mode: "0700"
     - path: "{{ infisical_podman_redis_path }}"
-      owner: "{{ puid }}"
-      group: "{{ pgid }}"
+      owner: "999"
+      group: "999"
       mode: "0755"
     - path: /etc/containers/systemd
       owner: root
