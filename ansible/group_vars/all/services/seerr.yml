@@ -3,7 +3,7 @@
 seerr:
   name: seerr
   stack: seerr
-  image: ghcr.io/hotio/seerr:release-3.1.0
+  image: ghcr.io/hotio/seerr:release-v3.2.0
   named_networks:
     overlay:
       external: true
