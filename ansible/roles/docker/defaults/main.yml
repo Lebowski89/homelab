@@ -27,6 +27,8 @@ docker_install_compose_plugin: true
 docker_manage_user: false
 docker_user: ""
 
-docker_network: 'overlay'  ## allows backend docker communication
-docker_network_driver: 'overlay'  ## only required if network doesn't exist
-docker_network_subnet: '172.98.0.0/24'  ## only required if network doesn't exist
+docker_network: "overlay"
+docker_network_driver: "overlay"
+docker_network_subnet: "172.98.0.0/24"
+
+docker_prune_threshold_percent: 80

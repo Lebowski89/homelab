@@ -11,25 +11,39 @@
         manager: auto
       tags: always
 
-    - name: Set timezone variable on manager
+    - name: Resolve host timezone variable
       when: inventory_hostname == docker_services_primary_manager
-      ansible.builtin.set_fact:
-        timezone: "{{ ansible_facts.timezone | default('Australia/Melbourne') }}"
-      tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
+      tags:
+        - infisical_deploy
+        - infisical_recreate
+        - infisical_podman_deploy
+        - infisical_podman_recreate
+        - deploy
+        - update
+        - remove
+        - recreate
+        - bootstrap
+      block:
+        - name: Set timezone variable on manager
+          ansible.builtin.set_fact:
+            timezone: "{{ ansible_facts.timezone | default('Australia/Melbourne') }}"
 
-    - name: Timezone output
-      when: inventory_hostname == docker_services_primary_manager
-      ansible.builtin.debug:
-        msg: "{{ timezone }}"
-      tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
+        - name: Timezone output
+          when: inventory_hostname == docker_services_primary_manager
+          ansible.builtin.debug:
+            msg: "{{ timezone }}"
 
-    - name: Share timezone to all hosts
-      when: inventory_hostname != docker_services_primary_manager
-      ansible.builtin.set_fact:
-        timezone: "{{ hostvars[docker_services_primary_manager].timezone }}"
-      tags: [infisical_deploy, infisical_recreate, deploy, update, remove, recreate, bootstrap]
+        - name: Share timezone to all hosts
+          when: inventory_hostname != docker_services_primary_manager
+          ansible.builtin.set_fact:
+            timezone: "{{ hostvars[docker_services_primary_manager].timezone }}"
 
   tasks:
+
+    ################################
+    # OS (CONFIG/SETTINGS)
+    ################################
+
     - name: Include Ubuntu role
       when:
         - ansible_os_family == "Debian"
@@ -48,6 +62,10 @@
         - ubuntu_network
         - ubuntu_netplan
 
+    ################################
+    # DOCKER
+    ################################
+
     - name: Include Docker role
       when: inventory_hostname in groups['docker']
       ansible.builtin.include_role:
@@ -64,6 +82,10 @@
         - docker_swarm_join
         - docker_swarm_network
 
+    ################################
+    # INFISICAL (STACK)
+    ################################
+
     - name: Include Infisical role
       when: inventory_hostname == docker_services_primary_manager
       ansible.builtin.include_role:
@@ -74,18 +96,9 @@
         - infisical_recreate
         - infisical_remove
 
-    - name: Include Infisical Podman role
-      when:
-        - inventory_hostname == docker_services_primary_manager
-        - infisical_podman_enabled | default(false) | bool
-      ansible.builtin.include_role:
-        name: infisical_podman
-      tags:
-        - infisical_podman_bootstrap
-        - infisical_podman_deploy
-        - infisical_podman_recreate
-        - infisical_podman_remove
-
+    ################################
+    # TERRAFORM
+    ################################
 
     - name: Include OpenTofu role
       ansible.builtin.include_role:
@@ -95,6 +108,10 @@
         - opentofu
         - opentofu_install
         - opentofu_pve_user
+
+    ################################
+    # POSTGRES (CLUSTER)
+    ################################
 
     - name: Include Postgres Cluster role
       ansible.builtin.include_role:
@@ -106,6 +123,10 @@
         - postgres_etcd
         - postgres_patroni
         - postgres_admin
+
+    ################################
+    # DOCKER_SERVICES
+    ################################
 
     - name: Load all service definitions from group_vars/all/services/*.yml
       ansible.builtin.include_vars:
@@ -159,3 +180,25 @@
           tags: [deploy, update, recreate]
       run_once: true
       tags: [deploy, update, recreate]
+
+    ################################
+    # TESTING
+    ################################
+
+    - name: Test | Include Podman role
+      when: inventory_hostname == docker_services_primary_manager
+      ansible.builtin.include_role:
+        name: podman
+      tags:
+        - podman
+        - podman_install
+
+    - name: Test | Include Infisical Podman role
+      when: inventory_hostname == docker_services_primary_manager
+      ansible.builtin.include_role:
+        name: infisical_podman
+      tags:
+        - infisical_podman_bootstrap
+        - infisical_podman_deploy
+        - infisical_podman_recreate
+        - infisical_podman_remove

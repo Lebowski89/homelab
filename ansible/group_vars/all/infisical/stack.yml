@@ -19,7 +19,7 @@ infisical_jwt_key: !vault |
           6437626637663763386433613939376131646232666366373138
 
 infisical_postgres_name: infisical-postgres
-infisical_postgres_image: postgres:18
+infisical_postgres_image: docker.io/library/postgres:18.3
 infisical_postgres_port: 5432
 infisical_postgres_path: "{{ infisical_path }}/postgres"
 infisical_postgres_user: !vault |
@@ -38,7 +38,7 @@ infisical_postgres_pass: !vault |
           6631
 
 infisical_redis_name: infisical-redis
-infisical_redis_image: redis:8.6-alpine
+infisical_redis_image: docker.io/library/redis:8.6-alpine
 infisical_redis_port: 6390
 infisical_redis_path: "{{ infisical_path }}/redis"
 infisical_redis_key: !vault |
@@ -81,6 +81,14 @@ infisical_smtp_sender: !vault |
           6566306235336331360a653036343932373963363561323163383534383463303038636361343266
           36356565353632366439336662333238393936636230633364653865336163656161666338663363
           6234303034316665663430353664346163376362613762326331
+
+infisical_domain: !vault |
+          $ANSIBLE_VAULT;1.1;AES256
+          39356239626439633732306331316130343136303238366236353038633363326534363231656239
+          6662666366666431346663613134336437386465666431330a343339323136663961383533303662
+          36373232353837636232313732623932383162316666343230633637333536616138333836303062
+          6665306130336463650a626535636166313736623032353930646230316565666332646461613537
+          31633666343563343131393033323132616239306535386562633561366633343937
 
 infisical_secret_files:
   postgres_user.txt: "{{ infisical_postgres_user }}"
