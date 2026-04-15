@@ -51,6 +51,7 @@
 | [docker_network](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L30)   | str | `overlay` |    
 | [docker_network_driver](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L31)   | str | `overlay` |    
 | [docker_network_subnet](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L32)   | str | `172.98.0.0/24` |    
+| [docker_prune_threshold_percent](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L34)   | int | `80` |    
 
 
 
@@ -84,6 +85,9 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Docker prune ¦ Get root filesystem usage | ansible.builtin.command | False |  |
+| Docker prune ¦ Parse root filesystem usage percent | ansible.builtin.set_fact | False |  |
+| Docker prune ¦ End play when usage is below threshold | ansible.builtin.meta | True |  |
 | Remove dangling Docker images | ansible.builtin.command | False | d,o,c,k,e,r,_,p,r,u,n,e,_,d,a,n,g,l,i,n,g |
 | Remove unused Docker images | ansible.builtin.command | False | d,o,c,k,e,r,_,p,r,u,n,e,_,u,n,u,s,e,d |
 | Remove unused Docker volumes | ansible.builtin.command | False | d,o,c,k,e,r,_,p,r,u,n,e,_,v,o,l,u,m,e,s |
@@ -173,10 +177,13 @@ classDef importRole stroke:#699ba7,stroke-width:2px;
 classDef includeVars stroke:#8e44ad,stroke-width:2px;
 classDef rescue stroke:#665352,stroke-width:2px;
 
-  Start-->|Task| Remove_dangling_Docker_images0[remove dangling docker images]:::task
-  Remove_dangling_Docker_images0-->|Task| Remove_unused_Docker_images1[remove unused docker images]:::task
-  Remove_unused_Docker_images1-->|Task| Remove_unused_Docker_volumes2[remove unused docker volumes]:::task
-  Remove_unused_Docker_volumes2-->End
+  Start-->|Task| Docker_prune___Get_root_filesystem_usage0[docker prune   get root filesystem usage]:::task
+  Docker_prune___Get_root_filesystem_usage0-->|Task| Docker_prune___Parse_root_filesystem_usage_percent1[docker prune   parse root filesystem usage percent]:::task
+  Docker_prune___Parse_root_filesystem_usage_percent1-->|Task| Docker_prune___End_play_when_usage_is_below_threshold2[docker prune   end play when usage is below<br>threshold<br>When: **docker prune root usage percent    docker prune<br>threshold percent   int**]:::task
+  Docker_prune___End_play_when_usage_is_below_threshold2-->|Task| Remove_dangling_Docker_images3[remove dangling docker images]:::task
+  Remove_dangling_Docker_images3-->|Task| Remove_unused_Docker_images4[remove unused docker images]:::task
+  Remove_unused_Docker_images4-->|Task| Remove_unused_Docker_volumes5[remove unused docker volumes]:::task
+  Remove_unused_Docker_volumes5-->End
 ```
 
 
