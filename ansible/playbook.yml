@@ -13,6 +13,16 @@
 
     - name: Resolve host timezone variable
       when: inventory_hostname == docker_services_primary_manager
+      tags:
+        - infisical_deploy
+        - infisical_recreate
+        - infisical_podman_deploy
+        - infisical_podman_recreate
+        - deploy
+        - update
+        - remove
+        - recreate
+        - bootstrap
       block:
         - name: Set timezone variable on manager
           ansible.builtin.set_fact:
@@ -27,16 +37,6 @@
           when: inventory_hostname != docker_services_primary_manager
           ansible.builtin.set_fact:
             timezone: "{{ hostvars[docker_services_primary_manager].timezone }}"
-      tags:
-        - infisical_deploy
-        - infisical_recreate
-        - infisical_podman_deploy
-        - infisical_podman_recreate
-        - deploy
-        - update
-        - remove
-        - recreate
-        - bootstrap
 
   tasks:
 
