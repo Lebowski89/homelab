@@ -3,7 +3,7 @@
 stash:
   name: stash
   stack: stash
-  image: ghcr.io/hotio/stash:release-v0.31.0
+  image: ghcr.io/hotio/stash:release-v0.31.1
   named_networks:
     overlay:
       external: true
