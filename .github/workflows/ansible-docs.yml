@@ -8,6 +8,7 @@ on:
       - main
     paths:
       - 'ansible/roles/**'
+      - 'ansible/test/**'
       - '.github/workflows/ansible-docs.yml'
   workflow_dispatch:
 
