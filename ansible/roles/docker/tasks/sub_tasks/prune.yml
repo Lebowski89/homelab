@@ -42,4 +42,3 @@
     'Total reclaimed space:' in docker_volume_prune_result.stdout
     and ('0B' not in docker_volume_prune_result.stdout)
   tags: docker_prune_volumes
-
