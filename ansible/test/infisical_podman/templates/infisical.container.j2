@@ -1,0 +1,21 @@
+[Unit]
+Description=Infisical container
+After=network-online.target {{ infisical_podman_network }}-network.service {{ infisical_podman_postgres_name }}.service {{ infisical_podman_redis_name }}.service
+Wants=network-online.target
+Requires={{ infisical_podman_network }}-network.service {{ infisical_podman_postgres_name }}.service {{ infisical_podman_redis_name }}.service
+
+[Container]
+ContainerName={{ infisical_podman_name }}
+Image={{ infisical_podman_image }}
+Network={{ infisical_podman_network }}
+PublishPort={{ infisical_podman_port }}:8080
+Environment=TZ={{ timezone }}
+Environment=NODE_ENV=production
+EnvironmentFile={{ infisical_podman_path }}/.env
+
+[Service]
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
