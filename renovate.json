@@ -53,8 +53,8 @@
     {
       "matchManagers": ["terraform"],
       "matchDepTypes": ["required_version"],
-      "groupName": "terraform core",
-      "labels": ["renovate", "terraform", "terraform-core"]
+      "enabled": false,
+      "description": "Do not update Terraform/OpenTofu required_version constraints; managed manually as a range."
     },
     {
       "matchManagers": ["terraform"],
