@@ -1,0 +1,5 @@
+github_owner           = "Lebowski89"
+repository_name        = "blog"
+repository_description = "Hugo blog"
+default_branch         = "main"
+visibility             = "public"

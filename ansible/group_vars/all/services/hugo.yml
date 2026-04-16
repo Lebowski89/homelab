@@ -89,50 +89,6 @@ hugo:
       source: /home/mgt/blog
       target: /project
       read_only: false
-  cloudflare:
-    enable: true
-    records:
-      ## github pages addresses
-      - record: "@"
-        type: "A"
-        value: "185.199.108.153"
-        proxy: false
-        solo: true
-      - record: "@"
-        type: "A"
-        value: "185.199.109.153"
-        proxy: false
-        solo: true
-      - record: "@"
-        type: "A"
-        value: "185.199.110.153"
-        proxy: false
-        solo: true
-      - record: "@"
-        type: "A"
-        value: "185.199.111.153"
-        proxy: false
-        solo: true
-      - record: "@"
-        type: "AAAA"
-        value: "2606:50c0:8000::153"
-        proxy: false
-        solo: true
-      - record: "@"
-        type: "AAAA"
-        value: "2606:50c0:8001::153"
-        proxy: false
-        solo: true
-      - record: "@"
-        type: "AAAA"
-        value: "2606:50c0:8002::153"
-        proxy: false
-        solo: true
-      - record: "@"
-        type: "AAAA"
-        value: "2606:50c0:8003::153"
-        proxy: false
-        solo: true
   deploy:
     type: swarm
     mode: replicated
