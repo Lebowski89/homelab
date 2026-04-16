@@ -29,8 +29,6 @@ thelounge:
     internal_api: true
     internal_api_rules:
       - "PathPrefix(`/uploads`)"
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

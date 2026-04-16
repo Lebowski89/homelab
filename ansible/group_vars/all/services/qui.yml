@@ -45,8 +45,6 @@ qui:
     enable: true
     port: 7476
     sso: authelia
-  cloudflare:
-    enable: true
   postgres:
     enable: true
     databases:

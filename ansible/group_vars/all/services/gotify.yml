@@ -50,8 +50,6 @@ gotify:
   traefik:
     enable: true
     port: 80
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

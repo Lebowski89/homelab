@@ -99,8 +99,6 @@ opencloud:
   traefik:
     enable: true
     port: 9200
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

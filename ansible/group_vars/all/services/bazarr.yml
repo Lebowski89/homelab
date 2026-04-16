@@ -84,8 +84,6 @@ bazarr:
     internal_api: true
     internal_api_rules:
       - "PathPrefix(`/api`)"
-  cloudflare:
-    enable: true
   themepark:
     app: bazarr
     theme: hotline

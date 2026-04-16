@@ -53,8 +53,6 @@ gitea:
     enable: true
     port: 3000
     sso: authelia
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

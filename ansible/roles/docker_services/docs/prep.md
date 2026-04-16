@@ -14,10 +14,6 @@ The prep (preparation) tasks are broken down into the following categories:
 
 **authelia:** Generates (via spinning up temporary containers) the various keys required by Authelia.
 
-**cloudflare:**
-  - Ensures Cloudflare credentials/zone values exist, fetching from Infisical when needed.
-  - Creates or updates Cloudflare DNS records for a target domain/host.
-
 **infisical:**
   - Looks up secrets from Infisical based on a `secrets_map`, outputting flattened vars and/or a dictionary.
   - Replaces infisical placeholder put in place due to svc facts being loaded before infisical fetch.

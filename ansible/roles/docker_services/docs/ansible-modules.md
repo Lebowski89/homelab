@@ -31,7 +31,6 @@ This file lists the Ansible modules invoked by this role's task and handler file
 
 ### `community.general`
 
-- `community.general.cloudflare_dns`
 - `community.general.git_config`
 - `community.general.ini_file`
 - `community.general.ipify_facts`

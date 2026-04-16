@@ -46,8 +46,6 @@ syncthing:
     enable: true
     port: 8384
     sso: authelia
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

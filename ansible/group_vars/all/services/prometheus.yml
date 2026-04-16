@@ -49,8 +49,6 @@ prometheus:
     enable: true
     port: 9090
     sso: authelia
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

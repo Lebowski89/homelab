@@ -15,8 +15,6 @@ sonarr:
       - "PathPrefix(`/api`)"
       - "PathPrefix(`/feed`)"
       - "PathPrefix(`/ping`)"
-  cloudflare:
-    enable: true
   themepark:
     app: sonarr
     theme: hotline
