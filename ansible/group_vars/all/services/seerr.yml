@@ -110,8 +110,6 @@ seerr:
     enable: true
     port: 5055
     sso: authelia
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

@@ -88,8 +88,6 @@ lidarr:
       - "PathPrefix(`/api`)"
       - "PathPrefix(`/feed`)"
       - "PathPrefix(`/ping`)"
-  cloudflare:
-    enable: true
   themepark:
     app: lidarr
     theme: hotline

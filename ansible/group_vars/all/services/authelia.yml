@@ -142,5 +142,3 @@ authelia:
         enable: true
         databases:
           - authelia
-      cloudflare:
-        enable: true

@@ -55,8 +55,6 @@ ombi:
     enable: true
     port: 3579
     sso: authelia
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

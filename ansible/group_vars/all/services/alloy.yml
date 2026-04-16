@@ -50,8 +50,6 @@ alloy:
     enable: true
     port: 12345
     sso: authelia
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated
