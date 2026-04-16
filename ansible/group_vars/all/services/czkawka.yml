@@ -33,8 +33,6 @@ czkawka:
     enable: true
     port: 5800
     sso: authelia
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

@@ -11,8 +11,6 @@ adminer:
     enable: true
     port: 8080
     sso: authelia
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

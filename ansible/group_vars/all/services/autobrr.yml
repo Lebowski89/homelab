@@ -60,8 +60,6 @@ autobrr:
     internal_api: true
     internal_api_rules:
       - "PathPrefix(`/api`)"
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

@@ -42,8 +42,6 @@ obsidian:
     enable: true
     port: 1314
     sso: authelia
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

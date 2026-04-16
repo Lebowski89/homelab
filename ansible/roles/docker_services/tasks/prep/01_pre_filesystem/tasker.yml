@@ -69,19 +69,3 @@
     apply:
       tags: [deploy, update, recreate]
   tags: [deploy, update, recreate]
-
-################################
-# PREP (DNS)
-################################
-
-- name: Ensure Cloudflare creds exist (Infisical when missing)
-  when:
-    - inventory_hostname == docker_services_primary_manager
-    - not (ci_mode | default(false)) | bool
-    - docker_services_svc.cloudflare is defined
-    - (docker_services_svc.cloudflare.enable | default(false)) | bool
-  ansible.builtin.include_tasks:
-    file: sub_tasks/cloudflare/tasker.yml
-    apply:
-      tags: [deploy, update, recreate]
-  tags: [deploy, update, recreate]

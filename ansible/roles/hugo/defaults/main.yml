@@ -1,0 +1,52 @@
+---
+
+hugo_fs_host: "{{ docker_services_primary_manager }}"
+hugo_root_path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}"
+hugo_site_path: "{{ hugo_root_path }}/blog"
+hugo_theme_path: "{{ hugo_site_path }}/themes/terminal"
+hugo_image: "ghcr.io/gohugoio/hugo:v0.160.1"
+
+hugo_directory_paths:
+  - path: "{{ hugo_site_path }}"
+    state: directory
+    mode: "0755"
+  - path: "{{ hugo_site_path }}/.github"
+    state: directory
+    mode: "0755"
+  - path: "{{ hugo_site_path }}/.github/workflows"
+    state: directory
+    mode: "0755"
+
+hugo_copy_items:
+  - src: files/favicon.png
+    dest: "{{ hugo_site_path }}/static/favicon.png"
+    mode: "0664"
+    force: false
+    wait: true
+    wait_timeout: 30
+  - src: files/og-image.png
+    dest: "{{ hugo_site_path }}/static/og-image.png"
+    mode: "0664"
+    force: false
+    wait: true
+    wait_timeout: 30
+  - src: files/terminal.css
+    dest: "{{ hugo_site_path }}/static/terminal.css"
+    mode: "0664"
+    force: false
+    wait: true
+    wait_timeout: 30
+  - src: files/pages.yaml
+    dest: "{{ hugo_site_path }}/.github/workflows/hugo.yaml"
+    mode: "0664"
+    force: false
+    wait: true
+    wait_timeout: 30
+
+hugo_templates:
+  - src: hugo.yaml.j2
+    dest: "{{ hugo_site_path }}/hugo.yaml"
+    mode: "0664"
+    force: true
+
+hugo_cloudflare_zone: ""

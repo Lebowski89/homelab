@@ -1,0 +1,132 @@
+---
+
+################################
+# DIRECTORIES
+################################
+
+- name: Hugo | Ensure directories exist
+  ansible.builtin.file:
+    path: "{{ hugo_path.path }}"
+    state: "{{ hugo_path.state | default('directory') }}"
+    mode: "{{ hugo_path.mode | default('0755') }}"
+  loop: "{{ hugo_directory_paths }}"
+  loop_control:
+    loop_var: hugo_path
+    label: "{{ hugo_path.path }}"
+  tags: hugo_bootstrap
+
+################################
+# COPY (SITE/THEME FILES)
+################################
+
+- name: Hugo | Copy files
+  ansible.builtin.copy:
+    src: "{{ hugo_copy.src }}"
+    dest: "{{ hugo_copy.dest }}"
+    mode: "{{ hugo_copy.mode }}"
+    force: "{{ hugo_copy.force | default(false) }}"
+  loop: "{{ hugo_copy_items }}"
+  loop_control:
+    loop_var: hugo_copy
+    label: "{{ hugo_copy.dest }}"
+  tags: hugo_bootstrap
+
+- name: Hugo | Wait for copied files
+  when: hugo_copy.wait | default(false)
+  ansible.builtin.wait_for:
+    path: "{{ hugo_copy.dest }}"
+    state: present
+    timeout: "{{ hugo_copy.wait_timeout | default(30) }}"
+  loop: "{{ hugo_copy_items }}"
+  loop_control:
+    loop_var: hugo_copy
+    label: "{{ hugo_copy.dest }}"
+  tags: hugo_bootstrap
+
+################################
+# TEMPLATE (CONFIG)
+################################
+
+- name: Hugo | Render templates
+  ansible.builtin.template:
+    src: "{{ hugo_template.src }}"
+    dest: "{{ hugo_template.dest }}"
+    mode: "{{ hugo_template.mode | default('0664') }}"
+    force: "{{ hugo_template.force | default(true) }}"
+  loop: "{{ hugo_templates }}"
+  loop_control:
+    loop_var: hugo_template
+    label: "{{ hugo_template.dest }}"
+  tags: hugo_bootstrap
+
+################################
+# SITE (CREATE IF MISSING)
+################################
+
+- name: Hugo | Check if site exists
+  ansible.builtin.stat:
+    path: "{{ hugo_site_path }}"
+  register: hugo_site_stat
+  delegate_to: "{{ hugo_fs_host }}"
+  run_once: true
+  tags: hugo_bootstrap
+
+- name: Hugo | Generate new Hugo site
+  when: not hugo_site_stat.stat.exists
+  tags: hugo_bootstrap
+  run_once: true
+  delegate_to: "{{ hugo_fs_host }}"
+  block:
+    - name: Hugo | Run hugo new site
+      community.docker.docker_container:
+        name: hugo-new-site
+        image: "{{ hugo_image }}"
+        pull: true
+        state: started
+        container_default_behavior: compatibility
+        detach: false
+        command: "hugo new site blog"
+        volumes:
+          - "{{ hugo_root_path }}:/src"
+        cleanup: true
+
+################################
+# GIT (INIT / THEME)
+################################
+
+- name: Hugo | Manage theme submodule
+  tags: hugo_submodule
+  block:
+    - name: Hugo | Check if repo already initialized
+      ansible.builtin.stat:
+        path: "{{ hugo_site_path }}/.git"
+      register: hugo_git_stat
+      delegate_to: "{{ hugo_fs_host }}"
+      run_once: true
+
+    - name: Hugo | Init git repo
+      when: not hugo_git_stat.stat.exists
+      ansible.builtin.command:
+        cmd: "git init"
+        chdir: "{{ hugo_site_path }}"
+        creates: "{{ hugo_site_path }}/.git/config"
+      delegate_to: "{{ hugo_fs_host }}"
+      run_once: true
+      changed_when: true
+
+    - name: Hugo | Check if theme submodule exists
+      ansible.builtin.stat:
+        path: "{{ hugo_theme_path }}"
+      register: hugo_theme_stat
+      delegate_to: "{{ hugo_fs_host }}"
+      run_once: true
+
+    - name: Hugo | Add Terminal theme submodule
+      when: not hugo_theme_stat.stat.exists
+      ansible.builtin.command:
+        cmd: "git submodule add -f https://github.com/panr/hugo-theme-terminal.git themes/terminal"
+        chdir: "{{ hugo_site_path }}"
+        creates: "{{ hugo_site_path }}/.gitmodules"
+      delegate_to: "{{ hugo_fs_host }}"
+      run_once: true
+      changed_when: true

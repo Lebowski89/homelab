@@ -88,8 +88,6 @@ whisparr:
       - "PathPrefix(`/api`)"
       - "PathPrefix(`/feed`)"
       - "PathPrefix(`/ping`)"
-  cloudflare:
-    enable: true
   themepark:
     app: whisparr
     theme: hotline

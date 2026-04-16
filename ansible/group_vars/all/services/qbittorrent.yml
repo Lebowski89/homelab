@@ -120,8 +120,6 @@ qbittorrent:
           - "PathPrefix(`/query`)"
           - "PathPrefix(`/login`)"
           - "PathPrefix(`/sync`)"
-      cloudflare:
-        enable: true
     seeds:
       name: qbittorrent-xs
       hostname: qbittorrent-xs.internal
@@ -207,5 +205,3 @@ qbittorrent:
           - "PathPrefix(`/query`)"
           - "PathPrefix(`/login`)"
           - "PathPrefix(`/sync`)"
-      cloudflare:
-        enable: true

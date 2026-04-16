@@ -56,8 +56,6 @@ tautulli:
       - "PathPrefix(`/newsletter`)"
       - "PathPrefix(`/image`)"
       - "PathPrefix(`/pms_image_proxy`)"
-  cloudflare:
-    enable: true
   themepark:
     app: tautulli
     theme: hotpink

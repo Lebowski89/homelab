@@ -82,8 +82,6 @@ nzbhydra2:
       - "PathPrefix(`/gettorrent`)"
       - "PathPrefix(`/rss`)"
       - "PathPrefix(`/torznab/api`)"
-  cloudflare:
-    enable: true
   prep:
   ## used in tasks/prep/03_post_filesystem/sub_tasks/nzbhydra2.yml
     sabnzbd:

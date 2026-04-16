@@ -42,8 +42,6 @@ sportarr:
       - "PathPrefix(`/api`)"
       - "PathPrefix(`/feed`)"
       - "PathPrefix(`/ping`)"
-  cloudflare:
-    enable: true
   deploy:
     type: swarm
     mode: replicated

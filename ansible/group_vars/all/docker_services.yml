@@ -128,8 +128,6 @@ docker_services:
     tags: [apps, monitoring, scraparr]
 
   ## services (blog)
-  - name: hugo
-    tags: [apps, blog, hugo]
   - name: obsidian
     tags: [apps, blog, obsidian]
 

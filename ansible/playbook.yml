@@ -83,6 +83,18 @@
         - docker_swarm_network
 
     ################################
+    # HUGO (INIT/THEME)
+    ################################
+
+    - name: Include Hugo role
+      when: inventory_hostname == docker_services_primary_manager
+      ansible.builtin.include_role:
+        name: hugo
+      tags:
+        - hugo_bootstrap
+        - hugo_submodule
+
+    ################################
     # INFISICAL (STACK)
     ################################
 
