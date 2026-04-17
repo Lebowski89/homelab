@@ -108,8 +108,8 @@ seerr:
       - seerr
   traefik:
     enable: true
+    exposure: private
     port: 5055
-    sso: authelia
   deploy:
     type: swarm
     mode: replicated

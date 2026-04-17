@@ -111,15 +111,8 @@ qbittorrent:
           read_only: false
       traefik:
         enable: true
+        exposure: private
         port: 8090
-        sso: authelia
-        internal_api: true
-        internal_api_rules:
-          - "PathPrefix(`/api`)"
-          - "PathPrefix(`/command`)"
-          - "PathPrefix(`/query`)"
-          - "PathPrefix(`/login`)"
-          - "PathPrefix(`/sync`)"
     seeds:
       name: qbittorrent-xs
       hostname: qbittorrent-xs.internal
@@ -196,12 +189,5 @@ qbittorrent:
           read_only: false
       traefik:
         enable: true
+        exposure: private
         port: 8091
-        sso: authelia
-        internal_api: true
-        internal_api_rules:
-          - "PathPrefix(`/api`)"
-          - "PathPrefix(`/command`)"
-          - "PathPrefix(`/query`)"
-          - "PathPrefix(`/login`)"
-          - "PathPrefix(`/sync`)"

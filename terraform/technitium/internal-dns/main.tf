@@ -1,0 +1,59 @@
+locals {
+  ipv4_records = [
+    "adminer",
+    "alloy",
+    "authelia",
+    "autobrr",
+    "autopulse-ui",
+    "bazarr",
+    "czkawka",
+    "gitea",
+    "gotify",
+    "grafana",
+    "homepage",
+    "infisical",
+    "lidarr",
+    "notifiarr",
+    "nzbhydra2",
+    "obsidian",
+    "ombi",
+    "opencloud",
+    "portainer",
+    "prometheus",
+    "prowlarr",
+    "qbittorrent",
+    "qbittorrent-xs",
+    "qui",
+    "radarr",
+    "radarr-4k",
+    "sabnzbd",
+    "seerr",
+    "sonarr",
+    "sonarr-4k",
+    "sportarr",
+    "stash",
+    "tautulli",
+    "technitium",
+    "thelounge",
+    "traefik",
+    "vaultwarden",
+    "whisparr",
+    "znc",
+  ]
+}
+
+resource "technitium_zone" "internal" {
+  name = var.zone_name
+  type = "Primary"
+}
+
+resource "technitium_record" "service_a" {
+  for_each = toset(local.ipv4_records)
+
+  domain     = "${each.value}.${var.zone_name}"
+  type       = "A"
+  ttl        = var.ttl
+  ip_address = var.traefik_ipv4
+
+  depends_on = [technitium_zone.internal]
+}

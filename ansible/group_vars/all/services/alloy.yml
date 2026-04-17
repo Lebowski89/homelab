@@ -48,8 +48,8 @@ alloy:
       read_only: true
   traefik:
     enable: true
+    exposure: private
     port: 12345
-    sso: authelia
   deploy:
     type: swarm
     mode: replicated

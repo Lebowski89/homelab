@@ -8,13 +8,8 @@ sonarr:
       external: true
   traefik:
     enable: true
+    exposure: private
     port: 8989
-    sso: authelia
-    internal_api: true
-    internal_api_rules:
-      - "PathPrefix(`/api`)"
-      - "PathPrefix(`/feed`)"
-      - "PathPrefix(`/ping`)"
   themepark:
     app: sonarr
     theme: hotline

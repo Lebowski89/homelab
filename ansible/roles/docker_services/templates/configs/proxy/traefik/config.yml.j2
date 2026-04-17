@@ -7,6 +7,9 @@ global:
 api:
   dashboard: true
 
+log:
+  level: DEBUG
+
 entryPoints:
   internal:
     address: ":8080"
@@ -91,6 +94,22 @@ entryPoints:
         writeTimeout: 0s
         idleTimeout: 180s
 
+  https_private:
+    address: ":8443"
+    http:
+      tls:
+        options: securetls@file
+        certResolver: dns-cloudflare
+        domains:
+          - main: int.{{ cloudflare_zone }}
+            sans:
+              - "*.int.{{ cloudflare_zone }}"
+    transport:
+      respondingTimeouts:
+        readTimeout: 600s
+        writeTimeout: 0s
+        idleTimeout: 180s
+
   ping:
     address: ":8081"
 
@@ -105,12 +124,8 @@ certificatesResolvers:
       dnsChallenge:
         provider: cloudflare
         resolvers:
-          # Your Technitium resolvers:
-          - "192.168.80.48:53"
-          - "192.168.80.59:53"
-          # If you ever want to force public resolvers instead, swap to:
-          # - "1.1.1.1:53"
-          # - "8.8.8.8:53"
+          - "1.1.1.1:53"
+          - "8.8.8.8:53"
 
 providers:
   file:

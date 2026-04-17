@@ -24,11 +24,8 @@ thelounge:
       read_only: false
   traefik:
     enable: true
+    exposure: private
     port: 9000
-    sso: authelia
-    internal_api: true
-    internal_api_rules:
-      - "PathPrefix(`/uploads`)"
   deploy:
     type: swarm
     mode: replicated

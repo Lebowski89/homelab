@@ -49,6 +49,7 @@ gotify:
       - gotify
   traefik:
     enable: true
+    exposure: private
     port: 80
   deploy:
     type: swarm

@@ -40,8 +40,8 @@ obsidian:
   shm_tmpfs_size: 1073741824
   traefik:
     enable: true
+    exposure: private
     port: 1314
-    sso: authelia
   deploy:
     type: swarm
     mode: replicated

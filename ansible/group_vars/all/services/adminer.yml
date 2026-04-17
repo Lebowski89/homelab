@@ -9,8 +9,8 @@ adminer:
       external: true
   traefik:
     enable: true
+    exposure: private
     port: 8080
-    sso: authelia
   deploy:
     type: swarm
     mode: replicated
