@@ -63,6 +63,9 @@ radarr:
             path: "/Radarr"
             name: API
             docker_secret: radarr_api_secret
+          - var: cloudflare_zone
+            path: "/Cloudflare"
+            name: ZONE
           - var: postgres_user
             path: "/Postgres"
             name: USER
@@ -142,6 +145,9 @@ radarr:
             path: "/Radarr-4K"
             name: API
             docker_secret: radarr_4k_api_secret
+          - var: cloudflare_zone
+            path: "/Cloudflare"
+            name: ZONE
           - var: postgres_user
             path: "/Postgres"
             name: USER

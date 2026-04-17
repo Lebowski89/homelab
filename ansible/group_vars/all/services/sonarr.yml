@@ -63,6 +63,9 @@ sonarr:
             path: "/Sonarr"
             name: API
             docker_secret: sonarr_api_secret
+          - var: cloudflare_zone
+            path: "/Cloudflare"
+            name: ZONE
           - var: postgres_user
             path: "/Postgres"
             name: USER
@@ -142,6 +145,9 @@ sonarr:
             path: "/Sonarr-4K"
             name: API
             docker_secret: sonarr_4k_api_secret
+          - var: cloudflare_zone
+            path: "/Cloudflare"
+            name: ZONE
           - var: postgres_user
             path: "/Postgres"
             name: USER

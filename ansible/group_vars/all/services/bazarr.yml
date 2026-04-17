@@ -41,6 +41,9 @@ bazarr:
       - var: sonarr_api
         path: "/Sonarr"
         name: API
+      - var: cloudflare_zone
+        path: "/Cloudflare"
+        name: ZONE
       - var: postgres_user
         path: "/Postgres"
         name: USER

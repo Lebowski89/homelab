@@ -37,6 +37,9 @@ lidarr:
         path: "/Lidarr"
         name: API
         docker_secret: lidarr_api_secret
+      - var: cloudflare_zone
+        path: "/Cloudflare"
+        name: ZONE
       - var: postgres_user
         path: "/Postgres"
         name: USER
