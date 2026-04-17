@@ -30,6 +30,17 @@ http:
           - "hsts@file"
           - "gzip@file"
 
+    {{ tr_router_name }}-private-ui-chain:
+      chain:
+        middlewares:
+          - "secure-headers@file"
+          - "robots-noindex@file"
+          - "hsts@file"
+{% if tr_theme_enable %}
+          - "themepark-{{ tr_router_name }}@file"
+{% endif %}
+          - "gzip@file"
+
   routers:
     {{ tr_router_name }}:
       entryPoints: ["{{ tr_entrypoint }}"]
@@ -37,7 +48,8 @@ http:
       priority: 20
       tls:
         options: "securetls@file"
-      middlewares: ["{{ tr_router_name }}-ui-chain"]
+        certResolver: "dns-cloudflare"
+      middlewares: ["{{ tr_middleware_chain }}"]
       service: "{{ tr_router_name }}-svc"
 
 {% if tr_internal_api and tr_internal_api_matchers | length > 0 %}

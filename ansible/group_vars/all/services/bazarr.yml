@@ -41,9 +41,6 @@ bazarr:
       - var: sonarr_api
         path: "/Sonarr"
         name: API
-      - var: cloudflare_zone
-        path: "/Cloudflare"
-        name: ZONE
       - var: postgres_user
         path: "/Postgres"
         name: USER
@@ -82,11 +79,8 @@ bazarr:
       read_only: false
   traefik:
     enable: true
+    exposure: private
     port: 6767
-    sso: authelia
-    internal_api: true
-    internal_api_rules:
-      - "PathPrefix(`/api`)"
   themepark:
     app: bazarr
     theme: hotline

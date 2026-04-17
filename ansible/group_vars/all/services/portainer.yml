@@ -55,11 +55,8 @@ portainer:
           read_only: true
       traefik:
         enable: true
+        exposure: private
         port: 9000
-        sso: authelia
-        internal_api: true
-        internal_api_rules:
-          - "PathPrefix(`/api`)"
       deploy:
         type: swarm
         mode: replicated

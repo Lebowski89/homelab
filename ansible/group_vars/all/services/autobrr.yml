@@ -55,11 +55,8 @@ autobrr:
       - autobrr
   traefik:
     enable: true
+    exposure: private
     port: 7474
-    sso: authelia
-    internal_api: true
-    internal_api_rules:
-      - "PathPrefix(`/api`)"
   deploy:
     type: swarm
     mode: replicated

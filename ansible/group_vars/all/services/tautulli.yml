@@ -48,14 +48,8 @@ tautulli:
       read_only: false
   traefik:
     enable: true
+    exposure: private
     port: 8181
-    sso: authelia
-    internal_api: true
-    internal_api_rules:
-      - "PathPrefix(`/api`)"
-      - "PathPrefix(`/newsletter`)"
-      - "PathPrefix(`/image`)"
-      - "PathPrefix(`/pms_image_proxy`)"
   themepark:
     app: tautulli
     theme: hotpink

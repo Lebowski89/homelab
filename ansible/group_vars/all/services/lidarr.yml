@@ -37,9 +37,6 @@ lidarr:
         path: "/Lidarr"
         name: API
         docker_secret: lidarr_api_secret
-      - var: cloudflare_zone
-        path: "/Cloudflare"
-        name: ZONE
       - var: postgres_user
         path: "/Postgres"
         name: USER
@@ -84,13 +81,8 @@ lidarr:
       read_only: false
   traefik:
     enable: true
+    exposure: private
     port: 8686
-    sso: authelia
-    internal_api: true
-    internal_api_rules:
-      - "PathPrefix(`/api`)"
-      - "PathPrefix(`/feed`)"
-      - "PathPrefix(`/ping`)"
   themepark:
     app: lidarr
     theme: hotline

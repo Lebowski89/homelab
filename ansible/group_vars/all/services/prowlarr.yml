@@ -39,9 +39,6 @@ prowlarr:
         path: "/Prowlarr"
         name: API
         docker_secret: prowlarr_api_secret
-      - var: cloudflare_zone
-        path: "/Cloudflare"
-        name: ZONE
       - var: postgres_user
         path: "/Postgres"
         name: USER
@@ -83,14 +80,8 @@ prowlarr:
       read_only: false
   traefik:
     enable: true
+    exposure: private
     port: 9696
-    sso: authelia
-    internal_api: true
-    internal_api_rules:
-      - "PathRegexp(`^/[0-9]+/api`)"
-      - "PathRegexp(`^/[0-9]+/download`)"
-      - "PathPrefix(`/api`)"
-      - "PathPrefix(`/ping`)"
   themepark:
     app: prowlarr
     theme: hotline

@@ -53,8 +53,8 @@ ombi:
       - Ombi
   traefik:
     enable: true
+    exposure: private
     port: 3579
-    sso: authelia
   deploy:
     type: swarm
     mode: replicated

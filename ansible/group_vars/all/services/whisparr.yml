@@ -37,9 +37,6 @@ whisparr:
         path: "/Whisparr"
         name: API
         docker_secret: whisparr_api_secret
-      - var: cloudflare_zone
-        path: "/Cloudflare"
-        name: ZONE
       - var: postgres_user
         path: "/Postgres"
         name: USER
@@ -84,13 +81,8 @@ whisparr:
       read_only: false
   traefik:
     enable: true
+    exposure: private
     port: 6969
-    sso: authelia
-    internal_api: true
-    internal_api_rules:
-      - "PathPrefix(`/api`)"
-      - "PathPrefix(`/feed`)"
-      - "PathPrefix(`/ping`)"
   themepark:
     app: whisparr
     theme: hotline

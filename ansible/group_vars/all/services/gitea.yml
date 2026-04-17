@@ -51,8 +51,8 @@ gitea:
       - gitea
   traefik:
     enable: true
+    exposure: private
     port: 3000
-    sso: authelia
   deploy:
     type: swarm
     mode: replicated
