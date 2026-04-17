@@ -101,21 +101,41 @@
     - (docker_services_svc.traefik.enable | default(false)) | bool
   ansible.builtin.template:
     src: templates/configs/proxy/traefik/router_template.yml.j2
-    dest: "/opt/traefik/dynamic/{{ docker_services_svc.name }}-middleware.yml"
+    dest: >-
+      {{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic/{{ docker_services_svc.name }}-middleware.yml
     owner: "1000"
     group: "1000"
     mode: "0644"
     force: true
   vars:
     tr_router_name: "{{ docker_services_svc.name }}"
+    tr_exposure: "{{ docker_services_svc.traefik.exposure | default('public') }}"
+    tr_private: "{{ tr_exposure == 'private' }}"
+    tr_entrypoint: >-
+      {{
+        docker_services_svc.traefik.entrypoint
+        | default(
+            'https_private' if tr_private else 'https',
+            true
+          )
+      }}
+    tr_zone: >-
+      {{
+        docker_services_svc.traefik.zone
+        | default(
+            (
+              'int.' ~ hostvars[docker_services_primary_manager].cloudflare_zone
+            )
+            if tr_private
+            else hostvars[docker_services_primary_manager].cloudflare_zone,
+            true
+          )
+      }}
     tr_address: >-
       {{
         (docker_services_svc.traefik.subdomain | default(docker_services_svc.name, true))
         ~ '.'
-        ~ (
-            docker_services_svc.traefik.zone
-            | default(hostvars[docker_services_primary_manager].cloudflare_zone, true)
-          )
+        ~ tr_zone
       }}
     tr_port: "{{ (docker_services_svc.traefik.port | default(docker_services_svc.ports.web.target)) | int }}"
     tr_authelia_enable: "{{ (docker_services_svc.traefik.sso | default('')) == 'authelia' }}"
@@ -141,5 +161,5 @@
     tr_theme_app: "{{ docker_services_svc.traefik.themepark.app | default('') }}"
     tr_theme_theme: "{{ docker_services_svc.traefik.themepark.theme | default('') }}"
     tr_backend_address: "http://{{ docker_services_svc.traefik.backend_host | default(docker_services_svc.name) }}:{{ tr_port }}"
-  delegate_to: "{{ docker_services_primary_manager | default('mgt') }}"
+  delegate_to: "{{ docker_services_primary_manager }}"
   tags: [deploy, update, recreate]

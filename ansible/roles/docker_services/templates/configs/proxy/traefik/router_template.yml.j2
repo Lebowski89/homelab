@@ -32,7 +32,7 @@ http:
 
   routers:
     {{ tr_router_name }}:
-      entryPoints: ["https"]
+      entryPoints: ["{{ tr_entrypoint }}"]
       rule: "Host(`{{ tr_address }}`)"
       priority: 20
       tls:

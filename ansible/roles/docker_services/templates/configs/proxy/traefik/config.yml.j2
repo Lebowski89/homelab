@@ -91,6 +91,22 @@ entryPoints:
         writeTimeout: 0s
         idleTimeout: 180s
 
+  https_private:
+    address: ":8443"
+    http:
+      tls:
+        options: securetls@file
+        certResolver: dns-cloudflare
+        domains:
+          - main: {{ cloudflare_zone }}
+            sans:
+              - "*.{{ cloudflare_zone }}"
+    transport:
+      respondingTimeouts:
+        readTimeout: 600s
+        writeTimeout: 0s
+        idleTimeout: 180s
+
   ping:
     address: ":8081"
 
