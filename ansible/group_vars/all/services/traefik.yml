@@ -38,6 +38,10 @@ traefik:
       published: 443
       target: 443
       mode: host
+    web_secure_private:
+      published: 8443
+      target: 8443
+      mode: host
   paths:
     - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik"
       state: directory

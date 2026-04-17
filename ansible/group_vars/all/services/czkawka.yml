@@ -31,8 +31,8 @@ czkawka:
       read_only: false
   traefik:
     enable: true
+    exposure: private
     port: 5800
-    sso: authelia
   deploy:
     type: swarm
     mode: replicated

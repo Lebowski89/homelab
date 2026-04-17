@@ -17,9 +17,9 @@ docker_services:
     target: main
     tags: [apps, portainer]
   - name: technitium
-    tags: [apps, technitium]
+    tags: [technitium]
   - name: vaultwarden
-    tags: [apps, vaultwarden]
+    tags: [vaultwarden]
 
   ## services (proxy)
   - name: authelia
@@ -92,20 +92,20 @@ docker_services:
   ## services (torrents)
   - name: qbittorrent
     target: downloads
-    tags: [torrents, qbittorrent]
+    tags: [apps, torrents, qbittorrent]
   - name: qbittorrent
     target: seeds
-    tags: [torrents, qbittorrent]
+    tags: [apps, torrents, qbittorrent]
   - name: qbit_manage
     target: downloads
-    tags: [torrents, qbit_manage]
+    tags: [apps, torrents, qbit_manage]
   - name: qbit_manage
     target: seeds
-    tags: [torrents, qbit_manage]
+    tags: [apps, torrents, qbit_manage]
   - name: qui
-    tags: [torrents, qui]
+    tags: [apps, torrents, qui]
   - name: unpackerr
-    tags: [torrents, unpackerr]
+    tags: [apps, torrents, unpackerr]
 
   ## services (usenet)
   - name: nzbhydra2
@@ -129,15 +129,15 @@ docker_services:
 
   ## services (blog)
   - name: obsidian
-    tags: [apps, blog, obsidian]
+    tags: [apps, obsidian]
 
   ## services (gluetun)
   - name: gluetun
-    tags: [apps, gluetun]
+    tags: [gluetun]
   - name: jdownloader2
-    tags: [apps, gluetun, jdownloader2]
+    tags: [gluetun, jdownloader2]
   - name: librewolf
-    tags: [apps, gluetun, librewolf]
+    tags: [gluetun, librewolf]
 
   ## services (utilities)
   - name: adminer
@@ -171,4 +171,4 @@ docker_services:
 
   ## services (unifi)
   - name: unifi
-    tags: [apps, unifi]
+    tags: [unifi]

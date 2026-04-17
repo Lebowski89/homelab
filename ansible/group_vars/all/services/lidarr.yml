@@ -81,13 +81,8 @@ lidarr:
       read_only: false
   traefik:
     enable: true
+    exposure: private
     port: 8686
-    sso: authelia
-    internal_api: true
-    internal_api_rules:
-      - "PathPrefix(`/api`)"
-      - "PathPrefix(`/feed`)"
-      - "PathPrefix(`/ping`)"
   themepark:
     app: lidarr
     theme: hotline

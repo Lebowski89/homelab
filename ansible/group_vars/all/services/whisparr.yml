@@ -81,13 +81,8 @@ whisparr:
       read_only: false
   traefik:
     enable: true
+    exposure: private
     port: 6969
-    sso: authelia
-    internal_api: true
-    internal_api_rules:
-      - "PathPrefix(`/api`)"
-      - "PathPrefix(`/feed`)"
-      - "PathPrefix(`/ping`)"
   themepark:
     app: whisparr
     theme: hotline
