@@ -96,12 +96,6 @@ docker_services:
   - name: qbittorrent
     target: seeds
     tags: [apps, torrents, qbittorrent]
-  - name: qbit_manage
-    target: downloads
-    tags: [apps, torrents, qbit_manage]
-  - name: qbit_manage
-    target: seeds
-    tags: [apps, torrents, qbit_manage]
   - name: qui
     tags: [apps, torrents, qui]
   - name: unpackerr
