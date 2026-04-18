@@ -78,10 +78,8 @@
         "ghcr.io/hotio/bazarr",
         "ghcr.io/hotio/nzbhydra2",
         "ghcr.io/hotio/qbittorrent",
-        "ghcr.io/hotio/qbitmanage",
         "ghcr.io/hotio/sabnzbd",
         "ghcr.io/hotio/seerr",
-        "ghcr.io/hotio/slskd",
         "ghcr.io/hotio/stash",
         "ghcr.io/hotio/tautulli",
         "ghcr.io/hotio/unpackerr"
@@ -129,15 +127,6 @@
         "lscr.io/linuxserver/thelounge"
       ],
       "versioning": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$"
-    },
-    {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchPackageNames": [
-        "lscr.io/linuxserver/unifi-network-application"
-      ],
-      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$"
     },
     {
       "matchDatasources": [
