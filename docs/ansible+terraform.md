@@ -1,4 +1,6 @@
-# Ansible + Terraform
+# Ansible <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/ansible.svg" alt="Ansible" width="24" /> + Terraform <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/hashicorp-terraform.svg" alt="Terraform" width="24" />
+
+<img width="60%" height="50%" alt="apkdh8" src="https://github.com/user-attachments/assets/2a84ff34-5974-4809-9820-0e4fcde7f7ae" />
 
 ## Introduction
 
