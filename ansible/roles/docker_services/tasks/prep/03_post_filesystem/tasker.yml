@@ -22,17 +22,6 @@
   run_once: true
   tags: [deploy, update, recreate]
 
-- name: Prep | Hugo (blog)
-  when:
-    - inventory_hostname == docker_services_primary_manager
-    - (docker_services_svc.name | default('') | string | trim) == "hugo"
-  ansible.builtin.include_tasks:
-    file: sub_tasks/hugo.yml
-    apply:
-      tags: [deploy, bootstrap, recreate]
-  run_once: true
-  tags: [deploy, bootstrap, recreate]
-
 - name: Prep | NZBHydra2
   when:
     - inventory_hostname == docker_services_primary_manager

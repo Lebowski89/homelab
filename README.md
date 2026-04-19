@@ -13,7 +13,16 @@
 - Automate app settings, configs, databases, dns, and other needs in a single Ansible run
 - Run on fresh Debian-based <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/debian.svg" alt="Debian" width="24" /> OS/VM and reliably deploy an app or service with my preferred settings
 
-Detailed documentation is available in the `docs` folder.
+## Disclaimer
+
+1. This repo is built by me, for me. It is what I use to drive my homelab
+2. This repo is subject to frequent unannounced changes (and sometimes I accidentally break things)
+3. This repo is public to show things you can achieve with common tools in the homelab, since some of the best learning is by simply seeing how others have approached things
+4. This is not a repo you can clone to your system and run without extensively adapting it to your environment.
+
+## Support
+
+<a href="https://buymeacoffee.com/lebowski89" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
 
 ## Apps in Use
 
