@@ -8,6 +8,8 @@ Recently, I finally added Terraform (OpenTofu to be specific) into my homelab se
 
 They both have strengths in automating different things, and in my homelab they work side-by-side to achieve my needs.
 
+<img width="220" height="164" alt="both-taco" src="https://github.com/user-attachments/assets/14974aba-6c01-42c8-92d9-76e0951533fe" />
+
 ## Teamwork makes the dream work
 
 ### 1. Using Ansible to automate the setup of Terraform
@@ -363,7 +365,7 @@ cloudflare:
 
 ### The Terraform way
 
-*See terraform/cloudflare/homelab for full module*
+<a href="https://github.com/Lebowski89/homelab/tree/main/terraform/cloudflare/homelab">See terraform/cloudflare/homelab for full module</a>
 
 <details>
 <summary>Show Terraform example</summary>
