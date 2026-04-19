@@ -3,7 +3,7 @@
 qui:
   name: qui
   stack: qui
-  image: ghcr.io/autobrr/qui:v1.16.1
+  image: ghcr.io/autobrr/qui:v1.17.0
   named_networks:
     overlay:
       external: true

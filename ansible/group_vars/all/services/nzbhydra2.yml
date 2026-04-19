@@ -3,7 +3,7 @@
 nzbhydra2:
   name: nzbhydra2
   stack: nzbhydra2
-  image: ghcr.io/hotio/nzbhydra2:release-v8.5.4
+  image: ghcr.io/hotio/nzbhydra2:release-v8.6.0
   named_networks:
     overlay:
       external: true
