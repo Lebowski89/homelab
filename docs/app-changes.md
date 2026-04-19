@@ -4,10 +4,9 @@
 
 ### Done with Discord
 
-Recently, I've removed Discord-focussed apps, including Doplarr and Notifiarr. I realised that I... I just don't like Discord. This was not much of a loss - function-wise, as I use Recyclarr to add custom formats to radarr/sonarr, and Gotify covers notifications.
-
 <img width="30%" height="30%" alt="f5cc8414-dbcd-470e-9f0d-bf4336a6fc2d" src="https://github.com/user-attachments/assets/746d37cd-d3c9-4ec2-8285-1a47f57973dc" />
 
+Recently, I've removed Discord-focussed apps, including Doplarr and Notifiarr. I realised that I... I just don't like Discord. This was not much of a loss - function-wise, as I use Recyclarr to add custom formats to radarr/sonarr, and Gotify covers notifications.
 
 ### Gettin qui with it...
 
