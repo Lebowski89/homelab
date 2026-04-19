@@ -113,6 +113,7 @@
       delegate_to: "{{ hugo_fs_host }}"
       run_once: true
       changed_when: true
+      # noqa: command-instead-of-module
 
     - name: Hugo | Check if theme submodule exists
       ansible.builtin.stat:
@@ -130,3 +131,4 @@
       delegate_to: "{{ hugo_fs_host }}"
       run_once: true
       changed_when: true
+      # noqa: command-instead-of-module
