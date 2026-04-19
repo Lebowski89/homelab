@@ -363,6 +363,8 @@ cloudflare:
 
 ### The Terraform way
 
+*See terraform/cloudflare/homelab for full module*
+
 <details>
 <summary>Show Terraform example</summary>
 
