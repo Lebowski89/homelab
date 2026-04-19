@@ -3,7 +3,7 @@
 grafana:
   name: grafana
   stack: grafana
-  image: grafana/grafana:13.0.0-ubuntu
+  image: grafana/grafana:13.0.1-ubuntu
   named_networks:
     overlay:
       external: true
