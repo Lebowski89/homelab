@@ -3,7 +3,7 @@
 ombi:
   name: ombi
   stack: ombi
-  image: lscr.io/linuxserver/ombi:v4.53.4-ls250
+  image: lscr.io/linuxserver/ombi:v4.53.4-ls251
   named_networks:
     overlay:
       external: true
