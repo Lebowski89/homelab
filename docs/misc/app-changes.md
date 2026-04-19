@@ -8,6 +8,6 @@ I've removed Discord-focussed apps, including Doplarr and Notifiarr. I realised 
 
 ## 04.2026 - Gettin qui with it...
 
-Made by those behind autobrr, 'qui' has been a fantastic addition. I knew it would be good, but I didn't anticipate how quickly its functionality would expand. It now covers the functionality of cross-seed and qBit-Manage (and more). So while I am thankful for both of those, and wish them the best in the future, I've retired and removed them.
+Made by those behind autobrr, 'qui' has been a fantastic addition. I knew it would be good, but I didn't anticipate how quickly its functionality would expand. It now covers the functionality of cross-seed and qBit-Manage, so I've retired and removed them.
 
 <img width="565" height="80%" alt="apkeqx1" src="https://github.com/user-attachments/assets/1229425b-dbc6-4fe5-8e7b-289625c0dc7d" />
