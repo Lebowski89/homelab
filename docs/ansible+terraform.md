@@ -2,21 +2,21 @@
 
 ## Introduction
 
-Recently, I finally added Terraform (OpenTofu to be specific) into my homelab setup. One thing I noticed in my very brief research on Terraform in the past (Very brief as in a quick google search and some reddit topics), is people trying to compare Ansible + Terraform, like it is a question of one or the other. But it really is a situation of 'Why not both?!?'. They both have strengths in automating different things, and in my homelab they work side-by-side to achieve what I need them to achieve.
+Recently, I finally added Terraform (OpenTofu to be specific) into my homelab setup. One thing I noticed in my very brief research on Terraform in the past (aka, a quick google search and some reddit topics), is people trying to compare Ansible + Terraform, like it's a question of one or the other. But in reality, it's a situation of 'Why not both?!?'. They both have strengths in automating different things, and in my homelab they work side-by-side to achieve my needs.
 
 ## Teamwork makes the dream work
 
 ### 1. Using Ansible to automate the setup of Terraform
 
-I use Ansible to install Terraform on my management VM, in the 'OpenTofu' role. I then have tasks in this role to create the Proxmox Terraform token/user/role with the required privleges for the BPG Terraform Provider.
+I use Ansible to install Terraform on my management VM, using the 'OpenTofu' role. I then use tasks in this role to create the Proxmox Terraform token/user/role with the required privleges for the BPG Terraform Provider.
 
 ### 2. Using Terraform to configure Proxmox and create VMs
 
-Using the BPG Terraform Provider, I create hardware mappings, configure network settings, configure VM templates, and automate the creation of multiple VMs, including UnRaid and my postgres cluster VMs. Additionally, I use a snippet to install and configure Tailscale on the newly minted VMs, with Tailscale being the primary way my Ansible hosts connect to each other.
+Using the BPG Terraform Provider, I create hardware mappings, configure network settings, configure VM templates, and automate the creation of multiple VMs, including UnRaid and Postgres cluster VMs. Via a snippet, I install and configure Tailscale on newly minted VMs, with Tailscale being the primary connections method for my Ansible hosts.
 
 ### 3. Ansible takes the torch
 
-After Terraform creates the VM, I then hand it over to Ansible to automate everything from the configuring of the filesystem (ubuntu role), the install and configuring of Docker/Docker Swarm/Infisical, and most importantly - all the preparation and configuring and deployment of all my Docker containers and Swarm services (via the aptly named 'docker_services' role).
+After Terraform creates the VM, I then hand it over to Ansible to automate everything, including filesystem config, the install and configuring of Docker/Docker Swarm/Infisical, and most importantly - all the preparation and configuring and deployment of all my Docker containers and Swarm services (via the aptly named 'docker_services' role).
 
 ## The delineation point
 
@@ -24,7 +24,7 @@ When using both Ansible + Terraform, it's important to think about the strengths
 
 - Ansible is the 'config king', it's great at filesystem tasks, templating, configs, procedurally performing tasks gated with various conditionals. It has modules for pretty much every topic around (Cue Jeff Geerling saying 'There's a module for that' in his Ansible tutorials). It doesn't need to keep track of state, and it's suited for both major and minute automations.
 
-- Terraform is stateful, it focusses on a pre-defined final state for a VM or config. If there is drift from this state it will act destructively to bring the VM or service config back into line. You can ignore changes to the state of some elements in the VM or service, but then you'll leave yourself manually configuring those things (or using Ansible) instead. Some things will benefit from the stateful nature, especially where you want minimal to no drift, including orchestrating VMs and automating external infrastructure/services (including Cloudflare DNS records).
+- Terraform is stateful, it focusses on a pre-defined final state for VM/service/config. If there is drift from this state it will act destructively to bring things back into line. You can ignore changes to the state of some elements, but then you'll leave yourself manually configuring those things (or using Ansible) instead. Some things benefit from this stateful nature, especially where you want minimal to no drift, including orchestrating VMs and automating external infrastructure/services (including Cloudflare DNS records).
 
 TLDR: There are infrastructure/services/config tasks that will benefit from Terraform's stateful nature and those that will not
 
@@ -335,7 +335,7 @@ cloudflare:
       set to "{{ docker_services_cf_record_value }}". Proxy: {{ docker_services_cf_record_proxy }}
 ```
 
-This works great, creates DNS records that are in place before a service deploys. However, as it isn't tracking the state, I would end up with useless/redundant records whenever I would change the name of a service (i.e, when I moved from radarr4k/sonarr4k to radarr-4k/sonarr-4k) or simply stopped using a service. And since Cloudflare is not a site I reguarly access, I would end up with quite a drift. So that is a situation where I'm happy for Terraform to take over and manage it. 
+This creates DNS records that are in place before a service deploys. However, as it isn't tracking the state, I would end up with useless/redundant records whenever I would change the name of a service (i.e, when I moved from radarr4k/sonarr4k to radarr-4k/sonarr-4k) or simply stopped using a service. And since Cloudflare is not a site I reguarly access, I would end up with quite a drift.
 
 4. The terraform way
 
