@@ -3,9 +3,22 @@
 
 provider "registry.opentofu.org/integrations/github" {
   version     = "6.11.1"
-  constraints = "~> 6.0"
+  constraints = "6.11.1"
   hashes = [
+    "h1:4K6eeEdpNdkaprazr0Mm9OGieE/IQMLYrtMm6FqCWEw=",
+    "h1:AQUY4ufQNsUPKEo9uZx+x5RaD3/3oYGqHOgIox3EWko=",
+    "h1:AUHIUeYTpWXoFzbpVfUPAALMe0cgbtT7m6VUPLP9BF8=",
+    "h1:GWRUP9LHikXVj8twXiRMiSfLQlk75jYvrRHQKGlKkps=",
     "h1:Hqvebe3Zc19DxRCHHLIByBvxCm+WJqGyAyYCbJDuHGE=",
+    "h1:MgLjjyi68MM3OFJQAHkhFpks63BmlLAJ4GN6vaJGewY=",
+    "h1:QoO/nVE98ITb/c7+h3Co1EUAZg59PRLE22eVjnvUsm4=",
+    "h1:R8JcD0DYjcbIE6HDDvBc/viZhXzQNTSjsqztG1qKpSU=",
+    "h1:UmesTbjRUJAcoO2RAgkdfTsroc6lPW2hfrJeFoRpkCE=",
+    "h1:aFEvxULxV9TqF61E5cjG+NSNW58VDFX/9iYf946ZidQ=",
+    "h1:dUQg8y5FcYb063ZboAkmgpgQvNb6wqR8uDBJPZnpJEM=",
+    "h1:hLOPqZMsxaapNxMQaB+7FjCpwVN7sRJSX7axZ+wpp3I=",
+    "h1:nanzeesukYMHAFrSaq7rnWx7iRDHMpme5KzQI3m/ZZo=",
+    "h1:qIQdb31z+C7Ufnzc7GSTB5Na1bKqY+Mr+zIvSEmKZBs=",
     "zh:0a5262b033a30d8a77ebf844dc3afd7e726d5f53ac1c9d4072cf9157820d1f73",
     "zh:437236181326f92d1a7c56985b2ac3223efd73f75c528323b90f4b7d1b781090",
     "zh:49a12c14d1d3a143a124ba81f15fbf18714af90752c993698c76e84fa85da004",
