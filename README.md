@@ -15,7 +15,7 @@
 
 ## Disclaimer
 
-This repo is built by me and for me, it is what I use to drive my homelab. This repo is subject to frequent unannounced changes (and sometimes I accidentally break things). This repo is public to show others some of the things you can achieve with tools like Ansible in the homelab, since some of the best learning you can do is seeing how others have approached things. This is not a repo that you can simply clone to your system and run without adapting it to your environment.
+This repo is built by me, for me. It is what I use to drive my homelab. This repo is subject to frequent unannounced changes (and sometimes I accidentally break things). This repo is public to show some of things you can achieve with ansible and others in the homelab, since some of the best learning is by simply seeing how others have approached things. This is not a repo that you can clone to your system and run without extensively adapting it to your environment.
 
 ## Support
 
