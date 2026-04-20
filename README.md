@@ -8,7 +8,7 @@
 
 ## Goals
 
-- Automate deployment of Proxmox VMs <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/proxmox.svg" alt="Proxmox" width="24" /> VM
+- Automate deployment of Proxmox VMs <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/proxmox.svg" alt="Proxmox" width="24" />
 - Automate deployment of apps and services, primarily via Docker and Docker Swarm
 - Automate app settings, configs, databases and other needs in a single Ansible run
 - Run on fresh Debian-based <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/debian.svg" alt="Debian" width="24" /> OS/VM and reliably deploy an app or service with my preferred settings
