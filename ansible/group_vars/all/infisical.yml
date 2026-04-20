@@ -1,0 +1,41 @@
+---
+
+# Required sensitive variables are defined in:
+# ansible/group_vars/all/vault.yml
+#
+# For the expected structure, see:
+# ansible/group_vars/all/vault.yml.sample
+
+################################
+# INFISICAL (COLLECTION)
+################################
+
+infisical_lookup_default_params:
+  auth_method: "universal_auth"
+  universal_auth_client_id: "{{ infisical_auth_client_id }}"
+  universal_auth_client_secret: "{{ infisical_auth_client_secret }}"
+  project_id: "{{ infisical_project_id }}"
+  env_slug: "prod"
+  url: "http://{{ local_ip }}:8066"
+
+################################
+# INFISICAL (STACK)
+################################
+
+infisical_postgres_name: infisical-postgres
+infisical_postgres_image: docker.io/library/postgres:18.3
+infisical_postgres_port: 5432
+infisical_postgres_path: "{{ infisical_path }}/postgres"
+
+infisical_redis_name: infisical-redis
+infisical_redis_image: docker.io/library/redis:8.6-alpine
+infisical_redis_port: 6390
+infisical_redis_path: "{{ infisical_path }}/redis"
+
+infisical_smtp_host: smtp.porkbun.com
+infisical_smtp_port: 587
+
+infisical_secret_files:
+  postgres_user.txt: "{{ infisical_postgres_user }}"
+  postgres_pass.txt: "{{ infisical_postgres_pass }}"
+  redis_key.txt: "{{ infisical_redis_key }}"

@@ -8,17 +8,17 @@
 
 ## Goals
 
-- Automate deployment of Proxmox <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/proxmox.svg" alt="Promox" width="24" /> VM
+- Automate deployment of Proxmox VMs <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/proxmox.svg" alt="Proxmox" width="24" />
 - Automate deployment of apps and services, primarily via Docker and Docker Swarm
-- Automate app settings, configs, databases, dns, and other needs in a single Ansible run
+- Automate app settings, configs, databases and other needs in a single Ansible run
 - Run on fresh Debian-based <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/debian.svg" alt="Debian" width="24" /> OS/VM and reliably deploy an app or service with my preferred settings
 
 ## Disclaimer
 
-1. This repo is built by me, for me. It is what I use to drive my homelab
-2. This repo is subject to frequent unannounced changes (and sometimes I accidentally break things)
-3. This repo is public to show things you can achieve with common tools in the homelab, since some of the best learning is by simply seeing how others have approached things
-4. This is not a repo you can clone to your system and run without extensively adapting it to your environment.
+1. This repo is built by me, for me. It is what I use to run my homelab.
+2. It is subject to frequent, unannounced changes, and I do sometimes break things.
+3. I keep it public to show what can be achieved with common homelab tools, because one of the best ways to learn is by seeing how others approach problems.
+4. This is not a plug-and-play repo. Anyone using parts of it should expect to adapt it heavily for their own environment.
 
 ## Support
 
@@ -101,5 +101,4 @@
     <td></td>
     <td></td>
   </tr>
-</table>
 </table>
