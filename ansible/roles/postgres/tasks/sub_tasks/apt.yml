@@ -36,14 +36,14 @@
     state: present
     update_cache: true
 
-- name: Install PostgreSQL 18 and Patroni packages
+- name: Install PostgreSQL 18, Patroni, and etcd packages
   ansible.builtin.apt:
     name:
       - postgresql-18
       - postgresql-client-18
       - postgresql-contrib-18
       - patroni
-      - patroni-etcd
       - python3-psycopg2
+      - etcd-server
       - etcd-client
     state: present
