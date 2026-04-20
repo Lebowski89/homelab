@@ -1,10 +1,10 @@
 ---
 
 # Required sensitive variables are defined in:
-# ansible/group_vars/all/vault.yaml
+# ansible/group_vars/all/vault.yml
 #
 # For the expected structure, see:
-# ansible/group_vars/all/vault.yaml.sample
+# ansible/group_vars/all/vault.yml.sample
 
 opentofu_api_role: "terraform"
 opentofu_api_user: terraform@pve

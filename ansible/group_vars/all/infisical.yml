@@ -1,10 +1,10 @@
 ---
 
 # Required sensitive variables are defined in:
-# ansible/group_vars/all/vault.yaml
+# ansible/group_vars/all/vault.yml
 #
 # For the expected structure, see:
-# ansible/group_vars/all/vault.yaml.sample
+# ansible/group_vars/all/vault.yml.sample
 
 ################################
 # INFISICAL (COLLECTION)
