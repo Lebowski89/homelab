@@ -128,7 +128,7 @@
     - name: Include Postgres Cluster role
       ansible.builtin.include_role:
         name: postgres
-      when: inventory_hostname in groups['postgres_cluster']
+      when: inventory_hostname in groups['postgres']
       tags:
         - postgres
         - postgres_apt
