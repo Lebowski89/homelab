@@ -84,7 +84,7 @@
 | Ensure PGDG keyring directory exists | ansible.builtin.file | False |
 | Download PGDG repository signing key | ansible.builtin.get_url | False |
 | Add PGDG repository | ansible.builtin.apt_repository | False |
-| Install PostgreSQL 18 and Patroni packages | ansible.builtin.apt | False |
+| Install PostgreSQL 18, Patroni, and etcd packages | ansible.builtin.apt | False |
 
 #### File: tasks/sub_tasks/etcd.yml
 
@@ -164,8 +164,8 @@ classDef rescue stroke:#665352,stroke-width:2px;
   Ensure_PostgreSQL_common_prerequisites_are_installed0-->|Task| Ensure_PGDG_keyring_directory_exists1[ensure pgdg keyring directory exists]:::task
   Ensure_PGDG_keyring_directory_exists1-->|Task| Download_PGDG_repository_signing_key2[download pgdg repository signing key]:::task
   Download_PGDG_repository_signing_key2-->|Task| Add_PGDG_repository3[add pgdg repository]:::task
-  Add_PGDG_repository3-->|Task| Install_PostgreSQL_18_and_Patroni_packages4[install postgresql 18 and patroni packages]:::task
-  Install_PostgreSQL_18_and_Patroni_packages4-->End
+  Add_PGDG_repository3-->|Task| Install_PostgreSQL_18__Patroni__and_etcd_packages4[install postgresql 18  patroni  and etcd packages]:::task
+  Install_PostgreSQL_18__Patroni__and_etcd_packages4-->End
 ```
 
 
