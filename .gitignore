@@ -1,6 +1,7 @@
 
 .vscode/
 ansible/collections/
+ansible/group_vars/all/vault.yml
 **/hosts.ini
 **/.terraform/*
 **/*.tfstate

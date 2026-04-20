@@ -1,14 +1,13 @@
 ---
 
+# Required sensitive variables are defined in:
+# ansible/group_vars/all/vault.yml
+#
+# For the expected structure, see:
+# ansible/group_vars/all/vault.yml.sample
+
 opentofu_api_role: "terraform"
 opentofu_api_user: terraform@pve
 opentofu_api_token_name: "terraform-token"
 
 proxmox_api_bootstrap_user: "root@pam"
-proxmox_api_bootstrap_password: !vault |
-          $ANSIBLE_VAULT;1.1;AES256
-          63653964343332326564353631343132363631363437363362353634376561623131373565316631
-          3235376139663163616536303439616562323761646338310a393364316530356336323334363233
-          38623535643163633833363432623231303434623461353161646532623235623036323965663430
-          3430376665343065300a363266323963613738303935613339376365396231626561373761373566
-          3937
