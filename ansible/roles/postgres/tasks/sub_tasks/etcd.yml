@@ -4,20 +4,28 @@
   ansible.builtin.assert:
     that:
       - postgres_etcd_node_name is defined
-      - postgres_etcd_node_name | length > 0
+      - postgres_etcd_node_name | string | trim | length > 0
       - local_ip is defined
-      - local_ip | length > 0
+      - local_ip | string | trim | length > 0
       - postgres_etcd_initial_cluster is defined
-      - postgres_etcd_initial_cluster | length > 0
+      - postgres_etcd_initial_cluster | string | trim | length > 0
     fail_msg: "Required etcd variables are missing."
+  tags:
+    - postgres
+    - postgres_etcd
 
-- name: Ensure etcd config directory exists
+- name: Stop etcd before optional reset
+  ansible.builtin.systemd_service:
+    name: etcd
+    state: stopped
+  failed_when: false
+  tags: postgres_etcd_reset
+
+- name: Remove etcd data directory for reset
   ansible.builtin.file:
-    path: "{{ postgres_etcd_config_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+    path: "{{ postgres_etcd_data_dir }}"
+    state: absent
+  tags: postgres_etcd_reset
 
 - name: Ensure etcd data directory exists
   ansible.builtin.file:
@@ -26,24 +34,36 @@
     owner: etcd
     group: etcd
     mode: "0700"
+  tags:
+    - postgres
+    - postgres_etcd
 
-- name: Template etcd config
+- name: Template etcd defaults
   ansible.builtin.template:
-    src: etcd.conf.yml.j2
-    dest: "{{ postgres_etcd_config_path }}"
+    src: etcd.default.j2
+    dest: /etc/default/etcd
     owner: root
     group: root
     mode: "0644"
   notify: Restart etcd
+  tags:
+    - postgres
+    - postgres_etcd
 
 - name: Enable and start etcd
   ansible.builtin.systemd_service:
     name: etcd
     state: started
     enabled: true
+  tags:
+    - postgres
+    - postgres_etcd
 
 - name: Wait for etcd client port
   ansible.builtin.wait_for:
     host: "{{ local_ip }}"
     port: "{{ postgres_etcd_client_port }}"
     timeout: 60
+  tags:
+    - postgres
+    - postgres_etcd

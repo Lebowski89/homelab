@@ -1,41 +1,80 @@
 ---
 
-postgres_etcd_cluster_token: pg-ha-1
-postgres_etcd_data_dir: /var/lib/etcd
-postgres_etcd_config_dir: /etc/etcd
-postgres_etcd_config_path: "{{ postgres_etcd_config_dir }}/etcd.conf.yml"
+################################
+# POSTGRES
+################################
 
+postgres_version: 18
+
+################################
+# ETCD
+################################
+
+postgres_etcd_data_dir: /var/lib/etcd
 postgres_etcd_client_port: 2379
 postgres_etcd_peer_port: 2380
+postgres_etcd_cluster_token: pg-ha-1
+
+#  postgres_etcd_initial_cluster: []
+
+################################
+# PATRONI
+################################
 
 postgres_patroni_scope: pg-cluster
 postgres_patroni_namespace: /service
+postgres_patroni_node_name: "{{ inventory_hostname }}"
 
+postgres_patroni_config_dir: /etc/patroni
+postgres_patroni_config_path: "{{ postgres_patroni_config_dir }}/config.yml"
+postgres_patroni_data_dir: "/var/lib/postgresql/{{ postgres_version }}/main"
+postgres_patroni_bin_dir: "/usr/lib/postgresql/{{ postgres_version }}/bin"
 postgres_patroni_restapi_port: 8008
 postgres_patroni_postgres_port: 5432
 
-postgres_patroni_data_dir: /var/lib/postgresql/18/main
-postgres_patroni_bin_dir: /usr/lib/postgresql/18/bin
-postgres_patroni_config_dir: /etc/patroni
-postgres_patroni_config_path: "{{ postgres_patroni_config_dir }}/patroni.yml"
+################################
+# PG-ADMIN
+################################
 
 postgres_patroni_superuser_name: postgres
+postgres_patroni_superuser_pass: ""
+
 postgres_patroni_replication_name: replicator
+postgres_patroni_replication_pass: ""
 
-postgres_patroni_postgresql_parameters:
-  max_connections: 100
-  shared_buffers: 1GB
-  wal_level: replica
-  hot_standby: "on"
-  max_wal_senders: 10
-  max_replication_slots: 10
-  wal_keep_size: 1GB
-  max_worker_processes: 8
-  max_locks_per_transaction: 64
-  max_prepared_transactions: 0
-  track_commit_timestamp: "off"
-  password_encryption: scram-sha-256
-
+postgres_patroni_admin_role_name: admin
+postgres_patroni_admin_role_pass: ""
 postgres_patroni_admin_role_login: true
 postgres_patroni_admin_role_createdb: true
 postgres_patroni_admin_role_createrole: false
+
+postgres_patroni_etcd_hosts: []
+postgres_patroni_pg_hba_extra: []
+
+################################
+# BACKUP ALL (DUMP DATABASES)
+################################
+
+postgres_backup_dir: /var/backups/postgres
+postgres_backup_compress: true
+
+postgres_backup_all_dbs_run: false
+postgres_backup_all_dbs_dir: "{{ postgres_backup_dir }}"
+postgres_backup_all_dbs_exclude:
+  - postgres
+
+postgres_backup_single_db: "test_db"
+postgres_backup_single_custom_format: true
+postgres_backup_single_compress: true
+
+################################
+# RESTORE (DATABASES)
+################################
+
+postgres_restore_all_dbs_run: false
+postgres_restore_all_dbs_dir: ""
+postgres_restore_all_dbs_drop_existing: true
+
+postgres_restore_single_file: "/var/backups/postgres/gotify.dump"
+postgres_restore_single_db: "gotify"
+postgres_restore_single_drop_existing: true

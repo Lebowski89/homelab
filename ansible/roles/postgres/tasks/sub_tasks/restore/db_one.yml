@@ -1,0 +1,148 @@
+---
+
+- name: Restore single DB | Assert requested input was provided
+  ansible.builtin.assert:
+    that:
+      - postgres_restore_single_file | string | trim | length > 0
+      - postgres_restore_single_db | string | trim | length > 0
+    fail_msg: >-
+      Single DB restore requires the following variables to be provided:
+        postgres_restore_single_file: "/path/to/file"
+        postgres_restore_single_db: "<database_name>"
+
+- name: Restore single DB | Query Patroni cluster state from first postgres node
+  ansible.builtin.uri:
+    url: "http://{{ hostvars[groups['postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: postgres_patroni_cluster_state
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+  retries: 12
+  delay: 5
+  until: >-
+    (
+      postgres_patroni_cluster_state.json.members
+      | default([])
+      | selectattr('role', 'equalto', 'leader')
+      | list
+      | length
+    ) > 0
+
+- name: Restore single DB | Extract Patroni leader candidates
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_candidates: >-
+      {{
+        postgres_patroni_cluster_state.json.members
+        | default([])
+        | selectattr('role', 'equalto', 'leader')
+        | list
+      }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Restore single DB | Determine Patroni leader member
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_member: "{{ postgres_patroni_leader_candidates[0] }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Restore single DB | Check restore file exists on leader
+  ansible.builtin.stat:
+    path: "{{ postgres_restore_single_file }}"
+  register: postgres_restore_single_file_stat
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+
+- name: Restore single DB | Assert restore file exists
+  ansible.builtin.assert:
+    that:
+      - postgres_restore_single_file_stat.stat.exists
+      - postgres_restore_single_file_stat.stat.isreg
+    fail_msg: "Restore file not found on leader: {{ postgres_restore_single_file }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Restore single DB | Drop target database if requested
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export PGPASSWORD='{{ postgres_patroni_superuser_pass }}'
+    psql \
+      -h 127.0.0.1 \
+      -p {{ postgres_patroni_postgres_port }} \
+      -U {{ postgres_patroni_superuser_name }} \
+      -d postgres \
+      -v ON_ERROR_STOP=1 <<'SQL'
+    SELECT pg_terminate_backend(pid)
+    FROM pg_stat_activity
+    WHERE datname = '{{ postgres_restore_single_db }}'
+      AND pid <> pg_backend_pid();
+    DROP DATABASE IF EXISTS "{{ postgres_restore_single_db }}";
+    CREATE DATABASE "{{ postgres_restore_single_db }}";
+    SQL
+  args:
+    executable: /bin/bash
+  when: postgres_restore_single_drop_existing | bool
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Restore single DB | Ensure target database exists when not dropping
+  community.postgresql.postgresql_db:
+    login_host: "127.0.0.1"
+    login_port: "{{ postgres_patroni_postgres_port }}"
+    login_user: "{{ postgres_patroni_superuser_name }}"
+    login_password: "{{ postgres_patroni_superuser_pass }}"
+    name: "{{ postgres_restore_single_db }}"
+    state: present
+  when: not (postgres_restore_single_drop_existing | bool)
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Restore single DB | Restore custom-format dump
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export PGPASSWORD='{{ postgres_patroni_superuser_pass }}'
+    pg_restore \
+      -h 127.0.0.1 \
+      -p {{ postgres_patroni_postgres_port }} \
+      -U {{ postgres_patroni_superuser_name }} \
+      -d '{{ postgres_restore_single_db }}' \
+      --clean \
+      --if-exists \
+      '{{ postgres_restore_single_file }}'
+  args:
+    executable: /bin/bash
+  when: (postgres_restore_single_file | lower).endswith('.dump')
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: false
+
+- name: Restore single DB | Restore plain SQL dump
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export PGPASSWORD='{{ postgres_patroni_superuser_pass }}'
+    psql \
+      -h 127.0.0.1 \
+      -p {{ postgres_patroni_postgres_port }} \
+      -U {{ postgres_patroni_superuser_name }} \
+      -d '{{ postgres_restore_single_db }}' \
+      -v ON_ERROR_STOP=1 \
+      < '{{ postgres_restore_single_file }}'
+  args:
+    executable: /bin/bash
+  when: not (postgres_restore_single_file | lower).endswith('.dump')
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Restore single DB | Show result
+  ansible.builtin.debug:
+    msg:
+      leader: "{{ postgres_patroni_leader_member.name }}"
+      restored_file: "{{ postgres_restore_single_file }}"
+      database: "{{ postgres_restore_single_db }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"

@@ -2,33 +2,54 @@
 
 - name: Query Patroni cluster state from first postgres node
   ansible.builtin.uri:
-    url: "http://{{ hostvars[groups['postgres_cluster'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
+    url: "http://{{ hostvars[groups['postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
     method: GET
     return_content: true
     status_code: 200
   register: postgres_patroni_cluster_state
   run_once: true
   delegate_to: "{{ docker_services_primary_manager }}"
+  retries: 12
+  delay: 5
+  until: >-
+    (
+      postgres_patroni_cluster_state.json.members
+      | default([])
+      | selectattr('role', 'equalto', 'leader')
+      | list
+      | length
+    ) > 0
+  failed_when: false
+
+- name: Extract Patroni leader candidates
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_candidates: >-
+      {{
+        postgres_patroni_cluster_state.json.members
+        | default([])
+        | selectattr('role', 'equalto', 'leader')
+        | list
+      }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
 
 - name: Determine Patroni leader member
   ansible.builtin.set_fact:
-    postgres_patroni_leader_member: >-
-      {{
-        (postgres_patroni_cluster_state.json.members
-         | selectattr('role', 'equalto', 'leader')
-         | list
-         | first)
-      }}
+    postgres_patroni_leader_member: "{{ postgres_patroni_leader_candidates[0] }}"
+  when: (postgres_patroni_leader_candidates | length) > 0
   run_once: true
   delegate_to: "{{ docker_services_primary_manager }}"
 
 - name: Assert Patroni leader was found
   ansible.builtin.assert:
     that:
+      - (postgres_patroni_leader_candidates | length) > 0
       - postgres_patroni_leader_member is defined
       - postgres_patroni_leader_member.name is defined
       - postgres_patroni_leader_member.host is defined
-    fail_msg: "Could not determine Patroni leader from REST API."
+    fail_msg: >-
+      Could not determine Patroni leader from REST API.
+      Cluster response: {{ postgres_patroni_cluster_state.json | default({}) }}
   run_once: true
   delegate_to: "{{ docker_services_primary_manager }}"
 
@@ -46,7 +67,7 @@
 
 - name: Ensure dedicated Patroni admin role exists on leader
   community.postgresql.postgresql_user:
-    login_host: "{{ postgres_patroni_leader_member.host }}"
+    login_host: "127.0.0.1"
     login_port: "{{ postgres_patroni_postgres_port }}"
     login_user: "{{ postgres_patroni_superuser_name }}"
     login_password: "{{ postgres_patroni_superuser_pass }}"
@@ -55,5 +76,5 @@
     role_attr_flags: "{{ postgres_patroni_admin_role_flags | join(',') }}"
     state: present
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
   no_log: true

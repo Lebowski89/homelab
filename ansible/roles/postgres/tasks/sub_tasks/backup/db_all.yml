@@ -1,0 +1,118 @@
+---
+
+- name: Backup all DBs | Query Patroni cluster state from first postgres node
+  ansible.builtin.uri:
+    url: "http://{{ hostvars[groups['postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: postgres_patroni_cluster_state
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+  retries: 12
+  delay: 5
+  until: >-
+    (
+      postgres_patroni_cluster_state.json.members
+      | default([])
+      | selectattr('role', 'equalto', 'leader')
+      | list
+      | length
+    ) > 0
+
+- name: Backup all DBs | Extract Patroni leader candidates
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_candidates: >-
+      {{
+        postgres_patroni_cluster_state.json.members
+        | default([])
+        | selectattr('role', 'equalto', 'leader')
+        | list
+      }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Backup all DBs | Determine Patroni leader member
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_member: "{{ postgres_patroni_leader_candidates[0] }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Backup all DBs | Build timestamp
+  ansible.builtin.set_fact:
+    postgres_backup_timestamp: "{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Backup all DBs | Build output directory
+  ansible.builtin.set_fact:
+    postgres_backup_all_dbs_output_dir: "{{ postgres_backup_all_dbs_dir }}/dbs-{{ postgres_backup_timestamp }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Backup all DBs | Ensure output directory exists on leader
+  ansible.builtin.file:
+    path: "{{ postgres_backup_all_dbs_output_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0750"
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+
+- name: Backup all DBs | Query non-template databases
+  community.postgresql.postgresql_query:
+    login_host: "127.0.0.1"
+    login_port: "{{ postgres_patroni_postgres_port }}"
+    login_user: "{{ postgres_patroni_superuser_name }}"
+    login_password: "{{ postgres_patroni_superuser_pass }}"
+    login_db: postgres
+    query: |
+      SELECT datname
+      FROM pg_database
+      WHERE datistemplate = false
+        AND datallowconn = true
+      ORDER BY datname;
+  register: postgres_backup_all_dbs_query
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Backup all DBs | Build database list
+  ansible.builtin.set_fact:
+    postgres_backup_all_dbs_list: >-
+      {{
+        postgres_backup_all_dbs_query.query_result
+        | map(attribute='datname')
+        | reject('in', postgres_backup_all_dbs_exclude | default([]))
+        | list
+      }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Backup all DBs | Dump each database in custom format
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export PGPASSWORD='{{ postgres_patroni_superuser_pass }}'
+    pg_dump \
+      -h 127.0.0.1 \
+      -p {{ postgres_patroni_postgres_port }} \
+      -U {{ postgres_patroni_superuser_name }} \
+      -d '{{ item }}' \
+      -Fc \
+      -f '{{ postgres_backup_all_dbs_output_dir }}/{{ item }}.dump'
+  args:
+    executable: /bin/bash
+  loop: "{{ postgres_backup_all_dbs_list }}"
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Backup all DBs | Show result
+  ansible.builtin.debug:
+    msg:
+      leader: "{{ postgres_patroni_leader_member.name }}"
+      backup_dir: "{{ postgres_backup_all_dbs_output_dir }}"
+      databases: "{{ postgres_backup_all_dbs_list }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"

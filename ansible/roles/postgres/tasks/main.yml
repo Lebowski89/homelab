@@ -14,24 +14,18 @@
 - name: Configure etcd
   ansible.builtin.include_tasks:
     file: sub_tasks/etcd.yml
-    apply:
-      tags:
-        - postgres
-        - postgres_etcd
   tags:
     - postgres
     - postgres_etcd
+    - postgres_etcd_reset
 
 - name: Configure Patroni
   ansible.builtin.include_tasks:
     file: sub_tasks/patroni.yml
-    apply:
-      tags:
-        - postgres
-        - postgres_patroni
   tags:
     - postgres
     - postgres_patroni
+    - postgres_patroni_reset
 
 - name: Ensure dedicated PostgreSQL admin role exists
   ansible.builtin.include_tasks:
@@ -43,3 +37,42 @@
   tags:
     - postgres
     - postgres_admin
+
+- name: Backup PostgreSQL cluster with pg_dumpall
+  ansible.builtin.include_tasks:
+    file: sub_tasks/backup/db_all.yml
+    apply:
+      tags:
+        - postgres_backup_all
+        - postgres_nuke_node
+  tags:
+    - postgres_backup_all
+    - postgres_nuke_node
+
+- name: Backup PostgreSQL single database with pg_dump
+  ansible.builtin.include_tasks:
+    file: sub_tasks/backup/db_one.yml
+    apply:
+      tags: postgres_backup_one
+  tags: postgres_backup_one
+
+- name: Reset PostgreSQL/Patroni node destructively
+  ansible.builtin.include_tasks:
+    file: sub_tasks/reset_node.yml
+    apply:
+      tags: postgres_nuke_node
+  tags: postgres_nuke_node
+
+- name: Restore PostgreSQL cluster from pg_dumpall backup
+  ansible.builtin.include_tasks:
+    file: sub_tasks/restore/db_all.yml
+    apply:
+      tags: postgres_restore_all
+  tags: postgres_restore_all
+
+- name: Restore PostgreSQL single database from pg_dump backup
+  ansible.builtin.include_tasks:
+    file: sub_tasks/restore/db_one.yml
+    apply:
+      tags: postgres_restore_one
+  tags: postgres_restore_one

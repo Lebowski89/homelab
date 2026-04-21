@@ -1,0 +1,120 @@
+---
+
+- name: Backup single DB | Assert requested database was provided
+  ansible.builtin.assert:
+    that:
+      - postgres_backup_single_db | string | trim | length > 0
+    fail_msg: >-
+      No database name provided for single database backup. Please specify the database name.
+      Example: postgres_backup_single_db: "<database_name>"
+
+- name: Backup single DB | Query Patroni cluster state from first postgres node
+  ansible.builtin.uri:
+    url: "http://{{ hostvars[groups['postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: postgres_patroni_cluster_state
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+  retries: 12
+  delay: 5
+  until: >-
+    (
+      postgres_patroni_cluster_state.json.members
+      | default([])
+      | selectattr('role', 'equalto', 'leader')
+      | list
+      | length
+    ) > 0
+
+- name: Backup single DB | Extract Patroni leader candidates
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_candidates: >-
+      {{
+        postgres_patroni_cluster_state.json.members
+        | default([])
+        | selectattr('role', 'equalto', 'leader')
+        | list
+      }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Backup single DB | Determine Patroni leader member
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_member: "{{ postgres_patroni_leader_candidates[0] }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Backup single DB | Build timestamp
+  ansible.builtin.set_fact:
+    postgres_backup_timestamp: "{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Backup single DB | Set output extension
+  ansible.builtin.set_fact:
+    postgres_backup_single_ext: "{{ 'dump' if postgres_backup_single_custom_format | bool else 'sql' }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Backup single DB | Set output path
+  ansible.builtin.set_fact:
+    postgres_backup_single_path: >-
+      {{ postgres_backup_dir }}/{{ postgres_backup_single_db }}-{{ postgres_backup_timestamp }}.{{ postgres_backup_single_ext }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Backup single DB | Ensure backup directory exists on leader
+  ansible.builtin.file:
+    path: "{{ postgres_backup_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0750"
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+
+- name: Backup single DB | Dump database in custom format
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export PGPASSWORD='{{ postgres_patroni_superuser_pass }}'
+    pg_dump \
+      -h 127.0.0.1 \
+      -p {{ postgres_patroni_postgres_port }} \
+      -U {{ postgres_patroni_superuser_name }} \
+      -d '{{ postgres_backup_single_db }}' \
+      -Fc \
+      -f '{{ postgres_backup_single_path }}'
+  args:
+    executable: /bin/bash
+  when: postgres_backup_single_custom_format | bool
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Backup single DB | Dump database in plain SQL format
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export PGPASSWORD='{{ postgres_patroni_superuser_pass }}'
+    pg_dump \
+      -h 127.0.0.1 \
+      -p {{ postgres_patroni_postgres_port }} \
+      -U {{ postgres_patroni_superuser_name }} \
+      -d '{{ postgres_backup_single_db }}' \
+      -f '{{ postgres_backup_single_path }}'
+  args:
+    executable: /bin/bash
+  when: not postgres_backup_single_custom_format | bool
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Backup single DB | Show result
+  ansible.builtin.debug:
+    msg:
+      leader: "{{ postgres_patroni_leader_member.name }}"
+      database: "{{ postgres_backup_single_db }}"
+      backup_path: "{{ postgres_backup_single_path }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"

@@ -1,18 +1,5 @@
 ---
 
-- name: Assert Patroni node vars are defined
-  ansible.builtin.assert:
-    that:
-      - postgres_patroni_node_name is defined
-      - postgres_patroni_node_name | length > 0
-      - local_ip is defined
-      - local_ip | length > 0
-      - postgres_patroni_superuser_pass is defined
-      - postgres_patroni_superuser_pass | length > 0
-      - postgres_patroni_replication_pass is defined
-      - postgres_patroni_replication_pass | length > 0
-    fail_msg: "Required Patroni variables are missing."
-
 - name: Ensure Patroni config directory exists
   ansible.builtin.file:
     path: "{{ postgres_patroni_config_dir }}"
@@ -20,39 +7,84 @@
     owner: root
     group: root
     mode: "0755"
+  tags:
+    - postgres
+    - postgres_patroni
 
-- name: Ensure Patroni data directory exists
+- name: Stop Patroni before optional reset
+  ansible.builtin.systemd_service:
+    name: patroni
+    state: stopped
+  failed_when: false
+  tags: postgres_patroni_reset
+
+- name: Stop default PostgreSQL service before optional reset
+  ansible.builtin.systemd_service:
+    name: postgresql
+    state: stopped
+  failed_when: false
+  tags: postgres_patroni_reset
+
+- name: Drop default Debian PostgreSQL cluster
+  ansible.builtin.command:
+    argv:
+      - pg_dropcluster
+      - --stop
+      - "{{ postgres_version | string }}"
+      - main
+  register: postgres_pg_dropcluster
+  changed_when: postgres_pg_dropcluster.rc == 0
+  failed_when: postgres_pg_dropcluster.rc not in [0, 2]
+  tags: postgres_patroni_reset
+
+- name: Ensure Patroni PostgreSQL data directory exists
   ansible.builtin.file:
     path: "{{ postgres_patroni_data_dir }}"
     state: directory
     owner: postgres
     group: postgres
     mode: "0700"
+  tags:
+    - postgres
+    - postgres_patroni
 
 - name: Stop and disable default PostgreSQL service
   ansible.builtin.systemd_service:
     name: postgresql
     state: stopped
     enabled: false
+  failed_when: false
+  tags:
+    - postgres
+    - postgres_patroni
 
 - name: Template Patroni config
   ansible.builtin.template:
     src: patroni.yml.j2
     dest: "{{ postgres_patroni_config_path }}"
     owner: root
-    group: root
-    mode: "0600"
-  notify: Restart patroni
+    group: postgres
+    mode: "0640"
   no_log: true
+  notify: Restart patroni
+  tags:
+    - postgres
+    - postgres_patroni
 
 - name: Enable and start Patroni
   ansible.builtin.systemd_service:
     name: patroni
     state: started
     enabled: true
+  tags:
+    - postgres
+    - postgres_patroni
 
 - name: Wait for Patroni REST API
   ansible.builtin.wait_for:
     host: "{{ local_ip }}"
     port: "{{ postgres_patroni_restapi_port }}"
     timeout: 60
+  tags:
+    - postgres
+    - postgres_patroni
