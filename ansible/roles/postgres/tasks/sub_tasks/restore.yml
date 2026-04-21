@@ -1,0 +1,178 @@
+---
+
+- name: Restore DBs | Assert restore map and restore dir are provided
+  ansible.builtin.assert:
+    that:
+      - postgres_restore_dbs_map is sequence
+      - postgres_restore_dbs_map is not string
+      - postgres_restore_dbs_map | length > 0
+      - postgres_restore_dbs_dir | string | trim | length > 0
+    fail_msg: >-
+      You must provide:
+      - postgres_restore_dbs_map as a non-empty list
+      - postgres_restore_dbs_dir
+
+- name: Restore DBs | Validate restore map entries
+  ansible.builtin.assert:
+    that:
+      - item.db is defined
+      - item.db | string | trim | length > 0
+      - item.file is defined
+      - item.file | string | trim | length > 0
+    fail_msg: >-
+      Each postgres_restore_dbs_map entry must contain:
+      - db
+      - file
+  loop: "{{ postgres_restore_dbs_map }}"
+  loop_control:
+    label: "{{ item.db | default('undefined-db') }}"
+
+- name: Restore DBs | Query Patroni cluster state from first postgres node
+  ansible.builtin.uri:
+    url: "http://{{ hostvars[groups['postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: postgres_patroni_cluster_state
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+  retries: 12
+  delay: 5
+  until: >-
+    (
+      postgres_patroni_cluster_state.json.members
+      | default([])
+      | selectattr('role', 'equalto', 'leader')
+      | list
+      | length
+    ) > 0
+
+- name: Restore DBs | Extract Patroni leader candidates
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_candidates: >-
+      {{
+        postgres_patroni_cluster_state.json.members
+        | default([])
+        | selectattr('role', 'equalto', 'leader')
+        | list
+      }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Restore DBs | Determine Patroni leader member
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_member: "{{ postgres_patroni_leader_candidates[0] }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Restore DBs | Assert Patroni leader was found
+  ansible.builtin.assert:
+    that:
+      - postgres_patroni_leader_member is defined
+      - postgres_patroni_leader_member.name is defined
+      - postgres_patroni_leader_member.host is defined
+    fail_msg: >-
+      Could not determine Patroni leader from REST API.
+      Cluster response: {{ postgres_patroni_cluster_state.json | default({}) }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Restore DBs | Build resolved restore map
+  ansible.builtin.set_fact:
+    postgres_restore_dbs_map_resolved: "{{ resolved_map | from_yaml }}"
+  vars:
+    resolved_map: |
+      {% for entry in postgres_restore_dbs_map %}
+      - db: {{ entry.db | to_json }}
+        file: {{ entry.file | to_json }}
+        path: {{ (entry.file if (entry.file | regex_search('^/')) else (postgres_restore_dbs_dir ~ '/' ~ entry.file)) | to_json }}
+      {% endfor %}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Restore DBs | Check requested dump files exist
+  ansible.builtin.stat:
+    path: "{{ item.path }}"
+  loop: "{{ postgres_restore_dbs_map_resolved }}"
+  loop_control:
+    label: "{{ item.db }} -> {{ item.path }}"
+  register: postgres_restore_dbs_stats
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+
+- name: Restore DBs | Assert requested dump files exist
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+    fail_msg: "Dump file not found: {{ item.item.path }}"
+  loop: "{{ postgres_restore_dbs_stats.results }}"
+  loop_control:
+    label: "{{ item.item.db }} -> {{ item.item.path }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Restore DBs | Drop databases if requested
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export PGPASSWORD='{{ postgres_patroni_superuser_pass }}'
+    psql \
+      -h 127.0.0.1 \
+      -p {{ postgres_patroni_postgres_port }} \
+      -U {{ postgres_patroni_superuser_name }} \
+      -d postgres \
+      -c 'DROP DATABASE IF EXISTS "{{ item.db }}" WITH (FORCE);'
+  args:
+    executable: /bin/bash
+  when: postgres_restore_dbs_drop_existing | bool
+  loop: "{{ postgres_restore_dbs_map_resolved }}"
+  loop_control:
+    label: "{{ item.db }}"
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Restore DBs | Create databases
+  community.postgresql.postgresql_db:
+    login_host: "127.0.0.1"
+    login_port: "{{ postgres_patroni_postgres_port }}"
+    login_user: "{{ postgres_patroni_superuser_name }}"
+    login_password: "{{ postgres_patroni_superuser_pass }}"
+    name: "{{ item.db }}"
+    state: present
+  loop: "{{ postgres_restore_dbs_map_resolved }}"
+  loop_control:
+    label: "{{ item.db }}"
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Restore DBs | Restore each database
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export PGPASSWORD='{{ postgres_patroni_superuser_pass }}'
+    pg_restore \
+      -h 127.0.0.1 \
+      -p {{ postgres_patroni_postgres_port }} \
+      -U {{ postgres_patroni_superuser_name }} \
+      -d '{{ item.db }}' \
+      --clean \
+      --if-exists \
+      '{{ item.path }}'
+  args:
+    executable: /bin/bash
+  loop: "{{ postgres_restore_dbs_map_resolved }}"
+  loop_control:
+    label: "{{ item.db }} <- {{ item.path }}"
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Restore DBs | Show result
+  ansible.builtin.debug:
+    msg:
+      leader: "{{ postgres_patroni_leader_member.name }}"
+      restore_dir: "{{ postgres_restore_dbs_dir }}"
+      databases: "{{ postgres_restore_dbs_map_resolved | map(attribute='db') | list }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
