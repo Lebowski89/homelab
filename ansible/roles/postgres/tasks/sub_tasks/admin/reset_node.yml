@@ -1,0 +1,133 @@
+---
+
+- name: Reset node | Stop Patroni
+  ansible.builtin.systemd_service:
+    name: patroni
+    state: stopped
+  failed_when: false
+
+- name: Reset node | Disable Patroni
+  ansible.builtin.systemd_service:
+    name: patroni
+    enabled: false
+  failed_when: false
+
+- name: Reset node | Stop PostgreSQL
+  ansible.builtin.systemd_service:
+    name: postgresql
+    state: stopped
+  failed_when: false
+
+- name: Reset node | Disable PostgreSQL
+  ansible.builtin.systemd_service:
+    name: postgresql
+    enabled: false
+  failed_when: false
+
+- name: Reset node | Stop etcd
+  ansible.builtin.systemd_service:
+    name: etcd
+    state: stopped
+  failed_when: false
+
+- name: Reset node | Disable etcd
+  ansible.builtin.systemd_service:
+    name: etcd
+    enabled: false
+  failed_when: false
+
+- name: Reset node | Kill stray postgres/patroni/etcd processes
+  ansible.builtin.shell: |
+    killall -q -9 patroni || true
+    killall -q -9 etcd || true
+    killall -q -u postgres postgres || true
+    exit 0
+  args:
+    executable: /bin/bash
+  changed_when: true
+  failed_when: false
+
+- name: Reset node | Drop Debian PostgreSQL cluster if present
+  ansible.builtin.command:
+    argv:
+      - pg_dropcluster
+      - --stop
+      - "{{ postgres_version | string }}"
+      - main
+  register: postgres_reset_dropcluster
+  changed_when: postgres_reset_dropcluster.rc == 0
+  failed_when: >-
+    postgres_reset_dropcluster.rc != 0
+    and ('does not exist' not in (postgres_reset_dropcluster.stderr | default('') | lower))
+
+- name: Reset node | Remove Patroni config
+  ansible.builtin.file:
+    path: "{{ postgres_patroni_config_path }}"
+    state: absent
+
+- name: Reset node | Remove Patroni config dir leftovers
+  ansible.builtin.file:
+    path: "{{ postgres_patroni_config_dir }}"
+    state: absent
+
+- name: Reset node | Remove PostgreSQL data dir
+  ansible.builtin.file:
+    path: "{{ postgres_patroni_data_dir }}"
+    state: absent
+
+- name: Reset node | Remove Debian PostgreSQL config dir
+  ansible.builtin.file:
+    path: "/etc/postgresql/{{ postgres_version }}/main"
+    state: absent
+
+- name: Reset node | Remove Debian PostgreSQL data root if still present
+  ansible.builtin.file:
+    path: "/var/lib/postgresql/{{ postgres_version }}"
+    state: absent
+
+- name: Reset node | Remove PostgreSQL runtime sockets and pid files
+  ansible.builtin.shell: |
+    rm -f /var/run/postgresql/.s.PGSQL.5432
+    rm -f /var/run/postgresql/.s.PGSQL.5432.lock
+    rm -f /var/run/postgresql/* || true
+  args:
+    executable: /bin/bash
+  changed_when: true
+
+- name: Reset node | Optionally remove etcd data dir too
+  ansible.builtin.file:
+    path: "{{ postgres_etcd_data_dir }}"
+    state: absent
+
+- name: Reset node | Reset failed systemd units
+  ansible.builtin.shell: |
+    systemctl reset-failed patroni || true
+    systemctl reset-failed postgresql || true
+    systemctl reset-failed etcd || true
+  args:
+    executable: /bin/bash
+  changed_when: true
+
+- name: Reset node | Recreate Patroni PostgreSQL data dir
+  ansible.builtin.file:
+    path: "{{ postgres_patroni_data_dir }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0700"
+
+- name: Reset node | Recreate Patroni config dir
+  ansible.builtin.file:
+    path: "{{ postgres_patroni_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Reset node | Recreate etcd data dir if keeping etcd
+  ansible.builtin.file:
+    path: "{{ postgres_etcd_data_dir }}"
+    state: directory
+    owner: etcd
+    group: etcd
+    mode: "0700"

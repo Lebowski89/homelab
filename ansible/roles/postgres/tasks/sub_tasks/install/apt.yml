@@ -36,12 +36,31 @@
     state: present
     update_cache: true
 
-- name: Install PostgreSQL 18, Patroni, and etcd packages
+- name: Install PostgreSQL common packages first
   ansible.builtin.apt:
     name:
-      - postgresql-18
-      - postgresql-client-18
-      - postgresql-contrib-18
+      - postgresql-common
+      - postgresql-client-common
+    state: present
+
+- name: Disable automatic Debian PostgreSQL cluster creation
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql-common/createcluster.conf
+    regexp: '^#?\s*create_main_cluster\s*='
+    line: 'create_main_cluster = false'
+
+- name: Set default PostgreSQL start_conf to manual
+  ansible.builtin.lineinfile:
+    path: /etc/postgresql-common/createcluster.conf
+    regexp: '^#?\s*start_conf\s*='
+    line: 'start_conf = manual'
+
+- name: Install PostgreSQL Patroni, and etcd packages
+  ansible.builtin.apt:
+    name:
+      - "postgresql-{{ postgres_version }}"
+      - "postgresql-client-{{ postgres_version }}"
+      - "postgresql-contrib-{{ postgres_version }}"
       - patroni
       - python3-psycopg2
       - etcd-server

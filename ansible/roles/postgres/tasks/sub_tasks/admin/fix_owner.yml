@@ -1,0 +1,241 @@
+---
+
+- name: Fix DB owner | Assert ownership map is provided
+  ansible.builtin.assert:
+    that:
+      - postgres_fix_owner_map is sequence
+      - postgres_fix_owner_map is not string
+      - postgres_fix_owner_map | length > 0
+    fail_msg: >-
+      You must provide postgres_fix_owner_map as a non-empty list, for example:
+      postgres_fix_owner_map:
+        - db: gotify
+          role: some_user
+
+- name: Fix DB owner | Validate ownership map entries
+  ansible.builtin.assert:
+    that:
+      - item.db is defined
+      - item.db | string | trim | length > 0
+      - item.role is defined
+      - item.role | string | trim | length > 0
+    fail_msg: >-
+      Each postgres_fix_owner_map entry must contain:
+      - db
+      - role
+  loop: "{{ postgres_fix_owner_map }}"
+  loop_control:
+    label: "{{ item.db | default('undefined-db') }}"
+
+- name: Fix DB owner | Query Patroni cluster state from first postgres node
+  ansible.builtin.uri:
+    url: "http://{{ hostvars[groups['postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: postgres_patroni_cluster_state
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+  retries: 12
+  delay: 5
+  until: >-
+    (
+      postgres_patroni_cluster_state.json.members
+      | default([])
+      | selectattr('role', 'equalto', 'leader')
+      | list
+      | length
+    ) > 0
+
+- name: Fix DB owner | Extract Patroni leader candidates
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_candidates: >-
+      {{
+        postgres_patroni_cluster_state.json.members
+        | default([])
+        | selectattr('role', 'equalto', 'leader')
+        | list
+      }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Fix DB owner | Determine Patroni leader member
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_member: "{{ postgres_patroni_leader_candidates[0] }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Fix DB owner | Assert Patroni leader was found
+  ansible.builtin.assert:
+    that:
+      - postgres_patroni_leader_member is defined
+      - postgres_patroni_leader_member.name is defined
+      - postgres_patroni_leader_member.host is defined
+    fail_msg: >-
+      Could not determine Patroni leader from REST API.
+      Cluster response: {{ postgres_patroni_cluster_state.json | default({}) }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Fix DB owner | Ensure target roles exist
+  community.postgresql.postgresql_query:
+    login_host: "127.0.0.1"
+    login_port: "{{ postgres_patroni_postgres_port }}"
+    login_user: "{{ postgres_patroni_superuser_name }}"
+    login_password: "{{ postgres_patroni_superuser_pass }}"
+    login_db: postgres
+    query: |
+      SELECT 1
+      FROM pg_roles
+      WHERE rolname = %(role_name)s
+    named_args:
+      role_name: "{{ item.role }}"
+  register: postgres_fix_owner_role_checks
+  loop: "{{ postgres_fix_owner_map }}"
+  loop_control:
+    label: "{{ item.db }} -> {{ item.role }}"
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Fix DB owner | Assert target roles exist
+  ansible.builtin.assert:
+    that:
+      - (item.query_result | default([]) | length) > 0
+    fail_msg: >-
+      Role '{{ item.item.role }}' does not exist in PostgreSQL for database '{{ item.item.db }}'.
+  loop: "{{ postgres_fix_owner_role_checks.results }}"
+  loop_control:
+    label: "{{ item.item.db }} -> {{ item.item.role }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Fix DB owner | Set database owners
+  community.postgresql.postgresql_query:
+    login_host: "127.0.0.1"
+    login_port: "{{ postgres_patroni_postgres_port }}"
+    login_user: "{{ postgres_patroni_superuser_name }}"
+    login_password: "{{ postgres_patroni_superuser_pass }}"
+    login_db: postgres
+    query: |
+      ALTER DATABASE "{{ item.db }}" OWNER TO "{{ item.role }}";
+  loop: "{{ postgres_fix_owner_map }}"
+  loop_control:
+    label: "{{ item.db }} -> {{ item.role }}"
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Fix DB owner | Fix schema ownership, object ownership, and privileges
+  ansible.builtin.shell: |
+    set -euo pipefail
+    export PGPASSWORD='{{ postgres_patroni_superuser_pass }}'
+    psql \
+      -h 127.0.0.1 \
+      -p {{ postgres_patroni_postgres_port }} \
+      -U {{ postgres_patroni_superuser_name }} \
+      -d '{{ item.db }}' \
+      -v ON_ERROR_STOP=1 <<'SQL'
+    ALTER SCHEMA public OWNER TO "{{ item.role }}";
+
+    GRANT ALL ON SCHEMA public TO "{{ item.role }}";
+
+    DO $$
+    DECLARE
+      r record;
+    BEGIN
+      -- tables
+      FOR r IN
+        SELECT schemaname, tablename
+        FROM pg_tables
+        WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+      LOOP
+        EXECUTE format(
+          'ALTER TABLE %I.%I OWNER TO %I',
+          r.schemaname, r.tablename, '{{ item.role }}'
+        );
+      END LOOP;
+
+      -- sequences
+      FOR r IN
+        SELECT sequence_schema, sequence_name
+        FROM information_schema.sequences
+        WHERE sequence_schema NOT IN ('pg_catalog', 'information_schema')
+      LOOP
+        EXECUTE format(
+          'ALTER SEQUENCE %I.%I OWNER TO %I',
+          r.sequence_schema, r.sequence_name, '{{ item.role }}'
+        );
+      END LOOP;
+
+      -- views
+      FOR r IN
+        SELECT table_schema, table_name
+        FROM information_schema.views
+        WHERE table_schema NOT IN ('pg_catalog', 'information_schema')
+      LOOP
+        EXECUTE format(
+          'ALTER VIEW %I.%I OWNER TO %I',
+          r.table_schema, r.table_name, '{{ item.role }}'
+        );
+      END LOOP;
+
+      -- materialized views
+      FOR r IN
+        SELECT schemaname, matviewname
+        FROM pg_matviews
+        WHERE schemaname NOT IN ('pg_catalog', 'information_schema')
+      LOOP
+        EXECUTE format(
+          'ALTER MATERIALIZED VIEW %I.%I OWNER TO %I',
+          r.schemaname, r.matviewname, '{{ item.role }}'
+        );
+      END LOOP;
+
+      -- foreign tables
+      FOR r IN
+        SELECT foreign_table_schema, foreign_table_name
+        FROM information_schema.foreign_tables
+        WHERE foreign_table_schema NOT IN ('pg_catalog', 'information_schema')
+      LOOP
+        EXECUTE format(
+          'ALTER FOREIGN TABLE %I.%I OWNER TO %I',
+          r.foreign_table_schema, r.foreign_table_name, '{{ item.role }}'
+        );
+      END LOOP;
+
+      -- functions / procedures / routines
+      FOR r IN
+        SELECT n.nspname AS schema_name,
+               p.proname AS routine_name,
+               pg_get_function_identity_arguments(p.oid) AS identity_args
+        FROM pg_proc p
+        JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')
+      LOOP
+        EXECUTE format(
+          'ALTER ROUTINE %I.%I(%s) OWNER TO %I',
+          r.schema_name, r.routine_name, r.identity_args, '{{ item.role }}'
+        );
+      END LOOP;
+    END $$;
+
+    GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO "{{ item.role }}";
+    GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO "{{ item.role }}";
+    GRANT ALL PRIVILEGES ON ALL FUNCTIONS IN SCHEMA public TO "{{ item.role }}";
+
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+      GRANT ALL ON TABLES TO "{{ item.role }}";
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+      GRANT ALL ON SEQUENCES TO "{{ item.role }}";
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public
+      GRANT ALL ON FUNCTIONS TO "{{ item.role }}";
+    SQL
+  args:
+    executable: /bin/bash
+  loop: "{{ postgres_fix_owner_map }}"
+  loop_control:
+    label: "{{ item.db }} -> {{ item.role }}"
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true

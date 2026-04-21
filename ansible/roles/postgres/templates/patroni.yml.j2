@@ -23,10 +23,35 @@ bootstrap:
     postgresql:
       use_pg_rewind: true
       use_slots: true
-      parameters:
-{% for key, value in postgres_patroni_postgresql_parameters.items() %}
-        {{ key }}: {{ value }}
+      pg_hba:
+        - "local   all             all                                     peer"
+        - "host    all             all             127.0.0.1/32            scram-sha-256"
+        - "host    all             all             ::1/128                 scram-sha-256"
+{% for host in groups['postgres'] %}
+        - "host    replication     {{ postgres_patroni_replication_name }} {{ hostvars[host].local_ip }}/32 scram-sha-256"
 {% endfor %}
+{% for host in groups['postgres'] %}
+        - "host    all             {{ postgres_patroni_superuser_name }}   {{ hostvars[host].local_ip }}/32 scram-sha-256"
+{% endfor %}
+{% for host in groups['postgres'] %}
+        - "host    all             {{ postgres_patroni_admin_role_name }}  {{ hostvars[host].local_ip }}/32 scram-sha-256"
+{% endfor %}
+{% for rule in postgres_patroni_pg_hba_extra %}
+        - "{{ rule }}"
+{% endfor %}
+      parameters:
+        max_connections: 100
+        shared_buffers: 1GB
+        wal_level: replica
+        hot_standby: on
+        max_wal_senders: 10
+        max_replication_slots: 10
+        wal_keep_size: 1GB
+        max_worker_processes: 8
+        max_locks_per_transaction: 64
+        max_prepared_transactions: 0
+        track_commit_timestamp: off
+        password_encryption: scram-sha-256
   initdb:
     - encoding: UTF8
     - data-checksums
@@ -44,9 +69,18 @@ postgresql:
       username: {{ postgres_patroni_replication_name }}
       password: {{ postgres_patroni_replication_pass }}
   parameters:
-{% for key, value in postgres_patroni_postgresql_parameters.items() %}
-    {{ key }}: {{ value }}
-{% endfor %}
+    max_connections: 100
+    shared_buffers: 1GB
+    wal_level: replica
+    hot_standby: on
+    max_wal_senders: 10
+    max_replication_slots: 10
+    wal_keep_size: 1GB
+    max_worker_processes: 8
+    max_locks_per_transaction: 64
+    max_prepared_transactions: 0
+    track_commit_timestamp: off
+    password_encryption: scram-sha-256
 
 tags:
   nofailover: false

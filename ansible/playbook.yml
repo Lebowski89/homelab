@@ -133,8 +133,14 @@
         - postgres
         - postgres_apt
         - postgres_etcd
+        - postgres_etcd_reset
         - postgres_patroni
+        - postgres_patroni_reset
+        - postgres_backup
+        - postgres_restore
         - postgres_admin
+        - postgres_nuke_node
+        - postgres_fix_owner
 
     ################################
     # DOCKER_SERVICES
