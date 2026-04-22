@@ -16,8 +16,6 @@
             )
           )
           | regex_replace('\r\n', '\n')
-          | regex_replace('\\\\n+$', '')
-          | regex_replace('\n+$', '')
         )
       }}
 
