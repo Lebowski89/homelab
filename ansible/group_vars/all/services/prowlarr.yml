@@ -23,7 +23,7 @@ prowlarr:
     PROWLARR__AUTH__METHOD: "External"
     FILE__PROWLARR__AUTH__APIKEY: /run/secrets/prowlarr_api_secret
     PROWLARR__POSTGRES__HOST: "haproxy"
-    PROWLARR__POSTGRES__PORT: "5433"
+    PROWLARR__POSTGRES__PORT: "5432"
     FILE__PROWLARR__POSTGRES__USER: /run/secrets/postgres_user_secret
     FILE__PROWLARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
     PROWLARR__POSTGRES__MAINDB: "prowlarr-main"

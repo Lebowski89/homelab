@@ -81,7 +81,7 @@
     login_host: 192.168.80.48
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_pass }}"
-    login_port: 5433
+    login_port: 5432
     login_db: "{{ postgres_db_item }}"
   loop: "{{ docker_services_postgres_databases }}"
   loop_control:
@@ -98,7 +98,7 @@
     login_host: 192.168.80.48
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_pass }}"
-    login_port: 5433
+    login_port: 5432
     name: "{{ postgres_ping_result.postgres_db_item }}"
     state: present
   loop: "{{ docker_services_postgres_ping_results.results | default([]) }}"

@@ -24,12 +24,10 @@ infisical_lookup_default_params:
 
 infisical_postgres_name: infisical-postgres
 infisical_postgres_image: docker.io/library/postgres:18.3
-infisical_postgres_port: 5432
 infisical_postgres_path: "{{ infisical_path }}/postgres"
 
 infisical_redis_name: infisical-redis
 infisical_redis_image: docker.io/library/redis:8.6-alpine
-infisical_redis_port: 6390
 infisical_redis_path: "{{ infisical_path }}/redis"
 
 infisical_smtp_host: smtp.porkbun.com

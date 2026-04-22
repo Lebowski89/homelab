@@ -42,7 +42,7 @@ sonarr:
         SONARR__AUTH__METHOD: "External"
         FILE__SONARR__AUTH__APIKEY: /run/secrets/sonarr_api_secret
         SONARR__POSTGRES__HOST: "haproxy"
-        SONARR__POSTGRES__PORT: "5433"
+        SONARR__POSTGRES__PORT: "5432"
         FILE__SONARR__POSTGRES__USER: /run/secrets/postgres_user_secret
         FILE__SONARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
         SONARR__POSTGRES__MAINDB: "sonarr-main"
@@ -121,7 +121,7 @@ sonarr:
         SONARR__AUTH__METHOD: "External"
         FILE__SONARR__AUTH__APIKEY: /run/secrets/sonarr_4k_api_secret
         SONARR__POSTGRES__HOST: "haproxy"
-        SONARR__POSTGRES__PORT: "5433"
+        SONARR__POSTGRES__PORT: "5432"
         FILE__SONARR__POSTGRES__USER: /run/secrets/postgres_user_secret
         FILE__SONARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
         SONARR__POSTGRES__MAINDB: "sonarr-4k-main"
