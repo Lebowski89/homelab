@@ -21,7 +21,7 @@ whisparr:
     WHISPARR__AUTH__METHOD: "External"
     FILE__WHISPARR__AUTH__APIKEY: /run/secrets/whisparr_api_secret
     WHISPARR__POSTGRES__HOST: "haproxy"
-    WHISPARR__POSTGRES__PORT: "5433"
+    WHISPARR__POSTGRES__PORT: "5432"
     FILE__WHISPARR__POSTGRES__USER: /run/secrets/postgres_user_secret
     FILE__WHISPARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
     WHISPARR__POSTGRES__MAINDB: "whisparr-main-v3"

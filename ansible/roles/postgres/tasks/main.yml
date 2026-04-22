@@ -72,12 +72,19 @@
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/reset_node.yml
     apply:
-      tags: postgres_nuke_node
-  tags: postgres_nuke_node
+      tags: postgres_admin_nuke_node
+  tags: postgres_admin_nuke_node
 
 - name: Fix database ownership and privileges
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/fix_owner.yml
     apply:
-      tags: postgres_fix_owner
-  tags: postgres_fix_owner
+      tags: postgres_admin_fix_owner
+  tags: postgres_admin_fix_owner
+
+- name: Update Patroni dynamic pg_hba in DCS
+  ansible.builtin.include_tasks:
+    file: sub_tasks/admin/pg_hba.yml
+    apply:
+      tags: postgres_admin_update_pg_hba
+  tags: postgres_admin_update_pg_hba

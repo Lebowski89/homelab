@@ -22,7 +22,7 @@ autobrr:
     AUTOBRR__SESSION_SECRET: "{{ autobrr_session | default('__INFISICAL__:autobrr_session', true) }}"
     AUTOBRR__DATABASE_TYPE: "postgres"
     AUTOBRR__POSTGRES_HOST: "haproxy"
-    AUTOBRR__POSTGRES_PORT: "5433"
+    AUTOBRR__POSTGRES_PORT: "5432"
     AUTOBRR__POSTGRES_DATABASE: "autobrr"
     AUTOBRR__POSTGRES_USER: "{{ postgres_user | default('__INFISICAL__:postgres_user', true) }}"
     AUTOBRR__POSTGRES_PASS: "{{ postgres_pass | default('__INFISICAL__:postgres_pass', true) }}"

@@ -142,24 +142,6 @@ docker_services:
     tags: [apps, utilities, themepark]
 
   ## services (postgres cluster)
-  - name: etcd
-    target: pg01
-    tags: [etcd, pg01]
-  - name: etcd
-    target: pg02
-    tags: [etcd, pg02]
-  - name: etcd
-    target: pg03
-    tags: [etcd, pg03]
-  - name: spilo
-    target: pg01
-    tags: [spilo, pg01]
-  - name: spilo
-    target: pg02
-    tags: [spilo, pg02]
-  - name: spilo
-    target: pg03
-    tags: [spilo, pg03]
   - name: haproxy
     tags: [haproxy]
 
