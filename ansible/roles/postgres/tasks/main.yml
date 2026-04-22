@@ -1,8 +1,12 @@
 ---
 
+################################
+# INSTALL TASKS
+################################
+
 - name: Install postgres packages
   ansible.builtin.include_tasks:
-    file: sub_tasks/apt.yml
+    file: sub_tasks/install/apt.yml
     apply:
       tags:
         - postgres
@@ -13,7 +17,7 @@
 
 - name: Configure etcd
   ansible.builtin.include_tasks:
-    file: sub_tasks/etcd.yml
+    file: sub_tasks/install/etcd.yml
   tags:
     - postgres
     - postgres_etcd
@@ -21,15 +25,41 @@
 
 - name: Configure Patroni
   ansible.builtin.include_tasks:
-    file: sub_tasks/patroni.yml
+    file: sub_tasks/install/patroni.yml
   tags:
     - postgres
     - postgres_patroni
     - postgres_patroni_reset
 
+################################
+# BACKUP TASKS
+################################
+
+- name: Backup PostgreSQL single database with pg_dump
+  ansible.builtin.include_tasks:
+    file: sub_tasks/backup.yml
+    apply:
+      tags: postgres_backup
+  tags: postgres_backup
+
+################################
+# RESTORE TASKS
+################################
+
+- name: Restore PostgreSQL single database from pg_dump backup
+  ansible.builtin.include_tasks:
+    file: sub_tasks/restore.yml
+    apply:
+      tags: postgres_restore
+  tags: postgres_restore
+
+################################
+# ADMIN TASKS
+################################
+
 - name: Ensure dedicated PostgreSQL admin role exists
   ansible.builtin.include_tasks:
-    file: sub_tasks/pg_admin.yml
+    file: sub_tasks/admin/pg_admin.yml
     apply:
       tags:
         - postgres
@@ -38,41 +68,16 @@
     - postgres
     - postgres_admin
 
-- name: Backup PostgreSQL cluster with pg_dumpall
-  ansible.builtin.include_tasks:
-    file: sub_tasks/backup/db_all.yml
-    apply:
-      tags:
-        - postgres_backup_all
-        - postgres_nuke_node
-  tags:
-    - postgres_backup_all
-    - postgres_nuke_node
-
-- name: Backup PostgreSQL single database with pg_dump
-  ansible.builtin.include_tasks:
-    file: sub_tasks/backup/db_one.yml
-    apply:
-      tags: postgres_backup_one
-  tags: postgres_backup_one
-
 - name: Reset PostgreSQL/Patroni node destructively
   ansible.builtin.include_tasks:
-    file: sub_tasks/reset_node.yml
+    file: sub_tasks/admin/reset_node.yml
     apply:
       tags: postgres_nuke_node
   tags: postgres_nuke_node
 
-- name: Restore PostgreSQL cluster from pg_dumpall backup
+- name: Fix database ownership and privileges
   ansible.builtin.include_tasks:
-    file: sub_tasks/restore/db_all.yml
+    file: sub_tasks/admin/fix_owner.yml
     apply:
-      tags: postgres_restore_all
-  tags: postgres_restore_all
-
-- name: Restore PostgreSQL single database from pg_dump backup
-  ansible.builtin.include_tasks:
-    file: sub_tasks/restore/db_one.yml
-    apply:
-      tags: postgres_restore_one
-  tags: postgres_restore_one
+      tags: postgres_fix_owner
+  tags: postgres_fix_owner

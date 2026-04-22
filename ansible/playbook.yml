@@ -136,12 +136,11 @@
         - postgres_etcd_reset
         - postgres_patroni
         - postgres_patroni_reset
+        - postgres_backup
+        - postgres_restore
         - postgres_admin
-        - postgres_backup_all
-        - postgres_backup_one
-        - postgres_restore_all
-        - postgres_restore_one
         - postgres_nuke_node
+        - postgres_fix_owner
 
     ################################
     # DOCKER_SERVICES
