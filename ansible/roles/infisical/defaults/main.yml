@@ -9,14 +9,12 @@ infisical_jwt_key: ""
 
 infisical_postgres_name: infisical-postgres
 infisical_postgres_image: postgres:18
-infisical_postgres_port: 5432
 infisical_postgres_path: "{{ infisical_path }}/postgres"
 infisical_postgres_user: ""
 infisical_postgres_pass: ""
 
 infisical_redis_name: infisical-redis
 infisical_redis_image: redis:8.6-alpine
-infisical_redis_port: 6390
 infisical_redis_path: "{{ infisical_path }}/redis"
 infisical_redis_key: ""
 

@@ -18,8 +18,6 @@ services:
         target: postgres_user_secret
       - source: infisical_postgres_pass_secret
         target: postgres_pass_secret
-    ports:
-      - "{{ infisical_postgres_port }}:5432"
     volumes:
       - {{ infisical_postgres_path }}:/var/lib/postgresql
     restart: unless-stopped
@@ -70,8 +68,6 @@ services:
     secrets:
       - source: infisical_redis_key_secret
         target: infisical_redis_key_secret
-    ports:
-      - "{{ infisical_redis_port }}:6379"
     volumes:
       - {{ infisical_redis_path }}:/data
     restart: unless-stopped
