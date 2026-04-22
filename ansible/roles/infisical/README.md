@@ -35,25 +35,23 @@
 | [infisical_jwt_key](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L8)   | str |  |    
 | [infisical_postgres_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L10)   | str | `infisical-postgres` |    
 | [infisical_postgres_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L11)   | str | `postgres:18` |    
-| [infisical_postgres_port](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L12)   | int | `5432` |    
-| [infisical_postgres_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L13)   | str | `{{ infisical_path }}/postgres` |    
-| [infisical_postgres_user](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L14)   | str |  |    
-| [infisical_postgres_pass](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L15)   | str |  |    
-| [infisical_redis_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L17)   | str | `infisical-redis` |    
-| [infisical_redis_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L18)   | str | `redis:8.6-alpine` |    
-| [infisical_redis_port](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L19)   | int | `6390` |    
-| [infisical_redis_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L20)   | str | `{{ infisical_path }}/redis` |    
-| [infisical_redis_key](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L21)   | str |  |    
-| [infisical_smtp_email](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L23)   | str |  |    
-| [infisical_smtp_host](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L24)   | str |  |    
-| [infisical_smtp_port](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L25)   | str |  |    
-| [infisical_smtp_user](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L26)   | str |  |    
-| [infisical_smtp_pass](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L27)   | str |  |    
-| [infisical_smtp_sender](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L28)   | str |  |    
-| [infisical_secret_files](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L30)   | dict | `{}` |    
-| [infisical_secret_files.postgres_user.**txt**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L31)   | str | `{{ infisical_postgres_user }}` |    
-| [infisical_secret_files.postgres_pass.**txt**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L31)   | str | `{{ infisical_postgres_pass }}` |    
-| [infisical_secret_files.redis_key.**txt**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L31)   | str | `{{ infisical_redis_key }}` |    
+| [infisical_postgres_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L12)   | str | `{{ infisical_path }}/postgres` |    
+| [infisical_postgres_user](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L13)   | str |  |    
+| [infisical_postgres_pass](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L14)   | str |  |    
+| [infisical_redis_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L16)   | str | `infisical-redis` |    
+| [infisical_redis_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L17)   | str | `redis:8.6-alpine` |    
+| [infisical_redis_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L18)   | str | `{{ infisical_path }}/redis` |    
+| [infisical_redis_key](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L19)   | str |  |    
+| [infisical_smtp_email](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L21)   | str |  |    
+| [infisical_smtp_host](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L22)   | str |  |    
+| [infisical_smtp_port](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L23)   | str |  |    
+| [infisical_smtp_user](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L24)   | str |  |    
+| [infisical_smtp_pass](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L25)   | str |  |    
+| [infisical_smtp_sender](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L26)   | str |  |    
+| [infisical_secret_files](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L28)   | dict | `{}` |    
+| [infisical_secret_files.postgres_user.**txt**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L29)   | str | `{{ infisical_postgres_user }}` |    
+| [infisical_secret_files.postgres_pass.**txt**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L29)   | str | `{{ infisical_postgres_pass }}` |    
+| [infisical_secret_files.redis_key.**txt**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L29)   | str | `{{ infisical_redis_key }}` |    
 
 
 
