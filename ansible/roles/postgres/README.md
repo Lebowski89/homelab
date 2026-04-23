@@ -118,6 +118,7 @@
 | Patroni dynamic pg_hba ¦ Assert Patroni leader was found | ansible.builtin.assert | False |
 | Patroni dynamic pg_hba ¦ Build desired pg_hba rules | ansible.builtin.set_fact | False |
 | Patroni dynamic pg_hba ¦ Read current dynamic config from leader | ansible.builtin.uri | False |
+| Patroni dynamic pg_hba ¦ Determine whether pg_hba update is needed | ansible.builtin.set_fact | False |
 | Patroni dynamic pg_hba ¦ Patch DCS config with desired pg_hba | ansible.builtin.uri | True |
 | Patroni dynamic pg_hba ¦ Restart patroni on all postgres nodes if DCS config changed | ansible.builtin.service | True |
 | Patroni dynamic pg_hba ¦ Wait for Patroni REST API on all postgres nodes | ansible.builtin.wait_for | True |
@@ -323,11 +324,12 @@ classDef rescue stroke:#665352,stroke-width:2px;
   Patroni_dynamic_pg_hba___Determine_Patroni_leader_member2-->|Task| Patroni_dynamic_pg_hba___Assert_Patroni_leader_was_found3[patroni dynamic pg hba   assert patroni leader was<br>found]:::task
   Patroni_dynamic_pg_hba___Assert_Patroni_leader_was_found3-->|Task| Patroni_dynamic_pg_hba___Build_desired_pg_hba_rules4[patroni dynamic pg hba   build desired pg hba<br>rules]:::task
   Patroni_dynamic_pg_hba___Build_desired_pg_hba_rules4-->|Task| Patroni_dynamic_pg_hba___Read_current_dynamic_config_from_leader5[patroni dynamic pg hba   read current dynamic<br>config from leader]:::task
-  Patroni_dynamic_pg_hba___Read_current_dynamic_config_from_leader5-->|Task| Patroni_dynamic_pg_hba___Patch_DCS_config_with_desired_pg_hba6[patroni dynamic pg hba   patch dcs config with<br>desired pg hba<br>When: **postgres patroni dynamic config json<br>postgresql pg hba     default          postgres<br>patroni pg hba desired**]:::task
-  Patroni_dynamic_pg_hba___Patch_DCS_config_with_desired_pg_hba6-->|Task| Patroni_dynamic_pg_hba___Restart_patroni_on_all_postgres_nodes_if_DCS_config_changed7[patroni dynamic pg hba   restart patroni on all<br>postgres nodes if dcs config changed<br>When: **postgres patroni dynamic config patch changed  <br>default false**]:::task
-  Patroni_dynamic_pg_hba___Restart_patroni_on_all_postgres_nodes_if_DCS_config_changed7-->|Task| Patroni_dynamic_pg_hba___Wait_for_Patroni_REST_API_on_all_postgres_nodes8[patroni dynamic pg hba   wait for patroni rest api<br>on all postgres nodes<br>When: **postgres patroni dynamic config patch changed  <br>default false**]:::task
-  Patroni_dynamic_pg_hba___Wait_for_Patroni_REST_API_on_all_postgres_nodes8-->|Task| Patroni_dynamic_pg_hba___Wait_for_live_pg_hba_conf_to_contain_HAProxy_rules_on_all_nodes9[patroni dynamic pg hba   wait for live pg hba conf<br>to contain haproxy rules on all nodes<br>When: **groups  haproxy     default       length    0**]:::task
-  Patroni_dynamic_pg_hba___Wait_for_live_pg_hba_conf_to_contain_HAProxy_rules_on_all_nodes9-->End
+  Patroni_dynamic_pg_hba___Read_current_dynamic_config_from_leader5-->|Task| Patroni_dynamic_pg_hba___Determine_whether_pg_hba_update_is_needed6[patroni dynamic pg hba   determine whether pg hba<br>update is needed]:::task
+  Patroni_dynamic_pg_hba___Determine_whether_pg_hba_update_is_needed6-->|Task| Patroni_dynamic_pg_hba___Patch_DCS_config_with_desired_pg_hba7[patroni dynamic pg hba   patch dcs config with<br>desired pg hba<br>When: **postgres patroni pg hba needs restart   bool**]:::task
+  Patroni_dynamic_pg_hba___Patch_DCS_config_with_desired_pg_hba7-->|Task| Patroni_dynamic_pg_hba___Restart_patroni_on_all_postgres_nodes_if_DCS_config_changed8[patroni dynamic pg hba   restart patroni on all<br>postgres nodes if dcs config changed<br>When: **postgres patroni pg hba needs restart   bool**]:::task
+  Patroni_dynamic_pg_hba___Restart_patroni_on_all_postgres_nodes_if_DCS_config_changed8-->|Task| Patroni_dynamic_pg_hba___Wait_for_Patroni_REST_API_on_all_postgres_nodes9[patroni dynamic pg hba   wait for patroni rest api<br>on all postgres nodes<br>When: **postgres patroni pg hba needs restart   bool**]:::task
+  Patroni_dynamic_pg_hba___Wait_for_Patroni_REST_API_on_all_postgres_nodes9-->|Task| Patroni_dynamic_pg_hba___Wait_for_live_pg_hba_conf_to_contain_HAProxy_rules_on_all_nodes10[patroni dynamic pg hba   wait for live pg hba conf<br>to contain haproxy rules on all nodes<br>When: **groups  haproxy     default       length    0**]:::task
+  Patroni_dynamic_pg_hba___Wait_for_live_pg_hba_conf_to_contain_HAProxy_rules_on_all_nodes10-->End
 ```
 
 

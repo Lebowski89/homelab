@@ -131,6 +131,7 @@
   run_once: true
   delegate_to: "{{ postgres_patroni_leader_member.name }}"
   no_log: true
+  changed_when: true
 
 - name: Restore DBs | Create databases
   community.postgresql.postgresql_db:
@@ -167,6 +168,7 @@
   run_once: true
   delegate_to: "{{ postgres_patroni_leader_member.name }}"
   no_log: true
+  changed_when: true
 
 - name: Restore DBs | Show result
   ansible.builtin.debug:
