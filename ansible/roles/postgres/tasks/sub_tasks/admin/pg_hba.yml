@@ -80,6 +80,18 @@
   run_once: true
   delegate_to: "{{ docker_services_primary_manager }}"
 
+- name: Patroni dynamic pg_hba | Determine whether pg_hba update is needed
+  ansible.builtin.set_fact:
+    postgres_patroni_pg_hba_needs_restart: >-
+      {{
+        (
+          postgres_patroni_dynamic_config.json.postgresql.pg_hba
+          | default([])
+        ) != postgres_patroni_pg_hba_desired
+      }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
 - name: Patroni dynamic pg_hba | Patch DCS config with desired pg_hba
   ansible.builtin.uri:
     url: "http://{{ postgres_patroni_leader_member.host }}:{{ postgres_patroni_restapi_port }}/config"
@@ -93,17 +105,13 @@
   register: postgres_patroni_dynamic_config_patch
   run_once: true
   delegate_to: "{{ docker_services_primary_manager }}"
-  when: >-
-    (
-      postgres_patroni_dynamic_config.json.postgresql.pg_hba
-      | default([])
-    ) != postgres_patroni_pg_hba_desired
+  when: postgres_patroni_pg_hba_needs_restart | bool
 
 - name: Patroni dynamic pg_hba | Restart patroni on all postgres nodes if DCS config changed
   ansible.builtin.service:
     name: patroni
     state: restarted
-  when: postgres_patroni_dynamic_config_patch.changed | default(false)
+  when: postgres_patroni_pg_hba_needs_restart | bool
   delegate_to: "{{ inventory_hostname }}"
 
 - name: Patroni dynamic pg_hba | Wait for Patroni REST API on all postgres nodes
@@ -112,7 +120,7 @@
     port: "{{ postgres_patroni_restapi_port }}"
     timeout: 60
     delay: 2
-  when: postgres_patroni_dynamic_config_patch.changed | default(false)
+  when: postgres_patroni_pg_hba_needs_restart | bool
   delegate_to: "{{ docker_services_primary_manager }}"
 
 - name: Patroni dynamic pg_hba | Wait for live pg_hba.conf to contain HAProxy rules on all nodes

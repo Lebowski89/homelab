@@ -87,6 +87,7 @@
   run_once: true
   delegate_to: "{{ postgres_patroni_leader_member.name }}"
   no_log: true
+  changed_when: true
 
 - name: Backup DBs | Dump each database in plain SQL format
   ansible.builtin.shell: |
@@ -105,6 +106,7 @@
   run_once: true
   delegate_to: "{{ postgres_patroni_leader_member.name }}"
   no_log: true
+  changed_when: true
 
 - name: Backup DBs | Show result
   ansible.builtin.debug:
