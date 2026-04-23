@@ -1,20 +1,20 @@
 ---
 
 infisical_name: infisical
-infisical_image: infisical/infisical:latest-postgres
+infisical_image: docker.io/infisical/infisical:v0.159.9
 infisical_port: 8066
 infisical_path: "/opt/{{ infisical_name }}"
 infisical_enc_key: ""
 infisical_jwt_key: ""
 
 infisical_postgres_name: infisical-postgres
-infisical_postgres_image: postgres:18
+infisical_postgres_image: docker.io/library/postgres:18.3
 infisical_postgres_path: "{{ infisical_path }}/postgres"
 infisical_postgres_user: ""
 infisical_postgres_pass: ""
 
 infisical_redis_name: infisical-redis
-infisical_redis_image: redis:8.6-alpine
+infisical_redis_image: docker.io/library/redis:8.6-alpine
 infisical_redis_path: "{{ infisical_path }}/redis"
 infisical_redis_key: ""
 
