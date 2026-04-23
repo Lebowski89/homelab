@@ -23,7 +23,8 @@ The new Postgres role has tasks to install postgres, etcd, patroni. It has tasks
 
 <details>
 <summary>Retired etcd Service Vars</summary>
-```bash
+
+```yaml
 etcd:
   name: etcd
   stack: pg-etcd
@@ -95,11 +96,13 @@ etcd:
         type: container
         host: pg03
 ```
+
 </details>
 
 <details>
 <summary>Retired Spilo Service Vars</summary>
-```bash
+
+```yaml
 spilo:
   name: spilo
   stack: spilo
@@ -241,4 +244,5 @@ spilo:
         type: container
         host: pg03
 ```
+
 </details>
