@@ -98,7 +98,7 @@ bazarr:
       port: "8989"
     postgres:
       host: "haproxy"
-      port: "5433"
+      port: "5432"
   deploy:
     type: swarm
     mode: replicated
