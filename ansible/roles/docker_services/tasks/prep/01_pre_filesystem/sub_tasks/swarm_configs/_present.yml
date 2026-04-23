@@ -10,9 +10,9 @@
             if (cfg.data is defined)
             else
             (
-              lookup('template', cfg.src)
+              lookup('template', cfg.src, rstrip=false)
               if ((cfg.data_is_template | default(false)) | bool) or ((cfg.src | string).endswith('.j2'))
-              else lookup('file', cfg.src)
+              else lookup('file', cfg.src, rstrip=false)
             )
           )
           | regex_replace('\r\n', '\n')

@@ -1,0 +1,132 @@
+---
+
+- name: Patroni dynamic pg_hba | Query Patroni cluster state from first postgres node
+  ansible.builtin.uri:
+    url: "http://{{ hostvars[groups['postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: postgres_patroni_cluster_state
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+  retries: 12
+  delay: 5
+  until: >-
+    (
+      postgres_patroni_cluster_state.json.members
+      | default([])
+      | selectattr('role', 'equalto', 'leader')
+      | list
+      | length
+    ) > 0
+
+- name: Patroni dynamic pg_hba | Extract Patroni leader candidates
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_candidates: >-
+      {{
+        postgres_patroni_cluster_state.json.members
+        | default([])
+        | selectattr('role', 'equalto', 'leader')
+        | list
+      }}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Patroni dynamic pg_hba | Determine Patroni leader member
+  ansible.builtin.set_fact:
+    postgres_patroni_leader_member: "{{ postgres_patroni_leader_candidates[0] }}"
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Patroni dynamic pg_hba | Assert Patroni leader was found
+  ansible.builtin.assert:
+    that:
+      - postgres_patroni_leader_member is defined
+      - postgres_patroni_leader_member.host is defined
+    fail_msg: "Could not determine Patroni leader from REST API."
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Patroni dynamic pg_hba | Build desired pg_hba rules
+  ansible.builtin.set_fact:
+    postgres_patroni_pg_hba_desired: "{{ postgres_patroni_pg_hba_desired_yaml | from_yaml }}"
+  vars:
+    postgres_patroni_pg_hba_desired_yaml: |
+      - local all all peer
+      - host all all 127.0.0.1/32 scram-sha-256
+      - host all all ::1/128 scram-sha-256
+      {% for host in groups['postgres'] %}
+      - host replication {{ postgres_patroni_replication_name }} {{ hostvars[host].local_ip }}/32 scram-sha-256
+      {% endfor %}
+      {% for host in groups['postgres'] %}
+      - host all {{ postgres_patroni_superuser_name }} {{ hostvars[host].local_ip }}/32 scram-sha-256
+      {% endfor %}
+      {% for host in groups['postgres'] %}
+      - host all {{ postgres_patroni_admin_role_name }} {{ hostvars[host].local_ip }}/32 scram-sha-256
+      {% endfor %}
+      {% for host in groups['haproxy'] | default([]) %}
+      - host all all {{ hostvars[host].local_ip }}/32 scram-sha-256
+      {% endfor %}
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Patroni dynamic pg_hba | Read current dynamic config from leader
+  ansible.builtin.uri:
+    url: "http://{{ postgres_patroni_leader_member.host }}:{{ postgres_patroni_restapi_port }}/config"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: postgres_patroni_dynamic_config
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Patroni dynamic pg_hba | Patch DCS config with desired pg_hba
+  ansible.builtin.uri:
+    url: "http://{{ postgres_patroni_leader_member.host }}:{{ postgres_patroni_restapi_port }}/config"
+    method: PATCH
+    body_format: json
+    body:
+      postgresql:
+        pg_hba: "{{ postgres_patroni_pg_hba_desired }}"
+    status_code: 200
+    return_content: true
+  register: postgres_patroni_dynamic_config_patch
+  run_once: true
+  delegate_to: "{{ docker_services_primary_manager }}"
+  when: >-
+    (
+      postgres_patroni_dynamic_config.json.postgresql.pg_hba
+      | default([])
+    ) != postgres_patroni_pg_hba_desired
+
+- name: Patroni dynamic pg_hba | Restart patroni on all postgres nodes if DCS config changed
+  ansible.builtin.service:
+    name: patroni
+    state: restarted
+  when: postgres_patroni_dynamic_config_patch.changed | default(false)
+  delegate_to: "{{ inventory_hostname }}"
+
+- name: Patroni dynamic pg_hba | Wait for Patroni REST API on all postgres nodes
+  ansible.builtin.wait_for:
+    host: "{{ hostvars[inventory_hostname].local_ip }}"
+    port: "{{ postgres_patroni_restapi_port }}"
+    timeout: 60
+    delay: 2
+  when: postgres_patroni_dynamic_config_patch.changed | default(false)
+  delegate_to: "{{ docker_services_primary_manager }}"
+
+- name: Patroni dynamic pg_hba | Wait for live pg_hba.conf to contain HAProxy rules on all nodes
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -F
+      - "host all all {{ hostvars[item].local_ip }}/32 scram-sha-256"
+      - "{{ postgres_patroni_data_dir }}/pg_hba.conf"
+  loop: "{{ groups['haproxy'] | default([]) }}"
+  register: postgres_patroni_pg_hba_live_check
+  changed_when: false
+  retries: 15
+  delay: 2
+  until: postgres_patroni_pg_hba_live_check.rc == 0
+  when: (groups['haproxy'] | default([]) | length) > 0
+  delegate_to: "{{ inventory_hostname }}"

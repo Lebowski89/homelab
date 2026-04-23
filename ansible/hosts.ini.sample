@@ -50,3 +50,8 @@ swarm_workers
 pg95
 pg96
 pg97
+
+[haproxy]
+mgt
+plex
+unraid
