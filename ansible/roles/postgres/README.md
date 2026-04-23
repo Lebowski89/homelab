@@ -78,8 +78,9 @@
 | Backup PostgreSQL single database with pg_dump | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,b,a,c,k,u,p |
 | Restore PostgreSQL single database from pg_dump backup | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,r,e,s,t,o,r,e |
 | Ensure dedicated PostgreSQL admin role exists | ansible.builtin.include_tasks | False | postgres,postgres_admin |
-| Reset PostgreSQL/Patroni node destructively | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,n,u,k,e,_,n,o,d,e |
-| Fix database ownership and privileges | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,f,i,x,_,o,w,n,e,r |
+| Reset PostgreSQL/Patroni node destructively | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,n,u,k,e,_,n,o,d,e |
+| Fix database ownership and privileges | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,f,i,x,_,o,w,n,e,r |
+| Update Patroni dynamic pg_hba in DCS | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,u,p,d,a,t,e,_,p,g,_,h,b,a |
 
 #### File: tasks/sub_tasks/admin/fix_owner.yml
 
@@ -106,6 +107,21 @@
 | Assert Patroni leader was found | ansible.builtin.assert | False |
 | Build Patroni admin role flags | ansible.builtin.set_fact | False |
 | Ensure dedicated Patroni admin role exists on leader | community.postgresql.postgresql_user | False |
+
+#### File: tasks/sub_tasks/admin/pg_hba.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Patroni dynamic pg_hba ¦ Query Patroni cluster state from first postgres node | ansible.builtin.uri | False |
+| Patroni dynamic pg_hba ¦ Extract Patroni leader candidates | ansible.builtin.set_fact | False |
+| Patroni dynamic pg_hba ¦ Determine Patroni leader member | ansible.builtin.set_fact | False |
+| Patroni dynamic pg_hba ¦ Assert Patroni leader was found | ansible.builtin.assert | False |
+| Patroni dynamic pg_hba ¦ Build desired pg_hba rules | ansible.builtin.set_fact | False |
+| Patroni dynamic pg_hba ¦ Read current dynamic config from leader | ansible.builtin.uri | False |
+| Patroni dynamic pg_hba ¦ Patch DCS config with desired pg_hba | ansible.builtin.uri | True |
+| Patroni dynamic pg_hba ¦ Restart patroni on all postgres nodes if DCS config changed | ansible.builtin.service | True |
+| Patroni dynamic pg_hba ¦ Wait for Patroni REST API on all postgres nodes | ansible.builtin.wait_for | True |
+| Patroni dynamic pg_hba ¦ Wait for live pg_hba.conf to contain HAProxy rules on all nodes | ansible.builtin.command | True |
 
 #### File: tasks/sub_tasks/admin/reset_node.yml
 
@@ -230,7 +246,8 @@ classDef rescue stroke:#665352,stroke-width:2px;
   Restore_PostgreSQL_single_database_from_pg_dump_backup_sub_tasks_restore_yml_4-->|Include task| Ensure_dedicated_PostgreSQL_admin_role_exists_sub_tasks_admin_pg_admin_yml_5[ensure dedicated postgresql admin role exists<br>include_task: sub tasks admin pg admin yml]:::includeTasks
   Ensure_dedicated_PostgreSQL_admin_role_exists_sub_tasks_admin_pg_admin_yml_5-->|Include task| Reset_PostgreSQL_Patroni_node_destructively_sub_tasks_admin_reset_node_yml_6[reset postgresql patroni node destructively<br>include_task: sub tasks admin reset node yml]:::includeTasks
   Reset_PostgreSQL_Patroni_node_destructively_sub_tasks_admin_reset_node_yml_6-->|Include task| Fix_database_ownership_and_privileges_sub_tasks_admin_fix_owner_yml_7[fix database ownership and privileges<br>include_task: sub tasks admin fix owner yml]:::includeTasks
-  Fix_database_ownership_and_privileges_sub_tasks_admin_fix_owner_yml_7-->End
+  Fix_database_ownership_and_privileges_sub_tasks_admin_fix_owner_yml_7-->|Include task| Update_Patroni_dynamic_pg_hba_in_DCS_sub_tasks_admin_pg_hba_yml_8[update patroni dynamic pg hba in dcs<br>include_task: sub tasks admin pg hba yml]:::includeTasks
+  Update_Patroni_dynamic_pg_hba_in_DCS_sub_tasks_admin_pg_hba_yml_8-->End
 ```
 
 
@@ -283,6 +300,34 @@ classDef rescue stroke:#665352,stroke-width:2px;
   Assert_Patroni_leader_was_found3-->|Task| Build_Patroni_admin_role_flags4[build patroni admin role flags]:::task
   Build_Patroni_admin_role_flags4-->|Task| Ensure_dedicated_Patroni_admin_role_exists_on_leader5[ensure dedicated patroni admin role exists on<br>leader]:::task
   Ensure_dedicated_Patroni_admin_role_exists_on_leader5-->End
+```
+
+
+### Graph for sub_tasks/admin/pg_hba.yml
+
+```mermaid
+flowchart TD
+Start
+classDef block stroke:#3498db,stroke-width:2px;
+classDef task stroke:#4b76bb,stroke-width:2px;
+classDef includeTasks stroke:#16a085,stroke-width:2px;
+classDef importTasks stroke:#34495e,stroke-width:2px;
+classDef includeRole stroke:#2980b9,stroke-width:2px;
+classDef importRole stroke:#699ba7,stroke-width:2px;
+classDef includeVars stroke:#8e44ad,stroke-width:2px;
+classDef rescue stroke:#665352,stroke-width:2px;
+
+  Start-->|Task| Patroni_dynamic_pg_hba___Query_Patroni_cluster_state_from_first_postgres_node0[patroni dynamic pg hba   query patroni cluster<br>state from first postgres node]:::task
+  Patroni_dynamic_pg_hba___Query_Patroni_cluster_state_from_first_postgres_node0-->|Task| Patroni_dynamic_pg_hba___Extract_Patroni_leader_candidates1[patroni dynamic pg hba   extract patroni leader<br>candidates]:::task
+  Patroni_dynamic_pg_hba___Extract_Patroni_leader_candidates1-->|Task| Patroni_dynamic_pg_hba___Determine_Patroni_leader_member2[patroni dynamic pg hba   determine patroni leader<br>member]:::task
+  Patroni_dynamic_pg_hba___Determine_Patroni_leader_member2-->|Task| Patroni_dynamic_pg_hba___Assert_Patroni_leader_was_found3[patroni dynamic pg hba   assert patroni leader was<br>found]:::task
+  Patroni_dynamic_pg_hba___Assert_Patroni_leader_was_found3-->|Task| Patroni_dynamic_pg_hba___Build_desired_pg_hba_rules4[patroni dynamic pg hba   build desired pg hba<br>rules]:::task
+  Patroni_dynamic_pg_hba___Build_desired_pg_hba_rules4-->|Task| Patroni_dynamic_pg_hba___Read_current_dynamic_config_from_leader5[patroni dynamic pg hba   read current dynamic<br>config from leader]:::task
+  Patroni_dynamic_pg_hba___Read_current_dynamic_config_from_leader5-->|Task| Patroni_dynamic_pg_hba___Patch_DCS_config_with_desired_pg_hba6[patroni dynamic pg hba   patch dcs config with<br>desired pg hba<br>When: **postgres patroni dynamic config json<br>postgresql pg hba     default          postgres<br>patroni pg hba desired**]:::task
+  Patroni_dynamic_pg_hba___Patch_DCS_config_with_desired_pg_hba6-->|Task| Patroni_dynamic_pg_hba___Restart_patroni_on_all_postgres_nodes_if_DCS_config_changed7[patroni dynamic pg hba   restart patroni on all<br>postgres nodes if dcs config changed<br>When: **postgres patroni dynamic config patch changed  <br>default false**]:::task
+  Patroni_dynamic_pg_hba___Restart_patroni_on_all_postgres_nodes_if_DCS_config_changed7-->|Task| Patroni_dynamic_pg_hba___Wait_for_Patroni_REST_API_on_all_postgres_nodes8[patroni dynamic pg hba   wait for patroni rest api<br>on all postgres nodes<br>When: **postgres patroni dynamic config patch changed  <br>default false**]:::task
+  Patroni_dynamic_pg_hba___Wait_for_Patroni_REST_API_on_all_postgres_nodes8-->|Task| Patroni_dynamic_pg_hba___Wait_for_live_pg_hba_conf_to_contain_HAProxy_rules_on_all_nodes9[patroni dynamic pg hba   wait for live pg hba conf<br>to contain haproxy rules on all nodes<br>When: **groups  haproxy     default       length    0**]:::task
+  Patroni_dynamic_pg_hba___Wait_for_live_pg_hba_conf_to_contain_HAProxy_rules_on_all_nodes9-->End
 ```
 
 

@@ -28,18 +28,18 @@
 | Var          | Type         | Value       |
 |--------------|--------------|-------------|
 | [infisical_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L3)   | str | `infisical` |    
-| [infisical_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L4)   | str | `infisical/infisical:latest-postgres` |    
+| [infisical_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L4)   | str | `docker.io/infisical/infisical:v0.159.9` |    
 | [infisical_port](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L5)   | int | `8066` |    
 | [infisical_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L6)   | str | `/opt/{{ infisical_name }}` |    
 | [infisical_enc_key](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L7)   | str |  |    
 | [infisical_jwt_key](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L8)   | str |  |    
 | [infisical_postgres_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L10)   | str | `infisical-postgres` |    
-| [infisical_postgres_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L11)   | str | `postgres:18` |    
+| [infisical_postgres_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L11)   | str | `docker.io/library/postgres:18.3` |    
 | [infisical_postgres_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L12)   | str | `{{ infisical_path }}/postgres` |    
 | [infisical_postgres_user](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L13)   | str |  |    
 | [infisical_postgres_pass](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L14)   | str |  |    
 | [infisical_redis_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L16)   | str | `infisical-redis` |    
-| [infisical_redis_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L17)   | str | `redis:8.6-alpine` |    
+| [infisical_redis_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L17)   | str | `docker.io/library/redis:8.6-alpine` |    
 | [infisical_redis_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L18)   | str | `{{ infisical_path }}/redis` |    
 | [infisical_redis_key](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L19)   | str |  |    
 | [infisical_smtp_email](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L21)   | str |  |    
