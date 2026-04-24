@@ -101,7 +101,7 @@ resource "uptimekuma_status_page" "homelab" {
   show_tags               = true
   show_certificate_expiry = true
   show_powered_by         = false
-  theme                   = "auto"
+  theme                   = "dark"
 
   public_group_list = [
     for group in local.status_page_groups : {
