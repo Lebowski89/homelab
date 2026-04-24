@@ -3,7 +3,7 @@
 alloy:
   name: alloy
   stack: alloy
-  image: grafana/alloy:v1.15.1
+  image: grafana/alloy:v1.16.0
   named_networks:
     overlay:
       external: true
