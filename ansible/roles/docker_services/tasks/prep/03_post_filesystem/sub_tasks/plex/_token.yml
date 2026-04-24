@@ -211,7 +211,7 @@
         option: "client_identifier"
         value: "{{ hostvars[docker_services_primary_manager].docker_services_plex_client_identifier }}"
         create: true
-        owner: "{{ docker_services_plex_ini_owner}}"
+        owner: "{{ docker_services_plex_ini_owner }}"
         group: "{{ docker_services_plex_ini_group }}"
         mode: "0664"
 
