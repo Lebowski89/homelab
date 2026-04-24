@@ -36,6 +36,7 @@ locals {
     "technitium",
     "thelounge",
     "traefik",
+    "uptime-kuma",
     "vaultwarden",
     "whisparr",
     "znc",
