@@ -1,0 +1,41 @@
+---
+
+uptime_kuma:
+  name: uptime-kuma
+  stack: uptime-kuma
+  image: louislam/uptime-kuma:2.2.1
+  named_networks:
+    overlay:
+      external: true
+  healthcheck:
+    test:
+      - "CMD-SHELL"
+      - "node /app/extra/healthcheck.js || exit 1"
+  environment:
+    TZ: "{{ timezone }}"
+  paths:
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/uptime-kuma"
+      state: directory
+      mode: "0755"
+  volumes:
+    data:
+      type: bind
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/uptime-kuma"
+      target: /app/data
+      read_only: false
+  traefik:
+    enable: true
+    exposure: private
+    port: 3001
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: "{{ docker_services_primary_manager }}"
+    constraints:
+      - node.labels.docker_services_host == docker_services_primary_manager
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

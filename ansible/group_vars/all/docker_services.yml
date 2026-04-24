@@ -18,6 +18,8 @@ docker_services:
     tags: [apps, portainer]
   - name: technitium
     tags: [technitium]
+  - name: uptime_kuma
+    tags: [uptime_kuma]
   - name: vaultwarden
     tags: [vaultwarden]
 
