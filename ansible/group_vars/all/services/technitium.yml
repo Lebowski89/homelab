@@ -3,7 +3,7 @@
 technitium:
   name: technitium
   stack: technitium
-  image: technitium/dns-server:15.0.0
+  image: technitium/dns-server:15.0.1
   named_networks:
     outside:
       external: true
