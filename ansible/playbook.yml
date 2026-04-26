@@ -139,6 +139,7 @@
         - postgres_backup
         - postgres_restore
         - postgres_admin
+        - postgres_admin_uptime_kuma
         - postgres_admin_nuke_node
         - postgres_admin_fix_owner
         - postgres_admin_update_pg_hba

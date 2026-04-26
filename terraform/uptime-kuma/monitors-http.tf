@@ -16,8 +16,11 @@ resource "uptimekuma_monitor_http" "this" {
   resend_interval       = local.default_monitor.resend_interval
   active                = local.default_monitor.active
   upside_down           = local.default_monitor.upside_down
-  parent                = uptimekuma_monitor_group.this[each.value.group].id
-  notification_ids      = local.default_notification_ids
+  parent = coalesce(
+    try(uptimekuma_monitor_group.root[each.value.group].id, null),
+    try(uptimekuma_monitor_group.child[each.value.group].id, null)
+  )
+  notification_ids = local.default_notification_ids
 
   tags = [
     for tag_key in each.value.tag_keys : {

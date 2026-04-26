@@ -1,66 +1,82 @@
 locals {
   groups = {
     apps = {
-      name        = "Apps"
-      description = "General private homelab applications"
+      name = "Apps"
     }
 
     arrs = {
-      name        = "ARRs"
-      description = "Application monitoring for ARR services"
-    }
-
-    core = {
-      name        = "Core"
-      description = "Core services and management interfaces"
+      name       = "ARRs"
+      parent_key = "apps"
     }
 
     infrastructure = {
-      name        = "Infrastructure"
-      description = "Hosts, hypervisors, storage, and management endpoints"
+      name = "Infrastructure"
     }
 
     media = {
-      name        = "Media"
-      description = "Media services and download stack"
+      name       = "Media"
+      parent_key = "apps"
     }
 
     monitoring = {
-      name        = "Monitoring"
-      description = "Monitoring, logging, and notification services"
+      name       = "Monitoring"
+      parent_key = "apps"
+    }
+
+    network = {
+      name = "Network"
+      parent_key = "apps"
     }
 
     networking = {
-      name        = "Networking"
-      description = "DNS, Traefik, auth, and connectivity"
+      name = "Networking"
     }
 
     plex = {
-      name        = "Plex"
-      description = "Plex ecosystem services and monitoring"
+      name       = "Plex"
+      parent_key = "apps"
     }
 
     torrents = {
-      name        = "Torrents"
-      description = "Torrent clients and automation tools"
+      name       = "Torrents"
+      parent_key = "apps"
     }
 
     usenet = {
-      name        = "Usenet"
-      description = "Usenet indexers and automation tools"
+      name       = "Usenet"
+      parent_key = "apps"
     }
 
     utilities = {
-      name        = "Utilities"
-      description = "Utility applications and self-hosted services"
+      name       = "Utilities"
+      parent_key = "apps"
     }
   }
 }
 
-resource "uptimekuma_monitor_group" "this" {
-  for_each = local.groups
+locals {
+  root_groups = {
+    for key, group in local.groups :
+    key => group
+    if !contains(keys(group), "parent_key")
+  }
 
-  name        = each.value.name
-  description = each.value.description
-  active      = true
+  child_groups = {
+    for key, group in local.groups :
+    key => group
+    if contains(keys(group), "parent_key")
+  }
+}
+
+resource "uptimekuma_monitor_group" "root" {
+  for_each = local.root_groups
+
+  name = each.value.name
+}
+
+resource "uptimekuma_monitor_group" "child" {
+  for_each = local.child_groups
+
+  name   = each.value.name
+  parent = uptimekuma_monitor_group.root[each.value.parent_key].id
 }

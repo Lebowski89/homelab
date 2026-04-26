@@ -5,34 +5,6 @@ docker_services_plex_host: plex
 docker_services_unraid_host: unraid
 
 docker_services:
-  ## services (core)
-  - name: gitea
-    tags: [apps, gitea]
-  - name: homepage
-    tags: [apps, homepage]
-  - name: portainer
-    target: agent
-    tags: [apps, portainer]
-  - name: portainer
-    target: main
-    tags: [apps, portainer]
-  - name: technitium
-    tags: [technitium]
-  - name: uptime_kuma
-    tags: [uptime_kuma]
-  - name: vaultwarden
-    tags: [vaultwarden]
-
-  ## services (proxy)
-  - name: authelia
-    target: redis
-    tags: [apps, proxy, authelia]
-  - name: authelia
-    target: main
-    tags: [apps, proxy, authelia]
-  - name: traefik
-    tags: [apps, proxy, traefik]
-
   ## services (arrs)
   - name: bazarr
     tags: [apps, arrs, bazarr]
@@ -59,11 +31,21 @@ docker_services:
   - name: whisparr
     tags: [apps, arrs, whisparr]
 
+  ## services (gluetun)
+  - name: gluetun
+    tags: [apps, gluetun]
+  - name: jdownloader2
+    tags: [apps, gluetun, jdownloader2]
+  - name: librewolf
+    tags: [apps, gluetun, librewolf]
+
   ## services (media)
   - name: autobrr
     tags: [apps, media, autobrr]
   - name: seerr
     tags: [apps, media, seerr]
+  - name: obsidian
+    tags: [apps, media, obsidian]
   - name: ombi
     tags: [apps, media, ombi]
   - name: opencloud
@@ -74,6 +56,46 @@ docker_services:
     tags: [apps, media, thelounge]
   - name: znc
     tags: [apps, media, znc]
+
+  ## services (monitoring)
+  - name: alloy
+    tags: [apps, monitoring, alloy]
+  - name: gotify
+    tags: [apps, monitoring, gotify]
+  - name: grafana
+    tags: [apps, monitoring, grafana]
+  - name: homepage
+    tags: [apps, monitoring, homepage]
+  - name: loki
+    tags: [apps, monitoring, loki]
+  - name: portainer
+    target: agent
+    tags: [apps, monitoring, portainer]
+  - name: portainer
+    target: main
+    tags: [apps, monitoring, portainer]
+  - name: prometheus
+    tags: [apps, monitoring, prometheus]
+  - name: scraparr
+    tags: [apps, monitoring, scraparr]
+  - name: uptime_kuma
+    tags: [apps, monitoring, uptime_kuma]
+
+  ## services (network)
+  - name: authelia
+    target: redis
+    tags: [apps, network, authelia]
+  - name: authelia
+    target: main
+    tags: [apps, network, authelia]
+  - name: haproxy
+    tags: [apps, network, haproxy]
+  - name: technitium
+    tags: [apps, network, technitium]
+  - name: traefik
+    tags: [apps, network, traefik]
+  - name: unifi
+    tags: [apps, network, unifi]
 
   ## services (plex)
   - name: autopulse
@@ -109,44 +131,14 @@ docker_services:
   - name: sabnzbd
     tags: [apps, usenet, sabnzbd]
 
-  ## services (monitoring)
-  - name: alloy
-    tags: [apps, monitoring, alloy]
-  - name: gotify
-    tags: [apps, monitoring, gotify]
-  - name: grafana
-    tags: [apps, monitoring, grafana]
-  - name: loki
-    tags: [apps, monitoring, loki]
-  - name: prometheus
-    tags: [apps, monitoring, prometheus]
-  - name: scraparr
-    tags: [apps, monitoring, scraparr]
-
-  ## services (blog)
-  - name: obsidian
-    tags: [apps, obsidian]
-
-  ## services (gluetun)
-  - name: gluetun
-    tags: [gluetun]
-  - name: jdownloader2
-    tags: [gluetun, jdownloader2]
-  - name: librewolf
-    tags: [gluetun, librewolf]
-
   ## services (utilities)
   - name: adminer
     tags: [apps, utilities, adminer]
   - name: czkawka
     tags: [apps, utilities, czkawka]
+  - name: gitea
+    tags: [apps, utilities, gitea]
   - name: themepark
     tags: [apps, utilities, themepark]
-
-  ## services (postgres cluster)
-  - name: haproxy
-    tags: [haproxy]
-
-  ## services (unifi)
-  - name: unifi
-    tags: [unifi]
+  - name: vaultwarden
+    tags: [apps, utilities, vaultwarden]
