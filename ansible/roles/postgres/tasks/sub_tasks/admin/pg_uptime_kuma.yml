@@ -1,0 +1,30 @@
+---
+
+- name: Ensure Uptime Kuma monitor role exists on leader
+  community.postgresql.postgresql_user:
+    login_host: "127.0.0.1"
+    login_port: "{{ postgres_patroni_postgres_port }}"
+    login_user: "{{ postgres_patroni_superuser_name }}"
+    login_password: "{{ postgres_patroni_superuser_pass }}"
+    name: "{{ postgres_uptime_kuma_monitor_role_name }}"
+    password: "{{ postgres_uptime_kuma_monitor_role_pass }}"
+    role_attr_flags: LOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE,NOINHERIT,NOREPLICATION
+    state: present
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+
+- name: Grant Uptime Kuma monitor role CONNECT on monitor database
+  community.postgresql.postgresql_privs:
+    login_host: "127.0.0.1"
+    login_port: "{{ postgres_patroni_postgres_port }}"
+    login_user: "{{ postgres_patroni_superuser_name }}"
+    login_password: "{{ postgres_patroni_superuser_pass }}"
+    db: "{{ postgres_uptime_kuma_monitor_database }}"
+    type: database
+    privs: CONNECT
+    roles: "{{ postgres_uptime_kuma_monitor_role_name }}"
+    state: present
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true

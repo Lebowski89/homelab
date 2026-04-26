@@ -37,6 +37,13 @@ variable "private_https_port" {
   default     = 8443
 }
 
+variable "postgres_monitor_connection_strings" {
+  description = "PostgreSQL connection strings for Uptime Kuma PostgreSQL monitors. These are sensitive and will be stored in OpenTofu state."
+  type        = map(string)
+  sensitive   = true
+  default     = {}
+}
+
 variable "enable_gotify_notification" {
   description = "Create and attach the Gotify notification channel to monitors by default."
   type        = bool

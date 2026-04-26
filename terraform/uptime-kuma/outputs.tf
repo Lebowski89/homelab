@@ -18,12 +18,21 @@ output "dns_monitor_ids" {
   value       = { for key, monitor in uptimekuma_monitor_dns.this : key => monitor.id }
 }
 
+output "postgres_monitor_ids" {
+  description = "PostgreSQL monitor IDs keyed by monitor key."
+  value       = { for key, monitor in uptimekuma_monitor_postgres.this : key => monitor.id }
+}
+
 output "tag_ids" {
   description = "Uptime Kuma tag IDs."
   value       = { for key, tag in uptimekuma_tag.this : key => tag.id }
 }
 
 output "group_ids" {
-  description = "Uptime Kuma monitor group IDs."
-  value       = { for key, group in uptimekuma_monitor_group.this : key => group.id }
+  description = "Created Uptime Kuma group IDs."
+
+  value = merge(
+    { for key, group in uptimekuma_monitor_group.root : key => group.id },
+    { for key, group in uptimekuma_monitor_group.child : key => group.id }
+  )
 }

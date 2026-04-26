@@ -52,6 +52,14 @@ postgres_patroni_etcd_hosts: []
 postgres_patroni_pg_hba_extra: []
 
 ################################
+# UPTIME KUMA MONITOR USER
+################################
+
+postgres_uptime_kuma_monitor_role_name: uptime_kuma_monitor
+postgres_uptime_kuma_monitor_role_pass: ""
+postgres_uptime_kuma_monitor_database: postgres
+
+################################
 # BACKUP (DUMP DATABASES)
 ################################
 

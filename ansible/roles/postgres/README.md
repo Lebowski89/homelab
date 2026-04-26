@@ -52,14 +52,17 @@
 | [postgres_patroni_admin_role_createrole](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L49)   | bool | `False` |    
 | [postgres_patroni_etcd_hosts](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L51)   | list | `[]` |    
 | [postgres_patroni_pg_hba_extra](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L52)   | list | `[]` |    
-| [postgres_backup_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L64)   | str | `/var/backups/postgres` |    
-| [postgres_backup_dbs](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L65)   | list | `[]` |    
-| [postgres_backup_dbs_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L66)   | str | `{{ postgres_backup_dir }}` |    
-| [postgres_backup_dbs_format](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L67)   | str | `custom` |    
-| [postgres_restore_dbs_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L73)   | str | `/var/backups/postgres` |    
-| [postgres_restore_dbs_drop_existing](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L74)   | bool | `True` |    
-| [postgres_restore_dbs_map](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L79)   | list | `[]` |    
-| [postgres_fix_owner_map](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L94)   | list | `[]` |    
+| [postgres_uptime_kuma_monitor_role_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L58)   | str | `uptime_kuma_monitor` |    
+| [postgres_uptime_kuma_monitor_role_pass](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L59)   | str |  |    
+| [postgres_uptime_kuma_monitor_database](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L60)   | str | `postgres` |    
+| [postgres_backup_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L72)   | str | `/var/backups/postgres` |    
+| [postgres_backup_dbs](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L73)   | list | `[]` |    
+| [postgres_backup_dbs_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L74)   | str | `{{ postgres_backup_dir }}` |    
+| [postgres_backup_dbs_format](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L75)   | str | `custom` |    
+| [postgres_restore_dbs_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L81)   | str | `/var/backups/postgres` |    
+| [postgres_restore_dbs_drop_existing](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L82)   | bool | `True` |    
+| [postgres_restore_dbs_map](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L87)   | list | `[]` |    
+| [postgres_fix_owner_map](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L102)   | list | `[]` |    
 
 
 
@@ -77,7 +80,8 @@
 | Configure Patroni | ansible.builtin.include_tasks | False | postgres,postgres_patroni,postgres_patroni_reset |
 | Backup PostgreSQL single database with pg_dump | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,b,a,c,k,u,p |
 | Restore PostgreSQL single database from pg_dump backup | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,r,e,s,t,o,r,e |
-| Ensure dedicated PostgreSQL admin role exists | ansible.builtin.include_tasks | False | postgres,postgres_admin |
+| Ensure dedicated PostgreSQL admin role exists | ansible.builtin.include_tasks | False | postgres,postgres_admin,postgres_admin_uptime_kuma |
+| Ensure dedicated PostgreSQL Uptime Kuma role exists | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,u,p,t,i,m,e,_,k,u,m,a |
 | Reset PostgreSQL/Patroni node destructively | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,n,u,k,e,_,n,o,d,e |
 | Fix database ownership and privileges | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,f,i,x,_,o,w,n,e,r |
 | Update Patroni dynamic pg_hba in DCS | ansible.builtin.include_tasks | False | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,u,p,d,a,t,e,_,p,g,_,h,b,a |
@@ -123,6 +127,13 @@
 | Patroni dynamic pg_hba ¦ Restart patroni on all postgres nodes if DCS config changed | ansible.builtin.service | True |
 | Patroni dynamic pg_hba ¦ Wait for Patroni REST API on all postgres nodes | ansible.builtin.wait_for | True |
 | Patroni dynamic pg_hba ¦ Wait for live pg_hba.conf to contain HAProxy rules on all nodes | ansible.builtin.command | True |
+
+#### File: tasks/sub_tasks/admin/pg_uptime_kuma.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Ensure Uptime Kuma monitor role exists on leader | community.postgresql.postgresql_user | False |
+| Grant Uptime Kuma monitor role CONNECT on monitor database | community.postgresql.postgresql_privs | False |
 
 #### File: tasks/sub_tasks/admin/reset_node.yml
 
@@ -245,10 +256,11 @@ classDef rescue stroke:#665352,stroke-width:2px;
   Configure_Patroni_sub_tasks_install_patroni_yml_2-->|Include task| Backup_PostgreSQL_single_database_with_pg_dump_sub_tasks_backup_yml_3[backup postgresql single database with pg dump<br>include_task: sub tasks backup yml]:::includeTasks
   Backup_PostgreSQL_single_database_with_pg_dump_sub_tasks_backup_yml_3-->|Include task| Restore_PostgreSQL_single_database_from_pg_dump_backup_sub_tasks_restore_yml_4[restore postgresql single database from pg dump<br>backup<br>include_task: sub tasks restore yml]:::includeTasks
   Restore_PostgreSQL_single_database_from_pg_dump_backup_sub_tasks_restore_yml_4-->|Include task| Ensure_dedicated_PostgreSQL_admin_role_exists_sub_tasks_admin_pg_admin_yml_5[ensure dedicated postgresql admin role exists<br>include_task: sub tasks admin pg admin yml]:::includeTasks
-  Ensure_dedicated_PostgreSQL_admin_role_exists_sub_tasks_admin_pg_admin_yml_5-->|Include task| Reset_PostgreSQL_Patroni_node_destructively_sub_tasks_admin_reset_node_yml_6[reset postgresql patroni node destructively<br>include_task: sub tasks admin reset node yml]:::includeTasks
-  Reset_PostgreSQL_Patroni_node_destructively_sub_tasks_admin_reset_node_yml_6-->|Include task| Fix_database_ownership_and_privileges_sub_tasks_admin_fix_owner_yml_7[fix database ownership and privileges<br>include_task: sub tasks admin fix owner yml]:::includeTasks
-  Fix_database_ownership_and_privileges_sub_tasks_admin_fix_owner_yml_7-->|Include task| Update_Patroni_dynamic_pg_hba_in_DCS_sub_tasks_admin_pg_hba_yml_8[update patroni dynamic pg hba in dcs<br>include_task: sub tasks admin pg hba yml]:::includeTasks
-  Update_Patroni_dynamic_pg_hba_in_DCS_sub_tasks_admin_pg_hba_yml_8-->End
+  Ensure_dedicated_PostgreSQL_admin_role_exists_sub_tasks_admin_pg_admin_yml_5-->|Include task| Ensure_dedicated_PostgreSQL_Uptime_Kuma_role_exists_sub_tasks_admin_pg_uptime_kuma_yml_6[ensure dedicated postgresql uptime kuma role<br>exists<br>include_task: sub tasks admin pg uptime kuma yml]:::includeTasks
+  Ensure_dedicated_PostgreSQL_Uptime_Kuma_role_exists_sub_tasks_admin_pg_uptime_kuma_yml_6-->|Include task| Reset_PostgreSQL_Patroni_node_destructively_sub_tasks_admin_reset_node_yml_7[reset postgresql patroni node destructively<br>include_task: sub tasks admin reset node yml]:::includeTasks
+  Reset_PostgreSQL_Patroni_node_destructively_sub_tasks_admin_reset_node_yml_7-->|Include task| Fix_database_ownership_and_privileges_sub_tasks_admin_fix_owner_yml_8[fix database ownership and privileges<br>include_task: sub tasks admin fix owner yml]:::includeTasks
+  Fix_database_ownership_and_privileges_sub_tasks_admin_fix_owner_yml_8-->|Include task| Update_Patroni_dynamic_pg_hba_in_DCS_sub_tasks_admin_pg_hba_yml_9[update patroni dynamic pg hba in dcs<br>include_task: sub tasks admin pg hba yml]:::includeTasks
+  Update_Patroni_dynamic_pg_hba_in_DCS_sub_tasks_admin_pg_hba_yml_9-->End
 ```
 
 
@@ -330,6 +342,26 @@ classDef rescue stroke:#665352,stroke-width:2px;
   Patroni_dynamic_pg_hba___Restart_patroni_on_all_postgres_nodes_if_DCS_config_changed8-->|Task| Patroni_dynamic_pg_hba___Wait_for_Patroni_REST_API_on_all_postgres_nodes9[patroni dynamic pg hba   wait for patroni rest api<br>on all postgres nodes<br>When: **postgres patroni pg hba needs restart   bool**]:::task
   Patroni_dynamic_pg_hba___Wait_for_Patroni_REST_API_on_all_postgres_nodes9-->|Task| Patroni_dynamic_pg_hba___Wait_for_live_pg_hba_conf_to_contain_HAProxy_rules_on_all_nodes10[patroni dynamic pg hba   wait for live pg hba conf<br>to contain haproxy rules on all nodes<br>When: **groups  haproxy     default       length    0**]:::task
   Patroni_dynamic_pg_hba___Wait_for_live_pg_hba_conf_to_contain_HAProxy_rules_on_all_nodes10-->End
+```
+
+
+### Graph for sub_tasks/admin/pg_uptime_kuma.yml
+
+```mermaid
+flowchart TD
+Start
+classDef block stroke:#3498db,stroke-width:2px;
+classDef task stroke:#4b76bb,stroke-width:2px;
+classDef includeTasks stroke:#16a085,stroke-width:2px;
+classDef importTasks stroke:#34495e,stroke-width:2px;
+classDef includeRole stroke:#2980b9,stroke-width:2px;
+classDef importRole stroke:#699ba7,stroke-width:2px;
+classDef includeVars stroke:#8e44ad,stroke-width:2px;
+classDef rescue stroke:#665352,stroke-width:2px;
+
+  Start-->|Task| Ensure_Uptime_Kuma_monitor_role_exists_on_leader0[ensure uptime kuma monitor role exists on leader]:::task
+  Ensure_Uptime_Kuma_monitor_role_exists_on_leader0-->|Task| Grant_Uptime_Kuma_monitor_role_CONNECT_on_monitor_database1[grant uptime kuma monitor role connect on monitor<br>database]:::task
+  Grant_Uptime_Kuma_monitor_role_CONNECT_on_monitor_database1-->End
 ```
 
 

@@ -67,6 +67,9 @@
       {% for host in groups['haproxy'] | default([]) %}
       - host all all {{ hostvars[host].local_ip }}/32 scram-sha-256
       {% endfor %}
+      {% for rule in postgres_patroni_pg_hba_extra %}
+      - {{ rule }}
+      {% endfor %}
   run_once: true
   delegate_to: "{{ docker_services_primary_manager }}"
 
