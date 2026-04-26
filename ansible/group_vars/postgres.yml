@@ -18,3 +18,6 @@ postgres_patroni_etcd_hosts:
 
 postgres_patroni_superuser_name: postgres
 postgres_patroni_replication_name: replicator
+
+postgres_patroni_pg_hba_extra:
+  - "host postgres uptime_kuma_monitor {{ hostvars[docker_services_primary_manager].local_ip }}/32 scram-sha-256"

@@ -64,9 +64,18 @@
       tags:
         - postgres
         - postgres_admin
+        - postgres_admin_uptime_kuma
   tags:
     - postgres
     - postgres_admin
+    - postgres_admin_uptime_kuma
+
+- name: Ensure dedicated PostgreSQL Uptime Kuma role exists
+  ansible.builtin.include_tasks:
+    file: sub_tasks/admin/pg_uptime_kuma.yml
+    apply:
+      tags: postgres_admin_uptime_kuma
+  tags: postgres_admin_uptime_kuma
 
 - name: Reset PostgreSQL/Patroni node destructively
   ansible.builtin.include_tasks:
