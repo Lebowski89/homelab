@@ -45,8 +45,9 @@ locals {
 }
 
 resource "technitium_zone" "internal" {
-  name = var.zone_name
-  type = "Primary"
+  name    = var.zone_name
+  type    = "Primary"
+  catalog = var.internal_zone_catalog
 }
 
 resource "technitium_record" "service_a" {
