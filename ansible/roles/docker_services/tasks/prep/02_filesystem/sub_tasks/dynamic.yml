@@ -19,11 +19,11 @@
         path: "/Cloudflare"
         name: ZONE
 
-- name: Render Traefik app router file (on traefik host)
+- name: Render Traefik dynamic file (on traefik host)
   ansible.builtin.template:
-    src: templates/configs/proxy/traefik/router_template.yml.j2
+    src: templates/configs/proxy/traefik/dynamic_template.yml.j2
     dest: >-
-      {{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic/{{ docker_services_svc.name }}-middleware.yml
+      {{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic/{{ docker_services_svc.name }}-dynamic.yml
     owner: "1000"
     group: "1000"
     mode: "0644"
@@ -83,6 +83,7 @@
           else []
         )
       }}
+    tr_headers_middleware: "{{ docker_services_svc.traefik.headers_middleware | default('secure-headers@file') }}"
     tr_theme_enable: >-
       {{
         (docker_services_svc.traefik.themepark.app | default('')) | length > 0

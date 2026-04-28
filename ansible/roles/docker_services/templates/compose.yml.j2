@@ -159,9 +159,14 @@ services:
 
 {% if svc.secrets is defined and (svc.secrets | length > 0) %}
     secrets:
-{% for secret_name in svc.secrets %}
-      - source: {{ secret_name }}
-        target: {{ secret_name }}
+{% for sec in svc.secrets %}
+{% if sec is mapping %}
+      - source: {{ sec.source }}
+        target: {{ sec.target }}
+{% else %}
+      - source: {{ sec }}
+        target: {{ sec }}
+{% endif %}
 {% endfor %}
 {% endif %}
 
@@ -400,18 +405,19 @@ configs:
 {%- set all_service_secrets = [] -%}
 {%- for _svc_name, _svc in _compose_services.items() -%}
 {%- if _svc.secrets is defined and (_svc.secrets | length > 0) -%}
-{%- for secret_name in _svc.secrets -%}
+{%- for sec in _svc.secrets -%}
+{%- set secret_name = sec.source if sec is mapping else sec -%}
 {%- if secret_name not in all_service_secrets -%}
 {%- set _ = all_service_secrets.append(secret_name) -%}
 {%- endif -%}
 {%- endfor -%}
 {%- endif -%}
-{%- endfor -%}
+{%- endfor %}
 
 {% if all_service_secrets | length > 0 %}
 secrets:
-{% for secret_name in all_service_secrets | sort %}
-  {{ secret_name }}:
+{% for sec in all_service_secrets | sort %}
+  {{ sec }}:
     external: true
 {% endfor %}
 {% endif %}

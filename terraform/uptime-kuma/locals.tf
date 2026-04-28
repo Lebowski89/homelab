@@ -9,12 +9,12 @@ locals {
     upside_down     = false
   }
 
-################################
-# SERVICES (PRIVATE)
-################################
+  ################################
+  # SERVICES (PRIVATE)
+  ################################
 
   private_http_services = {
-      # ARRs
+    # ARRs
     bazarr    = { group = "arrs", tag_keys = ["arrs"] }
     lidarr    = { group = "arrs", tag_keys = ["arrs"] }
     prowlarr  = { group = "arrs", tag_keys = ["arrs"] }
@@ -43,6 +43,9 @@ locals {
     prometheus  = { group = "monitoring", tag_keys = ["monitoring"] }
     uptime-kuma = { group = "monitoring", tag_keys = ["monitoring"] }
 
+    # Network
+    netbox = { group = "network", tag_keys = ["network"] }
+
     # Plex
     tautulli = {
       group                 = "plex"
@@ -62,8 +65,8 @@ locals {
     sabnzbd   = { group = "usenet", tag_keys = ["usenet"] }
 
     # Utilities
-    adminer  = { group = "utilities", tag_keys = ["utilities"] }
-    czkawka  = { group = "utilities", tag_keys = ["utilities"] }
+    adminer = { group = "utilities", tag_keys = ["utilities"] }
+    czkawka = { group = "utilities", tag_keys = ["utilities"] }
   }
 
   private_http_monitors = {
@@ -83,9 +86,9 @@ locals {
     }
   }
 
-################################
-# SERVICES (PUBLIC)
-################################
+  ################################
+  # SERVICES (PUBLIC)
+  ################################
 
   public_http_services = {
     # Public Cloudflare / Traefik routes.
@@ -133,20 +136,20 @@ locals {
     }
   }
 
-################################
-# SERVICES (DIRECT)
-################################
+  ################################
+  # SERVICES (DIRECT)
+  ################################
 
   # These test Docker overlay/service reachability without Technitium/Traefik.
   direct_http_group_defaults = {
-    arrs       = { group = "arrs",       tag_keys = ["arrs"] }
-    media      = { group = "media",      tag_keys = ["media"] }
+    arrs       = { group = "arrs", tag_keys = ["arrs"] }
+    media      = { group = "media", tag_keys = ["media"] }
     monitoring = { group = "monitoring", tag_keys = ["monitoring"] }
-    network    = { group = "network",    tag_keys = ["network"] }
-    plex       = { group = "plex",       tag_keys = ["plex"] }
-    torrents   = { group = "torrents",   tag_keys = ["torrents"] }
-    usenet     = { group = "usenet",     tag_keys = ["usenet"] }
-    utilities  = { group = "utilities",  tag_keys = ["utilities"] }
+    network    = { group = "network", tag_keys = ["network"] }
+    plex       = { group = "plex", tag_keys = ["plex"] }
+    torrents   = { group = "torrents", tag_keys = ["torrents"] }
+    usenet     = { group = "usenet", tag_keys = ["usenet"] }
+    utilities  = { group = "utilities", tag_keys = ["utilities"] }
   }
 
   direct_http_services = {
@@ -163,7 +166,7 @@ locals {
 
     # Media
     autobrr   = { category = "media", port = 7474 }
-    obsidian  = { category = "media", port = 8080 }
+    obsidian  = { category = "media", port = 1314 }
     ombi      = { category = "media", port = 3579 }
     opencloud = { category = "media", port = 9200 }
     seerr     = { category = "media", port = 5055 }
@@ -213,6 +216,12 @@ locals {
       port                  = 9091
       path                  = "/api/health"
       accepted_status_codes = ["200-299"]
+    }
+
+    netbox = {
+      category = "network"
+      port     = 8080
+      path     = "/login/"
     }
 
     traefik = {
