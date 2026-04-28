@@ -43,6 +43,9 @@ locals {
     prometheus  = { group = "monitoring", tag_keys = ["monitoring"] }
     uptime-kuma = { group = "monitoring", tag_keys = ["monitoring"] }
 
+    # Network
+    netbox = { group = "network", tag_keys = ["network"] }
+
     # Plex
     tautulli = {
       group                 = "plex"
@@ -213,6 +216,12 @@ locals {
       port                  = 9091
       path                  = "/api/health"
       accepted_status_codes = ["200-299"]
+    }
+
+    netbox = {
+      category = "network"
+      port     = 8080
+      path     = "/login/"
     }
 
     traefik = {
