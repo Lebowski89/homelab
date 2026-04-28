@@ -32,6 +32,17 @@ http:
           Permissions-Policy: "geolocation=(), microphone=(), camera=()"
           Referrer-Policy: "no-referrer"
 
+    netbox-headers:
+      headers:
+        contentTypeNosniff: true
+        frameDeny: false
+        browserXssFilter: false
+
+        customResponseHeaders:
+          server: ""
+          Permissions-Policy: "geolocation=(), microphone=(), camera=()"
+          Referrer-Policy: "same-origin"
+
     hsts:
       headers:
         stsSeconds: 31536000

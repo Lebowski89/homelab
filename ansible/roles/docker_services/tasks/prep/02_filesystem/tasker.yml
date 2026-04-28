@@ -92,16 +92,16 @@
   tags: [deploy, update, recreate]
 
 ################################
-# PREP (TEMPLATE MIDDLEWARES)
+# PREP (TEMPLATE DYNAMIC FILES)
 ################################
 
-- name: Render swarm env templates (always on services manager)
+- name: Render traefik dynamic files
   when:
     - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.traefik is defined
     - (docker_services_svc.traefik.enable | default(false)) | bool
   ansible.builtin.include_tasks:
-    file: sub_tasks/middlewares.yml
+    file: sub_tasks/dynamic.yml
     apply:
       tags: [deploy, update, recreate]
   tags: [deploy, update, recreate]

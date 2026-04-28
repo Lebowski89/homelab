@@ -84,16 +84,29 @@ docker_services:
   ## services (network)
   - name: authelia
     target: redis
-    tags: [apps, network, authelia]
+    tags: [apps, network, proxy, authelia]
   - name: authelia
     target: main
-    tags: [apps, network, authelia]
+    tags: [apps, network, proxy, authelia]
   - name: haproxy
     tags: [apps, network, haproxy]
+  - name: netbox
+    target: main
+    tags: [apps, network, netbox]
+  - name: netbox
+    ## If first deploy, the worker may fail, wait for main instance to be healthy and then re-run the role
+    target: worker
+    tags: [apps, network, netbox]
+  - name: netbox
+    target: redis
+    tags: [apps, network, netbox]
+  - name: netbox
+    target: redis_cache
+    tags: [apps, network, netbox]
   - name: technitium
     tags: [apps, network, technitium]
   - name: traefik
-    tags: [apps, network, traefik]
+    tags: [apps, network, proxy, traefik]
   - name: unifi
     tags: [apps, network, unifi]
 

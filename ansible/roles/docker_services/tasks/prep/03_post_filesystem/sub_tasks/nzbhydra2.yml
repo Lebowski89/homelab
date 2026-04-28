@@ -4,16 +4,19 @@
 # NZBHYDRA2 PREP
 ################################
 
-- name: NZBHydra2 prep | Set derived vars
+- name: NZBHydra2 prep | Set filesystem host
   no_log: true
   ansible.builtin.set_fact:
     docker_services_nzbhydra2_fs_host: "{{ docker_services_fs_hosts_effective | first }}"
-    docker_services_nzbhydra2_fs_hostvars: "{{ hostvars[docker_services_fs_hosts_effective | first] }}"
+  run_once: true
 
+- name: NZBHydra2 prep | Set derived vars
+  no_log: true
+  ansible.builtin.set_fact:
     docker_services_nzbhydra2_config_dir: >-
-      {{ docker_services_nzbhydra2_fs_hostvars.docker_host_appdata_root }}/nzbhydra2
+      {{ hostvars[docker_services_nzbhydra2_fs_host].docker_host_appdata_root }}/nzbhydra2
     docker_services_nzbhydra2_config_path: >-
-      {{ docker_services_nzbhydra2_fs_hostvars.docker_host_appdata_root }}/nzbhydra2/nzbhydra.yml
+      {{ hostvars[docker_services_nzbhydra2_fs_host].docker_host_appdata_root }}/nzbhydra2/nzbhydra.yml
     docker_services_nzbhydra2_image: "{{ docker_services_svc.image }}"
     docker_services_nzbhydra2_timezone: "{{ timezone }}"
 
@@ -22,7 +25,7 @@
         (
           (docker_services_svc.environment | default({})).PUID
           | default(
-              docker_services_nzbhydra2_fs_hostvars.docker_host_puid
+              hostvars[docker_services_nzbhydra2_fs_host].docker_host_puid
               | default('1000')
             )
         )
@@ -33,7 +36,7 @@
         (
           (docker_services_svc.environment | default({})).PGID
           | default(
-              docker_services_nzbhydra2_fs_hostvars.docker_host_pgid
+              hostvars[docker_services_nzbhydra2_fs_host].docker_host_pgid
               | default('1000')
             )
         )
