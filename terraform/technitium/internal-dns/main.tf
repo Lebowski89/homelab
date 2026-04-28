@@ -13,6 +13,7 @@ locals {
     "homepage",
     "infisical",
     "lidarr",
+    "netbox",
     "notifiarr",
     "nzbhydra2",
     "obsidian",
