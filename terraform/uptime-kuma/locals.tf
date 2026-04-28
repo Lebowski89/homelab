@@ -9,12 +9,12 @@ locals {
     upside_down     = false
   }
 
-################################
-# SERVICES (PRIVATE)
-################################
+  ################################
+  # SERVICES (PRIVATE)
+  ################################
 
   private_http_services = {
-      # ARRs
+    # ARRs
     bazarr    = { group = "arrs", tag_keys = ["arrs"] }
     lidarr    = { group = "arrs", tag_keys = ["arrs"] }
     prowlarr  = { group = "arrs", tag_keys = ["arrs"] }
@@ -65,8 +65,8 @@ locals {
     sabnzbd   = { group = "usenet", tag_keys = ["usenet"] }
 
     # Utilities
-    adminer  = { group = "utilities", tag_keys = ["utilities"] }
-    czkawka  = { group = "utilities", tag_keys = ["utilities"] }
+    adminer = { group = "utilities", tag_keys = ["utilities"] }
+    czkawka = { group = "utilities", tag_keys = ["utilities"] }
   }
 
   private_http_monitors = {
@@ -86,9 +86,9 @@ locals {
     }
   }
 
-################################
-# SERVICES (PUBLIC)
-################################
+  ################################
+  # SERVICES (PUBLIC)
+  ################################
 
   public_http_services = {
     # Public Cloudflare / Traefik routes.
@@ -136,20 +136,20 @@ locals {
     }
   }
 
-################################
-# SERVICES (DIRECT)
-################################
+  ################################
+  # SERVICES (DIRECT)
+  ################################
 
   # These test Docker overlay/service reachability without Technitium/Traefik.
   direct_http_group_defaults = {
-    arrs       = { group = "arrs",       tag_keys = ["arrs"] }
-    media      = { group = "media",      tag_keys = ["media"] }
+    arrs       = { group = "arrs", tag_keys = ["arrs"] }
+    media      = { group = "media", tag_keys = ["media"] }
     monitoring = { group = "monitoring", tag_keys = ["monitoring"] }
-    network    = { group = "network",    tag_keys = ["network"] }
-    plex       = { group = "plex",       tag_keys = ["plex"] }
-    torrents   = { group = "torrents",   tag_keys = ["torrents"] }
-    usenet     = { group = "usenet",     tag_keys = ["usenet"] }
-    utilities  = { group = "utilities",  tag_keys = ["utilities"] }
+    network    = { group = "network", tag_keys = ["network"] }
+    plex       = { group = "plex", tag_keys = ["plex"] }
+    torrents   = { group = "torrents", tag_keys = ["torrents"] }
+    usenet     = { group = "usenet", tag_keys = ["usenet"] }
+    utilities  = { group = "utilities", tag_keys = ["utilities"] }
   }
 
   direct_http_services = {

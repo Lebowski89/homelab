@@ -24,7 +24,7 @@ locals {
     }
 
     network = {
-      name = "Network"
+      name       = "Network"
       parent_key = "apps"
     }
 
