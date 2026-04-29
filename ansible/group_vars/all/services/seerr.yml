@@ -13,10 +13,8 @@ seerr:
       - "wget"
       - "--no-verbose"
       - "--tries=1"
-      - "--timeout=5"
-      - "-O"
-      - "/dev/null"
-      - "http://127.0.0.1:5055/api/v1/status"
+      - "--spider"
+      - "http://localhost:5055/api/v1/settings/public"
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
