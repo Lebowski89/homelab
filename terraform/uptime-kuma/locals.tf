@@ -166,7 +166,7 @@ locals {
 
     # Media
     autobrr   = { category = "media", port = 7474 }
-    obsidian  = { category = "media", port = 8080 }
+    obsidian  = { category = "media", port = 1314 }
     ombi      = { category = "media", port = 3579 }
     opencloud = { category = "media", port = 9200 }
     seerr     = { category = "media", port = 5055 }
