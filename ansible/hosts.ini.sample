@@ -46,7 +46,7 @@ docker_install
 swarm_managers
 swarm_workers
 
-[postgres_cluster]
+[postgres]
 pg95
 pg96
 pg97

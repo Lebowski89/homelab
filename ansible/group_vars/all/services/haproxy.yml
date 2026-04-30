@@ -9,8 +9,8 @@ haproxy:
       external: true
   swarm_configs:
     - name: haproxy_cfg
-      src: files/haproxy.cfg
-      data_is_template: false
+      src: templates/configs/haproxy.cfg.j2
+      data_is_template: true
   configs:
     - source: haproxy_cfg
       target: /usr/local/etc/haproxy/haproxy.cfg
@@ -20,6 +20,13 @@ haproxy:
       published: 5432
       target: 5432
       mode: host
+  settings:
+    haproxy_maxconn: 4096
+    haproxy_timeout_connect: 5s
+    haproxy_timeout_client: 4h
+    haproxy_timeout_server: 4h
+    haproxy_timeout_check: 5s
+    haproxy_retries: 3
   deploy:
     type: swarm
     mode: global

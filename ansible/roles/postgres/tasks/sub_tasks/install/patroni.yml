@@ -65,7 +65,7 @@
     owner: root
     group: postgres
     mode: "0640"
-    force: false
+    force: true
   no_log: true
   notify: Restart patroni
   tags:
