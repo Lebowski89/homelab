@@ -30,6 +30,9 @@ homepage:
       - var: bazarr_api
         path: "/Bazarr"
         name: API
+      - var: cloudflare_zone
+        path: "/Cloudflare"
+        name: ZONE
       - var: grafana_user
         path: "/Grafana"
         name: USER

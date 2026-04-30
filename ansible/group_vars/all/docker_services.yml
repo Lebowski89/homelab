@@ -7,29 +7,29 @@ docker_services_unraid_host: unraid
 docker_services:
   ## services (arrs)
   - name: bazarr
-    tags: [apps, arrs, bazarr]
+    tags: [apps, arrs, pgsql, bazarr]
   - name: lidarr
-    tags: [apps, arrs, lidarr]
+    tags: [apps, arrs, pgsql, lidarr]
   - name: prowlarr
-    tags: [apps, arrs, prowlarr]
+    tags: [apps, arrs, pgsql, prowlarr]
   - name: radarr
     target: radarr
-    tags: [apps, arrs, radarr]
+    tags: [apps, arrs, pgsql, radarr]
   - name: radarr
     target: radarr_4k
-    tags: [apps, arrs, radarr]
+    tags: [apps, arrs, pgsql, radarr]
   - name: recyclarr
     tags: [apps, arrs, recyclarr]
   - name: sonarr
     target: sonarr
-    tags: [apps, arrs, sonarr]
+    tags: [apps, arrs, pgsql, sonarr]
   - name: sonarr
     target: sonarr_4k
-    tags: [apps, arrs, sonarr]
+    tags: [apps, arrs, pgsql, sonarr]
   - name: sportarr
     tags: [apps, arrs, sportarr]
   - name: whisparr
-    tags: [apps, arrs, whisparr]
+    tags: [apps, arrs, pgsql, whisparr]
 
   ## services (gluetun)
   - name: gluetun
@@ -41,17 +41,17 @@ docker_services:
 
   ## services (media)
   - name: autobrr
-    tags: [apps, media, autobrr]
+    tags: [apps, media, pgsql, autobrr]
   - name: seerr
-    tags: [apps, media, seerr]
+    tags: [apps, media, pgsql, seerr]
   - name: obsidian
     tags: [apps, media, obsidian]
   - name: ombi
-    tags: [apps, media, ombi]
+    tags: [apps, media, pgsql, ombi]
   - name: opencloud
     tags: [apps, opencloud]
   - name: stash
-    tags: [apps, media, stash]
+    tags: [apps, media, pgsql, stash]
   - name: thelounge
     tags: [apps, media, thelounge]
   - name: znc
@@ -61,7 +61,7 @@ docker_services:
   - name: alloy
     tags: [apps, monitoring, alloy]
   - name: gotify
-    tags: [apps, monitoring, gotify]
+    tags: [apps, monitoring, pgsql, gotify]
   - name: grafana
     tags: [apps, monitoring, grafana]
   - name: homepage
@@ -84,25 +84,25 @@ docker_services:
   ## services (network)
   - name: authelia
     target: redis
-    tags: [apps, network, proxy, authelia]
+    tags: [apps, network, proxy, pgsql, authelia]
   - name: authelia
     target: main
-    tags: [apps, network, proxy, authelia]
+    tags: [apps, network, proxy, pgsql, authelia]
   - name: haproxy
     tags: [apps, network, haproxy]
   - name: netbox
     target: main
-    tags: [apps, network, netbox]
+    tags: [apps, network, pgsql, netbox]
   - name: netbox
     ## If first deploy, the worker may fail, wait for main instance to be healthy and then re-run the role
     target: worker
-    tags: [apps, network, netbox]
+    tags: [apps, network, pgsql, netbox]
   - name: netbox
     target: redis
-    tags: [apps, network, netbox]
+    tags: [apps, network, pgsql, netbox]
   - name: netbox
     target: redis_cache
-    tags: [apps, network, netbox]
+    tags: [apps, network, pgsql, netbox]
   - name: technitium
     tags: [apps, network, technitium]
   - name: traefik
@@ -113,10 +113,10 @@ docker_services:
   ## services (plex)
   - name: autopulse
     target: user_interface
-    tags: [apps, plex, autopulse]
+    tags: [apps, plex, pgsql, autopulse]
   - name: autopulse
     target: main
-    tags: [apps, plex, autopulse]
+    tags: [apps, plex, pgsql, autopulse]
   - name: imagemaid
     tags: [apps, plex, imagemaid]
   - name: kometa
@@ -134,7 +134,7 @@ docker_services:
     target: seeds
     tags: [apps, torrents, qbittorrent]
   - name: qui
-    tags: [apps, torrents, qui]
+    tags: [apps, torrents, pgsql, qui]
   - name: unpackerr
     tags: [apps, torrents, unpackerr]
 
@@ -150,8 +150,8 @@ docker_services:
   - name: czkawka
     tags: [apps, utilities, czkawka]
   - name: gitea
-    tags: [apps, utilities, gitea]
+    tags: [apps, utilities, pgsql, gitea]
   - name: themepark
     tags: [apps, utilities, themepark]
   - name: vaultwarden
-    tags: [apps, utilities, vaultwarden]
+    tags: [apps, utilities, pgsql, vaultwarden]

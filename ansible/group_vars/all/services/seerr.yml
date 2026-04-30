@@ -7,14 +7,6 @@ seerr:
   named_networks:
     overlay:
       external: true
-  healthcheck:
-    test:
-      - "CMD"
-      - "wget"
-      - "--no-verbose"
-      - "--tries=1"
-      - "--spider"
-      - "http://localhost:5055/api/v1/settings/public"
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
