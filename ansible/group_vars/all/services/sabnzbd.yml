@@ -3,7 +3,7 @@
 sabnzbd:
   name: sabnzbd
   stack: sabnzbd
-  image: ghcr.io/hotio/sabnzbd:release-4.5.5
+  image: ghcr.io/hotio/sabnzbd:release-v5.0.1
   named_networks:
     overlay:
       external: true
