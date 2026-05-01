@@ -44,6 +44,12 @@ crowdsec:
       group: "0"
       mode: "0644"
       force: true
+    - src: configs/crowdsec/acquis.d/authelia.yaml.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config/acquis.d/authelia.yaml"
+      owner: "0"
+      group: "0"
+      mode: "0644"
+      force: true
   volumes:
     crowdsec_data:
       type: bind
@@ -69,6 +75,11 @@ crowdsec:
       type: bind
       source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/logs"
       target: /var/log/traefik
+      read_only: true
+    authelia_logs:
+      type: bind
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/logs"
+      target: /var/log/authelia
       read_only: true
   deploy:
     type: swarm
