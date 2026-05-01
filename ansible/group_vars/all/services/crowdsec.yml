@@ -1,0 +1,57 @@
+---
+
+crowdsec:
+  name: crowdsec
+  stack: crowdsec
+  image: crowdsecurity/crowdsec:v1.7.0
+  named_networks:
+    overlay:
+      external: true
+  environment:
+    TZ: "{{ timezone }}"
+    COLLECTIONS: "crowdsecurity/linux crowdsecurity/traefik crowdsecurity/docker"
+    GID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
+  user: "0:0"
+  paths:
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/data"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config"
+      state: directory
+      mode: "0755"
+  volumes:
+    crowdsec_data:
+      type: bind
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/data"
+      target: /var/lib/crowdsec/data
+      read_only: false
+    crowdsec_config:
+      type: bind
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config"
+      target: /etc/crowdsec
+      read_only: false
+    docker_logs:
+      type: bind
+      source: /var/lib/docker/containers
+      target: /var/lib/docker/containers
+      read_only: true
+    syslog:
+      type: bind
+      source: /var/log
+      target: /var/log
+      read_only: true
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: "{{ docker_services_primary_manager }}"
+    constraints:
+      - node.labels.docker_services_host == docker_services_primary_manager
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m
