@@ -3,7 +3,7 @@
 imagemaid:
   name: imagemaid
   stack: imagemaid
-  image: kometateam/imagemaid:v1.1.1
+  image: kometateam/imagemaid:v1.2.0
   named_networks:
     overlay:
       external: true
