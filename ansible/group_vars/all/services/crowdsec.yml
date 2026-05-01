@@ -22,6 +22,22 @@ crowdsec:
     - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config"
       state: directory
       mode: "0755"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config/acquis.d"
+      state: directory
+      mode: "0755"
+  templates:
+    - src: configs/crowdsec/acquis.d/docker.yaml.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config/acquis.d/docker.yaml"
+      owner: "0"
+      group: "0"
+      mode: "0644"
+      force: true
+    - src: configs/crowdsec/acquis.d/syslog.yaml.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config/acquis.d/syslog.yaml"
+      owner: "0"
+      group: "0"
+      mode: "0644"
+      force: true
   volumes:
     crowdsec_data:
       type: bind
