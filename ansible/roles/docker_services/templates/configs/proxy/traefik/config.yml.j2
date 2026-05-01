@@ -10,6 +10,13 @@ api:
 log:
   level: DEBUG
 
+accessLog:
+  filePath: /etc/traefik/logs/access.log
+  format: json
+  bufferingSize: 100
+  fields:
+    defaultMode: keep
+
 entryPoints:
   internal:
     address: ":8080"
