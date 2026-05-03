@@ -3,7 +3,7 @@
 traefik:
   name: traefik
   stack: traefik
-  image: traefik:v3.6.14
+  image: traefik:v3.6.15
   named_networks:
     overlay:
       external: true
