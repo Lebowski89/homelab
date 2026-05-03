@@ -3,7 +3,7 @@
 prometheus:
   name: prometheus
   stack: prometheus
-  image: prom/prometheus:v3.11.2
+  image: prom/prometheus:v3.11.3
   named_networks:
     overlay:
       external: true
