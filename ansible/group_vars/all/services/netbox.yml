@@ -205,7 +205,7 @@ netbox:
           read_only: false
     redis:
       name: netbox-redis
-      image: valkey/valkey:9.0-alpine
+      image: valkey/valkey:9.1-alpine
       healthcheck:
         test:
           - "CMD-SHELL"
@@ -241,7 +241,7 @@ netbox:
           read_only: false
     redis_cache:
       name: netbox-redis-cache
-      image: valkey/valkey:9.0-alpine
+      image: valkey/valkey:9.1-alpine
       healthcheck:
         test:
           - "CMD-SHELL"
