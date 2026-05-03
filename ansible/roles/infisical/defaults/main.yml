@@ -1,7 +1,7 @@
 ---
 
 infisical_name: infisical
-infisical_image: docker.io/infisical/infisical:v0.159.22
+infisical_image: docker.io/infisical/infisical:v0.159.25
 infisical_port: 8066
 infisical_path: "/opt/{{ infisical_name }}"
 infisical_enc_key: ""
