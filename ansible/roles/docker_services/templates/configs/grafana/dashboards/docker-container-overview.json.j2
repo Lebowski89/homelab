@@ -1,0 +1,17 @@
+{
+  "uid": "docker-container-overview",
+  "title": "Docker Container Overview",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {"list": []},
+  "panels": [
+    {"type":"timeseries","title":"Container CPU Cores Used","gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"expr":"sum by(name) (rate(container_cpu_usage_seconds_total{name!~\"\"}[5m]))","legendFormat":"{{name}}"}]},
+    {"type":"timeseries","title":"Container Memory Working Set","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"sum by(name) (container_memory_working_set_bytes{name!~\"\"})","legendFormat":"{{name}}"}]},
+    {"type":"timeseries","title":"Container Network RX/TX Bytes/s","gridPos":{"h":8,"w":12,"x":0,"y":8},"targets":[{"expr":"sum by(name) (rate(container_network_receive_bytes_total{name!~\"\"}[5m]))","legendFormat":"rx {{name}}"},{"expr":"sum by(name) (rate(container_network_transmit_bytes_total{name!~\"\"}[5m]))","legendFormat":"tx {{name}}"}]},
+    {"type":"timeseries","title":"Container Filesystem Usage","gridPos":{"h":8,"w":12,"x":12,"y":8},"targets":[{"expr":"sum by(name) (container_fs_usage_bytes{name!~\"\"})","legendFormat":"{{name}}"}]},
+    {"type":"timeseries","title":"Top 10 Containers by CPU","gridPos":{"h":8,"w":12,"x":0,"y":16},"targets":[{"expr":"topk(10, sum by(name) (rate(container_cpu_usage_seconds_total{name!~\"\"}[5m])))","legendFormat":"{{name}}"}]},
+    {"type":"timeseries","title":"Top 10 Containers by Memory","gridPos":{"h":8,"w":12,"x":12,"y":16},"targets":[{"expr":"topk(10, sum by(name) (container_memory_working_set_bytes{name!~\"\"}))","legendFormat":"{{name}}"}]}
+  ]
+}
