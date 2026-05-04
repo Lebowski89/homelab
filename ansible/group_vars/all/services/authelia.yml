@@ -119,8 +119,15 @@ authelia:
         - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/logs"
+        - path: "{{ docker_services_log_root }}"
           state: directory
+          owner: "0"
+          group: "0"
+          mode: "0755"
+        - path: "{{ docker_services_log_root }}/authelia"
+          state: directory
+          owner: "0"
+          group: "0"
           mode: "0755"
       templates:
         - src: configs/proxy/authelia/config.yml.j2
@@ -140,6 +147,11 @@ authelia:
           type: bind
           source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia"
           target: /config
+          read_only: false
+        logs:
+          type: bind
+          source: "{{ docker_services_log_root }}/authelia"
+          target: /config/logs
           read_only: false
       postgres:
         enable: true
