@@ -1,3 +1,4 @@
+{% raw %}
 {
   "uid": "docker-container-overview",
   "title": "Docker Container Overview",
@@ -15,3 +16,4 @@
     {"type":"timeseries","title":"Top 10 Containers by Memory","gridPos":{"h":8,"w":12,"x":12,"y":16},"targets":[{"expr":"topk(10, sum by(name) (container_memory_working_set_bytes{name!~\"\"}))","legendFormat":"{{name}}"}]}
   ]
 }
+{% endraw %}
