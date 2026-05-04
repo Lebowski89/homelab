@@ -1,0 +1,490 @@
+{% raw %}
+{
+  "uid": "haproxy-postgres-overview",
+  "title": "HAProxy Postgres Overview",
+  "description": "TCP HAProxy monitoring for Postgres / Patroni backend routing",
+  "tags": ["haproxy", "postgres", "tcp", "homelab"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "host",
+        "label": "HAProxy target",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "query": "label_values(up{job=\"haproxy\"}, instance)",
+        "refresh": 1,
+        "multi": false,
+        "includeAll": false
+      },
+      {
+        "name": "frontend",
+        "label": "Frontend",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "query": "label_values(haproxy_frontend_current_sessions{instance=\"$host\"}, proxy)",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "backend",
+        "label": "Backend",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "query": "label_values(haproxy_backend_current_sessions{instance=\"$host\"}, proxy)",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      },
+      {
+        "name": "server",
+        "label": "Postgres server",
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "PBFA97CFB590B2093"
+        },
+        "query": "label_values(haproxy_server_current_sessions{instance=\"$host\",proxy=~\"$backend\"}, server)",
+        "refresh": 1,
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {
+          "selected": true,
+          "text": "All",
+          "value": "$__all"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Prometheus scrape",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "targets": [
+        {
+          "expr": "up{job=\"haproxy\",instance=\"$host\"}",
+          "legendFormat": "{{instance}}",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "mappings": [
+            {"type": "value", "options": {"0": {"text": "DOWN"}, "1": {"text": "UP"}}}
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red"},
+              {"color": "green", "value": 1}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "HAProxy uptime",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "targets": [
+        {
+          "expr": "time() - haproxy_process_start_time_seconds{instance=\"$host\"}",
+          "legendFormat": "uptime",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green"}]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "none",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Current frontend sessions",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "targets": [
+        {
+          "expr": "sum(haproxy_frontend_current_sessions{instance=\"$host\",proxy=~\"$frontend\"})",
+          "legendFormat": "frontend sessions",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green"}]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "none",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "stat",
+      "title": "Current backend sessions",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "targets": [
+        {
+          "expr": "sum(haproxy_backend_current_sessions{instance=\"$host\",proxy=~\"$backend\"})",
+          "legendFormat": "backend sessions",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [{"color": "green"}]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "none",
+        "graphMode": "area",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "textMode": "auto"
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Current sessions by frontend/backend",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "targets": [
+        {
+          "expr": "haproxy_frontend_current_sessions{instance=\"$host\",proxy=~\"$frontend\"}",
+          "legendFormat": "front {{proxy}}",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        },
+        {
+          "expr": "haproxy_backend_current_sessions{instance=\"$host\",proxy=~\"$backend\"}",
+          "legendFormat": "back {{proxy}}",
+          "refId": "B",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 15,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Current sessions by Postgres server",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "targets": [
+        {
+          "expr": "haproxy_server_current_sessions{instance=\"$host\",proxy=~\"$backend\",server=~\"$server\"}",
+          "legendFormat": "{{proxy}} / {{server}}",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 15,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Session / connection rate",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "targets": [
+        {
+          "expr": "sum by(proxy) (rate(haproxy_frontend_sessions_total{instance=\"$host\",proxy=~\"$frontend\"}[$__rate_interval]))",
+          "legendFormat": "front sessions {{proxy}}",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        },
+        {
+          "expr": "sum by(proxy) (rate(haproxy_frontend_connections_total{instance=\"$host\",proxy=~\"$frontend\"}[$__rate_interval]))",
+          "legendFormat": "front connections {{proxy}}",
+          "refId": "B",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        },
+        {
+          "expr": "sum by(proxy) (rate(haproxy_backend_connection_attempts_total{instance=\"$host\",proxy=~\"$backend\"}[$__rate_interval]))",
+          "legendFormat": "backend connection attempts {{proxy}}",
+          "refId": "C",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "cps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Traffic by frontend/backend",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "targets": [
+        {
+          "expr": "sum by(proxy) (rate(haproxy_frontend_bytes_in_total{instance=\"$host\",proxy=~\"$frontend\"}[$__rate_interval]) * 8)",
+          "legendFormat": "front in {{proxy}}",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        },
+        {
+          "expr": "sum by(proxy) (rate(haproxy_frontend_bytes_out_total{instance=\"$host\",proxy=~\"$frontend\"}[$__rate_interval]) * 8)",
+          "legendFormat": "front out {{proxy}}",
+          "refId": "B",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        },
+        {
+          "expr": "sum by(proxy) (rate(haproxy_backend_bytes_in_total{instance=\"$host\",proxy=~\"$backend\"}[$__rate_interval]) * 8)",
+          "legendFormat": "back in {{proxy}}",
+          "refId": "C",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        },
+        {
+          "expr": "sum by(proxy) (rate(haproxy_backend_bytes_out_total{instance=\"$host\",proxy=~\"$backend\"}[$__rate_interval]) * 8)",
+          "legendFormat": "back out {{proxy}}",
+          "refId": "D",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "bps",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Server health check status",
+      "description": "Shows HAProxy health check status for each Postgres backend server. If this is empty, check the exact status metric labels exposed by your HAProxy version.",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "targets": [
+        {
+          "expr": "haproxy_server_check_status{instance=\"$host\",proxy=~\"$backend\",server=~\"$server\"}",
+          "legendFormat": "{{proxy}} / {{server}} / {{state}}",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 5,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Server check failures",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "targets": [
+        {
+          "expr": "rate(haproxy_server_check_failures_total{instance=\"$host\",proxy=~\"$backend\",server=~\"$server\"}[$__rate_interval])",
+          "legendFormat": "{{proxy}} / {{server}}",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "type": "timeseries",
+      "title": "Backend retry / redispatch / response errors",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 28},
+      "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"},
+      "targets": [
+        {
+          "expr": "rate(haproxy_backend_retry_warnings_total{instance=\"$host\",proxy=~\"$backend\"}[$__rate_interval])",
+          "legendFormat": "retry {{proxy}}",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        },
+        {
+          "expr": "rate(haproxy_backend_redispatch_warnings_total{instance=\"$host\",proxy=~\"$backend\"}[$__rate_interval])",
+          "legendFormat": "redispatch {{proxy}}",
+          "refId": "B",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        },
+        {
+          "expr": "rate(haproxy_backend_response_errors_total{instance=\"$host\",proxy=~\"$backend\"}[$__rate_interval])",
+          "legendFormat": "response errors {{proxy}}",
+          "refId": "C",
+          "datasource": {"type": "prometheus", "uid": "PBFA97CFB590B2093"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "drawStyle": "line",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    }
+  ]
+}
+{% endraw %}

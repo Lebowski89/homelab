@@ -27,6 +27,7 @@ haproxy:
     haproxy_timeout_server: 4h
     haproxy_timeout_check: 5s
     haproxy_retries: 3
+    haproxy_prometheus_port: 8405
   deploy:
     type: swarm
     mode: global
