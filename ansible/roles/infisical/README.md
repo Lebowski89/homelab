@@ -52,6 +52,8 @@
 | [infisical_secret_files.postgres_user.**txt**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L29)   | str | `{{ infisical_postgres_user }}` |    
 | [infisical_secret_files.postgres_pass.**txt**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L29)   | str | `{{ infisical_postgres_pass }}` |    
 | [infisical_secret_files.redis_key.**txt**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L29)   | str | `{{ infisical_redis_key }}` |    
+| [infisical_domain](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L33)   | str |  |    
+| [infisical_backend_host](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L34)   | str | `{{ hostvars[docker_services_primary_manager].local_ip }}` |    
 
 
 
@@ -69,6 +71,7 @@
 | Remove compose file | ansible.builtin.file | False | infisical_recreate,infisical_remove |
 | Create directories | ansible.builtin.file | False | infisical_bootstrap,infisical_deploy,infisical_recreate |
 | Template env file | ansible.builtin.template | False | infisical_bootstrap,infisical_deploy,infisical_recreate |
+| Render Traefik dynamic file | ansible.builtin.template | False | infisical_deploy,infisical_recreate |
 | Create Infisical secret files | ansible.builtin.copy | False | infisical_bootstrap,infisical_deploy,infisical_recreate |
 | Import Infisical compose file | ansible.builtin.template | False | infisical_deploy,infisical_recreate |
 | Infisical compose stack up | community.docker.docker_compose_v2 | False | infisical_deploy,infisical_recreate |
@@ -97,10 +100,11 @@ classDef rescue stroke:#665352,stroke-width:2px;
   Infisical_compose_down1-->|Task| Remove_compose_file2[remove compose file]:::task
   Remove_compose_file2-->|Task| Create_directories3[create directories]:::task
   Create_directories3-->|Task| Template_env_file4[template env file]:::task
-  Template_env_file4-->|Task| Create_Infisical_secret_files5[create infisical secret files]:::task
-  Create_Infisical_secret_files5-->|Task| Import_Infisical_compose_file6[import infisical compose file]:::task
-  Import_Infisical_compose_file6-->|Task| Infisical_compose_stack_up7[infisical compose stack up]:::task
-  Infisical_compose_stack_up7-->End
+  Template_env_file4-->|Task| Render_Traefik_dynamic_file5[render traefik dynamic file]:::task
+  Render_Traefik_dynamic_file5-->|Task| Create_Infisical_secret_files6[create infisical secret files]:::task
+  Create_Infisical_secret_files6-->|Task| Import_Infisical_compose_file7[import infisical compose file]:::task
+  Import_Infisical_compose_file7-->|Task| Infisical_compose_stack_up8[infisical compose stack up]:::task
+  Infisical_compose_stack_up8-->End
 ```
 
 
