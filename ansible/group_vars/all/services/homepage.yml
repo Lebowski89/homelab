@@ -97,6 +97,16 @@ homepage:
     - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage"
       state: directory
       mode: "0755"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/images"
+      state: directory
+      mode: "0755"
+  copies:
+    - src: files/earth-rise-2.jpg
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/images/earth-rise-2.jpg"
+      mode: "0755"
+      force: false
+      wait: true
+      wait_timeout: 30
   templates:
     - src: configs/homepage/docker.yaml.j2
       dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/docker.yaml"
@@ -114,6 +124,14 @@ homepage:
       dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/bookmarks.yaml"
       mode: "0664"
       force: true
+    - src: configs/homepage/widgets.yaml.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/widgets.yaml"
+      mode: "0664"
+      force: true
+    - src: configs/homepage/custom.css.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/custom.css"
+      mode: "0664"
+      force: true
     - src: configs/homepage/homepage.env.j2
       dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/.env"
       mode: "0664"
@@ -124,6 +142,11 @@ homepage:
       source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage"
       target: /app/config
       read_only: false
+    images:
+      type: bind
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/images"
+      target: /app/public/images
+      read_only: true
   traefik:
     enable: true
     exposure: private
