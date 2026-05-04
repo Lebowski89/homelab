@@ -5,6 +5,7 @@ http:
     traefik-dashboard-chain:
       chain:
         middlewares:
+          - "crowdsec@file"
           - "authelia@file"
           - "secure-headers@file"
           - "hsts@file"
