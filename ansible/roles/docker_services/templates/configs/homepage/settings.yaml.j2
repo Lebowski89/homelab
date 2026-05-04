@@ -3,40 +3,98 @@
 # https://gethomepage.dev/configs/settings/
 
 title: Cyberdyne Systems
-
 description: Putting the net in Skynet.
+startUrl: "https://homepage.int.{{ cloudflare_zone }}:8443"
+
+background:
+  image: /images/earth-rise-2.jpg
 
 theme: dark
+color: slate
+language: en-AU
+
+# Open dashboard links in a new tab.
+target: _blank
+
+# Better for a dense homelab dashboard.
+fullWidth: true
 useEqualHeights: true
+headerStyle: boxedWidgets
+statusStyle: dot
+
+# Privacy / noise reduction.
+disableIndexing: true
+hideVersion: true
+disableUpdateCheck: true
+
+# Keep widget errors visible while tuning the dashboard.
+# Change to true once everything is stable if you prefer a cleaner UI.
+hideErrors: false
+
+quicklaunch:
+  searchDescriptions: true
+  hideInternetSearch: true
+  showSearchSuggestions: false
+  hideVisitURL: false
+  mobileButtonPosition: bottom-right
 
 layout:
   arrs:
     style: row
-    columns: 2
+    columns: 3
+    icon: mdi-download-network
+    initiallyCollapsed: false
+
   media:
     style: row
-    columns: 2
+    columns: 4
+    icon: mdi-multimedia
+    initiallyCollapsed: true
+
   monitoring:
     style: row
-    columns: 2
+    columns: 3
+    icon: mdi-chart-line
+    initiallyCollapsed: true
+
   network:
     style: row
     columns: 2
+    icon: mdi-lan
+    initiallyCollapsed: true
+
   plex:
     style: row
     columns: 2
+    icon: mdi-plex
+    initiallyCollapsed: true
+
   torrents:
     style: row
-    columns: 3
+    columns: 2
+    icon: mdi-download
+    initiallyCollapsed: true
+
   usenet:
     style: row
-    columns: 3
+    columns: 1
+    icon: mdi-cloud-download
+    initiallyCollapsed: true
+
   utilities:
     style: row
-    columns: 2
+    columns: 1
+    icon: mdi-tools
+    initiallyCollapsed: true
+
   services:
     style: row
-    columns: 5
+    columns: 6
+    icon: mdi-github
+    initiallyCollapsed: true
+
   providers:
     style: row
-    columns: 5
+    columns: 6
+    icon: mdi-terraform
+    initiallyCollapsed: true
