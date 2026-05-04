@@ -8,8 +8,8 @@ http:
       priority: 50
       tls:
         options: "securetls@file"
-      # IMPORTANT: do NOT include authelia@file here (would create an auth loop)
       middlewares:
+        - "crowdsec@file"
         - "secure-headers@file"
         - "hsts@file"
         - "gzip@file"

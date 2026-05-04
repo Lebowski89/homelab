@@ -12,6 +12,9 @@ http:
     {{ tr_router_name }}-ui-chain:
       chain:
         middlewares:
+{% if not tr_private %}
+          - "crowdsec@file"
+{% endif %}
 {% if tr_authelia_enable %}
           - "authelia@file"
 {% endif %}
@@ -26,6 +29,9 @@ http:
     {{ tr_router_name }}-api-chain:
       chain:
         middlewares:
+{% if not tr_private %}
+          - "crowdsec@file"
+{% endif %}
           - "{{ tr_headers_middleware }}"
           - "hsts@file"
           - "gzip@file"

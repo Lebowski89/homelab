@@ -25,7 +25,28 @@ crowdsec:
     - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config/acquis.d"
       state: directory
       mode: "0755"
+    - path: "{{ docker_services_log_root }}"
+      state: directory
+      owner: "0"
+      group: "0"
+      mode: "0755"
+    - path: "{{ docker_services_log_root }}/traefik"
+      state: directory
+      owner: "0"
+      group: "0"
+      mode: "0755"
+    - path: "{{ docker_services_log_root }}/authelia"
+      state: directory
+      owner: "0"
+      group: "0"
+      mode: "0755"
   templates:
+    - src: configs/crowdsec/acquis.yaml.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config/acquis.yaml"
+      owner: "0"
+      group: "0"
+      mode: "0644"
+      force: true
     - src: configs/crowdsec/acquis.d/syslog.yaml.j2
       dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config/acquis.d/syslog.yaml"
       owner: "0"
@@ -59,16 +80,6 @@ crowdsec:
       type: bind
       source: /var/log
       target: /var/log
-      read_only: true
-    traefik_logs:
-      type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/logs"
-      target: /var/log/traefik
-      read_only: true
-    authelia_logs:
-      type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/logs"
-      target: /var/log/authelia
       read_only: true
   deploy:
     type: swarm
