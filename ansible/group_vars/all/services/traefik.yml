@@ -27,8 +27,13 @@ traefik:
         path: "/Cloudflare"
         name: API
         docker_secret: cloudflare_api_secret
+      - var: crowdsec_traefik_bouncer_key
+        path: "/CrowdSec"
+        name: TRAEFIK_BOUNCER_KEY
+        docker_secret: crowdsec_traefik_bouncer_key_secret
   secrets:
     - cloudflare_api_secret
+    - crowdsec_traefik_bouncer_key_secret
   ports:
     web:
       published: 80
@@ -49,12 +54,19 @@ traefik:
     - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/logs"
-      state: directory
-      mode: "0755"
     - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/acme.json"
       state: touch
       mode: "0600"
+    - path: "{{ docker_services_log_root }}"
+      state: directory
+      owner: "0"
+      group: "0"
+      mode: "0755"
+    - path: "{{ docker_services_log_root }}/traefik"
+      state: directory
+      owner: "0"
+      group: "0"
+      mode: "0755"
   templates:
     - src: configs/proxy/traefik/config.yml.j2
       dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/traefik.yml"
@@ -80,6 +92,11 @@ traefik:
       type: bind
       source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik"
       target: /etc/traefik
+      read_only: false
+    logs:
+      type: bind
+      source: "{{ docker_services_log_root }}/traefik"
+      target: /etc/traefik/logs
       read_only: false
   deploy:
     type: swarm
