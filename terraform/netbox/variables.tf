@@ -65,7 +65,20 @@ variable "device_types" {
     model            = string
     slug             = optional(string)
     manufacturer_key = optional(string, "homelab")
+    part_number      = optional(string)
+    is_full_depth    = optional(bool)
+    u_height         = optional(number)
   }))
+}
+
+variable "device_type_interfaces" {
+  description = "Interface templates attached to device types."
+  type = map(list(object({
+    name  = string
+    label = optional(string)
+    type  = string
+  })))
+  default = {}
 }
 
 variable "prefixes" {

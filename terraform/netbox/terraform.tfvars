@@ -9,6 +9,11 @@ manufacturers = {
     name = "Homelab"
     slug = "homelab"
   }
+
+  mikrotik = {
+    name = "MikroTik"
+    slug = "mikrotik"
+  }
 }
 
 device_roles = {
@@ -28,6 +33,12 @@ device_roles = {
     name      = "Storage"
     slug      = "storage"
     color_hex = "4caf50"
+  }
+
+  switch = {
+    name      = "Switch"
+    slug      = "switch"
+    color_hex = "2196f3"
   }
 }
 
@@ -49,6 +60,46 @@ device_types = {
     slug             = "unraid-host"
     manufacturer_key = "homelab"
   }
+
+  mikrotik_crs305 = {
+    model            = "CRS305-1G-4S+IN"
+    slug             = "mikrotik-crs305-1g-4s-plus-in"
+    manufacturer_key = "mikrotik"
+    part_number      = "CRS305-1G-4S+"
+    is_full_depth    = false
+    u_height         = 1
+    comments         = "Five-port desktop switch with one Gigabit Ethernet port and four SFP+ 10Gbps ports."
+  }
+}
+
+device_type_interfaces = {
+  mikrotik_crs305 = [
+    {
+      name  = "sfp-sfpplus1"
+      label = "SFP+ 1"
+      type  = "10gbase-x-sfpp"
+    },
+    {
+      name  = "sfp-sfpplus2"
+      label = "SFP+ 2"
+      type  = "10gbase-x-sfpp"
+    },
+    {
+      name  = "sfp-sfpplus3"
+      label = "SFP+ 3"
+      type  = "10gbase-x-sfpp"
+    },
+    {
+      name  = "sfp-sfpplus4"
+      label = "SFP+ 4"
+      type  = "10gbase-x-sfpp"
+    },
+    {
+      name  = "ether1"
+      label = "ETH/BOOT"
+      type  = "1000base-t"
+    }
+  ]
 }
 
 prefixes = {
