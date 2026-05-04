@@ -81,6 +81,32 @@
     - infisical_recreate
 
 ################################
+# TRAEFIK
+################################
+
+- name: Render Traefik dynamic file
+  ansible.builtin.template:
+    src: templates/traefik_dynamic_file.j2
+    dest: "/opt/traefik/dynamic/{{ infisical_name }}-dynamic.yml"
+    owner: "1000"
+    group: "1000"
+    mode: "0644"
+    force: true
+  vars:
+    tr_router_name: "{{ infisical_name }}"
+    tr_address: "{{ infisical_domain }}"
+    tr_entrypoint: "https"
+    tr_port: "{{ infisical_port }}"
+    tr_authelia_enable: true
+    tr_backend_address: "http://{{ infisical_backend_host }}:{{ infisical_port }}"
+    tr_headers_middleware: "secure-headers@file"
+    tr_middleware_chain: "{{ tr_router_name }}-ui-chain"
+  delegate_to: "{{ docker_services_primary_manager }}"
+  tags:
+    - infisical_deploy
+    - infisical_recreate
+
+################################
 # SECRETS
 ################################
 
