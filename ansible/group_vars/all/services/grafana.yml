@@ -7,13 +7,6 @@ grafana:
   named_networks:
     overlay:
       external: true
-  healthcheck:
-    test:
-      - "CMD"
-      - "wget"
-      - "--spider"
-      - "-q"
-      - "http://127.0.0.1:3000/api/health"
   user: "0"
   environment:
     TZ: "{{ timezone }}"
@@ -35,12 +28,48 @@ grafana:
     - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana"
       state: directory
       mode: "0755"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/provisioning/datasources"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/provisioning/dashboards"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards"
+      state: directory
+      mode: "0755"
+  templates:
+    - src: configs/grafana/provisioning/datasources/prometheus.yml.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/provisioning/datasources/prometheus.yml"
+      mode: "0644"
+      force: true
+    - src: configs/grafana/provisioning/dashboards/dashboards.yml.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/provisioning/dashboards/dashboards.yml"
+      mode: "0644"
+      force: true
+    - src: configs/grafana/dashboards/host-resource-overview.json.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards/host-resource-overview.json"
+      mode: "0644"
+      force: true
+    - src: configs/grafana/dashboards/docker-container-overview.json.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards/docker-container-overview.json"
+      mode: "0644"
+      force: true
   volumes:
     data:
       type: bind
       source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana"
       target: /var/lib/grafana
       read_only: false
+    provisioning:
+      type: bind
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/provisioning"
+      target: /etc/grafana/provisioning
+      read_only: true
+    dashboards:
+      type: bind
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards"
+      target: /var/lib/grafana/dashboards
+      read_only: true
   traefik:
     enable: true
     exposure: private

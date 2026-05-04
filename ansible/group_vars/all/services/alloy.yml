@@ -33,7 +33,7 @@ alloy:
   volumes:
     data:
       type: bind
-      source: /opt/alloy/data
+      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/alloy/data"
       target: /etc/alloy/data
       read_only: false
     docker_sock:
@@ -41,10 +41,25 @@ alloy:
       source: /var/run/docker.sock
       target: /var/run/docker.sock
       read_only: true
-    docker_container:
+    host_rootfs:
       type: bind
-      source: /var/lib/docker/containers
-      target: /var/lib/docker/containers
+      source: /
+      target: /host/rootfs
+      read_only: true
+    host_proc:
+      type: bind
+      source: /proc
+      target: /host/proc
+      read_only: true
+    host_sys:
+      type: bind
+      source: /sys
+      target: /host/sys
+      read_only: true
+    docker_lib:
+      type: bind
+      source: /var/lib/docker
+      target: /var/lib/docker
       read_only: true
   traefik:
     enable: true
