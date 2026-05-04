@@ -1,0 +1,29 @@
+{
+  "uid": "host-resource-overview",
+  "title": "Host Resource Overview",
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "templating": {
+    "list": [
+      {
+        "name": "instance",
+        "type": "query",
+        "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+        "query": "label_values(node_cpu_seconds_total, instance)",
+        "multi": true,
+        "includeAll": true,
+        "current": {"selected": true, "text": "All", "value": "$__all"}
+      }
+    ]
+  },
+  "panels": [
+    {"type":"timeseries","title":"CPU Usage %","gridPos":{"h":8,"w":12,"x":0,"y":0},"targets":[{"expr":"100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\",instance=~\"$instance\"}[5m])) * 100)","legendFormat":"{{instance}}"}]},
+    {"type":"timeseries","title":"Memory Usage %","gridPos":{"h":8,"w":12,"x":12,"y":0},"targets":[{"expr":"(1 - (node_memory_MemAvailable_bytes{instance=~\"$instance\"} / node_memory_MemTotal_bytes{instance=~\"$instance\"})) * 100","legendFormat":"{{instance}}"}]},
+    {"type":"timeseries","title":"Filesystem Usage %","gridPos":{"h":8,"w":12,"x":0,"y":8},"targets":[{"expr":"100 * (1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\",mountpoint!~\"/run.*\",instance=~\"$instance\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay\",mountpoint!~\"/run.*\",instance=~\"$instance\"}))","legendFormat":"{{instance}} {{mountpoint}}"}]},
+    {"type":"timeseries","title":"Disk I/O Bytes/s","gridPos":{"h":8,"w":12,"x":12,"y":8},"targets":[{"expr":"rate(node_disk_read_bytes_total{instance=~\"$instance\"}[5m])","legendFormat":"read {{instance}} {{device}}"},{"expr":"rate(node_disk_written_bytes_total{instance=~\"$instance\"}[5m])","legendFormat":"write {{instance}} {{device}}"}]},
+    {"type":"timeseries","title":"Network RX/TX Bytes/s","gridPos":{"h":8,"w":12,"x":0,"y":16},"targets":[{"expr":"rate(node_network_receive_bytes_total{device!~\"lo\",instance=~\"$instance\"}[5m])","legendFormat":"rx {{instance}} {{device}}"},{"expr":"rate(node_network_transmit_bytes_total{device!~\"lo\",instance=~\"$instance\"}[5m])","legendFormat":"tx {{instance}} {{device}}"}]},
+    {"type":"timeseries","title":"Load Average (1m)","gridPos":{"h":8,"w":12,"x":12,"y":16},"targets":[{"expr":"node_load1{instance=~\"$instance\"}","legendFormat":"{{instance}}"}]}
+  ]
+}
