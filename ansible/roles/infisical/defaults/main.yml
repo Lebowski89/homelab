@@ -29,3 +29,6 @@ infisical_secret_files:
   postgres_user.txt: "{{ infisical_postgres_user }}"
   postgres_pass.txt: "{{ infisical_postgres_pass }}"
   redis_key.txt: "{{ infisical_redis_key }}"
+
+infisical_domain: ""
+infisical_backend_host: "{{ hostvars[docker_services_primary_manager].local_ip }}"
