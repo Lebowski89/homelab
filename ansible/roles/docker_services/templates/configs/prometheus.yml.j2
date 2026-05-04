@@ -7,3 +7,21 @@ scrape_configs:
     scrape_interval: 5s
     static_configs:
       - targets: ["prometheus:9090"]
+
+  - job_name: "authelia"
+    scrape_interval: 1m
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ["authelia:9959"]
+
+  - job_name: "haproxy"
+    scrape_interval: 15s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["haproxy:8405"]
+
+  - job_name: "traefik"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ["traefik:8082"]
