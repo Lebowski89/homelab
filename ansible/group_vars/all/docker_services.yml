@@ -61,6 +61,8 @@ docker_services:
   ## services (monitoring)
   - name: alloy
     tags: [apps, monitoring, alloy]
+  - name: beszel
+    tags: [apps, monitoring, beszel]
   - name: crowdsec
     tags: [apps, monitoring, crowdsec]
   - name: gotify
