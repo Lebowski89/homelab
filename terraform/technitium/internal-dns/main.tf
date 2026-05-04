@@ -6,6 +6,7 @@ locals {
     "autobrr",
     "autopulse-ui",
     "bazarr",
+    "beszel",
     "czkawka",
     "gitea",
     "gotify",
