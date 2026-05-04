@@ -3,13 +3,16 @@ locals {
     homelab = var.site
   }
 
-  host_role_keys = toset([
-    for host in values(var.hosts) : try(host.role_key, "server")
-  ])
-
-  host_device_type_keys = toset([
-    for host in values(var.hosts) : try(host.device_type_key, "generic_host")
-  ])
+  device_type_interfaces_flat = {
+    for interface in flatten([
+      for device_type_key, interfaces in var.device_type_interfaces : [
+        for interface in interfaces : merge(interface, {
+          key             = "${device_type_key}.${interface.name}"
+          device_type_key = device_type_key
+        })
+      ]
+    ]) : interface.key => interface
+  }
 }
 
 resource "netbox_site" "this" {
@@ -41,6 +44,18 @@ resource "netbox_device_type" "this" {
   model           = each.value.model
   slug            = try(each.value.slug, each.key)
   manufacturer_id = netbox_manufacturer.this[try(each.value.manufacturer_key, "homelab")].id
+  part_number     = try(each.value.part_number, null)
+  is_full_depth   = try(each.value.is_full_depth, null)
+  u_height        = try(each.value.u_height, null)
+}
+
+resource "netbox_interface_template" "this" {
+  for_each = local.device_type_interfaces_flat
+
+  device_type_id = netbox_device_type.this[each.value.device_type_key].id
+  name           = each.value.name
+  label          = try(each.value.label, null)
+  type           = each.value.type
 }
 
 resource "netbox_prefix" "this" {
@@ -63,6 +78,12 @@ resource "netbox_device" "hosts" {
   device_type_id = netbox_device_type.this[try(each.value.device_type_key, "generic_host")].id
   status         = try(each.value.status, "active")
   description    = try(each.value.description, null)
+
+  # Ensures NetBox device-type component templates exist before devices
+  # are instantiated from those device types.
+  depends_on = [
+    netbox_interface_template.this
+  ]
 }
 
 resource "netbox_device_interface" "mgmt" {
