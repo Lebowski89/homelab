@@ -14,6 +14,12 @@ defaults
   timeout check {{ docker_services_svc.settings.haproxy_timeout_check | default('5s') }}
   retries {{ docker_services_svc.settings.haproxy_retries | default('3') }}
 
+frontend prometheus
+  bind *:{{ docker_services_svc.settings.haproxy_prometheus_port | default(8405) }}
+  mode http
+  http-request use-service prometheus-exporter if { path /metrics }
+  no log
+
 frontend pg_write
   bind *:5432
   mode tcp
