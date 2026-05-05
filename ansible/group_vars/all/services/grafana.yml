@@ -46,6 +46,18 @@ grafana:
       dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/provisioning/dashboards/dashboards.yml"
       mode: "0644"
       force: true
+    - src: configs/grafana/dashboards/authelia-community-dashboard.json.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards/authelia-community-dashboard.json"
+      mode: "0644"
+      force: true
+    - src: configs/grafana/dashboards/haproxy-postgres-overview.json.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards/haproxy-postgres-overview.json"
+      mode: "0644"
+      force: true
+    - src: configs/grafana/dashboards/traefik-official-standalone-dashboard.json.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards/traefik-official-standalone-dashboard.json"
+      mode: "0644"
+      force: true
   volumes:
     data:
       type: bind
