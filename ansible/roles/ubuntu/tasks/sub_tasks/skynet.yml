@@ -45,7 +45,7 @@
       Missing vault password file: {{ ubuntu_ansible_vault_pass_file }}.
       Create it manually on this ansible manager before using skynet.
   when:
-    - inventory_hostname in groups['ansible_managers']
+    - "'tags_ansible_manager' in group_names"
     - not ubuntu_vault_pass_file_stat.stat.exists
 
 - name: Install templated skynet wrapper

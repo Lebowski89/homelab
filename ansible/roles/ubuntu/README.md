@@ -45,7 +45,7 @@
 | [ubuntu_ansible_vault_pass_file](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L21)   | str | `{{ ubuntu_ansible_secrets_path }}/.ansible_vault_pass` |    
 | [ubuntu_skynet_install](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L23)   | bool | `True` |    
 | [ubuntu_skynet_install_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L24)   | str | `/usr/local/bin/skynet` |    
-| [ubuntu_skynet_doctor_ping_target](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L25)   | str | `skynet` |    
+| [ubuntu_skynet_doctor_ping_target](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L25)   | str | `tags_skynet` |    
 | [ubuntu_skynet_docker_services_vars](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L26)   | str | `{{ ubuntu_ansible_path }}/group_vars/all/docker_services.yml` |    
 | [ubuntu_sysctl_file](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L28)   | str | `/etc/sysctl.d/99-ubuntu-tuning.conf` |    
 | [ubuntu_sysctl_settings](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L30)   | dict | `{}` |    
@@ -232,14 +232,14 @@ classDef includeVars stroke:#8e44ad,stroke-width:2px;
 classDef rescue stroke:#665352,stroke-width:2px;
 
   Start-->|Include task| Install_common_apt_packages_sub_tasks_apt_yml_0[install common apt packages<br>include_task: sub tasks apt yml]:::includeTasks
-  Install_common_apt_packages_sub_tasks_apt_yml_0-->|Include task| Clone_Homelab_repo_sub_tasks_repo_yml_1[clone homelab repo<br>When: **inventory hostname in groups  ansible managers**<br>include_task: sub tasks repo yml]:::includeTasks
-  Clone_Homelab_repo_sub_tasks_repo_yml_1-->|Include task| Setup_Python_venv_sub_tasks_venv_yml_2[setup python venv<br>When: **inventory hostname in groups  ansible managers**<br>include_task: sub tasks venv yml]:::includeTasks
-  Setup_Python_venv_sub_tasks_venv_yml_2-->|Include task| Install_required_collections_and_pip_packages_sub_tasks_requirements_yml_3[install required collections and pip packages<br>When: **inventory hostname in groups  ansible managers**<br>include_task: sub tasks requirements yml]:::includeTasks
-  Install_required_collections_and_pip_packages_sub_tasks_requirements_yml_3-->|Include task| Install_Skynet_wrapper_sub_tasks_skynet_yml_4[install skynet wrapper<br>When: **inventory hostname in groups  ansible managers**<br>include_task: sub tasks skynet yml]:::includeTasks
+  Install_common_apt_packages_sub_tasks_apt_yml_0-->|Include task| Clone_Homelab_repo_sub_tasks_repo_yml_1[clone homelab repo<br>When: **tags ansible manager  in group names**<br>include_task: sub tasks repo yml]:::includeTasks
+  Clone_Homelab_repo_sub_tasks_repo_yml_1-->|Include task| Setup_Python_venv_sub_tasks_venv_yml_2[setup python venv<br>When: **tags ansible manager  in group names**<br>include_task: sub tasks venv yml]:::includeTasks
+  Setup_Python_venv_sub_tasks_venv_yml_2-->|Include task| Install_required_collections_and_pip_packages_sub_tasks_requirements_yml_3[install required collections and pip packages<br>When: **tags ansible manager  in group names**<br>include_task: sub tasks requirements yml]:::includeTasks
+  Install_required_collections_and_pip_packages_sub_tasks_requirements_yml_3-->|Include task| Install_Skynet_wrapper_sub_tasks_skynet_yml_4[install skynet wrapper<br>When: **tags ansible manager  in group names**<br>include_task: sub tasks skynet yml]:::includeTasks
   Install_Skynet_wrapper_sub_tasks_skynet_yml_4-->|Include task| Tune_sysctl_settings_sub_tasks_sysctl_yml_5[tune sysctl settings<br>include_task: sub tasks sysctl yml]:::includeTasks
   Tune_sysctl_settings_sub_tasks_sysctl_yml_5-->|Include task| Set_PAM_limits_sub_tasks_pam_yml_6[set pam limits<br>include_task: sub tasks pam yml]:::includeTasks
   Set_PAM_limits_sub_tasks_pam_yml_6-->|Include task| Configure_network_tuning_sub_tasks_network_yml_7[configure network tuning<br>include_task: sub tasks network yml]:::includeTasks
-  Configure_network_tuning_sub_tasks_network_yml_7-->|Include task| Configure_Netplan_sub_tasks_netplan_yml_8[configure netplan<br>When: **inventory hostname not in  groups  opentofu<br>managed     default**<br>include_task: sub tasks netplan yml]:::includeTasks
+  Configure_network_tuning_sub_tasks_network_yml_7-->|Include task| Configure_Netplan_sub_tasks_netplan_yml_8[configure netplan<br>When: **inventory hostname not in  groups  tags opentofu<br>managed     default**<br>include_task: sub tasks netplan yml]:::includeTasks
   Configure_Netplan_sub_tasks_netplan_yml_8-->End
 ```
 
@@ -398,7 +398,7 @@ classDef rescue stroke:#665352,stroke-width:2px;
   Create_directories1-->|Task| Check_for_become_password_file2[check for become password file]:::task
   Check_for_become_password_file2-->|Task| Fail_if_become_password_file_is_missing3[fail if become password file is missing<br>When: **not ubuntu become pass file stat stat exists**]:::task
   Fail_if_become_password_file_is_missing3-->|Task| Check_for_vault_password_file4[check for vault password file]:::task
-  Check_for_vault_password_file4-->|Task| Fail_if_vault_password_file_is_missing5[fail if vault password file is missing<br>When: **inventory hostname in groups  ansible managers  <br>and not ubuntu vault pass file stat stat exists**]:::task
+  Check_for_vault_password_file4-->|Task| Fail_if_vault_password_file_is_missing5[fail if vault password file is missing<br>When: **tags ansible manager  in group names and not<br>ubuntu vault pass file stat stat exists**]:::task
   Fail_if_vault_password_file_is_missing5-->|Task| Install_templated_skynet_wrapper6[install templated skynet wrapper<br>When: **ubuntu skynet install   bool**]:::task
   Install_templated_skynet_wrapper6-->End
 ```

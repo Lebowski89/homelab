@@ -1,7 +1,7 @@
 ---
 
 - name: Install OpenTofu on supported hosts
-  when: inventory_hostname in groups['opentofu_install']
+  when: "'tags_opentofu_install' in group_names"
   ansible.builtin.include_tasks:
     file: sub_tasks/install.yml
     apply:
@@ -13,7 +13,7 @@
     - opentofu_install
 
 - name: Configure Proxmox API access
-  when: inventory_hostname in groups['opentofu_pve_user']
+  when: "'tags_opentofu_pve_user' in group_names"
   ansible.builtin.include_tasks:
     file: sub_tasks/pve_user.yml
     apply:

@@ -3,6 +3,7 @@
 ansible/collections/
 ansible/group_vars/all/vault.yml
 **/hosts.ini
+**/netbox.yml
 **/.terraform/*
 **/*.tfstate
 **/*.tfstate.*
@@ -12,4 +13,5 @@ ansible/group_vars/all/vault.yml
 **/override.tf.json
 **/*_override.tf
 **/*_override.tf.json
-**/secrets.auto.tfvars
+**/*.auto.tfvars
+!**/*.auto.tfvars.sample

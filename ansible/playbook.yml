@@ -1,7 +1,7 @@
 ---
 
 - name: Deploy homelab services
-  hosts: skynet
+  hosts: tags_skynet
   become: true
 
   pre_tasks:
@@ -67,7 +67,7 @@
     ################################
 
     - name: Include Docker role
-      when: inventory_hostname in groups['docker']
+      when: "'tags_docker' in group_names"
       ansible.builtin.include_role:
         name: docker
       tags:
@@ -113,9 +113,9 @@
     ################################
 
     - name: Include OpenTofu role
+      when: "'tags_opentofu' in group_names"
       ansible.builtin.include_role:
         name: opentofu
-      when: inventory_hostname in groups['opentofu']
       tags:
         - opentofu
         - opentofu_install
@@ -126,9 +126,9 @@
     ################################
 
     - name: Include Postgres Cluster role
+      when: "'tags_postgres' in group_names"
       ansible.builtin.include_role:
         name: postgres
-      when: inventory_hostname in groups['postgres']
       tags:
         - postgres
         - postgres_apt

@@ -1,0 +1,25 @@
+## NetBox Dynamic Inventory for Ansible
+## See docs/netbox.md for details
+
+plugin: netbox.netbox.nb_inventory
+
+api_endpoint: https://netbox.example.com
+token: REPLACE_ME
+
+validate_certs: false
+
+interfaces: true
+virtual_chassis: false
+
+query_filters:
+  - has_primary_ip: 'true'
+
+group_by:
+  - device_roles
+  - tags
+
+# Build Ansible variables from NetBox data
+compose:
+  ansible_host: custom_fields['tailscale_ip'] | default(primary_ip4.address | regex_replace('/.*', ''), true)
+  ansible_user: custom_fields['ansible_user'] | default('mgt', true)
+  ansible_port: custom_fields['ssh_port'] | default('22', true)
