@@ -104,8 +104,8 @@ classDef importRole stroke:#699ba7,stroke-width:2px;
 classDef includeVars stroke:#8e44ad,stroke-width:2px;
 classDef rescue stroke:#665352,stroke-width:2px;
 
-  Start-->|Include task| Install_OpenTofu_on_supported_hosts_sub_tasks_install_yml_0[install opentofu on supported hosts<br>When: **inventory hostname in groups  opentofu install**<br>include_task: sub tasks install yml]:::includeTasks
-  Install_OpenTofu_on_supported_hosts_sub_tasks_install_yml_0-->|Include task| Configure_Proxmox_API_access_sub_tasks_pve_user_yml_1[configure proxmox api access<br>When: **inventory hostname in groups  opentofu pve user**<br>include_task: sub tasks pve user yml]:::includeTasks
+  Start-->|Include task| Install_OpenTofu_on_supported_hosts_sub_tasks_install_yml_0[install opentofu on supported hosts<br>When: **tags opentofu install  in group names**<br>include_task: sub tasks install yml]:::includeTasks
+  Install_OpenTofu_on_supported_hosts_sub_tasks_install_yml_0-->|Include task| Configure_Proxmox_API_access_sub_tasks_pve_user_yml_1[configure proxmox api access<br>When: **tags opentofu pve user  in group names**<br>include_task: sub tasks pve user yml]:::includeTasks
   Configure_Proxmox_API_access_sub_tasks_pve_user_yml_1-->End
 ```
 

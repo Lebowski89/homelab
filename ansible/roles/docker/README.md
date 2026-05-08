@@ -130,8 +130,8 @@ classDef importRole stroke:#699ba7,stroke-width:2px;
 classDef includeVars stroke:#8e44ad,stroke-width:2px;
 classDef rescue stroke:#665352,stroke-width:2px;
 
-  Start-->|Include task| Install_Docker_sub_tasks_install_yml_0[install docker<br>When: **inventory hostname in groups  docker install**<br>include_task: sub tasks install yml]:::includeTasks
-  Install_Docker_sub_tasks_install_yml_0-->|Include task| Configure_Docker_Swarm_sub_tasks_swarm_yml_1[configure docker swarm<br>When: **inventory hostname in groups  swarm**<br>include_task: sub tasks swarm yml]:::includeTasks
+  Start-->|Include task| Install_Docker_sub_tasks_install_yml_0[install docker<br>When: **tags docker install  in group names**<br>include_task: sub tasks install yml]:::includeTasks
+  Install_Docker_sub_tasks_install_yml_0-->|Include task| Configure_Docker_Swarm_sub_tasks_swarm_yml_1[configure docker swarm<br>When: **tags swarm  in group names**<br>include_task: sub tasks swarm yml]:::includeTasks
   Configure_Docker_Swarm_sub_tasks_swarm_yml_1-->|Include task| Docker_Prune_sub_tasks_prune_yml_2[docker prune<br>include_task: sub tasks prune yml]:::includeTasks
   Docker_Prune_sub_tasks_prune_yml_2-->End
 ```
@@ -209,13 +209,13 @@ classDef rescue stroke:#665352,stroke-width:2px;
   Initialise_swarm_on_primary_manager4-->|Task| Get_worker_join_token_from_primary_manager5[get worker join token from primary manager]:::task
   Get_worker_join_token_from_primary_manager5-->|Task| Get_manager_join_token_from_primary_manager6[get manager join token from primary manager]:::task
   Get_manager_join_token_from_primary_manager6-->|Task| Store_join_tokens_on_primary_manager_hostvars7[store join tokens on primary manager hostvars]:::task
-  Store_join_tokens_on_primary_manager_hostvars7-->|Task| Join_additional_managers_to_swarm8[join additional managers to swarm<br>When: **inventory hostname in groups  swarm managers   and<br>inventory hostname    docker swarm primary manager**]:::task
-  Join_additional_managers_to_swarm8-->|Task| Join_workers_to_swarm9[join workers to swarm<br>When: **inventory hostname in groups  swarm workers**]:::task
+  Store_join_tokens_on_primary_manager_hostvars7-->|Task| Join_additional_managers_to_swarm8[join additional managers to swarm<br>When: **tags swarm manager  in group names and inventory<br>hostname    docker swarm primary manager**]:::task
+  Join_additional_managers_to_swarm8-->|Task| Join_workers_to_swarm9[join workers to swarm<br>When: **tags swarm worker  in group names**]:::task
   Join_workers_to_swarm9-->|Block Start| Conduct_overlay_network_tasks10_block_start_0[[conduct overlay network tasks]]:::block
   Conduct_overlay_network_tasks10_block_start_0-->|Task| Register_overlay_network0[register overlay network]:::task
   Register_overlay_network0-->|Task| Create_overlay_network1[create overlay network<br>When: **not docker network result exists**]:::task
   Create_overlay_network1-.->|End of Block| Conduct_overlay_network_tasks10_block_start_0
-  Create_overlay_network1-->|Task| Apply_swarm_node_labels11[apply swarm node labels<br>When: **inventory hostname in groups  swarm   and docker<br>swarm node labels is defined and docker swarm node<br>labels   length   0**]:::task
+  Create_overlay_network1-->|Task| Apply_swarm_node_labels11[apply swarm node labels<br>When: **tags swarm  in group names and docker swarm node<br>labels is defined and docker swarm node labels  <br>length   0**]:::task
   Apply_swarm_node_labels11-->End
 ```
 
