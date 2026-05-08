@@ -2,7 +2,7 @@
 set -euo pipefail
 
 PLAYBOOK="${PLAYBOOK:-{{ ubuntu_ansible_path }}/playbook.yml}"
-INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/hosts.ini}"
+INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/netbox.yml}"
 ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-{{ ubuntu_ansible_path }}/ansible.cfg}"
 BECOME_PASS_FILE="${BECOME_PASS_FILE:-{{ ubuntu_ansible_become_pass_file }}}"
 VAULT_PASS_FILE="${VAULT_PASS_FILE:-{{ ubuntu_ansible_vault_pass_file }}}"
@@ -32,6 +32,7 @@ Usage:
   skynet bootstrap <tag> [tag2 ...]
   skynet check <tag> [tag2 ...]
   skynet doctor [--ping]
+  skynet inventory [--graph|--list]
   skynet limit <hostpattern> <deploy|update|remove|recreate|bootstrap|check|raw> ...
   skynet tags
   skynet raw <ansible-playbook args...>
@@ -212,6 +213,12 @@ doctor() {
     else
       echo "[WARN] community.docker collection not found"
     fi
+
+    if "$ANSIBLE_GALAXY_BIN" collection list 2>/dev/null | grep -q 'netbox.netbox'; then
+      echo "[OK] netbox.netbox collection found"
+    else
+      echo "[WARN] netbox.netbox collection not found"
+    fi
   else
     echo "[WARN] ansible-galaxy not found/executable at '$ANSIBLE_GALAXY_BIN' (skipping collection checks)"
   fi
@@ -297,6 +304,21 @@ case "$CMD" in
     else
       doctor false
     fi
+    ;;
+
+  inventory)
+    MODE="${1:---graph}"
+    case "$MODE" in
+      --graph|graph)
+        ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_INVENTORY_BIN" -i "$INVENTORY" --graph
+        ;;
+      --list|list)
+        ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_INVENTORY_BIN" -i "$INVENTORY" --list
+        ;;
+      *)
+        die "Usage: skynet inventory [--graph|--list]"
+        ;;
+    esac
     ;;
 
   tags|list)

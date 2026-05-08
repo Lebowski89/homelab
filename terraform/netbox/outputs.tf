@@ -1,5 +1,5 @@
 output "managed_hosts" {
-  value       = keys(var.hosts)
+  value       = keys(local.hosts)
   description = "Hosts managed as NetBox devices."
 }
 
@@ -18,4 +18,14 @@ output "host_primary_ips" {
     for k, ip in netbox_ip_address.mgmt : k => ip.ip_address
   }
   description = "Primary management IPs for managed hosts."
+}
+
+output "managed_tags" {
+  value       = { for k, tag in netbox_tag.this : k => tag.slug }
+  description = "Tags managed in NetBox."
+}
+
+output "managed_device_custom_fields" {
+  value       = { for k, field in netbox_custom_field.device : k => field.name }
+  description = "Device custom fields managed in NetBox."
 }

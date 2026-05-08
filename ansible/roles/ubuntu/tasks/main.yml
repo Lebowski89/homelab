@@ -12,7 +12,7 @@
     - ubuntu_apt
 
 - name: Clone Homelab repo
-  when: inventory_hostname in groups['ansible_managers']
+  when: "'tags_ansible_manager' in group_names"
   ansible.builtin.include_tasks:
     file: sub_tasks/repo.yml
     apply:
@@ -24,7 +24,7 @@
     - ubuntu_repo
 
 - name: Setup Python venv
-  when: inventory_hostname in groups['ansible_managers']
+  when: "'tags_ansible_manager' in group_names"
   ansible.builtin.include_tasks:
     file: sub_tasks/venv.yml
     apply:
@@ -36,7 +36,7 @@
     - ubuntu_venv
 
 - name: Install required collections and pip packages
-  when: inventory_hostname in groups['ansible_managers']
+  when: "'tags_ansible_manager' in group_names"
   ansible.builtin.include_tasks:
     file: sub_tasks/requirements.yml
     apply:
@@ -48,7 +48,7 @@
     - ubuntu_requirements
 
 - name: Install Skynet wrapper
-  when: inventory_hostname in groups['ansible_managers']
+  when: "'tags_ansible_manager' in group_names"
   ansible.builtin.include_tasks:
     file: sub_tasks/skynet.yml
     apply:
@@ -93,7 +93,7 @@
     - ubuntu_network
 
 - name: Configure Netplan
-  when: inventory_hostname not in (groups['opentofu_managed'] | default([]))
+  when: inventory_hostname not in (groups['tags_opentofu_managed'] | default([]))
   ansible.builtin.include_tasks:
     file: sub_tasks/netplan.yml
     apply:

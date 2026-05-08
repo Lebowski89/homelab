@@ -6,3 +6,4 @@ collections:
   - name: community.postgresql
   - name: community.proxmox
   - name: infisical.vault
+  - name: netbox.netbox
