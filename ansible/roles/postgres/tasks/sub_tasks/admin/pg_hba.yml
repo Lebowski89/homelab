@@ -2,7 +2,7 @@
 
 - name: Patroni dynamic pg_hba | Query Patroni cluster state from first postgres node
   ansible.builtin.uri:
-    url: "http://{{ hostvars[groups['postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
+    url: "http://{{ hostvars[groups['tags_postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
     method: GET
     return_content: true
     status_code: 200
@@ -55,16 +55,16 @@
       - local all all peer
       - host all all 127.0.0.1/32 scram-sha-256
       - host all all ::1/128 scram-sha-256
-      {% for host in groups['postgres'] %}
+      {% for host in groups['tags_postgres'] %}
       - host replication {{ postgres_patroni_replication_name }} {{ hostvars[host].local_ip }}/32 scram-sha-256
       {% endfor %}
-      {% for host in groups['postgres'] %}
+      {% for host in groups['tags_postgres'] %}
       - host all {{ postgres_patroni_superuser_name }} {{ hostvars[host].local_ip }}/32 scram-sha-256
       {% endfor %}
-      {% for host in groups['postgres'] %}
+      {% for host in groups['tags_postgres'] %}
       - host all {{ postgres_patroni_admin_role_name }} {{ hostvars[host].local_ip }}/32 scram-sha-256
       {% endfor %}
-      {% for host in groups['haproxy'] | default([]) %}
+      {% for host in groups['tags_haproxy'] | default([]) %}
       - host all all {{ hostvars[host].local_ip }}/32 scram-sha-256
       {% endfor %}
       {% for rule in postgres_patroni_pg_hba_extra %}
@@ -133,11 +133,11 @@
       - -F
       - "host all all {{ hostvars[item].local_ip }}/32 scram-sha-256"
       - "{{ postgres_patroni_data_dir }}/pg_hba.conf"
-  loop: "{{ groups['haproxy'] | default([]) }}"
+  loop: "{{ groups['tags_haproxy'] | default([]) }}"
   register: postgres_patroni_pg_hba_live_check
   changed_when: false
   retries: 15
   delay: 2
   until: postgres_patroni_pg_hba_live_check.rc == 0
-  when: (groups['haproxy'] | default([]) | length) > 0
+  when: (groups['tags_haproxy'] | default([]) | length) > 0
   delegate_to: "{{ inventory_hostname }}"

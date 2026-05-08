@@ -2,7 +2,7 @@
 
 - name: Ensure this host is part of the swarm inventory
   ansible.builtin.set_fact:
-    docker_swarm_enabled: "{{ inventory_hostname in groups['swarm'] | default([]) }}"
+    docker_swarm_enabled: "{{ 'tags_swarm' in group_names }}"
 
 - name: End swarm tasks for non-swarm hosts
   ansible.builtin.meta: end_host
@@ -12,8 +12,8 @@
   ansible.builtin.assert:
     that:
       - docker_swarm_primary_manager is defined
-      - docker_swarm_primary_manager in groups['swarm_managers']
-    fail_msg: "docker_swarm_primary_manager must be defined and be a member of swarm_managers."
+      - docker_swarm_primary_manager in groups['tags_swarm_manager']
+    fail_msg: "docker_swarm_primary_manager must be defined and be a member of tags_swarm_manager."
 
 - name: Assert local_ip is defined for swarm node
   ansible.builtin.assert:
@@ -75,7 +75,7 @@
       - "{{ hostvars[docker_swarm_primary_manager].local_ip }}:2377"
     join_token: "{{ hostvars[docker_swarm_primary_manager].docker_swarm_manager_join_token }}"
   when:
-    - inventory_hostname in groups['swarm_managers']
+    - "'tags_swarm_manager' in group_names"
     - inventory_hostname != docker_swarm_primary_manager
   tags: docker_swarm_join
 
@@ -86,7 +86,7 @@
     remote_addrs:
       - "{{ hostvars[docker_swarm_primary_manager].local_ip }}:2377"
     join_token: "{{ hostvars[docker_swarm_primary_manager].docker_swarm_worker_join_token }}"
-  when: inventory_hostname in groups['swarm_workers']
+  when: "'tags_swarm_worker' in group_names"
   tags: docker_swarm_join
 
 - name: Conduct overlay network tasks
@@ -116,7 +116,7 @@
     labels_state: merge
   delegate_to: "{{ docker_swarm_primary_manager }}"
   when:
-    - inventory_hostname in groups['swarm']
+    - "'tags_swarm' in group_names"
     - docker_swarm_node_labels is defined
     - docker_swarm_node_labels | length > 0
   tags: docker_swarm_labels

@@ -3,6 +3,7 @@
 ansible/collections/
 ansible/group_vars/all/vault.yml
 **/hosts.ini
+**/netbox.yml
 **/.terraform/*
 **/*.tfstate
 **/*.tfstate.*
