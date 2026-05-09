@@ -135,17 +135,19 @@ skynet doctor --ping
 
 `hosts.ini` has been deprecated and retained only as a temporary fallback during migration.
 
+---
+
 ## Migration steps - hosts.ini to Netbox
 
 Here is the actual steps I took to replace my hosts.ini driven inventory with Netbox.
 
-1) Inventory groups to Netbox tags
+### Inventory groups to Netbox tags
 
 Each inventory group became a tag inside Netbox. Tags are found in Netbox in Customization/Tags.
 
-Hosts.ini:
+**Hosts.ini:**
 
-```bash
+```ini
 [skynet]
 mgt ansible_connection=local ansible_user= ansible_python_interpreter=
 unraid ansible_host= ansible_user=
@@ -204,7 +206,7 @@ plex
 unraid
 ```
 
-Netbox tags:
+**Netbox tags:**
 
 - skynet
 - ansible_manager
@@ -222,58 +224,58 @@ Netbox tags:
 
 These tags are then assigned to relevant hosts within Netbox.
 
-2) The playbook and conditionals that relied on host.ini groups were then pointed at the new Netbox tags
+### Pointing Playbook and tasks to new Netbox tags
 
 For example, the playbook went from:
 
-```bash
+```yaml
   hosts: skynet
 ```
 to:
 
-```bash
+```yaml
   hosts: tags_skynet
 ```
 
 Hosts group conditionals went from:
 
-```bash
+```yaml
 inventory_hostname in groups['docker']
 ```
 
 to:
 
-```bash
+```yaml
 "'tags_docker' in group_names"
 ```
 
 Hostvars lookups went from:
 
-```bash
+```yaml
 "http://{{ hostvars[groups['postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
 ```
 
 to:
 
-```bash
+```yaml
 "http://{{ hostvars[groups['tags_postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
 ```
 
 And so on. For the most part, it was about adding 'tags_' before the tag name.
 
-3) Updating 'Skynet' to use Netbox
+### Updating 'Skynet' to use Netbox
 
 Lastly, I updated my Skynet wrapper script to make use of my Netbox.yml file.
 
 From:
 
-```bash
+```yaml
 INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/hosts.ini}"
 ```
 
 to:
 
-```bash
+```yaml
 INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/netbox.yml}"
 ```
 
