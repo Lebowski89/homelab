@@ -2,7 +2,7 @@ locals {
   seerr_application_url = "https://seerr.${var.domain_int}"
 
   seerr_plex = {
-    ip      = "192.168.80.59"
+    ip      = var.plex_ip
     port    = 32400
     use_ssl = false
   }

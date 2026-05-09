@@ -8,19 +8,16 @@ variable "technitium_api_token" {
 }
 
 variable "zone_name" {
-  type    = string
-  default = "int.nosugarmaxtaste.com"
+  type = string
 }
 
 variable "internal_zone_catalog" {
   type        = string
   description = "Technitium catalog zone used to replicate/share the internal zone across the DNS cluster."
-  default     = "cluster-catalog.skynet"
 }
 
 variable "traefik_ipv4" {
-  type    = string
-  default = "192.168.80.48"
+  type = string
 }
 
 variable "ttl" {

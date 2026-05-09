@@ -22,7 +22,6 @@ resource "uptimekuma_monitor_dns" "this" {
   tags = [
     for tag_key in each.value.tag_keys : {
       tag_id = uptimekuma_tag.this[tag_key].id
-      value  = ""
     }
   ]
 }

@@ -41,8 +41,8 @@ No modules.
 | <a name="input_target_node"></a> [target\_node](#input\_target\_node) | Proxmox node to place the VMs on | `string` | n/a | yes |
 | <a name="input_vm_bridge"></a> [vm\_bridge](#input\_vm\_bridge) | n/a | `string` | `"vmbr0"` | no |
 | <a name="input_vm_cidr"></a> [vm\_cidr](#input\_vm\_cidr) | n/a | `number` | `24` | no |
-| <a name="input_vm_gateway"></a> [vm\_gateway](#input\_vm\_gateway) | n/a | `string` | `"192.168.80.1"` | no |
-| <a name="input_vm_nameserver"></a> [vm\_nameserver](#input\_vm\_nameserver) | n/a | `string` | `"192.168.80.48"` | no |
+| <a name="input_vm_gateway"></a> [vm\_gateway](#input\_vm\_gateway) | n/a | `string` | n/a | yes |
+| <a name="input_vm_nameserver"></a> [vm\_nameserver](#input\_vm\_nameserver) | n/a | `string` | n/a | yes |
 | <a name="input_vm_searchdomain"></a> [vm\_searchdomain](#input\_vm\_searchdomain) | n/a | `string` | `""` | no |
 | <a name="input_vm_storage"></a> [vm\_storage](#input\_vm\_storage) | Proxmox datastore for VM disks and cloud-init disks | `string` | n/a | yes |
 

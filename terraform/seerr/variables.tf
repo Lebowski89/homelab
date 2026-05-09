@@ -11,12 +11,11 @@ variable "domain_int" {
   type = string
 }
 
-variable "tautulli_api_key" {
-  type      = string
-  sensitive = true
+variable "plex_ip" {
+  type = string
 }
 
-variable "gotify_token" {
+variable "tautulli_api_key" {
   type      = string
   sensitive = true
 }
@@ -37,6 +36,11 @@ variable "sonarr_api_key" {
 }
 
 variable "sonarr_4k_api_key" {
+  type      = string
+  sensitive = true
+}
+
+variable "gotify_token" {
   type      = string
   sensitive = true
 }

@@ -33,9 +33,9 @@ No modules.
 | <a name="input_dns_domain"></a> [dns\_domain](#input\_dns\_domain) | n/a | `string` | `"home.arpa"` | no |
 | <a name="input_dns_servers"></a> [dns\_servers](#input\_dns\_servers) | n/a | `list(string)` | `[]` | no |
 | <a name="input_local_domain"></a> [local\_domain](#input\_local\_domain) | n/a | `string` | `"home.arpa"` | no |
-| <a name="input_network_vmbr0_address"></a> [network\_vmbr0\_address](#input\_network\_vmbr0\_address) | n/a | `string` | `"192.168.80.80/24"` | no |
+| <a name="input_network_vmbr0_address"></a> [network\_vmbr0\_address](#input\_network\_vmbr0\_address) | n/a | `string` | n/a | yes |
 | <a name="input_network_vmbr0_autostart"></a> [network\_vmbr0\_autostart](#input\_network\_vmbr0\_autostart) | n/a | `bool` | `true` | no |
-| <a name="input_network_vmbr0_gateway"></a> [network\_vmbr0\_gateway](#input\_network\_vmbr0\_gateway) | n/a | `string` | `"192.168.80.1"` | no |
+| <a name="input_network_vmbr0_gateway"></a> [network\_vmbr0\_gateway](#input\_network\_vmbr0\_gateway) | n/a | `string` | n/a | yes |
 | <a name="input_network_vmbr0_name"></a> [network\_vmbr0\_name](#input\_network\_vmbr0\_name) | n/a | `string` | `"vmbr0"` | no |
 | <a name="input_network_vmbr0_ports"></a> [network\_vmbr0\_ports](#input\_network\_vmbr0\_ports) | n/a | `list(string)` | `[]` | no |
 | <a name="input_network_vmbr1_autostart"></a> [network\_vmbr1\_autostart](#input\_network\_vmbr1\_autostart) | n/a | `bool` | `true` | no |

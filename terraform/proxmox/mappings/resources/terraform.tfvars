@@ -1,6 +1,3 @@
-pm_api_url      = "https://192.168.80.80:8006/"
-pm_tls_insecure = true
-
 target_node = "pve1"
 
 unraid_hba_mapping_name      = "UnRaid-HBA"

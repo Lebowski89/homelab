@@ -31,13 +31,11 @@ variable "network_vmbr0_name" {
 }
 
 variable "network_vmbr0_address" {
-  type    = string
-  default = "192.168.80.80/24"
+  type = string
 }
 
 variable "network_vmbr0_gateway" {
-  type    = string
-  default = "192.168.80.1"
+  type = string
 }
 
 variable "network_vmbr0_autostart" {
