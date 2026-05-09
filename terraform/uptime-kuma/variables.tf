@@ -1,5 +1,5 @@
 variable "uptime_kuma_endpoint" {
-  description = "Base URL for Uptime Kuma. Example: https://uptime-kuma.int.somedomain.com:8443"
+  description = "Base URL for Uptime Kuma. Example: https://uptime-kuma.somedomain.com"
   type        = string
 }
 
@@ -35,6 +35,12 @@ variable "private_https_port" {
   description = "Traefik private HTTPS entrypoint port."
   type        = number
   default     = 8443
+}
+
+variable "host_ips" {
+  description = "Private host IPs used by direct, ping, TCP, and DNS monitors."
+  type        = map(string)
+  default     = {}
 }
 
 variable "postgres_monitor_connection_strings" {

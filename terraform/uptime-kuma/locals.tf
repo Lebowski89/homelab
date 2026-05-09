@@ -236,7 +236,7 @@ locals {
 
     plex = {
       category              = "plex"
-      hostname              = "192.168.80.59"
+      hostname              = var.host_ips["plex"]
       port                  = 32400
       path                  = "/identity"
       accepted_status_codes = ["200-299"]
@@ -284,7 +284,7 @@ locals {
   extra_http_monitors = {
     proxmox = {
       name                  = "Proxmox (Web UI)"
-      url                   = "https://192.168.80.80:8006"
+      url                   = "https://${var.host_ips["pve1"]}:8006"
       description           = "Proxmox VE web interface"
       group                 = "infrastructure"
       tag_keys              = ["infrastructure"]
@@ -306,7 +306,7 @@ locals {
   ping_monitors = {
     mgt = {
       name        = "mgt (Host Ping)"
-      hostname    = "192.168.80.48"
+      hostname    = var.host_ips["mgt"]
       description = "Primary Swarm manager / Traefik / Technitium primary"
       group       = "infrastructure"
       tag_keys    = ["critical", "infrastructure"]
@@ -314,7 +314,7 @@ locals {
 
     unraid = {
       name        = "unraid (Host Ping)"
-      hostname    = "192.168.80.20"
+      hostname    = var.host_ips["unraid"]
       description = "Unraid storage host"
       group       = "infrastructure"
       tag_keys    = ["critical", "storage", "infrastructure"]
@@ -322,7 +322,7 @@ locals {
 
     plex = {
       name        = "plex (Host Ping)"
-      hostname    = "192.168.80.59"
+      hostname    = var.host_ips["plex"]
       description = "Plex / secondary DNS host"
       group       = "infrastructure"
       tag_keys    = ["critical", "infrastructure"]
@@ -330,7 +330,7 @@ locals {
 
     pve1 = {
       name        = "pve1 (Host Ping)"
-      hostname    = "192.168.80.80"
+      hostname    = var.host_ips["pve1"]
       description = "Proxmox VE host"
       group       = "infrastructure"
       tag_keys    = ["critical", "infrastructure"]
@@ -338,7 +338,7 @@ locals {
 
     pg95 = {
       name        = "pg95 (Host Ping)"
-      hostname    = "192.168.80.95"
+      hostname    = var.host_ips["pg95"]
       description = "PostgreSQL database host"
       group       = "infrastructure"
       tag_keys    = ["critical", "infrastructure"]
@@ -346,7 +346,7 @@ locals {
 
     pg96 = {
       name        = "pg96 (Host Ping)"
-      hostname    = "192.168.80.96"
+      hostname    = var.host_ips["pg96"]
       description = "PostgreSQL database host"
       group       = "infrastructure"
       tag_keys    = ["critical", "infrastructure"]
@@ -354,7 +354,7 @@ locals {
 
     pg97 = {
       name        = "pg97 (Host Ping)"
-      hostname    = "192.168.80.97"
+      hostname    = var.host_ips["pg97"]
       description = "PostgreSQL database host"
       group       = "infrastructure"
       tag_keys    = ["critical", "infrastructure"]
@@ -364,7 +364,7 @@ locals {
   tcp_monitors = {
     traefik_private_tcp = {
       name        = "Traefik (Private) HTTPS TCP"
-      hostname    = "192.168.80.48"
+      hostname    = var.host_ips["mgt"]
       port        = 8443
       description = "Traefik private HTTPS entrypoint listener"
       group       = "networking"
@@ -373,7 +373,7 @@ locals {
 
     traefik_public_tcp = {
       name        = "Traefik (Public) HTTPS TCP"
-      hostname    = "192.168.80.48"
+      hostname    = var.host_ips["mgt"]
       port        = 443
       description = "Traefik public HTTPS entrypoint listener"
       group       = "networking"
@@ -382,7 +382,7 @@ locals {
 
     technitium_primary_tcp = {
       name        = "Technitium (Primary) DNS TCP"
-      hostname    = "192.168.80.48"
+      hostname    = var.host_ips["mgt"]
       port        = 53
       description = "Primary Technitium TCP DNS listener"
       group       = "networking"
@@ -391,7 +391,7 @@ locals {
 
     technitium_backup_tcp = {
       name        = "Technitium (Backup) DNS TCP"
-      hostname    = "192.168.80.59"
+      hostname    = var.host_ips["plex"]
       port        = 53
       description = "Backup Technitium TCP DNS listener"
       group       = "networking"
@@ -400,7 +400,7 @@ locals {
 
     postgres_pg95_tcp = {
       name        = "pg95 (PostgreSQL TCP)"
-      hostname    = "192.168.80.95"
+      hostname    = var.host_ips["pg95"]
       port        = 5432
       description = "PostgreSQL listener on pg95"
       group       = "infrastructure"
@@ -409,7 +409,7 @@ locals {
 
     postgres_pg96_tcp = {
       name        = "pg96 (PostgreSQL TCP)"
-      hostname    = "192.168.80.96"
+      hostname    = var.host_ips["pg96"]
       port        = 5432
       description = "PostgreSQL listener on pg96"
       group       = "infrastructure"
@@ -418,7 +418,7 @@ locals {
 
     postgres_pg97_tcp = {
       name        = "pg97 (PostgreSQL TCP)"
-      hostname    = "192.168.80.97"
+      hostname    = var.host_ips["pg97"]
       port        = 5432
       description = "PostgreSQL listener on pg97"
       group       = "infrastructure"
@@ -453,7 +453,7 @@ locals {
     technitium_primary_internal = {
       name               = "Technitium (Primary) resolves internal zone"
       hostname           = "adminer.${var.internal_zone}"
-      dns_resolve_server = "192.168.80.48"
+      dns_resolve_server = var.host_ips["mgt"]
       dns_resolve_type   = "A"
       port               = 53
       description        = "Primary DNS should resolve internal Traefik records"
@@ -464,7 +464,7 @@ locals {
     technitium_backup_internal = {
       name               = "Technitium (Backup) resolves internal zone"
       hostname           = "adminer.${var.internal_zone}"
-      dns_resolve_server = "192.168.80.59"
+      dns_resolve_server = var.host_ips["plex"]
       dns_resolve_type   = "A"
       port               = 53
       description        = "Backup DNS should resolve internal Traefik records"
