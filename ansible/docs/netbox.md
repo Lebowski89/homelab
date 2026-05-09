@@ -143,7 +143,7 @@ Here is the actual steps I took to replace my hosts.ini driven inventory with Ne
 
 ### Inventory groups to Netbox tags
 
-Each inventory group became a tag inside Netbox. Tags are found in Netbox in Customization/Tags.
+Each inventory group becomes a tag inside Netbox. Tags are found in Netbox in Customization/Tags.
 
 **Hosts.ini:**
 
@@ -222,7 +222,7 @@ unraid
 - opentofu_managed
 - opentofu_pve_user
 
-These tags are then assigned to relevant hosts within Netbox.
+These tags are then assigned to relevant hosts (devices) within Netbox.
 
 ### Pointing Playbook and tasks to new Netbox tags
 
@@ -280,3 +280,7 @@ INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/netbox.yml}"
 ```
 
 With some Netbox relevant conditionals added.
+
+### Removing hosts.ini
+
+Once the above steps are completed, Netbox fully replaces the hosts.ini file, and the hosts file can be removed.
