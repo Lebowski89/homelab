@@ -134,3 +134,147 @@ skynet doctor --ping
 ## Legacy Inventory
 
 `hosts.ini` has been deprecated and retained only as a temporary fallback during migration.
+
+## Migration steps - hosts.ini to Netbox
+
+Here is the actual steps I took to replace my hosts.ini driven inventory with Netbox.
+
+1) Inventory groups to Netbox tags
+
+Each inventory group became a tag inside Netbox. Tags are found in Netbox in Customization/Tags.
+
+Hosts.ini:
+
+```bash
+[skynet]
+mgt ansible_connection=local ansible_user= ansible_python_interpreter=
+unraid ansible_host= ansible_user=
+plex ansible_host= ansible_user=
+pve1 ansible_host= ansible_user=
+pg95 ansible_host= ansible_user=
+pg96 ansible_host= ansible_user=
+pg97 ansible_host= ansible_user=
+
+[opentofu_install]
+mgt
+
+[opentofu_pve_user]
+pve1
+
+[opentofu_managed]
+pg95
+pg96
+pg97
+
+[opentofu:children]
+opentofu_install
+opentofu_pve_user
+
+[ansible_managers]
+mgt
+
+[docker_install]
+mgt
+plex
+
+[swarm_managers]
+mgt
+
+[swarm_workers]
+unraid
+plex
+
+[swarm:children]
+swarm_managers
+swarm_workers
+
+[docker:children]
+docker_install
+swarm_managers
+swarm_workers
+
+[postgres]
+pg95
+pg96
+pg97
+
+[haproxy]
+mgt
+plex
+unraid
+```
+
+Netbox tags:
+
+- skynet
+- ansible_manager
+- docker
+- docker_install
+- swarm
+- swarm_manager
+- swarm_worker
+- haproxy
+- postgres
+- opentofu
+- opentofu_install
+- opentofu_managed
+- opentofu_pve_user
+
+These tags are then assigned to relevant hosts within Netbox.
+
+2) The playbook and conditionals that relied on host.ini groups were then pointed at the new Netbox tags
+
+For example, the playbook went from:
+
+```bash
+  hosts: skynet
+```
+to:
+
+```bash
+  hosts: tags_skynet
+```
+
+Hosts group conditionals went from:
+
+```bash
+inventory_hostname in groups['docker']
+```
+
+to:
+
+```bash
+"'tags_docker' in group_names"
+```
+
+Hostvars lookups went from:
+
+```bash
+"http://{{ hostvars[groups['postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
+```
+
+to:
+
+```bash
+"http://{{ hostvars[groups['tags_postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
+```
+
+And so on. For the most part, it was about adding 'tags_' before the tag name.
+
+3) Updating 'Skynet' to use Netbox
+
+Lastly, I updated my Skynet wrapper script to make use of my Netbox.yml file.
+
+From:
+
+```bash
+INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/hosts.ini}"
+```
+
+to:
+
+```bash
+INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/netbox.yml}"
+```
+
+With some Netbox relevant conditionals added.
