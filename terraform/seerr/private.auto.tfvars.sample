@@ -1,0 +1,3 @@
+seerr_url  = "https://seerr.int.domain.com:8443"
+domain_int = "int.domain.com"
+plex_ip    = "192.168.xx.xx"
