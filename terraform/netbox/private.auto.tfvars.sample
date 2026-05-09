@@ -1,0 +1,73 @@
+internal_zone = "int.example.com"
+
+host_private_values = {
+  mgt = {
+    mgmt_ip = "192.168.xx.xx/24"
+
+    custom_fields = {
+      ansible_user = "user"
+      ssh_port     = "22"
+      tailscale_ip = "100.x.x.x"
+    }
+  }
+
+  unraid = {
+    mgmt_ip = "192.168.xx.xx/24"
+
+    custom_fields = {
+      ansible_user = "user"
+      ssh_port     = "22"
+      tailscale_ip = "100.x.x.x"
+    }
+  }
+
+  plex = {
+    mgmt_ip = "192.168.xx.xx/24"
+
+    custom_fields = {
+      ansible_user = "user"
+      ssh_port     = "22"
+      tailscale_ip = "100.x.x.x"
+    }
+  }
+
+  pve1 = {
+    mgmt_ip = "192.168.xx.xx/24"
+
+    custom_fields = {
+      ansible_user = "user"
+      ssh_port     = "22"
+      tailscale_ip = "100.x.x.x"
+    }
+  }
+
+  pg95 = {
+    mgmt_ip = "192.168.xx.xx/24"
+
+    custom_fields = {
+      ansible_user = "user"
+      ssh_port     = "22"
+      tailscale_ip = "100.x.x.x"
+    }
+  }
+
+  pg96 = {
+    mgmt_ip = "192.168.xx.xx/24"
+
+    custom_fields = {
+      ansible_user = "user"
+      ssh_port     = "22"
+      tailscale_ip = "100.x.x.x"
+    }
+  }
+
+  pg97 = {
+    mgmt_ip = "192.168.xx.xx/24"
+
+    custom_fields = {
+      ansible_user = "user"
+      ssh_port     = "22"
+      tailscale_ip = "100.x.x.x"
+    }
+  }
+}

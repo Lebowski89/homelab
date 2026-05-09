@@ -1,11 +1,7 @@
 locals {
-  sites = {
-    homelab = var.site
-  }
-
   device_type_interfaces_flat = {
     for interface in flatten([
-      for device_type_key, interfaces in var.device_type_interfaces : [
+      for device_type_key, interfaces in local.device_type_interfaces : [
         for interface in interfaces : merge(interface, {
           key             = "${device_type_key}.${interface.name}"
           device_type_key = device_type_key
@@ -24,14 +20,14 @@ resource "netbox_site" "this" {
 }
 
 resource "netbox_manufacturer" "this" {
-  for_each = var.manufacturers
+  for_each = local.manufacturers
 
   name = each.value.name
   slug = try(each.value.slug, each.key)
 }
 
 resource "netbox_device_role" "this" {
-  for_each = var.device_roles
+  for_each = local.device_roles
 
   name      = each.value.name
   slug      = try(each.value.slug, each.key)
@@ -39,7 +35,7 @@ resource "netbox_device_role" "this" {
 }
 
 resource "netbox_device_type" "this" {
-  for_each = var.device_types
+  for_each = local.device_types
 
   model           = each.value.model
   slug            = try(each.value.slug, each.key)
@@ -58,8 +54,34 @@ resource "netbox_interface_template" "this" {
   type           = each.value.type
 }
 
+resource "netbox_tag" "this" {
+  for_each = local.netbox_tags
+
+  name        = each.value.name
+  slug        = try(each.value.slug, each.key)
+  color_hex   = try(each.value.color_hex, "9e9e9e")
+  description = try(each.value.description, null)
+}
+
+resource "netbox_custom_field" "device" {
+  for_each = local.device_custom_fields
+
+  name          = each.value.name
+  label         = try(each.value.label, null)
+  type          = try(each.value.type, "text")
+  content_types = ["dcim.device"]
+  weight        = try(each.value.weight, 100)
+  description   = try(each.value.description, null)
+  group_name    = try(each.value.group_name, null)
+  required      = try(each.value.required, false)
+
+  validation_regex   = try(each.value.validation_regex, null)
+  validation_minimum = try(each.value.validation_minimum, null)
+  validation_maximum = try(each.value.validation_maximum, null)
+}
+
 resource "netbox_prefix" "this" {
-  for_each = var.prefixes
+  for_each = local.prefixes
 
   prefix        = each.value.prefix
   status        = try(each.value.status, "active")
@@ -70,7 +92,7 @@ resource "netbox_prefix" "this" {
 }
 
 resource "netbox_device" "hosts" {
-  for_each = var.hosts
+  for_each = local.hosts
 
   name           = each.key
   site_id        = netbox_site.this[try(each.value.site_key, "homelab")].id
@@ -78,16 +100,20 @@ resource "netbox_device" "hosts" {
   device_type_id = netbox_device_type.this[try(each.value.device_type_key, "generic_host")].id
   status         = try(each.value.status, "active")
   description    = try(each.value.description, null)
+  tags           = [for tag_key in try(each.value.tags, []) : try(local.netbox_tags[tag_key].name, tag_key)]
+  custom_fields  = try(each.value.custom_fields, null)
 
-  # Ensures NetBox device-type component templates exist before devices
-  # are instantiated from those device types.
+  # Ensures NetBox device-type component templates, tags, and custom fields
+  # exist before devices are instantiated from those device types.
   depends_on = [
-    netbox_interface_template.this
+    netbox_interface_template.this,
+    netbox_tag.this,
+    netbox_custom_field.device,
   ]
 }
 
 resource "netbox_device_interface" "mgmt" {
-  for_each = var.hosts
+  for_each = local.hosts
 
   name      = try(each.value.interface_name, "mgmt0")
   device_id = netbox_device.hosts[each.key].id
@@ -96,7 +122,7 @@ resource "netbox_device_interface" "mgmt" {
 }
 
 resource "netbox_ip_address" "mgmt" {
-  for_each = var.hosts
+  for_each = local.hosts
 
   ip_address          = each.value.mgmt_ip
   status              = "active"
@@ -106,7 +132,7 @@ resource "netbox_ip_address" "mgmt" {
 }
 
 resource "netbox_device_primary_ip" "hosts" {
-  for_each = var.hosts
+  for_each = local.hosts
 
   device_id          = netbox_device.hosts[each.key].id
   ip_address_id      = netbox_ip_address.mgmt[each.key].id
@@ -114,7 +140,7 @@ resource "netbox_device_primary_ip" "hosts" {
 }
 
 resource "netbox_ip_address" "reserved" {
-  for_each = var.reserved_ips
+  for_each = local.reserved_ips
 
   ip_address  = each.value.ip_address
   status      = try(each.value.status, "active")

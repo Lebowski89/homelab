@@ -27,96 +27,17 @@ variable "netbox_skip_version_check" {
   default     = false
 }
 
-variable "site" {
-  description = "Default site details in NetBox."
-  type = object({
-    name   = string
-    slug   = string
-    status = optional(string, "active")
-  })
+variable "internal_zone" {
+  type        = string
+  description = "Private DNS zone used to build NetBox device DNS names. Keep the real value in an uncommitted tfvars file."
+  default     = ""
 }
 
-variable "manufacturers" {
-  description = "Manufacturers to manage."
+variable "host_private_values" {
+  description = "Private per-host values such as LAN IPs and custom fields."
   type = map(object({
-    name = string
-    slug = optional(string)
-  }))
-  default = {
-    homelab = {
-      name = "Homelab"
-      slug = "homelab"
-    }
-  }
-}
-
-variable "device_roles" {
-  description = "Device roles to manage."
-  type = map(object({
-    name      = string
-    slug      = optional(string)
-    color_hex = optional(string, "9e9e9e")
-  }))
-}
-
-variable "device_types" {
-  description = "Device types to manage."
-  type = map(object({
-    model            = string
-    slug             = optional(string)
-    manufacturer_key = optional(string, "homelab")
-    part_number      = optional(string)
-    is_full_depth    = optional(bool)
-    u_height         = optional(number)
-  }))
-}
-
-variable "device_type_interfaces" {
-  description = "Interface templates attached to device types."
-  type = map(list(object({
-    name  = string
-    label = optional(string)
-    type  = string
-  })))
-  default = {}
-}
-
-variable "prefixes" {
-  description = "IPv4/IPv6 prefixes to manage."
-  type = map(object({
-    prefix        = string
-    status        = optional(string, "active")
-    description   = optional(string)
-    is_pool       = optional(bool, false)
-    mark_utilized = optional(bool, false)
-    site_key      = optional(string, "homelab")
-  }))
-  default = {}
-}
-
-variable "hosts" {
-  description = "Repo-managed physical/bare-metal hosts to create as NetBox devices."
-  type = map(object({
-    mgmt_ip         = string
-    dns_name        = optional(string)
-    description     = optional(string)
-    status          = optional(string, "active")
-    site_key        = optional(string, "homelab")
-    role_key        = optional(string, "server")
-    device_type_key = optional(string, "generic_host")
-    interface_name  = optional(string, "mgmt0")
-    interface_type  = optional(string, "1000base-t")
-  }))
-  default = {}
-}
-
-variable "reserved_ips" {
-  description = "Extra IP addresses not assigned to a device interface, such as VIPs, service endpoints, DNS records, or manually managed devices."
-  type = map(object({
-    ip_address  = string
-    status      = optional(string, "active")
-    dns_name    = optional(string)
-    description = optional(string)
+    mgmt_ip       = string
+    custom_fields = optional(map(string), {})
   }))
   default = {}
 }
