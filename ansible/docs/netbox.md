@@ -4,15 +4,6 @@ This homelab uses NetBox as the infrastructure source of truth for Ansible inven
 
 Traditional Ansible inventory management via `hosts.ini` has been replaced with a dynamic inventory powered by the `netbox.netbox.nb_inventory` plugin.
 
-NetBox now manages:
-
-- Host inventory
-- Host grouping
-- Tailscale IP addresses
-- SSH users
-- Infrastructure metadata
-- Role/group membership
-
 ---
 
 ## Why NetBox?
@@ -27,125 +18,35 @@ Using NetBox eliminates duplicated infrastructure data across:
 
 Instead, inventory metadata is centrally managed and dynamically exposed to Ansible.
 
-Examples:
+# Migration steps - `hosts.ini` to NetBox
 
-- `tags_postgres`
-- `tags_swarm`
-- `tags_swarm_manager`
-- `tags_ansible_manager`
-
-These groups are generated automatically from NetBox tags.
+Here are the actual steps I took to replace my `hosts.ini` driven inventory with NetBox.
 
 ---
 
-## Inventory Configuration
+## Inventory groups to NetBox tags
 
-The repository uses a dynamic inventory file:
+Most former `hosts.ini` groups were replaced with NetBox tags.
+
+Tags are created in NetBox under:
 
 ```text
-netbox.yml
+Customization → Tags
 ```
 
-Example:
+Child groups from `hosts.ini` were replaced with broader parent-style tags. For example, instead of recreating this directly:
 
-```yaml
-plugin: netbox.netbox.nb_inventory
-
-api_endpoint: https://netbox.example.com
-token: "{{ lookup('env', 'NETBOX_TOKEN') }}"
-
-validate_certs: false
-
-interfaces: true
-virtual_chassis: false
-
-query_filters:
-  - has_primary_ip: 'true'
-
-group_by:
-  - device_roles
-  - tags
-
-compose:
-  ansible_host: "{{ custom_fields['tailscale_ip'] | default(primary_ip4.address | regex_replace('/.*', ''), true) }}"
-  ansible_user: "{{ custom_fields['ansible_user'] | default('mgt', true) }}"
-  ansible_port: "{{ custom_fields['ssh_port'] | default('22', true) }}"
+```ini
+[swarm:children]
+swarm_managers
+swarm_workers
 ```
+
+I created a broad `swarm` tag and also kept the more specific `swarm_manager` and `swarm_worker` tags.
 
 ---
 
-## Required NetBox Custom Fields
-
-The following custom fields are expected on NetBox devices:
-
-| Name | Purpose |
-|---|---|
-| `tailscale_ip` | Primary Ansible connection address |
-| `ansible_user` | SSH username |
-| `ssh_port` | SSH port |
-
----
-
-## Tags → Ansible Groups
-
-NetBox tags automatically become Ansible groups.
-
-Example:
-
-| NetBox Tag | Ansible Group |
-|---|---|
-| `postgres` | `tags_postgres` |
-| `swarm` | `tags_swarm` |
-| `swarm_manager` | `tags_swarm_manager` |
-| `ansible_manager` | `tags_ansible_manager` |
-
-This allows playbooks to use:
-
-```yaml
-when: "'tags_postgres' in group_names"
-```
-
-instead of maintaining static inventory groups manually.
-
----
-
-## Useful Commands
-
-Validate inventory:
-
-```bash
-skynet inventory
-```
-
-Dump full inventory:
-
-```bash
-skynet inventory --list
-```
-
-Run connectivity test:
-
-```bash
-skynet doctor --ping
-```
-
----
-
-## Legacy Inventory
-
-`hosts.ini` has been deprecated and retained only as a temporary fallback during migration.
-
----
-
-## Migration steps - hosts.ini to Netbox
-
-Here is the actual steps I took to replace my hosts.ini driven inventory with Netbox.
-
-### Inventory groups to Netbox tags
-
-Each inventory group becomes a tag inside Netbox. Tags are found in Netbox in Customization/Tags.
-
-**Hosts.ini:**
+## Original `hosts.ini`
 
 ```ini
 [skynet]
@@ -206,81 +107,230 @@ plex
 unraid
 ```
 
-**Netbox tags:**
+---
 
-- skynet
-- ansible_manager
-- docker
-- docker_install
-- swarm
-- swarm_manager
-- swarm_worker
-- haproxy
-- postgres
-- opentofu
-- opentofu_install
-- opentofu_managed
-- opentofu_pve_user
+## NetBox tags
 
-These tags are then assigned to relevant hosts (devices) within Netbox.
+The replacement NetBox tags are:
 
-### Pointing Playbook and tasks to new Netbox tags
+- `skynet`
+- `ansible_manager`
+- `docker`
+- `docker_install`
+- `swarm`
+- `swarm_manager`
+- `swarm_worker`
+- `haproxy`
+- `postgres`
+- `opentofu`
+- `opentofu_install`
+- `opentofu_managed`
+- `opentofu_pve_user`
 
-For example, the playbook went from:
+These tags are assigned to the relevant hosts/devices within NetBox.
+
+---
+
+## Tags to Ansible groups
+
+The NetBox inventory plugin creates Ansible groups from NetBox tags by prefixing them with `tags_`.
+
+| NetBox tag | Ansible group |
+|---|---|
+| `skynet` | `tags_skynet` |
+| `ansible_manager` | `tags_ansible_manager` |
+| `docker` | `tags_docker` |
+| `docker_install` | `tags_docker_install` |
+| `swarm` | `tags_swarm` |
+| `swarm_manager` | `tags_swarm_manager` |
+| `swarm_worker` | `tags_swarm_worker` |
+| `haproxy` | `tags_haproxy` |
+| `postgres` | `tags_postgres` |
+| `opentofu` | `tags_opentofu` |
+| `opentofu_install` | `tags_opentofu_install` |
+| `opentofu_managed` | `tags_opentofu_managed` |
+| `opentofu_pve_user` | `tags_opentofu_pve_user` |
+
+---
+
+## Pointing playbooks and tasks to new NetBox tags
+
+The main playbook changed from:
 
 ```yaml
-  hosts: skynet
+hosts: skynet
 ```
+
 to:
 
 ```yaml
-  hosts: tags_skynet
+hosts: tags_skynet
 ```
 
-Hosts group conditionals went from:
+Host group conditionals changed from static inventory group lookups:
 
 ```yaml
 inventory_hostname in groups['docker']
 ```
 
-to:
+to checking the current host's dynamic group membership:
 
 ```yaml
 "'tags_docker' in group_names"
 ```
 
-Hostvars lookups went from:
+`group_names` is an Ansible magic variable. It contains the list of groups the current host belongs to during play execution.
+
+For example, a Postgres host may have:
+
+```yaml
+group_names:
+  - device_roles_server
+  - tags_opentofu
+  - tags_opentofu_managed
+  - tags_postgres
+  - tags_skynet
+```
+
+Direct group lookups still work, but the group name now includes the `tags_` prefix.
+
+For example, this old lookup:
 
 ```yaml
 "http://{{ hostvars[groups['postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
 ```
 
-to:
+became:
 
 ```yaml
 "http://{{ hostvars[groups['tags_postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
 ```
 
-And so on. For the most part, it was about adding 'tags_' before the tag name.
+For the most part, the migration was about replacing old static group names with the new NetBox-generated `tags_*` group names.
 
-### Updating 'Skynet' to use Netbox
+---
 
-Lastly, I updated my Skynet wrapper script to make use of my Netbox.yml file.
+## NetBox inventory file
+
+The real `netbox.yml` file is not committed because it contains my private NetBox endpoint and API token.
+
+Instead, the repo includes:
+
+```text
+netbox.yml.sample
+```
+
+To use the repo, copy the sample:
+
+```bash
+cp netbox.yml.sample netbox.yml
+```
+
+Then update the real local file:
+
+```yaml
+api_endpoint: https://your-netbox-url.example.com
+token: your-netbox-api-token
+```
+
+The real `netbox.yml` is ignored by Git.
+
+---
+
+## Required NetBox custom fields
+
+The following custom fields are expected on NetBox devices:
+
+| Name | Purpose |
+|---|---|
+| `tailscale_ip` | Primary Ansible connection address |
+| `ansible_user` | SSH username |
+| `ssh_port` | SSH port |
+
+These are used by the dynamic inventory `compose` block to build standard Ansible connection variables:
+
+```yaml
+compose:
+  ansible_host: custom_fields['tailscale_ip'] | default(primary_ip4.address | regex_replace('/.*', ''), true)
+  ansible_user: custom_fields['ansible_user'] | default('mgt', true)
+  ansible_port: custom_fields['ssh_port'] | default('22', true)
+```
+
+---
+
+## Updating Skynet to use NetBox
+
+The Skynet wrapper script was updated to use the NetBox inventory file by default.
 
 From:
 
-```yaml
+```bash
 INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/hosts.ini}"
 ```
 
 to:
 
-```yaml
+```bash
 INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/netbox.yml}"
 ```
 
-With some Netbox relevant conditionals added.
+The wrapper also gained an inventory helper command:
 
-### Removing hosts.ini
+```bash
+skynet inventory
+```
 
-Once the above steps are completed, Netbox fully replaces the hosts.ini file, and the hosts file can be removed.
+and:
+
+```bash
+skynet inventory --list
+```
+
+This makes it easier to inspect the generated NetBox inventory without manually calling `ansible-inventory`.
+
+---
+
+## Validating the migration
+
+After the dynamic inventory was configured, I validated it with:
+
+```bash
+ansible-inventory -i netbox.yml --graph
+```
+
+Then tested connectivity:
+
+```bash
+ansible tags_skynet -i netbox.yml -m ping
+```
+
+And checked the Skynet wrapper:
+
+```bash
+skynet doctor --ping
+```
+
+Useful additional checks:
+
+```bash
+ansible tags_postgres -i netbox.yml -m debug -a "var=group_names"
+ansible tags_swarm -i netbox.yml -m debug -a "var=group_names"
+ansible tags_ansible_manager -i netbox.yml -m debug -a "var=ansible_connection"
+```
+
+---
+
+## Removing `hosts.ini`
+
+After the dynamic inventory was tested successfully, `hosts.ini` was no longer required for normal operation.
+
+It can be removed or kept only as a temporary fallback during the migration.
+
+NetBox is now the source of truth for:
+
+- Host inventory
+- Host grouping
+- Tailscale IP addresses
+- SSH users
+- Infrastructure metadata
+- Role/group membership
