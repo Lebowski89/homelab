@@ -45,8 +45,7 @@ variable "vm_bridge" {
 }
 
 variable "vm_gateway" {
-  type    = string
-  default = "192.168.80.1"
+  type = string
 }
 
 variable "vm_cidr" {
@@ -55,8 +54,7 @@ variable "vm_cidr" {
 }
 
 variable "vm_nameserver" {
-  type    = string
-  default = "192.168.80.48"
+  type = string
 }
 
 variable "vm_searchdomain" {

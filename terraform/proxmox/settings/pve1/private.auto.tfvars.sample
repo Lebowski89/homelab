@@ -1,0 +1,22 @@
+pm_api_url      = "https://192.168.xx.xx:8006/"
+pm_tls_insecure = true
+
+target_node  = "pve1"
+local_domain = "home.arpa"
+
+node_management_ip = "192.168.xx.xx"
+
+network_vmbr0_name      = "vmbr0"
+network_vmbr0_address   = "192.168.xx.xx/24"
+network_vmbr0_gateway   = "192.168.xx.x"
+network_vmbr0_ports     = ["enpxxxxxxx"]
+network_vmbr0_autostart = true
+
+network_vmbr1_name      = "vmbr1"
+network_vmbr1_ports     = ["enpxxxxxxx"]
+network_vmbr1_autostart = true
+
+dns_domain  = "home.arpa"
+dns_servers = ["192.168.xx.xx", "192.168.xx.xx"]
+
+timezone = "Australia/Melbourne"
