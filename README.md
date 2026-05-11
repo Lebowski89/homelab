@@ -2,6 +2,7 @@
 
 - Powered by Ansible <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/ansible.svg" alt="Ansible" width="24" />, Docker <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/docker.svg" alt="Docker" width="24" /> and Terraform <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/hashicorp-terraform.svg" alt="Terraform" width="24" />
 - Uses Ansible Vault and Infisical <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/infisical.svg" alt="Infisical" width="24" /> for secrets management
+- Uses NetBox <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/netbox.svg" alt="NetBox" width="24" /> and its Ansible plugin for Ansible inventory management
 - Uses Authelia <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/authelia.svg" alt="Authelia" width="24" /> and Traefik <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/traefik.svg" alt="Traefik" width="24" /> for SSO and reverse proxy
 - Uses highly available PostgreSQL <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/postgresql.svg" alt="PostgreSQL" width="24" /> (PostgreSQL + Patroni + etcd + HAProxy)
 - Strong focus on media-centric services, especially arrs apps and companion services
@@ -21,6 +22,12 @@
 4. This is not a plug-and-play repo. Anyone using parts of it should expect to adapt it heavily for their own environment.
 
 ## Support
+
+This is a personal homelab repository and is shared for reference only.
+
+I’m not able to provide general support for Proxmox, Terraform/OpenTofu providers, Docker images, or third-party applications used here. For issues with upstream tools or applications, please open an issue with the relevant project.
+
+## Coffee
 
 <a href="https://buymeacoffee.com/lebowski89" target="_blank"><img src="https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png" alt="Buy Me A Coffee" style="height: 41px !important;width: 174px !important;box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;-webkit-box-shadow: 0px 3px 2px 0px rgba(190, 190, 190, 0.5) !important;" ></a>
 
