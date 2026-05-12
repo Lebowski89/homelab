@@ -1,7 +1,6 @@
 locals {
   ipv4_records = [
     "authelia",
-    "infisical",
     "opencloud",
     "traefik",
     "vaultwarden",

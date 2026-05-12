@@ -4,8 +4,8 @@
   ansible.builtin.file:
     path: "{{ ubuntu_ansible_opt_path }}"
     state: directory
-    owner: "{{ puid }}"
-    group: "{{ pgid }}"
+    owner: "{{ ubuntu_ansible_owner | default(ansible_user) }}"
+    group: "{{ ubuntu_ansible_group | default(ansible_user) }}"
     mode: "0755"
 
 - name: Create Python virtualenv

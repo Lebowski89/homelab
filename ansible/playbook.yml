@@ -1,5 +1,39 @@
 ---
 
+################################
+# BOOTSTRAP
+################################
+
+- name: Deploy NetBox
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+
+  vars:
+    ansible_python_interpreter: /opt/ansible/ansible-venv/bin/python
+
+    timezone: Australia/Melbourne
+    docker_host_puid: "1000"
+    docker_host_pgid: "1000"
+    docker_host_appdata_root: /opt
+
+    # Docker Swarm node name, not Ansible inventory name.
+    netbox_swarm_node_hostname: mgt
+
+  tasks:
+    - name: Include NetBox bootstrap role
+      ansible.builtin.include_role:
+        name: netbox
+        apply:
+          tags: netbox_deploy
+      tags:
+        - netbox_deploy
+
+################################
+# DEPLOY HOMELAB
+################################
+
 - name: Deploy homelab services
   hosts: tags_skynet
   become: true
