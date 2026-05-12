@@ -1,0 +1,271 @@
+services:
+  {{ netbox_postgres_name }}:
+    image: "{{ netbox_postgres_image }}"
+    logging:
+      driver: "{{ netbox_logging.driver }}"
+      options:
+{% for key, value in netbox_logging.options.items() %}
+        {{ key }}: "{{ value }}"
+{% endfor %}
+    networks:
+      - "{{ netbox_docker_network }}"
+    environment:
+      TZ: "{{ netbox_timezone }}"
+      POSTGRES_DB: "{{ netbox_postgres_db_name }}"
+      POSTGRES_USER_FILE: /run/secrets/postgres_user_secret
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_pass_secret
+    secrets:
+      - source: netbox_db_user_secret
+        target: postgres_user_secret
+      - source: netbox_db_password_secret
+        target: postgres_pass_secret
+    volumes:
+      - type: bind
+        source: "{{ netbox_postgres_path }}"
+        target: /var/lib/postgresql
+        read_only: false
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - "node.hostname == {{ netbox_swarm_node_hostname }}"
+      restart_policy:
+        condition: "{{ netbox_restart_policy.condition }}"
+        delay: "{{ netbox_restart_policy.delay }}"
+        max_attempts: {{ netbox_restart_policy.max_attempts }}
+        window: "{{ netbox_restart_policy.window }}"
+
+  {{ netbox_name }}:
+    image: "{{ netbox_image }}"
+    logging:
+      driver: "{{ netbox_logging.driver }}"
+      options:
+{% for key, value in netbox_logging.options.items() %}
+        {{ key }}: "{{ value }}"
+{% endfor %}
+    networks:
+      - "{{ netbox_docker_network }}"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "curl -f http://localhost:8080/login/ || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 180s
+    user: "netbox:root"
+    environment:
+      TIME_ZONE: "{{ netbox_timezone }}"
+      SKIP_SUPERUSER: "false"
+    env_file:
+      - "{{ netbox_env_path }}"
+    secrets:
+      - source: netbox_db_password_secret
+        target: db_password
+      - source: netbox_secret_key_secret
+        target: secret_key
+      - source: netbox_api_token_pepper_1_secret
+        target: api_token_pepper_1
+      - source: netbox_redis_password_secret
+        target: redis_password
+      - source: netbox_redis_cache_password_secret
+        target: redis_cache_password
+      - source: netbox_superuser_password_secret
+        target: superuser_password
+      - source: netbox_superuser_api_token_secret
+        target: superuser_api_token
+{% if netbox_superuser_api_key is defined and (netbox_superuser_api_key | string | length > 0) %}
+      - source: netbox_superuser_api_key_secret
+        target: superuser_api_key
+{% endif %}
+    volumes:
+      - type: bind
+        source: "{{ netbox_base_path }}/media"
+        target: /opt/netbox/netbox/media
+        read_only: false
+      - type: bind
+        source: "{{ netbox_base_path }}/reports"
+        target: /opt/netbox/netbox/reports
+        read_only: false
+      - type: bind
+        source: "{{ netbox_base_path }}/scripts"
+        target: /opt/netbox/netbox/scripts
+        read_only: false
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - "node.hostname == {{ netbox_swarm_node_hostname }}"
+      restart_policy:
+        condition: "{{ netbox_restart_policy.condition }}"
+        delay: "{{ netbox_restart_policy.delay }}"
+        max_attempts: {{ netbox_restart_policy.max_attempts }}
+        window: "{{ netbox_restart_policy.window }}"
+
+  {{ netbox_worker_name }}:
+    image: "{{ netbox_image }}"
+    logging:
+      driver: "{{ netbox_logging.driver }}"
+      options:
+{% for key, value in netbox_logging.options.items() %}
+        {{ key }}: "{{ value }}"
+{% endfor %}
+    networks:
+      - "{{ netbox_docker_network }}"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - "ps aux | grep -v grep | grep -q rqworker || exit 1"
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 90s
+    command:
+      - "/opt/netbox/venv/bin/python"
+      - "/opt/netbox/netbox/manage.py"
+      - "rqworker"
+    user: "netbox:root"
+    environment:
+      TIME_ZONE: "{{ netbox_timezone }}"
+      SKIP_SUPERUSER: "true"
+    env_file:
+      - "{{ netbox_env_path }}"
+    secrets:
+      - source: netbox_db_password_secret
+        target: db_password
+      - source: netbox_secret_key_secret
+        target: secret_key
+      - source: netbox_api_token_pepper_1_secret
+        target: api_token_pepper_1
+      - source: netbox_redis_password_secret
+        target: redis_password
+      - source: netbox_redis_cache_password_secret
+        target: redis_cache_password
+    volumes:
+      - type: bind
+        source: "{{ netbox_base_path }}/media"
+        target: /opt/netbox/netbox/media
+        read_only: false
+      - type: bind
+        source: "{{ netbox_base_path }}/reports"
+        target: /opt/netbox/netbox/reports
+        read_only: false
+      - type: bind
+        source: "{{ netbox_base_path }}/scripts"
+        target: /opt/netbox/netbox/scripts
+        read_only: false
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - "node.hostname == {{ netbox_swarm_node_hostname }}"
+      restart_policy:
+        condition: "{{ netbox_restart_policy.condition }}"
+        delay: "{{ netbox_restart_policy.delay }}"
+        max_attempts: {{ netbox_restart_policy.max_attempts }}
+        window: "{{ netbox_restart_policy.window }}"
+
+  {{ netbox_redis_name }}:
+    image: "{{ netbox_redis_image }}"
+    logging:
+      driver: "{{ netbox_logging.driver }}"
+      options:
+{% for key, value in netbox_logging.options.items() %}
+        {{ key }}: "{{ value }}"
+{% endfor %}
+    networks:
+      - "{{ netbox_docker_network }}"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'valkey-cli --pass "$$(cat /run/secrets/netbox_redis_password_secret)" ping | grep -q PONG'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command:
+      - "sh"
+      - "-c"
+      - 'valkey-server --appendonly yes --requirepass "$$(cat /run/secrets/netbox_redis_password_secret)"'
+    environment:
+      TZ: "{{ netbox_timezone }}"
+      PUID: "{{ netbox_redis_puid }}"
+      PGID: "{{ netbox_redis_pgid }}"
+    secrets:
+      - source: netbox_redis_password_secret
+        target: netbox_redis_password_secret
+    volumes:
+      - type: bind
+        source: "{{ netbox_redis_path }}"
+        target: /data
+        read_only: false
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - "node.hostname == {{ netbox_swarm_node_hostname }}"
+      restart_policy:
+        condition: "{{ netbox_restart_policy.condition }}"
+        delay: "{{ netbox_restart_policy.delay }}"
+        max_attempts: {{ netbox_restart_policy.max_attempts }}
+        window: "{{ netbox_restart_policy.window }}"
+
+  {{ netbox_redis_cache_name }}:
+    image: "{{ netbox_redis_image }}"
+    logging:
+      driver: "{{ netbox_logging.driver }}"
+      options:
+{% for key, value in netbox_logging.options.items() %}
+        {{ key }}: "{{ value }}"
+{% endfor %}
+    networks:
+      - "{{ netbox_docker_network }}"
+    healthcheck:
+      test:
+        - "CMD-SHELL"
+        - 'valkey-cli --pass "$$(cat /run/secrets/netbox_redis_cache_password_secret)" ping | grep -q PONG'
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    command:
+      - "sh"
+      - "-c"
+      - 'valkey-server --requirepass "$$(cat /run/secrets/netbox_redis_cache_password_secret)"'
+    environment:
+      TZ: "{{ netbox_timezone }}"
+      PUID: "{{ netbox_redis_puid }}"
+      PGID: "{{ netbox_redis_pgid }}"
+    secrets:
+      - source: netbox_redis_cache_password_secret
+        target: netbox_redis_cache_password_secret
+    volumes:
+      - type: bind
+        source: "{{ netbox_redis_cache_path }}"
+        target: /data
+        read_only: false
+    deploy:
+      mode: replicated
+      replicas: 1
+      placement:
+        constraints:
+          - "node.hostname == {{ netbox_swarm_node_hostname }}"
+      restart_policy:
+        condition: "{{ netbox_restart_policy.condition }}"
+        delay: "{{ netbox_restart_policy.delay }}"
+        max_attempts: {{ netbox_restart_policy.max_attempts }}
+        window: "{{ netbox_restart_policy.window }}"
+
+networks:
+  {{ netbox_docker_network }}:
+    external: true
+
+secrets:
+{% for secret_name in netbox_docker_secrets.keys() %}
+  {{ secret_name }}:
+    external: true
+{% endfor %}

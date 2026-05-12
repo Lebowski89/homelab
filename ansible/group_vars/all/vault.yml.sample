@@ -57,3 +57,25 @@ postgres_patroni_admin_role_pass: "replace-me"
 ################################
 
 proxmox_api_bootstrap_password: "replace-me"
+
+################################
+# NETBOX
+################################
+
+netbox_secret_key: "replace-me"
+
+netbox_api_token_pepper_1: "replace-me"
+
+netbox_redis_password: "replace-me"
+
+netbox_redis_cache_password: "replace-me"
+
+netbox_superuser_password: "replace-me"
+
+netbox_superuser_api_token: "replace-me"
+
+netbox_postgres_user: "replace-me"
+
+netbox_postgres_pass: "replace-me"
+
+netbox_domain: "replace-me"
