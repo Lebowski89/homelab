@@ -6,6 +6,9 @@
 # For the expected structure, see:
 # ansible/group_vars/all/vault.yml.sample
 
+postgres_etcd_node_name: "{{ inventory_hostname }}"
+postgres_patroni_node_name: "{{ inventory_hostname }}"
+
 postgres_etcd_initial_cluster: >-
   pg95=http://192.168.80.95:2380,
   pg96=http://192.168.80.96:2380,
