@@ -234,6 +234,69 @@ locals {
       description = "Tailscale IP used as the preferred Ansible connection address."
       weight      = 120
     }
+
+    docker_host_puid = {
+      name        = "docker_host_puid"
+      label       = "Docker host PUID"
+      type        = "text"
+      group_name  = "Docker"
+      description = "Default PUID used for Docker services on this host."
+      weight      = 200
+    }
+
+    docker_host_pgid = {
+      name        = "docker_host_pgid"
+      label       = "Docker host PGID"
+      type        = "text"
+      group_name  = "Docker"
+      description = "Default PGID used for Docker services on this host."
+      weight      = 210
+    }
+
+    docker_host_appdata_root = {
+      name        = "docker_host_appdata_root"
+      label       = "Docker appdata root"
+      type        = "text"
+      group_name  = "Docker"
+      description = "Host path used as the appdata root for Docker services."
+      weight      = 220
+    }
+
+    docker_host_data_root = {
+      name        = "docker_host_data_root"
+      label       = "Docker data root"
+      type        = "text"
+      group_name  = "Docker"
+      description = "Host path used as the data root for Docker services."
+      weight      = 230
+    }
+
+    docker_host_opencloud_puid = {
+      name        = "docker_host_opencloud_puid"
+      label       = "OpenCloud PUID"
+      type        = "text"
+      group_name  = "Docker"
+      description = "PUID used by OpenCloud on this host."
+      weight      = 240
+    }
+
+    docker_host_opencloud_pgid = {
+      name        = "docker_host_opencloud_pgid"
+      label       = "OpenCloud PGID"
+      type        = "text"
+      group_name  = "Docker"
+      description = "PGID used by OpenCloud on this host."
+      weight      = 250
+    }
+
+    docker_host_opencloud_data_root = {
+      name        = "docker_host_opencloud_data_root"
+      label       = "OpenCloud data root"
+      type        = "text"
+      group_name  = "Docker"
+      description = "Host path used as the OpenCloud data root."
+      weight      = 260
+    }
   }
 
   base_hosts = {
