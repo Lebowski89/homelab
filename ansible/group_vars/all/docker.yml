@@ -1,5 +1,5 @@
 ---
 
 docker_swarm_primary_manager: mgt
-
+docker_swarm_hostname: "{{ inventory_hostname }}"
 docker_network: overlay
