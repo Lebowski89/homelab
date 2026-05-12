@@ -11,8 +11,8 @@
   ansible.builtin.file:
     path: "{{ _skynet_dir.path }}"
     state: directory
-    owner: "{{ puid }}"
-    group: "{{ pgid }}"
+    owner: "{{ ubuntu_ansible_owner | default(ansible_user) }}"
+    group: "{{ ubuntu_ansible_group | default(ansible_user) }}"
     mode: "{{ _skynet_dir.mode }}"
   loop:
     - path: "{{ ubuntu_ansible_opt_path }}"

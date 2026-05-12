@@ -1,0 +1,123 @@
+---
+
+################################
+# ASSERTS
+################################
+
+- name: NetBox | Assert required non-secret values are defined
+  ansible.builtin.assert:
+    that:
+      - netbox_domain is defined
+      - netbox_domain | string | length > 0
+      - netbox_base_path is defined
+      - netbox_base_path | string | length > 0
+      - netbox_swarm_node_hostname is defined
+      - netbox_swarm_node_hostname | string | length > 0
+      - netbox_docker_network is defined
+      - netbox_docker_network | string | length > 0
+    fail_msg: "Required NetBox variable is missing."
+
+################################
+# OPTIONAL CLEAN UP
+################################
+
+- name: NetBox | Remove stack
+  community.docker.docker_stack:
+    name: "{{ netbox_stack }}"
+    state: absent
+
+- name: NetBox | Remove compose file
+  ansible.builtin.file:
+    path: "{{ netbox_compose_path }}"
+    state: absent
+
+################################
+# DIRECTORIES
+################################
+
+- name: NetBox | Create directories
+  ansible.builtin.file:
+    path: "{{ _netbox_dir.path }}"
+    state: directory
+    owner: "{{ _netbox_dir.owner }}"
+    group: "{{ _netbox_dir.group }}"
+    mode: "{{ _netbox_dir.mode }}"
+  loop:
+    - path: "{{ netbox_base_path }}"
+      owner: "{{ netbox_puid }}"
+      group: "{{ netbox_pgid }}"
+      mode: "0755"
+    - path: "{{ netbox_base_path }}/config"
+      owner: "{{ netbox_puid }}"
+      group: "{{ netbox_pgid }}"
+      mode: "0755"
+    - path: "{{ netbox_redis_path }}"
+      owner: "{{ netbox_redis_puid }}"
+      group: "{{ netbox_redis_pgid }}"
+      mode: "0755"
+    - path: "{{ netbox_postgres_path }}"
+      owner: "{{ netbox_postgres_puid }}"
+      group: "{{ netbox_postgres_pgid }}"
+      mode: "0700"
+  loop_control:
+    loop_var: _netbox_dir
+
+################################
+# SECRETS
+################################
+
+- name: NetBox | Assert Docker secret values are defined
+  ansible.builtin.assert:
+    that:
+      - item.value is defined
+      - item.value | string | length > 0
+    fail_msg: "NetBox Docker secret '{{ item.key }}' is empty or undefined."
+  loop: "{{ netbox_docker_secrets | dict2items }}"
+  no_log: true
+
+- name: NetBox | Ensure Docker Swarm secrets exist
+  community.docker.docker_secret:
+    name: "{{ item.key }}"
+    data: "{{ item.value }}"
+    state: present
+    force: false
+    labels:
+      app: netbox
+      managed_by: ansible
+      role: netbox
+  loop: "{{ netbox_docker_secrets | dict2items }}"
+  no_log: true
+
+################################
+# TRAEFIK
+################################
+
+- name: NetBox | Render Traefik dynamic file
+  ansible.builtin.template:
+    src: traefik_dynamic_file.j2
+    dest: "{{ netbox_traefik_dynamic_dir }}/{{ netbox_name }}-dynamic.yml"
+    owner: "{{ netbox_traefik_dynamic_owner }}"
+    group: "{{ netbox_traefik_dynamic_group }}"
+    mode: "0644"
+    force: true
+  when: netbox_traefik_enable | bool
+
+################################
+# DEPLOY
+################################
+
+- name: NetBox | Render compose file
+  ansible.builtin.template:
+    src: netbox-compose.yml.j2
+    dest: "{{ netbox_compose_path }}"
+    force: true
+    owner: "{{ netbox_puid }}"
+    group: "{{ netbox_pgid }}"
+    mode: "0664"
+
+- name: NetBox | Deploy stack
+  community.docker.docker_stack:
+    state: present
+    name: "{{ netbox_stack }}"
+    compose:
+      - "{{ netbox_compose_path }}"
