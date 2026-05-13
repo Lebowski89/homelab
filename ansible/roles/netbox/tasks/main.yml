@@ -7,6 +7,8 @@
 - name: NetBox | Assert required non-secret values are defined
   ansible.builtin.assert:
     that:
+      - netbox_domain is defined
+      - netbox_domain | string | length > 0
       - netbox_base_path is defined
       - netbox_base_path | string | length > 0
       - netbox_swarm_node_hostname is defined
@@ -45,23 +47,11 @@
       owner: "{{ netbox_puid }}"
       group: "{{ netbox_pgid }}"
       mode: "0755"
-    - path: "{{ netbox_base_path }}/media"
-      owner: "{{ netbox_puid }}"
-      group: "{{ netbox_pgid }}"
-      mode: "0755"
-    - path: "{{ netbox_base_path }}/reports"
-      owner: "{{ netbox_puid }}"
-      group: "{{ netbox_pgid }}"
-      mode: "0755"
-    - path: "{{ netbox_base_path }}/scripts"
+    - path: "{{ netbox_base_path }}/config"
       owner: "{{ netbox_puid }}"
       group: "{{ netbox_pgid }}"
       mode: "0755"
     - path: "{{ netbox_redis_path }}"
-      owner: "{{ netbox_redis_puid }}"
-      group: "{{ netbox_redis_pgid }}"
-      mode: "0755"
-    - path: "{{ netbox_redis_cache_path }}"
       owner: "{{ netbox_redis_puid }}"
       group: "{{ netbox_redis_pgid }}"
       mode: "0755"
@@ -71,20 +61,6 @@
       mode: "0700"
   loop_control:
     loop_var: _netbox_dir
-
-################################
-# CONFIG
-################################
-
-- name: NetBox | Template env file
-  ansible.builtin.template:
-    src: netbox.env.j2
-    dest: "{{ netbox_env_path }}"
-    force: true
-    owner: "{{ netbox_puid }}"
-    group: "{{ netbox_pgid }}"
-    mode: "0664"
-  no_log: true
 
 ################################
 # SECRETS
