@@ -17,28 +17,3 @@ infisical_lookup_default_params:
   project_id: "{{ infisical_project_id }}"
   env_slug: "prod"
   url: "http://{{ local_ip }}:8066"
-
-################################
-# INFISICAL (STACK)
-################################
-
-infisical_name: infisical
-infisical_image: docker.io/infisical/infisical:v0.159.25
-infisical_port: 8066
-infisical_path: "/opt/{{ infisical_name }}"
-
-infisical_postgres_name: infisical-postgres
-infisical_postgres_image: docker.io/library/postgres:18.3
-infisical_postgres_path: "{{ infisical_path }}/postgres"
-
-infisical_redis_name: infisical-redis
-infisical_redis_image: docker.io/library/redis:8.6-alpine
-infisical_redis_path: "{{ infisical_path }}/redis"
-
-infisical_smtp_host: smtp.porkbun.com
-infisical_smtp_port: 587
-
-infisical_secret_files:
-  postgres_user.txt: "{{ infisical_postgres_user }}"
-  postgres_pass.txt: "{{ infisical_postgres_pass }}"
-  redis_key.txt: "{{ infisical_redis_key }}"
