@@ -55,11 +55,11 @@
 | [postgres_uptime_kuma_monitor_role_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L58)   | str | `uptime_kuma_monitor` |    
 | [postgres_uptime_kuma_monitor_role_pass](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L59)   | str |  |    
 | [postgres_uptime_kuma_monitor_database](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L60)   | str | `postgres` |    
-| [postgres_backup_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L72)   | str | `/var/backups/postgres` |    
+| [postgres_backup_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L72)   | str | `/tmp` |    
 | [postgres_backup_dbs](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L73)   | list | `[]` |    
 | [postgres_backup_dbs_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L74)   | str | `{{ postgres_backup_dir }}` |    
 | [postgres_backup_dbs_format](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L75)   | str | `custom` |    
-| [postgres_restore_dbs_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L81)   | str | `/var/backups/postgres` |    
+| [postgres_restore_dbs_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L81)   | str | `/tmp` |    
 | [postgres_restore_dbs_drop_existing](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L82)   | bool | `True` |    
 | [postgres_restore_dbs_map](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L87)   | list | `[]` |    
 | [postgres_fix_owner_map](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L102)   | list | `[]` |    
