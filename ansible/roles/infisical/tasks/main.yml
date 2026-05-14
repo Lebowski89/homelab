@@ -1,31 +1,50 @@
 ---
 
 ################################
-# CLEAN UP
+# ASSERTS
 ################################
 
-- name: Check if compose file exists
+- name: Infisical | Assert required non-secret values are defined
+  ansible.builtin.assert:
+    that:
+      - infisical_domain is defined
+      - infisical_domain | string | length > 0
+      - infisical_base_path is defined
+      - infisical_base_path | string | length > 0
+      - infisical_docker_network is defined
+      - infisical_docker_network | string | length > 0
+    fail_msg: "Required infisical variable is missing."
+  tags:
+    - infisical_bootstrap
+    - infisical_deploy
+    - infisical_recreate
+
+################################
+# OPTIONAL CLEAN UP
+################################
+
+- name: Infisical | Check if compose file exists
   ansible.builtin.stat:
-    path: "{{ infisical_path }}/infisical-compose.yml"
+    path: "{{ infisical_compose_path }}"
   register: infisical_existing_compose_yaml
   tags:
     - infisical_recreate
     - infisical_remove
 
-- name: Infisical compose down
+- name: Infisical | Compose down
   when: infisical_existing_compose_yaml.stat.exists
   community.docker.docker_compose_v2:
-    project_src: "{{ infisical_path }}"
-    project_name: infisical
-    files: infisical-compose.yml
+    project_src: "{{ infisical_base_path }}"
+    project_name: "{{ infisical_stack }}"
+    files: "{{ infisical_compose_file }}"
     state: absent
   tags:
     - infisical_recreate
     - infisical_remove
 
-- name: Remove compose file
+- name: Infisical | Remove compose file
   ansible.builtin.file:
-    path: "{{ infisical_path }}/infisical-compose.yml"
+    path: "{{ infisical_compose_path }}"
     state: absent
   tags:
     - infisical_recreate
@@ -35,7 +54,7 @@
 # DIRECTORIES
 ################################
 
-- name: Create directories
+- name: Infisical | Create directories
   ansible.builtin.file:
     path: "{{ _infisical_dir.path }}"
     state: directory
@@ -43,17 +62,13 @@
     group: "{{ _infisical_dir.group }}"
     mode: "{{ _infisical_dir.mode }}"
   loop:
-    - path: "{{ infisical_path }}"
-      owner: "{{ puid }}"
-      group: "{{ pgid }}"
+    - path: "{{ infisical_base_path }}"
+      owner: "{{ infisical_puid }}"
+      group: "{{ infisical_pgid }}"
       mode: "0755"
-    - path: "{{ infisical_postgres_path }}"
-      owner: "999"
-      group: "999"
-      mode: "0700"
     - path: "{{ infisical_redis_path }}"
-      owner: "{{ puid }}"
-      group: "{{ pgid }}"
+      owner: "{{ infisical_redis_puid }}"
+      group: "{{ infisical_redis_pgid }}"
       mode: "0755"
   loop_control:
     loop_var: _infisical_dir
@@ -66,14 +81,57 @@
 # CONFIG
 ################################
 
-- name: Template env file
+- name: Infisical | Template env file
   ansible.builtin.template:
-    src: '{{ role_path }}/templates/infisical.env.j2'
-    dest: '{{ infisical_path }}/.env'
+    src: "{{ role_path }}/templates/infisical.env.j2"
+    dest: "{{ infisical_env_path }}"
     force: true
-    owner: "{{ puid }}"
-    group: "{{ pgid }}"
+    owner: "{{ infisical_puid }}"
+    group: "{{ infisical_pgid }}"
     mode: "0664"
+  no_log: true
+  tags:
+    - infisical_bootstrap
+    - infisical_deploy
+    - infisical_recreate
+
+################################
+# SECRETS
+################################
+
+- name: Infisical | Assert Docker secrets values are defined
+  ansible.builtin.assert:
+    that:
+      - item.value is defined
+      - item.value | string | length > 0
+    fail_msg: "Infisical Docker secret '{{ item.key }}' is empty or undefined."
+  loop: "{{ infisical_redis_docker_secrets | dict2items }}"
+  no_log: true
+  tags:
+    - infisical_bootstrap
+    - infisical_deploy
+    - infisical_recreate
+
+- name: Infisical | Create Docker secrets directory
+  ansible.builtin.file:
+    path: "{{ infisical_redis_secrets_files_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  tags:
+    - infisical_bootstrap
+    - infisical_deploy
+    - infisical_recreate
+
+- name: Infisical | Create Docker secrets files
+  ansible.builtin.copy:
+    dest: "{{ infisical_redis_secrets_files_path }}/{{ item.key }}"
+    content: "{{ item.value }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ infisical_redis_docker_secrets | dict2items }}"
   no_log: true
   tags:
     - infisical_bootstrap
@@ -84,45 +142,15 @@
 # TRAEFIK
 ################################
 
-- name: Render Traefik dynamic file
+- name: Infisical | Render Traefik dynamic file
   ansible.builtin.template:
-    src: templates/traefik_dynamic_file.j2
-    dest: "/opt/traefik/dynamic/{{ infisical_name }}-dynamic.yml"
-    owner: "1000"
-    group: "1000"
+    src: traefik_dynamic_file.j2
+    dest: "{{ infisical_traefik_dynamic_dir }}/{{ infisical_name }}-dynamic.yml"
+    owner: "{{ infisical_traefik_dynamic_owner }}"
+    group: "{{ infisical_traefik_dynamic_group }}"
     mode: "0644"
     force: true
-  vars:
-    tr_router_name: "{{ infisical_name }}"
-    tr_address: "{{ infisical_domain }}"
-    tr_entrypoint: "https"
-    tr_port: "{{ infisical_port }}"
-    tr_authelia_enable: true
-    tr_backend_address: "http://{{ infisical_backend_host }}:{{ infisical_port }}"
-    tr_headers_middleware: "secure-headers@file"
-    tr_middleware_chain: "{{ tr_router_name }}-ui-chain"
-  delegate_to: "{{ docker_services_primary_manager }}"
   tags:
-    - infisical_deploy
-    - infisical_recreate
-
-################################
-# SECRETS
-################################
-
-- name: Create Infisical secret files
-  ansible.builtin.copy:
-    dest: "{{ infisical_path }}/{{ _infisical_secrets_files.key }}"
-    content: "{{ _infisical_secrets_files.value }}\n"
-    owner: root
-    group: root
-    mode: "0600"
-  loop: "{{ infisical_secret_files | dict2items }}"
-  loop_control:
-    loop_var: _infisical_secrets_files
-  no_log: true
-  tags:
-    - infisical_bootstrap
     - infisical_deploy
     - infisical_recreate
 
@@ -130,22 +158,22 @@
 # DEPLOY
 ################################
 
-- name: Import Infisical compose file
+- name: Infisical | Import compose file
   ansible.builtin.template:
-    src: '{{ role_path }}/templates/infisical-compose.yml.j2'
-    dest: "{{ infisical_path }}/infisical-compose.yml"
+    src: infisical-compose.yml.j2
+    dest: "{{ infisical_compose_path }}"
     force: true
-    owner: "{{ puid }}"
-    group: "{{ pgid }}"
+    owner: "{{ infisical_puid }}"
+    group: "{{ infisical_pgid }}"
     mode: "0664"
   tags:
     - infisical_deploy
     - infisical_recreate
 
-- name: Infisical compose stack up
+- name: Infisical | Compose stack up
   community.docker.docker_compose_v2:
-    project_src: "{{ infisical_path }}"
-    files: infisical-compose.yml
+    project_src: "{{ infisical_base_path }}"
+    files: "{{ infisical_compose_file }}"
     state: present
   tags:
     - infisical_deploy
