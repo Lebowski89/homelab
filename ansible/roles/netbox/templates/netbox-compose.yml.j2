@@ -104,9 +104,9 @@ services:
       FILE__DB_USER: /run/secrets/postgres_user_secret
       FILE__DB_PASSWORD: /run/secrets/postgres_pass_secret
       DB_HOST: "{{ netbox_postgres_name }}"
-      DB_PORT: "{{ netbox_postgres_port }}"
+      DB_PORT: "5432"
       REDIS_HOST: "{{ netbox_redis_name }}"
-      REDIS_PORT: "{{ netbox_redis_port }}"
+      REDIS_PORT: "6379"
       REDIS_USERNAME: ""
       FILE__REDIS_PASSWORD: /run/secrets/netbox_redis_password_secret
       REDIS_DB_TASK: "0"

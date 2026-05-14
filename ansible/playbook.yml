@@ -26,9 +26,16 @@
       ansible.builtin.include_role:
         name: netbox
         apply:
-          tags: netbox_deploy
+          tags:
+            - netbox_bootstrap
+            - netbox_deploy
+            - netbox_recreate
+            - netbox_remove
       tags:
+        - netbox_bootstrap
         - netbox_deploy
+        - netbox_recreate
+        - netbox_remove
 
 ################################
 # DEPLOY HOMELAB
@@ -160,7 +167,7 @@
     ################################
 
     - name: Include Postgres Cluster role
-      when: "'tags_postgres' in group_names"
+#      when: "'tags_postgres' in group_names"
       ansible.builtin.include_role:
         name: postgres
       tags:

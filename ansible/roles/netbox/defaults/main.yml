@@ -19,7 +19,7 @@ netbox_required_docker_secrets:
   netbox_db_user_secret: "{{ netbox_postgres_user }}"
   netbox_db_password_secret: "{{ netbox_postgres_pass }}"
   netbox_redis_password_secret: "{{ netbox_redis_password }}"
-  
+
 netbox_docker_secrets: "{{ netbox_required_docker_secrets }}"
 
 ################################
@@ -28,15 +28,14 @@ netbox_docker_secrets: "{{ netbox_required_docker_secrets }}"
 
 netbox_name: netbox
 netbox_stack: netbox
+netbox_compose_file: netbox-compose.yml
+netbox_compose_path: "{{ netbox_base_path }}/{{ netbox_compose_file }}"
 
 netbox_image: lscr.io/linuxserver/netbox:v4.6.0-ls351
+netbox_timezone: "{{ timezone | default('Australia/Melbourne') }}"
 netbox_puid: "{{ docker_host_puid | default('1000') }}"
 netbox_pgid: "{{ docker_host_pgid | default('1000') }}"
 netbox_base_path: "{{ docker_host_appdata_root | default('/opt') }}/netbox"
-
-netbox_compose_path: "{{ netbox_base_path }}/netbox-compose.yml"
-netbox_env_path: "{{ netbox_base_path }}/.env"
-netbox_timezone: "{{ timezone | default('Australia/Melbourne') }}"
 
 netbox_frontend_fqdn: "{{ netbox_name }}.int.{{ netbox_domain }}"
 netbox_frontend_address: "https://{{ netbox_frontend_fqdn }}:8443"
@@ -66,7 +65,6 @@ netbox_redis_name: netbox-redis
 netbox_redis_image: valkey/valkey:9.1-alpine
 netbox_redis_puid: "{{ docker_host_puid | default('1000') }}"
 netbox_redis_pgid: "{{ docker_host_pgid | default('1000') }}"
-netbox_redis_port: "6379"
 netbox_redis_path: "{{ netbox_base_path }}/redis"
 
 ################################
@@ -77,7 +75,6 @@ netbox_postgres_name: netbox-postgres
 netbox_postgres_image: docker.io/library/postgres:18.3
 netbox_postgres_puid: "999"
 netbox_postgres_pgid: "999"
-netbox_postgres_port: "5432"
 netbox_postgres_path: "{{ netbox_base_path }}/postgres"
 netbox_postgres_db_name: netbox
 
