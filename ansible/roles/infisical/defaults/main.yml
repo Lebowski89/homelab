@@ -1,34 +1,96 @@
 ---
 
-infisical_name: infisical
-infisical_image: docker.io/infisical/infisical:v0.159.25
-infisical_port: 8066
-infisical_path: "/opt/{{ infisical_name }}"
+# Secret values should be defined in an encrypted group_vars/all/vault.yml file.
+
+################################
+# VAULT-BACKED SECRETS
+################################
+
 infisical_enc_key: ""
 infisical_jwt_key: ""
-
-infisical_postgres_name: infisical-postgres
-infisical_postgres_image: docker.io/library/postgres:18.3
-infisical_postgres_path: "{{ infisical_path }}/postgres"
 infisical_postgres_user: ""
 infisical_postgres_pass: ""
-
-infisical_redis_name: infisical-redis
-infisical_redis_image: docker.io/library/redis:8.6-alpine
-infisical_redis_path: "{{ infisical_path }}/redis"
-infisical_redis_key: ""
-
+infisical_redis_password: ""
+infisical_domain: ""
 infisical_smtp_email: ""
-infisical_smtp_host: ""
-infisical_smtp_port: ""
 infisical_smtp_user: ""
 infisical_smtp_pass: ""
 infisical_smtp_sender: ""
 
-infisical_secret_files:
-  postgres_user.txt: "{{ infisical_postgres_user }}"
-  postgres_pass.txt: "{{ infisical_postgres_pass }}"
-  redis_key.txt: "{{ infisical_redis_key }}"
+infisical_redis_required_docker_secrets:
+  infisical_redis_password_secret: "{{ infisical_redis_password }}"
 
-infisical_domain: ""
-infisical_backend_host: "{{ hostvars[docker_services_primary_manager].local_ip }}"
+infisical_redis_docker_secrets: "{{ infisical_redis_required_docker_secrets }}"
+
+infisical_redis_secrets_files_path: "{{ infisical_base_path }}/secrets"
+
+################################
+# INFISICAL
+################################
+
+infisical_name: infisical
+infisical_stack: infisical
+infisical_compose_file: infisical-compose.yml
+infisical_compose_path: "{{ infisical_base_path }}/{{ infisical_compose_file }}"
+
+infisical_image: docker.io/infisical/infisical:v0.159.25
+infisical_timezone: "{{ timezone | default('Australia/Melbourne') }}"
+infisical_puid: "{{ docker_host_puid | default('1000') }}"
+infisical_pgid: "{{ docker_host_pgid | default('1000') }}"
+infisical_port: 8066  # Host port used by ansible modules
+infisical_base_path: "{{ docker_host_appdata_root | default('/opt') }}/infisical"
+infisical_env_path: "{{ infisical_base_path }}/.env"
+
+infisical_smtp_host: smtp.porkbun.com
+infisical_smtp_port: 587
+
+infisical_frontend_fqdn: "{{ infisical_name }}.int.{{ infisical_domain }}"
+infisical_frontend_address: "https://{{ infisical_frontend_fqdn }}:8443"
+infisical_backend_address: "http://{{ infisical_name }}:8080"
+
+infisical_docker_network: overlay
+
+infisical_logging:
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+    compress: "true"
+
+infisical_restart_policy: unless-stopped
+
+################################
+# REDIS
+################################
+
+infisical_redis_name: infisical-redis
+infisical_redis_image: docker.io/library/redis:8.6-alpine
+infisical_redis_puid: "{{ docker_host_puid | default('1000') }}"
+infisical_redis_pgid: "{{ docker_host_pgid | default('1000') }}"
+infisical_redis_path: "{{ infisical_base_path }}/redis"
+
+################################
+# POSTGRES
+################################
+
+# Connects to pre-existing Postgres cluster
+
+infisical_postgres_name: haproxy
+infisical_postgres_port: 5432
+infisical_postgres_db_name: infisical
+
+################################
+# TRAEFIK
+################################
+
+infisical_traefik_enable: true
+infisical_traefik_dynamic_dir: /opt/traefik/dynamic
+infisical_traefik_entrypoint: https_private
+infisical_traefik_authelia_enable: false
+infisical_traefik_crowdsec_enable: false
+infisical_traefik_headers_middleware: secure-headers@file
+infisical_traefik_middleware_chain: "{{ infisical_name }}-ui-chain"
+infisical_traefik_certresolver: dns-cloudflare
+infisical_traefik_tls_options: securetls@file
+infisical_traefik_dynamic_owner: 1000
+infisical_traefik_dynamic_group: 1000
