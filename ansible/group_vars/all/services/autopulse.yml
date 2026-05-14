@@ -27,7 +27,7 @@ autopulse:
         port: 2880
     main:
       name: autopulse
-      image: danonline/autopulse:latest-postgres@sha256:bff8418e0e79e67bb02b43fb900c4252bd0130f7bbdb8f7794d736917481125b
+      image: danonline/autopulse:latest-postgres@sha256:8563ce72378014255028246cacd3a179004ea670dd66283d87ecc6c717e27b04
       environment:
         TZ: "{{ timezone }}"
         PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
