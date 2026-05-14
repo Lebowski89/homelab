@@ -116,12 +116,6 @@ docker_services:
     tags: [apps, network, unifi]
 
   ## services (plex)
-  - name: autopulse
-    target: user_interface
-    tags: [apps, plex, pgsql, autopulse]
-  - name: autopulse
-    target: main
-    tags: [apps, plex, pgsql, autopulse]
   - name: imagemaid
     tags: [apps, plex, imagemaid]
   - name: kometa
