@@ -20,7 +20,7 @@ autopulse:
   targets:
     user_interface:
       name: autopulse-ui
-      image: danonline/autopulse:ui@sha256:175ab67eaf670ed7a813d460641f238418a666e7f2a2a73a2bd0f2f48e084d9b
+      image: danonline/autopulse:ui@sha256:cf3f2f7f0cf8638fec398c1aa8ad4e41a518e841b5c7b7676488b92721a29354
       traefik:
         enable: true
         exposure: private
