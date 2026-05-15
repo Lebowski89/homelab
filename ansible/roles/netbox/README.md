@@ -71,7 +71,7 @@
 | [netbox_redis_pgid](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L67)   | str | `{{ docker_host_pgid ¦ default('1000') }}` |    
 | [netbox_redis_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L68)   | str | `{{ netbox_base_path }}/redis` |    
 | [netbox_postgres_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L74)   | str | `netbox-postgres` |    
-| [netbox_postgres_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L75)   | str | `docker.io/library/postgres:18.3` |    
+| [netbox_postgres_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L75)   | str | `docker.io/library/postgres:18.4` |    
 | [netbox_postgres_puid](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L76)   | str | `999` |    
 | [netbox_postgres_pgid](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L77)   | str | `999` |    
 | [netbox_postgres_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L78)   | str | `{{ netbox_base_path }}/postgres` |    
