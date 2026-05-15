@@ -1,2 +1,2 @@
-apex_name  = "@"
-ttl        = 1
+apex_name = "@"
+ttl       = 1
