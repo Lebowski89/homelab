@@ -18,7 +18,19 @@ variable "uptime_kuma_password" {
 variable "uptime_kuma_timeout" {
   description = "Provider connection timeout as a Go duration string."
   type        = string
-  default     = "30s"
+  default     = "2m"
+}
+
+variable "uptime_kuma_per_attempt_timeout" {
+  description = "Provider connection per_attempt_timeout as a Go duration string."
+  type        = string
+  default     = "20s"
+}
+
+variable "uptime_kuma_max_retries" {
+  description = "Provider connection max_retries as a Go duration string."
+  type        = string
+  default     = "5"
 }
 
 variable "cloudflare_zone" {
@@ -35,12 +47,6 @@ variable "private_https_port" {
   description = "Traefik private HTTPS entrypoint port."
   type        = number
   default     = 8443
-}
-
-variable "host_ips" {
-  description = "Private host IPs used by direct, ping, TCP, and DNS monitors."
-  type        = map(string)
-  default     = {}
 }
 
 variable "postgres_monitor_connection_strings" {
@@ -72,4 +78,22 @@ variable "gotify_priority" {
   description = "Gotify message priority."
   type        = number
   default     = 8
+}
+
+variable "enable_netbox_remote_state" {
+  description = "Read host/IP data from the terraform/netbox local state."
+  type        = bool
+  default     = true
+}
+
+variable "netbox_state_path" {
+  description = "Path to the terraform/netbox state file."
+  type        = string
+  default     = "../netbox/terraform.tfstate"
+}
+
+variable "host_ips" {
+  description = "Fallback or override private host IPs used by direct, ping, TCP, and DNS monitors."
+  type        = map(string)
+  default     = {}
 }
