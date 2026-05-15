@@ -1,0 +1,98 @@
+title = "homelab gitleaks config"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Repository-safe placeholders, examples, generated dependencies, and secret identifiers"
+
+paths = [
+  '''(^|/)collections/''',
+  '''(^|/)ansible/collections/''',
+]
+
+regexes = [
+  '''(?i)replace-me''',
+  '''(?i)replace_me''',
+  '''(?i)changeme''',
+  '''(?i)change-me''',
+  '''(?i)your-secret-value-here''',
+  '''(?i)your-token-here''',
+  '''(?i)example-token''',
+  '''(?i)dummy-token''',
+  '''(?i)redacted''',
+  '''(?i)<token>''',
+  '''(?i)<secret>''',
+  '''(?i)<password>''',
+  '''(?i)VALUE''',
+  '''100\.x\.x\.x''',
+  '''192\.168\.xx\.xx''',
+
+  # Terraform references, not literal secrets.
+  '''(?i)api_key\s*=\s*var\.[A-Za-z0-9_]+''',
+  '''(?i)token\s*=\s*var\.[A-Za-z0-9_]+''',
+  '''(?i)password\s*=\s*var\.[A-Za-z0-9_]+''',
+  '''(?i)secret\s*=\s*var\.[A-Za-z0-9_]+''',
+
+  # Docker secret object names are identifiers, not secret values.
+  '''docker_secret:\s*["']?[A-Za-z0-9_-]+_secret["']?''',
+  '''docker_secret:\s*["']?[A-Za-z0-9_-]+["']?''',
+]
+
+stopwords = [
+  "_secret",
+  "docker_secret",
+]
+
+[[rules]]
+id = "netbox-api-token-v2"
+description = "NetBox v2 API token"
+regex = '''\bnbt_[A-Za-z0-9]{8,}\.[A-Za-z0-9._-]{20,}\b'''
+keywords = ["nbt_"]
+
+[[rules]]
+id = "netbox-api-token-context"
+description = "NetBox API token in config"
+regex = '''(?i)(?:netbox[_-]?(?:api[_-]?)?token|NETBOX_API_TOKEN)\s*[:=]\s*["']?([A-Za-z0-9._-]{20,})["']?'''
+secretGroup = 1
+entropy = 3.5
+keywords = [
+  "netbox",
+  "NETBOX_API_TOKEN",
+]
+
+[[rules]]
+id = "cloudflare-token-context"
+description = "Cloudflare token in config"
+regex = '''(?i)(?:cloudflare[_-]?(?:api[_-]?)?token|CLOUDFLARE_API_TOKEN|CF_DNS_API_TOKEN)\s*[:=]\s*["']?([A-Za-z0-9._-]{20,})["']?'''
+secretGroup = 1
+entropy = 3.5
+keywords = [
+  "cloudflare",
+  "CLOUDFLARE_API_TOKEN",
+  "CF_DNS_API_TOKEN",
+]
+
+[[rules]]
+id = "tailscale-auth-key"
+description = "Tailscale auth key"
+regex = '''\btskey-auth-[A-Za-z0-9_-]{20,}\b'''
+keywords = ["tskey-auth-"]
+
+[[rules]]
+id = "tailscale-api-key"
+description = "Tailscale API key"
+regex = '''\btskey-api-[A-Za-z0-9_-]{20,}\b'''
+keywords = ["tskey-api-"]
+
+[[rules]]
+id = "infisical-token-context"
+description = "Infisical token or client secret in config"
+regex = '''(?i)(?:infisical[_-]?(?:token|client[_-]?secret|client[_-]?id)|INFISICAL_TOKEN|INFISICAL_CLIENT_SECRET)\s*[:=]\s*["']?([A-Za-z0-9._=-]{20,})["']?'''
+secretGroup = 1
+entropy = 3.5
+keywords = [
+  "infisical",
+  "INFISICAL_TOKEN",
+  "INFISICAL_CLIENT_SECRET",
+]
