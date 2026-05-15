@@ -10,7 +10,7 @@
 
 | Name | Version |
 |------|---------|
-| <a name="provider_github"></a> [github](#provider\_github) | 6.12.0 |
+| <a name="provider_github"></a> [github](#provider\_github) | 6.12.1 |
 
 ## Modules
 
@@ -21,6 +21,8 @@ No modules.
 | Name | Type |
 |------|------|
 | [github_repository.blog](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository) | resource |
+| [github_repository_pages.blog](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository_pages) | resource |
+| [github_repository_vulnerability_alerts.blog](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository_vulnerability_alerts) | resource |
 
 ## Inputs
 
