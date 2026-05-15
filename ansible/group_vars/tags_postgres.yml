@@ -10,13 +10,13 @@ postgres_etcd_node_name: "{{ inventory_hostname }}"
 postgres_patroni_node_name: "{{ inventory_hostname }}"
 
 postgres_etcd_initial_cluster: >-
-  {%- for host in groups['tags_postgres'] | sort -%}
-  {{ host }}=http://{{ hostvars[host].local_ip }}:2380{{ ',' if not loop.last else '' }}
-  {%- endfor -%}
+  {%- for host in groups['tags_postgres'] | default([]) | sort -%}
+  {{ host }}=http://{{ hostvars[host].local_ip }}:2380{{ ',' if not loop.last else '' }}{%- endfor -%}
 
 postgres_patroni_etcd_hosts: >-
   {{
     groups['tags_postgres']
+    | default([])
     | sort
     | map('extract', hostvars, 'local_ip')
     | map('regex_replace', '$', ':2379')
