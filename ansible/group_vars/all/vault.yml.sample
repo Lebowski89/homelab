@@ -28,7 +28,7 @@ infisical_postgres_user: "replace-me"
 
 infisical_postgres_pass: "replace-me"
 
-infisical_redis_key: "replace-me"
+infisical_redis_password: "replace-me"
 
 infisical_smtp_email: "replace-me"
 
