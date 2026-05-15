@@ -10,14 +10,18 @@ postgres_etcd_node_name: "{{ inventory_hostname }}"
 postgres_patroni_node_name: "{{ inventory_hostname }}"
 
 postgres_etcd_initial_cluster: >-
-  pg95=http://192.168.80.95:2380,
-  pg96=http://192.168.80.96:2380,
-  pg97=http://192.168.80.97:2380
+  {%- for host in groups['tags_postgres'] | sort -%}
+  {{ host }}=http://{{ hostvars[host].local_ip }}:2380{{ ',' if not loop.last else '' }}
+  {%- endfor -%}
 
-postgres_patroni_etcd_hosts:
-  - 192.168.80.95:2379
-  - 192.168.80.96:2379
-  - 192.168.80.97:2379
+postgres_patroni_etcd_hosts: >-
+  {{
+    groups['tags_postgres']
+    | sort
+    | map('extract', hostvars, 'local_ip')
+    | map('regex_replace', '$', ':2379')
+    | list
+  }}
 
 postgres_patroni_superuser_name: postgres
 postgres_patroni_replication_name: replicator
