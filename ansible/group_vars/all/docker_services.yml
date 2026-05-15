@@ -95,19 +95,6 @@ docker_services:
     tags: [apps, network, proxy, pgsql, authelia]
   - name: haproxy
     tags: [apps, network, haproxy]
-  - name: netbox
-    target: main
-    tags: [apps, network, pgsql, netbox]
-  - name: netbox
-    ## If first deploy, the worker may fail, wait for main instance to be healthy and then re-run the role
-    target: worker
-    tags: [apps, network, pgsql, netbox]
-  - name: netbox
-    target: redis
-    tags: [apps, network, pgsql, netbox]
-  - name: netbox
-    target: redis_cache
-    tags: [apps, network, pgsql, netbox]
   - name: technitium
     tags: [apps, network, technitium]
   - name: traefik
