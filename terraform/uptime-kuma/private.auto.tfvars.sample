@@ -3,14 +3,8 @@ cloudflare_zone      = "somedomain.com"
 internal_zone        = "int.somedomain.com"
 gotify_server_url    = "https://gotify.somedomain.com"
 
-host_ips = {
-  mgt    = "192.168.xx.xx"
-  unraid = "192.168.xx.xx"
-  plex   = "192.168.xx.xx"
-  pve1   = "192.168.xx.xx"
-  pg95   = "192.168.xx.xx"
-  pg96   = "192.168.xx.xx"
-  pg97   = "192.168.xx.xx"
-}
-
 private_https_port = 8443
+
+# Optional fallback/override only.
+# Normally sourced from terraform/netbox outputs
+host_ips      = {}

@@ -1,5 +1,5 @@
 output "managed_hosts" {
-  value       = keys(local.hosts)
+  value       = sort(keys(local.hosts))
   description = "Hosts managed as NetBox devices."
 }
 
@@ -13,11 +13,54 @@ output "managed_reserved_ips" {
   description = "Standalone/reserved IP addresses managed in NetBox."
 }
 
-output "host_primary_ips" {
+output "host_primary_ipv4" {
   value = {
-    for k, ip in netbox_ip_address.mgmt : k => ip.ip_address
+    for host_key, ip in netbox_ip_address.mgmt :
+    host_key => split("/", ip.ip_address)[0]
   }
-  description = "Primary management IPs for managed hosts."
+
+  description = "Primary management IPv4 addresses for managed hosts, without CIDR suffix."
+}
+
+output "host_primary_cidrs" {
+  value = {
+    for host_key, ip in netbox_ip_address.mgmt :
+    host_key => ip.ip_address
+  }
+
+  description = "Primary management IPv4 addresses for managed hosts, including CIDR suffix."
+}
+
+output "host_tailscale_ipv4" {
+  value = {
+    for host_key, host in local.hosts :
+    host_key => try(host.custom_fields.tailscale_ip, null)
+    if try(host.custom_fields.tailscale_ip, null) != null
+  }
+
+  description = "Tailscale IPv4 addresses for managed hosts."
+}
+
+output "host_dns_names" {
+  value = {
+    for host_key, host in local.hosts :
+    host_key => try(host.dns_name, null)
+  }
+
+  description = "DNS names assigned to managed hosts."
+}
+
+output "hosts_by_tag" {
+  value = {
+    for tag_key in keys(local.netbox_tags) :
+    tag_key => sort([
+      for host_key, host in local.hosts :
+      host_key
+      if contains(try(host.tags, []), tag_key)
+    ])
+  }
+
+  description = "Managed hosts grouped by local NetBox tag key."
 }
 
 output "managed_tags" {

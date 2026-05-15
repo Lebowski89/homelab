@@ -166,7 +166,7 @@ locals {
         "http.gitea-private",
         "http.gitea-direct",
         "http.infisical-direct",
-        "http.infisical-public",
+        "http.infisical-private",
         "http.vaultwarden-direct",
         "http.vaultwarden-public",
       ]
