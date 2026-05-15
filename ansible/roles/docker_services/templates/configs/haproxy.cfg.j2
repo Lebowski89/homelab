@@ -36,6 +36,6 @@ backend pg_primary
 
   default-server inter 2s fall 3 rise 2 on-marked-down shutdown-sessions
 
-{% for host in groups['postgres'] | default([]) %}
+{% for host in groups['tags_postgres'] | default([]) %}
   server {{ host }} {{ hostvars[host].local_ip }}:{{ postgres_patroni_postgres_port | default(5432) }} check port {{ postgres_patroni_restapi_port | default(8008) }}
 {% endfor %}
