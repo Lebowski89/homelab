@@ -14,13 +14,6 @@ resource "github_repository" "blog" {
   delete_branch_on_merge = false
   auto_init              = false
 
-  vulnerability_alerts = false
-
-  pages {
-    build_type = "workflow"
-    cname      = "drjoyce.blog"
-  }
-
   lifecycle {
     prevent_destroy = true
 
@@ -31,4 +24,16 @@ resource "github_repository" "blog" {
       squash_merge_commit_title,
     ]
   }
+}
+
+resource "github_repository_pages" "blog" {
+  repository = github_repository.blog.name
+
+  build_type = "workflow"
+  cname      = "drjoyce.blog"
+}
+
+resource "github_repository_vulnerability_alerts" "blog" {
+  repository = github_repository.blog.name
+  enabled    = false
 }

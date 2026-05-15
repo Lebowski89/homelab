@@ -29,11 +29,18 @@ jobs:
       fail-fast: false
       matrix:
         root:
+          - terraform/cloudflare/homelab
+          - terraform/cloudflare/hugo
+          - terraform/github/hugo
+          - terraform/netbox
           - terraform/proxmox/mappings/resources
           - terraform/proxmox/settings/pve1
           - terraform/proxmox/templates/ubuntu-2404
           - terraform/proxmox/vms/postgres-cluster
           - terraform/proxmox/vms/unraid
+          - terraform/seerr
+          - terraform/technitium/internal-dns
+          - terraform/uptime-kuma
 
     defaults:
       run:
