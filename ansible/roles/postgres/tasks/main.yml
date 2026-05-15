@@ -1,10 +1,11 @@
 ---
 
 ################################
-# INSTALL TASKS
+# INSTALL / CLUSTER TASKS
 ################################
 
 - name: Install postgres packages
+  when: "'tags_postgres' in group_names"
   ansible.builtin.include_tasks:
     file: sub_tasks/install/apt.yml
     apply:
@@ -16,6 +17,7 @@
     - postgres_apt
 
 - name: Configure etcd
+  when: "'tags_postgres' in group_names"
   ansible.builtin.include_tasks:
     file: sub_tasks/install/etcd.yml
   tags:
@@ -24,6 +26,7 @@
     - postgres_etcd_reset
 
 - name: Configure Patroni
+  when: "'tags_postgres' in group_names"
   ansible.builtin.include_tasks:
     file: sub_tasks/install/patroni.yml
   tags:
@@ -31,53 +34,63 @@
     - postgres_patroni
     - postgres_patroni_reset
 
-################################
-# BACKUP TASKS
-################################
-
-- name: Backup PostgreSQL single database with pg_dump
+- name: Ensure dedicated PostgreSQL admin role exists
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - ansible_run_tags is not defined
+      or 'all' in ansible_run_tags
+      or 'postgres_admin' in ansible_run_tags
+      or 'postgres_admin_uptime_kuma' in ansible_run_tags
   ansible.builtin.include_tasks:
-    file: sub_tasks/backup.yml
+    file: sub_tasks/admin/pg_admin.yml
     apply:
-      tags: postgres_backup
-  tags: postgres_backup
-
-################################
-# RESTORE TASKS
-################################
-
-- name: Restore PostgreSQL single database from pg_dump backup
-  ansible.builtin.include_tasks:
-    file: sub_tasks/restore.yml
-    apply:
-      tags: postgres_restore
-  tags: postgres_restore
+      tags:
+        - postgres_admin
+        - postgres_admin_uptime_kuma
+  tags:
+    - postgres_admin
+    - postgres_admin_uptime_kuma
 
 ################################
 # ADMIN TASKS
 ################################
 
-- name: Ensure dedicated PostgreSQL admin role exists
-  ansible.builtin.include_tasks:
-    file: sub_tasks/admin/pg_admin.yml
-    apply:
-      tags:
-        - postgres
-        - postgres_admin
-        - postgres_admin_uptime_kuma
-  tags:
-    - postgres
-    - postgres_admin
-    - postgres_admin_uptime_kuma
-
 - name: Ensure dedicated PostgreSQL Uptime Kuma role exists
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - ansible_run_tags is not defined
+      or 'all' in ansible_run_tags
+      or 'postgres_admin_uptime_kuma' in ansible_run_tags
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/pg_uptime_kuma.yml
     apply:
       tags: postgres_admin_uptime_kuma
   tags: postgres_admin_uptime_kuma
 
+- name: Backup PostgreSQL single database with pg_dump
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - "'postgres_backup' in ansible_run_tags"
+  ansible.builtin.include_tasks:
+    file: sub_tasks/backup.yml
+    apply:
+      tags: postgres_backup
+  tags: postgres_backup
+
+- name: Restore PostgreSQL single database from pg_dump backup
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - "'postgres_restore' in ansible_run_tags"
+  ansible.builtin.include_tasks:
+    file: sub_tasks/restore.yml
+    apply:
+      tags: postgres_restore
+  tags: postgres_restore
+
 - name: Reset PostgreSQL/Patroni node destructively
+  when:
+    - "'tags_postgres' in group_names"
+    - "'postgres_admin_nuke_node' in ansible_run_tags"
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/reset_node.yml
     apply:
@@ -85,6 +98,9 @@
   tags: postgres_admin_nuke_node
 
 - name: Fix database ownership and privileges
+  when:
+    - inventory_hostname == docker_services_primary_manager
+    - "'postgres_admin_fix_owner' in ansible_run_tags"
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/fix_owner.yml
     apply:
@@ -92,6 +108,9 @@
   tags: postgres_admin_fix_owner
 
 - name: Update Patroni dynamic pg_hba in DCS
+  when:
+    - "'tags_postgres' in group_names"
+    - "'postgres_admin_update_pg_hba' in ansible_run_tags"
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/pg_hba.yml
     apply:

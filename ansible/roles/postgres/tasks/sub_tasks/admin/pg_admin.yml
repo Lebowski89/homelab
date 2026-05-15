@@ -9,6 +9,7 @@
   register: postgres_patroni_cluster_state
   run_once: true
   delegate_to: "{{ docker_services_primary_manager }}"
+  check_mode: false
   retries: 12
   delay: 5
   until: >-

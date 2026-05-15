@@ -20,7 +20,7 @@
     login_port: "{{ postgres_patroni_postgres_port }}"
     login_user: "{{ postgres_patroni_superuser_name }}"
     login_password: "{{ postgres_patroni_superuser_pass }}"
-    db: "{{ postgres_uptime_kuma_monitor_database }}"
+    login_db: "{{ postgres_uptime_kuma_monitor_database }}"
     type: database
     privs: CONNECT
     roles: "{{ postgres_uptime_kuma_monitor_role_name }}"
