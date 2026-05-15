@@ -166,8 +166,7 @@
     # POSTGRES (CLUSTER)
     ################################
 
-    - name: Include Postgres Cluster role
-#      when: "'tags_postgres' in group_names"
+    - name: Include Postgres role
       ansible.builtin.include_role:
         name: postgres
       tags:

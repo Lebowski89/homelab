@@ -15,7 +15,7 @@ postgres_etcd_client_port: 2379
 postgres_etcd_peer_port: 2380
 postgres_etcd_cluster_token: pg-ha-1
 
-#  postgres_etcd_initial_cluster: []
+postgres_etcd_initial_cluster: []
 
 ################################
 # PATRONI
