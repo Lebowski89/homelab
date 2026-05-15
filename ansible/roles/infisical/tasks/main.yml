@@ -83,12 +83,12 @@
 
 - name: Infisical | Template env file
   ansible.builtin.template:
-    src: "{{ role_path }}/templates/infisical.env.j2"
+    src: infisical.env.j2
     dest: "{{ infisical_env_path }}"
     force: true
-    owner: "{{ infisical_puid }}"
-    group: "{{ infisical_pgid }}"
-    mode: "0664"
+    owner: root
+    group: root
+    mode: "0600"
   no_log: true
   tags:
     - infisical_bootstrap
