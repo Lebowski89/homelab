@@ -3,7 +3,7 @@
 znc:
   name: znc
   stack: znc
-  image: lscr.io/linuxserver/znc:znc-1.10.2-ls180
+  image: lscr.io/linuxserver/znc:znc-1.10.2-ls181
   named_networks:
     overlay:
       external: true
