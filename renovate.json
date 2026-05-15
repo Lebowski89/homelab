@@ -8,13 +8,16 @@
   "labels": [
     "renovate"
   ],
-  "prConcurrentLimit": 5,
+  "prConcurrentLimit": 8,
   "prHourlyLimit": 2,
   "rangeStrategy": "pin",
   "semanticCommits": "enabled",
   "semanticCommitType": "chore",
   "semanticCommitScope": "deps",
   "commitBodyTable": true,
+  "minimumReleaseAge": "3 days",
+  "separateMajorMinor": true,
+  "separateMinorPatch": true,
   "prBodyNotes": [
     "Homelab note: review upstream release notes/changelog before merging."
   ],
@@ -46,31 +49,187 @@
   ],
   "packageRules": [
     {
-      "matchManagers": ["terraform"],
-      "groupName": "terraform",
-      "labels": ["renovate", "terraform"]
-    },
-    {
-      "matchManagers": ["terraform"],
-      "matchDepTypes": ["required_version"],
-      "enabled": false,
-      "description": "Do not update Terraform/OpenTofu required_version constraints; managed manually as a range."
-    },
-    {
-      "matchManagers": ["terraform"],
-      "matchDepTypes": ["required_provider", "module"],
+      "description": "Group Terraform/OpenTofu providers and modules",
+      "matchManagers": [
+        "terraform"
+      ],
+      "matchDepTypes": [
+        "required_provider",
+        "module"
+      ],
       "groupName": "terraform providers and modules",
-      "labels": ["renovate", "terraform"]
+      "labels": [
+        "renovate",
+        "terraform"
+      ]
     },
-
     {
+      "description": "Do not update Terraform/OpenTofu required_version constraints; managed manually as a range.",
+      "matchManagers": [
+        "terraform"
+      ],
+      "matchDepTypes": [
+        "required_version"
+      ],
+      "enabled": false
+    },
+    {
+      "description": "Label Terraform/OpenTofu updates",
+      "matchManagers": [
+        "terraform"
+      ],
+      "labels": [
+        "renovate",
+        "terraform"
+      ]
+    },
+    {
+      "description": "Do not automerge Docker updates",
       "matchDatasources": [
         "docker"
       ],
-      "groupName": null,
       "automerge": false
     },
     {
+      "description": "Require dependency dashboard approval for major Docker updates",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true,
+      "labels": [
+        "renovate",
+        "docker",
+        "major"
+      ],
+      "prPriority": 20
+    },
+    {
+      "description": "Delay Docker minor updates a little longer",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "minor"
+      ],
+      "minimumReleaseAge": "7 days",
+      "labels": [
+        "renovate",
+        "docker",
+        "minor"
+      ],
+      "prPriority": 0
+    },
+    {
+      "description": "Label Docker patch updates",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "minimumReleaseAge": "3 days",
+      "labels": [
+        "renovate",
+        "docker",
+        "patch"
+      ],
+      "prPriority": -1
+    },
+    {
+      "description": "Keep critical infrastructure and database images separate",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "postgres",
+        "docker.io/library/postgres",
+        "redis",
+        "docker.io/library/redis",
+        "valkey/valkey",
+        "traefik",
+        "docker.io/library/traefik",
+        "authelia/authelia",
+        "infisical/infisical",
+        "netboxcommunity/netbox",
+        "lscr.io/linuxserver/netbox",
+        "prom/prometheus",
+        "grafana/grafana",
+        "grafana/loki",
+        "grafana/alloy",
+        "haproxy",
+        "docker.io/library/haproxy",
+        "cloudflare/cloudflared"
+      ],
+      "groupName": null,
+      "labels": [
+        "renovate",
+        "docker",
+        "critical"
+      ],
+      "prPriority": 5
+    },
+    {
+      "description": "Group Hotio media patch updates",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "matchPackageNames": [
+        "ghcr.io/hotio/bazarr",
+        "ghcr.io/hotio/lidarr",
+        "ghcr.io/hotio/nzbhydra2",
+        "ghcr.io/hotio/prowlarr",
+        "ghcr.io/hotio/qbittorrent",
+        "ghcr.io/hotio/radarr",
+        "ghcr.io/hotio/sabnzbd",
+        "ghcr.io/hotio/seerr",
+        "ghcr.io/hotio/sonarr",
+        "ghcr.io/hotio/stash",
+        "ghcr.io/hotio/tautulli",
+        "ghcr.io/hotio/unpackerr",
+        "ghcr.io/hotio/whisparr"
+      ],
+      "groupName": "hotio media patch updates",
+      "groupSlug": "hotio-media-patch",
+      "labels": [
+        "renovate",
+        "docker",
+        "patch",
+        "media"
+      ]
+    },
+    {
+      "description": "Group LinuxServer patch updates for non-critical apps",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/librewolf",
+        "lscr.io/linuxserver/obsidian",
+        "lscr.io/linuxserver/ombi",
+        "lscr.io/linuxserver/syncthing",
+        "lscr.io/linuxserver/thelounge",
+        "lscr.io/linuxserver/znc"
+      ],
+      "groupName": "linuxserver app patch updates",
+      "groupSlug": "linuxserver-app-patch",
+      "labels": [
+        "renovate",
+        "docker",
+        "patch",
+        "linuxserver"
+      ]
+    },
+    {
+      "description": "Hotio release-v semver tags",
       "matchDatasources": [
         "docker"
       ],
@@ -87,6 +246,7 @@
       "versioning": "regex:^release-v?(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$"
     },
     {
+      "description": "Hotio arr release tags with build number",
       "matchDatasources": [
         "docker"
       ],
@@ -99,6 +259,7 @@
       "versioning": "regex:^release-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)\\.(?<build>\\d+)$"
     },
     {
+      "description": "Hotio Whisparr v-prefixed release tags",
       "matchDatasources": [
         "docker"
       ],
@@ -108,15 +269,17 @@
       "versioning": "regex:^(?<compatibility>v\\d+)-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-release\\.(?<build>\\d+)$"
     },
     {
+      "description": "Block LinuxServer development tags",
       "matchDatasources": [
         "docker"
       ],
-      "allowedVersions": "!/^development-.*$/",
       "matchPackageNames": [
-        "lscr.io/linuxserver/{/,}**"
-      ]
+        "/^lscr\\.io\\/linuxserver\\//"
+      ],
+      "allowedVersions": "!/^development-.*$/"
     },
     {
+      "description": "LinuxServer vX.Y.Z-lsN tags",
       "matchDatasources": [
         "docker"
       ],
@@ -129,6 +292,7 @@
       "versioning": "regex:^v(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$"
     },
     {
+      "description": "LinuxServer ZNC tags",
       "matchDatasources": [
         "docker"
       ],
@@ -138,6 +302,7 @@
       "versioning": "regex:^znc-(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)-ls(?<build>\\d+)$"
     },
     {
+      "description": "LinuxServer LibreWolf tags",
       "matchDatasources": [
         "docker"
       ],
@@ -147,43 +312,20 @@
       "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)-(?<patch>\\d+)-ls(?<build>\\d+)$"
     },
     {
+      "description": "Group Python package patch updates",
       "matchDatasources": [
-        "docker"
-      ],
-      "matchUpdateTypes": [
-        "major"
-      ],
-      "labels": [
-        "renovate",
-        "major"
-      ],
-      "prPriority": 10
-    },
-    {
-      "matchDatasources": [
-        "docker"
-      ],
-      "matchUpdateTypes": [
-        "minor"
-      ],
-      "labels": [
-        "renovate",
-        "minor"
-      ],
-      "prPriority": 0
-    },
-    {
-      "matchDatasources": [
-        "docker"
+        "pypi"
       ],
       "matchUpdateTypes": [
         "patch"
       ],
+      "groupName": "python package patch updates",
+      "groupSlug": "python-package-patch",
       "labels": [
         "renovate",
+        "python",
         "patch"
-      ],
-      "prPriority": -1
+      ]
     }
   ]
 }
