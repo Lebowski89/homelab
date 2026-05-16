@@ -22,7 +22,10 @@
     "Homelab note: review upstream release notes/changelog before merging."
   ],
   "lockFileMaintenance": {
-    "enabled": true
+    "enabled": true,
+    "extends": [
+      "schedule:monthly"
+    ]
   },
   "customManagers": [
     {
@@ -174,6 +177,26 @@
         "critical"
       ],
       "prPriority": 5
+    },
+    {
+      "description": "Use target version in Traefik branch names",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "traefik",
+        "docker.io/library/traefik"
+      ],
+      "branchTopic": "{{{depNameSanitized}}}-{{{newVersion}}}",
+      "separateMinorPatch": false,
+      "groupName": null,
+      "labels": [
+        "renovate",
+        "docker",
+        "critical",
+        "traefik"
+      ],
+      "prPriority": 10
     },
     {
       "description": "Group Hotio media patch updates",
