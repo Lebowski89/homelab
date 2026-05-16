@@ -152,16 +152,20 @@
         "traefik",
         "docker.io/library/traefik",
         "authelia/authelia",
+        "docker.io/infisical/infisical",
         "infisical/infisical",
         "netboxcommunity/netbox",
         "lscr.io/linuxserver/netbox",
+        "lscr.io/linuxserver/plex",
         "prom/prometheus",
         "grafana/grafana",
         "grafana/loki",
         "grafana/alloy",
         "haproxy",
         "docker.io/library/haproxy",
-        "cloudflare/cloudflared"
+        "cloudflare/cloudflared",
+        "crowdsecurity/crowdsec",
+        "portainer/portainer-ce"
       ],
       "groupName": null,
       "labels": [
@@ -277,6 +281,21 @@
         "/^lscr\\.io\\/linuxserver\\//"
       ],
       "allowedVersions": "!/^development-.*$/"
+    },
+    {
+      "description": "LinuxServer Plex semver tags",
+      "matchDatasources": [
+        "docker"
+      ],
+      "matchPackageNames": [
+        "lscr.io/linuxserver/plex"
+      ],
+      "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$",
+      "labels": [
+        "renovate",
+        "docker",
+        "plex"
+      ]
     },
     {
       "description": "LinuxServer vX.Y.Z-lsN tags",
