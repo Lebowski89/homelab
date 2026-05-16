@@ -22,7 +22,10 @@
     "Homelab note: review upstream release notes/changelog before merging."
   ],
   "lockFileMaintenance": {
-    "enabled": true
+    "enabled": true,
+    "extends": [
+      "schedule:monthly"
+    ]
   },
   "customManagers": [
     {
