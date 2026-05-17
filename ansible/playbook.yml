@@ -27,11 +27,13 @@
         name: netbox
         apply:
           tags:
+            - never
             - netbox_bootstrap
             - netbox_deploy
             - netbox_recreate
             - netbox_remove
       tags:
+        - never
         - netbox_bootstrap
         - netbox_deploy
         - netbox_recreate
