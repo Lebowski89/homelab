@@ -7,13 +7,6 @@ homepage:
   named_networks:
     overlay:
       external: true
-  healthcheck:
-    test:
-      - "CMD"
-      - "wget"
-      - "--spider"
-      - "-q"
-      - "http://127.0.0.1:3000/"
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"

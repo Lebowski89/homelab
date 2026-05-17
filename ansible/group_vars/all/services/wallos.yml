@@ -7,13 +7,6 @@ wallos:
   named_networks:
     overlay:
       external: true
-  healthcheck:
-    test:
-      - "CMD"
-      - "wget"
-      - "--spider"
-      - "-q"
-      - "http://127.0.0.1/"
   environment:
     TZ: "{{ timezone }}"
   paths:

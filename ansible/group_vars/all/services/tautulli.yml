@@ -7,13 +7,6 @@ tautulli:
   named_networks:
     overlay:
       external: true
-  healthcheck:
-    test:
-      - "CMD"
-      - "wget"
-      - "--spider"
-      - "-q"
-      - "http://127.0.0.1:8181/status"
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[docker_services_plex_host].docker_host_puid }}"

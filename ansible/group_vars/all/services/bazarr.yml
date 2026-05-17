@@ -7,12 +7,6 @@ bazarr:
   named_networks:
     overlay:
       external: true
-  healthcheck:
-    test:
-      - "CMD"
-      - "curl"
-      - "--fail"
-      - "http://localhost:6767"
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"

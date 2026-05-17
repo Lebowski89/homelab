@@ -7,13 +7,6 @@ gitea:
   named_networks:
     overlay:
       external: true
-  healthcheck:
-    test:
-      - "CMD"
-      - "wget"
-      - "--spider"
-      - "-q"
-      - "http://127.0.0.1:3000/api/healthz"
   environment:
     TZ: "{{ timezone }}"
     USER_UID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
