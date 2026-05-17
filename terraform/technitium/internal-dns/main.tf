@@ -38,6 +38,7 @@ locals {
     "traefik",
     "uptime-kuma",
     "vaultwarden",
+    "wallos",
     "whisparr",
     "znc",
   ]

@@ -46,6 +46,7 @@ locals {
     seerr     = { group = "media", tag_keys = ["media"] }
     stash     = { group = "media", tag_keys = ["media"] }
     thelounge = { group = "media", tag_keys = ["media"] }
+    wallos    = { group = "media", tag_keys = ["media"] }
     znc       = { group = "media", tag_keys = ["media"] }
 
     # Monitoring
@@ -182,6 +183,7 @@ locals {
     stash     = { category = "media", port = 9999 }
     thelounge = { category = "media", port = 9000 }
     znc       = { category = "media", port = 6501 }
+    wallos    = { category = "media", port = 80 }
 
     # Monitoring
     alloy = {
