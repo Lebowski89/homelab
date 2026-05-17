@@ -51,6 +51,8 @@ docker_services:
     tags: [apps, media, pgsql, ombi]
   - name: opencloud
     tags: [apps, opencloud]
+  - name: wallos
+    tags: [apps, media, wallos]
   - name: stash
     tags: [apps, media, pgsql, stash]
   - name: thelounge
