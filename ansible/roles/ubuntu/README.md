@@ -98,13 +98,11 @@
 | [ubuntu_pam_limits.2.**value**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L75)   | str | `unlimited` |    
 | [ubuntu_defaults_netplan_config](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L77)   | str | `netplan-config.yaml` |    
 | [ubuntu_netplan_config_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L78)   | str | `/etc/netplan/{{ ubuntu_defaults_netplan_config }}` |    
-| [ubuntu_defaults_netplan_gateway](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L80)   | str | `192.168.80.1` |    
-| [ubuntu_defaults_netplan_nameservers](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L81)   | list | `[]` |    
-| [ubuntu_defaults_netplan_nameservers.**0**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L82)   | str | `192.168.80.48` |    
-| [ubuntu_defaults_netplan_nameservers.**1**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L83)   | str | `192.168.80.59` |    
-| [ubuntu_netplan_prefix](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L85)   | int | `24` |    
-| [ubuntu_nic_tuning_enabled](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L87)   | bool | `True` |    
-| [ubuntu_vnstat_enabled](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L88)   | bool | `True` |    
+| [ubuntu_defaults_netplan_gateway](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L80)   | str | `<multiline value: folded_strip>` |    
+| [ubuntu_defaults_netplan_nameservers](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L87)   | str | `<multiline value: folded_strip>` |    
+| [ubuntu_netplan_prefix](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L97)   | int | `24` |    
+| [ubuntu_nic_tuning_enabled](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L99)   | bool | `True` |    
+| [ubuntu_vnstat_enabled](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L100)   | bool | `True` |    
 
 
 
