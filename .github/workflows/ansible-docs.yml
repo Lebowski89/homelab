@@ -15,13 +15,20 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ansible-docs-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   generate_docs:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-24.04
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -65,7 +72,10 @@ jobs:
 
           if git diff --cached --quiet; then
             echo "No documentation changes to commit"
-          else
-            git commit -m "docs(ansible): regenerate role docs"
-            git push
+            exit 0
           fi
+
+          git commit -m "docs(ansible): regenerate role docs"
+
+          git pull --rebase origin main
+          git push origin HEAD:main
