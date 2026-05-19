@@ -4,14 +4,14 @@
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.11.0 |
-| <a name="requirement_uptimekuma"></a> [uptimekuma](#requirement\_uptimekuma) | 0.3.1 |
+| <a name="requirement_uptimekuma"></a> [uptimekuma](#requirement\_uptimekuma) | 0.3.2 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
 | <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
-| <a name="provider_uptimekuma"></a> [uptimekuma](#provider\_uptimekuma) | 0.3.1 |
+| <a name="provider_uptimekuma"></a> [uptimekuma](#provider\_uptimekuma) | 0.3.2 |
 
 ## Modules
 
@@ -21,16 +21,16 @@ No modules.
 
 | Name | Type |
 |------|------|
-| [uptimekuma_monitor_dns.this](https://registry.terraform.io/providers/breml/uptimekuma/0.3.1/docs/resources/monitor_dns) | resource |
-| [uptimekuma_monitor_group.child](https://registry.terraform.io/providers/breml/uptimekuma/0.3.1/docs/resources/monitor_group) | resource |
-| [uptimekuma_monitor_group.root](https://registry.terraform.io/providers/breml/uptimekuma/0.3.1/docs/resources/monitor_group) | resource |
-| [uptimekuma_monitor_http.this](https://registry.terraform.io/providers/breml/uptimekuma/0.3.1/docs/resources/monitor_http) | resource |
-| [uptimekuma_monitor_ping.this](https://registry.terraform.io/providers/breml/uptimekuma/0.3.1/docs/resources/monitor_ping) | resource |
-| [uptimekuma_monitor_postgres.this](https://registry.terraform.io/providers/breml/uptimekuma/0.3.1/docs/resources/monitor_postgres) | resource |
-| [uptimekuma_monitor_tcp_port.this](https://registry.terraform.io/providers/breml/uptimekuma/0.3.1/docs/resources/monitor_tcp_port) | resource |
-| [uptimekuma_notification_gotify.gotify](https://registry.terraform.io/providers/breml/uptimekuma/0.3.1/docs/resources/notification_gotify) | resource |
-| [uptimekuma_status_page.homelab](https://registry.terraform.io/providers/breml/uptimekuma/0.3.1/docs/resources/status_page) | resource |
-| [uptimekuma_tag.this](https://registry.terraform.io/providers/breml/uptimekuma/0.3.1/docs/resources/tag) | resource |
+| [uptimekuma_monitor_dns.this](https://registry.terraform.io/providers/breml/uptimekuma/0.3.2/docs/resources/monitor_dns) | resource |
+| [uptimekuma_monitor_group.child](https://registry.terraform.io/providers/breml/uptimekuma/0.3.2/docs/resources/monitor_group) | resource |
+| [uptimekuma_monitor_group.root](https://registry.terraform.io/providers/breml/uptimekuma/0.3.2/docs/resources/monitor_group) | resource |
+| [uptimekuma_monitor_http.this](https://registry.terraform.io/providers/breml/uptimekuma/0.3.2/docs/resources/monitor_http) | resource |
+| [uptimekuma_monitor_ping.this](https://registry.terraform.io/providers/breml/uptimekuma/0.3.2/docs/resources/monitor_ping) | resource |
+| [uptimekuma_monitor_postgres.this](https://registry.terraform.io/providers/breml/uptimekuma/0.3.2/docs/resources/monitor_postgres) | resource |
+| [uptimekuma_monitor_tcp_port.this](https://registry.terraform.io/providers/breml/uptimekuma/0.3.2/docs/resources/monitor_tcp_port) | resource |
+| [uptimekuma_notification_gotify.gotify](https://registry.terraform.io/providers/breml/uptimekuma/0.3.2/docs/resources/notification_gotify) | resource |
+| [uptimekuma_status_page.homelab](https://registry.terraform.io/providers/breml/uptimekuma/0.3.2/docs/resources/status_page) | resource |
+| [uptimekuma_tag.this](https://registry.terraform.io/providers/breml/uptimekuma/0.3.2/docs/resources/tag) | resource |
 | [terraform_remote_state.netbox](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/data-sources/remote_state) | data source |
 
 ## Inputs
