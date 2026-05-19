@@ -1,6 +1,12 @@
 internal_zone = "int.domain.com"
 
 host_private_values = {
+  router = {
+    mgmt_ip = "192.168.##.1/24"
+
+    custom_fields = {}
+  }
+
   mgt = {
     mgmt_ip = "192.168.xx.xx/24"
 
@@ -12,6 +18,7 @@ host_private_values = {
       docker_host_pgid         = "1000"
       docker_host_appdata_root = "/opt"
       docker_host_data_root    = "/opt"
+      dns_priority             = "010"
     }
   }
 
@@ -43,6 +50,7 @@ host_private_values = {
       docker_host_pgid         = "1000"
       docker_host_appdata_root = "/opt"
       docker_host_data_root    = "/opt"
+      dns_priority             = "020"
     }
   }
 
