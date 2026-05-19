@@ -7,10 +7,6 @@ autobrr:
   named_networks:
     overlay:
       external: true
-  healthcheck:
-    test:
-      - "CMD-SHELL"
-      - "wget -qO- http://localhost:7474/ || exit 1"
   user: >-
     {{ hostvars[docker_services_primary_manager].docker_host_puid }}:{{ hostvars[docker_services_primary_manager].docker_host_pgid }}
   environment:

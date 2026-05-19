@@ -7,13 +7,6 @@ nzbhydra2:
   named_networks:
     overlay:
       external: true
-  healthcheck:
-    test:
-      - "CMD"
-      - "wget"
-      - "--spider"
-      - "-q"
-      - "http://127.0.0.1:5076/actuator/health/ping"
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
