@@ -34,10 +34,10 @@ variable "internal_zone" {
 }
 
 variable "host_private_values" {
-  description = "Private per-host values such as LAN IPs and custom fields."
+  description = "Private per-host values such as LAN IPs, DNS names, and custom fields."
   type = map(object({
     mgmt_ip       = string
-    custom_fields = optional(map(string), {})
+    custom_fields = optional(any, {})
   }))
   default = {}
 }

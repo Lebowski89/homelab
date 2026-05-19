@@ -77,10 +77,22 @@ ubuntu_pam_limits:
 ubuntu_defaults_netplan_config: netplan-config.yaml
 ubuntu_netplan_config_path: "/etc/netplan/{{ ubuntu_defaults_netplan_config }}"
 
-ubuntu_defaults_netplan_gateway: 192.168.80.1
-ubuntu_defaults_netplan_nameservers:
-  - 192.168.80.48
-  - 192.168.80.59
+ubuntu_defaults_netplan_gateway: >-
+  {{
+    hostvars[
+      (groups['tags_lan_gateway'] | default([]) | sort | first)
+    ].local_ip
+  }}
+
+ubuntu_defaults_netplan_nameservers: >-
+  {{
+    groups['tags_dns']
+    | default([])
+    | map('extract', hostvars)
+    | sort(attribute='custom_fields.dns_priority')
+    | map(attribute='local_ip')
+    | list
+  }}
 
 ubuntu_netplan_prefix: 24
 
