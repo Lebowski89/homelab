@@ -19,6 +19,11 @@ locals {
       name = "MikroTik"
       slug = "mikrotik"
     }
+
+    tp_link = {
+      name = "TP-Link"
+      slug = "tp-link"
+    }
   }
 
   device_roles = {
@@ -45,6 +50,12 @@ locals {
       slug      = "switch"
       color_hex = "2196f3"
     }
+
+    gateway = {
+      name      = "Gateway"
+      slug      = "gateway"
+      color_hex = "9c27b0"
+    }
   }
 
   device_types = {
@@ -63,6 +74,28 @@ locals {
     unraid_host = {
       model            = "Unraid Host"
       slug             = "unraid-host"
+      manufacturer_key = "homelab"
+    }
+
+    generic_gateway_device = {
+      model            = "Generic Gateway Device"
+      slug             = "generic-gateway-device"
+      manufacturer_key = "homelab"
+    }
+
+    tp_link_archer_ax72 = {
+      model            = "Archer AX72"
+      slug             = "tp-link-archer-ax72"
+      manufacturer_key = "tp_link"
+      part_number      = "Archer AX72"
+      u_height         = 0
+      is_full_depth    = false
+      description      = "TP-Link Archer AX72 AX5400 dual-band Wi-Fi 6 router."
+    }
+
+    generic_switch_device = {
+      model            = "Generic Switch Device"
+      slug             = "generic-switch-device"
       manufacturer_key = "homelab"
     }
 
@@ -101,6 +134,34 @@ locals {
       {
         name  = "ether1"
         label = "ETH/BOOT"
+        type  = "1000base-t"
+      }
+    ]
+
+    tp_link_archer_ax72 = [
+      {
+        name  = "wan"
+        label = "WAN"
+        type  = "1000base-t"
+      },
+      {
+        name  = "lan1"
+        label = "LAN 1"
+        type  = "1000base-t"
+      },
+      {
+        name  = "lan2"
+        label = "LAN 2"
+        type  = "1000base-t"
+      },
+      {
+        name  = "lan3"
+        label = "LAN 3"
+        type  = "1000base-t"
+      },
+      {
+        name  = "lan4"
+        label = "LAN 4"
         type  = "1000base-t"
       }
     ]
@@ -205,6 +266,20 @@ locals {
       color_hex   = "9c27b0"
       description = "Proxmox hosts where the Terraform/OpenTofu API user is managed."
     }
+
+    lan_gateway = {
+      name        = "lan_gateway"
+      slug        = "lan_gateway"
+      description = "Default LAN gateway device."
+      color       = "4caf50"
+    }
+
+    dns = {
+      name        = "dns"
+      slug        = "dns"
+      description = "Hosts providing DNS services."
+      color       = "2196f3"
+    }
   }
 
   device_custom_fields = {
@@ -297,9 +372,27 @@ locals {
       description = "Host path used as the OpenCloud data root."
       weight      = 260
     }
+
+    dns_priority = {
+      name        = "dns_priority"
+      label       = "DNS priority"
+      type        = "text"
+      group_name  = "DNS"
+      description = "DNS resolver priority. Lower padded values are preferred first, e.g. 010, 020."
+      weight      = 300
+    }
   }
 
   base_hosts = {
+    router = {
+      description     = "Primary LAN gateway/router."
+      role_key        = "gateway"
+      device_type_key = "tp_link_archer_ax72"
+      tags = [
+        "lan_gateway",
+      ]
+    }
+
     mgt = {
       description = "Docker Swarm manager, automation host, HAProxy endpoint, Technitium DNS primary"
       role_key    = "server"
@@ -313,6 +406,7 @@ locals {
         "opentofu_install",
         "swarm",
         "swarm_manager",
+        "dns",
       ]
     }
 
@@ -340,6 +434,7 @@ locals {
         "haproxy",
         "swarm",
         "swarm_worker",
+        "dns",
       ]
     }
 
