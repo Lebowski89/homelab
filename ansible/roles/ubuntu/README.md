@@ -115,15 +115,15 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
-| Install common apt packages | ansible.builtin.include_tasks | False | ubuntu,ubuntu_apt |
-| Clone Homelab repo | ansible.builtin.include_tasks | True | ubuntu,ubuntu_repo |
-| Setup Python venv | ansible.builtin.include_tasks | True | ubuntu,ubuntu_venv |
-| Install required collections and pip packages | ansible.builtin.include_tasks | True | ubuntu,ubuntu_requirements |
-| Install Skynet wrapper | ansible.builtin.include_tasks | True | ubuntu,ubuntu_skynet |
-| Tune sysctl settings | ansible.builtin.include_tasks | False | ubuntu,ubuntu_sysctl |
-| Set PAM limits | ansible.builtin.include_tasks | False | ubuntu,ubuntu_pam |
-| Configure network tuning | ansible.builtin.include_tasks | False | ubuntu,ubuntu_network |
-| Configure Netplan | ansible.builtin.include_tasks | True | ubuntu,ubuntu_netplan |
+| Ubuntu ¦ Install common packages | ansible.builtin.include_tasks | False |  |
+| Ubuntu ¦ Clone Homelab repo | ansible.builtin.include_tasks | True |  |
+| Ubuntu ¦ Setup Python venv | ansible.builtin.include_tasks | True |  |
+| Ubuntu ¦ Install required collections | ansible.builtin.include_tasks | True |  |
+| Ubuntu ¦ Install Skynet wrapper | ansible.builtin.include_tasks | True |  |
+| Ubuntu ¦ Tune sysctl settings | ansible.builtin.include_tasks | False |  |
+| Ubuntu ¦ Set PAM limits | ansible.builtin.include_tasks | False |  |
+| Ubuntu ¦ Configure network tuning | ansible.builtin.include_tasks | False |  |
+| Ubuntu ¦ Configure Netplan | ansible.builtin.include_tasks | True |  |
 
 #### File: tasks/sub_tasks/apt.yml
 
@@ -229,16 +229,16 @@ classDef importRole stroke:#699ba7,stroke-width:2px;
 classDef includeVars stroke:#8e44ad,stroke-width:2px;
 classDef rescue stroke:#665352,stroke-width:2px;
 
-  Start-->|Include task| Install_common_apt_packages_sub_tasks_apt_yml_0[install common apt packages<br>include_task: sub tasks apt yml]:::includeTasks
-  Install_common_apt_packages_sub_tasks_apt_yml_0-->|Include task| Clone_Homelab_repo_sub_tasks_repo_yml_1[clone homelab repo<br>When: **tags ansible manager  in group names**<br>include_task: sub tasks repo yml]:::includeTasks
-  Clone_Homelab_repo_sub_tasks_repo_yml_1-->|Include task| Setup_Python_venv_sub_tasks_venv_yml_2[setup python venv<br>When: **tags ansible manager  in group names**<br>include_task: sub tasks venv yml]:::includeTasks
-  Setup_Python_venv_sub_tasks_venv_yml_2-->|Include task| Install_required_collections_and_pip_packages_sub_tasks_requirements_yml_3[install required collections and pip packages<br>When: **tags ansible manager  in group names**<br>include_task: sub tasks requirements yml]:::includeTasks
-  Install_required_collections_and_pip_packages_sub_tasks_requirements_yml_3-->|Include task| Install_Skynet_wrapper_sub_tasks_skynet_yml_4[install skynet wrapper<br>When: **tags ansible manager  in group names**<br>include_task: sub tasks skynet yml]:::includeTasks
-  Install_Skynet_wrapper_sub_tasks_skynet_yml_4-->|Include task| Tune_sysctl_settings_sub_tasks_sysctl_yml_5[tune sysctl settings<br>include_task: sub tasks sysctl yml]:::includeTasks
-  Tune_sysctl_settings_sub_tasks_sysctl_yml_5-->|Include task| Set_PAM_limits_sub_tasks_pam_yml_6[set pam limits<br>include_task: sub tasks pam yml]:::includeTasks
-  Set_PAM_limits_sub_tasks_pam_yml_6-->|Include task| Configure_network_tuning_sub_tasks_network_yml_7[configure network tuning<br>include_task: sub tasks network yml]:::includeTasks
-  Configure_network_tuning_sub_tasks_network_yml_7-->|Include task| Configure_Netplan_sub_tasks_netplan_yml_8[configure netplan<br>When: **inventory hostname not in  groups  tags opentofu<br>managed     default**<br>include_task: sub tasks netplan yml]:::includeTasks
-  Configure_Netplan_sub_tasks_netplan_yml_8-->End
+  Start-->|Include task| Ubuntu___Install_common_packages_sub_tasks_apt_yml_0[ubuntu   install common packages<br>include_task: sub tasks apt yml]:::includeTasks
+  Ubuntu___Install_common_packages_sub_tasks_apt_yml_0-->|Include task| Ubuntu___Clone_Homelab_repo_sub_tasks_repo_yml_1[ubuntu   clone homelab repo<br>When: **tags ansible manager  in group names**<br>include_task: sub tasks repo yml]:::includeTasks
+  Ubuntu___Clone_Homelab_repo_sub_tasks_repo_yml_1-->|Include task| Ubuntu___Setup_Python_venv_sub_tasks_venv_yml_2[ubuntu   setup python venv<br>When: **tags ansible manager  in group names**<br>include_task: sub tasks venv yml]:::includeTasks
+  Ubuntu___Setup_Python_venv_sub_tasks_venv_yml_2-->|Include task| Ubuntu___Install_required_collections_sub_tasks_requirements_yml_3[ubuntu   install required collections<br>When: **tags ansible manager  in group names**<br>include_task: sub tasks requirements yml]:::includeTasks
+  Ubuntu___Install_required_collections_sub_tasks_requirements_yml_3-->|Include task| Ubuntu___Install_Skynet_wrapper_sub_tasks_skynet_yml_4[ubuntu   install skynet wrapper<br>When: **tags ansible manager  in group names**<br>include_task: sub tasks skynet yml]:::includeTasks
+  Ubuntu___Install_Skynet_wrapper_sub_tasks_skynet_yml_4-->|Include task| Ubuntu___Tune_sysctl_settings_sub_tasks_sysctl_yml_5[ubuntu   tune sysctl settings<br>include_task: sub tasks sysctl yml]:::includeTasks
+  Ubuntu___Tune_sysctl_settings_sub_tasks_sysctl_yml_5-->|Include task| Ubuntu___Set_PAM_limits_sub_tasks_pam_yml_6[ubuntu   set pam limits<br>include_task: sub tasks pam yml]:::includeTasks
+  Ubuntu___Set_PAM_limits_sub_tasks_pam_yml_6-->|Include task| Ubuntu___Configure_network_tuning_sub_tasks_network_yml_7[ubuntu   configure network tuning<br>include_task: sub tasks network yml]:::includeTasks
+  Ubuntu___Configure_network_tuning_sub_tasks_network_yml_7-->|Include task| Ubuntu___Configure_Netplan_sub_tasks_netplan_yml_8[ubuntu   configure netplan<br>When: **inventory hostname not in  groups  tags opentofu<br>managed     default**<br>include_task: sub tasks netplan yml]:::includeTasks
+  Ubuntu___Configure_Netplan_sub_tasks_netplan_yml_8-->End
 ```
 
 
