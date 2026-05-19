@@ -12,8 +12,6 @@ obsidian:
     PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
     PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
     UMASK: "022"
-    CUSTOM_PORT: "1314"
-    CUSTOM_HTTPS_PORT: "1315"
   paths:
     - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/obsidian"
       state: directory
@@ -30,12 +28,12 @@ obsidian:
       source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/obsidian"
       target: /config
       read_only: false
-  shm_size: 2gb
+  shm_size: 1gb
   shm_tmpfs_size: 1073741824
   traefik:
     enable: true
     exposure: private
-    port: 1314
+    port: 3000
   deploy:
     type: swarm
     mode: replicated
