@@ -1,0 +1,168 @@
+---
+
+romm:
+  name: romm
+  stack: romm
+  image: ghcr.io/rommapp/romm:4.8.1
+  named_networks:
+    overlay:
+      external: true
+  environment:
+    TZ: "{{ timezone }}"
+    ROMM_PORT: "8080"
+    ROMM_DB_DRIVER: postgresql
+    DB_HOST: "haproxy"
+    DB_PORT: "5432"
+    DB_NAME: "romm"
+    DB_USER_FILE: /run/secrets/postgres_user_secret
+    DB_PASSWD_FILE: /run/secrets/postgres_pass_secret
+    ROMM_BASE_URL_FILE: /run/secrets/romm_base_url_secret
+    ROMM_AUTH_SECRET_KEY_FILE: /run/secrets/romm_auth_key_secret
+    HASHEOUS_API_ENABLED: "true"
+    # Add later after creating accounts/API keys.
+    # IGDB_CLIENT_ID: ""
+    # IGDB_CLIENT_SECRET_FILE: /run/secrets/romm_igdb_client_secret
+    # STEAMGRIDDB_API_KEY_FILE: /run/secrets/romm_steamgriddb_api_key
+    # RETROACHIEVEMENTS_API_KEY_FILE: /run/secrets/romm_retroachievements_api_key
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: romm_base_url
+        path: "/RomM"
+        name: BASE_URL
+        docker_secret: romm_base_url_secret
+      - var: romm_auth_key
+        path: "/RomM"
+        name: AUTH_KEY
+        docker_secret: romm_auth_key_secret
+      - var: postgres_user
+        path: "/Postgres"
+        name: USER
+        docker_secret: postgres_user_secret
+      - var: postgres_pass
+        path: "/Postgres"
+        name: PASS
+        docker_secret: postgres_pass_secret
+  secrets:
+    - romm_auth_key_secret
+    - romm_base_url_secret
+    - postgres_user_secret
+    - postgres_pass_secret
+  paths:
+    # RomM application data root.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/romm"
+      state: directory
+      mode: "0755"
+    # RomM downloaded metadata, artwork/cache resources, and internal app resources.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/romm/resources"
+      state: directory
+      mode: "0755"
+    # Persistent data for RomM's built-in Redis instance.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/romm/redis-data"
+      state: directory
+      mode: "0755"
+    # Optional RomM config files mounted into /romm/config.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/romm/config"
+      state: directory
+      mode: "0755"
+    # Host-side root for the overall RomM gaming workflow.
+    # Contains Igir script, inbox, DATs, reports, library, and assets.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm"
+      state: directory
+      mode: "0755"
+    # RomM library root mounted into the container as /romm/library.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm/library"
+      state: directory
+      mode: "0755"
+    # Actual ROM collection root.
+    # Platform folders live under here, e.g. gba, snes, n64, psx.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm/library/roms"
+      state: directory
+      mode: "0755"
+    # BIOS collection root for systems that require BIOS files.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm/library/bios"
+      state: directory
+      mode: "0755"
+    # RomM user assets such as uploaded saves, states, screenshots, and related files.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm/assets"
+      state: directory
+      mode: "0755"
+    # Igir intake folder for unsorted/unverified ROM files.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm/inbox"
+      state: directory
+      mode: "0755"
+    # Igir DAT folder for No-Intro, Redump, and similar DAT/XML files.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm/dats"
+      state: directory
+      mode: "0755"
+    # Igir report output folder.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm/reports"
+      state: directory
+      mode: "0755"
+    # Cache root for helper tooling used by the RomM workflow.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm/.cache"
+      state: directory
+      mode: "0755"
+    # npm cache used by the ephemeral Node container that runs Igir.
+    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm/.cache/npm"
+      state: directory
+      mode: "0755"
+  copies:
+    - src: files/romm/config.yml
+      dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/romm/config/config.yml"
+      mode: "0644"
+      force: false
+      wait: true
+      wait_timeout: 30
+    - src: files/romm/igir-romm.sh
+      dest: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm/igir-romm.sh"
+      mode: "0755"
+      force: true
+      wait: true
+      wait_timeout: 30
+  volumes:
+    resources:
+      type: bind
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/romm/resources"
+      target: /romm/resources
+      read_only: false
+    redis_data:
+      type: bind
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/romm/redis-data"
+      target: /redis-data
+      read_only: false
+    config:
+      type: bind
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/romm/config"
+      target: /romm/config
+      read_only: false
+    library:
+      type: bind
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm/library"
+      target: /romm/library
+      read_only: false
+    assets:
+      type: bind
+      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/games/romm/assets"
+      target: /romm/assets
+      read_only: false
+  traefik:
+    enable: true
+    exposure: private
+    port: 8080
+  postgres:
+    enable: true
+    databases:
+      - romm
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: "{{ docker_services_unraid_host }}"
+    constraints:
+      - node.labels.docker_services_host == docker_services_unraid_host
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m
