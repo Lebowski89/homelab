@@ -38,6 +38,9 @@ locals {
     sportarr  = { group = "arrs", tag_keys = ["arrs"] }
     whisparr  = { group = "arrs", tag_keys = ["arrs"] }
 
+    # Gaming
+    romm      = { group = "gaming", tag_keys = ["gaming"] }
+
     # Media
     autobrr   = { group = "media", tag_keys = ["media"] }
     gitea     = { group = "media", tag_keys = ["media"] }
@@ -82,6 +85,7 @@ locals {
     adminer   = { group = "utilities", tag_keys = ["utilities"] }
     czkawka   = { group = "utilities", tag_keys = ["utilities"] }
     infisical = { group = "utilities", tag_keys = ["utilities"] }
+    syncthing = { group = "utilities", tag_keys = ["utilities"] }
   }
 
   private_http_monitors = {
@@ -153,6 +157,7 @@ locals {
   # These test Docker overlay/service reachability without Technitium/Traefik.
   direct_http_group_defaults = {
     arrs       = { group = "arrs", tag_keys = ["arrs"] }
+    gaming     = { group = "gaming", tag_keys = ["gaming"] }
     media      = { group = "media", tag_keys = ["media"] }
     monitoring = { group = "monitoring", tag_keys = ["monitoring"] }
     network    = { group = "network", tag_keys = ["network"] }
@@ -173,6 +178,9 @@ locals {
     sonarr-4k = { category = "arrs", port = 8989 }
     sportarr  = { category = "arrs", port = 1867 }
     whisparr  = { category = "arrs", port = 6969 }
+
+    # Gaming
+    romm      = { category = "gaming", port = 8080 }
 
     # Media
     autobrr   = { category = "media", port = 7474 }
@@ -262,6 +270,7 @@ locals {
     czkawka     = { category = "utilities", port = 5800 }
     gitea       = { category = "utilities", port = 3000 }
     infisical   = { category = "utilities", port = 8080 }
+    syncthing   = { category = "utilities", port = 8384 }
     vaultwarden = { category = "utilities", port = 80 }
   }
 

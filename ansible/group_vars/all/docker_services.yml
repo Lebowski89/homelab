@@ -60,6 +60,10 @@ docker_services:
   - name: znc
     tags: [apps, media, znc]
 
+  ## services (gaming)
+  - name: romm
+    tags: [apps, gaming, romm]
+
   ## services (monitoring)
   - name: alloy
     tags: [apps, monitoring, alloy]
