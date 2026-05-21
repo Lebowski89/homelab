@@ -4,6 +4,7 @@ locals {
     auth           = { name = "auth", color = "#7c3aed" }
     critical       = { name = "critical", color = "#dc2626" }
     dns            = { name = "dns", color = "#9333ea" }
+    gaming         = { name = "gaming", color = "#9333ea" }
     infrastructure = { name = "infrastructure", color = "#2563eb" }
     private        = { name = "private", color = "#64748b" }
     public         = { name = "public", color = "#0284c7" }

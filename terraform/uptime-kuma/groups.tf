@@ -9,6 +9,11 @@ locals {
       parent_key = "apps"
     }
 
+    gaming = {
+      name       = "Gaming"
+      parent_key = "apps"
+    }
+
     infrastructure = {
       name = "Infrastructure"
     }

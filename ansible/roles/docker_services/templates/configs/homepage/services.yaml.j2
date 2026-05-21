@@ -79,6 +79,16 @@
         href: https://whisparr.int.{{ cloudflare_zone }}:8443
         description: PVR (Adult)
 
+- gaming:
+    - RomM:
+        icon: https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/romm.svg
+        href: https://romm.int.{{ cloudflare_zone }}:8443
+        description: ROM library and browser player
+        widget:
+          type: romm
+          url: http://romm:8080
+          fields: ["platforms", "totalRoms", "saves", "states"]
+
 - media:
     - Autobrr:
         icon: autobrr.svg
@@ -233,6 +243,10 @@
           fields: ["rate", "queue", "timeleft"]
 
 - utilities:
+    - Syncthing:
+        icon: syncthing.svg
+        href: https://syncthing.int.{{ cloudflare_zone }}:8443
+        description: Save/state/device sync
     - Vaultwarden:
         icon: vaultwarden.png
         href: https://vaultwarden.{{ cloudflare_zone }}
