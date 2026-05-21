@@ -78,7 +78,7 @@ I’m not able to provide general support for Proxmox, Terraform/OpenTofu provid
   </tr>
   <tr>
     <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/redis.svg" alt="Redis" width="36"><br>redis</td>
-    <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/romm-ps2-light.svg" alt="RomM" width="36"><br>romm</td>
+    <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/romm-snes-dark.svg" alt="RomM" width="36"><br>romm</td>
     <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/sabnzbd.svg" alt="SABnzbd" width="36"><br>sabnzbd</td>
     <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/scraparr.svg" alt="Scraparr" width="36"><br>scraparr</td>
     <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/seerr.svg" alt="Seerr" width="36"><br>seerr</td>
