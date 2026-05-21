@@ -14,9 +14,6 @@ on:
       - "terraform/**/*.tf"
       - ".github/workflows/tofu-docs.yml"
 
-permissions:
-  contents: write
-
 concurrency:
   group: tofu-docs-${{ github.ref }}
   cancel-in-progress: true
@@ -25,15 +22,18 @@ jobs:
   docs:
     runs-on: ubuntu-latest
 
+    permissions:
+      contents: write
+
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@8ade135a41bc03ea155e62e844d188df1ea18608
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Render OpenTofu docs
-        uses: terraform-docs/gh-actions@v1.4.1
+        uses: terraform-docs/gh-actions@90d7d172a97c5c65dfdb856ffdc7ba13e7d30d4d
         with:
           working-dir: .
           find-dir: terraform
