@@ -1,0 +1,35 @@
+---
+
+dozzle:
+  name: dozzle
+  stack: dozzle
+  image: amir20/dozzle:v8.14.7
+  named_networks:
+    overlay:
+      external: true
+  environment:
+    TZ: "{{ timezone }}"
+    DOZZLE_NO_ANALYTICS: true
+    DOZZLE_ENABLE_ACTIONS: false
+  volumes:
+    docker_sock:
+      type: bind
+      source: /var/run/docker.sock
+      target: /var/run/docker.sock
+      read_only: true
+  traefik:
+    enable: true
+    exposure: private
+    port: 8080
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    host: "{{ docker_services_primary_manager }}"
+    constraints:
+      - node.labels.docker_services_host == docker_services_primary_manager
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m

@@ -53,6 +53,7 @@ locals {
     znc       = { group = "media", tag_keys = ["media"] }
 
     # Monitoring
+    dozzle      = { group = "monitoring", tag_keys = ["monitoring"] }
     gotify      = { group = "monitoring", tag_keys = ["monitoring"] }
     grafana     = { group = "monitoring", tag_keys = ["monitoring"] }
     homepage    = { group = "monitoring", tag_keys = ["monitoring"] }
@@ -200,6 +201,8 @@ locals {
       path                  = "/-/ready"
       accepted_status_codes = ["200-299"]
     }
+
+    dozzle = { category = "monitoring", port = 8080 }
 
     gotify = { category = "monitoring", port = 80 }
 
