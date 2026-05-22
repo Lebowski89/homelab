@@ -6,6 +6,7 @@ locals {
     "autobrr",
     "bazarr",
     "czkawka",
+    "dozzle",
     "gitea",
     "gotify",
     "grafana",

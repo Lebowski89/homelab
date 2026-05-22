@@ -39,7 +39,7 @@ locals {
     whisparr  = { group = "arrs", tag_keys = ["arrs"] }
 
     # Gaming
-    romm      = { group = "gaming", tag_keys = ["gaming"] }
+    romm = { group = "gaming", tag_keys = ["gaming"] }
 
     # Media
     autobrr   = { group = "media", tag_keys = ["media"] }
@@ -53,6 +53,7 @@ locals {
     znc       = { group = "media", tag_keys = ["media"] }
 
     # Monitoring
+    dozzle      = { group = "monitoring", tag_keys = ["monitoring"] }
     gotify      = { group = "monitoring", tag_keys = ["monitoring"] }
     grafana     = { group = "monitoring", tag_keys = ["monitoring"] }
     homepage    = { group = "monitoring", tag_keys = ["monitoring"] }
@@ -180,7 +181,7 @@ locals {
     whisparr  = { category = "arrs", port = 6969 }
 
     # Gaming
-    romm      = { category = "gaming", port = 8080 }
+    romm = { category = "gaming", port = 8080 }
 
     # Media
     autobrr   = { category = "media", port = 7474 }
@@ -200,6 +201,8 @@ locals {
       path                  = "/-/ready"
       accepted_status_codes = ["200-299"]
     }
+
+    dozzle = { category = "monitoring", port = 8080 }
 
     gotify = { category = "monitoring", port = 80 }
 
