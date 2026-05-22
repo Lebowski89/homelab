@@ -39,7 +39,7 @@ locals {
     whisparr  = { group = "arrs", tag_keys = ["arrs"] }
 
     # Gaming
-    romm      = { group = "gaming", tag_keys = ["gaming"] }
+    romm = { group = "gaming", tag_keys = ["gaming"] }
 
     # Media
     autobrr   = { group = "media", tag_keys = ["media"] }
@@ -181,7 +181,7 @@ locals {
     whisparr  = { category = "arrs", port = 6969 }
 
     # Gaming
-    romm      = { category = "gaming", port = 8080 }
+    romm = { category = "gaming", port = 8080 }
 
     # Media
     autobrr   = { category = "media", port = 7474 }
