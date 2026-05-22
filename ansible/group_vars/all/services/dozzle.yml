@@ -3,14 +3,15 @@
 dozzle:
   name: dozzle
   stack: dozzle
-  image: amir20/dozzle:v8.14.7
+  image: amir20/dozzle:v10.6.0
   named_networks:
     overlay:
       external: true
   environment:
     TZ: "{{ timezone }}"
-    DOZZLE_NO_ANALYTICS: true
-    DOZZLE_ENABLE_ACTIONS: false
+    DOZZLE_MODE: "swarm"
+    DOZZLE_NO_ANALYTICS: "true"
+    DOZZLE_ENABLE_ACTIONS: "false"
   volumes:
     docker_sock:
       type: bind
@@ -23,11 +24,10 @@ dozzle:
     port: 8080
   deploy:
     type: swarm
-    mode: replicated
-    replicas: 1
+    mode: global
     host: "{{ docker_services_primary_manager }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+      - node.labels.haproxy == true
     restart_policy:
       condition: on-failure
       delay: 10s
