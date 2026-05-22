@@ -71,6 +71,8 @@ docker_services:
     tags: [apps, monitoring, beszel]
   - name: crowdsec
     tags: [apps, monitoring, crowdsec]
+  - name: dozzle
+    tags: [apps, monitoring, dozzle]
   - name: gotify
     tags: [apps, monitoring, pgsql, gotify]
   - name: grafana
