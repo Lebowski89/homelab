@@ -30,7 +30,7 @@ portainer:
           window: 2m
     main:
       name: portainer
-      image: portainer/portainer-ce:2.41.1-linux-amd64-alpine
+      image: portainer/portainer-ce:2.42.0-linux-amd64-alpine
       command:
         - "-H tcp://tasks.agent:9001 --tlsskipverify"
       environment:
