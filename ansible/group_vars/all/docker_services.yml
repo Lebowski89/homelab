@@ -32,14 +32,6 @@ docker_services:
   - name: whisparr
     tags: [apps, arrs, pgsql, whisparr]
 
-  ## services (gluetun)
-  - name: gluetun
-    tags: [apps, gluetun]
-  - name: jdownloader2
-    tags: [apps, gluetun, jdownloader2]
-  - name: librewolf
-    tags: [apps, gluetun, librewolf]
-
   ## services (media)
   - name: autobrr
     tags: [apps, media, pgsql, autobrr]
@@ -67,8 +59,6 @@ docker_services:
   ## services (monitoring)
   - name: alloy
     tags: [apps, monitoring, alloy]
-  - name: beszel
-    tags: [apps, monitoring, beszel]
   - name: crowdsec
     tags: [apps, monitoring, crowdsec]
   - name: dozzle
