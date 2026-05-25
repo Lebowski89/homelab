@@ -63,6 +63,14 @@ jobs:
               --output README.md
           done
 
+          README_DATE="$(TZ=Australia/Melbourne date +'%Y/%m/%d')"
+          export README_DATE
+
+          echo "Updating README generated date to ${README_DATE}"
+
+          find ansible/roles -type f -name README.md ! -path '*/docker_services/README.md' -print0 |
+            xargs -0 perl -0pi -e 's/(\|\s*Readme update\s*\|\s*)\d{4}\/\d{2}\/\d{2}(\s*\|)/$1$ENV{README_DATE}$2/g'
+
           echo "Removing Docsible backup files"
           find ansible/roles -type f -name 'README_backup_*.md' -delete
 
