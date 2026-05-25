@@ -1,0 +1,127 @@
+---
+
+- name: Docker prune Unraid User Script | Set whether host is Unraid-style non-systemd
+  ansible.builtin.set_fact:
+    docker_prune_unraid_supported: >-
+      {{
+        docker_prune_unraid_user_script_manage | bool
+        and ansible_facts.service_mgr | default('') != 'systemd'
+      }}
+
+- name: Docker prune Unraid User Script | Skip unsupported hosts
+  when: not docker_prune_unraid_supported | bool
+  ansible.builtin.debug:
+    msg: >-
+      Skipping Unraid User Script deployment on {{ inventory_hostname }} because
+      service manager is {{ ansible_facts.service_mgr | default('unknown') }}.
+
+- name: Docker prune Unraid User Script | Check User Scripts plugin directory
+  when: docker_prune_unraid_supported | bool
+  ansible.builtin.stat:
+    path: "{{ docker_prune_unraid_user_scripts_root }}"
+  register: docker_prune_unraid_user_scripts_root_stat
+
+- name: Docker prune Unraid User Script | Assert User Scripts plugin exists
+  when: docker_prune_unraid_supported | bool
+  ansible.builtin.assert:
+    that:
+      - docker_prune_unraid_user_scripts_root_stat.stat.exists
+      - docker_prune_unraid_user_scripts_root_stat.stat.isdir
+    fail_msg: >-
+      Unraid User Scripts plugin directory was not found at
+      {{ docker_prune_unraid_user_scripts_root }}.
+      Install the User Scripts plugin first, or adjust docker_prune_unraid_user_scripts_root.
+
+- name: Docker prune Unraid User Script | Ensure script directory exists
+  when: docker_prune_unraid_supported | bool
+  ansible.builtin.file:
+    path: "{{ docker_prune_unraid_user_script_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Docker prune Unraid User Script | Install safe prune script
+  when: docker_prune_unraid_supported | bool
+  ansible.builtin.copy:
+    dest: "{{ docker_prune_unraid_user_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+      PRUNE_PATH="{{ docker_prune_filesystem_path }}"
+      MIN_USAGE="{{ docker_prune_timer_min_usage_percent }}"
+      UNTIL="{{ docker_prune_until }}"
+
+      log() {
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*"
+        logger -t docker-prune-safe "$*" || true
+      }
+
+      if ! command -v docker >/dev/null 2>&1; then
+        log "Docker command not found; skipping cleanup."
+        exit 0
+      fi
+
+      if ! docker info >/dev/null 2>&1; then
+        log "Docker is not available/running; skipping cleanup."
+        exit 0
+      fi
+
+      usage="$(df -P "${PRUNE_PATH}" | awk 'NR == 2 { gsub(/%/, "", $5); print $5 }')"
+
+      log "Docker prune safe cleanup starting"
+      log "Path: ${PRUNE_PATH}"
+      log "Usage: ${usage}%"
+      log "Minimum usage threshold: ${MIN_USAGE}%"
+      log "Retention: ${UNTIL}"
+
+      if [ "${MIN_USAGE}" -gt 0 ] && [ "${usage}" -lt "${MIN_USAGE}" ]; then
+        log "Skipping cleanup. Usage ${usage}% is below ${MIN_USAGE}%."
+        exit 0
+      fi
+
+      docker system df || true
+
+      {% if docker_prune_containers | bool %}
+      log "Pruning stopped containers older than ${UNTIL}"
+      docker container prune -f --filter "until=${UNTIL}" || true
+      {% endif %}
+
+      {% if docker_prune_images | bool %}
+      log "Pruning unused images older than ${UNTIL}"
+      docker image prune -a -f --filter "until=${UNTIL}" || true
+      {% endif %}
+
+      {% if docker_prune_builder_cache | bool %}
+      log "Pruning unused builder cache older than ${UNTIL}"
+      docker builder prune -a -f --filter "until=${UNTIL}" || true
+      {% endif %}
+
+      {% if docker_prune_networks | bool %}
+      log "Pruning unused networks older than ${UNTIL}"
+      docker network prune -f --filter "until=${UNTIL}" || true
+      {% endif %}
+
+      {% if docker_prune_volumes | bool %}
+      log "Pruning unused volumes"
+      docker volume prune -f || true
+      {% else %}
+      log "Skipping volume prune; docker_prune_volumes is false."
+      {% endif %}
+
+      docker system df || true
+      log "Docker prune safe cleanup completed"
+
+- name: Docker prune Unraid User Script | Show next manual step
+  when: docker_prune_unraid_supported | bool
+  ansible.builtin.debug:
+    msg: >-
+      Installed {{ docker_prune_unraid_user_script_path }}.
+      In Unraid, go to Settings/Plugins -> User Scripts, find
+      {{ docker_prune_unraid_user_script_name }}, and set it to run weekly.

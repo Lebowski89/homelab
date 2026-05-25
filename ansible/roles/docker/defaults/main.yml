@@ -32,3 +32,27 @@ docker_network_driver: "overlay"
 docker_network_subnet: "172.98.0.0/24"
 
 docker_prune_threshold_percent: 80
+docker_prune_filesystem_path: "/"
+docker_prune_until: "168h"
+
+docker_prune_images: true
+docker_prune_containers: true
+docker_prune_builder_cache: true
+docker_prune_networks: false
+docker_prune_volumes: false
+
+docker_prune_manage_timer: true
+docker_prune_timer_name: docker-prune-safe
+docker_prune_timer_on_calendar: "Sun *-*-* 04:30:00"
+docker_prune_timer_randomized_delay_sec: "1h"
+docker_prune_script_path: /usr/local/sbin/docker-prune-safe
+
+# 0 means timer always runs the safe prune.
+# Set to 70/80/etc if you only want timer cleanup above a disk usage threshold.
+docker_prune_timer_min_usage_percent: 0
+
+docker_prune_unraid_user_script_manage: true
+docker_prune_unraid_user_script_name: docker-prune-safe
+docker_prune_unraid_user_scripts_root: /boot/config/plugins/user.scripts/scripts
+docker_prune_unraid_user_script_dir: "{{ docker_prune_unraid_user_scripts_root }}/{{ docker_prune_unraid_user_script_name }}"
+docker_prune_unraid_user_script_path: "{{ docker_prune_unraid_user_script_dir }}/script"

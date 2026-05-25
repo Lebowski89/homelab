@@ -1,0 +1,129 @@
+---
+
+- name: Docker prune cleanup | Get filesystem usage
+  ansible.builtin.command:
+    argv:
+      - df
+      - --output=pcent
+      - "{{ docker_prune_filesystem_path }}"
+  register: docker_prune_df
+  changed_when: false
+
+- name: Docker prune cleanup | Parse filesystem usage percent
+  ansible.builtin.set_fact:
+    docker_prune_usage_percent: >-
+      {{
+        docker_prune_df.stdout_lines[-1]
+        | regex_replace('[^0-9]', '')
+        | int
+      }}
+
+- name: Docker prune cleanup | Show current usage
+  ansible.builtin.debug:
+    msg:
+      path: "{{ docker_prune_filesystem_path }}"
+      usage_percent: "{{ docker_prune_usage_percent }}"
+      threshold_percent: "{{ docker_prune_threshold_percent }}"
+      prune_until: "{{ docker_prune_until }}"
+
+- name: Docker prune cleanup | Run safe cleanup when above threshold
+  when: docker_prune_usage_percent >= (docker_prune_threshold_percent | int)
+  block:
+    - name: Docker prune cleanup | Show Docker disk usage before cleanup
+      ansible.builtin.command:
+        argv:
+          - docker
+          - system
+          - df
+      register: docker_prune_df_before
+      changed_when: false
+
+    - name: Docker prune cleanup | Remove stopped containers older than retention
+      when: docker_prune_containers | bool
+      ansible.builtin.command:
+        argv:
+          - docker
+          - container
+          - prune
+          - -f
+          - --filter
+          - "until={{ docker_prune_until }}"
+      register: docker_prune_containers_result
+      changed_when: docker_prune_containers_result.stdout is search('Deleted Containers:')
+
+    - name: Docker prune cleanup | Remove unused images older than retention
+      when: docker_prune_images | bool
+      ansible.builtin.command:
+        argv:
+          - docker
+          - image
+          - prune
+          - -a
+          - -f
+          - --filter
+          - "until={{ docker_prune_until }}"
+      register: docker_prune_images_result
+      changed_when: docker_prune_images_result.stdout is search('Deleted Images:')
+
+    - name: Docker prune cleanup | Remove unused builder cache older than retention
+      when: docker_prune_builder_cache | bool
+      ansible.builtin.command:
+        argv:
+          - docker
+          - builder
+          - prune
+          - -a
+          - -f
+          - --filter
+          - "until={{ docker_prune_until }}"
+      register: docker_prune_builder_result
+      changed_when: >-
+        docker_prune_builder_result.stdout is search('Total reclaimed space:')
+        and not (docker_prune_builder_result.stdout is search('Total reclaimed space:\\s*0B'))
+
+    - name: Docker prune cleanup | Remove unused networks older than retention
+      when: docker_prune_networks | bool
+      ansible.builtin.command:
+        argv:
+          - docker
+          - network
+          - prune
+          - -f
+          - --filter
+          - "until={{ docker_prune_until }}"
+      register: docker_prune_networks_result
+      changed_when: docker_prune_networks_result.stdout is search('Deleted Networks:')
+
+    - name: Docker prune cleanup | Remove unused volumes
+      when: docker_prune_volumes | bool
+      ansible.builtin.command:
+        argv:
+          - docker
+          - volume
+          - prune
+          - -f
+      register: docker_prune_volumes_result
+      changed_when: docker_prune_volumes_result.stdout is search('Deleted Volumes:')
+
+    - name: Docker prune cleanup | Show Docker disk usage after cleanup
+      ansible.builtin.command:
+        argv:
+          - docker
+          - system
+          - df
+      register: docker_prune_df_after
+      changed_when: false
+
+    - name: Docker prune cleanup | Cleanup summary
+      ansible.builtin.debug:
+        msg:
+          before: "{{ docker_prune_df_before.stdout_lines }}"
+          after: "{{ docker_prune_df_after.stdout_lines }}"
+
+- name: Docker prune cleanup | Skip cleanup below threshold
+  when: docker_prune_usage_percent < (docker_prune_threshold_percent | int)
+  ansible.builtin.debug:
+    msg: >-
+      Skipping Docker prune. {{ docker_prune_filesystem_path }} usage is
+      {{ docker_prune_usage_percent }}%, below threshold
+      {{ docker_prune_threshold_percent }}%.
