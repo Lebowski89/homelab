@@ -110,35 +110,6 @@
 | NetBox ¦ Deploy stack | community.docker.docker_stack | False |  |
 
 
-## Task Flow Graphs
-
-
-
-### Graph for main.yml
-
-```mermaid
-flowchart TD
-Start
-classDef block stroke:#3498db,stroke-width:2px;
-classDef task stroke:#4b76bb,stroke-width:2px;
-classDef includeTasks stroke:#16a085,stroke-width:2px;
-classDef importTasks stroke:#34495e,stroke-width:2px;
-classDef includeRole stroke:#2980b9,stroke-width:2px;
-classDef importRole stroke:#699ba7,stroke-width:2px;
-classDef includeVars stroke:#8e44ad,stroke-width:2px;
-classDef rescue stroke:#665352,stroke-width:2px;
-
-  Start-->|Task| NetBox___Assert_required_non_secret_values_are_defined0[netbox   assert required non secret values are<br>defined]:::task
-  NetBox___Assert_required_non_secret_values_are_defined0-->|Task| NetBox___Remove_stack1[netbox   remove stack]:::task
-  NetBox___Remove_stack1-->|Task| NetBox___Remove_compose_file2[netbox   remove compose file]:::task
-  NetBox___Remove_compose_file2-->|Task| NetBox___Create_directories3[netbox   create directories]:::task
-  NetBox___Create_directories3-->|Task| NetBox___Assert_Docker_secrets_values_are_defined4[netbox   assert docker secrets values are defined]:::task
-  NetBox___Assert_Docker_secrets_values_are_defined4-->|Task| NetBox___Ensure_Docker_Swarm_secrets_exist5[netbox   ensure docker swarm secrets exist]:::task
-  NetBox___Ensure_Docker_Swarm_secrets_exist5-->|Task| NetBox___Render_Traefik_dynamic_file6[netbox   render traefik dynamic file]:::task
-  NetBox___Render_Traefik_dynamic_file6-->|Task| NetBox___Render_compose_file7[netbox   render compose file]:::task
-  NetBox___Render_compose_file7-->|Task| NetBox___Deploy_stack8[netbox   deploy stack]:::task
-  NetBox___Deploy_stack8-->End
-```
 
 
 
