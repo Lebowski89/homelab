@@ -52,6 +52,24 @@
 | [docker_network_driver](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L31)   | str | `overlay` |    
 | [docker_network_subnet](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L32)   | str | `172.98.0.0/24` |    
 | [docker_prune_threshold_percent](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L34)   | int | `80` |    
+| [docker_prune_filesystem_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L35)   | str | `/` |    
+| [docker_prune_until](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L36)   | str | `168h` |    
+| [docker_prune_images](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L38)   | bool | `True` |    
+| [docker_prune_containers](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L39)   | bool | `True` |    
+| [docker_prune_builder_cache](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L40)   | bool | `True` |    
+| [docker_prune_networks](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L41)   | bool | `False` |    
+| [docker_prune_volumes](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L42)   | bool | `False` |    
+| [docker_prune_manage_timer](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L44)   | bool | `True` |    
+| [docker_prune_timer_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L45)   | str | `docker-prune-safe` |    
+| [docker_prune_timer_on_calendar](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L46)   | str | `Sun *-*-* 04:30:00` |    
+| [docker_prune_timer_randomized_delay_sec](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L47)   | str | `1h` |    
+| [docker_prune_script_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L48)   | str | `/usr/local/sbin/docker-prune-safe` |    
+| [docker_prune_timer_min_usage_percent](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L52)   | int | `0` |    
+| [docker_prune_unraid_user_script_manage](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L54)   | bool | `True` |    
+| [docker_prune_unraid_user_script_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L55)   | str | `docker-prune-safe` |    
+| [docker_prune_unraid_user_scripts_root](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L56)   | str | `/boot/config/plugins/user.scripts/scripts` |    
+| [docker_prune_unraid_user_script_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L57)   | str | `{{ docker_prune_unraid_user_scripts_root }}/{{ docker_prune_unraid_user_script_name }}` |    
+| [docker_prune_unraid_user_script_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L58)   | str | `{{ docker_prune_unraid_user_script_dir }}/script` |    
 
 
 
@@ -66,7 +84,9 @@
 | ---- | ------ | -------------- | -----|
 | Install Docker | ansible.builtin.include_tasks | True | docker,docker_install |
 | Configure Docker Swarm | ansible.builtin.include_tasks | True | docker,docker_swarm,docker_swarm_init,docker_swarm_join,docker_swarm_network,docker_swarm_labels |
-| Docker Prune | ansible.builtin.include_tasks | False | docker_prune,docker_prune_dangling,docker_prune_unused,docker_prune_volumes |
+| Docker Prune Cleanup | ansible.builtin.include_tasks | False | docker_prune,docker_prune_dangling,docker_prune_unused,docker_prune_volumes |
+| Docker Prune Timer | ansible.builtin.include_tasks | False | docker_prune_timer |
+| Docker Prune Unraid User Script | ansible.builtin.include_tasks | False | docker_prune_unraid_user_script |
 
 #### File: tasks/sub_tasks/install.yml
 
@@ -81,16 +101,46 @@
 | Ensure docker group exists | ansible.builtin.group | True |
 | Add user to docker group | ansible.builtin.user | True |
 
-#### File: tasks/sub_tasks/prune.yml
+#### File: tasks/sub_tasks/prune/cleanup.yml
 
-| Name | Module | Has Conditions | Tags |
-| ---- | ------ | -------------- | -----|
-| Docker prune ¦ Get root filesystem usage | ansible.builtin.command | False |  |
-| Docker prune ¦ Parse root filesystem usage percent | ansible.builtin.set_fact | False |  |
-| Docker prune ¦ End play when usage is below threshold | ansible.builtin.meta | True |  |
-| Remove dangling Docker images | ansible.builtin.command | False | d,o,c,k,e,r,_,p,r,u,n,e,_,d,a,n,g,l,i,n,g |
-| Remove unused Docker images | ansible.builtin.command | False | d,o,c,k,e,r,_,p,r,u,n,e,_,u,n,u,s,e,d |
-| Remove unused Docker volumes | ansible.builtin.command | False | d,o,c,k,e,r,_,p,r,u,n,e,_,v,o,l,u,m,e,s |
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Docker prune cleanup ¦ Get filesystem usage | ansible.builtin.command | False |
+| Docker prune cleanup ¦ Parse filesystem usage percent | ansible.builtin.set_fact | False |
+| Docker prune cleanup ¦ Show current usage | ansible.builtin.debug | False |
+| Docker prune cleanup ¦ Run safe cleanup when above threshold | block | True |
+| Docker prune cleanup ¦ Show Docker disk usage before cleanup | ansible.builtin.command | False |
+| Docker prune cleanup ¦ Remove stopped containers older than retention | ansible.builtin.command | True |
+| Docker prune cleanup ¦ Remove unused images older than retention | ansible.builtin.command | True |
+| Docker prune cleanup ¦ Remove unused builder cache older than retention | ansible.builtin.command | True |
+| Docker prune cleanup ¦ Remove unused networks older than retention | ansible.builtin.command | True |
+| Docker prune cleanup ¦ Remove unused volumes | ansible.builtin.command | True |
+| Docker prune cleanup ¦ Show Docker disk usage after cleanup | ansible.builtin.command | False |
+| Docker prune cleanup ¦ Cleanup summary | ansible.builtin.debug | False |
+| Docker prune cleanup ¦ Skip cleanup below threshold | ansible.builtin.debug | True |
+
+#### File: tasks/sub_tasks/prune/timer.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Docker prune timer ¦ Set whether host supports systemd timers | ansible.builtin.set_fact | False |
+| Docker prune timer ¦ Skip non-systemd hosts | ansible.builtin.debug | True |
+| Docker prune timer ¦ Install safe prune script | ansible.builtin.copy | True |
+| Docker prune timer ¦ Install systemd service | ansible.builtin.copy | True |
+| Docker prune timer ¦ Install systemd timer | ansible.builtin.copy | True |
+| Docker prune timer ¦ Enable timer | ansible.builtin.systemd | True |
+
+#### File: tasks/sub_tasks/prune/unraid_user_script.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Docker prune Unraid User Script ¦ Set whether host is Unraid-style non-systemd | ansible.builtin.set_fact | False |
+| Docker prune Unraid User Script ¦ Skip unsupported hosts | ansible.builtin.debug | True |
+| Docker prune Unraid User Script ¦ Check User Scripts plugin directory | ansible.builtin.stat | True |
+| Docker prune Unraid User Script ¦ Assert User Scripts plugin exists | ansible.builtin.assert | True |
+| Docker prune Unraid User Script ¦ Ensure script directory exists | ansible.builtin.file | True |
+| Docker prune Unraid User Script ¦ Install safe prune script | ansible.builtin.copy | True |
+| Docker prune Unraid User Script ¦ Show next manual step | ansible.builtin.debug | True |
 
 #### File: tasks/sub_tasks/swarm.yml
 
@@ -132,8 +182,10 @@ classDef rescue stroke:#665352,stroke-width:2px;
 
   Start-->|Include task| Install_Docker_sub_tasks_install_yml_0[install docker<br>When: **tags docker install  in group names**<br>include_task: sub tasks install yml]:::includeTasks
   Install_Docker_sub_tasks_install_yml_0-->|Include task| Configure_Docker_Swarm_sub_tasks_swarm_yml_1[configure docker swarm<br>When: **tags swarm  in group names**<br>include_task: sub tasks swarm yml]:::includeTasks
-  Configure_Docker_Swarm_sub_tasks_swarm_yml_1-->|Include task| Docker_Prune_sub_tasks_prune_yml_2[docker prune<br>include_task: sub tasks prune yml]:::includeTasks
-  Docker_Prune_sub_tasks_prune_yml_2-->End
+  Configure_Docker_Swarm_sub_tasks_swarm_yml_1-->|Include task| Docker_Prune_Cleanup_sub_tasks_prune_cleanup_yml_2[docker prune cleanup<br>include_task: sub tasks prune cleanup yml]:::includeTasks
+  Docker_Prune_Cleanup_sub_tasks_prune_cleanup_yml_2-->|Include task| Docker_Prune_Timer_sub_tasks_prune_timer_yml_3[docker prune timer<br>include_task: sub tasks prune timer yml]:::includeTasks
+  Docker_Prune_Timer_sub_tasks_prune_timer_yml_3-->|Include task| Docker_Prune_Unraid_User_Script_sub_tasks_prune_unraid_user_script_yml_4[docker prune unraid user script<br>include_task: sub tasks prune unraid user script yml]:::includeTasks
+  Docker_Prune_Unraid_User_Script_sub_tasks_prune_unraid_user_script_yml_4-->End
 ```
 
 
@@ -163,7 +215,7 @@ classDef rescue stroke:#665352,stroke-width:2px;
 ```
 
 
-### Graph for sub_tasks/prune.yml
+### Graph for sub_tasks/prune/cleanup.yml
 
 ```mermaid
 flowchart TD
@@ -177,13 +229,70 @@ classDef importRole stroke:#699ba7,stroke-width:2px;
 classDef includeVars stroke:#8e44ad,stroke-width:2px;
 classDef rescue stroke:#665352,stroke-width:2px;
 
-  Start-->|Task| Docker_prune___Get_root_filesystem_usage0[docker prune   get root filesystem usage]:::task
-  Docker_prune___Get_root_filesystem_usage0-->|Task| Docker_prune___Parse_root_filesystem_usage_percent1[docker prune   parse root filesystem usage percent]:::task
-  Docker_prune___Parse_root_filesystem_usage_percent1-->|Task| Docker_prune___End_play_when_usage_is_below_threshold2[docker prune   end play when usage is below<br>threshold<br>When: **docker prune root usage percent    docker prune<br>threshold percent   int**]:::task
-  Docker_prune___End_play_when_usage_is_below_threshold2-->|Task| Remove_dangling_Docker_images3[remove dangling docker images]:::task
-  Remove_dangling_Docker_images3-->|Task| Remove_unused_Docker_images4[remove unused docker images]:::task
-  Remove_unused_Docker_images4-->|Task| Remove_unused_Docker_volumes5[remove unused docker volumes]:::task
-  Remove_unused_Docker_volumes5-->End
+  Start-->|Task| Docker_prune_cleanup___Get_filesystem_usage0[docker prune cleanup   get filesystem usage]:::task
+  Docker_prune_cleanup___Get_filesystem_usage0-->|Task| Docker_prune_cleanup___Parse_filesystem_usage_percent1[docker prune cleanup   parse filesystem usage<br>percent]:::task
+  Docker_prune_cleanup___Parse_filesystem_usage_percent1-->|Task| Docker_prune_cleanup___Show_current_usage2[docker prune cleanup   show current usage]:::task
+  Docker_prune_cleanup___Show_current_usage2-->|Block Start| Docker_prune_cleanup___Run_safe_cleanup_when_above_threshold3_block_start_0[[docker prune cleanup   run safe cleanup when above<br>threshold<br>When: **docker prune usage percent     docker prune<br>threshold percent   int**]]:::block
+  Docker_prune_cleanup___Run_safe_cleanup_when_above_threshold3_block_start_0-->|Task| Docker_prune_cleanup___Show_Docker_disk_usage_before_cleanup0[docker prune cleanup   show docker disk usage<br>before cleanup]:::task
+  Docker_prune_cleanup___Show_Docker_disk_usage_before_cleanup0-->|Task| Docker_prune_cleanup___Remove_stopped_containers_older_than_retention1[docker prune cleanup   remove stopped containers<br>older than retention<br>When: **docker prune containers   bool**]:::task
+  Docker_prune_cleanup___Remove_stopped_containers_older_than_retention1-->|Task| Docker_prune_cleanup___Remove_unused_images_older_than_retention2[docker prune cleanup   remove unused images older<br>than retention<br>When: **docker prune images   bool**]:::task
+  Docker_prune_cleanup___Remove_unused_images_older_than_retention2-->|Task| Docker_prune_cleanup___Remove_unused_builder_cache_older_than_retention3[docker prune cleanup   remove unused builder cache<br>older than retention<br>When: **docker prune builder cache   bool**]:::task
+  Docker_prune_cleanup___Remove_unused_builder_cache_older_than_retention3-->|Task| Docker_prune_cleanup___Remove_unused_networks_older_than_retention4[docker prune cleanup   remove unused networks<br>older than retention<br>When: **docker prune networks   bool**]:::task
+  Docker_prune_cleanup___Remove_unused_networks_older_than_retention4-->|Task| Docker_prune_cleanup___Remove_unused_volumes5[docker prune cleanup   remove unused volumes<br>When: **docker prune volumes   bool**]:::task
+  Docker_prune_cleanup___Remove_unused_volumes5-->|Task| Docker_prune_cleanup___Show_Docker_disk_usage_after_cleanup6[docker prune cleanup   show docker disk usage<br>after cleanup]:::task
+  Docker_prune_cleanup___Show_Docker_disk_usage_after_cleanup6-->|Task| Docker_prune_cleanup___Cleanup_summary7[docker prune cleanup   cleanup summary]:::task
+  Docker_prune_cleanup___Cleanup_summary7-.->|End of Block| Docker_prune_cleanup___Run_safe_cleanup_when_above_threshold3_block_start_0
+  Docker_prune_cleanup___Cleanup_summary7-->|Task| Docker_prune_cleanup___Skip_cleanup_below_threshold4[docker prune cleanup   skip cleanup below<br>threshold<br>When: **docker prune usage percent    docker prune<br>threshold percent   int**]:::task
+  Docker_prune_cleanup___Skip_cleanup_below_threshold4-->End
+```
+
+
+### Graph for sub_tasks/prune/timer.yml
+
+```mermaid
+flowchart TD
+Start
+classDef block stroke:#3498db,stroke-width:2px;
+classDef task stroke:#4b76bb,stroke-width:2px;
+classDef includeTasks stroke:#16a085,stroke-width:2px;
+classDef importTasks stroke:#34495e,stroke-width:2px;
+classDef includeRole stroke:#2980b9,stroke-width:2px;
+classDef importRole stroke:#699ba7,stroke-width:2px;
+classDef includeVars stroke:#8e44ad,stroke-width:2px;
+classDef rescue stroke:#665352,stroke-width:2px;
+
+  Start-->|Task| Docker_prune_timer___Set_whether_host_supports_systemd_timers0[docker prune timer   set whether host supports<br>systemd timers]:::task
+  Docker_prune_timer___Set_whether_host_supports_systemd_timers0-->|Task| Docker_prune_timer___Skip_non_systemd_hosts1[docker prune timer   skip non systemd hosts<br>When: **docker prune manage timer   bool and not docker<br>prune timer systemd supported   bool**]:::task
+  Docker_prune_timer___Skip_non_systemd_hosts1-->|Task| Docker_prune_timer___Install_safe_prune_script2[docker prune timer   install safe prune script<br>When: **docker prune timer systemd supported   bool**]:::task
+  Docker_prune_timer___Install_safe_prune_script2-->|Task| Docker_prune_timer___Install_systemd_service3[docker prune timer   install systemd service<br>When: **docker prune timer systemd supported   bool**]:::task
+  Docker_prune_timer___Install_systemd_service3-->|Task| Docker_prune_timer___Install_systemd_timer4[docker prune timer   install systemd timer<br>When: **docker prune timer systemd supported   bool**]:::task
+  Docker_prune_timer___Install_systemd_timer4-->|Task| Docker_prune_timer___Enable_timer5[docker prune timer   enable timer<br>When: **docker prune timer systemd supported   bool**]:::task
+  Docker_prune_timer___Enable_timer5-->End
+```
+
+
+### Graph for sub_tasks/prune/unraid_user_script.yml
+
+```mermaid
+flowchart TD
+Start
+classDef block stroke:#3498db,stroke-width:2px;
+classDef task stroke:#4b76bb,stroke-width:2px;
+classDef includeTasks stroke:#16a085,stroke-width:2px;
+classDef importTasks stroke:#34495e,stroke-width:2px;
+classDef includeRole stroke:#2980b9,stroke-width:2px;
+classDef importRole stroke:#699ba7,stroke-width:2px;
+classDef includeVars stroke:#8e44ad,stroke-width:2px;
+classDef rescue stroke:#665352,stroke-width:2px;
+
+  Start-->|Task| Docker_prune_Unraid_User_Script___Set_whether_host_is_Unraid_style_non_systemd0[docker prune unraid user script   set whether host<br>is unraid style non systemd]:::task
+  Docker_prune_Unraid_User_Script___Set_whether_host_is_Unraid_style_non_systemd0-->|Task| Docker_prune_Unraid_User_Script___Skip_unsupported_hosts1[docker prune unraid user script   skip unsupported<br>hosts<br>When: **not docker prune unraid supported   bool**]:::task
+  Docker_prune_Unraid_User_Script___Skip_unsupported_hosts1-->|Task| Docker_prune_Unraid_User_Script___Check_User_Scripts_plugin_directory2[docker prune unraid user script   check user<br>scripts plugin directory<br>When: **docker prune unraid supported   bool**]:::task
+  Docker_prune_Unraid_User_Script___Check_User_Scripts_plugin_directory2-->|Task| Docker_prune_Unraid_User_Script___Assert_User_Scripts_plugin_exists3[docker prune unraid user script   assert user<br>scripts plugin exists<br>When: **docker prune unraid supported   bool**]:::task
+  Docker_prune_Unraid_User_Script___Assert_User_Scripts_plugin_exists3-->|Task| Docker_prune_Unraid_User_Script___Ensure_script_directory_exists4[docker prune unraid user script   ensure script<br>directory exists<br>When: **docker prune unraid supported   bool**]:::task
+  Docker_prune_Unraid_User_Script___Ensure_script_directory_exists4-->|Task| Docker_prune_Unraid_User_Script___Install_safe_prune_script5[docker prune unraid user script   install safe<br>prune script<br>When: **docker prune unraid supported   bool**]:::task
+  Docker_prune_Unraid_User_Script___Install_safe_prune_script5-->|Task| Docker_prune_Unraid_User_Script___Show_next_manual_step6[docker prune unraid user script   show next manual<br>step<br>When: **docker prune unraid supported   bool**]:::task
+  Docker_prune_Unraid_User_Script___Show_next_manual_step6-->End
 ```
 
 

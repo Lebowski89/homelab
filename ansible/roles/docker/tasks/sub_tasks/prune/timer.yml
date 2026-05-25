@@ -1,0 +1,121 @@
+---
+
+- name: Docker prune timer | Set whether host supports systemd timers
+  ansible.builtin.set_fact:
+    docker_prune_timer_systemd_supported: >-
+      {{
+        docker_prune_manage_timer | bool
+        and ansible_facts.service_mgr | default('') == 'systemd'
+      }}
+
+- name: Docker prune timer | Skip non-systemd hosts
+  when:
+    - docker_prune_manage_timer | bool
+    - not docker_prune_timer_systemd_supported | bool
+  ansible.builtin.debug:
+    msg: >-
+      Skipping Docker prune systemd timer on {{ inventory_hostname }} because
+      service manager is {{ ansible_facts.service_mgr | default('unknown') }},
+      not systemd.
+
+- name: Docker prune timer | Install safe prune script
+  when: docker_prune_timer_systemd_supported | bool
+  ansible.builtin.copy:
+    dest: "{{ docker_prune_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/usr/bin/env bash
+      set -euo pipefail
+
+      PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+      PRUNE_PATH="{{ docker_prune_filesystem_path }}"
+      MIN_USAGE="{{ docker_prune_timer_min_usage_percent }}"
+      UNTIL="{{ docker_prune_until }}"
+
+      usage="$(df --output=pcent "${PRUNE_PATH}" | tail -n 1 | tr -dc '0-9')"
+
+      echo "Docker prune safe cleanup starting"
+      echo "Path: ${PRUNE_PATH}"
+      echo "Usage: ${usage}%"
+      echo "Minimum usage threshold: ${MIN_USAGE}%"
+      echo "Retention: ${UNTIL}"
+
+      if [ "${MIN_USAGE}" -gt 0 ] && [ "${usage}" -lt "${MIN_USAGE}" ]; then
+        echo "Skipping cleanup. Usage ${usage}% is below ${MIN_USAGE}%."
+        exit 0
+      fi
+
+      docker system df || true
+
+      {% if docker_prune_containers | bool %}
+      docker container prune -f --filter "until=${UNTIL}"
+      {% endif %}
+
+      {% if docker_prune_images | bool %}
+      docker image prune -a -f --filter "until=${UNTIL}"
+      {% endif %}
+
+      {% if docker_prune_builder_cache | bool %}
+      docker builder prune -a -f --filter "until=${UNTIL}"
+      {% endif %}
+
+      {% if docker_prune_networks | bool %}
+      docker network prune -f --filter "until=${UNTIL}"
+      {% endif %}
+
+      {% if docker_prune_volumes | bool %}
+      docker volume prune -f
+      {% endif %}
+
+      docker system df || true
+      echo "Docker prune safe cleanup completed"
+
+- name: Docker prune timer | Install systemd service
+  when: docker_prune_timer_systemd_supported | bool
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ docker_prune_timer_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Safe Docker prune cleanup
+      Wants=docker.service
+      After=docker.service
+
+      [Service]
+      Type=oneshot
+      ExecStart={{ docker_prune_script_path }}
+      Nice=10
+      IOSchedulingClass=best-effort
+      IOSchedulingPriority=7
+
+- name: Docker prune timer | Install systemd timer
+  when: docker_prune_timer_systemd_supported | bool
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ docker_prune_timer_name }}.timer"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=Run safe Docker prune cleanup
+
+      [Timer]
+      OnCalendar={{ docker_prune_timer_on_calendar }}
+      RandomizedDelaySec={{ docker_prune_timer_randomized_delay_sec }}
+      Persistent=true
+
+      [Install]
+      WantedBy=timers.target
+
+- name: Docker prune timer | Enable timer
+  when: docker_prune_timer_systemd_supported | bool
+  ansible.builtin.systemd:
+    name: "{{ docker_prune_timer_name }}.timer"
+    enabled: true
+    state: started
+    daemon_reload: true
