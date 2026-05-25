@@ -43,6 +43,7 @@ jobs:
       - name: Generate documentation for all supported roles
         run: |
           shopt -s nullglob
+
           for role in ansible/roles/*; do
             [ -d "$role" ] || continue
             role_name="$(basename "$role")"
@@ -62,12 +63,21 @@ jobs:
               --output README.md
           done
 
+          echo "Removing Docsible backup files"
+          find ansible/roles -type f -name 'README_backup_*.md' -delete
+
+          echo "Checking generated docs for Mermaid graphs"
+          if grep -R -E '```mermaid|graph TD|flowchart' ansible/roles/*/README.md; then
+            echo "Mermaid graphs still found in generated role docs"
+            exit 1
+          fi
+
       - name: Commit updated docs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add ansible/roles/**/README.md ansible/roles/**/.docsible
+          git add -A ansible/roles
 
           if git diff --cached --quiet; then
             echo "No documentation changes to commit"
