@@ -58,7 +58,6 @@ jobs:
             docsible \
               --role "$role" \
               --comments \
-              --graph \
               --repository-url detect \
               --output README.md
           done
