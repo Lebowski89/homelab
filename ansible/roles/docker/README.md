@@ -85,8 +85,8 @@
 | Install Docker | ansible.builtin.include_tasks | True | docker,docker_install |
 | Configure Docker Swarm | ansible.builtin.include_tasks | True | docker,docker_swarm,docker_swarm_init,docker_swarm_join,docker_swarm_network,docker_swarm_labels |
 | Docker Prune Cleanup | ansible.builtin.include_tasks | False | docker_prune,docker_prune_dangling,docker_prune_unused,docker_prune_volumes |
-| Docker Prune Timer | ansible.builtin.include_tasks | False | d,o,c,k,e,r,_,p,r,u,n,e,_,t,i,m,e,r |
-| Docker Prune Unraid User Script | ansible.builtin.include_tasks | False | d,o,c,k,e,r,_,p,r,u,n,e,_,u,n,r,a,i,d,_,u,s,e,r,_,s,c,r,i,p,t |
+| Docker Prune Timer | ansible.builtin.include_tasks | False | docker_prune_timer |
+| Docker Prune Unraid User Script | ansible.builtin.include_tasks | False | docker_prune_unraid_user_script |
 
 #### File: tasks/sub_tasks/install.yml
 
