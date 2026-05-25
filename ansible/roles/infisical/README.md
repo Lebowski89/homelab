@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/04/11 |
+| Readme update        | 2026/05/25 |
 
 
 
@@ -110,38 +110,6 @@
 | Infisical ¦ Compose stack up | community.docker.docker_compose_v2 | False |  |
 
 
-## Task Flow Graphs
-
-
-
-### Graph for main.yml
-
-```mermaid
-flowchart TD
-Start
-classDef block stroke:#3498db,stroke-width:2px;
-classDef task stroke:#4b76bb,stroke-width:2px;
-classDef includeTasks stroke:#16a085,stroke-width:2px;
-classDef importTasks stroke:#34495e,stroke-width:2px;
-classDef includeRole stroke:#2980b9,stroke-width:2px;
-classDef importRole stroke:#699ba7,stroke-width:2px;
-classDef includeVars stroke:#8e44ad,stroke-width:2px;
-classDef rescue stroke:#665352,stroke-width:2px;
-
-  Start-->|Task| Infisical___Assert_required_non_secret_values_are_defined0[infisical   assert required non secret values are<br>defined]:::task
-  Infisical___Assert_required_non_secret_values_are_defined0-->|Task| Infisical___Check_if_compose_file_exists1[infisical   check if compose file exists]:::task
-  Infisical___Check_if_compose_file_exists1-->|Task| Infisical___Compose_down2[infisical   compose down<br>When: **infisical existing compose yaml stat exists**]:::task
-  Infisical___Compose_down2-->|Task| Infisical___Remove_compose_file3[infisical   remove compose file]:::task
-  Infisical___Remove_compose_file3-->|Task| Infisical___Create_directories4[infisical   create directories]:::task
-  Infisical___Create_directories4-->|Task| Infisical___Template_env_file5[infisical   template env file]:::task
-  Infisical___Template_env_file5-->|Task| Infisical___Assert_Docker_secrets_values_are_defined6[infisical   assert docker secrets values are<br>defined]:::task
-  Infisical___Assert_Docker_secrets_values_are_defined6-->|Task| Infisical___Create_Docker_secrets_directory7[infisical   create docker secrets directory]:::task
-  Infisical___Create_Docker_secrets_directory7-->|Task| Infisical___Create_Docker_secrets_files8[infisical   create docker secrets files]:::task
-  Infisical___Create_Docker_secrets_files8-->|Task| Infisical___Render_Traefik_dynamic_file9[infisical   render traefik dynamic file]:::task
-  Infisical___Render_Traefik_dynamic_file9-->|Task| Infisical___Import_compose_file10[infisical   import compose file]:::task
-  Infisical___Import_compose_file10-->|Task| Infisical___Compose_stack_up11[infisical   compose stack up]:::task
-  Infisical___Compose_stack_up11-->End
-```
 
 
 

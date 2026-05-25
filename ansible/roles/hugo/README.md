@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/04/16 |
+| Readme update        | 2026/05/25 |
 
 
 
@@ -107,40 +107,6 @@
 | Hugo ¦ Add Terminal theme submodule | ansible.builtin.command | True |  |
 
 
-## Task Flow Graphs
-
-
-
-### Graph for main.yml
-
-```mermaid
-flowchart TD
-Start
-classDef block stroke:#3498db,stroke-width:2px;
-classDef task stroke:#4b76bb,stroke-width:2px;
-classDef includeTasks stroke:#16a085,stroke-width:2px;
-classDef importTasks stroke:#34495e,stroke-width:2px;
-classDef includeRole stroke:#2980b9,stroke-width:2px;
-classDef importRole stroke:#699ba7,stroke-width:2px;
-classDef includeVars stroke:#8e44ad,stroke-width:2px;
-classDef rescue stroke:#665352,stroke-width:2px;
-
-  Start-->|Task| Hugo___Ensure_directories_exist0[hugo   ensure directories exist]:::task
-  Hugo___Ensure_directories_exist0-->|Task| Hugo___Copy_files1[hugo   copy files]:::task
-  Hugo___Copy_files1-->|Task| Hugo___Wait_for_copied_files2[hugo   wait for copied files<br>When: **hugo copy wait   default false**]:::task
-  Hugo___Wait_for_copied_files2-->|Task| Hugo___Render_templates3[hugo   render templates]:::task
-  Hugo___Render_templates3-->|Task| Hugo___Check_if_site_exists4[hugo   check if site exists]:::task
-  Hugo___Check_if_site_exists4-->|Block Start| Hugo___Generate_new_Hugo_site5_block_start_0[[hugo   generate new hugo site<br>When: **not hugo site stat stat exists**]]:::block
-  Hugo___Generate_new_Hugo_site5_block_start_0-->|Task| Hugo___Run_hugo_new_site0[hugo   run hugo new site]:::task
-  Hugo___Run_hugo_new_site0-.->|End of Block| Hugo___Generate_new_Hugo_site5_block_start_0
-  Hugo___Run_hugo_new_site0-->|Block Start| Hugo___Manage_theme_submodule6_block_start_0[[hugo   manage theme submodule]]:::block
-  Hugo___Manage_theme_submodule6_block_start_0-->|Task| Hugo___Check_if_repo_already_initialized0[hugo   check if repo already initialized]:::task
-  Hugo___Check_if_repo_already_initialized0-->|Task| Hugo___Init_git_repo1[hugo   init git repo<br>When: **not hugo git stat stat exists**]:::task
-  Hugo___Init_git_repo1-->|Task| Hugo___Check_if_theme_submodule_exists2[hugo   check if theme submodule exists]:::task
-  Hugo___Check_if_theme_submodule_exists2-->|Task| Hugo___Add_Terminal_theme_submodule3[hugo   add terminal theme submodule<br>When: **not hugo theme stat stat exists**]:::task
-  Hugo___Add_Terminal_theme_submodule3-.->|End of Block| Hugo___Manage_theme_submodule6_block_start_0
-  Hugo___Add_Terminal_theme_submodule3-->End
-```
 
 
 

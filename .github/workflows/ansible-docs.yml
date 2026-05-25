@@ -42,33 +42,64 @@ jobs:
 
       - name: Generate documentation for all supported roles
         run: |
+          set -euo pipefail
           shopt -s nullglob
+
+          README_DATE="$(TZ=Australia/Melbourne date +'%Y/%m/%d')"
+          export README_DATE
+
           for role in ansible/roles/*; do
             [ -d "$role" ] || continue
             role_name="$(basename "$role")"
 
-            case "$role_name" in
-              docker_services)
-                echo "Skipping $role_name (hand-written docs)"
-                continue
-                ;;
-            esac
+            readme="$role/README.md"
+            before="$(mktemp)"
+            before_without_date="$(mktemp)"
+            after_without_date="$(mktemp)"
+
+            if [ -f "$readme" ]; then
+              cp "$readme" "$before"
+            else
+              touch "$before"
+            fi
 
             echo "Generating docs for $role"
             docsible \
               --role "$role" \
               --comments \
-              --graph \
               --repository-url detect \
               --output README.md
+
+            # Compare README content while ignoring only the Readme update row.
+            sed -E 's/(\|\s*Readme update\s*\|\s*)[0-9]{4}\/[0-9]{2}\/[0-9]{2}(\s*\|)/\1DATE_IGNORED\2/g' "$before" > "$before_without_date"
+            sed -E 's/(\|\s*Readme update\s*\|\s*)[0-9]{4}\/[0-9]{2}\/[0-9]{2}(\s*\|)/\1DATE_IGNORED\2/g' "$readme" > "$after_without_date"
+
+            if ! cmp -s "$before_without_date" "$after_without_date"; then
+              echo "README content changed for $role_name; updating README date to ${README_DATE}"
+              perl -0pi -e 's/(\|\s*Readme update\s*\|\s*)\d{4}\/\d{2}\/\d{2}(\s*\|)/$1$ENV{README_DATE}$2/g' "$readme"
+            else
+              echo "README content unchanged for $role_name; preserving existing README date"
+              cp "$before" "$readme"
+            fi
+
+            rm -f "$before" "$before_without_date" "$after_without_date"
           done
+
+          echo "Removing Docsible backup files"
+          find ansible/roles -type f -name 'README_backup_*.md' -delete
+
+          echo "Checking generated docs for Mermaid graphs"
+          if grep -R -E '```mermaid|graph TD|flowchart' ansible/roles/*/README.md; then
+            echo "Mermaid graphs still found in generated role docs"
+            exit 1
+          fi
 
       - name: Commit updated docs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add ansible/roles/**/README.md ansible/roles/**/.docsible
+          git add -A ansible/roles
 
           if git diff --cached --quiet; then
             echo "No documentation changes to commit"
