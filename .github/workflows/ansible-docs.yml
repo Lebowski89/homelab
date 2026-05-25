@@ -42,7 +42,11 @@ jobs:
 
       - name: Generate documentation for all supported roles
         run: |
+          set -euo pipefail
           shopt -s nullglob
+
+          README_DATE="$(TZ=Australia/Melbourne date +'%Y/%m/%d')"
+          export README_DATE
 
           for role in ansible/roles/*; do
             [ -d "$role" ] || continue
@@ -55,21 +59,38 @@ jobs:
                 ;;
             esac
 
+            readme="$role/README.md"
+            before="$(mktemp)"
+            before_without_date="$(mktemp)"
+            after_without_date="$(mktemp)"
+
+            if [ -f "$readme" ]; then
+              cp "$readme" "$before"
+            else
+              touch "$before"
+            fi
+
             echo "Generating docs for $role"
             docsible \
               --role "$role" \
               --comments \
               --repository-url detect \
               --output README.md
+
+            # Compare README content while ignoring only the Readme update row.
+            sed -E 's/(\|\s*Readme update\s*\|\s*)[0-9]{4}\/[0-9]{2}\/[0-9]{2}(\s*\|)/\1DATE_IGNORED\2/g' "$before" > "$before_without_date"
+            sed -E 's/(\|\s*Readme update\s*\|\s*)[0-9]{4}\/[0-9]{2}\/[0-9]{2}(\s*\|)/\1DATE_IGNORED\2/g' "$readme" > "$after_without_date"
+
+            if ! cmp -s "$before_without_date" "$after_without_date"; then
+              echo "README content changed for $role_name; updating README date to ${README_DATE}"
+              perl -0pi -e 's/(\|\s*Readme update\s*\|\s*)\d{4}\/\d{2}\/\d{2}(\s*\|)/$1$ENV{README_DATE}$2/g' "$readme"
+            else
+              echo "README content unchanged for $role_name; preserving existing README date"
+              cp "$before" "$readme"
+            fi
+
+            rm -f "$before" "$before_without_date" "$after_without_date"
           done
-
-          README_DATE="$(TZ=Australia/Melbourne date +'%Y/%m/%d')"
-          export README_DATE
-
-          echo "Updating README generated date to ${README_DATE}"
-
-          find ansible/roles -type f -name README.md ! -path '*/docker_services/README.md' -print0 |
-            xargs -0 perl -0pi -e 's/(\|\s*Readme update\s*\|\s*)\d{4}\/\d{2}\/\d{2}(\s*\|)/$1$ENV{README_DATE}$2/g'
 
           echo "Removing Docsible backup files"
           find ansible/roles -type f -name 'README_backup_*.md' -delete
