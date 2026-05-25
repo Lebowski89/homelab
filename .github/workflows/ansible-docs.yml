@@ -52,13 +52,6 @@ jobs:
             [ -d "$role" ] || continue
             role_name="$(basename "$role")"
 
-            case "$role_name" in
-              docker_services)
-                echo "Skipping $role_name (hand-written docs)"
-                continue
-                ;;
-            esac
-
             readme="$role/README.md"
             before="$(mktemp)"
             before_without_date="$(mktemp)"
