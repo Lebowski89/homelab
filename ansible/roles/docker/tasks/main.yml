@@ -46,7 +46,7 @@
     apply:
       tags:
         - docker_prune_timer
-  tags: 
+  tags:
     - docker_prune_timer
 
 - name: Docker Prune Unraid User Script
