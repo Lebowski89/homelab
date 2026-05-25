@@ -120,6 +120,8 @@
         - docker_prune_dangling
         - docker_prune_unused
         - docker_prune_volumes
+        - docker_prune_timer
+        - docker_prune_unraid_user_script
         - docker_swarm
         - docker_swarm_init
         - docker_swarm_join

@@ -28,14 +28,27 @@
     - docker_swarm_network
     - docker_swarm_labels
 
-- name: Docker Prune
+- name: Docker Prune Cleanup
   ansible.builtin.include_tasks:
-    file: sub_tasks/prune.yml
+    file: sub_tasks/prune/cleanup.yml
     apply:
-      tags:
-        - docker_prune
+      tags: docker_prune
   tags:
     - docker_prune
     - docker_prune_dangling
     - docker_prune_unused
     - docker_prune_volumes
+
+- name: Docker Prune Timer
+  ansible.builtin.include_tasks:
+    file: sub_tasks/prune/timer.yml
+    apply:
+      tags: docker_prune_timer
+  tags: docker_prune_timer
+
+- name: Docker Prune Unraid User Script
+  ansible.builtin.include_tasks:
+    file: sub_tasks/prune/unraid_user_script.yml
+    apply:
+      tags: docker_prune_unraid_user_script
+  tags: docker_prune_unraid_user_script
