@@ -1,0 +1,133 @@
+---
+
+- name: Compose - Command | Ensure docker_services_service_name is set
+  ansible.builtin.assert:
+    that:
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
+    fail_msg: "docker_services_service_name must be set before calling this helper"
+
+- name: Compose - Command | Ensure command_action is valid
+  ansible.builtin.assert:
+    that:
+      - command_action | default('replace') in ['append', 'replace', 'append_unique']
+    fail_msg: "command_action must be 'append', 'replace', or 'append_unique'"
+
+- name: Compose - Command | Select command input
+  ansible.builtin.set_fact:
+    docker_services_cmd_in: >-
+      {{
+        command
+        if (command is defined)
+        else
+        (command_list if (command_list is defined) else none)
+      }}
+
+- name: Compose - Command | Fail if no command provided
+  when: docker_services_cmd_in is none
+  ansible.builtin.fail:
+    msg: "You must pass 'command' (string or list) or legacy 'command_list'."
+
+- name: Compose - Command | Normalize command list input
+  when:
+    - docker_services_cmd_in is sequence
+    - docker_services_cmd_in is not string
+  ansible.builtin.set_fact:
+    docker_services_cmd_new_list: >-
+      {{
+        docker_services_cmd_in
+        | map('string')
+        | map('trim')
+        | reject('equalto', '')
+        | list
+      }}
+
+- name: Compose - Command | Normalize command
+  ansible.builtin.set_fact:
+    docker_services_cmd_new: >-
+      {{
+        docker_services_cmd_new_list[0]
+        if (
+          docker_services_cmd_in is sequence
+          and docker_services_cmd_in is not string
+          and (docker_services_cmd_new_list | length) == 1
+          and (' ' in docker_services_cmd_new_list[0])
+        )
+        else
+        (
+          docker_services_cmd_new_list
+          if (
+            docker_services_cmd_in is sequence
+            and docker_services_cmd_in is not string
+          )
+          else
+          (docker_services_cmd_in | string | trim)
+        )
+      }}
+
+- name: Compose - Command | Read existing command
+  ansible.builtin.set_fact:
+    docker_services_cmd_existing: >-
+      {{
+        (docker_services_compose_services | default({}))
+        .get(docker_services_service_name, {})
+        .get('command')
+        | default(none, true)
+      }}
+
+- name: Compose - Command | Normalize existing/new command values for merge actions
+  ansible.builtin.set_fact:
+    docker_services_cmd_existing_normalized: >-
+      {{
+        []
+        if (docker_services_cmd_existing is none)
+        else
+        (
+          [docker_services_cmd_existing]
+          if (docker_services_cmd_existing is string)
+          else docker_services_cmd_existing
+        )
+      }}
+    docker_services_cmd_new_normalized: >-
+      {{
+        []
+        if (docker_services_cmd_new is none)
+        else
+        (
+          [docker_services_cmd_new]
+          if (docker_services_cmd_new is string)
+          else docker_services_cmd_new
+        )
+      }}
+
+- name: Compose - Command | Compute final command
+  ansible.builtin.set_fact:
+    docker_services_cmd_final: >-
+      {{
+        docker_services_cmd_new
+        if (command_action | default('replace')) == 'replace'
+        else
+        (
+          docker_services_cmd_existing_normalized
+          +
+          (
+            docker_services_cmd_new_normalized
+            if (command_action | default('replace')) == 'append'
+            else
+            (docker_services_cmd_new_normalized | reject('in', docker_services_cmd_existing_normalized) | list)
+          )
+        )
+      }}
+
+- name: Compose - Command | Set command for service
+  ansible.builtin.set_fact:
+    docker_services_compose_services: >-
+      {{
+        (docker_services_compose_services | default({}))
+        | combine({
+            docker_services_service_name: (
+              ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
+              | combine({'command': docker_services_cmd_final}, recursive=true)
+            )
+          }, recursive=true)
+      }}

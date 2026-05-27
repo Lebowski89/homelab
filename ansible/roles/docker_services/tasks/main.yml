@@ -4,9 +4,9 @@
 # INIT
 ################################
 
-- name: Init (validate + normalize)
+- name: Init | Include tasks
   ansible.builtin.include_tasks:
-    file: init/tasker.yml
+    file: _init.yml
     apply:
       tags: [deploy, update, remove, recreate, bootstrap]
   tags: [deploy, update, remove, recreate, bootstrap]
@@ -15,57 +15,17 @@
 # PREP
 ################################
 
-- name: Prep | cleanup tasks
-  ansible.builtin.include_tasks: prep/00_cleanup/tasker.yml
-  tags: [remove, recreate]
-
-- name: Prep | Pre-template tasks
-  ansible.builtin.include_tasks: prep/01_pre_filesystem/tasker.yml
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Prep | filesystem tasks
-  ansible.builtin.include_tasks: prep/02_filesystem/tasker.yml
-  tags: [deploy, update, recreate]
-
-- name: Prep | Relevant services tasks
-  ansible.builtin.include_tasks: prep/03_post_filesystem/tasker.yml
-  tags: [deploy, update, recreate, bootstrap]
+- name: Prep | Include tasks
+  ansible.builtin.include_tasks: _prep.yml
+  tags: [remove, deploy, update, recreate, bootstrap]
 
 ################################
 # COMPOSE
 ################################
 
-- name: Compose | Init tasks
+- name: Compose | Include tasks
   ansible.builtin.include_tasks:
-    file: compose/00_init.yml
-    apply:
-      tags: [deploy, update, recreate]
-  tags: [deploy, update, recreate]
-
-- name: Compose | Service Base tasks
-  ansible.builtin.include_tasks:
-    file: compose/01_base/tasker.yml
-    apply:
-      tags: [deploy, update, recreate]
-  tags: [deploy, update, recreate]
-
-- name: Compose | Runtime tasks
-  ansible.builtin.include_tasks:
-    file: compose/02_runtime/tasker.yml
-    apply:
-      tags: [deploy, update, recreate]
-  tags: [deploy, update, recreate]
-
-- name: Compose | Input-Output tasks
-  ansible.builtin.include_tasks:
-    file: compose/03_io/tasker.yml
-    apply:
-      tags: [deploy, update, recreate]
-  tags: [deploy, update, recreate]
-
-- name: Compose | Metadata tasks
-  ansible.builtin.include_tasks:
-    file: compose/04_metadata/tasker.yml
+    file: _compose.yml
     apply:
       tags: [deploy, update, recreate]
   tags: [deploy, update, recreate]
@@ -74,9 +34,9 @@
 # DEPLOY
 ################################
 
-- name: Run centralized deploy (once)
+- name: Deploy | Include tasks
   ansible.builtin.include_tasks:
-    file: deploy/tasker.yml
+    file: _deploy.yml
     apply:
       tags: [deploy, update, recreate]
   tags: [deploy, update, recreate]

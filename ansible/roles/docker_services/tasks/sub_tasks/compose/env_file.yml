@@ -1,0 +1,29 @@
+---
+
+- name: Compose - Env File | Ensure docker_services_service_name is set
+  ansible.builtin.assert:
+    that:
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
+
+- name: Compose - Env File | Normalize env_file to list
+  ansible.builtin.set_fact:
+    docker_services_env_file_final: >-
+      {{
+        [docker_services_svc.env_file | string | trim]
+        if docker_services_svc.env_file is string
+        else (docker_services_svc.env_file | list)
+      }}
+
+- name: Compose - Env File | Attach env_file to service
+  ansible.builtin.set_fact:
+    docker_services_compose_services: >-
+      {{
+        (docker_services_compose_services | default({}))
+        | combine({
+            docker_services_service_name: (
+              ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
+              | combine({ 'env_file': docker_services_env_file_final }, recursive=true)
+            )
+          }, recursive=true)
+      }}

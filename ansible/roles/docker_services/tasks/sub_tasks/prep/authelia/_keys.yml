@@ -1,0 +1,127 @@
+---
+
+- name: Prep - Authelia Keys | Assert required inputs
+  ansible.builtin.assert:
+    that:
+      - authelia_job is defined
+      - (authelia_job | string | trim | length) > 0
+      - authelia_key_command is defined
+      - (authelia_key_command | string | trim | length) > 0
+      - authelia_key_echo is defined
+      - (authelia_key_echo | string | trim | length) > 0
+    fail_msg: "keys.yml requires authelia_job, authelia_key_command, authelia_key_echo"
+
+- name: Prep - Authelia Keys | Resolve keys host
+  ansible.builtin.set_fact:
+    docker_services_authelia_keys_host: >-
+      {{ docker_services_primary_manager | string | trim }}
+
+- name: Prep - Authelia Keys | Determine if key already exists
+  ansible.builtin.set_fact:
+    docker_services_authelia_key_is_enabled: >-
+      {{
+        (authelia_key is defined) and
+        (authelia_key is not none) and
+        (authelia_key | string | trim | length > 0)
+      }}
+
+- name: Prep - Authelia Keys | Determine if docker secret creation is enabled
+  ansible.builtin.set_fact:
+    docker_services_authelia_secret_is_enabled: >-
+      {{
+        (authelia_key_secret is defined) and
+        (authelia_key_secret is not none) and
+        (authelia_key_secret | string | trim | length > 0)
+      }}
+
+- name: Prep - Authelia Keys | Ensure secret exists
+  when:
+    - docker_services_authelia_key_is_enabled
+    - docker_services_authelia_secret_is_enabled
+  community.docker.docker_secret:
+    name: "{{ authelia_key_secret }}"
+    data: "{{ authelia_key | string }}"
+    state: present
+  delegate_to: "{{ docker_services_authelia_keys_host }}"
+  run_once: true
+
+- name: Prep - Authelia Keys | Generate key
+  when: not docker_services_authelia_key_is_enabled
+  block:
+    - name: Prep - Authelia Keys | Run generator container
+      community.docker.docker_container:
+        name: authelia-key-container
+        image: authelia/authelia:4.39.19
+        pull: true
+        state: started
+        container_default_behavior: compatibility
+        command: "{{ authelia_key_command }}"
+        detach: false
+        volumes:
+          - "/opt/authelia:/config"
+        cleanup: true
+      register: docker_services_authelia_key_register
+      delegate_to: "{{ docker_services_authelia_keys_host }}"
+      run_once: true
+
+    - name: Prep - Authelia Keys | Extract generated value
+      ansible.builtin.shell: |
+        set -euo pipefail
+        printf '%s\n' {{ docker_services_authelia_key_register.container.Output | quote }} \
+          | sed -n 's/^{{ authelia_key_echo }}: //p'
+      args:
+        executable: /bin/bash
+      register: docker_services_authelia_key_sanitised_output
+      changed_when: false
+      delegate_to: "{{ docker_services_authelia_keys_host }}"
+      run_once: true
+
+    - name: Prep - Authelia Keys | Mark generated this run
+      ansible.builtin.set_fact:
+        docker_services_authelia_generated_this_run: true
+      delegate_to: "{{ docker_services_authelia_keys_host }}"
+      run_once: true
+
+    - name: Prep - Authelia Keys | Fail if generation produced empty output
+      ansible.builtin.assert:
+        that:
+          - (docker_services_authelia_key_sanitised_output.stdout | default('') | string | trim | length) > 0
+        fail_msg: >-
+          Authelia keys: generated output was empty for job '{{ authelia_job }}'.
+          Command: {{ authelia_key_command }}
+      delegate_to: "{{ docker_services_authelia_keys_host }}"
+      run_once: true
+
+    - name: Prep - Authelia Keys | Save generated value as a mgt fact
+      when:
+        - authelia_fact_name is defined
+        - (authelia_fact_name | string | trim | length) > 0
+      ansible.builtin.set_fact:
+        "{{ authelia_fact_name }}": "{{ docker_services_authelia_key_sanitised_output.stdout | string | trim }}"
+      delegate_to: "{{ docker_services_authelia_keys_host }}"
+      delegate_facts: true
+      run_once: true
+
+    - name: Prep - Authelia Keys | Ensure secret exists (generated key)
+      when: docker_services_authelia_secret_is_enabled
+      community.docker.docker_secret:
+        name: "{{ authelia_key_secret }}"
+        data: "{{ docker_services_authelia_key_sanitised_output.stdout | string | trim }}"
+        state: present
+      delegate_to: "{{ docker_services_authelia_keys_host }}"
+      run_once: true
+
+  always:
+    - name: Prep - Authelia Keys | Ensure generator container is removed
+      community.docker.docker_container:
+        container_default_behavior: compatibility
+        name: authelia-key-container
+        state: absent
+        stop_timeout: 10
+      register: docker_services_remove_keys_container
+      retries: 5
+      delay: 5
+      until: docker_services_remove_keys_container is succeeded
+      delegate_to: "{{ docker_services_authelia_keys_host }}"
+      run_once: true
+      failed_when: false

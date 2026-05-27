@@ -1,0 +1,57 @@
+---
+
+- name: Compose - Stack Volumes | Ensure docker_services_stack_name is provided
+  ansible.builtin.assert:
+    that:
+      - docker_services_stack_name is defined
+      - docker_services_stack_name is string
+      - (docker_services_stack_name | trim | length) > 0
+    fail_msg: "docker_services_stack_name must be provided (non-empty string) when calling stack_volumes.yml"
+
+- name: Compose - Stack Volumes | Ensure stack_volume_names is provided
+  ansible.builtin.assert:
+    that:
+      - stack_volume_names is defined
+      - stack_volume_names is not none
+      - (stack_volume_names is mapping) or (stack_volume_names is sequence and stack_volume_names is not string)
+    fail_msg: "stack_volume_names must be a mapping of volume defs or a list of volume names."
+
+- name: Compose - Stack Volumes | Normalize stack volumes input into a mapping
+  ansible.builtin.set_fact:
+    docker_services_stack_volumes_new: >-
+      {%- if stack_volume_names is mapping -%}
+      {{ stack_volume_names }}{%- else -%}
+      {%- set out = {} -%}
+      {%- for vname in (stack_volume_names | map('string') | map('trim') | reject('equalto', '') | list) -%}
+      {%- set _ = out.update({vname: {'external': true}}) -%}
+      {%- endfor -%}
+      {{ out }}{%- endif -%}
+
+- name: Compose - Stack Volumes | Default external=true for any volume defs that omit it
+  when: docker_services_stack_volumes_new is mapping and (docker_services_stack_volumes_new | length > 0)
+  ansible.builtin.set_fact:
+    docker_services_stack_volumes_new: >-
+      {%- set out = {} -%}
+      {%- for k, v in (docker_services_stack_volumes_new | default({}) | dictsort) -%}
+      {%- set vv = v if (v is mapping) else {} -%}
+      {%- if vv.external is not defined -%}
+      {%- set vv = vv | combine({'external': true}, recursive=true) -%}
+      {%- endif -%}
+      {%- set _ = out.update({k: vv}) -%}
+      {%- endfor -%}
+      {{ out }}
+
+- name: Compose - Stack Volumes | Merge into docker_services_compose_stacks[docker_services_stack_name].volumes
+  ansible.builtin.set_fact:
+    docker_services_compose_stacks: >-
+      {%- set st = (hostvars[docker_services_primary_manager].docker_services_compose_stacks | default({})) -%}
+      {%- set existing_stack = st.get(docker_services_stack_name, {}) -%}
+      {%- set existing_vols = existing_stack.get('volumes', {}) | default({}, true) -%}
+      {%- set merged_stack = existing_stack | combine(
+        {'volumes': (existing_vols | combine(docker_services_stack_volumes_new, recursive=true))},
+        recursive=true
+      ) -%}
+      {{ st | combine({ docker_services_stack_name: merged_stack }, recursive=true) }}
+  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_facts: true
+  run_once: true
