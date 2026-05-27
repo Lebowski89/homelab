@@ -11,6 +11,10 @@
       ansible.builtin.set_fact:
         docker_services_pg_creds_missing: >-
           {{
+            (postgres_host | default('') | string | trim | length == 0)
+            or
+            (postgres_port | default('') | string | trim | length == 0)
+            or
             (postgres_user | default('') | string | trim | length == 0)
             or
             (postgres_pass | default('') | string | trim | length == 0)
@@ -18,11 +22,17 @@
 
     - name: Prep - Postgres | Fetch Postgres creds from Infisical
       when: docker_services_pg_creds_missing | bool
-      ansible.builtin.include_tasks: "{{ role_path }}/tasks/prep/01_pre_filesystem/sub_tasks/infisical/_fetch.yml"
+      ansible.builtin.include_tasks: "{{ role_path }}/tasks/sub_tasks/prep/infisical/_fetch.yml"
       vars:
         infisical_fail_on_empty: true
         infisical_flatten: true
         secrets_map:
+          - var: postgres_host
+            path: "{{ postgres_infisical_path | default('/Postgres') }}"
+            name: "{{ postgres_infisical_host_name | default('HOST') }}"
+          - var: postgres_port
+            path: "{{ postgres_infisical_path | default('/Postgres') }}"
+            name: "{{ postgres_infisical_port_name | default('PORT') }}"
           - var: postgres_user
             path: "{{ postgres_infisical_path | default('/Postgres') }}"
             name: "{{ postgres_infisical_user_name | default('USER') }}"
@@ -33,6 +43,8 @@
     - name: Prep - Postgres | Assert creds are now present
       ansible.builtin.assert:
         that:
+          - (postgres_host | default('') | string | trim | length) > 0
+          - (postgres_port | default('') | string | trim | length) > 0
           - (postgres_user | default('') | string | trim | length) > 0
           - (postgres_pass | default('') | string | trim | length) > 0
         fail_msg: "postgres_user/postgres_pass are still empty on mgt after Infisical fetch."
@@ -78,10 +90,10 @@
     - inventory_hostname == docker_services_primary_manager
     - (docker_services_postgres_databases | default([]) | length) > 0
   community.postgresql.postgresql_ping:
-    login_host: 192.168.80.48
+    login_host: "{{ postgres_host }}"
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_pass }}"
-    login_port: 5432
+    login_port: "{{ postgres_port | int }}"
     login_db: "{{ postgres_db_item }}"
   loop: "{{ docker_services_postgres_databases }}"
   loop_control:
@@ -95,10 +107,10 @@
     - postgres_ping_result is defined
     - not (postgres_ping_result.is_available | default(false))
   community.postgresql.postgresql_db:
-    login_host: 192.168.80.48
+    login_host: "{{ postgres_host }}"
     login_user: "{{ postgres_user }}"
     login_password: "{{ postgres_pass }}"
-    login_port: 5432
+    login_port: "{{ postgres_port | int }}"
     name: "{{ postgres_ping_result.postgres_db_item }}"
     state: present
   loop: "{{ docker_services_postgres_ping_results.results | default([]) }}"

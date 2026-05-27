@@ -21,7 +21,7 @@
 
 - name: Prep - Traefik | Render dynamic file
   ansible.builtin.template:
-    src: templates/configs/proxy/traefik/dynamic_template.yml.j2
+    src: "{{ role_path }}/templates/configs/proxy/traefik/dynamic_template.yml.j2"
     dest: >-
       {{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic/{{ docker_services_svc.name }}-dynamic.yml
     owner: "1000"
