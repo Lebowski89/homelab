@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/05/25 |
+| Readme update        | 2026/05/27 |
 
 
 
@@ -28,646 +28,547 @@
 ### Tasks
 
 
-#### File: tasks/compose/00_init.yml
+#### File: tasks/_compose.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Ensure docker_services_compose_stacks exists on mgt | ansible.builtin.set_fact | False |
-| Load this stack's current docker_services_compose_services | ansible.builtin.set_fact | True |
+| Compose - Init ¦ Ensure docker_services_compose_stacks exists | ansible.builtin.set_fact | False |
+| Compose - Init ¦ Load this stack's current docker_services_compose_services | ansible.builtin.set_fact | True |
+| Compose - Base ¦ Register networks needed by this stack | ansible.builtin.include_tasks | True |
+| Compose - Base ¦ Normalize network_mode for container deploys | ansible.builtin.set_fact | True |
+| Compose - Base ¦ Normalize network_mode for container deploys | ansible.builtin.set_fact | True |
+| Compose - Base ¦ Build service networks list | ansible.builtin.set_fact | True |
+| Compose - Base ¦ Register external volumes needed by this stack | ansible.builtin.include_tasks | True |
+| Compose - Base ¦ Set base service variables | ansible.builtin.include_tasks | True |
+| Compose - Runtime ¦ Set security_opt | ansible.builtin.include_tasks | True |
+| Compose - Runtime ¦ Set sysctls | ansible.builtin.include_tasks | True |
+| Compose - Runtime ¦ Set depends_on | ansible.builtin.include_tasks | True |
+| Compose - Runtime ¦ Add Linux capabilities (cap_add) | ansible.builtin.include_tasks | True |
+| Compose - Runtime ¦ Drop Linux capabilities (cap_drop) | ansible.builtin.include_tasks | True |
+| Compose - Runtime ¦ Add devices | ansible.builtin.include_tasks | True |
+| Compose - Runtime ¦ Set command variable | ansible.builtin.include_tasks | True |
+| Compose - Runtime ¦ Set healthcheck variable | ansible.builtin.include_tasks | True |
+| Compose - Runtime ¦ Set user variable | ansible.builtin.include_tasks | True |
+| Compose - IO ¦ Set environment variables | ansible.builtin.include_tasks | True |
+| Compose - IO ¦ Attach env_file to service | ansible.builtin.include_tasks | True |
+| Compose - IO ¦ Set secrets variable | ansible.builtin.include_tasks | True |
+| Compose - IO ¦ Set Swarm configs variable | ansible.builtin.include_tasks | True |
+| Compose - IO ¦ Set ports variable | ansible.builtin.include_tasks | True |
+| Compose - IO ¦ Set tmpfs variable | ansible.builtin.include_tasks | True |
+| Compose - IO ¦ Set volumes variable | ansible.builtin.include_tasks | True |
+| Compose - IO ¦ Add /dev/shm tmpfs | ansible.builtin.include_tasks | True |
+| Compose - IO ¦ Set SHM size | ansible.builtin.include_tasks | True |
+| Compose - Metadata ¦ Attach service labels | ansible.builtin.include_tasks | True |
 
-#### File: tasks/compose/01_base/sub_tasks/service_base.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Normalize effective stack deploy type | ansible.builtin.set_fact | False |
-| Set base service definition | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/01_base/sub_tasks/stack_networks.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_stack_name is provided | ansible.builtin.assert | False |
-| Ensure stack_network_names is provided (list or mapping) | ansible.builtin.assert | False |
-| Normalize stack networks input into a mapping | ansible.builtin.set_fact | False |
-| Default external=true for any network defs that omit it | ansible.builtin.set_fact | True |
-| Merge into docker_services_compose_stacks[docker_services_stack_name].networks (centralized on mgt) | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/01_base/sub_tasks/stack_volumes.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_stack_name is provided | ansible.builtin.assert | False |
-| Ensure stack_volume_names is provided (list or mapping) | ansible.builtin.assert | False |
-| Normalize stack volumes input into a mapping | ansible.builtin.set_fact | False |
-| Default external=true for any volume defs that omit it | ansible.builtin.set_fact | True |
-| Merge into docker_services_compose_stacks[docker_services_stack_name].volumes (centralized on mgt) | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/01_base/tasker.yml
+#### File: tasks/_deploy.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Register networks needed by this stack | ansible.builtin.include_tasks | True |
-| Register external volumes needed by this stack | ansible.builtin.include_tasks | True |
-| Normalize network_mode for container deploys (derive network_mode + is_container) | ansible.builtin.set_fact | True |
-| Normalize network_mode for container deploys (derive has_network_mode) | ansible.builtin.set_fact | True |
-| Build service networks list | ansible.builtin.set_fact | True |
-| Set base service variables | ansible.builtin.include_tasks | True |
+| Deploy ¦ Set deploy config (swarm only, compose structure) | ansible.builtin.include_tasks | True |
+| Deploy ¦ Persist compose into docker_services_compose_stacks[docker_services_stack_name_effective] | ansible.builtin.set_fact | True |
 
-#### File: tasks/compose/02_runtime/sub_tasks/caps.yml
+#### File: tasks/_init.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Ensure caps_target is valid | ansible.builtin.assert | False |
-| Ensure caps_action is valid | ansible.builtin.assert | False |
-| Normalize caps input | ansible.builtin.set_fact | False |
-| Add caps for service (append/replace/append_unique) | ansible.builtin.set_fact | False |
+| Init ¦ Normalize role interface vars (compat with old names) | ansible.builtin.set_fact | False |
+| Init ¦ Ensure docker_services_service_cfg is provided | ansible.builtin.assert | False |
+| Init ¦ Validate target exists when targets are defined | ansible.builtin.assert | False |
+| Init ¦ Normalize service config | ansible.builtin.set_fact | False |
+| Init ¦ Validate normalized service config | ansible.builtin.include_tasks | False |
+| Init ¦ Derive common service context | ansible.builtin.set_fact | False |
+| Init ¦ Derive stack name | ansible.builtin.set_fact | False |
+| Init ¦ Derive effective deploy host | ansible.builtin.set_fact | False |
+| Init ¦ Derive effective stack key | ansible.builtin.set_fact | False |
+| Init ¦ Derive effective filesystem hosts | ansible.builtin.set_fact | False |
+| Init ¦ Expand filesystem hosts if a group name was provided | ansible.builtin.set_fact | True |
+| Init ¦ De-dupe filesystem hosts | ansible.builtin.set_fact | False |
+| Init ¦ Assert container deploy has a single deploy.host | ansible.builtin.assert | True |
+| Init ¦ Determine if this host should build/deploy compose artifacts | ansible.builtin.set_fact | False |
 
-#### File: tasks/compose/02_runtime/sub_tasks/command.yml
+#### File: tasks/_prep.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Ensure command_action is valid | ansible.builtin.assert | False |
-| Select command input | ansible.builtin.set_fact | False |
-| Fail if no command provided | ansible.builtin.fail | True |
-| Normalize command list input | ansible.builtin.set_fact | True |
-| Normalize command | ansible.builtin.set_fact | False |
-| Read existing command | ansible.builtin.set_fact | False |
-| Normalize existing/new command values for merge actions | ansible.builtin.set_fact | False |
-| Compute final command | ansible.builtin.set_fact | False |
-| Set command for service (append/replace/append_unique) | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/02_runtime/sub_tasks/depends_on.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Ensure depends_on_action is valid | ansible.builtin.assert | False |
-| Normalize depends_on input | ansible.builtin.set_fact | False |
-| Attach depends_on to service | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/02_runtime/sub_tasks/devices.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Ensure devices_action is valid | ansible.builtin.assert | False |
-| Normalize devices input | ansible.builtin.set_fact | False |
-| Add devices for service (append/replace/append_unique) | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/02_runtime/sub_tasks/healthcheck.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Ensure health_test is provided | ansible.builtin.assert | False |
-| Normalize healthcheck test into list form | ansible.builtin.set_fact | False |
-| Attach healthcheck to service | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/02_runtime/sub_tasks/security_opt.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Ensure security_opt_action is valid | ansible.builtin.assert | False |
-| Normalize security_opt input | ansible.builtin.set_fact | False |
-| Attach security_opt to service | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/02_runtime/sub_tasks/sysctls.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Sysctls ¦ Validate input | ansible.builtin.assert | False |
-| Sysctls ¦ Normalize sysctls dict (drop empty/omit, stringify values) | ansible.builtin.set_fact | False |
-| Sysctls ¦ Attach sysctls to service | ansible.builtin.set_fact | True |
-
-#### File: tasks/compose/02_runtime/sub_tasks/user.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Set user for service | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/02_runtime/tasker.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Set security_opt | ansible.builtin.include_tasks | True |
-| Set sysctls | ansible.builtin.include_tasks | True |
-| Set depends_on | ansible.builtin.include_tasks | True |
-| Add Linux capabilities (cap_add) | ansible.builtin.include_tasks | True |
-| Drop Linux capabilities (cap_drop) | ansible.builtin.include_tasks | True |
-| Add devices | ansible.builtin.include_tasks | True |
-| Set command variable | ansible.builtin.include_tasks | True |
-| Set healthcheck variable | ansible.builtin.include_tasks | True |
-| Set user variable | ansible.builtin.include_tasks | True |
-
-#### File: tasks/compose/03_io/sub_tasks/configs.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Configs ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Configs ¦ Ensure configs_list is a list | ansible.builtin.assert | False |
-| Configs ¦ Resolve effective config sources | ansible.builtin.set_fact | False |
-| Configs ¦ Attach configs to service (replace) | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/03_io/sub_tasks/env.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Ensure environment_action is valid | ansible.builtin.assert | False |
-| Normalize environment inputs | ansible.builtin.set_fact | False |
-| Build final environment dict | ansible.builtin.set_fact | False |
-| Attach environment to service | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/03_io/sub_tasks/env_file.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Normalize env_file to list | ansible.builtin.set_fact | False |
-| Attach env_file to service | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/03_io/sub_tasks/ports.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Ensure ports_action is valid | ansible.builtin.assert | False |
-| Normalize effective stack deploy type | ansible.builtin.set_fact | False |
-| Build new port entries (ports/ports_list/legacy single) | ansible.builtin.set_fact | False |
-| Validate new ports entries are dicts with required keys | ansible.builtin.assert | False |
-| Reset working ports list (prevent cross-service bleed) | ansible.builtin.set_fact | False |
-| Canonicalise new ports (types + defaults) | ansible.builtin.set_fact | False |
-| Validate port protocols are tcp/udp | ansible.builtin.assert | False |
-| Compute merged ports list | ansible.builtin.set_fact | False |
-| Attach ports to service | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/03_io/sub_tasks/secrets.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Ensure secrets is a list (accept string or list) | ansible.builtin.set_fact | False |
-| Attach secrets list to service (swarm) | ansible.builtin.set_fact | True |
-| Convert secrets to bind-mount volumes (compose) | ansible.builtin.set_fact | True |
-| Attach secret mounts to service volumes (compose) | ansible.builtin.set_fact | True |
-
-#### File: tasks/compose/03_io/sub_tasks/shm.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Set SHM size for service | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/03_io/sub_tasks/tmpfs.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure tmpfs_action is valid | ansible.builtin.assert | False |
-| Normalise tmpfs entries to list | ansible.builtin.set_fact | False |
-| Merge tmpfs entries into compose services | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/03_io/sub_tasks/volumes.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Ensure volumes_action is valid | ansible.builtin.assert | False |
-| Build raw volume entries (mapping OR list OR legacy single) | ansible.builtin.set_fact | False |
-| Validate raw volume entries are dicts | ansible.builtin.assert | False |
-| Reset working volumes list (prevent cross-service bleed) | ansible.builtin.set_fact | False |
-| Canonicalise new volume entries | ansible.builtin.set_fact | False |
-| Validate canonical volume entries | ansible.builtin.assert | False |
-| Capture existing volumes list | ansible.builtin.set_fact | False |
-| Compute merged volumes list (append/replace/append_unique) | ansible.builtin.set_fact | False |
-| Attach volumes to service | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/03_io/tasker.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Set environment variables | ansible.builtin.include_tasks | True |
-| Attach env_file to service | ansible.builtin.include_tasks | True |
-| Set secrets variable (docker_services_svc format) | ansible.builtin.include_tasks | True |
-| Set configs variable (swarm only) | ansible.builtin.include_tasks | True |
-| Set ports variable | ansible.builtin.include_tasks | True |
-| Set tmpfs variable | ansible.builtin.include_tasks | True |
-| Set volumes variable | ansible.builtin.include_tasks | True |
-| Add /dev/shm tmpfs for swarm | ansible.builtin.include_tasks | True |
-| Set SHM size (compose only) | ansible.builtin.include_tasks | True |
-
-#### File: tasks/compose/04_metadata/sub_tasks/labels.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Ensure labels_action is valid | ansible.builtin.assert | False |
-| Ensure labels_precedence is valid | ansible.builtin.assert | False |
-| Normalize labels input to mapping | ansible.builtin.set_fact | False |
-| Build final labels dict | ansible.builtin.set_fact | False |
-| Attach labels to service | ansible.builtin.set_fact | False |
-
-#### File: tasks/compose/04_metadata/tasker.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Attach labels (service-level) | ansible.builtin.include_tasks | True |
-
-#### File: tasks/deploy/sub_tasks/deploy_all.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| DeployAll ¦ Ensure docker_services_compose_stacks exists | ansible.builtin.set_fact | False |
-| DeployAll ¦ Deploy each stack | ansible.builtin.include_tasks | True |
-
-#### File: tasks/deploy/sub_tasks/deploy_config.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Normalize deploy mode and capture raw replicas | ansible.builtin.set_fact | False |
-| Validate deploy mode | ansible.builtin.assert | False |
-| Validate deploy_replicas raw input | ansible.builtin.assert | True |
-| Normalize deploy replicas | ansible.builtin.set_fact | False |
-| Normalize deploy constraints into list | ansible.builtin.set_fact | False |
-| Normalize optional deploy sub-dicts (treat omit as empty) | ansible.builtin.set_fact | False |
-| Validate normalized deploy inputs | ansible.builtin.assert | False |
-| Build deploy dict | ansible.builtin.set_fact | False |
-| Attach deploy config to service | ansible.builtin.set_fact | False |
-
-#### File: tasks/deploy/sub_tasks/deploy_one.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| DeployOne ¦ Validate inputs | ansible.builtin.assert | False |
-| DeployOne ¦ Derive effective deploy host | ansible.builtin.set_fact | False |
-| DeployOne ¦ Ensure /opt/stacks exists | ansible.builtin.file | False |
-| DeployOne ¦ Render compose/stack file | ansible.builtin.template | False |
-| DeployOne ¦ Swarm deploy | community.docker.docker_stack | True |
-| DeployOne ¦ Compose deploy | community.docker.docker_compose_v2 | True |
-
-#### File: tasks/deploy/tasker.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Set deploy config (swarm only, compose structure) | ansible.builtin.include_tasks | True |
-| Persist compose into docker_services_compose_stacks[docker_services_stack_name_effective] (centralized queue) | ansible.builtin.set_fact | True |
-
-#### File: tasks/init/sub_tasks/validate_svc.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Validate ¦ docker_services_svc is defined | ansible.builtin.assert | False |
-| Validate ¦ docker_services_svc.name | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.image (required) | ansible.builtin.assert | False |
-| Validate ¦ docker_services_svc.user | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.command shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.command string form | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.command list form | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.env_file shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.env_file string form | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.env_file list form | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.devices shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.cap_add shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.cap_drop shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.sysctls shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.deploy shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.deploy.type | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.deploy.mode | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.deploy.replicas | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.deploy.host (optional) | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.deploy.constraints | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.targets shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.targets entries are mappings | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.named_networks | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.named_volumes | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.paths shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.paths entries | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.paths mode formatting | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.templates shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.templates entries | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.templates mode formatting | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.copies shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.copies entries | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.infisical shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.infisical.secrets_map | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.infisical.secrets_map var names | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.infisical.secrets_map docker_secret names | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.postgres shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.postgres.databases | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.healthcheck shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.secrets shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.secrets string form | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.secrets list form is non-empty | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.secrets list items are strings or dicts | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.secrets string items are non-empty | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.secrets dict items have source and target | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.ports shape | ansible.builtin.assert | True |
-| Validate ¦ Normalize ports items | ansible.builtin.set_fact | True |
-| Validate ¦ docker_services_svc.ports entries | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.volumes shape | ansible.builtin.assert | True |
-| Validate ¦ Normalize volume items | ansible.builtin.set_fact | True |
-| Validate ¦ docker_services_svc.volumes entries basic | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.volumes required keys by type | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.environment shape | ansible.builtin.assert | True |
-| Validate ¦ docker_services_svc.labels shape | ansible.builtin.assert | True |
-
-#### File: tasks/init/tasker.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Normalize role interface vars (compat with old names) | ansible.builtin.set_fact | False |
-| Ensure docker_services_service_cfg is provided | ansible.builtin.assert | False |
-| Validate target exists when targets are defined | ansible.builtin.assert | False |
-| Normalize service config (targets aware) | ansible.builtin.set_fact | False |
-| Validate normalized service config | ansible.builtin.include_tasks | False |
-| Derive common service context | ansible.builtin.set_fact | False |
-| Derive stack name (multi-service per stack) | ansible.builtin.set_fact | False |
-| Derive effective deploy host (swarm always on mgt) | ansible.builtin.set_fact | False |
-| Derive effective stack key (avoid container host collisions) | ansible.builtin.set_fact | False |
-| Derive effective filesystem hosts (dirs/templates/copies) | ansible.builtin.set_fact | False |
-| Expand filesystem hosts if a group name was provided | ansible.builtin.set_fact | True |
-| De-dupe filesystem hosts | ansible.builtin.set_fact | False |
-| Assert container deploy has a single deploy.host | ansible.builtin.assert | True |
-| Determine if this host should build/deploy compose artifacts | ansible.builtin.set_fact | False |
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Prep - Cleanup ¦ Derive cleanup flags | ansible.builtin.set_fact | False |  |
+| Prep - Cleanup ¦ Init cleaned-stacks tracker | ansible.builtin.set_fact | True |  |
+| Prep - Cleanup ¦ Determine if stack cleanup should run | ansible.builtin.set_fact | True |  |
+| Prep - Cleanup ¦ Remove existing stack | ansible.builtin.include_tasks | True |  |
+| Prep - Cleanup ¦ Mark stack as cleaned | ansible.builtin.set_fact | True |  |
+| Prep - Infisical ¦ Include tasker | ansible.builtin.include_tasks | False |  |
+| Prep - Swarm configs ¦ Include tasker | ansible.builtin.include_tasks | True |  |
+| Prep - Authelia ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
+| Prep - Postgres ¦ Create Postgres database | ansible.builtin.include_tasks | True |  |
+| Prep - qBittorrent ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
+| Prep - Paths ¦ Create filesystem paths | ansible.builtin.include_tasks | True |  |
+| Prep - Copies ¦ Copy files | ansible.builtin.include_tasks | True |  |
+| Prep - Templates ¦ Render templates | ansible.builtin.include_tasks | True |  |
+| Prep - Swarm Env Templates ¦ Render templates | ansible.builtin.include_tasks | True |  |
+| Prep - Traefik ¦ Render dynamic files | ansible.builtin.include_tasks | True |  |
+| Prep - Plex ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
+| Prep - Bazarr ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
+| Prep - NZBHydra2 ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
+| Prep - Vaultwarden ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
 
 #### File: tasks/main.yml
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
-| Init (validate + normalize) | ansible.builtin.include_tasks | False | deploy,update,remove,recreate,bootstrap |
-| Prep ¦ cleanup tasks | ansible.builtin.include_tasks | False |  |
-| Prep ¦ Pre-template tasks | ansible.builtin.include_tasks | False |  |
-| Prep ¦ filesystem tasks | ansible.builtin.include_tasks | False |  |
-| Prep ¦ Relevant services tasks | ansible.builtin.include_tasks | False |  |
-| Compose ¦ Init tasks | ansible.builtin.include_tasks | False |  |
-| Compose ¦ Service Base tasks | ansible.builtin.include_tasks | False |  |
-| Compose ¦ Runtime tasks | ansible.builtin.include_tasks | False |  |
-| Compose ¦ Input-Output tasks | ansible.builtin.include_tasks | False |  |
-| Compose ¦ Metadata tasks | ansible.builtin.include_tasks | False |  |
-| Run centralized deploy (once) | ansible.builtin.include_tasks | False | deploy,update,recreate |
+| Init ¦ Include tasks | ansible.builtin.include_tasks | False |  |
+| Prep ¦ Include tasks | ansible.builtin.include_tasks | False |  |
+| Compose ¦ Include tasks | ansible.builtin.include_tasks | False |  |
+| Deploy ¦ Include tasks | ansible.builtin.include_tasks | False |  |
 
-#### File: tasks/prep/00_cleanup/sub_tasks/cleanup.yml
+#### File: tasks/sub_tasks/compose/caps.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Ensure docker_services_stack_name is set | ansible.builtin.assert | False |
-| Cleanup container stack (compose) | block | True |
-| Check if compose file exists | ansible.builtin.stat | False |
-| Compose down | community.docker.docker_compose_v2 | True |
-| Remove compose file | ansible.builtin.file | False |
-| Remove container secret files directory (per-stack) | ansible.builtin.file | False |
-| Remove stack directory if empty (optional) | ansible.builtin.file | False |
-| Cleanup swarm stack | block | True |
-| Stack down | community.docker.docker_stack | False |
-| Remove stack file | ansible.builtin.file | False |
+| Compose - Caps ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Caps ¦ Ensure caps_target is valid | ansible.builtin.assert | False |
+| Compose - Caps ¦ Ensure caps_action is valid | ansible.builtin.assert | False |
+| Compose - Caps ¦ Normalize caps input | ansible.builtin.set_fact | False |
+| Compose - Caps ¦ Add caps for service | ansible.builtin.set_fact | False |
 
-#### File: tasks/prep/00_cleanup/tasker.yml
+#### File: tasks/sub_tasks/compose/command.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Command ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Command ¦ Ensure command_action is valid | ansible.builtin.assert | False |
+| Compose - Command ¦ Select command input | ansible.builtin.set_fact | False |
+| Compose - Command ¦ Fail if no command provided | ansible.builtin.fail | True |
+| Compose - Command ¦ Normalize command list input | ansible.builtin.set_fact | True |
+| Compose - Command ¦ Normalize command | ansible.builtin.set_fact | False |
+| Compose - Command ¦ Read existing command | ansible.builtin.set_fact | False |
+| Compose - Command ¦ Normalize existing/new command values for merge actions | ansible.builtin.set_fact | False |
+| Compose - Command ¦ Compute final command | ansible.builtin.set_fact | False |
+| Compose - Command ¦ Set command for service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/depends_on.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Depends_on ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Depends_on ¦ Ensure depends_on_action is valid | ansible.builtin.assert | False |
+| Compose - Depends_on ¦ Normalize depends_on input | ansible.builtin.set_fact | False |
+| Compose - Depends_on ¦ Attach depends_on to service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/devices.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Devices ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Devices ¦ Ensure devices_action is valid | ansible.builtin.assert | False |
+| Compose - Devices ¦ Normalize devices input | ansible.builtin.set_fact | False |
+| Compose - Devices ¦ Add devices for service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/env.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Env ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Env ¦ Ensure environment_action is valid | ansible.builtin.assert | False |
+| Compose - Env ¦ Normalize environment inputs | ansible.builtin.set_fact | False |
+| Compose - Env ¦ Build final environment dict | ansible.builtin.set_fact | False |
+| Compose - Env ¦ Attach environment to service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/env_file.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Env File ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Env File ¦ Normalize env_file to list | ansible.builtin.set_fact | False |
+| Compose - Env File ¦ Attach env_file to service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/healthcheck.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Healthcheck ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Healthcheck ¦ Ensure health_test is provided | ansible.builtin.assert | False |
+| Compose - Healthcheck ¦ Normalize healthcheck test into list form | ansible.builtin.set_fact | False |
+| Compose - Healthcheck ¦ Attach healthcheck to service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/labels.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Labels ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Labels ¦ Ensure labels_action is valid | ansible.builtin.assert | False |
+| Compose - Labels ¦ Ensure labels_precedence is valid | ansible.builtin.assert | False |
+| Compose - Labels ¦ Normalize labels input to mapping | ansible.builtin.set_fact | False |
+| Compose - Labels ¦ Build final labels dict | ansible.builtin.set_fact | False |
+| Compose - Labels ¦ Attach labels to service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/ports.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Ports ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Ports ¦ Ensure ports_action is valid | ansible.builtin.assert | False |
+| Compose - Ports ¦ Normalize effective stack deploy type | ansible.builtin.set_fact | False |
+| Compose - Ports ¦ Build new port entries | ansible.builtin.set_fact | False |
+| Compose - Ports ¦ Validate new ports entries are dicts with required keys | ansible.builtin.assert | False |
+| Compose - Ports ¦ Reset working ports list (prevent cross-service bleed) | ansible.builtin.set_fact | False |
+| Compose - Ports ¦ Canonicalise new ports | ansible.builtin.set_fact | False |
+| Compose - Ports ¦ Validate port protocols are tcp/udp | ansible.builtin.assert | False |
+| Compose - Ports ¦ Compute merged ports list | ansible.builtin.set_fact | False |
+| Compose - Ports ¦ Attach ports to service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/secrets.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Secrets ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Secrets ¦ Ensure secrets is a list | ansible.builtin.set_fact | False |
+| Compose - Secrets ¦ Attach secrets list to service | ansible.builtin.set_fact | True |
+| Compose - Secrets ¦ Convert secrets to bind-mount volumes | ansible.builtin.set_fact | True |
+| Compose - Secrets ¦ Attach secret mounts to service volumes | ansible.builtin.set_fact | True |
+
+#### File: tasks/sub_tasks/compose/security_opt.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Security_opt ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Security_opt ¦ Ensure security_opt_action is valid | ansible.builtin.assert | False |
+| Compose - Security_opt ¦ Normalize security_opt input | ansible.builtin.set_fact | False |
+| Compose - Security_opt ¦ Attach security_opt to service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/service_base.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Base ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Base ¦ Normalize effective stack deploy type | ansible.builtin.set_fact | False |
+| Compose - Base ¦ Set base service definition | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/shm.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - SHM ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - SHM ¦ Set SHM size for service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/stack_networks.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Stack Networks ¦ Ensure docker_services_stack_name is provided | ansible.builtin.assert | False |
+| Compose - Stack Networks ¦ Ensure stack_network_names is provided | ansible.builtin.assert | False |
+| Compose - Stack Networks ¦ Normalize stack networks input into a mapping | ansible.builtin.set_fact | False |
+| Compose - Stack Networks ¦ Default external=true for any network defs that omit it | ansible.builtin.set_fact | True |
+| Compose - Stack Networks ¦ Merge into docker_services_compose_stacks[docker_services_stack_name].networks | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/stack_volumes.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Stack Volumes ¦ Ensure docker_services_stack_name is provided | ansible.builtin.assert | False |
+| Compose - Stack Volumes ¦ Ensure stack_volume_names is provided | ansible.builtin.assert | False |
+| Compose - Stack Volumes ¦ Normalize stack volumes input into a mapping | ansible.builtin.set_fact | False |
+| Compose - Stack Volumes ¦ Default external=true for any volume defs that omit it | ansible.builtin.set_fact | True |
+| Compose - Stack Volumes ¦ Merge into docker_services_compose_stacks[docker_services_stack_name].volumes | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/swarm_configs.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Swarm Configs ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Swarm Configs ¦ Ensure configs_list is a list | ansible.builtin.assert | False |
+| Compose - Swarm Configs ¦ Resolve effective config sources | ansible.builtin.set_fact | False |
+| Compose - Swarm Configs ¦ Attach configs to service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/sysctls.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Sysctls ¦ Validate input | ansible.builtin.assert | False |
+| Compose - Sysctls ¦ Normalize sysctls dict | ansible.builtin.set_fact | False |
+| Compose - Sysctls ¦ Attach sysctls to service | ansible.builtin.set_fact | True |
+
+#### File: tasks/sub_tasks/compose/tmpfs.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Tmpfs ¦ Ensure tmpfs_action is valid | ansible.builtin.assert | False |
+| Compose - Tmpfs ¦ Normalise tmpfs entries to list | ansible.builtin.set_fact | False |
+| Compose - Tmpfs ¦ Merge tmpfs entries into compose services | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/user.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - User ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - User ¦ Set user for service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/compose/volumes.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - Volumes ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - Volumes ¦ Ensure volumes_action is valid | ansible.builtin.assert | False |
+| Compose - Volumes ¦ Build raw volume entries | ansible.builtin.set_fact | False |
+| Compose - Volumes ¦ Validate raw volume entries are dicts | ansible.builtin.assert | False |
+| Compose - Volumes ¦ Reset working volumes list (prevent cross-service bleed) | ansible.builtin.set_fact | False |
+| Compose - Volumes ¦ Canonicalise new volume entries | ansible.builtin.set_fact | False |
+| Compose - Volumes ¦ Validate canonical volume entries | ansible.builtin.assert | False |
+| Compose - Volumes ¦ Capture existing volumes list | ansible.builtin.set_fact | False |
+| Compose - Volumes ¦ Compute merged volumes list | ansible.builtin.set_fact | False |
+| Compose - Volumes ¦ Attach volumes to service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/deploy/all.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Deploy - All ¦ Ensure docker_services_compose_stacks exists | ansible.builtin.set_fact | False |
+| Deploy - All ¦ Deploy each stack | ansible.builtin.include_tasks | True |
+
+#### File: tasks/sub_tasks/deploy/config.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Deploy - Config ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Deploy - Config ¦ Normalize deploy mode and capture raw replicas | ansible.builtin.set_fact | False |
+| Deploy - Config ¦ Validate deploy mode | ansible.builtin.assert | False |
+| Deploy - Config ¦ Validate deploy_replicas raw input | ansible.builtin.assert | True |
+| Deploy - Config ¦ Normalize deploy replicas | ansible.builtin.set_fact | False |
+| Deploy - Config ¦ Normalize deploy constraints into list | ansible.builtin.set_fact | False |
+| Deploy - Config ¦ Normalize optional deploy sub-dicts | ansible.builtin.set_fact | False |
+| Deploy - Config ¦ Validate normalized deploy inputs | ansible.builtin.assert | False |
+| Deploy - Config ¦ Build deploy dict | ansible.builtin.set_fact | False |
+| Deploy - Config ¦ Attach deploy config to service | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/deploy/one.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Deploy - One ¦ Validate inputs | ansible.builtin.assert | False |
+| Deploy - One ¦ Derive effective deploy host | ansible.builtin.set_fact | False |
+| Deploy - One ¦ Ensure /opt/stacks exists | ansible.builtin.file | False |
+| Deploy - One ¦ Render compose/stack file | ansible.builtin.template | False |
+| Deploy - One ¦ Swarm deploy | community.docker.docker_stack | True |
+| Deploy - One ¦ Compose deploy | community.docker.docker_compose_v2 | True |
+
+#### File: tasks/sub_tasks/init/validate.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Init - Validate ¦ Assert docker_services_svc is defined and is a mapping | ansible.builtin.assert | False |
+| Init - Validate ¦ docker_services_svc.name | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.image (required) | ansible.builtin.assert | False |
+| Init - Validate ¦ docker_services_svc.user | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.command shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.command string form | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.command list form | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.env_file shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.env_file string form | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.env_file list form | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.devices shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.cap_add shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.cap_drop shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.sysctls shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.deploy shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.deploy.type | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.deploy.mode | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.deploy.replicas | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.deploy.host (optional) | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.deploy.constraints | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.targets shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.targets entries are mappings | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.named_networks | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.named_volumes | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.paths shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.paths entries | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.paths mode formatting | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.templates shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.templates entries | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.templates mode formatting | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.copies shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.copies entries | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.infisical shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.infisical.secrets_map | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.infisical.secrets_map var names | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.infisical.secrets_map docker_secret names | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.postgres shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.postgres.databases | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.healthcheck shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.secrets shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.secrets string form | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.secrets list form is non-empty | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.secrets list items are strings or dicts | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.secrets string items are non-empty | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.secrets dict items have source and target | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.ports shape | ansible.builtin.assert | True |
+| Init - Validate ¦ Normalize ports items | ansible.builtin.set_fact | True |
+| Init - Validate ¦ docker_services_svc.ports entries | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.volumes shape | ansible.builtin.assert | True |
+| Init - Validate ¦ Normalize volume items | ansible.builtin.set_fact | True |
+| Init - Validate ¦ docker_services_svc.volumes entries basic | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.volumes required keys by type | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.environment shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.labels shape | ansible.builtin.assert | True |
+
+#### File: tasks/sub_tasks/prep/authelia/_keys.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Authelia Keys ¦ Assert required inputs | ansible.builtin.assert | False |
+| Prep - Authelia Keys ¦ Resolve keys host | ansible.builtin.set_fact | False |
+| Prep - Authelia Keys ¦ Determine if key already exists | ansible.builtin.set_fact | False |
+| Prep - Authelia Keys ¦ Determine if docker secret creation is enabled | ansible.builtin.set_fact | False |
+| Prep - Authelia Keys ¦ Ensure secret exists | community.docker.docker_secret | True |
+| Prep - Authelia Keys ¦ Generate key | block | True |
+| Prep - Authelia Keys ¦ Run generator container | community.docker.docker_container | False |
+| Prep - Authelia Keys ¦ Extract generated value | ansible.builtin.shell | False |
+| Prep - Authelia Keys ¦ Mark generated this run | ansible.builtin.set_fact | False |
+| Prep - Authelia Keys ¦ Fail if generation produced empty output | ansible.builtin.assert | False |
+| Prep - Authelia Keys ¦ Save generated value as a mgt fact | ansible.builtin.set_fact | True |
+| Prep - Authelia Keys ¦ Ensure secret exists (generated key) | community.docker.docker_secret | True |
+
+#### File: tasks/sub_tasks/prep/authelia/tasker.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Authelia ¦ Generate argon2 + secrets | block | True |
+| Prep - Authelia ¦ Generate argon2 digest | ansible.builtin.include_tasks | False |
+| Prep - Authelia ¦ Ensure session key secret | ansible.builtin.include_tasks | False |
+| Prep - Authelia ¦ Ensure storage key secret | ansible.builtin.include_tasks | False |
+| Prep - Authelia ¦ Persist storage key in Infisical | ansible.builtin.debug | True |
+| Prep - Authelia ¦ Ensure JWT reset key secret | ansible.builtin.include_tasks | False |
+
+#### File: tasks/sub_tasks/prep/bazarr.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Bazarr ¦ Set derived vars | ansible.builtin.set_fact | False |
+| Prep - Bazarr ¦ Set secret vars | ansible.builtin.set_fact | False |
+| Prep - Bazarr ¦ Set postgres vars | ansible.builtin.set_fact | True |
+| Prep - Bazarr ¦ Assert postgres inputs are complete | ansible.builtin.assert | True |
+| Prep - Bazarr ¦ Ensure config dir exists | ansible.builtin.file | False |
+| Prep - Bazarr ¦ Check config exists | ansible.builtin.stat | False |
+| Prep - Bazarr ¦ Generate Bazarr config (temp container) | block | True |
+| Prep - Bazarr ¦ Start temp container to generate config | community.docker.docker_container | False |
+| Prep - Bazarr ¦ Wait for config.yaml to appear | ansible.builtin.wait_for | False |
+| Prep - Bazarr ¦ Give Bazarr time to finish writing config | ansible.builtin.pause | False |
+| Prep - Bazarr ¦ Configure api setting | yedit | False |
+| Prep - Bazarr ¦ Configure misc settings | yedit | False |
+| Prep - Bazarr ¦ Configure opensubtitlescom settings | yedit | False |
+| Prep - Bazarr ¦ Configure radarr settings | yedit | False |
+| Prep - Bazarr ¦ Configure sonarr settings | yedit | False |
+| Prep - Bazarr ¦ Configure postgres settings | yedit | False |
+
+#### File: tasks/sub_tasks/prep/cleanup.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Cleanup ¦ Ensure docker_services_stack_name is set | ansible.builtin.assert | False |
+| Prep - Cleanup ¦ Cleanup container stack | block | True |
+| Prep - Cleanup ¦ Check if compose file exists | ansible.builtin.stat | False |
+| Prep - Cleanup ¦ Compose down | community.docker.docker_compose_v2 | True |
+| Prep - Cleanup ¦ Remove compose file | ansible.builtin.file | False |
+| Prep - Cleanup ¦ Remove container secret files directory | ansible.builtin.file | False |
+| Prep - Cleanup ¦ Remove stack directory if empty | ansible.builtin.file | False |
+| Prep - Cleanup ¦ Cleanup swarm stack | block | True |
+| Prep - Cleanup ¦ Stack down | community.docker.docker_stack | False |
+| Prep - Cleanup ¦ Remove stack file | ansible.builtin.file | False |
+
+#### File: tasks/sub_tasks/prep/copies.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Copies ¦ Copy files | ansible.builtin.copy | False |
+| Prep - Copies ¦ Wait for copied files | ansible.builtin.wait_for | True |
+
+#### File: tasks/sub_tasks/prep/infisical/_fetch.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Infisical Fetch ¦ Ensure secrets_map is defined | ansible.builtin.assert | False |
+| Prep - Infisical Fetch ¦ Ensure infisical_lookup_default_params is defined | ansible.builtin.assert | False |
+| Prep - Infisical Fetch ¦ Initialize dict output | ansible.builtin.set_fact | True |
+| Prep - Infisical Fetch ¦ Fetch secrets from Infisical | ansible.builtin.set_fact | True |
+| Prep - Infisical Fetch ¦ Fail if any fetched secret is empty | ansible.builtin.assert | True |
+| Prep - Infisical Fetch ¦ Fetch secrets from Infisical | ansible.builtin.set_fact | True |
+| Prep - Infisical Fetch ¦ Fail if any fetched secret is empty | ansible.builtin.assert | True |
+
+#### File: tasks/sub_tasks/prep/infisical/_resolver.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Infisical Resolver ¦ Determine fail-on-empty behavior | ansible.builtin.set_fact | True |
+| Prep - Infisical Resolver ¦ Initialize resolved environment + placeholder key list | ansible.builtin.set_fact | True |
+| Prep - Infisical Resolver ¦ Resolve placeholders | ansible.builtin.set_fact | True |
+| Prep - Infisical Resolver ¦ Replace docker_services_svc.environment with resolved values | ansible.builtin.set_fact | True |
+| Prep - Infisical Resolver ¦ Fail if any placeholders remain | ansible.builtin.fail | True |
+| Prep - Infisical Resolver ¦ Fail if any placeholder-resolved env key is empty | ansible.builtin.assert | True |
+
+#### File: tasks/sub_tasks/prep/infisical/_secrets.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Infisical Secrets ¦ Reset working list | ansible.builtin.set_fact | False |
+| Prep - Infisical Secrets ¦ Resolve deploy host | ansible.builtin.set_fact | False |
+| Prep - Infisical Secrets ¦ Resolve effective secrets host | ansible.builtin.set_fact | False |
+| Prep - Infisical Secrets ¦ Build desired secret items from secrets_map | ansible.builtin.set_fact | False |
+| Prep - Infisical Secrets ¦ Dedupe by name (keep first), keep empties for visibility | ansible.builtin.set_fact | False |
+| Prep - Infisical Secrets ¦ Warn about empty secret values | ansible.builtin.debug | True |
+| Prep - Infisical Secrets ¦ Create Docker Swarm secrets | community.docker.docker_secret | True |
+| Prep - Infisical Secrets ¦ Ensure secrets directory exists on deploy host | ansible.builtin.file | True |
+| Prep - Infisical Secrets ¦ Remove secret path if it exists but is a directory | ansible.builtin.file | True |
+| Prep - Infisical Secrets ¦ Write secret files on deploy host | ansible.builtin.copy | True |
+| Prep - Infisical Secrets ¦ Verify secret paths exist and are files | ansible.builtin.stat | True |
+| Prep - Infisical Secrets ¦ Fail if any secret path is not a file | ansible.builtin.assert | True |
+
+#### File: tasks/sub_tasks/prep/infisical/tasker.yml
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
-| Derive cleanup flags (stack-scoped) | ansible.builtin.set_fact | False | remove,recreate |
-| Init cleaned-stacks tracker | ansible.builtin.set_fact | True | remove,recreate |
-| Cleanup ¦ Determine if stack cleanup should run (once per stack) | ansible.builtin.set_fact | True |  |
-| Remove existing stack (optional, once per stack) | ansible.builtin.include_tasks | True | remove,recreate |
-| Mark stack as cleaned | ansible.builtin.set_fact | True | remove,recreate |
+| Prep - Infisical Fetch ¦ Include tasks | ansible.builtin.include_tasks | True |  |
+| Prep - Infisical Resolver ¦ Include tasks on deploy host | ansible.builtin.include_tasks | True |  |
+| Prep - Infisical Resolver ¦ Propagate Infisical flattened vars to deploy host | ansible.builtin.set_fact | True |  |
+| Prep - Infisical Resolver ¦ Propagate Infisical dict to deploy host | ansible.builtin.set_fact | True |  |
+| Prep - Infisical Secrets ¦ Include tasks | ansible.builtin.include_tasks | True |  |
 
-#### File: tasks/prep/01_pre_filesystem/sub_tasks/authelia/_keys.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Authelia keys ¦ Assert required inputs | ansible.builtin.assert | False |
-| Authelia keys ¦ Resolve keys host (Swarm Manager) | ansible.builtin.set_fact | False |
-| Authelia keys ¦ Determine if key already exists | ansible.builtin.set_fact | False |
-| Authelia keys ¦ Determine if docker secret creation is enabled | ansible.builtin.set_fact | False |
-| Authelia keys ¦ Ensure secret exists (provided key) | community.docker.docker_secret | True |
-| Authelia keys ¦ Generate key (temporary container) | block | True |
-| Authelia keys ¦ Run generator container | community.docker.docker_container | False |
-| Authelia keys ¦ Extract generated value | ansible.builtin.shell | False |
-| Authelia keys ¦ Mark generated this run | ansible.builtin.set_fact | False |
-| Authelia keys ¦ Fail if generation produced empty output | ansible.builtin.assert | False |
-| Authelia keys ¦ Save generated value as a mgt fact | ansible.builtin.set_fact | True |
-| Authelia keys ¦ Ensure secret exists (generated key) | community.docker.docker_secret | True |
-
-#### File: tasks/prep/01_pre_filesystem/sub_tasks/authelia/tasker.yml
+#### File: tasks/sub_tasks/prep/nzbhydra2.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Authelia prep ¦ Generate argon2 + secrets (once) | block | True |
-| Authelia prep ¦ Generate argon2 digest (users_database) | ansible.builtin.include_tasks | False |
-| Authelia prep ¦ Ensure session key secret | ansible.builtin.include_tasks | False |
-| Authelia prep ¦ Ensure storage key secret | ansible.builtin.include_tasks | False |
-| Authelia prep ¦ IMPORTANT ¦ Persist storage key in Infisical | ansible.builtin.debug | True |
-| Authelia prep ¦ Ensure JWT reset key secret | ansible.builtin.include_tasks | False |
+| Prep - NZBHydra2 ¦ Set filesystem host | ansible.builtin.set_fact | False |
+| Prep - NZBHydra2 ¦ Set derived vars | ansible.builtin.set_fact | False |
+| Prep - NZBHydra2 ¦ Assert required secrets are present | ansible.builtin.assert | False |
+| Prep - NZBHydra2 ¦ Assert altHUB secrets are complete when used | ansible.builtin.assert | False |
+| Prep - NZBHydra2 ¦ Assert NZBGeek secrets are complete when used | ansible.builtin.assert | False |
+| Prep - NZBHydra2 ¦ Assert Drunken Slug secrets are complete when used | ansible.builtin.assert | False |
+| Prep - NZBHydra2 ¦ Ensure config dir exists | ansible.builtin.file | False |
+| Prep - NZBHydra2 ¦ Check config exists | ansible.builtin.stat | False |
+| Prep - NZBHydra2 ¦ Generate nzbhydra.yml (temp container) | block | True |
+| Prep - NZBHydra2 ¦ Start temp container to generate config | community.docker.docker_container | False |
+| Prep - NZBHydra2 ¦ Wait for config to appear | ansible.builtin.wait_for | False |
+| Prep - NZBHydra2 ¦ Wait for config file size to stabilize | ansible.builtin.shell | False |
+| Prep - NZBHydra2 ¦ Build config facts | ansible.builtin.set_fact | False |
+| Prep - NZBHydra2 ¦ Set auth user | yedit | False |
+| Prep - NZBHydra2 ¦ Set API key | yedit | False |
+| Prep - NZBHydra2 ¦ Replace downloaders list | block | False |
+| Prep - NZBHydra2 ¦ Remove existing downloaders | yedit | False |
+| Prep - NZBHydra2 ¦ Write managed downloaders | yedit | False |
+| Prep - NZBHydra2 ¦ Replace indexers list | block | False |
+| Prep - NZBHydra2 ¦ Remove existing indexers | yedit | False |
+| Prep - NZBHydra2 ¦ Write managed indexers | yedit | False |
+| Prep - NZBHydra2 ¦ Ensure config file permissions are restricted | ansible.builtin.file | False |
+| Prep - NZBHydra2 ¦ Slurp config | ansible.builtin.slurp | False |
+| Prep - NZBHydra2 ¦ Parse config YAML | ansible.builtin.set_fact | False |
+| Prep - NZBHydra2 ¦ Assert API key set | ansible.builtin.assert | False |
+| Prep - NZBHydra2 ¦ Assert SABnzbd downloader is set | ansible.builtin.assert | False |
+| Prep - NZBHydra2 ¦ Assert configured indexers were written | ansible.builtin.assert | False |
 
-#### File: tasks/prep/01_pre_filesystem/sub_tasks/infisical/_fetch.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Ensure secrets_map is defined | ansible.builtin.assert | False |
-| Ensure infisical_lookup_default_params is defined | ansible.builtin.assert | False |
-| Initialize dict output (optional) | ansible.builtin.set_fact | True |
-| Fetch secrets from Infisical (flattened vars) | ansible.builtin.set_fact | True |
-| Fail if any fetched secret is empty (flattened) | ansible.builtin.assert | True |
-| Fetch secrets from Infisical (dict output) | ansible.builtin.set_fact | True |
-| Fail if any fetched secret is empty (dict output) | ansible.builtin.assert | True |
-
-#### File: tasks/prep/01_pre_filesystem/sub_tasks/infisical/_resolver.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| EnvResolve ¦ Determine fail-on-empty behavior | ansible.builtin.set_fact | True |
-| EnvResolve ¦ Initialize resolved environment + placeholder key list | ansible.builtin.set_fact | True |
-| EnvResolve ¦ Resolve placeholders into docker_services_env_resolved | ansible.builtin.set_fact | True |
-| EnvResolve ¦ Replace docker_services_svc.environment with resolved values | ansible.builtin.set_fact | True |
-| EnvResolve ¦ Fail if any placeholders remain (means resolver didn't run) | ansible.builtin.fail | True |
-| EnvResolve ¦ Fail if any placeholder-resolved env key is empty | ansible.builtin.assert | True |
-
-#### File: tasks/prep/01_pre_filesystem/sub_tasks/infisical/_secrets.yml
+#### File: tasks/sub_tasks/prep/paths.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Secrets ¦ Reset working list (prevent cross-service bleed) | ansible.builtin.set_fact | False |
-| Secrets ¦ Resolve deploy host | ansible.builtin.set_fact | False |
-| Secrets ¦ Resolve effective secrets host (swarm -> mgt, else deploy host) | ansible.builtin.set_fact | False |
-| Secrets ¦ Build desired secret items from secrets_map (opt-in via docker_secret) | ansible.builtin.set_fact | False |
-| Secrets ¦ Dedupe by name (keep first), keep empties for visibility | ansible.builtin.set_fact | False |
-| Secrets ¦ Warn about empty secret values (if any) | ansible.builtin.debug | True |
-| Create Docker secrets (swarm) | community.docker.docker_secret | True |
-| Ensure secrets directory exists on deploy host (compose/container) | ansible.builtin.file | True |
-| Remove secret path if it exists but is a directory (compose/container pre-clean) | ansible.builtin.file | True |
-| Write secret files on deploy host (compose/container) | ansible.builtin.copy | True |
-| Verify secret paths exist and are files (compose/container) | ansible.builtin.stat | True |
-| Fail if any secret path is not a file (compose/container) | ansible.builtin.assert | True |
+| Prep - Paths ¦ Validate each path spec | ansible.builtin.assert | False |
+| Prep - Paths ¦ Apply filesystem state on deploy host | ansible.builtin.file | False |
 
-#### File: tasks/prep/01_pre_filesystem/sub_tasks/infisical/tasker.yml
-
-| Name | Module | Has Conditions | Tags |
-| ---- | ------ | -------------- | -----|
-| Prep ¦ Fetch Infisical secrets (docker_services_svc.infisical) | ansible.builtin.include_tasks | True |  |
-| Prep ¦ Resolve Infisical placeholders in docker_services_svc.environment | ansible.builtin.include_tasks | True |  |
-| Prep ¦ Propagate Infisical flattened vars to deploy host | ansible.builtin.set_fact | True |  |
-| Prep ¦ Propagate Infisical dict to deploy host | ansible.builtin.set_fact | True |  |
-| Prep ¦ Create docker secrets / files from Infisical secrets_map | ansible.builtin.include_tasks | True |  |
-
-#### File: tasks/prep/01_pre_filesystem/sub_tasks/postgres.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Postgres ¦ Ensure creds exist (fetch from Infisical if missing) | block | True |
-| Postgres ¦ Detect if creds are missing | ansible.builtin.set_fact | False |
-| Postgres ¦ Fetch postgres_user/postgres_pass from Infisical (only if missing) | ansible.builtin.include_tasks | True |
-| Postgres ¦ Assert creds are now present | ansible.builtin.assert | False |
-| Prepare Postgres docker secret | community.docker.docker_secret | True |
-| Normalize postgres database list from docker_services_svc schema | ansible.builtin.set_fact | True |
-| Ping for existing database(s) | community.postgresql.postgresql_ping | True |
-| Create postgres database(s) if missing | community.postgresql.postgresql_db | True |
-
-#### File: tasks/prep/01_pre_filesystem/sub_tasks/qbittorrent.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Qbit prep ¦ Set derived vars | ansible.builtin.set_fact | False |
-| Qbit prep ¦ Assert downloads-instance password is present | ansible.builtin.assert | True |
-| Qbit prep ¦ Generate downloads-instance pass | qbittorrent_passwd | True |
-| Qbit prep ¦ Assert seeds-instance password is present | ansible.builtin.assert | True |
-| Qbit prep ¦ Generate seeds-instance pass | qbittorrent_passwd | True |
-
-#### File: tasks/prep/01_pre_filesystem/sub_tasks/swarm_configs/_absent.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Swarm configs ¦ List existing swarm config names | ansible.builtin.command | False |
-| Swarm configs ¦ Find matching configs for absent base name | ansible.builtin.set_fact | False |
-| Swarm configs ¦ Record absent config base name | ansible.builtin.set_fact | False |
-| Swarm configs ¦ Remove absent configs by base-name match | community.docker.docker_config | True |
-
-#### File: tasks/prep/01_pre_filesystem/sub_tasks/swarm_configs/_present.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Swarm configs ¦ Render desired config content | ansible.builtin.set_fact | False |
-| Swarm configs ¦ Hash rendered content | ansible.builtin.set_fact | False |
-| Swarm configs ¦ Ensure versioned config exists | community.docker.docker_config | False |
-| Swarm configs ¦ Store effective config mapping | ansible.builtin.set_fact | False |
-
-#### File: tasks/prep/01_pre_filesystem/sub_tasks/swarm_configs/tasker.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Swarm configs ¦ Ensure swarm_configs is a list | ansible.builtin.assert | False |
-| Swarm configs ¦ Resolve deploy host (swarm manager) | ansible.builtin.set_fact | False |
-| Swarm configs ¦ Initialize effective config maps | ansible.builtin.set_fact | False |
-| Swarm configs ¦ Validate each config spec | ansible.builtin.assert | False |
-| Swarm configs ¦ Process absent configs | ansible.builtin.include_tasks | True |
-| Swarm configs ¦ Process present configs | ansible.builtin.include_tasks | True |
-
-#### File: tasks/prep/01_pre_filesystem/tasker.yml
-
-| Name | Module | Has Conditions | Tags |
-| ---- | ------ | -------------- | -----|
-| Prep ¦ Infisical Secrets | ansible.builtin.include_tasks | False |  |
-| Prep ¦ Swarm configs | ansible.builtin.include_tasks | True |  |
-| Prep ¦ Authelia key material (argon2/session/jwt/storage) | ansible.builtin.include_tasks | True |  |
-| Create Postgres database | ansible.builtin.include_tasks | True | deploy,update,recreate |
-| Hash qBittorrent passwords | ansible.builtin.include_tasks | True | deploy,update,recreate |
-
-#### File: tasks/prep/02_filesystem/sub_tasks/copies.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Copy files (role-relative src) | ansible.builtin.copy | False |
-| Wait for copied files (optional) | ansible.builtin.wait_for | True |
-
-#### File: tasks/prep/02_filesystem/sub_tasks/dynamic.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Cloudflare ¦ Detect if zone is missing | ansible.builtin.set_fact | False |
-| Cloudflare ¦ Fetch cloudflare_zone from Infisical (only if missing) | ansible.builtin.include_tasks | True |
-| Render Traefik dynamic file (on traefik host) | ansible.builtin.template | False |
-
-#### File: tasks/prep/02_filesystem/sub_tasks/paths.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Validate each path spec | ansible.builtin.assert | False |
-| Apply filesystem state on deploy host | ansible.builtin.file | False |
-
-#### File: tasks/prep/02_filesystem/sub_tasks/templates.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Render templates on deploy host | ansible.builtin.template | False |
-
-#### File: tasks/prep/02_filesystem/tasker.yml
-
-| Name | Module | Has Conditions | Tags |
-| ---- | ------ | -------------- | -----|
-| Create filesystem paths (on filesystem hosts) | ansible.builtin.include_tasks | True | deploy,update,recreate |
-| Copy static files (on filesystem hosts) | ansible.builtin.include_tasks | True | deploy,update,recreate |
-| Render templates (on filesystem host) | ansible.builtin.include_tasks | True | deploy,update,recreate |
-| Render swarm env templates (always on services manager) | ansible.builtin.include_tasks | True | deploy,update,recreate |
-| Render traefik dynamic files | ansible.builtin.include_tasks | True | deploy,update,recreate |
-
-#### File: tasks/prep/03_post_filesystem/sub_tasks/bazarr.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Bazarr prep ¦ Set derived vars | ansible.builtin.set_fact | False |
-| Bazarr prep ¦ Set secret vars | ansible.builtin.set_fact | False |
-| Bazarr prep ¦ Set postgres vars | ansible.builtin.set_fact | True |
-| Bazarr prep ¦ Assert postgres inputs are complete | ansible.builtin.assert | True |
-| Bazarr prep ¦ Ensure config dir exists | ansible.builtin.file | False |
-| Bazarr prep ¦ Check config exists | ansible.builtin.stat | False |
-| Bazarr prep ¦ Generate Bazarr config (temp container) | block | True |
-| Bazarr prep ¦ Start temp container to generate config | community.docker.docker_container | False |
-| Bazarr prep ¦ Wait for config.yaml to appear | ansible.builtin.wait_for | False |
-| Bazarr prep ¦ Give Bazarr time to finish writing config | ansible.builtin.pause | False |
-| Bazarr prep ¦ Configure api setting | yedit | False |
-| Bazarr prep ¦ Configure misc settings | yedit | False |
-| Bazarr prep ¦ Configure opensubtitlescom settings | yedit | False |
-| Bazarr prep ¦ Configure radarr settings | yedit | False |
-| Bazarr prep ¦ Configure sonarr settings | yedit | False |
-| Bazarr prep ¦ Configure postgres settings | yedit | False |
-
-#### File: tasks/prep/03_post_filesystem/sub_tasks/nzbhydra2.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| NZBHydra2 prep ¦ Set filesystem host | ansible.builtin.set_fact | False |
-| NZBHydra2 prep ¦ Set derived vars | ansible.builtin.set_fact | False |
-| NZBHydra2 prep ¦ Assert required secrets are present | ansible.builtin.assert | False |
-| NZBHydra2 prep ¦ Assert altHUB secrets are complete when used | ansible.builtin.assert | False |
-| NZBHydra2 prep ¦ Assert NZBGeek secrets are complete when used | ansible.builtin.assert | False |
-| NZBHydra2 prep ¦ Assert Drunken Slug secrets are complete when used | ansible.builtin.assert | False |
-| NZBHydra2 prep ¦ Ensure config dir exists | ansible.builtin.file | False |
-| NZBHydra2 prep ¦ Check config exists | ansible.builtin.stat | False |
-| NZBHydra2 prep ¦ Generate nzbhydra.yml (temp container) | block | True |
-| NZBHydra2 prep ¦ Start temp container to generate config | community.docker.docker_container | False |
-| NZBHydra2 prep ¦ Wait for config to appear | ansible.builtin.wait_for | False |
-| NZBHydra2 prep ¦ Wait for config file size to stabilize | ansible.builtin.shell | False |
-| NZBHydra2 prep ¦ Build config facts | ansible.builtin.set_fact | False |
-| NZBHydra2 prep ¦ Set auth user | yedit | False |
-| NZBHydra2 prep ¦ Set API key | yedit | False |
-| NZBHydra2 prep ¦ Replace downloaders list | block | False |
-| NZBHydra2 prep ¦ Remove existing downloaders | yedit | False |
-| NZBHydra2 prep ¦ Write managed downloaders | yedit | False |
-| NZBHydra2 prep ¦ Replace indexers list | block | False |
-| NZBHydra2 prep ¦ Remove existing indexers | yedit | False |
-| NZBHydra2 prep ¦ Write managed indexers | yedit | False |
-| NZBHydra2 prep ¦ Ensure config file permissions are restricted | ansible.builtin.file | False |
-| NZBHydra2 prep ¦ Slurp config | ansible.builtin.slurp | False |
-| NZBHydra2 prep ¦ Parse config YAML | ansible.builtin.set_fact | False |
-| NZBHydra2 prep ¦ Assert API key set | ansible.builtin.assert | False |
-| NZBHydra2 prep ¦ Assert SABnzbd downloader is set | ansible.builtin.assert | False |
-| NZBHydra2 prep ¦ Assert configured indexers were written | ansible.builtin.assert | False |
-
-#### File: tasks/prep/03_post_filesystem/sub_tasks/plex/_claim.yml
+#### File: tasks/sub_tasks/prep/plex/_claim.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
@@ -682,78 +583,135 @@
 | Claim ¦ Validate claim code | ansible.builtin.assert | True |
 | Claim ¦ Report claim status | ansible.builtin.debug | False |
 
-#### File: tasks/prep/03_post_filesystem/sub_tasks/plex/_preferences.yml
+#### File: tasks/sub_tasks/prep/plex/_preferences.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Preferences ¦ Conduct preferences.xml tasks | block | False |
-| Preferences ¦ Set derived vars | ansible.builtin.set_fact | False |
-| Preferences ¦ Check if Preferences.xml exists | ansible.builtin.stat | False |
-| Preferences ¦ Read Preferences.xml attributes | community.general.xml | True |
-| Preferences ¦ Remove Preferences.xml if malformed | ansible.builtin.file | True |
-| Preferences ¦ Derive flags from Preferences.xml | ansible.builtin.set_fact | True |
-| Preferences ¦ Fix TranscoderTempDirectory | community.general.xml | True |
+| Prep - Plex Preferences ¦ Conduct preferences.xml tasks | block | False |
+| Prep - Plex Preferences ¦ Set derived vars | ansible.builtin.set_fact | False |
+| Prep - Plex Preferences ¦ Check if Preferences.xml exists | ansible.builtin.stat | False |
+| Prep - Plex Preferences ¦ Read Preferences.xml attributes | community.general.xml | True |
+| Prep - Plex Preferences ¦ Remove Preferences.xml if malformed | ansible.builtin.file | True |
+| Prep - Plex Preferences ¦ Derive flags from Preferences.xml | ansible.builtin.set_fact | True |
+| Prep - Plex Preferences ¦ Fix TranscoderTempDirectory | community.general.xml | True |
 
-#### File: tasks/prep/03_post_filesystem/sub_tasks/plex/_token.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Token ¦ Set file ownership facts | ansible.builtin.set_fact | False |
-| Token ¦ Check if plex.ini exists | ansible.builtin.stat | False |
-| Token ¦ Set client identifier fact | block | True |
-| Token ¦ Lookup client_identifier | ansible.builtin.set_fact | False |
-| Token ¦ Generate new identifier | ansible.builtin.set_fact | True |
-| Token ¦ Set token variable if previously saved | ansible.builtin.set_fact | True |
-| Token ¦ Set docker_services_plex_no_token status | ansible.builtin.set_fact | False |
-| Token ¦ Check if Token is valid | ansible.builtin.uri | True |
-| Token ¦ Generate New Token | block | True |
-| Token ¦ Generate PIN | ansible.builtin.uri | False |
-| Token ¦ Login prompt | ansible.builtin.pause | False |
-| Token ¦ Check PIN | ansible.builtin.uri | False |
-| Token ¦ Set docker_services_plex_auth_token variable | ansible.builtin.set_fact | False |
-| Token ¦ Check if new Token is valid | ansible.builtin.uri | False |
-| Token ¦ Fail if new token is invalid | ansible.builtin.fail | True |
-| Token ¦ Add Client Identifier to plex.ini | community.general.ini_file | False |
-| Token ¦ Add Token to plex.ini | community.general.ini_file | False |
-| Token ¦ Display Token | ansible.builtin.debug | False |
-
-#### File: tasks/prep/03_post_filesystem/sub_tasks/plex/tasker.yml
+#### File: tasks/sub_tasks/prep/plex/_token.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Plex prep ¦ Set derived vars | ansible.builtin.set_fact | False |
-| Plex prep ¦ Assert derived hosts are valid | ansible.builtin.assert | False |
-| Plex prep ¦ Create media volume (NFS) | community.docker.docker_volume | False |
-| Plex prep ¦ Include Plex token tasks | ansible.builtin.include_tasks | False |
-| Plex prep ¦ Include Plex preferences.xml tasks | ansible.builtin.include_tasks | False |
-| Plex prep ¦ Include Plex claim tasks | ansible.builtin.include_tasks | False |
+| Prep - Plex Token ¦ Set file ownership facts | ansible.builtin.set_fact | False |
+| Prep - Plex Token ¦ Check if plex.ini exists | ansible.builtin.stat | False |
+| Prep - Plex Token ¦ Set client identifier fact | block | True |
+| Prep - Plex Token ¦ Lookup client_identifier | ansible.builtin.set_fact | False |
+| Prep - Plex Token ¦ Generate new identifier | ansible.builtin.set_fact | True |
+| Prep - Plex Token ¦ Set token variable if previously saved | ansible.builtin.set_fact | True |
+| Prep - Plex Token ¦ Set docker_services_plex_no_token status | ansible.builtin.set_fact | False |
+| Prep - Plex Token ¦ Check if Token is valid | ansible.builtin.uri | True |
+| Prep - Plex Token ¦ Generate New Token | block | True |
+| Prep - Plex Token ¦ Generate PIN | ansible.builtin.uri | False |
+| Prep - Plex Token ¦ Login prompt | ansible.builtin.pause | False |
+| Prep - Plex Token ¦ Check PIN | ansible.builtin.uri | False |
+| Prep - Plex Token ¦ Set docker_services_plex_auth_token variable | ansible.builtin.set_fact | False |
+| Prep - Plex Token ¦ Check if new Token is valid | ansible.builtin.uri | False |
+| Prep - Plex Token ¦ Fail if new token is invalid | ansible.builtin.fail | True |
+| Prep - Plex Token ¦ Add Client Identifier to plex.ini | community.general.ini_file | False |
+| Prep - Plex Token ¦ Add Token to plex.ini | community.general.ini_file | False |
+| Prep - Plex Token ¦ Display Token | ansible.builtin.debug | False |
 
-#### File: tasks/prep/03_post_filesystem/sub_tasks/vaultwarden.yml
+#### File: tasks/sub_tasks/prep/plex/tasker.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Vaultwarden prep ¦ Set derived vars | ansible.builtin.set_fact | False |
-| Vaultwarden prep ¦ Ensure vaultwarden dir exists | ansible.builtin.file | False |
-| Vaultwarden prep ¦ Check if admin token file exists | ansible.builtin.stat | False |
-| Vaultwarden prep ¦ Read existing token | ansible.builtin.slurp | True |
-| Vaultwarden prep ¦ Create new admin token | block | True |
-| Vaultwarden prep ¦ Generate random password | ansible.builtin.command | False |
-| Vaultwarden prep ¦ Save generated password | ansible.builtin.copy | False |
-| Vaultwarden prep ¦ Generate random salt | ansible.builtin.command | False |
-| Vaultwarden prep ¦ Generate Argon2 PHC string | ansible.builtin.command | False |
-| Vaultwarden prep ¦ Save argon2 token | ansible.builtin.copy | False |
-| Vaultwarden prep ¦ Set admin token fact | ansible.builtin.set_fact | False |
-| Vaultwarden prep ¦ Assert token looks like PHC argon2 string | ansible.builtin.assert | False |
-| Vaultwarden prep ¦ Ensure docker secret exists | community.docker.docker_secret | False |
+| Prep - Plex Prep ¦ Set derived vars | ansible.builtin.set_fact | False |
+| Prep - Plex Prep ¦ Assert derived hosts are valid | ansible.builtin.assert | False |
+| Prep - Plex Volume ¦ Create media volume (NFS) | community.docker.docker_volume | False |
+| Prep - Plex Token ¦ Include token tasks | ansible.builtin.include_tasks | False |
+| Prep - Plex Preferences ¦ Include Plex preferences.xml tasks | ansible.builtin.include_tasks | False |
+| Prep - Plex Claim ¦ Include claim server tasks | ansible.builtin.include_tasks | False |
 
-#### File: tasks/prep/03_post_filesystem/tasker.yml
+#### File: tasks/sub_tasks/prep/postgres.yml
 
-| Name | Module | Has Conditions | Tags |
-| ---- | ------ | -------------- | -----|
-| Prep ¦ Plex (claims/token/etc) | ansible.builtin.include_tasks | True |  |
-| Prep ¦ Bazarr | ansible.builtin.include_tasks | True |  |
-| Prep ¦ NZBHydra2 | ansible.builtin.include_tasks | True |  |
-| Prep ¦ Vaultwarden | ansible.builtin.include_tasks | True |  |
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Postgres ¦ Ensure creds exist | block | True |
+| Prep - Postgres ¦ Detect if creds are missing | ansible.builtin.set_fact | False |
+| Prep - Postgres ¦ Fetch Postgres creds from Infisical | ansible.builtin.include_tasks | True |
+| Prep - Postgres ¦ Assert creds are now present | ansible.builtin.assert | False |
+| Prep - Postgres ¦ Prepare docker secret | community.docker.docker_secret | True |
+| Prep - Postgres ¦ Normalize postgres database list | ansible.builtin.set_fact | True |
+| Prep - Postgres ¦ Ping for existing database(s) | community.postgresql.postgresql_ping | True |
+| Prep - Postgres ¦ Create database(s) if missing | community.postgresql.postgresql_db | True |
+
+#### File: tasks/sub_tasks/prep/qbittorrent.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - qBittorrent ¦ Set derived vars | ansible.builtin.set_fact | False |
+| Prep - qBittorrent ¦ Assert downloads-instance password is present | ansible.builtin.assert | True |
+| Prep - qBittorrent ¦ Generate downloads-instance pass | qbittorrent_passwd | True |
+| Prep - qBittorrent ¦ Assert seeds-instance password is present | ansible.builtin.assert | True |
+| Prep - qBittorrent ¦ Generate seeds-instance pass | qbittorrent_passwd | True |
+
+#### File: tasks/sub_tasks/prep/swarm_configs/_absent.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Swarm Configs (Absent) ¦ List existing config names | ansible.builtin.command | False |
+| Prep - Swarm Configs (Absent) ¦ Find matching configs | ansible.builtin.set_fact | False |
+| Prep - Swarm Configs (Absent) ¦ Record absent config base name | ansible.builtin.set_fact | False |
+| Prep - Swarm Configs (Absent) ¦ Remove absent configs | community.docker.docker_config | True |
+
+#### File: tasks/sub_tasks/prep/swarm_configs/_present.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Swarm Configs (Present) ¦ Render desired config content | ansible.builtin.set_fact | False |
+| Prep - Swarm Configs (Present) ¦ Hash rendered content | ansible.builtin.set_fact | False |
+| Prep - Swarm Configs (Present) ¦ Ensure versioned config exists | community.docker.docker_config | False |
+| Prep - Swarm Configs (Present) ¦ Store effective config mapping | ansible.builtin.set_fact | False |
+
+#### File: tasks/sub_tasks/prep/swarm_configs/tasker.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Swarm Configs ¦ Ensure swarm_configs is a list | ansible.builtin.assert | False |
+| Prep - Swarm Configs ¦ Resolve deploy host (swarm manager) | ansible.builtin.set_fact | False |
+| Prep - Swarm Configs ¦ Initialize effective config maps | ansible.builtin.set_fact | False |
+| Prep - Swarm Configs ¦ Validate each config spec | ansible.builtin.assert | False |
+| Prep - Swarm Configs ¦ Process absent configs | ansible.builtin.include_tasks | True |
+| Prep - Swarm Configs ¦ Process present configs | ansible.builtin.include_tasks | True |
+
+#### File: tasks/sub_tasks/prep/templates.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Templates ¦ Render templates on deploy host | ansible.builtin.template | False |
+
+#### File: tasks/sub_tasks/prep/traefik.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Traefik ¦ Detect if zone is missing | ansible.builtin.set_fact | False |
+| Prep - Traefik ¦ Fetch cloudflare_zone from Infisical | ansible.builtin.include_tasks | True |
+| Prep - Traefik ¦ Render dynamic file | ansible.builtin.template | False |
+
+#### File: tasks/sub_tasks/prep/vaultwarden.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Vaultwarden ¦ Set derived vars | ansible.builtin.set_fact | False |
+| Prep - Vaultwarden ¦ Ensure vaultwarden dir exists | ansible.builtin.file | False |
+| Prep - Vaultwarden ¦ Check if admin token file exists | ansible.builtin.stat | False |
+| Prep - Vaultwarden ¦ Read existing token | ansible.builtin.slurp | True |
+| Prep - Vaultwarden ¦ Create new admin token | block | True |
+| Prep - Vaultwarden ¦ Generate random password | ansible.builtin.command | False |
+| Prep - Vaultwarden ¦ Save generated password | ansible.builtin.copy | False |
+| Prep - Vaultwarden ¦ Generate random salt | ansible.builtin.command | False |
+| Prep - Vaultwarden ¦ Generate Argon2 PHC string | ansible.builtin.command | False |
+| Prep - Vaultwarden ¦ Save argon2 token | ansible.builtin.copy | False |
+| Prep - Vaultwarden ¦ Set admin token fact | ansible.builtin.set_fact | False |
+| Prep - Vaultwarden ¦ Assert token looks like PHC argon2 string | ansible.builtin.assert | False |
+| Prep - Vaultwarden ¦ Ensure docker secret exists | community.docker.docker_secret | False |
 
 
 

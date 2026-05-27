@@ -1,0 +1,52 @@
+---
+
+- name: Prep - Cleanup | Ensure docker_services_stack_name is set
+  ansible.builtin.assert:
+    that:
+      - docker_services_stack_name is defined
+      - docker_services_stack_name | string | trim | length > 0
+    fail_msg: "docker_services_stack_name must be set before calling cleanup.yml"
+
+- name: Prep - Cleanup | Cleanup container stack
+  when: (docker_services_stack_deploy_type | default('swarm', true) | string | trim) != 'swarm'
+  block:
+    - name: Prep - Cleanup | Check if compose file exists
+      ansible.builtin.stat:
+        path: "/opt/stacks/{{ docker_services_stack_name }}-compose.yml"
+      register: docker_services_existing_compose_yaml
+
+    - name: Prep - Cleanup | Compose down
+      when: docker_services_existing_compose_yaml.stat.exists
+      community.docker.docker_compose_v2:
+        project_src: "/opt/stacks"
+        project_name: "{{ docker_services_stack_name }}"
+        files: "{{ docker_services_stack_name }}-compose.yml"
+        state: absent
+
+    - name: Prep - Cleanup | Remove compose file
+      ansible.builtin.file:
+        path: "/opt/stacks/{{ docker_services_stack_name }}-compose.yml"
+        state: absent
+
+    - name: Prep - Cleanup | Remove container secret files directory
+      ansible.builtin.file:
+        path: "/opt/stacks/{{ docker_services_stack_name }}/secrets"
+        state: absent
+
+    - name: Prep - Cleanup | Remove stack directory if empty
+      ansible.builtin.file:
+        path: "/opt/stacks/{{ docker_services_stack_name }}"
+        state: absent
+
+- name: Prep - Cleanup | Cleanup swarm stack
+  when: (docker_services_stack_deploy_type | default('swarm', true) | string | trim) == 'swarm'
+  block:
+    - name: Prep - Cleanup | Stack down
+      community.docker.docker_stack:
+        name: "{{ docker_services_stack_name }}"
+        state: absent
+
+    - name: Prep - Cleanup | Remove stack file
+      ansible.builtin.file:
+        path: "/opt/stacks/{{ docker_services_stack_name }}-stack.yml"
+        state: absent
