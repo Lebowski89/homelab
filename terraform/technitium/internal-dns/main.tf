@@ -20,6 +20,7 @@ locals {
     "ombi",
     "opencloud",
     "portainer",
+    "postgres",
     "prometheus",
     "prowlarr",
     "qbittorrent",
