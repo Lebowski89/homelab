@@ -1,0 +1,76 @@
+---
+
+################################
+# PLEX PREP
+################################
+
+- name: Prep - Plex Prep | Set derived vars
+  ansible.builtin.set_fact:
+    docker_services_plex_fs_host: "{{ (docker_services_fs_hosts_effective | default([]) | first) | default('') }}"
+    docker_services_plex_swarm_mgr: >-
+      {{ docker_services_primary_manager | string | trim }}
+  run_once: true
+
+- name: Prep - Plex Prep | Assert derived hosts are valid
+  ansible.builtin.assert:
+    that:
+      - docker_services_plex_fs_host | string | trim | length > 0
+      - docker_services_plex_fs_host in hostvars
+      - docker_services_plex_swarm_mgr | string | trim | length > 0
+      - docker_services_plex_swarm_mgr in hostvars
+    fail_msg: >-
+      Plex prep derived an invalid filesystem host or swarm manager host.
+  run_once: true
+
+################################
+# PLEX VOLUME
+################################
+
+- name: Prep - Plex Volume | Create media volume (NFS)
+  community.docker.docker_volume:
+    volume_name: "media_nfs"
+    state: present
+    recreate: options-changed
+    driver: local
+    driver_options:
+      type: nfs
+      o: addr=192.168.80.20,rw,nfsvers=4.2
+      device: ":/mnt/user/data/media"
+  delegate_to: "{{ docker_services_plex_fs_host }}"
+  run_once: true
+
+################################
+# PLEX TOKEN
+################################
+
+- name: Prep - Plex Token | Include token tasks
+  ansible.builtin.include_tasks:
+    file: _token.yml
+    apply:
+      delegate_to: "{{ docker_services_plex_swarm_mgr }}"
+      run_once: true
+  run_once: true
+
+################################
+# PLEX PREFERENCES
+################################
+
+- name: Prep - Plex Preferences | Include Plex preferences.xml tasks
+  ansible.builtin.include_tasks:
+    file: _preferences.yml
+    apply:
+      delegate_to: "{{ docker_services_plex_fs_host }}"
+      run_once: true
+  run_once: true
+
+################################
+# PLEX CLAIM SERVER
+################################
+
+- name: Prep - Plex Claim | Include claim server tasks
+  ansible.builtin.include_tasks:
+    file: _claim.yml
+    apply:
+      delegate_to: "{{ docker_services_plex_fs_host }}"
+      run_once: true
+  run_once: true

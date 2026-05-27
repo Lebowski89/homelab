@@ -1,0 +1,452 @@
+---
+
+################################
+# COMPOSE (INIT)
+################################
+
+- name: Compose - Init | Ensure docker_services_compose_stacks exists
+  ansible.builtin.set_fact:
+    docker_services_compose_stacks: "{{ docker_services_compose_stacks | default({}) }}"
+  delegate_to: "{{ docker_services_primary_manager | default('mgt') }}"
+  delegate_facts: true
+  run_once: true
+
+- name: Compose - Init | Load this stack's current docker_services_compose_services
+  when: docker_services_is_deploy_host
+  ansible.builtin.set_fact:
+    docker_services_compose_services: >-
+      {{
+        (docker_services_compose_stacks | default({}))
+        .get(docker_services_stack_name_effective, {})
+        .get('services', {})
+        | default({}, true)
+      }}
+
+################################
+# COMPOSE (STACK NETWORKS)
+################################
+
+- name: Compose - Base | Register networks needed by this stack
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.named_networks is defined
+    - (docker_services_svc.named_networks is mapping)
+    - (docker_services_svc.named_networks | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/stack_networks.yml
+  vars:
+    docker_services_stack_name: "{{ docker_services_stack_name_effective }}"
+    stack_network_names: "{{ docker_services_svc.named_networks }}"
+
+- name: Compose - Base | Normalize network_mode for container deploys
+  when: docker_services_is_deploy_host
+  ansible.builtin.set_fact:
+    docker_services_svc_network_mode: "{{ docker_services_svc.network_mode | default('', true) | string | trim }}"
+    docker_services_svc_is_container: "{{ (docker_services_stack_deploy_type | default('swarm', true) | string | trim) != 'swarm' }}"
+
+- name: Compose - Base | Normalize network_mode for container deploys
+  when: docker_services_is_deploy_host
+  ansible.builtin.set_fact:
+    docker_services_svc_has_network_mode: "{{ docker_services_svc_is_container and (docker_services_svc_network_mode | length > 0) }}"
+
+- name: Compose - Base | Build service networks list
+  when: docker_services_is_deploy_host
+  ansible.builtin.set_fact:
+    docker_services_svc_networks_list: >-
+      {{
+        [] if docker_services_svc_has_network_mode else
+        (
+          (docker_services_svc.networks | default([], true))
+          if (
+            docker_services_svc.networks is defined
+            and docker_services_svc.networks is sequence
+            and docker_services_svc.networks is not string
+            and (docker_services_svc.networks | length > 0)
+          )
+          else
+          (
+            (docker_services_svc.named_networks.keys() | list)
+            if (
+              docker_services_svc.named_networks is defined
+              and docker_services_svc.named_networks is mapping
+              and (docker_services_svc.named_networks | length > 0)
+            )
+            else
+            [docker_network]
+          )
+        )
+      }}
+
+################################
+# COMPOSE (STACK VOLUMES)
+################################
+
+- name: Compose - Base | Register external volumes needed by this stack
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.named_volumes is defined
+    - (docker_services_svc.named_volumes | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/stack_volumes.yml
+  vars:
+    docker_services_stack_name: "{{ docker_services_stack_name_effective }}"
+    stack_volume_names: "{{ docker_services_svc.named_volumes }}"
+
+################################
+# COMPOSE (SERVICE BASE)
+################################
+
+- name: Compose - Base | Set base service variables
+  when: docker_services_is_deploy_host
+  ansible.builtin.include_tasks: sub_tasks/compose/service_base.yml
+  vars:
+    image: "{{ docker_services_svc.image | string }}"
+
+    hostname: >-
+      {{
+        (
+          docker_services_svc.hostname is defined
+          and (docker_services_svc.hostname | string | trim | length > 0)
+        )
+        | ternary((docker_services_svc.hostname | string | trim), omit)
+      }}
+
+    container_name: >-
+      {{
+        (
+          docker_services_svc_is_container
+          and (docker_services_svc.container_name is defined)
+          and (docker_services_svc.container_name | string | trim | length > 0)
+        )
+        | ternary((docker_services_svc.container_name | string | trim), omit)
+      }}
+
+    pid: >-
+      {{
+        (
+          docker_services_svc_is_container
+          and (docker_services_svc.pid is defined)
+          and (docker_services_svc.pid | string | trim | length > 0)
+        )
+        | ternary((docker_services_svc.pid | string | trim), omit)
+      }}
+
+    cgroup: >-
+      {{
+        (
+          docker_services_svc_is_container
+          and (docker_services_svc.cgroup is defined)
+          and ((docker_services_svc.cgroup | string | trim) in ['host', 'private'])
+        )
+        | ternary((docker_services_svc.cgroup | string | trim), omit)
+      }}
+
+    entrypoint: >-
+      {{
+        (
+          docker_services_svc.entrypoint is defined
+          and (
+            (
+              docker_services_svc.entrypoint is string
+              and (docker_services_svc.entrypoint | string | trim | length > 0)
+            )
+            or
+            (
+              docker_services_svc.entrypoint is sequence
+              and docker_services_svc.entrypoint is not string
+              and (docker_services_svc.entrypoint | length > 0)
+            )
+          )
+        )
+        | ternary(docker_services_svc.entrypoint, omit)
+      }}
+
+    network_mode: >-
+      {{
+        (
+          docker_services_svc_is_container
+          and (docker_services_svc_network_mode | length > 0)
+        )
+        | ternary(docker_services_svc_network_mode, omit)
+      }}
+
+    networks: >-
+      {{
+        (
+          (not docker_services_svc_has_network_mode)
+          and (docker_services_svc_networks_list | length > 0)
+        )
+        | ternary(docker_services_svc_networks_list, omit)
+      }}
+
+################################
+# COMPOSE (SECURITY_OPT)
+################################
+
+- name: Compose - Runtime | Set security_opt
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type != 'swarm'
+    - docker_services_svc.security_opt is defined
+    - (docker_services_svc.security_opt | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/security_opt.yml
+  vars:
+    security_opt_list: "{{ docker_services_svc.security_opt }}"
+
+################################
+# COMPOSE (SYSCTLS)
+################################
+
+- name: Compose - Runtime | Set sysctls
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.sysctls is defined
+    - (docker_services_svc.sysctls is mapping)
+    - (docker_services_svc.sysctls | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/sysctls.yml
+  vars:
+    sysctls_dict: "{{ docker_services_svc.sysctls }}"
+
+################################
+# COMPOSE (DEPENDS_ON)
+################################
+
+- name: Compose - Runtime | Set depends_on
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type != 'swarm'
+    - docker_services_svc.depends_on is defined
+    - (docker_services_svc.depends_on | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/depends_on.yml
+  vars:
+    depends_on_list: "{{ docker_services_svc.depends_on }}"
+
+################################
+# COMPOSE (CAPS)
+################################
+
+- name: Compose - Runtime | Add Linux capabilities (cap_add)
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.cap_add is defined
+    - (docker_services_svc.cap_add | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/caps.yml
+  vars:
+    caps_target: "cap_add"
+    caps_action: "append_unique"
+    caps_list: "{{ docker_services_svc.cap_add }}"
+
+- name: Compose - Runtime | Drop Linux capabilities (cap_drop)
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.cap_drop is defined
+    - (docker_services_svc.cap_drop | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/caps.yml
+  vars:
+    caps_target: "cap_drop"
+    caps_action: "append_unique"
+    caps_list: "{{ docker_services_svc.cap_drop }}"
+
+################################
+# COMPOSE (DEVICES)
+################################
+
+- name: Compose - Runtime | Add devices
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.devices is defined
+    - (docker_services_svc.devices | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/devices.yml
+  vars:
+    devices_action: "append_unique"
+    device_list: "{{ docker_services_svc.devices }}"
+
+################################
+# COMPOSE (COMMAND)
+################################
+
+- name: Compose - Runtime | Set command variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.command is defined
+  ansible.builtin.include_tasks: sub_tasks/compose/command.yml
+  vars:
+    command: "{{ docker_services_svc.command }}"
+    command_action: "replace"
+
+################################
+# COMPOSE (HEALTHCHECK)
+################################
+
+- name: Compose - Runtime | Set healthcheck variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.healthcheck is defined
+    - docker_services_svc.healthcheck.test is defined
+    - (
+        (
+          docker_services_svc.healthcheck.test is sequence
+          and docker_services_svc.healthcheck.test is not string
+          and (docker_services_svc.healthcheck.test | length > 0)
+        )
+        or
+        (docker_services_svc.healthcheck.test is string and (docker_services_svc.healthcheck.test | trim | length > 0))
+      )
+  ansible.builtin.include_tasks: sub_tasks/compose/healthcheck.yml
+  vars:
+    health_test: "{{ docker_services_svc.healthcheck.test }}"
+    health_interval: "{{ docker_services_svc.healthcheck.interval | default('1m', true) }}"
+    health_timeout: "{{ docker_services_svc.healthcheck.timeout | default('15s', true) }}"
+    health_retries: "{{ docker_services_svc.healthcheck.retries | default(3, true) }}"
+    health_start_period: "{{ docker_services_svc.healthcheck.start_period | default('30s', true) }}"
+
+################################
+# COMPOSE (USER)
+################################
+
+- name: Compose - Runtime | Set user variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.user is defined
+    - (docker_services_svc.user | string | trim | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/user.yml
+  vars:
+    user: "{{ docker_services_svc.user }}"
+
+################################
+# COMPOSE (ENV)
+################################
+
+- name: Compose - IO | Set environment variables
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.environment is defined
+    - (docker_services_svc.environment | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/env.yml
+  vars:
+    environment_vars: "{{ docker_services_svc.environment }}"
+
+################################
+# COMPOSE (ENV_FILE)
+################################
+
+- name: Compose - IO | Attach env_file to service
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.env_file is defined
+    - docker_services_svc.env_file | length > 0
+  ansible.builtin.include_tasks: sub_tasks/compose/env_file.yml
+
+################################
+# COMPOSE (SECRETS)
+################################
+
+- name: Compose - IO | Set secrets variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.secrets is defined
+    - (docker_services_svc.secrets | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/secrets.yml
+  vars:
+    secrets: "{{ docker_services_svc.secrets }}"
+
+################################
+# COMPOSE (SWARM CONFIGS)
+################################
+
+- name: Compose - IO | Set Swarm configs variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type == 'swarm'
+    - docker_services_svc.configs is defined
+    - (docker_services_svc.configs | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/swarm_configs.yml
+  vars:
+    configs_list: "{{ docker_services_svc.configs }}"
+
+################################
+# COMPOSE (PORTS)
+################################
+
+- name: Compose - IO | Set ports variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.ports is defined
+    - (docker_services_svc.ports | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/ports.yml
+  vars:
+    ports: "{{ docker_services_svc.ports }}"
+    ports_action: "replace"
+
+################################
+# COMPOSE (TMPFS)
+################################
+
+- name: Compose - IO | Set tmpfs variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type != "swarm"
+    - docker_services_svc.tmpfs is defined
+    - (docker_services_svc.tmpfs | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/tmpfs.yml
+  vars:
+    tmpfs: "{{ docker_services_svc.tmpfs }}"
+    tmpfs_action: "replace"
+
+################################
+# COMPOSE (VOLUMES)
+################################
+
+- name: Compose - IO | Set volumes variable
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.volumes is defined
+    - (docker_services_svc.volumes | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/volumes.yml
+  vars:
+    volumes: "{{ docker_services_svc.volumes }}"
+    volumes_action: "append_unique"
+
+- name: Compose - IO | Add /dev/shm tmpfs
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type == "swarm"
+    - docker_services_svc.shm_tmpfs_size is defined
+    - (docker_services_svc.shm_tmpfs_size | int) > 0
+  ansible.builtin.include_tasks: sub_tasks/compose/volumes.yml
+  vars:
+    volumes_action: append_unique
+    volumes:
+      shm:
+        type: tmpfs
+        target: /dev/shm
+        tmpfs:
+          size: "{{ docker_services_svc.shm_tmpfs_size | int }}"
+
+################################
+# COMPOSE (SHM)
+################################
+
+- name: Compose - IO | Set SHM size
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type != "swarm"
+    - docker_services_svc.shm_size is defined
+    - (docker_services_svc.shm_size | string | trim | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/compose/shm.yml
+  vars:
+    shm_size: "{{ docker_services_svc.shm_size }}"
+
+################################
+# COMPOSE (LABELS)
+################################
+
+- name: Compose - Metadata | Attach service labels
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.labels is defined
+    - (docker_services_svc.labels is mapping) or (docker_services_svc.labels is sequence and docker_services_svc.labels is not string)
+    - (docker_services_svc.labels | length > 0)
+  ansible.builtin.include_tasks: sub_tasks/labels.yml
+  vars:
+    labels_dict: "{{ docker_services_svc.labels }}"
+    labels_action: "append"
+    labels_precedence: "new_wins"
