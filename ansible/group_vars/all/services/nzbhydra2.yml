@@ -69,7 +69,7 @@ nzbhydra2:
     exposure: private
     port: 5076
   prep:
-  ## used in tasks/prep/03_post_filesystem/sub_tasks/nzbhydra2.yml
+  ## used in tasks/sub_tasks/prep/nzbhydra2.yml
     sabnzbd:
       url: "http://sabnzbd:8080"
   deploy:
