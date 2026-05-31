@@ -2,17 +2,24 @@
 # Manual edits may be lost in future updates.
 
 provider "registry.opentofu.org/e-breuninger/netbox" {
-  version     = "5.3.0"
+  version     = "5.4.0"
   constraints = "~> 5.2"
   hashes = [
-    "h1:QlSg3hlSvt77EUf/C6Ob32fmRBhkAQtq84YgIeKv77s=",
-    "zh:013829552dbd1d98348cccbc6e6a4eab256d043063a60020f16bb6a0c95febb9",
-    "zh:031b175ad0fa3523f82728c40ddb3b7048a13294bf9442da32e2775fe645556a",
-    "zh:2d9e1c70df4f0a41358f068a478b36748ec3f71c94e8c972724fda49dddbceda",
-    "zh:43c910417ae5b89355ae7a67913c9df8f0aec6d4470bc477777fdd3159299dd1",
-    "zh:4740a15b86fd53e7cbc88071f2d67ea2d17ecefa74ab7fdfb530dd784e569d47",
-    "zh:d16eb3f6bb47d21de2f7140254e8ba261e428b5f9a6ac26bb84ece2ad872c7d9",
-    "zh:d7c52802a35d8203192a9b2f3ed22419aebc076db89561aa9ad529a76a2154a0",
-    "zh:ee860302f50f755429d896da02606df1b896d343779e064d04bb2d96dc99c5da",
+    "h1:+jM799WZGdJEuZ/F9qKRKoKwL8kYCdoN52tX5fkrVkA=",
+    "h1:13Cx1alAaYI/vSoe099zXLBXuHkdWe54+XrPF+kpDw8=",
+    "h1:5IrjUUgtNTba1TpkYzPWtLM1Cq195ZB73D1tn0jnZos=",
+    "h1:GCRDe2K4WzgAuCF0Bw3bmHRLZP2ywsVfR07LwIhx3cI=",
+    "h1:P98M4qAf+FeXHXiZWJDbYy6d5ZLNanND/KxG1mR1/8M=",
+    "h1:aujT36oEn9TzQkxBpJiNRlL+tf6ruwzFZoX12aIo2wU=",
+    "h1:bmLf6Q/LD/m+JEqpZ0ljaxr2TIXiEdEcndtufhFkAjQ=",
+    "h1:vu50Vq3BcWv6TzLKWu6IlLzWuU0TYK5H5LhIeg15K9c=",
+    "zh:00c6431236b581e212cfa9a7646f8a9b02ca0f25d60f4106880328859f7d6a8e",
+    "zh:19ca575f35a3adb5c65d4be517e5aaa80695eb9e1d7e0895aa8932a45861cee7",
+    "zh:3b6c5de169393ec2e96732a2bc43ca6a616fb5c9170a68f2d990ec2bda55d50c",
+    "zh:50ea9ac55d8e226282dadb92b7da926cb7e0a6734c996a2e6227a411dfa108e3",
+    "zh:6110cb94035219d988f23b74b36fcbd01bddb5843ecbf097193e2adc872dda68",
+    "zh:9032d3780a8a60d6186fc844c223503eb747f6383e3a418d74fdb0dfc4783ccf",
+    "zh:b6c99f075b5d13cbffb230ec6693870f5cee02f0477ff86f401c4d5f79915bd2",
+    "zh:c0ea7eec94c9c619516ec21aa0a21914681139c2fd8d88b5209776198580d5a1",
   ]
 }
