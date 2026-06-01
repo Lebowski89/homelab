@@ -3,7 +3,7 @@
 
 provider "registry.opentofu.org/e-breuninger/netbox" {
   version     = "5.4.0"
-  constraints = "~> 5.2"
+  constraints = "5.4.0"
   hashes = [
     "h1:+jM799WZGdJEuZ/F9qKRKoKwL8kYCdoN52tX5fkrVkA=",
     "h1:13Cx1alAaYI/vSoe099zXLBXuHkdWe54+XrPF+kpDw8=",
