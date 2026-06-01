@@ -79,7 +79,7 @@
       {{
         (not docker_services_plex_ini.stat.exists)
         or (hostvars[docker_services_primary_manager].docker_services_plex_client_identifier_missing | default(false))
-        or ((hostvars[docker_services_primary_manager].docker_services_plex_auth_Prep - Plex Token | default('') | string | trim) == '')
+        or ((hostvars[docker_services_primary_manager].docker_services_plex_auth_token | default('') | string | trim) == '')
       }}
   delegate_to: "{{ docker_services_primary_manager }}"
   delegate_facts: true
@@ -89,7 +89,7 @@
   when:
     - docker_services_plex_ini.stat.exists
     - not (hostvars[docker_services_primary_manager].docker_services_plex_client_identifier_missing | default(false))
-    - (hostvars[docker_services_primary_manager].docker_services_plex_auth_Prep - Plex Token | default('') | string | length) > 0
+    - (hostvars[docker_services_primary_manager].docker_services_plex_auth_token | default('') | string | length) > 0
   ansible.builtin.uri:
     url: "https://plex.tv/api/v2/user"
     method: GET
@@ -116,7 +116,7 @@
 
 - name: Prep - Plex Token | Generate New Token
   when:
-    - (hostvars[docker_services_primary_manager].docker_services_plex_no_Prep - Plex Token | default(true)) | bool
+    - (hostvars[docker_services_primary_manager].docker_services_plex_no_token | default(true)) | bool
       or ((docker_services_plex_token is defined) and (docker_services_plex_token.status | default(0) | int) == 401)
   delegate_to: "{{ docker_services_primary_manager }}"
   run_once: true
@@ -172,7 +172,7 @@
 
     - name: Prep - Plex Token | Set docker_services_plex_auth_token variable
       ansible.builtin.set_fact:
-        docker_services_plex_auth_token: "{{ docker_services_plex_token_new.json.authPrep - Plex Token | regex_replace('\n', '') }}"
+        docker_services_plex_auth_token: "{{ docker_services_plex_token_new.json.authToken | regex_replace('\n', '') }}"
       delegate_facts: true
       no_log: true
 
@@ -228,6 +228,6 @@
 
 - name: Prep - Plex Token | Display Token
   ansible.builtin.debug:
-    msg: "Plex Auth Token: {{ hostvars[docker_services_primary_manager].docker_services_plex_auth_Prep - Plex Token | default('') }}"
+    msg: "Plex Auth Token: {{ hostvars[docker_services_primary_manager].docker_services_plex_auth_token | default('') }}"
   delegate_to: "{{ docker_services_primary_manager }}"
   run_once: true
