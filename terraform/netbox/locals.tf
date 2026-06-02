@@ -346,33 +346,6 @@ locals {
       weight      = 230
     }
 
-    docker_host_opencloud_puid = {
-      name        = "docker_host_opencloud_puid"
-      label       = "OpenCloud PUID"
-      type        = "text"
-      group_name  = "Docker"
-      description = "PUID used by OpenCloud on this host."
-      weight      = 240
-    }
-
-    docker_host_opencloud_pgid = {
-      name        = "docker_host_opencloud_pgid"
-      label       = "OpenCloud PGID"
-      type        = "text"
-      group_name  = "Docker"
-      description = "PGID used by OpenCloud on this host."
-      weight      = 250
-    }
-
-    docker_host_opencloud_data_root = {
-      name        = "docker_host_opencloud_data_root"
-      label       = "OpenCloud data root"
-      type        = "text"
-      group_name  = "Docker"
-      description = "Host path used as the OpenCloud data root."
-      weight      = 260
-    }
-
     dns_priority = {
       name        = "dns_priority"
       label       = "DNS priority"
