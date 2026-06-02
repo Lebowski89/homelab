@@ -11,9 +11,9 @@ host_private_values = {
     mgmt_ip = "192.168.xx.xx/24"
 
     custom_fields = {
-      ansible_user = "user"
-      ssh_port     = "22"
-      tailscale_ip = "100.xx.xx.xx"
+      ansible_user             = "user"
+      ssh_port                 = "22"
+      tailscale_ip             = "100.xx.xx.xx"
       docker_host_puid         = "1000"
       docker_host_pgid         = "1000"
       docker_host_appdata_root = "/opt"
@@ -26,16 +26,13 @@ host_private_values = {
     mgmt_ip = "192.168.xx.xx/24"
 
     custom_fields = {
-      ansible_user = "user"
-      ssh_port     = "22"
-      tailscale_ip = "100.xx.xx.xx"
-      docker_host_puid                   = "99"
-      docker_host_pgid                   = "100"
-      docker_host_appdata_root           = "/mnt/user/appdata"
-      docker_host_data_root              = "/mnt/user/data"
-      docker_host_opencloud_puid         = "1000"
-      docker_host_opencloud_pgid         = "1000"
-      docker_host_opencloud_data_root    = "/mnt/user/opencloud/data"
+      ansible_user             = "user"
+      ssh_port                 = "22"
+      tailscale_ip             = "100.xx.xx.xx"
+      docker_host_puid         = "99"
+      docker_host_pgid         = "100"
+      docker_host_appdata_root = "/mnt/user/appdata"
+      docker_host_data_root    = "/mnt/user/data"
     }
   }
 
@@ -43,9 +40,9 @@ host_private_values = {
     mgmt_ip = "192.168.xx.xx/24"
 
     custom_fields = {
-      ansible_user = "user"
-      ssh_port     = "22"
-      tailscale_ip = "100.xx.xx.xx"
+      ansible_user             = "user"
+      ssh_port                 = "22"
+      tailscale_ip             = "100.xx.xx.xx"
       docker_host_puid         = "1000"
       docker_host_pgid         = "1000"
       docker_host_appdata_root = "/opt"
