@@ -1,13 +1,20 @@
 #!/usr/bin/python
-# -*- coding: utf-8 -*-
 
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 # pylint: disable=wrong-import-order,wrong-import-position,unused-import
 
-from __future__ import absolute_import, division, print_function
+import contextlib
+import copy  # noqa: F401
+import fcntl  # noqa: F401
+import json  # noqa: F401
+import os  # noqa: F401
+import re  # noqa: F401
+import shutil  # noqa: F401
+import time  # noqa: F401
+from io import StringIO
 
-__metaclass__ = type
+from ansible.module_utils.basic import AnsibleModule
 
 ANSIBLE_METADATA = {
     "metadata_version": "1.1",
@@ -193,15 +200,6 @@ EXAMPLES = """
 #       d: e
 """
 
-import copy  # noqa: F401
-import fcntl  # noqa: F401
-import json  # noqa: F401
-import os  # noqa: F401
-import re  # noqa: F401
-import shutil  # noqa: F401
-import time  # noqa: F401
-from io import StringIO
-
 # ruamel.yaml >= 0.18 removed safe_load/safe_dump and changed loader API.
 # Support both ruamel.yaml and PyYAML seamlessly.
 _RUAMEL = False
@@ -220,10 +218,8 @@ except Exception:  # pragma: no cover
 def _ruamel_yaml_rt():
     y = YAML(typ="rt")
     # keep original formatting/quotes as much as possible
-    try:
+    with contextlib.suppress(Exception):
         y.preserve_quotes = True
-    except Exception:
-        pass
     return y
 
 
@@ -248,10 +244,8 @@ def _yaml_safe_load(text):
 def _yaml_safe_dump(data, default_flow_style=False):
     if _RUAMEL:
         y = _RY_SAFE
-        try:
+        with contextlib.suppress(Exception):
             y.default_flow_style = default_flow_style
-        except Exception:
-            pass
         stream = StringIO()
         y.dump(data, stream)
         return stream.getvalue()
@@ -270,17 +264,12 @@ def _yaml_round_trip_load(text):
 def _yaml_round_trip_dump(data, default_flow_style=False):
     if _RUAMEL:
         y = _RY_RT
-        try:
+        with contextlib.suppress(Exception):
             y.default_flow_style = default_flow_style
-        except Exception:
-            pass
         stream = StringIO()
         y.dump(data, stream)
         return stream.getvalue()
     return _pyyaml.safe_dump(data, default_flow_style=default_flow_style)
-
-
-from ansible.module_utils.basic import AnsibleModule
 
 
 class YeditException(Exception):
@@ -290,7 +279,7 @@ class YeditException(Exception):
 
 
 # pylint: disable=too-many-public-methods,too-many-instance-attributes
-class Yedit(object):
+class Yedit:
     """Class to modify yaml files"""
 
     re_valid_key = r"(((\[-?\d+\])|([0-9a-zA-Z%s/_-]+)).?)+$"
@@ -304,7 +293,7 @@ class Yedit(object):
         content=None,
         content_type="yaml",
         separator=".",
-        backup_ext=".{0}".format(time.strftime("%Y%m%dT%H%M%S")),
+        backup_ext=None,
         backup=False,
     ):
         self.content = content
@@ -313,7 +302,7 @@ class Yedit(object):
         self.__yaml_dict = content
         self.content_type = content_type
         self.backup = backup
-        self.backup_ext = backup_ext
+        self.backup_ext = backup_ext or f".{time.strftime('%Y%m%dT%H%M%S')}"
         self.load(content_type=self.content_type)
         if self.__yaml_dict is None:
             self.__yaml_dict = {}
@@ -348,9 +337,7 @@ class Yedit(object):
     def valid_key(key, sep="."):
         """validate the incoming key"""
         common_separators = list(Yedit.com_sep - set([sep]))
-        if not re.match(Yedit.re_valid_key.format("".join(common_separators)), key):
-            return False
-        return True
+        return re.match(Yedit.re_valid_key.format("".join(common_separators)), key) is not None
 
     # pylint: disable=too-many-return-statements,too-many-branches
     @staticmethod
@@ -361,9 +348,7 @@ class Yedit(object):
                 data.pop(value)
             elif index is not None:
                 raise YeditException(
-                    "remove_entry for a dictionary does not have an index {0}".format(
-                        index
-                    )
+                    f"remove_entry for a dictionary does not have an index {index}"
                 )
             else:
                 data.clear()
@@ -404,10 +389,9 @@ class Yedit(object):
                 del data[int(key_indexes[-1][0])]
                 return True
 
-        elif key_indexes[-1][1]:
-            if isinstance(data, dict):
-                del data[key_indexes[-1][1]]
-                return True
+        elif key_indexes[-1][1] and isinstance(data, dict):
+            del data[key_indexes[-1][1]]
+            return True
 
     @staticmethod
     def add_entry(data, key, item=None, sep="."):
@@ -428,7 +412,7 @@ class Yedit(object):
                 elif data and not isinstance(data, dict):
                     raise YeditException(
                         "Unexpected item type found while going through key "
-                        + "path: {0} (at key: {1})".format(key, dict_key)
+                        + f"path: {key} (at key: {dict_key})"
                     )
                 data[dict_key] = {}
                 data = data[dict_key]
@@ -437,9 +421,7 @@ class Yedit(object):
                 data = data[int(arr_ind)]
             else:
                 raise YeditException(
-                    "Unexpected item type found while going through key path: {0}".format(
-                        key
-                    )
+                    f"Unexpected item type found while going through key path: {key}"
                 )
 
         if key == "":
@@ -459,7 +441,7 @@ class Yedit(object):
             data[key_indexes[-1][1]] = item
 
         else:
-            raise YeditException("Error adding to object at path: {0}".format(key))
+            raise YeditException(f"Error adding to object at path: {key}")
 
         return data
 
@@ -517,12 +499,10 @@ class Yedit(object):
             raise YeditException("Please specify a filename.")
 
         if self.backup and self.file_exists():
-            shutil.copy(self.filename, "{0}{1}".format(self.filename, self.backup_ext))
+            shutil.copy(self.filename, f"{self.filename}{self.backup_ext}")
 
-        try:
+        with contextlib.suppress(AttributeError):
             self.yaml_dict.fa.set_block_style()
-        except AttributeError:
-            pass
 
         if self.content_type == "yaml":
             rendered = _yaml_round_trip_dump(self.yaml_dict, default_flow_style=False)
@@ -533,7 +513,7 @@ class Yedit(object):
             )
         else:
             raise YeditException(
-                "Unsupported content_type: {0}.".format(self.content_type)
+                f"Unsupported content_type: {self.content_type}."
                 + "Please specify a content_type of yaml or json."
             )
 
@@ -565,24 +545,20 @@ class Yedit(object):
 
         try:
             if content_type == "yaml" and contents:
-                try:
+                with contextlib.suppress(AttributeError):
                     self.yaml_dict.fa.set_block_style()
-                except AttributeError:
-                    pass
 
                 # ruamel: round-trip load; PyYAML: safe_load
                 self.yaml_dict = _yaml_round_trip_load(contents)
 
-                try:
+                with contextlib.suppress(AttributeError):
                     self.yaml_dict.fa.set_block_style()
-                except AttributeError:
-                    pass
 
             elif content_type == "json" and contents:
                 self.yaml_dict = json.loads(contents)
 
         except _YAMLError as err:
-            raise YeditException("Problem with loading yaml file. {0}".format(err))
+            raise YeditException(f"Problem with loading yaml file. {err}") from err
 
         return self.yaml_dict
 
@@ -644,10 +620,7 @@ class Yedit(object):
 
         if isinstance(entry, dict):
             if isinstance(value, dict):
-                for k, v in value.items():
-                    if entry.get(k) != v:
-                        return False
-                return True
+                return all(entry.get(k) == v for k, v in value.items())
             return value in entry
 
         return entry == value
@@ -695,7 +668,7 @@ class Yedit(object):
             if not isinstance(value, dict):
                 raise YeditException(
                     "Cannot replace key, value entry in dict with non-dict type. "
-                    + "value=[{0}] type=[{1}]".format(value, type(value))
+                    + f"value=[{value}] type=[{type(value)}]"
                 )
             entry.update(value)
             return (True, self.yaml_dict)
@@ -742,10 +715,8 @@ class Yedit(object):
         except Exception:
             tmp_copy = copy.deepcopy(self.yaml_dict)
 
-        try:
+        with contextlib.suppress(AttributeError):
             tmp_copy.fa.set_block_style()
-        except AttributeError:
-            pass
 
         result = Yedit.add_entry(tmp_copy, path, value, self.separator)
         if result is None:
@@ -769,10 +740,8 @@ class Yedit(object):
             except Exception:
                 tmp_copy = copy.deepcopy(self.yaml_dict)
 
-            try:
+            with contextlib.suppress(AttributeError):
                 tmp_copy.fa.set_block_style()
-            except AttributeError:
-                pass
 
             result = Yedit.add_entry(tmp_copy, path, value, self.separator)
             if result is not None:
@@ -826,7 +795,7 @@ class Yedit(object):
         if isinstance(inc_value, str) and "bool" in vtype:
             if inc_value not in true_bools and inc_value not in false_bools:
                 raise YeditException(
-                    "Not a boolean type. str=[{0}] vtype=[{1}]".format(inc_value, vtype)
+                    f"Not a boolean type. str=[{inc_value}] vtype=[{vtype}]"
                 )
         elif isinstance(inc_value, bool) and "str" in vtype:
             inc_value = str(inc_value)
@@ -836,11 +805,11 @@ class Yedit(object):
         elif isinstance(inc_value, str) and "str" not in vtype:
             try:
                 inc_value = _yaml_safe_load(inc_value)
-            except Exception:
+            except Exception as err:
                 raise YeditException(
                     "Could not determine type of incoming value. "
-                    + "value=[{0}] vtype=[{1}]".format(type(inc_value), vtype)
-                )
+                    + f"value=[{type(inc_value)}] vtype=[{vtype}]"
+                ) from err
 
         return inc_value
 
@@ -891,7 +860,7 @@ class Yedit(object):
             if yamlfile.yaml_dict is None and state != "present":
                 return {
                     "failed": True,
-                    "msg": "Error opening file [{0}].  Verify that the ".format(
+                    "msg": "Error opening file [{}].  Verify that the ".format(
                         params["src"]
                     )
                     + "file exists, that it is has correct permissions, and is valid yaml.",
@@ -1001,7 +970,7 @@ def main():
             ),
             backup=dict(default=False, type="bool"),
             backup_ext=dict(
-                default=".{0}".format(time.strftime("%Y%m%dT%H%M%S")), type="str"
+                default=".{}".format(time.strftime("%Y%m%dT%H%M%S")), type="str"
             ),
             separator=dict(default=".", type="str"),
             edits=dict(default=None, type="list"),
