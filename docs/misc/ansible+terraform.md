@@ -162,7 +162,7 @@ cloudflare:
 - name: Cloudflare | Fetch cloudflare_api from Infisical (only if missing)
   when: docker_services_cf_api_missing | bool
   ansible.builtin.include_tasks: >-
-    {{ role_path }}/tasks/prep/01_pre_filesystem/sub_tasks/infisical/_fetch.yml
+    {{ role_path }}/tasks/sub_tasks/prep/infisical/_fetch.yml
   vars:
     infisical_fail_on_empty: true
     infisical_flatten: true
@@ -185,7 +185,7 @@ cloudflare:
 - name: Cloudflare | Fetch cloudflare_zone from Infisical (only if missing)
   when: docker_services_cf_zone_missing | bool
   ansible.builtin.include_tasks: >-
-    {{ role_path }}/tasks/prep/01_pre_filesystem/sub_tasks/infisical/_fetch.yml
+    {{ role_path }}/tasks/sub_tasks/prep/infisical/_fetch.yml
   vars:
     infisical_fail_on_empty: true
     infisical_flatten: true
