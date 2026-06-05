@@ -53,5 +53,6 @@ jobs:
         env:
           ANSIBLE_LIBRARY: ${{ github.workspace }}/ansible/roles/docker_services/library
           ANSIBLE_CONFIG: ansible/ansible.cfg
+          ANSIBLE_LOG_PATH: ${{ github.workspace }}/.ansible/ansible.log
         run: |
           ansible-lint --format=pep8

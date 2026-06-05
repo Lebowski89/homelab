@@ -135,6 +135,8 @@ docker_services:
     tags: [apps, utilities, czkawka]
   - name: gitea
     tags: [apps, utilities, pgsql, gitea]
+  - name: syncthing
+    tags: [apps, utilities, syncthing]
   - name: themepark
     tags: [apps, utilities, themepark]
   - name: vaultwarden
