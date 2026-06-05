@@ -8,12 +8,14 @@
       - "{{ docker_prune_filesystem_path }}"
   register: docker_prune_df
   changed_when: false
+  check_mode: false
 
 - name: Docker prune cleanup | Parse filesystem usage percent
   ansible.builtin.set_fact:
     docker_prune_usage_percent: >-
       {{
-        docker_prune_df.stdout_lines[-1]
+        docker_prune_df.stdout_lines
+        | last
         | regex_replace('[^0-9]', '')
         | int
       }}
@@ -27,7 +29,9 @@
       prune_until: "{{ docker_prune_until }}"
 
 - name: Docker prune cleanup | Run safe cleanup when above threshold
-  when: docker_prune_usage_percent >= (docker_prune_threshold_percent | int)
+  when:
+    - not ansible_check_mode
+    - docker_prune_usage_percent >= (docker_prune_threshold_percent | int)
   block:
     - name: Docker prune cleanup | Show Docker disk usage before cleanup
       ansible.builtin.command:

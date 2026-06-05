@@ -60,6 +60,7 @@
       ansible.builtin.systemd_service:
         daemon_reload: true
       when:
+        - not ansible_check_mode
         - ubuntu_nic_tuning_enabled | bool
         - ubuntu_nic_tuning_unit.changed
 
@@ -68,4 +69,6 @@
         name: nic-tuning.service
         enabled: true
         state: started
-      when: ubuntu_nic_tuning_enabled | bool
+      when:
+        - not ansible_check_mode
+        - ubuntu_nic_tuning_enabled | bool

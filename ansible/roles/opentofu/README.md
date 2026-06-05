@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/05/25 |
+| Readme update        | 2026/06/05 |
 
 
 
@@ -80,7 +80,7 @@
 | Ensure OpenTofu Proxmox user exists | community.proxmox.proxmox_user | False |
 | Ensure OpenTofu role is assigned at root path | community.proxmox.proxmox_access_acl | False |
 | List existing OpenTofu API tokens | ansible.builtin.command | False |
-| Determine whether OpenTofu API token needs to be created | ansible.builtin.set_fact | False |
+| Determine whether OpenTofu API token needs to be created | ansible.builtin.set_fact | True |
 | Create OpenTofu API token if missing | ansible.builtin.command | True |
 | Show OpenTofu API token secret once when created | ansible.builtin.debug | True |
 | Pause so operator can copy token | ansible.builtin.pause | True |
