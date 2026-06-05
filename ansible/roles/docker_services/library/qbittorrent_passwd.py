@@ -1,8 +1,9 @@
 #!/usr/bin/python
-from ansible.module_utils.basic import AnsibleModule
 import base64
 import hashlib
 import os
+
+from ansible.module_utils.basic import AnsibleModule
 
 
 def qbittorrent_passwd(plain_passwd):
@@ -12,11 +13,9 @@ def qbittorrent_passwd(plain_passwd):
 
         salt = os.urandom(SALT_SIZE)
         h = hashlib.pbkdf2_hmac("sha512", plain_passwd.encode(), salt, ITERATIONS)
-        return "@ByteArray({}:{})".format(
-            base64.b64encode(salt).decode(), base64.b64encode(h).decode()
-        )
-    except Exception as e:
-        raise ValueError(f"Error generating password hash: {str(e)}")
+        return f"@ByteArray({base64.b64encode(salt).decode()}:{base64.b64encode(h).decode()})"
+    except Exception as err:
+        raise ValueError(f"Error generating password hash: {err}") from err
 
 
 def main():
