@@ -18,6 +18,11 @@ jobs:
   lint:
     runs-on: ubuntu-latest
 
+    env:
+      ANSIBLE_CONFIG: ansible/ansible.cfg
+      ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}/ansible/collections
+      ANSIBLE_LOG_PATH: ${{ github.workspace }}/.ansible/ansible.log
+
     steps:
       - uses: actions/checkout@v6.0.3
 
@@ -26,19 +31,23 @@ jobs:
         with:
           python-version: "3.14.5"
 
-      - name: Install tooling
+      - name: Install Python tooling
         run: |
           python -m pip install --upgrade pip
-          pip install ansible-core ansible-lint yamllint ruff
+
           if [ -f ansible/requirements.txt ]; then
-            pip install -r ansible/requirements.txt
+            python -m pip install -r ansible/requirements.txt
+          else
+            python -m pip install ansible-core ansible-lint yamllint ruff
           fi
 
-      - name: Install Galaxy requirements (if present)
+      - name: Install Ansible collections
         run: |
           if [ -f ansible/requirements.yml ]; then
-            ansible-galaxy collection install -r ansible/requirements.yml -p ansible/collections
-            ansible-galaxy role install -r ansible/requirements.yml -p ansible/roles || true
+            ansible-galaxy collection install \
+              -r ansible/requirements.yml \
+              -p ansible/collections \
+              --force
           fi
 
       - name: yamllint (tracked YAML files only)
@@ -62,9 +71,5 @@ jobs:
         run: mkdir -p .ansible
 
       - name: ansible-lint
-        env:
-          ANSIBLE_LIBRARY: ${{ github.workspace }}/ansible/roles/docker_services/library
-          ANSIBLE_CONFIG: ansible/ansible.cfg
-          ANSIBLE_LOG_PATH: ${{ github.workspace }}/.ansible/ansible.log
         run: |
-          ansible-lint --format=pep8
+          ansible-lint --format=pep8 ansible
