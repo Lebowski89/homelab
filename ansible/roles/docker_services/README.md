@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/05/27 |
+| Readme update        | 2026/06/06 |
 
 
 
@@ -417,6 +417,8 @@
 | Prep - Authelia Keys ¦ Determine if key already exists | ansible.builtin.set_fact | False |
 | Prep - Authelia Keys ¦ Determine if docker secret creation is enabled | ansible.builtin.set_fact | False |
 | Prep - Authelia Keys ¦ Ensure secret exists | community.docker.docker_secret | True |
+| Prep - Authelia Keys ¦ Report missing key in check mode | ansible.builtin.debug | True |
+| Prep - Authelia Keys ¦ Set check-mode placeholder generated value | ansible.builtin.set_fact | True |
 | Prep - Authelia Keys ¦ Generate key | block | True |
 | Prep - Authelia Keys ¦ Run generator container | community.docker.docker_container | False |
 | Prep - Authelia Keys ¦ Extract generated value | ansible.builtin.shell | False |
