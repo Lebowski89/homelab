@@ -1,14 +1,18 @@
 ---
 
-name: Lint (Ansible + YAML)
+name: Lint (Ansible + YAML + Python)
 
 on:
   push:
     paths:
       - "ansible/**"
+      - "pyproject.toml"
+      - ".github/workflows/lint.yml"
   pull_request:
     paths:
       - "ansible/**"
+      - "pyproject.toml"
+      - ".github/workflows/lint.yml"
 
 jobs:
   lint:
@@ -25,7 +29,7 @@ jobs:
       - name: Install tooling
         run: |
           python -m pip install --upgrade pip
-          pip install ansible-core ansible-lint yamllint
+          pip install ansible-core ansible-lint yamllint ruff
           if [ -f ansible/requirements.txt ]; then
             pip install -r ansible/requirements.txt
           fi
@@ -45,6 +49,14 @@ jobs:
             exit 0
           fi
           yamllint $files
+
+      - name: ruff check
+        run: |
+          ruff check --output-format=github ansible/roles/docker_services/library
+
+      - name: ruff format check
+        run: |
+          ruff format --check --diff ansible/roles/docker_services/library
 
       - name: Prepare ansible log dir
         run: mkdir -p .ansible
