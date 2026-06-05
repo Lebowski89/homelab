@@ -1,9 +1,26 @@
 ---
 
 collections:
+  - name: ansible.posix
+    version: 2.2.0
+
   - name: community.docker
+    version: 5.2.1
+
   - name: community.general
+    version: 13.0.1
+
+  - name: community.library_inventory_filtering_v1
+    version: 1.1.5
+
   - name: community.postgresql
+    version: 4.2.0
+
   - name: community.proxmox
+    version: 2.0.0
+
   - name: infisical.vault
+    version: 1.2.1
+
   - name: netbox.netbox
+    version: 3.23.0

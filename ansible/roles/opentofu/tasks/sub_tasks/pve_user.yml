@@ -77,6 +77,8 @@
       --output-format json
   register: opentofu_pve_token_list
   changed_when: false
+  failed_when: false
+  check_mode: false
   become: true
 
 - name: Determine whether OpenTofu API token needs to be created
@@ -84,15 +86,22 @@
     opentofu_pve_token_missing: >-
       {{
         (
-          opentofu_pve_token_list.stdout | from_json
+          opentofu_pve_token_list.stdout
+          | default('[]')
+          | from_json
           | selectattr('tokenid', 'equalto', hostvars[opentofu_pve_host].opentofu_api_token_name)
           | list
           | length
         ) == 0
       }}
+  when:
+    - opentofu_pve_token_list.rc == 0
+    - opentofu_pve_token_list.stdout | default("") | trim | length > 0
 
 - name: Create OpenTofu API token if missing
-  when: opentofu_pve_token_missing
+  when:
+    - opentofu_pve_token_missing | default(false)
+    - not ansible_check_mode
   ansible.builtin.command:
     cmd: >-
       pveum user token add
@@ -105,13 +114,17 @@
   changed_when: opentofu_pve_token_create.rc == 0
 
 - name: Show OpenTofu API token secret once when created
-  when: opentofu_pve_token_missing
+  when:
+    - opentofu_pve_token_missing | default(false)
+    - not ansible_check_mode
   ansible.builtin.debug:
     msg: >-
       Save this token secret now:
       {{ (opentofu_pve_token_create.stdout | from_json).value }}
 
 - name: Pause so operator can copy token
-  when: opentofu_pve_token_missing
+  when:
+    - opentofu_pve_token_missing | default(false)
+    - not ansible_check_mode
   ansible.builtin.pause:
     prompt: "Copy the OpenTofu API token now, then press Enter to continue."

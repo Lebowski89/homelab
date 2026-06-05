@@ -150,9 +150,8 @@ run_ansible_lint() {
   (
     cd "$REPO_ROOT"
     ANSIBLE_CONFIG="$ANSIBLE_CONFIG" \
-      ANSIBLE_LIBRARY="$PYTHON_LIBRARY_PATH" \
       ANSIBLE_LOG_PATH="$ANSIBLE_LOG_PATH" \
-      "$ANSIBLE_LINT_BIN" --format=pep8
+      "$ANSIBLE_LINT_BIN" --format=pep8 ansible
   )
 }
 
