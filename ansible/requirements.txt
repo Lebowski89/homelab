@@ -5,9 +5,10 @@ jmespath==1.1.0
 jsondiff==2.2.1
 infisicalsdk==1.0.16
 lxml==6.1.1
+proxmoxer==2.3.0
 psycopg2-binary==2.9.12
 pyyaml==6.0.3
 pytz==2026.2
 requests==2.34.2
-proxmoxer==2.3.0
+ruff==0.15.16
 yamllint==1.38.0
