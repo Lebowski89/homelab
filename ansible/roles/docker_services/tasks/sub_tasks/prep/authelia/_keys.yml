@@ -55,6 +55,18 @@
   delegate_to: "{{ docker_services_authelia_keys_host }}"
   run_once: true
 
+- name: Prep - Authelia Keys | Set check-mode placeholder generated value
+  ansible.builtin.set_fact:
+    "{{ authelia_fact_name }}": "CHECK_MODE_PLACEHOLDER_{{ authelia_job }}"
+  when:
+    - ansible_check_mode
+    - not docker_services_authelia_key_is_enabled
+    - authelia_fact_name is defined
+    - (authelia_fact_name | string | trim | length) > 0
+  delegate_to: "{{ docker_services_authelia_keys_host }}"
+  delegate_facts: true
+  run_once: true
+
 - name: Prep - Authelia Keys | Generate key
   when:
     - not ansible_check_mode
