@@ -48,15 +48,28 @@
       - ethtool
       - man-db
       - unrar-free
-      - qemu-guest-agent
     state: present
   environment: "{{ ubuntu_apt_env_vars }}"
+
+- name: Install qemu-guest-agent on virtual guests
+  ansible.builtin.apt:
+    name: qemu-guest-agent
+    state: present
+  environment: "{{ ubuntu_apt_env_vars }}"
+  register: ubuntu_qemu_guest_agent_pkg
+  when:
+    - ansible_virtualization_role | default("") == "guest"
+    - ansible_virtualization_type | default("") in ["kvm", "qemu"]
 
 - name: Ensure qemu-guest-agent is enabled and running
   ansible.builtin.systemd:
     name: qemu-guest-agent
     enabled: true
     state: started
+  when:
+    - not ansible_check_mode
+    - ansible_virtualization_role | default("") == "guest"
+    - ansible_virtualization_type | default("") in ["kvm", "qemu"]
 
 - name: Upgrade installed packages
   ansible.builtin.apt:
