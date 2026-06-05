@@ -347,9 +347,7 @@ class Yedit:
             if value is not None:
                 data.pop(value)
             elif index is not None:
-                raise YeditException(
-                    f"remove_entry for a dictionary does not have an index {index}"
-                )
+                raise YeditException(f"remove_entry for a dictionary does not have an index {index}")
             else:
                 data.clear()
             return True
@@ -383,9 +381,7 @@ class Yedit:
                 return None
 
         if key_indexes[-1][0]:
-            if (
-                isinstance(data, list) and int(key_indexes[-1][0]) <= len(data) - 1
-            ):  # noqa: E501
+            if isinstance(data, list) and int(key_indexes[-1][0]) <= len(data) - 1:  # noqa: E501
                 del data[int(key_indexes[-1][0])]
                 return True
 
@@ -404,34 +400,23 @@ class Yedit:
         key_indexes = Yedit.parse_key(key, sep)
         for arr_ind, dict_key in key_indexes[:-1]:
             if dict_key:
-                if (
-                    isinstance(data, dict) and dict_key in data and data[dict_key]
-                ):  # noqa: E501
+                if isinstance(data, dict) and dict_key in data and data[dict_key]:  # noqa: E501
                     data = data[dict_key]
                     continue
                 elif data and not isinstance(data, dict):
-                    raise YeditException(
-                        "Unexpected item type found while going through key "
-                        + f"path: {key} (at key: {dict_key})"
-                    )
+                    raise YeditException("Unexpected item type found while going through key " + f"path: {key} (at key: {dict_key})")
                 data[dict_key] = {}
                 data = data[dict_key]
 
             elif arr_ind and isinstance(data, list) and int(arr_ind) <= len(data) - 1:
                 data = data[int(arr_ind)]
             else:
-                raise YeditException(
-                    f"Unexpected item type found while going through key path: {key}"
-                )
+                raise YeditException(f"Unexpected item type found while going through key path: {key}")
 
         if key == "":
             data = item
 
-        elif (
-            key_indexes[-1][0]
-            and isinstance(data, list)
-            and int(key_indexes[-1][0]) <= len(data)
-        ):  # noqa: E501
+        elif key_indexes[-1][0] and isinstance(data, list) and int(key_indexes[-1][0]) <= len(data):  # noqa: E501
             if int(key_indexes[-1][0]) > len(data) - 1:
                 data.append(item)
             else:
@@ -508,14 +493,9 @@ class Yedit:
             rendered = _yaml_round_trip_dump(self.yaml_dict, default_flow_style=False)
             Yedit._write(self.filename, rendered)
         elif self.content_type == "json":
-            Yedit._write(
-                self.filename, json.dumps(self.yaml_dict, indent=4, sort_keys=True)
-            )
+            Yedit._write(self.filename, json.dumps(self.yaml_dict, indent=4, sort_keys=True))
         else:
-            raise YeditException(
-                f"Unsupported content_type: {self.content_type}."
-                + "Please specify a content_type of yaml or json."
-            )
+            raise YeditException(f"Unsupported content_type: {self.content_type}." + "Please specify a content_type of yaml or json.")
 
         return (True, self.yaml_dict)
 
@@ -667,8 +647,7 @@ class Yedit:
         if isinstance(entry, dict):
             if not isinstance(value, dict):
                 raise YeditException(
-                    "Cannot replace key, value entry in dict with non-dict type. "
-                    + f"value=[{value}] type=[{type(value)}]"
+                    "Cannot replace key, value entry in dict with non-dict type. " + f"value=[{value}] type=[{type(value)}]"
                 )
             entry.update(value)
             return (True, self.yaml_dict)
@@ -709,9 +688,7 @@ class Yedit:
         # Prefer a round-trip dump+load copy when possible (keeps ruamel CommentedMap types),
         # otherwise deepcopy.
         try:
-            tmp_copy = _yaml_round_trip_load(
-                _yaml_round_trip_dump(self.yaml_dict, default_flow_style=False)
-            )
+            tmp_copy = _yaml_round_trip_load(_yaml_round_trip_dump(self.yaml_dict, default_flow_style=False))
         except Exception:
             tmp_copy = copy.deepcopy(self.yaml_dict)
 
@@ -734,9 +711,7 @@ class Yedit:
     def create(self, path, value):
         if not self.file_exists():
             try:
-                tmp_copy = _yaml_round_trip_load(
-                    _yaml_round_trip_dump(self.yaml_dict, default_flow_style=False)
-                )
+                tmp_copy = _yaml_round_trip_load(_yaml_round_trip_dump(self.yaml_dict, default_flow_style=False))
             except Exception:
                 tmp_copy = copy.deepcopy(self.yaml_dict)
 
@@ -794,9 +769,7 @@ class Yedit:
 
         if isinstance(inc_value, str) and "bool" in vtype:
             if inc_value not in true_bools and inc_value not in false_bools:
-                raise YeditException(
-                    f"Not a boolean type. str=[{inc_value}] vtype=[{vtype}]"
-                )
+                raise YeditException(f"Not a boolean type. str=[{inc_value}] vtype=[{vtype}]")
         elif isinstance(inc_value, bool) and "str" in vtype:
             inc_value = str(inc_value)
 
@@ -806,10 +779,7 @@ class Yedit:
             try:
                 inc_value = _yaml_safe_load(inc_value)
             except Exception as err:
-                raise YeditException(
-                    "Could not determine type of incoming value. "
-                    + f"value=[{type(inc_value)}] vtype=[{vtype}]"
-                ) from err
+                raise YeditException("Could not determine type of incoming value. " + f"value=[{type(inc_value)}] vtype=[{vtype}]") from err
 
         return inc_value
 
@@ -824,9 +794,7 @@ class Yedit:
                     edit.get("curr_value_format"),
                 )
 
-                rval = yamlfile.update(
-                    edit["key"], value, edit.get("index"), curr_value
-                )
+                rval = yamlfile.update(edit["key"], value, edit.get("index"), curr_value)
 
             elif edit.get("action") == "append":
                 rval = yamlfile.append(edit["key"], value)
@@ -860,9 +828,7 @@ class Yedit:
             if yamlfile.yaml_dict is None and state != "present":
                 return {
                     "failed": True,
-                    "msg": "Error opening file [{}].  Verify that the ".format(
-                        params["src"]
-                    )
+                    "msg": "Error opening file [{}].  Verify that the ".format(params["src"])
                     + "file exists, that it is has correct permissions, and is valid yaml.",
                 }
 
@@ -950,9 +916,7 @@ def json_roundtrip_clean(js):
 def main():
     module = AnsibleModule(
         argument_spec=dict(
-            state=dict(
-                default="present", type="str", choices=["present", "absent", "list"]
-            ),
+            state=dict(default="present", type="str", choices=["present", "absent", "list"]),
             debug=dict(default=False, type="bool"),
             src=dict(default=None, type="str"),
             content=dict(default=None),
@@ -965,13 +929,9 @@ def main():
             insert=dict(default=False, type="bool"),
             index=dict(default=None, type="int"),
             curr_value=dict(default=None, type="str"),
-            curr_value_format=dict(
-                default="yaml", choices=["yaml", "json", "str"], type="str"
-            ),
+            curr_value_format=dict(default="yaml", choices=["yaml", "json", "str"], type="str"),
             backup=dict(default=False, type="bool"),
-            backup_ext=dict(
-                default=".{}".format(time.strftime("%Y%m%dT%H%M%S")), type="str"
-            ),
+            backup_ext=dict(default=".{}".format(time.strftime("%Y%m%dT%H%M%S")), type="str"),
             separator=dict(default=".", type="str"),
             edits=dict(default=None, type="list"),
         ),
@@ -995,9 +955,7 @@ def main():
                     break
 
         if key_error and edit_error:
-            return module.fail_json(
-                failed=True, msg="Empty value for parameter key not allowed."
-            )
+            return module.fail_json(failed=True, msg="Empty value for parameter key not allowed.")
 
     rval = json_roundtrip_clean(Yedit.run_ansible(module.params))
     if "failed" in rval and rval["failed"]:
