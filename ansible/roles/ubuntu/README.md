@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/05/25 |
+| Readme update        | 2026/06/05 |
 
 
 
@@ -131,7 +131,8 @@
 | ---- | ------ | -------------- |
 | Ensure python and apt prerequisites are installed | ansible.builtin.apt | False |
 | Install common packages | ansible.builtin.apt | False |
-| Ensure qemu-guest-agent is enabled and running | ansible.builtin.systemd | False |
+| Install qemu-guest-agent on virtual guests | ansible.builtin.apt | True |
+| Ensure qemu-guest-agent is enabled and running | ansible.builtin.systemd | True |
 | Upgrade installed packages | ansible.builtin.apt | False |
 | Remove unnecessary packages | ansible.builtin.apt | False |
 
