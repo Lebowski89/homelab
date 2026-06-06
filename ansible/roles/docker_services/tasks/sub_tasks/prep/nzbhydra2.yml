@@ -1,7 +1,6 @@
 ---
 
 - name: Prep - NZBHydra2 | Set filesystem host
-  no_log: true
   ansible.builtin.set_fact:
     docker_services_nzbhydra2_fs_host: "{{ docker_services_fs_hosts_effective | first }}"
   run_once: true
@@ -149,8 +148,30 @@
   delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
   run_once: true
 
+- name: Prep - NZBHydra2 | Report missing config in check mode
+  ansible.builtin.debug:
+    msg: >-
+      NZBHydra2 config {{ docker_services_nzbhydra2_config_path }} does not exist.
+      A real run would start a temporary container to generate it.
+  when:
+    - ansible_check_mode
+    - not docker_services_nzbhydra2_stat.stat.exists
+  run_once: true
+
+- name: Prep - NZBHydra2 | Determine whether config can be managed
+  ansible.builtin.set_fact:
+    docker_services_nzbhydra2_can_manage_config: >-
+      {{
+        docker_services_nzbhydra2_stat.stat.exists
+        or
+        not ansible_check_mode
+      }}
+  run_once: true
+
 - name: Prep - NZBHydra2 | Generate nzbhydra.yml (temp container)
-  when: not docker_services_nzbhydra2_stat.stat.exists
+  when:
+    - not ansible_check_mode
+    - not docker_services_nzbhydra2_stat.stat.exists
   run_once: true
   block:
     - name: Prep - NZBHydra2 | Start temp container to generate config
@@ -219,6 +240,7 @@
       delay: 5
       until: docker_services_nzbhydra2_remove_tmp is succeeded
       delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
+      when: not ansible_check_mode
 
 - name: Prep - NZBHydra2 | Build config facts
   no_log: true
@@ -306,6 +328,7 @@
     state: present
   delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
   run_once: true
+  when: docker_services_nzbhydra2_can_manage_config | bool
 
 - name: Prep - NZBHydra2 | Set API key
   no_log: true
@@ -316,11 +339,23 @@
     state: present
   delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
   run_once: true
+  when: docker_services_nzbhydra2_can_manage_config | bool
+
+- name: Prep - NZBHydra2 | Report API key update in check mode
+  ansible.builtin.debug:
+    msg: >-
+      NZBHydra2 API key would be written to main.apiKey in
+      {{ docker_services_nzbhydra2_config_path }} during a real run.
+  when:
+    - ansible_check_mode
+    - docker_services_nzbhydra2_can_manage_config | bool
+  run_once: true
 
 - name: Prep - NZBHydra2 | Replace downloaders list
   no_log: true
   run_once: true
   delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
+  when: docker_services_nzbhydra2_can_manage_config | bool
   block:
     - name: Prep - NZBHydra2 | Remove existing downloaders
       yedit:
@@ -339,6 +374,7 @@
   no_log: true
   run_once: true
   delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
+  when: docker_services_nzbhydra2_can_manage_config | bool
   block:
     - name: Prep - NZBHydra2 | Remove existing indexers
       yedit:
@@ -353,6 +389,16 @@
         value: "{{ docker_services_nzbhydra2_indexers }}"
         state: present
 
+- name: Prep - NZBHydra2 | Report managed config update in check mode
+  ansible.builtin.debug:
+    msg: >-
+      NZBHydra2 managed auth users, downloader config, and indexer config
+      would be written to {{ docker_services_nzbhydra2_config_path }} during a real run.
+  when:
+    - ansible_check_mode
+    - docker_services_nzbhydra2_can_manage_config | bool
+  run_once: true
+
 - name: Prep - NZBHydra2 | Ensure config file permissions are restricted
   ansible.builtin.file:
     path: "{{ docker_services_nzbhydra2_config_path }}"
@@ -362,6 +408,7 @@
     state: file
   delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
   run_once: true
+  when: docker_services_nzbhydra2_can_manage_config | bool
 
 - name: Prep - NZBHydra2 | Slurp config
   no_log: true
@@ -371,6 +418,7 @@
   delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
   run_once: true
   changed_when: false
+  when: not ansible_check_mode
 
 - name: Prep - NZBHydra2 | Parse config YAML
   no_log: true
@@ -378,6 +426,7 @@
     docker_services_nzbhydra2_cfg: "{{ (docker_services_nzbhydra2_cfg_raw.content | b64decode) | from_yaml }}"
   run_once: true
   changed_when: false
+  when: not ansible_check_mode
 
 - name: Prep - NZBHydra2 | Assert API key set
   no_log: true
@@ -389,6 +438,7 @@
       - (docker_services_nzbhydra2_cfg.main.apiKey | string | trim) == (docker_services_nzbhydra2_api | string | trim)
     fail_msg: "nzbhydra2_api was not written correctly to main.apiKey in {{ docker_services_nzbhydra2_config_path }}"
   run_once: true
+  when: not ansible_check_mode
 
 - name: Prep - NZBHydra2 | Assert SABnzbd downloader is set
   no_log: true
@@ -417,6 +467,7 @@
       Expected a downloader entry with url={{ docker_services_nzbhydra2_sabnzbd_url }}
       and the configured API key.
   run_once: true
+  when: not ansible_check_mode
 
 - name: Prep - NZBHydra2 | Assert configured indexers were written
   no_log: true
@@ -429,3 +480,4 @@
       in {{ docker_services_nzbhydra2_config_path }}, got
       {{ (docker_services_nzbhydra2_cfg.indexers | default([])) | length }}
   run_once: true
+  when: not ansible_check_mode

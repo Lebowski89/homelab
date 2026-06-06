@@ -543,25 +543,29 @@
 | Prep - NZBHydra2 ¦ Assert Drunken Slug secrets are complete when used | ansible.builtin.assert | False |
 | Prep - NZBHydra2 ¦ Ensure config dir exists | ansible.builtin.file | False |
 | Prep - NZBHydra2 ¦ Check config exists | ansible.builtin.stat | False |
+| Prep - NZBHydra2 ¦ Report missing config in check mode | ansible.builtin.debug | True |
+| Prep - NZBHydra2 ¦ Determine whether config can be managed | ansible.builtin.set_fact | False |
 | Prep - NZBHydra2 ¦ Generate nzbhydra.yml (temp container) | block | True |
 | Prep - NZBHydra2 ¦ Start temp container to generate config | community.docker.docker_container | False |
 | Prep - NZBHydra2 ¦ Wait for config to appear | ansible.builtin.wait_for | False |
 | Prep - NZBHydra2 ¦ Wait for config file size to stabilize | ansible.builtin.shell | False |
 | Prep - NZBHydra2 ¦ Build config facts | ansible.builtin.set_fact | False |
-| Prep - NZBHydra2 ¦ Set auth user | yedit | False |
-| Prep - NZBHydra2 ¦ Set API key | yedit | False |
-| Prep - NZBHydra2 ¦ Replace downloaders list | block | False |
+| Prep - NZBHydra2 ¦ Set auth user | yedit | True |
+| Prep - NZBHydra2 ¦ Set API key | yedit | True |
+| Prep - NZBHydra2 ¦ Report API key update in check mode | ansible.builtin.debug | True |
+| Prep - NZBHydra2 ¦ Replace downloaders list | block | True |
 | Prep - NZBHydra2 ¦ Remove existing downloaders | yedit | False |
 | Prep - NZBHydra2 ¦ Write managed downloaders | yedit | False |
-| Prep - NZBHydra2 ¦ Replace indexers list | block | False |
+| Prep - NZBHydra2 ¦ Replace indexers list | block | True |
 | Prep - NZBHydra2 ¦ Remove existing indexers | yedit | False |
 | Prep - NZBHydra2 ¦ Write managed indexers | yedit | False |
-| Prep - NZBHydra2 ¦ Ensure config file permissions are restricted | ansible.builtin.file | False |
-| Prep - NZBHydra2 ¦ Slurp config | ansible.builtin.slurp | False |
-| Prep - NZBHydra2 ¦ Parse config YAML | ansible.builtin.set_fact | False |
-| Prep - NZBHydra2 ¦ Assert API key set | ansible.builtin.assert | False |
-| Prep - NZBHydra2 ¦ Assert SABnzbd downloader is set | ansible.builtin.assert | False |
-| Prep - NZBHydra2 ¦ Assert configured indexers were written | ansible.builtin.assert | False |
+| Prep - NZBHydra2 ¦ Report managed config update in check mode | ansible.builtin.debug | True |
+| Prep - NZBHydra2 ¦ Ensure config file permissions are restricted | ansible.builtin.file | True |
+| Prep - NZBHydra2 ¦ Slurp config | ansible.builtin.slurp | True |
+| Prep - NZBHydra2 ¦ Parse config YAML | ansible.builtin.set_fact | True |
+| Prep - NZBHydra2 ¦ Assert API key set | ansible.builtin.assert | True |
+| Prep - NZBHydra2 ¦ Assert SABnzbd downloader is set | ansible.builtin.assert | True |
+| Prep - NZBHydra2 ¦ Assert configured indexers were written | ansible.builtin.assert | True |
 
 #### File: tasks/sub_tasks/prep/paths.yml
 
