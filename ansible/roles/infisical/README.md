@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/06/05 |
+| Readme update        | 2026/06/06 |
 
 
 
@@ -105,7 +105,7 @@
 | Infisical ¦ Assert Docker secrets values are defined | ansible.builtin.assert | False |  |
 | Infisical ¦ Create Docker secrets directory | ansible.builtin.file | False |  |
 | Infisical ¦ Create Docker secrets files | ansible.builtin.copy | False |  |
-| Infisical ¦ Render Traefik dynamic file | ansible.builtin.template | False |  |
+| Infisical ¦ Render Traefik dynamic file | ansible.builtin.template | True |  |
 | Infisical ¦ Import compose file | ansible.builtin.template | False |  |
 | Infisical ¦ Compose stack up | community.docker.docker_compose_v2 | False |  |
 

@@ -143,6 +143,7 @@
 ################################
 
 - name: Infisical | Render Traefik dynamic file
+  when: infisical_traefik_enable | bool
   ansible.builtin.template:
     src: traefik_dynamic_file.j2
     dest: "{{ infisical_traefik_dynamic_dir }}/{{ infisical_name }}-dynamic.yml"
