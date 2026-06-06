@@ -4,6 +4,16 @@
 # CLEAN UP
 ################################
 
+- name: Infisical Podman | Report recreate/remove actions in check mode
+  ansible.builtin.debug:
+    msg: >-
+      Infisical Podman cleanup would stop quadlet services, remove quadlet files,
+      and reload systemd during a real run.
+  when: ansible_check_mode
+  tags:
+    - infisical_podman_recreate
+    - infisical_podman_remove
+
 - name: Infisical Podman | Stop Infisical quadlet services
   ansible.builtin.systemd_service:
     name: "{{ _infisical_podman_unit }}"
@@ -15,6 +25,7 @@
     - "{{ infisical_podman_redis_name }}.service"
   loop_control:
     loop_var: _infisical_podman_unit
+  when: not ansible_check_mode
   tags:
     - infisical_podman_recreate
     - infisical_podman_remove
@@ -29,6 +40,7 @@
     - "{{ infisical_podman_network }}.network"
   loop_control:
     loop_var: _infisical_podman_quadlet
+  when: not ansible_check_mode
   tags:
     - infisical_podman_recreate
     - infisical_podman_remove
@@ -36,6 +48,7 @@
 - name: Reload systemd after quadlet removal
   ansible.builtin.systemd_service:
     daemon_reload: true
+  when: not ansible_check_mode
   tags:
     - infisical_podman_recreate
     - infisical_podman_remove
@@ -134,6 +147,16 @@
 - name: Infisical Podman | Reload systemd for quadlet generator
   ansible.builtin.systemd_service:
     daemon_reload: true
+  when: not ansible_check_mode
+  tags:
+    - infisical_podman_deploy
+    - infisical_podman_recreate
+
+- name: Infisical Podman | Report quadlet services would be started
+  ansible.builtin.debug:
+    msg: >-
+      Infisical Podman quadlet services would be enabled and started during a real run.
+  when: ansible_check_mode
   tags:
     - infisical_podman_deploy
     - infisical_podman_recreate
@@ -148,6 +171,7 @@
     - "{{ infisical_podman_name }}.service"
   loop_control:
     loop_var: _infisical_podman_service
+  when: not ansible_check_mode
   tags:
     - infisical_podman_deploy
     - infisical_podman_recreate
