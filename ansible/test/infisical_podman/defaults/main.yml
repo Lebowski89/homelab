@@ -1,39 +1,74 @@
 ---
 
-infisical_podman_name: infisical
-infisical_podman_image: docker.io/infisical/infisical:v0.159.9
-infisical_podman_port: 8066
-infisical_podman_path: "/opt/{{ infisical_podman_name }}"
+# Secret values should be defined in an encrypted group_vars/all/vault.yml file.
+
+################################
+# VAULT-BACKED SECRETS
+################################
+
 infisical_podman_enc_key: "{{ infisical_enc_key }}"
 infisical_podman_jwt_key: "{{ infisical_jwt_key }}"
-
-infisical_podman_network: infisical
-
-infisical_podman_postgres_name: infisical-postgres
-infisical_podman_postgres_image: docker.io/library/postgres:18.3
-infisical_podman_postgres_uid: 999
-infisical_podman_postgres_gid: 999
-infisical_podman_postgres_port: 5432
-infisical_podman_postgres_path: "{{ infisical_podman_path }}/postgres"
 infisical_podman_postgres_user: "{{ infisical_postgres_user }}"
 infisical_podman_postgres_pass: "{{ infisical_postgres_pass }}"
-infisical_podman_expose_postgres: true
-
-infisical_podman_redis_name: infisical-redis
-infisical_podman_redis_image: docker.io/library/redis:8.6-alpine
-infisical_podman_redis_uid: 999
-infisical_podman_redis_gid: 999
-infisical_podman_redis_port: 6390
-infisical_podman_redis_path: "{{ infisical_podman_path }}/redis"
-infisical_podman_redis_key: "{{ infisical_redis_key }}"
-infisical_podman_expose_redis: true
-
+infisical_podman_redis_password: "{{ infisical_redis_password }}"
+infisical_podman_domain: "{{ infisical_domain }}"
 infisical_podman_smtp_email: "{{ infisical_smtp_email }}"
-infisical_podman_smtp_host: "{{ infisical_smtp_host }}"
-infisical_podman_smtp_port: "{{ infisical_smtp_port }}"
 infisical_podman_smtp_user: "{{ infisical_smtp_user }}"
 infisical_podman_smtp_pass: "{{ infisical_smtp_pass }}"
 infisical_podman_smtp_sender: "{{ infisical_smtp_sender }}"
 
-infisical_podman_domain: "{{ infisical_domain }}"
-infisical_podman_backend_host: "{{ hostvars[docker_services_primary_manager].local_ip }}"
+################################
+# INFISICAL
+################################
+
+infisical_podman_name: infisical
+infisical_podman_image: docker.io/infisical/infisical:v0.160.10
+infisical_podman_timezone: "{{ timezone | default('Australia/Melbourne') }}"
+infisical_podman_port: 8066
+infisical_podman_base_path: "/opt/{{ infisical_podman_name }}"
+infisical_podman_env_path: "{{ infisical_podman_base_path }}/.env"
+
+infisical_podman_smtp_host: smtp.porkbun.com
+infisical_podman_smtp_port: 587
+
+infisical_podman_frontend_fqdn: "{{ infisical_podman_name }}.int.{{ infisical_podman_domain }}"
+infisical_podman_frontend_address: "https://{{ infisical_podman_frontend_fqdn }}:8443"
+infisical_podman_backend_address: "http://{{ infisical_podman_name }}:8080"
+
+infisical_podman_network: infisical.network
+
+################################
+# POSTGRES
+################################
+
+# Connects to pre-existing Postgres cluster
+
+infisical_podman_postgres_name: haproxy
+infisical_podman_postgres_port: 5432
+infisical_podman_postgres_db_name: infisical
+
+################################
+# REDIS
+################################
+
+infisical_podman_redis_name: infisical-redis
+infisical_podman_redis_image: docker.io/library/redis:8.6-alpine
+infisical_podman_redis_puid: 999
+infisical_podman_redis_pgid: 999
+infisical_podman_redis_path: "{{ infisical_podman_base_path }}/redis"
+
+################################
+# TRAEFIK
+################################
+
+infisical_podman_traefik_enable: true
+infisical_podman_traefik_dynamic_dir: /opt/traefik/dynamic
+infisical_podman_traefik_entrypoint: https_private
+infisical_podman_traefik_authelia_enable: false
+infisical_podman_traefik_crowdsec_enable: false
+infisical_podman_traefik_headers_middleware: secure-headers@file
+infisical_podman_traefik_middleware_chain: "{{ infisical_podman_name }}-ui-chain"
+infisical_podman_traefik_certresolver: dns-cloudflare
+infisical_podman_traefik_tls_options: securetls@file
+infisical_podman_traefik_dynamic_owner: 1000
+infisical_podman_traefik_dynamic_group: 1000
