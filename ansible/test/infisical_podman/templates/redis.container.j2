@@ -8,11 +8,8 @@ Requires={{ infisical_podman_network }}-network.service
 ContainerName={{ infisical_podman_redis_name }}
 Image={{ infisical_podman_redis_image }}
 Network={{ infisical_podman_network }}
-{% if infisical_podman_expose_redis %}
-PublishPort={{ infisical_podman_redis_port }}:6379
-{% endif %}
-Environment=TZ={{ timezone }}
-EnvironmentFile={{ infisical_podman_path }}/.env
+Environment=TZ={{ infisical_podman_timezone }}
+EnvironmentFile={{ infisical_podman_base_path }}/.env
 Volume={{ infisical_podman_redis_path }}:/data
 Exec=sh -c 'redis-server --appendonly yes --requirepass "$REDIS_KEY"'
 

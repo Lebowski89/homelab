@@ -4,7 +4,7 @@
 # CLEAN UP
 ################################
 
-- name: Stop Infisical quadlet services
+- name: Infisical Podman | Stop Infisical quadlet services
   ansible.builtin.systemd_service:
     name: "{{ _infisical_podman_unit }}"
     state: stopped
@@ -12,7 +12,6 @@
   failed_when: false
   loop:
     - "{{ infisical_podman_name }}.service"
-    - "{{ infisical_podman_postgres_name }}.service"
     - "{{ infisical_podman_redis_name }}.service"
   loop_control:
     loop_var: _infisical_podman_unit
@@ -20,13 +19,12 @@
     - infisical_podman_recreate
     - infisical_podman_remove
 
-- name: Remove Infisical quadlet files
+- name: Infisical Podman | Remove Infisical quadlet files
   ansible.builtin.file:
     path: "/etc/containers/systemd/{{ _infisical_podman_quadlet }}"
     state: absent
   loop:
     - "{{ infisical_podman_name }}.container"
-    - "{{ infisical_podman_postgres_name }}.container"
     - "{{ infisical_podman_redis_name }}.container"
     - "{{ infisical_podman_network }}.network"
   loop_control:
@@ -46,7 +44,7 @@
 # DIRECTORIES
 ################################
 
-- name: Create Infisical quadlet directories
+- name: Infisical Podman | Create Infisical quadlet directories
   ansible.builtin.file:
     path: "{{ _infisical_podman_dir.path }}"
     state: directory
@@ -54,17 +52,13 @@
     group: "{{ _infisical_podman_dir.group }}"
     mode: "{{ _infisical_podman_dir.mode }}"
   loop:
-    - path: "{{ infisical_podman_path }}"
+    - path: "{{ infisical_podman_base_path }}"
       owner: "root"
       group: "root"
       mode: "0750"
-    - path: "{{ infisical_podman_postgres_path }}"
-      owner: "{{ infisical_podman_postgres_uid }}"
-      group: "{{ infisical_podman_postgres_gid }}"
-      mode: "0700"
     - path: "{{ infisical_podman_redis_path }}"
-      owner: "{{ infisical_podman_redis_uid }}"
-      group: "{{ infisical_podman_redis_gid }}"
+      owner: "{{ infisical_podman_redis_puid }}"
+      group: "{{ infisical_podman_redis_pgid }}"
       mode: "0755"
     - path: /etc/containers/systemd
       owner: root
@@ -81,10 +75,10 @@
 # CONFIG
 ################################
 
-- name: Template Infisical Podman env file
+- name: Infisical Podman | Template Infisical Podman env file
   ansible.builtin.template:
     src: "{{ role_path }}/templates/infisical.env.j2"
-    dest: "{{ infisical_podman_path }}/.env"
+    dest: "{{ infisical_podman_base_path }}/.env"
     force: true
     owner: root
     group: root
@@ -99,24 +93,15 @@
 # TRAEFIK
 ################################
 
-- name: Render Traefik dynamic file
+- name: Infisical Podman | Render Traefik dynamic file
+  when: infisical_podman_traefik_enable | bool
   ansible.builtin.template:
-    src: templates/traefik_dynamic_file.j2
-    dest: "/opt/traefik/dynamic/{{ infisical_podman_name }}-dynamic.yml"
-    owner: "1000"
-    group: "1000"
+    src: traefik_dynamic_file.j2
+    dest: "{{ infisical_podman_traefik_dynamic_dir }}/{{ infisical_podman_name }}-dynamic.yml"
+    owner: "{{ infisical_podman_traefik_dynamic_owner }}"
+    group: "{{ infisical_podman_traefik_dynamic_group }}"
     mode: "0644"
     force: true
-  vars:
-    tr_router_name: "{{ infisical_podman_name }}"
-    tr_address: "{{ infisical_podman_domain }}"
-    tr_entrypoint: "https"
-    tr_port: "{{ infisical_podman_port }}"
-    tr_authelia_enable: true
-    tr_backend_address: "http://{{ infisical_podman_backend_host }}:{{ infisical_podman_port }}"
-    tr_headers_middleware: "secure-headers@file"
-    tr_middleware_chain: "{{ tr_router_name }}-ui-chain"
-  delegate_to: "{{ docker_services_primary_manager }}"
   tags:
     - infisical_podman_deploy
     - infisical_podman_recreate
@@ -125,7 +110,7 @@
 # DEPLOY
 ################################
 
-- name: Template Infisical Podman quadlets
+- name: Infisical Podman | Template Infisical Podman quadlets
   ansible.builtin.template:
     src: "{{ role_path }}/templates/{{ _infisical_podman_template.src }}"
     dest: "/etc/containers/systemd/{{ _infisical_podman_template.dest }}"
@@ -136,8 +121,6 @@
   loop:
     - src: "infisical.network.j2"
       dest: "{{ infisical_podman_network }}.network"
-    - src: "postgres.container.j2"
-      dest: "{{ infisical_podman_postgres_name }}.container"
     - src: "redis.container.j2"
       dest: "{{ infisical_podman_redis_name }}.container"
     - src: "infisical.container.j2"
@@ -148,20 +131,19 @@
     - infisical_podman_deploy
     - infisical_podman_recreate
 
-- name: Reload systemd for quadlet generator
+- name: Infisical Podman | Reload systemd for quadlet generator
   ansible.builtin.systemd_service:
     daemon_reload: true
   tags:
     - infisical_podman_deploy
     - infisical_podman_recreate
 
-- name: Start Infisical quadlet services
+- name: Infisical Podman | Start Infisical quadlet services
   ansible.builtin.systemd_service:
     name: "{{ _infisical_podman_service }}"
     state: started
     enabled: true
   loop:
-    - "{{ infisical_podman_postgres_name }}.service"
     - "{{ infisical_podman_redis_name }}.service"
     - "{{ infisical_podman_name }}.service"
   loop_control:
