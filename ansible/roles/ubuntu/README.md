@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/06/05 |
+| Readme update        | 2026/06/07 |
 
 
 
@@ -169,6 +169,7 @@
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Ensure repo root exists | ansible.builtin.file | False |
+| Report homelab repo update in check mode | ansible.builtin.debug | True |
 | Clone homelab repo | ansible.builtin.git | True |
 
 #### File: tasks/sub_tasks/requirements.yml
