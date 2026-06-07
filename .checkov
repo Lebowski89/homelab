@@ -1,0 +1,20 @@
+---
+
+quiet: true
+compact: true
+
+skip-path:
+  - "^\\.git/"
+  - "^\\.ansible/"
+  - "^ansible/collections/"
+  - "^terraform/.*/\\.terraform/"
+  - "^opentofu/.*/\\.terraform/"
+  - "^.*/\\.terraform/"
+  - "^.*/venv/"
+  - "^.*/__pycache__/"
+  - "^.*/node_modules/"
+
+framework:
+  - terraform
+  - github_actions
+  - dockerfile
