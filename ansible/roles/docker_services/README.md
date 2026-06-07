@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/06/06 |
+| Readme update        | 2026/06/07 |
 
 
 
@@ -622,7 +622,7 @@
 | Prep - Plex Token ¦ Fail if new token is invalid | ansible.builtin.fail | True |
 | Prep - Plex Token ¦ Add Client Identifier to plex.ini | community.general.ini_file | False |
 | Prep - Plex Token ¦ Add Token to plex.ini | community.general.ini_file | False |
-| Prep - Plex Token ¦ Display Token | ansible.builtin.debug | False |
+| Prep - Plex Token ¦ Report token status | ansible.builtin.debug | True |
 
 #### File: tasks/sub_tasks/prep/plex/tasker.yml
 

@@ -13,3 +13,5 @@
     loop_var: temp_prep
     label: "{{ temp_prep.dest }}"
   delegate_to: "{{ docker_services_deploy_host | default('mgt') }}"
+  no_log: "{{ temp_prep.no_log | default(false) | bool }}"
+  diff: "{{ not (temp_prep.no_log | default(false) | bool) }}"

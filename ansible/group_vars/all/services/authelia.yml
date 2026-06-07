@@ -138,6 +138,7 @@ authelia:
           dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/users_database.yml"
           mode: "0664"
           force: true
+          no_log: true
         - src: configs/proxy/authelia/authelia.env.j2
           dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/.env"
           mode: "0664"

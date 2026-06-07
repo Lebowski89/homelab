@@ -8,10 +8,21 @@
     group: "{{ ubuntu_ansible_group | default(ansible_user) }}"
     mode: "0755"
 
+- name: Report homelab repo update in check mode
+  when:
+    - ubuntu_manage_repo_clone | bool
+    - ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Homelab repo at {{ ubuntu_ansible_repo_path }} would be cloned/updated during a real run.
+
 - name: Clone homelab repo
-  when: ubuntu_manage_repo_clone | bool
+  when:
+    - ubuntu_manage_repo_clone | bool
+    - not ansible_check_mode
   ansible.builtin.git:
     repo: "{{ ubuntu_repo_url }}"
     dest: "{{ ubuntu_ansible_repo_path }}"
     version: "{{ ubuntu_repo_version }}"
     update: true
+  diff: false
