@@ -14,6 +14,9 @@ on:
       - "pyproject.toml"
       - ".github/workflows/lint.yml"
 
+permissions:
+  contents: read
+
 jobs:
   lint:
     runs-on: ubuntu-latest

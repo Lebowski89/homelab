@@ -20,6 +20,7 @@ No modules.
 
 | Name | Type |
 |------|------|
+| [github_branch_protection.blog](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/branch_protection) | resource |
 | [github_repository.blog](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository) | resource |
 | [github_repository_pages.blog](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository_pages) | resource |
 | [github_repository_vulnerability_alerts.blog](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository_vulnerability_alerts) | resource |

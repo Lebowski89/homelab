@@ -22,6 +22,9 @@ concurrency:
   group: tofu-check-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   tofu-check:
     runs-on: ubuntu-latest
