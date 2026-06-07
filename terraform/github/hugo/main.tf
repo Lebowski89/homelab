@@ -1,3 +1,4 @@
+#checkov:skip=CKV_GIT_1:This Hugo blog repository is intentionally public.
 resource "github_repository" "blog" {
   name        = var.repository_name
   description = var.repository_description
@@ -36,4 +37,14 @@ resource "github_repository_pages" "blog" {
 resource "github_repository_vulnerability_alerts" "blog" {
   repository = github_repository.blog.name
   enabled    = false
+}
+
+resource "github_branch_protection" "blog" {
+  repository_id = github_repository.blog.node_id
+  pattern       = var.default_branch
+
+  enforce_admins         = true
+  allows_deletions       = false
+  allows_force_pushes    = false
+  require_signed_commits = false
 }
