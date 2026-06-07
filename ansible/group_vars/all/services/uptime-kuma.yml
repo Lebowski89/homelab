@@ -3,7 +3,7 @@
 uptime_kuma:
   name: uptime-kuma
   stack: uptime-kuma
-  image: louislam/uptime-kuma:2.3.2
+  image: louislam/uptime-kuma:2.4.0
   named_networks:
     overlay:
       external: true
