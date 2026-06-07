@@ -1,5 +1,5 @@
-#checkov:skip=CKV_GIT_1:This Hugo blog repository is intentionally public.
 resource "github_repository" "blog" {
+  #checkov:skip=CKV_GIT_1:This Hugo blog repository is intentionally public.
   name        = var.repository_name
   description = var.repository_description
   visibility  = var.visibility
@@ -40,6 +40,8 @@ resource "github_repository_vulnerability_alerts" "blog" {
 }
 
 resource "github_branch_protection" "blog" {
+  #checkov:skip=CKV_GIT_5:This is a personal Hugo blog repository; two approvals are not practical.
+  #checkov:skip=CKV_GIT_6:Signed commits are not currently required for this personal Hugo blog repository.
   repository_id = github_repository.blog.node_id
   pattern       = var.default_branch
 
