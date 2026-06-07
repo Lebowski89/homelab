@@ -30,6 +30,7 @@
   register: docker_services_qbittorrent_pass_pbkdf2
   delegate_to: "{{ docker_services_qbittorrent_downloads_fs_host }}"
   run_once: true
+  no_log: true
 
 - name: Prep - qBittorrent | Assert seeds-instance password is present
   when: (docker_services_svc.name | default('') | string | trim) == "qbittorrent-xs"
@@ -47,3 +48,4 @@
   register: docker_services_qbittorrent_xs_pass_pbkdf2
   delegate_to: "{{ docker_services_qbittorrent_seeds_fs_host }}"
   run_once: true
+  no_log: true
