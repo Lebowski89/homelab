@@ -14,6 +14,7 @@ DEFAULT_REPO_ROOT="$(cd "$(dirname "$PLAYBOOK")/.." >/dev/null 2>&1 && pwd || tr
 REPO_ROOT="${REPO_ROOT:-$DEFAULT_REPO_ROOT}"
 PYTHON_LIBRARY_PATH="${PYTHON_LIBRARY_PATH:-$REPO_ROOT/ansible/roles/docker_services/library}"
 ANSIBLE_LOG_PATH="${ANSIBLE_LOG_PATH:-$REPO_ROOT/.ansible/ansible.log}"
+ANSIBLE_COLLECTIONS_PATH="${ANSIBLE_COLLECTIONS_PATH:-$REPO_ROOT/ansible/collections}"
 
 tool_path() {
   local name="$1"
@@ -42,20 +43,41 @@ Usage:
   skynet recreate <tag> [tag2 ...]
   skynet bootstrap <tag> [tag2 ...]
   skynet check <tag> [tag2 ...]
+
+  skynet run <role-target> [action]
+  skynet check <role-target> [action]
+
   skynet doctor [--ping]
   skynet syntax
   skynet lint
   skynet ci
   skynet versions
   skynet inventory [--graph|--list]
-  skynet limit <hostpattern> <deploy|update|remove|recreate|bootstrap|check|raw> ...
+  skynet limit <hostpattern> <deploy|update|remove|recreate|bootstrap|check|run|raw> ...
   skynet tags
+  skynet targets
   skynet raw <ansible-playbook args...>
   skynet help
 
 Aliases:
   skynet install  -> deploy
   skynet reset    -> remove
+  skynet dry-run  -> check
+  skynet target   -> run
+
+Role/action examples:
+  skynet check infisical-podman
+  skynet check infisical-podman recreate
+  skynet run infisical-podman deploy
+  skynet run infisical-podman remove
+  skynet check ubuntu sysctl
+  skynet run docker swarm
+  skynet run opentofu pve-user
+
+Docker service examples:
+  skynet check authelia
+  skynet recreate authelia
+  skynet update all
 
 Optional env vars:
   PLAYBOOK                    Override playbook path
@@ -74,7 +96,9 @@ Optional env vars:
   YAMLLINT_BIN                Override yamllint binary
   RUFF_BIN                    Override ruff binary
   REPO_ROOT                   Override repository root used by lint/ci
-  PYTHON_LIBRARY_PATH         Override custom Ansible module Python path for Ruff/ansible-lint
+  PYTHON_LIBRARY_PATH         Override custom Ansible module Python path for Ruff
+  ANSIBLE_LOG_PATH            Override Ansible log path
+  ANSIBLE_COLLECTIONS_PATH    Override Ansible collections path
 EOF
   exit 1
 }
@@ -151,6 +175,7 @@ run_ansible_lint() {
     cd "$REPO_ROOT"
     ANSIBLE_CONFIG="$ANSIBLE_CONFIG" \
       ANSIBLE_LOG_PATH="$ANSIBLE_LOG_PATH" \
+      ANSIBLE_COLLECTIONS_PATH="$ANSIBLE_COLLECTIONS_PATH" \
       "$ANSIBLE_LINT_BIN" --format=pep8 ansible
   )
 }
@@ -166,6 +191,8 @@ print_versions() {
   echo "[INFO] playbook: $PLAYBOOK"
   echo "[INFO] inventory: $INVENTORY"
   echo "[INFO] ansible config: $ANSIBLE_CONFIG"
+  echo "[INFO] ansible collections path: $ANSIBLE_COLLECTIONS_PATH"
+  echo "[INFO] ansible log path: $ANSIBLE_LOG_PATH"
 
   local -a tools=(
     "$ANSIBLE_PLAYBOOK_BIN"
@@ -193,6 +220,184 @@ join_csv() {
   echo "$*"
 }
 
+role_tag() {
+  local target="${1:-}"
+  local action="${2:-deploy}"
+
+  target="${target,,}"
+  target="${target//_/-}"
+  action="${action,,}"
+  action="${action//_/-}"
+
+  case "${target}:${action}" in
+    netbox:bootstrap)               echo "netbox_bootstrap" ;;
+    netbox:deploy)                  echo "netbox_deploy" ;;
+    netbox:recreate)                echo "netbox_recreate" ;;
+    netbox:remove)                  echo "netbox_remove" ;;
+
+    ubuntu:deploy)                  echo "ubuntu" ;;
+    ubuntu:apt)                     echo "ubuntu_apt" ;;
+    ubuntu:repo)                    echo "ubuntu_repo" ;;
+    ubuntu:venv)                    echo "ubuntu_venv" ;;
+    ubuntu:requirements)            echo "ubuntu_requirements" ;;
+    ubuntu:skynet)                  echo "ubuntu_skynet" ;;
+    ubuntu:sysctl)                  echo "ubuntu_sysctl" ;;
+    ubuntu:pam)                     echo "ubuntu_pam" ;;
+    ubuntu:network)                 echo "ubuntu_network" ;;
+    ubuntu:netplan)                 echo "ubuntu_netplan" ;;
+
+    docker:deploy)                  echo "docker" ;;
+    docker:install)                 echo "docker_install" ;;
+    docker:prune)                   echo "docker_prune" ;;
+    docker:prune-dangling)          echo "docker_prune_dangling" ;;
+    docker:prune-unused)            echo "docker_prune_unused" ;;
+    docker:prune-volumes)           echo "docker_prune_volumes" ;;
+    docker:prune-timer)             echo "docker_prune_timer" ;;
+    docker:prune-unraid-script)     echo "docker_prune_unraid_user_script" ;;
+    docker:swarm)                   echo "docker_swarm" ;;
+    docker:swarm-init)              echo "docker_swarm_init" ;;
+    docker:swarm-join)              echo "docker_swarm_join" ;;
+    docker:swarm-network)           echo "docker_swarm_network" ;;
+    docker:swarm-labels)            echo "docker_swarm_labels" ;;
+
+    hugo:bootstrap)                 echo "hugo_bootstrap" ;;
+    hugo:deploy)                    echo "hugo_bootstrap" ;;
+    hugo:submodule)                 echo "hugo_submodule" ;;
+
+    infisical:bootstrap)            echo "infisical_bootstrap" ;;
+    infisical:deploy)               echo "infisical_deploy" ;;
+    infisical:recreate)             echo "infisical_recreate" ;;
+    infisical:remove)               echo "infisical_remove" ;;
+
+    opentofu:deploy)                echo "opentofu" ;;
+    opentofu:install)               echo "opentofu_install" ;;
+    opentofu:pve-user)              echo "opentofu_pve_user" ;;
+
+    postgres:deploy)                echo "postgres" ;;
+    postgres:apt)                   echo "postgres_apt" ;;
+    postgres:etcd)                  echo "postgres_etcd" ;;
+    postgres:etcd-reset)            echo "postgres_etcd_reset" ;;
+    postgres:patroni)               echo "postgres_patroni" ;;
+    postgres:patroni-reset)         echo "postgres_patroni_reset" ;;
+    postgres:backup)                echo "postgres_backup" ;;
+    postgres:restore)               echo "postgres_restore" ;;
+    postgres:admin)                 echo "postgres_admin" ;;
+    postgres:admin-uptime-kuma)     echo "postgres_admin_uptime_kuma" ;;
+    postgres:admin-nuke-node)       echo "postgres_admin_nuke_node" ;;
+    postgres:admin-fix-owner)       echo "postgres_admin_fix_owner" ;;
+    postgres:admin-update-pg-hba)   echo "postgres_admin_update_pg_hba" ;;
+
+    podman:deploy)                  echo "podman" ;;
+    podman:install)                 echo "podman_install" ;;
+
+    infisical-podman:bootstrap)     echo "infisical_podman_bootstrap" ;;
+    infisical-podman:deploy)        echo "infisical_podman_deploy" ;;
+    infisical-podman:recreate)      echo "infisical_podman_recreate" ;;
+    infisical-podman:remove)        echo "infisical_podman_remove" ;;
+
+    *)
+      return 1
+      ;;
+  esac
+}
+
+print_targets() {
+  cat <<'EOF'
+Role/action targets:
+
+  netbox:
+    bootstrap -> netbox_bootstrap
+    deploy    -> netbox_deploy
+    recreate  -> netbox_recreate
+    remove    -> netbox_remove
+
+  ubuntu:
+    deploy       -> ubuntu
+    apt          -> ubuntu_apt
+    repo         -> ubuntu_repo
+    venv         -> ubuntu_venv
+    requirements -> ubuntu_requirements
+    skynet       -> ubuntu_skynet
+    sysctl       -> ubuntu_sysctl
+    pam          -> ubuntu_pam
+    network      -> ubuntu_network
+    netplan      -> ubuntu_netplan
+
+  docker:
+    deploy              -> docker
+    install             -> docker_install
+    prune               -> docker_prune
+    prune-dangling      -> docker_prune_dangling
+    prune-unused        -> docker_prune_unused
+    prune-volumes       -> docker_prune_volumes
+    prune-timer         -> docker_prune_timer
+    prune-unraid-script -> docker_prune_unraid_user_script
+    swarm               -> docker_swarm
+    swarm-init          -> docker_swarm_init
+    swarm-join          -> docker_swarm_join
+    swarm-network       -> docker_swarm_network
+    swarm-labels        -> docker_swarm_labels
+
+  hugo:
+    bootstrap -> hugo_bootstrap
+    deploy    -> hugo_bootstrap
+    submodule -> hugo_submodule
+
+  infisical:
+    bootstrap -> infisical_bootstrap
+    deploy    -> infisical_deploy
+    recreate  -> infisical_recreate
+    remove    -> infisical_remove
+
+  opentofu:
+    deploy   -> opentofu
+    install  -> opentofu_install
+    pve-user -> opentofu_pve_user
+
+  postgres:
+    deploy              -> postgres
+    apt                 -> postgres_apt
+    etcd                -> postgres_etcd
+    etcd-reset          -> postgres_etcd_reset
+    patroni             -> postgres_patroni
+    patroni-reset       -> postgres_patroni_reset
+    backup              -> postgres_backup
+    restore             -> postgres_restore
+    admin               -> postgres_admin
+    admin-uptime-kuma   -> postgres_admin_uptime_kuma
+    admin-nuke-node     -> postgres_admin_nuke_node
+    admin-fix-owner     -> postgres_admin_fix_owner
+    admin-update-pg-hba -> postgres_admin_update_pg_hba
+
+  podman:
+    deploy  -> podman
+    install -> podman_install
+
+  infisical-podman:
+    bootstrap -> infisical_podman_bootstrap
+    deploy    -> infisical_podman_deploy
+    recreate  -> infisical_podman_recreate
+    remove    -> infisical_podman_remove
+
+Examples:
+  skynet check infisical-podman
+  skynet check infisical-podman recreate
+  skynet run infisical-podman deploy
+  skynet run infisical-podman remove
+  skynet check ubuntu sysctl
+  skynet run docker swarm
+  skynet run opentofu pve-user
+
+Docker service targets:
+  Use service names/tags from: skynet tags
+
+Examples:
+  skynet check authelia
+  skynet recreate plex
+  skynet update all
+EOF
+}
+
 run_playbook() {
   local -a args=()
   args=(-i "$INVENTORY" "$PLAYBOOK")
@@ -211,12 +416,23 @@ run_playbook() {
     echo "[WARN] If vaulted vars are used, set VAULT_PASS_FILE or create .ansible_vault_pass"
   fi
 
-  ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_PLAYBOOK_BIN" "${args[@]}" "$@"
+  mkdir -p "$(dirname "$ANSIBLE_LOG_PATH")"
+
+  ANSIBLE_CONFIG="$ANSIBLE_CONFIG" \
+    ANSIBLE_LOG_PATH="$ANSIBLE_LOG_PATH" \
+    ANSIBLE_COLLECTIONS_PATH="$ANSIBLE_COLLECTIONS_PATH" \
+    "$ANSIBLE_PLAYBOOK_BIN" "${args[@]}" "$@"
 }
 
 print_tags() {
-  if command -v python3 >/dev/null 2>&1; then
-    python3 - "$PLAYBOOK" "$DOCKER_SERVICES_VARS" <<'PY'
+  {
+    echo "# Role/action tags"
+    print_targets | awk '/->/ { print $NF }' | sort -u
+    echo
+
+    echo "# Docker service tags"
+    if command -v python3 >/dev/null 2>&1; then
+      python3 - "$PLAYBOOK" "$DOCKER_SERVICES_VARS" <<'PY'
 import sys
 from collections import OrderedDict
 
@@ -274,12 +490,13 @@ except FileNotFoundError:
 for t in tags:
     print(t)
 PY
-  else
-    echo "[WARN] python3 not found; falling back to best-effort tag parsing from playbook only" >&2
-    grep -E '^\s*- name:|^\s*tags:\s*\[' "$PLAYBOOK" \
-      | sed -E 's/^\s*- name:\s*//; s/^\s*tags:\s*\[//; s/\]\s*$//' \
-      | tr ',' '\n' | sed 's/^ *//; s/ *$//' | sort -u
-  fi
+    else
+      echo "[WARN] python3 not found; falling back to best-effort tag parsing from playbook only" >&2
+      grep -E '^\s*- name:|^\s*tags:\s*\[' "$PLAYBOOK" \
+        | sed -E 's/^\s*- name:\s*//; s/^\s*tags:\s*\[//; s/\]\s*$//' \
+        | tr ',' '\n' | sed 's/^ *//; s/ *$//' | sort -u
+    fi
+  } | awk 'NF && !seen[$0]++'
 }
 
 doctor() {
@@ -288,6 +505,8 @@ doctor() {
   echo "[INFO] playbook: $PLAYBOOK"
   echo "[INFO] inventory: $INVENTORY"
   echo "[INFO] ansible config: $ANSIBLE_CONFIG"
+  echo "[INFO] ansible collections path: $ANSIBLE_COLLECTIONS_PATH"
+  echo "[INFO] ansible log path: $ANSIBLE_LOG_PATH"
   echo "[INFO] ansible venv path: $ANSIBLE_VENV_PATH"
 
   [[ -f "$PLAYBOOK" ]] && echo "[OK] playbook found: $PLAYBOOK" || die "Missing playbook: $PLAYBOOK"
@@ -304,19 +523,25 @@ doctor() {
     die "ansible-playbook --version failed"
   fi
 
-  if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_INVENTORY_BIN" -i "$INVENTORY" --list >/dev/null 2>&1; then
+  if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" \
+    ANSIBLE_COLLECTIONS_PATH="$ANSIBLE_COLLECTIONS_PATH" \
+    "$ANSIBLE_INVENTORY_BIN" -i "$INVENTORY" --list >/dev/null 2>&1; then
     echo "[OK] inventory parses"
   else
     die "ansible-inventory --list failed"
   fi
 
-  if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_PLAYBOOK_BIN" -i "$INVENTORY" "$PLAYBOOK" --syntax-check >/dev/null 2>&1; then
+  if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" \
+    ANSIBLE_COLLECTIONS_PATH="$ANSIBLE_COLLECTIONS_PATH" \
+    "$ANSIBLE_PLAYBOOK_BIN" -i "$INVENTORY" "$PLAYBOOK" --syntax-check >/dev/null 2>&1; then
     echo "[OK] playbook syntax check passed"
   else
     die "playbook syntax check failed"
   fi
 
-  if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_PLAYBOOK_BIN" -i "$INVENTORY" "$PLAYBOOK" --list-tags >/dev/null 2>&1; then
+  if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" \
+    ANSIBLE_COLLECTIONS_PATH="$ANSIBLE_COLLECTIONS_PATH" \
+    "$ANSIBLE_PLAYBOOK_BIN" -i "$INVENTORY" "$PLAYBOOK" --list-tags >/dev/null 2>&1; then
     echo "[OK] --list-tags works"
   else
     echo "[WARN] --list-tags failed"
@@ -335,16 +560,25 @@ doctor() {
   fi
 
   if bin_exists "$ANSIBLE_GALAXY_BIN"; then
-    if "$ANSIBLE_GALAXY_BIN" collection list 2>/dev/null | grep -q 'community.docker'; then
+    if ANSIBLE_COLLECTIONS_PATH="$ANSIBLE_COLLECTIONS_PATH" \
+      "$ANSIBLE_GALAXY_BIN" collection list 2>/dev/null | grep -q 'community.docker'; then
       echo "[OK] community.docker collection found"
     else
       echo "[WARN] community.docker collection not found"
     fi
 
-    if "$ANSIBLE_GALAXY_BIN" collection list 2>/dev/null | grep -q 'netbox.netbox'; then
+    if ANSIBLE_COLLECTIONS_PATH="$ANSIBLE_COLLECTIONS_PATH" \
+      "$ANSIBLE_GALAXY_BIN" collection list 2>/dev/null | grep -q 'netbox.netbox'; then
       echo "[OK] netbox.netbox collection found"
     else
       echo "[WARN] netbox.netbox collection not found"
+    fi
+
+    if ANSIBLE_COLLECTIONS_PATH="$ANSIBLE_COLLECTIONS_PATH" \
+      "$ANSIBLE_GALAXY_BIN" collection list 2>/dev/null | grep -q 'ansible.posix'; then
+      echo "[OK] ansible.posix collection found"
+    else
+      echo "[WARN] ansible.posix collection not found"
     fi
   else
     echo "[WARN] ansible-galaxy not found/executable at '$ANSIBLE_GALAXY_BIN' (skipping collection checks)"
@@ -352,7 +586,9 @@ doctor() {
 
   if [[ "$do_ping" == "true" ]]; then
     if bin_exists "$ANSIBLE_BIN"; then
-      if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_BIN" -i "$INVENTORY" "$DOCTOR_PING_TARGET" -m ping >/dev/null 2>&1; then
+      if ANSIBLE_CONFIG="$ANSIBLE_CONFIG" \
+        ANSIBLE_COLLECTIONS_PATH="$ANSIBLE_COLLECTIONS_PATH" \
+        "$ANSIBLE_BIN" -i "$INVENTORY" "$DOCTOR_PING_TARGET" -m ping >/dev/null 2>&1; then
         echo "[OK] ansible ping to '$DOCTOR_PING_TARGET' passed"
       else
         echo "[WARN] ansible ping to '$DOCTOR_PING_TARGET' failed"
@@ -382,6 +618,8 @@ fi
 case "$CMD" in
   install) CMD="deploy" ;;
   reset)   CMD="remove" ;;
+  dry-run) CMD="check" ;;
+  target)  CMD="run" ;;
 esac
 
 case "$CMD" in
@@ -403,26 +641,58 @@ case "$CMD" in
 
   remove)
     [[ $# -ge 1 ]] || die "remove requires at least one tag"
-    TAGS="remove,$(join_csv "$@")"
-    run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    if [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-remove}")"; then
+      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    else
+      TAGS="remove,$(join_csv "$@")"
+      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    fi
     ;;
 
   recreate)
     [[ $# -ge 1 ]] || die "recreate requires at least one tag"
-    TAGS="recreate,$(join_csv "$@")"
-    run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    if [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-recreate}")"; then
+      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    else
+      TAGS="recreate,$(join_csv "$@")"
+      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    fi
     ;;
 
   bootstrap)
     [[ $# -ge 1 ]] || die "bootstrap requires at least one tag"
-    TAGS="bootstrap,$(join_csv "$@")"
-    run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    if [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-bootstrap}")"; then
+      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    else
+      TAGS="bootstrap,$(join_csv "$@")"
+      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    fi
     ;;
 
   check|dry-run)
-    [[ $# -ge 1 ]] || die "check requires at least one tag"
-    TAGS="deploy,$(join_csv "$@")"
-    run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$TAGS"
+    [[ $# -ge 1 ]] || die "check requires at least one tag or role target"
+
+    if [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-deploy}")"; then
+      run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$TAGS"
+    else
+      TAGS="deploy,$(join_csv "$@")"
+      run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$TAGS"
+    fi
+    ;;
+
+  run)
+    [[ $# -ge 1 ]] || die "run requires a role target"
+
+    ROLE_TARGET="$1"
+    ROLE_ACTION="${2:-deploy}"
+
+    [[ $# -le 2 ]] || die "Usage: skynet run <role-target> [action]"
+
+    if TAGS="$(role_tag "$ROLE_TARGET" "$ROLE_ACTION")"; then
+      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    else
+      die "Unknown role target/action: $ROLE_TARGET $ROLE_ACTION. Run: skynet targets"
+    fi
     ;;
 
   doctor)
@@ -454,10 +724,14 @@ case "$CMD" in
     MODE="${1:---graph}"
     case "$MODE" in
       --graph|graph)
-        ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_INVENTORY_BIN" -i "$INVENTORY" --graph
+        ANSIBLE_CONFIG="$ANSIBLE_CONFIG" \
+          ANSIBLE_COLLECTIONS_PATH="$ANSIBLE_COLLECTIONS_PATH" \
+          "$ANSIBLE_INVENTORY_BIN" -i "$INVENTORY" --graph
         ;;
       --list|list)
-        ANSIBLE_CONFIG="$ANSIBLE_CONFIG" "$ANSIBLE_INVENTORY_BIN" -i "$INVENTORY" --list
+        ANSIBLE_CONFIG="$ANSIBLE_CONFIG" \
+          ANSIBLE_COLLECTIONS_PATH="$ANSIBLE_COLLECTIONS_PATH" \
+          "$ANSIBLE_INVENTORY_BIN" -i "$INVENTORY" --list
         ;;
       *)
         die "Usage: skynet inventory [--graph|--list]"
@@ -467,6 +741,10 @@ case "$CMD" in
 
   tags|list)
     print_tags
+    ;;
+
+  targets)
+    print_targets
     ;;
 
   raw)
