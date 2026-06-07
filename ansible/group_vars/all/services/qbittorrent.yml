@@ -91,6 +91,7 @@ qbittorrent:
           dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent/config/qBittorrent.conf"
           mode: "0664"
           force: true
+          no_log: true
       swarm_env_templates:
         - src: configs/qbittorrent/qBittorrent.env.j2
           dest: /opt/stacks/qbittorrent.env
@@ -169,6 +170,7 @@ qbittorrent:
           dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent-xs/config/qBittorrent.conf"
           mode: "0664"
           force: true
+          no_log: true
       swarm_env_templates:
         - src: configs/qbittorrent/qBittorrent-xs.env.j2
           dest: /opt/stacks/qbittorrent-xs.env
