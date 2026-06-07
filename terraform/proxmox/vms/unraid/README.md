@@ -80,13 +80,13 @@ usb0: mapping=UnRaid-Boot
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.11.0 |
-| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.108.0 |
+| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.109.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.108.0 |
+| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.109.0 |
 
 ## Modules
 
@@ -96,7 +96,7 @@ No modules.
 
 | Name | Type |
 |------|------|
-| [proxmox_virtual_environment_vm.unraid](https://registry.terraform.io/providers/bpg/proxmox/0.108.0/docs/resources/virtual_environment_vm) | resource |
+| [proxmox_virtual_environment_vm.unraid](https://registry.terraform.io/providers/bpg/proxmox/0.109.0/docs/resources/virtual_environment_vm) | resource |
 
 ## Inputs
 
