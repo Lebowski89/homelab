@@ -1,6 +1,8 @@
 ---
 
 bazarr:
+  enabled: true
+  tags: [apps, arrs, pgsql, bazarr]
   name: bazarr
   stack: bazarr
   image: ghcr.io/hotio/bazarr:release-v1.5.6

@@ -1,6 +1,8 @@
 ---
 
 tautulli:
+  enabled: true
+  tags: [apps, plex, tautulli]
   name: tautulli
   stack: tautulli
   image: ghcr.io/hotio/tautulli:release-v2.17.1

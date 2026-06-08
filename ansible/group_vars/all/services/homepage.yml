@@ -1,6 +1,8 @@
 ---
 
 homepage:
+  enabled: true
+  tags: [apps, monitoring, homepage]
   name: homepage
   stack: homepage
   image: ghcr.io/gethomepage/homepage:v1.13.1

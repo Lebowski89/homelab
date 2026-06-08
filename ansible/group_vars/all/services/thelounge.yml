@@ -1,6 +1,8 @@
 ---
 
 thelounge:
+  enabled: true
+  tags: [apps, media, thelounge]
   name: thelounge
   stack: thelounge
   image: lscr.io/linuxserver/thelounge:v4.5.0-ls223

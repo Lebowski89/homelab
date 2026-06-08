@@ -1,6 +1,8 @@
 ---
 
 seerr:
+  enabled: true
+  tags: [apps, media, pgsql, seerr]
   name: seerr
   stack: seerr
   image: ghcr.io/hotio/seerr:release-v3.2.0

@@ -216,6 +216,49 @@
         services: "{{ svcfiles }}"
       tags: [deploy, update, remove, recreate, bootstrap]
 
+    - name: Build docker service processing list from service definitions
+      ansible.builtin.set_fact:
+        docker_services_effective: "{{ _docker_services_effective_yaml | from_yaml }}"
+      vars:
+        _docker_services_effective_yaml: |
+          {%- set out = [] -%}
+          {%- for service_name, service_cfg in services.items() -%}
+          {%- if service_cfg.enabled | default(true) | bool -%}
+          {%- set service_tags = ([service_name] + (service_cfg.tags | default([]))) | unique | list -%}
+
+          {%- if service_cfg.targets is defined and service_cfg.targets is mapping -%}
+          {%- for target_name, target_cfg in service_cfg.targets.items() -%}
+          {%- if target_cfg.enabled | default(true) | bool -%}
+          {%- set target_tags = (service_tags + (target_cfg.tags | default([]))) | unique | list -%}
+          {%- set _ = out.append({
+                'name': service_name,
+                'target': target_name,
+                'tags': target_tags
+              }) -%}
+          {%- endif -%}
+          {%- endfor -%}
+
+          {%- else -%}
+          {%- set _ = out.append({
+                'name': service_name,
+                'tags': service_tags
+              }) -%}
+          {%- endif -%}
+
+          {%- endif -%}
+          {%- endfor -%}
+          {{ out | to_yaml }}
+      tags: [deploy, update, remove, recreate, bootstrap]
+
+    - name: Assert docker service processing list was built
+      ansible.builtin.assert:
+        that:
+          - docker_services_effective is defined
+          - docker_services_effective is sequence
+          - docker_services_effective | length > 0
+        fail_msg: "docker_services_effective is empty. No enabled service definitions were discovered."
+      tags: [deploy, update, remove, recreate, bootstrap]
+
     - name: Process each docker service
       ansible.builtin.include_role:
         name: docker_services
@@ -224,7 +267,7 @@
         docker_services_service_target: "{{ item.target | default(omit) }}"
         docker_services_role_prefix: "{{ item.name }}"
         docker_services_service_cfg_found: "{{ (services[item.name] is defined) | bool }}"
-      loop: "{{ docker_services }}"
+      loop: "{{ docker_services_effective }}"
       loop_control:
         label: "{{ item.name }}{{ ':' ~ item.target if item.target is defined else '' }}"
       when:

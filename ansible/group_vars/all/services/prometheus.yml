@@ -1,6 +1,8 @@
 ---
 
 prometheus:
+  enabled: prometheus
+  tags: [apps, monitoring, prometheus]
   name: prometheus
   stack: prometheus
   image: prom/prometheus:v3.12.0

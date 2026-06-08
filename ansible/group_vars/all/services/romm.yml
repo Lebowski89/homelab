@@ -1,6 +1,8 @@
 ---
 
 romm:
+  enabled: true
+  tags: [apps, gaming, romm]
   name: romm
   stack: romm
   image: ghcr.io/rommapp/romm:4.8.1
