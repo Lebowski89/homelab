@@ -1,6 +1,8 @@
 ---
 
 alloy:
+  enabled: true
+  tags: [apps, monitoring, alloy]
   name: alloy
   stack: alloy
   image: grafana/alloy:v1.16.2

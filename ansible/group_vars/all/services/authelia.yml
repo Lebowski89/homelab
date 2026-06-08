@@ -1,6 +1,8 @@
 ---
 
 authelia:
+  enabled: true
+  tags: [apps, network, proxy, pgsql, authelia]
   stack: authelia
   named_networks:
     overlay:

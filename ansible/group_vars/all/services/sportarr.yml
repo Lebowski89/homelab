@@ -1,6 +1,8 @@
 ---
 
 sportarr:
+  enabled: true
+  tags: [apps, arrs, sportarr]
   name: sportarr
   stack: sportarr
   image: sportarr/sportarr:4.0.1008.1087

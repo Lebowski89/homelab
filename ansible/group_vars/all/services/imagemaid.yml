@@ -1,6 +1,8 @@
 ---
 
 imagemaid:
+  enabled: true
+  tags: [apps, plex, imagemaid]
   name: imagemaid
   stack: imagemaid
   image: kometateam/imagemaid:v1.2.0

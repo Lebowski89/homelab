@@ -1,6 +1,8 @@
 ---
 
 dozzle:
+  enabled: true
+  tags: [apps, monitoring, dozzle]
   name: dozzle
   stack: dozzle
   image: amir20/dozzle:v10.6.5

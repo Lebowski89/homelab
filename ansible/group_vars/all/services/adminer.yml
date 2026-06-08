@@ -1,6 +1,8 @@
 ---
 
 adminer:
+  enabled: true
+  tags: [apps, utilities, adminer]
   name: adminer
   stack: adminer
   image: adminer:5.4.2

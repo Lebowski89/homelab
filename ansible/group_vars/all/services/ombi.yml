@@ -1,6 +1,8 @@
 ---
 
 ombi:
+  enabled: true
+  tags: [apps, media, pgsql, ombi]
   name: ombi
   stack: ombi
   image: lscr.io/linuxserver/ombi:v4.53.10-ls256

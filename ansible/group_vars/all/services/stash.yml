@@ -1,6 +1,8 @@
 ---
 
 stash:
+  enabled: true
+  tags: [apps, media, pgsql, stash]
   name: stash
   stack: stash
   image: ghcr.io/hotio/stash:release-v0.31.1
