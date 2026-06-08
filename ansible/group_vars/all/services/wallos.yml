@@ -1,6 +1,8 @@
 ---
 
 wallos:
+  enabled: true
+  tags: [apps, media, wallos]
   name: wallos
   stack: wallos
   image: bellamy/wallos:latest

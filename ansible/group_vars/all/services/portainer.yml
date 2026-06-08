@@ -1,6 +1,8 @@
 ---
 
 portainer:
+  enabled: true
+  tags: [apps, monitoring, portainer]
   stack: portainer
   named_networks:
     overlay:

@@ -1,6 +1,8 @@
 ---
 
 gotify:
+  enabled: true
+  tags: [apps, monitoring, pgsql, gotify]
   name: gotify
   stack: gotify
   image: gotify/server:2.9.1

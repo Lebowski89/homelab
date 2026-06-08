@@ -1,6 +1,8 @@
 ---
 
 obsidian:
+  enabled: true
+  tags: [apps, media, obsidian]
   name: obsidian
   stack: obsidian
   image: lscr.io/linuxserver/obsidian:v1.12.7-ls132

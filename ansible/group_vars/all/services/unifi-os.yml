@@ -1,6 +1,8 @@
 ---
 
 unifi:
+  enabled: true
+  tags: [apps, network, unifi]
   name: unifi
   stack: unifi
   container_name: unifi

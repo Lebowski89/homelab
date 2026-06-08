@@ -1,6 +1,8 @@
 ---
 
 qbittorrent:
+  enabled: true
+  tags: [apps, torrents, qbittorrent]
   image: ghcr.io/hotio/qbittorrent:release-v5.2.1
   stack: qbittorrent
   named_networks:

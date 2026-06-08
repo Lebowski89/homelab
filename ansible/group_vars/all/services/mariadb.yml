@@ -1,6 +1,8 @@
 ---
 
 mariadb:
+  enabled: false
+  tags: [apps, mariadb]
   name: mariadb
   stack: mariadb
   image: mariadb:12
