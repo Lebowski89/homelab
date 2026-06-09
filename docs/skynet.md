@@ -21,7 +21,7 @@ The wrapper is installed on the Ansible manager host and is mainly intended to b
 * Listing known Docker service tags and role/action targets.
 * Passing through raw `ansible-playbook` arguments when needed.
 
-It does **not** replace Ansible. It is a thin wrapper around this repository’s existing Ansible playbook, inventory, roles, and tags.
+It does **not** replace Ansible. It is a thin wrapper around this repository’s existing Ansible playbook, inventory, roles, service variable files, and tags.
 
 ## Defaults
 
@@ -34,17 +34,31 @@ The wrapper uses these default paths unless overridden with environment variable
 | `ANSIBLE_CONFIG`           | Repository Ansible config                             |
 | `BECOME_PASS_FILE`         | Become/sudo password file                             |
 | `VAULT_PASS_FILE`          | Ansible Vault password file                           |
-| `DOCKER_SERVICES_VARS`     | Docker service list used for tag discovery            |
+| `DOCKER_SERVICES_DIR`      | Directory containing Docker service variable files    |
 | `ANSIBLE_VENV_PATH`        | Python virtual environment containing Ansible tooling |
 | `REPO_ROOT`                | Repository root used for linting                      |
 | `PYTHON_LIBRARY_PATH`      | Custom Python module path checked by Ruff             |
 | `ANSIBLE_LOG_PATH`         | Ansible log output path                               |
 | `ANSIBLE_COLLECTIONS_PATH` | Repository-managed Ansible collections path           |
 
+By default, Docker service tags are discovered from:
+
+```text
+<repo-root>/ansible/group_vars/all/services/
+```
+
+Each enabled service file in that directory can define service-level tags and optional target-level tags.
+
 Example override:
 
 ```bash
 PLAYBOOK=/opt/homelab/ansible/playbook.yml skynet check all
+```
+
+Example Docker services directory override:
+
+```bash
+DOCKER_SERVICES_DIR=/opt/homelab/ansible/group_vars/all/services skynet tags
 ```
 
 ## Common workflow
@@ -105,7 +119,8 @@ Checks include:
 * Inventory parses.
 * Playbook syntax check passes.
 * `--list-tags` works.
-* Docker service vars file exists.
+* Docker service variable directory exists.
+* Docker service variable files are present.
 * Vault password file exists.
 * Important Ansible collections are installed.
 
@@ -232,7 +247,7 @@ skynet bootstrap netbox
 skynet bootstrap infisical-podman
 ```
 
-For services, this passes the normal `bootstrap,<tag>` Ansible tag combination.
+For Docker services, this passes the normal `bootstrap,<tag>` Ansible tag combination.
 
 For role/action targets, it maps to the role-specific bootstrap tag where supported.
 
@@ -284,6 +299,8 @@ skynet targets
 ```
 
 to list supported role/action mappings.
+
+Role/action targets are manually mapped inside the wrapper’s `role_tag()` function.
 
 ### NetBox
 
@@ -388,7 +405,20 @@ to list supported role/action mappings.
 
 ## Docker service targets
 
-Docker services are still managed using service names and service tags from the repository’s Docker service list.
+Docker services are managed using service names and tags defined in the per-service variable files under:
+
+```text
+ansible/group_vars/all/services/
+```
+
+Each service file can define:
+
+* a top-level service name,
+* `enabled: true` or `enabled: false`,
+* service-level tags,
+* optional target-level tags under `targets:`.
+
+`skynet tags` scans this directory and prints tags from enabled services and enabled targets.
 
 List available tags, including role/action tags and Docker service tags:
 
@@ -424,6 +454,43 @@ Check all services:
 ```bash
 skynet check all
 ```
+
+### Service-level and target-level tags
+
+A single-target service can define tags directly:
+
+```yaml
+grafana:
+  enabled: true
+  tags: [apps, monitoring, pgsql, grafana]
+```
+
+A multi-target service can define shared service tags and target-specific tags:
+
+```yaml
+radarr:
+  enabled: true
+  tags: [apps, arrs, pgsql, radarr]
+
+  targets:
+    radarr:
+      enabled: true
+      tags: [radarr_main]
+
+    radarr_4k:
+      enabled: true
+      tags: [radarr_4k]
+```
+
+This allows:
+
+```bash
+skynet check radarr
+skynet check radarr_main
+skynet check radarr_4k
+```
+
+Disabled services or targets are not listed by `skynet tags`.
 
 ## Inventory helpers
 
@@ -490,7 +557,7 @@ Print tool and path information:
 skynet versions
 ```
 
-This is useful when debugging the active Ansible virtual environment, inventory path, playbook path, or lint tooling.
+This is useful when debugging the active Ansible virtual environment, inventory path, playbook path, Docker service vars directory, or lint tooling.
 
 ## CI-style local check
 
@@ -601,7 +668,7 @@ skynet run docker swarm
 
 `skynet` supports two broad kinds of targets:
 
-1. **Docker service targets**, which are discovered from the Docker service list and used with commands like:
+1. **Docker service targets**, which are discovered from service variable files under `ansible/group_vars/all/services/` and used with commands like:
 
 ```bash
 skynet check authelia
@@ -643,7 +710,7 @@ skynet run infisical-podman recreate
 skynet run postgres backup
 ```
 
-Do **not** add normal Docker service names here. Docker services should continue to use the service/tag flow:
+Do **not** add normal Docker service names here. Docker services should continue to use the service/tag flow from their service variable files:
 
 ```bash
 skynet check authelia
@@ -959,3 +1026,84 @@ When adding a new role/action target:
 * Run `skynet lint`.
 * Run `skynet doctor`.
 * Run `skynet check all` if the change affects shared playbook logic.
+
+## Adding new Docker service tags
+
+Docker service tags are now defined in the relevant service variable file under:
+
+```text
+ansible/group_vars/all/services/
+```
+
+For a single-target service:
+
+```yaml
+example:
+  enabled: true
+  tags: [apps, example]
+```
+
+For a multi-target service:
+
+```yaml
+example:
+  enabled: true
+  tags: [apps, example]
+
+  targets:
+    main:
+      enabled: true
+      tags: [example_main]
+
+    worker:
+      enabled: true
+      tags: [example_worker]
+```
+
+Then check tag discovery:
+
+```bash
+skynet tags
+```
+
+Expected selectors:
+
+```text
+example
+apps
+example_main
+example_worker
+```
+
+Use service-level tags for broad selection and target-level tags for selecting one specific target.
+
+Examples:
+
+```bash
+skynet check example
+skynet check example_main
+skynet check example_worker
+```
+
+Disabled services and disabled targets are skipped by `skynet tags`:
+
+```yaml
+example:
+  enabled: false
+  tags: [apps, example]
+```
+
+```yaml
+example:
+  enabled: true
+  tags: [apps, example]
+
+  targets:
+    main:
+      enabled: true
+      tags: [example_main]
+
+    worker:
+      enabled: false
+      tags: [example_worker]
+```
