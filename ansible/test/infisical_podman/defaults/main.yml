@@ -52,7 +52,7 @@ infisical_podman_postgres_db_name: infisical
 ################################
 
 infisical_podman_redis_name: infisical-redis
-infisical_podman_redis_image: docker.io/library/redis:8.6-alpine
+infisical_podman_redis_image: valkey/valkey:9.1-alpine
 infisical_podman_redis_puid: 999
 infisical_podman_redis_pgid: 999
 infisical_podman_redis_path: "{{ infisical_podman_base_path }}/redis"
