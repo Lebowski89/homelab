@@ -22,9 +22,9 @@ authelia:
   targets:
     redis:
       name: authelia-redis
-      image: redis:8.8-alpine
+      image: valkey/valkey:9.1-alpine
       command:
-        - sh -c 'redis-server --requirepass "$$(cat /run/secrets/authelia_redis_secret)"'
+        - sh -c 'valkey-server --requirepass "$$(cat /run/secrets/authelia_redis_secret)"'
       environment:
         TZ: "{{ timezone }}"
         PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"

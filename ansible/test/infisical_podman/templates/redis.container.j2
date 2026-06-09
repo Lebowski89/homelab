@@ -11,7 +11,7 @@ Network={{ infisical_podman_network }}
 Environment=TZ={{ infisical_podman_timezone }}
 EnvironmentFile={{ infisical_podman_base_path }}/.env
 Volume={{ infisical_podman_redis_path }}:/data
-Exec=sh -c 'redis-server --appendonly yes --requirepass "$REDIS_KEY"'
+Exec=sh -c 'valkey-server --appendonly yes --requirepass "$REDIS_KEY"'
 
 [Service]
 Restart=always

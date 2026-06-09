@@ -64,7 +64,7 @@ infisical_restart_policy: unless-stopped
 ################################
 
 infisical_redis_name: infisical-redis
-infisical_redis_image: docker.io/library/redis:8.8-alpine
+infisical_redis_image: valkey/valkey:9.1-alpine
 infisical_redis_puid: "{{ docker_host_puid | default('1000') }}"
 infisical_redis_pgid: "{{ docker_host_pgid | default('1000') }}"
 infisical_redis_path: "{{ infisical_base_path }}/redis"
