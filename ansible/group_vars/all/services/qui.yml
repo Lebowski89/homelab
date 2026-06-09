@@ -5,7 +5,7 @@ qui:
   tags: [apps, torrents, pgsql, qui]
   name: qui
   stack: qui
-  image: ghcr.io/autobrr/qui:v1.19.0
+  image: ghcr.io/autobrr/qui:v1.20.0
   named_networks:
     overlay:
       external: true
