@@ -7,11 +7,11 @@ ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-{{ ubuntu_ansible_path }}/ansible.cfg}"
 BECOME_PASS_FILE="${BECOME_PASS_FILE:-{{ ubuntu_ansible_become_pass_file }}}"
 VAULT_PASS_FILE="${VAULT_PASS_FILE:-{{ ubuntu_ansible_vault_pass_file }}}"
 DOCTOR_PING_TARGET="${SKYNET_DOCTOR_PING_TARGET:-{{ ubuntu_skynet_doctor_ping_target }}}"
-DOCKER_SERVICES_VARS="${DOCKER_SERVICES_VARS:-{{ ubuntu_skynet_docker_services_vars }}}"
 ANSIBLE_VENV_PATH="${ANSIBLE_VENV_PATH:-{{ ubuntu_ansible_venv_path }}}"
 
 DEFAULT_REPO_ROOT="$(cd "$(dirname "$PLAYBOOK")/.." >/dev/null 2>&1 && pwd || true)"
 REPO_ROOT="${REPO_ROOT:-$DEFAULT_REPO_ROOT}"
+DOCKER_SERVICES_DIR="${DOCKER_SERVICES_DIR:-$REPO_ROOT/ansible/group_vars/all/services}"
 PYTHON_LIBRARY_PATH="${PYTHON_LIBRARY_PATH:-$REPO_ROOT/ansible/roles/docker_services/library}"
 ANSIBLE_LOG_PATH="${ANSIBLE_LOG_PATH:-$REPO_ROOT/.ansible/ansible.log}"
 ANSIBLE_COLLECTIONS_PATH="${ANSIBLE_COLLECTIONS_PATH:-$REPO_ROOT/ansible/collections}"
@@ -85,7 +85,7 @@ Optional env vars:
   ANSIBLE_CONFIG              Override ansible.cfg path
   BECOME_PASS_FILE            Override become password file path
   VAULT_PASS_FILE             Override Ansible Vault password file path
-  DOCKER_SERVICES_VARS        Override docker services vars path
+  DOCKER_SERVICES_DIR         Override Docker service vars directory
   ANSIBLE_VENV_PATH           Override Ansible virtualenv path
   SKYNET_DOCTOR_PING_TARGET   Inventory target for 'skynet doctor --ping'
   ANSIBLE_PLAYBOOK_BIN        Override ansible-playbook binary
@@ -191,6 +191,7 @@ print_versions() {
   echo "[INFO] playbook: $PLAYBOOK"
   echo "[INFO] inventory: $INVENTORY"
   echo "[INFO] ansible config: $ANSIBLE_CONFIG"
+  echo "[INFO] docker services dir: $DOCKER_SERVICES_DIR"
   echo "[INFO] ansible collections path: $ANSIBLE_COLLECTIONS_PATH"
   echo "[INFO] ansible log path: $ANSIBLE_LOG_PATH"
 
@@ -432,12 +433,12 @@ print_tags() {
 
     echo "# Docker service tags"
     if command -v python3 >/dev/null 2>&1; then
-      python3 - "$PLAYBOOK" "$DOCKER_SERVICES_VARS" <<'PY'
+      python3 - "$DOCKER_SERVICES_DIR" <<'PY'
 import sys
 from collections import OrderedDict
+from pathlib import Path
 
-playbook_path = sys.argv[1]
-docker_services_path = sys.argv[2]
+services_dir = Path(sys.argv[1])
 
 try:
     import yaml
@@ -446,55 +447,89 @@ except Exception:
 
 tags = OrderedDict()
 
-def add(x):
-    if isinstance(x, str):
-        x = x.strip()
-        if x and x not in tags:
-            tags[x] = True
+def add(value):
+    if isinstance(value, str):
+        value = value.strip()
+        if value and value not in tags:
+            tags[value] = True
+
+def to_bool(value, default=True):
+    if value is None:
+        return default
+
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, (int, float)):
+        return bool(value)
+
+    if isinstance(value, str):
+        value = value.strip().lower()
+        if value in {"1", "true", "yes", "y", "on", "enabled"}:
+            return True
+        if value in {"0", "false", "no", "n", "off", "disabled"}:
+            return False
+
+    return default
+
+def is_enabled(mapping):
+    if not isinstance(mapping, dict):
+        return True
+    return to_bool(mapping.get("enabled", True), default=True)
 
 if not yaml:
     sys.exit("python yaml module is required for skynet tags")
 
-try:
-    with open(playbook_path, "r", encoding="utf-8") as f:
-        data = yaml.safe_load(f) or []
-    if isinstance(data, list):
-        for play in data:
-            if not isinstance(play, dict):
+if services_dir.is_dir():
+    service_files = sorted(list(services_dir.glob("*.yml")) + list(services_dir.glob("*.yaml")))
+
+    for path in service_files:
+        try:
+            with path.open("r", encoding="utf-8") as f:
+                data = yaml.safe_load(f) or {}
+        except Exception as exc:
+            print(f"[WARN] failed to read service vars file {path}: {exc}", file=sys.stderr)
+            continue
+
+        if not isinstance(data, dict):
+            continue
+
+        for service_name, service_cfg in data.items():
+            if not isinstance(service_cfg, dict):
                 continue
-            ds = (play.get("vars") or {}).get("docker_services", [])
-            if isinstance(ds, list):
-                for item in ds:
-                    if not isinstance(item, dict):
+
+            if not is_enabled(service_cfg):
+                continue
+
+            add(service_name)
+
+            for tag in service_cfg.get("tags", []) or []:
+                add(tag)
+
+            targets = service_cfg.get("targets", {}) or {}
+            if isinstance(targets, dict):
+                for _target_name, target_cfg in targets.items():
+                    if not isinstance(target_cfg, dict):
                         continue
-                    add(item.get("name"))
-                    for t in (item.get("tags") or []):
-                        add(t)
-except FileNotFoundError:
-    pass
 
-try:
-    with open(docker_services_path, "r", encoding="utf-8") as f:
-        gv = yaml.safe_load(f) or {}
-    ds = gv.get("docker_services", [])
-    if isinstance(ds, list):
-        for item in ds:
-            if not isinstance(item, dict):
-                continue
-            add(item.get("name"))
-            for t in (item.get("tags") or []):
-                add(t)
-except FileNotFoundError:
-    pass
+                    if not is_enabled(target_cfg):
+                        continue
 
-for t in tags:
-    print(t)
+                    for tag in target_cfg.get("tags", []) or []:
+                        add(tag)
+
+for tag in tags:
+    print(tag)
 PY
     else
-      echo "[WARN] python3 not found; falling back to best-effort tag parsing from playbook only" >&2
-      grep -E '^\s*- name:|^\s*tags:\s*\[' "$PLAYBOOK" \
-        | sed -E 's/^\s*- name:\s*//; s/^\s*tags:\s*\[//; s/\]\s*$//' \
-        | tr ',' '\n' | sed 's/^ *//; s/ *$//' | sort -u
+      echo "[WARN] python3 not found; falling back to service file names only" >&2
+
+      if [[ -d "$DOCKER_SERVICES_DIR" ]]; then
+        find "$DOCKER_SERVICES_DIR" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) \
+          -exec basename {} \; | sed -E 's/\.ya?ml$//' | sort -u
+      else
+        echo "[WARN] docker services dir not found: $DOCKER_SERVICES_DIR" >&2
+      fi
     fi
   } | awk 'NF && !seen[$0]++'
 }
@@ -505,6 +540,7 @@ doctor() {
   echo "[INFO] playbook: $PLAYBOOK"
   echo "[INFO] inventory: $INVENTORY"
   echo "[INFO] ansible config: $ANSIBLE_CONFIG"
+  echo "[INFO] docker services dir: $DOCKER_SERVICES_DIR"
   echo "[INFO] ansible collections path: $ANSIBLE_COLLECTIONS_PATH"
   echo "[INFO] ansible log path: $ANSIBLE_LOG_PATH"
   echo "[INFO] ansible venv path: $ANSIBLE_VENV_PATH"
@@ -547,10 +583,16 @@ doctor() {
     echo "[WARN] --list-tags failed"
   fi
 
-  if [[ -f "$DOCKER_SERVICES_VARS" ]]; then
-    echo "[OK] docker services vars found: $DOCKER_SERVICES_VARS"
+  if [[ -d "$DOCKER_SERVICES_DIR" ]]; then
+    echo "[OK] docker services dir found: $DOCKER_SERVICES_DIR"
+
+    if find "$DOCKER_SERVICES_DIR" -maxdepth 1 -type f \( -name '*.yml' -o -name '*.yaml' \) | grep -q .; then
+      echo "[OK] docker service vars found in services dir"
+    else
+      echo "[WARN] no docker service vars found in services dir: $DOCKER_SERVICES_DIR"
+    fi
   else
-    echo "[WARN] docker services vars not found: $DOCKER_SERVICES_VARS"
+    echo "[WARN] docker services dir not found: $DOCKER_SERVICES_DIR"
   fi
 
   if [[ -f "$VAULT_PASS_FILE" ]]; then
