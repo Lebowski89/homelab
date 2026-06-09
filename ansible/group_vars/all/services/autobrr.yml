@@ -5,7 +5,7 @@ autobrr:
   tags: [apps, media, pgsql, autobrr]
   name: autobrr
   stack: autobrr
-  image: ghcr.io/autobrr/autobrr:v1.79.0
+  image: ghcr.io/autobrr/autobrr:v1.80.0
   named_networks:
     overlay:
       external: true
