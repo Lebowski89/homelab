@@ -66,7 +66,7 @@
 | [infisical_logging.options.**compress**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L58)   | str | `true` |    
 | [infisical_restart_policy](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L60)   | str | `unless-stopped` |    
 | [infisical_redis_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L66)   | str | `infisical-redis` |    
-| [infisical_redis_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L67)   | str | `docker.io/library/redis:8.6-alpine` |    
+| [infisical_redis_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L67)   | str | `docker.io/library/redis:8.8-alpine` |    
 | [infisical_redis_puid](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L68)   | str | `{{ docker_host_puid ¦ default('1000') }}` |    
 | [infisical_redis_pgid](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L69)   | str | `{{ docker_host_pgid ¦ default('1000') }}` |    
 | [infisical_redis_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L70)   | str | `{{ infisical_base_path }}/redis` |    
