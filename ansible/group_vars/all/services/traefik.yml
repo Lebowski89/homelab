@@ -5,7 +5,7 @@ traefik:
   tags: [apps, network, proxy, traefik]
   name: traefik
   stack: traefik
-  image: traefik:v3.7.1
+  image: traefik:v3.7.4
   named_networks:
     overlay:
       external: true
