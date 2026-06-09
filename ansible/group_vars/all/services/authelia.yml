@@ -22,7 +22,7 @@ authelia:
   targets:
     redis:
       name: authelia-redis
-      image: redis:8.6-alpine
+      image: redis:8.8-alpine
       command:
         - sh -c 'redis-server --requirepass "$$(cat /run/secrets/authelia_redis_secret)"'
       environment:
