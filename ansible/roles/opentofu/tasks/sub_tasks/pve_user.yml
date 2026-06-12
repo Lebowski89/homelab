@@ -69,6 +69,14 @@
         propagate: true
         state: present
 
+  rescue:
+    - name: Fail Proxmox OpenTofu API setup with context
+      ansible.builtin.fail:
+        msg: >-
+          Failed while managing Proxmox OpenTofu API objects. Partial state may
+          exist in Proxmox, such as the role, user, or ACL assignment. Review the
+          failed task above and re-run after fixing the issue.
+
 - name: List existing OpenTofu API tokens
   ansible.builtin.command:
     cmd: >-

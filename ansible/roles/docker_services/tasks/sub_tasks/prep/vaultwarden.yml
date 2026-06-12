@@ -89,6 +89,25 @@
         mode: "0600"
       no_log: true
 
+  rescue:
+    - name: Prep - Vaultwarden | Remove partial generated token files
+      ansible.builtin.file:
+        path: "{{ docker_services_vaultwarden_partial_token_file }}"
+        state: absent
+      loop:
+        - "{{ docker_services_vaultwarden_pass_file }}"
+        - "{{ docker_services_vaultwarden_token_file }}"
+      loop_control:
+        loop_var: docker_services_vaultwarden_partial_token_file
+        label: "{{ docker_services_vaultwarden_partial_token_file }}"
+      no_log: true
+
+    - name: Prep - Vaultwarden | Fail token generation with context
+      ansible.builtin.fail:
+        msg: >-
+          Vaultwarden admin token generation failed. Partial generated token files
+          were removed. Review the failed task above.
+
 - name: Prep - Vaultwarden | Set admin token fact
   no_log: true
   ansible.builtin.set_fact:
