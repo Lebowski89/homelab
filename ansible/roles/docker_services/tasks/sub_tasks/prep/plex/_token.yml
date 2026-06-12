@@ -226,6 +226,13 @@
         group: "{{ docker_services_plex_ini_group }}"
         mode: "0664"
 
+  rescue:
+    - name: Prep - Plex Token | Fail token generation with context
+      ansible.builtin.fail:
+        msg: >-
+          Plex token generation failed. No valid new token was saved.
+          Re-run the task and complete the Plex login prompt when requested.
+
 - name: Prep - Plex Token | Report token status
   ansible.builtin.debug:
     msg: "Plex auth token is present."

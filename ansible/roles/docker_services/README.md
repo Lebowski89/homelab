@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/06/07 |
+| Readme update        | 2026/06/12 |
 
 
 
@@ -448,7 +448,7 @@
 | Prep - Bazarr ¦ Assert postgres inputs are complete | ansible.builtin.assert | True |
 | Prep - Bazarr ¦ Ensure config dir exists | ansible.builtin.file | False |
 | Prep - Bazarr ¦ Check config exists | ansible.builtin.stat | False |
-| Prep - Bazarr ¦ Generate Bazarr config (temp container) | block | True |
+| Prep - Bazarr ¦ Generate config | block | True |
 | Prep - Bazarr ¦ Start temp container to generate config | community.docker.docker_container | False |
 | Prep - Bazarr ¦ Wait for config.yaml to appear | ansible.builtin.wait_for | False |
 | Prep - Bazarr ¦ Give Bazarr time to finish writing config | ansible.builtin.pause | False |
@@ -545,7 +545,7 @@
 | Prep - NZBHydra2 ¦ Check config exists | ansible.builtin.stat | False |
 | Prep - NZBHydra2 ¦ Report missing config in check mode | ansible.builtin.debug | True |
 | Prep - NZBHydra2 ¦ Determine whether config can be managed | ansible.builtin.set_fact | False |
-| Prep - NZBHydra2 ¦ Generate nzbhydra.yml (temp container) | block | True |
+| Prep - NZBHydra2 ¦ Generate config | block | True |
 | Prep - NZBHydra2 ¦ Start temp container to generate config | community.docker.docker_container | False |
 | Prep - NZBHydra2 ¦ Wait for config to appear | ansible.builtin.wait_for | False |
 | Prep - NZBHydra2 ¦ Wait for config file size to stabilize | ansible.builtin.shell | False |

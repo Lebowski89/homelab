@@ -168,7 +168,7 @@
       }}
   run_once: true
 
-- name: Prep - NZBHydra2 | Generate nzbhydra.yml (temp container)
+- name: Prep - NZBHydra2 | Generate config
   when:
     - not ansible_check_mode
     - not docker_services_nzbhydra2_stat.stat.exists
@@ -227,6 +227,13 @@
         executable: /bin/bash
       delegate_to: "{{ docker_services_nzbhydra2_fs_host }}"
       changed_when: false
+
+  rescue:
+    - name: Prep - NZBHydra2 | Fail config generation with context
+      ansible.builtin.fail:
+        msg: >-
+          NZBHydra2 config generation failed. The temporary container cleanup
+          will still run. Review the failed task above and container logs if needed.
 
   always:
     - name: Prep - NZBHydra2 | Remove temp config container

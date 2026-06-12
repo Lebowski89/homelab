@@ -135,6 +135,13 @@
       delegate_to: "{{ docker_services_authelia_keys_host }}"
       run_once: true
 
+  rescue:
+    - name: Prep - Authelia Keys | Fail generation with context
+      ansible.builtin.fail:
+        msg: >-
+          Authelia key generation failed for job '{{ authelia_job | default("unknown") }}'.
+          The generator container cleanup will still run. Review the failed task above.
+
   always:
     - name: Prep - Authelia Keys | Ensure generator container is removed
       community.docker.docker_container:
