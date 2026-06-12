@@ -5,7 +5,7 @@ opencloud:
   tags: [apps, opencloud]
   name: opencloud
   stack: opencloud
-  image: opencloudeu/opencloud-rolling:7.0.0
+  image: opencloudeu/opencloud-rolling:7.1.0
   named_networks:
     overlay:
       external: true
