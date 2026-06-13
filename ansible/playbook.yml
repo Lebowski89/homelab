@@ -65,6 +65,8 @@
         - remove
         - recreate
         - bootstrap
+        - drift
+        - reconcile
       block:
         - name: Set timezone variable on manager
           when: inventory_hostname == docker_services_primary_manager
@@ -200,7 +202,7 @@
         ignore_unknown_extensions: true
         extensions: [yml, yaml]
         name: svcfiles
-      tags: [deploy, update, remove, recreate, bootstrap]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
 
     - name: Assert svcfiles loaded
       ansible.builtin.assert:
@@ -209,12 +211,12 @@
           - (svcfiles | type_debug) == "dict"
           - (svcfiles | length) > 0
         fail_msg: "svcfiles is empty or not a dict. include_vars did not load your service files."
-      tags: [deploy, update, remove, recreate, bootstrap]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
 
     - name: Use svcfiles as the services mapping
       ansible.builtin.set_fact:
         services: "{{ svcfiles }}"
-      tags: [deploy, update, remove, recreate, bootstrap]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
 
     - name: Build docker service processing list from service definitions
       ansible.builtin.set_fact:
@@ -248,7 +250,7 @@
           {%- endif -%}
           {%- endfor -%}
           {{ out | to_yaml }}
-      tags: [deploy, update, remove, recreate, bootstrap]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
 
     - name: Assert docker service processing list was built
       ansible.builtin.assert:
@@ -257,7 +259,14 @@
           - docker_services_effective is sequence
           - docker_services_effective | length > 0
         fail_msg: "docker_services_effective is empty. No enabled service definitions were discovered."
-      tags: [deploy, update, remove, recreate, bootstrap]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
+
+    - name: Drift | Initialise image drift summary
+      when: inventory_hostname == docker_services_primary_manager
+      ansible.builtin.set_fact:
+        docker_services_image_drift: []
+      run_once: true
+      tags: [drift, reconcile]
 
     - name: Process each docker service
       ansible.builtin.include_role:
@@ -276,7 +285,27 @@
           or (ansible_run_tags | length == 0)
           or (item.name in (ansible_run_tags | default([])))
           or ((item.tags | default([])) | intersect(ansible_run_tags | default([])) | length > 0)
-      tags: [deploy, update, remove, recreate, bootstrap]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
+
+    - name: Drift | Report image drift summary
+      when:
+        - inventory_hostname == docker_services_primary_manager
+        - hostvars[docker_services_primary_manager].docker_services_image_drift is defined
+        - (hostvars[docker_services_primary_manager].docker_services_image_drift | length) > 0
+      ansible.builtin.debug:
+        var: hostvars[docker_services_primary_manager].docker_services_image_drift
+      run_once: true
+      tags: [drift, reconcile]
+
+    - name: Drift | Report no image drift found
+      when:
+        - inventory_hostname == docker_services_primary_manager
+        - hostvars[docker_services_primary_manager].docker_services_image_drift is not defined
+          or (hostvars[docker_services_primary_manager].docker_services_image_drift | length) == 0
+      ansible.builtin.debug:
+        msg: "No Docker service image drift detected."
+      run_once: true
+      tags: [drift, reconcile]
 
     - name: Deploy all stacks
       when:
