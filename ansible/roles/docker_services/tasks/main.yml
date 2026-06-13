@@ -8,8 +8,20 @@
   ansible.builtin.include_tasks:
     file: _init.yml
     apply:
-      tags: [deploy, update, remove, recreate, bootstrap]
-  tags: [deploy, update, remove, recreate, bootstrap]
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
+
+################################
+# DRIFT
+################################
+
+- name: Drift | Include image drift check
+  when: inventory_hostname == docker_services_primary_manager
+  ansible.builtin.include_tasks:
+    file: sub_tasks/drift/image.yml
+    apply:
+      tags: [drift, reconcile]
+  tags: [drift, reconcile]
 
 ################################
 # PREP
