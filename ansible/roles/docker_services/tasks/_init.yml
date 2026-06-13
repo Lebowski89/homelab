@@ -6,6 +6,7 @@
     docker_services_service_target: "{{ docker_services_service_target | default(service_target, true) }}"
     docker_services_role_prefix: "{{ docker_services_role_prefix | default(role_prefix, true) }}"
     docker_services_service_cfg_found: "{{ docker_services_service_cfg_found | default(service_cfg_found, true) }}"
+  tags: [remove, drift, reconcile]
 
 - name: Init | Ensure docker_services_service_cfg is provided
   ansible.builtin.assert:
@@ -14,6 +15,7 @@
       - docker_services_service_cfg is mapping
     fail_msg: >-
       docker_services role requires docker_services_service_cfg (mapping) to be passed from the playbook.
+  tags: [remove, drift, reconcile]
 
 - name: Init | Validate target exists when targets are defined
   ansible.builtin.assert:
@@ -23,6 +25,7 @@
     fail_msg: >-
       Service '{{ docker_services_role_prefix | default("docker_services") }}' has targets,
       but target '{{ docker_services_service_target | default("swarm") }}' is not defined.
+  tags: [remove, drift, reconcile]
 
 - name: Init | Normalize service config
   ansible.builtin.set_fact:
@@ -38,6 +41,7 @@
             recursive=true
           )
       }}
+  tags: [remove, drift, reconcile]
 
 - name: Init | Validate normalized service config
   ansible.builtin.include_tasks: sub_tasks/init/validate.yml
@@ -50,11 +54,13 @@
       {{ docker_services_svc.deploy.type | default('swarm', true) | string | trim }}
     # NOTE: deploy.host is for prep host(s) only; can be string OR list OR group name
     docker_services_deploy_host: "{{ docker_services_svc.deploy.host | default(docker_services_primary_manager, true) }}"
+  tags: [remove, drift, reconcile]
 
 - name: Init | Derive stack name
   ansible.builtin.set_fact:
     docker_services_stack_name: >-
       {{ docker_services_svc.stack | default(docker_services_service_name, true) | string | trim }}
+  tags: [remove, drift, reconcile]
 
 - name: Init | Derive effective deploy host
   ansible.builtin.set_fact:
@@ -64,6 +70,7 @@
         if (docker_services_stack_deploy_type | string | trim) == 'swarm'
         else (docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim)
       }}
+  tags: [remove, drift, reconcile]
 
 - name: Init | Derive effective stack key
   ansible.builtin.set_fact:
@@ -73,6 +80,7 @@
         if (docker_services_stack_deploy_type | string | trim) == 'swarm'
         else (docker_services_stack_name ~ '-' ~ docker_services_deploy_host_effective)
       }}
+  tags: [remove, drift, reconcile]
 
 - name: Init | Derive effective filesystem hosts
   ansible.builtin.set_fact:
@@ -108,3 +116,4 @@
 - name: Init | Determine if this host should build/deploy compose artifacts
   ansible.builtin.set_fact:
     docker_services_is_deploy_host: "{{ inventory_hostname == docker_services_deploy_host_effective }}"
+  tags: [remove]

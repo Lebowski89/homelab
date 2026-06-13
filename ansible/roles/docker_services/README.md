@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/06/12 |
+| Readme update        | 2026/06/13 |
 
 
 
@@ -69,22 +69,22 @@
 
 #### File: tasks/_init.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Init ¦ Normalize role interface vars (compat with old names) | ansible.builtin.set_fact | False |
-| Init ¦ Ensure docker_services_service_cfg is provided | ansible.builtin.assert | False |
-| Init ¦ Validate target exists when targets are defined | ansible.builtin.assert | False |
-| Init ¦ Normalize service config | ansible.builtin.set_fact | False |
-| Init ¦ Validate normalized service config | ansible.builtin.include_tasks | False |
-| Init ¦ Derive common service context | ansible.builtin.set_fact | False |
-| Init ¦ Derive stack name | ansible.builtin.set_fact | False |
-| Init ¦ Derive effective deploy host | ansible.builtin.set_fact | False |
-| Init ¦ Derive effective stack key | ansible.builtin.set_fact | False |
-| Init ¦ Derive effective filesystem hosts | ansible.builtin.set_fact | False |
-| Init ¦ Expand filesystem hosts if a group name was provided | ansible.builtin.set_fact | True |
-| Init ¦ De-dupe filesystem hosts | ansible.builtin.set_fact | False |
-| Init ¦ Assert container deploy has a single deploy.host | ansible.builtin.assert | True |
-| Init ¦ Determine if this host should build/deploy compose artifacts | ansible.builtin.set_fact | False |
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Init ¦ Normalize role interface vars (compat with old names) | ansible.builtin.set_fact | False |  |
+| Init ¦ Ensure docker_services_service_cfg is provided | ansible.builtin.assert | False |  |
+| Init ¦ Validate target exists when targets are defined | ansible.builtin.assert | False |  |
+| Init ¦ Normalize service config | ansible.builtin.set_fact | False |  |
+| Init ¦ Validate normalized service config | ansible.builtin.include_tasks | False |  |
+| Init ¦ Derive common service context | ansible.builtin.set_fact | False |  |
+| Init ¦ Derive stack name | ansible.builtin.set_fact | False |  |
+| Init ¦ Derive effective deploy host | ansible.builtin.set_fact | False |  |
+| Init ¦ Derive effective stack key | ansible.builtin.set_fact | False |  |
+| Init ¦ Derive effective filesystem hosts | ansible.builtin.set_fact | False |  |
+| Init ¦ Expand filesystem hosts if a group name was provided | ansible.builtin.set_fact | True |  |
+| Init ¦ De-dupe filesystem hosts | ansible.builtin.set_fact | False |  |
+| Init ¦ Assert container deploy has a single deploy.host | ansible.builtin.assert | True |  |
+| Init ¦ Determine if this host should build/deploy compose artifacts | ansible.builtin.set_fact | False |  |
 
 #### File: tasks/_prep.yml
 
@@ -115,6 +115,7 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Init ¦ Include tasks | ansible.builtin.include_tasks | False |  |
+| Drift ¦ Include image drift check | ansible.builtin.include_tasks | True |  |
 | Prep ¦ Include tasks | ansible.builtin.include_tasks | False |  |
 | Compose ¦ Include tasks | ansible.builtin.include_tasks | False |  |
 | Deploy ¦ Include tasks | ansible.builtin.include_tasks | False |  |
@@ -348,6 +349,23 @@
 | Deploy - One ¦ Render compose/stack file | ansible.builtin.template | False |
 | Deploy - One ¦ Swarm deploy | community.docker.docker_stack | True |
 | Deploy - One ¦ Compose deploy | community.docker.docker_compose_v2 | True |
+
+#### File: tasks/sub_tasks/drift/image.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Drift ¦ Skip services without an image | ansible.builtin.debug | True |
+| Drift ¦ Check image drift | block | True |
+| Drift ¦ Derive drift context | ansible.builtin.set_fact | False |
+| Drift ¦ Report unsupported non-swarm service | ansible.builtin.debug | True |
+| Drift ¦ Inspect live Swarm service image | ansible.builtin.command | True |
+| Drift ¦ Normalise live Swarm service image | ansible.builtin.set_fact | True |
+| Drift ¦ Determine image drift state | ansible.builtin.set_fact | True |
+| Drift ¦ Report missing Swarm service | ansible.builtin.debug | True |
+| Drift ¦ Report image drift | ansible.builtin.debug | True |
+| Drift ¦ Report image is current | ansible.builtin.debug | True |
+| Drift ¦ Add service to drift summary | ansible.builtin.set_fact | True |
+| Drift ¦ Recreate stack when drift is detected | community.docker.docker_stack | True |
 
 #### File: tasks/sub_tasks/init/validate.yml
 

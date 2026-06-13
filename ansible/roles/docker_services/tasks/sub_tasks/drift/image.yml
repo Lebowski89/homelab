@@ -1,0 +1,174 @@
+---
+
+- name: Drift | Skip services without an image
+  when:
+    - docker_services_svc.image is not defined
+      or (docker_services_svc.image | string | trim | length) == 0
+  ansible.builtin.debug:
+    msg: >-
+      Skipping image drift check for {{ docker_services_role_prefix }}
+      {{ '(' ~ docker_services_service_target ~ ')' if docker_services_service_target is defined else '' }}
+      because no image is defined.
+
+- name: Drift | Check image drift
+  when:
+    - docker_services_svc.image is defined
+    - (docker_services_svc.image | string | trim | length) > 0
+  block:
+    - name: Drift | Derive drift context
+      ansible.builtin.set_fact:
+        docker_services_drift_desired_image: "{{ docker_services_svc.image | string | trim }}"
+        docker_services_drift_desired_image_normalised: >-
+          {{
+            docker_services_svc.image
+            | string
+            | trim
+            | regex_replace('@sha256:.*$', '')
+          }}
+        docker_services_drift_stack_name: "{{ docker_services_stack_name_effective | string | trim }}"
+        docker_services_drift_compose_service_name: "{{ docker_services_service_name | string | trim }}"
+        docker_services_drift_swarm_service_name: >-
+          {{ docker_services_stack_name_effective | string | trim }}_{{ docker_services_service_name | string | trim }}
+        docker_services_drift_label: >-
+          {{
+            docker_services_role_prefix
+            ~ (
+              ':' ~ docker_services_service_target
+              if docker_services_service_target is defined
+              else ''
+            )
+          }}
+
+    - name: Drift | Report unsupported non-swarm service
+      when: (docker_services_stack_deploy_type | string | trim) != 'swarm'
+      ansible.builtin.debug:
+        msg: >-
+          Image drift check currently supports Swarm services only.
+          Skipping {{ docker_services_drift_label }} because deploy.type is
+          '{{ docker_services_stack_deploy_type | string | trim }}'.
+
+    - name: Drift | Inspect live Swarm service image
+      when: (docker_services_stack_deploy_type | string | trim) == 'swarm'
+      ansible.builtin.command:
+        argv:
+          - docker
+          - service
+          - inspect
+          - "--format"
+          - "{{ '{{ .Spec.TaskTemplate.ContainerSpec.Image }}' }}"
+          - "{{ docker_services_drift_swarm_service_name }}"
+      register: docker_services_drift_inspect
+      changed_when: false
+      failed_when: false
+      delegate_to: "{{ docker_services_primary_manager }}"
+      run_once: true
+
+    - name: Drift | Normalise live Swarm service image
+      when: (docker_services_stack_deploy_type | string | trim) == 'swarm'
+      ansible.builtin.set_fact:
+        docker_services_drift_live_image: "{{ docker_services_drift_inspect.stdout | default('') | string | trim }}"
+        docker_services_drift_live_image_normalised: >-
+          {{
+            docker_services_drift_inspect.stdout
+            | default('')
+            | string
+            | trim
+            | regex_replace('@sha256:.*$', '')
+          }}
+        docker_services_drift_service_exists: "{{ (docker_services_drift_inspect.rc | default(1)) == 0 }}"
+
+    - name: Drift | Determine image drift state
+      when: (docker_services_stack_deploy_type | string | trim) == 'swarm'
+      ansible.builtin.set_fact:
+        docker_services_drift_missing: "{{ not (docker_services_drift_service_exists | bool) }}"
+        docker_services_drift_image_changed: >-
+          {{
+            (docker_services_drift_service_exists | bool)
+            and
+            (
+              docker_services_drift_live_image_normalised
+              != docker_services_drift_desired_image_normalised
+            )
+          }}
+        docker_services_drift_detected: >-
+          {{
+            (not (docker_services_drift_service_exists | bool))
+            or
+            (
+              (docker_services_drift_service_exists | bool)
+              and
+              (
+                docker_services_drift_live_image_normalised
+                != docker_services_drift_desired_image_normalised
+              )
+            )
+          }}
+
+    - name: Drift | Report missing Swarm service
+      when:
+        - (docker_services_stack_deploy_type | string | trim) == 'swarm'
+        - docker_services_drift_missing | bool
+      ansible.builtin.debug:
+        msg: >-
+          Docker service missing for {{ docker_services_drift_label }}.
+          Expected Swarm service '{{ docker_services_drift_swarm_service_name }}'
+          with image '{{ docker_services_drift_desired_image }}'.
+
+    - name: Drift | Report image drift
+      when:
+        - (docker_services_stack_deploy_type | string | trim) == 'swarm'
+        - docker_services_drift_image_changed | bool
+      ansible.builtin.debug:
+        msg: >-
+          Image drift detected for {{ docker_services_drift_label }}.
+          Swarm service={{ docker_services_drift_swarm_service_name }},
+          desired={{ docker_services_drift_desired_image_normalised }},
+          current={{ docker_services_drift_live_image_normalised }}.
+
+    - name: Drift | Report image is current
+      when:
+        - (docker_services_stack_deploy_type | string | trim) == 'swarm'
+        - not (docker_services_drift_detected | bool)
+      ansible.builtin.debug:
+        msg: >-
+          Image is current for {{ docker_services_drift_label }}:
+          {{ docker_services_drift_desired_image_normalised }}.
+
+    - name: Drift | Add service to drift summary
+      when:
+        - (docker_services_stack_deploy_type | string | trim) == 'swarm'
+        - docker_services_drift_detected | bool
+      ansible.builtin.set_fact:
+        docker_services_image_drift: >-
+          {{
+            (hostvars[docker_services_primary_manager].docker_services_image_drift | default([]))
+            + [
+              {
+                'label': docker_services_drift_label,
+                'stack': docker_services_drift_stack_name,
+                'service': docker_services_drift_swarm_service_name,
+                'desired': docker_services_drift_desired_image_normalised,
+                'current': (
+                  'missing'
+                  if (docker_services_drift_missing | bool)
+                  else docker_services_drift_live_image_normalised
+                )
+              }
+            ]
+          }}
+      delegate_to: "{{ docker_services_primary_manager }}"
+      delegate_facts: true
+      run_once: true
+
+    - name: Drift | Recreate stack when drift is detected
+      when:
+        - docker_services_drift_recreate | default(false) | bool
+        - (docker_services_stack_deploy_type | string | trim) == 'swarm'
+        - docker_services_drift_detected | bool
+      community.docker.docker_stack:
+        state: present
+        name: "{{ docker_services_drift_stack_name }}"
+        compose:
+          - "/opt/stacks/{{ docker_services_drift_stack_name }}-stack.yml"
+      delegate_to: "{{ docker_services_primary_manager }}"
+      run_once: true
