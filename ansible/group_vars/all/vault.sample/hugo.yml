@@ -1,0 +1,7 @@
+---
+
+################################
+# CLOUDFLARE ZONE
+################################
+
+hugo_cloudflare_zone: "replace-me"
