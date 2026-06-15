@@ -37,12 +37,13 @@ RUFF_BIN="${RUFF_BIN:-$(tool_path ruff)}"
 usage() {
   cat <<'EOF'
 Usage:
-  skynet deploy <tag> [tag2 ...]
+  skynet deploy <tag|all> [tag2 ...]
   skynet update <tag|all> [tag2 ...]
-  skynet remove <tag> [tag2 ...]
-  skynet recreate <tag> [tag2 ...]
-  skynet bootstrap <tag> [tag2 ...]
-  skynet check <tag> [tag2 ...]
+  skynet remove <tag|all> [tag2 ...]
+  skynet recreate <tag|all> [tag2 ...]
+  skynet bootstrap <tag|all> [tag2 ...]
+  skynet check <tag|all> [tag2 ...]
+  skynet drift <tag|all> [tag2 ...]
 
   skynet run <role-target> [action]
   skynet check <role-target> [action]
@@ -53,7 +54,7 @@ Usage:
   skynet ci
   skynet versions
   skynet inventory [--graph|--list]
-  skynet limit <hostpattern> <deploy|update|remove|recreate|bootstrap|check|run|raw> ...
+  skynet limit <hostpattern> <deploy|update|remove|recreate|bootstrap|check|drift|run|raw> ...
   skynet tags
   skynet targets
   skynet raw <ansible-playbook args...>
@@ -76,8 +77,10 @@ Role/action examples:
 
 Docker service examples:
   skynet check authelia
+  skynet drift authelia
   skynet recreate authelia
   skynet update all
+  skynet drift all
 
 Optional env vars:
   PLAYBOOK                    Override playbook path
@@ -219,6 +222,21 @@ print_versions() {
 join_csv() {
   local IFS=,
   echo "$*"
+}
+
+run_docker_service_action() {
+  local action="$1"
+  shift
+
+  [[ $# -ge 1 ]] || die "$action requires at least one tag or 'all'"
+
+  if [[ "$1" == "all" ]]; then
+    [[ $# -eq 1 ]] || die "Usage: skynet $action all"
+    run_playbook "${LIMIT_ARGS[@]}" --tags "$action" -e docker_services_run_all=true
+  else
+    TAGS="$action,$(join_csv "$@")"
+    run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+  fi
 }
 
 role_tag() {
@@ -394,8 +412,10 @@ Docker service targets:
 
 Examples:
   skynet check authelia
+  skynet drift authelia
   skynet recreate plex
   skynet update all
+  skynet drift all
 EOF
 }
 
@@ -666,59 +686,72 @@ esac
 
 case "$CMD" in
   deploy)
-    [[ $# -ge 1 ]] || die "deploy requires at least one tag"
-    TAGS="deploy,$(join_csv "$@")"
-    run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    run_docker_service_action deploy "$@"
     ;;
 
   update)
-    [[ $# -ge 1 ]] || die "update requires at least one tag or 'all'"
-    if [[ "$1" == "all" ]]; then
-      run_playbook "${LIMIT_ARGS[@]}" --tags "update,all"
-    else
-      TAGS="update,$(join_csv "$@")"
-      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
-    fi
+    run_docker_service_action update "$@"
     ;;
 
   remove)
-    [[ $# -ge 1 ]] || die "remove requires at least one tag"
-    if [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-remove}")"; then
+    [[ $# -ge 1 ]] || die "remove requires at least one tag or role target"
+
+    if [[ "$1" == "all" ]]; then
+      run_docker_service_action remove "$@"
+    elif [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-remove}")"; then
       run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
     else
-      TAGS="remove,$(join_csv "$@")"
-      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+      run_docker_service_action remove "$@"
     fi
     ;;
 
   recreate)
-    [[ $# -ge 1 ]] || die "recreate requires at least one tag"
-    if [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-recreate}")"; then
+    [[ $# -ge 1 ]] || die "recreate requires at least one tag or role target"
+
+    if [[ "$1" == "all" ]]; then
+      run_docker_service_action recreate "$@"
+    elif [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-recreate}")"; then
       run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
     else
-      TAGS="recreate,$(join_csv "$@")"
-      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+      run_docker_service_action recreate "$@"
     fi
     ;;
 
   bootstrap)
-    [[ $# -ge 1 ]] || die "bootstrap requires at least one tag"
-    if [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-bootstrap}")"; then
+    [[ $# -ge 1 ]] || die "bootstrap requires at least one tag or role target"
+
+    if [[ "$1" == "all" ]]; then
+      run_docker_service_action bootstrap "$@"
+    elif [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-bootstrap}")"; then
       run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
     else
-      TAGS="bootstrap,$(join_csv "$@")"
-      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+      run_docker_service_action bootstrap "$@"
     fi
     ;;
 
   check|dry-run)
     [[ $# -ge 1 ]] || die "check requires at least one tag or role target"
 
-    if [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-deploy}")"; then
+    if [[ "$1" == "all" ]]; then
+      [[ $# -eq 1 ]] || die "Usage: skynet check all"
+      run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "deploy" -e docker_services_run_all=true
+    elif [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-deploy}")"; then
       run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$TAGS"
     else
       TAGS="deploy,$(join_csv "$@")"
       run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$TAGS"
+    fi
+    ;;
+
+  drift)
+    [[ $# -ge 1 ]] || die "drift requires at least one tag or 'all'"
+
+    if [[ "$1" == "all" ]]; then
+      [[ $# -eq 1 ]] || die "Usage: skynet drift all"
+      run_playbook "${LIMIT_ARGS[@]}" --tags "drift" -e docker_services_run_all=true
+    else
+      TAGS="drift,$(join_csv "$@")"
+      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
     fi
     ;;
 
