@@ -1,0 +1,17 @@
+---
+
+################################
+# STACK
+################################
+
+netbox_superuser_email: "replace-me"
+
+netbox_superuser_password: "replace-me"
+
+netbox_postgres_user: "replace-me"
+
+netbox_postgres_pass: "replace-me"
+
+netbox_redis_password: "replace-me"
+
+netbox_domain: "replace-me"

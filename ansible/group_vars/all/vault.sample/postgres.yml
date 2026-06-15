@@ -1,0 +1,15 @@
+---
+
+################################
+# POSTGRES CLUSTER
+################################
+
+postgres_patroni_superuser_pass: "replace-me"
+
+postgres_patroni_replication_pass: "replace-me"
+
+postgres_patroni_admin_role_name: "replace-me"
+
+postgres_patroni_admin_role_pass: "replace-me"
+
+postgres_uptime_kuma_monitor_role_pass: "replace-me"

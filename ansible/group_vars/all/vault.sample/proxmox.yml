@@ -1,0 +1,7 @@
+---
+
+################################
+# TERRAFORM API
+################################
+
+proxmox_api_bootstrap_password: "replace-me"
