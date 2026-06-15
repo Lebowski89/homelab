@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/06/13 |
+| Readme update        | 2026/06/16 |
 
 
 
@@ -354,18 +354,31 @@
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
+| Drift ¦ Derive clean service target label | ansible.builtin.set_fact | False |
 | Drift ¦ Skip services without an image | ansible.builtin.debug | True |
 | Drift ¦ Check image drift | block | True |
 | Drift ¦ Derive drift context | ansible.builtin.set_fact | False |
-| Drift ¦ Report unsupported non-swarm service | ansible.builtin.debug | True |
 | Drift ¦ Inspect live Swarm service image | ansible.builtin.command | True |
 | Drift ¦ Normalise live Swarm service image | ansible.builtin.set_fact | True |
-| Drift ¦ Determine image drift state | ansible.builtin.set_fact | True |
-| Drift ¦ Report missing Swarm service | ansible.builtin.debug | True |
+| Drift ¦ Derive Compose service context | ansible.builtin.set_fact | True |
+| Drift ¦ Inspect live Compose container image | ansible.builtin.shell | True |
+| Drift ¦ Normalise live Compose container image | ansible.builtin.set_fact | True |
+| Drift ¦ Determine image drift state | ansible.builtin.set_fact | False |
+| Drift ¦ Report missing runtime service/container | ansible.builtin.debug | True |
 | Drift ¦ Report image drift | ansible.builtin.debug | True |
 | Drift ¦ Report image is current | ansible.builtin.debug | True |
 | Drift ¦ Add service to drift summary | ansible.builtin.set_fact | True |
-| Drift ¦ Recreate stack when drift is detected | community.docker.docker_stack | True |
+
+#### File: tasks/sub_tasks/drift/notify_email.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Drift Notify ¦ Ensure SMTP creds exist | block | True |
+| Drift Notify ¦ Detect if SMTP creds are missing | ansible.builtin.set_fact | False |
+| Drift Notify ¦ Fetch SMTP creds from Infisical | ansible.builtin.include_tasks | True |
+| Drift Notify ¦ Assert SMTP creds are now present | ansible.builtin.assert | False |
+| Drift Notify ¦ Build image drift email body | ansible.builtin.set_fact | True |
+| Drift Notify ¦ Send image drift email | community.general.mail | True |
 
 #### File: tasks/sub_tasks/init/validate.yml
 
@@ -481,7 +494,8 @@
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Prep - Cleanup ¦ Ensure docker_services_stack_name is set | ansible.builtin.assert | False |
+| Prep - Cleanup ¦ Derive cleanup stack name | ansible.builtin.set_fact | False |
+| Prep - Cleanup ¦ Ensure cleanup stack name is set | ansible.builtin.assert | False |
 | Prep - Cleanup ¦ Cleanup container stack | block | True |
 | Prep - Cleanup ¦ Check if compose file exists | ansible.builtin.stat | False |
 | Prep - Cleanup ¦ Compose down | community.docker.docker_compose_v2 | True |
