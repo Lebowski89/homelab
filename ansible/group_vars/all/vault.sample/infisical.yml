@@ -1,0 +1,35 @@
+---
+
+################################
+# COLLECTION
+################################
+
+infisical_auth_client_id: "replace-me"
+
+infisical_auth_client_secret: "replace-me"
+
+infisical_project_id: "replace-me"
+
+################################
+# STACK
+################################
+
+infisical_enc_key: "replace-me"
+
+infisical_jwt_key: "replace-me"
+
+infisical_postgres_user: "replace-me"
+
+infisical_postgres_pass: "replace-me"
+
+infisical_redis_password: "replace-me"
+
+infisical_domain: "replace-me"
+
+infisical_smtp_email: "replace-me"
+
+infisical_smtp_user: "replace-me"
+
+infisical_smtp_pass: "replace-me"
+
+infisical_smtp_sender: "replace-me"
