@@ -9,7 +9,7 @@
     file: _init.yml
     apply:
       tags: [deploy, update, recreate, bootstrap]
-  tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
 
 ################################
 # DRIFT
@@ -20,8 +20,8 @@
   ansible.builtin.include_tasks:
     file: sub_tasks/drift/image.yml
     apply:
-      tags: [drift, reconcile]
-  tags: [drift, reconcile]
+      tags: drift
+  tags: drift
 
 ################################
 # PREP

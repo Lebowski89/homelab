@@ -202,7 +202,7 @@
         ignore_unknown_extensions: true
         extensions: [yml, yaml]
         name: svcfiles
-      tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Assert svcfiles loaded
       ansible.builtin.assert:
@@ -211,12 +211,12 @@
           - (svcfiles | type_debug) == "dict"
           - (svcfiles | length) > 0
         fail_msg: "svcfiles is empty or not a dict. include_vars did not load your service files."
-      tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Use svcfiles as the services mapping
       ansible.builtin.set_fact:
         services: "{{ svcfiles }}"
-      tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Build docker service processing list from service definitions
       ansible.builtin.set_fact:
@@ -250,7 +250,7 @@
           {%- endif -%}
           {%- endfor -%}
           {{ out | to_yaml }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Assert docker service processing list was built
       ansible.builtin.assert:
@@ -259,14 +259,54 @@
           - docker_services_effective is sequence
           - docker_services_effective | length > 0
         fail_msg: "docker_services_effective is empty. No enabled service definitions were discovered."
-      tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Drift | Initialise image drift summary
       when: inventory_hostname == docker_services_primary_manager
       ansible.builtin.set_fact:
         docker_services_image_drift: []
       run_once: true
-      tags: [drift, reconcile]
+      tags: [drift]
+
+    - name: Drift | End non-primary hosts
+      when:
+        - "'drift' in (ansible_run_tags | default([]))"
+        - inventory_hostname != docker_services_primary_manager
+      ansible.builtin.meta: end_host
+      tags: [drift]
+
+    - name: Build selected docker service processing list
+      ansible.builtin.set_fact:
+        docker_services_selected: "{{ _docker_services_selected_yaml | from_yaml }}"
+      vars:
+        _docker_services_selected_yaml: |
+          {%- set out = [] -%}
+          {%- set run_all = docker_services_run_all | default(false) | bool -%}
+          {%- set run_tags = ansible_run_tags | default([]) -%}
+
+          {%- for item in docker_services_effective -%}
+          {%- set item_tags = item.tags | default([]) -%}
+          {%- if run_all
+                or (run_tags | length == 0)
+                or (item.name in run_tags)
+                or ((item_tags | intersect(run_tags)) | length > 0) -%}
+          {%- set _ = out.append(item) -%}
+          {%- endif -%}
+          {%- endfor -%}
+
+          {{ out | to_yaml }}
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+    - name: Assert selected docker service processing list was built
+      ansible.builtin.assert:
+        that:
+          - docker_services_selected is defined
+          - docker_services_selected is sequence
+          - docker_services_selected | length > 0
+        fail_msg: >-
+          No Docker service definitions matched the requested tag(s):
+          {{ ansible_run_tags | default([]) | join(', ') }}.
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Process each docker service
       ansible.builtin.include_role:
@@ -276,16 +316,12 @@
         docker_services_service_target: "{{ item.target | default(omit) }}"
         docker_services_role_prefix: "{{ item.name }}"
         docker_services_service_cfg_found: "{{ (services[item.name] is defined) | bool }}"
-      loop: "{{ docker_services_effective }}"
+      loop: "{{ docker_services_selected }}"
       loop_control:
         label: "{{ item.name }}{{ ':' ~ item.target if item.target is defined else '' }}"
       when:
         - docker_services_service_cfg_found | bool
-        - ('all' in (ansible_run_tags | default([])))
-          or (ansible_run_tags | length == 0)
-          or (item.name in (ansible_run_tags | default([])))
-          or ((item.tags | default([])) | intersect(ansible_run_tags | default([])) | length > 0)
-      tags: [deploy, update, remove, recreate, bootstrap, drift, reconcile]
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Drift | Report image drift summary
       when:
@@ -293,9 +329,22 @@
         - hostvars[docker_services_primary_manager].docker_services_image_drift is defined
         - (hostvars[docker_services_primary_manager].docker_services_image_drift | length) > 0
       ansible.builtin.debug:
-        var: hostvars[docker_services_primary_manager].docker_services_image_drift
+        msg: |
+          Docker image drift detected:
+          {% for drift_item in hostvars[docker_services_primary_manager].docker_services_image_drift | sort(attribute='label') %}
+          - {{ drift_item.label }}
+            stack:   {{ drift_item.stack }}
+            service: {{ drift_item.service }}
+            desired: {{ drift_item.desired }}
+            current: {{ drift_item.current }}
+
+          {% endfor %}
       run_once: true
-      tags: [drift, reconcile]
+      tags: [drift]
+
+    - name: Drift | Import email notification tasks
+      ansible.builtin.import_tasks: "{{ playbook_dir }}/roles/docker_services/tasks/sub_tasks/drift/notify_email.yml"
+      tags: [drift]
 
     - name: Drift | Report no image drift found
       when:
@@ -305,7 +354,7 @@
       ansible.builtin.debug:
         msg: "No Docker service image drift detected."
       run_once: true
-      tags: [drift, reconcile]
+      tags: [drift]
 
     - name: Deploy all stacks
       when:
