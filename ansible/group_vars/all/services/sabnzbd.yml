@@ -5,7 +5,7 @@ sabnzbd:
   tags: [apps, usenet, sabnzbd]
   name: sabnzbd
   stack: sabnzbd
-  image: ghcr.io/hotio/sabnzbd:release-v5.0.3
+  image: ghcr.io/hotio/sabnzbd:release-v5.0.4
   named_networks:
     overlay:
       external: true
