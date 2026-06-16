@@ -5,7 +5,7 @@ dozzle:
   tags: [apps, monitoring, dozzle]
   name: dozzle
   stack: dozzle
-  image: amir20/dozzle:v10.6.5
+  image: amir20/dozzle:v10.6.6
   named_networks:
     overlay:
       external: true
