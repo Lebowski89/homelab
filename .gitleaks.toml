@@ -3,12 +3,13 @@ title = "homelab gitleaks config"
 [extend]
 useDefault = true
 
-[allowlist]
+[[allowlists]]
 description = "Repository-safe placeholders, examples, generated dependencies, and secret identifiers"
 
 paths = [
   '''(^|/)collections/''',
   '''(^|/)ansible/collections/''',
+  '''(^|/)ansible/group_vars/all/vault\.sample/''',
 ]
 
 regexes = [
