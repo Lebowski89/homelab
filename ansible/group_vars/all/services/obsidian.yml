@@ -5,7 +5,7 @@ obsidian:
   tags: [apps, media, obsidian]
   name: obsidian
   stack: obsidian
-  image: lscr.io/linuxserver/obsidian:v1.12.7-ls132
+  image: lscr.io/linuxserver/obsidian:v1.12.7-ls134
   named_networks:
     overlay:
       external: true
