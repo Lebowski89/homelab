@@ -1,85 +1,179 @@
 ---
 
-- name: Ensure python and apt prerequisites are installed
+- name: Ubuntu APT | Build effective package profile list
+  ansible.builtin.set_fact:
+    ubuntu_apt_package_profiles_effective: >-
+      {{
+        (
+          []
+          + (ubuntu_apt_package_profiles_base | default([]))
+          + (ubuntu_apt_package_profiles_extra | default([]))
+          + (ubuntu_apt_package_profiles_ansible_manager | default([]))
+          + (ubuntu_apt_package_profiles_docker | default([]))
+          + (ubuntu_apt_package_profiles_postgres | default([]))
+          + (ubuntu_apt_package_profiles_swarm | default([]))
+          + (ubuntu_apt_package_profiles_haproxy | default([]))
+          + (ubuntu_apt_package_profiles_opentofu | default([]))
+        )
+        | unique
+        | list
+      }}
+
+- name: Ubuntu APT | Build selected package list
+  ansible.builtin.set_fact:
+    ubuntu_apt_selected_packages: >-
+      {{
+        (
+          []
+          + (
+            ubuntu_apt_base_packages
+            if 'base' in (ubuntu_apt_package_profiles_effective | default([]))
+            else []
+          )
+          + (
+            ubuntu_apt_common_packages
+            if 'common' in (ubuntu_apt_package_profiles_effective | default([]))
+            else []
+          )
+          + (
+            ubuntu_apt_python_packages | default([])
+            if 'python' in (ubuntu_apt_package_profiles_effective | default([]))
+            else []
+          )
+          + (
+            ubuntu_apt_build_packages | default([])
+            if 'build' in (ubuntu_apt_package_profiles_effective | default([]))
+            else []
+          )
+          + (
+            ubuntu_apt_admin_packages
+            if 'admin' in (ubuntu_apt_package_profiles_effective | default([]))
+            else []
+          )
+          + (
+            ubuntu_apt_network_packages
+            if 'network' in (ubuntu_apt_package_profiles_effective | default([]))
+            else []
+          )
+          + (
+            ubuntu_apt_firewall_packages
+            if 'firewall' in (ubuntu_apt_package_profiles_effective | default([]))
+            else []
+          )
+          + (
+            ubuntu_apt_docker_packages | default([])
+            if 'docker' in (ubuntu_apt_package_profiles_effective | default([]))
+            else []
+          )
+          + (
+            ubuntu_apt_swarm_packages | default([])
+            if 'swarm' in (ubuntu_apt_package_profiles_effective | default([]))
+            else []
+          )
+          + (
+            ubuntu_apt_haproxy_packages | default([])
+            if 'haproxy' in (ubuntu_apt_package_profiles_effective | default([]))
+            else []
+          )
+          + (
+            ubuntu_apt_opentofu_packages | default([])
+            if 'opentofu' in (ubuntu_apt_package_profiles_effective | default([]))
+            else []
+          )
+          + (ubuntu_apt_extra_packages | default([]))
+        )
+        | unique
+        | list
+      }}
+
+- name: Ubuntu APT | Install selected packages
+  when:
+    - ubuntu_apt_enabled | default(true) | bool
+    - ubuntu_apt_selected_packages | length > 0
   ansible.builtin.apt:
-    name:
-      - python3
-      - python3-pip
-      - python3-venv
-      - python3-apt
-      - python3-debian
-      - ca-certificates
-      - software-properties-common
-      - apt-utils
+    name: "{{ ubuntu_apt_selected_packages }}"
     state: present
-    update_cache: true
+    update_cache: "{{ ubuntu_apt_update_cache | default(true) | bool }}"
   environment: "{{ ubuntu_apt_env_vars }}"
 
-- name: Install common packages
-  ansible.builtin.apt:
-    name:
-      - nano
-      - zip
-      - unzip
-      - p7zip-full
-      - curl
-      - wget
-      - tree
-      - lsof
-      - git
-      - argon2
-      - pwgen
-      - rsync
-      - logrotate
-      - htop
-      - iotop
-      - nload
-      - ufw
-      - ncdu
-      - mc
-      - dnsutils
-      - screen
-      - tmux
-      - apache2-utils
-      - jq
-      - moreutils
-      - vnstat
-      - pciutils
-      - ethtool
-      - man-db
-      - unrar-free
-    state: present
-  environment: "{{ ubuntu_apt_env_vars }}"
-
-- name: Install qemu-guest-agent on virtual guests
+- name: Ubuntu APT | Install qemu-guest-agent on virtual guests
+  when:
+    - ubuntu_apt_enabled | default(true) | bool
+    - ansible_facts.virtualization_role | default("") == "guest"
+    - ansible_facts.virtualization_type | default("") in ["kvm", "qemu"]
   ansible.builtin.apt:
     name: qemu-guest-agent
     state: present
   environment: "{{ ubuntu_apt_env_vars }}"
-  register: ubuntu_qemu_guest_agent_pkg
-  when:
-    - ansible_virtualization_role | default("") == "guest"
-    - ansible_virtualization_type | default("") in ["kvm", "qemu"]
 
-- name: Ensure qemu-guest-agent is enabled and running
+- name: Ubuntu APT | Ensure qemu-guest-agent is enabled and running
+  when:
+    - not ansible_check_mode
+    - ubuntu_apt_enabled | default(true) | bool
+    - ansible_facts.virtualization_role | default("") == "guest"
+    - ansible_facts.virtualization_type | default("") in ["kvm", "qemu"]
   ansible.builtin.systemd:
     name: qemu-guest-agent
     enabled: true
     state: started
-  when:
-    - not ansible_check_mode
-    - ansible_virtualization_role | default("") == "guest"
-    - ansible_virtualization_type | default("") in ["kvm", "qemu"]
 
-- name: Upgrade installed packages
+- name: Ubuntu APT | Upgrade installed packages
+  when:
+    - ubuntu_apt_enabled | default(true) | bool
+    - ubuntu_apt_upgrade_enabled | default(false) | bool
   ansible.builtin.apt:
-    upgrade: full
+    upgrade: "{{ ubuntu_apt_upgrade_mode | default('safe') }}"
     update_cache: true
     autoremove: false
     autoclean: false
   environment: "{{ ubuntu_apt_env_vars }}"
 
-- name: Remove unnecessary packages
+- name: Ubuntu APT | Check for unnecessary packages
+  when:
+    - ubuntu_apt_enabled | default(true) | bool
+    - ubuntu_apt_autoremove_enabled | default(true) | bool
+  ansible.builtin.command: # noqa: command-instead-of-module
+    argv:
+      - apt-get
+      - -s
+      - autoremove
+  register: ubuntu_apt_autoremove_check
+  changed_when: "'Remv ' in ubuntu_apt_autoremove_check.stdout"
+  environment: "{{ ubuntu_apt_env_vars }}"
+
+- name: Ubuntu APT | Remove unnecessary packages
+  when:
+    - ubuntu_apt_enabled | default(true) | bool
+    - ubuntu_apt_autoremove_enabled | default(true) | bool
+    - not ansible_check_mode
+    - "'Remv ' in ubuntu_apt_autoremove_check.stdout"
+  ansible.builtin.command: # noqa: command-instead-of-module
+    argv:
+      - apt-get
+      - autoremove
+      - --yes
+  register: ubuntu_apt_autoremove_result
+  changed_when: true
+  environment: "{{ ubuntu_apt_env_vars }}"
+
+- name: Ubuntu APT | Autoclean package cache
+  when:
+    - ubuntu_apt_enabled | default(true) | bool
+    - ubuntu_apt_autoremove_enabled | default(true) | bool
+    - not ansible_check_mode
+  ansible.builtin.command: # noqa: command-instead-of-module
+    argv:
+      - apt-get
+      - autoclean
+      - --yes
+  register: ubuntu_apt_autoclean_result
+  changed_when: false
+  environment: "{{ ubuntu_apt_env_vars }}"
+
+- name: Ubuntu APT | Remove explicitly unwanted packages
+  when:
+    - ubuntu_apt_enabled | default(true) | bool
+    - ubuntu_apt_remove_packages | default([]) | length > 0
   ansible.builtin.apt:
-    autoremove: true
-    autoclean: true
+    name: "{{ ubuntu_apt_remove_packages }}"
+    state: absent

@@ -6,6 +6,9 @@
 # For the expected structure, see:
 # ansible/group_vars/all/vault.yml.sample
 
+ubuntu_apt_package_profiles_postgres:
+  - network
+
 postgres_etcd_node_name: "{{ inventory_hostname }}"
 postgres_patroni_node_name: "{{ inventory_hostname }}"
 

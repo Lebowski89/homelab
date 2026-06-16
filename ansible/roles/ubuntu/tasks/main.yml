@@ -1,6 +1,7 @@
 ---
 
 - name: Ubuntu | Install common packages
+  when: ubuntu_apt_enabled | default(true) | bool
   ansible.builtin.include_tasks:
     file: sub_tasks/apt.yml
     apply:
@@ -60,6 +61,7 @@
     - ubuntu_skynet
 
 - name: Ubuntu | Tune sysctl settings
+  when: ubuntu_sysctl_enabled | default(true) | bool
   ansible.builtin.include_tasks:
     file: sub_tasks/sysctl.yml
     apply:
@@ -93,7 +95,9 @@
     - ubuntu_network
 
 - name: Ubuntu | Configure Netplan
-  when: inventory_hostname not in (groups['tags_opentofu_managed'] | default([]))
+  when:
+    - ubuntu_netplan_enabled | default(true) | bool
+    - inventory_hostname not in (groups['tags_opentofu_managed'] | default([]))
   ansible.builtin.include_tasks:
     file: sub_tasks/netplan.yml
     apply:

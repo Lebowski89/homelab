@@ -2,3 +2,10 @@
 
 ansible_connection: local
 ansible_python_interpreter: /opt/ansible/ansible-venv/bin/python
+
+ubuntu_apt_package_profiles_ansible_manager:
+  - admin
+  - network
+  - firewall
+  - python
+  - build
