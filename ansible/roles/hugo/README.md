@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/05/25 |
+| Readme update        | 2026/06/17 |
 
 
 
@@ -31,7 +31,7 @@
 | [hugo_root_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L4)   | str | `{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}` |    
 | [hugo_site_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L5)   | str | `{{ hugo_root_path }}/blog` |    
 | [hugo_theme_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L6)   | str | `{{ hugo_site_path }}/themes/terminal` |    
-| [hugo_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L7)   | str | `ghcr.io/gohugoio/hugo:v0.161.1` |    
+| [hugo_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L7)   | str | `ghcr.io/gohugoio/hugo:v0.163.2` |    
 | [hugo_directory_paths](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L9)   | list | `[]` |    
 | [hugo_directory_paths.**0**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L10)   | dict | `{}` |    
 | [hugo_directory_paths.0.**path**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L10)   | str | `{{ hugo_site_path }}` |    
