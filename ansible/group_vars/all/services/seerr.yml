@@ -5,7 +5,7 @@ seerr:
   tags: [apps, media, pgsql, seerr]
   name: seerr
   stack: seerr
-  image: ghcr.io/hotio/seerr:release-v3.2.0
+  image: ghcr.io/hotio/seerr:release-v3.3.0
   named_networks:
     overlay:
       external: true
