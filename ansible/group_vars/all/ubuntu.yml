@@ -1,0 +1,11 @@
+---
+
+ubuntu_apt_package_profiles_base:
+  - base
+  - common
+
+ubuntu_apt_package_profiles_extra: []
+
+ubuntu_apt_upgrade_enabled: true
+ubuntu_apt_upgrade_mode: safe
+ubuntu_apt_autoremove_enabled: true
