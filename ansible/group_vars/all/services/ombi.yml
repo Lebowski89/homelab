@@ -5,7 +5,7 @@ ombi:
   tags: [apps, media, pgsql, ombi]
   name: ombi
   stack: ombi
-  image: lscr.io/linuxserver/ombi:v4.53.10-ls256
+  image: lscr.io/linuxserver/ombi:v4.53.10-ls257
   named_networks:
     overlay:
       external: true

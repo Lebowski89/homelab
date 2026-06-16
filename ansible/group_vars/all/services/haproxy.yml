@@ -5,7 +5,7 @@ haproxy:
   tags: [apps, network, haproxy]
   name: haproxy
   stack: haproxy
-  image: haproxy:3.3-alpine
+  image: haproxy:3.4-alpine
   named_networks:
     overlay:
       external: true
