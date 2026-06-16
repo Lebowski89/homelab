@@ -34,8 +34,8 @@ output "host_primary_cidrs" {
 output "host_tailscale_ipv4" {
   value = {
     for host_key, host in local.hosts :
-    host_key => try(host.custom_fields.tailscale_ip, null)
-    if try(host.custom_fields.tailscale_ip, null) != null
+    host_key => trimspace(try(host.custom_fields.tailscale_ip, ""))
+    if trimspace(try(host.custom_fields.tailscale_ip, "")) != ""
   }
 
   description = "Tailscale IPv4 addresses for managed hosts."

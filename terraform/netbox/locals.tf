@@ -356,6 +356,17 @@ locals {
     }
   }
 
+  device_custom_field_defaults = {
+    ansible_user             = ""
+    ssh_port                 = ""
+    tailscale_ip             = ""
+    docker_host_puid         = ""
+    docker_host_pgid         = ""
+    docker_host_appdata_root = ""
+    docker_host_data_root    = ""
+    dns_priority             = ""
+  }
+
   base_hosts = {
     router = {
       description     = "Primary LAN gateway/router."
@@ -465,9 +476,12 @@ locals {
       local.internal_zone != "" ? {
         dns_name = "${host_key}.${local.internal_zone}"
       } : {},
-      try(length(var.host_private_values[host_key].custom_fields), 0) > 0 ? {
-        custom_fields = var.host_private_values[host_key].custom_fields
-      } : {}
+      {
+        custom_fields = merge(
+          local.device_custom_field_defaults,
+          coalesce(try(var.host_private_values[host_key].custom_fields, null), {})
+        )
+      }
     )
   }
 
