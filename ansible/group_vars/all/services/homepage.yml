@@ -5,7 +5,7 @@ homepage:
   tags: [apps, monitoring, homepage]
   name: homepage
   stack: homepage
-  image: ghcr.io/gethomepage/homepage:v1.13.1
+  image: ghcr.io/gethomepage/homepage:v1.13.2
   named_networks:
     overlay:
       external: true

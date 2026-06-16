@@ -5,7 +5,7 @@ sportarr:
   tags: [apps, arrs, sportarr]
   name: sportarr
   stack: sportarr
-  image: sportarr/sportarr:4.0.1008.1087
+  image: sportarr/sportarr:4.0.1010.1090
   named_networks:
     overlay:
       external: true
