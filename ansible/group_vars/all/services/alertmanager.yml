@@ -16,6 +16,27 @@ alertmanager:
     {{ hostvars[docker_services_primary_manager].docker_host_puid }}:{{ hostvars[docker_services_primary_manager].docker_host_pgid }}
   environment:
     TZ: "{{ timezone }}"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: smtp_email
+        path: "/Porkbun"
+        name: SMTP_EMAIL
+      - var: smtp_host
+        path: "/Porkbun"
+        name: SMTP_HOST
+      - var: smtp_password
+        path: "/Porkbun"
+        name: SMTP_PASS
+        docker_secret: alertmanager_smtp_password_secret
+      - var: smtp_port
+        path: "/Porkbun"
+        name: SMTP_PORT
+      - var: smtp_username
+        path: "/Porkbun"
+        name: SMTP_USER
+  secrets:
+    - alertmanager_smtp_password_secret
   paths:
     - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/alertmanager"
       state: directory
@@ -43,55 +64,6 @@ alertmanager:
     enable: true
     exposure: private
     port: 9093
-  deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    host: "{{ docker_services_primary_manager }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
-    restart_policy:
-      condition: on-failure
-      delay: 10s
-      max_attempts: 5
-      window: 2m
-
-alertmanager_gotify_bridge:
-  enabled: true
-  tags: [apps, monitoring, alertmanager, gotify]
-  name: alertmanager-gotify-bridge
-  stack: alertmanager
-  image: ghcr.io/druggeri/alertmanager_gotify_bridge:v2.3.2
-  named_networks:
-    overlay:
-      external: true
-  environment:
-    TZ: "{{ timezone }}"
-    GOTIFY_ENDPOINT: http://gotify:80/message
-    BIND_ADDRESS: 0.0.0.0
-    PORT: "8080"
-    WEBHOOK_PATH: /gotify_webhook
-    DEFAULT_PRIORITY: "5"
-    EXTENDED_DETAILS: "true"
-    DISPATCH_ERRORS: "true"
-  env_file:
-    - "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/alertmanager-gotify-bridge/.env"
-  infisical:
-    fail_on_empty: true
-    secrets_map:
-      - var: gotify_alertmanager_token
-        path: "/Gotify"
-        name: ALERTMANAGER_TOKEN
-  paths:
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/alertmanager-gotify-bridge"
-      state: directory
-      mode: "0755"
-  templates:
-    - src: configs/alertmanager/gotify-bridge.env.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/alertmanager-gotify-bridge/.env"
-      mode: "0660"
-      force: true
-      no_log: true
   deploy:
     type: swarm
     mode: replicated
