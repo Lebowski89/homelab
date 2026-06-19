@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 OUT_DIR="${OUT_DIR:-$(mktemp -d)}"
 PROM_IMAGE="${PROM_IMAGE:-prom/prometheus:v3.12.0}"
-ALERTMANAGER_IMAGE="${ALERTMANAGER_IMAGE:-prom/alertmanager:v0.28.1}"
+ALERTMANAGER_IMAGE="${ALERTMANAGER_IMAGE:-prom/alertmanager:v0.32.2}"
 
 cleanup() {
   if [[ "${KEEP_RENDERED:-0}" != "1" ]]; then
@@ -132,21 +132,3 @@ run_tool \
   amtool \
   "check-config /rendered/alertmanager.yml" \
   check-config "${OUT_DIR}/alertmanager.yml"
-
-run_tool "${PROM_IMAGE}" promtool "check config /rendered/prometheus.docker-validation.yml" check config "${OUT_DIR}/prometheus.local-validation.yml"
-
-shopt -s nullglob
-rule_files=("${OUT_DIR}"/rules/*.yml)
-shopt -u nullglob
-
-if (( ${#rule_files[@]} == 0 )); then
-  echo "ERROR: no rendered Prometheus rule files found in ${OUT_DIR}/rules" >&2
-  exit 1
-fi
-
-for rule_file in "${rule_files[@]}"; do
-  rule_name="$(basename "${rule_file}")"
-  run_tool "${PROM_IMAGE}" promtool "check rules /rendered/rules/${rule_name}" check rules "${rule_file}"
-done
-
-run_tool "${ALERTMANAGER_IMAGE}" amtool "check-config /rendered/alertmanager.yml" check-config "${OUT_DIR}/alertmanager.yml"
