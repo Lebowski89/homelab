@@ -4,13 +4,13 @@
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.11.0 |
-| <a name="requirement_netbox"></a> [netbox](#requirement\_netbox) | 5.5.0 |
+| <a name="requirement_netbox"></a> [netbox](#requirement\_netbox) | 5.6.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_netbox"></a> [netbox](#provider\_netbox) | 5.5.0 |
+| <a name="provider_netbox"></a> [netbox](#provider\_netbox) | 5.6.0 |
 
 ## Modules
 
@@ -20,19 +20,19 @@ No modules.
 
 | Name | Type |
 |------|------|
-| [netbox_custom_field.device](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/custom_field) | resource |
-| [netbox_device.hosts](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/device) | resource |
-| [netbox_device_interface.mgmt](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/device_interface) | resource |
-| [netbox_device_primary_ip.hosts](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/device_primary_ip) | resource |
-| [netbox_device_role.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/device_role) | resource |
-| [netbox_device_type.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/device_type) | resource |
-| [netbox_interface_template.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/interface_template) | resource |
-| [netbox_ip_address.mgmt](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/ip_address) | resource |
-| [netbox_ip_address.reserved](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/ip_address) | resource |
-| [netbox_manufacturer.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/manufacturer) | resource |
-| [netbox_prefix.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/prefix) | resource |
-| [netbox_site.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/site) | resource |
-| [netbox_tag.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.5.0/docs/resources/tag) | resource |
+| [netbox_custom_field.device](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/custom_field) | resource |
+| [netbox_device.hosts](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/device) | resource |
+| [netbox_device_interface.mgmt](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/device_interface) | resource |
+| [netbox_device_primary_ip.hosts](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/device_primary_ip) | resource |
+| [netbox_device_role.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/device_role) | resource |
+| [netbox_device_type.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/device_type) | resource |
+| [netbox_interface_template.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/interface_template) | resource |
+| [netbox_ip_address.mgmt](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/ip_address) | resource |
+| [netbox_ip_address.reserved](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/ip_address) | resource |
+| [netbox_manufacturer.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/manufacturer) | resource |
+| [netbox_prefix.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/prefix) | resource |
+| [netbox_site.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/site) | resource |
+| [netbox_tag.this](https://registry.terraform.io/providers/e-breuninger/netbox/5.6.0/docs/resources/tag) | resource |
 
 ## Inputs
 
