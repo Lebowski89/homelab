@@ -1,0 +1,35 @@
+---
+name: Alerting config validation
+
+on:
+  pull_request:
+    paths:
+      - ansible/group_vars/all/services/alertmanager.yml
+      - ansible/group_vars/all/services/prometheus.yml
+      - ansible/roles/docker_services/templates/configs/alertmanager/**
+      - ansible/roles/docker_services/templates/configs/prometheus.yml.j2
+      - ansible/roles/docker_services/templates/configs/prometheus/rules/**
+      - ansible/roles/docker_services/scripts/validate-alerting-configs.sh
+      - .github/workflows/alerting-config-validation.yml
+  push:
+    paths:
+      - ansible/group_vars/all/services/alertmanager.yml
+      - ansible/group_vars/all/services/prometheus.yml
+      - ansible/roles/docker_services/templates/configs/alertmanager/**
+      - ansible/roles/docker_services/templates/configs/prometheus.yml.j2
+      - ansible/roles/docker_services/templates/configs/prometheus/rules/**
+      - ansible/roles/docker_services/scripts/validate-alerting-configs.sh
+      - .github/workflows/alerting-config-validation.yml
+
+jobs:
+  validate-alerting-configs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4.3.1
+
+      - name: Install Python render dependencies
+        run: python3 -m pip install jinja2 pyyaml
+
+      - name: Validate rendered Prometheus and Alertmanager configs
+        run: ansible/roles/docker_services/scripts/validate-alerting-configs.sh

@@ -2,6 +2,14 @@ global:
   scrape_interval: 15s
   scrape_timeout: 10s
 
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
 scrape_configs:
   - job_name: "prometheus"
     scrape_interval: 5s
@@ -25,3 +33,14 @@ scrape_configs:
     scrape_timeout: 10s
     static_configs:
       - targets: ["traefik:8082"]
+
+  - job_name: "alertmanager"
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["alertmanager:9093"]
+
+  - job_name: "alertmanager-gotify-bridge"
+    scrape_interval: 30s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["alertmanager-gotify-bridge:8080"]

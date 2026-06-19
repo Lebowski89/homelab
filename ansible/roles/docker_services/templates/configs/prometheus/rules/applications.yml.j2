@@ -1,0 +1,22 @@
+groups:
+  - name: applications.rules
+    rules:
+      - alert: Traefik5xxSpike
+        expr: sum by (service) (rate(traefik_service_requests_total{code=~"5.."}[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Traefik 5xx spike for {{ '{{' }} $labels.service {{ '}}' }}"
+          description: "Traefik is serving more than 0.1 5xx responses/sec for {{ '{{' }} $labels.service {{ '}}' }} over 5 minutes."
+          priority: "7"
+
+      - alert: HAProxyBackendDown
+        expr: haproxy_server_up == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HAProxy backend down: {{ '{{' }} $labels.proxy {{ '}}' }}/{{ '{{' }} $labels.server {{ '}}' }}"
+          description: "HAProxy backend server {{ '{{' }} $labels.server {{ '}}' }} in {{ '{{' }} $labels.proxy {{ '}}' }} has been down for 5 minutes."
+          priority: "9"
