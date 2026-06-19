@@ -5,7 +5,7 @@ alertmanager:
   tags: [apps, monitoring, alertmanager]
   name: alertmanager
   stack: alertmanager
-  image: prom/alertmanager:v0.28.1
+  image: prom/alertmanager:v0.32.2
   named_networks:
     overlay:
       external: true
