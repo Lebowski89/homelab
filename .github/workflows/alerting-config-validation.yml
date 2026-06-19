@@ -9,7 +9,7 @@ on:
       - ansible/roles/docker_services/templates/configs/alertmanager/**
       - ansible/roles/docker_services/templates/configs/prometheus.yml.j2
       - ansible/roles/docker_services/templates/configs/prometheus/rules/**
-      - scripts/validate-alerting-configs.sh
+      - ansible/roles/docker_services/scripts/validate-alerting-configs.sh
       - .github/workflows/alerting-config-validation.yml
   push:
     paths:
@@ -18,7 +18,7 @@ on:
       - ansible/roles/docker_services/templates/configs/alertmanager/**
       - ansible/roles/docker_services/templates/configs/prometheus.yml.j2
       - ansible/roles/docker_services/templates/configs/prometheus/rules/**
-      - scripts/validate-alerting-configs.sh
+      - ansible/roles/docker_services/scripts/validate-alerting-configs.sh
       - .github/workflows/alerting-config-validation.yml
 
 jobs:
@@ -32,4 +32,4 @@ jobs:
         run: python3 -m pip install jinja2 pyyaml
 
       - name: Validate rendered Prometheus and Alertmanager configs
-        run: scripts/validate-alerting-configs.sh
+        run: ansible/roles/docker_services/scripts/validate-alerting-configs.sh

@@ -63,7 +63,7 @@ curl -XPOST http://alertmanager:9093/api/v2/alerts \
 Render and validate the alerting templates with:
 
 ```bash
-scripts/validate-alerting-configs.sh
+ansible/roles/docker_services/scripts/validate-alerting-configs.sh
 ```
 
 The script first YAML-parses the Alertmanager and Prometheus service definition files, renders the Jinja templates to a temporary directory, then runs:
