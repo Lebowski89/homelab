@@ -29,11 +29,13 @@ root = Path(os.environ["ROOT_DIR"])
 out = Path(os.environ["OUT_DIR"])
 env = Environment()
 
+
 def render(src: Path, dest: Path) -> None:
     rendered = env.from_string(src.read_text()).render()
     yaml.safe_load(rendered)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(rendered)
+
 
 # Basic YAML validation for service definitions that affect the alerting stack.
 # The Jinja expressions in these files are YAML scalar values, so raw parsing is
@@ -44,8 +46,14 @@ for service_yaml in [
 ]:
     yaml.safe_load(service_yaml.read_text())
 
-render(root / "ansible/roles/docker_services/templates/configs/prometheus.yml.j2", out / "prometheus.yml")
-render(root / "ansible/roles/docker_services/templates/configs/alertmanager/alertmanager.yml.j2", out / "alertmanager.yml")
+render(
+    root / "ansible/roles/docker_services/templates/configs/prometheus.yml.j2",
+    out / "prometheus.yml",
+)
+render(
+    root / "ansible/roles/docker_services/templates/configs/alertmanager/alertmanager.yml.j2",
+    out / "alertmanager.yml",
+)
 
 rules_dir = root / "ansible/roles/docker_services/templates/configs/prometheus/rules"
 for src in sorted(rules_dir.glob("*.yml.j2")):
@@ -56,11 +64,23 @@ for src in sorted(rules_dir.glob("*.yml.j2")):
 # rendered rule files in OUT_DIR so promtool check config validates the rendered
 # rules instead of a non-existent host /etc/prometheus path.
 prometheus_config = yaml.safe_load((out / "prometheus.yml").read_text())
+
 prometheus_config["rule_files"] = [str(out / "rules" / "*.yml")]
-(out / "prometheus.local-validation.yml").write_text(yaml.safe_dump(prometheus_config, sort_keys=False))
+(out / "prometheus.local-validation.yml").write_text(
+    yaml.safe_dump(prometheus_config, sort_keys=False)
+)
+
 prometheus_config["rule_files"] = ["/rendered/rules/*.yml"]
-(out / "prometheus.docker-validation.yml").write_text(yaml.safe_dump(prometheus_config, sort_keys=False))
+(out / "prometheus.docker-validation.yml").write_text(
+    yaml.safe_dump(prometheus_config, sort_keys=False)
+)
 PY
+
+# Prometheus and Alertmanager containers run as non-root users, while mktemp
+# creates OUT_DIR as 0700. Make rendered validation files readable/traversable
+# for Docker-based validation.
+find "${OUT_DIR}" -type d -exec chmod 0755 {} +
+find "${OUT_DIR}" -type f -exec chmod 0644 {} +
 
 run_tool() {
   local image="$1"
@@ -82,6 +102,36 @@ run_tool() {
     return 127
   fi
 }
+
+run_tool \
+  "${PROM_IMAGE}" \
+  promtool \
+  "check config /rendered/prometheus.docker-validation.yml" \
+  check config "${OUT_DIR}/prometheus.local-validation.yml"
+
+shopt -s nullglob
+rule_files=("${OUT_DIR}"/rules/*.yml)
+shopt -u nullglob
+
+if (( ${#rule_files[@]} == 0 )); then
+  echo "ERROR: no rendered Prometheus rule files found in ${OUT_DIR}/rules" >&2
+  exit 1
+fi
+
+for rule_file in "${rule_files[@]}"; do
+  rule_name="$(basename "${rule_file}")"
+  run_tool \
+    "${PROM_IMAGE}" \
+    promtool \
+    "check rules /rendered/rules/${rule_name}" \
+    check rules "${rule_file}"
+done
+
+run_tool \
+  "${ALERTMANAGER_IMAGE}" \
+  amtool \
+  "check-config /rendered/alertmanager.yml" \
+  check-config "${OUT_DIR}/alertmanager.yml"
 
 run_tool "${PROM_IMAGE}" promtool "check config /rendered/prometheus.docker-validation.yml" check config "${OUT_DIR}/prometheus.local-validation.yml"
 
