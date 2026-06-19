@@ -72,7 +72,11 @@ run_tool() {
     "${binary}" "$@"
   elif command -v docker >/dev/null 2>&1; then
     # shellcheck disable=SC2086
-    docker run --rm -v "${OUT_DIR}:/rendered:ro" "${image}" "${binary}" ${docker_args}
+    docker run --rm \
+      --entrypoint "${binary}" \
+      -v "${OUT_DIR}:/rendered:ro" \
+      "${image}" \
+      ${docker_args}
   else
     echo "ERROR: neither ${binary} nor docker is available" >&2
     return 127
