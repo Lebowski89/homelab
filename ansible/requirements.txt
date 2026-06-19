@@ -1,4 +1,4 @@
-ansible-core==2.21.0
+ansible-core==2.21.1
 ansible-lint==26.4.0
 docker==7.1.0
 jmespath==1.1.0
@@ -10,5 +10,5 @@ psycopg2-binary==2.9.12
 pyyaml==6.0.3
 pytz==2026.2
 requests==2.34.2
-ruff==0.15.17
+ruff==0.15.18
 yamllint==1.38.0
