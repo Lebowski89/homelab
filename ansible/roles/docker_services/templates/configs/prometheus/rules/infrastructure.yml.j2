@@ -2,7 +2,7 @@ groups:
   - name: infrastructure.rules
     rules:
       - alert: PrometheusTargetDown
-        expr: up{job!~"alertmanager|alertmanager-gotify-bridge"} == 0
+        expr: up{job!="alertmanager"} == 0
         for: 5m
         labels:
           severity: critical
@@ -19,24 +19,4 @@ groups:
         annotations:
           summary: "Alertmanager is down"
           description: "Prometheus has been unable to scrape Alertmanager on {{ '{{' }} $labels.instance {{ '}}' }} for 5 minutes."
-          priority: "9"
-
-      - alert: GotifyBridgeDown
-        expr: up{job="alertmanager-gotify-bridge"} == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Alertmanager Gotify bridge is down"
-          description: "Prometheus has been unable to scrape alertmanager-gotify-bridge on {{ '{{' }} $labels.instance {{ '}}' }} for 5 minutes."
-          priority: "9"
-
-      - alert: GotifyBackendUnhealthy
-        expr: alertmanager_gotify_bridge_gotify_up == 0
-        for: 5m
-        labels:
-          severity: critical
-        annotations:
-          summary: "Gotify backend is unhealthy from the bridge"
-          description: "alertmanager-gotify-bridge cannot reach Gotify's health endpoint."
           priority: "9"
