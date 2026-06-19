@@ -1,6 +1,7 @@
 locals {
   ipv4_records = [
     "adminer",
+    "alertmanager",
     "alloy",
     "authelia",
     "autobrr",
