@@ -1,7 +1,7 @@
 ---
 
 haproxy:
-  enabled: haproxy
+  enabled: true
   tags: [apps, network, haproxy]
   name: haproxy
   stack: haproxy
