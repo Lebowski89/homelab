@@ -2,7 +2,7 @@
 
 kometa:
   enabled: true
-  tags: [apps, plex, kometa]
+  tags: [plex, kometa]
   name: kometa
   stack: kometa
   image: kometateam/kometa:v2.3.1

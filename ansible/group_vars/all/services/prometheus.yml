@@ -2,7 +2,7 @@
 
 prometheus:
   enabled: true
-  tags: [apps, monitoring, prometheus]
+  tags: [monitoring, prometheus]
   name: prometheus
   stack: prometheus
   image: prom/prometheus:v3.12.0
@@ -71,7 +71,3 @@ prometheus:
       delay: 10s
       max_attempts: 5
       window: 2m
-
-prometheus_node_exporter_targets:
-  - name: unraid
-    target: "192.168.80.20:9100"

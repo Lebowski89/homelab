@@ -2,7 +2,7 @@
 
 mariadb:
   enabled: false
-  tags: [apps, mariadb]
+  tags: [mariadb]
   name: mariadb
   stack: mariadb
   image: mariadb:12

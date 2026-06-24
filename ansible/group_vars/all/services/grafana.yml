@@ -2,7 +2,7 @@
 
 grafana:
   enabled: true
-  tags: [apps, monitoring, grafana]
+  tags: [monitoring, grafana]
   name: grafana
   stack: grafana
   image: grafana/grafana:13.0.2-ubuntu

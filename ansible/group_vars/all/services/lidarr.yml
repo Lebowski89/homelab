@@ -2,7 +2,7 @@
 
 lidarr:
   enabled: true
-  tags: [apps, arrs, pgsql, lidarr]
+  tags: [arrs, pgsql, lidarr]
   name: lidarr
   stack: lidarr
   image: ghcr.io/hotio/lidarr:release-3.1.0.4875

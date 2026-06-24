@@ -2,7 +2,7 @@
 
 radarr:
   enabled: true
-  tags: [apps, arrs, pgsql, radarr]
+  tags: [arrs, pgsql, radarr]
   stack: radarr
   image: ghcr.io/hotio/radarr:release-6.2.1.10461
   named_networks:

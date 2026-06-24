@@ -2,7 +2,7 @@
 
 themepark:
   enabled: true
-  tags: [apps, utilities, themepark]
+  tags: [utilities, themepark]
   name: theme-park
   stack: themepark
   image: ghcr.io/themepark-dev/theme.park:1.22.0

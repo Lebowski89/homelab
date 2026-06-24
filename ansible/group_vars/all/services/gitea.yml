@@ -2,7 +2,7 @@
 
 gitea:
   enabled: true
-  tags: [apps, utilities, pgsql, gitea]
+  tags: [utilities, pgsql, gitea]
   name: gitea
   stack: gitea
   image: gitea/gitea:1.26.3

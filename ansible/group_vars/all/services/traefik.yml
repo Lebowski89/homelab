@@ -2,7 +2,7 @@
 
 traefik:
   enabled: true
-  tags: [apps, network, proxy, traefik]
+  tags: [proxy, traefik]
   name: traefik
   stack: traefik
   image: traefik:v3.7.5

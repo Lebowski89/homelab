@@ -2,7 +2,7 @@
 
 qui:
   enabled: true
-  tags: [apps, torrents, pgsql, qui]
+  tags: [torrents, pgsql, qui]
   name: qui
   stack: qui
   image: ghcr.io/autobrr/qui:v1.20.0

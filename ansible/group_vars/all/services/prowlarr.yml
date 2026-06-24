@@ -2,7 +2,7 @@
 
 prowlarr:
   enabled: true
-  tags: [apps, arrs, pgsql, prowlarr]
+  tags: [arrs, pgsql, prowlarr]
   name: prowlarr
   stack: prowlarr
   image: ghcr.io/hotio/prowlarr:release-2.4.0.5397

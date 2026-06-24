@@ -2,7 +2,7 @@
 
 znc:
   enabled: true
-  tags: [apps, media, znc]
+  tags: [media, znc]
   name: znc
   stack: znc
   image: lscr.io/linuxserver/znc:znc-1.10.2-ls181

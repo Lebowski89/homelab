@@ -2,7 +2,7 @@
 
 alloy:
   enabled: true
-  tags: [apps, monitoring, alloy]
+  tags: [monitoring, alloy]
   name: alloy
   stack: alloy
   image: grafana/alloy:v1.17.0

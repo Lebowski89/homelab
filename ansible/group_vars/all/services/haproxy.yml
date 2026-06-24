@@ -2,7 +2,7 @@
 
 haproxy:
   enabled: true
-  tags: [apps, network, haproxy]
+  tags: [haproxy]
   name: haproxy
   stack: haproxy
   image: haproxy:3.4-alpine

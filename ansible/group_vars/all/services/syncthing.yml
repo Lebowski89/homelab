@@ -2,7 +2,7 @@
 
 syncthing:
   enabled: true
-  tags: [apps, utilities, syncthing]
+  tags: [utilities, syncthing]
   name: syncthing
   stack: syncthing
   image: lscr.io/linuxserver/syncthing:v2.1.1-ls220
