@@ -28,10 +28,6 @@
         apply:
           tags:
             - never
-            - netbox_bootstrap
-            - netbox_deploy
-            - netbox_recreate
-            - netbox_remove
       tags:
         - never
         - netbox_bootstrap
@@ -190,6 +186,25 @@
         - postgres_admin_nuke_node
         - postgres_admin_fix_owner
         - postgres_admin_update_pg_hba
+
+    ################################
+    # NODE EXPORTER (MONITORING)
+    ################################
+
+    - name: Include Node Exporter role
+      ansible.builtin.include_role:
+        name: node_exporter
+        apply:
+          tags: [node_exporter]
+      vars:
+        node_exporter_install_groups:
+          - tags_ansible_manager
+          - tags_docker
+          - tags_postgres
+      when:
+        - node_exporter_install_groups | intersect(group_names) | length > 0
+        - "'device_roles_storage' not in group_names"
+      tags: [node_exporter]
 
     ################################
     # DOCKER_SERVICES

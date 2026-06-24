@@ -18,17 +18,23 @@ groups:
             (
               node_filesystem_avail_bytes{
                 job="node-exporter",
-                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*",
-                mountpoint!~"/boot|/dev|/proc|/sys|/run|/var/lib/docker/.*"
+                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*|rootfs|vfat",
+                mountpoint!~"^/(boot|dev|proc|sys|run)($|/)|^/var/lib/docker($|/)"
               }
               /
               node_filesystem_size_bytes{
                 job="node-exporter",
-                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*",
-                mountpoint!~"/boot|/dev|/proc|/sys|/run|/var/lib/docker/.*"
+                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*|rootfs|vfat",
+                mountpoint!~"^/(boot|dev|proc|sys|run)($|/)|^/var/lib/docker($|/)"
               }
             )
           ) * 100 > 85
+          and on(instance, device, mountpoint, fstype)
+          node_filesystem_size_bytes{
+            job="node-exporter",
+            fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*|rootfs|vfat",
+            mountpoint!~"^/(boot|dev|proc|sys|run)($|/)|^/var/lib/docker($|/)"
+          } > 0
         for: 15m
         labels:
           severity: warning
@@ -44,17 +50,23 @@ groups:
             (
               node_filesystem_avail_bytes{
                 job="node-exporter",
-                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*",
-                mountpoint!~"/boot|/dev|/proc|/sys|/run|/var/lib/docker/.*"
+                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*|rootfs|vfat",
+                mountpoint!~"^/(boot|dev|proc|sys|run)($|/)|^/var/lib/docker($|/)"
               }
               /
               node_filesystem_size_bytes{
                 job="node-exporter",
-                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*",
-                mountpoint!~"/boot|/dev|/proc|/sys|/run|/var/lib/docker/.*"
+                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*|rootfs|vfat",
+                mountpoint!~"^/(boot|dev|proc|sys|run)($|/)|^/var/lib/docker($|/)"
               }
             )
           ) * 100 > 95
+          and on(instance, device, mountpoint, fstype)
+          node_filesystem_size_bytes{
+            job="node-exporter",
+            fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*|rootfs|vfat",
+            mountpoint!~"^/(boot|dev|proc|sys|run)($|/)|^/var/lib/docker($|/)"
+          } > 0
         for: 10m
         labels:
           severity: critical
@@ -62,6 +74,24 @@ groups:
           summary: "Disk usage critical on {{ '{{' }} $labels.instance {{ '}}' }}: {{ '{{' }} $labels.mountpoint {{ '}}' }}"
           description: "Filesystem {{ '{{' }} $labels.mountpoint {{ '}}' }} on {{ '{{' }} $labels.instance {{ '}}' }} is {{ '{{' }} humanize $value {{ '}}' }}% full."
           priority: "9"
+
+      - alert: DockerFilesystemHigh
+        expr: |
+          (
+            1 -
+            (
+              node_filesystem_avail_bytes{job="node-exporter", mountpoint="/var/lib/docker"}
+              /
+              node_filesystem_size_bytes{job="node-exporter", mountpoint="/var/lib/docker"}
+            )
+          ) * 100 > 85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Docker filesystem usage high on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Docker filesystem {{ '{{' }} $labels.mountpoint {{ '}}' }} on {{ '{{' }} $labels.instance {{ '}}' }} is {{ '{{' }} humanize $value {{ '}}' }}% full."
+          priority: "6"
 
       - alert: HostFilesystemReadonly
         expr: node_filesystem_readonly{job="node-exporter", mountpoint!~"/boot|/dev|/proc|/sys|/run"} == 1
