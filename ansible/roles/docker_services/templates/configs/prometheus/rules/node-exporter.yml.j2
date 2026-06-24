@@ -1,0 +1,169 @@
+groups:
+  - name: node-exporter.rules
+    rules:
+      - alert: NodeExporterDown
+        expr: up{job="node-exporter"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node exporter down on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Prometheus has been unable to scrape node-exporter on {{ '{{' }} $labels.instance {{ '}}' }} for 5 minutes."
+          priority: "9"
+
+      - alert: HostDiskSpaceHigh
+        expr: |
+          (
+            1 -
+            (
+              node_filesystem_avail_bytes{
+                job="node-exporter",
+                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*",
+                mountpoint!~"/boot|/dev|/proc|/sys|/run|/var/lib/docker/.*"
+              }
+              /
+              node_filesystem_size_bytes{
+                job="node-exporter",
+                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*",
+                mountpoint!~"/boot|/dev|/proc|/sys|/run|/var/lib/docker/.*"
+              }
+            )
+          ) * 100 > 85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk usage high on {{ '{{' }} $labels.instance {{ '}}' }}: {{ '{{' }} $labels.mountpoint {{ '}}' }}"
+          description: "Filesystem {{ '{{' }} $labels.mountpoint {{ '}}' }} on {{ '{{' }} $labels.instance {{ '}}' }} is {{ '{{' }} humanize $value {{ '}}' }}% full."
+          priority: "6"
+
+      - alert: HostDiskSpaceCritical
+        expr: |
+          (
+            1 -
+            (
+              node_filesystem_avail_bytes{
+                job="node-exporter",
+                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*",
+                mountpoint!~"/boot|/dev|/proc|/sys|/run|/var/lib/docker/.*"
+              }
+              /
+              node_filesystem_size_bytes{
+                job="node-exporter",
+                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*",
+                mountpoint!~"/boot|/dev|/proc|/sys|/run|/var/lib/docker/.*"
+              }
+            )
+          ) * 100 > 95
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Disk usage critical on {{ '{{' }} $labels.instance {{ '}}' }}: {{ '{{' }} $labels.mountpoint {{ '}}' }}"
+          description: "Filesystem {{ '{{' }} $labels.mountpoint {{ '}}' }} on {{ '{{' }} $labels.instance {{ '}}' }} is {{ '{{' }} humanize $value {{ '}}' }}% full."
+          priority: "9"
+
+      - alert: HostFilesystemReadonly
+        expr: node_filesystem_readonly{job="node-exporter", mountpoint!~"/boot|/dev|/proc|/sys|/run"} == 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Filesystem is read-only on {{ '{{' }} $labels.instance {{ '}}' }}: {{ '{{' }} $labels.mountpoint {{ '}}' }}"
+          description: "Filesystem {{ '{{' }} $labels.mountpoint {{ '}}' }} on {{ '{{' }} $labels.instance {{ '}}' }} has become read-only."
+          priority: "10"
+
+      - alert: HostInodesHigh
+        expr: |
+          (
+            1 -
+            (
+              node_filesystem_files_free{
+                job="node-exporter",
+                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*",
+                mountpoint!~"/boot|/dev|/proc|/sys|/run|/var/lib/docker/.*"
+              }
+              /
+              node_filesystem_files{
+                job="node-exporter",
+                fstype!~"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*",
+                mountpoint!~"/boot|/dev|/proc|/sys|/run|/var/lib/docker/.*"
+              }
+            )
+          ) * 100 > 85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Inode usage high on {{ '{{' }} $labels.instance {{ '}}' }}: {{ '{{' }} $labels.mountpoint {{ '}}' }}"
+          description: "Filesystem {{ '{{' }} $labels.mountpoint {{ '}}' }} on {{ '{{' }} $labels.instance {{ '}}' }} inode usage is {{ '{{' }} humanize $value {{ '}}' }}%."
+          priority: "6"
+
+      - alert: HostMemoryHigh
+        expr: |
+          (
+            1 -
+            (
+              node_memory_MemAvailable_bytes{job="node-exporter"}
+              /
+              node_memory_MemTotal_bytes{job="node-exporter"}
+            )
+          ) * 100 > 90
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory usage high on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Memory usage on {{ '{{' }} $labels.instance {{ '}}' }} is {{ '{{' }} humanize $value {{ '}}' }}%."
+          priority: "6"
+
+      - alert: HostSwapHigh
+        expr: |
+          (
+            1 -
+            (
+              node_memory_SwapFree_bytes{job="node-exporter"}
+              /
+              node_memory_SwapTotal_bytes{job="node-exporter"}
+            )
+          ) * 100 > 50
+          and
+          node_memory_SwapTotal_bytes{job="node-exporter"} > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Swap usage high on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Swap usage on {{ '{{' }} $labels.instance {{ '}}' }} is {{ '{{' }} humanize $value {{ '}}' }}%."
+          priority: "6"
+
+      - alert: HostCpuHigh
+        expr: |
+          (
+            1 -
+            avg by (instance) (
+              rate(node_cpu_seconds_total{job="node-exporter", mode="idle"}[5m])
+            )
+          ) * 100 > 90
+        for: 20m
+        labels:
+          severity: warning
+        annotations:
+          summary: "CPU usage high on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "CPU usage on {{ '{{' }} $labels.instance {{ '}}' }} is {{ '{{' }} humanize $value {{ '}}' }}% over 20 minutes."
+          priority: "6"
+
+      - alert: HostLoadHigh
+        expr: |
+          (
+            node_load15{job="node-exporter"}
+            /
+            count by (instance) (node_cpu_seconds_total{job="node-exporter", mode="idle"})
+          ) > 1.5
+        for: 20m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Load average high on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "15-minute load average on {{ '{{' }} $labels.instance {{ '}}' }} is high relative to CPU count."
+          priority: "6"
