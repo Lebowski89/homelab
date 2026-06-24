@@ -4,13 +4,13 @@
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.11.0 |
-| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.109.0 |
+| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.110.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.109.0 |
+| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.110.0 |
 
 ## Modules
 
@@ -20,10 +20,10 @@ No modules.
 
 | Name | Type |
 |------|------|
-| [proxmox_hardware_mapping_pci.unraid_cache](https://registry.terraform.io/providers/bpg/proxmox/0.109.0/docs/resources/hardware_mapping_pci) | resource |
-| [proxmox_hardware_mapping_pci.unraid_hba](https://registry.terraform.io/providers/bpg/proxmox/0.109.0/docs/resources/hardware_mapping_pci) | resource |
-| [proxmox_hardware_mapping_pci.unraid_nic](https://registry.terraform.io/providers/bpg/proxmox/0.109.0/docs/resources/hardware_mapping_pci) | resource |
-| [proxmox_hardware_mapping_usb.unraid_boot](https://registry.terraform.io/providers/bpg/proxmox/0.109.0/docs/resources/hardware_mapping_usb) | resource |
+| [proxmox_hardware_mapping_pci.unraid_cache](https://registry.terraform.io/providers/bpg/proxmox/0.110.0/docs/resources/hardware_mapping_pci) | resource |
+| [proxmox_hardware_mapping_pci.unraid_hba](https://registry.terraform.io/providers/bpg/proxmox/0.110.0/docs/resources/hardware_mapping_pci) | resource |
+| [proxmox_hardware_mapping_pci.unraid_nic](https://registry.terraform.io/providers/bpg/proxmox/0.110.0/docs/resources/hardware_mapping_pci) | resource |
+| [proxmox_hardware_mapping_usb.unraid_boot](https://registry.terraform.io/providers/bpg/proxmox/0.110.0/docs/resources/hardware_mapping_usb) | resource |
 
 ## Inputs
 
