@@ -2,7 +2,7 @@
 
 plex:
   enabled: true
-  tags: [apps, plex, plex_server]
+  tags: [plex, plex_server]
   name: plex
   stack: plex
   image: lscr.io/linuxserver/plex:1.43.2

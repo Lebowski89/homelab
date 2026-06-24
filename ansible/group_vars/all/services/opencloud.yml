@@ -2,7 +2,7 @@
 
 opencloud:
   enabled: true
-  tags: [apps, opencloud]
+  tags: [opencloud]
   name: opencloud
   stack: opencloud
   image: opencloudeu/opencloud-rolling:7.1.0

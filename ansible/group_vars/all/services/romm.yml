@@ -2,7 +2,7 @@
 
 romm:
   enabled: true
-  tags: [apps, gaming, romm]
+  tags: [gaming, romm]
   name: romm
   stack: romm
   image: ghcr.io/rommapp/romm:4.9.1

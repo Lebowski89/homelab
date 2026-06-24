@@ -2,7 +2,7 @@
 
 crowdsec:
   enabled: true
-  tags: [apps, monitoring, crowdsec]
+  tags: [proxy, crowdsec]
   name: crowdsec
   stack: crowdsec
   image: crowdsecurity/crowdsec:v1.7.8

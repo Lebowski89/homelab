@@ -2,7 +2,7 @@
 
 sonarr:
   enabled: true
-  tags: [apps, arrs, pgsql, sonarr]
+  tags: [arrs, pgsql, sonarr]
   stack: sonarr
   image: ghcr.io/hotio/sonarr:release-4.0.17.2952
   named_networks:

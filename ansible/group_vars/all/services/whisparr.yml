@@ -2,7 +2,7 @@
 
 whisparr:
   enabled: true
-  tags: [apps, arrs, pgsql, whisparr]
+  tags: [arrs, pgsql, whisparr]
   name: whisparr
   stack: whisparr
   image: ghcr.io/hotio/whisparr:v3-3.3.3-release.683

@@ -2,7 +2,7 @@
 
 vaultwarden:
   enabled: true
-  tags: [apps, utilities, pgsql, vaultwarden]
+  tags: [utilities, pgsql, vaultwarden]
   name: vaultwarden
   stack: vaultwarden
   image: vaultwarden/server:1.36.0

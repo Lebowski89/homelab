@@ -2,7 +2,7 @@
 
 technitium:
   enabled: true
-  tags: [apps, network, technitium]
+  tags: [technitium]
   name: technitium
   stack: technitium
   image: technitium/dns-server:15.2.0

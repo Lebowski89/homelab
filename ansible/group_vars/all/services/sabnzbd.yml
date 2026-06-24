@@ -2,7 +2,7 @@
 
 sabnzbd:
   enabled: true
-  tags: [apps, usenet, sabnzbd]
+  tags: [usenet, sabnzbd]
   name: sabnzbd
   stack: sabnzbd
   image: ghcr.io/hotio/sabnzbd:release-v5.0.4

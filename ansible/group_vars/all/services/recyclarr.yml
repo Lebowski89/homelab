@@ -2,7 +2,7 @@
 
 recyclarr:
   enabled: true
-  tags: [apps, arrs, recyclarr]
+  tags: [arrs, recyclarr]
   name: recyclarr
   stack: recyclarr
   image: ghcr.io/recyclarr/recyclarr:8.6.0
