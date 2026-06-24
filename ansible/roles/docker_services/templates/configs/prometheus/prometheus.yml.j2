@@ -38,3 +38,13 @@ scrape_configs:
     scrape_interval: 30s
     static_configs:
       - targets: ["alertmanager:9093"]
+
+  - job_name: "node-exporter"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    static_configs:
+{% for target in prometheus_node_exporter_targets | default([]) %}
+      - targets: ["{{ target.target }}"]
+        labels:
+          instance: "{{ target.name }}"
+{% endfor %}
