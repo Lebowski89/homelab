@@ -5,7 +5,7 @@ gitea:
   tags: [utilities, pgsql, gitea]
   name: gitea
   stack: gitea
-  image: gitea/gitea:1.26.3
+  image: gitea/gitea:1.26.4
   named_networks:
     overlay:
       external: true
