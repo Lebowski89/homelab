@@ -40,6 +40,10 @@ prometheus:
       dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/prometheus/rules/applications.yml"
       mode: "0644"
       force: true
+    - src: configs/prometheus/rules/node-exporter.yml.j2
+      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/prometheus/rules/node-exporter.yml"
+      mode: "0644"
+      force: true
   volumes:
     config:
       type: bind
@@ -67,3 +71,7 @@ prometheus:
       delay: 10s
       max_attempts: 5
       window: 2m
+
+prometheus_node_exporter_targets:
+  - name: unraid
+    target: "192.168.80.20:9100"
