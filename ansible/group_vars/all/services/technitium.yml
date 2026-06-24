@@ -1,7 +1,7 @@
 ---
 
 technitium:
-  enabled: technitium
+  enabled: true
   tags: [apps, network, technitium]
   name: technitium
   stack: technitium
