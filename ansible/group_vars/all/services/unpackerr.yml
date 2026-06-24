@@ -2,7 +2,7 @@
 
 unpackerr:
   enabled: true
-  tags: [apps, torrents, unpackerr]
+  tags: [torrents, unpackerr]
   name: unpackerr
   stack: unpackerr
   image: ghcr.io/hotio/unpackerr:release-v0.15.2

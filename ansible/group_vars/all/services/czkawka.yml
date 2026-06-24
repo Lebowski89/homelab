@@ -2,7 +2,7 @@
 
 czkawka:
   enabled: true
-  tags: [apps, utilities, czkawka]
+  tags: [utilities, czkawka]
   name: czkawka
   stack: czkawka
   image: jlesage/czkawka:v26.03.1

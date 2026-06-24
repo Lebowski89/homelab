@@ -2,7 +2,7 @@
 
 scraparr:
   enabled: scraparr
-  tags: [apps, monitoring, scraparr]
+  tags: [monitoring, scraparr]
   name: scraparr
   stack: scraparr
   # image: thegameprofi/scraparr:3.0.3
