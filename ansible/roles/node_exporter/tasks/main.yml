@@ -1,0 +1,63 @@
+---
+
+- name: Create node_exporter group
+  ansible.builtin.group:
+    name: "{{ node_exporter_group }}"
+    system: true
+
+- name: Create node_exporter user
+  ansible.builtin.user:
+    name: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Create node_exporter textfile collector directory
+  ansible.builtin.file:
+    path: "{{ node_exporter_textfile_dir }}"
+    state: directory
+    owner: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    mode: "0755"
+
+- name: Download node_exporter archive
+  ansible.builtin.get_url:
+    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}.tar.gz"
+    dest: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}.tar.gz"
+    mode: "0644"
+
+- name: Extract node_exporter archive
+  ansible.builtin.unarchive:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}.tar.gz"
+    dest: /tmp
+    remote_src: true
+    creates: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}/node_exporter"
+
+- name: Install node_exporter binary
+  ansible.builtin.copy:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}/node_exporter"
+    dest: "{{ node_exporter_install_dir }}/node_exporter"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  notify: Restart node_exporter
+
+- name: Install node_exporter systemd unit
+  ansible.builtin.template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart node_exporter
+
+- name: Enable and start node_exporter
+  ansible.builtin.systemd:
+    name: node_exporter
+    enabled: true
+    state: started
+    daemon_reload: true

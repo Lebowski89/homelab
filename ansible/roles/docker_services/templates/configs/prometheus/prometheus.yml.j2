@@ -43,8 +43,20 @@ scrape_configs:
     scrape_interval: 30s
     scrape_timeout: 10s
     static_configs:
-{% for target in prometheus_node_exporter_targets | default([]) %}
-      - targets: ["{{ target.target }}"]
+{% set ns = namespace(hosts=[]) %}
+{% for inventory_group in prometheus_node_exporter_inventory_groups | default([]) %}
+{% for host in groups.get(inventory_group, []) %}
+{% if host not in ns.hosts %}
+{% set _ = ns.hosts.append(host) %}
+{% endif %}
+{% endfor %}
+{% endfor %}
+{% for host in ns.hosts | sort %}
+{% set local_ip = hostvars[host].local_ip | default('') %}
+{% if local_ip %}
+      - targets: ["{{ local_ip }}:{{ prometheus_node_exporter_port | default(9100) }}"]
         labels:
-          instance: "{{ target.name }}"
+          instance: "{{ host }}"
+          source: "netbox"
+{% endif %}
 {% endfor %}

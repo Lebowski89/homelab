@@ -1,0 +1,9 @@
+---
+
+prometheus_node_exporter_inventory_groups:
+  - tags_ansible_manager
+  - tags_docker
+  - tags_postgres
+  - tags_storage
+
+prometheus_node_exporter_port: 9100
