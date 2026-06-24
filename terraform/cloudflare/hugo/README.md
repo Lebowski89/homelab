@@ -4,13 +4,13 @@
 | Name | Version |
 |------|---------|
 | <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.11.0 |
-| <a name="requirement_cloudflare"></a> [cloudflare](#requirement\_cloudflare) | 5.20.0 |
+| <a name="requirement_cloudflare"></a> [cloudflare](#requirement\_cloudflare) | 5.21.0 |
 
 ## Providers
 
 | Name | Version |
 |------|---------|
-| <a name="provider_cloudflare"></a> [cloudflare](#provider\_cloudflare) | 5.20.0 |
+| <a name="provider_cloudflare"></a> [cloudflare](#provider\_cloudflare) | 5.21.0 |
 
 ## Modules
 
@@ -20,8 +20,8 @@ No modules.
 
 | Name | Type |
 |------|------|
-| [cloudflare_dns_record.github_pages_a](https://registry.terraform.io/providers/cloudflare/cloudflare/5.20.0/docs/resources/dns_record) | resource |
-| [cloudflare_dns_record.github_pages_aaaa](https://registry.terraform.io/providers/cloudflare/cloudflare/5.20.0/docs/resources/dns_record) | resource |
+| [cloudflare_dns_record.github_pages_a](https://registry.terraform.io/providers/cloudflare/cloudflare/5.21.0/docs/resources/dns_record) | resource |
+| [cloudflare_dns_record.github_pages_aaaa](https://registry.terraform.io/providers/cloudflare/cloudflare/5.21.0/docs/resources/dns_record) | resource |
 
 ## Inputs
 
