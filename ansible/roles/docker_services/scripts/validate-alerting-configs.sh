@@ -31,26 +31,69 @@ out = Path(os.environ["OUT_DIR"])
 env = Environment()
 
 
+def read_yaml(path: Path) -> dict:
+    if not path.exists():
+        return {}
+    return yaml.safe_load(path.read_text()) or {}
+
+
+def first_existing(*paths: Path) -> Path:
+    for path in paths:
+        if path.exists():
+            return path
+
+    wanted = "\n".join(f"  - {path}" for path in paths)
+    raise FileNotFoundError(f"None of the expected paths exist:\n{wanted}")
+
+
+service_alertmanager = root / "ansible/group_vars/all/services/alertmanager.yml"
+service_prometheus = root / "ansible/group_vars/all/services/prometheus.yml"
+
+# Basic YAML validation for service definitions that affect the alerting stack.
+# This is a syntax check, not full schema validation.
+alertmanager_service_vars = read_yaml(service_alertmanager)
+prometheus_service_vars = read_yaml(service_prometheus)
+
+prometheus_group_vars = read_yaml(root / "ansible/group_vars/all/prometheus.yml")
+
+# The validation script renders templates outside a real Ansible inventory, so
+# provide a small CI-safe context for templates that normally depend on NetBox
+# hostvars/groups or Infisical-provided SMTP variables.
+node_groups = prometheus_group_vars.get("prometheus_node_exporter_inventory_groups", [])
+groups = {}
+hostvars = {}
+
+for idx, group in enumerate(node_groups, start=1):
+    host = f"ci-{group.replace('_', '-')}"
+    groups[group] = [host]
+    hostvars[host] = {"local_ip": f"192.0.2.{idx}"}
+
+context = {
+    **prometheus_group_vars,
+    "groups": groups,
+    "hostvars": hostvars,
+    "docker_services_svc": prometheus_service_vars.get("prometheus", {}),
+    "smtp_host": "smtp.example.com",
+    "smtp_port": "587",
+    "smtp_email": "alerts@example.com",
+    "smtp_sender": "alertmanager@example.com",
+    "smtp_username": "alertmanager@example.com",
+}
+
+
 def render(src: Path, dest: Path) -> None:
-    rendered = env.from_string(src.read_text()).render()
+    rendered = env.from_string(src.read_text()).render(**context)
     yaml.safe_load(rendered)
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(rendered)
 
 
-# Basic YAML validation for service definitions that affect the alerting stack.
-# The Jinja expressions in these files are YAML scalar values, so raw parsing is
-# sufficient here. This is a syntax check, not full schema validation.
-for service_yaml in [
-    root / "ansible/group_vars/all/services/alertmanager.yml",
-    root / "ansible/group_vars/all/services/prometheus.yml",
-]:
-    yaml.safe_load(service_yaml.read_text())
-
-render(
+prometheus_template = first_existing(
+    root / "ansible/roles/docker_services/templates/configs/prometheus/prometheus.yml.j2",
     root / "ansible/roles/docker_services/templates/configs/prometheus.yml.j2",
-    out / "prometheus.yml",
 )
+
+render(prometheus_template, out / "prometheus.yml")
 render(
     root / "ansible/roles/docker_services/templates/configs/alertmanager/alertmanager.yml.j2",
     out / "alertmanager.yml",
