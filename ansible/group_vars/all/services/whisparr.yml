@@ -5,7 +5,7 @@ whisparr:
   tags: [arrs, pgsql, whisparr]
   name: whisparr
   stack: whisparr
-  image: ghcr.io/hotio/whisparr:v3-3.3.3-release.683
+  image: ghcr.io/hotio/whisparr:v3-3.3.4-release.794
   named_networks:
     overlay:
       external: true
