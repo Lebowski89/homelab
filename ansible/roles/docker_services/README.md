@@ -755,8 +755,12 @@
 | Prep - qBittorrent ¦ Set derived vars | ansible.builtin.set_fact | False |
 | Prep - qBittorrent ¦ Assert downloads-instance password is present | ansible.builtin.assert | True |
 | Prep - qBittorrent ¦ Generate downloads-instance pass | qbittorrent_passwd | True |
+| Prep - qBittorrent ¦ Store downloads-instance pass hash | ansible.builtin.set_fact | True |
+| Prep - qBittorrent ¦ Assert downloads-instance pass hash was generated | ansible.builtin.assert | True |
 | Prep - qBittorrent ¦ Assert seeds-instance password is present | ansible.builtin.assert | True |
 | Prep - qBittorrent ¦ Generate seeds-instance pass | qbittorrent_passwd | True |
+| Prep - qBittorrent ¦ Store seeds-instance pass hash | ansible.builtin.set_fact | True |
+| Prep - qBittorrent ¦ Assert seeds-instance pass hash was generated | ansible.builtin.assert | True |
 
 #### File: tasks/sub_tasks/prep/swarm_configs/_absent.yml
 
