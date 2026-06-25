@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/06/16 |
+| Readme update        | 2026/06/26 |
 
 
 
@@ -19,7 +19,62 @@
 
 
 
+### Defaults
 
+**These are static variables with lower priority**
+
+#### File: defaults/main.yml
+
+| Var          | Type         | Value       |
+|--------------|--------------|-------------|
+| [docker_services_default_deploy_profile](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L3)   | str | `none` |    
+| [docker_services_deploy_profiles](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L5)   | dict | `{}` |    
+| [docker_services_deploy_profiles.**none**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L6)   | dict | `{}` |    
+| [docker_services_deploy_profiles.**standard**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L8)   | dict | `{}` |    
+| [docker_services_deploy_profiles.standard.**restart_policy**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L9)   | dict | `{}` |    
+| [docker_services_deploy_profiles.standard.restart_policy.**condition**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L10)   | str | `on-failure` |    
+| [docker_services_deploy_profiles.standard.restart_policy.**delay**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L11)   | str | `10s` |    
+| [docker_services_deploy_profiles.standard.restart_policy.**max_attempts**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L12)   | int | `5` |    
+| [docker_services_deploy_profiles.standard.restart_policy.**window**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L13)   | str | `2m` |    
+| [docker_services_deploy_profiles.standard.**update_config**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L14)   | dict | `{}` |    
+| [docker_services_deploy_profiles.standard.update_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L15)   | int | `1` |    
+| [docker_services_deploy_profiles.standard.update_config.**delay**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L16)   | str | `10s` |    
+| [docker_services_deploy_profiles.standard.update_config.**failure_action**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L17)   | str | `rollback` |    
+| [docker_services_deploy_profiles.standard.update_config.**order**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L18)   | str | `stop-first` |    
+| [docker_services_deploy_profiles.standard.**rollback_config**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L19)   | dict | `{}` |    
+| [docker_services_deploy_profiles.standard.rollback_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L20)   | int | `1` |    
+| [docker_services_deploy_profiles.standard.rollback_config.**delay**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L21)   | str | `10s` |    
+| [docker_services_deploy_profiles.standard.rollback_config.**order**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L22)   | str | `stop-first` |    
+| [docker_services_deploy_profiles.**careful**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L24)   | dict | `{}` |    
+| [docker_services_deploy_profiles.careful.**restart_policy**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L25)   | dict | `{}` |    
+| [docker_services_deploy_profiles.careful.restart_policy.**condition**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L26)   | str | `on-failure` |    
+| [docker_services_deploy_profiles.careful.restart_policy.**delay**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L27)   | str | `10s` |    
+| [docker_services_deploy_profiles.careful.restart_policy.**max_attempts**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L28)   | int | `5` |    
+| [docker_services_deploy_profiles.careful.restart_policy.**window**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L29)   | str | `2m` |    
+| [docker_services_deploy_profiles.careful.**update_config**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L30)   | dict | `{}` |    
+| [docker_services_deploy_profiles.careful.update_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L31)   | int | `1` |    
+| [docker_services_deploy_profiles.careful.update_config.**delay**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L32)   | str | `30s` |    
+| [docker_services_deploy_profiles.careful.update_config.**failure_action**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L33)   | str | `rollback` |    
+| [docker_services_deploy_profiles.careful.update_config.**order**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L34)   | str | `stop-first` |    
+| [docker_services_deploy_profiles.careful.**rollback_config**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L35)   | dict | `{}` |    
+| [docker_services_deploy_profiles.careful.rollback_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L36)   | int | `1` |    
+| [docker_services_deploy_profiles.careful.rollback_config.**delay**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L37)   | str | `30s` |    
+| [docker_services_deploy_profiles.careful.rollback_config.**order**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L38)   | str | `stop-first` |    
+| [docker_services_deploy_profiles.**stateless_ha**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L40)   | dict | `{}` |    
+| [docker_services_deploy_profiles.stateless_ha.**restart_policy**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L41)   | dict | `{}` |    
+| [docker_services_deploy_profiles.stateless_ha.restart_policy.**condition**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L42)   | str | `on-failure` |    
+| [docker_services_deploy_profiles.stateless_ha.restart_policy.**delay**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L43)   | str | `5s` |    
+| [docker_services_deploy_profiles.stateless_ha.restart_policy.**max_attempts**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L44)   | int | `5` |    
+| [docker_services_deploy_profiles.stateless_ha.restart_policy.**window**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L45)   | str | `2m` |    
+| [docker_services_deploy_profiles.stateless_ha.**update_config**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L46)   | dict | `{}` |    
+| [docker_services_deploy_profiles.stateless_ha.update_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L47)   | int | `1` |    
+| [docker_services_deploy_profiles.stateless_ha.update_config.**delay**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L48)   | str | `5s` |    
+| [docker_services_deploy_profiles.stateless_ha.update_config.**failure_action**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L49)   | str | `rollback` |    
+| [docker_services_deploy_profiles.stateless_ha.update_config.**order**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L50)   | str | `start-first` |    
+| [docker_services_deploy_profiles.stateless_ha.**rollback_config**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L51)   | dict | `{}` |    
+| [docker_services_deploy_profiles.stateless_ha.rollback_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L52)   | int | `1` |    
+| [docker_services_deploy_profiles.stateless_ha.rollback_config.**delay**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L53)   | str | `5s` |    
+| [docker_services_deploy_profiles.stateless_ha.rollback_config.**order**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L54)   | str | `start-first` |    
 
 
 
@@ -74,7 +129,11 @@
 | Init ¦ Normalize role interface vars (compat with old names) | ansible.builtin.set_fact | False |  |
 | Init ¦ Ensure docker_services_service_cfg is provided | ansible.builtin.assert | False |  |
 | Init ¦ Validate target exists when targets are defined | ansible.builtin.assert | False |  |
+| Init ¦ Derive base and target service config | ansible.builtin.set_fact | False |  |
 | Init ¦ Normalize service config | ansible.builtin.set_fact | False |  |
+| Init ¦ Preserve target command override | ansible.builtin.set_fact | True |  |
+| Init ¦ Preserve target entrypoint override | ansible.builtin.set_fact | True |  |
+| Init ¦ Preserve target healthcheck.test override | ansible.builtin.set_fact | True |  |
 | Init ¦ Validate normalized service config | ansible.builtin.include_tasks | False |  |
 | Init ¦ Derive common service context | ansible.builtin.set_fact | False |  |
 | Init ¦ Derive stack name | ansible.builtin.set_fact | False |  |
@@ -334,6 +393,9 @@
 | Deploy - Config ¦ Validate deploy_replicas raw input | ansible.builtin.assert | True |
 | Deploy - Config ¦ Normalize deploy replicas | ansible.builtin.set_fact | False |
 | Deploy - Config ¦ Normalize deploy constraints into list | ansible.builtin.set_fact | False |
+| Deploy - Config ¦ Normalize deploy profile | ansible.builtin.set_fact | False |
+| Deploy - Config ¦ Validate deploy profile | ansible.builtin.assert | False |
+| Deploy - Config ¦ Load deploy profile defaults | ansible.builtin.set_fact | False |
 | Deploy - Config ¦ Normalize optional deploy sub-dicts | ansible.builtin.set_fact | False |
 | Deploy - Config ¦ Validate normalized deploy inputs | ansible.builtin.assert | False |
 | Deploy - Config ¦ Build deploy dict | ansible.builtin.set_fact | False |
@@ -400,10 +462,16 @@
 | Init - Validate ¦ docker_services_svc.sysctls shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.deploy shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.deploy.type | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.deploy.profile | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.deploy.profile is swarm-only | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.deploy.mode | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.deploy.replicas | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.deploy.host (optional) | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.deploy.constraints | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.deploy.restart_policy | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.deploy.update_config | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.deploy.rollback_config | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.deploy.resources | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.targets shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.targets entries are mappings | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.named_networks | ansible.builtin.assert | True |

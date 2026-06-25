@@ -4,7 +4,6 @@ qbittorrent:
   enabled: true
   tags: [torrents, qbittorrent]
   image: ghcr.io/hotio/qbittorrent:release-v5.2.2
-  stack: qbittorrent
   named_networks:
     overlay:
       external: true
@@ -21,6 +20,17 @@ qbittorrent:
     TZ: "{{ timezone }}"
     FILE__VPN_PIA_USER: /run/secrets/qbittorrent_pia_user_secret
     FILE__VPN_PIA_PASS: /run/secrets/qbittorrent_pia_pass_secret
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: qbittorrent_pia_user
+        path: "/PIA"
+        name: USER
+        docker_secret: qbittorrent_pia_user_secret
+      - var: qbittorrent_pia_pass
+        path: "/PIA"
+        name: PASS
+        docker_secret: qbittorrent_pia_pass_secret
   secrets:
     - qbittorrent_pia_user_secret
     - qbittorrent_pia_pass_secret
@@ -28,17 +38,19 @@ qbittorrent:
     type: swarm
     mode: replicated
     replicas: 1
+    profile: standard
     host: "{{ docker_services_unraid_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_unraid_host
-    restart_policy:
-      condition: on-failure
-      delay: 10s
-      max_attempts: 5
-      window: 2m
   targets:
+
+    ################################
+    # QBIT MAIN SERVICE
+    ################################
     downloads:
       name: qbittorrent
+      tags: [qbittorrent-main]
+      stack: qbittorrent
       hostname: qbittorrent.internal
       healthcheck:
         test:
@@ -50,7 +62,6 @@ qbittorrent:
       env_file:
         - /opt/stacks/qbittorrent.env
       infisical:
-        fail_on_empty: true
         secrets_map:
           - var: qbittorrent_user
             path: "/qBittorrent"
@@ -58,14 +69,6 @@ qbittorrent:
           - var: qbittorrent_pass
             path: "/qBittorrent"
             name: PASS
-          - var: qbittorrent_pia_user
-            path: "/PIA"
-            name: USER
-            docker_secret: qbittorrent_pia_user_secret
-          - var: qbittorrent_pia_pass
-            path: "/PIA"
-            name: PASS
-            docker_secret: qbittorrent_pia_pass_secret
       paths:
         - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent"
           state: directory
@@ -116,8 +119,14 @@ qbittorrent:
         enable: true
         exposure: private
         port: 8090
+
+    ################################
+    # QBIT CROSS-SEED SERVICE
+    ################################
     seeds:
       name: qbittorrent-xs
+      tags: [qbittorrent-xs]
+      stack: qbittorrent-xs
       hostname: qbittorrent-xs.internal
       healthcheck:
         test:
@@ -129,7 +138,6 @@ qbittorrent:
       env_file:
         - /opt/stacks/qbittorrent-xs.env
       infisical:
-        fail_on_empty: true
         secrets_map:
           - var: qbittorrent_xs_user
             path: "/qBittorrent-XS"
@@ -137,14 +145,6 @@ qbittorrent:
           - var: qbittorrent_xs_pass
             path: "/qBittorrent-XS"
             name: PASS
-          - var: qbittorrent_pia_user
-            path: "/PIA"
-            name: USER
-            docker_secret: qbittorrent_pia_user_secret
-          - var: qbittorrent_pia_pass
-            path: "/PIA"
-            name: PASS
-            docker_secret: qbittorrent_pia_pass_secret
       paths:
         - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent-xs"
           state: directory

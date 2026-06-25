@@ -29,6 +29,9 @@ traefik:
         path: "/Cloudflare"
         name: API
         docker_secret: cloudflare_api_secret
+      - var: cloudflare_zone
+        path: "/Cloudflare"
+        name: ZONE
       - var: crowdsec_traefik_bouncer_key
         path: "/CrowdSec"
         name: TRAEFIK_BOUNCER_KEY
@@ -104,11 +107,7 @@ traefik:
     type: swarm
     mode: replicated
     replicas: 1
+    profile: careful
     host: "{{ docker_services_primary_manager }}"
     constraints:
       - node.labels.docker_services_host == docker_services_primary_manager
-    restart_policy:
-      condition: on-failure
-      delay: 10s
-      max_attempts: 5
-      window: 2m

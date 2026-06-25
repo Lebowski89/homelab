@@ -27,11 +27,7 @@ dozzle:
   deploy:
     type: swarm
     mode: global
+    profile: careful
     host: "{{ docker_services_primary_manager }}"
     constraints:
       - node.labels.haproxy == true
-    restart_policy:
-      condition: on-failure
-      delay: 10s
-      max_attempts: 5
-      window: 2m
