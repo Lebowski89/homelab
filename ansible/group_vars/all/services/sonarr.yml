@@ -3,7 +3,7 @@
 sonarr:
   enabled: true
   tags: [arrs, pgsql, sonarr]
-  image: ghcr.io/hotio/sonarr:release-4.0.17.2952
+  image: ghcr.io/hotio/sonarr:release-4.0.18.2971
   named_networks:
     overlay:
       external: true
