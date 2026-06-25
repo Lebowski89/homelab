@@ -5,7 +5,7 @@ nzbhydra2:
   tags: [usenet, nzbhydra2]
   name: nzbhydra2
   stack: nzbhydra2
-  image: ghcr.io/hotio/nzbhydra2:release-v8.8.3
+  image: ghcr.io/hotio/nzbhydra2:release-v8.8.4
   named_networks:
     overlay:
       external: true

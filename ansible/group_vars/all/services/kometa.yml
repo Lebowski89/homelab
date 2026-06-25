@@ -5,7 +5,7 @@ kometa:
   tags: [plex, kometa]
   name: kometa
   stack: kometa
-  image: kometateam/kometa:v2.3.1
+  image: kometateam/kometa:v2.4.4
   named_networks:
     overlay:
       external: true

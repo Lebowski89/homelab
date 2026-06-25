@@ -17,7 +17,7 @@ portainer:
     ################################
     agent:
       name: agent
-      image: portainer/agent:2.42.0-linux-amd64-alpine
+      image: portainer/agent:2.43.0-linux-amd64-alpine
       volumes:
         docker_volumes:
           type: bind
@@ -37,7 +37,7 @@ portainer:
     ################################
     main:
       name: portainer
-      image: portainer/portainer-ce:2.42.0-linux-amd64-alpine
+      image: portainer/portainer-ce:2.43.0-linux-amd64-alpine
       command:
         - "-H tcp://tasks.agent:9001 --tlsskipverify"
       environment:
