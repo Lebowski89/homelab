@@ -5,7 +5,7 @@ loki:
   tags: [monitoring, loki]
   name: loki
   stack: loki
-  image: grafana/loki:3.7.2
+  image: grafana/loki:3.7.3
   named_networks:
     overlay:
       external: true
