@@ -111,7 +111,7 @@
 - name: Prep - qBittorrent | Include bootstrap tasks
   when:
     - inventory_hostname == docker_services_primary_manager
-    - (docker_services_svc.stack | default('') | string | trim) == "qbittorrent"
+    - (docker_services_role_prefix | default('') | string | trim) == "qbittorrent"
   ansible.builtin.include_tasks:
     file: sub_tasks/prep/qbittorrent.yml
     apply:
