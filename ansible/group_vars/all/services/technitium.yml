@@ -25,20 +25,7 @@ technitium:
     type: swarm
     mode: replicated
     replicas: 1
-    restart_policy:
-      condition: on-failure
-      delay: 10s
-      max_attempts: 5
-      window: 2m
-    update_config:
-      parallelism: 1
-      delay: 30s
-      failure_action: rollback
-      order: stop-first
-    rollback_config:
-      parallelism: 1
-      delay: 30s
-      order: stop-first
+    profile: careful
   targets:
     ################################
     # TECHNITIUM PRIMARY SERVICE

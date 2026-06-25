@@ -166,6 +166,36 @@
       - (docker_services_svc.deploy.type | string | trim) in ['swarm', 'container']
     fail_msg: "docker_services_svc.deploy.type must be 'swarm' or 'container' when provided."
 
+- name: Init - Validate | docker_services_svc.deploy.profile
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.profile is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.deploy.profile is string
+      - (docker_services_svc.deploy.profile | string | trim | length) > 0
+      - >-
+        (docker_services_svc.deploy.profile | string | trim)
+        in ((docker_services_deploy_profiles | default({'none': {}})).keys() | list)
+    fail_msg: >-
+      docker_services_svc.deploy.profile must be a non-empty string and one of:
+      {{ (docker_services_deploy_profiles | default({'none': {}})).keys() | list | sort }}
+
+- name: Init - Validate | docker_services_svc.deploy.profile is swarm-only
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.profile is defined
+    - (docker_services_svc.deploy.profile | string | trim) != 'none'
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.deploy.type | default('swarm', true) | string | trim) == 'swarm'
+    fail_msg: >-
+      docker_services_svc.deploy.profile='{{ docker_services_svc.deploy.profile }}'
+      only applies to Swarm services. For deploy.type='container', omit deploy.profile
+      or set profile: none.
+
 - name: Init - Validate | docker_services_svc.deploy.mode
   when:
     - docker_services_svc.deploy is defined
@@ -257,6 +287,46 @@
           ) == (docker_services_svc.deploy.constraints | length)
         )
     fail_msg: "docker_services_svc.deploy.constraints must be a string or a list of strings."
+
+- name: Init - Validate | docker_services_svc.deploy.restart_policy
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.restart_policy is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.deploy.restart_policy is mapping
+    fail_msg: "docker_services_svc.deploy.restart_policy must be a mapping when provided."
+
+- name: Init - Validate | docker_services_svc.deploy.update_config
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.update_config is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.deploy.update_config is mapping
+    fail_msg: "docker_services_svc.deploy.update_config must be a mapping when provided."
+
+- name: Init - Validate | docker_services_svc.deploy.rollback_config
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.rollback_config is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.deploy.rollback_config is mapping
+    fail_msg: "docker_services_svc.deploy.rollback_config must be a mapping when provided."
+
+- name: Init - Validate | docker_services_svc.deploy.resources
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.resources is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.deploy.resources is mapping
+    fail_msg: "docker_services_svc.deploy.resources must be a mapping when provided."
 
 ################################
 # TARGETS

@@ -7,7 +7,14 @@ portainer:
   named_networks:
     overlay:
       external: true
+  deploy:
+    type: swarm
+    profile: careful
   targets:
+
+    ################################
+    # PORTAINER-AGENT SERVICE
+    ################################
     agent:
       name: agent
       image: portainer/agent:2.42.0-linux-amd64-alpine
@@ -21,15 +28,13 @@ portainer:
           source: /var/run/docker.sock
           target: /var/run/docker.sock
       deploy:
-        type: swarm
         mode: global
         constraints:
           - node.platform.os == linux
-        restart_policy:
-          condition: on-failure
-          delay: 10s
-          max_attempts: 5
-          window: 2m
+
+    ################################
+    # PORTAINER SERVICE
+    ################################
     main:
       name: portainer
       image: portainer/portainer-ce:2.42.0-linux-amd64-alpine
@@ -60,14 +65,8 @@ portainer:
         exposure: private
         port: 9000
       deploy:
-        type: swarm
         mode: replicated
         replicas: 1
         host: "{{ docker_services_primary_manager }}"
         constraints:
           - node.labels.docker_services_host == docker_services_primary_manager
-        restart_policy:
-          condition: on-failure
-          delay: 10s
-          max_attempts: 5
-          window: 2m

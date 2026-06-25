@@ -14,10 +14,11 @@
     deploy_mode: "{{ docker_services_svc.deploy.mode | default('replicated') }}"
     deploy_replicas: "{{ docker_services_svc.deploy.replicas | default(1) }}"
     deploy_constraints: "{{ docker_services_svc.deploy.constraints | default([]) }}"
-    deploy_restart_policy: "{{ docker_services_svc.deploy.restart_policy | default(omit) }}"
-    deploy_update_config: "{{ docker_services_svc.deploy.update_config | default(omit) }}"
-    deploy_rollback_config: "{{ docker_services_svc.deploy.rollback_config | default(omit) }}"
-    deploy_resources: "{{ docker_services_svc.deploy.resources | default(omit) }}"
+    deploy_profile: "{{ docker_services_svc.deploy.profile | default(docker_services_default_deploy_profile, true) }}"
+    deploy_restart_policy: "{{ docker_services_svc.deploy.restart_policy | default({}, true) }}"
+    deploy_update_config: "{{ docker_services_svc.deploy.update_config | default({}, true) }}"
+    deploy_rollback_config: "{{ docker_services_svc.deploy.rollback_config | default({}, true) }}"
+    deploy_resources: "{{ docker_services_svc.deploy.resources | default({}, true) }}"
 
 - name: Deploy | Persist compose into docker_services_compose_stacks[docker_services_stack_name_effective]
   when: docker_services_is_deploy_host

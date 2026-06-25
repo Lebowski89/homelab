@@ -11,15 +11,15 @@ authelia:
     type: swarm
     mode: replicated
     replicas: 1
+    profile: careful
     host: "{{ docker_services_primary_manager }}"
     constraints:
       - node.labels.docker_services_host == docker_services_primary_manager
-    restart_policy:
-      condition: on-failure
-      delay: 10s
-      max_attempts: 5
-      window: 2m
   targets:
+
+    ################################
+    # AUTHELIA-REDIS SERVICE
+    ################################
     redis:
       name: authelia-redis
       image: valkey/valkey:9.1-alpine
@@ -48,6 +48,10 @@ authelia:
           source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/redis"
           target: /data
           read_only: false
+
+    ################################
+    # AUTHELIA SERVICE
+    ################################
     main:
       name: authelia
       image: authelia/authelia:4.39.20
