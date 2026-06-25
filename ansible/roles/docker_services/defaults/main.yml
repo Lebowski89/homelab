@@ -1,0 +1,54 @@
+---
+
+docker_services_default_deploy_profile: none
+
+docker_services_deploy_profiles:
+  none: {}
+
+  standard:
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m
+    update_config:
+      parallelism: 1
+      delay: 10s
+      failure_action: rollback
+      order: stop-first
+    rollback_config:
+      parallelism: 1
+      delay: 10s
+      order: stop-first
+
+  careful:
+    restart_policy:
+      condition: on-failure
+      delay: 10s
+      max_attempts: 5
+      window: 2m
+    update_config:
+      parallelism: 1
+      delay: 30s
+      failure_action: rollback
+      order: stop-first
+    rollback_config:
+      parallelism: 1
+      delay: 30s
+      order: stop-first
+
+  stateless_ha:
+    restart_policy:
+      condition: on-failure
+      delay: 5s
+      max_attempts: 5
+      window: 2m
+    update_config:
+      parallelism: 1
+      delay: 5s
+      failure_action: rollback
+      order: start-first
+    rollback_config:
+      parallelism: 1
+      delay: 5s
+      order: start-first

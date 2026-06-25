@@ -48,17 +48,73 @@
         | map('string') | map('trim') | reject('equalto', '') | list
       }}
 
+- name: Deploy - Config | Normalize deploy profile
+  ansible.builtin.set_fact:
+    docker_services_deploy_profile_name: >-
+      {{
+        deploy_profile
+        | default(
+            docker_services_svc.deploy.profile
+            | default(docker_services_default_deploy_profile | default('none'), true),
+            true
+          )
+        | string
+        | trim
+      }}
+    docker_services_deploy_profiles_effective: "{{ docker_services_deploy_profiles | default({'none': {}}) }}"
+
+- name: Deploy - Config | Validate deploy profile
+  ansible.builtin.assert:
+    that:
+      - docker_services_deploy_profile_name in docker_services_deploy_profiles_effective
+      - docker_services_deploy_profiles_effective[docker_services_deploy_profile_name] is mapping
+    fail_msg: >-
+      Unknown or invalid deploy profile '{{ docker_services_deploy_profile_name }}'.
+      Valid profiles: {{ docker_services_deploy_profiles_effective.keys() | list | sort }}
+
+- name: Deploy - Config | Load deploy profile defaults
+  ansible.builtin.set_fact:
+    docker_services_deploy_profile_defaults: "{{ docker_services_deploy_profiles_effective[docker_services_deploy_profile_name] | default({}) }}"
+
 - name: Deploy - Config | Normalize optional deploy sub-dicts
   ansible.builtin.set_fact:
-    docker_services_deploy_restart_policy: "{{ deploy_restart_policy if (deploy_restart_policy is mapping) else {} }}"
-    docker_services_deploy_update_config: "{{ deploy_update_config if (deploy_update_config is mapping) else {} }}"
-    docker_services_deploy_rollback_config: "{{ deploy_rollback_config if (deploy_rollback_config is mapping) else {} }}"
-    docker_services_deploy_resources: "{{ deploy_resources if (deploy_resources is mapping) else {} }}"
+    docker_services_deploy_restart_policy: >-
+      {{
+        (docker_services_deploy_profile_defaults.restart_policy | default({}))
+        | combine(
+            (deploy_restart_policy if (deploy_restart_policy is defined and deploy_restart_policy is mapping) else {}),
+            recursive=true
+          )
+      }}
+    docker_services_deploy_update_config: >-
+      {{
+        (docker_services_deploy_profile_defaults.update_config | default({}))
+        | combine(
+            (deploy_update_config if (deploy_update_config is defined and deploy_update_config is mapping) else {}),
+            recursive=true
+          )
+      }}
+    docker_services_deploy_rollback_config: >-
+      {{
+        (docker_services_deploy_profile_defaults.rollback_config | default({}))
+        | combine(
+            (deploy_rollback_config if (deploy_rollback_config is defined and deploy_rollback_config is mapping) else {}),
+            recursive=true
+          )
+      }}
+    docker_services_deploy_resources: >-
+      {{
+        (docker_services_deploy_profile_defaults.resources | default({}))
+        | combine(
+            (deploy_resources if (deploy_resources is defined and deploy_resources is mapping) else {}),
+            recursive=true
+          )
+      }}
 
 - name: Deploy - Config | Validate normalized deploy inputs
   ansible.builtin.assert:
     that:
-      - docker_services_deploy_mode != 'replicated' or docker_services_deploy_replicas >= 0
+      - docker_services_deploy_mode != 'replicated' or (docker_services_deploy_replicas | int) >= 0
       - docker_services_deploy_restart_policy is mapping
       - docker_services_deploy_update_config is mapping
       - docker_services_deploy_rollback_config is mapping

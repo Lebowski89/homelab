@@ -27,18 +27,79 @@
       but target '{{ docker_services_service_target | default("swarm") }}' is not defined.
   tags: [remove, drift]
 
+- name: Init | Derive base and target service config
+  ansible.builtin.set_fact:
+    docker_services_svc_base: >-
+      {{
+        docker_services_service_cfg
+        | dict2items
+        | rejectattr('key', 'equalto', 'targets')
+        | list
+        | items2dict
+      }}
+    docker_services_svc_target: >-
+      {{
+        (
+          docker_services_service_cfg.targets[docker_services_service_target | default('swarm')]
+          if docker_services_service_cfg.targets is defined
+          else {}
+        )
+      }}
+  tags: [remove, drift]
+
 - name: Init | Normalize service config
   ansible.builtin.set_fact:
     docker_services_svc: >-
       {{
-        docker_services_service_cfg
+        docker_services_svc_base
         | combine(
-            (docker_services_service_cfg.targets is defined)
-            | ternary(
-                docker_services_service_cfg.targets[docker_services_service_target | default('swarm')],
-                {}
-              ),
-            recursive=true
+            docker_services_svc_target,
+            recursive=true,
+            list_merge='append_rp'
+          )
+      }}
+  tags: [remove, drift]
+
+- name: Init | Preserve target command override
+  when: docker_services_svc_target.command is defined
+  ansible.builtin.set_fact:
+    docker_services_svc: >-
+      {{
+        docker_services_svc
+        | combine(
+            {'command': docker_services_svc_target.command},
+            recursive=true,
+            list_merge='replace'
+          )
+      }}
+  tags: [remove, drift]
+
+- name: Init | Preserve target entrypoint override
+  when: docker_services_svc_target.entrypoint is defined
+  ansible.builtin.set_fact:
+    docker_services_svc: >-
+      {{
+        docker_services_svc
+        | combine(
+            {'entrypoint': docker_services_svc_target.entrypoint},
+            recursive=true,
+            list_merge='replace'
+          )
+      }}
+  tags: [remove, drift]
+
+- name: Init | Preserve target healthcheck.test override
+  when:
+    - docker_services_svc_target.healthcheck is defined
+    - docker_services_svc_target.healthcheck.test is defined
+  ansible.builtin.set_fact:
+    docker_services_svc: >-
+      {{
+        docker_services_svc
+        | combine(
+            {'healthcheck': {'test': docker_services_svc_target.healthcheck.test}},
+            recursive=true,
+            list_merge='replace'
           )
       }}
   tags: [remove, drift]
