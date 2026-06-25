@@ -5,7 +5,7 @@ romm:
   tags: [gaming, romm]
   name: romm
   stack: romm
-  image: ghcr.io/rommapp/romm:4.9.1
+  image: ghcr.io/rommapp/romm:4.9.2
   named_networks:
     overlay:
       external: true

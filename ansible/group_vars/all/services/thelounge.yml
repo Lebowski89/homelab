@@ -5,7 +5,7 @@ thelounge:
   tags: [media, thelounge]
   name: thelounge
   stack: thelounge
-  image: lscr.io/linuxserver/thelounge:v4.5.0-ls223
+  image: lscr.io/linuxserver/thelounge:v4.5.1-ls225
   named_networks:
     overlay:
       external: true
