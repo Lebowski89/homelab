@@ -5,7 +5,7 @@ grafana:
   tags: [monitoring, grafana]
   name: grafana
   stack: grafana
-  image: grafana/grafana:13.0.3-ubuntu
+  image: grafana/grafana:13.1.0-ubuntu
   named_networks:
     overlay:
       external: true
