@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/06/24 |
+| Readme update        | 2026/06/26 |
 
 
 
@@ -45,7 +45,7 @@
 | [infisical_stack](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L32)   | str | `infisical` |    
 | [infisical_compose_file](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L33)   | str | `infisical-compose.yml` |    
 | [infisical_compose_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L34)   | str | `{{ infisical_base_path }}/{{ infisical_compose_file }}` |    
-| [infisical_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L36)   | str | `docker.io/infisical/infisical:v0.161.3` |    
+| [infisical_image](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L36)   | str | `docker.io/infisical/infisical:v0.161.4` |    
 | [infisical_timezone](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L37)   | str | `{{ timezone ¦ default('Australia/Melbourne') }}` |    
 | [infisical_puid](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L38)   | str | `{{ docker_host_puid ¦ default('1000') }}` |    
 | [infisical_pgid](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L39)   | str | `{{ docker_host_pgid ¦ default('1000') }}` |    
