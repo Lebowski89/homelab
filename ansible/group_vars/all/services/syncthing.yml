@@ -5,7 +5,7 @@ syncthing:
   tags: [utilities, syncthing]
   name: syncthing
   stack: syncthing
-  image: lscr.io/linuxserver/syncthing:v2.1.1-ls220
+  image: lscr.io/linuxserver/syncthing:v2.1.1-ls221
   named_networks:
     overlay:
       external: true
