@@ -7,82 +7,26 @@
       - docker_services_service_name | string | trim | length > 0
     fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Compose - Labels | Ensure labels_action is valid
-  ansible.builtin.assert:
-    that:
-      - labels_action | default('append') in ['append', 'replace', 'append_unique']
-    fail_msg: "labels_action must be 'append', 'replace', or 'append_unique'"
-
-- name: Compose - Labels | Ensure labels_precedence is valid
-  ansible.builtin.assert:
-    that:
-      - labels_precedence | default('new_wins') in ['new_wins', 'existing_wins']
-    fail_msg: "labels_precedence must be 'new_wins' or 'existing_wins'"
-
-- name: Compose - Labels | Normalize labels input to mapping
+- name: Compose - Labels | Capture existing labels
   ansible.builtin.set_fact:
-    docker_services_labels_h_action: "{{ labels_action | default('append', true) | string | trim }}"
-    docker_services_labels_h_precedence: "{{ labels_precedence | default('new_wins', true) | string | trim }}"
-    docker_services_labels_h_existing: >-
+    docker_services_labels_existing: >-
       {{
         (docker_services_compose_services | default({}))
         .get(docker_services_service_name, {})
         .get('labels', {})
         | default({}, true)
       }}
-    docker_services_labels_h_new: >-
-      {%- set out = {} -%}
-      {%- if (labels_dict is mapping) -%}
-        {%- set out = labels_dict -%}
-      {%- elif (labels_dict is sequence) and (labels_dict is not string) -%}
-        {%- for s in (labels_dict | list) -%}
-          {%- set st = s | string | trim -%}
-          {%- if (st | length) > 0 -%}
-            {%- if '=' in st -%}
-              {%- set parts = st.split('=', 1) -%}
-              {%- set k = parts[0] | string | trim -%}
-              {%- set v = parts[1] | string | trim -%}
-              {%- if (k | length) > 0 -%}
-                {%- set _ = out.update({k: v}) -%}
-              {%- endif -%}
-            {%- endif -%}
-          {%- endif -%}
-        {%- endfor -%}
-      {%- endif -%}
-      {{ out }}
 
 - name: Compose - Labels | Build final labels dict
   ansible.builtin.set_fact:
     docker_services_labels_h_final: >-
       {{
-        (
-          docker_services_labels_h_new
-          if docker_services_labels_h_action == 'replace'
-          else
-          (
-            docker_services_labels_h_existing | combine(
-              dict(
-                (docker_services_labels_h_new | dict2items)
-                | rejectattr('key', 'in', (docker_services_labels_h_existing.keys() | list))
-                | map(attribute='key')
-                | zip(
-                    (docker_services_labels_h_new | dict2items)
-                    | rejectattr('key', 'in', (docker_services_labels_h_existing.keys() | list))
-                    | map(attribute='value')
-                  )
-              ),
-              recursive=true
-            )
-            if docker_services_labels_h_action == 'append_unique'
-            else
-            (
-              (docker_services_labels_h_existing | combine(docker_services_labels_h_new, recursive=true))
-              if docker_services_labels_h_precedence == 'new_wins'
-              else
-              (docker_services_labels_h_new | combine(docker_services_labels_h_existing, recursive=true))
-            )
+        docker_services_labels_existing
+        | docker_services_merge_labels(
+            labels_dict | default({}, true),
+            labels_action | default('append', true),
+            labels_precedence | default('new_wins', true)
           )
-        )
       }}
 
 - name: Compose - Labels | Attach labels to service
