@@ -7,7 +7,6 @@ from typing import Any
 
 from ansible.errors import AnsibleFilterError
 
-
 _VALID_DEPLOY_MODES = {"replicated", "global"}
 
 
@@ -39,9 +38,7 @@ def _normalize_mode(value: Any) -> str:
     mode = _as_str(value, default="replicated")
 
     if mode not in _VALID_DEPLOY_MODES:
-        raise AnsibleFilterError(
-            f"deploy_mode must be 'replicated' or 'global' got {mode!r}."
-        )
+        raise AnsibleFilterError(f"deploy_mode must be 'replicated' or 'global' got {mode!r}.")
 
     return mode
 
@@ -50,9 +47,7 @@ def _normalize_replicas(value: Any) -> int:
     raw = _as_str(value, default="1")
 
     if not re.fullmatch(r"^[0-9]+$", raw):
-        raise AnsibleFilterError(
-            f"deploy_replicas must be a non-negative integer for replicated services. Got: {value!r}"
-        )
+        raise AnsibleFilterError(f"deploy_replicas must be a non-negative integer for replicated services. Got: {value!r}")
 
     return int(raw)
 
@@ -70,11 +65,7 @@ def _normalize_constraints(value: Any) -> list[str]:
     else:
         raw_items = [value]
 
-    return [
-        str(item).strip()
-        for item in raw_items
-        if str(item).strip()
-    ]
+    return [str(item).strip() for item in raw_items if str(item).strip()]
 
 
 def _normalize_profiles(value: Any) -> dict[str, Any]:
@@ -82,9 +73,7 @@ def _normalize_profiles(value: Any) -> dict[str, Any]:
         return {"none": {}}
 
     if not _is_mapping(value):
-        raise AnsibleFilterError(
-            f"docker_services_deploy_profiles must be a mapping, got {type(value).__name__}."
-        )
+        raise AnsibleFilterError(f"docker_services_deploy_profiles must be a mapping, got {type(value).__name__}.")
 
     return deepcopy(dict(value))
 
@@ -107,17 +96,13 @@ def _validate_profile(
     profiles: Mapping[str, Any],
 ) -> dict[str, Any]:
     if profile_name not in profiles:
-        valid_profiles = ", ".join(sorted(str(key) for key in profiles.keys()))
-        raise AnsibleFilterError(
-            f"Unknown deploy profile {profile_name!r}. Valid profiles: {valid_profiles}"
-        )
+        valid_profiles = ", ".join(sorted(str(key) for key in profiles))
+        raise AnsibleFilterError(f"Unknown deploy profile {profile_name!r}. Valid profiles: {valid_profiles}")
 
     profile_defaults = profiles[profile_name]
 
     if not _is_mapping(profile_defaults):
-        raise AnsibleFilterError(
-            f"Deploy profile {profile_name!r} must be a mapping, got {type(profile_defaults).__name__}."
-        )
+        raise AnsibleFilterError(f"Deploy profile {profile_name!r} must be a mapping, got {type(profile_defaults).__name__}.")
 
     return deepcopy(dict(profile_defaults))
 
@@ -149,18 +134,14 @@ def _subdict_from_profile(
         default_value = {}
 
     if not _is_mapping(default_value):
-        raise AnsibleFilterError(
-            f"Deploy profile field {key!r} must be a mapping, got {type(default_value).__name__}."
-        )
+        raise AnsibleFilterError(f"Deploy profile field {key!r} must be a mapping, got {type(default_value).__name__}.")
 
     if explicit is None:
         explicit_value = {}
     elif _is_mapping(explicit):
         explicit_value = explicit
     else:
-        raise AnsibleFilterError(
-            f"deploy_{key} override must be a mapping, got {type(explicit).__name__}."
-        )
+        raise AnsibleFilterError(f"deploy_{key} override must be a mapping, got {type(explicit).__name__}.")
 
     return _recursive_merge(default_value, explicit_value)
 
@@ -184,23 +165,15 @@ def docker_services_build_deploy_config(
         deploy_cfg = {}
 
     if not _is_mapping(deploy_cfg):
-        raise AnsibleFilterError(
-            f"deploy config must be a mapping, got {type(deploy_cfg).__name__}."
-        )
+        raise AnsibleFilterError(f"deploy config must be a mapping, got {type(deploy_cfg).__name__}.")
 
     deploy_cfg = dict(deploy_cfg)
 
-    deploy_mode = _normalize_mode(
-        _first_defined(mode, deploy_cfg.get("mode"), "replicated")
-    )
+    deploy_mode = _normalize_mode(_first_defined(mode, deploy_cfg.get("mode"), "replicated"))
 
-    deploy_replicas = _normalize_replicas(
-        _first_defined(replicas, deploy_cfg.get("replicas"), 1)
-    )
+    deploy_replicas = _normalize_replicas(_first_defined(replicas, deploy_cfg.get("replicas"), 1))
 
-    deploy_constraints = _normalize_constraints(
-        _first_defined(constraints, deploy_cfg.get("constraints"))
-    )
+    deploy_constraints = _normalize_constraints(_first_defined(constraints, deploy_cfg.get("constraints")))
 
     deploy_profiles = _normalize_profiles(profiles)
 

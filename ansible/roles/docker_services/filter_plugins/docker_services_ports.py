@@ -6,7 +6,6 @@ from typing import Any
 
 from ansible.errors import AnsibleFilterError
 
-
 _VALID_ACTIONS = {"append", "replace", "append_unique"}
 _VALID_PROTOCOLS = {"tcp", "udp"}
 _VALID_STACK_DEPLOY_TYPES = {"swarm", "container"}
@@ -55,10 +54,7 @@ def _normalize_stack_deploy_type(value: Any) -> str:
     deploy_type = _as_str(value, default="swarm")
 
     if deploy_type not in _VALID_STACK_DEPLOY_TYPES:
-        raise AnsibleFilterError(
-            f"stack_deploy_type must be one of {sorted(_VALID_STACK_DEPLOY_TYPES)}, "
-            f"got {deploy_type!r}."
-        )
+        raise AnsibleFilterError(f"stack_deploy_type must be one of {sorted(_VALID_STACK_DEPLOY_TYPES)}, got {deploy_type!r}.")
 
     return deploy_type
 
@@ -67,9 +63,7 @@ def _normalize_action(value: Any) -> str:
     action = _as_str(value, default="append")
 
     if action not in _VALID_ACTIONS:
-        raise AnsibleFilterError(
-            f"ports_action must be one of {sorted(_VALID_ACTIONS)}, got {action!r}."
-        )
+        raise AnsibleFilterError(f"ports_action must be one of {sorted(_VALID_ACTIONS)}, got {action!r}.")
 
     return action
 
@@ -78,9 +72,7 @@ def _normalize_protocol(value: Any, *, name: str) -> str:
     protocol = _as_str(value, default="tcp").lower()
 
     if protocol not in _VALID_PROTOCOLS:
-        raise AnsibleFilterError(
-            f"{name}.protocol must be one of {sorted(_VALID_PROTOCOLS)}, got {protocol!r}."
-        )
+        raise AnsibleFilterError(f"{name}.protocol must be one of {sorted(_VALID_PROTOCOLS)}, got {protocol!r}.")
 
     return protocol
 
@@ -120,9 +112,7 @@ def _canonicalize_port(
         if existing:
             return None
 
-        raise AnsibleFilterError(
-            f"ports[{index}] must be a mapping, got {type(port).__name__}."
-        )
+        raise AnsibleFilterError(f"ports[{index}] must be a mapping, got {type(port).__name__}.")
 
     port_dict = dict(port)
 
@@ -130,9 +120,7 @@ def _canonicalize_port(
         if existing:
             return None
 
-        raise AnsibleFilterError(
-            f"ports[{index}] must include both 'target' and 'published'."
-        )
+        raise AnsibleFilterError(f"ports[{index}] must include both 'target' and 'published'.")
 
     item: dict[str, Any] = {
         "target": _as_int(port_dict.get("target"), name=f"ports[{index}].target"),

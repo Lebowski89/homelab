@@ -39,10 +39,7 @@ def _as_bool(value: Any, *, name: str = "value", default: bool = True) -> bool:
         if normalized in {"false", "no", "off", "0"}:
             return False
 
-    raise AnsibleFilterError(
-        f"{name} must be boolean-like true/false, got {value!r}. "
-        "Use enabled: true or enabled: false."
-    )
+    raise AnsibleFilterError(f"{name} must be boolean-like true/false, got {value!r}. Use enabled: true or enabled: false.")
 
 
 def _unique(values: list[Any]) -> list[Any]:
@@ -69,9 +66,7 @@ def docker_services_effective(services: Mapping[str, Any]) -> list[dict[str, Any
 
     for service_name, service_cfg in services.items():
         if not isinstance(service_cfg, Mapping):
-            raise AnsibleFilterError(
-                f"Service {service_name!r} must be a mapping, got {type(service_cfg).__name__}"
-            )
+            raise AnsibleFilterError(f"Service {service_name!r} must be a mapping, got {type(service_cfg).__name__}")
 
         service_enabled = _as_bool(
             service_cfg.get("enabled", True),
@@ -79,10 +74,7 @@ def docker_services_effective(services: Mapping[str, Any]) -> list[dict[str, Any
             default=True,
         )
 
-        service_tags = _unique(
-            [service_name]
-            + _as_list(service_cfg.get("tags", []), name=f"{service_name}.tags")
-        )
+        service_tags = _unique([service_name] + _as_list(service_cfg.get("tags", []), name=f"{service_name}.tags"))
 
         targets = service_cfg.get("targets")
 
@@ -97,16 +89,11 @@ def docker_services_effective(services: Mapping[str, Any]) -> list[dict[str, Any
             continue
 
         if not isinstance(targets, Mapping):
-            raise AnsibleFilterError(
-                f"{service_name}.targets must be a mapping, got {type(targets).__name__}"
-            )
+            raise AnsibleFilterError(f"{service_name}.targets must be a mapping, got {type(targets).__name__}")
 
         for target_name, target_cfg in targets.items():
             if not isinstance(target_cfg, Mapping):
-                raise AnsibleFilterError(
-                    f"{service_name}.targets.{target_name} must be a mapping, "
-                    f"got {type(target_cfg).__name__}"
-                )
+                raise AnsibleFilterError(f"{service_name}.targets.{target_name} must be a mapping, got {type(target_cfg).__name__}")
 
             target_enabled = _as_bool(
                 target_cfg.get("enabled", True),
@@ -155,12 +142,7 @@ def docker_services_select(
         item_name = str(item.get("name", "")).strip()
         item_tags = set(_as_list(item.get("tags", []), name=f"{item_name}.tags"))
 
-        is_match = (
-            run_all_bool
-            or not run_tags_set
-            or item_name in run_tags_set
-            or bool(item_tags.intersection(run_tags_set))
-        )
+        is_match = run_all_bool or not run_tags_set or item_name in run_tags_set or bool(item_tags.intersection(run_tags_set))
 
         if not is_match:
             continue

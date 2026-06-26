@@ -6,7 +6,6 @@ from typing import Any
 
 from ansible.errors import AnsibleFilterError
 
-
 _VALID_VOLUME_TYPES = {"bind", "volume", "tmpfs"}
 _VALID_ACTIONS = {"append", "replace", "append_unique"}
 
@@ -108,9 +107,7 @@ def _validate_existing_volumes(existing: Any) -> list[dict[str, Any]]:
 
     for index, volume in enumerate(existing_list):
         if not _is_mapping(volume):
-            raise AnsibleFilterError(
-                f"existing volumes[{index}] must be a mapping, got {type(volume).__name__}."
-            )
+            raise AnsibleFilterError(f"existing volumes[{index}] must be a mapping, got {type(volume).__name__}.")
 
     return [deepcopy(dict(volume)) for volume in existing_list]
 
@@ -141,9 +138,7 @@ def _raw_new_volumes(
 
 def _canonicalize_volume(volume: Any, *, index: int) -> dict[str, Any]:
     if not _is_mapping(volume):
-        raise AnsibleFilterError(
-            f"volumes[{index}] must be a mapping, got {type(volume).__name__}."
-        )
+        raise AnsibleFilterError(f"volumes[{index}] must be a mapping, got {type(volume).__name__}.")
 
     volume_dict = dict(volume)
     volume_type = _as_str(volume_dict.get("type"), default="bind")
@@ -151,10 +146,7 @@ def _canonicalize_volume(volume: Any, *, index: int) -> dict[str, Any]:
     target = _as_str(volume_dict.get("target"))
 
     if volume_type not in _VALID_VOLUME_TYPES:
-        raise AnsibleFilterError(
-            f"volumes[{index}].type must be one of {sorted(_VALID_VOLUME_TYPES)}, "
-            f"got {volume_type!r}."
-        )
+        raise AnsibleFilterError(f"volumes[{index}].type must be one of {sorted(_VALID_VOLUME_TYPES)}, got {volume_type!r}.")
 
     if volume_type == "tmpfs":
         if not target:
@@ -203,10 +195,7 @@ def docker_services_canonical_volumes(
         paths_read_only,
     )
 
-    return [
-        _canonicalize_volume(volume, index=index)
-        for index, volume in enumerate(raw_volumes)
-    ]
+    return [_canonicalize_volume(volume, index=index) for index, volume in enumerate(raw_volumes)]
 
 
 def docker_services_merge_volumes(
@@ -222,9 +211,7 @@ def docker_services_merge_volumes(
     action = _as_str(action, default="append")
 
     if action not in _VALID_ACTIONS:
-        raise AnsibleFilterError(
-            f"volumes_action must be one of {sorted(_VALID_ACTIONS)}, got {action!r}."
-        )
+        raise AnsibleFilterError(f"volumes_action must be one of {sorted(_VALID_ACTIONS)}, got {action!r}.")
 
     existing_volumes = _validate_existing_volumes(existing)
     new_volumes = docker_services_canonical_volumes(

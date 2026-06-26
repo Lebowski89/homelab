@@ -6,7 +6,6 @@ from typing import Any
 
 from ansible.errors import AnsibleFilterError
 
-
 _REPLACE_KEYS = {
     "command",
     "entrypoint",
@@ -62,24 +61,17 @@ def _target_cfg(service_cfg: Mapping[str, Any], target_name: str) -> Mapping[str
     targets = service_cfg.get("targets", {})
 
     if not _is_mapping(targets):
-        raise AnsibleFilterError(
-            f"docker_services_merge_target expected 'targets' to be a mapping, "
-            f"got {type(targets).__name__}"
-        )
+        raise AnsibleFilterError(f"docker_services_merge_target expected 'targets' to be a mapping, got {type(targets).__name__}")
 
     if target_name not in targets:
-        available = ", ".join(str(key) for key in targets.keys()) or "none"
-        raise AnsibleFilterError(
-            f"docker_services_merge_target target {target_name!r} was not found. "
-            f"Available targets: {available}"
-        )
+        available = ", ".join(str(key) for key in targets) or "none"
+        raise AnsibleFilterError(f"docker_services_merge_target target {target_name!r} was not found. Available targets: {available}")
 
     target = targets[target_name]
 
     if not _is_mapping(target):
         raise AnsibleFilterError(
-            f"docker_services_merge_target expected target {target_name!r} to be a mapping, "
-            f"got {type(target).__name__}"
+            f"docker_services_merge_target expected target {target_name!r} to be a mapping, got {type(target).__name__}"
         )
 
     return target
@@ -129,10 +121,7 @@ def docker_services_merge_target(
     """
 
     if not _is_mapping(service_cfg):
-        raise AnsibleFilterError(
-            f"docker_services_merge_target expected service_cfg to be a mapping, "
-            f"got {type(service_cfg).__name__}"
-        )
+        raise AnsibleFilterError(f"docker_services_merge_target expected service_cfg to be a mapping, got {type(service_cfg).__name__}")
 
     base = _pop_targets(service_cfg)
 
