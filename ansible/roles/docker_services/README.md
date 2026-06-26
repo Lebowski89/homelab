@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/06/26 |
+| Readme update        | 2026/06/27 |
 
 
 
@@ -128,12 +128,8 @@
 | ---- | ------ | -------------- | -----|
 | Init ¦ Normalize role interface vars (compat with old names) | ansible.builtin.set_fact | False |  |
 | Init ¦ Ensure docker_services_service_cfg is provided | ansible.builtin.assert | False |  |
-| Init ¦ Validate target exists when targets are defined | ansible.builtin.assert | False |  |
-| Init ¦ Derive base and target service config | ansible.builtin.set_fact | False |  |
+| Init ¦ Derive effective target name | ansible.builtin.set_fact | False |  |
 | Init ¦ Normalize service config | ansible.builtin.set_fact | False |  |
-| Init ¦ Preserve target command override | ansible.builtin.set_fact | True |  |
-| Init ¦ Preserve target entrypoint override | ansible.builtin.set_fact | True |  |
-| Init ¦ Preserve target healthcheck.test override | ansible.builtin.set_fact | True |  |
 | Init ¦ Validate normalized service config | ansible.builtin.include_tasks | False |  |
 | Init ¦ Derive common service context | ansible.builtin.set_fact | False |  |
 | Init ¦ Derive stack name | ansible.builtin.set_fact | False |  |
@@ -265,13 +261,7 @@
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Compose - Ports ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Compose - Ports ¦ Ensure ports_action is valid | ansible.builtin.assert | False |
-| Compose - Ports ¦ Normalize effective stack deploy type | ansible.builtin.set_fact | False |
-| Compose - Ports ¦ Build new port entries | ansible.builtin.set_fact | False |
-| Compose - Ports ¦ Validate new ports entries are dicts with required keys | ansible.builtin.assert | False |
-| Compose - Ports ¦ Reset working ports list (prevent cross-service bleed) | ansible.builtin.set_fact | False |
-| Compose - Ports ¦ Canonicalise new ports | ansible.builtin.set_fact | False |
-| Compose - Ports ¦ Validate port protocols are tcp/udp | ansible.builtin.assert | False |
+| Compose - Ports ¦ Capture existing ports list | ansible.builtin.set_fact | False |
 | Compose - Ports ¦ Compute merged ports list | ansible.builtin.set_fact | False |
 | Compose - Ports ¦ Attach ports to service | ansible.builtin.set_fact | False |
 
@@ -366,12 +356,6 @@
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Compose - Volumes ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Compose - Volumes ¦ Ensure volumes_action is valid | ansible.builtin.assert | False |
-| Compose - Volumes ¦ Build raw volume entries | ansible.builtin.set_fact | False |
-| Compose - Volumes ¦ Validate raw volume entries are dicts | ansible.builtin.assert | False |
-| Compose - Volumes ¦ Reset working volumes list (prevent cross-service bleed) | ansible.builtin.set_fact | False |
-| Compose - Volumes ¦ Canonicalise new volume entries | ansible.builtin.set_fact | False |
-| Compose - Volumes ¦ Validate canonical volume entries | ansible.builtin.assert | False |
 | Compose - Volumes ¦ Capture existing volumes list | ansible.builtin.set_fact | False |
 | Compose - Volumes ¦ Compute merged volumes list | ansible.builtin.set_fact | False |
 | Compose - Volumes ¦ Attach volumes to service | ansible.builtin.set_fact | False |
@@ -388,16 +372,6 @@
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Deploy - Config ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Deploy - Config ¦ Normalize deploy mode and capture raw replicas | ansible.builtin.set_fact | False |
-| Deploy - Config ¦ Validate deploy mode | ansible.builtin.assert | False |
-| Deploy - Config ¦ Validate deploy_replicas raw input | ansible.builtin.assert | True |
-| Deploy - Config ¦ Normalize deploy replicas | ansible.builtin.set_fact | False |
-| Deploy - Config ¦ Normalize deploy constraints into list | ansible.builtin.set_fact | False |
-| Deploy - Config ¦ Normalize deploy profile | ansible.builtin.set_fact | False |
-| Deploy - Config ¦ Validate deploy profile | ansible.builtin.assert | False |
-| Deploy - Config ¦ Load deploy profile defaults | ansible.builtin.set_fact | False |
-| Deploy - Config ¦ Normalize optional deploy sub-dicts | ansible.builtin.set_fact | False |
-| Deploy - Config ¦ Validate normalized deploy inputs | ansible.builtin.assert | False |
 | Deploy - Config ¦ Build deploy dict | ansible.builtin.set_fact | False |
 | Deploy - Config ¦ Attach deploy config to service | ansible.builtin.set_fact | False |
 
