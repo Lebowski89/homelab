@@ -17,33 +17,18 @@
       docker_services role requires docker_services_service_cfg (mapping) to be passed from the playbook.
   tags: [remove, drift]
 
-- name: Init | Validate target exists when targets are defined
-  ansible.builtin.assert:
-    that:
-      - docker_services_service_cfg.targets is not defined
-        or (docker_services_service_target | default('swarm')) in docker_services_service_cfg.targets
-    fail_msg: >-
-      Service '{{ docker_services_role_prefix | default("docker_services") }}' has targets,
-      but target '{{ docker_services_service_target | default("swarm") }}' is not defined.
-  tags: [remove, drift]
-
-- name: Init | Derive base and target service config
+- name: Init | Derive effective target name
   ansible.builtin.set_fact:
-    docker_services_svc_base: >-
-      {{
-        docker_services_service_cfg
-        | dict2items
-        | rejectattr('key', 'equalto', 'targets')
-        | list
-        | items2dict
-      }}
-    docker_services_svc_target: >-
+    docker_services_service_target_effective: >-
       {{
         (
-          docker_services_service_cfg.targets[docker_services_service_target | default('swarm')]
-          if docker_services_service_cfg.targets is defined
-          else {}
+          docker_services_service_target
+          | default('swarm', true)
+          | string
+          | trim
         )
+        if docker_services_service_cfg.targets is defined
+        else none
       }}
   tags: [remove, drift]
 
@@ -51,56 +36,8 @@
   ansible.builtin.set_fact:
     docker_services_svc: >-
       {{
-        docker_services_svc_base
-        | combine(
-            docker_services_svc_target,
-            recursive=true,
-            list_merge='append_rp'
-          )
-      }}
-  tags: [remove, drift]
-
-- name: Init | Preserve target command override
-  when: docker_services_svc_target.command is defined
-  ansible.builtin.set_fact:
-    docker_services_svc: >-
-      {{
-        docker_services_svc
-        | combine(
-            {'command': docker_services_svc_target.command},
-            recursive=true,
-            list_merge='replace'
-          )
-      }}
-  tags: [remove, drift]
-
-- name: Init | Preserve target entrypoint override
-  when: docker_services_svc_target.entrypoint is defined
-  ansible.builtin.set_fact:
-    docker_services_svc: >-
-      {{
-        docker_services_svc
-        | combine(
-            {'entrypoint': docker_services_svc_target.entrypoint},
-            recursive=true,
-            list_merge='replace'
-          )
-      }}
-  tags: [remove, drift]
-
-- name: Init | Preserve target healthcheck.test override
-  when:
-    - docker_services_svc_target.healthcheck is defined
-    - docker_services_svc_target.healthcheck.test is defined
-  ansible.builtin.set_fact:
-    docker_services_svc: >-
-      {{
-        docker_services_svc
-        | combine(
-            {'healthcheck': {'test': docker_services_svc_target.healthcheck.test}},
-            recursive=true,
-            list_merge='replace'
-          )
+        docker_services_service_cfg
+        | docker_services_merge_target(docker_services_service_target_effective)
       }}
   tags: [remove, drift]
 
@@ -113,7 +50,6 @@
       {{ docker_services_svc.name | default(docker_services_role_prefix, true) | string | trim }}
     docker_services_stack_deploy_type: >-
       {{ docker_services_svc.deploy.type | default('swarm', true) | string | trim }}
-    # NOTE: deploy.host is for prep host(s) only; can be string OR list OR group name
     docker_services_deploy_host: "{{ docker_services_svc.deploy.host | default(docker_services_primary_manager, true) }}"
   tags: [remove, drift]
 
@@ -151,6 +87,7 @@
         if (docker_services_deploy_host is sequence and docker_services_deploy_host is not string)
         else [ (docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim) ]
       }}
+  tags: [remove, drift]
 
 - name: Init | Expand filesystem hosts if a group name was provided
   when:
@@ -158,10 +95,12 @@
     - docker_services_fs_hosts_effective[0] in groups
   ansible.builtin.set_fact:
     docker_services_fs_hosts_effective: "{{ groups[docker_services_fs_hosts_effective[0]] | list }}"
+  tags: [remove, drift]
 
 - name: Init | De-dupe filesystem hosts
   ansible.builtin.set_fact:
     docker_services_fs_hosts_effective: "{{ docker_services_fs_hosts_effective | unique | list }}"
+  tags: [remove, drift]
 
 - name: Init | Assert container deploy has a single deploy.host
   when: (docker_services_stack_deploy_type | string | trim) != 'swarm'
@@ -173,6 +112,7 @@
     fail_msg: >-
       Container deploys require deploy.host to be a single hostname (not a group or list).
       Got: {{ docker_services_deploy_host }}
+  tags: [remove, drift]
 
 - name: Init | Determine if this host should build/deploy compose artifacts
   ansible.builtin.set_fact:

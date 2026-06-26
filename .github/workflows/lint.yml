@@ -6,11 +6,13 @@ on:
   push:
     paths:
       - "ansible/**"
+      - "tests/**"
       - "pyproject.toml"
       - ".github/workflows/lint.yml"
   pull_request:
     paths:
       - "ansible/**"
+      - "tests/**"
       - "pyproject.toml"
       - ".github/workflows/lint.yml"
 
@@ -40,9 +42,9 @@ jobs:
 
           if [ -f ansible/requirements.txt ]; then
             python -m pip install -r ansible/requirements.txt
-          else
-            python -m pip install ansible-core ansible-lint yamllint ruff
           fi
+
+          python -m pip install ansible-core ansible-lint yamllint ruff pytest
 
       - name: Install Ansible collections
         run: |
@@ -64,11 +66,23 @@ jobs:
 
       - name: ruff check
         run: |
-          ruff check --output-format=github ansible/roles/docker_services/library
+          ruff check --output-format=github \
+            ansible/filter_plugins \
+            ansible/roles/docker_services/filter_plugins \
+            ansible/roles/docker_services/library \
+            tests/unit
 
       - name: ruff format check
         run: |
-          ruff format --check --diff ansible/roles/docker_services/library
+          ruff format --check --diff \
+            ansible/filter_plugins \
+            ansible/roles/docker_services/filter_plugins \
+            ansible/roles/docker_services/library \
+            tests/unit
+
+      - name: pytest
+        run: |
+          python -m pytest tests/unit
 
       - name: Prepare ansible log dir
         run: mkdir -p .ansible

@@ -2,6 +2,13 @@
 .ansible/
 .vscode/
 .ruff_cache/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
 ansible/netbox.yml
 ansible/collections/
 ansible/group_vars/all/vault

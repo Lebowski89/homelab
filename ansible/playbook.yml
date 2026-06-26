@@ -235,53 +235,7 @@
 
     - name: Build docker service processing list from service definitions
       ansible.builtin.set_fact:
-        docker_services_effective: "{{ _docker_services_effective_yaml | from_yaml }}"
-      vars:
-        _docker_services_effective_yaml: |
-          {%- set out = [] -%}
-          {%- for service_name, service_cfg in services.items() -%}
-
-          {%- set service_enabled = service_cfg.enabled | default(true) | bool -%}
-
-          {%- set service_tags_raw = service_cfg.tags | default([]) -%}
-          {%- set service_tags_list =
-                ([service_tags_raw] if service_tags_raw is string else (service_tags_raw | list))
-          -%}
-          {%- set service_tags = ([service_name] + service_tags_list) | unique | list -%}
-
-          {%- if service_cfg.targets is defined and service_cfg.targets is mapping -%}
-          {%- for target_name, target_cfg in service_cfg.targets.items() -%}
-
-          {%- set target_enabled = target_cfg.enabled | default(true) | bool -%}
-          {%- set effective_enabled = service_enabled and target_enabled -%}
-
-          {%- set target_tags_raw = target_cfg.tags | default([]) -%}
-          {%- set target_tags_list =
-                ([target_tags_raw] if target_tags_raw is string else (target_tags_raw | list))
-          -%}
-          {%- set target_tags = (service_tags + [target_name] + target_tags_list) | unique | list -%}
-
-          {%- set _ = out.append({
-                'name': service_name,
-                'target': target_name,
-                'tags': target_tags,
-                'enabled': effective_enabled
-              }) -%}
-
-          {%- endfor -%}
-
-          {%- else -%}
-
-          {%- set _ = out.append({
-                'name': service_name,
-                'tags': service_tags,
-                'enabled': service_enabled
-              }) -%}
-
-          {%- endif -%}
-          {%- endfor -%}
-
-          {{ out | to_yaml }}
+        docker_services_effective: "{{ services | docker_services_effective }}"
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Assert docker service processing list was built
@@ -309,61 +263,22 @@
 
     - name: Build selected docker service processing list
       ansible.builtin.set_fact:
-        docker_services_matched: "{{ _docker_services_matched_yaml | from_yaml }}"
-        docker_services_selected: "{{ _docker_services_selected_yaml | from_yaml }}"
-      vars:
-        _docker_services_matched_yaml: |
-          {%- set out = [] -%}
-          {%- set run_all = docker_services_run_all | default(false) | bool -%}
-          {%- set run_tags = ansible_run_tags | default([]) -%}
-
-          {%- for item in docker_services_effective -%}
-          {%- set item_tags = item.tags | default([]) -%}
-          {%- set matched =
-                run_all
-                or (run_tags | length == 0)
-                or (item.name in run_tags)
-                or ((item_tags | intersect(run_tags)) | length > 0)
-          -%}
-
-          {%- if matched -%}
-          {%- set _ = out.append(item) -%}
-          {%- endif -%}
-          {%- endfor -%}
-
-          {{ out | to_yaml }}
-
-        _docker_services_selected_yaml: |
-          {%- set out = [] -%}
-          {%- set run_all = docker_services_run_all | default(false) | bool -%}
-          {%- set run_tags = ansible_run_tags | default([]) -%}
-          {%- set allow_disabled = 'remove' in run_tags -%}
-
-          {%- for item in docker_services_effective -%}
-          {%- set item_tags = item.tags | default([]) -%}
-          {%- set matched =
-                run_all
-                or (run_tags | length == 0)
-                or (item.name in run_tags)
-                or ((item_tags | intersect(run_tags)) | length > 0)
-          -%}
-
-          {%- if matched and ((item.enabled | default(true) | bool) or allow_disabled) -%}
-          {%- set _ = out.append(item) -%}
-          {%- endif -%}
-          {%- endfor -%}
-
-          {{ out | to_yaml }}
+        docker_services_selection: >-
+          {{
+            docker_services_effective
+            | docker_services_select(
+                ansible_run_tags | default([]),
+                docker_services_run_all | default(false),
+                'remove' in (ansible_run_tags | default([]))
+              )
+          }}
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
-    - name: Determine docker service selection state
+    - name: Extract docker service selection facts
       ansible.builtin.set_fact:
-        docker_services_disabled_only_selection: >-
-          {{
-            (docker_services_matched | default([]) | length > 0)
-            and
-            (docker_services_selected | default([]) | length == 0)
-          }}
+        docker_services_matched: "{{ docker_services_selection.matched }}"
+        docker_services_selected: "{{ docker_services_selection.selected }}"
+        docker_services_disabled_only_selection: "{{ docker_services_selection.disabled_only }}"
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Report disabled docker service selection in check mode

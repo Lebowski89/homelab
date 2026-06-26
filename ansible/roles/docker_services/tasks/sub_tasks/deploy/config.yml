@@ -7,156 +7,23 @@
       - docker_services_service_name | string | trim | length > 0
     fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Deploy - Config | Normalize deploy mode and capture raw replicas
-  ansible.builtin.set_fact:
-    docker_services_deploy_mode: "{{ deploy_mode | default('replicated', true) | string | trim }}"
-    docker_services_deploy_replicas_raw: "{{ deploy_replicas | default(1, true) }}"
-
-- name: Deploy - Config | Validate deploy mode
-  ansible.builtin.assert:
-    that:
-      - docker_services_deploy_mode in ['replicated', 'global']
-    fail_msg: "deploy_mode must be 'replicated' or 'global' (got '{{ docker_services_deploy_mode }}')."
-
-- name: Deploy - Config | Validate deploy_replicas raw input
-  when: docker_services_deploy_mode == 'replicated'
-  ansible.builtin.assert:
-    that:
-      - (docker_services_deploy_replicas_raw | string | trim) is match('^[0-9]+$')
-    fail_msg: >-
-      deploy_replicas must be a non-negative integer for replicated services.
-      Got: {{ docker_services_deploy_replicas_raw }}
-
-- name: Deploy - Config | Normalize deploy replicas
-  ansible.builtin.set_fact:
-    docker_services_deploy_replicas: "{{ docker_services_deploy_replicas_raw | int }}"
-
-- name: Deploy - Config | Normalize deploy constraints into list
-  ansible.builtin.set_fact:
-    docker_services_deploy_constraints: >-
-      {{
-        (
-          [] if (deploy_constraints is not defined or deploy_constraints is none) else
-          (
-            (deploy_constraints.split(',') if (deploy_constraints is string) else
-             (deploy_constraints if (deploy_constraints is sequence and deploy_constraints is not string) else
-              [deploy_constraints | string]
-             )
-            )
-          )
-        )
-        | map('string') | map('trim') | reject('equalto', '') | list
-      }}
-
-- name: Deploy - Config | Normalize deploy profile
-  ansible.builtin.set_fact:
-    docker_services_deploy_profile_name: >-
-      {{
-        deploy_profile
-        | default(
-            docker_services_svc.deploy.profile
-            | default(docker_services_default_deploy_profile | default('none'), true),
-            true
-          )
-        | string
-        | trim
-      }}
-    docker_services_deploy_profiles_effective: "{{ docker_services_deploy_profiles | default({'none': {}}) }}"
-
-- name: Deploy - Config | Validate deploy profile
-  ansible.builtin.assert:
-    that:
-      - docker_services_deploy_profile_name in docker_services_deploy_profiles_effective
-      - docker_services_deploy_profiles_effective[docker_services_deploy_profile_name] is mapping
-    fail_msg: >-
-      Unknown or invalid deploy profile '{{ docker_services_deploy_profile_name }}'.
-      Valid profiles: {{ docker_services_deploy_profiles_effective.keys() | list | sort }}
-
-- name: Deploy - Config | Load deploy profile defaults
-  ansible.builtin.set_fact:
-    docker_services_deploy_profile_defaults: "{{ docker_services_deploy_profiles_effective[docker_services_deploy_profile_name] | default({}) }}"
-
-- name: Deploy - Config | Normalize optional deploy sub-dicts
-  ansible.builtin.set_fact:
-    docker_services_deploy_restart_policy: >-
-      {{
-        (docker_services_deploy_profile_defaults.restart_policy | default({}))
-        | combine(
-            (deploy_restart_policy if (deploy_restart_policy is defined and deploy_restart_policy is mapping) else {}),
-            recursive=true
-          )
-      }}
-    docker_services_deploy_update_config: >-
-      {{
-        (docker_services_deploy_profile_defaults.update_config | default({}))
-        | combine(
-            (deploy_update_config if (deploy_update_config is defined and deploy_update_config is mapping) else {}),
-            recursive=true
-          )
-      }}
-    docker_services_deploy_rollback_config: >-
-      {{
-        (docker_services_deploy_profile_defaults.rollback_config | default({}))
-        | combine(
-            (deploy_rollback_config if (deploy_rollback_config is defined and deploy_rollback_config is mapping) else {}),
-            recursive=true
-          )
-      }}
-    docker_services_deploy_resources: >-
-      {{
-        (docker_services_deploy_profile_defaults.resources | default({}))
-        | combine(
-            (deploy_resources if (deploy_resources is defined and deploy_resources is mapping) else {}),
-            recursive=true
-          )
-      }}
-
-- name: Deploy - Config | Validate normalized deploy inputs
-  ansible.builtin.assert:
-    that:
-      - docker_services_deploy_mode != 'replicated' or (docker_services_deploy_replicas | int) >= 0
-      - docker_services_deploy_restart_policy is mapping
-      - docker_services_deploy_update_config is mapping
-      - docker_services_deploy_rollback_config is mapping
-      - docker_services_deploy_resources is mapping
-    fail_msg: >-
-      deploy_replicas must be >= 0 for replicated services, and normalized deploy_*
-      overrides must be mappings.
-
 - name: Deploy - Config | Build deploy dict
   ansible.builtin.set_fact:
     docker_services_deploy_dict: >-
       {{
-        { 'mode': docker_services_deploy_mode }
-        | combine(
-            (docker_services_deploy_mode == 'replicated')
-            | ternary({ 'replicas': docker_services_deploy_replicas }, {}),
-            recursive=true
-          )
-        | combine(
-            (docker_services_deploy_constraints | length > 0)
-            | ternary({ 'placement': { 'constraints': docker_services_deploy_constraints } }, {}),
-            recursive=true
-          )
-        | combine(
-            (docker_services_deploy_restart_policy | length > 0)
-            | ternary({ 'restart_policy': docker_services_deploy_restart_policy }, {}),
-            recursive=true
-          )
-        | combine(
-            (docker_services_deploy_update_config | length > 0)
-            | ternary({ 'update_config': docker_services_deploy_update_config }, {}),
-            recursive=true
-          )
-        | combine(
-            (docker_services_deploy_rollback_config | length > 0)
-            | ternary({ 'rollback_config': docker_services_deploy_rollback_config }, {}),
-            recursive=true
-          )
-        | combine(
-            (docker_services_deploy_resources | length > 0)
-            | ternary({ 'resources': docker_services_deploy_resources }, {}),
-            recursive=true
+        docker_services_svc.deploy | default({}, true)
+        | docker_services_build_deploy_config(
+            mode=deploy_mode | default(none, true),
+            replicas=deploy_replicas | default(none, true),
+            constraints=deploy_constraints | default(none, true),
+            profile=deploy_profile | default(none, true),
+            service_profile=docker_services_svc.deploy.profile | default(none, true),
+            default_profile=docker_services_default_deploy_profile | default('none', true),
+            profiles=docker_services_deploy_profiles | default({'none': {}}, true),
+            restart_policy=deploy_restart_policy | default(none, true),
+            update_config=deploy_update_config | default(none, true),
+            rollback_config=deploy_rollback_config | default(none, true),
+            resources=deploy_resources | default(none, true)
           )
       }}
 

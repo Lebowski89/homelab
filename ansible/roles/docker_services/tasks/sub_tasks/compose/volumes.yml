@@ -7,115 +7,6 @@
       - docker_services_service_name | string | trim | length > 0
     fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Compose - Volumes | Ensure volumes_action is valid
-  ansible.builtin.assert:
-    that:
-      - volumes_action | default('append') in ['append', 'replace', 'append_unique']
-    fail_msg: "volumes_action must be 'append', 'replace', or 'append_unique'"
-
-- name: Compose - Volumes | Build raw volume entries
-  ansible.builtin.set_fact:
-    docker_services_volumes_new_raw: >-
-      {{
-        (
-          (volumes.values() | list) if (volumes is defined and volumes is mapping)
-          else (volumes | list) if (volumes is defined)
-          else (volumes_list | default([], true) | list) if (volumes_list is defined)
-          else
-          [
-            {
-              'type': (paths_type | default('bind', true) | string | trim),
-              'source': (paths_host | default('', true) | string),
-              'target': (paths_container | default('', true) | string),
-              'read_only': (paths_read_only | default(false)) | bool
-            }
-          ]
-        )
-      }}
-
-- name: Compose - Volumes | Validate raw volume entries are dicts
-  ansible.builtin.assert:
-    that:
-      - (docker_services_volumes_new_raw | select('mapping') | list | length) == (docker_services_volumes_new_raw | length)
-    fail_msg: "volumes must be a list (or mapping) of dicts."
-
-- name: Compose - Volumes | Reset working volumes list (prevent cross-service bleed)
-  ansible.builtin.set_fact:
-    docker_services_volumes_new: []
-
-- name: Compose - Volumes | Canonicalise new volume entries
-  ansible.builtin.set_fact:
-    docker_services_volumes_new: "{{ docker_services_volumes_new | default([]) + [_canon] }}"
-  vars:
-    _t: "{{ (v.type | default('bind', true) | string | trim) }}"
-    _src: "{{ (v.source | default('', true) | string | trim) }}"
-    _tgt: "{{ (v.target | default('', true) | string | trim) }}"
-    _ro: "{{ (v.read_only | default(false)) | bool }}"
-    _tmpfs_base: >-
-      {{
-        (v.tmpfs | default({}, true))
-        if (v.tmpfs is defined and v.tmpfs is mapping)
-        else {}
-      }}
-    _tmpfs_norm: >-
-      {{
-        (_tmpfs_base | combine({'size': (_tmpfs_base.size | int)}))
-        if (_tmpfs_base is mapping and _tmpfs_base.size is defined)
-        else _tmpfs_base
-      }}
-    _canon: >-
-      {%- if _t == 'tmpfs' -%}
-      {{
-        {
-          'type': 'tmpfs',
-          'target': _tgt,
-          'tmpfs': _tmpfs_norm
-        }
-      }}
-      {%- else -%}
-      {{
-        {
-          'type': _t,
-          'source': _src,
-          'target': _tgt,
-          'read_only': _ro
-        }
-      }}
-      {%- endif -%}
-  loop: "{{ docker_services_volumes_new_raw }}"
-  loop_control:
-    loop_var: v
-
-- name: Compose - Volumes | Validate canonical volume entries
-  ansible.builtin.assert:
-    that:
-      - _t in ['bind', 'volume', 'tmpfs']
-      - (_t != 'tmpfs') or (_tgt | length > 0)
-      - (_t == 'tmpfs') or (_src | length > 0)
-      - (_t == 'tmpfs') or (_tgt | length > 0)
-      - (_t != 'tmpfs') or (_tmpfs_ok)
-    fail_msg: >-
-      Invalid volume entry for service '{{ docker_services_service_name }}':
-      type='{{ _t }}', source='{{ _src }}', target='{{ _tgt }}', tmpfs='{{ vcanon.tmpfs | default(omit) }}'
-  vars:
-    _t: "{{ vcanon.type | default('bind', true) | string | trim }}"
-    _src: "{{ vcanon.source | default('', true) | string | trim }}"
-    _tgt: "{{ vcanon.target | default('', true) | string | trim }}"
-    _tmpfs_ok: >-
-      {{
-        (vcanon.tmpfs is not defined)
-        or (
-          (vcanon.tmpfs is mapping)
-          and (
-            (vcanon.tmpfs.size is not defined)
-            or ((vcanon.tmpfs.size | int) >= 0)
-          )
-        )
-      }}
-  loop: "{{ docker_services_volumes_new }}"
-  loop_control:
-    loop_var: vcanon
-
 - name: Compose - Volumes | Capture existing volumes list
   ansible.builtin.set_fact:
     docker_services_volumes_existing: >-
@@ -128,47 +19,18 @@
 - name: Compose - Volumes | Compute merged volumes list
   ansible.builtin.set_fact:
     docker_services_volumes_merged: >-
-      {%- set action = (volumes_action | default('append')) -%}
-      {%- if action == 'replace' -%}
-      {{ docker_services_volumes_new }}
-      {%- elif action == 'append' -%}
-      {{ docker_services_volumes_existing + docker_services_volumes_new }}
-      {%- else -%}
-      {%- set seen = {} -%}
-      {%- set out = [] -%}
-
-      {%- for v in docker_services_volumes_existing -%}
-      {%- set t = (v.type | default('bind', true) | string | trim) -%}
-      {%- if t in ['bind','volume'] -%}
-      {%- set k = t ~ ':' ~ (v.source | default('') | string) ~ '->' ~ (v.target | default('') | string) -%}
-      {%- elif t == 'tmpfs' -%}
-      {%- set k = 'tmpfs:' ~ (v.target | default('') | string) -%}
-      {%- else -%}
-      {%- set k = t ~ ':' ~ (v.target | default('') | string) -%}
-      {%- endif -%}
-      {%- if k not in seen -%}
-      {%- set _ = seen.update({k: true}) -%}
-      {%- set _ = out.append(v) -%}
-      {%- endif -%}
-      {%- endfor -%}
-
-      {%- for v in docker_services_volumes_new -%}
-      {%- set t = (v.type | default('bind', true) | string | trim) -%}
-      {%- if t in ['bind','volume'] -%}
-      {%- set k = t ~ ':' ~ (v.source | default('') | string) ~ '->' ~ (v.target | default('') | string) -%}
-      {%- elif t == 'tmpfs' -%}
-      {%- set k = 'tmpfs:' ~ (v.target | default('') | string) -%}
-      {%- else -%}
-      {%- set k = t ~ ':' ~ (v.target | default('') | string) -%}
-      {%- endif -%}
-      {%- if k not in seen -%}
-      {%- set _ = seen.update({k: true}) -%}
-      {%- set _ = out.append(v) -%}
-      {%- endif -%}
-      {%- endfor -%}
-
-      {{ out }}
-      {%- endif -%}
+      {{
+        docker_services_volumes_existing
+        | docker_services_merge_volumes(
+            volumes | default(none, true),
+            volumes_list | default(none, true),
+            volumes_action | default('append', true),
+            paths_type | default('bind', true),
+            paths_host | default('', true),
+            paths_container | default('', true),
+            paths_read_only | default(false, true)
+          )
+      }}
 
 - name: Compose - Volumes | Attach volumes to service
   ansible.builtin.set_fact:
