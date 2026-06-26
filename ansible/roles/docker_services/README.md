@@ -250,9 +250,7 @@
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Compose - Labels ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Compose - Labels ¦ Ensure labels_action is valid | ansible.builtin.assert | False |
-| Compose - Labels ¦ Ensure labels_precedence is valid | ansible.builtin.assert | False |
-| Compose - Labels ¦ Normalize labels input to mapping | ansible.builtin.set_fact | False |
+| Compose - Labels ¦ Capture existing labels | ansible.builtin.set_fact | False |
 | Compose - Labels ¦ Build final labels dict | ansible.builtin.set_fact | False |
 | Compose - Labels ¦ Attach labels to service | ansible.builtin.set_fact | False |
 
