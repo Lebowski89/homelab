@@ -28,8 +28,8 @@
     label: "{{ item.db | default('undefined-db') }}"
 
 - name: Fix DB owner | Query Patroni cluster state from first postgres node
-  ansible.builtin.uri:
   # checkov:skip=CKV2_ANSIBLE_1: Internal homelab service endpoint over trusted management network
+  ansible.builtin.uri:
     url: "http://{{ hostvars[groups['tags_postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
     method: GET
     return_content: true
