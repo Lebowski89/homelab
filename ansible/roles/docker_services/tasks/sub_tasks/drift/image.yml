@@ -14,10 +14,17 @@
         else ''
       }}
 
+- name: Drift | Determine whether image drift check applies
+  ansible.builtin.set_fact:
+    docker_services_drift_image_enabled: >-
+      {{
+        docker_services_svc.image is defined
+        and (docker_services_svc.image | string | trim | length) > 0
+      }}
+
 - name: Drift | Skip services without an image
   when:
-    - docker_services_svc.image is not defined
-      or (docker_services_svc.image | string | trim | length) == 0
+    - not (docker_services_drift_image_enabled | bool)
   ansible.builtin.debug:
     msg: >-
       Skipping image drift check for {{ docker_services_role_prefix }}
@@ -28,218 +35,230 @@
       }}
       because no image is defined.
 
-- name: Drift | Check image drift
-  # checkov:skip=CKV2_ANSIBLE_3: Drift inspection intentionally uses failed_when=false; failures are captured as drift data, not rescued.
+- name: Drift | Derive drift context
   when:
-    - docker_services_svc.image is defined
-    - (docker_services_svc.image | string | trim | length) > 0
-  block:
-    - name: Drift | Derive drift context
-      ansible.builtin.set_fact:
-        docker_services_drift_desired_image: "{{ docker_services_svc.image | string | trim }}"
-        docker_services_drift_desired_image_normalised: >-
-          {{
-            docker_services_svc.image
-            | string
-            | trim
-            | regex_replace('@sha256:.*$', '')
-          }}
-        docker_services_drift_deploy_type: >-
-          {{ docker_services_stack_deploy_type | default('swarm', true) | string | trim }}
-        docker_services_drift_stack_name: "{{ docker_services_stack_name_effective | string | trim }}"
-        docker_services_drift_compose_service_name: "{{ docker_services_service_name | string | trim }}"
-        docker_services_drift_swarm_service_name: >-
-          {{ docker_services_stack_name_effective | string | trim }}_{{ docker_services_service_name | string | trim }}
-        docker_services_drift_label: >-
-          {{
-            docker_services_role_prefix
-            ~ (
-              ':' ~ docker_services_drift_target_label
-              if (docker_services_drift_target_label | string | trim | length) > 0
-              else ''
+    - docker_services_drift_image_enabled | bool
+  ansible.builtin.set_fact:
+    docker_services_drift_desired_image: "{{ docker_services_svc.image | string | trim }}"
+    docker_services_drift_desired_image_normalised: >-
+      {{
+        docker_services_svc.image
+        | string
+        | trim
+        | regex_replace('@sha256:.*$', '')
+      }}
+    docker_services_drift_deploy_type: >-
+      {{ docker_services_stack_deploy_type | default('swarm', true) | string | trim }}
+    docker_services_drift_stack_name: "{{ docker_services_stack_name_effective | string | trim }}"
+    docker_services_drift_compose_service_name: "{{ docker_services_service_name | string | trim }}"
+    docker_services_drift_swarm_service_name: >-
+      {{ docker_services_stack_name_effective | string | trim }}_{{ docker_services_service_name | string | trim }}
+    docker_services_drift_label: >-
+      {{
+        docker_services_role_prefix
+        ~ (
+          ':' ~ docker_services_drift_target_label
+          if (docker_services_drift_target_label | string | trim | length) > 0
+          else ''
+        )
+      }}
+
+################################
+# SWARM INSPECTION
+################################
+
+- name: Drift | Inspect live Swarm service image
+  when:
+    - docker_services_drift_image_enabled | bool
+    - (docker_services_drift_deploy_type | default('')) == 'swarm'
+  ansible.builtin.command:
+    argv:
+      - docker
+      - service
+      - inspect
+      - "--format"
+      - "{{ '{{ .Spec.TaskTemplate.ContainerSpec.Image }}' }}"
+      - "{{ docker_services_drift_swarm_service_name }}"
+  register: docker_services_drift_swarm_inspect
+  changed_when: false
+  failed_when: false
+  delegate_to: "{{ docker_services_primary_manager }}"
+  run_once: true
+
+- name: Drift | Normalise live Swarm service image
+  when:
+    - docker_services_drift_image_enabled | bool
+    - (docker_services_drift_deploy_type | default('')) == 'swarm'
+  ansible.builtin.set_fact:
+    docker_services_drift_live_image: "{{ docker_services_drift_swarm_inspect.stdout | default('') | string | trim }}"
+    docker_services_drift_live_image_normalised: >-
+      {{
+        docker_services_drift_swarm_inspect.stdout
+        | default('')
+        | string
+        | trim
+        | regex_replace('@sha256:.*$', '')
+      }}
+    docker_services_drift_service_exists: "{{ (docker_services_drift_swarm_inspect.rc | default(1)) == 0 }}"
+    docker_services_drift_live_ref: "{{ docker_services_drift_swarm_service_name }}"
+
+################################
+# COMPOSE INSPECTION
+################################
+
+- name: Drift | Derive Compose service context
+  when:
+    - docker_services_drift_image_enabled | bool
+    - (docker_services_drift_deploy_type | default('')) != 'swarm'
+  ansible.builtin.set_fact:
+    docker_services_drift_compose_project_name: "{{ docker_services_stack_name_effective | string | trim }}"
+    docker_services_drift_compose_file: >-
+      /opt/stacks/{{ docker_services_stack_name_effective | string | trim }}-compose.yml
+    docker_services_drift_compose_service_name: "{{ docker_services_service_name | string | trim }}"
+
+- name: Drift | Inspect live Compose container image
+  when:
+    - docker_services_drift_image_enabled | bool
+    - (docker_services_drift_deploy_type | default('')) != 'swarm'
+  ansible.builtin.shell: |
+    set -euo pipefail
+
+    compose_file={{ docker_services_drift_compose_file | quote }}
+    project_name={{ docker_services_drift_compose_project_name | quote }}
+    service_name={{ docker_services_drift_compose_service_name | quote }}
+
+    if [ ! -f "$compose_file" ]; then
+      exit 3
+    fi
+
+    container_id="$(
+      docker compose \
+        --file "$compose_file" \
+        --project-name "$project_name" \
+        ps -q "$service_name" \
+        | head -n 1
+    )"
+
+    if [ -z "$container_id" ]; then
+      exit 4
+    fi
+
+    docker inspect \
+      --format '{{ "{{ .Config.Image }}" }}' \
+      "$container_id"
+  args:
+    executable: /bin/bash
+  register: docker_services_drift_compose_inspect
+  changed_when: false
+  failed_when: false
+  delegate_to: "{{ docker_services_deploy_host_effective }}"
+  run_once: true
+
+- name: Drift | Normalise live Compose container image
+  when:
+    - docker_services_drift_image_enabled | bool
+    - (docker_services_drift_deploy_type | default('')) != 'swarm'
+  ansible.builtin.set_fact:
+    docker_services_drift_live_image: "{{ docker_services_drift_compose_inspect.stdout | default('') | string | trim }}"
+    docker_services_drift_live_image_normalised: >-
+      {{
+        docker_services_drift_compose_inspect.stdout
+        | default('')
+        | string
+        | trim
+        | regex_replace('@sha256:.*$', '')
+      }}
+    docker_services_drift_service_exists: "{{ (docker_services_drift_compose_inspect.rc | default(1)) == 0 }}"
+    docker_services_drift_live_ref: "{{ docker_services_drift_compose_project_name }}:{{ docker_services_drift_compose_service_name }}"
+
+################################
+# DRIFT STATE
+################################
+
+- name: Drift | Determine image drift state
+  when:
+    - docker_services_drift_image_enabled | bool
+  ansible.builtin.set_fact:
+    docker_services_drift_missing: "{{ not (docker_services_drift_service_exists | bool) }}"
+    docker_services_drift_image_changed: >-
+      {{
+        (docker_services_drift_service_exists | bool)
+        and
+        (
+          docker_services_drift_live_image_normalised
+          != docker_services_drift_desired_image_normalised
+        )
+      }}
+    docker_services_drift_detected: >-
+      {{
+        (not (docker_services_drift_service_exists | bool))
+        or
+        (
+          (docker_services_drift_service_exists | bool)
+          and
+          (
+            docker_services_drift_live_image_normalised
+            != docker_services_drift_desired_image_normalised
+          )
+        )
+      }}
+
+################################
+# REPORTING
+################################
+
+- name: Drift | Report missing runtime service/container
+  when:
+    - docker_services_drift_image_enabled | bool
+    - docker_services_drift_missing | bool
+  ansible.builtin.debug:
+    msg: >-
+      Runtime service/container missing for {{ docker_services_drift_label }}.
+      Expected '{{ docker_services_drift_live_ref | default('unknown') }}'
+      with image '{{ docker_services_drift_desired_image }}'.
+
+- name: Drift | Report image drift
+  when:
+    - docker_services_drift_image_enabled | bool
+    - docker_services_drift_image_changed | bool
+  ansible.builtin.debug:
+    msg: >-
+      Image drift detected for {{ docker_services_drift_label }}.
+      Runtime={{ docker_services_drift_live_ref }},
+      desired={{ docker_services_drift_desired_image_normalised }},
+      current={{ docker_services_drift_live_image_normalised }}.
+
+- name: Drift | Report image is current
+  when:
+    - docker_services_drift_image_enabled | bool
+    - not (docker_services_drift_detected | bool)
+  ansible.builtin.debug:
+    msg: >-
+      Image is current for {{ docker_services_drift_label }}:
+      {{ docker_services_drift_desired_image_normalised }}.
+
+- name: Drift | Add service to drift summary
+  when:
+    - docker_services_drift_image_enabled | bool
+    - docker_services_drift_detected | bool
+  ansible.builtin.set_fact:
+    docker_services_image_drift: >-
+      {{
+        (hostvars[docker_services_primary_manager].docker_services_image_drift | default([]))
+        + [
+          {
+            'label': docker_services_drift_label,
+            'stack': docker_services_drift_stack_name,
+            'service': docker_services_drift_live_ref,
+            'desired': docker_services_drift_desired_image_normalised,
+            'current': (
+              'missing'
+              if (docker_services_drift_missing | bool)
+              else docker_services_drift_live_image_normalised
             )
-          }}
-
-    ################################
-    # SWARM INSPECTION
-    ################################
-
-    - name: Drift | Inspect live Swarm service image
-      when: docker_services_drift_deploy_type == 'swarm'
-      ansible.builtin.command:
-        argv:
-          - docker
-          - service
-          - inspect
-          - "--format"
-          - "{{ '{{ .Spec.TaskTemplate.ContainerSpec.Image }}' }}"
-          - "{{ docker_services_drift_swarm_service_name }}"
-      register: docker_services_drift_swarm_inspect
-      changed_when: false
-      failed_when: false
-      delegate_to: "{{ docker_services_primary_manager }}"
-      run_once: true
-
-    - name: Drift | Normalise live Swarm service image
-      when: docker_services_drift_deploy_type == 'swarm'
-      ansible.builtin.set_fact:
-        docker_services_drift_live_image: "{{ docker_services_drift_swarm_inspect.stdout | default('') | string | trim }}"
-        docker_services_drift_live_image_normalised: >-
-          {{
-            docker_services_drift_swarm_inspect.stdout
-            | default('')
-            | string
-            | trim
-            | regex_replace('@sha256:.*$', '')
-          }}
-        docker_services_drift_service_exists: "{{ (docker_services_drift_swarm_inspect.rc | default(1)) == 0 }}"
-        docker_services_drift_live_ref: "{{ docker_services_drift_swarm_service_name }}"
-
-    ################################
-    # COMPOSE INSPECTION
-    ################################
-
-    - name: Drift | Derive Compose service context
-      when: docker_services_drift_deploy_type != 'swarm'
-      ansible.builtin.set_fact:
-        docker_services_drift_compose_project_name: "{{ docker_services_stack_name_effective | string | trim }}"
-        docker_services_drift_compose_file: >-
-          /opt/stacks/{{ docker_services_stack_name_effective | string | trim }}-compose.yml
-        docker_services_drift_compose_service_name: "{{ docker_services_service_name | string | trim }}"
-
-    - name: Drift | Inspect live Compose container image
-      when: docker_services_drift_deploy_type != 'swarm'
-      ansible.builtin.shell: |
-        set -euo pipefail
-
-        compose_file={{ docker_services_drift_compose_file | quote }}
-        project_name={{ docker_services_drift_compose_project_name | quote }}
-        service_name={{ docker_services_drift_compose_service_name | quote }}
-
-        if [ ! -f "$compose_file" ]; then
-          exit 3
-        fi
-
-        container_id="$(
-          docker compose \
-            --file "$compose_file" \
-            --project-name "$project_name" \
-            ps -q "$service_name" \
-            | head -n 1
-        )"
-
-        if [ -z "$container_id" ]; then
-          exit 4
-        fi
-
-        docker inspect \
-          --format '{{ "{{ .Config.Image }}" }}' \
-          "$container_id"
-      args:
-        executable: /bin/bash
-      register: docker_services_drift_compose_inspect
-      changed_when: false
-      failed_when: false
-      delegate_to: "{{ docker_services_deploy_host_effective }}"
-      run_once: true
-
-    - name: Drift | Normalise live Compose container image
-      when: docker_services_drift_deploy_type != 'swarm'
-      ansible.builtin.set_fact:
-        docker_services_drift_live_image: "{{ docker_services_drift_compose_inspect.stdout | default('') | string | trim }}"
-        docker_services_drift_live_image_normalised: >-
-          {{
-            docker_services_drift_compose_inspect.stdout
-            | default('')
-            | string
-            | trim
-            | regex_replace('@sha256:.*$', '')
-          }}
-        docker_services_drift_service_exists: "{{ (docker_services_drift_compose_inspect.rc | default(1)) == 0 }}"
-        docker_services_drift_live_ref: "{{ docker_services_drift_compose_project_name }}:{{ docker_services_drift_compose_service_name }}"
-
-    ################################
-    # DRIFT STATE
-    ################################
-
-    - name: Drift | Determine image drift state
-      ansible.builtin.set_fact:
-        docker_services_drift_missing: "{{ not (docker_services_drift_service_exists | bool) }}"
-        docker_services_drift_image_changed: >-
-          {{
-            (docker_services_drift_service_exists | bool)
-            and
-            (
-              docker_services_drift_live_image_normalised
-              != docker_services_drift_desired_image_normalised
-            )
-          }}
-        docker_services_drift_detected: >-
-          {{
-            (not (docker_services_drift_service_exists | bool))
-            or
-            (
-              (docker_services_drift_service_exists | bool)
-              and
-              (
-                docker_services_drift_live_image_normalised
-                != docker_services_drift_desired_image_normalised
-              )
-            )
-          }}
-
-    ################################
-    # REPORTING
-    ################################
-
-    - name: Drift | Report missing runtime service/container
-      when:
-        - docker_services_drift_missing | bool
-      ansible.builtin.debug:
-        msg: >-
-          Runtime service/container missing for {{ docker_services_drift_label }}.
-          Expected '{{ docker_services_drift_live_ref | default('unknown') }}'
-          with image '{{ docker_services_drift_desired_image }}'.
-
-    - name: Drift | Report image drift
-      when:
-        - docker_services_drift_image_changed | bool
-      ansible.builtin.debug:
-        msg: >-
-          Image drift detected for {{ docker_services_drift_label }}.
-          Runtime={{ docker_services_drift_live_ref }},
-          desired={{ docker_services_drift_desired_image_normalised }},
-          current={{ docker_services_drift_live_image_normalised }}.
-
-    - name: Drift | Report image is current
-      when:
-        - not (docker_services_drift_detected | bool)
-      ansible.builtin.debug:
-        msg: >-
-          Image is current for {{ docker_services_drift_label }}:
-          {{ docker_services_drift_desired_image_normalised }}.
-
-    - name: Drift | Add service to drift summary
-      when:
-        - docker_services_drift_detected | bool
-      ansible.builtin.set_fact:
-        docker_services_image_drift: >-
-          {{
-            (hostvars[docker_services_primary_manager].docker_services_image_drift | default([]))
-            + [
-              {
-                'label': docker_services_drift_label,
-                'stack': docker_services_drift_stack_name,
-                'service': docker_services_drift_live_ref,
-                'desired': docker_services_drift_desired_image_normalised,
-                'current': (
-                  'missing'
-                  if (docker_services_drift_missing | bool)
-                  else docker_services_drift_live_image_normalised
-                )
-              }
-            ]
-          }}
-      delegate_to: "{{ docker_services_primary_manager }}"
-      delegate_facts: true
-      run_once: true
+          }
+        ]
+      }}
+  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_facts: true
+  run_once: true
