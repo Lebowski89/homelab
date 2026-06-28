@@ -389,15 +389,15 @@
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Drift ¦ Derive clean service target label | ansible.builtin.set_fact | False |
+| Drift ¦ Determine whether image drift check applies | ansible.builtin.set_fact | False |
 | Drift ¦ Skip services without an image | ansible.builtin.debug | True |
-| Drift ¦ Check image drift | block | True |
-| Drift ¦ Derive drift context | ansible.builtin.set_fact | False |
+| Drift ¦ Derive drift context | ansible.builtin.set_fact | True |
 | Drift ¦ Inspect live Swarm service image | ansible.builtin.command | True |
 | Drift ¦ Normalise live Swarm service image | ansible.builtin.set_fact | True |
 | Drift ¦ Derive Compose service context | ansible.builtin.set_fact | True |
 | Drift ¦ Inspect live Compose container image | ansible.builtin.shell | True |
 | Drift ¦ Normalise live Compose container image | ansible.builtin.set_fact | True |
-| Drift ¦ Determine image drift state | ansible.builtin.set_fact | False |
+| Drift ¦ Determine image drift state | ansible.builtin.set_fact | True |
 | Drift ¦ Report missing runtime service/container | ansible.builtin.debug | True |
 | Drift ¦ Report image drift | ansible.builtin.debug | True |
 | Drift ¦ Report image is current | ansible.builtin.debug | True |
