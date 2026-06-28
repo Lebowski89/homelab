@@ -64,3 +64,9 @@
         authelia_key_secret: "authelia_jwt_key_secret"
         authelia_key_command: "authelia crypto rand --length 64 --charset alphanumeric"
         authelia_key_echo: "Random Value"
+  rescue:
+    - name: Prep - Authelia | Fail secret generation with context
+      ansible.builtin.fail:
+        msg: >-
+          Authelia argon2/key generation failed. Some values may have been generated
+          before the failure. Review the failed task above and rerun.

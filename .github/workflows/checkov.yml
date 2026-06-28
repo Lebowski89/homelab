@@ -59,9 +59,6 @@ jobs:
           checkov \
             --directory . \
             --config-file .checkov.yml \
-            --framework terraform \
-            --framework dockerfile \
-            --framework ansible \
             --output cli \
             --output sarif \
             --output-file-path console,checkov.sarif \

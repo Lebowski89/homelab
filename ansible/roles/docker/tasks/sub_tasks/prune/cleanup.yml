@@ -123,6 +123,12 @@
         msg:
           before: "{{ docker_prune_df_before.stdout_lines }}"
           after: "{{ docker_prune_df_after.stdout_lines }}"
+  rescue:
+    - name: Docker prune cleanup | Fail cleanup with context
+      ansible.builtin.fail:
+        msg: >-
+          Docker prune cleanup failed on {{ inventory_hostname }}.
+          Review the failed task above and rerun after fixing the issue.
 
 - name: Docker prune cleanup | Skip cleanup below threshold
   when: docker_prune_usage_percent < (docker_prune_threshold_percent | int)
