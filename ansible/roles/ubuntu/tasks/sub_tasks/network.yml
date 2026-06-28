@@ -72,3 +72,9 @@
       when:
         - not ansible_check_mode
         - ubuntu_nic_tuning_enabled | bool
+  rescue:
+    - name: Fail network configuration with context
+      ansible.builtin.fail:
+        msg: >-
+          Network-related Ubuntu configuration failed on {{ inventory_hostname }}.
+          Fix the failed task above and rerun.

@@ -108,6 +108,12 @@
         attachable: true
         ipam_config:
           - subnet: "{{ docker_network_subnet }}"
+  rescue:
+    - name: Fail overlay network setup with context
+      ansible.builtin.fail:
+        msg: >-
+          Docker Swarm overlay network setup failed for '{{ docker_network }}'
+          on {{ docker_swarm_primary_manager }}. Fix the failed task above and rerun.
 
 - name: Apply swarm node labels
   community.docker.docker_node:

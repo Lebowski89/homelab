@@ -72,6 +72,12 @@
           SMTP drift notification creds are still empty after Infisical fetch.
           Expected SMTP_EMAIL, SMTP_HOST, SMTP_PASS, SMTP_PORT, SMTP_SENDER, SMTP_USER
           under {{ docker_services_drift_email_infisical_path | default('/Porkbun') }}.
+  rescue:
+    - name: Drift Notify | Fail SMTP credential setup with context
+      ansible.builtin.fail:
+        msg: >-
+          Failed while resolving SMTP credentials for image drift notification.
+          Fix the failed task above or disable docker_services_drift_email_enabled.
 
 ################################
 # EMAIL BODY
