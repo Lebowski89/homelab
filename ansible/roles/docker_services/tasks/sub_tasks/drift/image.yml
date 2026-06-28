@@ -33,6 +33,7 @@
     - docker_services_svc.image is defined
     - (docker_services_svc.image | string | trim | length) > 0
   block:
+  # checkov:skip=<CHECK_ID>: Drift inspection intentionally uses failed_when=false; failures are captured as drift data, not rescued.
     - name: Drift | Derive drift context
       ansible.builtin.set_fact:
         docker_services_drift_desired_image: "{{ docker_services_svc.image | string | trim }}"
