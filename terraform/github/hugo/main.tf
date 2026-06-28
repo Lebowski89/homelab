@@ -1,5 +1,7 @@
 resource "github_repository" "blog" {
-  #checkov:skip=CKV_GIT_1:This Hugo blog repository is intentionally public.
+  #checkov:skip=CKV_GIT_1:Hugo/static site repository is intentionally public.
+  #checkov:skip=CKV_GIT_5:Personal homelab repo; one-maintainer workflow does not require two approvals.
+  #checkov:skip=CKV_GIT_6:Signed commits are not currently enforced for this personal repo.
   name        = var.repository_name
   description = var.repository_description
   visibility  = var.visibility
