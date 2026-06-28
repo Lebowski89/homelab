@@ -376,6 +376,13 @@
         key: downloading.downloaders
         value: "{{ docker_services_nzbhydra2_downloaders }}"
         state: present
+  rescue:
+    - name: Prep - NZBHydra2 | Fail downloader replacement with context
+      ansible.builtin.fail:
+        msg: >-
+          Failed while replacing NZBHydra2 downloaders in
+          {{ docker_services_nzbhydra2_config_path }}. The existing list may have
+          been removed before the failure. Fix the failed task above and rerun.
 
 - name: Prep - NZBHydra2 | Replace indexers list
   no_log: true
@@ -395,6 +402,13 @@
         key: indexers
         value: "{{ docker_services_nzbhydra2_indexers }}"
         state: present
+  rescue:
+    - name: Prep - NZBHydra2 | Fail indexer replacement with context
+      ansible.builtin.fail:
+        msg: >-
+          Failed while replacing NZBHydra2 indexers in
+          {{ docker_services_nzbhydra2_config_path }}. The existing list may have
+          been removed before the failure. Fix the failed task above and rerun.
 
 - name: Prep - NZBHydra2 | Report managed config update in check mode
   ansible.builtin.debug:

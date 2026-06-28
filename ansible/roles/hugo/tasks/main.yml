@@ -73,22 +73,20 @@
 
 - name: Hugo | Generate new Hugo site
   when: not hugo_site_stat.stat.exists
+  community.docker.docker_container:
+    name: hugo-new-site
+    image: "{{ hugo_image }}"
+    pull: true
+    state: started
+    container_default_behavior: compatibility
+    detach: false
+    command: "hugo new site blog"
+    volumes:
+      - "{{ hugo_root_path }}:/src"
+    cleanup: true
   tags: hugo_bootstrap
   run_once: true
   delegate_to: "{{ hugo_fs_host }}"
-  block:
-    - name: Hugo | Run hugo new site
-      community.docker.docker_container:
-        name: hugo-new-site
-        image: "{{ hugo_image }}"
-        pull: true
-        state: started
-        container_default_behavior: compatibility
-        detach: false
-        command: "hugo new site blog"
-        volumes:
-          - "{{ hugo_root_path }}:/src"
-        cleanup: true
 
 ################################
 # GIT (INIT / THEME)
@@ -132,3 +130,9 @@
       run_once: true
       changed_when: true
       # noqa: command-instead-of-module
+  rescue:
+    - name: Hugo | Fail theme submodule setup with context
+      ansible.builtin.fail:
+        msg: >-
+          Hugo theme submodule setup failed at {{ hugo_site_path }}.
+          Fix the failed task above and rerun.

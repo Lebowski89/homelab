@@ -60,3 +60,9 @@
         attribute: TranscoderTempDirectory
         value: "/transcode"
         state: present
+  rescue:
+    - name: Prep - Plex Preferences | Fail preferences handling with context
+      ansible.builtin.fail:
+        msg: >-
+          Failed while managing Plex Preferences.xml on {{ docker_services_plex_fs_host }}.
+          Review the failed task above before rerunning.

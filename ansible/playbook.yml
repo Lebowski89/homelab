@@ -42,6 +42,7 @@
 - name: Deploy homelab services
   hosts: tags_skynet
   become: true
+  any_errors_fatal: true
 
   pre_tasks:
     - name: Gather packages

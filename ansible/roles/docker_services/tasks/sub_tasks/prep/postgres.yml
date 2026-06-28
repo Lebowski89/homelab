@@ -48,6 +48,12 @@
           - (postgres_user | default('') | string | trim | length) > 0
           - (postgres_pass | default('') | string | trim | length) > 0
         fail_msg: "postgres_user/postgres_pass are still empty on mgt after Infisical fetch."
+  rescue:
+    - name: Prep - Postgres | Fail credential resolution with context
+      ansible.builtin.fail:
+        msg: >-
+          Failed while resolving Postgres credentials from variables/Infisical.
+          Fix the failed task above and rerun.
 
 ################################
 # DOCKER SECRET
