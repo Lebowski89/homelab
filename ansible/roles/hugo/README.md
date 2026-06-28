@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/06/26 |
+| Readme update        | 2026/06/29 |
 
 
 
@@ -98,8 +98,7 @@
 | Hugo ¦ Wait for copied files | ansible.builtin.wait_for | True |  |
 | Hugo ¦ Render templates | ansible.builtin.template | False |  |
 | Hugo ¦ Check if site exists | ansible.builtin.stat | False |  |
-| Hugo ¦ Generate new Hugo site | block | True |  |
-| Hugo ¦ Run hugo new site | community.docker.docker_container | False |  |
+| Hugo ¦ Generate new Hugo site | community.docker.docker_container | True |  |
 | Hugo ¦ Manage theme submodule | block | False |  |
 | Hugo ¦ Check if repo already initialized | ansible.builtin.stat | False |  |
 | Hugo ¦ Init git repo | ansible.builtin.command | True |  |
