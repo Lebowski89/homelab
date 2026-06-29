@@ -36,6 +36,10 @@ permissions:
   security-events: write
   actions: read
 
+concurrency:
+  group: checkov-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   checkov:
     runs-on: ubuntu-latest
