@@ -1,7 +1,7 @@
 ---
 
 - name: Patroni dynamic pg_hba | Query Patroni cluster state from first postgres node
-  # checkov:skip=CKV2_ANSIBLE_1: Internal homelab service endpoint over trusted management network
+  #checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
   ansible.builtin.uri:
     url: "http://{{ hostvars[groups['tags_postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
     method: GET
@@ -76,7 +76,7 @@
   delegate_to: "{{ docker_services_primary_manager }}"
 
 - name: Patroni dynamic pg_hba | Read current dynamic config from leader
-  # checkov:skip=CKV2_ANSIBLE_1: Internal homelab service endpoint over trusted management network
+  #checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
   ansible.builtin.uri:
     url: "http://{{ postgres_patroni_leader_member.host }}:{{ postgres_patroni_restapi_port }}/config"
     method: GET
@@ -99,7 +99,7 @@
   delegate_to: "{{ docker_services_primary_manager }}"
 
 - name: Patroni dynamic pg_hba | Patch DCS config with desired pg_hba
-  # checkov:skip=CKV2_ANSIBLE_1: Internal homelab service endpoint over trusted management network
+  #checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
   ansible.builtin.uri:
     url: "http://{{ postgres_patroni_leader_member.host }}:{{ postgres_patroni_restapi_port }}/config"
     method: PATCH
