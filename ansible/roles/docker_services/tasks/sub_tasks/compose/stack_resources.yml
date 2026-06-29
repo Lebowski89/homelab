@@ -1,0 +1,36 @@
+---
+
+- name: Compose - Stack Resources | Ensure docker_services_stack_name is provided
+  ansible.builtin.assert:
+    that:
+      - docker_services_stack_name is defined
+      - docker_services_stack_name is string
+      - (docker_services_stack_name | trim | length) > 0
+    fail_msg: "docker_services_stack_name must be provided when calling stack_resources.yml"
+
+- name: Compose - Stack Resources | Validate resource type and input
+  ansible.builtin.assert:
+    that:
+      - stack_resource_type is defined
+      - stack_resource_type | string | trim in ['networks', 'volumes']
+      - stack_resource_names is defined
+      - stack_resource_names is not none
+      - (stack_resource_names is mapping) or (stack_resource_names is sequence and stack_resource_names is not string)
+    fail_msg: >-
+      stack_resource_type must be 'networks' or 'volumes', and stack_resource_names
+      must be a mapping of resource definitions or a list of resource names.
+
+- name: Compose - Stack Resources | Merge resources into stack
+  ansible.builtin.set_fact:
+    docker_services_compose_stacks: >-
+      {{
+        hostvars[docker_services_primary_manager].docker_services_compose_stacks | default({}, true)
+        | docker_services_merge_stack_resources(
+            docker_services_stack_name,
+            stack_resource_type | string | trim,
+            stack_resource_names
+          )
+      }}
+  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_facts: true
+  run_once: true

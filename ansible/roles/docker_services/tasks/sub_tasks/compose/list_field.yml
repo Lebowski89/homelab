@@ -1,0 +1,67 @@
+---
+
+- name: Compose - List Field | Ensure docker_services_service_name is set
+  ansible.builtin.assert:
+    that:
+      - docker_services_service_name is defined
+      - docker_services_service_name | string | trim | length > 0
+    fail_msg: "docker_services_service_name must be set before calling this helper"
+
+- name: Compose - List Field | Validate field and action
+  ansible.builtin.assert:
+    that:
+      - compose_list_field is defined
+      - compose_list_field | string | trim | length > 0
+      - compose_list_field | string | trim in compose_list_allowed_fields | default([
+          'cap_add',
+          'cap_drop',
+          'devices',
+          'security_opt',
+          'depends_on',
+          'tmpfs'
+        ])
+      - compose_list_action | default('append_unique', true) in ['append', 'replace', 'append_unique']
+    fail_msg: >-
+      compose_list_field must be one of {{
+        compose_list_allowed_fields | default([
+          'cap_add',
+          'cap_drop',
+          'devices',
+          'security_opt',
+          'depends_on',
+          'tmpfs'
+        ])
+      }}, and compose_list_action must be append, replace, or append_unique.
+
+- name: Compose - List Field | Capture existing field list
+  ansible.builtin.set_fact:
+    docker_services_list_field_existing: >-
+      {{
+        (docker_services_compose_services | default({}))
+        .get(docker_services_service_name, {})
+        .get(compose_list_field | string | trim, [])
+        | default([], true)
+      }}
+
+- name: Compose - List Field | Merge field list
+  ansible.builtin.set_fact:
+    docker_services_list_field_merged: >-
+      {{
+        docker_services_list_field_existing
+        | docker_services_merge_string_list(
+            compose_list_value | default([], true),
+            compose_list_action | default('append_unique', true)
+          )
+      }}
+
+- name: Compose - List Field | Attach field to service
+  ansible.builtin.set_fact:
+    docker_services_compose_services: >-
+      {{
+        docker_services_compose_services | default({})
+        | docker_services_set_service_field(
+            docker_services_service_name,
+            compose_list_field | string | trim,
+            docker_services_list_field_merged
+          )
+      }}

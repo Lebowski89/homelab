@@ -30,12 +30,13 @@
   when:
     - docker_services_is_deploy_host
     - docker_services_svc.named_networks is defined
-    - (docker_services_svc.named_networks is mapping)
+    - docker_services_svc.named_networks is not none
     - (docker_services_svc.named_networks | length > 0)
-  ansible.builtin.include_tasks: sub_tasks/compose/stack_networks.yml
+  ansible.builtin.include_tasks: sub_tasks/compose/stack_resources.yml
   vars:
     docker_services_stack_name: "{{ docker_services_stack_name_effective }}"
-    stack_network_names: "{{ docker_services_svc.named_networks }}"
+    stack_resource_type: "networks"
+    stack_resource_names: "{{ docker_services_svc.named_networks }}"
 
 - name: Compose - Base | Normalize network_mode for container deploys
   when: docker_services_is_deploy_host
@@ -84,11 +85,13 @@
   when:
     - docker_services_is_deploy_host
     - docker_services_svc.named_volumes is defined
+    - docker_services_svc.named_volumes is not none
     - (docker_services_svc.named_volumes | length > 0)
-  ansible.builtin.include_tasks: sub_tasks/compose/stack_volumes.yml
+  ansible.builtin.include_tasks: sub_tasks/compose/stack_resources.yml
   vars:
     docker_services_stack_name: "{{ docker_services_stack_name_effective }}"
-    stack_volume_names: "{{ docker_services_svc.named_volumes }}"
+    stack_resource_type: "volumes"
+    stack_resource_names: "{{ docker_services_svc.named_volumes }}"
 
 ################################
 # COMPOSE (SERVICE BASE)
@@ -187,9 +190,11 @@
     - docker_services_stack_deploy_type != 'swarm'
     - docker_services_svc.security_opt is defined
     - (docker_services_svc.security_opt | length > 0)
-  ansible.builtin.include_tasks: sub_tasks/compose/security_opt.yml
+  ansible.builtin.include_tasks: sub_tasks/compose/list_field.yml
   vars:
-    security_opt_list: "{{ docker_services_svc.security_opt }}"
+    compose_list_field: "security_opt"
+    compose_list_value: "{{ docker_services_svc.security_opt }}"
+    compose_list_action: "append_unique"
 
 ################################
 # COMPOSE (SYSCTLS)
@@ -215,9 +220,11 @@
     - docker_services_stack_deploy_type != 'swarm'
     - docker_services_svc.depends_on is defined
     - (docker_services_svc.depends_on | length > 0)
-  ansible.builtin.include_tasks: sub_tasks/compose/depends_on.yml
+  ansible.builtin.include_tasks: sub_tasks/compose/list_field.yml
   vars:
-    depends_on_list: "{{ docker_services_svc.depends_on }}"
+    compose_list_field: "depends_on"
+    compose_list_value: "{{ docker_services_svc.depends_on }}"
+    compose_list_action: "append_unique"
 
 ################################
 # COMPOSE (CAPS)
@@ -228,22 +235,22 @@
     - docker_services_is_deploy_host
     - docker_services_svc.cap_add is defined
     - (docker_services_svc.cap_add | length > 0)
-  ansible.builtin.include_tasks: sub_tasks/compose/caps.yml
+  ansible.builtin.include_tasks: sub_tasks/compose/list_field.yml
   vars:
-    caps_target: "cap_add"
-    caps_action: "append_unique"
-    caps_list: "{{ docker_services_svc.cap_add }}"
+    compose_list_field: "cap_add"
+    compose_list_value: "{{ docker_services_svc.cap_add }}"
+    compose_list_action: "append_unique"
 
 - name: Compose - Runtime | Drop Linux capabilities (cap_drop)
   when:
     - docker_services_is_deploy_host
     - docker_services_svc.cap_drop is defined
     - (docker_services_svc.cap_drop | length > 0)
-  ansible.builtin.include_tasks: sub_tasks/compose/caps.yml
+  ansible.builtin.include_tasks: sub_tasks/compose/list_field.yml
   vars:
-    caps_target: "cap_drop"
-    caps_action: "append_unique"
-    caps_list: "{{ docker_services_svc.cap_drop }}"
+    compose_list_field: "cap_drop"
+    compose_list_value: "{{ docker_services_svc.cap_drop }}"
+    compose_list_action: "append_unique"
 
 ################################
 # COMPOSE (DEVICES)
@@ -254,10 +261,11 @@
     - docker_services_is_deploy_host
     - docker_services_svc.devices is defined
     - (docker_services_svc.devices | length > 0)
-  ansible.builtin.include_tasks: sub_tasks/compose/devices.yml
+  ansible.builtin.include_tasks: sub_tasks/compose/list_field.yml
   vars:
-    devices_action: "append_unique"
-    device_list: "{{ docker_services_svc.devices }}"
+    compose_list_field: "devices"
+    compose_list_value: "{{ docker_services_svc.devices }}"
+    compose_list_action: "append_unique"
 
 ################################
 # COMPOSE (COMMAND)
@@ -386,10 +394,11 @@
     - docker_services_stack_deploy_type != "swarm"
     - docker_services_svc.tmpfs is defined
     - (docker_services_svc.tmpfs | length > 0)
-  ansible.builtin.include_tasks: sub_tasks/compose/tmpfs.yml
+  ansible.builtin.include_tasks: sub_tasks/compose/list_field.yml
   vars:
-    tmpfs: "{{ docker_services_svc.tmpfs }}"
-    tmpfs_action: "replace"
+    compose_list_field: "tmpfs"
+    compose_list_value: "{{ docker_services_svc.tmpfs }}"
+    compose_list_action: "replace"
 
 ################################
 # COMPOSE (VOLUMES)
