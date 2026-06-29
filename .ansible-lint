@@ -9,7 +9,6 @@ exclude_paths:
 
 mock_modules:
   - yedit
-  - find_open_port
   - qbittorrent_passwd
 
 warn_list:
