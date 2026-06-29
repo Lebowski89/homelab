@@ -38,6 +38,7 @@ def test_normalize_list_resources_defaults_external_true():
         },
     }
 
+
 def test_normalize_mapping_resources_defaults_external_true_when_missing():
     plugin = load_plugin()
 
