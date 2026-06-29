@@ -175,16 +175,6 @@
 | Compose ¦ Include tasks | ansible.builtin.include_tasks | False |  |
 | Deploy ¦ Include tasks | ansible.builtin.include_tasks | False |  |
 
-#### File: tasks/sub_tasks/compose/caps.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Compose - Caps ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Compose - Caps ¦ Ensure caps_target is valid | ansible.builtin.assert | False |
-| Compose - Caps ¦ Ensure caps_action is valid | ansible.builtin.assert | False |
-| Compose - Caps ¦ Normalize caps input | ansible.builtin.set_fact | False |
-| Compose - Caps ¦ Add caps for service | ansible.builtin.set_fact | False |
-
 #### File: tasks/sub_tasks/compose/command.yml
 
 | Name | Module | Has Conditions |
@@ -199,24 +189,6 @@
 | Compose - Command ¦ Normalize existing/new command values for merge actions | ansible.builtin.set_fact | False |
 | Compose - Command ¦ Compute final command | ansible.builtin.set_fact | False |
 | Compose - Command ¦ Set command for service | ansible.builtin.set_fact | False |
-
-#### File: tasks/sub_tasks/compose/depends_on.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Compose - Depends_on ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Compose - Depends_on ¦ Ensure depends_on_action is valid | ansible.builtin.assert | False |
-| Compose - Depends_on ¦ Normalize depends_on input | ansible.builtin.set_fact | False |
-| Compose - Depends_on ¦ Attach depends_on to service | ansible.builtin.set_fact | False |
-
-#### File: tasks/sub_tasks/compose/devices.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Compose - Devices ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Compose - Devices ¦ Ensure devices_action is valid | ansible.builtin.assert | False |
-| Compose - Devices ¦ Normalize devices input | ansible.builtin.set_fact | False |
-| Compose - Devices ¦ Add devices for service | ansible.builtin.set_fact | False |
 
 #### File: tasks/sub_tasks/compose/env.yml
 
@@ -254,6 +226,16 @@
 | Compose - Labels ¦ Build final labels dict | ansible.builtin.set_fact | False |
 | Compose - Labels ¦ Attach labels to service | ansible.builtin.set_fact | False |
 
+#### File: tasks/sub_tasks/compose/list_field.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Compose - List Field ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
+| Compose - List Field ¦ Validate field and action | ansible.builtin.assert | False |
+| Compose - List Field ¦ Capture existing field list | ansible.builtin.set_fact | False |
+| Compose - List Field ¦ Merge field list | ansible.builtin.set_fact | False |
+| Compose - List Field ¦ Attach field to service | ansible.builtin.set_fact | False |
+
 #### File: tasks/sub_tasks/compose/ports.yml
 
 | Name | Module | Has Conditions |
@@ -273,15 +255,6 @@
 | Compose - Secrets ¦ Convert secrets to bind-mount volumes | ansible.builtin.set_fact | True |
 | Compose - Secrets ¦ Attach secret mounts to service volumes | ansible.builtin.set_fact | True |
 
-#### File: tasks/sub_tasks/compose/security_opt.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Compose - Security_opt ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Compose - Security_opt ¦ Ensure security_opt_action is valid | ansible.builtin.assert | False |
-| Compose - Security_opt ¦ Normalize security_opt input | ansible.builtin.set_fact | False |
-| Compose - Security_opt ¦ Attach security_opt to service | ansible.builtin.set_fact | False |
-
 #### File: tasks/sub_tasks/compose/service_base.yml
 
 | Name | Module | Has Conditions |
@@ -297,25 +270,13 @@
 | Compose - SHM ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
 | Compose - SHM ¦ Set SHM size for service | ansible.builtin.set_fact | False |
 
-#### File: tasks/sub_tasks/compose/stack_networks.yml
+#### File: tasks/sub_tasks/compose/stack_resources.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Compose - Stack Networks ¦ Ensure docker_services_stack_name is provided | ansible.builtin.assert | False |
-| Compose - Stack Networks ¦ Ensure stack_network_names is provided | ansible.builtin.assert | False |
-| Compose - Stack Networks ¦ Normalize stack networks input into a mapping | ansible.builtin.set_fact | False |
-| Compose - Stack Networks ¦ Default external=true for any network defs that omit it | ansible.builtin.set_fact | True |
-| Compose - Stack Networks ¦ Merge into docker_services_compose_stacks[docker_services_stack_name].networks | ansible.builtin.set_fact | False |
-
-#### File: tasks/sub_tasks/compose/stack_volumes.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Compose - Stack Volumes ¦ Ensure docker_services_stack_name is provided | ansible.builtin.assert | False |
-| Compose - Stack Volumes ¦ Ensure stack_volume_names is provided | ansible.builtin.assert | False |
-| Compose - Stack Volumes ¦ Normalize stack volumes input into a mapping | ansible.builtin.set_fact | False |
-| Compose - Stack Volumes ¦ Default external=true for any volume defs that omit it | ansible.builtin.set_fact | True |
-| Compose - Stack Volumes ¦ Merge into docker_services_compose_stacks[docker_services_stack_name].volumes | ansible.builtin.set_fact | False |
+| Compose - Stack Resources ¦ Ensure docker_services_stack_name is provided | ansible.builtin.assert | False |
+| Compose - Stack Resources ¦ Validate resource type and input | ansible.builtin.assert | False |
+| Compose - Stack Resources ¦ Merge resources into stack | ansible.builtin.set_fact | False |
 
 #### File: tasks/sub_tasks/compose/swarm_configs.yml
 
@@ -333,14 +294,6 @@
 | Compose - Sysctls ¦ Validate input | ansible.builtin.assert | False |
 | Compose - Sysctls ¦ Normalize sysctls dict | ansible.builtin.set_fact | False |
 | Compose - Sysctls ¦ Attach sysctls to service | ansible.builtin.set_fact | True |
-
-#### File: tasks/sub_tasks/compose/tmpfs.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Compose - Tmpfs ¦ Ensure tmpfs_action is valid | ansible.builtin.assert | False |
-| Compose - Tmpfs ¦ Normalise tmpfs entries to list | ansible.builtin.set_fact | False |
-| Compose - Tmpfs ¦ Merge tmpfs entries into compose services | ansible.builtin.set_fact | False |
 
 #### File: tasks/sub_tasks/compose/user.yml
 
