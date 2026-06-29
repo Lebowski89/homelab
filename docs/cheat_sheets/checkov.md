@@ -1,5 +1,3 @@
----
-
 # Checkov Cheatsheet
 
 Useful Checkov commands and patterns for this homelab repo.
@@ -496,23 +494,19 @@ Use one of these to remove noisy alerts:
 
 ## Good reasons to inline skip
 
-```text
-- Public repo is intentionally public.
-- Personal repo does not require two approvals.
-- Internal HTTP endpoint is only on a trusted management network.
-- Scanner rule does not match the homelab threat model.
-- Upstream scanner bug causes a false positive.
-```
+* Public repo is intentionally public.
+* Personal repo does not require two approvals.
+* Internal HTTP endpoint is only on a trusted management network.
+* Scanner rule does not match the homelab threat model.
+* Upstream scanner bug causes a false positive.
 
 ## Bad reasons to inline skip
 
-```text
-- The finding is easy to fix.
-- The workflow really is over-permissioned.
-- A secret might actually be exposed.
-- The service is accidentally internet-facing.
-- The skip reason is vague, like "not needed".
-```
+* The finding is easy to fix.
+* The workflow really is over-permissioned.
+* A secret might actually be exposed.
+* The service is accidentally internet-facing.
+* The skip reason is vague, like `not needed`.
 
 ## Good skip reason examples
 
@@ -538,26 +532,22 @@ homelab
 
 Usually fix these instead of skipping:
 
-```text
-- GitHub Actions workflow has write-all permissions.
-- GitHub Actions job has unnecessary contents: write.
-- Secrets appear in plaintext.
-- Dockerfile runs as root when it does not need to.
-- Terraform resource exposes something publicly by accident.
-- Ansible task disables certificate validation against an internet endpoint.
-```
+* GitHub Actions workflow has write-all permissions.
+* GitHub Actions job has unnecessary `contents: write`.
+* Secrets appear in plaintext.
+* Dockerfile runs as root when it does not need to.
+* Terraform resource exposes something publicly by accident.
+* Ansible task disables certificate validation against an internet endpoint.
 
 ## Checkov findings often acceptable in this repo
 
 Often skip or dismiss these after review:
 
-```text
-- Public GitHub repo for a public Hugo/static site.
-- Two required PR approvals for a personal repo.
-- Signed commits required for a personal repo.
-- Internal HTTP calls to trusted homelab services.
-- Scanner noise around Ansible block/rescue structure.
-```
+* Public GitHub repo for a public Hugo/static site.
+* Two required PR approvals for a personal repo.
+* Signed commits required for a personal repo.
+* Internal HTTP calls to trusted homelab services.
+* Scanner noise around Ansible block/rescue structure.
 
 ## Quick triage flow
 
