@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/06/24 |
+| Readme update        | 2026/06/30 |
 
 
 
@@ -36,9 +36,10 @@
 | [node_exporter_listen_address](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L11)   | str | `0.0.0.0:9100` |    
 | [node_exporter_enabled_collectors](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L13)   | list | `[]` |    
 | [node_exporter_enabled_collectors.**0**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L14)   | str | `systemd` |    
-| [node_exporter_enabled_collectors.**1**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L15)   | str | `textfile` |    
-| [node_exporter_disabled_collectors](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L17)   | list | `[]` |    
-| [node_exporter_extra_args](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L19)   | list | `[]` |    
+| [node_exporter_enabled_collectors.**1**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L15)   | str | `processes` |    
+| [node_exporter_enabled_collectors.**2**](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L16)   | str | `textfile` |    
+| [node_exporter_disabled_collectors](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L18)   | list | `[]` |    
+| [node_exporter_extra_args](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L20)   | list | `[]` |    
 
 
 
