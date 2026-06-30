@@ -41,7 +41,24 @@
       }}
   tags: [remove, drift]
 
+- name: Init | Determine whether schema validation should run
+  ansible.builtin.set_fact:
+    docker_services_validate_enabled: >-
+      {{
+        docker_services_validate
+        | default(
+            (
+              ansible_check_mode
+              or ('bootstrap' in (ansible_run_tags | default([])))
+            ),
+            true
+          )
+        | bool
+      }}
+  tags: [remove, drift]
+
 - name: Init | Validate normalized service config
+  when: docker_services_validate_enabled | bool
   ansible.builtin.include_tasks: sub_tasks/init/validate.yml
 
 - name: Init | Derive common service context
