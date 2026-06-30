@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/06/29 |
+| Readme update        | 2026/06/30 |
 
 
 
@@ -130,7 +130,8 @@
 | Init ¦ Ensure docker_services_service_cfg is provided | ansible.builtin.assert | False |  |
 | Init ¦ Derive effective target name | ansible.builtin.set_fact | False |  |
 | Init ¦ Normalize service config | ansible.builtin.set_fact | False |  |
-| Init ¦ Validate normalized service config | ansible.builtin.include_tasks | False |  |
+| Init ¦ Determine whether schema validation should run | ansible.builtin.set_fact | False |  |
+| Init ¦ Validate normalized service config | ansible.builtin.include_tasks | True |  |
 | Init ¦ Derive common service context | ansible.builtin.set_fact | False |  |
 | Init ¦ Derive stack name | ansible.builtin.set_fact | False |  |
 | Init ¦ Derive effective deploy host | ansible.builtin.set_fact | False |  |
