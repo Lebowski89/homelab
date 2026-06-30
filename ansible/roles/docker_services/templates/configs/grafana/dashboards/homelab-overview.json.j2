@@ -1,0 +1,516 @@
+{% raw %}
+{
+  "uid": "homelab-overview",
+  "title": "Homelab Overview",
+  "description": "Compact homelab landing page for alerts, scrape health, host pressure, and attention items.",
+  "tags": ["homelab", "overview"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "current": {
+          "selected": true,
+          "text": "Prometheus",
+          "value": "PBFA97CFB590B2093"
+        }
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Firing alerts",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {
+          "expr": "sum(ALERTS{alertstate=\"firing\"}) or vector(0)",
+          "legendFormat": "alerts",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "$datasource"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green"},
+              {"color": "orange", "value": 1},
+              {"color": "red", "value": 3}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Targets down",
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {
+          "expr": "sum(up == 0) or vector(0)",
+          "legendFormat": "targets",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "$datasource"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green"},
+              {"color": "red", "value": 1}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Node exporters up %",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {
+          "expr": "sum(up{job=\"node-exporter\"} == 1) / count(up{job=\"node-exporter\"}) * 100",
+          "legendFormat": "up",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "$datasource"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "max": 100,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red"},
+              {"color": "orange", "value": 90},
+              {"color": "green", "value": 100}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Traefik 5xx/sec",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {
+          "expr": "sum(rate(traefik_service_requests_total{code=~\"5..\"}[$__rate_interval])) or vector(0)",
+          "legendFormat": "5xx/sec",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "$datasource"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green"},
+              {"color": "orange", "value": 0.01},
+              {"color": "red", "value": 0.1}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "horizontal",
+        "textMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "CPU busy by host",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {
+          "expr": "100 * (1 - avg by (instance) (rate(node_cpu_seconds_total{job=\"node-exporter\", mode=\"idle\"}[$__rate_interval])))",
+          "legendFormat": "{{ instance }}",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "$datasource"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green"},
+              {"color": "orange", "value": 80},
+              {"color": "red", "value": 95}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Memory used by host",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 4},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {
+          "expr": "100 * (1 - (node_memory_MemAvailable_bytes{job=\"node-exporter\"} / node_memory_MemTotal_bytes{job=\"node-exporter\"}))",
+          "legendFormat": "{{ instance }}",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "$datasource"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green"},
+              {"color": "orange", "value": 80},
+              {"color": "red", "value": 95}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Filesystem usage by host/mount",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {
+          "expr": "100 * (1 - (node_filesystem_avail_bytes{job=\"node-exporter\", fstype!~\"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*|rootfs|vfat\", mountpoint!~\"^/(boot|dev|proc|sys|run)($|/)|^/var/lib/docker($|/)\"} / node_filesystem_size_bytes{job=\"node-exporter\", fstype!~\"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*|rootfs|vfat\", mountpoint!~\"^/(boot|dev|proc|sys|run)($|/)|^/var/lib/docker($|/)\"}))",
+          "legendFormat": "{{ instance }} {{ mountpoint }}",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "$datasource"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green"},
+              {"color": "orange", "value": 80},
+              {"color": "red", "value": 90}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Load / CPU cores",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 12},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {
+          "expr": "node_load15{job=\"node-exporter\"} / on (instance) count by (instance) (node_cpu_seconds_total{job=\"node-exporter\", mode=\"idle\"})",
+          "legendFormat": "{{ instance }}",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "$datasource"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 2,
+          "min": 0,
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "fillOpacity": 10,
+            "showPoints": "never"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green"},
+              {"color": "orange", "value": 1},
+              {"color": "red", "value": 1.5}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {"displayMode": "table", "placement": "bottom", "showLegend": true},
+        "tooltip": {"mode": "multi", "sort": "desc"}
+      }
+    },
+    {
+      "id": 9,
+      "type": "table",
+      "title": "Down targets",
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {
+          "expr": "up == 0",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "$datasource"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {"type": "auto"},
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green"},
+              {"color": "red", "value": 1}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {"show": false}
+      }
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "HAProxy backends down",
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 20},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {
+          "expr": "haproxy_server_up == 0",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "$datasource"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {"type": "auto"},
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green"},
+              {"color": "red", "value": 1}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {"show": false}
+      }
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Filesystems over 85%",
+      "gridPos": {"h": 7, "w": 12, "x": 0, "y": 27},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {
+          "expr": "100 * (1 - (node_filesystem_avail_bytes{job=\"node-exporter\", fstype!~\"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*|rootfs|vfat\", mountpoint!~\"^/(boot|dev|proc|sys|run)($|/)|^/var/lib/docker($|/)\"} / node_filesystem_size_bytes{job=\"node-exporter\", fstype!~\"tmpfs|overlay|squashfs|nsfs|ramfs|devtmpfs|fuse.*|rootfs|vfat\", mountpoint!~\"^/(boot|dev|proc|sys|run)($|/)|^/var/lib/docker($|/)\"})) > 85",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "$datasource"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "custom": {
+            "align": "auto",
+            "cellOptions": {"type": "auto"},
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green"},
+              {"color": "orange", "value": 85},
+              {"color": "red", "value": 95}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {"show": false}
+      }
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Firing alert details",
+      "gridPos": {"h": 7, "w": 12, "x": 12, "y": 27},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {
+          "expr": "ALERTS{alertstate=\"firing\"}",
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto",
+          "refId": "A",
+          "datasource": {"type": "prometheus", "uid": "$datasource"}
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "cellOptions": {"type": "auto"},
+            "inspect": false
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green"},
+              {"color": "red", "value": 1}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {"show": false}
+      }
+    }
+  ]
+}
+{% endraw %}
