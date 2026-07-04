@@ -5,7 +5,7 @@ sportarr:
   tags: [arrs, sportarr]
   name: sportarr
   stack: sportarr
-  image: sportarr/sportarr:4.0.1012.1092
+  image: sportarr/sportarr:4.0.1015.1095
   named_networks:
     overlay:
       external: true
@@ -14,6 +14,26 @@ sportarr:
     PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
     PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
     UMASK: "022"
+    Sportarr__Database__Provider: "postgres"
+    Sportarr__Database__Host: "haproxy"
+    Sportarr__Database__Port: "5432"
+    Sportarr__Database__Name: "sportarr"
+    FILE__Sportarr__Database__Username: /run/secrets/postgres_user_secret
+    FILE__Sportarr__Database__Password: /run/secrets/postgres_pass_secret
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: postgres_user
+        path: "/Postgres"
+        name: USER
+        docker_secret: postgres_user_secret
+      - var: postgres_pass
+        path: "/Postgres"
+        name: PASS
+        docker_secret: postgres_pass_secret
+  secrets:
+    - postgres_user_secret
+    - postgres_pass_secret
   paths:
     - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/sportarr"
       state: directory
@@ -39,6 +59,10 @@ sportarr:
     enable: true
     exposure: private
     port: 1867
+  postgres:
+    enable: true
+    databases:
+      - sportarr
   deploy:
     type: swarm
     mode: replicated
