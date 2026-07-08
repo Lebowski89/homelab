@@ -13,7 +13,7 @@ A practical checklist for cleaning up a noisy Git history with interactive rebas
 - Create a `backup/before-batch-N` branch before each batch.
 - Verify the final file tree is unchanged before pushing.
 - During conflicts, do **not** use `git add .`; add only the specific resolved files.
-- Ignore untracked generated folders such as `.ansible/`, `ansible/`, or `terraform/` unless you intentionally created them and know they belong in Git.
+- Ignore untracked generated folders, such as `.ansible/`, unless you intentionally created them and know they belong in Git.
 - The actual `git-rebase-todo` can differ from a generated `git log --reverse` list. Edit the real todo Git opens.
 - In an interactive rebase, `ours` means the already-rebased current state; `theirs` means the commit currently being replayed.
 
@@ -414,7 +414,7 @@ Expected:
 Untracked generated folders can be ignored or removed if you are sure they are not needed:
 
 ```bash
-rm -rf .ansible ansible terraform
+rm -rf .ansible
 ```
 
 Only do that if they are truly generated leftovers and not real project files in your current tree.
@@ -516,7 +516,7 @@ echo "$BOUNDARY"
 git show -s --oneline "$BOUNDARY"
 
 # backup before next rewrite
-git branch backup/before-batch-NEXT
+git show-ref --verify --quiet refs/heads/backup/before-batch-NEXT || git branch backup/before-batch-NEXT
 
 # prep files
 BATCH_SIZE=120
@@ -568,7 +568,7 @@ git rev-list --count "$BOUNDARY"
 git rev-list --max-parents=0 --oneline "$BOUNDARY"
 
 # backup
-git branch backup/before-batch-NEXT
+git show-ref --verify --quiet refs/heads/backup/before-batch-NEXT || git branch backup/before-batch-NEXT
 
 # prep root section
 git log --reverse --no-merges --format='pick %h %s' "$BOUNDARY" > /tmp/batchNEXT-picks.txt
