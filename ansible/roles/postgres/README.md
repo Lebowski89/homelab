@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/05/25 |
+| Readme update        | 2026/07/09 |
 
 
 
@@ -27,43 +27,43 @@
 
 | Var          | Type         | Value       |
 |--------------|--------------|-------------|
-| [postgres_version](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L7)   | int | `18` |    
-| [postgres_etcd_data_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L13)   | str | `/var/lib/etcd` |    
-| [postgres_etcd_client_port](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L14)   | int | `2379` |    
-| [postgres_etcd_peer_port](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L15)   | int | `2380` |    
-| [postgres_etcd_cluster_token](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L16)   | str | `pg-ha-1` |    
-| [postgres_etcd_initial_cluster](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L18)   | list | `[]` |    
-| [postgres_patroni_scope](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L24)   | str | `pg-cluster` |    
-| [postgres_patroni_namespace](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L25)   | str | `/service` |    
-| [postgres_patroni_node_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L26)   | str | `{{ inventory_hostname }}` |    
-| [postgres_patroni_config_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L28)   | str | `/etc/patroni` |    
-| [postgres_patroni_config_path](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L29)   | str | `{{ postgres_patroni_config_dir }}/config.yml` |    
-| [postgres_patroni_data_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L30)   | str | `/var/lib/postgresql/{{ postgres_version }}/main` |    
-| [postgres_patroni_bin_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L31)   | str | `/usr/lib/postgresql/{{ postgres_version }}/bin` |    
-| [postgres_patroni_restapi_port](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L32)   | int | `8008` |    
-| [postgres_patroni_postgres_port](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L33)   | int | `5432` |    
-| [postgres_patroni_superuser_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L39)   | str | `postgres` |    
-| [postgres_patroni_superuser_pass](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L40)   | str |  |    
-| [postgres_patroni_replication_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L42)   | str | `replicator` |    
-| [postgres_patroni_replication_pass](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L43)   | str |  |    
-| [postgres_patroni_admin_role_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L45)   | str | `admin` |    
-| [postgres_patroni_admin_role_pass](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L46)   | str |  |    
-| [postgres_patroni_admin_role_login](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L47)   | bool | `True` |    
-| [postgres_patroni_admin_role_createdb](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L48)   | bool | `True` |    
-| [postgres_patroni_admin_role_createrole](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L49)   | bool | `False` |    
-| [postgres_patroni_etcd_hosts](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L51)   | list | `[]` |    
-| [postgres_patroni_pg_hba_extra](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L52)   | list | `[]` |    
-| [postgres_uptime_kuma_monitor_role_name](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L58)   | str | `uptime_kuma_monitor` |    
-| [postgres_uptime_kuma_monitor_role_pass](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L59)   | str |  |    
-| [postgres_uptime_kuma_monitor_database](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L60)   | str | `postgres` |    
-| [postgres_backup_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L72)   | str | `/tmp` |    
-| [postgres_backup_dbs](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L73)   | list | `[]` |    
-| [postgres_backup_dbs_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L74)   | str | `{{ postgres_backup_dir }}` |    
-| [postgres_backup_dbs_format](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L75)   | str | `custom` |    
-| [postgres_restore_dbs_dir](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L81)   | str | `/tmp` |    
-| [postgres_restore_dbs_drop_existing](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L82)   | bool | `True` |    
-| [postgres_restore_dbs_map](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L87)   | list | `[]` |    
-| [postgres_fix_owner_map](https://github.com/Lebowski89/homelab/blob/main/defaults/main.yml#L102)   | list | `[]` |    
+| [postgres_version](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L7)   | int | `18` |    
+| [postgres_etcd_data_dir](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L13)   | str | `/var/lib/etcd` |    
+| [postgres_etcd_client_port](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L14)   | int | `2379` |    
+| [postgres_etcd_peer_port](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L15)   | int | `2380` |    
+| [postgres_etcd_cluster_token](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L16)   | str | `pg-ha-1` |    
+| [postgres_etcd_initial_cluster](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L18)   | list | `[]` |    
+| [postgres_patroni_scope](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L24)   | str | `pg-cluster` |    
+| [postgres_patroni_namespace](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L25)   | str | `/service` |    
+| [postgres_patroni_node_name](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L26)   | str | `{{ inventory_hostname }}` |    
+| [postgres_patroni_config_dir](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L28)   | str | `/etc/patroni` |    
+| [postgres_patroni_config_path](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L29)   | str | `{{ postgres_patroni_config_dir }}/config.yml` |    
+| [postgres_patroni_data_dir](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L30)   | str | `/var/lib/postgresql/{{ postgres_version }}/main` |    
+| [postgres_patroni_bin_dir](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L31)   | str | `/usr/lib/postgresql/{{ postgres_version }}/bin` |    
+| [postgres_patroni_restapi_port](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L32)   | int | `8008` |    
+| [postgres_patroni_postgres_port](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L33)   | int | `5432` |    
+| [postgres_patroni_superuser_name](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L39)   | str | `postgres` |    
+| [postgres_patroni_superuser_pass](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L40)   | str |  |    
+| [postgres_patroni_replication_name](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L42)   | str | `replicator` |    
+| [postgres_patroni_replication_pass](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L43)   | str |  |    
+| [postgres_patroni_admin_role_name](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L45)   | str | `admin` |    
+| [postgres_patroni_admin_role_pass](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L46)   | str |  |    
+| [postgres_patroni_admin_role_login](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L47)   | bool | `True` |    
+| [postgres_patroni_admin_role_createdb](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L48)   | bool | `True` |    
+| [postgres_patroni_admin_role_createrole](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L49)   | bool | `False` |    
+| [postgres_patroni_etcd_hosts](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L51)   | list | `[]` |    
+| [postgres_patroni_pg_hba_extra](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L52)   | list | `[]` |    
+| [postgres_uptime_kuma_monitor_role_name](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L58)   | str | `uptime_kuma_monitor` |    
+| [postgres_uptime_kuma_monitor_role_pass](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L59)   | str |  |    
+| [postgres_uptime_kuma_monitor_database](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L60)   | str | `postgres` |    
+| [postgres_backup_dir](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L72)   | str | `/tmp` |    
+| [postgres_backup_dbs](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L73)   | list | `[]` |    
+| [postgres_backup_dbs_dir](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L74)   | str | `{{ postgres_backup_dir }}` |    
+| [postgres_backup_dbs_format](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L75)   | str | `custom` |    
+| [postgres_restore_dbs_dir](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L81)   | str | `/tmp` |    
+| [postgres_restore_dbs_drop_existing](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L82)   | bool | `True` |    
+| [postgres_restore_dbs_map](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L87)   | list | `[]` |    
+| [postgres_fix_owner_map](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L102)   | list | `[]` |    
 
 
 
