@@ -72,8 +72,7 @@
                 "module"
             ],
             "groupName": "terraform providers and modules",
-            "labels": [
-                "renovate",
+            "addLabels": [
                 "terraform"
             ]
         },
@@ -92,8 +91,7 @@
             "matchManagers": [
                 "terraform"
             ],
-            "labels": [
-                "renovate",
+            "addLabels": [
                 "terraform"
             ]
         },
@@ -113,12 +111,11 @@
                 "major"
             ],
             "dependencyDashboardApproval": true,
-            "labels": [
-                "renovate",
+            "prPriority": 20,
+            "addLabels": [
                 "docker",
                 "major"
-            ],
-            "prPriority": 20
+            ]
         },
         {
             "description": "Delay Docker minor updates a little longer",
@@ -129,12 +126,11 @@
                 "minor"
             ],
             "minimumReleaseAge": "7 days",
-            "labels": [
-                "renovate",
+            "prPriority": 0,
+            "addLabels": [
                 "docker",
                 "minor"
-            ],
-            "prPriority": 0
+            ]
         },
         {
             "description": "Label Docker patch updates",
@@ -145,12 +141,11 @@
                 "patch"
             ],
             "minimumReleaseAge": "3 days",
-            "labels": [
-                "renovate",
+            "prPriority": -1,
+            "addLabels": [
                 "docker",
                 "patch"
-            ],
-            "prPriority": -1
+            ]
         },
         {
             "description": "Weekly batch for non-critical Docker minor/patch updates",
@@ -168,12 +163,35 @@
             ],
             "minimumGroupSize": 2,
             "separateMinorPatch": false,
-            "labels": [
-                "renovate",
+            "prPriority": -5,
+            "addLabels": [
                 "docker",
                 "batch"
             ],
-            "prPriority": -5
+            "excludePackageNames": [
+                "postgres",
+                "docker.io/library/postgres",
+                "redis",
+                "docker.io/library/redis",
+                "valkey/valkey",
+                "traefik",
+                "docker.io/library/traefik",
+                "authelia/authelia",
+                "docker.io/infisical/infisical",
+                "infisical/infisical",
+                "netboxcommunity/netbox",
+                "lscr.io/linuxserver/netbox",
+                "lscr.io/linuxserver/plex",
+                "prom/prometheus",
+                "grafana/grafana",
+                "grafana/loki",
+                "grafana/alloy",
+                "haproxy",
+                "docker.io/library/haproxy",
+                "cloudflare/cloudflared",
+                "crowdsecurity/crowdsec",
+                "portainer/portainer-ce"
+            ]
         },
         {
             "description": "Keep critical infrastructure and database images separate",
@@ -205,12 +223,10 @@
                 "portainer/portainer-ce"
             ],
             "groupName": null,
-            "labels": [
-                "renovate",
+            "addLabels": [
                 "docker",
                 "critical"
-            ],
-            "prPriority": 5
+            ]
         },
         {
             "description": "Use target version in Traefik branch names",
@@ -224,13 +240,10 @@
             "branchTopic": "{{{depNameSanitized}}}-{{{newVersion}}}",
             "separateMinorPatch": false,
             "groupName": null,
-            "labels": [
-                "renovate",
-                "docker",
-                "critical",
+            "prPriority": 10,
+            "addLabels": [
                 "traefik"
-            ],
-            "prPriority": 10
+            ]
         },
         {
             "description": "Hotio release-v semver tags",
@@ -291,8 +304,7 @@
                 "lscr.io/linuxserver/plex"
             ],
             "versioning": "regex:^(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)$",
-            "labels": [
-                "renovate",
+            "addLabels": [
                 "docker",
                 "plex"
             ]
@@ -340,8 +352,7 @@
             ],
             "groupName": "python package patch updates",
             "groupSlug": "python-package-patch",
-            "labels": [
-                "renovate",
+            "addLabels": [
                 "python",
                 "patch"
             ]
