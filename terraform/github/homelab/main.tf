@@ -40,6 +40,10 @@ resource "github_repository" "homelab" {
   }
 }
 
+resource "github_repository_vulnerability_alerts" "homelab" {
+  repository = github_repository.homelab.name
+}
+
 resource "github_repository_ruleset" "main_clean_history" {
   name        = "main clean history"
   repository  = github_repository.homelab.name
@@ -81,19 +85,12 @@ resource "github_actions_repository_permissions" "homelab" {
 resource "terraform_data" "workflow_token_permissions" {
   count = var.set_workflow_token_permissions ? 1 : 0
 
-  input = {
-    owner       = var.github_owner
-    repository  = github_repository.homelab.name
-    permissions = "write"
-    approve_prs = false
-  }
+  input            = local.workflow_token_permissions
+  triggers_replace = local.workflow_token_permissions
 
-  triggers_replace = {
-    owner       = var.github_owner
-    repository  = github_repository.homelab.name
-    permissions = "write"
-    approve_prs = "false"
-  }
+  depends_on = [
+    github_actions_repository_permissions.homelab,
+  ]
 
   provisioner "local-exec" {
     interpreter = ["/usr/bin/env", "bash", "-c"]
@@ -108,6 +105,8 @@ resource "terraform_data" "workflow_token_permissions" {
       set -euo pipefail
 
       curl -fsSL \
+        --connect-timeout 10 \
+        --max-time 60 \
         -X PUT \
         -H "Accept: application/vnd.github+json" \
         -H "Authorization: Bearer $${GITHUB_TOKEN}" \
