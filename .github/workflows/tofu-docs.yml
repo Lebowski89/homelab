@@ -7,22 +7,23 @@ on:
     paths:
       - "terraform/**/*.tf"
       - ".github/workflows/tofu-docs.yml"
-  push:
-    branches:
-      - main
-    paths:
-      - "terraform/**/*.tf"
-      - ".github/workflows/tofu-docs.yml"
+  workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: tofu-docs-${{ github.ref }}
-  cancel-in-progress: true
+  group: generated-docs-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
 
 jobs:
   docs:
+    if: >-
+      github.actor != 'github-actions[bot]' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
 
     steps:
@@ -30,9 +31,9 @@ jobs:
         uses: actions/checkout@v7.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          ref: ${{ github.head_ref || github.ref_name }}
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
 
-      - name: Render OpenTofu docs
+      - name: Render and commit OpenTofu docs
         uses: terraform-docs/gh-actions@v1.4.1
         with:
           working-dir: .

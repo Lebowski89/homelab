@@ -3,25 +3,25 @@
 name: Generate Ansible Docs
 
 on:
-  push:
-    branches:
-      - main
+  pull_request:
     paths:
       - 'ansible/roles/**'
       - 'ansible/test/**'
       - '.github/workflows/ansible-docs.yml'
   workflow_dispatch:
 
+concurrency:
+  group: generated-docs-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: false
+
 permissions:
   contents: write
 
-concurrency:
-  group: ansible-docs-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   generate_docs:
-    if: github.actor != 'github-actions[bot]'
+    if: >-
+      github.actor != 'github-actions[bot]' &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
 
     steps:
@@ -29,6 +29,7 @@ jobs:
         uses: actions/checkout@v7.0.0
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
 
       - name: Set up Python
         uses: actions/setup-python@v6.3.0
@@ -94,19 +95,40 @@ jobs:
             exit 1
           fi
 
-      - name: Commit updated docs
+      - name: Commit generated docs
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          set -euo pipefail
 
-          git add -A ansible/roles
-
-          if git diff --cached --quiet; then
-            echo "No documentation changes to commit"
+          if git diff --quiet; then
+            echo "No generated doc changes."
             exit 0
           fi
 
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add ansible/roles
           git commit -m "docs(ansible): regenerate role docs"
 
-          git pull --rebase origin main
-          git push origin HEAD:main
+      - name: Push generated docs
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          set -euo pipefail
+
+          BRANCH="${{ github.event.pull_request.head.ref || github.ref_name }}"
+
+          for attempt in 1 2 3; do
+            echo "Push attempt ${attempt} to ${BRANCH}"
+
+            if git push origin HEAD:"${BRANCH}"; then
+              exit 0
+            fi
+
+            echo "Push rejected; rebasing on latest ${BRANCH}..."
+            git fetch origin "${BRANCH}"
+            git rebase "origin/${BRANCH}"
+          done
+
+          echo "Failed to push generated docs after retries."
+          exit 1
