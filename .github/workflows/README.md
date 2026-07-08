@@ -1,7 +1,10 @@
-# Workflows
+## Workflows
 
-lint.yml          -> Runs ansible-lint, yamllint, ruff
-checkov.yml       -> Runs Terraform/GitHub Actions/Dockerfile security scan
-secrets-check.yml -> Runs forbidden private files + gitleaks detection
-tofu-check.yml    -> Runs tofu fmt/init/validate
-docs workflows    -> Runs ansible and terraform auto-generated docs
+| Workflow | Purpose |
+|---|---|
+| `lint.yml` | Runs `ansible-lint`, `yamllint`, and `ruff`. |
+| `checkov.yml` | Runs security scanning for Terraform/OpenTofu, Ansible, GitHub Actions, and Dockerfiles. |
+| `secrets-check.yml` | Checks for forbidden private files and runs Gitleaks detection. |
+| `tofu-check.yml` | Runs `tofu fmt`, `tofu init`, and `tofu validate`. |
+| `alerting-config-validation.yml` | Validates Prometheus alert rules and Alertmanager configuration. |
+| Docs workflows | Regenerates Ansible role docs and Terraform/OpenTofu module docs. |

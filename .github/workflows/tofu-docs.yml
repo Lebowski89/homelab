@@ -9,9 +9,6 @@ on:
       - ".github/workflows/tofu-docs.yml"
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 concurrency:
   group: generated-docs-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
   cancel-in-progress: false

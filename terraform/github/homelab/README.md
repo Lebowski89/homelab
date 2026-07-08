@@ -43,6 +43,7 @@ No modules.
 | <a name="input_repository_name"></a> [repository\_name](#input\_repository\_name) | Repository to manage. | `string` | `"homelab"` | no |
 | <a name="input_repository_visibility"></a> [repository\_visibility](#input\_repository\_visibility) | public or private. Must match your existing repo unless you intend to change it. | `string` | `"public"` | no |
 | <a name="input_set_workflow_token_permissions"></a> [set\_workflow\_token\_permissions](#input\_set\_workflow\_token\_permissions) | Use a Terraform local-exec REST call to set Actions GITHUB\_TOKEN defaults to read/write. Official provider support is limited here. | `bool` | `true` | no |
+| <a name="input_workflow_token_default_permissions"></a> [workflow\_token\_default\_permissions](#input\_workflow\_token\_default\_permissions) | Default permissions granted to GITHUB\_TOKEN for workflows. | `string` | `"read"` | no |
 
 ## Outputs
 
