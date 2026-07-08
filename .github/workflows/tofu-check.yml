@@ -35,6 +35,7 @@ jobs:
           - terraform/cloudflare/homelab
           - terraform/cloudflare/hugo
           - terraform/github/hugo
+          - terraform/github/homelab
           - terraform/netbox
           - terraform/proxmox/mappings/resources
           - terraform/proxmox/settings/pve1
