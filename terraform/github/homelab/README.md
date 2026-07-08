@@ -24,6 +24,7 @@ No modules.
 | [github_actions_repository_permissions.homelab](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/actions_repository_permissions) | resource |
 | [github_repository.homelab](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository) | resource |
 | [github_repository_ruleset.main_clean_history](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository_ruleset) | resource |
+| [github_repository_vulnerability_alerts.homelab](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository_vulnerability_alerts) | resource |
 | [terraform_data.workflow_token_permissions](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 
 ## Inputs
@@ -33,7 +34,7 @@ No modules.
 | <a name="input_allow_forking"></a> [allow\_forking](#input\_allow\_forking) | Public repos can be forked regardless; this mainly matters for private/org repos. | `bool` | `true` | no |
 | <a name="input_default_branch"></a> [default\_branch](#input\_default\_branch) | Default branch protected by the ruleset. | `string` | `"main"` | no |
 | <a name="input_github_owner"></a> [github\_owner](#input\_github\_owner) | GitHub owner/user/org, e.g. Lebowski89. | `string` | `"Lebowski89"` | no |
-| <a name="input_github_token"></a> [github\_token](#input\_github\_token) | n/a | `string` | n/a | yes |
+| <a name="input_github_token"></a> [github\_token](#input\_github\_token) | GitHub token used by the provider and REST API calls. | `string` | n/a | yes |
 | <a name="input_has_discussions"></a> [has\_discussions](#input\_has\_discussions) | n/a | `bool` | `false` | no |
 | <a name="input_has_issues"></a> [has\_issues](#input\_has\_issues) | n/a | `bool` | `true` | no |
 | <a name="input_has_projects"></a> [has\_projects](#input\_has\_projects) | n/a | `bool` | `true` | no |
