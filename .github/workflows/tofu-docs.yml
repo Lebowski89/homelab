@@ -19,6 +19,9 @@ concurrency:
 permissions:
   contents: write
 
+permissions:
+  contents: write
+
 jobs:
   docs:
     if: >-
