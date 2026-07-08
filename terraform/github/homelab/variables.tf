@@ -75,3 +75,14 @@ variable "set_workflow_token_permissions" {
   description = "Use a Terraform local-exec REST call to set Actions GITHUB_TOKEN defaults to read/write. Official provider support is limited here."
   default     = true
 }
+
+variable "workflow_token_default_permissions" {
+  description = "Default permissions granted to GITHUB_TOKEN for workflows."
+  type        = string
+  default     = "read"
+
+  validation {
+    condition     = contains(["read", "write"], var.workflow_token_default_permissions)
+    error_message = "workflow_token_default_permissions must be either read or write."
+  }
+}

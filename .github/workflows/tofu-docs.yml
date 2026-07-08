@@ -16,6 +16,9 @@ concurrency:
   group: tofu-docs-${{ github.ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: write
+
 jobs:
   docs:
     if: >-

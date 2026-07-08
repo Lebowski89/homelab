@@ -10,12 +10,12 @@ on:
       - '.github/workflows/ansible-docs.yml'
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 concurrency:
   group: ansible-docs-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: write
 
 jobs:
   generate_docs:
