@@ -11,8 +11,8 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ansible-docs-${{ github.ref }}
-  cancel-in-progress: true
+  group: generated-docs-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -95,17 +95,40 @@ jobs:
             exit 1
           fi
 
-      - name: Commit generated docs to branch
+      - name: Commit generated docs
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          set -euo pipefail
 
-          git add -A ansible/roles
-
-          if git diff --cached --quiet; then
-            echo "No documentation changes to commit"
+          if git diff --quiet; then
+            echo "No generated doc changes."
             exit 0
           fi
 
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add ansible/roles
           git commit -m "docs(ansible): regenerate role docs"
-          git push origin HEAD:${{ github.event.pull_request.head.ref || github.ref_name }}
+
+      - name: Push generated docs
+        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          set -euo pipefail
+
+          BRANCH="${{ github.event.pull_request.head.ref || github.ref_name }}"
+
+          for attempt in 1 2 3; do
+            echo "Push attempt ${attempt} to ${BRANCH}"
+
+            if git push origin HEAD:"${BRANCH}"; then
+              exit 0
+            fi
+
+            echo "Push rejected; rebasing on latest ${BRANCH}..."
+            git fetch origin "${BRANCH}"
+            git rebase "origin/${BRANCH}"
+          done
+
+          echo "Failed to push generated docs after retries."
+          exit 1
