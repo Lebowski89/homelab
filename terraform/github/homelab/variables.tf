@@ -1,6 +1,12 @@
 variable "github_token" {
-  type      = string
-  sensitive = true
+  description = "GitHub token used by the provider and REST API calls."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = length(trimspace(var.github_token)) > 0
+    error_message = "github_token must not be empty."
+  }
 }
 
 variable "github_owner" {
