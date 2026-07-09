@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/09 |
+| Readme update        | 2026/07/10 |
 
 
 
@@ -27,54 +27,54 @@
 
 | Var          | Type         | Value       |
 |--------------|--------------|-------------|
-| [docker_services_default_deploy_profile](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L3)   | str | `none` |    
-| [docker_services_deploy_profiles](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L5)   | dict | `{}` |    
-| [docker_services_deploy_profiles.**none**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L6)   | dict | `{}` |    
-| [docker_services_deploy_profiles.**standard**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L8)   | dict | `{}` |    
-| [docker_services_deploy_profiles.standard.**restart_policy**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L9)   | dict | `{}` |    
-| [docker_services_deploy_profiles.standard.restart_policy.**condition**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L10)   | str | `on-failure` |    
-| [docker_services_deploy_profiles.standard.restart_policy.**delay**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L11)   | str | `10s` |    
-| [docker_services_deploy_profiles.standard.restart_policy.**max_attempts**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L12)   | int | `5` |    
-| [docker_services_deploy_profiles.standard.restart_policy.**window**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L13)   | str | `2m` |    
-| [docker_services_deploy_profiles.standard.**update_config**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L14)   | dict | `{}` |    
-| [docker_services_deploy_profiles.standard.update_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L15)   | int | `1` |    
-| [docker_services_deploy_profiles.standard.update_config.**delay**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L16)   | str | `10s` |    
-| [docker_services_deploy_profiles.standard.update_config.**failure_action**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L17)   | str | `rollback` |    
-| [docker_services_deploy_profiles.standard.update_config.**order**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L18)   | str | `stop-first` |    
-| [docker_services_deploy_profiles.standard.**rollback_config**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L19)   | dict | `{}` |    
-| [docker_services_deploy_profiles.standard.rollback_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L20)   | int | `1` |    
-| [docker_services_deploy_profiles.standard.rollback_config.**delay**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L21)   | str | `10s` |    
-| [docker_services_deploy_profiles.standard.rollback_config.**order**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L22)   | str | `stop-first` |    
-| [docker_services_deploy_profiles.**careful**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L24)   | dict | `{}` |    
-| [docker_services_deploy_profiles.careful.**restart_policy**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L25)   | dict | `{}` |    
-| [docker_services_deploy_profiles.careful.restart_policy.**condition**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L26)   | str | `on-failure` |    
-| [docker_services_deploy_profiles.careful.restart_policy.**delay**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L27)   | str | `10s` |    
-| [docker_services_deploy_profiles.careful.restart_policy.**max_attempts**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L28)   | int | `5` |    
-| [docker_services_deploy_profiles.careful.restart_policy.**window**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L29)   | str | `2m` |    
-| [docker_services_deploy_profiles.careful.**update_config**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L30)   | dict | `{}` |    
-| [docker_services_deploy_profiles.careful.update_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L31)   | int | `1` |    
-| [docker_services_deploy_profiles.careful.update_config.**delay**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L32)   | str | `30s` |    
-| [docker_services_deploy_profiles.careful.update_config.**failure_action**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L33)   | str | `rollback` |    
-| [docker_services_deploy_profiles.careful.update_config.**order**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L34)   | str | `stop-first` |    
-| [docker_services_deploy_profiles.careful.**rollback_config**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L35)   | dict | `{}` |    
-| [docker_services_deploy_profiles.careful.rollback_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L36)   | int | `1` |    
-| [docker_services_deploy_profiles.careful.rollback_config.**delay**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L37)   | str | `30s` |    
-| [docker_services_deploy_profiles.careful.rollback_config.**order**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L38)   | str | `stop-first` |    
-| [docker_services_deploy_profiles.**stateless_ha**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L40)   | dict | `{}` |    
-| [docker_services_deploy_profiles.stateless_ha.**restart_policy**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L41)   | dict | `{}` |    
-| [docker_services_deploy_profiles.stateless_ha.restart_policy.**condition**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L42)   | str | `on-failure` |    
-| [docker_services_deploy_profiles.stateless_ha.restart_policy.**delay**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L43)   | str | `5s` |    
-| [docker_services_deploy_profiles.stateless_ha.restart_policy.**max_attempts**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L44)   | int | `5` |    
-| [docker_services_deploy_profiles.stateless_ha.restart_policy.**window**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L45)   | str | `2m` |    
-| [docker_services_deploy_profiles.stateless_ha.**update_config**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L46)   | dict | `{}` |    
-| [docker_services_deploy_profiles.stateless_ha.update_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L47)   | int | `1` |    
-| [docker_services_deploy_profiles.stateless_ha.update_config.**delay**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L48)   | str | `5s` |    
-| [docker_services_deploy_profiles.stateless_ha.update_config.**failure_action**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L49)   | str | `rollback` |    
-| [docker_services_deploy_profiles.stateless_ha.update_config.**order**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L50)   | str | `start-first` |    
-| [docker_services_deploy_profiles.stateless_ha.**rollback_config**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L51)   | dict | `{}` |    
-| [docker_services_deploy_profiles.stateless_ha.rollback_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L52)   | int | `1` |    
-| [docker_services_deploy_profiles.stateless_ha.rollback_config.**delay**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L53)   | str | `5s` |    
-| [docker_services_deploy_profiles.stateless_ha.rollback_config.**order**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L54)   | str | `start-first` |    
+| [docker_services_default_deploy_profile](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L3)   | str | `none` |    
+| [docker_services_deploy_profiles](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L5)   | dict | `{}` |    
+| [docker_services_deploy_profiles.**none**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L6)   | dict | `{}` |    
+| [docker_services_deploy_profiles.**standard**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L8)   | dict | `{}` |    
+| [docker_services_deploy_profiles.standard.**restart_policy**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L9)   | dict | `{}` |    
+| [docker_services_deploy_profiles.standard.restart_policy.**condition**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L10)   | str | `on-failure` |    
+| [docker_services_deploy_profiles.standard.restart_policy.**delay**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L11)   | str | `10s` |    
+| [docker_services_deploy_profiles.standard.restart_policy.**max_attempts**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L12)   | int | `5` |    
+| [docker_services_deploy_profiles.standard.restart_policy.**window**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L13)   | str | `2m` |    
+| [docker_services_deploy_profiles.standard.**update_config**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L14)   | dict | `{}` |    
+| [docker_services_deploy_profiles.standard.update_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L15)   | int | `1` |    
+| [docker_services_deploy_profiles.standard.update_config.**delay**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L16)   | str | `10s` |    
+| [docker_services_deploy_profiles.standard.update_config.**failure_action**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L17)   | str | `rollback` |    
+| [docker_services_deploy_profiles.standard.update_config.**order**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L18)   | str | `stop-first` |    
+| [docker_services_deploy_profiles.standard.**rollback_config**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L19)   | dict | `{}` |    
+| [docker_services_deploy_profiles.standard.rollback_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L20)   | int | `1` |    
+| [docker_services_deploy_profiles.standard.rollback_config.**delay**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L21)   | str | `10s` |    
+| [docker_services_deploy_profiles.standard.rollback_config.**order**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L22)   | str | `stop-first` |    
+| [docker_services_deploy_profiles.**careful**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L24)   | dict | `{}` |    
+| [docker_services_deploy_profiles.careful.**restart_policy**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L25)   | dict | `{}` |    
+| [docker_services_deploy_profiles.careful.restart_policy.**condition**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L26)   | str | `on-failure` |    
+| [docker_services_deploy_profiles.careful.restart_policy.**delay**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L27)   | str | `10s` |    
+| [docker_services_deploy_profiles.careful.restart_policy.**max_attempts**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L28)   | int | `5` |    
+| [docker_services_deploy_profiles.careful.restart_policy.**window**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L29)   | str | `2m` |    
+| [docker_services_deploy_profiles.careful.**update_config**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L30)   | dict | `{}` |    
+| [docker_services_deploy_profiles.careful.update_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L31)   | int | `1` |    
+| [docker_services_deploy_profiles.careful.update_config.**delay**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L32)   | str | `30s` |    
+| [docker_services_deploy_profiles.careful.update_config.**failure_action**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L33)   | str | `rollback` |    
+| [docker_services_deploy_profiles.careful.update_config.**order**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L34)   | str | `stop-first` |    
+| [docker_services_deploy_profiles.careful.**rollback_config**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L35)   | dict | `{}` |    
+| [docker_services_deploy_profiles.careful.rollback_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L36)   | int | `1` |    
+| [docker_services_deploy_profiles.careful.rollback_config.**delay**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L37)   | str | `30s` |    
+| [docker_services_deploy_profiles.careful.rollback_config.**order**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L38)   | str | `stop-first` |    
+| [docker_services_deploy_profiles.**stateless_ha**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L40)   | dict | `{}` |    
+| [docker_services_deploy_profiles.stateless_ha.**restart_policy**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L41)   | dict | `{}` |    
+| [docker_services_deploy_profiles.stateless_ha.restart_policy.**condition**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L42)   | str | `on-failure` |    
+| [docker_services_deploy_profiles.stateless_ha.restart_policy.**delay**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L43)   | str | `5s` |    
+| [docker_services_deploy_profiles.stateless_ha.restart_policy.**max_attempts**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L44)   | int | `5` |    
+| [docker_services_deploy_profiles.stateless_ha.restart_policy.**window**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L45)   | str | `2m` |    
+| [docker_services_deploy_profiles.stateless_ha.**update_config**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L46)   | dict | `{}` |    
+| [docker_services_deploy_profiles.stateless_ha.update_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L47)   | int | `1` |    
+| [docker_services_deploy_profiles.stateless_ha.update_config.**delay**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L48)   | str | `5s` |    
+| [docker_services_deploy_profiles.stateless_ha.update_config.**failure_action**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L49)   | str | `rollback` |    
+| [docker_services_deploy_profiles.stateless_ha.update_config.**order**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L50)   | str | `start-first` |    
+| [docker_services_deploy_profiles.stateless_ha.**rollback_config**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L51)   | dict | `{}` |    
+| [docker_services_deploy_profiles.stateless_ha.rollback_config.**parallelism**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L52)   | int | `1` |    
+| [docker_services_deploy_profiles.stateless_ha.rollback_config.**delay**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L53)   | str | `5s` |    
+| [docker_services_deploy_profiles.stateless_ha.rollback_config.**order**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.161.x/defaults/main.yml#L54)   | str | `start-first` |    
 
 
 
