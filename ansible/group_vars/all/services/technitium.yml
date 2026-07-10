@@ -3,7 +3,7 @@
 technitium:
   enabled: true
   tags: [dns]
-  image: technitium/dns-server:15.2.0
+  image: technitium/dns-server:15.3.0
   named_networks:
     outside:
       external: true
