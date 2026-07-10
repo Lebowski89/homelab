@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/09 |
+| Readme update        | 2026/07/10 |
 
 
 
@@ -27,20 +27,20 @@
 
 | Var          | Type         | Value       |
 |--------------|--------------|-------------|
-| [opentofu_prereq_packages](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L3)   | list | `[]` |    
-| [opentofu_prereq_packages.**0**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L4)   | str | `apt-transport-https` |    
-| [opentofu_prereq_packages.**1**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L5)   | str | `ca-certificates` |    
-| [opentofu_prereq_packages.**2**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L6)   | str | `curl` |    
-| [opentofu_prereq_packages.**3**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L7)   | str | `gnupg` |    
-| [opentofu_prereq_packages.**4**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L8)   | str | `software-properties-common` |    
-| [opentofu_source_url](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L10)   | str | `https://packages.opentofu.org/opentofu/tofu/any/` |    
-| [opentofu_source_suite](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L11)   | str | `any` |    
-| [opentofu_keyring_dir](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L12)   | str | `/etc/apt/keyrings` |    
-| [opentofu_keyring_file](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L13)   | str | `/etc/apt/keyrings/opentofu.gpg` |    
-| [opentofu_keyring_file_repo](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L14)   | str | `/etc/apt/keyrings/opentofu-repo.gpg` |    
-| [opentofu_repo_filename](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L15)   | str | `opentofu` |    
-| [opentofu_packages](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L17)   | list | `[]` |    
-| [opentofu_packages.**0**](https://github.com/Lebowski89/homelab/blob/feat/github-repo-governance/defaults/main.yml#L17)   | str | `tofu` |    
+| [opentofu_prereq_packages](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L3)   | list | `[]` |    
+| [opentofu_prereq_packages.**0**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L4)   | str | `apt-transport-https` |    
+| [opentofu_prereq_packages.**1**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L5)   | str | `ca-certificates` |    
+| [opentofu_prereq_packages.**2**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L6)   | str | `curl` |    
+| [opentofu_prereq_packages.**3**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L7)   | str | `gnupg` |    
+| [opentofu_prereq_packages.**4**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L8)   | str | `software-properties-common` |    
+| [opentofu_source_url](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L10)   | str | `https://packages.opentofu.org/opentofu/tofu/any/` |    
+| [opentofu_source_suite](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L11)   | str | `any` |    
+| [opentofu_keyring_dir](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L12)   | str | `/etc/apt/keyrings` |    
+| [opentofu_keyring_file](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L13)   | str | `/etc/apt/keyrings/opentofu.gpg` |    
+| [opentofu_keyring_file_repo](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L14)   | str | `/etc/apt/keyrings/opentofu-repo.gpg` |    
+| [opentofu_repo_filename](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L15)   | str | `opentofu` |    
+| [opentofu_packages](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L17)   | list | `[]` |    
+| [opentofu_packages.**0**](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L17)   | str | `tofu` |    
 
 
 

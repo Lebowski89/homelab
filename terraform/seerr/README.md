@@ -1,31 +1,10 @@
 <!-- BEGIN_TF_DOCS -->
-## Requirements
 
-| Name | Version |
-|------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.11.0 |
-| <a name="requirement_seerr"></a> [seerr](#requirement\_seerr) | 0.19.5 |
-
-## Providers
-
-| Name | Version |
-|------|---------|
-| <a name="provider_seerr"></a> [seerr](#provider\_seerr) | 0.19.5 |
-
-## Modules
-
-No modules.
 
 ## Resources
 
 | Name | Type |
 |------|------|
-| [seerr_main_settings.this](https://registry.terraform.io/providers/josh-archer/seerr/0.19.5/docs/resources/main_settings) | resource |
-| [seerr_notification_gotify.this](https://registry.terraform.io/providers/josh-archer/seerr/0.19.5/docs/resources/notification_gotify) | resource |
-| [seerr_plex_settings.this](https://registry.terraform.io/providers/josh-archer/seerr/0.19.5/docs/resources/plex_settings) | resource |
-| [seerr_radarr_server.this](https://registry.terraform.io/providers/josh-archer/seerr/0.19.5/docs/resources/radarr_server) | resource |
-| [seerr_sonarr_server.this](https://registry.terraform.io/providers/josh-archer/seerr/0.19.5/docs/resources/sonarr_server) | resource |
-| [seerr_tautulli_settings.this](https://registry.terraform.io/providers/josh-archer/seerr/0.19.5/docs/resources/tautulli_settings) | resource |
 
 ## Inputs
 

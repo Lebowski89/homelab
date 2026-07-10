@@ -1,31 +1,10 @@
 <!-- BEGIN_TF_DOCS -->
-## Requirements
 
-| Name | Version |
-|------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.11.0 |
-| <a name="requirement_cloudflare"></a> [cloudflare](#requirement\_cloudflare) | 5.21.1 |
-
-## Providers
-
-| Name | Version |
-|------|---------|
-| <a name="provider_cloudflare"></a> [cloudflare](#provider\_cloudflare) | 5.21.1 |
-
-## Modules
-
-No modules.
 
 ## Resources
 
 | Name | Type |
 |------|------|
-| [cloudflare_dns_record.mx_fwd1](https://registry.terraform.io/providers/cloudflare/cloudflare/5.21.1/docs/resources/dns_record) | resource |
-| [cloudflare_dns_record.mx_fwd2](https://registry.terraform.io/providers/cloudflare/cloudflare/5.21.1/docs/resources/dns_record) | resource |
-| [cloudflare_dns_record.service_a](https://registry.terraform.io/providers/cloudflare/cloudflare/5.21.1/docs/resources/dns_record) | resource |
-| [cloudflare_dns_record.txt_dkim_default](https://registry.terraform.io/providers/cloudflare/cloudflare/5.21.1/docs/resources/dns_record) | resource |
-| [cloudflare_dns_record.txt_dmarc](https://registry.terraform.io/providers/cloudflare/cloudflare/5.21.1/docs/resources/dns_record) | resource |
-| [cloudflare_dns_record.txt_spf](https://registry.terraform.io/providers/cloudflare/cloudflare/5.21.1/docs/resources/dns_record) | resource |
 
 ## Inputs
 

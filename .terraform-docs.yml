@@ -1,0 +1,12 @@
+---
+
+formatter: markdown table
+
+sections:
+  hide:
+    - requirements
+    - providers
+    - resources
+
+settings:
+  hide-empty: true

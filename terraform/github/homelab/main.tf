@@ -15,7 +15,7 @@ resource "github_repository" "homelab" {
   allow_merge_commit  = false
   allow_rebase_merge  = false
   allow_squash_merge  = true
-  allow_auto_merge    = false
+  allow_auto_merge    = true
   allow_update_branch = true
 
   delete_branch_on_merge = true

@@ -5,7 +5,7 @@ czkawka:
   tags: [utilities, czkawka]
   name: czkawka
   stack: czkawka
-  image: jlesage/czkawka:v26.03.1
+  image: jlesage/czkawka:v26.07.1
   named_networks:
     overlay:
       external: true
