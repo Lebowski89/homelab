@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/10 |
+| Readme update        | 2026/07/11 |
 
 
 
@@ -45,7 +45,7 @@
 | [infisical_stack](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L32)   | str | `infisical` |    
 | [infisical_compose_file](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L33)   | str | `infisical-compose.yml` |    
 | [infisical_compose_path](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L34)   | str | `{{ infisical_base_path }}/{{ infisical_compose_file }}` |    
-| [infisical_image](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L36)   | str | `docker.io/infisical/infisical:v0.161.14` |    
+| [infisical_image](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L36)   | str | `docker.io/infisical/infisical:v0.162.0` |    
 | [infisical_timezone](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L37)   | str | `{{ timezone ¦ default('Australia/Melbourne') }}` |    
 | [infisical_puid](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L38)   | str | `{{ docker_host_puid ¦ default('1000') }}` |    
 | [infisical_pgid](https://github.com/Lebowski89/homelab/blob/renovate/docker.io-infisical-infisical-0.x/defaults/main.yml#L39)   | str | `{{ docker_host_pgid ¦ default('1000') }}` |    
