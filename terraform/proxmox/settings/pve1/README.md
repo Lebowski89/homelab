@@ -1,30 +1,10 @@
 <!-- BEGIN_TF_DOCS -->
-## Requirements
 
-| Name | Version |
-|------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.11.0 |
-| <a name="requirement_proxmox"></a> [proxmox](#requirement\_proxmox) | 0.111.0 |
-
-## Providers
-
-| Name | Version |
-|------|---------|
-| <a name="provider_proxmox"></a> [proxmox](#provider\_proxmox) | 0.111.0 |
-
-## Modules
-
-No modules.
 
 ## Resources
 
 | Name | Type |
 |------|------|
-| [proxmox_network_linux_bridge.vmbr0](https://registry.terraform.io/providers/bpg/proxmox/0.111.0/docs/resources/network_linux_bridge) | resource |
-| [proxmox_network_linux_bridge.vmbr1](https://registry.terraform.io/providers/bpg/proxmox/0.111.0/docs/resources/network_linux_bridge) | resource |
-| [proxmox_virtual_environment_dns.dns](https://registry.terraform.io/providers/bpg/proxmox/0.111.0/docs/resources/virtual_environment_dns) | resource |
-| [proxmox_virtual_environment_hosts.hosts](https://registry.terraform.io/providers/bpg/proxmox/0.111.0/docs/resources/virtual_environment_hosts) | resource |
-| [proxmox_virtual_environment_time.timezone](https://registry.terraform.io/providers/bpg/proxmox/0.111.0/docs/resources/virtual_environment_time) | resource |
 
 ## Inputs
 
