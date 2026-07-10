@@ -5,7 +5,7 @@ alloy:
   tags: [monitoring, alloy]
   name: alloy
   stack: alloy
-  image: grafana/alloy:v1.17.0
+  image: grafana/alloy:v1.17.1
   named_networks:
     overlay:
       external: true
