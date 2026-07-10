@@ -6,6 +6,7 @@ on:
   pull_request:
     paths:
       - "terraform/**/*.tf"
+      - ".terraform-docs.yml"
       - ".github/workflows/tofu-docs.yml"
   workflow_dispatch:
 
@@ -20,6 +21,7 @@ jobs:
   docs:
     if: >-
       github.actor != 'github-actions[bot]' &&
+      github.actor != 'renovate[bot]' &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
 
@@ -33,10 +35,9 @@ jobs:
       - name: Render and commit OpenTofu docs
         uses: terraform-docs/gh-actions@v1.4.1
         with:
-          working-dir: .
           find-dir: terraform
-          recursive: true
-          recursive-path: .
+          config-file: .terraform-docs.yml
           output-file: README.md
           output-method: inject
           git-push: "true"
+          git-commit-message: "docs(tofu): regenerate module docs"

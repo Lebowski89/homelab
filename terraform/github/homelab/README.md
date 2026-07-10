@@ -1,31 +1,10 @@
 <!-- BEGIN_TF_DOCS -->
-## Requirements
 
-| Name | Version |
-|------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.11.0 |
-| <a name="requirement_github"></a> [github](#requirement\_github) | 6.12.1 |
-
-## Providers
-
-| Name | Version |
-|------|---------|
-| <a name="provider_github"></a> [github](#provider\_github) | 6.12.1 |
-| <a name="provider_terraform"></a> [terraform](#provider\_terraform) | n/a |
-
-## Modules
-
-No modules.
 
 ## Resources
 
 | Name | Type |
 |------|------|
-| [github_actions_repository_permissions.homelab](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/actions_repository_permissions) | resource |
-| [github_repository.homelab](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository) | resource |
-| [github_repository_ruleset.main_clean_history](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository_ruleset) | resource |
-| [github_repository_vulnerability_alerts.homelab](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository_vulnerability_alerts) | resource |
-| [terraform_data.workflow_token_permissions](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/resources/data) | resource |
 
 ## Inputs
 

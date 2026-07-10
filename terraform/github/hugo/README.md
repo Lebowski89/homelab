@@ -1,29 +1,10 @@
 <!-- BEGIN_TF_DOCS -->
-## Requirements
 
-| Name | Version |
-|------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.11.0 |
-| <a name="requirement_github"></a> [github](#requirement\_github) | 6.12.1 |
-
-## Providers
-
-| Name | Version |
-|------|---------|
-| <a name="provider_github"></a> [github](#provider\_github) | 6.12.1 |
-
-## Modules
-
-No modules.
 
 ## Resources
 
 | Name | Type |
 |------|------|
-| [github_branch_protection.blog](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/branch_protection) | resource |
-| [github_repository.blog](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository) | resource |
-| [github_repository_pages.blog](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository_pages) | resource |
-| [github_repository_vulnerability_alerts.blog](https://registry.terraform.io/providers/integrations/github/6.12.1/docs/resources/repository_vulnerability_alerts) | resource |
 
 ## Inputs
 
