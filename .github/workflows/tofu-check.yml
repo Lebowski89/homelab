@@ -41,7 +41,7 @@ jobs:
           - terraform/proxmox/mappings/resources
           - terraform/proxmox/settings/pve1
           - terraform/proxmox/templates/ubuntu-2404
-          - terraform/proxmox/templates/ubuntu-2024-lxc
+          - terraform/proxmox/templates/ubuntu-2404-lxc
           - terraform/proxmox/vms/postgres-cluster
           - terraform/proxmox/vms/unraid
           - terraform/seerr
