@@ -31,3 +31,6 @@ compose:
   docker_host_pgid: custom_fields['docker_host_pgid'] | default(omit, true)
   docker_host_appdata_root: custom_fields['docker_host_appdata_root'] | default(omit, true)
   docker_host_data_root: custom_fields['docker_host_data_root'] | default(omit, true)
+
+  keepalived_priority_dns_vip_a: custom_fields['keepalived_priority_dns_vip_a'] | default(omit, true)
+  keepalived_priority_dns_vip_b: custom_fields['keepalived_priority_dns_vip_b'] | default(omit, true)

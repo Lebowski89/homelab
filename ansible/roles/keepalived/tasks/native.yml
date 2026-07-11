@@ -1,0 +1,49 @@
+---
+
+- name: Keepalived native | Assert supported OS
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family | default('') == 'Debian'
+    fail_msg: "Native keepalived backend currently supports Debian/Ubuntu hosts only."
+
+- name: Keepalived native | Install packages
+  ansible.builtin.apt:
+    name:
+      - keepalived
+      - dnsutils
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Keepalived native | Ensure config directory exists
+  ansible.builtin.file:
+    path: /etc/keepalived
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Keepalived native | Install DNS health check script
+  ansible.builtin.template:
+    src: check-dns.sh.j2
+    dest: "{{ keepalived_check_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: Restart keepalived
+
+- name: Keepalived native | Render keepalived config
+  ansible.builtin.template:
+    src: keepalived.conf.j2
+    dest: "{{ keepalived_config_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart keepalived
+
+- name: Keepalived native | Enable and start keepalived
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: keepalived
+    enabled: true
+    state: started

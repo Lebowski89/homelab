@@ -1,0 +1,22 @@
+---
+
+keepalived_config_path: /etc/keepalived/keepalived.conf
+keepalived_check_script_path: /usr/local/sbin/check-technitium-dns.sh
+
+keepalived_dns_check_query: dns01.skynet
+keepalived_dns_check_type: A
+keepalived_dns_check_server: "127.0.0.1"
+keepalived_dns_check_timeout: 1
+keepalived_dns_check_tries: 1
+
+keepalived_script_interval: 2
+keepalived_script_timeout: 2
+keepalived_script_fall: 3
+keepalived_script_rise: 2
+keepalived_script_weight: -80
+
+keepalived_dns_group: tags_keepalived
+keepalived_host_ip: "{{ local_ip | default('') }}"
+keepalived_host_interface: "{{ ansible_default_ipv4.interface | default('') }}"
+keepalived_host_mode: native
+keepalived_instances: {}
