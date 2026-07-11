@@ -27,49 +27,49 @@
 
 | Var          | Type         | Value       |
 |--------------|--------------|-------------|
-| [docker_packages](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L3)   | list | `[]` |    
-| [docker_packages.**0**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L4)   | str | `docker-ce` |    
-| [docker_packages.**1**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L5)   | str | `docker-ce-cli` |    
-| [docker_packages.**2**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L6)   | str | `containerd.io` |    
-| [docker_packages.**3**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L7)   | str | `docker-buildx-plugin` |    
-| [docker_packages.**4**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L8)   | str | `docker-compose-plugin` |    
-| [docker_prereq_packages](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L10)   | list | `[]` |    
-| [docker_prereq_packages.**0**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L11)   | str | `ca-certificates` |    
-| [docker_prereq_packages.**1**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L12)   | str | `curl` |    
-| [docker_apt_arch_map](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L14)   | dict | `{}` |    
-| [docker_apt_arch_map.**x86_64**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L15)   | str | `amd64` |    
-| [docker_apt_arch_map.**aarch64**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L16)   | str | `arm64` |    
-| [docker_apt_arch](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L18)   | str | `{{ docker_apt_arch_map[ansible_architecture] ¦ default(ansible_architecture) }}` |    
-| [docker_repo_url](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L20)   | str | `https://download.docker.com/linux/ubuntu` |    
-| [docker_repo_channel](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L21)   | str | `stable` |    
-| [docker_keyring_dir](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L22)   | str | `/etc/apt/keyrings` |    
-| [docker_keyring_file](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L23)   | str | `/etc/apt/keyrings/docker.asc` |    
-| [docker_repo_filename](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L24)   | str | `docker` |    
-| [docker_install_compose_plugin](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L26)   | bool | `True` |    
-| [docker_manage_user](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L27)   | bool | `False` |    
-| [docker_user](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L28)   | str |  |    
-| [docker_network](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L30)   | str | `overlay` |    
-| [docker_network_driver](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L31)   | str | `overlay` |    
-| [docker_network_subnet](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L32)   | str | `172.98.0.0/24` |    
-| [docker_prune_threshold_percent](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L34)   | int | `80` |    
-| [docker_prune_filesystem_path](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L35)   | str | `/` |    
-| [docker_prune_until](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L36)   | str | `168h` |    
-| [docker_prune_images](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L38)   | bool | `True` |    
-| [docker_prune_containers](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L39)   | bool | `True` |    
-| [docker_prune_builder_cache](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L40)   | bool | `True` |    
-| [docker_prune_networks](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L41)   | bool | `False` |    
-| [docker_prune_volumes](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L42)   | bool | `False` |    
-| [docker_prune_manage_timer](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L44)   | bool | `True` |    
-| [docker_prune_timer_name](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L45)   | str | `docker-prune-safe` |    
-| [docker_prune_timer_on_calendar](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L46)   | str | `Sun *-*-* 04:30:00` |    
-| [docker_prune_timer_randomized_delay_sec](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L47)   | str | `1h` |    
-| [docker_prune_script_path](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L48)   | str | `/usr/local/sbin/docker-prune-safe` |    
-| [docker_prune_timer_min_usage_percent](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L52)   | int | `0` |    
-| [docker_prune_unraid_user_script_manage](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L54)   | bool | `True` |    
-| [docker_prune_unraid_user_script_name](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L55)   | str | `docker-prune-safe` |    
-| [docker_prune_unraid_user_scripts_root](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L56)   | str | `/boot/config/plugins/user.scripts/scripts` |    
-| [docker_prune_unraid_user_script_dir](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L57)   | str | `{{ docker_prune_unraid_user_scripts_root }}/{{ docker_prune_unraid_user_script_name }}` |    
-| [docker_prune_unraid_user_script_path](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/ansible/roles/docker/defaults/main.yml#L58)   | str | `{{ docker_prune_unraid_user_script_dir }}/script` |    
+| [docker_packages](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L3)   | list | `[]` |    
+| [docker_packages.**0**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L4)   | str | `docker-ce` |    
+| [docker_packages.**1**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L5)   | str | `docker-ce-cli` |    
+| [docker_packages.**2**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L6)   | str | `containerd.io` |    
+| [docker_packages.**3**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L7)   | str | `docker-buildx-plugin` |    
+| [docker_packages.**4**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L8)   | str | `docker-compose-plugin` |    
+| [docker_prereq_packages](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L10)   | list | `[]` |    
+| [docker_prereq_packages.**0**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L11)   | str | `ca-certificates` |    
+| [docker_prereq_packages.**1**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L12)   | str | `curl` |    
+| [docker_apt_arch_map](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L14)   | dict | `{}` |    
+| [docker_apt_arch_map.**x86_64**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L15)   | str | `amd64` |    
+| [docker_apt_arch_map.**aarch64**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L16)   | str | `arm64` |    
+| [docker_apt_arch](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L18)   | str | `{{ docker_apt_arch_map[ansible_architecture] ¦ default(ansible_architecture) }}` |    
+| [docker_repo_url](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L20)   | str | `https://download.docker.com/linux/ubuntu` |    
+| [docker_repo_channel](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L21)   | str | `stable` |    
+| [docker_keyring_dir](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L22)   | str | `/etc/apt/keyrings` |    
+| [docker_keyring_file](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L23)   | str | `/etc/apt/keyrings/docker.asc` |    
+| [docker_repo_filename](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L24)   | str | `docker` |    
+| [docker_install_compose_plugin](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L26)   | bool | `True` |    
+| [docker_manage_user](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L27)   | bool | `False` |    
+| [docker_user](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L28)   | str |  |    
+| [docker_network](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L30)   | str | `overlay` |    
+| [docker_network_driver](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L31)   | str | `overlay` |    
+| [docker_network_subnet](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L32)   | str | `172.98.0.0/24` |    
+| [docker_prune_threshold_percent](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L34)   | int | `80` |    
+| [docker_prune_filesystem_path](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L35)   | str | `/` |    
+| [docker_prune_until](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L36)   | str | `168h` |    
+| [docker_prune_images](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L38)   | bool | `True` |    
+| [docker_prune_containers](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L39)   | bool | `True` |    
+| [docker_prune_builder_cache](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L40)   | bool | `True` |    
+| [docker_prune_networks](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L41)   | bool | `False` |    
+| [docker_prune_volumes](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L42)   | bool | `False` |    
+| [docker_prune_manage_timer](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L44)   | bool | `True` |    
+| [docker_prune_timer_name](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L45)   | str | `docker-prune-safe` |    
+| [docker_prune_timer_on_calendar](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L46)   | str | `Sun *-*-* 04:30:00` |    
+| [docker_prune_timer_randomized_delay_sec](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L47)   | str | `1h` |    
+| [docker_prune_script_path](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L48)   | str | `/usr/local/sbin/docker-prune-safe` |    
+| [docker_prune_timer_min_usage_percent](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L52)   | int | `0` |    
+| [docker_prune_unraid_user_script_manage](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L54)   | bool | `True` |    
+| [docker_prune_unraid_user_script_name](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L55)   | str | `docker-prune-safe` |    
+| [docker_prune_unraid_user_scripts_root](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L56)   | str | `/boot/config/plugins/user.scripts/scripts` |    
+| [docker_prune_unraid_user_script_dir](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L57)   | str | `{{ docker_prune_unraid_user_scripts_root }}/{{ docker_prune_unraid_user_script_name }}` |    
+| [docker_prune_unraid_user_script_path](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L58)   | str | `{{ docker_prune_unraid_user_script_dir }}/script` |    
 
 
 
