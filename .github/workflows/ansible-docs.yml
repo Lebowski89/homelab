@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: generated-docs-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.event.pull_request.head.ref || github.ref_name }}
+  group: generated-docs-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: false
 
 permissions:
@@ -21,15 +21,19 @@ jobs:
   generate_docs:
     if: >-
       github.actor != 'github-actions[bot]' &&
+      github.actor != 'renovate[bot]' &&
+      !startsWith(github.head_ref || github.ref_name, 'renovate/') &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-24.04
+    env:
+      BRANCH: ${{ github.head_ref || github.ref_name }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.0
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref || github.ref_name }}
+          ref: ${{ env.BRANCH }}
 
       - name: Set up Python
         uses: actions/setup-python@v6.3.0
@@ -96,7 +100,6 @@ jobs:
           fi
 
       - name: Commit generated docs
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         run: |
           set -euo pipefail
 
@@ -112,16 +115,13 @@ jobs:
           git commit -m "docs(ansible): regenerate role docs"
 
       - name: Push generated docs
-        if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
         run: |
           set -euo pipefail
-
-          BRANCH="${{ github.event.pull_request.head.ref || github.ref_name }}"
 
           for attempt in 1 2 3; do
             echo "Push attempt ${attempt} to ${BRANCH}"
 
-            if git push origin HEAD:"${BRANCH}"; then
+            if git push origin "HEAD:${BRANCH}"; then
               exit 0
             fi
 

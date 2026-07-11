@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+dig @{{ keepalived_dns_check_server }} \
+  {{ keepalived_dns_check_query }} \
+  {{ keepalived_dns_check_type }} \
+  +time={{ keepalived_dns_check_timeout }} \
+  +tries={{ keepalived_dns_check_tries }} \
+  >/dev/null

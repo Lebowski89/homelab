@@ -1,0 +1,17 @@
+---
+
+technitium_native_install_script_url: https://download.technitium.com/dns/install.sh
+technitium_native_install_script_path: /tmp/technitium-dns-install.sh
+
+technitium_native_service_name: dns
+technitium_native_web_port: 5380
+technitium_native_dns_port: 53
+
+technitium_native_config_dir: /etc/dns
+technitium_native_install_marker: /opt/technitium/dns/DnsServerApp.dll
+
+technitium_native_resolved_dns_servers:
+  - 192.168.80.53
+  - 192.168.80.54
+
+technitium_native_disable_resolved_stub: true

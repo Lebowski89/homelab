@@ -208,6 +208,30 @@
       tags: [node_exporter]
 
     ################################
+    # KEEPALIVED (DNS VIPS)
+    ################################
+
+    - name: Include Keepalived role
+      when: "'tags_keepalived' in group_names"
+      ansible.builtin.include_role:
+        name: keepalived
+        apply:
+          tags: [keepalived]
+      tags: [keepalived]
+
+    ################################
+    # TECHNITIUM NATIVE (DNS)
+    ################################
+
+    - name: Include Technitium native role
+      when: "'tags_technitium_native' in group_names"
+      ansible.builtin.include_role:
+        name: technitium_native
+        apply:
+          tags: [technitium_native]
+      tags: [technitium_native]
+
+    ################################
     # DOCKER_SERVICES
     ################################
 
