@@ -1,0 +1,57 @@
+---
+
+- name: Keepalived | Set host config
+  ansible.builtin.set_fact:
+    keepalived_dns_hosts: "{{ groups[keepalived_dns_group] | default([]) }}"
+    keepalived_host_cfg:
+      ip: "{{ keepalived_host_ip }}"
+      interface: "{{ keepalived_host_interface }}"
+      mode: "{{ keepalived_host_mode }}"
+
+- name: Keepalived | Validate common config
+  ansible.builtin.assert:
+    that:
+      - keepalived_dns_hosts | length > 1
+      - keepalived_instances is mapping
+      - keepalived_instances | length > 0
+      - keepalived_host_cfg.ip is defined
+      - keepalived_host_cfg.ip | length > 0
+      - keepalived_host_cfg.interface is defined
+      - keepalived_host_cfg.interface | length > 0
+      - keepalived_host_cfg.mode | default('native') in ['native']
+    fail_msg: >-
+      Invalid keepalived config for {{ inventory_hostname }}. Check
+      the {{ keepalived_dns_group }} inventory group, interface, IP, mode, and
+      keepalived_instances.
+
+- name: Keepalived | Validate peer inventory addresses
+  ansible.builtin.assert:
+    that:
+      - hostvars[item].local_ip is defined
+      - hostvars[item].local_ip | length > 0
+    fail_msg: "Keepalived peer {{ item }} does not have a local_ip inventory variable."
+  loop: "{{ keepalived_dns_hosts }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Keepalived | Validate each VRRP instance
+  ansible.builtin.assert:
+    that:
+      - item.value.virtual_router_id is defined
+      - item.value.virtual_ip is defined
+      - item.value.priority_var is defined
+      - hostvars[inventory_hostname][item.value.priority_var] is defined
+      - hostvars[inventory_hostname][item.value.priority_var] | int >= 1
+      - hostvars[inventory_hostname][item.value.priority_var] | int <= 254
+    fail_msg: >-
+      Invalid keepalived instance {{ item.key }} for {{ inventory_hostname }}.
+      Each instance needs virtual_router_id, virtual_ip, and a valid priority_var
+      supplied by NetBox for this host.
+  loop: "{{ keepalived_instances | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Keepalived | Include native backend
+  when: keepalived_host_cfg.mode | default('native') == 'native'
+  ansible.builtin.include_tasks:
+    file: native.yml

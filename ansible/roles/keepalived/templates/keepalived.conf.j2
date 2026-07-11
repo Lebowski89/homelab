@@ -1,0 +1,42 @@
+global_defs {
+  enable_script_security
+  script_user root
+  router_id {{ inventory_hostname | upper | regex_replace('[^A-Z0-9_]', '_') }}
+}
+
+vrrp_script chk_technitium_dns {
+  script "{{ keepalived_check_script_path }}"
+  interval {{ keepalived_script_interval }}
+  timeout {{ keepalived_script_timeout }}
+  fall {{ keepalived_script_fall }}
+  rise {{ keepalived_script_rise }}
+  weight {{ keepalived_script_weight }}
+}
+
+{% for instance_name, instance in keepalived_instances | dictsort %}
+vrrp_instance {{ instance_name | upper }} {
+  state BACKUP
+  interface {{ keepalived_host_cfg.interface }}
+  virtual_router_id {{ instance.virtual_router_id }}
+  priority {{ hostvars[inventory_hostname][instance.priority_var] }}
+  advert_int {{ instance.advert_int | default(1) }}
+
+  unicast_src_ip {{ keepalived_host_cfg.ip }}
+  unicast_peer {
+{% for peer_name in keepalived_dns_hosts | sort %}
+{% if peer_name != inventory_hostname %}
+    {{ hostvars[peer_name].local_ip }}
+{% endif %}
+{% endfor %}
+  }
+
+  virtual_ipaddress {
+    {{ instance.virtual_ip }}/{{ instance.prefix | default(24) }} dev {{ keepalived_host_cfg.interface }}
+  }
+
+  track_script {
+    chk_technitium_dns
+  }
+}
+
+{% endfor %}

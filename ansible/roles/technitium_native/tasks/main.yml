@@ -1,0 +1,86 @@
+---
+
+- name: Technitium native | Assert supported OS
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family == "Debian"
+    fail_msg: "technitium_native currently supports Debian/Ubuntu hosts only."
+
+- name: Technitium native | Install prerequisite packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - dnsutils
+    state: present
+    update_cache: true
+
+- name: Technitium native | Download installer before changing local DNS
+  ansible.builtin.get_url:
+    url: "{{ technitium_native_install_script_url }}"
+    dest: "{{ technitium_native_install_script_path }}"
+    mode: "0755"
+
+- name: Technitium native | Ensure resolved config directory exists
+  when: technitium_native_disable_resolved_stub | bool
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Technitium native | Disable systemd-resolved DNS stub
+  when: technitium_native_disable_resolved_stub | bool
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/technitium.conf
+    mode: "0644"
+    content: |
+      [Resolve]
+      DNS={{ technitium_native_resolved_dns_servers | join(' ') }}
+      FallbackDNS=1.1.1.1 9.9.9.9
+      DNSStubListener=no
+  notify: Restart systemd-resolved
+
+- name: Technitium native | Point resolv.conf at real resolved output
+  when: technitium_native_disable_resolved_stub | bool
+  ansible.builtin.file:
+    src: /run/systemd/resolve/resolv.conf
+    dest: /etc/resolv.conf
+    state: link
+    force: true
+  notify: Restart systemd-resolved
+
+- name: Technitium native | Flush resolver changes before install
+  ansible.builtin.meta: flush_handlers
+
+- name: Technitium native | Verify DNS still works after resolver change
+  ansible.builtin.command:
+    cmd: getent hosts download.technitium.com
+  changed_when: false
+
+- name: Technitium native | Run installer
+  ansible.builtin.command:
+    cmd: "bash {{ technitium_native_install_script_path }}"
+    creates: "{{ technitium_native_install_marker }}"
+
+- name: Technitium native | Enable and start service
+  ansible.builtin.systemd:
+    name: "{{ technitium_native_service_name }}"
+    enabled: true
+    state: started
+
+- name: Technitium native | Wait for web console
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ technitium_native_web_port }}"
+    timeout: 60
+
+- name: Technitium native | Wait for DNS listener
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ technitium_native_dns_port }}"
+    timeout: 60
+
+- name: Technitium native | Test local DNS recursion
+  ansible.builtin.command:
+    cmd: dig @127.0.0.1 cloudflare.com A +short +time=2 +tries=1
+  changed_when: false

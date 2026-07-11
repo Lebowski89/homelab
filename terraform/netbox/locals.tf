@@ -65,6 +65,18 @@ locals {
       manufacturer_key = "homelab"
     }
 
+    generic_vm = {
+      model            = "Generic Virtual Machine"
+      slug             = "generic-virtual-machine"
+      manufacturer_key = "homelab"
+    }
+
+    generic_lxc = {
+      model            = "Generic LXC Container"
+      slug             = "generic-lxc-container"
+      manufacturer_key = "homelab"
+    }
+
     proxmox_host = {
       model            = "Proxmox Host"
       slug             = "proxmox-host"
@@ -280,6 +292,27 @@ locals {
       description = "Hosts providing DNS services."
       color       = "2196f3"
     }
+
+    technitium = {
+      name        = "technitium"
+      slug        = "technitium"
+      description = "Hosts providing Technitium DNS services."
+      color_hex   = "00bcd4"
+    }
+
+    technitium_native = {
+      name        = "technitium-native"
+      slug        = "technitium_native"
+      description = "Hosts running Technitium DNS Server natively."
+      color_hex   = "00acc1"
+    }
+
+    keepalived = {
+      name        = "keepalived"
+      slug        = "keepalived"
+      description = "Hosts participating in keepalived VRRP."
+      color_hex   = "4caf50"
+    }
   }
 
   device_custom_fields = {
@@ -354,6 +387,26 @@ locals {
       description = "DNS resolver priority. Lower padded values are preferred first, e.g. 010, 020."
       weight      = 300
     }
+
+    keepalived_priority_dns_vip_a = {
+      name             = "keepalived_priority_dns_vip_a"
+      label            = "Keepalived DNS VIP A priority"
+      type             = "text"
+      group_name       = "Keepalived"
+      description      = "VRRP priority for the first Technitium DNS virtual IP."
+      weight           = 310
+      validation_regex = "^(?:[1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-4])$"
+    }
+
+    keepalived_priority_dns_vip_b = {
+      name             = "keepalived_priority_dns_vip_b"
+      label            = "Keepalived DNS VIP B priority"
+      type             = "text"
+      group_name       = "Keepalived"
+      description      = "VRRP priority for the second Technitium DNS virtual IP."
+      weight           = 320
+      validation_regex = "^(?:[1-9]|[1-9][0-9]|1[0-9][0-9]|2[0-4][0-9]|25[0-4])$"
+    }
   }
 
   device_custom_field_defaults = {
@@ -378,8 +431,9 @@ locals {
     }
 
     mgt = {
-      description = "Docker Swarm manager, automation host, HAProxy endpoint, Technitium DNS primary"
-      role_key    = "server"
+      description     = "Docker Swarm manager, automation host, HAProxy endpoint, Technitium DNS primary"
+      role_key        = "server"
+      device_type_key = "generic_vm"
       tags = [
         "skynet",
         "ansible_manager",
@@ -391,6 +445,8 @@ locals {
         "swarm",
         "swarm_manager",
         "dns",
+        "technitium",
+        "keepalived",
       ]
     }
 
@@ -419,6 +475,8 @@ locals {
         "swarm",
         "swarm_worker",
         "dns",
+        "technitium",
+        "keepalived",
       ]
     }
 
@@ -433,9 +491,23 @@ locals {
       ]
     }
 
+    dns03 = {
+      description     = "Ubuntu LXC on pve1, Technitium DNS tertiary, keepalived backup"
+      role_key        = "server"
+      device_type_key = "generic_lxc"
+      tags = [
+        "skynet",
+        "opentofu_managed",
+        "dns",
+        "technitium_native",
+        "keepalived",
+      ]
+    }
+
     pg95 = {
-      description = "Postgres / Patroni node"
-      role_key    = "server"
+      description     = "Postgres / Patroni node"
+      role_key        = "server"
+      device_type_key = "generic_vm"
       tags = [
         "skynet",
         "opentofu",
@@ -445,8 +517,9 @@ locals {
     }
 
     pg96 = {
-      description = "Postgres / Patroni node"
-      role_key    = "server"
+      description     = "Postgres / Patroni node"
+      role_key        = "server"
+      device_type_key = "generic_vm"
       tags = [
         "skynet",
         "opentofu",
@@ -456,8 +529,9 @@ locals {
     }
 
     pg97 = {
-      description = "Postgres / Patroni node"
-      role_key    = "server"
+      description     = "Postgres / Patroni node"
+      role_key        = "server"
+      device_type_key = "generic_vm"
       tags = [
         "skynet",
         "opentofu",

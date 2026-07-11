@@ -1,0 +1,27 @@
+---
+
+keepalived_dns_check_query: dns01.skynet
+keepalived_dns_check_type: A
+keepalived_dns_check_server: "127.0.0.1"
+keepalived_dns_check_timeout: 1
+keepalived_dns_check_tries: 1
+
+keepalived_check_script_path: /usr/local/sbin/check-technitium-dns.sh
+keepalived_config_path: /etc/keepalived/keepalived.conf
+
+keepalived_dns_group: tags_technitium
+
+keepalived_instances:
+  dns_vip_a:
+    virtual_router_id: 53
+    virtual_ip: 192.168.80.53
+    prefix: 24
+    advert_int: 1
+    priority_var: keepalived_priority_dns_vip_a
+
+  dns_vip_b:
+    virtual_router_id: 54
+    virtual_ip: 192.168.80.54
+    prefix: 24
+    advert_int: 1
+    priority_var: keepalived_priority_dns_vip_b

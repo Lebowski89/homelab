@@ -11,14 +11,16 @@ host_private_values = {
     mgmt_ip = "192.168.xx.xx/24"
 
     custom_fields = {
-      ansible_user             = "user"
-      ssh_port                 = "22"
-      tailscale_ip             = "100.xx.xx.xx"
-      docker_host_puid         = "1000"
-      docker_host_pgid         = "1000"
-      docker_host_appdata_root = "/opt"
-      docker_host_data_root    = "/opt"
-      dns_priority             = "010"
+      ansible_user                  = "user"
+      ssh_port                      = "22"
+      tailscale_ip                  = "100.xx.xx.xx"
+      docker_host_puid              = "1000"
+      docker_host_pgid              = "1000"
+      docker_host_appdata_root      = "/opt"
+      docker_host_data_root         = "/opt"
+      dns_priority                  = "010"
+      keepalived_priority_dns_vip_a = "150"
+      keepalived_priority_dns_vip_b = "110"
     }
   }
 
@@ -40,14 +42,16 @@ host_private_values = {
     mgmt_ip = "192.168.xx.xx/24"
 
     custom_fields = {
-      ansible_user             = "user"
-      ssh_port                 = "22"
-      tailscale_ip             = "100.xx.xx.xx"
-      docker_host_puid         = "1000"
-      docker_host_pgid         = "1000"
-      docker_host_appdata_root = "/opt"
-      docker_host_data_root    = "/opt"
-      dns_priority             = "020"
+      ansible_user                  = "user"
+      ssh_port                      = "22"
+      tailscale_ip                  = "100.xx.xx.xx"
+      docker_host_puid              = "1000"
+      docker_host_pgid              = "1000"
+      docker_host_appdata_root      = "/opt"
+      docker_host_data_root         = "/opt"
+      dns_priority                  = "020"
+      keepalived_priority_dns_vip_a = "120"
+      keepalived_priority_dns_vip_b = "150"
     }
   }
 
@@ -58,6 +62,19 @@ host_private_values = {
       ansible_user = "user"
       ssh_port     = "22"
       tailscale_ip = "100.xx.xx.xx"
+    }
+  }
+
+  dns03 = {
+    mgmt_ip = "192.168.xx.xx/24"
+
+    custom_fields = {
+      ansible_user                  = "root"
+      ssh_port                      = "22"
+      tailscale_ip                  = "100.x.x.x"
+      dns_priority                  = "030"
+      keepalived_priority_dns_vip_a = "110"
+      keepalived_priority_dns_vip_b = "120"
     }
   }
 

@@ -1,0 +1,12 @@
+---
+
+- name: Restart systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted
+  when: technitium_native_disable_resolved_stub | bool
+
+- name: Restart Technitium DNS
+  ansible.builtin.systemd:
+    name: "{{ technitium_native_service_name }}"
+    state: restarted
