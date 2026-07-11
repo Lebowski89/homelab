@@ -6,7 +6,7 @@ resource "proxmox_virtual_environment_container" "dns03" {
   started       = true
   start_on_boot = true
   protection    = var.container_protection
-  unprivileged  = true
+  unprivileged  = false
 
   lifecycle {
     ignore_changes = [
