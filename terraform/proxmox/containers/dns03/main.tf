@@ -6,7 +6,7 @@ resource "proxmox_virtual_environment_container" "dns03" {
   started       = true
   start_on_boot = true
   protection    = var.container_protection
-  unprivileged  = false
+  unprivileged  = true
 
   lifecycle {
     ignore_changes = [
@@ -105,6 +105,7 @@ resource "terraform_data" "dns03_prepare" {
       "modprobe tun || true",
       "grep -q '^lxc.cgroup2.devices.allow: c 10:200 rwm$' /etc/pve/lxc/${var.container_vmid}.conf || echo 'lxc.cgroup2.devices.allow: c 10:200 rwm' >> /etc/pve/lxc/${var.container_vmid}.conf",
       "grep -q '^lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file$' /etc/pve/lxc/${var.container_vmid}.conf || echo 'lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file' >> /etc/pve/lxc/${var.container_vmid}.conf",
+      "grep -q '^lxc.cap.drop:$' /etc/pve/lxc/${var.container_vmid}.conf || echo 'lxc.cap.drop:' >> /etc/pve/lxc/${var.container_vmid}.conf",
       "pct start ${var.container_vmid}",
       "sleep 5",
       "pct exec ${var.container_vmid} -- bash -lc 'export DEBIAN_FRONTEND=noninteractive; apt-get update'",
@@ -135,10 +136,19 @@ resource "terraform_data" "dns03_tailscale_join" {
     agent = true
   }
 
+  provisioner "file" {
+    content     = var.tailscale_auth_key
+    destination = "/tmp/ts-authkey-${var.container_vmid}"
+  }
+
   provisioner "remote-exec" {
     inline = [
       "set -eu",
-      "pct exec ${var.container_vmid} -- bash -lc \"tailscale status >/dev/null 2>&1 || tailscale up --auth-key='${var.tailscale_auth_key}' --hostname='${var.container_hostname}' --ssh\"",
+      "chmod 600 /tmp/ts-authkey-${var.container_vmid}",
+      "pct push ${var.container_vmid} /tmp/ts-authkey-${var.container_vmid} /root/ts-authkey --perms 600",
+      "rm -f /tmp/ts-authkey-${var.container_vmid}",
+      "pct exec ${var.container_vmid} -- bash -lc \"tailscale status >/dev/null 2>&1 || tailscale up --authkey=file:/root/ts-authkey --hostname='${var.container_hostname}' --ssh\"",
+      "pct exec ${var.container_vmid} -- rm -f /root/ts-authkey",
     ]
   }
 }

@@ -1,35 +1,35 @@
 variable "pm_api_url" {
-  type        = string
+  type = string
 }
 
 variable "pm_api_token" {
-  type        = string
-  sensitive   = true
+  type      = string
+  sensitive = true
 }
 
 variable "pm_tls_insecure" {
-  type        = bool
-  default     = true
+  type    = bool
+  default = false
 }
 
 variable "pm_ssh_username" {
-  type        = string
-  default     = "root"
-  sensitive   = true
+  type      = string
+  default   = "root"
+  sensitive = true
 }
 
 variable "pm_ssh_host" {
-  type        = string
-  sensitive   = true
+  type      = string
+  sensitive = true
 }
 
 variable "tailscale_auth_key" {
-  type        = string
-  sensitive   = true
+  type      = string
+  sensitive = true
 }
 
 variable "target_node" {
-  type        = string
+  type = string
 }
 
 variable "container_vmid" {
@@ -53,11 +53,11 @@ variable "container_protection" {
 }
 
 variable "container_storage" {
-  type        = string
+  type = string
 }
 
 variable "template_file_id" {
-  type        = string
+  type = string
 }
 
 variable "container_bridge" {
@@ -66,11 +66,11 @@ variable "container_bridge" {
 }
 
 variable "container_ip" {
-  type        = string
+  type = string
 }
 
 variable "container_gateway" {
-  type        = string
+  type = string
 }
 
 variable "container_dns_domain" {
@@ -79,7 +79,7 @@ variable "container_dns_domain" {
 }
 
 variable "container_dns_servers" {
-  type        = list(string)
+  type = list(string)
 }
 
 variable "container_cores" {
@@ -103,5 +103,5 @@ variable "container_disk_size" {
 }
 
 variable "ssh_public_key_path" {
-  type        = string
+  type = string
 }
