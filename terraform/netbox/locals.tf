@@ -499,6 +499,7 @@ locals {
         "skynet",
         "opentofu_managed",
         "dns",
+        "technitium",
         "technitium_native",
         "keepalived",
       ]

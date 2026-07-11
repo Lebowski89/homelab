@@ -212,7 +212,7 @@
     ################################
 
     - name: Include Keepalived role
-      when: "'tags_technitium' in group_names or 'tags_technitium_native' in group_names"
+      when: "'tags_keepalived' in group_names"
       ansible.builtin.include_role:
         name: keepalived
         apply:

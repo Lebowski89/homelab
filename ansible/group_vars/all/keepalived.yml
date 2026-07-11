@@ -9,7 +9,7 @@ keepalived_dns_check_tries: 1
 keepalived_check_script_path: /usr/local/sbin/check-technitium-dns.sh
 keepalived_config_path: /etc/keepalived/keepalived.conf
 
-keepalived_dns_group: tags_technitium
+keepalived_dns_group: tags_keepalived
 
 keepalived_instances:
   dns_vip_a:
