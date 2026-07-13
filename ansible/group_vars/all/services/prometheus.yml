@@ -5,7 +5,7 @@ prometheus:
   tags: [monitoring, prometheus]
   name: prometheus
   stack: prometheus
-  image: prom/prometheus:v3.13.0
+  image: prom/prometheus:v3.13.1
   named_networks:
     overlay:
       external: true
