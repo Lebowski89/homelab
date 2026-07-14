@@ -83,7 +83,6 @@ ubuntu_ansible_vault_pass_file: "{{ ubuntu_ansible_secrets_path }}/.ansible_vaul
 ubuntu_skynet_install: true
 ubuntu_skynet_install_path: /usr/local/bin/skynet
 ubuntu_skynet_doctor_ping_target: tags_skynet
-ubuntu_skynet_docker_services_vars: "{{ ubuntu_ansible_path }}/group_vars/all/docker_services.yml"
 
 ubuntu_sysctl_file: /etc/sysctl.d/99-ubuntu-tuning.conf
 
@@ -113,26 +112,26 @@ ubuntu_sysctl_settings:
   net.ipv4.tcp_wmem: "4096 87380 33554432"
   net.ipv4.udp_rmem_min: 8192
   net.ipv4.udp_wmem_min: 8192
-  vm.dirty_background_ratio: 10
-  vm.dirty_ratio: 15
-  vm.swappiness: 10
   net.ipv4.neigh.default.gc_thresh1: 1024
   net.ipv4.neigh.default.gc_thresh2: 2048
   net.ipv4.neigh.default.gc_thresh3: 4096
+  vm.dirty_background_ratio: 10
+  vm.dirty_ratio: 15
+  vm.swappiness: 10
 
 ubuntu_pam_limits:
   - domain: "*"
     limit_type: "-"
-    limit_item: "nofile"
+    limit_item: nofile
     value: "100000"
   - domain: "*"
-    limit_type: "soft"
-    limit_item: "memlock"
-    value: "unlimited"
+    limit_type: soft
+    limit_item: memlock
+    value: unlimited
   - domain: "*"
-    limit_type: "hard"
-    limit_item: "memlock"
-    value: "unlimited"
+    limit_type: hard
+    limit_item: memlock
+    value: unlimited
 
 ubuntu_defaults_netplan_config: netplan-config.yaml
 ubuntu_netplan_config_path: "/etc/netplan/{{ ubuntu_defaults_netplan_config }}"
@@ -154,6 +153,8 @@ ubuntu_defaults_netplan_nameservers: >-
     | list
   }}
 
+ubuntu_netplan_nameservers: "{{ ubuntu_defaults_netplan_nameservers }}"
+ubuntu_netplan_search_domains: []
 ubuntu_netplan_prefix: 24
 
 ubuntu_nic_tuning_enabled: true
