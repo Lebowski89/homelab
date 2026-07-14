@@ -41,3 +41,11 @@ variable "host_private_values" {
   }))
   default = {}
 }
+
+variable "reserved_ip_private_values" {
+  description = "Private values for standalone/reserved IP addresses such as VIPs."
+  type = map(object({
+    ip_address = string
+  }))
+  default = {}
+}
