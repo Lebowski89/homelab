@@ -18,6 +18,7 @@ locals {
         "ping.plex",
         "ping.pve1",
         "http.proxmox",
+        "ping.dns03",
         "ping.pg95",
         "ping.pg96",
         "ping.pg97",
@@ -34,10 +35,7 @@ locals {
       weight   = 2
       send_url = false
       monitors = [
-        "dns.technitium_primary_internal",
-        "dns.technitium_backup_internal",
-        "tcp.technitium_primary_tcp",
-        "tcp.technitium_backup_tcp",
+        "dns.cloudflare_public",
         "tcp.traefik_private_tcp",
         "tcp.traefik_public_tcp",
       ]
@@ -95,6 +93,7 @@ locals {
       weight   = 3
       send_url = true
       monitors = [
+        "http.blackbox-exporter-direct",
         "http.gotify-private",
         "http.gotify-direct",
         "http.grafana-private",

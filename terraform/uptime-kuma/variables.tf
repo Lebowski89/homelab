@@ -28,9 +28,9 @@ variable "uptime_kuma_per_attempt_timeout" {
 }
 
 variable "uptime_kuma_max_retries" {
-  description = "Provider connection max_retries as a Go duration string."
-  type        = string
-  default     = "5"
+  description = "Provider connection maximum retry count."
+  type        = number
+  default     = 5
 }
 
 variable "cloudflare_zone" {
@@ -81,7 +81,7 @@ variable "gotify_priority" {
 }
 
 variable "enable_netbox_remote_state" {
-  description = "Read host/IP data from the terraform/netbox local state."
+  description = "Read host/IP and DNS topology data from the terraform/netbox local state."
   type        = bool
   default     = true
 }
@@ -93,7 +93,13 @@ variable "netbox_state_path" {
 }
 
 variable "host_ips" {
-  description = "Fallback or override private host IPs used by direct, ping, TCP, and DNS monitors."
+  description = "Fallback or override private host management IPs used by direct, ping, and TCP monitors. Normally sourced from terraform/netbox outputs.host_primary_ipv4."
+  type        = map(string)
+  default     = {}
+}
+
+variable "dns_ips" {
+  description = "Fallback or override DNS node/VIP IPs used by DNS-related monitors. Normally sourced from terraform/netbox outputs.dns_ips."
   type        = map(string)
   default     = {}
 }

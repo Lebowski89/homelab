@@ -60,3 +60,51 @@ scrape_configs:
           source: "netbox"
 {% endif %}
 {% endfor %}
+
+{% if prometheus_blackbox_dns_targets | default({}) | length > 0 %}
+  - job_name: "blackbox-dns-udp"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /probe
+    params:
+      module:
+        - dns_udp_internal_a
+    static_configs:
+{% for target_name, target_ip in prometheus_blackbox_dns_targets | dictsort %}
+      - targets: ["{{ target_ip }}"]
+        labels:
+          dns_target: "{{ target_name }}"
+          dns_target_ip: "{{ target_ip }}"
+          probe: dns_udp_internal_a
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__address__]
+        target_label: instance
+      - target_label: __address__
+        replacement: "{{ prometheus_blackbox_exporter_address }}"
+
+  - job_name: "blackbox-dns-tcp"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /probe
+    params:
+      module:
+        - dns_tcp_internal_a
+    static_configs:
+{% for target_name, target_ip in prometheus_blackbox_dns_targets | dictsort %}
+      - targets: ["{{ target_ip }}"]
+        labels:
+          dns_target: "{{ target_name }}"
+          dns_target_ip: "{{ target_ip }}"
+          probe: dns_tcp_internal_a
+{% endfor %}
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__address__]
+        target_label: instance
+      - target_label: __address__
+        replacement: "{{ prometheus_blackbox_exporter_address }}"
+{% endif %}

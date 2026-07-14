@@ -1,0 +1,33 @@
+---
+
+{% set dns_query_re = prometheus_blackbox_dns_query_name | regex_escape %}
+{% set dns_expected_a_re = prometheus_blackbox_dns_expected_a | regex_escape %}
+
+modules:
+  dns_udp_internal_a:
+    prober: dns
+    timeout: 5s
+    dns:
+      query_name: "{{ prometheus_blackbox_dns_query_name }}"
+      query_type: A
+      transport_protocol: udp
+      preferred_ip_protocol: ip4
+      valid_rcodes:
+        - NOERROR
+      validate_answer_rrs:
+        fail_if_not_matches_regexp:
+          - '{{ dns_query_re }}\..*IN.*A.*{{ dns_expected_a_re }}'
+
+  dns_tcp_internal_a:
+    prober: dns
+    timeout: 5s
+    dns:
+      query_name: "{{ prometheus_blackbox_dns_query_name }}"
+      query_type: A
+      transport_protocol: tcp
+      preferred_ip_protocol: ip4
+      valid_rcodes:
+        - NOERROR
+      validate_answer_rrs:
+        fail_if_not_matches_regexp:
+          - '{{ dns_query_re }}\..*IN.*A.*{{ dns_expected_a_re }}'

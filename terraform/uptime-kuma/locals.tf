@@ -15,8 +15,6 @@ locals {
 
   netbox_host_ips = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.host_primary_ipv4, {}) : {}
 
-  # NetBox is the preferred source. var.host_ips remains as a manual fallback
-  # or override escape hatch.
   host_ips = merge(
     var.host_ips,
     local.netbox_host_ips,
@@ -202,6 +200,13 @@ locals {
       accepted_status_codes = ["200-299"]
     }
 
+    blackbox-exporter = {
+      category              = "monitoring"
+      port                  = 9115
+      path                  = "/metrics"
+      accepted_status_codes = ["200-299"]
+    }
+
     dozzle = { category = "monitoring", port = 8080 }
 
     gotify = { category = "monitoring", port = 80 }
@@ -319,6 +324,14 @@ locals {
   )
 
   ping_monitors = {
+    dns03 = {
+      name        = "dns03 (Host Ping)"
+      hostname    = local.host_ips["dns03"]
+      description = "Technitium DNS tertiary, DHCP, and keepalived backup host"
+      group       = "infrastructure"
+      tag_keys    = ["critical", "dns", "infrastructure"]
+    }
+
     mgt = {
       name        = "mgt (Host Ping)"
       hostname    = local.host_ips["mgt"]
@@ -395,24 +408,6 @@ locals {
       tag_keys    = ["critical", "networking", "traefik"]
     }
 
-    technitium_primary_tcp = {
-      name        = "Technitium (Primary) DNS TCP"
-      hostname    = local.host_ips["mgt"]
-      port        = 53
-      description = "Primary Technitium TCP DNS listener"
-      group       = "networking"
-      tag_keys    = ["critical", "dns", "networking"]
-    }
-
-    technitium_backup_tcp = {
-      name        = "Technitium (Backup) DNS TCP"
-      hostname    = local.host_ips["plex"]
-      port        = 53
-      description = "Backup Technitium TCP DNS listener"
-      group       = "networking"
-      tag_keys    = ["critical", "dns", "networking"]
-    }
-
     postgres_pg95_tcp = {
       name        = "pg95 (PostgreSQL TCP)"
       hostname    = local.host_ips["pg95"]
@@ -465,28 +460,6 @@ locals {
   }
 
   dns_monitors = {
-    technitium_primary_internal = {
-      name               = "Technitium (Primary) resolves internal zone"
-      hostname           = "adminer.${var.internal_zone}"
-      dns_resolve_server = local.host_ips["mgt"]
-      dns_resolve_type   = "A"
-      port               = 53
-      description        = "Primary DNS should resolve internal Traefik records"
-      group              = "networking"
-      tag_keys           = ["critical", "dns", "networking"]
-    }
-
-    technitium_backup_internal = {
-      name               = "Technitium (Backup) resolves internal zone"
-      hostname           = "adminer.${var.internal_zone}"
-      dns_resolve_server = local.host_ips["plex"]
-      dns_resolve_type   = "A"
-      port               = 53
-      description        = "Backup DNS should resolve internal Traefik records"
-      group              = "networking"
-      tag_keys           = ["critical", "dns", "networking"]
-    }
-
     cloudflare_public = {
       name               = "Cloudflare (Public) resolves public zone"
       hostname           = "opencloud.${var.cloudflare_zone}"
