@@ -1,10 +1,12 @@
 ---
 
 - name: Reload systemd
+  when: not ansible_check_mode
   ansible.builtin.systemd:
     daemon_reload: true
 
 - name: Restart node_exporter
+  when: not ansible_check_mode
   ansible.builtin.systemd:
     name: node_exporter
     state: restarted
