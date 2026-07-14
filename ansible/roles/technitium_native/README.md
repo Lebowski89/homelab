@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/12 |
+| Readme update        | 2026/07/15 |
 
 
 
@@ -27,17 +27,17 @@
 
 | Var          | Type         | Value       |
 |--------------|--------------|-------------|
-| [technitium_native_install_script_url](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L3)   | str | `https://download.technitium.com/dns/install.sh` |    
-| [technitium_native_install_script_path](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L4)   | str | `/tmp/technitium-dns-install.sh` |    
-| [technitium_native_service_name](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L6)   | str | `dns` |    
-| [technitium_native_web_port](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L7)   | int | `5380` |    
-| [technitium_native_dns_port](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L8)   | int | `53` |    
-| [technitium_native_config_dir](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L10)   | str | `/etc/dns` |    
-| [technitium_native_install_marker](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L11)   | str | `/opt/technitium/dns/DnsServerApp.dll` |    
-| [technitium_native_resolved_dns_servers](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L13)   | list | `[]` |    
-| [technitium_native_resolved_dns_servers.**0**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L14)   | str | `192.168.80.53` |    
-| [technitium_native_resolved_dns_servers.**1**](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L15)   | str | `192.168.80.54` |    
-| [technitium_native_disable_resolved_stub](https://github.com/Lebowski89/homelab/blob/feat/add-technitium-redundancy/defaults/main.yml#L17)   | bool | `True` |    
+| [technitium_native_install_script_url](https://github.com/Lebowski89/homelab/blob/qol/various/defaults/main.yml#L3)   | str | `https://download.technitium.com/dns/install.sh` |    
+| [technitium_native_install_script_path](https://github.com/Lebowski89/homelab/blob/qol/various/defaults/main.yml#L4)   | str | `/tmp/technitium-dns-install.sh` |    
+| [technitium_native_service_name](https://github.com/Lebowski89/homelab/blob/qol/various/defaults/main.yml#L6)   | str | `dns` |    
+| [technitium_native_web_port](https://github.com/Lebowski89/homelab/blob/qol/various/defaults/main.yml#L7)   | int | `5380` |    
+| [technitium_native_dns_port](https://github.com/Lebowski89/homelab/blob/qol/various/defaults/main.yml#L8)   | int | `53` |    
+| [technitium_native_config_dir](https://github.com/Lebowski89/homelab/blob/qol/various/defaults/main.yml#L10)   | str | `/etc/dns` |    
+| [technitium_native_install_marker](https://github.com/Lebowski89/homelab/blob/qol/various/defaults/main.yml#L11)   | str | `/opt/technitium/dns/DnsServerApp.dll` |    
+| [technitium_native_resolved_dns_servers](https://github.com/Lebowski89/homelab/blob/qol/various/defaults/main.yml#L13)   | list | `[]` |    
+| [technitium_native_resolved_dns_servers.**0**](https://github.com/Lebowski89/homelab/blob/qol/various/defaults/main.yml#L14)   | str | `192.168.80.53` |    
+| [technitium_native_resolved_dns_servers.**1**](https://github.com/Lebowski89/homelab/blob/qol/various/defaults/main.yml#L15)   | str | `192.168.80.54` |    
+| [technitium_native_disable_resolved_stub](https://github.com/Lebowski89/homelab/blob/qol/various/defaults/main.yml#L17)   | bool | `True` |    
 
 
 
