@@ -1,0 +1,37 @@
+---
+
+resolved_packages:
+  - libnss-resolve
+
+resolved_apt_env_vars:
+  DEBIAN_FRONTEND: noninteractive
+  DEBIAN_PRIORITY: critical
+
+resolved_service_name: systemd-resolved
+
+# DNS servers need this enabled so Technitium can bind TCP/UDP port 53.
+resolved_disable_stub: false
+
+resolved_config_dir: /etc/systemd/resolved.conf.d
+resolved_dropin_path: "{{ resolved_config_dir }}/99-skynet.conf"
+
+# DNS hosts should point /etc/resolv.conf at resolved's upstream resolver file,
+# not the local 127.0.0.53 stub file.
+resolved_manage_resolv_conf: "{{ resolved_disable_stub }}"
+resolved_resolv_conf_path: /etc/resolv.conf
+resolved_resolv_conf_target: /run/systemd/resolve/resolv.conf
+
+resolved_fallback_dns:
+  - 1.1.1.1
+  - 9.9.9.9
+
+resolved_cleanup_dropins:
+  - /etc/systemd/resolved.conf.d/no-stub-listener.conf
+
+# Required for ssh/getent/libc apps to use systemd-resolved split DNS,
+# including Tailscale MagicDNS. Without this, tools may bypass resolved and
+# only use nameservers listed in /etc/resolv.conf.
+resolved_manage_nsswitch: true
+resolved_nsswitch_path: /etc/nsswitch.conf
+resolved_nsswitch_backup: true
+resolved_nsswitch_hosts_line: "hosts:          files resolve [!UNAVAIL=return] dns"

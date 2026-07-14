@@ -1,0 +1,71 @@
+---
+
+- name: Resolved | Assert supported host
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family | default("") == "Debian"
+      - ansible_facts.service_mgr | default("") == "systemd"
+    fail_msg: "The resolved role only supports Debian/Ubuntu hosts using systemd."
+
+- name: Resolved | Install NSS resolver packages
+  when: resolved_packages | length > 0
+  ansible.builtin.apt:
+    name: "{{ resolved_packages }}"
+    state: present
+    update_cache: true
+  environment: "{{ resolved_apt_env_vars }}"
+
+- name: Resolved | Ensure systemd-resolved is enabled and running
+  ansible.builtin.systemd:
+    name: "{{ resolved_service_name }}"
+    enabled: true
+    state: started
+
+- name: Resolved | Ensure resolved config directory exists
+  ansible.builtin.file:
+    path: "{{ resolved_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Resolved | Remove stale unmanaged resolved drop-ins
+  when: resolved_cleanup_dropins | length > 0
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: absent
+  loop: "{{ resolved_cleanup_dropins }}"
+  notify: Restart systemd-resolved
+
+- name: Resolved | Configure systemd-resolved drop-in
+  ansible.builtin.copy:
+    dest: "{{ resolved_dropin_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Resolve]
+      {% if resolved_fallback_dns | length > 0 %}
+      FallbackDNS={{ resolved_fallback_dns | join(' ') }}
+      {% endif %}
+      {% if resolved_disable_stub | bool %}
+      DNSStubListener=no
+      {% endif %}
+  notify: Restart systemd-resolved
+
+- name: Resolved | Point resolv.conf at resolved upstream file
+  when: resolved_manage_resolv_conf | bool
+  ansible.builtin.file:
+    src: "{{ resolved_resolv_conf_target }}"
+    dest: "{{ resolved_resolv_conf_path }}"
+    state: link
+    force: true
+  notify: Restart systemd-resolved
+
+- name: Resolved | Ensure NSS uses systemd-resolved before plain DNS
+  when: resolved_manage_nsswitch | bool
+  ansible.builtin.lineinfile:
+    path: "{{ resolved_nsswitch_path }}"
+    regexp: '^hosts:'
+    line: "{{ resolved_nsswitch_hosts_line }}"
+    backup: "{{ resolved_nsswitch_backup | bool }}"
