@@ -17,7 +17,7 @@
 | <a name="input_netbox_request_timeout"></a> [netbox\_request\_timeout](#input\_netbox\_request\_timeout) | NetBox API request timeout in seconds. | `number` | `30` | no |
 | <a name="input_netbox_server_url"></a> [netbox\_server\_url](#input\_netbox\_server\_url) | NetBox URL, including scheme and port if required. Example: https://netbox.int.example.com:8443 | `string` | n/a | yes |
 | <a name="input_netbox_skip_version_check"></a> [netbox\_skip\_version\_check](#input\_netbox\_skip\_version\_check) | Skip provider NetBox version compatibility check. | `bool` | `false` | no |
-| <a name="input_reserved_ip_private_values"></a> [reserved\_ip\_private\_values](#input\_reserved\_ip\_private\_values) | Private values for standalone/reserved IP addresses such as VIPs. | <pre>map(object({<br/>    ip_address = string<br/>  }))</pre> | `{}` | no |
+| <a name="input_reserved_ip_private_values"></a> [reserved\_ip\_private\_values](#input\_reserved\_ip\_private\_values) | Private values for reserved infrastructure IPs, such as Keepalived DNS VIPs. | <pre>map(object({<br/>    ip_address = string<br/>  }))</pre> | n/a | yes |
 
 ## Outputs
 
