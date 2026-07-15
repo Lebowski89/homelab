@@ -161,25 +161,37 @@ run_yaml_lint() {
   (cd "$REPO_ROOT" && "$YAMLLINT_BIN" "${yaml_files[@]}")
 }
 
-run_python_lint() {
-  require_bin "$RUFF_BIN" ruff
+resolve_existing_paths() {
+  local label="$1"
+  local input_var="$2"
+  local output_var="$3"
+  local path
+
+  local -n input_ref="$input_var"
+  local -n output_ref="$output_var"
 
   [[ -n "$REPO_ROOT" ]] || die "Unable to determine REPO_ROOT; set REPO_ROOT manually"
   [[ -d "$REPO_ROOT" ]] || die "REPO_ROOT does not exist: $REPO_ROOT"
 
-  local -a configured_paths=()
-  local -a ruff_paths=()
-  local path
+  output_ref=()
 
-  read -r -a configured_paths <<< "$RUFF_PATHS"
-
-  for path in "${configured_paths[@]}"; do
+  for path in "${input_ref[@]}"; do
     if [[ -e "$REPO_ROOT/$path" ]]; then
-      ruff_paths+=("$path")
+      output_ref+=("$path")
     else
-      echo "[WARN] Ruff path not found; skipping: $path"
+      echo "[WARN] $label path not found; skipping: $path"
     fi
   done
+}
+
+run_python_lint() {
+  require_bin "$RUFF_BIN" ruff
+
+  local -a configured_paths=()
+  local -a ruff_paths=()
+
+  read -r -a configured_paths <<< "$RUFF_PATHS"
+  resolve_existing_paths "Ruff" configured_paths ruff_paths
 
   if [[ ${ruff_paths[0]+_} != _ ]]; then
     echo "[WARN] No Ruff paths found; skipping Ruff"
@@ -196,22 +208,11 @@ run_python_lint() {
 run_unit_tests() {
   require_bin "$PYTEST_BIN" pytest
 
-  [[ -n "$REPO_ROOT" ]] || die "Unable to determine REPO_ROOT; set REPO_ROOT manually"
-  [[ -d "$REPO_ROOT" ]] || die "REPO_ROOT does not exist: $REPO_ROOT"
-
   local -a configured_paths=()
   local -a pytest_paths=()
-  local path
 
   read -r -a configured_paths <<< "$PYTEST_PATHS"
-
-  for path in "${configured_paths[@]}"; do
-    if [[ -e "$REPO_ROOT/$path" ]]; then
-      pytest_paths+=("$path")
-    else
-      echo "[WARN] pytest path not found; skipping: $path"
-    fi
-  done
+  resolve_existing_paths "pytest" configured_paths pytest_paths
 
   if [[ ${pytest_paths[0]+_} != _ ]]; then
     echo "[WARN] No pytest paths found; skipping pytest"
