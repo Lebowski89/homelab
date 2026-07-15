@@ -28,32 +28,32 @@
       Skipping node_exporter archive download/extract/install in check mode because
       get_url does not materialize the archive for the following unarchive task.
 
+- name: Node_Exporter | Download node_exporter archive
+  when: not ansible_check_mode
+  ansible.builtin.get_url:
+    url: "{{ node_exporter_download_url }}"
+    dest: "{{ node_exporter_archive_path }}"
+    mode: "0644"
+    checksum: "{{ node_exporter_checksum | default(omit, true) }}"
+
+- name: Node_Exporter | Extract node_exporter archive
+  when: not ansible_check_mode
+  ansible.builtin.unarchive:
+    src: "{{ node_exporter_archive_path }}"
+    dest: /tmp
+    remote_src: true
+    creates: "{{ node_exporter_extract_dir }}/node_exporter"
+
 - name: Node_Exporter | Install node_exporter binary
   when: not ansible_check_mode
-  block:
-    - name: Node_Exporter | Download node_exporter archive
-      ansible.builtin.get_url:
-        url: "{{ node_exporter_download_url }}"
-        dest: "{{ node_exporter_archive_path }}"
-        mode: "0644"
-        checksum: "{{ node_exporter_checksum | default(omit, true) }}"
-
-    - name: Node_Exporter | Extract node_exporter archive
-      ansible.builtin.unarchive:
-        src: "{{ node_exporter_archive_path }}"
-        dest: /tmp
-        remote_src: true
-        creates: "{{ node_exporter_extract_dir }}/node_exporter"
-
-    - name: Node_Exporter | Install node_exporter binary
-      ansible.builtin.copy:
-        src: "{{ node_exporter_extract_dir }}/node_exporter"
-        dest: "{{ node_exporter_install_dir }}/node_exporter"
-        owner: root
-        group: root
-        mode: "0755"
-        remote_src: true
-      notify: Restart node_exporter
+  ansible.builtin.copy:
+    src: "{{ node_exporter_extract_dir }}/node_exporter"
+    dest: "{{ node_exporter_install_dir }}/node_exporter"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  notify: Restart node_exporter
 
 - name: Node_Exporter | Install node_exporter systemd unit
   ansible.builtin.template:
