@@ -16,4 +16,3 @@ prometheus_blackbox_dns_targets:
   dns01: "{{ hostvars[docker_services_primary_manager].local_ip }}"
   dns02: "{{ hostvars[docker_services_plex_host].local_ip }}"
   dns03: "{{ hostvars['dns03'].local_ip }}"
-  
