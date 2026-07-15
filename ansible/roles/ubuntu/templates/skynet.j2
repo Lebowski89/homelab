@@ -393,6 +393,12 @@ role_tag() {
   esac
 }
 
+is_role_target() {
+  local target="${1:-}"
+
+  role_tag "$target" deploy >/dev/null 2>&1
+}
+
 run_role_or_docker_action() {
   local command="$1"
   local default_role_action="$2"
@@ -404,8 +410,11 @@ run_role_or_docker_action() {
     run_docker_service_action "$command" "$@"
   elif [[ $# -le 2 ]]; then
     local tags
+
     if tags="$(role_tag "$1" "${2:-$default_role_action}")"; then
       run_playbook "${LIMIT_ARGS[@]}" --tags "$tags"
+    elif is_role_target "$1"; then
+      die "Unknown role target/action: $1 ${2:-$default_role_action}. Run: skynet targets"
     else
       run_docker_service_action "$command" "$@"
     fi
