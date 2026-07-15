@@ -53,14 +53,27 @@
       {% endif %}
   notify: Restart systemd-resolved
 
+- name: Resolved | Apply DNS stub listener changes before dependent services
+  when: resolved_disable_stub | bool
+  ansible.builtin.meta: flush_handlers
+
+- name: Resolved | Allow Proxmox LXC to manage resolv.conf
+  when:
+    - ansible_facts.virtualization_type | default("") == "lxc"
+  ansible.builtin.file:
+    path: /etc/.pve-ignore.resolv.conf
+    state: absent
+
 - name: Resolved | Point resolv.conf at resolved upstream file
-  when: resolved_manage_resolv_conf | bool
+  when:
+    - resolved_manage_resolv_conf | bool
+    - ansible_facts.virtualization_type | default("") != "lxc"
   ansible.builtin.file:
     src: "{{ resolved_resolv_conf_target }}"
     dest: "{{ resolved_resolv_conf_path }}"
     state: link
     force: true
-  notify: Restart systemd-resolved
+    follow: false
 
 - name: Resolved | Ensure NSS uses systemd-resolved before plain DNS
   when: resolved_manage_nsswitch | bool
