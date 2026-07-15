@@ -12,7 +12,8 @@ ANSIBLE_VENV_PATH="${ANSIBLE_VENV_PATH:-{{ ubuntu_ansible_venv_path }}}"
 DEFAULT_REPO_ROOT="$(cd "$(dirname "$PLAYBOOK")/.." >/dev/null 2>&1 && pwd || true)"
 REPO_ROOT="${REPO_ROOT:-$DEFAULT_REPO_ROOT}"
 DOCKER_SERVICES_DIR="${DOCKER_SERVICES_DIR:-$REPO_ROOT/ansible/group_vars/all/services}"
-PYTHON_LIBRARY_PATH="${PYTHON_LIBRARY_PATH:-$REPO_ROOT/ansible/roles/docker_services/library}"
+RUFF_PATHS="${RUFF_PATHS:-ansible/filter_plugins ansible/roles/docker_services/filter_plugins ansible/roles/docker_services/library tests/unit}"
+PYTEST_PATHS="${PYTEST_PATHS:-tests/unit}"
 ANSIBLE_LOG_PATH="${ANSIBLE_LOG_PATH:-$REPO_ROOT/.ansible/ansible.log}"
 ANSIBLE_COLLECTIONS_PATH="${ANSIBLE_COLLECTIONS_PATH:-$REPO_ROOT/ansible/collections}"
 
@@ -33,16 +34,17 @@ ANSIBLE_BIN="${ANSIBLE_BIN:-$(tool_path ansible)}"
 ANSIBLE_LINT_BIN="${ANSIBLE_LINT_BIN:-$(tool_path ansible-lint)}"
 YAMLLINT_BIN="${YAMLLINT_BIN:-$(tool_path yamllint)}"
 RUFF_BIN="${RUFF_BIN:-$(tool_path ruff)}"
+PYTEST_BIN="${PYTEST_BIN:-$(tool_path pytest)}"
 
 usage() {
-  cat <<'EOF'
+  cat <<'USAGE'
 Usage:
-  skynet deploy <tag|all> [tag2 ...]
-  skynet update <tag|all> [tag2 ...]
-  skynet remove <tag|all> [tag2 ...]
-  skynet recreate <tag|all> [tag2 ...]
-  skynet bootstrap <tag|all> [tag2 ...]
-  skynet check <tag|all> [tag2 ...]
+  skynet deploy <tag|role-target|all> [tag2|role-action ...]
+  skynet update <tag|role-target|all> [tag2|role-action ...]
+  skynet remove <tag|role-target|all> [tag2|role-action ...]
+  skynet recreate <tag|role-target|all> [tag2|role-action ...]
+  skynet bootstrap <tag|role-target|all> [tag2|role-action ...]
+  skynet check <tag|role-target|all> [tag2|role-action ...]
   skynet drift <tag|all> [tag2 ...]
 
   skynet run <role-target> [action]
@@ -67,13 +69,18 @@ Aliases:
   skynet target   -> run
 
 Role/action examples:
+  skynet check resolved
+  skynet run resolved
+  skynet check ubuntu sysctl
+  skynet run docker swarm
+  skynet run opentofu pve-user
   skynet check infisical-podman
   skynet check infisical-podman recreate
   skynet run infisical-podman deploy
   skynet run infisical-podman remove
-  skynet check ubuntu sysctl
-  skynet run docker swarm
-  skynet run opentofu pve-user
+  skynet check keepalived
+  skynet check technitium-native
+  skynet check node-exporter
 
 Docker service examples:
   skynet check authelia
@@ -98,11 +105,13 @@ Optional env vars:
   ANSIBLE_LINT_BIN            Override ansible-lint binary
   YAMLLINT_BIN                Override yamllint binary
   RUFF_BIN                    Override ruff binary
+  PYTEST_BIN                  Override pytest binary
   REPO_ROOT                   Override repository root used by lint/ci
-  PYTHON_LIBRARY_PATH         Override custom Ansible module Python path for Ruff
+  RUFF_PATHS                  Override space-separated paths for Ruff
+  PYTEST_PATHS                Override space-separated paths for pytest
   ANSIBLE_LOG_PATH            Override Ansible log path
   ANSIBLE_COLLECTIONS_PATH    Override Ansible collections path
-EOF
+USAGE
   exit 1
 }
 
@@ -152,19 +161,66 @@ run_yaml_lint() {
   (cd "$REPO_ROOT" && "$YAMLLINT_BIN" "${yaml_files[@]}")
 }
 
+resolve_existing_paths() {
+  local label="$1"
+  local input_var="$2"
+  local output_var="$3"
+  local path
+
+  local -n input_ref="$input_var"
+  local -n output_ref="$output_var"
+
+  [[ -n "$REPO_ROOT" ]] || die "Unable to determine REPO_ROOT; set REPO_ROOT manually"
+  [[ -d "$REPO_ROOT" ]] || die "REPO_ROOT does not exist: $REPO_ROOT"
+
+  output_ref=()
+
+  for path in "${input_ref[@]}"; do
+    if [[ -e "$REPO_ROOT/$path" ]]; then
+      output_ref+=("$path")
+    else
+      echo "[WARN] $label path not found; skipping: $path"
+    fi
+  done
+}
+
 run_python_lint() {
   require_bin "$RUFF_BIN" ruff
 
-  if [[ ! -d "$PYTHON_LIBRARY_PATH" ]]; then
-    echo "[WARN] Python library path not found; skipping Ruff: $PYTHON_LIBRARY_PATH"
+  local -a configured_paths=()
+  local -a ruff_paths=()
+
+  read -r -a configured_paths <<< "$RUFF_PATHS"
+  resolve_existing_paths "Ruff" configured_paths ruff_paths
+
+  if [[ ${ruff_paths[0]+_} != _ ]]; then
+    echo "[WARN] No Ruff paths found; skipping Ruff"
     return 0
   fi
 
   echo "[INFO] Running Ruff check"
-  (cd "$REPO_ROOT" && "$RUFF_BIN" check --output-format=github "$PYTHON_LIBRARY_PATH")
+  (cd "$REPO_ROOT" && "$RUFF_BIN" check --output-format=github "${ruff_paths[@]}")
 
   echo "[INFO] Running Ruff format check"
-  (cd "$REPO_ROOT" && "$RUFF_BIN" format --check --diff "$PYTHON_LIBRARY_PATH")
+  (cd "$REPO_ROOT" && "$RUFF_BIN" format --check --diff "${ruff_paths[@]}")
+}
+
+run_unit_tests() {
+  require_bin "$PYTEST_BIN" pytest
+
+  local -a configured_paths=()
+  local -a pytest_paths=()
+
+  read -r -a configured_paths <<< "$PYTEST_PATHS"
+  resolve_existing_paths "pytest" configured_paths pytest_paths
+
+  if [[ ${pytest_paths[0]+_} != _ ]]; then
+    echo "[WARN] No pytest paths found; skipping pytest"
+    return 0
+  fi
+
+  echo "[INFO] Running pytest"
+  (cd "$REPO_ROOT" && "$PYTEST_BIN" "${pytest_paths[@]}")
 }
 
 run_ansible_lint() {
@@ -206,6 +262,7 @@ print_versions() {
     "$ANSIBLE_LINT_BIN"
     "$YAMLLINT_BIN"
     "$RUFF_BIN"
+    "$PYTEST_BIN"
   )
 
   local tool
@@ -234,8 +291,9 @@ run_docker_service_action() {
     [[ $# -eq 1 ]] || die "Usage: skynet $action all"
     run_playbook "${LIMIT_ARGS[@]}" --tags "$action" -e docker_services_run_all=true
   else
-    TAGS="$action,$(join_csv "$@")"
-    run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    local tags
+    tags="$action,$(join_csv "$@")"
+    run_playbook "${LIMIT_ARGS[@]}" --tags "$tags"
   fi
 }
 
@@ -264,6 +322,11 @@ role_tag() {
     ubuntu:pam)                     echo "ubuntu_pam" ;;
     ubuntu:network)                 echo "ubuntu_network" ;;
     ubuntu:netplan)                 echo "ubuntu_netplan" ;;
+
+    resolved:deploy)                echo "resolved" ;;
+    resolved:run)                   echo "resolved" ;;
+    systemd-resolved:deploy)        echo "resolved" ;;
+    systemd-resolved:run)           echo "resolved" ;;
 
     docker:deploy)                  echo "docker" ;;
     docker:install)                 echo "docker_install" ;;
@@ -314,14 +377,89 @@ role_tag() {
     infisical-podman:recreate)      echo "infisical_podman_recreate" ;;
     infisical-podman:remove)        echo "infisical_podman_remove" ;;
 
+    keepalived:deploy)              echo "keepalived" ;;
+    keepalived:run)                 echo "keepalived" ;;
+
+    technitium-native:deploy)       echo "technitium_native" ;;
+    technitium-native:install)      echo "technitium_native" ;;
+    technitium-native:run)          echo "technitium_native" ;;
+
+    node-exporter:deploy)           echo "node_exporter" ;;
+    node-exporter:install)          echo "node_exporter" ;;
+    node-exporter:run)              echo "node_exporter" ;;
+
     *)
       return 1
       ;;
   esac
 }
 
+is_role_target() {
+  local target="${1:-}"
+
+  role_tag "$target" deploy >/dev/null 2>&1
+}
+
+run_role_or_docker_action() {
+  local command="$1"
+  local default_role_action="$2"
+  shift 2
+
+  [[ $# -ge 1 ]] || die "$command requires at least one tag, role target, or 'all'"
+
+  if [[ "$1" == "all" ]]; then
+    run_docker_service_action "$command" "$@"
+  elif [[ $# -le 2 ]]; then
+    local tags
+
+    if tags="$(role_tag "$1" "${2:-$default_role_action}")"; then
+      run_playbook "${LIMIT_ARGS[@]}" --tags "$tags"
+    elif is_role_target "$1"; then
+      die "Unknown role target/action: $1 ${2:-$default_role_action}. Run: skynet targets"
+    else
+      run_docker_service_action "$command" "$@"
+    fi
+  else
+    run_docker_service_action "$command" "$@"
+  fi
+}
+
+run_check_action() {
+  [[ $# -ge 1 ]] || die "check requires at least one tag, role target, or 'all'"
+
+  if [[ "$1" == "all" ]]; then
+    [[ $# -eq 1 ]] || die "Usage: skynet check all"
+    run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "deploy" -e docker_services_run_all=true
+  elif [[ $# -le 2 ]]; then
+    local tags
+    if tags="$(role_tag "$1" "${2:-deploy}")"; then
+      run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$tags"
+    else
+      tags="deploy,$(join_csv "$@")"
+      run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$tags"
+    fi
+  else
+    local tags
+    tags="deploy,$(join_csv "$@")"
+    run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$tags"
+  fi
+}
+
+run_drift_action() {
+  [[ $# -ge 1 ]] || die "drift requires at least one tag or 'all'"
+
+  if [[ "$1" == "all" ]]; then
+    [[ $# -eq 1 ]] || die "Usage: skynet drift all"
+    run_playbook "${LIMIT_ARGS[@]}" --tags "drift" -e docker_services_run_all=true
+  else
+    local tags
+    tags="drift,$(join_csv "$@")"
+    run_playbook "${LIMIT_ARGS[@]}" --tags "$tags"
+  fi
+}
+
 print_targets() {
-  cat <<'EOF'
+  cat <<'TARGETS'
 Role/action targets:
 
   netbox:
@@ -341,6 +479,10 @@ Role/action targets:
     pam          -> ubuntu_pam
     network      -> ubuntu_network
     netplan      -> ubuntu_netplan
+
+  resolved:
+    deploy -> resolved
+    run    -> resolved
 
   docker:
     deploy              -> docker
@@ -398,14 +540,33 @@ Role/action targets:
     recreate  -> infisical_podman_recreate
     remove    -> infisical_podman_remove
 
+  keepalived:
+    deploy -> keepalived
+    run    -> keepalived
+
+  technitium-native:
+    deploy  -> technitium_native
+    install -> technitium_native
+    run     -> technitium_native
+
+  node-exporter:
+    deploy  -> node_exporter
+    install -> node_exporter
+    run     -> node_exporter
+
 Examples:
+  skynet check resolved
+  skynet run resolved
+  skynet check ubuntu sysctl
+  skynet run docker swarm
+  skynet run opentofu pve-user
   skynet check infisical-podman
   skynet check infisical-podman recreate
   skynet run infisical-podman deploy
   skynet run infisical-podman remove
-  skynet check ubuntu sysctl
-  skynet run docker swarm
-  skynet run opentofu pve-user
+  skynet check keepalived
+  skynet check technitium-native
+  skynet check node-exporter
 
 Docker service targets:
   Use service names/tags from: skynet tags
@@ -416,7 +577,7 @@ Examples:
   skynet recreate plex
   skynet update all
   skynet drift all
-EOF
+TARGETS
 }
 
 run_playbook() {
@@ -686,87 +847,44 @@ esac
 
 case "$CMD" in
   deploy)
-    run_docker_service_action deploy "$@"
+    run_role_or_docker_action deploy deploy "$@"
     ;;
 
   update)
-    run_docker_service_action update "$@"
+    run_role_or_docker_action update deploy "$@"
     ;;
 
   remove)
-    [[ $# -ge 1 ]] || die "remove requires at least one tag or role target"
-
-    if [[ "$1" == "all" ]]; then
-      run_docker_service_action remove "$@"
-    elif [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-remove}")"; then
-      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
-    else
-      run_docker_service_action remove "$@"
-    fi
+    run_role_or_docker_action remove remove "$@"
     ;;
 
   recreate)
-    [[ $# -ge 1 ]] || die "recreate requires at least one tag or role target"
-
-    if [[ "$1" == "all" ]]; then
-      run_docker_service_action recreate "$@"
-    elif [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-recreate}")"; then
-      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
-    else
-      run_docker_service_action recreate "$@"
-    fi
+    run_role_or_docker_action recreate recreate "$@"
     ;;
 
   bootstrap)
-    [[ $# -ge 1 ]] || die "bootstrap requires at least one tag or role target"
-
-    if [[ "$1" == "all" ]]; then
-      run_docker_service_action bootstrap "$@"
-    elif [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-bootstrap}")"; then
-      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
-    else
-      run_docker_service_action bootstrap "$@"
-    fi
+    run_role_or_docker_action bootstrap bootstrap "$@"
     ;;
 
   check|dry-run)
-    [[ $# -ge 1 ]] || die "check requires at least one tag or role target"
-
-    if [[ "$1" == "all" ]]; then
-      [[ $# -eq 1 ]] || die "Usage: skynet check all"
-      run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "deploy" -e docker_services_run_all=true
-    elif [[ $# -le 2 ]] && TAGS="$(role_tag "$1" "${2:-deploy}")"; then
-      run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$TAGS"
-    else
-      TAGS="deploy,$(join_csv "$@")"
-      run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$TAGS"
-    fi
+    run_check_action "$@"
     ;;
 
   drift)
-    [[ $# -ge 1 ]] || die "drift requires at least one tag or 'all'"
-
-    if [[ "$1" == "all" ]]; then
-      [[ $# -eq 1 ]] || die "Usage: skynet drift all"
-      run_playbook "${LIMIT_ARGS[@]}" --tags "drift" -e docker_services_run_all=true
-    else
-      TAGS="drift,$(join_csv "$@")"
-      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
-    fi
+    run_drift_action "$@"
     ;;
 
   run)
     [[ $# -ge 1 ]] || die "run requires a role target"
-
-    ROLE_TARGET="$1"
-    ROLE_ACTION="${2:-deploy}"
-
     [[ $# -le 2 ]] || die "Usage: skynet run <role-target> [action]"
 
-    if TAGS="$(role_tag "$ROLE_TARGET" "$ROLE_ACTION")"; then
-      run_playbook "${LIMIT_ARGS[@]}" --tags "$TAGS"
+    role_target="$1"
+    role_action="${2:-deploy}"
+
+    if tags="$(role_tag "$role_target" "$role_action")"; then
+      run_playbook "${LIMIT_ARGS[@]}" --tags "$tags"
     else
-      die "Unknown role target/action: $ROLE_TARGET $ROLE_ACTION. Run: skynet targets"
+      die "Unknown role target/action: $role_target $role_action. Run: skynet targets"
     fi
     ;;
 
@@ -788,6 +906,7 @@ case "$CMD" in
 
   ci)
     run_lint
+    run_unit_tests
     doctor false
     ;;
 
@@ -796,8 +915,8 @@ case "$CMD" in
     ;;
 
   inventory)
-    MODE="${1:---graph}"
-    case "$MODE" in
+    mode="${1:---graph}"
+    case "$mode" in
       --graph|graph)
         ANSIBLE_CONFIG="$ANSIBLE_CONFIG" \
           ANSIBLE_COLLECTIONS_PATH="$ANSIBLE_COLLECTIONS_PATH" \

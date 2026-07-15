@@ -1,0 +1,34 @@
+---
+
+groups:
+  - name: dns.rules
+    rules:
+      - alert: DnsBlackboxScrapeFailed
+        expr: up{job=~"blackbox-dns-(udp|tcp)"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DNS blackbox scrape failed: {{ '{{' }} $labels.dns_target {{ '}}' }} / {{ '{{' }} $labels.job {{ '}}' }}"
+          description: "Prometheus could not scrape Blackbox for {{ '{{' }} $labels.dns_target {{ '}}' }} at {{ '{{' }} $labels.dns_target_ip {{ '}}' }}. This usually means Blackbox Exporter, the overlay path to Blackbox, or the /probe scrape is broken."
+          priority: "9"
+
+      - alert: DnsBlackboxProbeFailed
+        expr: probe_success{job=~"blackbox-dns-(udp|tcp)"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "DNS probe failed: {{ '{{' }} $labels.dns_target {{ '}}' }} / {{ '{{' }} $labels.job {{ '}}' }}"
+          description: "Blackbox DNS probe {{ '{{' }} $labels.job {{ '}}' }} failed for {{ '{{' }} $labels.dns_target {{ '}}' }} at {{ '{{' }} $labels.dns_target_ip {{ '}}' }}."
+          priority: "9"
+
+      - alert: DnsBlackboxProbeSlow
+        expr: probe_duration_seconds{job=~"blackbox-dns-(udp|tcp)"} > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "DNS probe slow: {{ '{{' }} $labels.dns_target {{ '}}' }} / {{ '{{' }} $labels.job {{ '}}' }}"
+          description: "Blackbox DNS probe {{ '{{' }} $labels.job {{ '}}' }} for {{ '{{' }} $labels.dns_target {{ '}}' }} has taken more than 1 second for 5 minutes."
+          priority: "6"

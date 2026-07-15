@@ -50,6 +50,18 @@ output "host_dns_names" {
   description = "DNS names assigned to managed hosts."
 }
 
+output "dns_ips" {
+  value = {
+    dns01     = split("/", netbox_ip_address.mgmt["mgt"].ip_address)[0]
+    dns02     = split("/", netbox_ip_address.mgmt["plex"].ip_address)[0]
+    dns03     = split("/", netbox_ip_address.mgmt["dns03"].ip_address)[0]
+    dns_vip_a = split("/", netbox_ip_address.reserved["dns_vip_a"].ip_address)[0]
+    dns_vip_b = split("/", netbox_ip_address.reserved["dns_vip_b"].ip_address)[0]
+  }
+
+  description = "DNS node and DNS VIP IPv4 addresses without CIDR suffix."
+}
+
 output "hosts_by_tag" {
   value = {
     for tag_key in keys(local.netbox_tags) :

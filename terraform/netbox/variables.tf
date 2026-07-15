@@ -41,3 +41,26 @@ variable "host_private_values" {
   }))
   default = {}
 }
+
+variable "reserved_ip_private_values" {
+  description = "Private values for reserved infrastructure IPs, such as Keepalived DNS VIPs."
+  type = map(object({
+    ip_address = string
+  }))
+
+  validation {
+    condition = alltrue([
+      contains(keys(var.reserved_ip_private_values), "dns_vip_a"),
+      contains(keys(var.reserved_ip_private_values), "dns_vip_b"),
+    ])
+    error_message = "reserved_ip_private_values must include dns_vip_a and dns_vip_b."
+  }
+
+  validation {
+    condition = alltrue([
+      for reserved_ip in var.reserved_ip_private_values :
+      can(cidrhost(reserved_ip.ip_address, 0))
+    ])
+    error_message = "Each reserved_ip_private_values entry must provide ip_address as a valid CIDR address, for example 192.168.80.53/24."
+  }
+}

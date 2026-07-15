@@ -108,3 +108,13 @@ host_private_values = {
     }
   }
 }
+
+reserved_ip_private_values = {
+  dns_vip_a = {
+    ip_address = "192.168.xx.xx/24"
+  }
+
+  dns_vip_b = {
+    ip_address = "192.168.xx.xx/24"
+  }
+}

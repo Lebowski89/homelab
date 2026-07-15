@@ -92,4 +92,34 @@
       }}
     tr_theme_app: "{{ docker_services_svc.traefik.themepark.app | default('') }}"
     tr_theme_theme: "{{ docker_services_svc.traefik.themepark.theme | default('') }}"
-    tr_backend_address: "http://{{ docker_services_svc.traefik.backend_host | default(docker_services_svc.name) }}:{{ tr_port }}"
+    tr_backend_scheme: "{{ docker_services_svc.traefik.backend_scheme | default('http', true) }}"
+    tr_backend_mode: "{{ docker_services_svc.traefik.backend_mode | default('service', true) | string | trim }}"
+    tr_backend_host_inventory: >-
+      {{
+        docker_services_svc.traefik.backend_host_inventory
+        | default(docker_services_deploy_host, true)
+      }}
+    tr_backend_host_auto: >-
+      {{
+        hostvars[tr_backend_host_inventory].local_ip
+        if (
+          tr_backend_mode == 'host'
+          and tr_backend_host_inventory is string
+          and tr_backend_host_inventory in hostvars
+          and hostvars[tr_backend_host_inventory].local_ip is defined
+        )
+        else docker_services_svc.name
+      }}
+    tr_backend_host: >-
+      {{
+        docker_services_svc.traefik.backend_host
+        | default(tr_backend_host_auto, true)
+      }}
+    tr_backend_address: >-
+      {{
+        docker_services_svc.traefik.backend_url
+        | default(
+            tr_backend_scheme ~ '://' ~ tr_backend_host ~ ':' ~ tr_port,
+            true
+          )
+      }}

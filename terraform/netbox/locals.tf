@@ -251,6 +251,13 @@ locals {
       description = "Postgres / Patroni nodes."
     }
 
+    node_exporter = {
+      name        = "node-exporter"
+      slug        = "node_exporter"
+      description = "Hosts running Prometheus node_exporter."
+      color_hex   = "4caf50"
+    }
+
     opentofu = {
       name        = "opentofu"
       slug        = "opentofu"
@@ -410,14 +417,16 @@ locals {
   }
 
   device_custom_field_defaults = {
-    ansible_user             = ""
-    ssh_port                 = ""
-    tailscale_ip             = ""
-    docker_host_puid         = ""
-    docker_host_pgid         = ""
-    docker_host_appdata_root = ""
-    docker_host_data_root    = ""
-    dns_priority             = ""
+    ansible_user                  = ""
+    ssh_port                      = ""
+    tailscale_ip                  = ""
+    docker_host_puid              = ""
+    docker_host_pgid              = ""
+    docker_host_appdata_root      = ""
+    docker_host_data_root         = ""
+    dns_priority                  = ""
+    keepalived_priority_dns_vip_a = ""
+    keepalived_priority_dns_vip_b = ""
   }
 
   base_hosts = {
@@ -440,6 +449,7 @@ locals {
         "docker",
         "docker_install",
         "haproxy",
+        "node_exporter",
         "opentofu",
         "opentofu_install",
         "swarm",
@@ -472,6 +482,7 @@ locals {
         "docker",
         "docker_install",
         "haproxy",
+        "node_exporter",
         "swarm",
         "swarm_worker",
         "dns",
@@ -497,6 +508,7 @@ locals {
       device_type_key = "generic_lxc"
       tags = [
         "skynet",
+        "node_exporter",
         "opentofu_managed",
         "dns",
         "technitium",
@@ -511,6 +523,7 @@ locals {
       device_type_key = "generic_vm"
       tags = [
         "skynet",
+        "node_exporter",
         "opentofu",
         "opentofu_managed",
         "postgres",
@@ -523,6 +536,7 @@ locals {
       device_type_key = "generic_vm"
       tags = [
         "skynet",
+        "node_exporter",
         "opentofu",
         "opentofu_managed",
         "postgres",
@@ -535,6 +549,7 @@ locals {
       device_type_key = "generic_vm"
       tags = [
         "skynet",
+        "node_exporter",
         "opentofu",
         "opentofu_managed",
         "postgres",
@@ -560,5 +575,26 @@ locals {
     )
   }
 
-  reserved_ips = {}
+  base_reserved_ips = {
+    dns_vip_a = {
+      status      = "reserved"
+      dns_name    = "dns-vip-a.${local.internal_zone}"
+      description = "Keepalived DNS VIP A"
+    }
+
+    dns_vip_b = {
+      status      = "reserved"
+      dns_name    = "dns-vip-b.${local.internal_zone}"
+      description = "Keepalived DNS VIP B"
+    }
+  }
+
+  reserved_ips = {
+    for reserved_ip_key, reserved_ip in local.base_reserved_ips : reserved_ip_key => merge(
+      reserved_ip,
+      {
+        ip_address = var.reserved_ip_private_values[reserved_ip_key].ip_address
+      }
+    )
+  }
 }

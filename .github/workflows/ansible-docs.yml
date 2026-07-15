@@ -72,7 +72,6 @@ jobs:
             docsible \
               --role "$role" \
               --comments \
-              --repository-url detect \
               --output README.md
 
             # Compare README content while ignoring only the Readme update row.

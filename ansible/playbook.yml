@@ -105,6 +105,20 @@
         - ubuntu_netplan
 
     ################################
+    # SYSTEMD-RESOLVED / NSS
+    ################################
+
+    - name: Include systemd-resolved role
+      when:
+        - ansible_facts.os_family | default("") == "Debian"
+        - ansible_facts.distribution | default("") == "Ubuntu"
+      ansible.builtin.include_role:
+        name: resolved
+        apply:
+          tags: [resolved]
+      tags: [resolved]
+
+    ################################
     # DOCKER
     ################################
 
@@ -193,18 +207,11 @@
     ################################
 
     - name: Include Node Exporter role
+      when: "'tags_node_exporter' in group_names"
       ansible.builtin.include_role:
         name: node_exporter
         apply:
           tags: [node_exporter]
-      vars:
-        node_exporter_install_groups:
-          - tags_ansible_manager
-          - tags_docker
-          - tags_postgres
-      when:
-        - node_exporter_install_groups | intersect(group_names) | length > 0
-        - "'device_roles_storage' not in group_names"
       tags: [node_exporter]
 
     ################################
@@ -276,7 +283,6 @@
       when: inventory_hostname == docker_services_primary_manager
       ansible.builtin.set_fact:
         docker_services_image_drift: []
-      run_once: true
       tags: [drift]
 
     - name: Drift | End non-primary hosts
@@ -379,7 +385,6 @@
             current: {{ drift_item.current }}
 
           {% endfor %}
-      run_once: true
       tags: [drift]
 
     - name: Drift | Import email notification tasks
@@ -393,7 +398,6 @@
           or (hostvars[docker_services_primary_manager].docker_services_image_drift | length) == 0
       ansible.builtin.debug:
         msg: "No Docker service image drift detected."
-      run_once: true
       tags: [drift]
 
     - name: Deploy all stacks
@@ -404,7 +408,6 @@
         file: "{{ playbook_dir }}/roles/docker_services/tasks/sub_tasks/deploy/all.yml"
         apply:
           tags: [deploy, update, recreate]
-      run_once: true
       tags: [deploy, update, recreate]
 
     ################################

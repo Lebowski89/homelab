@@ -95,7 +95,7 @@ prometheus_template = first_existing(
 
 render(prometheus_template, out / "prometheus.yml")
 render(
-    root / "ansible/roles/docker_services/templates/configs/alertmanager/alertmanager.yml.j2",
+    root / "ansible/roles/docker_services/templates/configs/alertmanager.yml.j2",
     out / "alertmanager.yml",
 )
 

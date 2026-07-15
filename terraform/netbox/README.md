@@ -17,11 +17,13 @@
 | <a name="input_netbox_request_timeout"></a> [netbox\_request\_timeout](#input\_netbox\_request\_timeout) | NetBox API request timeout in seconds. | `number` | `30` | no |
 | <a name="input_netbox_server_url"></a> [netbox\_server\_url](#input\_netbox\_server\_url) | NetBox URL, including scheme and port if required. Example: https://netbox.int.example.com:8443 | `string` | n/a | yes |
 | <a name="input_netbox_skip_version_check"></a> [netbox\_skip\_version\_check](#input\_netbox\_skip\_version\_check) | Skip provider NetBox version compatibility check. | `bool` | `false` | no |
+| <a name="input_reserved_ip_private_values"></a> [reserved\_ip\_private\_values](#input\_reserved\_ip\_private\_values) | Private values for reserved infrastructure IPs, such as Keepalived DNS VIPs. | <pre>map(object({<br/>    ip_address = string<br/>  }))</pre> | n/a | yes |
 
 ## Outputs
 
 | Name | Description |
 |------|-------------|
+| <a name="output_dns_ips"></a> [dns\_ips](#output\_dns\_ips) | DNS node and DNS VIP IPv4 addresses without CIDR suffix. |
 | <a name="output_host_dns_names"></a> [host\_dns\_names](#output\_host\_dns\_names) | DNS names assigned to managed hosts. |
 | <a name="output_host_primary_cidrs"></a> [host\_primary\_cidrs](#output\_host\_primary\_cidrs) | Primary management IPv4 addresses for managed hosts, including CIDR suffix. |
 | <a name="output_host_primary_ipv4"></a> [host\_primary\_ipv4](#output\_host\_primary\_ipv4) | Primary management IPv4 addresses for managed hosts, without CIDR suffix. |
