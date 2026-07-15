@@ -33,20 +33,21 @@
   block:
     - name: Node_Exporter | Download node_exporter archive
       ansible.builtin.get_url:
-        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}.tar.gz"
-        dest: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}.tar.gz"
+        url: "{{ node_exporter_download_url }}"
+        dest: "{{ node_exporter_archive_path }}"
         mode: "0644"
+        checksum: "{{ node_exporter_checksum | default(omit, true) }}"
 
     - name: Node_Exporter | Extract node_exporter archive
       ansible.builtin.unarchive:
-        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}.tar.gz"
+        src: "{{ node_exporter_archive_path }}"
         dest: /tmp
         remote_src: true
-        creates: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}/node_exporter"
+        creates: "{{ node_exporter_extract_dir }}/node_exporter"
 
     - name: Node_Exporter | Install node_exporter binary
       ansible.builtin.copy:
-        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}/node_exporter"
+        src: "{{ node_exporter_extract_dir }}/node_exporter"
         dest: "{{ node_exporter_install_dir }}/node_exporter"
         owner: root
         group: root

@@ -2,8 +2,17 @@
 
 node_exporter_version: "1.10.1"
 node_exporter_arch: "amd64"
+
 node_exporter_user: node_exporter
 node_exporter_group: node_exporter
+
+node_exporter_release_url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}"
+node_exporter_archive_name: "node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}.tar.gz"
+node_exporter_download_url: "{{ node_exporter_release_url }}/{{ node_exporter_archive_name }}"
+node_exporter_archive_path: "/tmp/{{ node_exporter_archive_name }}"
+node_exporter_extract_dir: "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}"
+
+node_exporter_checksum: "sha256:{{ node_exporter_release_url }}/sha256sums.txt"
 
 node_exporter_install_dir: /usr/local/bin
 node_exporter_textfile_dir: /var/lib/node_exporter/textfile_collector
