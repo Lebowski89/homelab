@@ -417,14 +417,16 @@ locals {
   }
 
   device_custom_field_defaults = {
-    ansible_user             = ""
-    ssh_port                 = ""
-    tailscale_ip             = ""
-    docker_host_puid         = ""
-    docker_host_pgid         = ""
-    docker_host_appdata_root = ""
-    docker_host_data_root    = ""
-    dns_priority             = ""
+    ansible_user                  = ""
+    ssh_port                      = ""
+    tailscale_ip                  = ""
+    docker_host_puid              = ""
+    docker_host_pgid              = ""
+    docker_host_appdata_root      = ""
+    docker_host_data_root         = ""
+    dns_priority                  = ""
+    keepalived_priority_dns_vip_a = ""
+    keepalived_priority_dns_vip_b = ""
   }
 
   base_hosts = {
