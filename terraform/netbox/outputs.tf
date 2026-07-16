@@ -50,6 +50,12 @@ output "host_dns_names" {
   description = "DNS names assigned to managed hosts."
 }
 
+output "cloudflare_zone" {
+  value       = var.cloudflare_zone
+  description = "Public Cloudflare DNS zone used by dependent Terraform roots."
+  sensitive   = true
+}
+
 output "internal_zone" {
   value       = local.internal_zone
   description = "Private DNS zone used to build NetBox device DNS names."

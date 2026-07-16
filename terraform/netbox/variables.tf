@@ -27,6 +27,17 @@ variable "netbox_skip_version_check" {
   default     = false
 }
 
+variable "cloudflare_zone" {
+  description = "Public Cloudflare DNS zone used by dependent Terraform roots."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = trimspace(var.cloudflare_zone) != ""
+    error_message = "cloudflare_zone must be set in terraform/netbox/private.auto.tfvars."
+  }
+}
+
 variable "internal_zone" {
   type        = string
   description = "Private DNS zone used to build NetBox device DNS names. Keep the real value in an uncommitted tfvars file."
