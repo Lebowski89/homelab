@@ -11,19 +11,19 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_cloudflare_zone"></a> [cloudflare\_zone](#input\_cloudflare\_zone) | Parent Cloudflare zone/domain. | `string` | n/a | yes |
+| <a name="input_cloudflare_zone"></a> [cloudflare\_zone](#input\_cloudflare\_zone) | Optional public Cloudflare DNS zone fallback. Normally sourced from terraform/netbox outputs.cloudflare\_zone. | `string` | `""` | no |
 | <a name="input_dns_ips"></a> [dns\_ips](#input\_dns\_ips) | Fallback or override DNS node/VIP IPs used by DNS-related monitors. Normally sourced from terraform/netbox outputs.dns\_ips. | `map(string)` | `{}` | no |
 | <a name="input_enable_gotify_notification"></a> [enable\_gotify\_notification](#input\_enable\_gotify\_notification) | Create and attach the Gotify notification channel to monitors by default. | `bool` | `true` | no |
 | <a name="input_enable_netbox_remote_state"></a> [enable\_netbox\_remote\_state](#input\_enable\_netbox\_remote\_state) | Read host/IP and DNS topology data from the terraform/netbox local state. | `bool` | `true` | no |
 | <a name="input_gotify_application_token"></a> [gotify\_application\_token](#input\_gotify\_application\_token) | Gotify application token for Uptime Kuma notifications. | `string` | `null` | no |
 | <a name="input_gotify_priority"></a> [gotify\_priority](#input\_gotify\_priority) | Gotify message priority. | `number` | `8` | no |
-| <a name="input_gotify_server_url"></a> [gotify\_server\_url](#input\_gotify\_server\_url) | Gotify URL as reached by Uptime Kuma. | `string` | n/a | yes |
+| <a name="input_gotify_server_url"></a> [gotify\_server\_url](#input\_gotify\_server\_url) | Optional explicit Gotify URL as reached by Uptime Kuma. Defaults to https://gotify.<internal\_zone>:<private\_https\_port>. | `string` | `""` | no |
 | <a name="input_host_ips"></a> [host\_ips](#input\_host\_ips) | Fallback or override private host management IPs used by direct, ping, and TCP monitors. Normally sourced from terraform/netbox outputs.host\_primary\_ipv4. | `map(string)` | `{}` | no |
-| <a name="input_internal_zone"></a> [internal\_zone](#input\_internal\_zone) | Internal/private DNS zone used by Traefik private routes. | `string` | n/a | yes |
+| <a name="input_internal_zone"></a> [internal\_zone](#input\_internal\_zone) | Optional internal/private DNS zone fallback. Normally sourced from terraform/netbox outputs.internal\_zone. | `string` | `""` | no |
 | <a name="input_netbox_state_path"></a> [netbox\_state\_path](#input\_netbox\_state\_path) | Path to the terraform/netbox state file. | `string` | `"../netbox/terraform.tfstate"` | no |
 | <a name="input_postgres_monitor_connection_strings"></a> [postgres\_monitor\_connection\_strings](#input\_postgres\_monitor\_connection\_strings) | PostgreSQL connection strings for Uptime Kuma PostgreSQL monitors. These are sensitive and will be stored in OpenTofu state. | `map(string)` | `{}` | no |
 | <a name="input_private_https_port"></a> [private\_https\_port](#input\_private\_https\_port) | Traefik private HTTPS entrypoint port. | `number` | `8443` | no |
-| <a name="input_uptime_kuma_endpoint"></a> [uptime\_kuma\_endpoint](#input\_uptime\_kuma\_endpoint) | Base URL for Uptime Kuma. Example: https://uptime-kuma.somedomain.com | `string` | n/a | yes |
+| <a name="input_uptime_kuma_endpoint"></a> [uptime\_kuma\_endpoint](#input\_uptime\_kuma\_endpoint) | Optional explicit Uptime Kuma base URL. Defaults to https://uptime-kuma.<internal\_zone>:<private\_https\_port>. | `string` | `""` | no |
 | <a name="input_uptime_kuma_max_retries"></a> [uptime\_kuma\_max\_retries](#input\_uptime\_kuma\_max\_retries) | Provider connection maximum retry count. | `number` | `5` | no |
 | <a name="input_uptime_kuma_password"></a> [uptime\_kuma\_password](#input\_uptime\_kuma\_password) | Uptime Kuma password. Can also be supplied with TF\_VAR\_uptime\_kuma\_password. | `string` | n/a | yes |
 | <a name="input_uptime_kuma_per_attempt_timeout"></a> [uptime\_kuma\_per\_attempt\_timeout](#input\_uptime\_kuma\_per\_attempt\_timeout) | Provider connection per\_attempt\_timeout as a Go duration string. | `string` | `"20s"` | no |

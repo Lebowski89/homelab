@@ -5,14 +5,18 @@
 
 | Name | Type |
 |------|------|
+| [terraform_remote_state.netbox](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/data-sources/remote_state) | data source |
 
 ## Inputs
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_dns_domain"></a> [dns\_domain](#input\_dns\_domain) | n/a | `string` | `"home.arpa"` | no |
-| <a name="input_dns_servers"></a> [dns\_servers](#input\_dns\_servers) | n/a | `list(string)` | `[]` | no |
-| <a name="input_local_domain"></a> [local\_domain](#input\_local\_domain) | n/a | `string` | `"home.arpa"` | no |
+| <a name="input_dns_domain"></a> [dns\_domain](#input\_dns\_domain) | Optional Proxmox DNS search domain fallback. Ignored while enable\_netbox\_remote\_state is true. | `string` | `""` | no |
+| <a name="input_dns_ips"></a> [dns\_ips](#input\_dns\_ips) | Fallback DNS node/VIP IPs. Normally sourced from terraform/netbox outputs.dns\_ips. | `map(string)` | `{}` | no |
+| <a name="input_dns_servers"></a> [dns\_servers](#input\_dns\_servers) | Optional Proxmox DNS servers fallback. Ignored while enable\_netbox\_remote\_state is true. | `list(string)` | `[]` | no |
+| <a name="input_enable_netbox_remote_state"></a> [enable\_netbox\_remote\_state](#input\_enable\_netbox\_remote\_state) | Read DNS topology data from the terraform/netbox local state. | `bool` | `true` | no |
+| <a name="input_local_domain"></a> [local\_domain](#input\_local\_domain) | Optional local host domain fallback. Ignored while enable\_netbox\_remote\_state is true. | `string` | `""` | no |
+| <a name="input_netbox_state_path"></a> [netbox\_state\_path](#input\_netbox\_state\_path) | Path to the terraform/netbox state file. | `string` | `"../../../netbox/terraform.tfstate"` | no |
 | <a name="input_network_vmbr0_address"></a> [network\_vmbr0\_address](#input\_network\_vmbr0\_address) | n/a | `string` | n/a | yes |
 | <a name="input_network_vmbr0_autostart"></a> [network\_vmbr0\_autostart](#input\_network\_vmbr0\_autostart) | n/a | `bool` | `true` | no |
 | <a name="input_network_vmbr0_gateway"></a> [network\_vmbr0\_gateway](#input\_network\_vmbr0\_gateway) | n/a | `string` | n/a | yes |

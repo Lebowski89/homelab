@@ -10,6 +10,7 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
+| <a name="input_cloudflare_zone"></a> [cloudflare\_zone](#input\_cloudflare\_zone) | Public Cloudflare DNS zone used by dependent Terraform roots. | `string` | n/a | yes |
 | <a name="input_host_private_values"></a> [host\_private\_values](#input\_host\_private\_values) | Private per-host values such as LAN IPs, DNS names, and custom fields. | <pre>map(object({<br/>    mgmt_ip       = string<br/>    custom_fields = optional(any, {})<br/>  }))</pre> | `{}` | no |
 | <a name="input_internal_zone"></a> [internal\_zone](#input\_internal\_zone) | Private DNS zone used to build NetBox device DNS names. Keep the real value in an uncommitted tfvars file. | `string` | `""` | no |
 | <a name="input_netbox_allow_insecure_https"></a> [netbox\_allow\_insecure\_https](#input\_netbox\_allow\_insecure\_https) | Allow self-signed HTTPS certificates. | `bool` | `false` | no |
@@ -23,12 +24,14 @@
 
 | Name | Description |
 |------|-------------|
+| <a name="output_cloudflare_zone"></a> [cloudflare\_zone](#output\_cloudflare\_zone) | Public Cloudflare DNS zone used by dependent Terraform roots. |
 | <a name="output_dns_ips"></a> [dns\_ips](#output\_dns\_ips) | DNS node and DNS VIP IPv4 addresses without CIDR suffix. |
 | <a name="output_host_dns_names"></a> [host\_dns\_names](#output\_host\_dns\_names) | DNS names assigned to managed hosts. |
 | <a name="output_host_primary_cidrs"></a> [host\_primary\_cidrs](#output\_host\_primary\_cidrs) | Primary management IPv4 addresses for managed hosts, including CIDR suffix. |
 | <a name="output_host_primary_ipv4"></a> [host\_primary\_ipv4](#output\_host\_primary\_ipv4) | Primary management IPv4 addresses for managed hosts, without CIDR suffix. |
 | <a name="output_host_tailscale_ipv4"></a> [host\_tailscale\_ipv4](#output\_host\_tailscale\_ipv4) | Tailscale IPv4 addresses for managed hosts. |
 | <a name="output_hosts_by_tag"></a> [hosts\_by\_tag](#output\_hosts\_by\_tag) | Managed hosts grouped by local NetBox tag key. |
+| <a name="output_internal_zone"></a> [internal\_zone](#output\_internal\_zone) | Private DNS zone used to build NetBox device DNS names. |
 | <a name="output_managed_device_custom_fields"></a> [managed\_device\_custom\_fields](#output\_managed\_device\_custom\_fields) | Device custom fields managed in NetBox. |
 | <a name="output_managed_hosts"></a> [managed\_hosts](#output\_managed\_hosts) | Hosts managed as NetBox devices. |
 | <a name="output_managed_prefixes"></a> [managed\_prefixes](#output\_managed\_prefixes) | Prefixes managed in NetBox. |
