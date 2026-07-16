@@ -1,3 +1,20 @@
+locals {
+  netbox_dns_ips       = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.dns_ips, {}) : {}
+  netbox_internal_zone = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
+
+  dns_ips = merge(
+    var.dns_ips,
+    local.netbox_dns_ips,
+  )
+
+  container_dns_servers = (var.enable_netbox_remote_state || length(var.container_dns_servers) == 0) ? [
+    local.dns_ips["dns_vip_a"],
+    local.dns_ips["dns_vip_b"],
+  ] : var.container_dns_servers
+
+  container_dns_domain = (var.enable_netbox_remote_state || trimspace(var.container_dns_domain) == "") ? local.netbox_internal_zone : var.container_dns_domain
+}
+
 resource "proxmox_virtual_environment_container" "dns03" {
   node_name   = var.target_node
   vm_id       = var.container_vmid
@@ -40,8 +57,8 @@ resource "proxmox_virtual_environment_container" "dns03" {
     hostname = var.container_hostname
 
     dns {
-      domain  = var.container_dns_domain
-      servers = var.container_dns_servers
+      domain  = local.container_dns_domain
+      servers = local.container_dns_servers
     }
 
     ip_config {

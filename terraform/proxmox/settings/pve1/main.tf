@@ -1,3 +1,21 @@
+locals {
+  netbox_dns_ips       = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.dns_ips, {}) : {}
+  netbox_internal_zone = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
+
+  dns_ips = merge(
+    var.dns_ips,
+    local.netbox_dns_ips,
+  )
+
+  dns_servers = (var.enable_netbox_remote_state || length(var.dns_servers) == 0) ? [
+    local.dns_ips["dns_vip_a"],
+    local.dns_ips["dns_vip_b"],
+  ] : var.dns_servers
+
+  dns_domain   = (var.enable_netbox_remote_state || trimspace(var.dns_domain) == "") ? local.netbox_internal_zone : var.dns_domain
+  local_domain = (var.enable_netbox_remote_state || trimspace(var.local_domain) == "") ? local.netbox_internal_zone : var.local_domain
+}
+
 resource "proxmox_virtual_environment_hosts" "hosts" {
   node_name = var.target_node
 
@@ -8,7 +26,7 @@ resource "proxmox_virtual_environment_hosts" "hosts" {
 
   entry {
     address   = var.node_management_ip
-    hostnames = ["${var.target_node}.${var.local_domain}", var.target_node]
+    hostnames = ["${var.target_node}.${local.local_domain}", var.target_node]
   }
 
   entry {
@@ -60,8 +78,8 @@ resource "proxmox_network_linux_bridge" "vmbr1" {
 
 resource "proxmox_virtual_environment_dns" "dns" {
   node_name = var.target_node
-  domain    = var.dns_domain
-  servers   = var.dns_servers
+  domain  = local.dns_domain
+  servers = local.dns_servers
 }
 
 resource "proxmox_virtual_environment_time" "timezone" {

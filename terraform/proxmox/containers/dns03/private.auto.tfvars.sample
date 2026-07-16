@@ -9,9 +9,3 @@ template_file_id  = "local:vztmpl/noble-server-cloudimg-amd64-root.tar.xz"
 container_bridge  = "vmbr0"
 container_ip      = "192.168.xx.xx/24"
 container_gateway = "192.168.xx.x"
-
-container_dns_domain = "skynet"
-container_dns_servers = [
-  "192.168.xx.xx",
-  "192.168.xx.xx",
-]

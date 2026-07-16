@@ -74,12 +74,15 @@ variable "container_gateway" {
 }
 
 variable "container_dns_domain" {
-  type    = string
-  default = "skynet"
+  description = "Optional container DNS search domain fallback. Ignored while enable_netbox_remote_state is true."
+  type        = string
+  default     = ""
 }
 
 variable "container_dns_servers" {
-  type = list(string)
+  description = "Optional container DNS servers fallback. Ignored while enable_netbox_remote_state is true."
+  type        = list(string)
+  default     = []
 }
 
 variable "container_cores" {
@@ -104,4 +107,22 @@ variable "container_disk_size" {
 
 variable "ssh_public_key_path" {
   type = string
+}
+
+variable "enable_netbox_remote_state" {
+  description = "Read DNS topology data from the terraform/netbox local state."
+  type        = bool
+  default     = true
+}
+
+variable "netbox_state_path" {
+  description = "Path to the terraform/netbox state file."
+  type        = string
+  default     = "../../../netbox/terraform.tfstate"
+}
+
+variable "dns_ips" {
+  description = "Fallback DNS node/VIP IPs. Normally sourced from terraform/netbox outputs.dns_ips."
+  type        = map(string)
+  default     = {}
 }

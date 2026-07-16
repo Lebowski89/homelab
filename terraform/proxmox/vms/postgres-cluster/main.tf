@@ -1,5 +1,22 @@
 locals {
-  vm_nameservers = [for ns in split(" ", trimspace(var.vm_nameserver)) : ns if ns != ""]
+  netbox_dns_ips       = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.dns_ips, {}) : {}
+  netbox_internal_zone = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
+
+  dns_ips = merge(
+    var.dns_ips,
+    local.netbox_dns_ips,
+  )
+
+  dns_vip_nameservers = [
+    local.dns_ips["dns_vip_a"],
+    local.dns_ips["dns_vip_b"],
+  ]
+
+  vm_nameservers = (var.enable_netbox_remote_state || trimspace(var.vm_nameserver) == "") ? local.dns_vip_nameservers : [
+    for ns in split(" ", trimspace(var.vm_nameserver)) : ns if ns != ""
+  ]
+
+  vm_searchdomain = (var.enable_netbox_remote_state || trimspace(var.vm_searchdomain) == "") ? local.netbox_internal_zone : var.vm_searchdomain
 }
 
 resource "proxmox_virtual_environment_file" "tailscale_cloudinit" {
@@ -29,6 +46,12 @@ resource "proxmox_virtual_environment_vm" "postgres" {
   vm_id       = each.value.vmid
   description = "Postgres HA node ${each.key} managed by Terraform"
   node_name   = var.target_node
+
+  lifecycle {
+    ignore_changes = [
+      initialization,
+    ]
+  }
 
   clone {
     vm_id   = var.clone_template_vmid
@@ -72,7 +95,6 @@ resource "proxmox_virtual_environment_vm" "postgres" {
     datastore_id        = var.vm_storage
     vendor_data_file_id = proxmox_virtual_environment_file.tailscale_cloudinit.id
 
-
     ip_config {
       ipv4 {
         address = "${each.value.ip}/${var.vm_cidr}"
@@ -81,7 +103,7 @@ resource "proxmox_virtual_environment_vm" "postgres" {
     }
 
     dns {
-      domain  = var.vm_searchdomain
+      domain  = local.vm_searchdomain
       servers = local.vm_nameservers
     }
 
