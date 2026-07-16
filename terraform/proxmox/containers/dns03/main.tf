@@ -1,11 +1,24 @@
 locals {
   netbox_dns_ips       = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.dns_ips, {}) : {}
+  netbox_host_ips      = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.host_primary_ipv4, {}) : {}
   netbox_internal_zone = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
 
   dns_ips = merge(
-    var.dns_ips,
     local.netbox_dns_ips,
+    var.dns_ips,
   )
+
+  pm_node_ip = lookup(local.netbox_host_ips, var.target_node, "")
+
+  pm_api_url = trimspace(var.pm_api_url) != "" ? trimspace(var.pm_api_url) : "https://${local.pm_node_ip}:${var.pm_api_port}/"
+
+  pm_ssh_host = trimspace(var.pm_ssh_host) != "" ? trimspace(var.pm_ssh_host) : local.pm_node_ip
+
+  container_primary_ipv4 = lookup(local.netbox_host_ips, var.container_hostname, "")
+
+  container_ip = trimspace(var.container_ip) != "" ? trimspace(var.container_ip) : "${local.container_primary_ipv4}/${var.container_prefix_length}"
+
+  container_gateway = trimspace(var.container_gateway) != "" ? trimspace(var.container_gateway) : cidrhost(local.container_ip, var.container_gateway_host_number)
 
   container_dns_servers = (var.enable_netbox_remote_state || length(var.container_dns_servers) == 0) ? [
     local.dns_ips["dns_vip_a"],
@@ -63,8 +76,8 @@ resource "proxmox_virtual_environment_container" "dns03" {
 
     ip_config {
       ipv4 {
-        address = var.container_ip
-        gateway = var.container_gateway
+        address = local.container_ip
+        gateway = local.container_gateway
       }
     }
 
@@ -107,9 +120,9 @@ resource "terraform_data" "dns03_prepare" {
 
   connection {
     type  = "ssh"
-    host  = var.pm_ssh_host
+    host  = local.pm_ssh_host
     user  = var.pm_ssh_username
-    port  = 22
+    port  = var.pm_ssh_port
     agent = true
   }
 

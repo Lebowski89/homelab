@@ -1,5 +1,5 @@
 provider "proxmox" {
-  endpoint  = var.pm_api_url
+  endpoint  = local.pm_api_url
   api_token = var.pm_api_token
   insecure  = var.pm_tls_insecure
 
@@ -9,8 +9,8 @@ provider "proxmox" {
 
     node {
       name    = var.target_node
-      address = var.pm_ssh_host
-      port    = 22
+      address = local.pm_ssh_host
+      port    = var.pm_ssh_port
     }
   }
 }
