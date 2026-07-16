@@ -3,14 +3,15 @@ resource "seerr_main_settings" "this" {
   application_url         = local.seerr_application_url
   locale                  = "en"
   local_login             = true
-  plex_login              = true
+  media_server_login      = true
   new_plex_login          = true
   partial_requests        = true
   hide_available          = false
-  trust_proxy             = false
-  csrf_protection         = false
-  movie_requests_enabled  = true
-  series_requests_enabled = true
+}
+
+resource "seerr_network_settings" "this" {
+  trust_proxy     = false
+  csrf_protection = false
 }
 
 resource "seerr_plex_settings" "this" {
