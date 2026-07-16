@@ -1,12 +1,12 @@
 resource "seerr_main_settings" "this" {
-  app_title               = "Seerr"
-  application_url         = local.seerr_application_url
-  locale                  = "en"
-  local_login             = true
-  media_server_login      = true
-  new_plex_login          = true
-  partial_requests        = true
-  hide_available          = false
+  app_title          = "Seerr"
+  application_url    = local.seerr_application_url
+  locale             = "en"
+  local_login        = true
+  media_server_login = true
+  new_plex_login     = true
+  partial_requests   = true
+  hide_available     = false
 }
 
 resource "seerr_network_settings" "this" {
