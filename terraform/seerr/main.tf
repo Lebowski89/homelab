@@ -18,6 +18,13 @@ resource "seerr_plex_settings" "this" {
   ip      = local.seerr_plex.ip
   port    = local.seerr_plex.port
   use_ssl = local.seerr_plex.use_ssl
+
+  lifecycle {
+    precondition {
+      condition     = trimspace(local.seerr_plex.ip) != ""
+      error_message = "Unable to determine the Plex IP. Set plex_ip explicitly or ensure terraform/netbox outputs.host_primary_ipv4 contains the plex host."
+    }
+  }
 }
 
 resource "seerr_tautulli_settings" "this" {

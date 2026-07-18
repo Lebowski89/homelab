@@ -12,7 +12,7 @@ locals {
 
   seerr_url = trimspace(var.seerr_url) != "" ? trimspace(var.seerr_url) : "https://seerr.${local.domain_int}:${local.private_https_port}"
 
-  plex_ip = trimspace(var.plex_ip) != "" ? trimspace(var.plex_ip) : local.netbox_host_ips["plex"]
+  plex_ip = trimspace(var.plex_ip) != "" ? trimspace(var.plex_ip) : lookup(local.netbox_host_ips, "plex", "")
 
   ################################
   # SEERR SETTINGS
