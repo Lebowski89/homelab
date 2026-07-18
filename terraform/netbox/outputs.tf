@@ -51,8 +51,8 @@ output "host_dns_names" {
 }
 
 output "cloudflare_zone" {
-  value       = var.cloudflare_zone
-  description = "Public Cloudflare DNS zone used by dependent Terraform roots."
+  value       = local.cloudflare_zone
+  description = "Normalized public Cloudflare DNS zone used by dependent OpenTofu roots."
   sensitive   = true
 }
 

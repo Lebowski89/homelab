@@ -28,7 +28,7 @@ variable "netbox_skip_version_check" {
 }
 
 variable "cloudflare_zone" {
-  description = "Public Cloudflare DNS zone used by dependent Terraform roots."
+  description = "Public Cloudflare DNS zone used by dependent OpenTofu roots."
   type        = string
   sensitive   = true
 
