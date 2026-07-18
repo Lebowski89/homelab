@@ -10,7 +10,7 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_cloudflare_zone"></a> [cloudflare\_zone](#input\_cloudflare\_zone) | Public Cloudflare DNS zone used by dependent Terraform roots. | `string` | n/a | yes |
+| <a name="input_cloudflare_zone"></a> [cloudflare\_zone](#input\_cloudflare\_zone) | Public Cloudflare DNS zone used by dependent OpenTofu roots. | `string` | n/a | yes |
 | <a name="input_host_private_values"></a> [host\_private\_values](#input\_host\_private\_values) | Private per-host values such as LAN IPs, DNS names, and custom fields. | <pre>map(object({<br/>    mgmt_ip       = string<br/>    custom_fields = optional(any, {})<br/>  }))</pre> | `{}` | no |
 | <a name="input_internal_zone"></a> [internal\_zone](#input\_internal\_zone) | Private DNS zone used to build NetBox device DNS names. Keep the real value in an uncommitted tfvars file. | `string` | `""` | no |
 | <a name="input_netbox_allow_insecure_https"></a> [netbox\_allow\_insecure\_https](#input\_netbox\_allow\_insecure\_https) | Allow self-signed HTTPS certificates. | `bool` | `false` | no |
@@ -24,7 +24,7 @@
 
 | Name | Description |
 |------|-------------|
-| <a name="output_cloudflare_zone"></a> [cloudflare\_zone](#output\_cloudflare\_zone) | Public Cloudflare DNS zone used by dependent Terraform roots. |
+| <a name="output_cloudflare_zone"></a> [cloudflare\_zone](#output\_cloudflare\_zone) | Normalized public Cloudflare DNS zone used by dependent OpenTofu roots. |
 | <a name="output_dns_ips"></a> [dns\_ips](#output\_dns\_ips) | DNS node and DNS VIP IPv4 addresses without CIDR suffix. |
 | <a name="output_host_dns_names"></a> [host\_dns\_names](#output\_host\_dns\_names) | DNS names assigned to managed hosts. |
 | <a name="output_host_primary_cidrs"></a> [host\_primary\_cidrs](#output\_host\_primary\_cidrs) | Primary management IPv4 addresses for managed hosts, including CIDR suffix. |
