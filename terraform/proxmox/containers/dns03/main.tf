@@ -3,33 +3,74 @@ locals {
   netbox_host_ips      = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.host_primary_ipv4, {}) : {}
   netbox_internal_zone = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
 
+  node_name          = trimspace(var.target_node)
+  container_hostname = trimspace(var.container_hostname)
+
+  # NetBox takes precedence when available. var.dns_ips fills missing keys or
+  # provides fallback values when remote state is disabled.
   dns_ips = merge(
-    local.netbox_dns_ips,
     var.dns_ips,
+    local.netbox_dns_ips,
   )
 
-  pm_node_ip = lookup(local.netbox_host_ips, var.target_node, "")
+  pm_node_ip = trimspace(
+    lookup(local.netbox_host_ips, local.node_name, "")
+  )
 
-  pm_api_url = trimspace(var.pm_api_url) != "" ? trimspace(var.pm_api_url) : "https://${local.pm_node_ip}:${var.pm_api_port}/"
+  explicit_pm_api_url = trimspace(var.pm_api_url)
+
+  pm_api_url = local.explicit_pm_api_url != "" ? local.explicit_pm_api_url : (
+    local.pm_node_ip != ""
+    ? "https://${local.pm_node_ip}:${var.pm_api_port}/"
+    : ""
+  )
 
   pm_ssh_host = trimspace(var.pm_ssh_host) != "" ? trimspace(var.pm_ssh_host) : local.pm_node_ip
 
-  container_primary_ipv4 = lookup(local.netbox_host_ips, var.container_hostname, "")
+  container_primary_ipv4 = trimspace(
+    lookup(local.netbox_host_ips, local.container_hostname, "")
+  )
 
-  container_ip = trimspace(var.container_ip) != "" ? trimspace(var.container_ip) : "${local.container_primary_ipv4}/${var.container_prefix_length}"
+  explicit_container_ip = trimspace(var.container_ip)
 
-  container_gateway = trimspace(var.container_gateway) != "" ? trimspace(var.container_gateway) : cidrhost(local.container_ip, var.container_gateway_host_number)
+  container_ip = local.explicit_container_ip != "" ? local.explicit_container_ip : (
+    local.container_primary_ipv4 != ""
+    ? "${local.container_primary_ipv4}/${var.container_prefix_length}"
+    : ""
+  )
 
-  container_dns_servers = (var.enable_netbox_remote_state || length(var.container_dns_servers) == 0) ? [
-    local.dns_ips["dns_vip_a"],
-    local.dns_ips["dns_vip_b"],
-  ] : var.container_dns_servers
+  explicit_container_gateway = trimspace(var.container_gateway)
 
-  container_dns_domain = (var.enable_netbox_remote_state || trimspace(var.container_dns_domain) == "") ? local.netbox_internal_zone : var.container_dns_domain
+  derived_container_gateway = local.container_ip != "" ? try(
+    cidrhost(local.container_ip, var.container_gateway_host_number),
+    ""
+  ) : ""
+
+  container_gateway = local.explicit_container_gateway != "" ? local.explicit_container_gateway : local.derived_container_gateway
+
+  dns_vip_servers = distinct(compact([
+    trimspace(lookup(local.dns_ips, "dns_vip_a", "")),
+    trimspace(lookup(local.dns_ips, "dns_vip_b", "")),
+  ]))
+
+  configured_container_dns_servers = distinct(compact([
+    for server in var.container_dns_servers : trimspace(server)
+  ]))
+
+  # Preserve the existing behaviour:
+  # - use DNS VIPs while NetBox remote state is enabled;
+  # - otherwise use explicitly configured servers when supplied;
+  # - fall back to var.dns_ips VIPs when no explicit servers are supplied.
+  use_dns_vips = var.enable_netbox_remote_state || length(local.configured_container_dns_servers) == 0
+
+  container_dns_servers = local.use_dns_vips ? local.dns_vip_servers : local.configured_container_dns_servers
+
+  container_dns_domain_source = trimspace(local.netbox_internal_zone) != "" ? local.netbox_internal_zone : var.container_dns_domain
+  container_dns_domain        = trim(trimspace(local.container_dns_domain_source), ".")
 }
 
 resource "proxmox_virtual_environment_container" "dns03" {
-  node_name   = var.target_node
+  node_name   = local.node_name
   vm_id       = var.container_vmid
   description = var.container_description
 
@@ -42,6 +83,41 @@ resource "proxmox_virtual_environment_container" "dns03" {
     ignore_changes = [
       features,
     ]
+
+    precondition {
+      condition     = local.node_name != ""
+      error_message = "target_node must not be empty."
+    }
+
+    precondition {
+      condition     = local.container_hostname != ""
+      error_message = "container_hostname must not be empty."
+    }
+
+    precondition {
+      condition     = can(cidrhost(local.container_ip, 0))
+      error_message = "Unable to determine a valid IPv4 CIDR for dns03. Set container_ip explicitly or ensure NetBox outputs.host_primary_ipv4 contains the container_hostname entry."
+    }
+
+    precondition {
+      condition     = can(cidrhost("${local.container_gateway}/32", 0))
+      error_message = "Unable to determine a valid IPv4 gateway for dns03. Set container_gateway explicitly or provide a valid container IP and gateway host number."
+    }
+
+    precondition {
+      condition = (
+        local.use_dns_vips
+        ? length(local.dns_vip_servers) == 2
+        : length(local.configured_container_dns_servers) > 0
+      )
+
+      error_message = "Unable to determine valid DNS servers for dns03. Ensure NetBox outputs.dns_ips contains distinct dns_vip_a and dns_vip_b values, provide them through dns_ips, or set container_dns_servers when NetBox remote state is disabled."
+    }
+
+    precondition {
+      condition     = local.container_dns_domain != ""
+      error_message = "Unable to determine the dns03 search domain. Set container_dns_domain explicitly or ensure NetBox exports internal_zone."
+    }
   }
 
   tags = [
@@ -67,7 +143,7 @@ resource "proxmox_virtual_environment_container" "dns03" {
   }
 
   initialization {
-    hostname = var.container_hostname
+    hostname = local.container_hostname
 
     dns {
       domain  = local.container_dns_domain
@@ -118,6 +194,13 @@ resource "terraform_data" "dns03_prepare" {
     proxmox_virtual_environment_container.dns03,
   ]
 
+  lifecycle {
+    precondition {
+      condition     = local.pm_ssh_host != ""
+      error_message = "Unable to determine the Proxmox SSH host. Set pm_ssh_host explicitly or ensure NetBox contains the target_node management IP."
+    }
+  }
+
   connection {
     type  = "ssh"
     host  = local.pm_ssh_host
@@ -160,9 +243,9 @@ resource "terraform_data" "dns03_tailscale_join" {
 
   connection {
     type  = "ssh"
-    host  = var.pm_ssh_host
+    host  = local.pm_ssh_host
     user  = var.pm_ssh_username
-    port  = 22
+    port  = var.pm_ssh_port
     agent = true
   }
 
@@ -177,7 +260,7 @@ resource "terraform_data" "dns03_tailscale_join" {
       "chmod 600 /tmp/ts-authkey-${var.container_vmid}",
       "pct push ${var.container_vmid} /tmp/ts-authkey-${var.container_vmid} /root/ts-authkey --perms 600",
       "rm -f /tmp/ts-authkey-${var.container_vmid}",
-      "pct exec ${var.container_vmid} -- bash -lc \"tailscale status >/dev/null 2>&1 || tailscale up --authkey=file:/root/ts-authkey --hostname='${var.container_hostname}' --ssh\"",
+      "pct exec ${var.container_vmid} -- bash -lc \"tailscale status >/dev/null 2>&1 || tailscale up --authkey=file:/root/ts-authkey --hostname='${local.container_hostname}' --ssh\"",
       "pct exec ${var.container_vmid} -- rm -f /root/ts-authkey",
     ]
   }
