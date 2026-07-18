@@ -5,6 +5,7 @@
 
 | Name | Type |
 |------|------|
+| [terraform_remote_state.netbox](https://registry.terraform.io/providers/hashicorp/terraform/latest/docs/data-sources/remote_state) | data source |
 
 ## Inputs
 
@@ -13,6 +14,9 @@
 | <a name="input_ci_user"></a> [ci\_user](#input\_ci\_user) | n/a | `string` | `"ubuntu"` | no |
 | <a name="input_clone_template_vmid"></a> [clone\_template\_vmid](#input\_clone\_template\_vmid) | VMID of the Ubuntu 24.04 Cloud-Init template in Proxmox | `number` | n/a | yes |
 | <a name="input_default_tags"></a> [default\_tags](#input\_default\_tags) | n/a | `string` | `"terraform;postgres;patroni"` | no |
+| <a name="input_dns_ips"></a> [dns\_ips](#input\_dns\_ips) | Fallback DNS node/VIP IPs. Normally sourced from terraform/netbox outputs.dns\_ips. | `map(string)` | `{}` | no |
+| <a name="input_enable_netbox_remote_state"></a> [enable\_netbox\_remote\_state](#input\_enable\_netbox\_remote\_state) | Read DNS topology data from the terraform/netbox local state. | `bool` | `true` | no |
+| <a name="input_netbox_state_path"></a> [netbox\_state\_path](#input\_netbox\_state\_path) | Path to the terraform/netbox state file. | `string` | `"../../../netbox/terraform.tfstate"` | no |
 | <a name="input_pm_api_token"></a> [pm\_api\_token](#input\_pm\_api\_token) | Terraform Proxmox API token in format user@realm!tokenid=secret | `string` | n/a | yes |
 | <a name="input_pm_api_url"></a> [pm\_api\_url](#input\_pm\_api\_url) | Proxmox API URL, e.g. https://pve.example.com:8006/ | `string` | n/a | yes |
 | <a name="input_pm_ssh_host"></a> [pm\_ssh\_host](#input\_pm\_ssh\_host) | n/a | `string` | n/a | yes |
@@ -25,8 +29,8 @@
 | <a name="input_vm_bridge"></a> [vm\_bridge](#input\_vm\_bridge) | n/a | `string` | `"vmbr0"` | no |
 | <a name="input_vm_cidr"></a> [vm\_cidr](#input\_vm\_cidr) | n/a | `number` | `24` | no |
 | <a name="input_vm_gateway"></a> [vm\_gateway](#input\_vm\_gateway) | n/a | `string` | n/a | yes |
-| <a name="input_vm_nameserver"></a> [vm\_nameserver](#input\_vm\_nameserver) | n/a | `string` | n/a | yes |
-| <a name="input_vm_searchdomain"></a> [vm\_searchdomain](#input\_vm\_searchdomain) | n/a | `string` | `""` | no |
+| <a name="input_vm_nameserver"></a> [vm\_nameserver](#input\_vm\_nameserver) | Optional space-separated VM DNS nameserver fallback. Ignored while enable\_netbox\_remote\_state is true. | `string` | `""` | no |
+| <a name="input_vm_searchdomain"></a> [vm\_searchdomain](#input\_vm\_searchdomain) | Optional VM DNS search domain fallback. Ignored while enable\_netbox\_remote\_state is true. | `string` | `""` | no |
 | <a name="input_vm_storage"></a> [vm\_storage](#input\_vm\_storage) | Proxmox datastore for VM disks and cloud-init disks | `string` | n/a | yes |
 
 ## Outputs

@@ -54,12 +54,15 @@ variable "vm_cidr" {
 }
 
 variable "vm_nameserver" {
-  type = string
+  description = "Optional space-separated VM DNS nameserver fallback. Ignored while enable_netbox_remote_state is true."
+  type        = string
+  default     = ""
 }
 
 variable "vm_searchdomain" {
-  type    = string
-  default = ""
+  description = "Optional VM DNS search domain fallback. Ignored while enable_netbox_remote_state is true."
+  type        = string
+  default     = ""
 }
 
 variable "ci_user" {
@@ -94,4 +97,22 @@ variable "postgres_vms" {
     onboot       = optional(bool, true)
     ci_user      = optional(string)
   }))
+}
+
+variable "enable_netbox_remote_state" {
+  description = "Read DNS topology data from the terraform/netbox local state."
+  type        = bool
+  default     = true
+}
+
+variable "netbox_state_path" {
+  description = "Path to the terraform/netbox state file."
+  type        = string
+  default     = "../../../netbox/terraform.tfstate"
+}
+
+variable "dns_ips" {
+  description = "Fallback DNS node/VIP IPs. Normally sourced from terraform/netbox outputs.dns_ips."
+  type        = map(string)
+  default     = {}
 }

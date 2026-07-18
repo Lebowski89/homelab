@@ -4,10 +4,14 @@ output "zone_name" {
 
 output "service_fqdns" {
   value = sort([
-    for name in keys(technitium_record.service_a) : "${name}.${var.zone_name}"
+    for name in keys(technitium_record.service_a) : "${name}.${local.zone_name}"
   ])
 }
 
 output "traefik_ipv4" {
-  value = var.traefik_ipv4
+  value = local.traefik_ipv4
+}
+
+output "technitium_server" {
+  value = local.technitium_server
 }

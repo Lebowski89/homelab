@@ -1,6 +1,7 @@
 variable "uptime_kuma_endpoint" {
-  description = "Base URL for Uptime Kuma. Example: https://uptime-kuma.somedomain.com"
+  description = "Optional explicit Uptime Kuma base URL. Defaults to https://uptime-kuma.<internal_zone>:<private_https_port>."
   type        = string
+  default     = ""
 }
 
 variable "uptime_kuma_username" {
@@ -34,13 +35,15 @@ variable "uptime_kuma_max_retries" {
 }
 
 variable "cloudflare_zone" {
-  description = "Parent Cloudflare zone/domain."
+  description = "Optional public Cloudflare DNS zone fallback. Normally sourced from terraform/netbox outputs.cloudflare_zone."
   type        = string
+  default     = ""
 }
 
 variable "internal_zone" {
-  description = "Internal/private DNS zone used by Traefik private routes."
+  description = "Optional internal/private DNS zone fallback. Normally sourced from terraform/netbox outputs.internal_zone."
   type        = string
+  default     = ""
 }
 
 variable "private_https_port" {
@@ -63,8 +66,9 @@ variable "enable_gotify_notification" {
 }
 
 variable "gotify_server_url" {
-  description = "Gotify URL as reached by Uptime Kuma."
+  description = "Optional explicit Gotify URL as reached by Uptime Kuma. Defaults to https://gotify.<internal_zone>:<private_https_port>."
   type        = string
+  default     = ""
 }
 
 variable "gotify_application_token" {

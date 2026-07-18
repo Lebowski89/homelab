@@ -1,22 +1,30 @@
 resource "seerr_main_settings" "this" {
-  app_title               = "Seerr"
-  application_url         = local.seerr_application_url
-  locale                  = "en"
-  local_login             = true
-  plex_login              = true
-  new_plex_login          = true
-  partial_requests        = true
-  hide_available          = false
-  trust_proxy             = false
-  csrf_protection         = false
-  movie_requests_enabled  = true
-  series_requests_enabled = true
+  app_title          = "Seerr"
+  application_url    = local.seerr_application_url
+  locale             = "en"
+  local_login        = true
+  media_server_login = true
+  new_plex_login     = true
+  partial_requests   = true
+  hide_available     = false
+}
+
+resource "seerr_network_settings" "this" {
+  trust_proxy     = false
+  csrf_protection = false
 }
 
 resource "seerr_plex_settings" "this" {
   ip      = local.seerr_plex.ip
   port    = local.seerr_plex.port
   use_ssl = local.seerr_plex.use_ssl
+
+  lifecycle {
+    precondition {
+      condition     = trimspace(local.seerr_plex.ip) != ""
+      error_message = "Unable to determine the Plex IP. Set plex_ip explicitly or ensure terraform/netbox outputs.host_primary_ipv4 contains the plex host."
+    }
+  }
 }
 
 resource "seerr_tautulli_settings" "this" {

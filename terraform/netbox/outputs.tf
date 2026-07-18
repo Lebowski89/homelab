@@ -50,6 +50,17 @@ output "host_dns_names" {
   description = "DNS names assigned to managed hosts."
 }
 
+output "cloudflare_zone" {
+  value       = local.cloudflare_zone
+  description = "Normalized public Cloudflare DNS zone used by dependent OpenTofu roots."
+  sensitive   = true
+}
+
+output "internal_zone" {
+  value       = local.internal_zone
+  description = "Private DNS zone used to build NetBox device DNS names."
+}
+
 output "dns_ips" {
   value = {
     dns01     = split("/", netbox_ip_address.mgmt["mgt"].ip_address)[0]

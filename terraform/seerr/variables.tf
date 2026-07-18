@@ -1,5 +1,25 @@
+variable "enable_netbox_remote_state" {
+  description = "Read host and DNS topology data from the terraform/netbox local state."
+  type        = bool
+  default     = true
+}
+
+variable "netbox_state_path" {
+  description = "Path to the terraform/netbox state file."
+  type        = string
+  default     = "../netbox/terraform.tfstate"
+}
+
 variable "seerr_url" {
-  type = string
+  description = "Optional explicit Seerr URL. Defaults to https://seerr.<domain_int>:<private_https_port>."
+  type        = string
+  default     = ""
+}
+
+variable "private_https_port" {
+  description = "Private HTTPS entrypoint port used for internal service URLs."
+  type        = number
+  default     = 8443
 }
 
 variable "seerr_api_key" {
@@ -8,11 +28,15 @@ variable "seerr_api_key" {
 }
 
 variable "domain_int" {
-  type = string
+  description = "Optional internal DNS zone fallback. Normally sourced from terraform/netbox outputs.internal_zone."
+  type        = string
+  default     = ""
 }
 
 variable "plex_ip" {
-  type = string
+  description = "Optional Plex IP fallback. Normally sourced from terraform/netbox outputs.host_primary_ipv4[\"plex\"]."
+  type        = string
+  default     = ""
 }
 
 variable "tautulli_api_key" {

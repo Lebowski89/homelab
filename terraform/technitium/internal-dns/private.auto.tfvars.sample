@@ -1,4 +1,0 @@
-technitium_server     = "http://192.168.xx.xx:5380"
-internal_zone_catalog = "cluster-catalog.xxxx"
-traefik_ipv4          = "192.168.xx.xx"
-ttl                   = 300

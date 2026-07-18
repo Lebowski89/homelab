@@ -8,8 +8,6 @@ vm_storage          = "local-zfs"
 vm_bridge       = "vmbr1"
 vm_gateway      = "192.168.xx.x"
 vm_cidr         = 24
-vm_nameserver   = "192.168.xx.xx 192.168.xx.xx"
-vm_searchdomain = "home.arpa"
 
 ci_user = "user"
 

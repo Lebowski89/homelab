@@ -13,11 +13,23 @@ locals {
   # NETBOX (OUTPUTS)
   ################################
 
-  netbox_host_ips = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.host_primary_ipv4, {}) : {}
+  netbox_host_ips        = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.host_primary_ipv4, {}) : {}
+  netbox_cloudflare_zone = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.cloudflare_zone, "") : ""
+  netbox_internal_zone   = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
+
+  cloudflare_zone = trimspace(var.cloudflare_zone) != "" ? trimspace(var.cloudflare_zone) : local.netbox_cloudflare_zone
+
+  internal_zone = trimspace(var.internal_zone) != "" ? trimspace(var.internal_zone) : local.netbox_internal_zone
+
+  private_https_port = var.private_https_port
+
+  uptime_kuma_endpoint = trimspace(var.uptime_kuma_endpoint) != "" ? trimspace(var.uptime_kuma_endpoint) : "https://uptime-kuma.${local.internal_zone}:${local.private_https_port}"
+
+  gotify_server_url = trimspace(var.gotify_server_url) != "" ? trimspace(var.gotify_server_url) : "https://gotify.${local.internal_zone}:${local.private_https_port}"
 
   host_ips = merge(
-    var.host_ips,
     local.netbox_host_ips,
+    var.host_ips,
   )
 
   ################################
@@ -66,7 +78,7 @@ locals {
     tautulli = {
       group                 = "plex"
       tag_keys              = ["plex", "private", "traefik"]
-      url                   = "https://tautulli.${var.internal_zone}:${var.private_https_port}/status"
+      url                   = "https://tautulli.${local.internal_zone}:${local.private_https_port}/status"
       accepted_status_codes = ["200-299"]
       max_redirects         = 0
     }
@@ -90,7 +102,7 @@ locals {
   private_http_monitors = {
     for service, cfg in local.private_http_services : "${service}-private" => {
       name        = try(cfg.name, "${join(" ", [for word in split("-", service) : title(word)])} [Private]")
-      url         = try(cfg.url, "https://${service}.${var.internal_zone}:${var.private_https_port}")
+      url         = try(cfg.url, "https://${service}.${local.internal_zone}:${local.private_https_port}")
       description = try(cfg.description, "Private Traefik route for ${service}")
 
       group    = try(cfg.group, "apps")
@@ -135,7 +147,7 @@ locals {
   public_http_monitors = {
     for service, cfg in local.public_http_services : "${service}-public" => {
       name        = try(cfg.name, "${join(" ", [for word in split("-", service) : title(word)])} [Public]")
-      url         = try(cfg.url, "https://${service}.${var.cloudflare_zone}")
+      url         = try(cfg.url, "https://${service}.${local.cloudflare_zone}")
       description = try(cfg.description, "Public Cloudflare/Traefik route for ${service}")
 
       group    = try(cfg.group, "apps")
@@ -393,7 +405,7 @@ locals {
     traefik_private_tcp = {
       name        = "Traefik (Private) HTTPS TCP"
       hostname    = local.host_ips["mgt"]
-      port        = 8443
+      port        = local.private_https_port
       description = "Traefik private HTTPS entrypoint listener"
       group       = "networking"
       tag_keys    = ["critical", "networking", "traefik"]
@@ -462,7 +474,7 @@ locals {
   dns_monitors = {
     cloudflare_public = {
       name               = "Cloudflare (Public) resolves public zone"
-      hostname           = "opencloud.${var.cloudflare_zone}"
+      hostname           = "opencloud.${local.cloudflare_zone}"
       dns_resolve_server = "1.1.1.1"
       dns_resolve_type   = "A"
       port               = 53

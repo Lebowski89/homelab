@@ -1,3 +1,4 @@
+cloudflare_zone = "domain.com"
 internal_zone = "int.domain.com"
 
 host_private_values = {

@@ -13,16 +13,17 @@ variable "pm_tls_insecure" {
 }
 
 variable "target_node" {
-  type = string
+  description = "Proxmox node name."
+  type        = string
+
+  validation {
+    condition     = trimspace(var.target_node) != ""
+    error_message = "target_node must not be empty."
+  }
 }
 
 variable "node_management_ip" {
   type = string
-}
-
-variable "local_domain" {
-  type    = string
-  default = "home.arpa"
 }
 
 variable "network_vmbr0_name" {
@@ -63,17 +64,43 @@ variable "network_vmbr1_autostart" {
   default = true
 }
 
+variable "local_domain" {
+  description = "Optional local host domain fallback. Ignored while enable_netbox_remote_state is true."
+  type        = string
+  default     = ""
+}
+
 variable "dns_domain" {
-  type    = string
-  default = "home.arpa"
+  description = "Optional Proxmox DNS search domain fallback. Ignored while enable_netbox_remote_state is true."
+  type        = string
+  default     = ""
 }
 
 variable "dns_servers" {
-  type    = list(string)
-  default = []
+  description = "Optional Proxmox DNS servers fallback. Ignored while enable_netbox_remote_state is true."
+  type        = list(string)
+  default     = []
 }
 
 variable "timezone" {
   type    = string
   default = "Australia/Melbourne"
+}
+
+variable "enable_netbox_remote_state" {
+  description = "Read DNS topology data from the terraform/netbox local state."
+  type        = bool
+  default     = true
+}
+
+variable "netbox_state_path" {
+  description = "Path to the terraform/netbox state file."
+  type        = string
+  default     = "../../../netbox/terraform.tfstate"
+}
+
+variable "dns_ips" {
+  description = "Fallback DNS node/VIP IPs. Normally sourced from terraform/netbox outputs.dns_ips."
+  type        = map(string)
+  default     = {}
 }

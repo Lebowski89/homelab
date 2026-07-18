@@ -1,5 +1,36 @@
 locals {
-  vm_nameservers = [for ns in split(" ", trimspace(var.vm_nameserver)) : ns if ns != ""]
+  netbox_dns_ips       = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.dns_ips, {}) : {}
+  netbox_internal_zone = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
+
+  # NetBox takes precedence, while var.dns_ips can provide fallback values
+  # when remote state is disabled or incomplete.
+  dns_ips = merge(
+    var.dns_ips,
+    local.netbox_dns_ips,
+  )
+
+  dns_vip_nameservers = distinct(compact([
+    trimspace(lookup(local.dns_ips, "dns_vip_a", "")),
+    trimspace(lookup(local.dns_ips, "dns_vip_b", "")),
+  ]))
+
+  configured_vm_nameservers = distinct([
+    for nameserver in split(" ", trimspace(var.vm_nameserver)) : trimspace(nameserver)
+    if trimspace(nameserver) != ""
+  ])
+
+  # Preserve the existing behaviour:
+  # - use DNS VIPs while NetBox remote state is enabled;
+  # - otherwise use explicitly configured nameservers when supplied;
+  # - fall back to var.dns_ips VIPs when no explicit nameservers are supplied.
+  use_dns_vips = var.enable_netbox_remote_state || length(local.configured_vm_nameservers) == 0
+
+  vm_nameservers = local.use_dns_vips ? local.dns_vip_nameservers : local.configured_vm_nameservers
+
+  # Prefer the NetBox internal zone when available, but retain the explicit
+  # fallback if remote state is disabled or does not contain the output.
+  vm_searchdomain_source = trimspace(local.netbox_internal_zone) != "" ? local.netbox_internal_zone : var.vm_searchdomain
+  vm_searchdomain        = trim(trimspace(local.vm_searchdomain_source), ".")
 }
 
 resource "proxmox_virtual_environment_file" "tailscale_cloudinit" {
@@ -29,6 +60,22 @@ resource "proxmox_virtual_environment_vm" "postgres" {
   vm_id       = each.value.vmid
   description = "Postgres HA node ${each.key} managed by Terraform"
   node_name   = var.target_node
+
+  lifecycle {
+    ignore_changes = [
+      initialization,
+    ]
+
+    precondition {
+      condition = (
+        local.use_dns_vips
+        ? length(local.dns_vip_nameservers) == 2
+        : length(local.configured_vm_nameservers) > 0
+      )
+
+      error_message = "Unable to determine valid VM DNS servers. Ensure NetBox outputs.dns_ips contains distinct dns_vip_a and dns_vip_b values, provide them through dns_ips, or set vm_nameserver when NetBox remote state is disabled."
+    }
+  }
 
   clone {
     vm_id   = var.clone_template_vmid
@@ -72,7 +119,6 @@ resource "proxmox_virtual_environment_vm" "postgres" {
     datastore_id        = var.vm_storage
     vendor_data_file_id = proxmox_virtual_environment_file.tailscale_cloudinit.id
 
-
     ip_config {
       ipv4 {
         address = "${each.value.ip}/${var.vm_cidr}"
@@ -81,7 +127,7 @@ resource "proxmox_virtual_environment_vm" "postgres" {
     }
 
     dns {
-      domain  = var.vm_searchdomain
+      domain  = local.vm_searchdomain
       servers = local.vm_nameservers
     }
 
