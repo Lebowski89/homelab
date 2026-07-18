@@ -2,7 +2,7 @@
 
 collections:
   - name: ansible.posix
-    version: 2.2.1
+    version: 2.2.2
 
   - name: community.docker
     version: 5.2.1
