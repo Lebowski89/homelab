@@ -13,7 +13,13 @@ variable "pm_tls_insecure" {
 }
 
 variable "target_node" {
-  type = string
+  description = "Proxmox node name."
+  type        = string
+
+  validation {
+    condition     = trimspace(var.target_node) != ""
+    error_message = "target_node must not be empty."
+  }
 }
 
 variable "node_management_ip" {
