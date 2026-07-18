@@ -12,7 +12,7 @@
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_enable_netbox_remote_state"></a> [enable\_netbox\_remote\_state](#input\_enable\_netbox\_remote\_state) | Read DNS topology data from the terraform/netbox local state. | `bool` | `true` | no |
-| <a name="input_internal_zone_catalog"></a> [internal\_zone\_catalog](#input\_internal\_zone\_catalog) | Optional explicit Technitium catalog zone. Defaults to cluster-catalog.<technitium\_cluster\_domain>. | `string` | `""` | no |
+| <a name="input_internal_zone_catalog"></a> [internal\_zone\_catalog](#input\_internal\_zone\_catalog) | Optional explicit Technitium catalog zone. Defaults to `cluster-catalog.<technitium_cluster_domain>`. | `string` | `""` | no |
 | <a name="input_netbox_state_path"></a> [netbox\_state\_path](#input\_netbox\_state\_path) | Path to the terraform/netbox state file. | `string` | `"../../netbox/terraform.tfstate"` | no |
 | <a name="input_technitium_api_token"></a> [technitium\_api\_token](#input\_technitium\_api\_token) | n/a | `string` | n/a | yes |
 | <a name="input_technitium_cluster_domain"></a> [technitium\_cluster\_domain](#input\_technitium\_cluster\_domain) | Technitium DNS cluster domain. Used to derive the catalog zone name. | `string` | `"skynet"` | no |

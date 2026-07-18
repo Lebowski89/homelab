@@ -36,7 +36,7 @@
 | <a name="input_pm_ssh_host"></a> [pm\_ssh\_host](#input\_pm\_ssh\_host) | Optional explicit Proxmox SSH host fallback. Defaults to target\_node IP from NetBox. | `string` | `""` | no |
 | <a name="input_pm_ssh_port"></a> [pm\_ssh\_port](#input\_pm\_ssh\_port) | Proxmox SSH port. | `number` | `22` | no |
 | <a name="input_pm_ssh_username"></a> [pm\_ssh\_username](#input\_pm\_ssh\_username) | SSH username used to run pct commands on the Proxmox host. | `string` | `"root"` | no |
-| <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | Allow insecure TLS when connecting to the Proxmox API. | `bool` | `true` | no |
+| <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | Allow insecure TLS when connecting to the Proxmox API. | `bool` | `false` | no |
 | <a name="input_ssh_public_key_path"></a> [ssh\_public\_key\_path](#input\_ssh\_public\_key\_path) | Path to the SSH public key injected into the dns03 LXC. | `string` | n/a | yes |
 | <a name="input_tailscale_auth_key"></a> [tailscale\_auth\_key](#input\_tailscale\_auth\_key) | Ephemeral/auth key used to join the dns03 LXC to Tailscale. | `string` | n/a | yes |
 | <a name="input_target_node"></a> [target\_node](#input\_target\_node) | Proxmox node that hosts the dns03 LXC. | `string` | `"pve1"` | no |
