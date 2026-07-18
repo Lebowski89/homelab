@@ -46,7 +46,7 @@ variable "technitium_cluster_domain" {
 }
 
 variable "internal_zone_catalog" {
-  description = "Optional explicit Technitium catalog zone. Defaults to cluster-catalog.<technitium_cluster_domain>."
+  description = "Optional explicit Technitium catalog zone. Defaults to `cluster-catalog.<technitium_cluster_domain>`."
   type        = string
   default     = ""
 }

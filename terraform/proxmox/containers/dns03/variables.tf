@@ -19,7 +19,7 @@ variable "pm_api_token" {
 variable "pm_tls_insecure" {
   description = "Allow insecure TLS when connecting to the Proxmox API."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "pm_ssh_username" {
