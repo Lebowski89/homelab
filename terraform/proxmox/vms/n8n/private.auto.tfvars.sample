@@ -1,0 +1,29 @@
+pm_api_url      = "https://192.168.xx.xx:8006/"
+pm_tls_insecure = true
+
+target_node         = "pve1"
+clone_template_vm_id = 9002
+vm_storage          = "local-zfs"
+snippet_storage     = "local"
+
+vm_id             = 9010
+vm_ipv4_address   = "192.168.xx.xx/24"
+vm_ipv4_gateway   = "192.168.xx.x"
+vm_network_bridge = "vmbr1"
+vm_vlan_id        = null
+
+cloud_init_user     = "ubuntu"
+ssh_public_key_path = "~/.ssh/proxmox_terraform.pub"
+
+# Used only when enable_netbox_remote_state is false or its outputs are not
+# intended to supply DNS for this root.
+vm_nameservers  = ["192.168.xx.xx", "192.168.xx.xx"]
+vm_search_domain = "internal.example.com"
+
+netbox_state_path = "../../../netbox/terraform.tfstate"
+
+# Optional fallback values when the NetBox state is disabled or incomplete.
+dns_ips = {
+  dns_vip_a = "192.168.xx.xx"
+  dns_vip_b = "192.168.xx.xx"
+}

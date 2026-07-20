@@ -13,6 +13,7 @@ ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 mapfile -t TOFU_DIRS < <(
   find "${ROOT_DIR}/terraform" \
     -path '*/.terraform' -prune -o \
+    -path '*/modules' -prune -o \
     -name '*.tf' -printf '%h\n' |
     sort -u
 )
