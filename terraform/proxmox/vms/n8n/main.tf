@@ -27,7 +27,6 @@ module "n8n_vm" {
   ssh_public_keys                    = [trimspace(file(pathexpand(var.ssh_public_key_path)))]
   snippet_datastore_id               = var.snippet_storage
   qemu_guest_agent_bootstrap_enabled = var.qemu_guest_agent_bootstrap_enabled
-  qemu_guest_agent_snippet_file_name = "${var.vm_name}-tailscale-bootstrap.yaml"
   network_bridge                     = var.vm_network_bridge
   vlan_id                            = var.vm_vlan_id
 }
