@@ -53,7 +53,14 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         _validate_numeric_id(container["gid"], name=f"{name}.container.gid")
     ports = container.get("ports", []) or []
     for port in ports:
-        if not isinstance(port, Mapping) or int(port.get("host", 0)) < 1 or int(port.get("container", 0)) < 1:
+        if not isinstance(port, Mapping):
+            raise AnsibleFilterError(f"{name}.container.ports entries require host and container ports")
+        try:
+            host_port = int(port.get("host", 0))
+            container_port = int(port.get("container", 0))
+        except (ValueError, TypeError):
+            raise AnsibleFilterError(f"{name}.container.ports entries require numeric host and container ports")
+        if host_port < 1 or container_port < 1:
             raise AnsibleFilterError(f"{name}.container.ports entries require host and container ports")
         if "host_ip" in port and str(port.get("host_ip", "")).strip() == "":
             raise AnsibleFilterError(f"{name}.container.ports.host_ip must not be empty when supplied")
