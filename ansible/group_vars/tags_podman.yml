@@ -1,0 +1,4 @@
+---
+
+ubuntu_apt_package_profiles_podman:
+  - network

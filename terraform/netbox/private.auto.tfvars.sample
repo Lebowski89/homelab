@@ -56,6 +56,16 @@ host_private_values = {
     }
   }
 
+  n8n = {
+    mgmt_ip = "192.168.xx.xx/24"
+
+    custom_fields = {
+      ansible_user = "ubuntu"
+      ssh_port     = "22"
+      tailscale_ip = "100.xx.xx.xx"
+    }
+  }
+
   pve1 = {
     mgmt_ip = "192.168.xx.xx/24"
 

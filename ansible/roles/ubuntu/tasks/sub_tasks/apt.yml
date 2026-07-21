@@ -10,6 +10,7 @@
           + (ubuntu_apt_package_profiles_extra | default([]))
           + (ubuntu_apt_package_profiles_ansible_manager | default([]))
           + (ubuntu_apt_package_profiles_docker | default([]))
+          + (ubuntu_apt_package_profiles_podman | default([]))
           + (ubuntu_apt_package_profiles_postgres | default([]))
           + (ubuntu_apt_package_profiles_swarm | default([]))
           + (ubuntu_apt_package_profiles_haproxy | default([]))

@@ -1,0 +1,22 @@
+---
+podman_services_quadlet_dir: /etc/containers/systemd
+podman_services_action_remove: "{{ 'remove' in (ansible_run_tags | default([])) }}"
+podman_services_action_recreate: "{{ 'recreate' in (ansible_run_tags | default([])) }}"
+podman_services_action_update: "{{ 'update' in (ansible_run_tags | default([])) }}"
+podman_services_action_drift: "{{ 'drift' in (ansible_run_tags | default([])) }}"
+podman_services_action_bootstrap: "{{ 'bootstrap' in (ansible_run_tags | default([])) }}"
+podman_services_state: >-
+  {{
+    'check' if ansible_check_mode else
+    ('remove' if podman_services_action_remove else
+    ('recreate' if podman_services_action_recreate else
+    ('update' if podman_services_action_update else
+    ('drift' if podman_services_action_drift else
+    ('bootstrap' if podman_services_action_bootstrap else 'deploy')))))
+  }}
+podman_services_pull_images: true
+podman_services_traefik_delegate: "{{ docker_services_primary_manager | default('mgt') }}"
+podman_services_traefik_dynamic_dir: /opt/traefik/dynamic
+podman_services_traefik_dynamic_owner: "1000"
+podman_services_traefik_dynamic_group: "1000"
+podman_services_infisical_delegate: "{{ docker_services_primary_manager | default('mgt') }}"

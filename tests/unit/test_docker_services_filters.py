@@ -157,3 +157,25 @@ def test_invalid_enabled_value_fails_fast():
         assert "scraparr.enabled must be boolean-like" in str(exc)
     else:
         raise AssertionError("Expected invalid enabled value to fail")
+
+
+def test_existing_docker_services_with_missing_runtime_are_unchanged():
+    plugin = load_plugin()
+    legacy_service = {
+        "homepage": {
+            "enabled": True,
+            "tags": ["monitoring", "homepage"],
+            "targets": {
+                "app": {"enabled": True, "tags": ["ui"]},
+            },
+        }
+    }
+
+    assert plugin.docker_services_effective(legacy_service) == [
+        {
+            "name": "homepage",
+            "target": "app",
+            "tags": ["homepage", "monitoring", "app", "ui"],
+            "enabled": True,
+        }
+    ]

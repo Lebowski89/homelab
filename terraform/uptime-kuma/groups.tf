@@ -4,6 +4,11 @@ locals {
       name = "Apps"
     }
 
+    automation = {
+      name       = "Automation"
+      parent_key = "apps"
+    }
+
     arrs = {
       name       = "ARRs"
       parent_key = "apps"
