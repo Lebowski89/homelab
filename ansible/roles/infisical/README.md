@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/15 |
+| Readme update        | 2026/07/21 |
 
 
 
@@ -45,7 +45,7 @@
 | [infisical_stack](defaults/main.yml#L32)   | str | `infisical` |    
 | [infisical_compose_file](defaults/main.yml#L33)   | str | `infisical-compose.yml` |    
 | [infisical_compose_path](defaults/main.yml#L34)   | str | `{{ infisical_base_path }}/{{ infisical_compose_file }}` |    
-| [infisical_image](defaults/main.yml#L36)   | str | `docker.io/infisical/infisical:v0.162.2` |    
+| [infisical_image](defaults/main.yml#L36)   | str | `docker.io/infisical/infisical:v0.162.6` |    
 | [infisical_timezone](defaults/main.yml#L37)   | str | `{{ timezone ¦ default('Australia/Melbourne') }}` |    
 | [infisical_puid](defaults/main.yml#L38)   | str | `{{ docker_host_puid ¦ default('1000') }}` |    
 | [infisical_pgid](defaults/main.yml#L39)   | str | `{{ docker_host_pgid ¦ default('1000') }}` |    
