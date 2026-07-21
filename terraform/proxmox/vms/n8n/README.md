@@ -19,7 +19,6 @@
 | <a name="input_cloud_init_user"></a> [cloud\_init\_user](#input\_cloud\_init\_user) | Cloud-init administrative username. | `string` | `"ubuntu"` | no |
 | <a name="input_dns_ips"></a> [dns\_ips](#input\_dns\_ips) | Fallback DNS VIP map, normally sourced from NetBox outputs. | `map(string)` | `{}` | no |
 | <a name="input_enable_netbox_remote_state"></a> [enable\_netbox\_remote\_state](#input\_enable\_netbox\_remote\_state) | Read DNS topology from the terraform/netbox local state. | `bool` | `true` | no |
-| <a name="input_enable_tailscale_bootstrap"></a> [enable\_tailscale\_bootstrap](#input\_enable\_tailscale\_bootstrap) | Install and enrol Tailscale through a cloud-init vendor-data snippet. | `bool` | `true` | no |
 | <a name="input_netbox_state_path"></a> [netbox\_state\_path](#input\_netbox\_state\_path) | Path to the terraform/netbox state file. | `string` | `"../../../netbox/terraform.tfstate"` | no |
 | <a name="input_pm_api_token"></a> [pm\_api\_token](#input\_pm\_api\_token) | Proxmox API token in user@realm!tokenid=secret format. | `string` | n/a | yes |
 | <a name="input_pm_api_url"></a> [pm\_api\_url](#input\_pm\_api\_url) | Proxmox API URL, for example https://pve.example.com:8006/. | `string` | n/a | yes |
@@ -28,9 +27,9 @@
 | <a name="input_pm_ssh_username"></a> [pm\_ssh\_username](#input\_pm\_ssh\_username) | SSH username used by the Proxmox provider for snippet operations. | `string` | `"root"` | no |
 | <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | Allow a self-signed Proxmox API certificate. | `bool` | `false` | no |
 | <a name="input_qemu_agent_enabled"></a> [qemu\_agent\_enabled](#input\_qemu\_agent\_enabled) | Enable QEMU guest-agent integration. | `bool` | `true` | no |
+| <a name="input_qemu_guest_agent_bootstrap_enabled"></a> [qemu\_guest\_agent\_bootstrap\_enabled](#input\_qemu\_guest\_agent\_bootstrap\_enabled) | Install qemu-guest-agent during first boot so Proxmox can bootstrap the guest. | `bool` | `true` | no |
 | <a name="input_snippet_storage"></a> [snippet\_storage](#input\_snippet\_storage) | Proxmox snippets datastore for optional cloud-init vendor data. | `string` | `"local"` | no |
 | <a name="input_ssh_public_key_path"></a> [ssh\_public\_key\_path](#input\_ssh\_public\_key\_path) | Local path to the SSH public key installed by cloud-init. | `string` | n/a | yes |
-| <a name="input_tailscale_auth_key"></a> [tailscale\_auth\_key](#input\_tailscale\_auth\_key) | Tailscale auth key used only during initial cloud-init bootstrap. | `string` | `null` | no |
 | <a name="input_target_node"></a> [target\_node](#input\_target\_node) | Proxmox node on which to create the n8n VM. | `string` | n/a | yes |
 | <a name="input_vm_ballooning_memory_mb"></a> [vm\_ballooning\_memory\_mb](#input\_vm\_ballooning\_memory\_mb) | Minimum ballooned memory in MiB; 0 disables ballooning. | `number` | `0` | no |
 | <a name="input_vm_cpu_cores"></a> [vm\_cpu\_cores](#input\_vm\_cpu\_cores) | Number of n8n VM virtual CPU cores. | `number` | `2` | no |

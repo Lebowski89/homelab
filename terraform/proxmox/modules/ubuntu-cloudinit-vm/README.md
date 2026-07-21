@@ -31,6 +31,9 @@
 | <a name="input_on_boot"></a> [on\_boot](#input\_on\_boot) | Start the VM automatically when the Proxmox node boots. | `bool` | `true` | no |
 | <a name="input_protection"></a> [protection](#input\_protection) | Enable Proxmox VM protection. | `bool` | `false` | no |
 | <a name="input_qemu_agent_enabled"></a> [qemu\_agent\_enabled](#input\_qemu\_agent\_enabled) | Enable the QEMU guest agent integration. | `bool` | `true` | no |
+| <a name="input_qemu_guest_agent_bootstrap_enabled"></a> [qemu\_guest\_agent\_bootstrap\_enabled](#input\_qemu\_guest\_agent\_bootstrap\_enabled) | Install and start qemu-guest-agent through non-secret cloud-init vendor data. | `bool` | `true` | no |
+| <a name="input_qemu_guest_agent_snippet_file_name"></a> [qemu\_guest\_agent\_snippet\_file\_name](#input\_qemu\_guest\_agent\_snippet\_file\_name) | Optional filename override for the generated QEMU guest-agent cloud-init snippet. | `string` | `null` | no |
+| <a name="input_snippet_datastore_id"></a> [snippet\_datastore\_id](#input\_snippet\_datastore\_id) | Proxmox datastore used for generated cloud-init snippets. | `string` | `"local"` | no |
 | <a name="input_ssh_public_keys"></a> [ssh\_public\_keys](#input\_ssh\_public\_keys) | SSH public keys installed for the cloud-init user. | `list(string)` | n/a | yes |
 | <a name="input_started"></a> [started](#input\_started) | Ensure the VM is started after creation. | `bool` | `true` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Tags applied to the Proxmox VM. | `list(string)` | <pre>[<br/>  "terraform",<br/>  "ubuntu",<br/>  "cloud-init"<br/>]</pre> | no |
