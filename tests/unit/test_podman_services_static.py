@@ -31,7 +31,7 @@ def test_remove_stops_container_before_network_then_removes_files():
 def test_remove_shared_network_is_not_explicitly_removed():
     check = TASKS.index("Check dedicated network still exists for removal")
     remove = TASKS.index("Remove dedicated network if still present")
-    assert "podman_service.network.delete_on_stop | default(false) | bool" in TASKS[check:remove]
+    assert "podman_services_service.network.delete_on_stop | default(false) | bool" in TASKS[check:remove]
 
 
 def test_changed_dedicated_network_lifecycle_checks_and_removes_before_reload_and_start():
@@ -71,7 +71,7 @@ def test_false_to_true_delete_on_stop_transition_removes_remaining_network():
     exists = TASKS.index("Check changed dedicated network still exists")
     remove = TASKS.index("Remove changed dedicated network if still present")
     assert stop < exists < remove
-    assert "podman_service.network.delete_on_stop | default(false) | bool" in TASKS[stop:remove]
+    assert "podman_services_service.network.delete_on_stop | default(false) | bool" in TASKS[stop:remove]
 
 
 def test_secret_skip_existing_semantics_are_explicit():
