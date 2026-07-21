@@ -11,3 +11,22 @@ opentofu_api_user: terraform@pve
 opentofu_api_token_name: "terraform-token"
 
 proxmox_api_bootstrap_user: "root@pam"
+
+################################
+# TAILSCALE BOOTSTRAP
+################################
+
+tailscale_bootstrap_guest: ""
+tailscale_bootstrap_guests: {}
+
+# Populate the variables above before running the bootstrap role.
+#
+# Example:
+#
+# tailscale_bootstrap_guest: n8n
+#
+# tailscale_bootstrap_guests:
+#   n8n:
+#     vmid: 9010
+#     hostname: n8n
+#     enable_ssh: true
