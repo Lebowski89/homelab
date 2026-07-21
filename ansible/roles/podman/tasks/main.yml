@@ -40,7 +40,7 @@
   when: not (ansible_check_mode and podman_version_result.rc != 0)
   ansible.builtin.assert:
     that:
-      - (podman_version_result.stdout | regex_search('[0-9]+\.[0-9]+\.[0-9]+')) is version(podman_min_version, '>=')
+      - (podman_version_result.stdout | regex_search('[0-9]+\.[0-9]+\.[0-9]+') | default('0.0.0', true)) is version(podman_min_version, '>=')
     fail_msg: >-
       Installed Podman must be at least {{ podman_min_version }} for system Quadlet support;
       got {{ podman_version_result.stdout | default('unknown') }}.
