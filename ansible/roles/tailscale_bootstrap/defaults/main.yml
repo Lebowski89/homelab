@@ -1,0 +1,6 @@
+---
+
+tailscale_bootstrap_guest: ""
+tailscale_bootstrap_guests: {}
+tailscale_bootstrap_guest_agent_retries: 30
+tailscale_bootstrap_guest_agent_delay: 5

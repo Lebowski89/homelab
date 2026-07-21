@@ -100,6 +100,12 @@ variable "qemu_agent_enabled" {
   default     = true
 }
 
+variable "qemu_guest_agent_bootstrap_enabled" {
+  description = "Install qemu-guest-agent during first boot so Proxmox can bootstrap the guest."
+  type        = bool
+  default     = true
+}
+
 variable "vm_cpu_cores" {
   description = "Number of n8n VM virtual CPU cores."
   type        = number
@@ -180,20 +186,6 @@ variable "cloud_init_user" {
 variable "ssh_public_key_path" {
   description = "Local path to the SSH public key installed by cloud-init."
   type        = string
-}
-
-variable "enable_tailscale_bootstrap" {
-  description = "Install and enrol Tailscale through a cloud-init vendor-data snippet."
-  type        = bool
-  default     = true
-}
-
-variable "tailscale_auth_key" {
-  description = "Tailscale auth key used only during initial cloud-init bootstrap."
-  type        = string
-  sensitive   = true
-  default     = null
-  nullable    = true
 }
 
 variable "enable_netbox_remote_state" {

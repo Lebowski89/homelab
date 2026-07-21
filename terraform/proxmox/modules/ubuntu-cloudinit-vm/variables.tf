@@ -64,10 +64,37 @@ variable "started" {
   default     = true
 }
 
+variable "snippet_datastore_id" {
+  description = "Proxmox datastore used for generated cloud-init snippets."
+  type        = string
+  default     = "local"
+}
+
+variable "qemu_guest_agent_bootstrap_enabled" {
+  description = "Install and start qemu-guest-agent through non-secret cloud-init vendor data."
+  type        = bool
+  default     = true
+}
+
 variable "qemu_agent_enabled" {
   description = "Enable the QEMU guest agent integration."
   type        = bool
   default     = true
+}
+
+variable "qemu_guest_agent_snippet_file_name" {
+  description = "Optional filename override for the generated QEMU guest-agent cloud-init snippet."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition = (
+      var.qemu_guest_agent_snippet_file_name == null ||
+      trimspace(var.qemu_guest_agent_snippet_file_name) != ""
+    )
+    error_message = "qemu_guest_agent_snippet_file_name must be null or a non-empty filename."
+  }
 }
 
 variable "cpu_cores" {

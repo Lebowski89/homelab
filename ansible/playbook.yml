@@ -83,6 +83,22 @@
   tasks:
 
     ################################
+    # TAILSCALE BOOTSTRAP (QEMU AGENT)
+    ################################
+
+    - name: Include Tailscale bootstrap role
+      when: inventory_hostname == tailscale_bootstrap_proxmox_host
+      ansible.builtin.include_role:
+        name: tailscale_bootstrap
+        apply:
+          tags:
+            - never
+            - tailscale_bootstrap
+      tags:
+        - never
+        - tailscale_bootstrap
+
+    ################################
     # OS (CONFIG/SETTINGS)
     ################################
 

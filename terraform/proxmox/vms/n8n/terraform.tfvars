@@ -18,5 +18,6 @@ vm_on_boot    = true
 vm_protection = false
 vm_started    = true
 
+qemu_guest_agent_bootstrap_enabled = true
+
 enable_netbox_remote_state = true
-enable_tailscale_bootstrap = true
