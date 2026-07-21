@@ -217,6 +217,28 @@ locals {
       description = "Hosts where the Docker role installs Docker."
     }
 
+
+    podman = {
+      name        = "podman"
+      slug        = "podman"
+      color_hex   = "7952b3"
+      description = "Podman-capable hosts."
+    }
+
+    podman_install = {
+      name        = "podman-install"
+      slug        = "podman_install"
+      color_hex   = "9575cd"
+      description = "Hosts where the Podman role installs Podman."
+    }
+
+    n8n = {
+      name        = "n8n"
+      slug        = "n8n"
+      color_hex   = "ea4b71"
+      description = "n8n automation service hosts."
+    }
+
     swarm = {
       name        = "swarm"
       slug        = "swarm"
@@ -489,6 +511,20 @@ locals {
         "dns",
         "technitium",
         "keepalived",
+      ]
+    }
+
+    n8n = {
+      description     = "Isolated n8n automation VM"
+      role_key        = "server"
+      device_type_key = "generic_vm"
+      tags = [
+        "skynet",
+        "podman",
+        "podman_install",
+        "node_exporter",
+        "opentofu_managed",
+        "n8n",
       ]
     }
 

@@ -1,6 +1,9 @@
 ---
 
 collections:
+  - name: containers.podman
+    version: 1.18.0
+
   - name: ansible.posix
     version: 2.2.2
 

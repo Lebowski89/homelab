@@ -22,6 +22,7 @@ locals {
         "ping.pg95",
         "ping.pg96",
         "ping.pg97",
+        "ping.n8n",
         "tcp.postgres_pg95_tcp",
         "tcp.postgres_pg96_tcp",
         "tcp.postgres_pg97_tcp",
@@ -38,6 +39,15 @@ locals {
         "dns.cloudflare_public",
         "tcp.traefik_private_tcp",
         "tcp.traefik_public_tcp",
+      ]
+    },
+    {
+      name     = "Automation"
+      weight   = 11
+      send_url = true
+      monitors = [
+        "http.n8n-direct",
+        "http.n8n-private",
       ]
     },
     {

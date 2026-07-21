@@ -1,6 +1,7 @@
 locals {
   tags = {
     arrs           = { name = "arrs", color = "#7c3aed" }
+    automation     = { name = "automation", color = "#ea4b71" }
     auth           = { name = "auth", color = "#7c3aed" }
     critical       = { name = "critical", color = "#dc2626" }
     dns            = { name = "dns", color = "#9333ea" }

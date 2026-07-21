@@ -1,0 +1,98 @@
+---
+- name: Podman | Assert supported Ubuntu host
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family | default('') == 'Debian'
+      - ansible_facts.distribution | default('') == 'Ubuntu'
+      - ansible_facts.distribution_version is version('26.04', '>=')
+    fail_msg: "The production podman role targets Ubuntu 26.04 or newer with Podman 5.7 or newer."
+  tags: [podman, podman_install]
+
+- name: Podman | Install runtime packages
+  when: podman_install_enable | bool
+  ansible.builtin.apt:
+    name: "{{ podman_packages + podman_install_extra_packages }}"
+    state: "{{ podman_state }}"
+    update_cache: "{{ podman_update_cache }}"
+    cache_valid_time: "{{ podman_cache_valid_time }}"
+  tags: [podman, podman_install]
+
+- name: Podman | Check installed version
+  ansible.builtin.command:
+    argv: [podman, --version]
+  register: podman_version_result
+  changed_when: false
+  failed_when: >-
+    not (ansible_check_mode and podman_version_result.rc != 0)
+    and podman_version_result.rc != 0
+  check_mode: false
+  tags: [podman, podman_install]
+
+- name: Podman | Defer runtime validation in fresh-host check mode
+  when:
+    - ansible_check_mode
+    - podman_version_result.rc != 0
+  ansible.builtin.debug:
+    msg: "Podman is not installed yet; version and Quadlet generator validation will run after installation."
+  tags: [podman, podman_install]
+
+- name: Podman | Assert Quadlet-capable version
+  when: not (ansible_check_mode and podman_version_result.rc != 0)
+  ansible.builtin.assert:
+    that:
+      - (podman_version_result.stdout | regex_search('[0-9]+\.[0-9]+\.[0-9]+') | default('0.0.0', true)) is version(podman_min_version, '>=')
+    fail_msg: >-
+      Installed Podman must be at least {{ podman_min_version }} for system Quadlet support;
+      got {{ podman_version_result.stdout | default('unknown') }}.
+  tags: [podman, podman_install]
+
+
+- name: Podman | Check Podman cgroup version
+  when: not (ansible_check_mode and podman_version_result.rc != 0)
+  ansible.builtin.command:
+    argv: [podman, info, --format, "{{ '{{.Host.CgroupsVersion}}' }}"]
+  register: podman_cgroup_version_result
+  changed_when: false
+  check_mode: false
+  tags: [podman, podman_install]
+
+- name: Podman | Assert cgroup v2
+  when: not (ansible_check_mode and podman_version_result.rc != 0)
+  ansible.builtin.assert:
+    that:
+      - podman_cgroup_version_result.stdout | trim == 'v2'
+    fail_msg: >-
+      Podman 5.7 requires cgroup v2; podman info reported
+      {{ podman_cgroup_version_result.stdout | default('unknown') }}.
+  tags: [podman, podman_install]
+
+- name: Podman | Check system Quadlet generator
+  when: not (ansible_check_mode and podman_version_result.rc != 0)
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop: "{{ podman_quadlet_generator_paths }}"
+  register: podman_quadlet_generator_stats
+  tags: [podman, podman_install]
+
+- name: Podman | Record system Quadlet generator path
+  when: not (ansible_check_mode and podman_version_result.rc != 0)
+  ansible.builtin.set_fact:
+    podman_quadlet_generator_path: >-
+      {{
+        (
+          podman_quadlet_generator_stats.results
+          | selectattr('stat.exists')
+          | map(attribute='stat.path')
+          | list
+          | first
+        ) | default('')
+      }}
+  tags: [podman, podman_install]
+
+- name: Podman | Assert system Quadlet generator exists
+  when: not (ansible_check_mode and podman_version_result.rc != 0)
+  ansible.builtin.assert:
+    that:
+      - podman_quadlet_generator_path | length > 0
+    fail_msg: "Podman systemd Quadlet generator not found in {{ podman_quadlet_generator_paths | join(', ') }}."
+  tags: [podman, podman_install]

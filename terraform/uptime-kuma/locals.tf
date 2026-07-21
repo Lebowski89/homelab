@@ -62,6 +62,15 @@ locals {
     wallos    = { group = "media", tag_keys = ["media"] }
     znc       = { group = "media", tag_keys = ["media"] }
 
+    # Automation
+    n8n = {
+      group                 = "automation"
+      tag_keys              = ["automation", "private"]
+      url                   = "https://n8n.${local.internal_zone}:${local.private_https_port}/healthz/readiness"
+      accepted_status_codes = ["200-299"]
+      max_redirects         = 0
+    }
+
     # Monitoring
     dozzle      = { group = "monitoring", tag_keys = ["monitoring"] }
     gotify      = { group = "monitoring", tag_keys = ["monitoring"] }
@@ -170,6 +179,7 @@ locals {
     arrs       = { group = "arrs", tag_keys = ["arrs"] }
     gaming     = { group = "gaming", tag_keys = ["gaming"] }
     media      = { group = "media", tag_keys = ["media"] }
+    automation = { group = "automation", tag_keys = ["automation"] }
     monitoring = { group = "monitoring", tag_keys = ["monitoring"] }
     network    = { group = "network", tag_keys = ["network"] }
     plex       = { group = "plex", tag_keys = ["plex"] }
@@ -203,6 +213,15 @@ locals {
     thelounge = { category = "media", port = 9000 }
     znc       = { category = "media", port = 6501 }
     wallos    = { category = "media", port = 80 }
+
+    # Automation
+    n8n = {
+      category              = "automation"
+      hostname              = local.host_ips["n8n"]
+      port                  = 5678
+      path                  = "/healthz/readiness"
+      accepted_status_codes = ["200-299"]
+    }
 
     # Monitoring
     alloy = {
@@ -336,6 +355,14 @@ locals {
   )
 
   ping_monitors = {
+    n8n = {
+      name        = "n8n (Host Ping)"
+      hostname    = local.host_ips["n8n"]
+      description = "Dedicated n8n automation VM"
+      group       = "infrastructure"
+      tag_keys    = ["automation", "infrastructure"]
+    }
+
     dns03 = {
       name        = "dns03 (Host Ping)"
       hostname    = local.host_ips["dns03"]
