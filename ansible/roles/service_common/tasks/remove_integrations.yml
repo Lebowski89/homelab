@@ -1,0 +1,20 @@
+---
+
+- name: Service common remove integrations | Include interface validation
+  ansible.builtin.include_tasks: validate.yml
+
+- name: Service common remove integrations | Resolve canonical and legacy Traefik paths
+  ansible.builtin.set_fact:
+    service_common_traefik_remove_paths:
+      - "{{ service_common_traefik_dynamic_dir }}/{{ service_common_name }}-dynamic.yml"
+      - "{{ service_common_traefik_dynamic_dir }}/{{ service_common_name }}.yml"
+
+- name: Service common remove integrations | Remove canonical and legacy Traefik configurations
+  ansible.builtin.file:
+    path: "{{ service_common_traefik_remove_path }}"
+    state: absent
+  loop: "{{ service_common_traefik_remove_paths | unique | list }}"
+  loop_control:
+    loop_var: service_common_traefik_remove_path
+    label: "{{ service_common_traefik_remove_path }}"
+  delegate_to: "{{ service_common_controller_host }}"

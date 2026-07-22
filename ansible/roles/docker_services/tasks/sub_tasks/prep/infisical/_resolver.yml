@@ -1,12 +1,14 @@
 ---
 
 - name: Prep - Infisical Resolver | Determine fail-on-empty behavior
+  no_log: true
   ansible.builtin.set_fact:
     docker_services_env_fail_on_empty: >-
       {{ (docker_services_svc.infisical.fail_on_empty | default(true)) | bool }}
   when: docker_services_svc.infisical is defined
 
 - name: Prep - Infisical Resolver | Initialize resolved environment + placeholder key list
+  no_log: true
   when:
     - docker_services_svc.environment is defined
     - (docker_services_svc.environment | length) > 0
@@ -15,6 +17,7 @@
     docker_services_env_placeholder_keys: []
 
 - name: Prep - Infisical Resolver | Resolve placeholders
+  no_log: true
   when:
     - docker_services_svc.environment is defined
     - (docker_services_svc.environment | length) > 0
@@ -60,11 +63,13 @@
     label: "{{ env_kv.key }}"
 
 - name: Prep - Infisical Resolver | Replace docker_services_svc.environment with resolved values
+  no_log: true
   when: docker_services_env_resolved is defined
   ansible.builtin.set_fact:
     docker_services_svc: "{{ docker_services_svc | combine({'environment': docker_services_env_resolved}, recursive=true) }}"
 
 - name: Prep - Infisical Resolver | Fail if any placeholders remain
+  no_log: true
   when:
     - (docker_services_env_fail_on_empty | default(true)) | bool
     - docker_services_svc.environment is defined
@@ -86,6 +91,7 @@
       }}
 
 - name: Prep - Infisical Resolver | Fail if any placeholder-resolved env key is empty
+  no_log: true
   when:
     - (docker_services_env_fail_on_empty | default(true)) | bool
     - (docker_services_env_placeholder_keys | default([]) | length) > 0

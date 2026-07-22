@@ -1,0 +1,19 @@
+---
+
+service_common_name: ""
+service_common_runtime: ""
+service_common_action: ""
+service_common_service: {}
+service_common_target_hosts: []
+service_common_controller_host: ""
+service_common_default_owner: "1000"
+service_common_default_group: "1000"
+service_common_default_mode: "0755"
+service_common_host_defaults: {}
+service_common_template_vars: {}
+service_common_traefik_base_zone: ""
+service_common_traefik_dynamic_dir: /opt/traefik/dynamic
+service_common_traefik_owner: "1000"
+service_common_traefik_group: "1000"
+service_common_prepare_actions: [deploy, update, recreate, bootstrap]
+service_common_remove_actions: [remove]

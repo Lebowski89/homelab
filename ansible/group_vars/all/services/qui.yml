@@ -22,6 +22,7 @@ qui:
       mode: "0755"
   swarm_env_templates:
     - src: configs/qui.env.j2
+      no_log: true
       dest: /opt/stacks/qui.env
       mode: "0600"
       force: true

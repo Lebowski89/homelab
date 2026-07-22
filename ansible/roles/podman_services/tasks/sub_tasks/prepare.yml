@@ -1,0 +1,130 @@
+---
+
+- name: Prep | Ensure system Quadlet directory exists
+  ansible.builtin.file:
+    path: "{{ podman_services_quadlet_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Prep | Render network Quadlet
+  when:
+    - podman_services_service.network is mapping
+    - podman_services_state != 'remove'
+  ansible.builtin.template:
+    src: network.network.j2
+    dest: "{{ podman_services_quadlet_dir }}/{{ podman_services_service.network.name }}.network"
+    owner: root
+    group: root
+    mode: "0644"
+  register: podman_services_network_quadlet
+  notify: Podman services | daemon reload
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Prep | Render volume Quadlets
+  when: podman_services_state != 'remove'
+  ansible.builtin.template:
+    src: volume.volume.j2
+    dest: "{{ podman_services_quadlet_dir }}/{{ volume.name }}.volume"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ podman_services_service.volumes }}"
+  loop_control:
+    loop_var: volume
+    label: "{{ volume.name }}"
+  register: podman_services_volume_quadlets
+  notify: Podman services | daemon reload
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Prep | Render protected environment file
+  when:
+    - podman_services_service.env | length > 0
+    - podman_services_state != 'remove'
+  ansible.builtin.template:
+    src: env.env.j2
+    dest: "{{ podman_services_quadlet_dir }}/{{ podman_services_service.unit_name }}.env"
+    owner: root
+    group: root
+    mode: "0600"
+  register: podman_services_env_file
+  notify: Podman services | daemon reload
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Prep | Resolve Infisical secret values
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_service.secrets | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_secret_values: >-
+      {{
+        podman_services_secret_values | default({})
+        | combine({
+            item.name: lookup(
+              'infisical.vault.read_secrets',
+              **(podman_services_infisical_lookup_params | combine({
+                'path': item.infisical_path,
+                'secret_name': item.infisical_key
+              }))
+            ).value
+          })
+      }}
+  loop: "{{ podman_services_service.secrets }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Prep | Reject empty Infisical secret values before Podman materialization
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_service.secrets | length > 0
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - podman_services_secret_values[item.name] | default('') | string | trim | length > 0
+    fail_msg: "A required Podman secret value is empty; runtime secret creation was stopped."
+  loop: "{{ podman_services_service.secrets }}"
+
+- name: Prep | Create/update Podman secrets
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+  no_log: true
+  diff: false
+  containers.podman.podman_secret:
+    name: "{{ item.name }}"
+    data: "{{ podman_services_secret_values[item.name] }}"
+    state: present
+    force: "{{ (item | podman_secret_policy(podman_services_state)).force }}"
+    skip_existing: "{{ (item | podman_secret_policy(podman_services_state)).skip_existing }}"
+  loop: "{{ podman_services_service.secrets }}"
+  register: podman_services_secret_results
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Prep | Report check-mode PostgreSQL database plan
+  when:
+    - ansible_check_mode
+    - podman_services_service.postgres.enable | default(false) | bool
+  ansible.builtin.debug:
+    msg: >-
+      PostgreSQL database declaration for {{ podman_services_service.name }} is
+      {{ podman_services_service.postgres.databases | default([]) | join(', ') }}.
+      Database creation is intentionally not performed by podman_services.
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Prep | Render container Quadlet
+  when: podman_services_state != 'remove'
+  ansible.builtin.template:
+    src: container.container.j2
+    dest: "{{ podman_services_quadlet_dir }}/{{ podman_services_service.unit_name }}.container"
+    owner: root
+    group: root
+    mode: "0644"
+  register: podman_services_container_quadlet
+  notify: Podman services | daemon reload
+  tags: [deploy, update, recreate, bootstrap]

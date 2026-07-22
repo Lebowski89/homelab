@@ -47,6 +47,7 @@ kometa:
       mode: "0755"
   templates:
     - src: configs/kometa.yml.j2
+      no_log: true
       dest: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/kometa/config.yml"
       mode: "0664"
       force: false

@@ -1,0 +1,41 @@
+---
+
+- name: Drift | Check current image reference
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'drift'
+  ansible.builtin.command:
+    argv: [podman, inspect, --format, "{{ '{{.ImageName}}' }}", "{{ podman_services_service.unit_name }}"]
+  register: podman_services_drift_inspect
+  failed_when: false
+  changed_when: false
+  tags: [drift]
+
+- name: Drift | Classify image reference drift
+  when: podman_services_state == 'drift'
+  ansible.builtin.set_fact:
+    podman_services_image_reference_drift: >-
+      {{
+        podman_services_drift_inspect
+        | podman_image_reference_drift(podman_services_service.image)
+      }}
+  changed_when: podman_services_image_reference_drift.drift | bool
+  tags: [drift]
+
+- name: Drift | Report Podman image reference drift
+  when:
+    - podman_services_state == 'drift'
+    - podman_services_image_reference_drift.drift | bool
+  ansible.builtin.debug:
+    msg: "{{ podman_services_image_reference_drift.message }}"
+  changed_when: false
+  tags: [drift]
+
+- name: Drift | Report no Podman image reference drift
+  when:
+    - podman_services_state == 'drift'
+    - not (podman_services_image_reference_drift.drift | bool)
+  ansible.builtin.debug:
+    msg: "No Podman image reference drift detected for {{ podman_services_service.name }}."
+  changed_when: false
+  tags: [drift]

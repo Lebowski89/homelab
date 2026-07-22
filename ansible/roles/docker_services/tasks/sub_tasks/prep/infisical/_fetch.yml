@@ -21,6 +21,8 @@
 
 - name: Prep - Infisical Fetch | Fetch secrets from Infisical
   when: (infisical_flatten | default(true)) | bool
+  no_log: true
+  diff: false
   ansible.builtin.set_fact:
     "{{ infisical_secret_item.var }}": >-
       {{
@@ -40,6 +42,7 @@
   when:
     - (infisical_flatten | default(true)) | bool
     - (infisical_fail_on_empty | default(true)) | bool
+  no_log: true
   ansible.builtin.assert:
     that:
       - (lookup('ansible.builtin.vars', infisical_secret_item.var, default='') | string | trim | length) > 0
@@ -52,6 +55,8 @@
 
 - name: Prep - Infisical Fetch | Fetch secrets from Infisical
   when: not (infisical_flatten | default(true)) | bool
+  no_log: true
+  diff: false
   ansible.builtin.set_fact:
     "{{ infisical_out_var | default('infisical_secrets') }}": >-
       {{
@@ -74,6 +79,7 @@
   when:
     - not (infisical_flatten | default(true)) | bool
     - (infisical_fail_on_empty | default(true)) | bool
+  no_log: true
   ansible.builtin.assert:
     that:
       - (

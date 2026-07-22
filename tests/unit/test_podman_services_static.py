@@ -1,12 +1,33 @@
 from pathlib import Path
 
-TASKS = Path("ansible/roles/podman_services/tasks/main.yml").read_text()
+TASKS_DIR = Path("ansible/roles/podman_services/tasks")
+MAIN_TASKS = (TASKS_DIR / "main.yml").read_text()
+SUB_TASK_FILES = (
+    "init.yml",
+    "prepare.yml",
+    "image.yml",
+    "network.yml",
+    "lifecycle.yml",
+    "remove.yml",
+    "drift.yml",
+)
+TASKS = "\n".join((TASKS_DIR / "sub_tasks" / name).read_text() for name in SUB_TASK_FILES)
 N8N = Path("ansible/group_vars/all/services/n8n.yml").read_text()
 NETWORK_TEMPLATE = Path("ansible/roles/podman_services/templates/network.network.j2").read_text()
+PODMAN_DEFAULTS = Path("ansible/roles/podman/defaults/main.yml").read_text()
+PODMAN_TASKS = Path("ansible/roles/podman/tasks/main.yml").read_text()
+PODMAN_HANDLERS = Path("ansible/roles/podman_services/handlers/main.yml").read_text()
+
+
+def test_main_orchestrates_sub_tasks_in_order():
+    positions = [MAIN_TASKS.index(f"sub_tasks/{name}") for name in SUB_TASK_FILES]
+    assert positions == sorted(positions)
+    assert "Podman services | Normalize service" not in MAIN_TASKS
+    assert "Podman services | Flush removal daemon-reload handlers" in MAIN_TASKS
 
 
 def test_quadlet_directory_prerequisite_exists_before_templates():
-    dir_pos = TASKS.index("Podman | Ensure system Quadlet directory exists")
+    dir_pos = TASKS.index("Prep | Ensure system Quadlet directory exists")
     first_template_pos = TASKS.index("ansible.builtin.template")
     assert dir_pos < first_template_pos
     assert 'path: "{{ podman_services_quadlet_dir }}"' in TASKS
@@ -61,8 +82,8 @@ def test_no_late_shared_network_migration_fail_after_template_render():
 
 
 def test_network_validation_occurs_before_template_rendering():
-    normalize = TASKS.index("Podman services | Normalize service")
-    network_template = TASKS.index("Podman services | Render network Quadlet")
+    normalize = TASKS.index("Init | Normalize service")
+    network_template = TASKS.index("Prep | Render network Quadlet")
     assert normalize < network_template
 
 
@@ -85,3 +106,17 @@ def test_absent_container_unit_is_checked_before_stop():
     assert load_state < stop
     assert "--property=LoadState" in TASKS
     assert "stdout | trim != 'not-found'" in TASKS
+
+
+def test_podman_role_targets_ubuntu_2604_resolute_and_podman_57():
+    assert 'podman_min_version: "5.7.0"' in PODMAN_DEFAULTS
+    assert "distribution_version is version('26.04', '>=')" in PODMAN_TASKS
+    assert "Ubuntu 26.04 LTS (Resolute)" in PODMAN_TASKS
+
+
+def test_split_tasks_notify_the_existing_daemon_reload_handler():
+    handler_name = "Podman services | daemon reload"
+    assert f"- name: {handler_name}" in PODMAN_HANDLERS
+    assert TASKS.count(f"notify: {handler_name}") == 5
+    assert "notify: Prep | daemon reload" not in TASKS
+    assert "notify: Remove | daemon reload" not in TASKS

@@ -89,17 +89,16 @@ def render(src: Path, dest: Path) -> None:
 
 
 prometheus_template = first_existing(
-    root / "ansible/roles/docker_services/templates/configs/prometheus/prometheus.yml.j2",
-    root / "ansible/roles/docker_services/templates/configs/prometheus.yml.j2",
+    root / "ansible/roles/service_common/templates/configs/prometheus/prometheus.yml.j2",
 )
 
 render(prometheus_template, out / "prometheus.yml")
 render(
-    root / "ansible/roles/docker_services/templates/configs/alertmanager.yml.j2",
+    root / "ansible/roles/service_common/templates/configs/alertmanager.yml.j2",
     out / "alertmanager.yml",
 )
 
-rules_dir = root / "ansible/roles/docker_services/templates/configs/prometheus/rules"
+rules_dir = root / "ansible/roles/service_common/templates/configs/prometheus/rules"
 for src in sorted(rules_dir.glob("*.yml.j2")):
     render(src, out / "rules" / src.name.removesuffix(".j2"))
 

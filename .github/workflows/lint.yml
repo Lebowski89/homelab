@@ -69,6 +69,8 @@ jobs:
           ruff check --output-format=github \
             ansible/filter_plugins \
             ansible/roles/docker_services/filter_plugins \
+            ansible/roles/podman_services/filter_plugins \
+            ansible/roles/service_common/filter_plugins \
             ansible/roles/docker_services/library \
             tests/unit
 
@@ -77,6 +79,8 @@ jobs:
           ruff format --check --diff \
             ansible/filter_plugins \
             ansible/roles/docker_services/filter_plugins \
+            ansible/roles/podman_services/filter_plugins \
+            ansible/roles/service_common/filter_plugins \
             ansible/roles/docker_services/library \
             tests/unit
 

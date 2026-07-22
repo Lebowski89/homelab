@@ -68,6 +68,14 @@
     docker_services_stack_deploy_type: >-
       {{ docker_services_svc.deploy.type | default('swarm', true) | string | trim }}
     docker_services_deploy_host: "{{ docker_services_svc.deploy.host | default(docker_services_primary_manager, true) }}"
+    docker_services_common_action: >-
+      {{
+        'remove' if 'remove' in (ansible_run_tags | default([])) else
+        ('recreate' if 'recreate' in (ansible_run_tags | default([])) else
+        ('update' if 'update' in (ansible_run_tags | default([])) else
+        ('drift' if 'drift' in (ansible_run_tags | default([])) else
+        ('bootstrap' if 'bootstrap' in (ansible_run_tags | default([])) else 'deploy'))))
+      }}
   tags: [remove, drift]
 
 - name: Init | Derive stack name
@@ -117,6 +125,28 @@
 - name: Init | De-dupe filesystem hosts
   ansible.builtin.set_fact:
     docker_services_fs_hosts_effective: "{{ docker_services_fs_hosts_effective | unique | list }}"
+  tags: [remove, drift]
+
+- name: Init | Initialize runtime-neutral host ownership mapping
+  ansible.builtin.set_fact:
+    docker_services_common_host_defaults: {}
+  tags: [remove, drift]
+
+- name: Init | Build runtime-neutral host ownership mapping
+  ansible.builtin.set_fact:
+    docker_services_common_host_defaults: >-
+      {{
+        docker_services_common_host_defaults
+        | combine({
+            docker_services_common_target_host: {
+              'owner': hostvars[docker_services_common_target_host].docker_host_puid | default('1000'),
+              'group': hostvars[docker_services_common_target_host].docker_host_pgid | default('1000')
+            }
+          })
+      }}
+  loop: "{{ docker_services_fs_hosts_effective }}"
+  loop_control:
+    loop_var: docker_services_common_target_host
   tags: [remove, drift]
 
 - name: Init | Assert container deploy has a single deploy.host

@@ -79,6 +79,7 @@ opencloud:
       force: true
   swarm_env_templates:
     - src: configs/opencloud/opencloud.env.j2
+      no_log: true
       dest: /opt/stacks/opencloud.env
       mode: "0600"
       force: true

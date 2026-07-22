@@ -5,7 +5,9 @@
 ################################
 
 - name: Drift Notify | Ensure SMTP creds exist
+  no_log: true
   when:
+    - not ansible_check_mode
     - inventory_hostname == docker_services_primary_manager
     - docker_services_drift_email_enabled | default(false) | bool
     - hostvars[docker_services_primary_manager].docker_services_image_drift is defined

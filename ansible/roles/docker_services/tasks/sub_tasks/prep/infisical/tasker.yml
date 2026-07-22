@@ -8,6 +8,7 @@
   when:
     - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.infisical is defined
+    - not ansible_check_mode
     - docker_services_svc.infisical.secrets_map is defined
     - (docker_services_svc.infisical.secrets_map | length > 0)
   ansible.builtin.include_tasks:
@@ -33,6 +34,8 @@
   tags: [deploy, update, recreate]
 
 - name: Prep - Infisical Resolver | Propagate Infisical flattened vars to deploy host
+  no_log: true
+  diff: false
   when:
     - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.infisical is defined
@@ -50,6 +53,8 @@
   tags: [deploy, update, recreate]
 
 - name: Prep - Infisical Resolver | Propagate Infisical dict to deploy host
+  no_log: true
+  diff: false
   when:
     - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.infisical is defined

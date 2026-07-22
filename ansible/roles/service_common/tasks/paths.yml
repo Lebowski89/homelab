@@ -1,0 +1,45 @@
+---
+
+- name: Service common paths | Validate each path specification
+  ansible.builtin.assert:
+    that:
+      - service_common_path_item.path is defined
+      - service_common_path_item.path | string | trim | length > 0
+      - service_common_path_item.state | default('directory', true) in ['absent', 'directory', 'file', 'hard', 'link', 'touch']
+      - >-
+        (service_common_path_item.state | default('directory', true) not in ['hard', 'link'])
+        or (service_common_path_item.src is defined and service_common_path_item.src | string | trim | length > 0)
+      - >-
+        (service_common_path_item.state | default('directory', true) == 'absent')
+        or (service_common_path_item.mode is defined)
+        or (service_common_default_mode is defined)
+    fail_msg: >-
+      Invalid path specification for {{ service_common_name }}:
+      path={{ service_common_path_item.path | default('MISSING') }},
+      state={{ service_common_path_item.state | default('directory') }}.
+  loop: "{{ service_common_paths }}"
+  loop_control:
+    loop_var: service_common_path_item
+    label: "{{ service_common_path_item.path | default('MISSING') }}"
+
+- name: Service common paths | Apply filesystem state on target host
+  ansible.builtin.file:
+    path: "{{ service_common_path_item.path }}"
+    state: "{{ service_common_path_item.state | default('directory', true) }}"
+    src: "{{ service_common_path_item.src | default(omit, true) }}"
+    owner: "{{ service_common_path_item.owner | default(service_common_path_default_owner) }}"
+    group: "{{ service_common_path_item.group | default(service_common_path_default_group) }}"
+    mode: "{{ service_common_path_item.mode | default(service_common_default_mode) }}"
+    force: "{{ service_common_path_item.force | default(false, true) }}"
+  vars:
+    service_common_path_host_defaults: "{{ service_common_host_defaults.get(service_common_target_host, {}) }}"
+    service_common_path_default_owner: >-
+      {{ service_common_path_host_defaults.get('owner', service_common_default_owner) }}
+    service_common_path_default_group: >-
+      {{ service_common_path_host_defaults.get('group', service_common_default_group) }}
+  loop: "{{ service_common_paths }}"
+  loop_control:
+    loop_var: service_common_path_item
+    label: >-
+      {{ service_common_path_item.path }} [{{ service_common_path_item.state | default('directory') }}]
+  delegate_to: "{{ service_common_target_host }}"
