@@ -2,7 +2,7 @@ pm_api_url      = "https://192.168.xx.xx:8006/"
 pm_tls_insecure = true
 
 target_node         = "pve1"
-clone_template_vm_id = 9002
+clone_template_vm_id = 9003
 vm_storage          = "local-zfs"
 snippet_storage     = "local"
 

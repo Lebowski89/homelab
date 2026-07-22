@@ -38,7 +38,7 @@ variable "target_node" {
 }
 
 variable "clone_template_vm_id" {
-  description = "VMID of the Ubuntu 24.04 cloud-init template."
+  description = "VMID of the Ubuntu 26.04 LTS (Resolute) cloud-init template."
   type        = number
 }
 

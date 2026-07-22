@@ -1,0 +1,2 @@
+pm_api_url      = "https://192.168.xx.xx:8006/"
+pm_tls_insecure = true
