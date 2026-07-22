@@ -4,7 +4,7 @@ The shared service catalogue in `ansible/group_vars/all/services/*.yml` is runti
 
 ## Runtime layers
 
-1. `podman` installs and validates Podman 5.7+ on Ubuntu 26.04 LTS (Resolute) or newer hosts tagged `podman`/`podman_install`. The role intentionally emits Podman 5.7 Quadlet syntax and is not compatible with Ubuntu 24.04 LTS (Noble), whose packaged Podman 4.9 lacks the required directives.
+1. `podman_services` intentionally renders Quadlets using Podman 5.7 syntax and is not compatible with Ubuntu 24.04 LTS (Noble), whose packaged Podman 4.9 lacks the required directives.
 2. `service_common` prepares runtime-neutral host paths and shared Traefik dynamic files from explicit adapter inputs.
 3. `podman_services` renders rootful system Quadlets in `/etc/containers/systemd` and retains native Podman secrets, image pulls, Quadlet validation, systemd lifecycle, and PostgreSQL declarations without creating databases.
 4. The shared catalogue selects Docker and Podman services together, then splits the selected items by runtime.
