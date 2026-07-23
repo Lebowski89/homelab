@@ -25,7 +25,7 @@
 | <a name="input_pm_ssh_host"></a> [pm\_ssh\_host](#input\_pm\_ssh\_host) | SSH address of the target Proxmox node. | `string` | n/a | yes |
 | <a name="input_pm_ssh_port"></a> [pm\_ssh\_port](#input\_pm\_ssh\_port) | SSH port of the target Proxmox node. | `number` | `22` | no |
 | <a name="input_pm_ssh_username"></a> [pm\_ssh\_username](#input\_pm\_ssh\_username) | SSH username used by the Proxmox provider for snippet operations. | `string` | `"root"` | no |
-| <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | Allow a self-signed Proxmox API certificate. | `bool` | `false` | no |
+| <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | Disable Proxmox API TLS certificate verification. Keep false when the Proxmox CA is trusted; set true only for an explicitly accepted self-signed or untrusted certificate. | `bool` | `false` | no |
 | <a name="input_qemu_agent_enabled"></a> [qemu\_agent\_enabled](#input\_qemu\_agent\_enabled) | Enable QEMU guest-agent integration. | `bool` | `true` | no |
 | <a name="input_qemu_guest_agent_bootstrap_enabled"></a> [qemu\_guest\_agent\_bootstrap\_enabled](#input\_qemu\_guest\_agent\_bootstrap\_enabled) | Install qemu-guest-agent during first boot so Proxmox can bootstrap the guest. | `bool` | `true` | no |
 | <a name="input_snippet_storage"></a> [snippet\_storage](#input\_snippet\_storage) | Proxmox snippets datastore for optional cloud-init vendor data. | `string` | `"local"` | no |
