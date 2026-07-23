@@ -9,7 +9,7 @@ variable "pm_api_token" {
 
 variable "pm_tls_insecure" {
   type    = bool
-  default = true
+  default = false
 }
 
 variable "target_node" {

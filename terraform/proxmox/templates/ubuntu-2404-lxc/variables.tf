@@ -19,7 +19,7 @@ variable "pm_ssh_host" {
 
 variable "pm_tls_insecure" {
   type    = bool
-  default = true
+  default = false
 }
 
 variable "template_node_name" {
