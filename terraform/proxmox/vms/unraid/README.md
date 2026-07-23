@@ -88,7 +88,7 @@ usb0: mapping=UnRaid-Boot
 |------|-------------|------|---------|:--------:|
 | <a name="input_pm_api_token"></a> [pm\_api\_token](#input\_pm\_api\_token) | n/a | `string` | n/a | yes |
 | <a name="input_pm_api_url"></a> [pm\_api\_url](#input\_pm\_api\_url) | n/a | `string` | n/a | yes |
-| <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | n/a | `bool` | `true` | no |
+| <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | n/a | `bool` | `false` | no |
 | <a name="input_target_node"></a> [target\_node](#input\_target\_node) | n/a | `string` | n/a | yes |
 | <a name="input_unraid_bios"></a> [unraid\_bios](#input\_unraid\_bios) | n/a | `string` | `"seabios"` | no |
 | <a name="input_unraid_boot_mapping"></a> [unraid\_boot\_mapping](#input\_unraid\_boot\_mapping) | n/a | `string` | `"UnRaid-Boot"` | no |

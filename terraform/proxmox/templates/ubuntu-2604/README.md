@@ -10,15 +10,15 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
+| <a name="input_cloud_image_checksum"></a> [cloud\_image\_checksum](#input\_cloud\_image\_checksum) | SHA-256 checksum matching the pinned Ubuntu cloud image. | `string` | `"117816726abbdefc5ef3e38902e81a76f1c76c3610e709999d0885f9d5d9b477"` | no |
 | <a name="input_cloud_image_datastore"></a> [cloud\_image\_datastore](#input\_cloud\_image\_datastore) | n/a | `string` | `"local"` | no |
 | <a name="input_cloud_image_file_name"></a> [cloud\_image\_file\_name](#input\_cloud\_image\_file\_name) | n/a | `string` | `"ubuntu-26.04-server-cloudimg-amd64.img"` | no |
-| <a name="input_cloud_image_node_name"></a> [cloud\_image\_node\_name](#input\_cloud\_image\_node\_name) | n/a | `string` | n/a | yes |
 | <a name="input_cloud_image_url"></a> [cloud\_image\_url](#input\_cloud\_image\_url) | n/a | `string` | `"https://cloud-images.ubuntu.com/releases/resolute/release/ubuntu-26.04-server-cloudimg-amd64.img"` | no |
 | <a name="input_pm_api_token"></a> [pm\_api\_token](#input\_pm\_api\_token) | n/a | `string` | n/a | yes |
 | <a name="input_pm_api_url"></a> [pm\_api\_url](#input\_pm\_api\_url) | n/a | `string` | n/a | yes |
 | <a name="input_pm_ssh_host"></a> [pm\_ssh\_host](#input\_pm\_ssh\_host) | n/a | `string` | n/a | yes |
 | <a name="input_pm_ssh_username"></a> [pm\_ssh\_username](#input\_pm\_ssh\_username) | n/a | `string` | n/a | yes |
-| <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | n/a | `bool` | `true` | no |
+| <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | n/a | `bool` | `false` | no |
 | <a name="input_snippet_storage"></a> [snippet\_storage](#input\_snippet\_storage) | n/a | `string` | `"local"` | no |
 | <a name="input_ssh_public_key_path"></a> [ssh\_public\_key\_path](#input\_ssh\_public\_key\_path) | n/a | `string` | n/a | yes |
 | <a name="input_target_node"></a> [target\_node](#input\_target\_node) | n/a | `string` | n/a | yes |
