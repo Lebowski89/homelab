@@ -6,7 +6,6 @@ vm_storage      = "local-zfs"
 snippet_storage = "local"
 
 cloud_image_datastore = "local"
-cloud_image_node_name = "pve1"
 
 template_cores   = 2
 template_memory  = 2048

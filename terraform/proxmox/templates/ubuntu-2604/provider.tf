@@ -8,7 +8,7 @@ provider "proxmox" {
     username = var.pm_ssh_username
 
     node {
-      name    = var.cloud_image_node_name
+      name    = var.target_node
       address = var.pm_ssh_host
       port    = 22
     }

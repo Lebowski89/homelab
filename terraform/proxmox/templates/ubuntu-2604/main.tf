@@ -1,10 +1,12 @@
 resource "proxmox_download_file" "ubuntu_cloud_image" {
-  content_type = "iso"
-  datastore_id = var.cloud_image_datastore
-  node_name    = var.cloud_image_node_name
-  file_name    = var.cloud_image_file_name
-  url          = var.cloud_image_url
-  overwrite    = false
+  content_type       = "iso"
+  datastore_id       = var.cloud_image_datastore
+  node_name          = var.target_node
+  file_name          = var.cloud_image_file_name
+  url                = var.cloud_image_url
+  checksum           = var.cloud_image_checksum
+  checksum_algorithm = "sha256"
+  overwrite          = false
 }
 
 resource "proxmox_virtual_environment_vm" "ubuntu_template" {
