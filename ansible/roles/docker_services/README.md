@@ -1,4 +1,5 @@
 <!-- DOCSIBLE START -->
+
 # 📃 Role overview
 
 ## docker_services
@@ -9,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/15 |
+| Readme update        | 2026/07/24 |
 
 
 
@@ -138,6 +139,8 @@
 | Init ¦ Derive effective filesystem hosts | ansible.builtin.set_fact | False |  |
 | Init ¦ Expand filesystem hosts if a group name was provided | ansible.builtin.set_fact | True |  |
 | Init ¦ De-dupe filesystem hosts | ansible.builtin.set_fact | False |  |
+| Init ¦ Initialize runtime-neutral host ownership mapping | ansible.builtin.set_fact | False |  |
+| Init ¦ Build runtime-neutral host ownership mapping | ansible.builtin.set_fact | False |  |
 | Init ¦ Assert container deploy has a single deploy.host | ansible.builtin.assert | True |  |
 | Init ¦ Determine if this host should build/deploy compose artifacts | ansible.builtin.set_fact | False |  |
 
@@ -699,6 +702,14 @@
 | Prep - Swarm Configs ¦ Validate each config spec | ansible.builtin.assert | False |
 | Prep - Swarm Configs ¦ Process absent configs | ansible.builtin.include_tasks | True |
 | Prep - Swarm Configs ¦ Process present configs | ansible.builtin.include_tasks | True |
+
+#### File: tasks/sub_tasks/prep/traefik_zone.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prep - Traefik zone ¦ Detect whether a base zone is required and missing | ansible.builtin.set_fact | False |
+| Prep - Traefik zone ¦ Fetch cloudflare_zone from Infisical | ansible.builtin.include_tasks | True |
+| Prep - Traefik zone ¦ Use a non-routable check-mode zone without fetching secrets | ansible.builtin.set_fact | True |
 
 #### File: tasks/sub_tasks/prep/vaultwarden.yml
 
