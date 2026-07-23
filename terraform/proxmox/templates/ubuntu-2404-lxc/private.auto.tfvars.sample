@@ -1,4 +1,7 @@
 pm_api_url      = "https://192.168.xx.xx:8006/"
+
+# Temporary compatibility for an untrusted/self-signed Proxmox certificate.
+# Prefer trusting the Proxmox CA and setting this to false.
 pm_tls_insecure = true
 
 template_node_name = "pve1"

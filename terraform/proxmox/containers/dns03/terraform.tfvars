@@ -8,6 +8,8 @@ container_disk_size = 8
 
 container_protection = false
 
+# Temporary compatibility for an untrusted/self-signed Proxmox certificate.
+# Prefer trusting the Proxmox CA and setting this to false.
 pm_tls_insecure = true
 
 ssh_public_key_path = "~/.ssh/proxmox_terraform.pub"

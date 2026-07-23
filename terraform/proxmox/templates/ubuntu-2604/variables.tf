@@ -18,8 +18,9 @@ variable "pm_ssh_host" {
 }
 
 variable "pm_tls_insecure" {
-  type    = bool
-  default = false
+  description = "Disable Proxmox API TLS certificate verification. Keep false when the Proxmox CA is trusted; set true only for an explicitly accepted self-signed or untrusted certificate."
+  type        = bool
+  default     = false
 }
 
 variable "target_node" {
