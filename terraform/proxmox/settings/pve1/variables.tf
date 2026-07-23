@@ -8,8 +8,9 @@ variable "pm_api_token" {
 }
 
 variable "pm_tls_insecure" {
-  type    = bool
-  default = true
+  description = "Disable Proxmox API TLS certificate verification. Keep false when the Proxmox CA is trusted; set true only for an explicitly accepted self-signed or untrusted certificate."
+  type        = bool
+  default     = false
 }
 
 variable "target_node" {

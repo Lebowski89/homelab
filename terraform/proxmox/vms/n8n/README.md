@@ -15,7 +15,7 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_clone_template_vm_id"></a> [clone\_template\_vm\_id](#input\_clone\_template\_vm\_id) | VMID of the Ubuntu 24.04 cloud-init template. | `number` | n/a | yes |
+| <a name="input_clone_template_vm_id"></a> [clone\_template\_vm\_id](#input\_clone\_template\_vm\_id) | VMID of the Ubuntu 26.04 LTS (Resolute) cloud-init template. | `number` | n/a | yes |
 | <a name="input_cloud_init_user"></a> [cloud\_init\_user](#input\_cloud\_init\_user) | Cloud-init administrative username. | `string` | `"ubuntu"` | no |
 | <a name="input_dns_ips"></a> [dns\_ips](#input\_dns\_ips) | Fallback DNS VIP map, normally sourced from NetBox outputs. | `map(string)` | `{}` | no |
 | <a name="input_enable_netbox_remote_state"></a> [enable\_netbox\_remote\_state](#input\_enable\_netbox\_remote\_state) | Read DNS topology from the terraform/netbox local state. | `bool` | `true` | no |
@@ -25,7 +25,7 @@
 | <a name="input_pm_ssh_host"></a> [pm\_ssh\_host](#input\_pm\_ssh\_host) | SSH address of the target Proxmox node. | `string` | n/a | yes |
 | <a name="input_pm_ssh_port"></a> [pm\_ssh\_port](#input\_pm\_ssh\_port) | SSH port of the target Proxmox node. | `number` | `22` | no |
 | <a name="input_pm_ssh_username"></a> [pm\_ssh\_username](#input\_pm\_ssh\_username) | SSH username used by the Proxmox provider for snippet operations. | `string` | `"root"` | no |
-| <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | Allow a self-signed Proxmox API certificate. | `bool` | `false` | no |
+| <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | Disable Proxmox API TLS certificate verification. Keep false when the Proxmox CA is trusted; set true only for an explicitly accepted self-signed or untrusted certificate. | `bool` | `false` | no |
 | <a name="input_qemu_agent_enabled"></a> [qemu\_agent\_enabled](#input\_qemu\_agent\_enabled) | Enable QEMU guest-agent integration. | `bool` | `true` | no |
 | <a name="input_qemu_guest_agent_bootstrap_enabled"></a> [qemu\_guest\_agent\_bootstrap\_enabled](#input\_qemu\_guest\_agent\_bootstrap\_enabled) | Install qemu-guest-agent during first boot so Proxmox can bootstrap the guest. | `bool` | `true` | no |
 | <a name="input_snippet_storage"></a> [snippet\_storage](#input\_snippet\_storage) | Proxmox snippets datastore for optional cloud-init vendor data. | `string` | `"local"` | no |

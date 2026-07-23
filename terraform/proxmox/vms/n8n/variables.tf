@@ -10,7 +10,7 @@ variable "pm_api_token" {
 }
 
 variable "pm_tls_insecure" {
-  description = "Allow a self-signed Proxmox API certificate."
+  description = "Disable Proxmox API TLS certificate verification. Keep false when the Proxmox CA is trusted; set true only for an explicitly accepted self-signed or untrusted certificate."
   type        = bool
   default     = false
 }
@@ -38,7 +38,7 @@ variable "target_node" {
 }
 
 variable "clone_template_vm_id" {
-  description = "VMID of the Ubuntu 24.04 cloud-init template."
+  description = "VMID of the Ubuntu 26.04 LTS (Resolute) cloud-init template."
   type        = number
 }
 

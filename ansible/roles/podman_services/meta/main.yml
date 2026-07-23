@@ -1,8 +1,0 @@
----
-galaxy_info:
-  role_name: podman_services
-  author: homelab
-  description: Manage data-driven Podman Quadlet services.
-  license: MIT
-  min_ansible_version: "2.16"
-dependencies: []

@@ -12,7 +12,7 @@
 |------|-------------|------|---------|:--------:|
 | <a name="input_pm_api_token"></a> [pm\_api\_token](#input\_pm\_api\_token) | n/a | `string` | n/a | yes |
 | <a name="input_pm_api_url"></a> [pm\_api\_url](#input\_pm\_api\_url) | n/a | `string` | n/a | yes |
-| <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | n/a | `bool` | `true` | no |
+| <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | Disable Proxmox API TLS certificate verification. Keep false when the Proxmox CA is trusted; set true only for an explicitly accepted self-signed or untrusted certificate. | `bool` | `false` | no |
 | <a name="input_target_node"></a> [target\_node](#input\_target\_node) | n/a | `string` | n/a | yes |
 | <a name="input_unraid_boot_usb_map_id"></a> [unraid\_boot\_usb\_map\_id](#input\_unraid\_boot\_usb\_map\_id) | n/a | `string` | n/a | yes |
 | <a name="input_unraid_boot_usb_map_path"></a> [unraid\_boot\_usb\_map\_path](#input\_unraid\_boot\_usb\_map\_path) | n/a | `string` | n/a | yes |

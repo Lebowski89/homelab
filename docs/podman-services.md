@@ -4,9 +4,10 @@ The shared service catalogue in `ansible/group_vars/all/services/*.yml` is runti
 
 ## Runtime layers
 
-1. `podman` installs and validates Podman 5.7+ on Ubuntu 26.04+ hosts tagged `podman`/`podman_install`.
-2. `podman_services` renders rootful system Quadlets in `/etc/containers/systemd`, manages host paths, native Podman secrets, image pulls, systemd lifecycle, optional host-backed Traefik files, and optional PostgreSQL database declarations.
-3. The shared catalogue selects Docker and Podman services together, then splits the selected items by runtime.
+1. `podman_services` intentionally renders Quadlets using Podman 5.7 syntax and is not compatible with Ubuntu 24.04 LTS (Noble), whose packaged Podman 4.9 lacks the required directives.
+2. `service_common` prepares runtime-neutral host paths and shared Traefik dynamic files from explicit adapter inputs.
+3. `podman_services` renders rootful system Quadlets in `/etc/containers/systemd` and retains native Podman secrets, image pulls, Quadlet validation, systemd lifecycle, and PostgreSQL declarations without creating databases.
+4. The shared catalogue selects Docker and Podman services together, then splits the selected items by runtime.
 
 Rootful system Quadlets were chosen first because they are stable for boot-time services and fit the existing system-level Ansible model. Containers still run as non-root users through separate container UID/GID settings. Rootless user-systemd Quadlets can be added later by introducing a scoped Quadlet directory and user lingering management.
 
@@ -21,6 +22,8 @@ Rootful system Quadlets were chosen first because they are stable for boot-time 
 Generated `.container` files include `[Install] WantedBy=multi-user.target`; the role does not call `systemctl enable` for generated Quadlet services.
 
 For this initial version, any `network` mapping supplied to `podman_services` is treated as a role-managed dedicated network and must set `network.delete_on_stop: true`; validation rejects shared/external network mappings before rendering a Quadlet. `NetworkDeleteOnStop=true` is rendered only from that explicit setting and is appropriate for dedicated per-service networks such as n8n's network. Shared/external networks are not yet managed by this role, and the role must not stop, modify, or remove them. Future schema should add an explicit ownership field such as `ownership: dedicated`/`managed: true` versus `ownership: shared`/`external: true`, allowing services to reference an existing Podman network without owning its lifecycle.
+
+Published ports accept an optional `host_ip` per port. When set, the generated `PublishPort=` entry binds only that address. When omitted, Podman binds the published port on every host interface; this can expose the service on management, LAN, Tailscale, or other reachable networks and can bypass the intended reverse proxy and its middleware. Prefer an explicit trusted bind address and enforce host/network firewall policy whenever direct access is not intended.
 
 ## Secrets and PostgreSQL
 
