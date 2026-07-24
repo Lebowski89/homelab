@@ -5,6 +5,8 @@
 ################################
 
 - name: Prep - Postgres | Ensure creds exist
+  no_log: true
+  diff: false
   when: inventory_hostname == docker_services_primary_manager
   block:
     - name: Prep - Postgres | Detect if creds are missing
@@ -60,6 +62,8 @@
 ################################
 
 - name: Prep - Postgres | Prepare docker secret
+  no_log: true
+  diff: false
   when: inventory_hostname == docker_services_primary_manager
   community.docker.docker_secret:
     name: postgres_pass_secret
@@ -92,6 +96,7 @@
       }}
 
 - name: Prep - Postgres | Ping for existing database(s)
+  no_log: true
   when:
     - inventory_hostname == docker_services_primary_manager
     - (docker_services_postgres_databases | default([]) | length) > 0
@@ -107,6 +112,8 @@
   register: docker_services_postgres_ping_results
 
 - name: Prep - Postgres | Create database(s) if missing
+  no_log: true
+  diff: false
   when:
     - inventory_hostname == docker_services_primary_manager
     - docker_services_postgres_ping_results is defined

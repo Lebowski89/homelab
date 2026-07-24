@@ -1,0 +1,24 @@
+---
+
+- name: Service common templates | Render application templates on target host
+  when: not (ansible_check_mode and service_common_template_item.no_log | default(false) | bool)
+  ansible.builtin.template:
+    src: "{{ role_path }}/templates/{{ service_common_template_item.src }}"
+    dest: "{{ service_common_template_item.dest }}"
+    owner: "{{ service_common_template_item.owner | default(service_common_template_default_owner, true) }}"
+    group: "{{ service_common_template_item.group | default(service_common_template_default_group, true) }}"
+    mode: "{{ service_common_template_item.mode | default('0664', true) }}"
+    force: "{{ service_common_template_item.force | default(true) | bool }}"
+  vars:
+    service_common_template_host_defaults: "{{ service_common_host_defaults.get(service_common_target_host, {}) }}"
+    service_common_template_default_owner: >-
+      {{ service_common_template_host_defaults.get('owner', service_common_default_owner) }}
+    service_common_template_default_group: >-
+      {{ service_common_template_host_defaults.get('group', service_common_default_group) }}
+  loop: "{{ service_common_templates }}"
+  loop_control:
+    loop_var: service_common_template_item
+    label: "{{ service_common_template_item.dest }}"
+  delegate_to: "{{ service_common_target_host }}"
+  no_log: "{{ service_common_template_item.no_log | default(false) | bool }}"
+  diff: "{{ not (service_common_template_item.no_log | default(false) | bool) }}"

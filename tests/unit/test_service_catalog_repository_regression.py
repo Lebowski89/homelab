@@ -66,3 +66,30 @@ def test_service_catalog_preserves_docker_selector_parity_for_real_services():
     disabled_name = next(name for name, cfg in services.items() if cfg.get("runtime", "docker") == "docker" and cfg.get("enabled") is False)
     assert_selector_parity(services, run_tags=[disabled_name], allow_disabled=False)
     assert_selector_parity(services, run_tags=[disabled_name], allow_disabled=True)
+
+
+def test_real_services_without_runtime_still_default_to_docker():
+    catalog_filters = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog_defaults")
+    services = load_services()
+    service_name = next(name for name, cfg in services.items() if "runtime" not in cfg and "targets" not in cfg)
+
+    item = next(item for item in catalog_filters.service_catalog_effective(services) if item["name"] == service_name)
+
+    assert item["runtime"] == "docker"
+
+
+def test_real_sonarr_target_merge_keeps_effective_configuration():
+    merge_filters = load_module(
+        REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_merge.py",
+        "docker_services_merge_real_sonarr",
+    )
+    sonarr = load_services()["sonarr"]
+
+    effective = merge_filters.docker_services_merge_target(sonarr, "sonarr")
+
+    assert "targets" not in effective
+    assert effective["name"] == "sonarr"
+    assert effective["deploy"]["type"] == "swarm"
+    assert effective["environment"]["SONARR__APP__INSTANCENAME"] == "Sonarr"
+    assert effective["secrets"] == ["postgres_user_secret", "postgres_pass_secret", "sonarr_api_secret"]
+    assert effective["traefik"] == {"enable": True, "exposure": "private", "port": 8989}

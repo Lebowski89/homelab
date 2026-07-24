@@ -1,0 +1,49 @@
+---
+
+- name: Service common Traefik | Include interface validation
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service common Traefik | Resolve runtime-neutral render context
+  ansible.builtin.set_fact:
+    service_common_traefik: >-
+      {{
+        service_common_service
+        | service_common_traefik_context(
+            service_common_name,
+            service_common_target_hosts,
+            service_common_traefik_base_zone,
+            hostvars
+          )
+      }}
+
+- name: Service common Traefik | Resolve canonical and legacy paths
+  ansible.builtin.set_fact:
+    service_common_traefik_canonical_path: >-
+      {{ service_common_traefik_dynamic_dir }}/{{ service_common_name }}-dynamic.yml
+    service_common_traefik_legacy_path: >-
+      {{ service_common_traefik_dynamic_dir }}/{{ service_common_name }}.yml
+
+- name: Service common Traefik | Render canonical dynamic configuration
+  ansible.builtin.template:
+    src: traefik/dynamic.yml.j2
+    dest: "{{ service_common_traefik_canonical_path }}"
+    owner: "{{ service_common_traefik_owner }}"
+    group: "{{ service_common_traefik_group }}"
+    mode: "0644"
+    force: true
+  register: service_common_traefik_canonical_render
+  delegate_to: "{{ service_common_controller_host }}"
+
+- name: Service common Traefik | Remove distinct legacy Podman configuration after render
+  when:
+    - service_common_traefik_canonical_render is succeeded
+    - service_common_runtime == "podman"
+    - service_common_traefik_legacy_path != service_common_traefik_canonical_path
+  ansible.builtin.file:
+    path: "{{ service_common_traefik_legacy_path }}"
+    state: absent
+  delegate_to: "{{ service_common_controller_host }}"

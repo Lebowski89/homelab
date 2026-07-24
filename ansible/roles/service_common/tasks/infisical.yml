@@ -1,0 +1,62 @@
+---
+
+- name: Service common Infisical | Reset per-service secret output
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_common_secret_values: {}
+  tags: [deploy, update, recreate, bootstrap, drift]
+
+- name: Service common Infisical | Validate and normalize lookup declaration
+  ansible.builtin.set_fact:
+    service_common_infisical_config: >-
+      {{
+        service_common_infisical_secrets_map
+        | service_common_infisical_normalize(service_common_infisical_fail_on_empty)
+      }}
+  tags: [deploy, update, recreate, bootstrap, drift]
+
+- name: Service common Infisical | Validate lookup parameters
+  when:
+    - not ansible_check_mode
+    - service_common_infisical_config.secrets_map | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_common_infisical_lookup_params is mapping
+    fail_msg: "service_common_infisical_lookup_params must be a mapping."
+  tags: [deploy, update, recreate, bootstrap, drift]
+
+- name: Service common Infisical | Fetch requested secret values
+  when: not ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_common_secret_values: >-
+      {{
+        service_common_secret_values
+        | combine({
+            service_common_infisical_item.var: lookup(
+              'infisical.vault.read_secrets',
+              **(service_common_infisical_lookup_params | combine({
+                'path': service_common_infisical_item.path,
+                'secret_name': service_common_infisical_item.name
+              }))
+            ).value
+          })
+      }}
+  loop: "{{ service_common_infisical_config.secrets_map }}"
+  loop_control:
+    loop_var: service_common_infisical_item
+    label: "{{ service_common_infisical_item.var }}"
+  tags: [deploy, update, recreate, bootstrap, drift]
+
+- name: Service common Infisical | Enforce empty-value policy
+  when: not ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_common_secret_values: >-
+      {{ service_common_secret_values | service_common_infisical_finalize(service_common_infisical_config) }}
+  tags: [deploy, update, recreate, bootstrap, drift]

@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/15 |
+| Readme update        | 2026/07/24 |
 
 
 
@@ -139,6 +139,8 @@
 | Init ¦ Derive effective filesystem hosts | ansible.builtin.set_fact | False |  |
 | Init ¦ Expand filesystem hosts if a group name was provided | ansible.builtin.set_fact | True |  |
 | Init ¦ De-dupe filesystem hosts | ansible.builtin.set_fact | False |  |
+| Init ¦ Initialize runtime-neutral host ownership mapping | ansible.builtin.set_fact | False |  |
+| Init ¦ Build runtime-neutral host ownership mapping | ansible.builtin.set_fact | False |  |
 | Init ¦ Assert container deploy has a single deploy.host | ansible.builtin.assert | True |  |
 | Init ¦ Determine if this host should build/deploy compose artifacts | ansible.builtin.set_fact | False |  |
 
@@ -156,11 +158,9 @@
 | Prep - Authelia ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
 | Prep - Postgres ¦ Create Postgres database | ansible.builtin.include_tasks | True |  |
 | Prep - qBittorrent ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
-| Prep - Paths ¦ Create filesystem paths | ansible.builtin.include_tasks | True |  |
-| Prep - Copies ¦ Copy files | ansible.builtin.include_tasks | True |  |
-| Prep - Templates ¦ Render templates | ansible.builtin.include_tasks | True |  |
-| Prep - Swarm Env Templates ¦ Render templates | ansible.builtin.include_tasks | True |  |
-| Prep - Traefik ¦ Render dynamic files | ansible.builtin.include_tasks | True |  |
+| Prep - Traefik zone ¦ Resolve Docker compatibility input | ansible.builtin.include_tasks | True |  |
+| Prep - Service common ¦ Prepare files and Traefik integration | ansible.builtin.include_role | True |  |
+| Prep - Swarm Env Templates ¦ Render templates | ansible.builtin.include_role | True |  |
 | Prep - Plex ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
 | Prep - Bazarr ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
 | Prep - NZBHydra2 ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
@@ -500,24 +500,13 @@
 | Prep - Cleanup ¦ Stack down | community.docker.docker_stack | False |
 | Prep - Cleanup ¦ Remove stack file | ansible.builtin.file | False |
 
-#### File: tasks/sub_tasks/prep/copies.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Copies ¦ Copy files | ansible.builtin.copy | False |
-| Prep - Copies ¦ Wait for copied files | ansible.builtin.wait_for | True |
-
 #### File: tasks/sub_tasks/prep/infisical/_fetch.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Infisical Fetch ¦ Ensure secrets_map is defined | ansible.builtin.assert | False |
-| Prep - Infisical Fetch ¦ Ensure infisical_lookup_default_params is defined | ansible.builtin.assert | False |
-| Prep - Infisical Fetch ¦ Initialize dict output | ansible.builtin.set_fact | True |
-| Prep - Infisical Fetch ¦ Fetch secrets from Infisical | ansible.builtin.set_fact | True |
-| Prep - Infisical Fetch ¦ Fail if any fetched secret is empty | ansible.builtin.assert | True |
-| Prep - Infisical Fetch ¦ Fetch secrets from Infisical | ansible.builtin.set_fact | True |
-| Prep - Infisical Fetch ¦ Fail if any fetched secret is empty | ansible.builtin.assert | True |
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Prep - Infisical Fetch ¦ Retrieve values through service common | ansible.builtin.include_role | False |  |
+| Prep - Infisical Fetch ¦ Recreate flattened compatibility facts | ansible.builtin.set_fact | True |  |
+| Prep - Infisical Fetch ¦ Recreate dictionary compatibility fact | ansible.builtin.set_fact | True |  |
 
 #### File: tasks/sub_tasks/prep/infisical/_resolver.yml
 
@@ -539,7 +528,7 @@
 | Prep - Infisical Secrets ¦ Resolve effective secrets host | ansible.builtin.set_fact | False |
 | Prep - Infisical Secrets ¦ Build desired secret items from secrets_map | ansible.builtin.set_fact | False |
 | Prep - Infisical Secrets ¦ Dedupe by name (keep first), keep empties for visibility | ansible.builtin.set_fact | False |
-| Prep - Infisical Secrets ¦ Warn about empty secret values | ansible.builtin.debug | True |
+| Prep - Infisical Secrets ¦ Reject empty secret values before materialization | ansible.builtin.assert | False |
 | Prep - Infisical Secrets ¦ Create Docker Swarm secrets | community.docker.docker_secret | True |
 | Prep - Infisical Secrets ¦ Ensure secrets directory exists on deploy host | ansible.builtin.file | True |
 | Prep - Infisical Secrets ¦ Remove secret path if it exists but is a directory | ansible.builtin.file | True |
@@ -592,13 +581,6 @@
 | Prep - NZBHydra2 ¦ Assert API key set | ansible.builtin.assert | True |
 | Prep - NZBHydra2 ¦ Assert SABnzbd downloader is set | ansible.builtin.assert | True |
 | Prep - NZBHydra2 ¦ Assert configured indexers were written | ansible.builtin.assert | True |
-
-#### File: tasks/sub_tasks/prep/paths.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Paths ¦ Validate each path spec | ansible.builtin.assert | False |
-| Prep - Paths ¦ Apply filesystem state on deploy host | ansible.builtin.file | False |
 
 #### File: tasks/sub_tasks/prep/plex/_claim.yml
 
@@ -717,19 +699,13 @@
 | Prep - Swarm Configs ¦ Process absent configs | ansible.builtin.include_tasks | True |
 | Prep - Swarm Configs ¦ Process present configs | ansible.builtin.include_tasks | True |
 
-#### File: tasks/sub_tasks/prep/templates.yml
+#### File: tasks/sub_tasks/prep/traefik_zone.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Prep - Templates ¦ Render templates on deploy host | ansible.builtin.template | False |
-
-#### File: tasks/sub_tasks/prep/traefik.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Traefik ¦ Detect if zone is missing | ansible.builtin.set_fact | False |
-| Prep - Traefik ¦ Fetch cloudflare_zone from Infisical | ansible.builtin.include_tasks | True |
-| Prep - Traefik ¦ Render dynamic file | ansible.builtin.template | False |
+| Prep - Traefik zone ¦ Detect whether a base zone is required and missing | ansible.builtin.set_fact | False |
+| Prep - Traefik zone ¦ Fetch cloudflare_zone from Infisical | ansible.builtin.include_tasks | True |
+| Prep - Traefik zone ¦ Use a non-routable check-mode zone without fetching secrets | ansible.builtin.set_fact | True |
 
 #### File: tasks/sub_tasks/prep/vaultwarden.yml
 

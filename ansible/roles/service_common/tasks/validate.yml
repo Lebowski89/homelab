@@ -1,0 +1,26 @@
+---
+
+- name: Service common | Validate role interface
+  ansible.builtin.assert:
+    that:
+      - service_common_name | string | trim | length > 0
+      - service_common_runtime in ['docker', 'podman']
+      - service_common_action in ['deploy', 'update', 'remove', 'recreate', 'bootstrap', 'drift']
+      - service_common_service is mapping
+      - service_common_controller_host | string | trim | length > 0
+      - service_common_target_hosts is sequence
+      - service_common_target_hosts is not string
+    fail_msg: >-
+      service_common requires a non-empty name, a docker/podman runtime, a supported action,
+      a service mapping, an explicit controller host, and an explicit target-host list.
+
+- name: Service common | Validate target hosts
+  when: service_common_target_hosts | length > 0
+  ansible.builtin.assert:
+    that:
+      - service_common_target_host | string | trim | length > 0
+    fail_msg: "service_common_target_hosts cannot contain empty host names."
+  loop: "{{ service_common_target_hosts }}"
+  loop_control:
+    loop_var: service_common_target_host
+    label: "{{ service_common_target_host | default('EMPTY') }}"

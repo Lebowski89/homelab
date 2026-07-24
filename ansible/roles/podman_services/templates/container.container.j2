@@ -2,7 +2,7 @@
 {% set container_systemd = podman_service.container.systemd | default({}) %}
 [Unit]
 Description={{ podman_service.description }}
-{% for after in container_systemd.after | default(['network-online.target']) %}
+{% for after in container_systemd.after | default([]) %}
 After={{ after }}
 {% endfor %}
 
@@ -20,7 +20,8 @@ User={{ podman_service.container.uid }}
 Group={{ podman_service.container.gid }}
 {% endif %}
 {% for volume in podman_service.volumes | sort(attribute='name') %}
-Volume={{ volume.name }}.volume:{{ volume.target }}{% if volume.read_only | default(false) %}:ro{% endif %}
+{% set volume_read_only = volume.read_only | default(false) %}
+Volume={{ volume.name }}.volume:{{ volume.target }}{{ ':ro' if volume_read_only else '' }}
 {% endfor %}
 {% for secret in podman_service.secrets | sort(attribute='name') %}
 Secret={{ secret.name }},target={{ secret.target | default('/run/secrets/' ~ secret.name) }},uid={{ secret.uid | default(podman_service.container.uid | default('0')) }},gid={{ secret.gid | default(podman_service.container.gid | default('0')) }},mode={{ secret.mode | default('0400') }}
@@ -29,7 +30,15 @@ Secret={{ secret.name }},target={{ secret.target | default('/run/secrets/' ~ sec
 PublishPort={% if port.host_ip is defined %}{{ port.host_ip }}:{% endif %}{{ port.host }}:{{ port.container }}/{{ port.protocol | default('tcp') }}
 {% endfor %}
 {% for volume in podman_service.container.mounts | default([]) %}
-Volume={{ volume.source }}:{{ volume.target }}{% if volume.read_only | default(false) %}:ro{% endif %}
+{% set volume_read_only = volume.read_only | default(false) %}
+Volume={{ volume.source }}:{{ volume.target }}{{ ':ro' if volume_read_only else '' }}
+{% endfor %}
+{% for tmpfs in podman_service.container.tmpfs | default([]) %}
+{% set tmpfs_options = tmpfs.options | default([]) %}
+Tmpfs={{ tmpfs.target }}{{ (':' ~ (tmpfs_options | join(','))) if (tmpfs_options | length > 0) else '' }}
+{% endfor %}
+{% for cap in podman_service.container.cap_add | default([]) %}
+AddCapability={{ cap }}
 {% endfor %}
 {% for cap in podman_service.container.cap_drop | default([]) %}
 DropCapability={{ cap }}

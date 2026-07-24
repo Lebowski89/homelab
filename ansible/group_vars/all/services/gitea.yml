@@ -31,6 +31,7 @@ gitea:
       mode: "0755"
   templates:
     - src: configs/gitea.env.j2
+      no_log: true
       dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gitea/.env"
       mode: "0664"
       force: true

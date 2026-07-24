@@ -1,0 +1,33 @@
+---
+
+- name: Service common copies | Copy static files
+  ansible.builtin.copy:
+    src: "{{ role_path }}/{{ service_common_copy_item.src | string | trim }}"
+    dest: "{{ service_common_copy_item.dest | string | trim }}"
+    force: "{{ service_common_copy_item.force | default(false) | bool }}"
+    owner: "{{ service_common_copy_item.owner | default(service_common_copy_default_owner, true) }}"
+    group: "{{ service_common_copy_item.group | default(service_common_copy_default_group, true) }}"
+    mode: "{{ service_common_copy_item.mode | default(omit) }}"
+  vars:
+    service_common_copy_host_defaults: "{{ service_common_host_defaults.get(service_common_target_host, {}) }}"
+    service_common_copy_default_owner: >-
+      {{ service_common_copy_host_defaults.get('owner', service_common_default_owner) }}
+    service_common_copy_default_group: >-
+      {{ service_common_copy_host_defaults.get('group', service_common_default_group) }}
+  delegate_to: "{{ service_common_target_host }}"
+  loop: "{{ service_common_copies }}"
+  loop_control:
+    loop_var: service_common_copy_item
+    label: "{{ service_common_copy_item.dest | string | trim }}"
+
+- name: Service common copies | Wait for copied files
+  when: service_common_copy_item.wait | default(false) | bool
+  ansible.builtin.wait_for:
+    path: "{{ service_common_copy_item.dest | string | trim }}"
+    state: present
+    timeout: "{{ service_common_copy_item.wait_timeout | default(30) | int }}"
+  delegate_to: "{{ service_common_target_host }}"
+  loop: "{{ service_common_copies }}"
+  loop_control:
+    loop_var: service_common_copy_item
+    label: "{{ service_common_copy_item.dest | string | trim }}"

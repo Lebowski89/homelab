@@ -53,7 +53,10 @@
 ################################
 
 - name: Prep - Infisical | Include tasker
-  ansible.builtin.include_tasks: sub_tasks/prep/infisical/tasker.yml
+  ansible.builtin.include_tasks:
+    file: sub_tasks/prep/infisical/tasker.yml
+    apply:
+      tags: [deploy, update, recreate]
   tags: [deploy, update, recreate]
 
 ################################
@@ -80,6 +83,7 @@
 
 - name: Prep - Authelia | Include bootstrap tasks
   when:
+    - not ansible_check_mode
     - inventory_hostname == docker_services_primary_manager
     - (docker_services_svc.name | default('') | string | trim) == "authelia"
   ansible.builtin.include_tasks:
@@ -95,6 +99,7 @@
 
 - name: Prep - Postgres | Create Postgres database
   when:
+    - not ansible_check_mode
     - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.postgres is defined
     - (docker_services_svc.postgres.enable | default(false)) | bool
@@ -110,6 +115,7 @@
 
 - name: Prep - qBittorrent | Include bootstrap tasks
   when:
+    - not ansible_check_mode
     - inventory_hostname == docker_services_primary_manager
     - (docker_services_role_prefix | default('') | string | trim) == "qbittorrent"
   ansible.builtin.include_tasks:
@@ -119,74 +125,53 @@
   tags: [deploy, update, recreate]
 
 ################################
-# PREP (PATHS)
+# PREP (TRAEFIK ZONE LOOKUP)
 ################################
 
-- name: Prep - Paths | Create filesystem paths
+- name: Prep - Traefik zone | Resolve Docker compatibility input
   when:
     - inventory_hostname == docker_services_primary_manager
-    - docker_services_svc.paths is defined
-    - (docker_services_svc.paths | length > 0)
+    - docker_services_svc.traefik.enable | default(false) | bool
   ansible.builtin.include_tasks:
-    file: sub_tasks/prep/paths.yml
+    file: sub_tasks/prep/traefik_zone.yml
     apply:
       tags: [deploy, update, recreate]
-  vars:
-    paths: "{{ docker_services_svc.paths }}"
-    docker_services_deploy_host: "{{ _fs_target }}"
-    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default('1000') }}"
-    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default('1000') }}"
-    default_mode: "0755"
-  loop: "{{ docker_services_fs_hosts_effective }}"
-  loop_control:
-    loop_var: _fs_target
   tags: [deploy, update, recreate]
 
 ################################
-# PREP (COPIES)
+# PREP (RUNTIME-NEUTRAL SERVICE STATE)
 ################################
 
-- name: Prep - Copies | Copy files
-  when:
-    - inventory_hostname == docker_services_primary_manager
-    - docker_services_svc.copies is defined
-    - (docker_services_svc.copies | length > 0)
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/copies.yml
+- name: Prep - Service common | Prepare files and Traefik integration
+  when: inventory_hostname == docker_services_primary_manager
+  ansible.builtin.include_role:
+    name: service_common
     apply:
-      tags: [deploy, update, recreate]
+      tags: [deploy, update, remove, recreate]
   vars:
-    copies: "{{ docker_services_svc.copies }}"
-    docker_services_deploy_host: "{{ _fs_target }}"
-    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default('1000') }}"
-    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default('1000') }}"
-  loop: "{{ docker_services_fs_hosts_effective }}"
-  loop_control:
-    loop_var: _fs_target
-  tags: [deploy, update, recreate]
-
-################################
-# PREP (TEMPLATES)
-################################
-
-- name: Prep - Templates | Render templates
-  when:
-    - inventory_hostname == docker_services_primary_manager
-    - docker_services_svc.templates is defined
-    - (docker_services_svc.templates | length > 0)
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/templates.yml
-    apply:
-      tags: [deploy, update, recreate]
-  vars:
-    templates: "{{ docker_services_svc.templates }}"
-    docker_services_deploy_host: "{{ _fs_target }}"
-    default_owner: "{{ hostvars[_fs_target].docker_host_puid | default('1000') }}"
-    default_group: "{{ hostvars[_fs_target].docker_host_pgid | default('1000') }}"
-  loop: "{{ docker_services_fs_hosts_effective }}"
-  loop_control:
-    loop_var: _fs_target
-  tags: [deploy, update, recreate]
+    service_common_name: "{{ docker_services_service_name }}"
+    service_common_runtime: docker
+    service_common_action: "{{ docker_services_common_action }}"
+    service_common_service: "{{ docker_services_svc }}"
+    service_common_target_hosts: "{{ docker_services_fs_hosts_effective }}"
+    service_common_controller_host: "{{ docker_services_primary_manager }}"
+    service_common_host_defaults: "{{ docker_services_common_host_defaults }}"
+    service_common_template_vars:
+      qbittorrent_pass_pbkdf2: "{{ docker_services_qbittorrent_pass_pbkdf2 | default('') }}"
+      qbittorrent_xs_pass_pbkdf2: "{{ docker_services_qbittorrent_xs_pass_pbkdf2 | default('') }}"
+    service_common_traefik_base_zone: >-
+      {{
+        hostvars[docker_services_primary_manager].cloudflare_zone
+        | default(
+            cloudflare_zone
+            | default(docker_services_traefik_check_base_zone | default(''))
+          )
+      }}
+    service_common_traefik_dynamic_dir: >-
+      {{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic
+    service_common_traefik_owner: "1000"
+    service_common_traefik_group: "1000"
+  tags: [deploy, update, remove, recreate]
 
 ################################
 # PREP (SWARM ENV TEMPLATES)
@@ -198,30 +183,23 @@
     - (docker_services_stack_deploy_type | string | trim) == "swarm"
     - docker_services_svc.swarm_env_templates is defined
     - (docker_services_svc.swarm_env_templates | length > 0)
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/templates.yml
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: templates
     apply:
       tags: [deploy, update, recreate]
   vars:
-    templates: "{{ docker_services_svc.swarm_env_templates }}"
-    docker_services_deploy_host: "{{ docker_services_primary_manager }}"
-    default_owner: "{{ hostvars[docker_services_primary_manager].docker_host_puid | default('1000') }}"
-    default_group: "{{ hostvars[docker_services_primary_manager].docker_host_pgid | default('1000') }}"
-  tags: [deploy, update, recreate]
-
-################################
-# PREP (TRAEFIK)
-################################
-
-- name: Prep - Traefik | Render dynamic files
-  when:
-    - inventory_hostname == docker_services_primary_manager
-    - docker_services_svc.traefik is defined
-    - (docker_services_svc.traefik.enable | default(false)) | bool
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/traefik.yml
-    apply:
-      tags: [deploy, update, recreate]
+    service_common_name: "{{ docker_services_service_name }}"
+    service_common_templates: "{{ docker_services_svc.swarm_env_templates }}"
+    service_common_target_host: "{{ docker_services_primary_manager }}"
+    service_common_host_defaults: "{{ docker_services_common_host_defaults }}"
+    service_common_default_owner: >-
+      {{ hostvars[docker_services_primary_manager].docker_host_puid | default('1000') }}
+    service_common_default_group: >-
+      {{ hostvars[docker_services_primary_manager].docker_host_pgid | default('1000') }}
+    service_common_template_vars:
+      qbittorrent_pass_pbkdf2: "{{ docker_services_qbittorrent_pass_pbkdf2 | default('') }}"
+      qbittorrent_xs_pass_pbkdf2: "{{ docker_services_qbittorrent_xs_pass_pbkdf2 | default('') }}"
   tags: [deploy, update, recreate]
 
 ################################
@@ -230,6 +208,7 @@
 
 - name: Prep - Plex | Include bootstrap tasks
   when:
+    - not ansible_check_mode
     - inventory_hostname == docker_services_primary_manager
     - (docker_services_svc.name | default('') | string | trim) == "plex"
   ansible.builtin.include_tasks:
@@ -245,6 +224,7 @@
 
 - name: Prep - Bazarr | Include bootstrap tasks
   when:
+    - not ansible_check_mode
     - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.name  | default('') == "bazarr"
   ansible.builtin.include_tasks:
@@ -260,6 +240,7 @@
 
 - name: Prep - NZBHydra2 | Include bootstrap tasks
   when:
+    - not ansible_check_mode
     - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.name  | default('') == "nzbhydra2"
   ansible.builtin.include_tasks:
@@ -275,6 +256,7 @@
 
 - name: Prep - Vaultwarden | Include bootstrap tasks
   when:
+    - not ansible_check_mode
     - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.name == "vaultwarden"
   ansible.builtin.include_tasks:

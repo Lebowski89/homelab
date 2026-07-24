@@ -1,494 +1,123 @@
 ---
 
-- name: Podman services | Normalize service
-  ansible.builtin.set_fact:
-    podman_services_service: "{{ podman_services_service_cfg | podman_service_normalize(podman_services_role_prefix) }}"
-    podman_services_unit_name: "{{ (podman_services_service_cfg.container.name | default(podman_services_role_prefix)) ~ '.service' }}"
+################################
+# INIT
+################################
+
+- name: Podman services | Include initialization tasks
+  ansible.builtin.include_tasks: sub_tasks/init.yml
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Podman services | Reset per-service transient facts
-  ansible.builtin.set_fact:
-    podman_services_secret_values: {}
-    podman_services_secret_results: {}
-    podman_services_image_pull: {}
-    podman_services_requires_restart: false
-  no_log: true
+################################
+# SHARED PREPARATION
+################################
+
+- name: Podman services | Prepare runtime-neutral host state
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: prepare
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    service_common_name: "{{ podman_services_service.name }}"
+    service_common_runtime: podman
+    service_common_action: "{{ podman_services_common_action }}"
+    service_common_service: >-
+      {{ podman_services_service | combine({'paths': podman_services_service.host_paths}, recursive=true) }}
+    service_common_target_hosts: ["{{ inventory_hostname }}"]
+    service_common_controller_host: "{{ podman_services_traefik_delegate }}"
+    service_common_default_owner: "{{ podman_services_service.container.uid | default('1000') }}"
+    service_common_default_group: "{{ podman_services_service.container.gid | default('1000') }}"
+    service_common_default_mode: "0750"
+  tags: [deploy, update, recreate, bootstrap]
+
+################################
+# PREPARE
+################################
+
+- name: Podman services | Include preparation tasks
+  ansible.builtin.include_tasks: sub_tasks/prepare.yml
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Podman services | Assert inventory target matches selected host
-  ansible.builtin.assert:
-    that:
-      - podman_services_service.container.host | default(inventory_hostname) == inventory_hostname
-    fail_msg: >-
-      Podman service {{ podman_services_service.name }} is targeted at
-      {{ podman_services_service.container.host | default(inventory_hostname) }}, not {{ inventory_hostname }}.
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
+################################
+# IMAGE
+################################
 
-- name: Podman services | Build Infisical lookup parameters for manager endpoint
-  ansible.builtin.set_fact:
-    podman_services_infisical_lookup_params: >-
-      {{
-        infisical_lookup_default_params
-        | combine({
-            'url': 'http://' ~ hostvars[podman_services_infisical_delegate].local_ip ~ ':8066'
-          })
-      }}
-  when:
-    - infisical_lookup_default_params is defined
-    - podman_services_infisical_delegate in hostvars
-    - hostvars[podman_services_infisical_delegate].local_ip is defined
-  no_log: true
-  tags: [deploy, update, recreate, remove, drift, bootstrap]
-
-
-- name: Podman services | Assert Infisical lookup parameters for secrets
-  when:
-    - podman_services_service.secrets | length > 0
-    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
-  ansible.builtin.assert:
-    that:
-      - podman_services_infisical_lookup_params is defined
-      - podman_services_infisical_lookup_params is mapping
-    fail_msg: >-
-      podman_services requires infisical_lookup_default_params and
-      {{ podman_services_infisical_delegate }}.local_ip for secret-backed services.
-  no_log: true
+- name: Podman services | Include image tasks
+  ansible.builtin.include_tasks: sub_tasks/image.yml
   tags: [deploy, update, recreate, bootstrap]
 
+################################
+# CHANGED NETWORK
+################################
 
-- name: Podman | Ensure system Quadlet directory exists
-  ansible.builtin.file:
-    path: "{{ podman_services_quadlet_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
-
-- name: Podman services | Ensure host data paths exist
-  when: podman_services_state != 'remove'
-  ansible.builtin.file:
-    path: "{{ item.path }}"
-    state: directory
-    owner: "{{ item.owner | default(podman_services_service.container.uid | default('1000')) }}"
-    group: "{{ item.group | default(podman_services_service.container.gid | default('1000')) }}"
-    mode: "{{ item.mode | default('0750') }}"
-  loop: "{{ podman_services_service.host_paths }}"
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Render network Quadlet
-  when:
-    - podman_services_service.network is mapping
-    - podman_services_state != 'remove'
-  ansible.builtin.template:
-    src: network.network.j2
-    dest: "{{ podman_services_quadlet_dir }}/{{ podman_services_service.network.name }}.network"
-    owner: root
-    group: root
-    mode: "0644"
-  register: podman_services_network_quadlet
-  notify: Podman services | daemon reload
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Render volume Quadlets
-  when: podman_services_state != 'remove'
-  ansible.builtin.template:
-    src: volume.volume.j2
-    dest: "{{ podman_services_quadlet_dir }}/{{ volume.name }}.volume"
-    owner: root
-    group: root
-    mode: "0644"
-  loop: "{{ podman_services_service.volumes }}"
-  loop_control:
-    loop_var: volume
-    label: "{{ volume.name }}"
-  register: podman_services_volume_quadlets
-  notify: Podman services | daemon reload
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Render protected environment file
-  when:
-    - podman_services_service.env | length > 0
-    - podman_services_state != 'remove'
-  ansible.builtin.template:
-    src: env.env.j2
-    dest: "{{ podman_services_quadlet_dir }}/{{ podman_services_service.unit_name }}.env"
-    owner: root
-    group: root
-    mode: "0600"
-  register: podman_services_env_file
-  notify: Podman services | daemon reload
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Resolve Infisical secret values
-  when:
-    - not ansible_check_mode
-    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
-    - podman_services_service.secrets | length > 0
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    podman_services_secret_values: >-
-      {{
-        podman_services_secret_values | default({})
-        | combine({
-            item.name: lookup(
-              'infisical.vault.read_secrets',
-              **(podman_services_infisical_lookup_params | combine({
-                'path': item.infisical_path,
-                'secret_name': item.infisical_key
-              }))
-            ).value
-          })
-      }}
-  loop: "{{ podman_services_service.secrets }}"
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Create/update Podman secrets
-  when:
-    - not ansible_check_mode
-    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
-  no_log: true
-  diff: false
-  containers.podman.podman_secret:
-    name: "{{ item.name }}"
-    data: "{{ podman_services_secret_values[item.name] }}"
-    state: present
-    force: "{{ (item | podman_secret_policy(podman_services_state)).force }}"
-    skip_existing: "{{ (item | podman_secret_policy(podman_services_state)).skip_existing }}"
-  loop: "{{ podman_services_service.secrets }}"
-  register: podman_services_secret_results
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Report check-mode PostgreSQL database plan
-  when:
-    - ansible_check_mode
-    - podman_services_service.postgres.enable | default(false) | bool
-  ansible.builtin.debug:
-    msg: >-
-      PostgreSQL database declaration for {{ podman_services_service.name }} is
-      {{ podman_services_service.postgres.databases | default([]) | join(', ') }}.
-      Database creation is intentionally not performed by podman_services.
-  changed_when: false
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Render container Quadlet
-  when: podman_services_state != 'remove'
-  ansible.builtin.template:
-    src: container.container.j2
-    dest: "{{ podman_services_quadlet_dir }}/{{ podman_services_service.unit_name }}.container"
-    owner: root
-    group: root
-    mode: "0644"
-  register: podman_services_container_quadlet
-  notify: Podman services | daemon reload
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Pull exact image when allowed
-  when:
-    - not ansible_check_mode
-    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
-    - podman_services_pull_images | bool
-  containers.podman.podman_image:
-    name: "{{ podman_services_service.image }}"
-    state: present
-    pull: true
-  register: podman_services_image_pull
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Compute restart requirement
-  ansible.builtin.set_fact:
-    podman_services_requires_restart: >-
-      {{
-        podman_services_state == 'recreate'
-        or (podman_services_container_quadlet is changed)
-        or (podman_services_env_file is changed)
-        or (podman_services_network_quadlet is changed)
-        or (podman_services_volume_quadlets is changed)
-        or (podman_services_image_pull is changed)
-        or (
-          podman_services_state == 'update'
-          and (podman_services_service.secrets | selectattr('replace') | list | length) > 0
-        )
-        or (
-          podman_services_secret_results is defined
-          and (
-            podman_services_secret_results.results | default([])
-            | selectattr('changed')
-            | list
-            | length
-          ) > 0
-        )
-      }}
-  tags: [deploy, update, recreate, bootstrap]
-
-
-- name: Podman services | Stop container before changed dedicated network lifecycle
-  when:
-    - not ansible_check_mode
-    - podman_services_state in ['update', 'recreate']
-    - podman_services_service.network is mapping
-    - podman_services_network_quadlet is changed
-    - podman_services_service.network.delete_on_stop | default(false) | bool
-  ansible.builtin.systemd_service:
-    name: "{{ podman_services_unit_name }}"
-    state: stopped
+- name: Podman services | Include changed network tasks
+  ansible.builtin.include_tasks: sub_tasks/network.yml
   tags: [update, recreate]
 
-- name: Podman services | Stop generated dedicated network after changed lifecycle
-  when:
-    - not ansible_check_mode
-    - podman_services_state in ['update', 'recreate']
-    - podman_services_service.network is mapping
-    - podman_services_network_quadlet is changed
-    - podman_services_service.network.delete_on_stop | default(false) | bool
-  ansible.builtin.systemd_service:
-    name: "{{ podman_services_service.network.name }}-network.service"
-    state: stopped
-  register: podman_services_changed_network_stop
-  failed_when: >-
-    podman_services_changed_network_stop is failed
-    and (podman_services_changed_network_stop.msg | default('') is not search('not loaded|Could not find|not found'))
-  tags: [update, recreate]
+################################
+# SERVICE LIFECYCLE
+################################
 
-- name: Podman services | Check changed dedicated network still exists
-  when:
-    - not ansible_check_mode
-    - podman_services_state in ['update', 'recreate']
-    - podman_services_service.network is mapping
-    - podman_services_network_quadlet is changed
-    - podman_services_service.network.delete_on_stop | default(false) | bool
-  ansible.builtin.command:
-    argv: [podman, network, exists, "{{ podman_services_service.network.name }}"]
-  register: podman_services_changed_network_exists
-  changed_when: false
-  failed_when: podman_services_changed_network_exists.rc not in [0, 1]
-  tags: [update, recreate]
-
-- name: Podman services | Remove changed dedicated network if still present
-  when:
-    - not ansible_check_mode
-    - podman_services_state in ['update', 'recreate']
-    - podman_services_service.network is mapping
-    - podman_services_network_quadlet is changed
-    - podman_services_service.network.delete_on_stop | default(false) | bool
-    - podman_services_changed_network_exists.rc == 0
-  ansible.builtin.command:
-    argv: [podman, network, rm, "{{ podman_services_service.network.name }}"]
-  changed_when: true
-  tags: [update, recreate]
-
-- name: Podman services | Flush Quadlet daemon-reload handlers before lifecycle
-  ansible.builtin.meta: flush_handlers
+- name: Podman services | Include service lifecycle tasks
+  ansible.builtin.include_tasks: sub_tasks/lifecycle.yml
   tags: [deploy, update, remove, recreate, bootstrap]
 
-- name: Podman services | Validate Quadlets with Podman generator dry run
-  when:
-    - podman_services_state != 'remove'
-    - not ansible_check_mode
-  ansible.builtin.command:
-    argv:
-      - "{{ podman_quadlet_generator_path | default('/usr/lib/systemd/system-generators/podman-system-generator') }}"
-      - --dryrun
-  changed_when: false
+################################
+# TRAEFIK
+################################
+
+- name: Podman services | Include Traefik tasks
+  when: podman_services_service.traefik.enable | default(false) | bool
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: traefik
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    service_common_name: "{{ podman_services_service.name }}"
+    service_common_runtime: podman
+    service_common_action: "{{ podman_services_common_action }}"
+    service_common_service: "{{ podman_services_service }}"
+    service_common_target_hosts: ["{{ inventory_hostname }}"]
+    service_common_controller_host: "{{ podman_services_traefik_delegate }}"
+    service_common_traefik_base_zone: "{{ internal_zone | regex_replace('^int\\.', '') }}"
+    service_common_traefik_dynamic_dir: "{{ podman_services_traefik_dynamic_dir }}"
+    service_common_traefik_owner: "{{ podman_services_traefik_dynamic_owner }}"
+    service_common_traefik_group: "{{ podman_services_traefik_dynamic_group }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Podman services | Verify generated systemd unit
-  when:
-    - podman_services_state != 'remove'
-    - not ansible_check_mode
-  ansible.builtin.command:
-    argv:
-      - systemd-analyze
-      - --generators=true
-      - verify
-      - "{{ podman_services_unit_name }}"
-  changed_when: false
-  tags: [deploy, update, recreate, bootstrap]
+################################
+# REMOVE
+################################
 
-- name: Podman services | Start service for deploy/bootstrap
-  when:
-    - not ansible_check_mode
-    - podman_services_state in ['deploy', 'bootstrap']
-  ansible.builtin.systemd_service:
-    name: "{{ podman_services_unit_name }}"
-    state: started
-  tags: [deploy, bootstrap]
-
-- name: Podman services | Restart service when update inputs changed
-  when:
-    - not ansible_check_mode
-    - podman_services_state == 'update'
-    - podman_services_requires_restart | bool
-  ansible.builtin.systemd_service:
-    name: "{{ podman_services_unit_name }}"
-    state: restarted
-  tags: [update]
-
-- name: Podman services | Recreate service unconditionally
-  when:
-    - not ansible_check_mode
-    - podman_services_state == 'recreate'
-  ansible.builtin.systemd_service:
-    name: "{{ podman_services_unit_name }}"
-    state: restarted
-  tags: [recreate]
-
-- name: Podman services | Render private Traefik host backend on manager
-  when:
-    - podman_services_service.traefik.enable | default(false) | bool
-    - podman_services_service.traefik.backend_mode | default('') == 'host'
-    - podman_services_state != 'remove'
-  ansible.builtin.template:
-    src: traefik-host.yml.j2
-    dest: "{{ podman_services_traefik_dynamic_dir }}/{{ podman_services_service.name }}.yml"
-    owner: "{{ podman_services_traefik_dynamic_owner }}"
-    group: "{{ podman_services_traefik_dynamic_group }}"
-    mode: "0644"
-  delegate_to: "{{ podman_services_traefik_delegate }}"
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Check container unit load state for removal
-  when:
-    - not ansible_check_mode
-    - podman_services_state == 'remove'
-  ansible.builtin.command:
-    argv:
-      - systemctl
-      - show
-      - "{{ podman_services_unit_name }}"
-      - --property=LoadState
-      - --value
-  register: podman_services_remove_unit_load_state
-  changed_when: false
-  failed_when: false
+- name: Podman services | Include removal tasks
+  ansible.builtin.include_tasks: sub_tasks/remove.yml
   tags: [remove]
 
-- name: Podman services | Stop service for removal without deleting data
-  when:
-    - not ansible_check_mode
-    - podman_services_state == 'remove'
-    - podman_services_remove_unit_load_state.stdout | trim != 'not-found'
-  ansible.builtin.systemd_service:
-    name: "{{ podman_services_unit_name }}"
-    state: stopped
+- name: Podman services | Remove runtime-neutral integrations
+  when: podman_services_service.traefik.enable | default(false) | bool
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: remove_integrations
+    apply:
+      tags: [remove]
+  vars:
+    service_common_name: "{{ podman_services_service.name }}"
+    service_common_runtime: podman
+    service_common_action: "{{ podman_services_common_action }}"
+    service_common_service: "{{ podman_services_service }}"
+    service_common_target_hosts: ["{{ inventory_hostname }}"]
+    service_common_controller_host: "{{ podman_services_traefik_delegate }}"
+    service_common_traefik_dynamic_dir: "{{ podman_services_traefik_dynamic_dir }}"
   tags: [remove]
 
+################################
+# DRIFT
+################################
 
-- name: Podman services | Stop generated network unit for removal
-  when:
-    - not ansible_check_mode
-    - podman_services_state == 'remove'
-    - podman_services_service.network is mapping
-  ansible.builtin.systemd_service:
-    name: "{{ podman_services_service.network.name }}-network.service"
-    state: stopped
-  register: podman_services_remove_network_stop
-  failed_when: >-
-    podman_services_remove_network_stop is failed
-    and (podman_services_remove_network_stop.msg | default('') is not search('not loaded|Could not find|not found'))
-  tags: [remove]
-
-- name: Podman services | Check dedicated network still exists for removal
-  when:
-    - not ansible_check_mode
-    - podman_services_state == 'remove'
-    - podman_services_service.network is mapping
-    - podman_services_service.network.delete_on_stop | default(false) | bool
-  ansible.builtin.command:
-    argv: [podman, network, exists, "{{ podman_services_service.network.name }}"]
-  register: podman_services_remove_network_exists
-  changed_when: false
-  failed_when: podman_services_remove_network_exists.rc not in [0, 1]
-  tags: [remove]
-
-- name: Podman services | Remove dedicated network if still present
-  when:
-    - not ansible_check_mode
-    - podman_services_state == 'remove'
-    - podman_services_service.network is mapping
-    - podman_services_service.network.delete_on_stop | default(false) | bool
-    - podman_services_remove_network_exists.rc == 0
-  ansible.builtin.command:
-    argv: [podman, network, rm, "{{ podman_services_service.network.name }}"]
-  changed_when: true
-  tags: [remove]
-
-- name: Podman services | Remove generated Quadlet and environment files only
-  when: podman_services_state == 'remove'
-  ansible.builtin.file:
-    path: "{{ item }}"
-    state: absent
-  loop: >-
-    {{
-      [
-        podman_services_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.container',
-        podman_services_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.env'
-      ]
-      + (
-        [podman_services_quadlet_dir ~ '/' ~ podman_services_service.network.name ~ '.network']
-        if podman_services_service.network is mapping
-        else []
-      )
-      + (
-        podman_services_service.volumes
-        | map(attribute='name')
-        | map('regex_replace', '^(.*)$', podman_services_quadlet_dir ~ '/\\1.volume')
-        | list
-      )
-    }}
-  notify: Podman services | daemon reload
-  tags: [remove]
-
-- name: Podman services | Remove private Traefik host backend
-  when:
-    - podman_services_service.traefik.enable | default(false) | bool
-    - podman_services_service.traefik.backend_mode | default('') == 'host'
-    - podman_services_state == 'remove'
-  ansible.builtin.file:
-    path: "{{ podman_services_traefik_dynamic_dir }}/{{ podman_services_service.name }}.yml"
-    state: absent
-  delegate_to: "{{ podman_services_traefik_delegate }}"
-  tags: [remove]
-
-- name: Podman services | Drift check current image reference
-  when:
-    - not ansible_check_mode
-    - podman_services_state == 'drift'
-  ansible.builtin.command:
-    argv: [podman, inspect, --format, "{{ '{{.ImageName}}' }}", "{{ podman_services_service.unit_name }}"]
-  register: podman_services_drift_inspect
-  failed_when: false
-  changed_when: false
-  tags: [drift]
-
-- name: Podman services | Classify image reference drift
-  when: podman_services_state == 'drift'
-  ansible.builtin.set_fact:
-    podman_services_image_reference_drift: >-
-      {{
-        podman_services_drift_inspect
-        | podman_image_reference_drift(podman_services_service.image)
-      }}
-  changed_when: podman_services_image_reference_drift.drift | bool
-  tags: [drift]
-
-- name: Podman services | Report Podman image reference drift
-  when:
-    - podman_services_state == 'drift'
-    - podman_services_image_reference_drift.drift | bool
-  ansible.builtin.debug:
-    msg: "{{ podman_services_image_reference_drift.message }}"
-  changed_when: false
-  tags: [drift]
-
-- name: Podman services | Report no Podman image reference drift
-  when:
-    - podman_services_state == 'drift'
-    - not (podman_services_image_reference_drift.drift | bool)
-  ansible.builtin.debug:
-    msg: "No Podman image reference drift detected for {{ podman_services_service.name }}."
-  changed_when: false
+- name: Podman services | Include drift tasks
+  ansible.builtin.include_tasks: sub_tasks/drift.yml
   tags: [drift]
 
 - name: Podman services | Flush removal daemon-reload handlers

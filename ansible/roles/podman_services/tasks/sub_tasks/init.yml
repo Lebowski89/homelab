@@ -1,0 +1,60 @@
+---
+
+- name: Init | Normalize service
+  ansible.builtin.set_fact:
+    podman_services_service: "{{ podman_services_service_cfg | podman_service_normalize(podman_services_role_prefix) }}"
+    podman_services_unit_name: "{{ (podman_services_service_cfg.container.name | default(podman_services_role_prefix)) ~ '.service' }}"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Init | Reset per-service transient facts
+  ansible.builtin.set_fact:
+    podman_services_secret_values: {}
+    podman_services_infisical_secrets_map: []
+    podman_services_secret_results: {}
+    podman_services_image_pull: {}
+    podman_services_requires_restart: false
+  no_log: true
+  diff: false
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Init | Assert inventory target matches selected host
+  ansible.builtin.assert:
+    that:
+      - podman_services_service.container.host | default(inventory_hostname) == inventory_hostname
+    fail_msg: >-
+      Podman service {{ podman_services_service.name }} is targeted at
+      {{ podman_services_service.container.host | default(inventory_hostname) }}, not {{ inventory_hostname }}.
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Init | Build Infisical lookup parameters for manager endpoint
+  ansible.builtin.set_fact:
+    podman_services_infisical_lookup_params: >-
+      {{
+        infisical_lookup_default_params
+        | combine({
+            'url': 'http://' ~ hostvars[podman_services_infisical_delegate].local_ip ~ ':8066'
+          })
+      }}
+  when:
+    - infisical_lookup_default_params is defined
+    - podman_services_infisical_delegate in hostvars
+    - hostvars[podman_services_infisical_delegate].local_ip is defined
+  no_log: true
+  diff: false
+  tags: [deploy, update, recreate, remove, drift, bootstrap]
+
+
+- name: Init | Assert Infisical lookup parameters for secrets
+  when:
+    - podman_services_service.secrets | length > 0
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.assert:
+    that:
+      - podman_services_infisical_lookup_params is defined
+      - podman_services_infisical_lookup_params is mapping
+    fail_msg: >-
+      podman_services requires infisical_lookup_default_params and
+      {{ podman_services_infisical_delegate }}.local_ip for secret-backed services.
+  no_log: true
+  diff: false
+  tags: [deploy, update, recreate, bootstrap]

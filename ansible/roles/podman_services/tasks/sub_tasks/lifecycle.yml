@@ -1,0 +1,57 @@
+---
+
+- name: Lifecycle | Flush Quadlet daemon-reload handlers before lifecycle
+  ansible.builtin.meta: flush_handlers
+  tags: [deploy, update, remove, recreate, bootstrap]
+
+- name: Lifecycle | Validate Quadlets with Podman generator dry run
+  when:
+    - podman_services_state != 'remove'
+    - not ansible_check_mode
+  ansible.builtin.command:
+    argv:
+      - "{{ podman_quadlet_generator_path | default('/usr/lib/systemd/system-generators/podman-system-generator') }}"
+      - --dryrun
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Lifecycle | Verify generated systemd unit
+  when:
+    - podman_services_state != 'remove'
+    - not ansible_check_mode
+  ansible.builtin.command:
+    argv:
+      - systemd-analyze
+      - --generators=true
+      - verify
+      - "{{ podman_services_unit_name }}"
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Lifecycle | Start service for deploy/bootstrap
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'bootstrap']
+  ansible.builtin.systemd_service:
+    name: "{{ podman_services_unit_name }}"
+    state: started
+  tags: [deploy, bootstrap]
+
+- name: Lifecycle | Restart service when update inputs changed
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'update'
+    - podman_services_requires_restart | bool
+  ansible.builtin.systemd_service:
+    name: "{{ podman_services_unit_name }}"
+    state: restarted
+  tags: [update]
+
+- name: Lifecycle | Recreate service unconditionally
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'recreate'
+  ansible.builtin.systemd_service:
+    name: "{{ podman_services_unit_name }}"
+    state: restarted
+  tags: [recreate]

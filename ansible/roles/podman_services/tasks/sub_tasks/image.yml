@@ -1,0 +1,39 @@
+---
+
+- name: Image | Pull exact image when allowed
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_pull_images | bool
+  containers.podman.podman_image:
+    name: "{{ podman_services_service.image }}"
+    state: present
+    pull: true
+  register: podman_services_image_pull
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Image | Compute restart requirement
+  ansible.builtin.set_fact:
+    podman_services_requires_restart: >-
+      {{
+        podman_services_state == 'recreate'
+        or (podman_services_container_quadlet is changed)
+        or (podman_services_env_file is changed)
+        or (podman_services_network_quadlet is changed)
+        or (podman_services_volume_quadlets is changed)
+        or (podman_services_image_pull is changed)
+        or (
+          podman_services_state == 'update'
+          and (podman_services_service.secrets | selectattr('replace') | list | length) > 0
+        )
+        or (
+          podman_services_secret_results is defined
+          and (
+            podman_services_secret_results.results | default([])
+            | selectattr('changed')
+            | list
+            | length
+          ) > 0
+        )
+      }}
+  tags: [deploy, update, recreate, bootstrap]

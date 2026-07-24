@@ -56,6 +56,7 @@ stash:
       mode: "0755"
   templates:
     - src: configs/stash.yml.j2
+      no_log: true
       dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/stash/config.yml"
       mode: "0664"
       force: false
