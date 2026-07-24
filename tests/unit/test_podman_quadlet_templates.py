@@ -1,6 +1,8 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
+from ansible.errors import AnsibleFilterError
 from jinja2 import Environment, FileSystemLoader
 
 TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "ansible" / "roles" / "podman_services" / "templates"
@@ -12,8 +14,13 @@ filter_spec.loader.exec_module(podman_services_filters)
 
 def render(name, service):
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), trim_blocks=True, lstrip_blocks=True)
-    env.filters["podman_env_quote"] = podman_services_filters.podman_env_quote
-    return env.get_template(name).render(podman_service=service, internal_zone="int.example.test")
+    env.filters["podman_env_file_key"] = podman_services_filters.podman_env_file_key
+    env.filters["podman_env_file_value"] = podman_services_filters.podman_env_file_value
+    return env.get_template(name).render(
+        podman_service=service,
+        podman_services_quadlet_dir="/etc/containers/systemd",
+        internal_zone="int.example.test",
+    )
 
 
 def service():
@@ -30,7 +37,13 @@ def service():
             "NODES_EXCLUDE": '["n8n-nodes-base.executeCommand","n8n-nodes-base.readWriteFile"]',
         },
         "secrets": [
-            {"name": "postgres_pass_secret", "uid": "1000", "gid": "1000", "mode": "0400"},
+            {
+                "name": "postgres_pass_secret",
+                "uid": "1000",
+                "gid": "1000",
+                "mode": "0400",
+                "value": "super-secret-value",
+            },
             {"name": "n8n_encryption_key_secret", "uid": "1000", "gid": "1000", "mode": "0400"},
         ],
         "container": {
@@ -38,11 +51,64 @@ def service():
             "gid": "1000",
             "ports": [{"host_ip": "192.0.2.98", "host": 5678, "container": 5678, "protocol": "tcp"}],
             "mounts": [{"source": "/opt/n8n", "target": "/home/node/.n8n"}],
+            "tmpfs": [{"target": "/tmp", "options": ["size=1048576", "mode=1777"]}],
+            "cap_add": ["NET_BIND_SERVICE"],
             "cap_drop": ["all"],
             "no_new_privileges": True,
             "healthcheck": {"command": "node -e ok"},
-            "systemd": {"after": ["network-online.target"]},
+            "systemd": {"after": ["custom-online.target"]},
         },
+    }
+
+
+def canonical_service():
+    return {
+        "runtime": "podman",
+        "description": "Canonical portable service",
+        "image": "ghcr.io/example/portable:1.2.3",
+        "user": "1001:1002",
+        "environment": {"APP_ENV": "production"},
+        "deploy": {"type": "swarm", "mode": "replicated", "replicas": 1, "host": "podman01"},
+        "ports": {
+            "web": {
+                "published": 8443,
+                "target": 8080,
+                "protocol": "tcp",
+                "host_ip": "192.0.2.10",
+            }
+        },
+        "volumes": {
+            "config": {
+                "type": "bind",
+                "source": "/opt/portable/config",
+                "target": "/config",
+                "read_only": True,
+            },
+            "data": {
+                "type": "volume",
+                "source": "portable-data",
+                "target": "/data",
+                "read_only": False,
+            },
+            "scratch": {
+                "type": "tmpfs",
+                "target": "/tmp",
+                "tmpfs": {"size": 1048576, "mode": 1777},
+            },
+        },
+        "paths": [{"path": "/opt/portable/config"}],
+        "cap_add": ["NET_BIND_SERVICE"],
+        "cap_drop": ["ALL"],
+        "no_new_privileges": True,
+        "read_only": True,
+        "healthcheck": {
+            "test": ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/health"],
+            "interval": "20s",
+            "timeout": "5s",
+            "retries": 4,
+            "start_period": "30s",
+        },
+        "network": {"name": "portable", "driver": "bridge", "delete_on_stop": True},
     }
 
 
@@ -59,9 +125,67 @@ def test_container_quadlet_is_deterministic_and_secret_safe():
     assert "User=1000:1000" not in first
     assert "NoNewPrivileges=true" in first
     assert "PodmanArgs=--security-opt=no-new-privileges" not in first
+    assert "AddCapability=NET_BIND_SERVICE" in first
     assert "DropCapability=all" in first
+    assert "Tmpfs=/tmp:size=1048576,mode=1777" in first
     assert "Volume=n8n-data.volume:/home/node/.n8n" in first
     assert "PublishPort=192.0.2.98:5678:5678/tcp" in first
+    assert "After=custom-online.target" in first
+    assert "WantedBy=multi-user.target" in first
+
+
+def test_canonical_normalization_reaches_container_quadlet():
+    normalized = podman_services_filters.podman_service_normalize(canonical_service(), "portable")
+    rendered = render("container.container.j2", normalized)
+
+    assert "Image=ghcr.io/example/portable:1.2.3" in rendered
+    assert "User=1001" in rendered
+    assert "Group=1002" in rendered
+    assert "EnvironmentFile=/etc/containers/systemd/portable.env" in rendered
+    assert "Network=portable.network" in rendered
+    assert "PublishPort=192.0.2.10:8443:8080/tcp" in rendered
+    assert "Volume=portable-data.volume:/data" in rendered
+    assert "Volume=/opt/portable/config:/config:ro" in rendered
+    assert "Tmpfs=/tmp:size=1048576,mode=1777" in rendered
+    assert "AddCapability=NET_BIND_SERVICE" in rendered
+    assert "DropCapability=ALL" in rendered
+    assert "NoNewPrivileges=true" in rendered
+    assert "ReadOnly=true" in rendered
+    assert "HealthCmd=curl -fsS http://127.0.0.1:8080/health" in rendered
+    assert "HealthInterval=20s" in rendered
+    assert "HealthTimeout=5s" in rendered
+    assert "HealthRetries=4" in rendered
+    assert "HealthStartPeriod=30s" in rendered
+    expected_lines = {
+        "Image=ghcr.io/example/portable:1.2.3",
+        "User=1001",
+        "Group=1002",
+        "EnvironmentFile=/etc/containers/systemd/portable.env",
+        "Network=portable.network",
+        "PublishPort=192.0.2.10:8443:8080/tcp",
+        "Volume=portable-data.volume:/data",
+        "Volume=/opt/portable/config:/config:ro",
+        "Tmpfs=/tmp:size=1048576,mode=1777",
+        "AddCapability=NET_BIND_SERVICE",
+        "DropCapability=ALL",
+        "NoNewPrivileges=true",
+        "ReadOnly=true",
+        "HealthCmd=curl -fsS http://127.0.0.1:8080/health",
+        "HealthInterval=20s",
+        "HealthTimeout=5s",
+        "HealthRetries=4",
+        "HealthStartPeriod=30s",
+    }
+    assert expected_lines <= set(rendered.splitlines())
+
+
+def test_no_new_privileges_false_is_not_rendered():
+    svc = service()
+    svc["container"]["no_new_privileges"] = False
+
+    rendered = render("container.container.j2", svc)
+
+    assert "NoNewPrivileges=true" not in rendered
 
 
 def test_network_quadlet_is_deterministic():
@@ -72,11 +196,70 @@ def test_network_quadlet_is_deterministic():
     assert "NetworkDeleteOnStop=true" in rendered
 
 
-def test_env_file_quotes_json_values():
-    rendered = render("env.env.j2", service())
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ('["node-a","node-b"]', '["node-a","node-b"]'),
+        ("value with spaces", "value with spaces"),
+        ("left=right=again", "left=right=again"),
+        (True, "true"),
+        (False, "false"),
+        (42, "42"),
+        ("", ""),
+        ("single'quote", "single'quote"),
+        ('double"quote', 'double"quote'),
+        (None, ""),
+    ],
+)
+def test_env_file_value_serializes_supported_scalars_without_shell_quotes(value, expected):
+    assert podman_services_filters.podman_env_file_value(value) == expected
+
+
+@pytest.mark.parametrize("value", ["line\nbreak", "carriage\rreturn", "nul\0byte"])
+def test_env_file_value_rejects_line_injection(value):
+    with pytest.raises(AnsibleFilterError, match="must not contain"):
+        podman_services_filters.podman_env_file_value(value)
+
+
+@pytest.mark.parametrize("value", [{"nested": "mapping"}, ["a", "list"], 1.5])
+def test_env_file_value_rejects_complex_or_unsupported_values(value):
+    with pytest.raises(AnsibleFilterError, match="serialize structured"):
+        podman_services_filters.podman_env_file_value(value)
+
+
+@pytest.mark.parametrize("key", ["1INVALID", "HAS-DASH", "HAS.DOT", "", 42])
+def test_env_file_key_rejects_invalid_names(key):
+    with pytest.raises(AnsibleFilterError, match="env-file key"):
+        podman_services_filters.podman_env_file_key(key)
+
+
+def test_env_file_renders_json_and_literal_content_without_shell_quotes():
+    svc = service()
+    quote_value = 'single\' and "double"'
+    svc["env"].update(
+        {
+            "SPACE": "two words",
+            "EQUALS": "left=right",
+            "BOOL": False,
+            "INTEGER": 7,
+            "EMPTY": "",
+            "QUOTES": quote_value,
+            "NULL_VALUE": None,
+        }
+    )
+
+    rendered = render("env.env.j2", svc)
+
+    assert 'NODES_EXCLUDE=["n8n-nodes-base.executeCommand","n8n-nodes-base.readWriteFile"]' in rendered
+    assert "SPACE=two words" in rendered
+    assert "EQUALS=left=right" in rendered
+    assert "BOOL=false" in rendered
+    assert "INTEGER=7" in rendered
+    assert "EMPTY=\n" in rendered
+    assert f"QUOTES={quote_value}" in rendered
+    assert "NULL_VALUE=\n" in rendered
     assert "N8N_ENCRYPTION_KEY_FILE=/run/secrets/n8n_encryption_key_secret" in rendered
-    assert "DB_TYPE=postgresdb" in rendered
-    assert 'NODES_EXCLUDE=\'["n8n-nodes-base.executeCommand","n8n-nodes-base.readWriteFile"]\'' in rendered
+    assert "super-secret-value" not in rendered
 
 
 def test_volume_quadlet_is_deterministic():
@@ -103,10 +286,21 @@ def test_generic_network_does_not_default_delete_on_stop():
     assert "NetworkDeleteOnStop=true" not in rendered
 
 
-def test_container_quadlet_defaults_when_systemd_mapping_absent():
+def test_container_quadlet_has_no_manual_default_network_dependency():
     svc = service()
     del svc["container"]["systemd"]
     rendered = render("container.container.j2", svc)
-    assert "After=network-online.target" in rendered
+    assert "After=network-online.target" not in rendered
+    assert "Wants=network-online.target" not in rendered
     assert "Restart=on-failure" in rendered
     assert "RestartSec=15s" in rendered
+
+
+def test_container_quadlet_renders_explicit_custom_after_dependencies():
+    svc = service()
+    svc["container"]["systemd"]["after"] = ["postgresql.service", "custom-online.target"]
+
+    rendered = render("container.container.j2", svc)
+
+    assert "After=postgresql.service" in rendered
+    assert "After=custom-online.target" in rendered
