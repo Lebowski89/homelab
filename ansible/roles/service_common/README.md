@@ -82,21 +82,21 @@
 
 #### File: tasks/prepare.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Service common prepare ¦ Include interface validation | ansible.builtin.include_tasks | False |
-| Service common prepare ¦ Require target hosts for filesystem preparation | ansible.builtin.assert | True |
-| Service common prepare ¦ Include path preparation per target | ansible.builtin.include_tasks | True |
-| Service common prepare ¦ Include static copies per target | ansible.builtin.include_tasks | True |
-| Service common prepare ¦ Include application templates per target | ansible.builtin.include_tasks | True |
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Service common prepare ¦ Include interface validation | ansible.builtin.include_tasks | False |  |
+| Service common prepare ¦ Require target hosts for filesystem preparation | ansible.builtin.assert | True |  |
+| Service common prepare ¦ Include path preparation per target | ansible.builtin.include_tasks | True |  |
+| Service common prepare ¦ Include static copies per target | ansible.builtin.include_tasks | True |  |
+| Service common prepare ¦ Include application templates per target | ansible.builtin.include_tasks | True |  |
 
 #### File: tasks/remove_integrations.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Service common remove integrations ¦ Include interface validation | ansible.builtin.include_tasks | False |
-| Service common remove integrations ¦ Resolve canonical and legacy Traefik paths | ansible.builtin.set_fact | False |
-| Service common remove integrations ¦ Remove canonical and legacy Traefik configurations | ansible.builtin.file | False |
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Service common remove integrations ¦ Include interface validation | ansible.builtin.include_tasks | False |  |
+| Service common remove integrations ¦ Resolve canonical and legacy Traefik paths | ansible.builtin.set_fact | False |  |
+| Service common remove integrations ¦ Remove canonical and legacy Traefik configurations | ansible.builtin.file | False |  |
 
 #### File: tasks/templates.yml
 
@@ -106,13 +106,13 @@
 
 #### File: tasks/traefik.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Service common Traefik ¦ Include interface validation | ansible.builtin.include_tasks | False |
-| Service common Traefik ¦ Resolve runtime-neutral render context | ansible.builtin.set_fact | False |
-| Service common Traefik ¦ Resolve canonical and legacy paths | ansible.builtin.set_fact | False |
-| Service common Traefik ¦ Render canonical dynamic configuration | ansible.builtin.template | False |
-| Service common Traefik ¦ Remove distinct legacy Podman configuration after render | ansible.builtin.file | True |
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Service common Traefik ¦ Include interface validation | ansible.builtin.include_tasks | False |  |
+| Service common Traefik ¦ Resolve runtime-neutral render context | ansible.builtin.set_fact | False |  |
+| Service common Traefik ¦ Resolve canonical and legacy paths | ansible.builtin.set_fact | False |  |
+| Service common Traefik ¦ Render canonical dynamic configuration | ansible.builtin.template | False |  |
+| Service common Traefik ¦ Remove distinct legacy Podman configuration after render | ansible.builtin.file | True |  |
 
 #### File: tasks/validate.yml
 
