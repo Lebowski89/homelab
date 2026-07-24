@@ -100,6 +100,17 @@ def test_secret_skip_existing_semantics_are_explicit():
     assert "podman_secret_policy(podman_services_state)" in TASKS
 
 
+def test_podman_adapts_existing_secret_declarations_without_changing_materialization_policy():
+    assert "'var': item.name" in TASKS
+    assert "'path': item.infisical_path" in TASKS
+    assert "'name': item.infisical_key" in TASKS
+    assert "tasks_from: infisical" in TASKS
+    assert 'name: "{{ item.name }}"' in TASKS
+    assert 'data: "{{ service_common_secret_values[item.name] }}"' in TASKS
+    assert "podman_secret_policy(podman_services_state)).force" in TASKS
+    assert "podman_secret_policy(podman_services_state)).skip_existing" in TASKS
+
+
 def test_absent_container_unit_is_checked_before_stop():
     load_state = TASKS.index("Check container unit load state for removal")
     stop = TASKS.index("Stop service for removal without deleting data")

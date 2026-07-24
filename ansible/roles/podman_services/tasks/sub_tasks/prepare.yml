@@ -53,41 +53,36 @@
   notify: Podman services | daemon reload
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep | Resolve Infisical secret values
-  when:
-    - not ansible_check_mode
-    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
-    - podman_services_service.secrets | length > 0
+- name: Prep | Build temporary common Infisical secrets map
+  when: podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
   no_log: true
   diff: false
   ansible.builtin.set_fact:
-    podman_services_secret_values: >-
+    podman_services_infisical_secrets_map: >-
       {{
-        podman_services_secret_values | default({})
-        | combine({
-            item.name: lookup(
-              'infisical.vault.read_secrets',
-              **(podman_services_infisical_lookup_params | combine({
-                'path': item.infisical_path,
-                'secret_name': item.infisical_key
-              }))
-            ).value
-          })
+        podman_services_infisical_secrets_map
+        + [{
+            'var': item.name,
+            'path': item.infisical_path,
+            'name': item.infisical_key
+          }]
       }}
   loop: "{{ podman_services_service.secrets }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep | Reject empty Infisical secret values before Podman materialization
-  when:
-    - not ansible_check_mode
-    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
-    - podman_services_service.secrets | length > 0
+- name: Prep | Retrieve Infisical values through service common
+  when: podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
   no_log: true
-  ansible.builtin.assert:
-    that:
-      - podman_services_secret_values[item.name] | default('') | string | trim | length > 0
-    fail_msg: "A required Podman secret value is empty; runtime secret creation was stopped."
-  loop: "{{ podman_services_service.secrets }}"
+  diff: false
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: infisical
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    service_common_infisical_secrets_map: "{{ podman_services_infisical_secrets_map }}"
+    service_common_infisical_lookup_params: "{{ podman_services_infisical_lookup_params | default({}) }}"
+    service_common_infisical_fail_on_empty: true
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Prep | Create/update Podman secrets
@@ -98,7 +93,7 @@
   diff: false
   containers.podman.podman_secret:
     name: "{{ item.name }}"
-    data: "{{ podman_services_secret_values[item.name] }}"
+    data: "{{ service_common_secret_values[item.name] }}"
     state: present
     force: "{{ (item | podman_secret_policy(podman_services_state)).force }}"
     skip_existing: "{{ (item | podman_secret_policy(podman_services_state)).skip_existing }}"

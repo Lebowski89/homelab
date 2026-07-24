@@ -16,6 +16,68 @@ def _text(value: Any) -> str:
     return str(value or "").strip()
 
 
+def _strict_bool(value: Any, *, name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        if value in {0, 1}:
+            return bool(value)
+        raise AnsibleFilterError(f"{name} must be a boolean or integer 0/1, got {value!r}")
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "yes", "on", "1"}:
+            return True
+        if normalized in {"false", "no", "off", "0"}:
+            return False
+    raise AnsibleFilterError(f"{name} must be a strict boolean value, got {value!r}")
+
+
+def service_common_infisical_normalize(secrets_map: Any, fail_on_empty: Any = True) -> dict[str, Any]:
+    if not isinstance(secrets_map, list):
+        raise AnsibleFilterError("service_common_infisical_secrets_map must be a list")
+
+    normalized: list[dict[str, str]] = []
+    seen_vars: set[str] = set()
+    for index, entry in enumerate(secrets_map):
+        item_name = f"service_common_infisical_secrets_map[{index}]"
+        if not isinstance(entry, Mapping):
+            raise AnsibleFilterError(f"{item_name} must be a mapping")
+        item: dict[str, str] = {}
+        for field in ("var", "path", "name"):
+            value = entry.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise AnsibleFilterError(f"{item_name}.{field} must be a non-empty string")
+            item[field] = value.strip()
+        if item["var"] in seen_vars:
+            raise AnsibleFilterError(f"duplicate Infisical var {item['var']!r}")
+        seen_vars.add(item["var"])
+        normalized.append(item)
+
+    return {
+        "secrets_map": normalized,
+        "fail_on_empty": _strict_bool(
+            fail_on_empty,
+            name="service_common_infisical_fail_on_empty",
+        ),
+    }
+
+
+def service_common_infisical_finalize(values: Any, config: Any) -> dict[str, Any]:
+    values = _mapping(values, name="service_common_secret_values")
+    config = _mapping(config, name="service_common_infisical_config")
+    normalized = service_common_infisical_normalize(
+        config.get("secrets_map"),
+        config.get("fail_on_empty"),
+    )
+    result: dict[str, Any] = {}
+    for entry in normalized["secrets_map"]:
+        value = values.get(entry["var"], "")
+        if normalized["fail_on_empty"] and not str(value if value is not None else "").strip():
+            raise AnsibleFilterError("Infisical returned an empty required secret value")
+        result[entry["var"]] = value
+    return result
+
+
 def _target_hosts(value: Any) -> list[str]:
     if not isinstance(value, Sequence) or isinstance(value, str):
         raise AnsibleFilterError("service_common_target_hosts must be a list")
@@ -115,4 +177,8 @@ def service_common_traefik_context(
 
 class FilterModule:
     def filters(self) -> dict[str, Any]:
-        return {"service_common_traefik_context": service_common_traefik_context}
+        return {
+            "service_common_infisical_finalize": service_common_infisical_finalize,
+            "service_common_infisical_normalize": service_common_infisical_normalize,
+            "service_common_traefik_context": service_common_traefik_context,
+        }

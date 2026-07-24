@@ -11,6 +11,10 @@ service_common_default_group: "1000"
 service_common_default_mode: "0755"
 service_common_host_defaults: {}
 service_common_template_vars: {}
+service_common_infisical_secrets_map: []
+service_common_infisical_lookup_params: {}
+service_common_infisical_fail_on_empty: true
+service_common_secret_values: {}
 service_common_traefik_base_zone: ""
 service_common_traefik_dynamic_dir: /opt/traefik/dynamic
 service_common_traefik_owner: "1000"

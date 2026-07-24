@@ -6,6 +6,7 @@
 
 - name: Drift Notify | Ensure SMTP creds exist
   no_log: true
+  diff: false
   when:
     - not ansible_check_mode
     - inventory_hostname == docker_services_primary_manager

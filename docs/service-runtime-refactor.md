@@ -5,7 +5,7 @@
 Service orchestration now has three responsibility boundaries:
 
 1. `service_catalog` loads definitions, expands targets, preserves tag/enabled selection, and chooses `docker` or `podman` (defaulting legacy definitions to Docker).
-2. `service_common` prepares paths, copies static assets, renders application templates, and manages shared Traefik dynamic files. It receives an already-normalized service and explicit target/controller hosts. It does not choose a runtime or create runtime resources.
+2. `service_common` prepares paths, copies static assets, renders application templates, manages shared Traefik dynamic files, and validates and retrieves runtime-neutral Infisical values. It receives an already-normalized service and explicit target/controller hosts. It does not choose a runtime or create runtime resources.
 3. `docker_services` and `podman_services` remain runtime adapters. Docker retains Compose/Swarm and batched stack deployment; Podman retains Quadlets and immediate per-service lifecycle operations.
 
 During this transition the runtime roles call named `service_common` entry points directly. A dispatcher is intentionally deferred. The desired eventual order is:
@@ -25,6 +25,8 @@ The required context is explicit: `service_common_name`, `service_common_runtime
 
 The common role never derives target topology from Docker fields. Docker passes `docker_services_fs_hosts_effective`; Podman passes its selected inventory host after translating `host_paths` to the existing portable `paths` preparation input.
 
+The focused Infisical entry point accepts `service_common_infisical_secrets_map`, `service_common_infisical_lookup_params`, and `service_common_infisical_fail_on_empty`. It resets `service_common_secret_values` for every service and returns a dictionary keyed by each declaration's `var`. Check mode validates declarations but performs no lookup.
+
 Shared Traefik files use `<service-name>-dynamic.yml`. A successful render removes the distinct legacy Podman `<service-name>.yml`; removal deletes both names idempotently. Explicit `backend_host` is resolved before any inventory lookup, while `backend_host_inventory` resolves `local_ip` only when needed. Thus n8n resolves its host backend to the n8n VM address on port 5678 without a duplicate runtime-specific Traefik definition.
 
 ## Deliberately retained runtime responsibilities
@@ -33,9 +35,9 @@ Shared Traefik files use `<service-name>-dynamic.yml`. A successful render remov
 
 `podman_services` retains exact-image and UID/GID validation, dedicated-network validation, Podman secrets and replacement policy, images, Quadlet rendering, generated systemd units, lifecycle operations, and image drift.
 
-Infisical lookup extraction is deferred. Docker currently combines flattened lookup facts, environment placeholder resolution, Docker secret selection, standalone secret files, PostgreSQL preparation, and application bootstraps. Moving only part of that contract would risk changing established secret propagation. Podman likewise keeps lookup adjacent to `containers.podman.podman_secret`. Both adapters reject empty values before runtime materialization, hide secret-bearing tasks with `no_log`, and disable diffs on secret writes. A later focused change can introduce `service_common_secret_values` with fixture coverage for placeholder and lookup compatibility.
+Infisical declaration validation, retrieval, and empty-value enforcement are shared through `service_common_secret_values`. Docker recreates its flattened or dictionary compatibility facts after lookup, preserving environment placeholder resolution and deployment-host propagation. Docker still owns Docker secret selection, Swarm secrets, protected standalone secret files, PostgreSQL preparation, and application bootstraps. Podman still owns `containers.podman.podman_secret`, secret replacement policy, mount metadata, and Quadlet rendering. Both adapters keep runtime materialization outside `service_common`.
 
-Check mode does not fetch secrets: Docker runtime/application bootstraps and secret-bearing common templates are skipped, while paths, copies, non-sensitive templates, and Traefik structure remain checkable.
+Check mode validates Infisical declarations but does not fetch secrets or recreate Docker compatibility facts. Docker runtime/application bootstraps and secret-bearing common templates are skipped, while paths, copies, non-sensitive templates, and Traefik structure remain checkable.
 
 Automatic PostgreSQL creation is not common behavior. Existing Docker workflows keep their established database preparation. Podman only reports declared requirements in check mode and never creates a database. The n8n database therefore remains an explicit operation through the established Docker/services workflow. A future `service_database` role or `database_bootstrap` task should be invoked explicitly, never as an implicit step of every runtime deployment.
 
@@ -80,8 +82,7 @@ Migration must preserve the catalog compatibility path while accepting both lega
 
 ## Remaining sequence
 
-1. Extract Infisical lookup and placeholder resolution behind a secret-value return contract, retaining adapter-specific materialization.
-2. Move suitable application preparation into `service_common/tasks/apps/` or, preferably for lifecycle-heavy applications, a dedicated `service_prepare` role.
-3. Introduce canonical normalization while keeping both compatibility inputs.
-4. Add `service_dispatch` only after normalized shared preparation and integration inputs are stable.
-5. Migrate portable services one at a time, proving equivalent common configuration plus runtime-specific Compose or Quadlet output for each service.
+1. Move suitable application preparation into `service_common/tasks/apps/` or, preferably for lifecycle-heavy applications, a dedicated `service_prepare` role.
+2. In Phase 2B, introduce canonical runtime-neutral secret declarations while keeping both compatibility inputs, then migrate n8n.
+3. Add `service_dispatch` only after normalized shared preparation and integration inputs are stable.
+4. Migrate portable services one at a time, proving equivalent common configuration plus runtime-specific Compose or Quadlet output for each service.

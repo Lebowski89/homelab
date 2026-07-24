@@ -5,19 +5,15 @@
 ################################
 
 - name: Prep - Infisical Fetch | Include tasks
-  when:
-    - inventory_hostname == docker_services_primary_manager
-    - docker_services_svc.infisical is defined
-    - not ansible_check_mode
-    - docker_services_svc.infisical.secrets_map is defined
-    - (docker_services_svc.infisical.secrets_map | length > 0)
+  when: inventory_hostname == docker_services_primary_manager
   ansible.builtin.include_tasks:
     file: _fetch.yml
     apply:
       tags: [deploy, update, recreate]
   vars:
-    infisical_fail_on_empty: "{{ docker_services_svc.infisical.fail_on_empty | default(true) }}"
-    secrets_map: "{{ docker_services_svc.infisical.secrets_map }}"
+    infisical_fail_on_empty: >-
+      {{ (docker_services_svc.infisical | default({})).fail_on_empty | default(true) }}
+    secrets_map: "{{ (docker_services_svc.infisical | default({})).secrets_map | default([]) }}"
   tags: [deploy, update, recreate]
 
 ################################
@@ -26,6 +22,7 @@
 
 - name: Prep - Infisical Resolver | Include tasks on deploy host
   when:
+    - not ansible_check_mode
     - inventory_hostname == docker_services_deploy_host_effective
   ansible.builtin.include_tasks:
     file: _resolver.yml
@@ -37,6 +34,7 @@
   no_log: true
   diff: false
   when:
+    - not ansible_check_mode
     - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.infisical is defined
     - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
@@ -56,6 +54,7 @@
   no_log: true
   diff: false
   when:
+    - not ansible_check_mode
     - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.infisical is defined
     - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
@@ -76,6 +75,7 @@
 
 - name: Prep - Infisical Secrets | Include tasks
   when:
+    - not ansible_check_mode
     - docker_services_svc.infisical is defined
     - (docker_services_svc.infisical.secrets_map | default([]) | length) > 0
     - >-

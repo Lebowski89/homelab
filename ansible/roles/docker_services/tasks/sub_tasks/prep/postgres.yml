@@ -6,6 +6,7 @@
 
 - name: Prep - Postgres | Ensure creds exist
   no_log: true
+  diff: false
   when: inventory_hostname == docker_services_primary_manager
   block:
     - name: Prep - Postgres | Detect if creds are missing

@@ -53,8 +53,10 @@
 ################################
 
 - name: Prep - Infisical | Include tasker
-  when: not ansible_check_mode
-  ansible.builtin.include_tasks: sub_tasks/prep/infisical/tasker.yml
+  ansible.builtin.include_tasks:
+    file: sub_tasks/prep/infisical/tasker.yml
+    apply:
+      tags: [deploy, update, recreate]
   tags: [deploy, update, recreate]
 
 ################################

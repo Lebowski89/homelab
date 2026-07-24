@@ -9,10 +9,12 @@
 - name: Init | Reset per-service transient facts
   ansible.builtin.set_fact:
     podman_services_secret_values: {}
+    podman_services_infisical_secrets_map: []
     podman_services_secret_results: {}
     podman_services_image_pull: {}
     podman_services_requires_restart: false
   no_log: true
+  diff: false
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
 - name: Init | Assert inventory target matches selected host
@@ -38,6 +40,7 @@
     - podman_services_infisical_delegate in hostvars
     - hostvars[podman_services_infisical_delegate].local_ip is defined
   no_log: true
+  diff: false
   tags: [deploy, update, recreate, remove, drift, bootstrap]
 
 
@@ -53,4 +56,5 @@
       podman_services requires infisical_lookup_default_params and
       {{ podman_services_infisical_delegate }}.local_ip for secret-backed services.
   no_log: true
+  diff: false
   tags: [deploy, update, recreate, bootstrap]

@@ -22,6 +22,7 @@ DOCKER_FETCH_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/in
 DOCKER_RESOLVER_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/_resolver.yml").read_text()
 DOCKER_INFISICAL_TASKER = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/tasker.yml").read_text()
 COMMON_TEMPLATE_TASKS = (ROLE / "tasks/templates.yml").read_text()
+COMMON_INFISICAL_TASKS = (ROLE / "tasks/infisical.yml").read_text()
 DOCKER_POSTGRES_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/postgres.yml").read_text()
 
 
@@ -99,21 +100,17 @@ def test_expected_common_dynamic_includes_propagate_required_tags():
             if key not in required_tags:
                 continue
 
-            assert isinstance(include, dict), (
-                f"{path}: {include_file} must use mapping syntax to support apply.tags"
-            )
+            assert isinstance(include, dict), f"{path}: {include_file} must use mapping syntax to support apply.tags"
 
             outer_tags = set(task.get("tags", []))
             applied_tags = set(include.get("apply", {}).get("tags", []))
             required = required_tags[key]
 
             assert required.issubset(outer_tags), (
-                f"{path}: {include_file} is missing required selection tags: "
-                f"{sorted(required - outer_tags)}"
+                f"{path}: {include_file} is missing required selection tags: {sorted(required - outer_tags)}"
             )
             assert required.issubset(applied_tags), (
-                f"{path}: {include_file} is missing required apply.tags: "
-                f"{sorted(required - applied_tags)}"
+                f"{path}: {include_file} is missing required apply.tags: {sorted(required - applied_tags)}"
             )
 
             checked.add(key)
@@ -166,35 +163,65 @@ def test_docker_batch_deployment_remains_after_service_loops():
     assert docker_loop < podman_loop < batch_deploy
 
 
-def test_secret_materialization_rejects_empty_values_and_hides_writes():
+def test_secret_materialization_and_compatibility_paths_remain_adapter_owned():
     assert "Reject empty secret values before materialization" in DOCKER_SECRET_TASKS
     assert "runtime secret creation was stopped" in DOCKER_SECRET_TASKS
     assert "Create Docker Swarm secrets\n  no_log: true\n  diff: false" in DOCKER_SECRET_TASKS
     assert "Write secret files on deploy host\n  no_log: true\n  diff: false" in DOCKER_SECRET_TASKS
-    assert "Reject empty Infisical secret values before Podman materialization" in PODMAN_PREP
-    assert "Create/update Podman secrets" in PODMAN_PREP
-    assert PODMAN_PREP.count("diff: false") >= 2
-    assert DOCKER_FETCH_TASKS.count("no_log: true") >= 4
-    assert DOCKER_FETCH_TASKS.count("diff: false") >= 2
-    assert DOCKER_RESOLVER_TASKS.count("- name:") == DOCKER_RESOLVER_TASKS.count("no_log: true")
+    assert "community.docker.docker_secret" in DOCKER_SECRET_TASKS
+    assert 'path: "/opt/stacks/{{ docker_services_stack_name }}/secrets"' in DOCKER_SECRET_TASKS
+    assert 'mode: "0600"' in DOCKER_SECRET_TASKS
+    assert "service_common_secret_values[infisical_secret_item.var]" in DOCKER_FETCH_TASKS
+    assert '"{{ infisical_secret_item.var }}":' in DOCKER_FETCH_TASKS
     assert "Propagate Infisical flattened vars to deploy host\n  no_log: true\n  diff: false" in DOCKER_INFISICAL_TASKER
     assert "Propagate Infisical dict to deploy host\n  no_log: true\n  diff: false" in DOCKER_INFISICAL_TASKER
 
 
-def test_check_mode_does_not_enter_docker_infisical_lookup_or_materialization():
-    include = "Prep - Infisical | Include tasker\n  when: not ansible_check_mode"
-    assert include in DOCKER_PREP_TASKS
-    guarded_prep = [
-        "Prep - Authelia | Include bootstrap tasks",
-        "Prep - Postgres | Create Postgres database",
-        "Prep - qBittorrent | Include bootstrap tasks",
-        "Prep - Plex | Include bootstrap tasks",
-        "Prep - Bazarr | Include bootstrap tasks",
-        "Prep - NZBHydra2 | Include bootstrap tasks",
-        "Prep - Vaultwarden | Include bootstrap tasks",
+def test_common_infisical_tasks_reset_output_guard_lookup_and_hide_values():
+    tasks = yaml.safe_load(COMMON_INFISICAL_TASKS)
+    reset = next(task for task in tasks if "Reset per-service secret output" in task["name"])
+    validate_params = next(task for task in tasks if "Validate lookup parameters" in task["name"])
+    fetch = next(task for task in tasks if "Fetch requested secret values" in task["name"])
+    finalize = next(task for task in tasks if "Enforce empty-value policy" in task["name"])
+
+    assert reset["ansible.builtin.set_fact"]["service_common_secret_values"] == {}
+    assert tasks.index(reset) < tasks.index(fetch) < tasks.index(finalize)
+    assert fetch["when"] == "not ansible_check_mode"
+    assert finalize["when"] == "not ansible_check_mode"
+    assert "infisical.vault.read_secrets" in COMMON_INFISICAL_TASKS
+    assert "infisical.vault.read_secrets" not in DOCKER_FETCH_TASKS
+    assert "infisical.vault.read_secrets" not in PODMAN_PREP
+
+    for task in (reset, validate_params, fetch, finalize):
+        assert task["no_log"] is True
+        assert task["diff"] is False
+
+
+def test_docker_compatibility_facts_are_not_recreated_in_check_mode():
+    tasks = yaml.safe_load(DOCKER_FETCH_TASKS)
+    compatibility_tasks = [
+        task
+        for task in tasks
+        if task["name"]
+        in {
+            "Prep - Infisical Fetch | Recreate flattened compatibility facts",
+            "Prep - Infisical Fetch | Recreate dictionary compatibility fact",
+        }
     ]
-    for name in guarded_prep:
-        assert f"{name}\n  when:\n    - not ansible_check_mode" in DOCKER_PREP_TASKS
+
+    assert len(compatibility_tasks) == 2
+
+    for task in compatibility_tasks:
+        assert "not ansible_check_mode" in task["when"]
+
+
+def test_check_mode_validates_infisical_declarations_without_lookup_or_materialization():
+    assert "Prep - Infisical | Include tasker\n  ansible.builtin.include_tasks:" in DOCKER_PREP_TASKS
+    assert "Prep - Infisical Fetch | Include tasks\n  when: inventory_hostname" in DOCKER_INFISICAL_TASKER
+    assert "Prep - Infisical Resolver | Include tasks on deploy host\n  when:\n    - not ansible_check_mode" in DOCKER_INFISICAL_TASKER
+    assert "Prep - Infisical Secrets | Include tasks\n  when:\n    - not ansible_check_mode" in DOCKER_INFISICAL_TASKER
+    assert "Retrieve Infisical values through service common" in PODMAN_PREP
+    assert "when: podman_services_state in" in PODMAN_PREP
     assert "ansible_check_mode and service_common_template_item.no_log" in COMMON_TEMPLATE_TASKS
     assert "Prepare docker secret\n  no_log: true\n  diff: false" in DOCKER_POSTGRES_TASKS
     assert "Create database(s) if missing\n  no_log: true\n  diff: false" in DOCKER_POSTGRES_TASKS
