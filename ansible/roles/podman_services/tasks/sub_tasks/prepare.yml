@@ -88,6 +88,7 @@
       - podman_services_secret_values[item.name] | default('') | string | trim | length > 0
     fail_msg: "A required Podman secret value is empty; runtime secret creation was stopped."
   loop: "{{ podman_services_service.secrets }}"
+  tags: [deploy, update, recreate, bootstrap]
 
 - name: Prep | Create/update Podman secrets
   when:
