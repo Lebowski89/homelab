@@ -38,17 +38,21 @@
 | [service_common_default_mode](defaults/main.yml#L11)   | str | `0755` |    
 | [service_common_host_defaults](defaults/main.yml#L12)   | dict | `{}` |    
 | [service_common_template_vars](defaults/main.yml#L13)   | dict | `{}` |    
-| [service_common_traefik_base_zone](defaults/main.yml#L14)   | str |  |    
-| [service_common_traefik_dynamic_dir](defaults/main.yml#L15)   | str | `/opt/traefik/dynamic` |    
-| [service_common_traefik_owner](defaults/main.yml#L16)   | str | `1000` |    
-| [service_common_traefik_group](defaults/main.yml#L17)   | str | `1000` |    
-| [service_common_prepare_actions](defaults/main.yml#L18)   | list | `[]` |    
-| [service_common_prepare_actions.**0**](defaults/main.yml#L18)   | str | `deploy` |    
-| [service_common_prepare_actions.**1**](defaults/main.yml#L18)   | str | `update` |    
-| [service_common_prepare_actions.**2**](defaults/main.yml#L18)   | str | `recreate` |    
-| [service_common_prepare_actions.**3**](defaults/main.yml#L18)   | str | `bootstrap` |    
-| [service_common_remove_actions](defaults/main.yml#L19)   | list | `[]` |    
-| [service_common_remove_actions.**0**](defaults/main.yml#L19)   | str | `remove` |    
+| [service_common_infisical_secrets_map](defaults/main.yml#L14)   | list | `[]` |    
+| [service_common_infisical_lookup_params](defaults/main.yml#L15)   | dict | `{}` |    
+| [service_common_infisical_fail_on_empty](defaults/main.yml#L16)   | bool | `True` |    
+| [service_common_secret_values](defaults/main.yml#L17)   | dict | `{}` |    
+| [service_common_traefik_base_zone](defaults/main.yml#L18)   | str |  |    
+| [service_common_traefik_dynamic_dir](defaults/main.yml#L19)   | str | `/opt/traefik/dynamic` |    
+| [service_common_traefik_owner](defaults/main.yml#L20)   | str | `1000` |    
+| [service_common_traefik_group](defaults/main.yml#L21)   | str | `1000` |    
+| [service_common_prepare_actions](defaults/main.yml#L22)   | list | `[]` |    
+| [service_common_prepare_actions.**0**](defaults/main.yml#L22)   | str | `deploy` |    
+| [service_common_prepare_actions.**1**](defaults/main.yml#L22)   | str | `update` |    
+| [service_common_prepare_actions.**2**](defaults/main.yml#L22)   | str | `recreate` |    
+| [service_common_prepare_actions.**3**](defaults/main.yml#L22)   | str | `bootstrap` |    
+| [service_common_remove_actions](defaults/main.yml#L23)   | list | `[]` |    
+| [service_common_remove_actions.**0**](defaults/main.yml#L23)   | str | `remove` |    
 
 
 
@@ -63,6 +67,16 @@
 | ---- | ------ | -------------- |
 | Service common copies ¦ Copy static files | ansible.builtin.copy | False |
 | Service common copies ¦ Wait for copied files | ansible.builtin.wait_for | True |
+
+#### File: tasks/infisical.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Service common Infisical ¦ Reset per-service secret output | ansible.builtin.set_fact | False |  |
+| Service common Infisical ¦ Validate and normalize lookup declaration | ansible.builtin.set_fact | False |  |
+| Service common Infisical ¦ Validate lookup parameters | ansible.builtin.assert | True |  |
+| Service common Infisical ¦ Fetch requested secret values | ansible.builtin.set_fact | True |  |
+| Service common Infisical ¦ Enforce empty-value policy | ansible.builtin.set_fact | True |  |
 
 #### File: tasks/main.yml
 

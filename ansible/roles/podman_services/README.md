@@ -119,8 +119,8 @@
 | Prep ¦ Render network Quadlet | ansible.builtin.template | True |  |
 | Prep ¦ Render volume Quadlets | ansible.builtin.template | True |  |
 | Prep ¦ Render protected environment file | ansible.builtin.template | True |  |
-| Prep ¦ Resolve Infisical secret values | ansible.builtin.set_fact | True |  |
-| Prep ¦ Reject empty Infisical secret values before Podman materialization | ansible.builtin.assert | True |  |
+| Prep ¦ Build temporary common Infisical secrets map | ansible.builtin.set_fact | True |  |
+| Prep ¦ Retrieve Infisical values through service common | ansible.builtin.include_role | True |  |
 | Prep ¦ Create/update Podman secrets | containers.podman.podman_secret | True |  |
 | Prep ¦ Report check-mode PostgreSQL database plan | ansible.builtin.debug | True |  |
 | Prep ¦ Render container Quadlet | ansible.builtin.template | True |  |

@@ -153,7 +153,7 @@
 | Prep - Cleanup ¦ Determine if stack cleanup should run | ansible.builtin.set_fact | True |  |
 | Prep - Cleanup ¦ Remove existing stack | ansible.builtin.include_tasks | True |  |
 | Prep - Cleanup ¦ Mark stack as cleaned | ansible.builtin.set_fact | True |  |
-| Prep - Infisical ¦ Include tasker | ansible.builtin.include_tasks | True |  |
+| Prep - Infisical ¦ Include tasker | ansible.builtin.include_tasks | False |  |
 | Prep - Swarm configs ¦ Include tasker | ansible.builtin.include_tasks | True |  |
 | Prep - Authelia ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
 | Prep - Postgres ¦ Create Postgres database | ansible.builtin.include_tasks | True |  |
@@ -502,15 +502,11 @@
 
 #### File: tasks/sub_tasks/prep/infisical/_fetch.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Infisical Fetch ¦ Ensure secrets_map is defined | ansible.builtin.assert | False |
-| Prep - Infisical Fetch ¦ Ensure infisical_lookup_default_params is defined | ansible.builtin.assert | False |
-| Prep - Infisical Fetch ¦ Initialize dict output | ansible.builtin.set_fact | True |
-| Prep - Infisical Fetch ¦ Fetch secrets from Infisical | ansible.builtin.set_fact | True |
-| Prep - Infisical Fetch ¦ Fail if any fetched secret is empty | ansible.builtin.assert | True |
-| Prep - Infisical Fetch ¦ Fetch secrets from Infisical | ansible.builtin.set_fact | True |
-| Prep - Infisical Fetch ¦ Fail if any fetched secret is empty | ansible.builtin.assert | True |
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Prep - Infisical Fetch ¦ Retrieve values through service common | ansible.builtin.include_role | False |  |
+| Prep - Infisical Fetch ¦ Recreate flattened compatibility facts | ansible.builtin.set_fact | True |  |
+| Prep - Infisical Fetch ¦ Recreate dictionary compatibility fact | ansible.builtin.set_fact | True |  |
 
 #### File: tasks/sub_tasks/prep/infisical/_resolver.yml
 
