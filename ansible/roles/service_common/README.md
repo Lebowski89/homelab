@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/24 |
+| Readme update        | 2026/07/25 |
 
 
 
@@ -41,18 +41,25 @@
 | [service_common_infisical_secrets_map](defaults/main.yml#L14)   | list | `[]` |    
 | [service_common_infisical_lookup_params](defaults/main.yml#L15)   | dict | `{}` |    
 | [service_common_infisical_fail_on_empty](defaults/main.yml#L16)   | bool | `True` |    
-| [service_common_secret_values](defaults/main.yml#L17)   | dict | `{}` |    
-| [service_common_traefik_base_zone](defaults/main.yml#L18)   | str |  |    
-| [service_common_traefik_dynamic_dir](defaults/main.yml#L19)   | str | `/opt/traefik/dynamic` |    
-| [service_common_traefik_owner](defaults/main.yml#L20)   | str | `1000` |    
-| [service_common_traefik_group](defaults/main.yml#L21)   | str | `1000` |    
-| [service_common_prepare_actions](defaults/main.yml#L22)   | list | `[]` |    
-| [service_common_prepare_actions.**0**](defaults/main.yml#L22)   | str | `deploy` |    
-| [service_common_prepare_actions.**1**](defaults/main.yml#L22)   | str | `update` |    
-| [service_common_prepare_actions.**2**](defaults/main.yml#L22)   | str | `recreate` |    
-| [service_common_prepare_actions.**3**](defaults/main.yml#L22)   | str | `bootstrap` |    
-| [service_common_remove_actions](defaults/main.yml#L23)   | list | `[]` |    
-| [service_common_remove_actions.**0**](defaults/main.yml#L23)   | str | `remove` |    
+| [service_common_legacy_docker_secrets](defaults/main.yml#L17)   | list | `[]` |    
+| [service_common_legacy_podman_secrets](defaults/main.yml#L18)   | list | `[]` |    
+| [service_common_environment](defaults/main.yml#L19)   | dict | `{}` |    
+| [service_common_infisical_config](defaults/main.yml#L20)   | dict | `{}` |    
+| [service_common_infisical_values](defaults/main.yml#L21)   | dict | `{}` |    
+| [service_common_secret_declarations](defaults/main.yml#L22)   | list | `[]` |    
+| [service_common_resolved_environment](defaults/main.yml#L23)   | dict | `{}` |    
+| [service_common_secret_values](defaults/main.yml#L25)   | dict | `{}` |    
+| [service_common_traefik_base_zone](defaults/main.yml#L26)   | str |  |    
+| [service_common_traefik_dynamic_dir](defaults/main.yml#L27)   | str | `/opt/traefik/dynamic` |    
+| [service_common_traefik_owner](defaults/main.yml#L28)   | str | `1000` |    
+| [service_common_traefik_group](defaults/main.yml#L29)   | str | `1000` |    
+| [service_common_prepare_actions](defaults/main.yml#L30)   | list | `[]` |    
+| [service_common_prepare_actions.**0**](defaults/main.yml#L30)   | str | `deploy` |    
+| [service_common_prepare_actions.**1**](defaults/main.yml#L30)   | str | `update` |    
+| [service_common_prepare_actions.**2**](defaults/main.yml#L30)   | str | `recreate` |    
+| [service_common_prepare_actions.**3**](defaults/main.yml#L30)   | str | `bootstrap` |    
+| [service_common_remove_actions](defaults/main.yml#L31)   | list | `[]` |    
+| [service_common_remove_actions.**0**](defaults/main.yml#L31)   | str | `remove` |    
 
 
 
@@ -72,11 +79,16 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
-| Service common Infisical ¦ Reset per-service secret output | ansible.builtin.set_fact | False |  |
-| Service common Infisical ¦ Validate and normalize lookup declaration | ansible.builtin.set_fact | False |  |
+| Service common Infisical ¦ Reset all per-service outputs | ansible.builtin.set_fact | False |  |
+| Service common Infisical ¦ Validate and normalize declarations | ansible.builtin.set_fact | False |  |
+| Service common Infisical ¦ Publish lookup config and value-free secret declarations | ansible.builtin.set_fact | False |  |
+| Service common environment ¦ Validate and normalize canonical environment | ansible.builtin.set_fact | False |  |
 | Service common Infisical ¦ Validate lookup parameters | ansible.builtin.assert | True |  |
-| Service common Infisical ¦ Fetch requested secret values | ansible.builtin.set_fact | True |  |
+| Service common Infisical ¦ Fetch requested values | ansible.builtin.set_fact | True |  |
 | Service common Infisical ¦ Enforce empty-value policy | ansible.builtin.set_fact | True |  |
+| Service common Infisical ¦ Build deterministic check-mode values | ansible.builtin.set_fact | True |  |
+| Service common Infisical ¦ Publish temporary values compatibility alias | ansible.builtin.set_fact | False |  |
+| Service common environment ¦ Resolve canonical environment | ansible.builtin.set_fact | False |  |
 
 #### File: tasks/main.yml
 

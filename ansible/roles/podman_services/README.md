@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/24 |
+| Readme update        | 2026/07/25 |
 
 
 
@@ -54,6 +54,8 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Podman services ¦ Include initialization tasks | ansible.builtin.include_tasks | False |  |
+| Podman services ¦ Resolve common Infisical values and environment | ansible.builtin.include_role | True |  |
+| Podman services ¦ Attach common resolved environment | ansible.builtin.set_fact | True |  |
 | Podman services ¦ Prepare runtime-neutral host state | ansible.builtin.include_role | False |  |
 | Podman services ¦ Include preparation tasks | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Include image tasks | ansible.builtin.include_tasks | False |  |
@@ -86,6 +88,7 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Init ¦ Normalize service | ansible.builtin.set_fact | False |  |
+| Init ¦ Derive normalized systemd unit name | ansible.builtin.set_fact | False |  |
 | Init ¦ Reset per-service transient facts | ansible.builtin.set_fact | False |  |
 | Init ¦ Assert inventory target matches selected host | ansible.builtin.assert | False |  |
 | Init ¦ Build Infisical lookup parameters for manager endpoint | ansible.builtin.set_fact | True |  |
@@ -119,8 +122,6 @@
 | Prep ¦ Render network Quadlet | ansible.builtin.template | True |  |
 | Prep ¦ Render volume Quadlets | ansible.builtin.template | True |  |
 | Prep ¦ Render protected environment file | ansible.builtin.template | True |  |
-| Prep ¦ Build temporary common Infisical secrets map | ansible.builtin.set_fact | True |  |
-| Prep ¦ Retrieve Infisical values through service common | ansible.builtin.include_role | True |  |
 | Prep ¦ Create/update Podman secrets | containers.podman.podman_secret | True |  |
 | Prep ¦ Report check-mode PostgreSQL database plan | ansible.builtin.debug | True |  |
 | Prep ¦ Render container Quadlet | ansible.builtin.template | True |  |
