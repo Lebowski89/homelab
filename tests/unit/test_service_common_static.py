@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import yaml
+
 ROLE = Path("ansible/roles/service_common")
 OPERATIONAL_FILES = [
     *ROLE.joinpath("defaults").rglob("*.yml"),
@@ -21,6 +23,102 @@ DOCKER_RESOLVER_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep
 DOCKER_INFISICAL_TASKER = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/tasker.yml").read_text()
 COMMON_TEMPLATE_TASKS = (ROLE / "tasks/templates.yml").read_text()
 DOCKER_POSTGRES_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/postgres.yml").read_text()
+
+
+def test_expected_common_dynamic_includes_propagate_required_tags():
+    required_tags = {
+        ("main.yml", "validate.yml"): {
+            "deploy",
+            "update",
+            "remove",
+            "recreate",
+            "bootstrap",
+            "drift",
+        },
+        ("main.yml", "prepare.yml"): {
+            "deploy",
+            "update",
+            "recreate",
+            "bootstrap",
+        },
+        ("main.yml", "traefik.yml"): {
+            "deploy",
+            "update",
+            "recreate",
+            "bootstrap",
+        },
+        ("main.yml", "remove_integrations.yml"): {"remove"},
+        ("prepare.yml", "validate.yml"): {
+            "deploy",
+            "update",
+            "recreate",
+            "bootstrap",
+        },
+        ("prepare.yml", "paths.yml"): {
+            "deploy",
+            "update",
+            "recreate",
+            "bootstrap",
+        },
+        ("prepare.yml", "copies.yml"): {
+            "deploy",
+            "update",
+            "recreate",
+            "bootstrap",
+        },
+        ("prepare.yml", "templates.yml"): {
+            "deploy",
+            "update",
+            "recreate",
+            "bootstrap",
+        },
+        ("traefik.yml", "validate.yml"): {
+            "deploy",
+            "update",
+            "recreate",
+            "bootstrap",
+        },
+        ("remove_integrations.yml", "validate.yml"): {"remove"},
+    }
+    checked = set()
+
+    for path in ROLE.joinpath("tasks").glob("*.yml"):
+        tasks = yaml.safe_load(path.read_text()) or []
+
+        for task in tasks:
+            if not isinstance(task, dict):
+                continue
+
+            include = task.get("ansible.builtin.include_tasks")
+            if include is None:
+                continue
+
+            include_file = include.get("file") if isinstance(include, dict) else include
+            key = (path.name, include_file)
+
+            if key not in required_tags:
+                continue
+
+            assert isinstance(include, dict), (
+                f"{path}: {include_file} must use mapping syntax to support apply.tags"
+            )
+
+            outer_tags = set(task.get("tags", []))
+            applied_tags = set(include.get("apply", {}).get("tags", []))
+            required = required_tags[key]
+
+            assert required.issubset(outer_tags), (
+                f"{path}: {include_file} is missing required selection tags: "
+                f"{sorted(required - outer_tags)}"
+            )
+            assert required.issubset(applied_tags), (
+                f"{path}: {include_file} is missing required apply.tags: "
+                f"{sorted(required - applied_tags)}"
+            )
+
+            checked.add(key)
+
+    assert checked == set(required_tags)
 
 
 def test_common_operational_code_has_no_runtime_role_variables_or_resources():
