@@ -9,12 +9,34 @@
   ansible.builtin.include_tasks:
     file: _fetch.yml
     apply:
-      tags: [deploy, update, recreate]
+      tags: [deploy, update, recreate, bootstrap]
   vars:
     infisical_fail_on_empty: >-
       {{ (docker_services_svc.infisical | default({})).fail_on_empty | default(true) }}
     secrets_map: "{{ (docker_services_svc.infisical | default({})).secrets_map | default([]) }}"
-  tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Prep - Infisical Fetch | Snapshot value-free service secret declarations
+  when: inventory_hostname == docker_services_primary_manager
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_secret_declarations: "{{ service_common_secret_declarations }}"
+    docker_services_resolved_environment: "{{ service_common_resolved_environment }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Prep - Infisical Fetch | Attach common resolved environment on every role host
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_svc: >-
+      {{
+        docker_services_svc
+        | combine({
+            "environment": hostvars[docker_services_primary_manager].docker_services_resolved_environment
+          }, recursive=false)
+      }}
+  tags: [deploy, update, recreate, bootstrap]
 
 ################################
 # PREP (INFISICAL RESOLVER)
@@ -27,8 +49,8 @@
   ansible.builtin.include_tasks:
     file: _resolver.yml
     apply:
-      tags: [deploy, update, recreate]
-  tags: [deploy, update, recreate]
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
 
 - name: Prep - Infisical Resolver | Propagate Infisical flattened vars to deploy host
   no_log: true
@@ -48,7 +70,7 @@
     label: "{{ inf_item.var }}"
   delegate_to: "{{ docker_services_deploy_host_effective }}"
   delegate_facts: true
-  tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate, bootstrap]
 
 - name: Prep - Infisical Resolver | Propagate Infisical dict to deploy host
   no_log: true
@@ -67,7 +89,7 @@
       }}
   delegate_to: "{{ docker_services_deploy_host_effective }}"
   delegate_facts: true
-  tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate, bootstrap]
 
 ################################
 # PREP (INFISICAL SECRETS)
@@ -87,5 +109,5 @@
   ansible.builtin.include_tasks:
     file: _secrets.yml
     apply:
-      tags: [deploy, update, recreate]
-  tags: [deploy, update, recreate]
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]

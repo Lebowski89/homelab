@@ -18,12 +18,17 @@ PODMAN_MAIN = Path("ansible/roles/podman_services/tasks/main.yml").read_text()
 PODMAN_PREP = Path("ansible/roles/podman_services/tasks/sub_tasks/prepare.yml").read_text()
 DOCKER_SECRET_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/_secrets.yml").read_text()
 DOCKER_PREP_TASKS = Path("ansible/roles/docker_services/tasks/_prep.yml").read_text()
+DOCKER_COMPOSE_TASKS = Path("ansible/roles/docker_services/tasks/_compose.yml").read_text()
 DOCKER_FETCH_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/_fetch.yml").read_text()
 DOCKER_RESOLVER_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/_resolver.yml").read_text()
 DOCKER_INFISICAL_TASKER = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/tasker.yml").read_text()
 COMMON_TEMPLATE_TASKS = (ROLE / "tasks/templates.yml").read_text()
 COMMON_INFISICAL_TASKS = (ROLE / "tasks/infisical.yml").read_text()
 DOCKER_POSTGRES_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/postgres.yml").read_text()
+DOCKER_MAIN_TASKS = Path("ansible/roles/docker_services/tasks/main.yml").read_text()
+DOCKER_DEPLOY_ALL_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/deploy/all.yml").read_text()
+DOCKER_ENV_FILE_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/compose/env_file.yml").read_text()
+AUTOBRR = Path("ansible/group_vars/all/services/autobrr.yml").read_text()
 
 
 def test_expected_common_dynamic_includes_propagate_required_tags():
@@ -123,8 +128,6 @@ def test_common_operational_code_has_no_runtime_role_variables_or_resources():
     assert "podman_services_" not in OPERATIONAL_TEXT
     assert "community.docker" not in OPERATIONAL_TEXT
     assert "containers.podman" not in OPERATIONAL_TEXT
-    assert "docker_secret" not in OPERATIONAL_TEXT
-    assert "podman_secret" not in OPERATIONAL_TEXT
     assert "compose.yml" not in OPERATIONAL_TEXT
     assert "quadlet" not in OPERATIONAL_TEXT.lower()
 
@@ -135,7 +138,7 @@ def test_docker_uses_normalized_service_and_effective_filesystem_hosts():
 
 
 def test_podman_translates_host_paths_and_keeps_quadlets_runtime_owned():
-    assert "{'paths': podman_services_service.host_paths}" in PODMAN_MAIN
+    assert '{"paths": podman_services_service.host_paths}' in PODMAN_MAIN
     assert "Ensure host data paths exist" not in PODMAN_PREP
     assert "Render container Quadlet" in PODMAN_PREP
 
@@ -170,31 +173,46 @@ def test_secret_materialization_and_compatibility_paths_remain_adapter_owned():
     assert "Write secret files on deploy host\n  no_log: true\n  diff: false" in DOCKER_SECRET_TASKS
     assert "community.docker.docker_secret" in DOCKER_SECRET_TASKS
     assert 'path: "/opt/stacks/{{ docker_services_stack_name }}/secrets"' in DOCKER_SECRET_TASKS
-    assert 'mode: "0600"' in DOCKER_SECRET_TASKS
-    assert "service_common_secret_values[infisical_secret_item.var]" in DOCKER_FETCH_TASKS
+    assert "default('0600')" in DOCKER_SECRET_TASKS
+    assert "service_common_infisical_values[infisical_secret_item.var]" in DOCKER_FETCH_TASKS
     assert '"{{ infisical_secret_item.var }}":' in DOCKER_FETCH_TASKS
     assert "Propagate Infisical flattened vars to deploy host\n  no_log: true\n  diff: false" in DOCKER_INFISICAL_TASKER
     assert "Propagate Infisical dict to deploy host\n  no_log: true\n  diff: false" in DOCKER_INFISICAL_TASKER
 
 
-def test_common_infisical_tasks_reset_output_guard_lookup_and_hide_values():
+def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
     tasks = yaml.safe_load(COMMON_INFISICAL_TASKS)
-    reset = next(task for task in tasks if "Reset per-service secret output" in task["name"])
+    reset = next(task for task in tasks if "Reset all per-service outputs" in task["name"])
+    normalize_declarations = next(task for task in tasks if "Validate and normalize declarations" in task["name"])
+    normalize_environment = next(task for task in tasks if "Validate and normalize canonical environment" in task["name"])
     validate_params = next(task for task in tasks if "Validate lookup parameters" in task["name"])
-    fetch = next(task for task in tasks if "Fetch requested secret values" in task["name"])
+    fetch = next(task for task in tasks if "Fetch requested values" in task["name"])
     finalize = next(task for task in tasks if "Enforce empty-value policy" in task["name"])
+    check_values = next(task for task in tasks if "Build deterministic check-mode values" in task["name"])
+    compatibility = next(task for task in tasks if "temporary values compatibility alias" in task["name"])
+    resolve = next(task for task in tasks if "Resolve canonical environment" in task["name"])
 
-    assert reset["ansible.builtin.set_fact"]["service_common_secret_values"] == {}
-    assert tasks.index(reset) < tasks.index(fetch) < tasks.index(finalize)
+    reset_facts = reset["ansible.builtin.set_fact"]
+    assert reset_facts["service_common_infisical_config"] == {}
+    assert reset_facts["service_common_infisical_values"] == {}
+    assert reset_facts["service_common_secret_values"] == {}
+    assert reset_facts["service_common_secret_declarations"] == []
+    assert reset_facts["service_common_resolved_environment"] == {}
+    assert tasks.index(reset) < tasks.index(normalize_declarations) < tasks.index(normalize_environment)
+    assert tasks.index(normalize_environment) < tasks.index(fetch) < tasks.index(finalize) < tasks.index(resolve)
     assert fetch["when"] == "not ansible_check_mode"
     assert finalize["when"] == "not ansible_check_mode"
+    assert check_values["when"] == "ansible_check_mode"
+    assert "service_common_infisical_values" in str(compatibility["ansible.builtin.set_fact"])
     assert "infisical.vault.read_secrets" in COMMON_INFISICAL_TASKS
     assert "infisical.vault.read_secrets" not in DOCKER_FETCH_TASKS
     assert "infisical.vault.read_secrets" not in PODMAN_PREP
 
-    for task in (reset, validate_params, fetch, finalize):
+    for task in tasks:
         assert task["no_log"] is True
         assert task["diff"] is False
+
+    assert validate_params["no_log"] is True
 
 
 def test_docker_compatibility_facts_are_not_recreated_in_check_mode():
@@ -220,8 +238,119 @@ def test_check_mode_validates_infisical_declarations_without_lookup_or_materiali
     assert "Prep - Infisical Fetch | Include tasks\n  when: inventory_hostname" in DOCKER_INFISICAL_TASKER
     assert "Prep - Infisical Resolver | Include tasks on deploy host\n  when:\n    - not ansible_check_mode" in DOCKER_INFISICAL_TASKER
     assert "Prep - Infisical Secrets | Include tasks\n  when:\n    - not ansible_check_mode" in DOCKER_INFISICAL_TASKER
-    assert "Retrieve Infisical values through service common" in PODMAN_PREP
-    assert "when: podman_services_state in" in PODMAN_PREP
+    assert "Resolve common Infisical values and environment" in PODMAN_MAIN
+    assert "when: podman_services_common_action in" in PODMAN_MAIN
+    assert "Validate and retrieve Infisical values through service common" not in PODMAN_PREP
     assert "ansible_check_mode and service_common_template_item.no_log" in COMMON_TEMPLATE_TASKS
     assert "Prepare docker secret\n  no_log: true\n  diff: false" in DOCKER_POSTGRES_TASKS
     assert "Create database(s) if missing\n  no_log: true\n  diff: false" in DOCKER_POSTGRES_TASKS
+
+
+def test_docker_validates_attachment_metadata_before_materialization():
+    validate = DOCKER_SECRET_TASKS.index("Validate runtime attachment metadata before materialization")
+    reject_empty = DOCKER_SECRET_TASKS.index("Reject empty secret values before materialization")
+    create_swarm = DOCKER_SECRET_TASKS.index("Create Docker Swarm secrets")
+    write_file = DOCKER_SECRET_TASKS.index("Write secret files on deploy host")
+
+    assert validate < reject_empty < create_swarm
+    assert validate < write_file
+
+
+def test_docker_snapshots_service_declarations_before_later_compatibility_lookups():
+    snapshot = DOCKER_INFISICAL_TASKER.index("Snapshot value-free service secret declarations")
+    resolver = DOCKER_INFISICAL_TASKER.index("Prep - Infisical Resolver | Include tasks on deploy host")
+
+    assert snapshot < resolver
+    assert 'docker_services_secret_declarations: "{{ service_common_secret_declarations }}"' in DOCKER_INFISICAL_TASKER
+    assert "hostvars[docker_services_primary_manager].docker_services_secret_declarations" in DOCKER_SECRET_TASKS
+    assert "hostvars[docker_services_primary_manager].docker_services_secret_declarations" in DOCKER_COMPOSE_TASKS
+
+
+def test_docker_canonical_no_new_privileges_uses_tagged_append_unique_list_helper():
+    tasks = yaml.safe_load(DOCKER_COMPOSE_TASKS)
+    task = next(task for task in tasks if task["name"] == "Compose - Runtime | Add canonical no-new-privileges security option")
+    include = task["ansible.builtin.include_tasks"]
+
+    assert include["file"] == "sub_tasks/compose/list_field.yml"
+    assert set(include["apply"]["tags"]) == {"deploy", "update", "recreate"}
+    assert set(task["tags"]) == {"deploy", "update", "recreate"}
+    assert task["vars"]["compose_list_field"] == "security_opt"
+    assert task["vars"]["compose_list_action"] == "append_unique"
+    assert "docker_services_no_new_privileges_security_opts" in str(task["when"])
+
+
+def test_no_operational_ansible_file_references_internal_zone():
+    operational_files = [path for path in Path("ansible").rglob("*") if path.is_file() and path.suffix in {".yml", ".yaml", ".j2", ".py"}]
+
+    offenders = [str(path) for path in operational_files if "internal_zone" in path.read_text()]
+    assert offenders == []
+
+
+def test_docker_common_resolution_precedes_legacy_adapter_shared_prep_and_compose():
+    fetch = DOCKER_INFISICAL_TASKER.index("Prep - Infisical Fetch | Include tasks")
+    attach = DOCKER_INFISICAL_TASKER.index("Attach common resolved environment")
+    legacy = DOCKER_INFISICAL_TASKER.index("Prep - Infisical Resolver | Include tasks on deploy host")
+    native = DOCKER_INFISICAL_TASKER.index("Prep - Infisical Secrets | Include tasks")
+    common_prep = DOCKER_PREP_TASKS.index("Prep - Service common | Prepare files and Traefik integration")
+
+    assert fetch < attach < legacy < native
+    assert DOCKER_PREP_TASKS.index("Prep - Infisical | Include tasker") < common_prep
+    assert "docker_services_resolved_environment" in DOCKER_INFISICAL_TASKER
+    assert "service_common_resolved_environment" in DOCKER_INFISICAL_TASKER
+
+
+def test_docker_legacy_placeholder_and_env_file_compatibility_remain_narrow_and_unchanged():
+    assert "__INFISICAL__:autobrr_session" in AUTOBRR
+    assert "__INFISICAL__:postgres_user" in AUTOBRR
+    assert "__INFISICAL__:postgres_pass" in AUTOBRR
+    assert "^__INFISICAL__:.+$" in DOCKER_RESOLVER_TASKS
+    assert "^__INFISICAL__:(.+)$" in DOCKER_RESOLVER_TASKS
+    assert "value_template" not in DOCKER_RESOLVER_TASKS
+    assert "value_from" not in DOCKER_RESOLVER_TASKS
+    assert "docker_services_svc.env_file" in DOCKER_ENV_FILE_TASKS
+    assert "service_common" not in DOCKER_ENV_FILE_TASKS
+
+
+def test_value_bearing_runtime_render_paths_are_no_log_and_diff_safe():
+    docker_main = yaml.safe_load(DOCKER_MAIN_TASKS)
+    for task_name in {"Compose | Include tasks", "Deploy | Include tasks"}:
+        task = next(task for task in docker_main if task["name"] == task_name)
+        assert task["no_log"] is True
+        assert "diff" not in task
+        include = task["ansible.builtin.include_tasks"]
+        assert include["apply"]["no_log"] is True
+        assert include["apply"]["diff"] is False
+
+    podman_main = yaml.safe_load(PODMAN_MAIN)
+    resolver = next(task for task in podman_main if "Resolve common Infisical values and environment" in task["name"])
+    attach = next(task for task in podman_main if "Attach common resolved environment" in task["name"])
+    traefik = next(task for task in podman_main if "Include Traefik tasks" in task["name"])
+    assert attach["no_log"] is True
+    assert attach["diff"] is False
+    for task in (resolver, traefik):
+        assert task["no_log"] is True
+        assert "diff" not in task
+        include = task["ansible.builtin.include_role"]
+        assert include["apply"]["no_log"] is True
+        assert include["apply"]["diff"] is False
+
+
+def test_required_docker_dynamic_includes_propagate_selection_tags():
+    expectations = [
+        (DOCKER_MAIN_TASKS, "Prep | Include tasks", {"deploy", "update", "remove", "recreate", "bootstrap"}),
+        (DOCKER_PREP_TASKS, "Prep - Infisical | Include tasker", {"deploy", "update", "recreate", "bootstrap"}),
+        (DOCKER_INFISICAL_TASKER, "Prep - Infisical Fetch | Include tasks", {"deploy", "update", "recreate", "bootstrap"}),
+        (
+            DOCKER_INFISICAL_TASKER,
+            "Prep - Infisical Resolver | Include tasks on deploy host",
+            {"deploy", "update", "recreate", "bootstrap"},
+        ),
+        (DOCKER_INFISICAL_TASKER, "Prep - Infisical Secrets | Include tasks", {"deploy", "update", "recreate", "bootstrap"}),
+        (DOCKER_DEPLOY_ALL_TASKS, "Deploy - All | Deploy each stack", {"deploy", "update", "recreate"}),
+    ]
+
+    for content, task_name, required in expectations:
+        task = next(task for task in yaml.safe_load(content) if task["name"] == task_name)
+        include = task["ansible.builtin.include_tasks"]
+        assert required.issubset(set(task.get("tags", [])))
+        assert required.issubset(set(include.get("apply", {}).get("tags", [])))

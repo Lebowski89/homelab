@@ -28,7 +28,10 @@
 ################################
 
 - name: Prep | Include tasks
-  ansible.builtin.include_tasks: _prep.yml
+  ansible.builtin.include_tasks:
+    file: _prep.yml
+    apply:
+      tags: [remove, deploy, update, recreate, bootstrap]
   tags: [remove, deploy, update, recreate, bootstrap]
 
 ################################
@@ -36,10 +39,13 @@
 ################################
 
 - name: Compose | Include tasks
+  no_log: true
   ansible.builtin.include_tasks:
     file: _compose.yml
     apply:
       tags: [deploy, update, recreate]
+      no_log: true
+      diff: false
   tags: [deploy, update, recreate]
 
 ################################
@@ -47,8 +53,11 @@
 ################################
 
 - name: Deploy | Include tasks
+  no_log: true
   ansible.builtin.include_tasks:
     file: _deploy.yml
     apply:
       tags: [deploy, update, recreate]
+      no_log: true
+      diff: false
   tags: [deploy, update, recreate]

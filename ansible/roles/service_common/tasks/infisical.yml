@@ -1,18 +1,50 @@
 ---
 
-- name: Service common Infisical | Reset per-service secret output
+- name: Service common Infisical | Reset all per-service outputs
   no_log: true
   diff: false
   ansible.builtin.set_fact:
+    service_common_infisical_config: {}
+    service_common_infisical_values: {}
     service_common_secret_values: {}
+    service_common_secret_declarations: []
+    service_common_environment_normalized: {}
+    service_common_resolved_environment: {}
   tags: [deploy, update, recreate, bootstrap, drift]
 
-- name: Service common Infisical | Validate and normalize lookup declaration
+- name: Service common Infisical | Validate and normalize declarations
+  no_log: true
+  diff: false
   ansible.builtin.set_fact:
-    service_common_infisical_config: >-
+    service_common_infisical_normalized: >-
       {{
         service_common_infisical_secrets_map
-        | service_common_infisical_normalize(service_common_infisical_fail_on_empty)
+        | service_common_infisical_normalize(
+            service_common_infisical_fail_on_empty,
+            service_common_legacy_docker_secrets,
+            service_common_legacy_podman_secrets
+          )
+      }}
+  tags: [deploy, update, recreate, bootstrap, drift]
+
+- name: Service common Infisical | Publish lookup config and value-free secret declarations
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_common_infisical_config:
+      secrets_map: "{{ service_common_infisical_normalized.secrets_map }}"
+      fail_on_empty: "{{ service_common_infisical_normalized.fail_on_empty }}"
+    service_common_secret_declarations: "{{ service_common_infisical_normalized.secret_declarations }}"
+  tags: [deploy, update, recreate, bootstrap, drift]
+
+- name: Service common environment | Validate and normalize canonical environment
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_common_environment_normalized: >-
+      {{
+        service_common_environment
+        | service_common_environment_normalize(service_common_infisical_config)
       }}
   tags: [deploy, update, recreate, bootstrap, drift]
 
@@ -28,20 +60,20 @@
     fail_msg: "service_common_infisical_lookup_params must be a mapping."
   tags: [deploy, update, recreate, bootstrap, drift]
 
-- name: Service common Infisical | Fetch requested secret values
+- name: Service common Infisical | Fetch requested values
   when: not ansible_check_mode
   no_log: true
   diff: false
   ansible.builtin.set_fact:
-    service_common_secret_values: >-
+    service_common_infisical_values: >-
       {{
-        service_common_secret_values
+        service_common_infisical_values
         | combine({
             service_common_infisical_item.var: lookup(
-              'infisical.vault.read_secrets',
+              "infisical.vault.read_secrets",
               **(service_common_infisical_lookup_params | combine({
-                'path': service_common_infisical_item.path,
-                'secret_name': service_common_infisical_item.name
+                "path": service_common_infisical_item.path,
+                "secret_name": service_common_infisical_item.name
               }))
             ).value
           })
@@ -57,6 +89,36 @@
   no_log: true
   diff: false
   ansible.builtin.set_fact:
-    service_common_secret_values: >-
-      {{ service_common_secret_values | service_common_infisical_finalize(service_common_infisical_config) }}
+    service_common_infisical_values: >-
+      {{ service_common_infisical_values | service_common_infisical_finalize(service_common_infisical_config) }}
+  tags: [deploy, update, recreate, bootstrap, drift]
+
+- name: Service common Infisical | Build deterministic check-mode values
+  when: ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_common_infisical_values: >-
+      {{ service_common_infisical_config | service_common_infisical_check_values }}
+  tags: [deploy, update, recreate, bootstrap, drift]
+
+- name: Service common Infisical | Publish temporary values compatibility alias
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_common_secret_values: "{{ service_common_infisical_values }}"
+  tags: [deploy, update, recreate, bootstrap, drift]
+
+- name: Service common environment | Resolve canonical environment
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_common_resolved_environment: >-
+      {{
+        service_common_environment_normalized
+        | service_common_environment_resolve(
+            service_common_infisical_values,
+            service_common_infisical_config
+          )
+      }}
   tags: [deploy, update, recreate, bootstrap, drift]

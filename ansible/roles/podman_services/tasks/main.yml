@@ -5,29 +5,73 @@
 ################################
 
 - name: Podman services | Include initialization tasks
-  ansible.builtin.include_tasks: sub_tasks/init.yml
+  ansible.builtin.include_tasks:
+    file: sub_tasks/init.yml
+    apply:
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
   tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+################################
+# COMMON LOOKUP + ENVIRONMENT
+################################
+
+- name: Podman services | Resolve common Infisical values and environment
+  when: podman_services_common_action in ["deploy", "update", "recreate", "bootstrap"]
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: infisical
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  vars:
+    service_common_environment: "{{ podman_services_service.env }}"
+    service_common_infisical_secrets_map: >-
+      {{ (podman_services_service_cfg.infisical | default({})).secrets_map | default([]) }}
+    service_common_legacy_podman_secrets: "{{ podman_services_service_cfg.secrets | default([]) }}"
+    service_common_infisical_lookup_params: "{{ podman_services_infisical_lookup_params | default({}) }}"
+    service_common_infisical_fail_on_empty: >-
+      {{ (podman_services_service_cfg.infisical | default({})).fail_on_empty | default(true) }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Podman services | Attach common resolved environment
+  when: podman_services_common_action in ["deploy", "update", "recreate", "bootstrap"]
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_service: >-
+      {{
+        podman_services_service
+        | combine({"env": service_common_resolved_environment}, recursive=false)
+      }}
+  tags: [deploy, update, recreate, bootstrap]
 
 ################################
 # SHARED PREPARATION
 ################################
 
 - name: Podman services | Prepare runtime-neutral host state
+  no_log: true
   ansible.builtin.include_role:
     name: service_common
     tasks_from: prepare
     apply:
       tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
   vars:
     service_common_name: "{{ podman_services_service.name }}"
     service_common_runtime: podman
     service_common_action: "{{ podman_services_common_action }}"
     service_common_service: >-
-      {{ podman_services_service | combine({'paths': podman_services_service.host_paths}, recursive=true) }}
+      {{ podman_services_service | combine({"paths": podman_services_service.host_paths}, recursive=true) }}
     service_common_target_hosts: ["{{ inventory_hostname }}"]
     service_common_controller_host: "{{ podman_services_traefik_delegate }}"
-    service_common_default_owner: "{{ podman_services_service.container.uid | default('1000') }}"
-    service_common_default_group: "{{ podman_services_service.container.gid | default('1000') }}"
+    service_common_default_owner: >-
+      {{ podman_services_service.container.uid | default("1000") }}
+    service_common_default_group: >-
+      {{ podman_services_service.container.gid | default("1000") }}
     service_common_default_mode: "0750"
   tags: [deploy, update, recreate, bootstrap]
 
@@ -36,7 +80,13 @@
 ################################
 
 - name: Podman services | Include preparation tasks
-  ansible.builtin.include_tasks: sub_tasks/prepare.yml
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: sub_tasks/prepare.yml
+    apply:
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
+      no_log: true
+      diff: false
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
 ################################
@@ -44,7 +94,10 @@
 ################################
 
 - name: Podman services | Include image tasks
-  ansible.builtin.include_tasks: sub_tasks/image.yml
+  ansible.builtin.include_tasks:
+    file: sub_tasks/image.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]
 
 ################################
@@ -52,7 +105,10 @@
 ################################
 
 - name: Podman services | Include changed network tasks
-  ansible.builtin.include_tasks: sub_tasks/network.yml
+  ansible.builtin.include_tasks:
+    file: sub_tasks/network.yml
+    apply:
+      tags: [update, recreate]
   tags: [update, recreate]
 
 ################################
@@ -60,7 +116,10 @@
 ################################
 
 - name: Podman services | Include service lifecycle tasks
-  ansible.builtin.include_tasks: sub_tasks/lifecycle.yml
+  ansible.builtin.include_tasks:
+    file: sub_tasks/lifecycle.yml
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap]
   tags: [deploy, update, remove, recreate, bootstrap]
 
 ################################
@@ -69,11 +128,14 @@
 
 - name: Podman services | Include Traefik tasks
   when: podman_services_service.traefik.enable | default(false) | bool
+  no_log: true
   ansible.builtin.include_role:
     name: service_common
     tasks_from: traefik
     apply:
       tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
   vars:
     service_common_name: "{{ podman_services_service.name }}"
     service_common_runtime: podman
@@ -81,7 +143,12 @@
     service_common_service: "{{ podman_services_service }}"
     service_common_target_hosts: ["{{ inventory_hostname }}"]
     service_common_controller_host: "{{ podman_services_traefik_delegate }}"
-    service_common_traefik_base_zone: "{{ internal_zone | regex_replace('^int\\.', '') }}"
+    service_common_traefik_base_zone: >-
+      {{
+        "check-mode.invalid"
+        if ansible_check_mode
+        else service_common_infisical_values.cloudflare_zone
+      }}
     service_common_traefik_dynamic_dir: "{{ podman_services_traefik_dynamic_dir }}"
     service_common_traefik_owner: "{{ podman_services_traefik_dynamic_owner }}"
     service_common_traefik_group: "{{ podman_services_traefik_dynamic_group }}"
@@ -92,7 +159,10 @@
 ################################
 
 - name: Podman services | Include removal tasks
-  ansible.builtin.include_tasks: sub_tasks/remove.yml
+  ansible.builtin.include_tasks:
+    file: sub_tasks/remove.yml
+    apply:
+      tags: [remove]
   tags: [remove]
 
 - name: Podman services | Remove runtime-neutral integrations
@@ -117,7 +187,10 @@
 ################################
 
 - name: Podman services | Include drift tasks
-  ansible.builtin.include_tasks: sub_tasks/drift.yml
+  ansible.builtin.include_tasks:
+    file: sub_tasks/drift.yml
+    apply:
+      tags: [drift]
   tags: [drift]
 
 - name: Podman services | Flush removal daemon-reload handlers

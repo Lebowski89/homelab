@@ -95,7 +95,7 @@ services:
 %}
     healthcheck:
 {% if svc.healthcheck.test is sequence and svc.healthcheck.test is not string %}
-      test: {{ svc.healthcheck.test }}
+      test: {{ svc.healthcheck.test | to_json }}
 {% else %}
       test: ["CMD-SHELL", "{{ svc.healthcheck.test | string | trim }}"]
 {% endif %}
@@ -163,6 +163,15 @@ services:
 {% if sec is mapping %}
       - source: {{ sec.source }}
         target: {{ sec.target }}
+{% if sec.uid is defined %}
+        uid: "{{ sec.uid }}"
+{% endif %}
+{% if sec.gid is defined %}
+        gid: "{{ sec.gid }}"
+{% endif %}
+{% if sec.mode is defined %}
+        mode: {{ sec.mode }}
+{% endif %}
 {% else %}
       - source: {{ sec }}
         target: {{ sec }}
@@ -174,7 +183,7 @@ services:
     ports:
 {% for port in svc.ports %}
 {% if _stack_type != 'swarm' %}
-      - "{{ port.published }}:{{ port.target }}{{ ('/' ~ (port.protocol | default('tcp', true) | string | trim | lower)) if ((port.protocol | default('tcp', true) | string | trim | lower) != 'tcp') else '' }}"
+      - "{{ ((port.host_ip | string | trim) ~ ':') if (port.host_ip is defined and (port.host_ip | string | trim | length > 0)) else '' }}{{ port.published }}:{{ port.target }}{{ ('/' ~ (port.protocol | default('tcp', true) | string | trim | lower)) if ((port.protocol | default('tcp', true) | string | trim | lower) != 'tcp') else '' }}"
 {% else %}
       - target: {{ port.target }}
         published: {{ port.published }}

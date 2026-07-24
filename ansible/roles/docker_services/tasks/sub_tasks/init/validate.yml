@@ -138,6 +138,19 @@
         == (docker_services_svc.cap_drop | length)
     fail_msg: "docker_services_svc.cap_drop must be a list of non-empty strings."
 
+- name: Init - Validate | docker_services_svc.no_new_privileges
+  when: docker_services_svc.no_new_privileges is defined
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          docker_services_svc.no_new_privileges
+          | docker_services_no_new_privileges_security_opts(docker_services_stack_deploy_type)
+        ) is sequence
+    fail_msg: >-
+      docker_services_svc.no_new_privileges must be a strict boolean-like value and
+      true is supported only for deploy.type=container.
+
 - name: Init - Validate | docker_services_svc.sysctls shape
   when: docker_services_svc.sysctls is defined
   ansible.builtin.assert:

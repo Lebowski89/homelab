@@ -165,7 +165,8 @@ def _environment(value: Any, *, name: str) -> dict[str, Any]:
     for key, item in environment.items():
         try:
             podman_env_file_key(key)
-            podman_env_file_value(item)
+            if not isinstance(item, Mapping):
+                podman_env_file_value(item)
         except AnsibleFilterError as error:
             raise AnsibleFilterError(f"{name}.{key}: {error}") from error
     return environment
@@ -403,26 +404,165 @@ def _systemd(value: Any, *, name: str) -> dict[str, Any]:
     return systemd
 
 
-def _secrets(value: Any, *, name: str) -> list[dict[str, Any]]:
+def _secret_mount(
+    value: Any,
+    *,
+    var: str,
+    name: str,
+    canonical: bool,
+) -> dict[str, Any]:
+    secret = _as_mapping(value, name=name)
+    if canonical:
+        supported = {"name", "target", "uid", "gid", "mode", "runtime_options"}
+    else:
+        supported = {"name", "infisical_path", "infisical_key", "target", "uid", "gid", "mode", "immutable", "replace"}
+    unsupported = set(secret) - supported
+    if unsupported:
+        raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(sorted(unsupported))}")
+
+    resource_name = _resource_name(secret.get("name"), name=f"{name}.name")
+    target = secret.get("target", f"/run/secrets/{resource_name}")
+    target = _nonempty_string(target, name=f"{name}.target")
+    if not posixpath.isabs(target):
+        raise AnsibleFilterError(f"{name}.target must be an absolute path")
+
+    if canonical:
+        runtime_options = _as_mapping(secret.get("runtime_options", {}), name=f"{name}.runtime_options")
+        unsupported_runtimes = set(runtime_options) - {"podman"}
+        if unsupported_runtimes:
+            raise AnsibleFilterError(f"{name}.runtime_options contains unsupported runtimes: {', '.join(sorted(unsupported_runtimes))}")
+        podman_options = _as_mapping(runtime_options.get("podman", {}), name=f"{name}.runtime_options.podman")
+        unsupported_options = set(podman_options) - {"immutable", "replace"}
+        if unsupported_options:
+            raise AnsibleFilterError(f"{name}.runtime_options.podman contains unsupported fields: {', '.join(sorted(unsupported_options))}")
+        immutable = _as_bool(podman_options.get("immutable", False), name=f"{name}.runtime_options.podman.immutable")
+        replace = _as_bool(podman_options.get("replace", False), name=f"{name}.runtime_options.podman.replace")
+    else:
+        immutable = _as_bool(secret.get("immutable", False), name=f"{name}.immutable")
+        replace = _as_bool(secret.get("replace", False), name=f"{name}.replace")
+    if immutable and replace:
+        raise AnsibleFilterError(f"{name} cannot be both immutable and replaceable")
+
+    result: dict[str, Any] = {
+        "name": resource_name,
+        "var": var,
+        "target": target,
+        "immutable": immutable,
+        "replace": replace,
+    }
+    for field in ("uid", "gid"):
+        if field in secret:
+            result[field] = _numeric_id(secret[field], name=f"{name}.{field}")
+    if "mode" in secret:
+        if not isinstance(secret["mode"], str) or not re.fullmatch(r"0[0-7]{3}", secret["mode"]):
+            raise AnsibleFilterError(f'{name}.mode must be a quoted four-digit octal mode such as "0400"')
+        result["mode"] = secret["mode"]
+    return result
+
+
+def _canonical_infisical(value: Any, *, name: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     if value is None:
-        return []
+        return {"secrets_map": [], "fail_on_empty": True}, []
+    infisical = _as_mapping(value, name=name)
+    unsupported = set(infisical) - {"secrets_map", "fail_on_empty"}
+    if unsupported:
+        raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(sorted(unsupported))}")
+    raw_map = infisical.get("secrets_map", [])
+    if not isinstance(raw_map, list):
+        raise AnsibleFilterError(f"{name}.secrets_map must be a list")
+    lookups: list[dict[str, str]] = []
+    secrets: dict[str, dict[str, Any]] = {}
+    seen_vars: set[str] = set()
+    for index, raw_entry in enumerate(raw_map):
+        item_name = f"{name}.secrets_map[{index}]"
+        entry = _as_mapping(raw_entry, name=item_name)
+        unsupported_entry = set(entry) - {"var", "path", "name", "secret", "docker_secret"}
+        if unsupported_entry:
+            raise AnsibleFilterError(f"{item_name} contains unsupported fields: {', '.join(sorted(unsupported_entry))}")
+        lookup = {field: _nonempty_string(entry.get(field), name=f"{item_name}.{field}") for field in ("var", "path", "name")}
+        if lookup["var"] in seen_vars:
+            raise AnsibleFilterError(f"duplicate Infisical var {lookup['var']!r}")
+        seen_vars.add(lookup["var"])
+        lookups.append(lookup)
+        if "secret" not in entry:
+            continue
+        secret = _secret_mount(entry["secret"], var=lookup["var"], name=f"{item_name}.secret", canonical=True)
+        existing = secrets.get(secret["name"])
+        if existing is not None and existing != secret:
+            raise AnsibleFilterError(f"conflicting secret declaration for {secret['name']!r}")
+        secrets[secret["name"]] = secret
+    return {
+        "secrets_map": lookups,
+        "fail_on_empty": _as_bool(infisical.get("fail_on_empty", True), name=f"{name}.fail_on_empty"),
+    }, list(secrets.values())
+
+
+def _secrets(value: Any, *, name: str) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
+    if value is None:
+        return [], []
     if isinstance(value, (str, Mapping)) or not isinstance(value, Iterable):
         raise AnsibleFilterError(f"{name} must be a list of secret mappings")
+    lookups: list[dict[str, str]] = []
     normalized: list[dict[str, Any]] = []
     for index, secret in enumerate(value):
         item_name = f"{name}[{index}]"
-        if not isinstance(secret, Mapping):
-            raise AnsibleFilterError(f"{item_name} must be a mapping")
-        result = deepcopy(dict(secret))
-        result["name"] = _resource_name(result.get("name"), name=f"{item_name}.name")
-        result["infisical_path"] = _nonempty_string(result.get("infisical_path"), name=f"{item_name}.infisical_path")
-        result["infisical_key"] = _nonempty_string(result.get("infisical_key"), name=f"{item_name}.infisical_key")
-        result["immutable"] = _as_bool(result.get("immutable", False), name=f"{item_name}.immutable")
-        result["replace"] = _as_bool(result.get("replace", False), name=f"{item_name}.replace")
-        if result["immutable"] and result["replace"]:
-            raise AnsibleFilterError(f"{item_name} cannot be both immutable and replaceable")
-        normalized.append(result)
-    return normalized
+        secret_map = _as_mapping(secret, name=item_name)
+        resource_name = _resource_name(secret_map.get("name"), name=f"{item_name}.name")
+        lookup = {
+            "var": resource_name,
+            "path": _nonempty_string(secret_map.get("infisical_path"), name=f"{item_name}.infisical_path"),
+            "name": _nonempty_string(secret_map.get("infisical_key"), name=f"{item_name}.infisical_key"),
+        }
+        lookups.append(lookup)
+        normalized.append(_secret_mount(secret_map, var=resource_name, name=item_name, canonical=False))
+    return lookups, normalized
+
+
+def _merge_secrets(
+    canonical_lookups: list[dict[str, str]],
+    canonical: list[dict[str, Any]],
+    legacy_lookups: list[dict[str, str]],
+    legacy: list[dict[str, Any]],
+) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
+    lookups = list(canonical_lookups)
+    lookup_by_var = {item["var"]: item for item in lookups}
+    declarations = {item["name"]: item for item in canonical}
+    for lookup, declaration in zip(legacy_lookups, legacy, strict=True):
+        existing = declarations.get(declaration["name"])
+        if existing is not None:
+            canonical_lookup = lookup_by_var[existing["var"]]
+            if canonical_lookup["path"] != lookup["path"] or canonical_lookup["name"] != lookup["name"]:
+                raise AnsibleFilterError(f"conflicting secret declaration for {declaration['name']!r}: lookup differs")
+            comparison = dict(declaration)
+            comparison["var"] = existing["var"]
+            if comparison != existing:
+                raise AnsibleFilterError(f"conflicting secret declaration for {declaration['name']!r}")
+            continue
+        if lookup["var"] in lookup_by_var:
+            if lookup_by_var[lookup["var"]] != lookup:
+                raise AnsibleFilterError(f"duplicate Infisical var {lookup['var']!r} has conflicting lookup")
+        else:
+            lookups.append(lookup)
+            lookup_by_var[lookup["var"]] = lookup
+        declarations[declaration["name"]] = declaration
+    return lookups, list(declarations.values())
+
+
+def _podman_runtime_options(value: Any, *, name: str) -> dict[str, Any]:
+    options = _as_mapping(value, name=name)
+    unsupported_runtimes = set(options) - {"podman", "docker"}
+    if unsupported_runtimes:
+        raise AnsibleFilterError(f"{name} contains unsupported runtimes: {', '.join(sorted(unsupported_runtimes))}")
+    podman = _as_mapping(options.get("podman", {}), name=f"{name}.podman")
+    unsupported = set(podman) - {"network", "systemd"}
+    if unsupported:
+        raise AnsibleFilterError(f"{name}.podman contains unsupported fields: {', '.join(sorted(unsupported))}")
+    result: dict[str, Any] = {}
+    if "network" in podman:
+        result["network"] = _network(podman["network"], name=f"{name}.podman.network")
+    if "systemd" in podman:
+        result["systemd"] = _systemd(podman["systemd"], name=f"{name}.podman.systemd")
+    return result
 
 
 def _network(value: Any, *, name: str) -> dict[str, Any]:
@@ -621,8 +761,40 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
     if healthcheck_present:
         container["healthcheck"] = healthcheck
 
-    secrets = _secrets(cfg.get("secrets"), name=f"{name}.secrets")
-    network = _network(cfg["network"], name=f"{name}.network") if cfg.get("network") is not None else None
+    podman_options = _podman_runtime_options(cfg.get("runtime_options", {}), name=f"{name}.runtime_options")
+    systemd, systemd_present = _choose(
+        podman_options.get("systemd"),
+        container.get("systemd"),
+        canonical_present="systemd" in podman_options,
+        legacy_present="systemd" in raw_container,
+        canonical_name=f"{name}.runtime_options.podman.systemd",
+        legacy_name=f"{name}.container.systemd",
+    )
+    if systemd_present:
+        container["systemd"] = systemd
+
+    canonical_infisical, canonical_secrets = _canonical_infisical(cfg.get("infisical"), name=f"{name}.infisical")
+    legacy_lookups, legacy_secrets = _secrets(cfg.get("secrets"), name=f"{name}.secrets")
+    lookups, secrets = _merge_secrets(
+        canonical_infisical["secrets_map"],
+        canonical_secrets,
+        legacy_lookups,
+        legacy_secrets,
+    )
+    infisical = {
+        "secrets_map": lookups,
+        "fail_on_empty": canonical_infisical["fail_on_empty"],
+    }
+
+    legacy_network = _network(cfg["network"], name=f"{name}.network") if cfg.get("network") is not None else None
+    network, _ = _choose(
+        podman_options.get("network"),
+        legacy_network,
+        canonical_present="network" in podman_options,
+        legacy_present=cfg.get("network") is not None,
+        canonical_name=f"{name}.runtime_options.podman.network",
+        legacy_name=f"{name}.network",
+    )
     postgres = _as_mapping(cfg["postgres"], name=f"{name}.postgres") if "postgres" in cfg else {}
     traefik = _as_mapping(cfg["traefik"], name=f"{name}.traefik") if "traefik" in cfg else {}
 
@@ -633,9 +805,11 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         "image": image,
         "container": container,
         "env": env if env_present else {},
+        "infisical": infisical,
         "secrets": secrets,
         "host_paths": host_paths,
         "network": network,
+        "runtime_options": {"podman": podman_options},
         "volumes": volumes,
         "postgres": postgres,
         "traefik": traefik,

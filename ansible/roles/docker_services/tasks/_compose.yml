@@ -196,6 +196,30 @@
     compose_list_value: "{{ docker_services_svc.security_opt }}"
     compose_list_action: "append_unique"
 
+- name: Compose - Runtime | Add canonical no-new-privileges security option
+  when:
+    - docker_services_is_deploy_host
+    - docker_services_svc.no_new_privileges is defined
+    - >-
+      (
+        docker_services_svc.no_new_privileges
+        | docker_services_no_new_privileges_security_opts(docker_services_stack_deploy_type)
+        | length
+      ) > 0
+  ansible.builtin.include_tasks:
+    file: sub_tasks/compose/list_field.yml
+    apply:
+      tags: [deploy, update, recreate]
+  vars:
+    compose_list_field: "security_opt"
+    compose_list_value: >-
+      {{
+        docker_services_svc.no_new_privileges
+        | docker_services_no_new_privileges_security_opts(docker_services_stack_deploy_type)
+      }}
+    compose_list_action: "append_unique"
+  tags: [deploy, update, recreate]
+
 ################################
 # COMPOSE (SYSCTLS)
 ################################
@@ -348,13 +372,16 @@
 ################################
 
 - name: Compose - IO | Set secrets variable
-  when:
-    - docker_services_is_deploy_host
-    - docker_services_svc.secrets is defined
-    - (docker_services_svc.secrets | length > 0)
-  ansible.builtin.include_tasks: sub_tasks/compose/secrets.yml
+  when: docker_services_is_deploy_host
+  ansible.builtin.include_tasks:
+    file: sub_tasks/compose/secrets.yml
+    apply:
+      tags: [deploy, update, recreate]
   vars:
-    secrets: "{{ docker_services_svc.secrets }}"
+    secrets: "{{ docker_services_svc.secrets | default([]) }}"
+    secret_declarations: >-
+      {{ hostvars[docker_services_primary_manager].docker_services_secret_declarations | default([]) }}
+  tags: [deploy, update, recreate]
 
 ################################
 # COMPOSE (SWARM CONFIGS)

@@ -56,8 +56,8 @@
   ansible.builtin.include_tasks:
     file: sub_tasks/prep/infisical/tasker.yml
     apply:
-      tags: [deploy, update, recreate]
-  tags: [deploy, update, recreate]
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
 
 ################################
 # PREP (SWARM CONFIGS)
@@ -135,8 +135,8 @@
   ansible.builtin.include_tasks:
     file: sub_tasks/prep/traefik_zone.yml
     apply:
-      tags: [deploy, update, recreate]
-  tags: [deploy, update, recreate]
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
 
 ################################
 # PREP (RUNTIME-NEUTRAL SERVICE STATE)
@@ -144,10 +144,13 @@
 
 - name: Prep - Service common | Prepare files and Traefik integration
   when: inventory_hostname == docker_services_primary_manager
+  no_log: true
   ansible.builtin.include_role:
     name: service_common
     apply:
-      tags: [deploy, update, remove, recreate]
+      tags: [deploy, update, remove, recreate, bootstrap]
+      no_log: true
+      diff: false
   vars:
     service_common_name: "{{ docker_services_service_name }}"
     service_common_runtime: docker
@@ -161,17 +164,22 @@
       qbittorrent_xs_pass_pbkdf2: "{{ docker_services_qbittorrent_xs_pass_pbkdf2 | default('') }}"
     service_common_traefik_base_zone: >-
       {{
-        hostvars[docker_services_primary_manager].cloudflare_zone
+        (hostvars[docker_services_primary_manager].service_common_infisical_values | default({}))
+        .get("cloudflare_zone", "")
         | default(
-            cloudflare_zone
-            | default(docker_services_traefik_check_base_zone | default(''))
+            hostvars[docker_services_primary_manager].cloudflare_zone
+            | default(
+                cloudflare_zone
+                | default(docker_services_traefik_check_base_zone | default(""))
+              ),
+            true
           )
       }}
     service_common_traefik_dynamic_dir: >-
       {{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic
     service_common_traefik_owner: "1000"
     service_common_traefik_group: "1000"
-  tags: [deploy, update, remove, recreate]
+  tags: [deploy, update, remove, recreate, bootstrap]
 
 ################################
 # PREP (SWARM ENV TEMPLATES)
@@ -187,7 +195,7 @@
     name: service_common
     tasks_from: templates
     apply:
-      tags: [deploy, update, recreate]
+      tags: [deploy, update, recreate, bootstrap]
   vars:
     service_common_name: "{{ docker_services_service_name }}"
     service_common_templates: "{{ docker_services_svc.swarm_env_templates }}"
@@ -200,7 +208,7 @@
     service_common_template_vars:
       qbittorrent_pass_pbkdf2: "{{ docker_services_qbittorrent_pass_pbkdf2 | default('') }}"
       qbittorrent_xs_pass_pbkdf2: "{{ docker_services_qbittorrent_xs_pass_pbkdf2 | default('') }}"
-  tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate, bootstrap]
 
 ################################
 # PREP (PLEX)
@@ -262,6 +270,6 @@
   ansible.builtin.include_tasks:
     file: sub_tasks/prep/vaultwarden.yml
     apply:
-      tags: [deploy, update, recreate]
+      tags: [deploy, update, recreate, bootstrap]
   run_once: true
-  tags: [deploy, update, recreate]
+  tags: [deploy, update, recreate, bootstrap]

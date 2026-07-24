@@ -1,7 +1,12 @@
+import re
 from pathlib import Path
+
+import yaml
 
 TASKS_DIR = Path("ansible/roles/podman_services/tasks")
 MAIN_TASKS = (TASKS_DIR / "main.yml").read_text()
+PREPARE_TASKS = (TASKS_DIR / "sub_tasks" / "prepare.yml").read_text()
+REMOVE_TASKS = (TASKS_DIR / "sub_tasks" / "remove.yml").read_text()
 SUB_TASK_FILES = (
     "init.yml",
     "prepare.yml",
@@ -100,15 +105,18 @@ def test_secret_skip_existing_semantics_are_explicit():
     assert "podman_secret_policy(podman_services_state)" in TASKS
 
 
-def test_podman_adapts_existing_secret_declarations_without_changing_materialization_policy():
-    assert "'var': item.name" in TASKS
-    assert "'path': item.infisical_path" in TASKS
-    assert "'name': item.infisical_key" in TASKS
-    assert "tasks_from: infisical" in TASKS
-    assert 'name: "{{ item.name }}"' in TASKS
-    assert 'data: "{{ service_common_secret_values[item.name] }}"' in TASKS
+def test_podman_adapts_canonical_and_legacy_secrets_without_changing_materialization_policy():
+    assert "service_common_infisical_secrets_map:" in MAIN_TASKS
+    assert "service_common_legacy_podman_secrets:" in MAIN_TASKS
+    assert "tasks_from: infisical" in MAIN_TASKS
+    assert "Attach common resolved environment" in MAIN_TASKS
+    assert "service_common_resolved_environment" in MAIN_TASKS
+    assert "Validate and retrieve Infisical values through service common" not in TASKS
+    assert 'name: "{{ podman_services_secret.name }}"' in TASKS
+    assert 'data: "{{ service_common_infisical_values[podman_services_secret.var] }}"' in TASKS
     assert "podman_secret_policy(podman_services_state)).force" in TASKS
     assert "podman_secret_policy(podman_services_state)).skip_existing" in TASKS
+    assert "not ansible_check_mode" in TASKS
 
 
 def test_absent_container_unit_is_checked_before_stop():
@@ -131,3 +139,72 @@ def test_split_tasks_notify_the_existing_daemon_reload_handler():
     assert TASKS.count(f"notify: {handler_name}") == 5
     assert "notify: Prep | daemon reload" not in TASKS
     assert "notify: Remove | daemon reload" not in TASKS
+
+
+def test_podman_secret_loop_uses_a_role_prefixed_variable_without_item_references():
+    tasks = yaml.safe_load(PREPARE_TASKS)
+    task = next(task for task in tasks if task["name"] == "Prep | Create/update Podman secrets")
+
+    assert task["loop_control"]["loop_var"] == "podman_services_secret"
+    assert re.search(r"(?<![A-Za-z0-9_])item(?![A-Za-z0-9_])", str(task)) is None
+
+
+def test_podman_generated_path_loop_uses_a_role_prefixed_variable_without_item_references():
+    tasks = yaml.safe_load(REMOVE_TASKS)
+    task = next(task for task in tasks if task["name"] == "Remove | Remove generated Quadlet and environment files only")
+
+    assert task["loop_control"]["loop_var"] == "podman_services_generated_path"
+    assert re.search(r"(?<![A-Za-z0-9_])item(?![A-Za-z0-9_])", str(task)) is None
+
+
+def test_podman_render_tasks_publish_the_normalized_service_to_templates():
+    tasks = yaml.safe_load(PREPARE_TASKS)
+    template_sources = {"network.network.j2", "env.env.j2", "container.container.j2"}
+    render_tasks = [
+        task
+        for task in tasks
+        if isinstance(task.get("ansible.builtin.template"), dict) and task["ansible.builtin.template"].get("src") in template_sources
+    ]
+
+    assert {task["ansible.builtin.template"]["src"] for task in render_tasks} == template_sources
+    for task in render_tasks:
+        assert task["vars"]["podman_service"] == "{{ podman_services_service }}"
+
+
+def test_podman_common_resolution_precedes_shared_and_runtime_rendering():
+    resolve = MAIN_TASKS.index("Resolve common Infisical values and environment")
+    attach = MAIN_TASKS.index("Attach common resolved environment")
+    shared = MAIN_TASKS.index("Prepare runtime-neutral host state")
+    prepare = MAIN_TASKS.index("Include preparation tasks")
+    env_file = TASKS.index("Render protected environment file")
+    native_secret = TASKS.index("Create/update Podman secrets")
+    quadlet = TASKS.index("Render container Quadlet")
+
+    assert resolve < attach < shared < prepare
+    assert env_file < native_secret < quadlet
+    assert "no_log: true\n  diff: false\n  when:" in TASKS[env_file:native_secret]
+
+
+def test_podman_dynamic_includes_propagate_required_tags():
+    required_tags = {
+        "sub_tasks/init.yml": {"deploy", "update", "remove", "recreate", "drift", "bootstrap"},
+        "sub_tasks/prepare.yml": {"deploy", "update", "remove", "recreate", "drift", "bootstrap"},
+        "sub_tasks/image.yml": {"deploy", "update", "recreate", "bootstrap"},
+        "sub_tasks/network.yml": {"update", "recreate"},
+        "sub_tasks/lifecycle.yml": {"deploy", "update", "remove", "recreate", "bootstrap"},
+        "sub_tasks/remove.yml": {"remove"},
+        "sub_tasks/drift.yml": {"drift"},
+    }
+    checked = set()
+
+    for task in yaml.safe_load(MAIN_TASKS):
+        include = task.get("ansible.builtin.include_tasks")
+        if not isinstance(include, dict) or include.get("file") not in required_tags:
+            continue
+        include_file = include["file"]
+        required = required_tags[include_file]
+        assert required.issubset(set(task.get("tags", [])))
+        assert required.issubset(set(include.get("apply", {}).get("tags", [])))
+        checked.add(include_file)
+
+    assert checked == set(required_tags)

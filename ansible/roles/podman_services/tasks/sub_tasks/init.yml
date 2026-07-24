@@ -3,7 +3,11 @@
 - name: Init | Normalize service
   ansible.builtin.set_fact:
     podman_services_service: "{{ podman_services_service_cfg | podman_service_normalize(podman_services_role_prefix) }}"
-    podman_services_unit_name: "{{ (podman_services_service_cfg.container.name | default(podman_services_role_prefix)) ~ '.service' }}"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Init | Derive normalized systemd unit name
+  ansible.builtin.set_fact:
+    podman_services_unit_name: "{{ podman_services_service.unit_name ~ '.service' }}"
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
 - name: Init | Reset per-service transient facts

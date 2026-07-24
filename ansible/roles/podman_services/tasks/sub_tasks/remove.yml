@@ -69,7 +69,7 @@
 - name: Remove | Remove generated Quadlet and environment files only
   when: podman_services_state == 'remove'
   ansible.builtin.file:
-    path: "{{ item }}"
+    path: "{{ podman_services_generated_path }}"
     state: absent
   loop: >-
     {{
@@ -89,5 +89,8 @@
         | list
       )
     }}
+  loop_control:
+    loop_var: podman_services_generated_path
+    label: "{{ podman_services_generated_path }}"
   notify: Podman services | daemon reload
   tags: [remove]

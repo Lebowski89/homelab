@@ -70,7 +70,7 @@
   diff: false
   when: docker_services_env_resolved is defined
   ansible.builtin.set_fact:
-    docker_services_svc: "{{ docker_services_svc | combine({'environment': docker_services_env_resolved}, recursive=true) }}"
+    docker_services_svc: "{{ docker_services_svc | combine({'environment': docker_services_env_resolved}, recursive=false) }}"
 
 - name: Prep - Infisical Resolver | Fail if any placeholders remain
   no_log: true

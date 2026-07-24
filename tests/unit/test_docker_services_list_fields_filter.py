@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_PATH = REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_list_fields.py"
 
@@ -285,3 +287,40 @@ def test_set_service_field_non_mapping_existing_service_fails():
         assert "compose_services['plex'] must be a mapping" in str(exc)
     else:
         raise AssertionError("Expected non-mapping existing service to fail")
+
+
+def test_no_new_privileges_true_appends_unique_security_option():
+    plugin = load_plugin()
+
+    canonical = plugin.docker_services_no_new_privileges_security_opts(True, "container")
+    result = plugin.docker_services_merge_string_list(
+        ["label=disable", "no-new-privileges:true"],
+        canonical,
+        "append_unique",
+    )
+
+    assert result == ["label=disable", "no-new-privileges:true"]
+
+
+def test_no_new_privileges_false_leaves_existing_security_options_unchanged():
+    plugin = load_plugin()
+
+    canonical = plugin.docker_services_no_new_privileges_security_opts(False, "container")
+    result = plugin.docker_services_merge_string_list(["label=disable"], canonical, "append_unique")
+
+    assert result == ["label=disable"]
+
+
+@pytest.mark.parametrize("value", ["maybe", 2, None, [], {}])
+def test_no_new_privileges_rejects_non_strict_boolean_values(value):
+    plugin = load_plugin()
+
+    with pytest.raises(Exception, match="must be boolean-like"):
+        plugin.docker_services_no_new_privileges_security_opts(value, "container")
+
+
+def test_no_new_privileges_true_is_rejected_for_swarm():
+    plugin = load_plugin()
+
+    with pytest.raises(Exception, match="only supported for Docker container deploys, not Swarm"):
+        plugin.docker_services_no_new_privileges_security_opts(True, "swarm")

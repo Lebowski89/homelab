@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from typing import Any
@@ -77,6 +78,23 @@ def _normalize_protocol(value: Any, *, name: str) -> str:
     return protocol
 
 
+def _normalize_host_ip(value: Any, *, name: str) -> str:
+    host_ip = _as_str(value)
+
+    if not host_ip:
+        raise AnsibleFilterError(f"{name}.host_ip must be a valid IPv4 address.")
+
+    try:
+        address = ipaddress.ip_address(host_ip)
+    except ValueError as exc:
+        raise AnsibleFilterError(f"{name}.host_ip must be a valid IPv4 address.") from exc
+
+    if address.version != 4:
+        raise AnsibleFilterError(f"{name}.host_ip must be IPv4 for this compatibility phase.")
+
+    return str(address)
+
+
 def _raw_new_ports(
     ports: Any,
     ports_list: Any,
@@ -129,7 +147,11 @@ def _canonicalize_port(
     }
 
     if stack_deploy_type == "swarm":
+        if "host_ip" in port_dict:
+            raise AnsibleFilterError(f"ports[{index}].host_ip is only supported for Docker container deploys, not Swarm.")
         item["mode"] = _as_str(port_dict.get("mode"), default="ingress")
+    elif "host_ip" in port_dict:
+        item["host_ip"] = _normalize_host_ip(port_dict["host_ip"], name=f"ports[{index}]")
 
     return item
 
@@ -199,6 +221,7 @@ def _port_key(port: Mapping[str, Any]) -> tuple[Any, ...]:
         int(port["target"]),
         _as_str(port.get("protocol"), default="tcp").lower(),
         _as_str(port.get("mode")),
+        _as_str(port.get("host_ip")),
     )
 
 

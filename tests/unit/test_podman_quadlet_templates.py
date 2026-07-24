@@ -19,7 +19,6 @@ def render(name, service):
     return env.get_template(name).render(
         podman_service=service,
         podman_services_quadlet_dir="/etc/containers/systemd",
-        internal_zone="int.example.test",
     )
 
 
@@ -304,3 +303,36 @@ def test_container_quadlet_renders_explicit_custom_after_dependencies():
 
     assert "After=postgresql.service" in rendered
     assert "After=custom-online.target" in rendered
+
+
+def test_canonical_secret_normalization_reaches_quadlet_without_value():
+    cfg = canonical_service()
+    cfg["infisical"] = {
+        "secrets_map": [
+            {
+                "var": "app_secret_value",
+                "path": "/Portable",
+                "name": "VALUE",
+                "secret": {
+                    "name": "app_secret",
+                    "target": "/run/secrets/app_secret",
+                    "uid": "1001",
+                    "gid": "1002",
+                    "mode": "0400",
+                    "runtime_options": {
+                        "podman": {
+                            "immutable": True,
+                            "replace": False,
+                        }
+                    },
+                },
+            }
+        ]
+    }
+
+    normalized = podman_services_filters.podman_service_normalize(cfg, "portable")
+    rendered = render("container.container.j2", normalized)
+
+    assert "Secret=app_secret,target=/run/secrets/app_secret,uid=1001,gid=1002,mode=0400" in rendered
+    assert "app_secret_value" not in rendered
+    assert "VALUE" not in rendered
