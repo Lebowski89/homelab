@@ -433,7 +433,13 @@ def test_real_n8n_declares_cloudflare_zone_as_lookup_only():
         cfg["infisical"]["fail_on_empty"],
     )
 
-    assert lookup == {"var": "cloudflare_zone", "path": "/Cloudflare", "name": "ZONE"}
+    assert lookup == {
+        "var": "cloudflare_zone",
+        "path": "/Cloudflare",
+        "name": "ZONE",
+        "check_mode_value": "check-mode.invalid",
+    }
+    assert lookup in normalized["secrets_map"]
     assert "secret" not in lookup
     assert "cloudflare_zone" not in {item["var"] for item in normalized["secret_declarations"]}
     assert [item["name"] for item in normalized["secret_declarations"]] == [

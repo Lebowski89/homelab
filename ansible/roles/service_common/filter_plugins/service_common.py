@@ -370,8 +370,24 @@ def service_common_environment_resolve(environment: Any, values: Any, config: An
 
 
 def service_common_infisical_check_values(config: Any) -> dict[str, str]:
-    declared = sorted(_declared_infisical_vars(config))
-    return {var: ("check-mode.invalid" if var == "cloudflare_zone" else f"__CHECK_MODE_REDACTED_INFISICAL_{var}__") for var in declared}
+    config_mapping = _mapping(config, name="service_common_infisical_config")
+    secrets_map = config_mapping.get("secrets_map", [])
+    if not isinstance(secrets_map, list):
+        raise AnsibleFilterError("service_common_infisical_config.secrets_map must be a list")
+
+    values: dict[str, str] = {}
+    for index, entry in enumerate(secrets_map):
+        item_name = f"service_common_infisical_config.secrets_map[{index}]"
+        entry_mapping = _mapping(entry, name=item_name)
+        var = _identifier(entry_mapping.get("var"), name=f"{item_name}.var")
+        if var in values:
+            raise AnsibleFilterError(f"duplicate Infisical var {var!r}")
+        values[var] = (
+            _nonempty_text(entry_mapping["check_mode_value"], name=f"{item_name}.check_mode_value")
+            if "check_mode_value" in entry_mapping
+            else f"__CHECK_MODE_REDACTED_INFISICAL_{var}__"
+        )
+    return {var: values[var] for var in sorted(values)}
 
 
 def service_common_infisical_normalize(
@@ -392,7 +408,7 @@ def service_common_infisical_normalize(
         if not isinstance(entry, Mapping):
             raise AnsibleFilterError(f"{item_name} must be a mapping")
         item: dict[str, str] = {}
-        unsupported_entry = set(entry) - {"var", "path", "name", "secret", "docker_secret"}
+        unsupported_entry = set(entry) - {"var", "path", "name", "check_mode_value", "secret", "docker_secret"}
         if unsupported_entry:
             raise AnsibleFilterError(f"{item_name} contains unsupported fields: {', '.join(sorted(unsupported_entry))}")
         for field in ("var", "path", "name"):
@@ -400,6 +416,11 @@ def service_common_infisical_normalize(
             if not isinstance(value, str) or not value.strip():
                 raise AnsibleFilterError(f"{item_name}.{field} must be a non-empty string")
             item[field] = value.strip()
+        if "check_mode_value" in entry:
+            item["check_mode_value"] = _nonempty_text(
+                entry["check_mode_value"],
+                name=f"{item_name}.check_mode_value",
+            )
         item["var"] = _identifier(item["var"], name=f"{item_name}.var")
         if item["var"] in seen_vars:
             raise AnsibleFilterError(f"duplicate Infisical var {item['var']!r}")
@@ -443,7 +464,8 @@ def service_common_infisical_normalize(
                     raise AnsibleFilterError(f"conflicting secret declaration for {declaration['name']!r}: lookup differs")
                 declaration["var"] = existing["var"]
             elif lookup["var"] in lookup_by_var:
-                if lookup_by_var[lookup["var"]] != lookup:
+                canonical_lookup = lookup_by_var[lookup["var"]]
+                if canonical_lookup["path"] != lookup["path"] or canonical_lookup["name"] != lookup["name"]:
                     raise AnsibleFilterError(f"duplicate Infisical var {lookup['var']!r} has conflicting lookup")
             else:
                 normalized.append(lookup)

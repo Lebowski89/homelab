@@ -63,6 +63,14 @@ def test_required_fields_must_be_non_empty_strings(field, value):
         service_common.service_common_infisical_normalize([entry])
 
 
+@pytest.mark.parametrize("value", [None, "", "   ", 0, False, [], {}])
+def test_check_mode_value_must_be_a_non_empty_string(value):
+    entry = {"var": "zone", "path": "/Cloudflare", "name": "ZONE", "check_mode_value": value}
+
+    with pytest.raises(AnsibleFilterError, match=r"\.check_mode_value must be a non-empty string"):
+        service_common.service_common_infisical_normalize([entry])
+
+
 def test_duplicate_normalized_var_names_are_rejected():
     secrets_map = [
         {"var": " token ", "path": "/App", "name": "FIRST"},
@@ -552,8 +560,18 @@ def test_environment_resolution_is_isolated_between_services():
     assert second == {"VALUE": "second-service"}
 
 
-def test_check_mode_values_are_deterministic_and_redacted_without_lookup():
-    config = environment_config("token", "cloudflare_zone")
+def test_check_mode_values_use_explicit_standin_and_default_redaction():
+    config = service_common.service_common_infisical_normalize(
+        [
+            {
+                "var": "cloudflare_zone",
+                "path": "/Cloudflare",
+                "name": "ZONE",
+                "check_mode_value": "check-mode.invalid",
+            },
+            {"var": "token", "path": "/App", "name": "TOKEN"},
+        ]
+    )
 
     first = service_common.service_common_infisical_check_values(config)
     second = service_common.service_common_infisical_check_values(config)
@@ -571,3 +589,21 @@ def test_check_mode_values_are_deterministic_and_redacted_without_lookup():
         first,
         config,
     ) == {"HOST": "app.check-mode.invalid"}
+
+
+def test_check_mode_value_metadata_does_not_change_live_finalization():
+    config = service_common.service_common_infisical_normalize(
+        [
+            {
+                "var": "cloudflare_zone",
+                "path": "/Cloudflare",
+                "name": "ZONE",
+                "check_mode_value": "check-mode.invalid",
+            }
+        ]
+    )
+
+    assert service_common.service_common_infisical_finalize(
+        {"cloudflare_zone": "live.example"},
+        config,
+    ) == {"cloudflare_zone": "live.example"}

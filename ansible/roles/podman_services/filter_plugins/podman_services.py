@@ -476,10 +476,15 @@ def _canonical_infisical(value: Any, *, name: str) -> tuple[dict[str, Any], list
     for index, raw_entry in enumerate(raw_map):
         item_name = f"{name}.secrets_map[{index}]"
         entry = _as_mapping(raw_entry, name=item_name)
-        unsupported_entry = set(entry) - {"var", "path", "name", "secret", "docker_secret"}
+        unsupported_entry = set(entry) - {"var", "path", "name", "check_mode_value", "secret", "docker_secret"}
         if unsupported_entry:
             raise AnsibleFilterError(f"{item_name} contains unsupported fields: {', '.join(sorted(unsupported_entry))}")
         lookup = {field: _nonempty_string(entry.get(field), name=f"{item_name}.{field}") for field in ("var", "path", "name")}
+        if "check_mode_value" in entry:
+            lookup["check_mode_value"] = _nonempty_string(
+                entry["check_mode_value"],
+                name=f"{item_name}.check_mode_value",
+            )
         if lookup["var"] in seen_vars:
             raise AnsibleFilterError(f"duplicate Infisical var {lookup['var']!r}")
         seen_vars.add(lookup["var"])
@@ -539,7 +544,8 @@ def _merge_secrets(
                 raise AnsibleFilterError(f"conflicting secret declaration for {declaration['name']!r}")
             continue
         if lookup["var"] in lookup_by_var:
-            if lookup_by_var[lookup["var"]] != lookup:
+            canonical_lookup = lookup_by_var[lookup["var"]]
+            if canonical_lookup["path"] != lookup["path"] or canonical_lookup["name"] != lookup["name"]:
                 raise AnsibleFilterError(f"duplicate Infisical var {lookup['var']!r} has conflicting lookup")
         else:
             lookups.append(lookup)

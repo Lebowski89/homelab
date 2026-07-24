@@ -204,6 +204,10 @@ def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
     assert finalize["when"] == "not ansible_check_mode"
     assert check_values["when"] == "ansible_check_mode"
     assert "service_common_infisical_values" in str(compatibility["ansible.builtin.set_fact"])
+    fetch_expression = str(fetch["ansible.builtin.set_fact"]["service_common_infisical_values"])
+    assert "check_mode_value" not in fetch_expression
+    assert "service_common_infisical_item.path" in fetch_expression
+    assert "service_common_infisical_item.name" in fetch_expression
     assert "infisical.vault.read_secrets" in COMMON_INFISICAL_TASKS
     assert "infisical.vault.read_secrets" not in DOCKER_FETCH_TASKS
     assert "infisical.vault.read_secrets" not in PODMAN_PREP
@@ -277,6 +281,12 @@ def test_docker_canonical_no_new_privileges_uses_tagged_append_unique_list_helpe
     assert task["vars"]["compose_list_field"] == "security_opt"
     assert task["vars"]["compose_list_action"] == "append_unique"
     assert "docker_services_no_new_privileges_security_opts" in str(task["when"])
+    assert "docker_services_stack_deploy_type != 'swarm'" in task["when"]
+
+
+def test_podman_host_selection_treats_empty_hosts_as_missing():
+    assert "default(item.name, true)" in PLAYBOOK
+    assert "| default(item.name, true),\n                true" in PLAYBOOK
 
 
 def test_no_operational_ansible_file_references_internal_zone():

@@ -52,7 +52,7 @@ infisical:
       name: TEMPLATE_VALUE
 ```
 
-`service_common` validates the lookup and value-free declaration metadata, resets all outputs per service, and retrieves lookup-only and secret-backed values into `service_common_infisical_values`, keyed by `var`. Entries without `secret` remain lookup-only. It also resolves the canonical environment before Podman renders its protected environment file or Quadlets. Check mode validates declarations and references without contacting Infisical or creating a native secret, using `check-mode.invalid` for `cloudflare_zone` and deterministic redacted stand-ins for other declared values.
+`service_common` validates the lookup and value-free declaration metadata, resets all outputs per service, and retrieves lookup-only and secret-backed values into `service_common_infisical_values`, keyed by `var`. Entries without `secret` remain lookup-only. It also resolves the canonical environment before Podman renders its protected environment file or Quadlets. Check mode validates declarations and references without contacting Infisical or creating a native secret, using an optional declaration-owned `check_mode_value` when present and deterministic redacted stand-ins otherwise.
 
 `podman_services` remains responsible for `containers.podman.podman_secret` and Quadlet attachment. It reads the value through the declaration's `var`, creates the declared native Podman secret name, and preserves target, UID, GID, and mode in `Secret=`. Value-carrying tasks use `no_log: true` and `diff: false`; values never enter generated Quadlets. Native Podman secrets keep values out of repository files and generated unit arguments, but the default file-backed secret driver is not encrypted storage and root on the host can access it.
 

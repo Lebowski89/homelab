@@ -143,12 +143,7 @@
     service_common_service: "{{ podman_services_service }}"
     service_common_target_hosts: ["{{ inventory_hostname }}"]
     service_common_controller_host: "{{ podman_services_traefik_delegate }}"
-    service_common_traefik_base_zone: >-
-      {{
-        "check-mode.invalid"
-        if ansible_check_mode
-        else service_common_infisical_values.cloudflare_zone
-      }}
+    service_common_traefik_base_zone: "{{ service_common_infisical_values.cloudflare_zone }}"
     service_common_traefik_dynamic_dir: "{{ podman_services_traefik_dynamic_dir }}"
     service_common_traefik_owner: "{{ podman_services_traefik_dynamic_owner }}"
     service_common_traefik_group: "{{ podman_services_traefik_dynamic_group }}"

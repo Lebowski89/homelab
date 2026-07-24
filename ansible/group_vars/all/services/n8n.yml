@@ -80,6 +80,7 @@ n8n:
       - var: cloudflare_zone
         path: /Cloudflare
         name: ZONE
+        check_mode_value: check-mode.invalid
       - var: postgres_user
         path: /Postgres
         name: USER

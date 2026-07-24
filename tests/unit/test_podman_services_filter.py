@@ -932,6 +932,22 @@ def test_equivalent_canonical_and_legacy_podman_secret_deduplicates():
     assert len(svc["secrets"]) == 1
 
 
+def test_check_mode_metadata_does_not_conflict_with_equivalent_legacy_lookup():
+    cfg = canonical_secret_cfg()
+    cfg["infisical"]["secrets_map"][1]["check_mode_value"] = "check-mode.invalid"
+    cfg["secrets"] = [
+        {
+            "name": "template_only",
+            "infisical_path": "/Portable",
+            "infisical_key": "TEMPLATE",
+        }
+    ]
+
+    svc = podman_services.podman_service_normalize(cfg, "portable")
+
+    assert svc["infisical"]["secrets_map"][1]["check_mode_value"] == "check-mode.invalid"
+
+
 def test_conflicting_canonical_and_legacy_podman_secret_fails():
     cfg = canonical_secret_cfg()
     cfg["secrets"] = [

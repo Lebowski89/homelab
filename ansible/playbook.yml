@@ -417,7 +417,11 @@
           ==
           (
             (podman_services_service_cfg.deploy | default({})).host
-            | default((podman_services_service_cfg.container | default({})).host | default(item.name))
+            | default(
+                (podman_services_service_cfg.container | default({})).host
+                | default(item.name, true),
+                true
+              )
           )
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 

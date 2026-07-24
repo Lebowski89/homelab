@@ -199,6 +199,7 @@
 - name: Compose - Runtime | Add canonical no-new-privileges security option
   when:
     - docker_services_is_deploy_host
+    - docker_services_stack_deploy_type != 'swarm'
     - docker_services_svc.no_new_privileges is defined
     - >-
       (
