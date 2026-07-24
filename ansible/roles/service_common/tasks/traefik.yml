@@ -1,7 +1,11 @@
 ---
 
 - name: Service common Traefik | Include interface validation
-  ansible.builtin.include_tasks: validate.yml
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
 
 - name: Service common Traefik | Resolve runtime-neutral render context
   ansible.builtin.set_fact:

@@ -1,7 +1,11 @@
 ---
 
 - name: Service common remove integrations | Include interface validation
-  ansible.builtin.include_tasks: validate.yml
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags: [remove]
+  tags: [remove]
 
 - name: Service common remove integrations | Resolve canonical and legacy Traefik paths
   ansible.builtin.set_fact:

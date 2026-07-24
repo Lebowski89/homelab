@@ -1,24 +1,36 @@
 ---
 
 - name: Service common | Include interface validation
-  ansible.builtin.include_tasks: validate.yml
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
 - name: Service common | Include shared preparation
   when: service_common_action in service_common_prepare_actions
-  ansible.builtin.include_tasks: prepare.yml
+  ansible.builtin.include_tasks:
+    file: prepare.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Service common | Include shared Traefik integration
   when:
     - service_common_action in service_common_prepare_actions
     - service_common_service.traefik.enable | default(false) | bool
-  ansible.builtin.include_tasks: traefik.yml
+  ansible.builtin.include_tasks:
+    file: traefik.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Service common | Include shared integration removal
   when:
     - service_common_action in service_common_remove_actions
     - service_common_service.traefik.enable | default(false) | bool
-  ansible.builtin.include_tasks: remove_integrations.yml
+  ansible.builtin.include_tasks:
+    file: remove_integrations.yml
+    apply:
+      tags: [remove]
   tags: [remove]

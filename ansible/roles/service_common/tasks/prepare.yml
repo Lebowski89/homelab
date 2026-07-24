@@ -1,7 +1,11 @@
 ---
 
 - name: Service common prepare | Include interface validation
-  ansible.builtin.include_tasks: validate.yml
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
 
 - name: Service common prepare | Require target hosts for filesystem preparation
   when: >-
@@ -17,34 +21,46 @@
   when:
     - service_common_action in service_common_prepare_actions
     - service_common_service.paths | default([]) | length > 0
-  ansible.builtin.include_tasks: paths.yml
+  ansible.builtin.include_tasks:
+    file: paths.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
   vars:
     service_common_paths: "{{ service_common_service.paths }}"
   loop: "{{ service_common_target_hosts }}"
   loop_control:
     loop_var: service_common_target_host
     label: "{{ service_common_target_host }}"
+  tags: [deploy, update, recreate, bootstrap]
 
 - name: Service common prepare | Include static copies per target
   when:
     - service_common_action in service_common_prepare_actions
     - service_common_service.copies | default([]) | length > 0
-  ansible.builtin.include_tasks: copies.yml
+  ansible.builtin.include_tasks:
+    file: copies.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
   vars:
     service_common_copies: "{{ service_common_service.copies }}"
   loop: "{{ service_common_target_hosts }}"
   loop_control:
     loop_var: service_common_target_host
     label: "{{ service_common_target_host }}"
+  tags: [deploy, update, recreate, bootstrap]
 
 - name: Service common prepare | Include application templates per target
   when:
     - service_common_action in service_common_prepare_actions
     - service_common_service.templates | default([]) | length > 0
-  ansible.builtin.include_tasks: templates.yml
+  ansible.builtin.include_tasks:
+    file: templates.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
   vars:
     service_common_templates: "{{ service_common_service.templates }}"
   loop: "{{ service_common_target_hosts }}"
   loop_control:
     loop_var: service_common_target_host
     label: "{{ service_common_target_host }}"
+  tags: [deploy, update, recreate, bootstrap]
