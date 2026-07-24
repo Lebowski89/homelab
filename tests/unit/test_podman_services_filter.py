@@ -838,13 +838,181 @@ def test_legacy_named_volumes_continue_combining_with_legacy_mounts_and_tmpfs():
     assert svc["container"]["tmpfs"] == [{"target": "/tmp", "options": ["size=1024"]}]
 
 
-def test_environment_validation_rejects_invalid_key_and_complex_value():
+def test_environment_initial_normalization_rejects_invalid_keys_and_lists_but_preserves_typed_mappings():
     bad_key = minimal_canonical_cfg()
     bad_key["environment"] = {"BAD-KEY": "value"}
     complex_value = minimal_canonical_cfg()
     complex_value["environment"] = {"STRUCTURED": ["serialize", "me"]}
+    typed_value = minimal_canonical_cfg()
+    typed_value["environment"] = {
+        "HOST": {"value_template": "app.${cloudflare_zone}"},
+        "TOKEN": {"value_from": {"infisical": "application_token"}},
+    }
 
     with pytest.raises(AnsibleFilterError, match=r"environment\.BAD-KEY"):
         podman_services.podman_service_normalize(bad_key, "portable")
     with pytest.raises(AnsibleFilterError, match=r"environment\.STRUCTURED"):
         podman_services.podman_service_normalize(complex_value, "portable")
+
+    assert podman_services.podman_service_normalize(typed_value, "portable")["env"] == typed_value["environment"]
+
+
+def canonical_secret_cfg():
+    cfg = minimal_canonical_cfg()
+    cfg["infisical"] = {
+        "fail_on_empty": True,
+        "secrets_map": [
+            {
+                "var": "portable_secret",
+                "path": "/Portable",
+                "name": "VALUE",
+                "secret": {
+                    "name": "portable_secret",
+                    "target": "/run/secrets/portable_secret",
+                    "uid": "1001",
+                    "gid": "1002",
+                    "mode": "0400",
+                    "runtime_options": {
+                        "podman": {
+                            "immutable": False,
+                            "replace": True,
+                        }
+                    },
+                },
+            },
+            {
+                "var": "template_only",
+                "path": "/Portable",
+                "name": "TEMPLATE",
+            },
+        ],
+    }
+    return cfg
+
+
+def test_canonical_secret_normalizes_for_native_podman_and_keeps_lookup_only_entry():
+    svc = podman_services.podman_service_normalize(canonical_secret_cfg(), "portable")
+
+    assert svc["infisical"]["secrets_map"] == [
+        {"var": "portable_secret", "path": "/Portable", "name": "VALUE"},
+        {"var": "template_only", "path": "/Portable", "name": "TEMPLATE"},
+    ]
+    assert svc["secrets"] == [
+        {
+            "name": "portable_secret",
+            "var": "portable_secret",
+            "target": "/run/secrets/portable_secret",
+            "uid": "1001",
+            "gid": "1002",
+            "mode": "0400",
+            "immutable": False,
+            "replace": True,
+        }
+    ]
+
+
+def test_equivalent_canonical_and_legacy_podman_secret_deduplicates():
+    cfg = canonical_secret_cfg()
+    cfg["secrets"] = [
+        {
+            "name": "portable_secret",
+            "infisical_path": "/Portable",
+            "infisical_key": "VALUE",
+            "target": "/run/secrets/portable_secret",
+            "uid": "1001",
+            "gid": "1002",
+            "mode": "0400",
+            "immutable": False,
+            "replace": True,
+        }
+    ]
+
+    svc = podman_services.podman_service_normalize(cfg, "portable")
+
+    assert len(svc["secrets"]) == 1
+
+
+def test_check_mode_metadata_does_not_conflict_with_equivalent_legacy_lookup():
+    cfg = canonical_secret_cfg()
+    cfg["infisical"]["secrets_map"][1]["check_mode_value"] = "check-mode.invalid"
+    cfg["secrets"] = [
+        {
+            "name": "template_only",
+            "infisical_path": "/Portable",
+            "infisical_key": "TEMPLATE",
+        }
+    ]
+
+    svc = podman_services.podman_service_normalize(cfg, "portable")
+
+    assert svc["infisical"]["secrets_map"][1]["check_mode_value"] == "check-mode.invalid"
+
+
+def test_conflicting_canonical_and_legacy_podman_secret_fails():
+    cfg = canonical_secret_cfg()
+    cfg["secrets"] = [
+        {
+            "name": "portable_secret",
+            "infisical_path": "/Portable",
+            "infisical_key": "DIFFERENT",
+        }
+    ]
+
+    with pytest.raises(AnsibleFilterError, match="lookup differs"):
+        podman_services.podman_service_normalize(cfg, "portable")
+
+
+def test_runtime_options_podman_owns_network_and_systemd_policy():
+    cfg = minimal_canonical_cfg()
+    cfg["runtime_options"] = {
+        "podman": {
+            "network": {
+                "name": "portable",
+                "driver": "bridge",
+                "delete_on_stop": True,
+            },
+            "systemd": {
+                "after": ["network-online.target"],
+                "restart": "on-failure",
+                "restart_sec": "15s",
+            },
+        }
+    }
+
+    svc = podman_services.podman_service_normalize(cfg, "portable")
+
+    assert svc["network"]["name"] == "portable"
+    assert svc["container"]["systemd"]["restart"] == "on-failure"
+
+
+def test_conflicting_runtime_options_and_legacy_network_fail():
+    cfg = minimal_canonical_cfg()
+    cfg["runtime_options"] = {
+        "podman": {
+            "network": {
+                "name": "canonical",
+                "delete_on_stop": True,
+            }
+        }
+    }
+    cfg["network"] = {"name": "legacy", "delete_on_stop": True}
+
+    with pytest.raises(AnsibleFilterError, match="Conflicting declarations"):
+        podman_services.podman_service_normalize(cfg, "portable")
+
+
+@pytest.mark.parametrize(
+    "runtime_options",
+    [
+        [],
+        {"podman": []},
+        {"podman": {"unsupported": True}},
+        {"containerd": {}},
+    ],
+)
+def test_runtime_options_shape_and_fields_are_strict(runtime_options):
+    cfg = minimal_canonical_cfg()
+    cfg["runtime_options"] = runtime_options
+
+    with pytest.raises(AnsibleFilterError, match="runtime_options"):
+        podman_services.podman_service_normalize(cfg, "portable")

@@ -19,6 +19,8 @@
     owner: root
     group: root
     mode: "0644"
+  vars:
+    podman_service: "{{ podman_services_service }}"
   register: podman_services_network_quadlet
   notify: Podman services | daemon reload
   tags: [deploy, update, recreate, bootstrap]
@@ -40,6 +42,8 @@
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Prep | Render protected environment file
+  no_log: true
+  diff: false
   when:
     - podman_services_service.env | length > 0
     - podman_services_state != 'remove'
@@ -49,40 +53,10 @@
     owner: root
     group: root
     mode: "0600"
+  vars:
+    podman_service: "{{ podman_services_service }}"
   register: podman_services_env_file
   notify: Podman services | daemon reload
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Prep | Build temporary common Infisical secrets map
-  when: podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    podman_services_infisical_secrets_map: >-
-      {{
-        podman_services_infisical_secrets_map
-        + [{
-            'var': item.name,
-            'path': item.infisical_path,
-            'name': item.infisical_key
-          }]
-      }}
-  loop: "{{ podman_services_service.secrets }}"
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Prep | Retrieve Infisical values through service common
-  when: podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
-  no_log: true
-  diff: false
-  ansible.builtin.include_role:
-    name: service_common
-    tasks_from: infisical
-    apply:
-      tags: [deploy, update, recreate, bootstrap]
-  vars:
-    service_common_infisical_secrets_map: "{{ podman_services_infisical_secrets_map }}"
-    service_common_infisical_lookup_params: "{{ podman_services_infisical_lookup_params | default({}) }}"
-    service_common_infisical_fail_on_empty: true
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Prep | Create/update Podman secrets
@@ -92,12 +66,14 @@
   no_log: true
   diff: false
   containers.podman.podman_secret:
-    name: "{{ item.name }}"
-    data: "{{ service_common_secret_values[item.name] }}"
+    name: "{{ podman_services_secret.name }}"
+    data: "{{ service_common_infisical_values[podman_services_secret.var] }}"
     state: present
-    force: "{{ (item | podman_secret_policy(podman_services_state)).force }}"
-    skip_existing: "{{ (item | podman_secret_policy(podman_services_state)).skip_existing }}"
+    force: "{{ (podman_services_secret | podman_secret_policy(podman_services_state)).force }}"
+    skip_existing: "{{ (podman_services_secret | podman_secret_policy(podman_services_state)).skip_existing }}"
   loop: "{{ podman_services_service.secrets }}"
+  loop_control:
+    loop_var: podman_services_secret
   register: podman_services_secret_results
   tags: [deploy, update, recreate, bootstrap]
 
@@ -114,6 +90,8 @@
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Prep | Render container Quadlet
+  no_log: true
+  diff: false
   when: podman_services_state != 'remove'
   ansible.builtin.template:
     src: container.container.j2
@@ -121,6 +99,8 @@
     owner: root
     group: root
     mode: "0644"
+  vars:
+    podman_service: "{{ podman_services_service }}"
   register: podman_services_container_quadlet
   notify: Podman services | daemon reload
   tags: [deploy, update, recreate, bootstrap]

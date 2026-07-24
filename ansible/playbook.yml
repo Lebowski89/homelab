@@ -412,7 +412,17 @@
         label: "{{ item.name }}{{ ':' ~ item.target if item.target is defined else '' }}"
       when:
         - podman_services_service_cfg_found | bool
-        - inventory_hostname == (podman_services_service_cfg.container.host | default(item.name))
+        - >-
+          inventory_hostname
+          ==
+          (
+            (podman_services_service_cfg.deploy | default({})).host
+            | default(
+                (podman_services_service_cfg.container | default({})).host
+                | default(item.name, true),
+                true
+              )
+          )
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Drift | Report image drift summary
@@ -447,6 +457,7 @@
       tags: [drift]
 
     - name: Deploy all Docker stacks
+      no_log: true
       when:
         - inventory_hostname == docker_services_primary_manager
         - docker_services_selected | default([]) | length > 0
@@ -455,4 +466,6 @@
         file: "{{ playbook_dir }}/roles/docker_services/tasks/sub_tasks/deploy/all.yml"
         apply:
           tags: [deploy, update, recreate]
+          no_log: true
+          diff: false
       tags: [deploy, update, recreate]

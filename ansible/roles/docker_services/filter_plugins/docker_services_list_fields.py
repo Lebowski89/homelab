@@ -7,6 +7,7 @@ from typing import Any
 from ansible.errors import AnsibleFilterError
 
 _VALID_ACTIONS = {"append", "replace", "append_unique"}
+_VALID_STACK_DEPLOY_TYPES = {"swarm", "container"}
 
 
 def _is_mapping(value: Any) -> bool:
@@ -24,6 +25,37 @@ def _normalize_action(value: Any) -> str:
         raise AnsibleFilterError(f"list field action must be one of {sorted(_VALID_ACTIONS)}, got {action!r}.")
 
     return action
+
+
+def _as_bool(value: Any, *, name: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        if value in {0, 1}:
+            return bool(value)
+        raise AnsibleFilterError(f"{name} must be boolean-like true/false or integer 0/1, got {value!r}")
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized in {"true", "yes", "on", "1"}:
+            return True
+        if normalized in {"false", "no", "off", "0"}:
+            return False
+    raise AnsibleFilterError(f"{name} must be boolean-like true/false or integer 0/1, got {value!r}")
+
+
+def docker_services_no_new_privileges_security_opts(
+    value: Any,
+    stack_deploy_type: Any = "swarm",
+) -> list[str]:
+    deploy_type = _as_str(stack_deploy_type or "swarm")
+    if deploy_type not in _VALID_STACK_DEPLOY_TYPES:
+        raise AnsibleFilterError(f"stack_deploy_type must be one of {sorted(_VALID_STACK_DEPLOY_TYPES)}, got {deploy_type!r}.")
+
+    enabled = _as_bool(value, name="no_new_privileges")
+    if enabled and deploy_type == "swarm":
+        raise AnsibleFilterError("no_new_privileges: true is only supported for Docker container deploys, not Swarm.")
+
+    return ["no-new-privileges:true"] if enabled else []
 
 
 def docker_services_string_list(value: Any = None) -> list[str]:
@@ -146,5 +178,6 @@ class FilterModule:
         return {
             "docker_services_string_list": docker_services_string_list,
             "docker_services_merge_string_list": docker_services_merge_string_list,
+            "docker_services_no_new_privileges_security_opts": docker_services_no_new_privileges_security_opts,
             "docker_services_set_service_field": docker_services_set_service_field,
         }

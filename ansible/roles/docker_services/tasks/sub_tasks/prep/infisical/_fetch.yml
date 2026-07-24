@@ -2,17 +2,21 @@
 
 - name: Prep - Infisical Fetch | Retrieve values through service common
   no_log: true
-  diff: false
   ansible.builtin.include_role:
     name: service_common
     tasks_from: infisical
     apply:
-      tags: [deploy, update, recreate, drift]
+      tags: [deploy, update, recreate, bootstrap, drift]
+      no_log: true
+      diff: false
   vars:
+    service_common_environment: >-
+      {{ infisical_environment | default((docker_services_svc | default({})).environment | default({})) }}
     service_common_infisical_secrets_map: "{{ secrets_map | default([]) }}"
     service_common_infisical_lookup_params: "{{ infisical_lookup_default_params | default({}) }}"
     service_common_infisical_fail_on_empty: "{{ infisical_fail_on_empty | default(true) }}"
-  tags: [deploy, update, recreate, drift]
+    service_common_legacy_docker_secrets: "{{ (docker_services_svc | default({})).secrets | default([]) }}"
+  tags: [deploy, update, recreate, bootstrap, drift]
 
 - name: Prep - Infisical Fetch | Recreate flattened compatibility facts
   when:
@@ -21,12 +25,12 @@
   no_log: true
   diff: false
   ansible.builtin.set_fact:
-    "{{ infisical_secret_item.var }}": "{{ service_common_secret_values[infisical_secret_item.var] }}"
+    "{{ infisical_secret_item.var }}": "{{ service_common_infisical_values[infisical_secret_item.var] }}"
   loop: "{{ service_common_infisical_config.secrets_map }}"
   loop_control:
     loop_var: infisical_secret_item
     label: "{{ infisical_secret_item.var }}"
-  tags: [deploy, update, recreate, drift]
+  tags: [deploy, update, recreate, bootstrap, drift]
 
 - name: Prep - Infisical Fetch | Recreate dictionary compatibility fact
   when:
@@ -35,5 +39,5 @@
   no_log: true
   diff: false
   ansible.builtin.set_fact:
-    "{{ infisical_out_var | default('infisical_secrets') }}": "{{ service_common_secret_values }}"
-  tags: [deploy, update, recreate, drift]
+    "{{ infisical_out_var | default('infisical_secrets') }}": "{{ service_common_infisical_values }}"
+  tags: [deploy, update, recreate, bootstrap, drift]

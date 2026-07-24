@@ -3,6 +3,8 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_PATH = REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_ports.py"
 
@@ -336,3 +338,55 @@ def test_invalid_action_fails():
         assert "ports_action must be one of" in str(exc)
     else:
         raise AssertionError("Expected invalid action to fail")
+
+
+def test_container_preserves_valid_ipv4_host_ip():
+    plugin = load_plugin()
+
+    result = plugin.docker_services_canonical_ports(
+        ports=[{"host_ip": "192.0.2.98", "published": 5678, "target": 5678}],
+        stack_deploy_type="container",
+    )
+
+    assert result == [
+        {
+            "target": 5678,
+            "published": 5678,
+            "protocol": "tcp",
+            "host_ip": "192.0.2.98",
+        }
+    ]
+
+
+@pytest.mark.parametrize("host_ip", ["", "not-an-ip", "2001:db8::1"])
+def test_container_rejects_invalid_or_non_ipv4_host_ip(host_ip):
+    plugin = load_plugin()
+
+    with pytest.raises(Exception, match="host_ip must"):
+        plugin.docker_services_canonical_ports(
+            ports=[{"host_ip": host_ip, "published": 5678, "target": 5678}],
+            stack_deploy_type="container",
+        )
+
+
+def test_swarm_rejects_host_ip_clearly():
+    plugin = load_plugin()
+
+    with pytest.raises(Exception, match="only supported for Docker container deploys, not Swarm"):
+        plugin.docker_services_canonical_ports(
+            ports=[{"host_ip": "192.0.2.98", "published": 5678, "target": 5678}],
+            stack_deploy_type="swarm",
+        )
+
+
+def test_append_unique_distinguishes_container_ports_by_host_ip():
+    plugin = load_plugin()
+
+    result = plugin.docker_services_merge_ports(
+        [{"host_ip": "192.0.2.98", "published": 5678, "target": 5678}],
+        ports=[{"host_ip": "192.0.2.99", "published": 5678, "target": 5678}],
+        action="append_unique",
+        stack_deploy_type="container",
+    )
+
+    assert [port["host_ip"] for port in result] == ["192.0.2.98", "192.0.2.99"]

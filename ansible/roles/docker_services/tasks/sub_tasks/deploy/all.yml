@@ -14,8 +14,14 @@
   run_once: true
 
 - name: Deploy - All | Deploy each stack
+  no_log: true
   when: (docker_services_compose_stacks_effective | length) > 0
-  ansible.builtin.include_tasks: one.yml
+  ansible.builtin.include_tasks:
+    file: one.yml
+    apply:
+      tags: [deploy, update, recreate]
+      no_log: true
+      diff: false
   loop: "{{ docker_services_compose_stacks_effective | dict2items }}"
   loop_control:
     loop_var: _stack_item
@@ -35,3 +41,4 @@
     stack_networks: "{{ _stack_def.networks | default({}, true) }}"
     stack_volumes: "{{ _stack_def.volumes | default({}, true) }}"
   run_once: true
+  tags: [deploy, update, recreate]

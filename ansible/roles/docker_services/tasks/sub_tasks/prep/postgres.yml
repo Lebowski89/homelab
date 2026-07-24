@@ -28,6 +28,7 @@
       vars:
         infisical_fail_on_empty: true
         infisical_flatten: true
+        infisical_environment: {}
         secrets_map:
           - var: postgres_host
             path: "{{ postgres_infisical_path | default('/Postgres') }}"

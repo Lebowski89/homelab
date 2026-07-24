@@ -21,23 +21,64 @@ Rootful system Quadlets were chosen first because they are stable for boot-time 
 
 Generated `.container` files include `[Install] WantedBy=multi-user.target`; the role does not call `systemctl enable` for generated Quadlet services.
 
-For this initial version, any `network` mapping supplied to `podman_services` is treated as a role-managed dedicated network and must set `network.delete_on_stop: true`; validation rejects shared/external network mappings before rendering a Quadlet. `NetworkDeleteOnStop=true` is rendered only from that explicit setting and is appropriate for dedicated per-service networks such as n8n's network. Shared/external networks are not yet managed by this role, and the role must not stop, modify, or remove them. Future schema should add an explicit ownership field such as `ownership: dedicated`/`managed: true` versus `ownership: shared`/`external: true`, allowing services to reference an existing Podman network without owning its lifecycle.
+For this initial version, any dedicated network mapping supplied to `podman_services` is role-managed and must set `delete_on_stop: true`. Canonical services place it under `runtime_options.podman.network`; the legacy top-level `network` form remains accepted. Validation rejects shared/external network mappings before rendering a Quadlet. `NetworkDeleteOnStop=true` is rendered only from that explicit setting and is appropriate for dedicated per-service networks such as n8n's network. Shared/external networks are not yet managed by this role, and the role must not stop, modify, or remove them. A future schema can add explicit dedicated/shared ownership.
+
 
 Published ports accept an optional `host_ip` per port. When set, the generated `PublishPort=` entry binds only that address. When omitted, Podman binds the published port on every host interface; this can expose the service on management, LAN, Tailscale, or other reachable networks and can bypass the intended reverse proxy and its middleware. Prefer an explicit trusted bind address and enforce host/network firewall policy whenever direct access is not intended.
 
 ## Secrets and PostgreSQL
 
-Secret values are fetched with the repository-standard `infisical.vault.read_secrets` lookup parameters and the Infisical endpoint on the primary manager. Secrets are stored as native Podman secrets and mounted at `/run/secrets/<name>` with service-declared UID, GID, and mode; secret tasks are `no_log` and `diff: false`. Native Podman secrets keep values out of repository files and generated unit arguments, but the default file-backed secret driver is not encrypted storage and root on the host can access it.
+Canonical materialized secrets are nested in an Infisical map entry:
 
-The service schema distinguishes immutable secrets, such as the n8n encryption key, from replaceable secrets, such as the PostgreSQL password. Mutable secrets are replaced only during `update` and `recreate`. A normal `deploy` creates missing secrets without replacement so it cannot silently rotate a secret behind a running container.
+```yaml
+infisical:
+  fail_on_empty: true
+  secrets_map:
+    - var: app_password
+      path: /App
+      name: PASSWORD
+      secret:
+        name: app_password_secret
+        target: /run/secrets/app_password_secret
+        uid: "1000"
+        gid: "1000"
+        mode: "0400"
+        runtime_options:
+          podman:
+            immutable: false
+            replace: true
+    - var: lookup_only
+      path: /App
+      name: TEMPLATE_VALUE
+```
 
-`postgres.enable` and `postgres.databases` are declarations only for Podman services. The role deliberately does not create databases, modify PostgreSQL, run Docker database-management tasks, or invoke playbooks automatically. The existing Docker database-preparation task is still coupled to `docker_services` and only consumes Docker-selected service definitions, so `skynet deploy n8n`, `skynet install n8n`, and `podman_services` do not create the `n8n` database. A future refactor should extract the mature Docker PostgreSQL preparation into a small runtime-neutral explicit database/bootstrap action. Until then, create `n8n` before deployment with the existing shared PostgreSQL credentials, for example from an approved admin shell: `PGPASSWORD="$POSTGRES_PASS" createdb --host="$POSTGRES_HOST" --port="$POSTGRES_PORT" --username="$POSTGRES_USER" --owner="$POSTGRES_USER" n8n`.
+`service_common` validates the lookup and value-free declaration metadata, resets all outputs per service, and retrieves lookup-only and secret-backed values into `service_common_infisical_values`, keyed by `var`. Entries without `secret` remain lookup-only. It also resolves the canonical environment before Podman renders its protected environment file or Quadlets. Check mode validates declarations and references without contacting Infisical or creating a native secret, using an optional declaration-owned `check_mode_value` when present and deterministic redacted stand-ins otherwise.
+
+`podman_services` remains responsible for `containers.podman.podman_secret` and Quadlet attachment. It reads the value through the declaration's `var`, creates the declared native Podman secret name, and preserves target, UID, GID, and mode in `Secret=`. Value-carrying tasks use `no_log: true` and `diff: false`; values never enter generated Quadlets. Native Podman secrets keep values out of repository files and generated unit arguments, but the default file-backed secret driver is not encrypted storage and root on the host can access it.
+
+Podman replacement policy is declared under `secret.runtime_options.podman`. `immutable` and `replace` are strict booleans and cannot both be true. Replaceable secrets are forced only during `update` and `recreate`; normal deploy/bootstrap creates missing secrets without rotating existing ones. Existing top-level Podman entries with `infisical_path`, `infisical_key`, mount metadata, `immutable`, and `replace` remain compatible. Equivalent canonical/legacy declarations deduplicate, while conflicts fail.
+
+Docker `secrets_map[].docker_secret` and top-level Docker secret attachments are also retained by the common compatibility normalizer, but Podman never creates Docker resources. Conversely, Docker ignores Podman rotation policy.
+
+`postgres.enable` and `postgres.databases` are declarations only for Podman services. The role deliberately does not create databases, modify PostgreSQL, run Docker database-management tasks, or invoke playbooks automatically. The existing Docker database-preparation task remains an explicit operator workflow. The n8n database must therefore exist before the first deployment.
+
+## Canonical environment values
+
+Portable services may use ordinary scalar environment values, direct `value_from.infisical` references, or `value_template` strings containing one or more `${identifier}` references. Every reference must match a `var` declared by that service. Substitution is deliberately single-pass and does not evaluate Jinja or shell expressions; `$$` represents a literal dollar sign. `service_common` produces the final scalar mapping consumed by the Podman adapter.
+
+Docker temporarily retains its exact `__INFISICAL__:var` whole-value placeholder for unchanged services and keeps existing `env_file` behaviour. That legacy syntax is not canonical and is not supported by Podman. Runtime-native secrets remain separate: only an Infisical entry with `secret` metadata creates and attaches a Podman secret.
 
 ## n8n
 
-n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.04; this role intentionally rejects the current Ubuntu 24.04 VM. n8n is not in Docker Swarm. It uses the pinned official image `docker.io/n8nio/n8n:2.31.4`, stores local application data in `/opt/n8n`, uses PostgreSQL database `n8n` through the shared HAProxy endpoint IP from the primary manager inventory, and is routed privately at `https://n8n.<internal-zone>:8443/`.
+n8n is the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, canonical ports/volumes/paths, `deploy`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter; only the dedicated network and systemd lifecycle remain under `runtime_options.podman`.
 
-The direct backend binds port `5678` to the VM management/LAN address via `host_ip: "{{ local_ip }}"`. That direct port remains reachable by systems on that network and bypasses Traefik TLS and middleware; binding to the LAN address is not firewall isolation.
+n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.04. The selected host must already have the runtime required by the declaration: changing `runtime` to Docker is schema-valid for the tested portable subset but does not install Docker or establish live parity. The proof covers the trusted-address `host_ip` bind in both generated Docker standalone Compose and Podman Quadlet output. Static tests do not replace a live migration test.
+
+
+The service uses pinned image `docker.io/n8nio/n8n:2.31.4`, UID/GID 1000:1000, application data in `/opt/n8n`, PostgreSQL database `n8n` through the shared HAProxy endpoint, and private routing at `https://n8n.int.<cloudflare-zone>:8443/`. The direct backend binds port 5678 to the VM management/LAN address; that direct port remains reachable on that network and bypasses Traefik TLS and middleware.
+
+Its three canonical secrets preserve existing policy: the PostgreSQL username and n8n encryption key are immutable, while the PostgreSQL password is replaceable during update/recreate. Database creation is not part of n8n deployment.
+
 
 Required private values before deployment:
 

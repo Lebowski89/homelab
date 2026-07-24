@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/24 |
+| Readme update        | 2026/07/25 |
 
 
 
@@ -85,35 +85,36 @@
 
 #### File: tasks/_compose.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Compose - Init ¦ Ensure docker_services_compose_stacks exists | ansible.builtin.set_fact | False |
-| Compose - Init ¦ Load this stack's current docker_services_compose_services | ansible.builtin.set_fact | True |
-| Compose - Base ¦ Register networks needed by this stack | ansible.builtin.include_tasks | True |
-| Compose - Base ¦ Normalize network_mode for container deploys | ansible.builtin.set_fact | True |
-| Compose - Base ¦ Normalize network_mode for container deploys | ansible.builtin.set_fact | True |
-| Compose - Base ¦ Build service networks list | ansible.builtin.set_fact | True |
-| Compose - Base ¦ Register external volumes needed by this stack | ansible.builtin.include_tasks | True |
-| Compose - Base ¦ Set base service variables | ansible.builtin.include_tasks | True |
-| Compose - Runtime ¦ Set security_opt | ansible.builtin.include_tasks | True |
-| Compose - Runtime ¦ Set sysctls | ansible.builtin.include_tasks | True |
-| Compose - Runtime ¦ Set depends_on | ansible.builtin.include_tasks | True |
-| Compose - Runtime ¦ Add Linux capabilities (cap_add) | ansible.builtin.include_tasks | True |
-| Compose - Runtime ¦ Drop Linux capabilities (cap_drop) | ansible.builtin.include_tasks | True |
-| Compose - Runtime ¦ Add devices | ansible.builtin.include_tasks | True |
-| Compose - Runtime ¦ Set command variable | ansible.builtin.include_tasks | True |
-| Compose - Runtime ¦ Set healthcheck variable | ansible.builtin.include_tasks | True |
-| Compose - Runtime ¦ Set user variable | ansible.builtin.include_tasks | True |
-| Compose - IO ¦ Set environment variables | ansible.builtin.include_tasks | True |
-| Compose - IO ¦ Attach env_file to service | ansible.builtin.include_tasks | True |
-| Compose - IO ¦ Set secrets variable | ansible.builtin.include_tasks | True |
-| Compose - IO ¦ Set Swarm configs variable | ansible.builtin.include_tasks | True |
-| Compose - IO ¦ Set ports variable | ansible.builtin.include_tasks | True |
-| Compose - IO ¦ Set tmpfs variable | ansible.builtin.include_tasks | True |
-| Compose - IO ¦ Set volumes variable | ansible.builtin.include_tasks | True |
-| Compose - IO ¦ Add /dev/shm tmpfs | ansible.builtin.include_tasks | True |
-| Compose - IO ¦ Set SHM size | ansible.builtin.include_tasks | True |
-| Compose - Metadata ¦ Attach service labels | ansible.builtin.include_tasks | True |
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Compose - Init ¦ Ensure docker_services_compose_stacks exists | ansible.builtin.set_fact | False |  |
+| Compose - Init ¦ Load this stack's current docker_services_compose_services | ansible.builtin.set_fact | True |  |
+| Compose - Base ¦ Register networks needed by this stack | ansible.builtin.include_tasks | True |  |
+| Compose - Base ¦ Normalize network_mode for container deploys | ansible.builtin.set_fact | True |  |
+| Compose - Base ¦ Normalize network_mode for container deploys | ansible.builtin.set_fact | True |  |
+| Compose - Base ¦ Build service networks list | ansible.builtin.set_fact | True |  |
+| Compose - Base ¦ Register external volumes needed by this stack | ansible.builtin.include_tasks | True |  |
+| Compose - Base ¦ Set base service variables | ansible.builtin.include_tasks | True |  |
+| Compose - Runtime ¦ Set security_opt | ansible.builtin.include_tasks | True |  |
+| Compose - Runtime ¦ Add canonical no-new-privileges security option | ansible.builtin.include_tasks | True |  |
+| Compose - Runtime ¦ Set sysctls | ansible.builtin.include_tasks | True |  |
+| Compose - Runtime ¦ Set depends_on | ansible.builtin.include_tasks | True |  |
+| Compose - Runtime ¦ Add Linux capabilities (cap_add) | ansible.builtin.include_tasks | True |  |
+| Compose - Runtime ¦ Drop Linux capabilities (cap_drop) | ansible.builtin.include_tasks | True |  |
+| Compose - Runtime ¦ Add devices | ansible.builtin.include_tasks | True |  |
+| Compose - Runtime ¦ Set command variable | ansible.builtin.include_tasks | True |  |
+| Compose - Runtime ¦ Set healthcheck variable | ansible.builtin.include_tasks | True |  |
+| Compose - Runtime ¦ Set user variable | ansible.builtin.include_tasks | True |  |
+| Compose - IO ¦ Set environment variables | ansible.builtin.include_tasks | True |  |
+| Compose - IO ¦ Attach env_file to service | ansible.builtin.include_tasks | True |  |
+| Compose - IO ¦ Set secrets variable | ansible.builtin.include_tasks | True |  |
+| Compose - IO ¦ Set Swarm configs variable | ansible.builtin.include_tasks | True |  |
+| Compose - IO ¦ Set ports variable | ansible.builtin.include_tasks | True |  |
+| Compose - IO ¦ Set tmpfs variable | ansible.builtin.include_tasks | True |  |
+| Compose - IO ¦ Set volumes variable | ansible.builtin.include_tasks | True |  |
+| Compose - IO ¦ Add /dev/shm tmpfs | ansible.builtin.include_tasks | True |  |
+| Compose - IO ¦ Set SHM size | ansible.builtin.include_tasks | True |  |
+| Compose - Metadata ¦ Attach service labels | ansible.builtin.include_tasks | True |  |
 
 #### File: tasks/_deploy.yml
 
@@ -251,7 +252,7 @@
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Compose - Secrets ¦ Ensure docker_services_service_name is set | ansible.builtin.assert | False |
-| Compose - Secrets ¦ Ensure secrets is a list | ansible.builtin.set_fact | False |
+| Compose - Secrets ¦ Normalize legacy and canonical attachments | ansible.builtin.set_fact | False |
 | Compose - Secrets ¦ Attach secrets list to service | ansible.builtin.set_fact | True |
 | Compose - Secrets ¦ Convert secrets to bind-mount volumes | ansible.builtin.set_fact | True |
 | Compose - Secrets ¦ Attach secret mounts to service volumes | ansible.builtin.set_fact | True |
@@ -314,10 +315,10 @@
 
 #### File: tasks/sub_tasks/deploy/all.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Deploy - All ¦ Ensure docker_services_compose_stacks exists | ansible.builtin.set_fact | False |
-| Deploy - All ¦ Deploy each stack | ansible.builtin.include_tasks | True |
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Deploy - All ¦ Ensure docker_services_compose_stacks exists | ansible.builtin.set_fact | False |  |
+| Deploy - All ¦ Deploy each stack | ansible.builtin.include_tasks | True |  |
 
 #### File: tasks/sub_tasks/deploy/config.yml
 
@@ -385,6 +386,7 @@
 | Init - Validate ¦ docker_services_svc.devices shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.cap_add shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.cap_drop shape | ansible.builtin.assert | True |
+| Init - Validate ¦ docker_services_svc.no_new_privileges | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.sysctls shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.deploy shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.deploy.type | ansible.builtin.assert | True |
@@ -523,11 +525,10 @@
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Prep - Infisical Secrets ¦ Reset working list | ansible.builtin.set_fact | False |
 | Prep - Infisical Secrets ¦ Resolve deploy host | ansible.builtin.set_fact | False |
 | Prep - Infisical Secrets ¦ Resolve effective secrets host | ansible.builtin.set_fact | False |
-| Prep - Infisical Secrets ¦ Build desired secret items from secrets_map | ansible.builtin.set_fact | False |
-| Prep - Infisical Secrets ¦ Dedupe by name (keep first), keep empties for visibility | ansible.builtin.set_fact | False |
+| Prep - Infisical Secrets ¦ Build desired secret items from common declarations | ansible.builtin.set_fact | False |
+| Prep - Infisical Secrets ¦ Validate runtime attachment metadata before materialization | ansible.builtin.set_fact | False |
 | Prep - Infisical Secrets ¦ Reject empty secret values before materialization | ansible.builtin.assert | False |
 | Prep - Infisical Secrets ¦ Create Docker Swarm secrets | community.docker.docker_secret | True |
 | Prep - Infisical Secrets ¦ Ensure secrets directory exists on deploy host | ansible.builtin.file | True |
@@ -541,6 +542,8 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Prep - Infisical Fetch ¦ Include tasks | ansible.builtin.include_tasks | True |  |
+| Prep - Infisical Fetch ¦ Snapshot value-free service secret declarations | ansible.builtin.set_fact | True |  |
+| Prep - Infisical Fetch ¦ Attach common resolved environment on every role host | ansible.builtin.set_fact | False |  |
 | Prep - Infisical Resolver ¦ Include tasks on deploy host | ansible.builtin.include_tasks | True |  |
 | Prep - Infisical Resolver ¦ Propagate Infisical flattened vars to deploy host | ansible.builtin.set_fact | True |  |
 | Prep - Infisical Resolver ¦ Propagate Infisical dict to deploy host | ansible.builtin.set_fact | True |  |
