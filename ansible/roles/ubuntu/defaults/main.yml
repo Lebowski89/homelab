@@ -133,6 +133,11 @@ ubuntu_pam_limits:
     limit_item: memlock
     value: unlimited
 
+ubuntu_netplan_enabled: true
+ubuntu_netplan_disable_cloud_init_networking: true
+ubuntu_netplan_verify_address: true
+ubuntu_netplan_interface: ""
+
 ubuntu_defaults_netplan_config: netplan-config.yaml
 ubuntu_netplan_config_path: "/etc/netplan/{{ ubuntu_defaults_netplan_config }}"
 

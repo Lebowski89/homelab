@@ -1,6 +1,23 @@
 locals {
-  netbox_dns_ips       = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.dns_ips, {}) : {}
-  netbox_internal_zone = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
+  netbox_dns_ips           = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.dns_ips, {}) : {}
+  netbox_internal_zone     = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
+  netbox_host_primary_ipv4 = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.host_primary_ipv4, {}) : {}
+  netbox_host_primary_cidrs = var.enable_netbox_remote_state ? try(
+    data.terraform_remote_state.netbox[0].outputs.host_primary_cidrs,
+    {},
+  ) : {}
+
+  vm_name = trimspace(var.vm_name)
+
+  explicit_vm_ipv4_address = trimspace(var.vm_ipv4_address)
+  vm_ipv4_address = local.explicit_vm_ipv4_address != "" ? local.explicit_vm_ipv4_address : trimspace(
+    lookup(local.netbox_host_primary_cidrs, local.vm_name, "")
+  )
+
+  explicit_vm_ipv4_gateway = trimspace(var.vm_ipv4_gateway)
+  vm_ipv4_gateway = local.explicit_vm_ipv4_gateway != "" ? local.explicit_vm_ipv4_gateway : trimspace(
+    lookup(local.netbox_host_primary_ipv4, var.vm_gateway_host, "")
+  )
 
   dns_ips = merge(
     var.dns_ips,

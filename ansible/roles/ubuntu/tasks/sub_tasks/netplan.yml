@@ -1,13 +1,36 @@
 ---
 
-- name: Assert local_ip is defined for netplan
+- name: Assert Netplan inputs are valid
   ansible.builtin.assert:
     that:
       - local_ip is defined
-      - local_ip | length > 0
-    fail_msg: "local_ip must be defined in host_vars for static netplan configuration."
+      - local_ip | trim | length > 0
+      - ubuntu_netplan_prefix | int >= 1
+      - ubuntu_netplan_prefix | int <= 32
+      - >-
+        (
+          ubuntu_netplan_interface | default('') | trim | length > 0
+        )
+        or
+        (
+          ansible_facts.get('default_ipv4', {}).get('interface', '') | length > 0
+        )
+    fail_msg: >-
+      Netplan requires local_ip, a prefix between 1 and 32, and either
+      ubuntu_netplan_interface or a discovered default IPv4 interface.
 
-- name: Find existing netplan configs
+- name: Disable cloud-init network configuration
+  when: ubuntu_netplan_disable_cloud_init_networking | bool
+  ansible.builtin.copy:
+    dest: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      network:
+        config: disabled
+
+- name: Find existing Netplan configs
   ansible.builtin.find:
     paths: /etc/netplan
     patterns:
@@ -16,7 +39,7 @@
     file_type: file
   register: ubuntu_netplan_configs
 
-- name: Remove unmanaged netplan configs
+- name: Remove unmanaged Netplan configs
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: absent
@@ -26,7 +49,7 @@
     - Generate netplan
     - Apply netplan
 
-- name: Render netplan config
+- name: Render Netplan config
   ansible.builtin.template:
     src: netplan-config.yaml.j2
     dest: "{{ ubuntu_netplan_config_path }}"
@@ -36,3 +59,22 @@
   notify:
     - Generate netplan
     - Apply netplan
+
+- name: Apply pending Netplan changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Refresh network facts after Netplan apply
+  when: ubuntu_netplan_verify_address | bool
+  ansible.builtin.setup:
+    gather_subset:
+      - network
+
+- name: Verify expected static IPv4 address is assigned
+  when: ubuntu_netplan_verify_address | bool
+  ansible.builtin.assert:
+    that:
+      - local_ip in (ansible_facts.all_ipv4_addresses | default([]))
+    fail_msg: >-
+      Expected static address {{ local_ip }} is not assigned after applying
+      Netplan. Assigned addresses:
+      {{ ansible_facts.all_ipv4_addresses | default([]) | join(', ') }}

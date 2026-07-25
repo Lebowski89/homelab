@@ -143,13 +143,21 @@ variable "vm_disk_size_gb" {
 }
 
 variable "vm_ipv4_address" {
-  description = "Static n8n VM IPv4 address in CIDR notation."
+  description = "Fallback static VM IPv4 CIDR when NetBox does not supply the n8n host address."
   type        = string
+  default     = ""
 }
 
 variable "vm_ipv4_gateway" {
-  description = "IPv4 default gateway for the n8n VM."
+  description = "Fallback IPv4 gateway when NetBox does not supply the configured gateway host."
   type        = string
+  default     = ""
+}
+
+variable "vm_gateway_host" {
+  description = "NetBox host whose primary IPv4 address is the VM default gateway."
+  type        = string
+  default     = "router"
 }
 
 variable "vm_network_bridge" {

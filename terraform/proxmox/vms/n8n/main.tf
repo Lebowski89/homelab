@@ -19,8 +19,8 @@ module "n8n_vm" {
   ballooning_memory_mb               = var.vm_ballooning_memory_mb
   datastore_id                       = var.vm_storage
   disk_size_gb                       = var.vm_disk_size_gb
-  ipv4_address                       = var.vm_ipv4_address
-  ipv4_gateway                       = var.vm_ipv4_gateway
+  ipv4_address                       = local.vm_ipv4_address
+  ipv4_gateway                       = local.vm_ipv4_gateway
   dns_servers                        = local.vm_nameservers
   dns_domain                         = local.vm_search_domain
   cloud_init_user                    = var.cloud_init_user

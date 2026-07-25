@@ -2,8 +2,8 @@
 
 - name: Configure network-related settings
   when:
-    - ansible_default_ipv4 is defined
-    - ansible_default_ipv4.type == "ether"
+    - ansible_facts.default_ipv4 is defined
+    - ansible_facts.default_ipv4.type == "ether"
   block:
     - name: Check vnstat config
       ansible.builtin.stat:
@@ -14,7 +14,7 @@
       ansible.builtin.lineinfile:
         path: /etc/vnstat.conf
         regexp: '^(Interface)\s+.*$'
-        line: '\1 "{{ ansible_default_ipv4.interface }}"'
+        line: '\1 "{{ ansible_facts.default_ipv4.interface }}"'
         backrefs: true
       when:
         - ubuntu_vnstat_enabled | bool

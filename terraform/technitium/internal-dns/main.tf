@@ -52,6 +52,7 @@ locals {
     "infisical",
     "lidarr",
     "netbox",
+    "n8n",
     "notifiarr",
     "nzbhydra2",
     "obsidian",
