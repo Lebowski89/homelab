@@ -37,9 +37,10 @@
 | <a name="input_vm_cpu_type"></a> [vm\_cpu\_type](#input\_vm\_cpu\_type) | Proxmox CPU type exposed to the n8n VM. | `string` | `"host"` | no |
 | <a name="input_vm_description"></a> [vm\_description](#input\_vm\_description) | Proxmox VM description. | `string` | `"Isolated n8n automation VM managed by OpenTofu"` | no |
 | <a name="input_vm_disk_size_gb"></a> [vm\_disk\_size\_gb](#input\_vm\_disk\_size\_gb) | n8n VM system disk size in GiB. | `number` | `24` | no |
+| <a name="input_vm_gateway_host"></a> [vm\_gateway\_host](#input\_vm\_gateway\_host) | NetBox host whose primary IPv4 address is the VM default gateway. | `string` | `"router"` | no |
 | <a name="input_vm_id"></a> [vm\_id](#input\_vm\_id) | VMID assigned to the n8n VM. | `number` | n/a | yes |
-| <a name="input_vm_ipv4_address"></a> [vm\_ipv4\_address](#input\_vm\_ipv4\_address) | Static n8n VM IPv4 address in CIDR notation. | `string` | n/a | yes |
-| <a name="input_vm_ipv4_gateway"></a> [vm\_ipv4\_gateway](#input\_vm\_ipv4\_gateway) | IPv4 default gateway for the n8n VM. | `string` | n/a | yes |
+| <a name="input_vm_ipv4_address"></a> [vm\_ipv4\_address](#input\_vm\_ipv4\_address) | Fallback static VM IPv4 CIDR when NetBox does not supply the n8n host address. | `string` | `""` | no |
+| <a name="input_vm_ipv4_gateway"></a> [vm\_ipv4\_gateway](#input\_vm\_ipv4\_gateway) | Fallback IPv4 gateway when NetBox does not supply the configured gateway host. | `string` | `""` | no |
 | <a name="input_vm_memory_mb"></a> [vm\_memory\_mb](#input\_vm\_memory\_mb) | Dedicated memory for the n8n VM in MiB. | `number` | `2048` | no |
 | <a name="input_vm_name"></a> [vm\_name](#input\_vm\_name) | Proxmox VM name. | `string` | `"n8n"` | no |
 | <a name="input_vm_nameservers"></a> [vm\_nameservers](#input\_vm\_nameservers) | Fallback DNS servers used when NetBox remote state is disabled. | `list(string)` | `[]` | no |
