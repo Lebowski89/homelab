@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/15 |
+| Readme update        | 2026/07/25 |
 
 
 
@@ -147,15 +147,19 @@
 | [ubuntu_pam_limits.2.**limit_type**](defaults/main.yml#L132)   | str | `hard` |    
 | [ubuntu_pam_limits.2.**limit_item**](defaults/main.yml#L133)   | str | `memlock` |    
 | [ubuntu_pam_limits.2.**value**](defaults/main.yml#L134)   | str | `unlimited` |    
-| [ubuntu_defaults_netplan_config](defaults/main.yml#L136)   | str | `netplan-config.yaml` |    
-| [ubuntu_netplan_config_path](defaults/main.yml#L137)   | str | `/etc/netplan/{{ ubuntu_defaults_netplan_config }}` |    
-| [ubuntu_defaults_netplan_gateway](defaults/main.yml#L139)   | str | `<multiline value: folded_strip>` |    
-| [ubuntu_defaults_netplan_nameservers](defaults/main.yml#L146)   | str | `<multiline value: folded_strip>` |    
-| [ubuntu_netplan_nameservers](defaults/main.yml#L156)   | str | `{{ ubuntu_defaults_netplan_nameservers }}` |    
-| [ubuntu_netplan_search_domains](defaults/main.yml#L157)   | list | `[]` |    
-| [ubuntu_netplan_prefix](defaults/main.yml#L158)   | int | `24` |    
-| [ubuntu_nic_tuning_enabled](defaults/main.yml#L160)   | bool | `True` |    
-| [ubuntu_vnstat_enabled](defaults/main.yml#L161)   | bool | `True` |    
+| [ubuntu_netplan_enabled](defaults/main.yml#L136)   | bool | `True` |    
+| [ubuntu_netplan_disable_cloud_init_networking](defaults/main.yml#L137)   | bool | `True` |    
+| [ubuntu_netplan_verify_address](defaults/main.yml#L138)   | bool | `True` |    
+| [ubuntu_netplan_interface](defaults/main.yml#L139)   | str |  |    
+| [ubuntu_defaults_netplan_config](defaults/main.yml#L141)   | str | `netplan-config.yaml` |    
+| [ubuntu_netplan_config_path](defaults/main.yml#L142)   | str | `/etc/netplan/{{ ubuntu_defaults_netplan_config }}` |    
+| [ubuntu_defaults_netplan_gateway](defaults/main.yml#L144)   | str | `<multiline value: folded_strip>` |    
+| [ubuntu_defaults_netplan_nameservers](defaults/main.yml#L151)   | str | `<multiline value: folded_strip>` |    
+| [ubuntu_netplan_nameservers](defaults/main.yml#L161)   | str | `{{ ubuntu_defaults_netplan_nameservers }}` |    
+| [ubuntu_netplan_search_domains](defaults/main.yml#L162)   | list | `[]` |    
+| [ubuntu_netplan_prefix](defaults/main.yml#L163)   | int | `24` |    
+| [ubuntu_nic_tuning_enabled](defaults/main.yml#L165)   | bool | `True` |    
+| [ubuntu_vnstat_enabled](defaults/main.yml#L166)   | bool | `True` |    
 
 
 
@@ -197,10 +201,14 @@
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Assert local_ip is defined for netplan | ansible.builtin.assert | False |
-| Find existing netplan configs | ansible.builtin.find | False |
-| Remove unmanaged netplan configs | ansible.builtin.file | True |
-| Render netplan config | ansible.builtin.template | False |
+| Assert Netplan inputs are valid | ansible.builtin.assert | False |
+| Disable cloud-init network configuration | ansible.builtin.copy | True |
+| Find existing Netplan configs | ansible.builtin.find | False |
+| Remove unmanaged Netplan configs | ansible.builtin.file | True |
+| Render Netplan config | ansible.builtin.template | False |
+| Apply pending Netplan changes | ansible.builtin.meta | False |
+| Refresh network facts after Netplan apply | ansible.builtin.setup | True |
+| Verify expected static IPv4 address is assigned | ansible.builtin.assert | True |
 
 #### File: tasks/sub_tasks/network.yml
 
