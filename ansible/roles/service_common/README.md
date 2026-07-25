@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/25 |
+| Readme update        | 2026/07/26 |
 
 
 
@@ -106,11 +106,20 @@
 | Service common paths ¦ Validate each path specification | ansible.builtin.assert | False |
 | Service common paths ¦ Apply filesystem state on target host | ansible.builtin.file | False |
 
+#### File: tasks/postgres.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Service common PostgreSQL ¦ Validate and normalize declaration | ansible.builtin.set_fact | False |  |
+| Service common PostgreSQL ¦ Report check-mode database plan | ansible.builtin.debug | True |  |
+| Service common PostgreSQL ¦ Ensure declared databases exist | community.postgresql.postgresql_db | True |  |
+
 #### File: tasks/prepare.yml
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Service common prepare ¦ Include interface validation | ansible.builtin.include_tasks | False |  |
+| Service common prepare ¦ Include PostgreSQL database preparation | ansible.builtin.include_tasks | True |  |
 | Service common prepare ¦ Require target hosts for filesystem preparation | ansible.builtin.assert | True |  |
 | Service common prepare ¦ Include path preparation per target | ansible.builtin.include_tasks | True |  |
 | Service common prepare ¦ Include static copies per target | ansible.builtin.include_tasks | True |  |

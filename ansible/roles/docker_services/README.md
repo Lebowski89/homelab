@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/25 |
+| Readme update        | 2026/07/26 |
 
 
 
@@ -157,7 +157,6 @@
 | Prep - Infisical ¦ Include tasker | ansible.builtin.include_tasks | False |  |
 | Prep - Swarm configs ¦ Include tasker | ansible.builtin.include_tasks | True |  |
 | Prep - Authelia ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
-| Prep - Postgres ¦ Create Postgres database | ansible.builtin.include_tasks | True |  |
 | Prep - qBittorrent ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
 | Prep - Traefik zone ¦ Resolve Docker compatibility input | ansible.builtin.include_tasks | True |  |
 | Prep - Service common ¦ Prepare files and Traefik integration | ansible.builtin.include_role | True |  |
@@ -416,8 +415,6 @@
 | Init - Validate ¦ docker_services_svc.infisical.secrets_map | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.infisical.secrets_map var names | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.infisical.secrets_map docker_secret names | ansible.builtin.assert | True |
-| Init - Validate ¦ docker_services_svc.postgres shape | ansible.builtin.assert | True |
-| Init - Validate ¦ docker_services_svc.postgres.databases | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.healthcheck shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.secrets shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.secrets string form | ansible.builtin.assert | True |
@@ -541,8 +538,9 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Prep - Infisical Fetch ¦ Reset per-service adapter values | ansible.builtin.set_fact | True |  |
 | Prep - Infisical Fetch ¦ Include tasks | ansible.builtin.include_tasks | True |  |
-| Prep - Infisical Fetch ¦ Snapshot value-free service secret declarations | ansible.builtin.set_fact | True |  |
+| Prep - Infisical Fetch ¦ Snapshot common per-service outputs | ansible.builtin.set_fact | True |  |
 | Prep - Infisical Fetch ¦ Attach common resolved environment on every role host | ansible.builtin.set_fact | False |  |
 | Prep - Infisical Resolver ¦ Include tasks on deploy host | ansible.builtin.include_tasks | True |  |
 | Prep - Infisical Resolver ¦ Propagate Infisical flattened vars to deploy host | ansible.builtin.set_fact | True |  |
@@ -645,19 +643,6 @@
 | Prep - Plex Token ¦ Include token tasks | ansible.builtin.include_tasks | False |
 | Prep - Plex Preferences ¦ Include Plex preferences.xml tasks | ansible.builtin.include_tasks | False |
 | Prep - Plex Claim ¦ Include claim server tasks | ansible.builtin.include_tasks | False |
-
-#### File: tasks/sub_tasks/prep/postgres.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Postgres ¦ Ensure creds exist | block | True |
-| Prep - Postgres ¦ Detect if creds are missing | ansible.builtin.set_fact | False |
-| Prep - Postgres ¦ Fetch Postgres creds from Infisical | ansible.builtin.include_tasks | True |
-| Prep - Postgres ¦ Assert creds are now present | ansible.builtin.assert | False |
-| Prep - Postgres ¦ Prepare docker secret | community.docker.docker_secret | True |
-| Prep - Postgres ¦ Normalize postgres database list | ansible.builtin.set_fact | True |
-| Prep - Postgres ¦ Ping for existing database(s) | community.postgresql.postgresql_ping | True |
-| Prep - Postgres ¦ Create database(s) if missing | community.postgresql.postgresql_db | True |
 
 #### File: tasks/sub_tasks/prep/qbittorrent.yml
 
