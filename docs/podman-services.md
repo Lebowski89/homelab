@@ -6,7 +6,7 @@ The shared service catalogue in `ansible/group_vars/all/services/*.yml` is runti
 
 1. `podman_services` intentionally renders Quadlets using Podman 5.7 syntax and is not compatible with Ubuntu 24.04 LTS (Noble), whose packaged Podman 4.9 lacks the required directives.
 2. `service_common` prepares runtime-neutral host paths and shared Traefik dynamic files from explicit adapter inputs.
-3. `podman_services` renders rootful system Quadlets in `/etc/containers/systemd` and retains native Podman secrets, image pulls, Quadlet validation, systemd lifecycle, and PostgreSQL declarations without creating databases.
+3. `podman_services` renders rootful system Quadlets in `/etc/containers/systemd` and retains native Podman secrets, image pulls, Quadlet validation, and systemd lifecycle. Shared preparation reconciles declared PostgreSQL databases before the runtime starts.
 4. The shared catalogue selects Docker and Podman services together, then splits the selected items by runtime.
 
 Rootful system Quadlets were chosen first because they are stable for boot-time services and fit the existing system-level Ansible model. Containers still run as non-root users through separate container UID/GID settings. Rootless user-systemd Quadlets can be added later by introducing a scoped Quadlet directory and user lingering management.
@@ -60,7 +60,19 @@ Podman replacement policy is declared under `secret.runtime_options.podman`. `im
 
 Docker `secrets_map[].docker_secret` and top-level Docker secret attachments are also retained by the common compatibility normalizer, but Podman never creates Docker resources. Conversely, Docker ignores Podman rotation policy.
 
-`postgres.enable` and `postgres.databases` are declarations only for Podman services. The role deliberately does not create databases, modify PostgreSQL, run Docker database-management tasks, or invoke playbooks automatically. The existing Docker database-preparation task remains an explicit operator workflow. The n8n database must therefore exist before the first deployment.
+The canonical PostgreSQL declaration is shared by Docker and Podman:
+
+```yaml
+postgres:
+  enable: true
+  databases: [n8n]
+  port: 5432
+  user_var: postgres_user
+  password_var: postgres_pass
+  # Optional: host or host_inventory, but never both.
+```
+
+When neither address field is supplied, `host_inventory` defaults to `service_common_controller_host` and resolves that inventory host `local_ip`. An explicit `host` skips inventory lookup. After common Infisical resolution, live deploy/update/recreate/bootstrap operations delegate idempotent `postgresql_db state=present` reconciliation to the controller before Quadlet rendering and lifecycle. Check mode validates the schema, references, inventory, and resolved address without authenticating or connecting, then prints a non-sensitive plan.
 
 ## Canonical environment values
 
@@ -77,7 +89,7 @@ n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.
 
 The service uses pinned image `docker.io/n8nio/n8n:2.31.4`, UID/GID 1000:1000, application data in `/opt/n8n`, PostgreSQL database `n8n` through the shared HAProxy endpoint, and private routing at `https://n8n.int.<cloudflare-zone>:8443/`. The direct backend binds port 5678 to the VM management/LAN address; that direct port remains reachable on that network and bypasses Traefik TLS and middleware.
 
-Its three canonical secrets preserve existing policy: the PostgreSQL username and n8n encryption key are immutable, while the PostgreSQL password is replaceable during update/recreate. Database creation is not part of n8n deployment.
+Its three canonical secrets preserve existing policy: the PostgreSQL username and n8n encryption key are immutable, while the PostgreSQL password is replaceable during update/recreate. Shared preparation ensures the `n8n` database exists before the Podman service starts.
 
 
 Required private values before deployment:

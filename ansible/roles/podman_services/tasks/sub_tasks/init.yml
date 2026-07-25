@@ -13,6 +13,7 @@
 - name: Init | Reset per-service transient facts
   ansible.builtin.set_fact:
     podman_services_secret_values: {}
+    podman_services_infisical_values: {}
     podman_services_infisical_secrets_map: []
     podman_services_secret_results: {}
     podman_services_image_pull: {}

@@ -1,0 +1,312 @@
+from copy import deepcopy
+from pathlib import Path
+
+import pytest
+import yaml
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+COMMON_PREPARE_PATH = REPO_ROOT / "ansible/roles/service_common/tasks/prepare.yml"
+COMMON_POSTGRES_PATH = REPO_ROOT / "ansible/roles/service_common/tasks/postgres.yml"
+DOCKER_PREP_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/_prep.yml"
+DOCKER_INFISICAL_TASKER_PATH = (
+    REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/tasker.yml"
+)
+DOCKER_SECRET_TASKS_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/_secrets.yml"
+DOCKER_POSTGRES_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/postgres.yml"
+PODMAN_MAIN_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/main.yml"
+PODMAN_INIT_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/init.yml"
+PODMAN_PREP_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/prepare.yml"
+SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
+
+COMMON_PREPARE = COMMON_PREPARE_PATH.read_text()
+COMMON_POSTGRES = COMMON_POSTGRES_PATH.read_text()
+DOCKER_PREP = DOCKER_PREP_PATH.read_text()
+DOCKER_INFISICAL_TASKER = DOCKER_INFISICAL_TASKER_PATH.read_text()
+DOCKER_SECRET_TASKS = DOCKER_SECRET_TASKS_PATH.read_text()
+PODMAN_MAIN = PODMAN_MAIN_PATH.read_text()
+PODMAN_INIT = PODMAN_INIT_PATH.read_text()
+PODMAN_PREP = PODMAN_PREP_PATH.read_text()
+
+EXPECTED_TAGS = {"deploy", "update", "recreate", "bootstrap"}
+
+
+def task_named(tasks, name):
+    return next(task for task in tasks if task["name"] == name)
+
+
+def walk_mappings(value):
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from walk_mappings(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from walk_mappings(child)
+
+
+def materialized_secret_names(service):
+    names = set()
+    for mapping in walk_mappings(service):
+        infisical = mapping.get("infisical")
+        if not isinstance(infisical, dict):
+            continue
+        for entry in infisical.get("secrets_map", []):
+            if not isinstance(entry, dict):
+                continue
+            if isinstance(entry.get("docker_secret"), str):
+                names.add(entry["docker_secret"])
+            secret = entry.get("secret")
+            if isinstance(secret, dict) and isinstance(secret.get("name"), str):
+                names.add(secret["name"])
+    return names
+
+
+def recursive_base_target_merge(base, target):
+    """Mirror Ansible combine(recursive=true): mappings recurse; target values replace."""
+    if isinstance(base, dict) and isinstance(target, dict):
+        merged = deepcopy(base)
+        for key, target_value in target.items():
+            if key in merged:
+                merged[key] = recursive_base_target_merge(merged[key], target_value)
+            else:
+                merged[key] = deepcopy(target_value)
+        return merged
+    return deepcopy(target)
+
+
+def effective_service_configs(services):
+    for service_name, base_service in services.items():
+        targets = base_service.get("targets")
+        if targets is None:
+            yield service_name, "<base>", deepcopy(base_service)
+            continue
+        for target_name, target in targets.items():
+            yield service_name, target_name, recursive_base_target_merge(base_service, target)
+
+
+def assert_postgres_credentials_declared(services):
+    failures = []
+    for service_name, target_name, service in effective_service_configs(services):
+        postgres = service.get("postgres")
+        if not isinstance(postgres, dict) or postgres.get("enable") is not True:
+            continue
+
+        user_var = postgres.get("user_var", "postgres_user")
+        password_var = postgres.get("password_var", "postgres_pass")
+        infisical = service.get("infisical", {})
+        secrets_map = infisical.get("secrets_map", []) if isinstance(infisical, dict) else []
+        declared_vars = {entry.get("var") for entry in secrets_map if isinstance(entry, dict)}
+        missing = [
+            variable
+            for variable in (user_var, password_var)
+            if variable not in declared_vars
+        ]
+        if missing:
+            failures.append(
+                f"service={service_name}, target={target_name}: "
+                f"missing infisical.secrets_map declarations for {', '.join(map(str, missing))}"
+            )
+
+    assert not failures, "PostgreSQL credential declaration errors:\n" + "\n".join(failures)
+
+
+def test_runtime_adapters_snapshot_and_explicitly_handoff_common_infisical_values():
+    docker_tasker = yaml.safe_load(DOCKER_INFISICAL_TASKER)
+    docker_reset = task_named(
+        docker_tasker,
+        "Prep - Infisical Fetch | Reset per-service adapter values",
+    )
+    docker_fetch = task_named(docker_tasker, "Prep - Infisical Fetch | Include tasks")
+    docker_snapshot = task_named(
+        docker_tasker,
+        "Prep - Infisical Fetch | Snapshot common per-service outputs",
+    )
+    docker_prepare = task_named(
+        yaml.safe_load(DOCKER_PREP),
+        "Prep - Service common | Prepare files and Traefik integration",
+    )
+
+    assert docker_reset["ansible.builtin.set_fact"]["docker_services_infisical_values"] == {}
+    assert docker_reset["no_log"] is True
+    assert docker_reset["diff"] is False
+    assert docker_snapshot["ansible.builtin.set_fact"]["docker_services_infisical_values"] == (
+        "{{ service_common_infisical_values }}"
+    )
+    assert docker_snapshot["no_log"] is True
+    assert docker_snapshot["diff"] is False
+    docker_reset_index = docker_tasker.index(docker_reset)
+    docker_fetch_index = docker_tasker.index(docker_fetch)
+    docker_snapshot_index = docker_tasker.index(docker_snapshot)
+    assert docker_reset_index + 1 == docker_fetch_index
+    assert docker_fetch_index + 1 == docker_snapshot_index
+    assert docker_prepare["vars"]["service_common_infisical_values"] == "{{ docker_services_infisical_values }}"
+    assert "docker_services_infisical_values" in docker_prepare["vars"]["service_common_traefik_base_zone"]
+    assert "service_common_infisical_values" not in docker_prepare["vars"]["service_common_traefik_base_zone"]
+    assert "docker_services_infisical_values" in DOCKER_SECRET_TASKS
+    assert "service_common_infisical_values" not in DOCKER_SECRET_TASKS
+
+    podman_main = yaml.safe_load(PODMAN_MAIN)
+    podman_reset = task_named(
+        yaml.safe_load(PODMAN_INIT),
+        "Init | Reset per-service transient facts",
+    )
+    podman_lookup = task_named(
+        podman_main,
+        "Podman services | Resolve common Infisical values and environment",
+    )
+    podman_snapshot = task_named(
+        podman_main,
+        "Podman services | Snapshot common Infisical values",
+    )
+    podman_prepare = task_named(
+        podman_main,
+        "Podman services | Prepare runtime-neutral host state",
+    )
+    podman_traefik = task_named(podman_main, "Podman services | Include Traefik tasks")
+    podman_secret = task_named(yaml.safe_load(PODMAN_PREP), "Prep | Create/update Podman secrets")
+
+    assert podman_reset["ansible.builtin.set_fact"]["podman_services_infisical_values"] == {}
+    assert podman_reset["no_log"] is True
+    assert podman_reset["diff"] is False
+    assert podman_snapshot["ansible.builtin.set_fact"]["podman_services_infisical_values"] == (
+        "{{ service_common_infisical_values }}"
+    )
+    assert podman_snapshot["no_log"] is True
+    assert podman_snapshot["diff"] is False
+    podman_lookup_index = podman_main.index(podman_lookup)
+    podman_snapshot_index = podman_main.index(podman_snapshot)
+    assert podman_lookup_index + 1 == podman_snapshot_index
+    assert podman_snapshot_index < podman_main.index(podman_prepare)
+    assert podman_prepare["vars"]["service_common_infisical_values"] == "{{ podman_services_infisical_values }}"
+    assert podman_secret["containers.podman.podman_secret"]["data"] == (
+        "{{ podman_services_infisical_values[podman_services_secret.var] }}"
+    )
+    assert podman_traefik["vars"]["service_common_traefik_base_zone"] == (
+        "{{ podman_services_infisical_values.cloudflare_zone }}"
+    )
+
+
+def test_both_runtime_paths_reach_common_postgres_after_infisical_resolution():
+    common_tasks = yaml.safe_load(COMMON_PREPARE)
+    postgres_include = task_named(
+        common_tasks,
+        "Service common prepare | Include PostgreSQL database preparation",
+    )
+    include = postgres_include["ansible.builtin.include_tasks"]
+
+    assert include["file"] == "postgres.yml"
+    assert set(include["apply"]["tags"]) == EXPECTED_TAGS
+    assert set(postgres_include["tags"]) == EXPECTED_TAGS
+    assert "service_common_service.postgres is defined" in postgres_include["when"]
+
+    assert DOCKER_PREP.index("Prep - Infisical | Include tasker") < DOCKER_PREP.index(
+        "Prep - Service common | Prepare files and Traefik integration"
+    )
+    assert "name: service_common" in DOCKER_PREP
+
+    assert PODMAN_MAIN.index("Resolve common Infisical values and environment") < PODMAN_MAIN.index("Prepare runtime-neutral host state")
+    assert "tasks_from: prepare" in PODMAN_MAIN
+
+
+def test_common_postgres_check_mode_reports_without_connecting():
+    tasks = yaml.safe_load(COMMON_POSTGRES)
+    normalize = task_named(tasks, "Service common PostgreSQL | Validate and normalize declaration")
+    report = task_named(tasks, "Service common PostgreSQL | Report check-mode database plan")
+    ensure = task_named(tasks, "Service common PostgreSQL | Ensure declared databases exist")
+
+    assert "when" not in normalize
+    assert normalize["no_log"] is True
+    assert normalize["diff"] is False
+    assert "ansible_check_mode" in report["when"]
+    assert report["changed_when"] is False
+    assert "not ansible_check_mode" in ensure["when"]
+    assert "community.postgresql.postgresql_db" not in report
+    assert set(report["tags"]) == EXPECTED_TAGS
+
+    plan = report["ansible.builtin.debug"]["msg"]
+    assert "databases=" in plan
+    assert "host=" in plan
+    assert "inventory=" in plan
+    assert "port=" in plan
+    assert "user" not in plan
+    assert "password" not in plan
+
+
+def test_live_postgres_uses_common_values_and_idempotent_database_module_once():
+    tasks = yaml.safe_load(COMMON_POSTGRES)
+    ensure = task_named(tasks, "Service common PostgreSQL | Ensure declared databases exist")
+    module = ensure["community.postgresql.postgresql_db"]
+
+    assert module["state"] == "present"
+    assert "service_common_infisical_values" in module["login_user"]
+    assert "service_common_infisical_values" in module["login_password"]
+    assert module["login_host"] == "{{ service_common_postgres_config.host }}"
+    assert module["login_port"] == "{{ service_common_postgres_config.port }}"
+    assert ensure["delegate_to"] == "{{ service_common_controller_host }}"
+    assert ensure["run_once"] is True
+    assert ensure["no_log"] is True
+    assert ensure["diff"] is False
+    assert ensure["loop_control"]["loop_var"] == "service_common_postgres_database"
+    assert "community.postgresql.postgresql_ping" not in COMMON_POSTGRES
+
+
+def test_common_postgres_has_no_runtime_modules_or_runtime_secret_creation():
+    assert "community.docker." not in COMMON_POSTGRES
+    assert "containers.podman." not in COMMON_POSTGRES
+    assert "postgres_pass_secret" not in COMMON_POSTGRES
+
+    assert not DOCKER_POSTGRES_PATH.exists()
+    assert "sub_tasks/prep/postgres.yml" not in DOCKER_PREP
+    assert "Report check-mode PostgreSQL database plan" not in PODMAN_PREP
+
+
+def test_every_postgres_password_secret_consumer_declares_materialization():
+    consumers = []
+    missing = []
+
+    for path in sorted(SERVICES_DIR.glob("*.yml")):
+        services = yaml.safe_load(path.read_text()) or {}
+        for name, service in services.items():
+            if "postgres_pass_secret" not in repr(service):
+                continue
+            consumers.append(name)
+            if "postgres_pass_secret" not in materialized_secret_names(service):
+                missing.append(name)
+
+    assert consumers
+    assert missing == []
+
+
+def test_every_postgres_enabled_effective_service_declares_credentials():
+    services = {}
+    for path in sorted(SERVICES_DIR.glob("*.yml")):
+        services.update(yaml.safe_load(path.read_text()) or {})
+
+    assert_postgres_credentials_declared(services)
+
+
+def test_postgres_credential_guard_reports_missing_target_declaration():
+    services = {
+        "broken": {
+            "infisical": {
+                "secrets_map": [
+                    {"var": "postgres_user", "path": "/Postgres", "name": "USER"},
+                ]
+            },
+            "targets": {
+                "primary": {
+                    "postgres": {
+                        "enable": True,
+                        "databases": ["broken"],
+                    }
+                }
+            },
+        }
+    }
+
+    with pytest.raises(AssertionError) as exc_info:
+        assert_postgres_credentials_declared(services)
+
+    message = str(exc_info.value)
+    assert "service=broken, target=primary" in message
+    assert "postgres_pass" in message

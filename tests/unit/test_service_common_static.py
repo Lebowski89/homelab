@@ -24,7 +24,6 @@ DOCKER_RESOLVER_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep
 DOCKER_INFISICAL_TASKER = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/tasker.yml").read_text()
 COMMON_TEMPLATE_TASKS = (ROLE / "tasks/templates.yml").read_text()
 COMMON_INFISICAL_TASKS = (ROLE / "tasks/infisical.yml").read_text()
-DOCKER_POSTGRES_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/postgres.yml").read_text()
 DOCKER_MAIN_TASKS = Path("ansible/roles/docker_services/tasks/main.yml").read_text()
 DOCKER_DEPLOY_ALL_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/deploy/all.yml").read_text()
 DOCKER_ENV_FILE_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/compose/env_file.yml").read_text()
@@ -55,6 +54,12 @@ def test_expected_common_dynamic_includes_propagate_required_tags():
         },
         ("main.yml", "remove_integrations.yml"): {"remove"},
         ("prepare.yml", "validate.yml"): {
+            "deploy",
+            "update",
+            "recreate",
+            "bootstrap",
+        },
+        ("prepare.yml", "postgres.yml"): {
             "deploy",
             "update",
             "recreate",
@@ -246,8 +251,6 @@ def test_check_mode_validates_infisical_declarations_without_lookup_or_materiali
     assert "when: podman_services_common_action in" in PODMAN_MAIN
     assert "Validate and retrieve Infisical values through service common" not in PODMAN_PREP
     assert "ansible_check_mode and service_common_template_item.no_log" in COMMON_TEMPLATE_TASKS
-    assert "Prepare docker secret\n  no_log: true\n  diff: false" in DOCKER_POSTGRES_TASKS
-    assert "Create database(s) if missing\n  no_log: true\n  diff: false" in DOCKER_POSTGRES_TASKS
 
 
 def test_docker_validates_attachment_metadata_before_materialization():
@@ -261,11 +264,13 @@ def test_docker_validates_attachment_metadata_before_materialization():
 
 
 def test_docker_snapshots_service_declarations_before_later_compatibility_lookups():
-    snapshot = DOCKER_INFISICAL_TASKER.index("Snapshot value-free service secret declarations")
+    snapshot = DOCKER_INFISICAL_TASKER.index("Snapshot common per-service outputs")
     resolver = DOCKER_INFISICAL_TASKER.index("Prep - Infisical Resolver | Include tasks on deploy host")
 
     assert snapshot < resolver
+    assert 'docker_services_infisical_values: "{{ service_common_infisical_values }}"' in DOCKER_INFISICAL_TASKER
     assert 'docker_services_secret_declarations: "{{ service_common_secret_declarations }}"' in DOCKER_INFISICAL_TASKER
+    assert 'service_common_infisical_values: "{{ docker_services_infisical_values }}"' in DOCKER_PREP_TASKS
     assert "hostvars[docker_services_primary_manager].docker_services_secret_declarations" in DOCKER_SECRET_TASKS
     assert "hostvars[docker_services_primary_manager].docker_services_secret_declarations" in DOCKER_COMPOSE_TASKS
 

@@ -7,6 +7,16 @@
       tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]
 
+- name: Service common prepare | Include PostgreSQL database preparation
+  when:
+    - service_common_action in service_common_prepare_actions
+    - service_common_service.postgres is defined
+  ansible.builtin.include_tasks:
+    file: postgres.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Service common prepare | Require target hosts for filesystem preparation
   when: >-
     (service_common_service.paths | default([]) | length > 0)

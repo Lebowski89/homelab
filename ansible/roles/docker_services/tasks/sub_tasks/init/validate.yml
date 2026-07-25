@@ -590,48 +590,6 @@
       letters, numbers, dot, underscore, or hyphen.
 
 ################################
-# POSTGRES
-################################
-
-- name: Init - Validate | docker_services_svc.postgres shape
-  when: docker_services_svc.postgres is defined
-  ansible.builtin.assert:
-    that:
-      - docker_services_svc.postgres is mapping
-    fail_msg: "docker_services_svc.postgres must be a mapping when provided."
-
-- name: Init - Validate | docker_services_svc.postgres.databases
-  when:
-    - docker_services_svc.postgres is defined
-    - docker_services_svc.postgres is mapping
-    - docker_services_svc.postgres.databases is defined
-  ansible.builtin.assert:
-    that:
-      - >
-        (
-          docker_services_svc.postgres.databases is string
-          and (docker_services_svc.postgres.databases | trim | length) > 0
-        )
-        or
-        (
-          docker_services_svc.postgres.databases is sequence
-          and docker_services_svc.postgres.databases is not string
-          and (docker_services_svc.postgres.databases | length) > 0
-          and (docker_services_svc.postgres.databases | select('string') | list | length)
-              == (docker_services_svc.postgres.databases | length)
-          and
-          (
-            docker_services_svc.postgres.databases
-            | select('string')
-            | map('trim')
-            | reject('equalto', '')
-            | list
-            | length
-          ) == (docker_services_svc.postgres.databases | length)
-        )
-    fail_msg: "docker_services_svc.postgres.databases must be a non-empty string or a list of non-empty strings."
-
-################################
 # HEALTHCHECK
 ################################
 

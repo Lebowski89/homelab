@@ -113,7 +113,7 @@ def test_podman_adapts_canonical_and_legacy_secrets_without_changing_materializa
     assert "service_common_resolved_environment" in MAIN_TASKS
     assert "Validate and retrieve Infisical values through service common" not in TASKS
     assert 'name: "{{ podman_services_secret.name }}"' in TASKS
-    assert 'data: "{{ service_common_infisical_values[podman_services_secret.var] }}"' in TASKS
+    assert 'data: "{{ podman_services_infisical_values[podman_services_secret.var] }}"' in TASKS
     assert "podman_secret_policy(podman_services_state)).force" in TASKS
     assert "podman_secret_policy(podman_services_state)).skip_existing" in TASKS
     assert "not ansible_check_mode" in TASKS

@@ -390,6 +390,90 @@ def service_common_infisical_check_values(config: Any) -> dict[str, str]:
     return {var: values[var] for var in sorted(values)}
 
 
+def service_common_postgres_normalize(
+    postgres: Any,
+    controller_host: Any,
+    inventory_hosts: Any,
+    infisical_values: Any,
+    check_mode: Any = False,
+) -> dict[str, Any]:
+    config = _mapping(postgres, name="service_common_service.postgres")
+    unsupported = set(config) - {
+        "enable",
+        "databases",
+        "port",
+        "user_var",
+        "password_var",
+        "host",
+        "host_inventory",
+    }
+    if unsupported:
+        raise AnsibleFilterError(f"service_common_service.postgres contains unsupported fields: {', '.join(sorted(unsupported))}")
+
+    enabled = _strict_bool(config.get("enable", False), name="service_common_service.postgres.enable")
+    raw_databases = config.get("databases", [])
+    if isinstance(raw_databases, str):
+        databases = [_nonempty_text(raw_databases, name="service_common_service.postgres.databases")]
+    elif isinstance(raw_databases, Sequence):
+        databases = [
+            _nonempty_text(database, name=f"service_common_service.postgres.databases[{index}]")
+            for index, database in enumerate(raw_databases)
+        ]
+    else:
+        raise AnsibleFilterError("service_common_service.postgres.databases must be a non-empty string or list")
+    if enabled and not databases:
+        raise AnsibleFilterError("service_common_service.postgres.databases must be non-empty when enabled")
+
+    port = config.get("port", 5432)
+    if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        raise AnsibleFilterError("service_common_service.postgres.port must be an integer from 1 through 65535")
+
+    user_var = _identifier(config.get("user_var", "postgres_user"), name="service_common_service.postgres.user_var")
+    password_var = _identifier(
+        config.get("password_var", "postgres_pass"),
+        name="service_common_service.postgres.password_var",
+    )
+
+    if "host" in config and "host_inventory" in config:
+        raise AnsibleFilterError("service_common_service.postgres.host and host_inventory are mutually exclusive")
+
+    result: dict[str, Any] = {
+        "enable": enabled,
+        "databases": databases,
+        "port": port,
+        "user_var": user_var,
+        "password_var": password_var,
+    }
+    if "host" in config:
+        result["host"] = _nonempty_text(config["host"], name="service_common_service.postgres.host")
+    else:
+        host_inventory = _nonempty_text(
+            config.get("host_inventory", controller_host),
+            name="service_common_service.postgres.host_inventory",
+        )
+        result["host_inventory"] = host_inventory
+        if enabled:
+            hosts = _mapping(inventory_hosts, name="hostvars")
+            if host_inventory not in hosts:
+                raise AnsibleFilterError(f"PostgreSQL inventory host {host_inventory!r} is not in hostvars")
+            host_config = _mapping(hosts[host_inventory], name=f"hostvars[{host_inventory!r}]")
+            result["host"] = _nonempty_text(
+                host_config.get("local_ip"),
+                name=f"hostvars[{host_inventory!r}].local_ip",
+            )
+
+    is_check_mode = _strict_bool(check_mode, name="ansible_check_mode")
+    if enabled:
+        values = _mapping(infisical_values, name="service_common_infisical_values")
+        for field, var in (("user_var", user_var), ("password_var", password_var)):
+            if var not in values:
+                raise AnsibleFilterError(f"service_common_service.postgres.{field} references undeclared Infisical value {var!r}")
+            if not is_check_mode and not str(values[var] if values[var] is not None else "").strip():
+                raise AnsibleFilterError(f"service_common_service.postgres.{field} references empty Infisical value {var!r}")
+
+    return result
+
+
 def service_common_infisical_normalize(
     secrets_map: Any,
     fail_on_empty: Any = True,
@@ -603,5 +687,6 @@ class FilterModule:
             "service_common_infisical_check_values": service_common_infisical_check_values,
             "service_common_infisical_finalize": service_common_infisical_finalize,
             "service_common_infisical_normalize": service_common_infisical_normalize,
+            "service_common_postgres_normalize": service_common_postgres_normalize,
             "service_common_traefik_context": service_common_traefik_context,
         }

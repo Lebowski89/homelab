@@ -1,0 +1,54 @@
+---
+
+- name: Service common PostgreSQL | Validate and normalize declaration
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_common_postgres_config: >-
+      {{
+        service_common_service.postgres
+        | service_common_postgres_normalize(
+            service_common_controller_host,
+            hostvars,
+            service_common_infisical_values,
+            ansible_check_mode
+          )
+      }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service common PostgreSQL | Report check-mode database plan
+  when:
+    - ansible_check_mode
+    - service_common_postgres_config.enable
+  ansible.builtin.debug:
+    msg: >-
+      PostgreSQL database plan:
+      databases={{ service_common_postgres_config.databases | join(', ') }};
+      host={{ service_common_postgres_config.host }};
+      inventory={{ service_common_postgres_config.host_inventory | default('explicit') }};
+      port={{ service_common_postgres_config.port }}.
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service common PostgreSQL | Ensure declared databases exist
+  when:
+    - not ansible_check_mode
+    - service_common_postgres_config.enable
+  no_log: true
+  diff: false
+  community.postgresql.postgresql_db:
+    login_host: "{{ service_common_postgres_config.host }}"
+    login_port: "{{ service_common_postgres_config.port }}"
+    login_user: >-
+      {{ service_common_infisical_values[service_common_postgres_config.user_var] }}
+    login_password: >-
+      {{ service_common_infisical_values[service_common_postgres_config.password_var] }}
+    name: "{{ service_common_postgres_database }}"
+    state: present
+  loop: "{{ service_common_postgres_config.databases }}"
+  loop_control:
+    loop_var: service_common_postgres_database
+    label: "{{ service_common_postgres_database }}"
+  delegate_to: "{{ service_common_controller_host }}"
+  run_once: true
+  tags: [deploy, update, recreate, bootstrap]

@@ -94,22 +94,6 @@
   tags: [deploy, bootstrap, recreate]
 
 ################################
-# PREP (POSTGRES)
-################################
-
-- name: Prep - Postgres | Create Postgres database
-  when:
-    - not ansible_check_mode
-    - inventory_hostname == docker_services_primary_manager
-    - docker_services_svc.postgres is defined
-    - (docker_services_svc.postgres.enable | default(false)) | bool
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/postgres.yml
-    apply:
-      tags: [deploy, update, recreate]
-  tags: [deploy, update, recreate]
-
-################################
 # PREP (QBITTORRENT)
 ################################
 
@@ -158,13 +142,14 @@
     service_common_service: "{{ docker_services_svc }}"
     service_common_target_hosts: "{{ docker_services_fs_hosts_effective }}"
     service_common_controller_host: "{{ docker_services_primary_manager }}"
+    service_common_infisical_values: "{{ docker_services_infisical_values }}"
     service_common_host_defaults: "{{ docker_services_common_host_defaults }}"
     service_common_template_vars:
       qbittorrent_pass_pbkdf2: "{{ docker_services_qbittorrent_pass_pbkdf2 | default('') }}"
       qbittorrent_xs_pass_pbkdf2: "{{ docker_services_qbittorrent_xs_pass_pbkdf2 | default('') }}"
     service_common_traefik_base_zone: >-
       {{
-        (hostvars[docker_services_primary_manager].service_common_infisical_values | default({}))
+        (docker_services_infisical_values | default({}))
         .get("cloudflare_zone", "")
         | default(
             hostvars[docker_services_primary_manager].cloudflare_zone
