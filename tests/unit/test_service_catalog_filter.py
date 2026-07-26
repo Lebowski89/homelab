@@ -46,6 +46,33 @@ def test_mixed_runtime_selection_splits():
     assert [item["name"] for item in service_catalog.service_catalog_by_runtime(selected, "podman")] == ["n8n"]
 
 
+@pytest.mark.parametrize(
+    ("service_cfg", "target_name", "message"),
+    [
+        ("not-a-mapping", None, "expected service_cfg to be a mapping"),
+        ({"targets": []}, "primary", "expected targets to be a mapping"),
+        ({"targets": {"primary": []}}, "primary", "expected target .primary. to be a mapping"),
+        ({"targets": {"primary": {}}}, "missing", "Available targets: primary"),
+    ],
+)
+def test_merge_target_rejects_invalid_input(service_cfg, target_name, message):
+    with pytest.raises(AnsibleFilterError, match=message):
+        service_catalog.service_catalog_merge_target(service_cfg, target_name)
+
+
+def test_merge_target_rejects_nested_targets():
+    service_cfg = {
+        "targets": {
+            "primary": {
+                "targets": {"nested": {}},
+            }
+        }
+    }
+
+    with pytest.raises(AnsibleFilterError, match="target .primary. must not contain nested targets"):
+        service_catalog.service_catalog_merge_target(service_cfg, "primary")
+
+
 def test_canonical_target_merge_contract():
     services = {
         "app": {

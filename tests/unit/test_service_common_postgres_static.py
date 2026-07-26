@@ -72,10 +72,7 @@ def materialized_secret_names(service):
 
 
 def effective_service_configs(services):
-    catalog = SERVICE_CATALOG.service_catalog_effective(services)
-    selected = SERVICE_CATALOG.service_catalog_select(catalog, run_all=True, allow_disabled=True)["selected"]
-
-    for item in selected:
+    for item in SERVICE_CATALOG.service_catalog_effective(services):
         yield item["name"], item.get("target", "<base>"), item["config"]
 
 
@@ -262,7 +259,31 @@ def test_every_postgres_password_secret_consumer_declares_materialization():
     assert missing == []
 
 
-def test_every_postgres_enabled_effective_service_declares_credentials():
+def test_postgres_credential_guard_includes_disabled_malformed_declarations():
+    services = {
+        "disabled": {
+            "enabled": False,
+            "infisical": {
+                "secrets_map": [
+                    {"var": "postgres_user", "path": "/Postgres", "name": "USER"},
+                ]
+            },
+            "postgres": {
+                "enable": True,
+                "databases": ["disabled"],
+            },
+        }
+    }
+
+    with pytest.raises(AssertionError) as exc_info:
+        assert_postgres_credentials_declared(services)
+
+    message = str(exc_info.value)
+    assert "service=disabled, target=<base>" in message
+    assert "postgres_pass" in message
+
+
+def test_every_postgres_effective_service_declares_credentials():
     services = {}
     for path in sorted(SERVICES_DIR.glob("*.yml")):
         services.update(yaml.safe_load(path.read_text()) or {})

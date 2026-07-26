@@ -137,6 +137,7 @@ def test_netplan_template_renders_only_normalized_address_and_interface():
     assert interface["addresses"] == ["192.0.2.10/24"]
     assert interface["dhcp4"] is False
     assert interface["dhcp6"] is False
+    assert interface["routes"] == [{"to": "default", "via": "192.0.2.1"}]
     assert "198.51.100.20" not in rendered
     assert "raw-interface" not in rendered
     assert "local_ip" not in NETPLAN_TEMPLATE

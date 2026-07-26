@@ -78,6 +78,8 @@ def _target_config(service_cfg: Mapping[str, Any], target_name: str) -> Mapping[
         raise AnsibleFilterError(
             f"service_catalog_merge_target expected target {target_name!r} to be a mapping, got {type(target).__name__}"
         )
+    if "targets" in target:
+        raise AnsibleFilterError(f"service_catalog_merge_target target {target_name!r} must not contain nested targets")
     return target
 
 
