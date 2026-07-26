@@ -5,6 +5,9 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
+PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
+DOCKER_INIT_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/_init.yml"
+PODMAN_INIT_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/init.yml"
 
 
 def load_module(path, name):
@@ -23,6 +26,20 @@ def load_services():
     return services
 
 
+def walk_mappings(value):
+    if isinstance(value, dict):
+        yield value
+        for child in value.values():
+            yield from walk_mappings(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from walk_mappings(child)
+
+
+def task_named(value, name):
+    return next(mapping for mapping in walk_mappings(value) if mapping.get("name") == name)
+
+
 def test_service_catalog_preserves_existing_docker_expansion_ordering():
     docker_filters = load_module(REPO_ROOT / "ansible/filter_plugins/docker_services.py", "docker_services")
     catalog_filters = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog")
@@ -31,7 +48,7 @@ def test_service_catalog_preserves_existing_docker_expansion_ordering():
     legacy = docker_filters.docker_services_effective(services)
     effective = catalog_filters.service_catalog_effective(services)
     catalog_docker = [
-        {key: value for key, value in item.items() if key != "runtime"}
+        {key: value for key, value in item.items() if key not in {"runtime", "config"}}
         for item in catalog_filters.service_catalog_by_runtime(effective, "docker")
     ]
 
@@ -39,7 +56,7 @@ def test_service_catalog_preserves_existing_docker_expansion_ordering():
 
 
 def selected_without_runtime(items):
-    return [{key: value for key, value in item.items() if key != "runtime"} for item in items]
+    return [{key: value for key, value in item.items() if key not in {"runtime", "config"}} for item in items]
 
 
 def assert_selector_parity(services, run_tags=None, run_all=False, allow_disabled=False):
@@ -78,14 +95,18 @@ def test_real_services_without_runtime_still_default_to_docker():
     assert item["runtime"] == "docker"
 
 
-def test_real_sonarr_target_merge_keeps_effective_configuration():
-    merge_filters = load_module(
-        REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_merge.py",
-        "docker_services_merge_real_sonarr",
+def test_real_sonarr_catalog_target_keeps_effective_configuration():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_real_sonarr",
     )
-    sonarr = load_services()["sonarr"]
+    item = next(
+        item
+        for item in catalog_filters.service_catalog_effective(load_services())
+        if item["name"] == "sonarr" and item.get("target") == "sonarr"
+    )
 
-    effective = merge_filters.docker_services_merge_target(sonarr, "sonarr")
+    effective = item["config"]
 
     assert "targets" not in effective
     assert effective["name"] == "sonarr"
@@ -93,3 +114,24 @@ def test_real_sonarr_target_merge_keeps_effective_configuration():
     assert effective["environment"]["SONARR__APP__INSTANCENAME"] == "Sonarr"
     assert effective["secrets"] == ["postgres_user_secret", "postgres_pass_secret", "sonarr_api_secret"]
     assert effective["traefik"] == {"enable": True, "exposure": "private", "port": 8989}
+
+
+def test_playbook_passes_catalog_resolved_config_to_both_adapters():
+    playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
+    docker_task = task_named(playbook, "Process each Docker service")
+    podman_task = task_named(playbook, "Process each Podman service")
+
+    assert docker_task["vars"]["docker_services_service_cfg"] == "{{ item.config }}"
+    assert podman_task["vars"]["podman_services_service_cfg"] == "{{ item.config }}"
+    assert "combine" not in podman_task["vars"]["podman_services_service_cfg"]
+
+    docker_init = yaml.safe_load(DOCKER_INIT_PATH.read_text())
+    docker_config = task_named(docker_init, "Init | Use catalog-resolved service config")
+    docker_assert = task_named(docker_init, "Init | Ensure docker_services_service_cfg is provided")
+    podman_init = yaml.safe_load(PODMAN_INIT_PATH.read_text())
+    podman_assert = task_named(podman_init, "Init | Assert catalog-resolved service config")
+
+    assert docker_config["ansible.builtin.set_fact"]["docker_services_svc"] == "{{ docker_services_service_cfg }}"
+    assert "docker_services_merge_target" not in DOCKER_INIT_PATH.read_text()
+    assert "docker_services_service_cfg.targets is not defined" in docker_assert["ansible.builtin.assert"]["that"]
+    assert "podman_services_service_cfg.targets is not defined" in podman_assert["ansible.builtin.assert"]["that"]

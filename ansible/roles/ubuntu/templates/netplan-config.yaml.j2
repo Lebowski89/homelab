@@ -1,5 +1,4 @@
 ---
-
 {% set netplan_nameservers = ubuntu_netplan_nameservers | default(ubuntu_defaults_netplan_nameservers) %}
 {% set netplan_search_domains = ubuntu_netplan_search_domains | default([]) %}
 
@@ -7,9 +6,11 @@ network:
   version: 2
   renderer: networkd
   ethernets:
-    {{ ansible_facts.default_ipv4.interface | default(ansible_default_ipv4.interface) }}:
+    {{ ubuntu_netplan_effective_interface }}:
+      dhcp4: false
+      dhcp6: false
       addresses:
-        - {{ local_ip }}/{{ ubuntu_netplan_prefix }}
+        - {{ ubuntu_netplan_ipv4_address }}/{{ ubuntu_netplan_prefix }}
       nameservers:
         addresses:
 {% for ns in netplan_nameservers %}
@@ -23,4 +24,4 @@ network:
 {% endif %}
       routes:
         - to: default
-          via: {{ ubuntu_defaults_netplan_gateway }}
+          via: {{ ubuntu_netplan_ipv4_gateway }}

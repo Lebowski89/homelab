@@ -4,7 +4,7 @@
 
 Service orchestration now has three responsibility boundaries:
 
-1. `service_catalog` loads definitions, expands targets, preserves tag/enabled selection, and chooses `docker` or `podman` (defaulting legacy definitions to Docker).
+1. `service_catalog` loads definitions, selects and resolves targets with the canonical base-plus-target merge, preserves tag/enabled selection, and chooses `docker` or `podman` (defaulting legacy definitions to Docker).
 2. `service_common` prepares paths, copies static assets, renders application templates, manages shared Traefik dynamic files, and validates and retrieves runtime-neutral Infisical values. It receives an already-normalized service and explicit target/controller hosts. It does not choose a runtime or create runtime resources.
 3. `docker_services` and `podman_services` remain runtime adapters. Docker retains Compose/Swarm and batched stack deployment; Podman retains Quadlets and immediate per-service lifecycle operations.
 
@@ -17,7 +17,9 @@ service_catalog
   -> shared integrations
 ```
 
-Docker continues to build Compose state inside the selected-service loop and deploy all accumulated stacks after the loop. Podman continues to handle each selected service immediately.
+Docker continues to build Compose state inside the selected-service loop and deploy all accumulated stacks after the loop. Podman continues to handle each selected service immediately. Both adapters receive the same catalog-resolved configuration; neither adapter expands targets independently.
+
+The canonical target merge recursively combines mappings, appends ordinary additive lists with append-rp semantics, removes exact duplicates, and lets target scalars override base scalars. `command`, `entrypoint`, and `healthcheck.test` replace their base lists. Target `runtime` overrides the base runtime, base and target `enabled` values both participate in selection, and `targets` is removed from the resolved configuration before adapter dispatch. The legacy `docker_services_merge_target` filter remains only as a compatibility wrapper around this catalog-owned implementation.
 
 ## Common role interface
 
@@ -32,15 +34,15 @@ Shared Traefik files use `<service-name>-dynamic.yml`. A successful render remov
 
 ## Deliberately retained runtime responsibilities
 
-`docker_services` retains target/schema compatibility, deploy-host calculation, cleanup, Compose construction and filters, labels, ports, volumes, Docker secrets, Swarm configs, stack accumulation/deployment, image drift, PostgreSQL preparation, and the application-specific tasks below.
+`docker_services` retains schema compatibility, deploy-host calculation, cleanup, Compose construction and filters, labels, ports, volumes, Docker secrets, Swarm configs, stack accumulation/deployment, image drift, and the application-specific tasks below.
 
 `podman_services` retains exact-image and UID/GID validation, dedicated-network validation, Podman secrets and replacement policy, images, Quadlet rendering, generated systemd units, lifecycle operations, and image drift.
 
-Infisical declaration validation, retrieval, empty-value enforcement, and canonical environment resolution are shared through `service_common_infisical_values` and `service_common_resolved_environment`. The old `service_common_secret_values` name remains only as a temporary internal compatibility alias. Docker recreates its flattened or dictionary compatibility facts after lookup, preserving environment placeholder resolution and deployment-host propagation. Docker still owns Docker secret selection, Swarm secrets, protected standalone secret files, PostgreSQL preparation, and application bootstraps. Podman still owns `containers.podman.podman_secret`, secret replacement policy, mount metadata, and Quadlet rendering. Both adapters keep runtime materialization outside `service_common`.
+Infisical declaration validation, retrieval, empty-value enforcement, and canonical environment resolution are shared through `service_common_infisical_values` and `service_common_resolved_environment`. The old `service_common_secret_values` name remains only as a temporary internal compatibility alias. Docker recreates its flattened or dictionary compatibility facts after lookup, preserving environment placeholder resolution and deployment-host propagation. Docker still owns Docker secret selection, Swarm secrets, protected standalone secret files, and application bootstraps. Podman still owns `containers.podman.podman_secret`, secret replacement policy, mount metadata, and Quadlet rendering. Both adapters keep runtime materialization outside `service_common`.
 
-Check mode validates Infisical declarations but does not fetch secrets or recreate Docker compatibility facts. Docker runtime/application bootstraps and secret-bearing common templates are skipped, while paths, copies, non-sensitive templates, and Traefik structure remain checkable.
+PostgreSQL database preparation is runtime-neutral. After common Infisical resolution and before runtime rendering or lifecycle, `service_common` validates the canonical `postgres` declaration and idempotently ensures each declared database exists with `community.postgresql.postgresql_db state=present`. Database operations are delegated to `service_common_controller_host` and use the declared `user_var` and `password_var` from `service_common_infisical_values`. An explicit `host` bypasses inventory lookup; otherwise `host_inventory` defaults to the controller and resolves `local_ip` from only that inventory host. The former Docker-only Infisical `HOST` and `PORT` lookups were intentionally removed: addressing now comes from `postgres.host`, or `postgres.host_inventory` and the selected inventory host `local_ip`, while `postgres.port` defaults to `5432`. Docker and Podman secret materialization remain adapter-owned and are not part of database preparation.
 
-Automatic PostgreSQL creation is not common behavior. Existing Docker workflows keep their established database preparation. Podman only reports declared requirements in check mode and never creates a database. The n8n database therefore remains an explicit operation through the established Docker/services workflow. A future `service_database` role or `database_bootstrap` task should be invoked explicitly, never as an implicit step of every runtime deployment.
+Check mode validates Infisical declarations and the complete PostgreSQL schema, credential references, inventory host, and resolved address without fetching secrets or connecting to PostgreSQL. It reports only database names, host/inventory identity, and port. Docker runtime/application bootstraps and secret-bearing common templates are skipped, while paths, copies, non-sensitive templates, PostgreSQL intent, and Traefik structure remain checkable.
 
 ## Application-specific preparation inventory
 
@@ -107,7 +109,7 @@ For Docker Swarm, canonical targets must be directly beneath `/run/secrets`; the
 
 Podman-only network and systemd lifecycle policy belongs under `runtime_options.podman`. Those options are ignored by Docker Compose. Changing `runtime` is a schema-level choice, not installation: the destination host must already have the selected runtime and supported version installed.
 
-Static tests prove normalized portable-field equivalence and render structure; they do not prove live Docker/Podman behavioral parity. The n8n proof renders its trusted-address `host_ip` bind through both the Docker standalone and Podman adapters; Docker Swarm rejects `host_ip` explicitly. Swarm-only networks, configs, placement, replicas, application-specific preparation, runtime installation, and database bootstrapping remain adapter or operator concerns.
+Static tests prove normalized portable-field equivalence and render structure; they do not prove live Docker/Podman behavioral parity. The n8n proof renders its trusted-address `host_ip` bind through both the Docker standalone and Podman adapters; Docker Swarm rejects `host_ip` explicitly. Swarm-only networks, configs, placement, replicas, application-specific preparation, and runtime installation remain adapter or operator concerns.
 
 Inventory topology and naming are outside Phase 2B. NetBox remains authoritative, services continue to resolve existing `local_ip`, hostnames, `deploy.host`, and Traefik inventory references, and no canonical address is hard-coded. Renaming legacy inventory variables from `docker_host_*` to runtime-neutral `container_host_*` is a separate future compatibility migration, not part of the service declaration refactor.
 

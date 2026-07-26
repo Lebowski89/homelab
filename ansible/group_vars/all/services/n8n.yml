@@ -136,6 +136,9 @@ n8n:
     enable: true
     databases:
       - n8n
+    port: 5432
+    user_var: postgres_user
+    password_var: postgres_pass
 
   traefik:
     enable: true

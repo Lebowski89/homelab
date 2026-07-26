@@ -381,7 +381,7 @@
       ansible.builtin.include_role:
         name: docker_services
       vars:
-        docker_services_service_cfg: "{{ services[item.name] | default({}) }}"
+        docker_services_service_cfg: "{{ item.config }}"
         docker_services_service_target: "{{ item.target | default(omit) }}"
         docker_services_role_prefix: "{{ item.name }}"
         docker_services_service_cfg_found: "{{ (services[item.name] is defined) | bool }}"
@@ -396,14 +396,7 @@
       ansible.builtin.include_role:
         name: podman_services
       vars:
-        podman_services_service_cfg: >-
-          {{
-            (services[item.name] | default({}))
-            | combine(
-                ((services[item.name].targets[item.target] | default({})) if item.target is defined else {}),
-                recursive=true
-              )
-          }}
+        podman_services_service_cfg: "{{ item.config }}"
         podman_services_service_target: "{{ item.target | default(omit) }}"
         podman_services_role_prefix: "{{ item.name }}{{ '-' ~ item.target if item.target is defined else '' }}"
         podman_services_service_cfg_found: "{{ (services[item.name] is defined) | bool }}"

@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/25 |
+| Readme update        | 2026/07/26 |
 
 
 
@@ -55,6 +55,7 @@
 | ---- | ------ | -------------- | -----|
 | Podman services ¦ Include initialization tasks | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Resolve common Infisical values and environment | ansible.builtin.include_role | True |  |
+| Podman services ¦ Snapshot common Infisical values | ansible.builtin.set_fact | True |  |
 | Podman services ¦ Attach common resolved environment | ansible.builtin.set_fact | True |  |
 | Podman services ¦ Prepare runtime-neutral host state | ansible.builtin.include_role | False |  |
 | Podman services ¦ Include preparation tasks | ansible.builtin.include_tasks | False |  |
@@ -87,6 +88,7 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Init ¦ Assert catalog-resolved service config | ansible.builtin.assert | False |  |
 | Init ¦ Normalize service | ansible.builtin.set_fact | False |  |
 | Init ¦ Derive normalized systemd unit name | ansible.builtin.set_fact | False |  |
 | Init ¦ Reset per-service transient facts | ansible.builtin.set_fact | False |  |
@@ -123,7 +125,6 @@
 | Prep ¦ Render volume Quadlets | ansible.builtin.template | True |  |
 | Prep ¦ Render protected environment file | ansible.builtin.template | True |  |
 | Prep ¦ Create/update Podman secrets | containers.podman.podman_secret | True |  |
-| Prep ¦ Report check-mode PostgreSQL database plan | ansible.builtin.debug | True |  |
 | Prep ¦ Render container Quadlet | ansible.builtin.template | True |  |
 
 #### File: tasks/sub_tasks/remove.yml

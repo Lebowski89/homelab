@@ -13,32 +13,15 @@
     that:
       - docker_services_service_cfg is defined
       - docker_services_service_cfg is mapping
+      - docker_services_service_cfg.targets is not defined
     fail_msg: >-
-      docker_services role requires docker_services_service_cfg (mapping) to be passed from the playbook.
+      docker_services requires a catalog-resolved docker_services_service_cfg mapping
+      without a targets key.
   tags: [remove, drift]
 
-- name: Init | Derive effective target name
+- name: Init | Use catalog-resolved service config
   ansible.builtin.set_fact:
-    docker_services_service_target_effective: >-
-      {{
-        (
-          docker_services_service_target
-          | default('swarm', true)
-          | string
-          | trim
-        )
-        if docker_services_service_cfg.targets is defined
-        else none
-      }}
-  tags: [remove, drift]
-
-- name: Init | Normalize service config
-  ansible.builtin.set_fact:
-    docker_services_svc: >-
-      {{
-        docker_services_service_cfg
-        | docker_services_merge_target(docker_services_service_target_effective)
-      }}
+    docker_services_svc: "{{ docker_services_service_cfg }}"
   tags: [remove, drift]
 
 - name: Init | Determine whether schema validation should run

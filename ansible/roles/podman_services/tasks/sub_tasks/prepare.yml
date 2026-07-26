@@ -67,7 +67,7 @@
   diff: false
   containers.podman.podman_secret:
     name: "{{ podman_services_secret.name }}"
-    data: "{{ service_common_infisical_values[podman_services_secret.var] }}"
+    data: "{{ podman_services_infisical_values[podman_services_secret.var] }}"
     state: present
     force: "{{ (podman_services_secret | podman_secret_policy(podman_services_state)).force }}"
     skip_existing: "{{ (podman_services_secret | podman_secret_policy(podman_services_state)).skip_existing }}"
@@ -75,18 +75,6 @@
   loop_control:
     loop_var: podman_services_secret
   register: podman_services_secret_results
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Prep | Report check-mode PostgreSQL database plan
-  when:
-    - ansible_check_mode
-    - podman_services_service.postgres.enable | default(false) | bool
-  ansible.builtin.debug:
-    msg: >-
-      PostgreSQL database declaration for {{ podman_services_service.name }} is
-      {{ podman_services_service.postgres.databases | default([]) | join(', ') }}.
-      Database creation is intentionally not performed by podman_services.
-  changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Prep | Render container Quadlet

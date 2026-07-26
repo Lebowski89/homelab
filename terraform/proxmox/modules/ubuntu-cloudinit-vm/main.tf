@@ -131,6 +131,16 @@ resource "proxmox_virtual_environment_vm" "this" {
 
   lifecycle {
     precondition {
+      condition     = can(cidrnetmask(var.ipv4_address))
+      error_message = "ipv4_address must be a valid IPv4 CIDR."
+    }
+
+    precondition {
+      condition     = can(cidrnetmask("${var.ipv4_gateway}/32"))
+      error_message = "ipv4_gateway must be a valid IPv4 address."
+    }
+
+    precondition {
       condition     = length(var.dns_servers) > 0
       error_message = "At least one DNS server must be supplied to the Ubuntu VM module."
     }

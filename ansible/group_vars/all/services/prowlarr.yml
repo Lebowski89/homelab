@@ -86,7 +86,6 @@ prowlarr:
     databases:
       - prowlarr-main
       - prowlarr-log
-    clean_sqlite: true
   deploy:
     type: swarm
     mode: replicated

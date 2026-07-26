@@ -4,6 +4,14 @@
 # PREP (INFISICAL FETCH)
 ################################
 
+- name: Prep - Infisical Fetch | Reset per-service adapter values
+  when: inventory_hostname == docker_services_primary_manager
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_infisical_values: {}
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Prep - Infisical Fetch | Include tasks
   when: inventory_hostname == docker_services_primary_manager
   ansible.builtin.include_tasks:
@@ -16,11 +24,12 @@
     secrets_map: "{{ (docker_services_svc.infisical | default({})).secrets_map | default([]) }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep - Infisical Fetch | Snapshot value-free service secret declarations
+- name: Prep - Infisical Fetch | Snapshot common per-service outputs
   when: inventory_hostname == docker_services_primary_manager
   no_log: true
   diff: false
   ansible.builtin.set_fact:
+    docker_services_infisical_values: "{{ service_common_infisical_values }}"
     docker_services_secret_declarations: "{{ service_common_secret_declarations }}"
     docker_services_resolved_environment: "{{ service_common_resolved_environment }}"
   tags: [deploy, update, recreate, bootstrap]

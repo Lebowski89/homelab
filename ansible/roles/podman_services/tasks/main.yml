@@ -35,6 +35,14 @@
       {{ (podman_services_service_cfg.infisical | default({})).fail_on_empty | default(true) }}
   tags: [deploy, update, recreate, bootstrap]
 
+- name: Podman services | Snapshot common Infisical values
+  when: podman_services_common_action in ["deploy", "update", "recreate", "bootstrap"]
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_infisical_values: "{{ service_common_infisical_values }}"
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Podman services | Attach common resolved environment
   when: podman_services_common_action in ["deploy", "update", "recreate", "bootstrap"]
   no_log: true
@@ -68,6 +76,7 @@
       {{ podman_services_service | combine({"paths": podman_services_service.host_paths}, recursive=true) }}
     service_common_target_hosts: ["{{ inventory_hostname }}"]
     service_common_controller_host: "{{ podman_services_traefik_delegate }}"
+    service_common_infisical_values: "{{ podman_services_infisical_values }}"
     service_common_default_owner: >-
       {{ podman_services_service.container.uid | default("1000") }}
     service_common_default_group: >-
@@ -143,7 +152,7 @@
     service_common_service: "{{ podman_services_service }}"
     service_common_target_hosts: ["{{ inventory_hostname }}"]
     service_common_controller_host: "{{ podman_services_traefik_delegate }}"
-    service_common_traefik_base_zone: "{{ service_common_infisical_values.cloudflare_zone }}"
+    service_common_traefik_base_zone: "{{ podman_services_infisical_values.cloudflare_zone }}"
     service_common_traefik_dynamic_dir: "{{ podman_services_traefik_dynamic_dir }}"
     service_common_traefik_owner: "{{ podman_services_traefik_dynamic_owner }}"
     service_common_traefik_group: "{{ podman_services_traefik_dynamic_group }}"
