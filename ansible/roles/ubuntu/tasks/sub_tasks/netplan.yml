@@ -3,6 +3,8 @@
 - name: Normalize Netplan address and interface inputs
   ansible.builtin.set_fact:
     ubuntu_netplan_ipv4_address: "{{ local_ip | default('') | string | trim }}"
+    ubuntu_netplan_ipv4_gateway: "{{ ubuntu_defaults_netplan_gateway | default('') | string | trim }}"
+    ubuntu_netplan_ipv4_pattern: '^(?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])(?:[.](?:25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])){3}\Z'
     ubuntu_netplan_requested_interface: "{{ ubuntu_netplan_interface | default('') | string | trim }}"
     ubuntu_netplan_discovered_interface: >-
       {{ ansible_facts.get('default_ipv4', {}).get('interface', '') | string | trim }}
@@ -20,13 +22,15 @@
   ansible.builtin.assert:
     that:
       - local_ip is defined
-      - ubuntu_netplan_ipv4_address | length > 0
+      - ubuntu_netplan_ipv4_address is match(ubuntu_netplan_ipv4_pattern)
+      - ubuntu_netplan_ipv4_gateway is match(ubuntu_netplan_ipv4_pattern)
       - ubuntu_netplan_prefix | int >= 1
       - ubuntu_netplan_prefix | int <= 32
       - ubuntu_netplan_effective_interface | length > 0
     fail_msg: >-
-      Netplan requires local_ip, a prefix between 1 and 32, and either
-      ubuntu_netplan_interface or a discovered default IPv4 interface.
+      Netplan requires a plain static IPv4 address without CIDR syntax, an IPv4
+      gateway, a prefix between 1 and 32, and either ubuntu_netplan_interface
+      or a discovered default IPv4 interface.
 
 - name: Disable cloud-init network configuration
   when: ubuntu_netplan_disable_cloud_init_networking | bool
