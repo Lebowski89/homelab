@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/25 |
+| Readme update        | 2026/07/26 |
 
 
 
@@ -201,8 +201,11 @@
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
+| Normalize Netplan address and interface inputs | ansible.builtin.set_fact | False |
+| Resolve effective Netplan interface | ansible.builtin.set_fact | False |
 | Assert Netplan inputs are valid | ansible.builtin.assert | False |
 | Disable cloud-init network configuration | ansible.builtin.copy | True |
+| Remove cloud-init network configuration disablement | ansible.builtin.file | True |
 | Find existing Netplan configs | ansible.builtin.find | False |
 | Remove unmanaged Netplan configs | ansible.builtin.file | True |
 | Render Netplan config | ansible.builtin.template | False |
