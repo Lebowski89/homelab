@@ -1,7 +1,7 @@
 module "n8n_vm" {
   source = "../../modules/ubuntu-cloudinit-vm"
 
-  name                 = var.vm_name
+  name                 = local.vm_name
   description          = var.vm_description
   vm_id                = var.vm_id
   node_name            = var.target_node

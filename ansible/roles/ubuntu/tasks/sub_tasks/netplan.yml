@@ -1,20 +1,29 @@
 ---
 
+- name: Normalize Netplan address and interface inputs
+  ansible.builtin.set_fact:
+    ubuntu_netplan_ipv4_address: "{{ local_ip | default('') | string | trim }}"
+    ubuntu_netplan_requested_interface: "{{ ubuntu_netplan_interface | default('') | string | trim }}"
+    ubuntu_netplan_discovered_interface: >-
+      {{ ansible_facts.get('default_ipv4', {}).get('interface', '') | string | trim }}
+
+- name: Resolve effective Netplan interface
+  ansible.builtin.set_fact:
+    ubuntu_netplan_effective_interface: >-
+      {{
+        ubuntu_netplan_requested_interface
+        if ubuntu_netplan_requested_interface | length > 0
+        else ubuntu_netplan_discovered_interface
+      }}
+
 - name: Assert Netplan inputs are valid
   ansible.builtin.assert:
     that:
       - local_ip is defined
-      - local_ip | trim | length > 0
+      - ubuntu_netplan_ipv4_address | length > 0
       - ubuntu_netplan_prefix | int >= 1
       - ubuntu_netplan_prefix | int <= 32
-      - >-
-        (
-          ubuntu_netplan_interface | default('') | trim | length > 0
-        )
-        or
-        (
-          ansible_facts.get('default_ipv4', {}).get('interface', '') | length > 0
-        )
+      - ubuntu_netplan_effective_interface | length > 0
     fail_msg: >-
       Netplan requires local_ip, a prefix between 1 and 32, and either
       ubuntu_netplan_interface or a discovered default IPv4 interface.
@@ -29,6 +38,12 @@
     content: |
       network:
         config: disabled
+
+- name: Remove cloud-init network configuration disablement
+  when: not (ubuntu_netplan_disable_cloud_init_networking | bool)
+  ansible.builtin.file:
+    path: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+    state: absent
 
 - name: Find existing Netplan configs
   ansible.builtin.find:
@@ -73,8 +88,8 @@
   when: ubuntu_netplan_verify_address | bool
   ansible.builtin.assert:
     that:
-      - local_ip in (ansible_facts.all_ipv4_addresses | default([]))
+      - ubuntu_netplan_ipv4_address in (ansible_facts.all_ipv4_addresses | default([]))
     fail_msg: >-
-      Expected static address {{ local_ip }} is not assigned after applying
+      Expected static address {{ ubuntu_netplan_ipv4_address }} is not assigned after applying
       Netplan. Assigned addresses:
       {{ ansible_facts.all_ipv4_addresses | default([]) | join(', ') }}

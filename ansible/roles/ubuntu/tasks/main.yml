@@ -95,7 +95,9 @@
     - ubuntu_network
 
 - name: Ubuntu | Configure Netplan
-  when: ubuntu_netplan_enabled | bool
+  when:
+    - ubuntu_netplan_enabled | bool
+    - (ansible_facts.virtualization_type | default("")) != "lxc"
   ansible.builtin.include_tasks:
     file: sub_tasks/netplan.yml
     apply:

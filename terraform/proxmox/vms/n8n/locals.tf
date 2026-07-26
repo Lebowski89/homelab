@@ -7,7 +7,8 @@ locals {
     {},
   ) : {}
 
-  vm_name = trimspace(var.vm_name)
+  vm_name         = trimspace(var.vm_name)
+  vm_gateway_host = trimspace(var.vm_gateway_host)
 
   explicit_vm_ipv4_address = trimspace(var.vm_ipv4_address)
   vm_ipv4_address = local.explicit_vm_ipv4_address != "" ? local.explicit_vm_ipv4_address : trimspace(
@@ -16,7 +17,7 @@ locals {
 
   explicit_vm_ipv4_gateway = trimspace(var.vm_ipv4_gateway)
   vm_ipv4_gateway = local.explicit_vm_ipv4_gateway != "" ? local.explicit_vm_ipv4_gateway : trimspace(
-    lookup(local.netbox_host_primary_ipv4, var.vm_gateway_host, "")
+    lookup(local.netbox_host_primary_ipv4, local.vm_gateway_host, "")
   )
 
   dns_ips = merge(
