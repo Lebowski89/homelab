@@ -129,8 +129,7 @@
 | ---- | ------ | -------------- | -----|
 | Init ¦ Normalize role interface vars (compat with old names) | ansible.builtin.set_fact | False |  |
 | Init ¦ Ensure docker_services_service_cfg is provided | ansible.builtin.assert | False |  |
-| Init ¦ Derive effective target name | ansible.builtin.set_fact | False |  |
-| Init ¦ Normalize service config | ansible.builtin.set_fact | False |  |
+| Init ¦ Use catalog-resolved service config | ansible.builtin.set_fact | False |  |
 | Init ¦ Determine whether schema validation should run | ansible.builtin.set_fact | False |  |
 | Init ¦ Validate normalized service config | ansible.builtin.include_tasks | True |  |
 | Init ¦ Derive common service context | ansible.builtin.set_fact | False |  |

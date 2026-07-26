@@ -88,6 +88,7 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Init ¦ Assert catalog-resolved service config | ansible.builtin.assert | False |  |
 | Init ¦ Normalize service | ansible.builtin.set_fact | False |  |
 | Init ¦ Derive normalized systemd unit name | ansible.builtin.set_fact | False |  |
 | Init ¦ Reset per-service transient facts | ansible.builtin.set_fact | False |  |
