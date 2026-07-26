@@ -1,5 +1,16 @@
 ---
 
+- name: Init | Assert catalog-resolved service config
+  ansible.builtin.assert:
+    that:
+      - podman_services_service_cfg is defined
+      - podman_services_service_cfg is mapping
+      - podman_services_service_cfg.targets is not defined
+    fail_msg: >-
+      podman_services requires a catalog-resolved podman_services_service_cfg mapping
+      without a targets key.
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
 - name: Init | Normalize service
   ansible.builtin.set_fact:
     podman_services_service: "{{ podman_services_service_cfg | podman_service_normalize(podman_services_role_prefix) }}"

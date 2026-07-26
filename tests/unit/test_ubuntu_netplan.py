@@ -1,6 +1,9 @@
 from pathlib import Path
 
+import pytest
 import yaml
+from ansible.plugins.filter.core import FilterModule
+from ansible.plugins.test.core import TestModule as AnsibleTestModule
 from jinja2 import Environment, FileSystemLoader
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -9,17 +12,34 @@ MAIN_TASKS = yaml.safe_load((UBUNTU_ROLE / "tasks/main.yml").read_text())
 NETPLAN_TASKS = yaml.safe_load((UBUNTU_ROLE / "tasks/sub_tasks/netplan.yml").read_text())
 NETPLAN_TEMPLATE_PATH = UBUNTU_ROLE / "templates/netplan-config.yaml.j2"
 NETPLAN_TEMPLATE = NETPLAN_TEMPLATE_PATH.read_text()
+ANSIBLE_BOOL = FilterModule().filters()["bool"]
+ANSIBLE_MATCH = AnsibleTestModule().tests()["match"]
 
 
 def task_named(tasks, name):
     return next(task for task in tasks if task["name"] == name)
 
 
-def normalize_netplan_values(local_ip, requested_interface, discovered_interface):
+def ansible_environment():
     environment = Environment()
+    environment.filters["bool"] = ANSIBLE_BOOL
+    environment.tests["match"] = ANSIBLE_MATCH
+    return environment
+
+
+def normalize_netplan_values(
+    local_ip,
+    requested_interface,
+    discovered_interface,
+    gateway="192.0.2.1",
+    prefix=24,
+):
+    environment = ansible_environment()
     values = {
         "local_ip": local_ip,
+        "ubuntu_defaults_netplan_gateway": gateway,
         "ubuntu_netplan_interface": requested_interface,
+        "ubuntu_netplan_prefix": prefix,
         "ansible_facts": {
             "default_ipv4": {
                 "interface": discovered_interface,
@@ -40,10 +60,19 @@ def normalize_netplan_values(local_ip, requested_interface, discovered_interface
     return values
 
 
+def validate_netplan_values(*args, **kwargs):
+    environment = ansible_environment()
+    values = normalize_netplan_values(*args, **kwargs)
+    task = task_named(NETPLAN_TASKS, "Assert Netplan inputs are valid")
+    failed = [condition for condition in task["ansible.builtin.assert"]["that"] if not environment.compile_expression(condition)(**values)]
+    if failed:
+        raise AssertionError(task["ansible.builtin.assert"]["fail_msg"])
+    return values
+
+
 def netplan_include_selected(enabled, virtualization_type, opentofu_managed=False):
     task = task_named(MAIN_TASKS, "Ubuntu | Configure Netplan")
-    environment = Environment()
-    environment.filters["bool"] = bool
+    environment = ansible_environment()
     variables = {
         "ubuntu_netplan_enabled": enabled,
         "ansible_facts": {"virtualization_type": virtualization_type},
@@ -57,6 +86,17 @@ def test_netplan_normalization_trims_local_ip():
     values = normalize_netplan_values("  192.0.2.10  ", "ens18", "ens19")
 
     assert values["ubuntu_netplan_ipv4_address"] == "192.0.2.10"
+
+
+def test_netplan_normalization_trims_gateway():
+    values = normalize_netplan_values(
+        "192.0.2.10",
+        "ens18",
+        "ens19",
+        gateway="  192.0.2.1  ",
+    )
+
+    assert values["ubuntu_netplan_ipv4_gateway"] == "192.0.2.1"
 
 
 def test_netplan_normalization_trims_explicit_interface():
@@ -84,20 +124,66 @@ def test_netplan_template_renders_only_normalized_address_and_interface():
         ubuntu_netplan_ipv4_address="192.0.2.10",
         ubuntu_netplan_effective_interface="ens18",
         ubuntu_netplan_prefix=24,
+        ubuntu_netplan_ipv4_gateway="192.0.2.1",
         ubuntu_defaults_netplan_nameservers=["192.0.2.53"],
         ubuntu_netplan_search_domains=["example.test"],
-        ubuntu_defaults_netplan_gateway="192.0.2.1",
         local_ip="  198.51.100.20  ",
         ubuntu_netplan_interface="  raw-interface  ",
     )
     config = yaml.safe_load(rendered)
 
     assert set(config["network"]["ethernets"]) == {"ens18"}
-    assert config["network"]["ethernets"]["ens18"]["addresses"] == ["192.0.2.10/24"]
+    interface = config["network"]["ethernets"]["ens18"]
+    assert interface["addresses"] == ["192.0.2.10/24"]
+    assert interface["dhcp4"] is False
+    assert interface["dhcp6"] is False
     assert "198.51.100.20" not in rendered
     assert "raw-interface" not in rendered
     assert "local_ip" not in NETPLAN_TEMPLATE
     assert "ubuntu_netplan_interface" not in NETPLAN_TEMPLATE
+    assert "ubuntu_defaults_netplan_gateway" not in NETPLAN_TEMPLATE
+
+
+@pytest.mark.parametrize("address", ["999.0.2.10", "not-an-address"])
+def test_netplan_validation_rejects_malformed_address(address):
+    with pytest.raises(AssertionError, match="plain static IPv4 address"):
+        validate_netplan_values(address, "ens18", "ens19")
+
+
+def test_netplan_validation_rejects_address_with_cidr():
+    with pytest.raises(AssertionError, match="without CIDR syntax"):
+        validate_netplan_values("192.0.2.10/24", "ens18", "ens19")
+
+
+def test_netplan_validation_rejects_invalid_gateway():
+    with pytest.raises(AssertionError, match="IPv4.*gateway"):
+        validate_netplan_values("192.0.2.10", "ens18", "ens19", gateway="192.0.2.999")
+
+
+@pytest.mark.parametrize("prefix", [0, 33])
+def test_netplan_validation_rejects_invalid_prefix(prefix):
+    with pytest.raises(AssertionError, match="prefix between 1 and 32"):
+        validate_netplan_values("192.0.2.10", "ens18", "ens19", prefix=prefix)
+
+
+def test_netplan_validation_rejects_missing_interface():
+    with pytest.raises(AssertionError, match="default IPv4 interface"):
+        validate_netplan_values("192.0.2.10", "   ", "   ")
+
+
+def test_netplan_validation_precedes_all_file_mutations():
+    validation = task_named(NETPLAN_TASKS, "Assert Netplan inputs are valid")
+    mutating_tasks = [
+        task
+        for task in NETPLAN_TASKS
+        if "ansible.builtin.copy" in task
+        or "ansible.builtin.file" in task
+        or "ansible.builtin.template" in task
+        or "ansible.builtin.meta" in task
+    ]
+
+    assert mutating_tasks
+    assert all(NETPLAN_TASKS.index(validation) < NETPLAN_TASKS.index(task) for task in mutating_tasks)
 
 
 def test_post_apply_verification_uses_normalized_ipv4_address():
@@ -129,18 +215,26 @@ def test_cloud_init_network_disable_file_has_true_and_false_lifecycle_paths():
     assert "tags" not in remove
 
 
-def test_netplan_include_excludes_lxc_but_keeps_supported_vms():
+@pytest.mark.parametrize("enabled", [True, "true"])
+def test_netplan_include_accepts_ansible_true_values(enabled):
+    assert netplan_include_selected(enabled, "kvm") is True
+
+
+@pytest.mark.parametrize("enabled", [False, "false"])
+def test_netplan_include_rejects_ansible_false_values(enabled):
+    assert netplan_include_selected(enabled, "kvm") is False
+
+
+def test_netplan_include_excludes_lxc():
     assert netplan_include_selected(True, "lxc") is False
-    assert netplan_include_selected(True, "kvm") is True
-    assert netplan_include_selected(True, "qemu") is True
-    assert netplan_include_selected(False, "kvm") is False
 
 
-def test_opentofu_inventory_tag_does_not_exclude_supported_vm():
+@pytest.mark.parametrize("virtualization_type", ["kvm", "qemu"])
+def test_opentofu_inventory_tag_does_not_exclude_supported_vm(virtualization_type):
     task = task_named(MAIN_TASKS, "Ubuntu | Configure Netplan")
     conditions = " ".join(task["when"])
 
-    assert netplan_include_selected(True, "kvm", opentofu_managed=True) is True
+    assert netplan_include_selected(True, virtualization_type, opentofu_managed=True) is True
     assert "tags_opentofu_managed" not in conditions
     assert task["ansible.builtin.include_tasks"]["file"] == "sub_tasks/netplan.yml"
     assert set(task["ansible.builtin.include_tasks"]["apply"]["tags"]) == {

@@ -193,10 +193,7 @@ def test_real_n8n_postgres_declaration_resolves_with_common_values():
 
 def test_real_autobrr_adapter_snapshot_reaches_common_postgres_normalization():
     autobrr = yaml.safe_load(AUTOBRR_PATH.read_text())["autobrr"]
-    adapter_values = {
-        entry["var"]: f"value-for-{entry['var']}"
-        for entry in autobrr["infisical"]["secrets_map"]
-    }
+    adapter_values = {entry["var"]: f"value-for-{entry['var']}" for entry in autobrr["infisical"]["secrets_map"]}
 
     result = normalize(autobrr["postgres"], values=adapter_values)
 
@@ -209,10 +206,7 @@ def test_real_autobrr_adapter_snapshot_reaches_common_postgres_normalization():
 
 def test_adapter_reset_prevents_previous_values_satisfying_later_omitted_declaration():
     autobrr = yaml.safe_load(AUTOBRR_PATH.read_text())["autobrr"]
-    previous_adapter_values = {
-        entry["var"]: f"value-for-{entry['var']}"
-        for entry in autobrr["infisical"]["secrets_map"]
-    }
+    previous_adapter_values = {entry["var"]: f"value-for-{entry['var']}" for entry in autobrr["infisical"]["secrets_map"]}
     later_service = {
         "infisical": {
             "secrets_map": [
@@ -228,10 +222,7 @@ def test_adapter_reset_prevents_previous_values_satisfying_later_omitted_declara
             "databases": ["later"],
         },
     }
-    later_adapter_values = {
-        entry["var"]: f"value-for-{entry['var']}"
-        for entry in later_service["infisical"]["secrets_map"]
-    }
+    later_adapter_values = {entry["var"]: f"value-for-{entry['var']}" for entry in later_service["infisical"]["secrets_map"]}
 
     assert "postgres_pass" in previous_adapter_values
     assert "postgres_pass" not in later_adapter_values

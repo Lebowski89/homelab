@@ -4,7 +4,7 @@
 
 Service orchestration now has three responsibility boundaries:
 
-1. `service_catalog` loads definitions, expands targets, preserves tag/enabled selection, and chooses `docker` or `podman` (defaulting legacy definitions to Docker).
+1. `service_catalog` loads definitions, selects and resolves targets with the canonical base-plus-target merge, preserves tag/enabled selection, and chooses `docker` or `podman` (defaulting legacy definitions to Docker).
 2. `service_common` prepares paths, copies static assets, renders application templates, manages shared Traefik dynamic files, and validates and retrieves runtime-neutral Infisical values. It receives an already-normalized service and explicit target/controller hosts. It does not choose a runtime or create runtime resources.
 3. `docker_services` and `podman_services` remain runtime adapters. Docker retains Compose/Swarm and batched stack deployment; Podman retains Quadlets and immediate per-service lifecycle operations.
 
@@ -17,7 +17,9 @@ service_catalog
   -> shared integrations
 ```
 
-Docker continues to build Compose state inside the selected-service loop and deploy all accumulated stacks after the loop. Podman continues to handle each selected service immediately.
+Docker continues to build Compose state inside the selected-service loop and deploy all accumulated stacks after the loop. Podman continues to handle each selected service immediately. Both adapters receive the same catalog-resolved configuration; neither adapter expands targets independently.
+
+The canonical target merge recursively combines mappings, appends ordinary additive lists with append-rp semantics, removes exact duplicates, and lets target scalars override base scalars. `command`, `entrypoint`, and `healthcheck.test` replace their base lists. Target `runtime` overrides the base runtime, base and target `enabled` values both participate in selection, and `targets` is removed from the resolved configuration before adapter dispatch. The legacy `docker_services_merge_target` filter remains only as a compatibility wrapper around this catalog-owned implementation.
 
 ## Common role interface
 
@@ -32,7 +34,7 @@ Shared Traefik files use `<service-name>-dynamic.yml`. A successful render remov
 
 ## Deliberately retained runtime responsibilities
 
-`docker_services` retains target/schema compatibility, deploy-host calculation, cleanup, Compose construction and filters, labels, ports, volumes, Docker secrets, Swarm configs, stack accumulation/deployment, image drift, and the application-specific tasks below.
+`docker_services` retains schema compatibility, deploy-host calculation, cleanup, Compose construction and filters, labels, ports, volumes, Docker secrets, Swarm configs, stack accumulation/deployment, image drift, and the application-specific tasks below.
 
 `podman_services` retains exact-image and UID/GID validation, dedicated-network validation, Podman secrets and replacement policy, images, Quadlet rendering, generated systemd units, lifecycle operations, and image drift.
 

@@ -43,10 +43,6 @@ docker_secrets = load_module(
     REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_secrets.py",
     "n8n_docker_secrets",
 )
-docker_merge = load_module(
-    REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_merge.py",
-    "n8n_docker_merge",
-)
 docker_lists = load_module(
     REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_list_fields.py",
     "n8n_docker_lists",
@@ -200,8 +196,9 @@ def test_runtime_only_copy_is_accepted_by_docker_port_volume_secret_and_catalog_
     docker_cfg = copy.deepcopy(cfg)
     docker_cfg["runtime"] = "docker"
 
-    assert catalog.service_catalog_effective({"n8n": docker_cfg})[0]["runtime"] == "docker"
-    docker_service = docker_merge.docker_services_merge_target(docker_cfg)
+    docker_item = catalog.service_catalog_effective({"n8n": docker_cfg})[0]
+    assert docker_item["runtime"] == "docker"
+    docker_service = docker_item["config"]
     assert docker_service["image"] == docker_cfg["image"]
     assert docker_service["environment"] == docker_cfg["environment"]
     assert resolved_environment["N8N_HOST"] == "n8n.int.example.test"
@@ -268,7 +265,7 @@ def docker_compose_service_from_real_n8n():
     cfg, _, _, ports, volumes, _, mounts, resolved_environment = normalize_both()
     docker_cfg = copy.deepcopy(cfg)
     docker_cfg["runtime"] = "docker"
-    normalized = docker_merge.docker_services_merge_target(docker_cfg)
+    normalized = catalog.service_catalog_effective({"n8n": docker_cfg})[0]["config"]
     security_opt = docker_lists.docker_services_merge_string_list(
         normalized.get("security_opt", []),
         docker_lists.docker_services_no_new_privileges_security_opts(
