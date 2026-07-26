@@ -15,6 +15,30 @@ in this file.
 - If requirements conflict with the current architecture, stop and explain the
   conflict before editing.
 
+## Repository Tooling Environment
+
+Python and Ansible tooling is installed in:
+
+`/opt/ansible/ansible-venv`
+
+Do not assume `python`, `ruff`, `pytest`, `ansible-lint`, or
+`ansible-playbook` are globally available.
+
+Prefer invoking the virtual-environment binaries explicitly:
+
+- `/opt/ansible/ansible-venv/bin/python`
+- `/opt/ansible/ansible-venv/bin/ruff`
+- `/opt/ansible/ansible-venv/bin/ansible-lint`
+- `/opt/ansible/ansible-venv/bin/ansible-playbook`
+
+If activating the environment instead, activation and all dependent commands
+must run within the same shell invocation.
+
+Before reporting validation success, confirm that the Ruff version matches the
+version pinned in `ansible/requirements.txt`. If the environment is missing or
+outdated, report that rather than installing or upgrading dependencies without
+authorization.
+
 ## Absolute Safety Boundaries
 
 Unless the user explicitly authorizes a specific action in the current request:
