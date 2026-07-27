@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/26 |
+| Readme update        | 2026/07/27 |
 
 
 
@@ -84,6 +84,7 @@
 | Service common Infisical ¦ Publish lookup config and value-free secret declarations | ansible.builtin.set_fact | False |  |
 | Service common environment ¦ Validate and normalize canonical environment | ansible.builtin.set_fact | False |  |
 | Service common Infisical ¦ Validate lookup parameters | ansible.builtin.assert | True |  |
+| Service common Infisical ¦ Publish current-service lookup request | ansible.builtin.set_fact | True |  |
 | Service common Infisical ¦ Fetch requested values | ansible.builtin.set_fact | True |  |
 | Service common Infisical ¦ Enforce empty-value policy | ansible.builtin.set_fact | True |  |
 | Service common Infisical ¦ Build deterministic check-mode values | ansible.builtin.set_fact | True |  |
