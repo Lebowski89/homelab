@@ -233,6 +233,7 @@ def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
     normalize_environment = next(task for task in tasks if "Validate and normalize canonical environment" in task["name"])
     validate_params = next(task for task in tasks if "Validate lookup parameters" in task["name"])
     fetch = next(task for task in tasks if "Fetch requested values" in task["name"])
+    lookup_request = next(task for task in tasks if "Publish current-service lookup request" in task["name"])
     finalize = next(task for task in tasks if "Enforce empty-value policy" in task["name"])
     check_values = next(task for task in tasks if "Build deterministic check-mode values" in task["name"])
     compatibility = next(task for task in tasks if "temporary values compatibility alias" in task["name"])
@@ -240,6 +241,7 @@ def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
 
     reset_facts = reset["ansible.builtin.set_fact"]
     assert reset_facts["service_common_infisical_config"] == {}
+    assert reset_facts["service_common_infisical_lookup_request"] == {}
     assert reset_facts["service_common_infisical_values"] == {}
     assert reset_facts["service_common_secret_values"] == {}
     assert reset_facts["service_common_secret_declarations"] == []
@@ -247,6 +249,19 @@ def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
     assert tasks.index(reset) < tasks.index(normalize_declarations) < tasks.index(normalize_environment)
     assert tasks.index(normalize_environment) < tasks.index(fetch) < tasks.index(finalize) < tasks.index(resolve)
     assert fetch["when"] == "not ansible_check_mode"
+    assert lookup_request["when"] == [
+        "not ansible_check_mode",
+        "service_common_infisical_config.secrets_map | length > 0",
+    ]
+    assert lookup_request["ansible.builtin.set_fact"]["service_common_infisical_lookup_request"] == {
+        "controller_host": "{{ service_common_controller_host | default(inventory_hostname, true) }}",
+        "params": "{{ service_common_infisical_lookup_params }}",
+        "secrets_map": "{{ service_common_infisical_config.secrets_map }}",
+    }
+    assert "hostvars[inventory_hostname].service_common_infisical_lookup_request.controller_host" in fetch["delegate_to"]
+    assert "default(inventory_hostname, true)" in fetch["delegate_to"]
+    assert "delegate_facts" not in fetch
+    assert all("delegate_to" not in task for task in tasks if task is not fetch)
     assert finalize["when"] == "not ansible_check_mode"
     assert check_values["when"] == "ansible_check_mode"
     assert "service_common_infisical_values" in str(compatibility["ansible.builtin.set_fact"])
@@ -254,6 +269,9 @@ def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
     assert "check_mode_value" not in fetch_expression
     assert "service_common_infisical_item.path" in fetch_expression
     assert "service_common_infisical_item.name" in fetch_expression
+    assert "hostvars[inventory_hostname].service_common_infisical_values" in fetch_expression
+    assert "hostvars[inventory_hostname].service_common_infisical_lookup_request.params" in fetch_expression
+    assert fetch["loop"] == "{{ hostvars[inventory_hostname].service_common_infisical_lookup_request.secrets_map }}"
     assert "infisical.vault.read_secrets" in COMMON_INFISICAL_TASKS
     assert "infisical.vault.read_secrets" not in DOCKER_FETCH_TASKS
     assert "infisical.vault.read_secrets" not in PODMAN_PREP
@@ -289,7 +307,13 @@ def test_check_mode_validates_infisical_declarations_without_lookup_or_materiali
     include_fetch = next(task for task in tasker if task["name"] == "Prep - Infisical Fetch | Include tasks")
     assert "when" not in include_fetch
     fetch = yaml.safe_load(DOCKER_FETCH_TASKS)[0]
-    assert fetch["ansible.builtin.include_role"]["apply"]["delegate_to"] == "{{ docker_services_primary_manager }}"
+    assert "delegate_to" not in fetch
+    assert "delegate_to" not in fetch["ansible.builtin.include_role"]["apply"]
+    assert fetch["vars"]["service_common_controller_host"] == "{{ docker_services_primary_manager }}"
+    assert (
+        "hostvars[docker_services_primary_manager].infisical_lookup_default_params"
+        in fetch["vars"]["service_common_infisical_lookup_params"]
+    )
     assert "Prep - Infisical Resolver | Include tasks on deploy host\n  when:\n    - not ansible_check_mode" in DOCKER_INFISICAL_TASKER
     assert "Prep - Infisical Secrets | Include tasks\n  when:\n    - not ansible_check_mode" in DOCKER_INFISICAL_TASKER
     assert "Resolve common Infisical values and environment" in PODMAN_MAIN

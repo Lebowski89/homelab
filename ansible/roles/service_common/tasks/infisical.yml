@@ -5,6 +5,7 @@
   diff: false
   ansible.builtin.set_fact:
     service_common_infisical_config: {}
+    service_common_infisical_lookup_request: {}
     service_common_infisical_values: {}
     service_common_secret_values: {}
     service_common_secret_declarations: []
@@ -60,6 +61,20 @@
     fail_msg: "service_common_infisical_lookup_params must be a mapping."
   tags: [deploy, update, recreate, bootstrap, drift]
 
+- name: Service common Infisical | Publish current-service lookup request
+  when:
+    - not ansible_check_mode
+    - service_common_infisical_config.secrets_map | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_common_infisical_lookup_request:
+      controller_host: >-
+        {{ service_common_controller_host | default(inventory_hostname, true) }}
+      params: "{{ service_common_infisical_lookup_params }}"
+      secrets_map: "{{ service_common_infisical_config.secrets_map }}"
+  tags: [deploy, update, recreate, bootstrap, drift]
+
 - name: Service common Infisical | Fetch requested values
   when: not ansible_check_mode
   no_log: true
@@ -67,21 +82,26 @@
   ansible.builtin.set_fact:
     service_common_infisical_values: >-
       {{
-        service_common_infisical_values
+        hostvars[inventory_hostname].service_common_infisical_values
         | combine({
             service_common_infisical_item.var: lookup(
               "infisical.vault.read_secrets",
-              **(service_common_infisical_lookup_params | combine({
+              **(hostvars[inventory_hostname].service_common_infisical_lookup_request.params | combine({
                 "path": service_common_infisical_item.path,
                 "secret_name": service_common_infisical_item.name
               }))
             ).value
           })
       }}
-  loop: "{{ service_common_infisical_config.secrets_map }}"
+  loop: "{{ hostvars[inventory_hostname].service_common_infisical_lookup_request.secrets_map }}"
   loop_control:
     loop_var: service_common_infisical_item
     label: "{{ service_common_infisical_item.var }}"
+  delegate_to: >-
+    {{
+      hostvars[inventory_hostname].service_common_infisical_lookup_request.controller_host
+      | default(inventory_hostname, true)
+    }}
   tags: [deploy, update, recreate, bootstrap, drift]
 
 - name: Service common Infisical | Enforce empty-value policy
