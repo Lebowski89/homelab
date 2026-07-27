@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/26 |
+| Readme update        | 2026/07/27 |
 
 
 
@@ -158,7 +158,7 @@
 | Prep - Authelia ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
 | Prep - qBittorrent ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
 | Prep - Traefik zone ¦ Resolve Docker compatibility input | ansible.builtin.include_tasks | True |  |
-| Prep - Service common ¦ Prepare files and Traefik integration | ansible.builtin.include_role | True |  |
+| Prep - Service common ¦ Prepare files and Traefik integration | ansible.builtin.include_role | False |  |
 | Prep - Swarm Env Templates ¦ Render templates | ansible.builtin.include_role | True |  |
 | Prep - Plex ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
 | Prep - Bazarr ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
@@ -537,9 +537,9 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
-| Prep - Infisical Fetch ¦ Reset per-service adapter values | ansible.builtin.set_fact | True |  |
-| Prep - Infisical Fetch ¦ Include tasks | ansible.builtin.include_tasks | True |  |
-| Prep - Infisical Fetch ¦ Snapshot common per-service outputs | ansible.builtin.set_fact | True |  |
+| Prep - Infisical Fetch ¦ Reset per-service adapter values | ansible.builtin.set_fact | False |  |
+| Prep - Infisical Fetch ¦ Include tasks | ansible.builtin.include_tasks | False |  |
+| Prep - Infisical Fetch ¦ Snapshot common per-service outputs | ansible.builtin.set_fact | False |  |
 | Prep - Infisical Fetch ¦ Attach common resolved environment on every role host | ansible.builtin.set_fact | False |  |
 | Prep - Infisical Resolver ¦ Include tasks on deploy host | ansible.builtin.include_tasks | True |  |
 | Prep - Infisical Resolver ¦ Propagate Infisical flattened vars to deploy host | ansible.builtin.set_fact | True |  |
