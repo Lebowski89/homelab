@@ -5,7 +5,6 @@
 ################################
 
 - name: Prep - Infisical Fetch | Reset per-service adapter values
-  when: inventory_hostname == docker_services_primary_manager
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -13,7 +12,6 @@
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Prep - Infisical Fetch | Include tasks
-  when: inventory_hostname == docker_services_primary_manager
   ansible.builtin.include_tasks:
     file: _fetch.yml
     apply:
@@ -25,7 +23,6 @@
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Prep - Infisical Fetch | Snapshot common per-service outputs
-  when: inventory_hostname == docker_services_primary_manager
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -42,7 +39,7 @@
       {{
         docker_services_svc
         | combine({
-            "environment": hostvars[docker_services_primary_manager].docker_services_resolved_environment
+            "environment": docker_services_resolved_environment
           }, recursive=false)
       }}
   tags: [deploy, update, recreate, bootstrap]

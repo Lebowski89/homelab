@@ -1,0 +1,23 @@
+---
+
+- name: Service catalog dispatch | Reset Podman transient configuration
+  ansible.builtin.set_fact:
+    podman_services_dispatch_config: {}
+
+- name: Service catalog dispatch | Copy Podman materialized configuration
+  ansible.builtin.set_fact:
+    podman_services_dispatch_config: "{{ service_catalog_podman_service.config }}"
+
+- name: Service catalog dispatch | Include Podman service role
+  ansible.builtin.include_role:
+    name: podman_services
+  vars:
+    podman_services_service_cfg: "{{ podman_services_dispatch_config }}"
+    podman_services_service_cfg_found: true
+    podman_services_service_target: "{{ service_catalog_podman_service.target | default(omit) }}"
+    podman_services_role_prefix: >-
+      {{ service_catalog_podman_service.name }}{{
+        '-' ~ service_catalog_podman_service.target
+        if service_catalog_podman_service.target is defined
+        else ''
+      }}

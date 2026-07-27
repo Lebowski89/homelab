@@ -3,8 +3,10 @@ from __future__ import annotations
 import copy
 import importlib.util
 import json
+import os
 import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -196,9 +198,9 @@ def test_runtime_only_copy_is_accepted_by_docker_port_volume_secret_and_catalog_
     docker_cfg = copy.deepcopy(cfg)
     docker_cfg["runtime"] = "docker"
 
-    docker_item = catalog.service_catalog_effective({"n8n": docker_cfg})[0]
+    docker_item = catalog.service_catalog_effective({"n8n": docker_cfg}, "manager")[0]
     assert docker_item["runtime"] == "docker"
-    docker_service = docker_item["config"]
+    docker_service = catalog.service_catalog_merge_target(docker_cfg)
     assert docker_service["image"] == docker_cfg["image"]
     assert docker_service["environment"] == docker_cfg["environment"]
     assert resolved_environment["N8N_HOST"] == "n8n.int.example.test"
@@ -265,7 +267,7 @@ def docker_compose_service_from_real_n8n():
     cfg, _, _, ports, volumes, _, mounts, resolved_environment = normalize_both()
     docker_cfg = copy.deepcopy(cfg)
     docker_cfg["runtime"] = "docker"
-    normalized = catalog.service_catalog_effective({"n8n": docker_cfg})[0]["config"]
+    normalized = catalog.service_catalog_merge_target(docker_cfg)
     security_opt = docker_lists.docker_services_merge_string_list(
         normalized.get("security_opt", []),
         docker_lists.docker_services_no_new_privileges_security_opts(
@@ -534,3 +536,113 @@ def test_ansible_service_loading_finalizes_n8n_without_infisical_values(tmp_path
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "undefined" not in result.stderr.lower()
+
+
+def test_n8n_docker_check_mode_keeps_infisical_facts_on_dispatch_host(tmp_path):
+    ansible_playbook = Path(sys.executable).with_name("ansible-playbook")
+    playbook = tmp_path / "n8n-docker-infisical-ownership.yml"
+    playbook.write_text(
+        """---
+- name: Exercise Docker Infisical ownership away from the manager
+  hosts: all
+  strategy: linear
+  connection: local
+  gather_facts: false
+  vars:
+    docker_services_primary_manager: manager
+    docker_services_deploy_host_effective: dispatch
+    docker_services_stack_deploy_type: container
+    docker_services_is_deploy_host: true
+    infisical_lookup_default_params: must-not-be-used-in-check-mode
+    infisical_flatten: true
+  tasks:
+    - name: Seed manager inventory and deliberately stale common facts
+      when: inventory_hostname == "manager"
+      ansible.builtin.set_fact:
+        local_ip: 192.0.2.10
+        service_common_infisical_config:
+          secrets_map:
+            - var: manager_stale
+              path: /Synthetic
+              name: STALE
+        service_common_infisical_values:
+          cloudflare_zone: manager-stale.invalid
+          manager_stale: manager-stale-value
+        service_common_secret_values:
+          manager_stale: manager-stale-value
+        service_common_secret_declarations:
+          - name: manager_stale_secret
+        service_common_resolved_environment:
+          N8N_HOST: manager-stale.invalid
+        docker_services_infisical_values:
+          manager_stale: manager-docker-stale-value
+        docker_services_secret_declarations:
+          - name: manager_docker_stale_secret
+        docker_services_resolved_environment:
+          N8N_HOST: manager-docker-stale.invalid
+
+    - name: Seed dispatch-host inventory values
+      when: inventory_hostname == "dispatch"
+      ansible.builtin.set_fact:
+        local_ip: 192.0.2.98
+
+    - name: Load the real n8n declaration on its dispatch host
+      when: inventory_hostname == "dispatch"
+      ansible.builtin.include_vars:
+        file: __N8N_PATH__
+        name: n8n_svcfiles
+
+    - name: Switch only the n8n runtime to Docker
+      when: inventory_hostname == "dispatch"
+      ansible.builtin.set_fact:
+        docker_services_svc: >-
+          {{ n8n_svcfiles.n8n | combine({"runtime": "docker"}, recursive=true) }}
+
+    - name: Resolve n8n through the Docker Infisical tasker
+      when: inventory_hostname == "dispatch"
+      ansible.builtin.include_tasks:
+        file: __DOCKER_INFISICAL_TASKER__
+
+    - name: Verify dispatch ownership and stale-manager isolation
+      when: inventory_hostname == "manager"
+      ansible.builtin.assert:
+        that:
+          - hostvars.dispatch.service_common_infisical_values.cloudflare_zone == "check-mode.invalid"
+          - hostvars.dispatch.service_common_secret_values.cloudflare_zone == "check-mode.invalid"
+          - hostvars.dispatch.service_common_resolved_environment.N8N_HOST == "n8n.int.check-mode.invalid"
+          - hostvars.dispatch.docker_services_infisical_values.cloudflare_zone == "check-mode.invalid"
+          - hostvars.dispatch.docker_services_resolved_environment.N8N_HOST == "n8n.int.check-mode.invalid"
+          - hostvars.dispatch.docker_services_svc.environment.N8N_HOST == "n8n.int.check-mode.invalid"
+          - hostvars.dispatch.docker_services_svc.environment.DB_POSTGRESDB_HOST == "192.0.2.10"
+          - hostvars.dispatch.service_common_infisical_config.secrets_map | map(attribute="var") | list == ["cloudflare_zone", "postgres_user", "postgres_pass", "n8n_encryption_key"]
+          - hostvars.dispatch.docker_services_secret_declarations | map(attribute="name") | list == ["postgres_user_secret", "postgres_pass_secret", "n8n_encryption_key_secret"]
+          - hostvars.manager.service_common_infisical_values.manager_stale == "manager-stale-value"
+          - hostvars.manager.service_common_resolved_environment.N8N_HOST == "manager-stale.invalid"
+          - hostvars.manager.docker_services_infisical_values.manager_stale == "manager-docker-stale-value"
+          - hostvars.manager.docker_services_resolved_environment.N8N_HOST == "manager-docker-stale.invalid"
+""".replace("__N8N_PATH__", str(N8N_PATH)).replace(
+            "__DOCKER_INFISICAL_TASKER__",
+            str(REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/tasker.yml"),
+        )
+    )
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "ANSIBLE_CONFIG": str(REPO_ROOT / "ansible/ansible.cfg"),
+            "ANSIBLE_LOCAL_TEMP": str(tmp_path / "ansible-local"),
+        }
+    )
+
+    result = subprocess.run(
+        [str(ansible_playbook), "-i", "manager,dispatch,", str(playbook), "--check"],
+        cwd=REPO_ROOT,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Service common Infisical | Fetch requested values" in result.stdout
+    assert "skipping: [dispatch]" in result.stdout
+    assert "undefined" not in (result.stdout + result.stderr).lower()

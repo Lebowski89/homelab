@@ -1,4 +1,5 @@
 import importlib.util
+from copy import deepcopy
 from pathlib import Path
 
 import yaml
@@ -8,6 +9,11 @@ SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
 DOCKER_INIT_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/_init.yml"
 PODMAN_INIT_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/init.yml"
+DOCKER_TASKS_DIR = REPO_ROOT / "ansible/roles/docker_services/tasks"
+PODMAN_TASKS_DIR = REPO_ROOT / "ansible/roles/podman_services/tasks"
+GLOBAL_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch.yml"
+DOCKER_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_docker.yml"
+PODMAN_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_podman.yml"
 
 
 def load_module(path, name):
@@ -46,9 +52,9 @@ def test_service_catalog_preserves_existing_docker_expansion_ordering():
     services = load_services()
 
     legacy = docker_filters.docker_services_effective(services)
-    effective = catalog_filters.service_catalog_effective(services)
+    effective = catalog_filters.service_catalog_effective(services, "manager")
     catalog_docker = [
-        {key: value for key, value in item.items() if key not in {"runtime", "config"}}
+        {key: value for key, value in item.items() if key not in {"runtime", "dispatch_host"}}
         for item in catalog_filters.service_catalog_by_runtime(effective, "docker")
     ]
 
@@ -56,7 +62,7 @@ def test_service_catalog_preserves_existing_docker_expansion_ordering():
 
 
 def selected_without_runtime(items):
-    return [{key: value for key, value in item.items() if key not in {"runtime", "config"}} for item in items]
+    return [{key: value for key, value in item.items() if key not in {"runtime", "dispatch_host"}} for item in items]
 
 
 def assert_selector_parity(services, run_tags=None, run_all=False, allow_disabled=False):
@@ -66,7 +72,7 @@ def assert_selector_parity(services, run_tags=None, run_all=False, allow_disable
     legacy_effective = docker_filters.docker_services_effective(services)
     legacy_selected = docker_filters.docker_services_select(legacy_effective, run_tags, run_all, allow_disabled)
 
-    catalog_effective = catalog_filters.service_catalog_effective(services)
+    catalog_effective = catalog_filters.service_catalog_effective(services, "manager")
     catalog_selected = catalog_filters.service_catalog_select(catalog_effective, run_tags, run_all, allow_disabled)
     catalog_docker_selected = catalog_filters.service_catalog_by_runtime(catalog_selected["selected"], "docker")
 
@@ -85,12 +91,63 @@ def test_service_catalog_preserves_docker_selector_parity_for_real_services():
     assert_selector_parity(services, run_tags=[disabled_name], allow_disabled=True)
 
 
+def test_real_repository_catalog_contains_only_lightweight_selection_metadata():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_lightweight_repository",
+    )
+
+    effective = catalog_filters.service_catalog_effective(load_services(), "manager")
+
+    assert effective
+    assert all("config" not in item for item in effective)
+    assert all(set(item) <= {"name", "target", "runtime", "tags", "enabled", "dispatch_host"} for item in effective)
+
+
+def test_real_repository_dispatch_hosts_are_lightweight_and_runtime_specific():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_repository_dispatch",
+    )
+    effective = catalog_filters.service_catalog_effective(load_services(), "manager")
+    arrs = [item for item in effective if "arrs" in item["tags"]]
+    n8n = next(item for item in effective if item["name"] == "n8n")
+
+    assert arrs
+    assert all(item["runtime"] == "docker" for item in arrs)
+    assert all(item["dispatch_host"] == "manager" for item in arrs)
+    assert n8n["runtime"] == "podman"
+    assert n8n["dispatch_host"] == "n8n"
+    assert all("config" not in item for item in [*arrs, n8n])
+
+
+def test_real_repository_dispatch_hosts_match_repository_host_definitions():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_repository_hosts",
+    )
+    services = deepcopy(load_services())
+    for service in services.values():
+        configurations = [service, *(service.get("targets", {}) or {}).values()]
+        for configuration in configurations:
+            deploy = configuration.get("deploy", {})
+            if deploy.get("host") == "{{ docker_services_primary_manager }}":
+                deploy["host"] = "mgt"
+
+    effective = catalog_filters.service_catalog_effective(services, "mgt")
+    repository_hosts = {path.stem for path in (REPO_ROOT / "ansible/host_vars").glob("*.yml")}
+    repository_hosts.update(path.name for path in (REPO_ROOT / "terraform/proxmox/vms").iterdir() if path.is_dir())
+
+    assert {entry["dispatch_host"] for entry in effective} == {"mgt", "n8n"}
+    assert all(entry["dispatch_host"] in repository_hosts for entry in effective)
+
+
 def test_real_services_without_runtime_still_default_to_docker():
     catalog_filters = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog_defaults")
     services = load_services()
     service_name = next(name for name, cfg in services.items() if "runtime" not in cfg and "targets" not in cfg)
 
-    item = next(item for item in catalog_filters.service_catalog_effective(services) if item["name"] == service_name)
+    item = next(item for item in catalog_filters.service_catalog_effective(services, "manager") if item["name"] == service_name)
 
     assert item["runtime"] == "docker"
 
@@ -102,11 +159,12 @@ def test_real_sonarr_catalog_target_keeps_effective_configuration():
     )
     item = next(
         item
-        for item in catalog_filters.service_catalog_effective(load_services())
+        for item in catalog_filters.service_catalog_effective(load_services(), "manager")
         if item["name"] == "sonarr" and item.get("target") == "sonarr"
     )
 
-    effective = item["config"]
+    services = load_services()
+    effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item["target"])
 
     assert "targets" not in effective
     assert effective["name"] == "sonarr"
@@ -116,14 +174,178 @@ def test_real_sonarr_catalog_target_keeps_effective_configuration():
     assert effective["traefik"] == {"enable": True, "exposure": "private", "port": 8989}
 
 
-def test_playbook_passes_catalog_resolved_config_to_both_adapters():
-    playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
-    docker_task = task_named(playbook, "Process each Docker service")
-    podman_task = task_named(playbook, "Process each Podman service")
+def test_cross_host_standalone_services_retain_global_catalog_order():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_cross_host_order",
+    )
+    services = {
+        "first": {"deploy": {"type": "container", "host": "docker-a"}},
+        "second": {"deploy": {"type": "container", "host": "docker-b"}},
+    }
 
-    assert docker_task["vars"]["docker_services_service_cfg"] == "{{ item.config }}"
-    assert podman_task["vars"]["podman_services_service_cfg"] == "{{ item.config }}"
-    assert "combine" not in podman_task["vars"]["podman_services_service_cfg"]
+    selected = catalog_filters.service_catalog_select(
+        catalog_filters.service_catalog_effective(services, "manager"),
+        run_all=True,
+    )["selected"]
+
+    assert [(entry["name"], entry["dispatch_host"]) for entry in selected] == [
+        ("first", "docker-a"),
+        ("second", "docker-b"),
+    ]
+
+
+def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
+    playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
+    deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")
+    deploy_tasks = deploy_play["tasks"]
+    assert deploy_play["strategy"] == "linear"
+    catalog_task = task_named(playbook, "Build service catalog processing list from service definitions")
+    selection_task = task_named(playbook, "Build selected service catalog processing list")
+    selection_extract_task = task_named(playbook, "Extract service catalog selection facts")
+    dispatch_host_validation = task_named(playbook, "Validate selected service dispatch hosts")
+    share_task = task_named(playbook, "Share lightweight service catalog selection with play hosts")
+    global_dispatch_task = task_named(playbook, "Process globally ordered service catalog")
+    deploy_all_task = task_named(playbook, "Deploy all Docker stacks")
+
+    assert catalog_task["when"] == "inventory_hostname == docker_services_primary_manager"
+    assert selection_task["when"] == "inventory_hostname == docker_services_primary_manager"
+    catalog_expression = catalog_task["ansible.builtin.set_fact"]["service_catalog_effective"]
+    assert "svcfiles | service_catalog_effective(docker_services_primary_manager)" in catalog_expression
+    assert "service_catalog_effective" not in share_task["ansible.builtin.set_fact"]
+
+    expected_tags = {"deploy", "update", "remove", "recreate", "bootstrap", "drift"}
+    assert dispatch_host_validation["when"] == "inventory_hostname == docker_services_primary_manager"
+    assert dispatch_host_validation["loop"] == "{{ service_catalog_selected }}"
+    assert dispatch_host_validation["loop_control"]["loop_var"] == "service_catalog_dispatch_item"
+    assert dispatch_host_validation["ansible.builtin.assert"]["that"] == [
+        "service_catalog_dispatch_item.dispatch_host in ansible_play_hosts_all"
+    ]
+    dispatch_failure = dispatch_host_validation["ansible.builtin.assert"]["fail_msg"]
+    assert "service_catalog_dispatch_item.name" in dispatch_failure
+    assert "service_catalog_dispatch_item.target" in dispatch_failure
+    assert "service_catalog_dispatch_item.dispatch_host" in dispatch_failure
+    assert set(dispatch_host_validation["tags"]) == expected_tags
+    assert deploy_tasks.index(selection_extract_task) < deploy_tasks.index(dispatch_host_validation)
+    assert deploy_tasks.index(dispatch_host_validation) < deploy_tasks.index(share_task)
+    assert deploy_tasks.index(share_task) < deploy_tasks.index(global_dispatch_task)
+    assert deploy_tasks.index(global_dispatch_task) < deploy_tasks.index(deploy_all_task)
+
+    shared_facts = share_task["ansible.builtin.set_fact"]
+    assert set(shared_facts) == {
+        "service_catalog_matched",
+        "service_catalog_selected",
+        "service_catalog_disabled_only_selection",
+    }
+    assert "config" not in str(shared_facts)
+    assert "materialized" not in str(shared_facts)
+
+    assert global_dispatch_task["loop"] == "{{ service_catalog_selected }}"
+    assert global_dispatch_task["loop_control"]["loop_var"] == "service_catalog_dispatch_entry"
+    assert "when" not in global_dispatch_task
+    assert global_dispatch_task["ansible.builtin.include_tasks"]["file"] == "tasks/service_catalog_dispatch.yml"
+    assert set(global_dispatch_task["tags"]) == expected_tags
+    assert set(global_dispatch_task["ansible.builtin.include_tasks"]["apply"]["tags"]) == expected_tags
+    assert "service_catalog_host_selected" not in PLAYBOOK_PATH.read_text()
+    assert "docker_services_selected" not in PLAYBOOK_PATH.read_text()
+    assert "podman_services_selected" not in PLAYBOOK_PATH.read_text()
+    assert any("service_catalog_selected" in condition for condition in deploy_all_task["when"])
+    assert any("service_catalog_by_runtime('docker')" in condition for condition in deploy_all_task["when"])
+
+    global_dispatch = yaml.safe_load(GLOBAL_DISPATCH_PATH.read_text())
+    reset = task_named(global_dispatch, "Service catalog dispatch | Reset host-local materialized result")
+    materialize = task_named(global_dispatch, "Service catalog dispatch | Materialize selected entry on dispatch host")
+    copy_result = task_named(global_dispatch, "Service catalog dispatch | Copy returned materialized entry")
+    validate = task_named(global_dispatch, "Service catalog dispatch | Validate single materialized entry")
+    docker_route = task_named(global_dispatch, "Service catalog dispatch | Process Docker entry")
+    podman_route = task_named(global_dispatch, "Service catalog dispatch | Process Podman entry")
+
+    assert global_dispatch.index(reset) < global_dispatch.index(materialize) < global_dispatch.index(copy_result)
+    assert global_dispatch.index(copy_result) < global_dispatch.index(validate)
+    assert global_dispatch.index(validate) < global_dispatch.index(docker_route)
+    assert global_dispatch.index(validate) < global_dispatch.index(podman_route)
+    assert reset["ansible.builtin.set_fact"]["service_catalog_host_materialized"] == []
+    expected_host_condition = "inventory_hostname == service_catalog_dispatch_entry.dispatch_host"
+    assert materialize["when"] == expected_host_condition
+    assert validate["when"] == expected_host_condition
+    assert materialize["service_catalog_materialize"] == {
+        "source_var": "svcfiles",
+        "selected": ["{{ service_catalog_dispatch_entry }}"],
+    }
+    assert materialize["register"] == "service_catalog_materialize_result"
+    assert copy_result["when"] == expected_host_condition
+    assert copy_result["ansible.builtin.set_fact"]["service_catalog_host_materialized"] == (
+        "{{ service_catalog_materialize_result.ansible_facts.service_catalog_host_materialized }}"
+    )
+    assert validate["ansible.builtin.assert"]["that"] == [
+        "service_catalog_host_materialized is sequence",
+        "service_catalog_host_materialized | length == 1",
+        "service_catalog_host_materialized[0].config is mapping",
+    ]
+    for route, runtime, filename, variable in (
+        (docker_route, "docker", "service_catalog_dispatch_docker.yml", "service_catalog_docker_service"),
+        (podman_route, "podman", "service_catalog_dispatch_podman.yml", "service_catalog_podman_service"),
+    ):
+        assert route["when"] == [expected_host_condition, f'service_catalog_dispatch_entry.runtime == "{runtime}"']
+        assert route["ansible.builtin.include_tasks"]["file"] == filename
+        assert set(route["tags"]) == expected_tags
+        assert set(route["ansible.builtin.include_tasks"]["apply"]["tags"]) == expected_tags
+        assert route["vars"][variable] == "{{ service_catalog_host_materialized[0] }}"
+
+    assert "{{ svcfiles }}" not in GLOBAL_DISPATCH_PATH.read_text()
+    assert "hostvars" not in GLOBAL_DISPATCH_PATH.read_text()
+    assert "delegate_to" not in GLOBAL_DISPATCH_PATH.read_text()
+    assert "delegate_facts" not in GLOBAL_DISPATCH_PATH.read_text()
+
+    docker_dispatch = yaml.safe_load(DOCKER_DISPATCH_PATH.read_text())
+    podman_dispatch = yaml.safe_load(PODMAN_DISPATCH_PATH.read_text())
+    docker_reset = task_named(
+        docker_dispatch,
+        "Service catalog dispatch | Reset Docker transient configuration",
+    )
+    docker_copy = task_named(
+        docker_dispatch,
+        "Service catalog dispatch | Copy Docker materialized configuration",
+    )
+    docker_include = task_named(
+        docker_dispatch,
+        "Service catalog dispatch | Include Docker service role",
+    )
+    podman_reset = task_named(
+        podman_dispatch,
+        "Service catalog dispatch | Reset Podman transient configuration",
+    )
+    podman_copy = task_named(
+        podman_dispatch,
+        "Service catalog dispatch | Copy Podman materialized configuration",
+    )
+    podman_include = task_named(
+        podman_dispatch,
+        "Service catalog dispatch | Include Podman service role",
+    )
+
+    assert docker_reset["ansible.builtin.set_fact"]["docker_services_dispatch_config"] == {}
+    assert podman_reset["ansible.builtin.set_fact"]["podman_services_dispatch_config"] == {}
+    assert docker_dispatch.index(docker_reset) < docker_dispatch.index(docker_copy) < docker_dispatch.index(docker_include)
+    assert podman_dispatch.index(podman_reset) < podman_dispatch.index(podman_copy) < podman_dispatch.index(podman_include)
+
+    assert docker_copy["ansible.builtin.set_fact"]["docker_services_dispatch_config"] == ("{{ service_catalog_docker_service.config }}")
+    assert podman_copy["ansible.builtin.set_fact"]["podman_services_dispatch_config"] == ("{{ service_catalog_podman_service.config }}")
+    assert "svcfiles" not in DOCKER_DISPATCH_PATH.read_text()
+    assert "svcfiles" not in PODMAN_DISPATCH_PATH.read_text()
+    assert "service_catalog_merge_target" not in DOCKER_DISPATCH_PATH.read_text()
+    assert "service_catalog_merge_target" not in PODMAN_DISPATCH_PATH.read_text()
+    assert docker_include["vars"]["docker_services_service_cfg_found"] is True
+    assert podman_include["vars"]["podman_services_service_cfg_found"] is True
+    assert "default(service_cfg_found" not in DOCKER_DISPATCH_PATH.read_text()
+    assert "default(service_cfg_found" not in PODMAN_DISPATCH_PATH.read_text()
+    assert "when" not in docker_include
+    assert "when" not in podman_include
+
+    assert docker_include["vars"]["docker_services_service_cfg"] == "{{ docker_services_dispatch_config }}"
+    assert podman_include["vars"]["podman_services_service_cfg"] == "{{ podman_services_dispatch_config }}"
+    assert "service_catalog_merge_target" not in str(docker_include["vars"])
+    assert "service_catalog_merge_target" not in str(podman_include["vars"])
 
     docker_init = yaml.safe_load(DOCKER_INIT_PATH.read_text())
     docker_config = task_named(docker_init, "Init | Use catalog-resolved service config")
@@ -132,6 +354,7 @@ def test_playbook_passes_catalog_resolved_config_to_both_adapters():
     podman_assert = task_named(podman_init, "Init | Assert catalog-resolved service config")
 
     assert docker_config["ansible.builtin.set_fact"]["docker_services_svc"] == "{{ docker_services_service_cfg }}"
-    assert "docker_services_merge_target" not in DOCKER_INIT_PATH.read_text()
+    adapter_tasks = "\n".join(path.read_text() for tasks_dir in (DOCKER_TASKS_DIR, PODMAN_TASKS_DIR) for path in tasks_dir.rglob("*.yml"))
+    assert "merge_target" not in adapter_tasks
     assert "docker_services_service_cfg.targets is not defined" in docker_assert["ansible.builtin.assert"]["that"]
     assert "podman_services_service_cfg.targets is not defined" in podman_assert["ansible.builtin.assert"]["that"]

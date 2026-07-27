@@ -72,8 +72,13 @@ def materialized_secret_names(service):
 
 
 def effective_service_configs(services):
-    for item in SERVICE_CATALOG.service_catalog_effective(services):
-        yield item["name"], item.get("target", "<base>"), item["config"]
+    effective = SERVICE_CATALOG.service_catalog_effective(services, "manager")
+    for item in effective:
+        yield (
+            item["name"],
+            item.get("target", "<base>"),
+            SERVICE_CATALOG.service_catalog_merge_target(services[item["name"]], item.get("target")),
+        )
 
 
 def assert_postgres_credentials_declared(services):

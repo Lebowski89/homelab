@@ -114,7 +114,6 @@
 
 - name: Prep - Traefik zone | Resolve Docker compatibility input
   when:
-    - inventory_hostname == docker_services_primary_manager
     - docker_services_svc.traefik.enable | default(false) | bool
   ansible.builtin.include_tasks:
     file: sub_tasks/prep/traefik_zone.yml
@@ -127,7 +126,6 @@
 ################################
 
 - name: Prep - Service common | Prepare files and Traefik integration
-  when: inventory_hostname == docker_services_primary_manager
   no_log: true
   ansible.builtin.include_role:
     name: service_common

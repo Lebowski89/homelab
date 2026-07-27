@@ -10,10 +10,15 @@
       no_log: true
       diff: false
   vars:
+    service_common_controller_host: "{{ docker_services_primary_manager }}"
     service_common_environment: >-
       {{ infisical_environment | default((docker_services_svc | default({})).environment | default({})) }}
     service_common_infisical_secrets_map: "{{ secrets_map | default([]) }}"
-    service_common_infisical_lookup_params: "{{ infisical_lookup_default_params | default({}) }}"
+    service_common_infisical_lookup_params: >-
+      {{
+        hostvars[docker_services_primary_manager].infisical_lookup_default_params
+        | default(infisical_lookup_default_params | default({}), true)
+      }}
     service_common_infisical_fail_on_empty: "{{ infisical_fail_on_empty | default(true) }}"
     service_common_legacy_docker_secrets: "{{ (docker_services_svc | default({})).secrets | default([]) }}"
   tags: [deploy, update, recreate, bootstrap, drift]

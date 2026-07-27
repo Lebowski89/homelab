@@ -43,6 +43,7 @@
   hosts: tags_skynet
   become: true
   any_errors_fatal: true
+  strategy: linear
 
   pre_tasks:
     - name: Gather packages
@@ -288,17 +289,15 @@
         fail_msg: "svcfiles is empty or not a dict. include_vars did not load your service files."
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
-    - name: Use svcfiles as the services mapping
-      ansible.builtin.set_fact:
-        services: "{{ svcfiles }}"
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
-
     - name: Build service catalog processing list from service definitions
+      when: inventory_hostname == docker_services_primary_manager
       ansible.builtin.set_fact:
-        service_catalog_effective: "{{ services | service_catalog_effective }}"
+        service_catalog_effective: >-
+          {{ svcfiles | service_catalog_effective(docker_services_primary_manager) }}
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Assert service catalog processing list was built
+      when: inventory_hostname == docker_services_primary_manager
       ansible.builtin.assert:
         that:
           - service_catalog_effective is defined
@@ -314,6 +313,7 @@
       tags: [drift]
 
     - name: Build selected service catalog processing list
+      when: inventory_hostname == docker_services_primary_manager
       ansible.builtin.set_fact:
         service_catalog_selection: >-
           {{
@@ -327,12 +327,42 @@
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Extract service catalog selection facts
+      when: inventory_hostname == docker_services_primary_manager
       ansible.builtin.set_fact:
         service_catalog_matched: "{{ service_catalog_selection.matched }}"
         service_catalog_selected: "{{ service_catalog_selection.selected }}"
         service_catalog_disabled_only_selection: "{{ service_catalog_selection.disabled_only }}"
-        docker_services_selected: "{{ service_catalog_selection.selected | service_catalog_by_runtime('docker') }}"
-        podman_services_selected: "{{ service_catalog_selection.selected | service_catalog_by_runtime('podman') }}"
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+    - name: Validate selected service dispatch hosts
+      when: inventory_hostname == docker_services_primary_manager
+      ansible.builtin.assert:
+        that:
+          - service_catalog_dispatch_item.dispatch_host in ansible_play_hosts_all
+        fail_msg: >-
+          Selected service {{ service_catalog_dispatch_item.name }}{{
+            ':' ~ service_catalog_dispatch_item.target
+            if service_catalog_dispatch_item.target is defined
+            else ''
+          }} dispatches to {{ service_catalog_dispatch_item.dispatch_host }},
+          which is not present in the current play.
+      loop: "{{ service_catalog_selected }}"
+      loop_control:
+        loop_var: service_catalog_dispatch_item
+        label: >-
+          {{ service_catalog_dispatch_item.name }}{{
+            ':' ~ service_catalog_dispatch_item.target
+            if service_catalog_dispatch_item.target is defined
+            else ''
+          }}
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+    - name: Share lightweight service catalog selection with play hosts
+      ansible.builtin.set_fact:
+        service_catalog_matched: "{{ hostvars[docker_services_primary_manager].service_catalog_matched }}"
+        service_catalog_selected: "{{ hostvars[docker_services_primary_manager].service_catalog_selected }}"
+        service_catalog_disabled_only_selection: >-
+          {{ hostvars[docker_services_primary_manager].service_catalog_disabled_only_selection }}
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Report disabled service selection in check mode
@@ -377,45 +407,20 @@
           }}
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
-    - name: Process each Docker service
-      ansible.builtin.include_role:
-        name: docker_services
-      vars:
-        docker_services_service_cfg: "{{ item.config }}"
-        docker_services_service_target: "{{ item.target | default(omit) }}"
-        docker_services_role_prefix: "{{ item.name }}"
-        docker_services_service_cfg_found: "{{ (services[item.name] is defined) | bool }}"
-      loop: "{{ docker_services_selected }}"
+    - name: Process globally ordered service catalog
+      ansible.builtin.include_tasks:
+        file: tasks/service_catalog_dispatch.yml
+        apply:
+          tags: [deploy, update, remove, recreate, bootstrap, drift]
+      loop: "{{ service_catalog_selected }}"
       loop_control:
-        label: "{{ item.name }}{{ ':' ~ item.target if item.target is defined else '' }}"
-      when:
-        - docker_services_service_cfg_found | bool
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
-
-    - name: Process each Podman service
-      ansible.builtin.include_role:
-        name: podman_services
-      vars:
-        podman_services_service_cfg: "{{ item.config }}"
-        podman_services_service_target: "{{ item.target | default(omit) }}"
-        podman_services_role_prefix: "{{ item.name }}{{ '-' ~ item.target if item.target is defined else '' }}"
-        podman_services_service_cfg_found: "{{ (services[item.name] is defined) | bool }}"
-      loop: "{{ podman_services_selected | default([]) }}"
-      loop_control:
-        label: "{{ item.name }}{{ ':' ~ item.target if item.target is defined else '' }}"
-      when:
-        - podman_services_service_cfg_found | bool
-        - >-
-          inventory_hostname
-          ==
-          (
-            (podman_services_service_cfg.deploy | default({})).host
-            | default(
-                (podman_services_service_cfg.container | default({})).host
-                | default(item.name, true),
-                true
-              )
-          )
+        loop_var: service_catalog_dispatch_entry
+        label: >-
+          {{ service_catalog_dispatch_entry.name }}{{
+            ':' ~ service_catalog_dispatch_entry.target
+            if service_catalog_dispatch_entry.target is defined
+            else ''
+          }}
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Drift | Report image drift summary
@@ -453,7 +458,12 @@
       no_log: true
       when:
         - inventory_hostname == docker_services_primary_manager
-        - docker_services_selected | default([]) | length > 0
+        - >-
+          (
+            service_catalog_selected
+            | service_catalog_by_runtime('docker')
+            | length
+          ) > 0
         - not (ci_mode | default(false) | bool)
       ansible.builtin.include_tasks:
         file: "{{ playbook_dir }}/roles/docker_services/tasks/sub_tasks/deploy/all.yml"

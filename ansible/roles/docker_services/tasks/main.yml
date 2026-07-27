@@ -16,7 +16,7 @@
 ################################
 
 - name: Drift | Include image drift check
-  when: inventory_hostname == docker_services_primary_manager
+  when: docker_services_is_deploy_host | bool
   ansible.builtin.include_tasks:
     file: sub_tasks/drift/image.yml
     apply:

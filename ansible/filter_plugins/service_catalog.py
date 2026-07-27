@@ -123,9 +123,60 @@ def _unique(values: list[Any]) -> list[Any]:
     return out
 
 
-def service_catalog_effective(services: Mapping[str, Any]) -> list[dict[str, Any]]:
+def _effective_section(
+    service_cfg: Mapping[str, Any],
+    target_cfg: Mapping[str, Any] | None,
+    key: str,
+    *,
+    name: str,
+) -> dict[str, Any]:
+    base_value = service_cfg.get(key, {})
+    if target_cfg is None or key not in target_cfg:
+        value = base_value
+    else:
+        target_value = target_cfg[key]
+        value = (
+            _merge_recursive_append_rp(base_value, target_value)
+            if isinstance(base_value, Mapping) and isinstance(target_value, Mapping)
+            else target_value
+        )
+
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise AnsibleFilterError(f"{name}.{key} must be a mapping, got {type(value).__name__}")
+    return dict(value)
+
+
+def _dispatch_host(
+    service_name: str,
+    runtime: str,
+    service_cfg: Mapping[str, Any],
+    target_cfg: Mapping[str, Any] | None,
+    docker_manager: str,
+    *,
+    name: str,
+) -> str:
+    deploy = _effective_section(service_cfg, target_cfg, "deploy", name=name)
+    container = _effective_section(service_cfg, target_cfg, "container", name=name)
+
+    if runtime == "docker":
+        deploy_type = str(deploy.get("type", "swarm") or "swarm").strip()
+        raw_host = docker_manager if deploy_type == "swarm" else (deploy.get("host") or docker_manager)
+    else:
+        raw_host = deploy.get("host") or container.get("host") or service_name
+
+    if not isinstance(raw_host, str) or not raw_host.strip():
+        raise AnsibleFilterError(f"{name} dispatch host must be a non-empty string, got {raw_host!r}")
+    return raw_host.strip()
+
+
+def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) -> list[dict[str, Any]]:
     if not isinstance(services, Mapping):
         raise AnsibleFilterError(f"services must be a mapping, got {type(services).__name__}")
+    if not isinstance(docker_manager, str) or not docker_manager.strip():
+        raise AnsibleFilterError(f"docker_manager must be a non-empty string, got {docker_manager!r}")
+    normalized_docker_manager = docker_manager.strip()
     out: list[dict[str, Any]] = []
     for service_name, service_cfg in services.items():
         if not isinstance(service_cfg, Mapping):
@@ -143,7 +194,14 @@ def service_catalog_effective(services: Mapping[str, Any]) -> list[dict[str, Any
                     "tags": service_tags,
                     "enabled": service_enabled,
                     "runtime": service_runtime,
-                    "config": service_catalog_merge_target(service_cfg),
+                    "dispatch_host": _dispatch_host(
+                        service_name,
+                        service_runtime,
+                        service_cfg,
+                        None,
+                        normalized_docker_manager,
+                        name=service_name,
+                    ),
                 }
             )
             continue
@@ -154,15 +212,15 @@ def service_catalog_effective(services: Mapping[str, Any]) -> list[dict[str, Any
         for target_name, target_cfg in targets.items():
             if not isinstance(target_cfg, Mapping):
                 raise AnsibleFilterError(f"{service_name}.targets.{target_name} must be a mapping, got {type(target_cfg).__name__}")
+            if "targets" in target_cfg:
+                raise AnsibleFilterError(f"{service_name}.targets.{target_name} must not contain nested targets")
 
-            effective_config = service_catalog_merge_target(service_cfg, target_name)
-            target_runtime = _runtime(
-                effective_config.get("runtime", service_runtime), name=f"{service_name}.targets.{target_name}.runtime"
-            )
+            target_runtime = _runtime(target_cfg.get("runtime", service_runtime), name=f"{service_name}.targets.{target_name}.runtime")
             target_enabled = _as_bool(target_cfg.get("enabled", True), name=f"{service_name}.targets.{target_name}.enabled", default=True)
             target_tags = _unique(
                 service_tags + [target_name] + _as_list(target_cfg.get("tags", []), name=f"{service_name}.targets.{target_name}.tags")
             )
+            target_path = f"{service_name}.targets.{target_name}"
             out.append(
                 {
                     "name": service_name,
@@ -170,7 +228,14 @@ def service_catalog_effective(services: Mapping[str, Any]) -> list[dict[str, Any
                     "tags": target_tags,
                     "enabled": service_enabled and target_enabled,
                     "runtime": target_runtime,
-                    "config": effective_config,
+                    "dispatch_host": _dispatch_host(
+                        service_name,
+                        target_runtime,
+                        service_cfg,
+                        target_cfg,
+                        normalized_docker_manager,
+                        name=target_path,
+                    ),
                 }
             )
     return out

@@ -239,8 +239,35 @@ def docker_services_build_deploy_config(
     return deploy_dict
 
 
+def docker_services_attach_deploy_config(
+    compose_services: Any,
+    service_name: Any,
+    deploy_config: Any,
+) -> dict[str, Any]:
+    if not _is_mapping(compose_services):
+        raise AnsibleFilterError(f"docker_services_compose_services must be a mapping, got {type(compose_services).__name__}.")
+
+    normalized_service_name = _as_str(service_name)
+    if not normalized_service_name:
+        raise AnsibleFilterError("docker_services_service_name must be a non-empty string.")
+    if not _is_mapping(deploy_config):
+        raise AnsibleFilterError(f"deploy config must be a mapping, got {type(deploy_config).__name__}.")
+
+    current_service = compose_services.get(normalized_service_name, {})
+    if not _is_mapping(current_service):
+        raise AnsibleFilterError(f"Compose service {normalized_service_name!r} must be a mapping, got {type(current_service).__name__}.")
+
+    result = dict(compose_services)
+    result[normalized_service_name] = _recursive_merge(
+        current_service,
+        {"deploy": deploy_config},
+    )
+    return result
+
+
 class FilterModule:
     def filters(self) -> dict[str, Any]:
         return {
             "docker_services_build_deploy_config": docker_services_build_deploy_config,
+            "docker_services_attach_deploy_config": docker_services_attach_deploy_config,
         }
