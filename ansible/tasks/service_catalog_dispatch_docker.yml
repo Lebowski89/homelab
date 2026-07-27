@@ -1,0 +1,18 @@
+---
+
+- name: Service catalog dispatch | Reset Docker transient configuration
+  ansible.builtin.set_fact:
+    docker_services_dispatch_config: {}
+
+- name: Service catalog dispatch | Copy Docker materialized configuration
+  ansible.builtin.set_fact:
+    docker_services_dispatch_config: "{{ service_catalog_docker_service.config }}"
+
+- name: Service catalog dispatch | Include Docker service role
+  ansible.builtin.include_role:
+    name: docker_services
+  vars:
+    docker_services_service_cfg: "{{ docker_services_dispatch_config }}"
+    docker_services_service_cfg_found: true
+    docker_services_service_target: "{{ service_catalog_docker_service.target | default(omit) }}"
+    docker_services_role_prefix: "{{ service_catalog_docker_service.name }}"

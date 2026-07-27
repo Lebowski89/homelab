@@ -3,8 +3,14 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import yaml
+from ansible.plugins.filter.core import combine
+from jinja2.nativetypes import NativeEnvironment
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_PATH = REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_deploy.py"
+DEPLOY_TASK_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/deploy/config.yml"
+PERSIST_TASK_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/_deploy.yml"
 
 
 def load_plugin():
@@ -40,6 +46,84 @@ def deploy_profiles():
             },
         },
     }
+
+
+def test_attach_deploy_config_only_rebuilds_selected_service():
+    plugin = load_plugin()
+    sidecar = {"image": "example/sidecar:1.0.0", "environment": {"SIDE": "car"}}
+    source = {
+        "app": {
+            "image": "example/app:1.0.0",
+            "deploy": {
+                "mode": "replicated",
+                "restart_policy": {"condition": "any", "delay": "5s"},
+            },
+        },
+        "sidecar": sidecar,
+    }
+
+    result = plugin.docker_services_attach_deploy_config(
+        source,
+        "app",
+        {"mode": "global", "restart_policy": {"condition": "on-failure"}},
+    )
+
+    assert result["app"] == {
+        "image": "example/app:1.0.0",
+        "deploy": {
+            "mode": "global",
+            "restart_policy": {"condition": "on-failure", "delay": "5s"},
+        },
+    }
+    assert result["sidecar"] is sidecar
+    assert source["app"]["deploy"]["mode"] == "replicated"
+
+
+def test_attach_task_references_stack_mapping_once_without_recursive_combine():
+    tasks = yaml.safe_load(DEPLOY_TASK_PATH.read_text())
+    attach = next(task for task in tasks if task["name"] == "Deploy - Config | Attach deploy config to service")
+    expression = attach["ansible.builtin.set_fact"]["docker_services_compose_services"]
+
+    assert expression.count("docker_services_compose_services") == 1
+    assert "docker_services_attach_deploy_config" in expression
+    assert "combine(" not in expression
+
+
+def test_sequential_manager_persistence_retains_services_and_stacks():
+    tasks = yaml.safe_load(PERSIST_TASK_PATH.read_text())
+    persist = next(task for task in tasks if task["name"].startswith("Deploy | Persist compose into"))
+    expression = persist["ansible.builtin.set_fact"]["docker_services_compose_stacks"]
+    environment = NativeEnvironment()
+    environment.filters["combine"] = combine
+    template = environment.from_string(expression)
+
+    def persist_stack(stacks, stack_name, services, deploy_host):
+        return template.render(
+            hostvars={"manager": {"docker_services_compose_stacks": stacks}},
+            docker_services_primary_manager="manager",
+            docker_services_stack_name_effective=stack_name,
+            docker_services_stack_deploy_type="container",
+            docker_services_deploy_host_effective=deploy_host,
+            docker_services_compose_services=services,
+            stack_networks={},
+            stack_volumes={},
+        )
+
+    stacks = persist_stack({}, "shared", {"one": {"image": "example/one:1"}}, "docker-a")
+    stacks = persist_stack(
+        stacks,
+        "shared",
+        {
+            "one": {"image": "example/one:1"},
+            "two": {"image": "example/two:1"},
+        },
+        "docker-a",
+    )
+    stacks = persist_stack(stacks, "separate", {"three": {"image": "example/three:1"}}, "docker-b")
+
+    assert list(stacks) == ["shared", "separate"]
+    assert list(stacks["shared"]["services"]) == ["one", "two"]
+    assert list(stacks["separate"]["services"]) == ["three"]
 
 
 def test_replicated_standard_profile_builds_expected_config():

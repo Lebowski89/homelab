@@ -13,19 +13,26 @@ OPERATIONAL_TEXT = "\n".join(path.read_text() for path in OPERATIONAL_FILES)
 TRAEFIK_TASKS = (ROLE / "tasks/traefik.yml").read_text()
 REMOVE_TASKS = (ROLE / "tasks/remove_integrations.yml").read_text()
 PLAYBOOK = Path("ansible/playbook.yml").read_text()
+GLOBAL_DISPATCH = Path("ansible/tasks/service_catalog_dispatch.yml").read_text()
 DOCKER_PREP = Path("ansible/roles/docker_services/tasks/_prep.yml").read_text()
 PODMAN_MAIN = Path("ansible/roles/podman_services/tasks/main.yml").read_text()
 PODMAN_PREP = Path("ansible/roles/podman_services/tasks/sub_tasks/prepare.yml").read_text()
+PODMAN_DISPATCH = Path("ansible/tasks/service_catalog_dispatch_podman.yml").read_text()
 DOCKER_SECRET_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/_secrets.yml").read_text()
 DOCKER_PREP_TASKS = Path("ansible/roles/docker_services/tasks/_prep.yml").read_text()
 DOCKER_COMPOSE_TASKS = Path("ansible/roles/docker_services/tasks/_compose.yml").read_text()
 DOCKER_FETCH_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/_fetch.yml").read_text()
 DOCKER_RESOLVER_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/_resolver.yml").read_text()
 DOCKER_INFISICAL_TASKER = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/tasker.yml").read_text()
+COMMON_PATH_TASKS = (ROLE / "tasks/paths.yml").read_text()
+COMMON_COPY_TASKS = (ROLE / "tasks/copies.yml").read_text()
 COMMON_TEMPLATE_TASKS = (ROLE / "tasks/templates.yml").read_text()
+COMMON_POSTGRES_TASKS = (ROLE / "tasks/postgres.yml").read_text()
 COMMON_INFISICAL_TASKS = (ROLE / "tasks/infisical.yml").read_text()
 DOCKER_MAIN_TASKS = Path("ansible/roles/docker_services/tasks/main.yml").read_text()
 DOCKER_DEPLOY_ALL_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/deploy/all.yml").read_text()
+DOCKER_DEPLOY_TASKS = Path("ansible/roles/docker_services/tasks/_deploy.yml").read_text()
+DOCKER_DRIFT_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/drift/image.yml").read_text()
 DOCKER_ENV_FILE_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/compose/env_file.yml").read_text()
 AUTOBRR = Path("ansible/group_vars/all/services/autobrr.yml").read_text()
 
@@ -140,6 +147,41 @@ def test_common_operational_code_has_no_runtime_role_variables_or_resources():
 def test_docker_uses_normalized_service_and_effective_filesystem_hosts():
     assert 'service_common_service: "{{ docker_services_svc }}"' in DOCKER_PREP
     assert 'service_common_target_hosts: "{{ docker_services_fs_hosts_effective }}"' in DOCKER_PREP
+    prepare = next(
+        task for task in yaml.safe_load(DOCKER_PREP) if task["name"] == "Prep - Service common | Prepare files and Traefik integration"
+    )
+    assert "when" not in prepare
+
+
+def test_common_filesystem_and_integration_work_has_explicit_delegation():
+    for task_file in (COMMON_PATH_TASKS, COMMON_COPY_TASKS, COMMON_TEMPLATE_TASKS):
+        tasks = yaml.safe_load(task_file)
+        mutating_tasks = [
+            task
+            for task in tasks
+            if any(
+                module in task
+                for module in (
+                    "ansible.builtin.file",
+                    "ansible.builtin.copy",
+                    "ansible.builtin.template",
+                    "ansible.builtin.wait_for",
+                )
+            )
+        ]
+        assert mutating_tasks
+        assert all(task.get("delegate_to") == "{{ service_common_target_host }}" for task in mutating_tasks)
+
+    traefik_tasks = yaml.safe_load(TRAEFIK_TASKS)
+    traefik_mutations = [task for task in traefik_tasks if "ansible.builtin.template" in task or "ansible.builtin.file" in task]
+    postgres_tasks = yaml.safe_load(COMMON_POSTGRES_TASKS)
+    postgres_mutations = [task for task in postgres_tasks if "community.postgresql.postgresql_db" in task]
+    remove_tasks = yaml.safe_load(REMOVE_TASKS)
+    remove_mutations = [task for task in remove_tasks if "ansible.builtin.file" in task]
+    assert traefik_mutations and postgres_mutations and remove_mutations
+    assert all(task.get("delegate_to") == "{{ service_common_controller_host }}" for task in traefik_mutations)
+    assert all(task.get("delegate_to") == "{{ service_common_controller_host }}" for task in postgres_mutations)
+    assert all(task.get("delegate_to") == "{{ service_common_controller_host }}" for task in remove_mutations)
 
 
 def test_podman_translates_host_paths_and_keeps_quadlets_runtime_owned():
@@ -165,10 +207,9 @@ def test_remove_deletes_canonical_and_legacy_paths_idempotently():
 
 
 def test_docker_batch_deployment_remains_after_service_loops():
-    docker_loop = PLAYBOOK.index("Process each Docker service")
-    podman_loop = PLAYBOOK.index("Process each Podman service")
+    global_loop = PLAYBOOK.index("Process globally ordered service catalog")
     batch_deploy = PLAYBOOK.index("Deploy all Docker stacks")
-    assert docker_loop < podman_loop < batch_deploy
+    assert global_loop < batch_deploy
 
 
 def test_secret_materialization_and_compatibility_paths_remain_adapter_owned():
@@ -244,7 +285,11 @@ def test_docker_compatibility_facts_are_not_recreated_in_check_mode():
 
 def test_check_mode_validates_infisical_declarations_without_lookup_or_materialization():
     assert "Prep - Infisical | Include tasker\n  ansible.builtin.include_tasks:" in DOCKER_PREP_TASKS
-    assert "Prep - Infisical Fetch | Include tasks\n  when: inventory_hostname" in DOCKER_INFISICAL_TASKER
+    tasker = yaml.safe_load(DOCKER_INFISICAL_TASKER)
+    include_fetch = next(task for task in tasker if task["name"] == "Prep - Infisical Fetch | Include tasks")
+    assert "when" not in include_fetch
+    fetch = yaml.safe_load(DOCKER_FETCH_TASKS)[0]
+    assert fetch["ansible.builtin.include_role"]["apply"]["delegate_to"] == "{{ docker_services_primary_manager }}"
     assert "Prep - Infisical Resolver | Include tasks on deploy host\n  when:\n    - not ansible_check_mode" in DOCKER_INFISICAL_TASKER
     assert "Prep - Infisical Secrets | Include tasks\n  when:\n    - not ansible_check_mode" in DOCKER_INFISICAL_TASKER
     assert "Resolve common Infisical values and environment" in PODMAN_MAIN
@@ -271,8 +316,11 @@ def test_docker_snapshots_service_declarations_before_later_compatibility_lookup
     assert 'docker_services_infisical_values: "{{ service_common_infisical_values }}"' in DOCKER_INFISICAL_TASKER
     assert 'docker_services_secret_declarations: "{{ service_common_secret_declarations }}"' in DOCKER_INFISICAL_TASKER
     assert 'service_common_infisical_values: "{{ docker_services_infisical_values }}"' in DOCKER_PREP_TASKS
-    assert "hostvars[docker_services_primary_manager].docker_services_secret_declarations" in DOCKER_SECRET_TASKS
-    assert "hostvars[docker_services_primary_manager].docker_services_secret_declarations" in DOCKER_COMPOSE_TASKS
+    assert "docker_services_secret_declarations | default([])" in DOCKER_SECRET_TASKS
+    assert "docker_services_infisical_values | default({})" in DOCKER_SECRET_TASKS
+    assert "docker_services_secret_declarations | default([])" in DOCKER_COMPOSE_TASKS
+    assert "hostvars[docker_services_primary_manager].docker_services_secret_declarations" not in DOCKER_SECRET_TASKS
+    assert "hostvars[docker_services_primary_manager].docker_services_secret_declarations" not in DOCKER_COMPOSE_TASKS
 
 
 def test_docker_canonical_no_new_privileges_uses_tagged_append_unique_list_helper():
@@ -289,9 +337,60 @@ def test_docker_canonical_no_new_privileges_uses_tagged_append_unique_list_helpe
     assert "docker_services_stack_deploy_type != 'swarm'" in task["when"]
 
 
-def test_podman_host_selection_treats_empty_hosts_as_missing():
-    assert "default(item.name, true)" in PLAYBOOK
-    assert "| default(item.name, true),\n                true" in PLAYBOOK
+def test_podman_dispatch_is_routed_from_the_single_global_iteration():
+    playbook = yaml.safe_load(PLAYBOOK)
+    deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")
+    dispatch = next(task for task in deploy_play["tasks"] if task.get("name") == "Process globally ordered service catalog")
+    dispatcher_tasks = yaml.safe_load(GLOBAL_DISPATCH)
+    materialization = next(
+        task for task in dispatcher_tasks if task.get("name") == "Service catalog dispatch | Materialize selected entry on dispatch host"
+    )
+    podman_route = next(task for task in dispatcher_tasks if task.get("name") == "Service catalog dispatch | Process Podman entry")
+    dispatch_tasks = yaml.safe_load(PODMAN_DISPATCH)
+    podman_role = next(task for task in dispatch_tasks if task.get("name") == "Service catalog dispatch | Include Podman service role")
+
+    assert dispatch["loop"] == "{{ service_catalog_selected }}"
+    assert "when" not in dispatch
+    assert materialization["when"] == "inventory_hostname == service_catalog_dispatch_entry.dispatch_host"
+    assert podman_route["when"] == [
+        "inventory_hostname == service_catalog_dispatch_entry.dispatch_host",
+        'service_catalog_dispatch_entry.runtime == "podman"',
+    ]
+    assert "when" not in podman_role
+
+
+def test_manager_owned_compose_and_drift_state_have_single_ordered_writers():
+    compose_tasks = yaml.safe_load(DOCKER_COMPOSE_TASKS)
+    compose_init = next(task for task in compose_tasks if task["name"] == "Compose - Init | Ensure docker_services_compose_stacks exists")
+    deploy_tasks = yaml.safe_load(DOCKER_DEPLOY_TASKS)
+    persist = next(task for task in deploy_tasks if task["name"].startswith("Deploy | Persist compose into"))
+    drift_tasks = yaml.safe_load(DOCKER_DRIFT_TASKS)
+    drift_append = next(task for task in drift_tasks if task["name"] == "Drift | Add service to drift summary")
+    docker_main = yaml.safe_load(DOCKER_MAIN_TASKS)
+    drift_include = next(task for task in docker_main if task["name"] == "Drift | Include image drift check")
+
+    for task in (compose_init, persist, drift_append):
+        assert task["delegate_to"] == "{{ docker_services_primary_manager }}" or task["delegate_to"] == (
+            "{{ docker_services_primary_manager | default('mgt') }}"
+        )
+        assert task["delegate_facts"] is True
+
+    persist_expression = persist["ansible.builtin.set_fact"]["docker_services_compose_stacks"]
+    assert persist_expression.count("hostvars[docker_services_primary_manager].docker_services_compose_stacks") >= 2
+    assert "docker_services_stack_name_effective" in persist_expression
+    assert "docker_services_compose_services" in persist_expression
+
+    drift_expression = drift_append["ansible.builtin.set_fact"]["docker_services_image_drift"]
+    assert "hostvars[docker_services_primary_manager].docker_services_image_drift" in drift_expression
+    assert drift_append["run_once"] is True
+    assert drift_include["when"] == "docker_services_is_deploy_host | bool"
+
+    global_dispatch = yaml.safe_load(GLOBAL_DISPATCH)
+    materialize = next(
+        task for task in global_dispatch if task["name"] == "Service catalog dispatch | Materialize selected entry on dispatch host"
+    )
+    assert materialize["service_catalog_materialize"]["selected"] == ["{{ service_catalog_dispatch_entry }}"]
+    assert PLAYBOOK.count('loop: "{{ service_catalog_selected }}"') == 2
 
 
 def test_no_operational_ansible_file_references_internal_zone():

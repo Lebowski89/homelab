@@ -1,0 +1,57 @@
+---
+
+- name: Service catalog dispatch | Reset host-local materialized result
+  ansible.builtin.set_fact:
+    service_catalog_host_materialized: []
+
+- name: Service catalog dispatch | Materialize selected entry on dispatch host
+  when: inventory_hostname == service_catalog_dispatch_entry.dispatch_host
+  service_catalog_materialize:
+    source_var: svcfiles
+    selected:
+      - "{{ service_catalog_dispatch_entry }}"
+  register: service_catalog_materialize_result
+
+- name: Service catalog dispatch | Copy returned materialized entry
+  when: inventory_hostname == service_catalog_dispatch_entry.dispatch_host
+  ansible.builtin.set_fact:
+    service_catalog_host_materialized: >-
+      {{ service_catalog_materialize_result.ansible_facts.service_catalog_host_materialized }}
+
+- name: Service catalog dispatch | Validate single materialized entry
+  when: inventory_hostname == service_catalog_dispatch_entry.dispatch_host
+  ansible.builtin.assert:
+    that:
+      - service_catalog_host_materialized is sequence
+      - service_catalog_host_materialized | length == 1
+      - service_catalog_host_materialized[0].config is mapping
+    fail_msg: >-
+      Selective materialization for {{ service_catalog_dispatch_entry.name }}{{
+        ':' ~ service_catalog_dispatch_entry.target
+        if service_catalog_dispatch_entry.target is defined
+        else ''
+      }} did not return exactly one concrete configuration.
+
+- name: Service catalog dispatch | Process Docker entry
+  when:
+    - inventory_hostname == service_catalog_dispatch_entry.dispatch_host
+    - service_catalog_dispatch_entry.runtime == "docker"
+  ansible.builtin.include_tasks:
+    file: service_catalog_dispatch_docker.yml
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+  vars:
+    service_catalog_docker_service: "{{ service_catalog_host_materialized[0] }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Service catalog dispatch | Process Podman entry
+  when:
+    - inventory_hostname == service_catalog_dispatch_entry.dispatch_host
+    - service_catalog_dispatch_entry.runtime == "podman"
+  ansible.builtin.include_tasks:
+    file: service_catalog_dispatch_podman.yml
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+  vars:
+    service_catalog_podman_service: "{{ service_catalog_host_materialized[0] }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]

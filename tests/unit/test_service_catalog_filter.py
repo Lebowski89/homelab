@@ -12,7 +12,7 @@ spec.loader.exec_module(service_catalog)
 
 
 def test_missing_runtime_defaults_to_docker():
-    items = service_catalog.service_catalog_effective({"app": {"enabled": True}})
+    items = service_catalog.service_catalog_effective({"app": {"enabled": True}}, "manager")
 
     assert items == [
         {
@@ -20,26 +20,56 @@ def test_missing_runtime_defaults_to_docker():
             "tags": ["app"],
             "enabled": True,
             "runtime": "docker",
-            "config": {"enabled": True},
+            "dispatch_host": "manager",
         }
     ]
 
 
 def test_explicit_podman_runtime():
-    items = service_catalog.service_catalog_effective({"n8n": {"runtime": "podman", "tags": ["automation"]}})
+    items = service_catalog.service_catalog_effective({"n8n": {"runtime": "podman", "tags": ["automation"]}}, "manager")
 
     assert items[0]["runtime"] == "podman"
-    assert items[0]["config"]["runtime"] == "podman"
+    assert items[0]["dispatch_host"] == "n8n"
+    assert "config" not in items[0]
     assert "automation" in items[0]["tags"]
+
+
+def test_effective_target_entry_contains_only_selection_metadata():
+    items = service_catalog.service_catalog_effective(
+        {
+            "app": {
+                "runtime": "docker",
+                "tags": ["base"],
+                "targets": {
+                    "primary": {
+                        "runtime": "podman",
+                        "tags": ["target"],
+                    }
+                },
+            }
+        },
+        "manager",
+    )
+
+    assert items == [
+        {
+            "name": "app",
+            "target": "primary",
+            "runtime": "podman",
+            "tags": ["app", "base", "primary", "target"],
+            "enabled": True,
+            "dispatch_host": "app",
+        }
+    ]
 
 
 def test_invalid_runtime_fails():
     with pytest.raises(AnsibleFilterError, match="must be one of"):
-        service_catalog.service_catalog_effective({"bad": {"runtime": "containerd"}})
+        service_catalog.service_catalog_effective({"bad": {"runtime": "containerd"}}, "manager")
 
 
 def test_mixed_runtime_selection_splits():
-    items = service_catalog.service_catalog_effective({"app": {}, "n8n": {"runtime": "podman"}})
+    items = service_catalog.service_catalog_effective({"app": {}, "n8n": {"runtime": "podman"}}, "manager")
     selected = service_catalog.service_catalog_select(items, ["all"], run_all=True)["selected"]
 
     assert [item["name"] for item in service_catalog.service_catalog_by_runtime(selected, "docker")] == ["app"]
@@ -72,6 +102,9 @@ def test_merge_target_rejects_nested_targets():
     with pytest.raises(AnsibleFilterError, match="target .primary. must not contain nested targets"):
         service_catalog.service_catalog_merge_target(service_cfg, "primary")
 
+    with pytest.raises(AnsibleFilterError, match="app.targets.primary must not contain nested targets"):
+        service_catalog.service_catalog_effective({"app": service_cfg}, "manager")
+
 
 def test_canonical_target_merge_contract():
     services = {
@@ -102,8 +135,8 @@ def test_canonical_target_merge_contract():
         }
     }
 
-    item = service_catalog.service_catalog_effective(services)[0]
-    config = item["config"]
+    item = service_catalog.service_catalog_effective(services, "manager")[0]
+    config = service_catalog.service_catalog_merge_target(services["app"], item["target"])
 
     assert item["runtime"] == "podman"
     assert config["runtime"] == "podman"
@@ -136,7 +169,7 @@ def test_base_and_target_enabled_states_are_both_respected(base_enabled, target_
             "targets": {"primary": {"enabled": target_enabled}},
         }
     }
-    item = service_catalog.service_catalog_effective(services)[0]
+    item = service_catalog.service_catalog_effective(services, "manager")[0]
 
     assert item["enabled"] is expected
     assert service_catalog.service_catalog_select([item], run_all=True)["selected"] == ([item] if expected else [])
@@ -182,8 +215,24 @@ def portable_target_fixture(runtime):
 
 
 def test_runtime_choice_does_not_change_portable_target_expansion():
-    docker = service_catalog.service_catalog_effective(portable_target_fixture("docker"))[0]["config"]
-    podman = service_catalog.service_catalog_effective(portable_target_fixture("podman"))[0]["config"]
+    docker_services = portable_target_fixture("docker")
+    podman_services = portable_target_fixture("podman")
+    docker_item = service_catalog.service_catalog_by_runtime(
+        service_catalog.service_catalog_select(
+            service_catalog.service_catalog_effective(docker_services, "manager"),
+            run_all=True,
+        )["selected"],
+        "docker",
+    )[0]
+    podman_item = service_catalog.service_catalog_by_runtime(
+        service_catalog.service_catalog_select(
+            service_catalog.service_catalog_effective(podman_services, "manager"),
+            run_all=True,
+        )["selected"],
+        "podman",
+    )[0]
+    docker = service_catalog.service_catalog_merge_target(docker_services["app"], docker_item["target"])
+    podman = service_catalog.service_catalog_merge_target(podman_services["app"], podman_item["target"])
 
     docker_portable = {key: value for key, value in docker.items() if key != "runtime"}
     podman_portable = {key: value for key, value in podman.items() if key != "runtime"}
@@ -202,22 +251,83 @@ def test_runtime_choice_does_not_change_portable_target_expansion():
 
 
 def test_target_inherits_parent_runtime():
-    items = service_catalog.service_catalog_effective({"svc": {"runtime": "podman", "targets": {"one": {}}}})
+    items = service_catalog.service_catalog_effective({"svc": {"runtime": "podman", "targets": {"one": {}}}}, "manager")
 
     assert items[0]["runtime"] == "podman"
-    assert items[0]["config"]["runtime"] == "podman"
-    assert "targets" not in items[0]["config"]
+    assert items[0]["dispatch_host"] == "svc"
+    assert "config" not in items[0]
+    merged = service_catalog.service_catalog_merge_target(
+        {"runtime": "podman", "targets": {"one": {}}},
+        "one",
+    )
+    assert merged["runtime"] == "podman"
+    assert "targets" not in merged
 
 
 def test_disabled_podman_and_remove_selection():
-    items = service_catalog.service_catalog_effective({"n8n": {"runtime": "podman", "enabled": False}})
+    items = service_catalog.service_catalog_effective({"n8n": {"runtime": "podman", "enabled": False}}, "manager")
 
     assert service_catalog.service_catalog_select(items, ["n8n"])["disabled_only"] is True
     assert service_catalog.service_catalog_select(items, ["n8n"], allow_disabled=True)["selected"][0]["name"] == "n8n"
 
 
 def test_all_selection_selects_enabled_mixed_services():
-    items = service_catalog.service_catalog_effective({"app": {}, "off": {"runtime": "podman", "enabled": False}})
+    items = service_catalog.service_catalog_effective({"app": {}, "off": {"runtime": "podman", "enabled": False}}, "manager")
     selected = service_catalog.service_catalog_select(items, run_all=True)["selected"]
 
     assert [item["name"] for item in selected] == ["app"]
+
+
+def test_dispatch_host_selection_uses_runtime_orchestration_host():
+    items = service_catalog.service_catalog_effective(
+        {
+            "swarm": {"deploy": {"type": "swarm", "host": "filesystem"}},
+            "standalone": {"deploy": {"type": "container", "host": "docker-vm"}},
+            "standalone-empty": {"deploy": {"type": "container", "host": ""}},
+            "podman": {"runtime": "podman", "deploy": {"host": "podman-vm"}},
+            "legacy-podman": {
+                "runtime": "podman",
+                "deploy": {"host": ""},
+                "container": {"host": "legacy-vm"},
+            },
+            "default-podman": {
+                "runtime": "podman",
+                "deploy": {"host": ""},
+                "container": {"host": ""},
+            },
+        },
+        "manager",
+    )
+    by_name = {item["name"]: item for item in items}
+
+    assert by_name["swarm"]["dispatch_host"] == "manager"
+    assert by_name["standalone"]["dispatch_host"] == "docker-vm"
+    assert by_name["standalone-empty"]["dispatch_host"] == "manager"
+    assert by_name["podman"]["dispatch_host"] == "podman-vm"
+    assert by_name["legacy-podman"]["dispatch_host"] == "legacy-vm"
+    assert by_name["default-podman"]["dispatch_host"] == "default-podman"
+
+
+def test_target_runtime_and_deploy_override_select_dispatch_host():
+    items = service_catalog.service_catalog_effective(
+        {
+            "app": {
+                "runtime": "docker",
+                "deploy": {"type": "swarm", "host": "filesystem"},
+                "targets": {
+                    "podman": {"runtime": "podman", "deploy": {"host": "podman-vm"}},
+                    "standalone": {"deploy": {"type": "container", "host": "docker-vm"}},
+                },
+            }
+        },
+        "manager",
+    )
+    by_target = {item["target"]: item for item in items}
+
+    assert by_target["podman"]["dispatch_host"] == "podman-vm"
+    assert by_target["standalone"]["dispatch_host"] == "docker-vm"
+
+
+def test_catalog_requires_configured_docker_manager():
+    with pytest.raises(AnsibleFilterError, match="docker_manager must be a non-empty string"):
+        service_catalog.service_catalog_effective({"app": {}}, "")
