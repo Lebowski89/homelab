@@ -76,7 +76,9 @@
   tags: [deploy, update, recreate, bootstrap, drift]
 
 - name: Service common Infisical | Fetch requested values
-  when: not ansible_check_mode
+  when:
+    - not ansible_check_mode
+    - service_common_infisical_config.secrets_map | length > 0
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -93,7 +95,8 @@
             ).value
           })
       }}
-  loop: "{{ hostvars[inventory_hostname].service_common_infisical_lookup_request.secrets_map }}"
+  loop: >-
+    {{ hostvars[inventory_hostname].service_common_infisical_lookup_request.secrets_map | default([]) }}
   loop_control:
     loop_var: service_common_infisical_item
     label: "{{ service_common_infisical_item.var }}"

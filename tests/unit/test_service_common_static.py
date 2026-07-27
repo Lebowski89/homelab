@@ -1,3 +1,6 @@
+import os
+import subprocess
+import sys
 from pathlib import Path
 
 import yaml
@@ -248,7 +251,10 @@ def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
     assert reset_facts["service_common_resolved_environment"] == {}
     assert tasks.index(reset) < tasks.index(normalize_declarations) < tasks.index(normalize_environment)
     assert tasks.index(normalize_environment) < tasks.index(fetch) < tasks.index(finalize) < tasks.index(resolve)
-    assert fetch["when"] == "not ansible_check_mode"
+    assert fetch["when"] == [
+        "not ansible_check_mode",
+        "service_common_infisical_config.secrets_map | length > 0",
+    ]
     assert lookup_request["when"] == [
         "not ansible_check_mode",
         "service_common_infisical_config.secrets_map | length > 0",
@@ -271,7 +277,8 @@ def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
     assert "service_common_infisical_item.name" in fetch_expression
     assert "hostvars[inventory_hostname].service_common_infisical_values" in fetch_expression
     assert "hostvars[inventory_hostname].service_common_infisical_lookup_request.params" in fetch_expression
-    assert fetch["loop"] == "{{ hostvars[inventory_hostname].service_common_infisical_lookup_request.secrets_map }}"
+    assert "hostvars[inventory_hostname].service_common_infisical_lookup_request.secrets_map" in fetch["loop"]
+    assert "default([])" in fetch["loop"]
     assert "infisical.vault.read_secrets" in COMMON_INFISICAL_TASKS
     assert "infisical.vault.read_secrets" not in DOCKER_FETCH_TASKS
     assert "infisical.vault.read_secrets" not in PODMAN_PREP
@@ -299,6 +306,106 @@ def test_docker_compatibility_facts_are_not_recreated_in_check_mode():
 
     for task in compatibility_tasks:
         assert "not ansible_check_mode" in task["when"]
+
+
+def test_empty_infisical_map_skips_live_lookup_and_keeps_empty_dispatch_owned_outputs(tmp_path):
+    repo_root = Path(__file__).resolve().parents[2]
+    ansible_playbook = Path(sys.executable).with_name("ansible-playbook")
+    tasker = repo_root / "ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/tasker.yml"
+    playbook = tmp_path / "empty-infisical-map.yml"
+    playbook.write_text(
+        """---
+- name: Exercise empty Docker Infisical declarations without check mode
+  hosts: all
+  strategy: linear
+  connection: local
+  gather_facts: false
+  vars:
+    docker_services_primary_manager: manager
+    docker_services_deploy_host_effective: dispatch
+    docker_services_stack_deploy_type: container
+    docker_services_is_deploy_host: true
+    infisical_lookup_default_params: must-not-be-used
+    infisical_flatten: true
+  tasks:
+    - name: Seed deliberately stale manager outputs
+      when: inventory_hostname == "manager"
+      ansible.builtin.set_fact:
+        service_common_infisical_values:
+          manager_stale: manager-stale-value
+        service_common_secret_values:
+          manager_stale: manager-stale-value
+        service_common_secret_declarations:
+          - name: manager_stale_secret
+        service_common_resolved_environment:
+          OWNER: manager-stale
+        docker_services_infisical_values:
+          manager_stale: manager-docker-stale-value
+        docker_services_secret_declarations:
+          - name: manager_docker_stale_secret
+        docker_services_resolved_environment:
+          OWNER: manager-docker-stale
+
+    - name: Publish synthetic empty-map service on dispatch host
+      when: inventory_hostname == "dispatch"
+      ansible.builtin.set_fact:
+        docker_services_svc:
+          name: empty-map
+          runtime: docker
+          environment:
+            OWNER: dispatch-owned
+          infisical:
+            fail_on_empty: true
+            secrets_map: []
+
+    - name: Resolve empty map through the Docker Infisical tasker
+      when: inventory_hostname == "dispatch"
+      ansible.builtin.include_tasks:
+        file: __DOCKER_INFISICAL_TASKER__
+
+    - name: Verify empty outputs remain dispatch-owned
+      when: inventory_hostname == "manager"
+      ansible.builtin.assert:
+        that:
+          - hostvars.dispatch.service_common_infisical_config.secrets_map == []
+          - hostvars.dispatch.service_common_infisical_lookup_request == {}
+          - hostvars.dispatch.service_common_infisical_values == {}
+          - hostvars.dispatch.service_common_secret_values == {}
+          - hostvars.dispatch.service_common_secret_declarations == []
+          - 'hostvars.dispatch.service_common_resolved_environment == {"OWNER": "dispatch-owned"}'
+          - hostvars.dispatch.docker_services_infisical_values == {}
+          - hostvars.dispatch.docker_services_secret_declarations == []
+          - 'hostvars.dispatch.docker_services_resolved_environment == {"OWNER": "dispatch-owned"}'
+          - 'hostvars.dispatch.docker_services_svc.environment == {"OWNER": "dispatch-owned"}'
+          - hostvars.manager.service_common_infisical_values.manager_stale == "manager-stale-value"
+          - hostvars.manager.service_common_resolved_environment.OWNER == "manager-stale"
+          - hostvars.manager.docker_services_infisical_values.manager_stale == "manager-docker-stale-value"
+          - hostvars.manager.docker_services_resolved_environment.OWNER == "manager-docker-stale"
+""".replace("__DOCKER_INFISICAL_TASKER__", str(tasker))
+    )
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "ANSIBLE_CONFIG": str(repo_root / "ansible/ansible.cfg"),
+            "ANSIBLE_LOCAL_TEMP": str(tmp_path / "ansible-local"),
+        }
+    )
+
+    result = subprocess.run(
+        [str(ansible_playbook), "-i", "manager,dispatch,", str(playbook)],
+        cwd=repo_root,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    fetch_start = output.index("TASK [service_common : Service common Infisical | Fetch requested values]")
+    fetch_end = output.index("\nTASK [", fetch_start + 1)
+    assert "skipping: [dispatch]" in output[fetch_start:fetch_end]
+    assert "undefined" not in output.lower()
 
 
 def test_check_mode_validates_infisical_declarations_without_lookup_or_materialization():
