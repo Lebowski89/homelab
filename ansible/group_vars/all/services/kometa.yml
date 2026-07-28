@@ -2,17 +2,17 @@
 
 kometa:
   enabled: true
+  runtime: docker
   tags: [plex, kometa]
   name: kometa
   stack: kometa
+
   image: kometateam/kometa:v2.4.4
-  named_networks:
-    overlay:
-      external: true
+
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_plex_host].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_plex_host].docker_host_pgid }}"
+    PUID: "{{ hostvars[services_plex_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_plex_host].container_host_pgid }}"
     UMASK: "022"
   infisical:
     fail_on_empty: true
@@ -41,27 +41,33 @@ kometa:
       - var: plex_token
         path: "/Plex"
         name: TOKEN
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/kometa"
+    - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/kometa"
       state: directory
       mode: "0755"
   templates:
     - src: configs/kometa.yml.j2
       no_log: true
-      dest: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/kometa/config.yml"
+      dest: "{{ hostvars[services_plex_host].container_host_appdata_root }}/kometa/config.yml"
       mode: "0664"
       force: false
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/kometa"
+      source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/kometa"
       target: /config
       read_only: false
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_plex_host }}"
+    host: "{{ services_plex_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_plex_host
+      - node.labels.docker_services_host == services_plex_host

@@ -2,44 +2,57 @@
 
 czkawka:
   enabled: true
+  runtime: docker
   tags: [utilities, czkawka]
   name: czkawka
   stack: czkawka
+
   image: jlesage/czkawka:v26.07.1
-  named_networks:
-    overlay:
-      external: true
+
   environment:
     TZ: "{{ timezone }}"
-    USER_ID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
-    GROUP_ID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
+    USER_ID: "{{ hostvars[services_storage_host].container_host_puid }}"
+    GROUP_ID: "{{ hostvars[services_storage_host].container_host_pgid }}"
     UMASK: "022"
     DARK_MODE: "1"
     WEB_FILE_MANAGER: "1"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/czkawka"
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/czkawka"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/czkawka"
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/czkawka"
       target: /config
       read_only: false
     media:
       type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}"
+      source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /storage
       read_only: false
+
   traefik:
     enable: true
     exposure: private
     port: 5800
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_unraid_host }}"
+    host: "{{ services_storage_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_unraid_host
+      - node.labels.docker_services_host == services_storage_host

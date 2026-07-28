@@ -2,14 +2,25 @@
 
 portainer:
   enabled: true
+  runtime: docker
   tags: [monitoring, portainer]
   stack: portainer
+
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
+
   named_networks:
     overlay:
       external: true
+
   deploy:
     type: swarm
     profile: careful
+
   targets:
 
     ################################
@@ -17,7 +28,9 @@ portainer:
     ################################
     agent:
       name: agent
+
       image: portainer/agent:2.43.0-linux-amd64-alpine
+
       volumes:
         docker_volumes:
           type: bind
@@ -27,6 +40,7 @@ portainer:
           type: bind
           source: /var/run/docker.sock
           target: /var/run/docker.sock
+
       deploy:
         mode: global
         constraints:
@@ -37,22 +51,25 @@ portainer:
     ################################
     main:
       name: portainer
+
       image: portainer/portainer-ce:2.43.0-linux-amd64-alpine
       command:
         - "-H tcp://tasks.agent:9001 --tlsskipverify"
+
       environment:
         TZ: "{{ timezone }}"
-        PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
-        PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
+        PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
+        PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
         UMASK: "022"
+
       paths:
-        - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/portainer"
+        - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/portainer"
           state: directory
           mode: "0755"
       volumes:
         config:
           type: bind
-          source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/portainer"
+          source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/portainer"
           target: /data
           read_only: false
         docker_sock:
@@ -60,13 +77,15 @@ portainer:
           source: /var/run/docker.sock
           target: /var/run/docker.sock
           read_only: true
+
       traefik:
         enable: true
         exposure: private
         port: 9000
+
       deploy:
         mode: replicated
         replicas: 1
-        host: "{{ docker_services_primary_manager }}"
+        host: "{{ services_controller_host }}"
         constraints:
-          - node.labels.docker_services_host == docker_services_primary_manager
+          - node.labels.docker_services_host == services_controller_host

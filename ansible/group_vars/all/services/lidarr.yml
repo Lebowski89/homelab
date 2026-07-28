@@ -2,21 +2,17 @@
 
 lidarr:
   enabled: true
+  runtime: docker
   tags: [arrs, pgsql, lidarr]
   name: lidarr
   stack: lidarr
+
   image: ghcr.io/hotio/lidarr:release-3.1.0.4875
-  named_networks:
-    overlay:
-      external: true
-  healthcheck:
-    test:
-      - "CMD-SHELL"
-      - "touch /data/media/music/.healthcheck && rm -f /data/media/music/.healthcheck || exit 1"
+
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
+    PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_storage_host].container_host_pgid }}"
     UMASK: "022"
     LIDARR__APP__INSTANCENAME: "Lidarr"
     LIDARR__SERVER__PORT: "8686"
@@ -29,38 +25,45 @@ lidarr:
     LIDARR__POSTGRES__MAINDB: "lidarr-main"
     LIDARR__POSTGRES__LOGDB: "lidarr-log"
     TP_SCHEME: "http"
-    TP_DOMAIN: "{{ hostvars[docker_services_primary_manager].local_ip }}:8089"
+    TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
     TP_HOTIO: "true"
     TP_THEME: "hotline"
   infisical:
     fail_on_empty: true
     secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
       - var: lidarr_api
         path: "/Lidarr"
         name: API
-        docker_secret: lidarr_api_secret
+        secret:
+          name: lidarr_api_secret
       - var: postgres_user
         path: "/Postgres"
         name: USER
-        docker_secret: postgres_user_secret
+        secret:
+          name: postgres_user_secret
       - var: postgres_pass
         path: "/Postgres"
         name: PASS
-        docker_secret: postgres_pass_secret
-  secrets:
-    - lidarr_api_secret
-    - postgres_user_secret
-    - postgres_pass_secret
+        secret:
+          name: postgres_pass_secret
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/lidarr"
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/lidarr"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/media/music"
+    - path: "{{ hostvars[services_storage_host].container_host_data_root }}/media/music"
       state: directory
       mode: "0755"
   copies:
     - src: files/themepark/98-themepark-lidarr
-      dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/lidarr/98-themepark-lidarr"
+      dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/lidarr/98-themepark-lidarr"
       mode: "0755"
       force: false
       wait: true
@@ -68,19 +71,25 @@ lidarr:
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/lidarr"
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/lidarr"
       target: /config
       read_only: false
     media:
       type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}"
+      source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
     themepark:
       type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/lidarr/98-themepark-lidarr"
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/lidarr/98-themepark-lidarr"
       target: /etc/cont-init.d/98-themepark
       read_only: false
+
+  healthcheck:
+    test:
+      - "CMD-SHELL"
+      - "touch /data/media/music/.healthcheck && rm -f /data/media/music/.healthcheck || exit 1"
+
   traefik:
     enable: true
     exposure: private
@@ -93,11 +102,12 @@ lidarr:
     databases:
       - lidarr-main
       - lidarr-log
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_unraid_host }}"
+    host: "{{ services_storage_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_unraid_host
+      - node.labels.docker_services_host == services_storage_host

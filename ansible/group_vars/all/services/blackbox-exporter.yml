@@ -2,15 +2,15 @@
 
 blackbox_exporter:
   enabled: true
+  runtime: docker
   tags: [monitoring, blackbox_exporter]
-  image: prom/blackbox-exporter:v0.27.0
   name: blackbox-exporter
   stack: blackbox-exporter
-  named_networks:
-    overlay:
-      external: true
+
+  image: prom/blackbox-exporter:v0.27.0
   command:
     - "--config.file=/etc/blackbox_exporter/config.yml"
+
   swarm_configs:
     - name: blackbox_exporter_config
       src: templates/configs/prometheus/blackbox.yml.j2
@@ -19,11 +19,16 @@ blackbox_exporter:
     - source: blackbox_exporter_config
       target: /etc/blackbox_exporter/config.yml
       mode: "0444"
+
+  named_networks:
+    overlay:
+      external: true
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: careful
-    host: "{{ docker_services_unraid_host }}"
+    host: "{{ services_storage_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_unraid_host
+      - node.labels.docker_services_host == services_storage_host

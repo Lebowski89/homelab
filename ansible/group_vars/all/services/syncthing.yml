@@ -2,18 +2,28 @@
 
 syncthing:
   enabled: true
+  runtime: docker
   tags: [utilities, syncthing]
   name: syncthing
   stack: syncthing
+
   image: lscr.io/linuxserver/syncthing:v2.1.1-ls221
+
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_storage_host].container_host_pgid }}"
+    UMASK: "022"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
+
   named_networks:
     overlay:
       external: true
-  environment:
-    TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
-    UMASK: "022"
   ports:
     listening_tcp:
       published: 22000
@@ -29,30 +39,33 @@ syncthing:
       target: 21027
       protocol: udp
       mode: host
+
   paths:
-    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/syncthing"
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/syncthing"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/syncthing"
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/syncthing"
       target: /config
       read_only: false
     media:
       type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}"
+      source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
+
   traefik:
     enable: true
     exposure: private
     port: 8384
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_unraid_host }}"
+    host: "{{ services_storage_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_unraid_host
+      - node.labels.docker_services_host == services_storage_host

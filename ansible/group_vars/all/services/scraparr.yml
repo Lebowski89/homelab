@@ -2,18 +2,18 @@
 
 scraparr:
   enabled: true
+  runtime: docker
   tags: [monitoring, scraparr]
   name: scraparr
   stack: scraparr
+
   # image: thegameprofi/scraparr:3.0.3
   image: scraparr-secrets:latest
-  named_networks:
-    overlay:
-      external: true
+
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
+    PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
     UMASK: "022"
     GENERAL_PORT: "7100"
     BAZARR_URL: "http://bazarr:6767"
@@ -46,45 +46,50 @@ scraparr:
       - var: lidarr_api
         path: "/Lidarr"
         name: API
-        docker_secret: lidarr_api_secret
+        secret:
+          name: lidarr_api_secret
       - var: prowlarr_api
         path: "/Prowlarr"
         name: API
-        docker_secret: prowlarr_api_secret
+        secret:
+          name: prowlarr_api_secret
       - var: radarr_api
         path: "/Radarr"
         name: API
-        docker_secret: radarr_api_secret
+        secret:
+          name: radarr_api_secret
       - var: radarr_4k_api
         path: "/Radarr-4K"
         name: API
-        docker_secret: radarr_4k_api_secret
+        secret:
+          name: radarr_4k_api_secret
       - var: sonarr_api
         path: "/Sonarr"
         name: API
-        docker_secret: sonarr_api_secret
+        secret:
+          name: sonarr_api_secret
       - var: sonarr_4k_api
         path: "/Sonarr-4K"
         name: API
-        docker_secret: sonarr_4k_api_secret
+        secret:
+          name: sonarr_4k_api_secret
       - var: whisparr_api
         path: "/Whisparr"
         name: API
-        docker_secret: whisparr_api_secret
+        secret:
+          name: whisparr_api_secret
   secrets:
     - bazarr_api_secret
-    - lidarr_api_secret
-    - prowlarr_api_secret
-    - radarr_api_secret
-    - radarr_4k_api_secret
-    - sonarr_api_secret
-    - sonarr_4k_api_secret
-    - whisparr_api_secret
+
+  named_networks:
+    overlay:
+      external: true
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+      - node.labels.docker_services_host == services_controller_host

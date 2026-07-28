@@ -1,0 +1,95 @@
+---
+
+- name: Drift notification preflight | Detect missing SMTP values
+  when:
+    - not ansible_check_mode
+    - inventory_hostname == services_controller_host
+    - docker_services_drift_email_enabled | default(false) | bool
+    - hostvars[services_controller_host].docker_services_image_drift is defined
+    - hostvars[services_controller_host].docker_services_image_drift | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_catalog_drift_smtp_missing: >-
+      {{
+        (docker_services_drift_email_to | default('') | string | trim | length == 0)
+        or (docker_services_drift_email_host | default('') | string | trim | length == 0)
+        or (docker_services_drift_email_port | default('') | string | trim | length == 0)
+        or (docker_services_drift_email_user | default('') | string | trim | length == 0)
+        or (docker_services_drift_email_pass | default('') | string | trim | length == 0)
+        or (docker_services_drift_email_sender | default('') | string | trim | length == 0)
+      }}
+
+- name: Drift notification preflight | Resolve missing SMTP values
+  when:
+    - not ansible_check_mode
+    - inventory_hostname == services_controller_host
+    - service_catalog_drift_smtp_missing | default(false) | bool
+  no_log: true
+  diff: false
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: infisical
+    apply:
+      tags: [drift]
+      no_log: true
+      diff: false
+  vars:
+    service_common_controller_host: "{{ services_controller_host }}"
+    service_common_environment: {}
+    service_common_infisical_lookup_params: >-
+      {{ hostvars[services_controller_host].infisical_lookup_default_params | default({}, true) }}
+    service_common_infisical_fail_on_empty: true
+    service_common_infisical_secrets_map:
+      - var: docker_services_drift_email_to
+        path: "{{ docker_services_drift_email_infisical_path | default('/Porkbun') }}"
+        name: "{{ docker_services_drift_email_infisical_to_name | default('SMTP_EMAIL') }}"
+      - var: docker_services_drift_email_host
+        path: "{{ docker_services_drift_email_infisical_path | default('/Porkbun') }}"
+        name: "{{ docker_services_drift_email_infisical_host_name | default('SMTP_HOST') }}"
+      - var: docker_services_drift_email_pass
+        path: "{{ docker_services_drift_email_infisical_path | default('/Porkbun') }}"
+        name: "{{ docker_services_drift_email_infisical_pass_name | default('SMTP_PASS') }}"
+      - var: docker_services_drift_email_port
+        path: "{{ docker_services_drift_email_infisical_path | default('/Porkbun') }}"
+        name: "{{ docker_services_drift_email_infisical_port_name | default('SMTP_PORT') }}"
+      - var: docker_services_drift_email_sender
+        path: "{{ docker_services_drift_email_infisical_path | default('/Porkbun') }}"
+        name: "{{ docker_services_drift_email_infisical_sender_name | default('SMTP_SENDER') }}"
+      - var: docker_services_drift_email_user
+        path: "{{ docker_services_drift_email_infisical_path | default('/Porkbun') }}"
+        name: "{{ docker_services_drift_email_infisical_user_name | default('SMTP_USER') }}"
+
+- name: Drift notification preflight | Snapshot resolved SMTP values
+  when:
+    - not ansible_check_mode
+    - inventory_hostname == services_controller_host
+    - service_catalog_drift_smtp_missing | default(false) | bool
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_drift_email_to: "{{ service_common_infisical_values.docker_services_drift_email_to }}"
+    docker_services_drift_email_host: "{{ service_common_infisical_values.docker_services_drift_email_host }}"
+    docker_services_drift_email_pass: "{{ service_common_infisical_values.docker_services_drift_email_pass }}"
+    docker_services_drift_email_port: "{{ service_common_infisical_values.docker_services_drift_email_port }}"
+    docker_services_drift_email_sender: "{{ service_common_infisical_values.docker_services_drift_email_sender }}"
+    docker_services_drift_email_user: "{{ service_common_infisical_values.docker_services_drift_email_user }}"
+
+- name: Drift notification preflight | Validate SMTP values
+  when:
+    - not ansible_check_mode
+    - inventory_hostname == services_controller_host
+    - docker_services_drift_email_enabled | default(false) | bool
+    - hostvars[services_controller_host].docker_services_image_drift is defined
+    - hostvars[services_controller_host].docker_services_image_drift | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - docker_services_drift_email_to | default('') | string | trim | length > 0
+      - docker_services_drift_email_host | default('') | string | trim | length > 0
+      - docker_services_drift_email_port | default('') | string | trim | length > 0
+      - docker_services_drift_email_user | default('') | string | trim | length > 0
+      - docker_services_drift_email_pass | default('') | string | trim | length > 0
+      - docker_services_drift_email_sender | default('') | string | trim | length > 0
+    fail_msg: "Image-drift SMTP credential preflight returned missing values."

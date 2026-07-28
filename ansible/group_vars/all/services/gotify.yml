@@ -2,63 +2,73 @@
 
 gotify:
   enabled: true
+  runtime: docker
   tags: [monitoring, pgsql, gotify]
   name: gotify
   stack: gotify
+
   image: gotify/server:2.9.1
-  named_networks:
-    overlay:
-      external: true
+
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
+    PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
   env_file:
-    - "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify/.env"
+    - "{{ hostvars[services_controller_host].container_host_appdata_root }}/gotify/.env"
   infisical:
     fail_on_empty: true
     secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
       - var: postgres_user
         path: "/Postgres"
         name: USER
       - var: postgres_pass
         path: "/Postgres"
         name: PASS
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/gotify"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify/images"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/gotify/images"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify/plugins"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/gotify/plugins"
       state: directory
       mode: "0755"
   templates:
     - src: configs/gotify.env.j2
       no_log: true
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify/.env"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/gotify/.env"
       mode: "0664"
       force: true
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/gotify"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/gotify"
       target: /app/data
       read_only: false
-  postgres:
-    enable: true
-    databases:
-      - gotify
+
   traefik:
     enable: true
     exposure: private
     port: 80
+  postgres:
+    enable: true
+    databases:
+      - gotify
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: careful
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+      - node.labels.docker_services_host == services_controller_host

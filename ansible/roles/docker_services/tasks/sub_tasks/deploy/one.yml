@@ -25,8 +25,8 @@
   ansible.builtin.file:
     path: /opt/stacks
     state: directory
-    owner: "{{ hostvars[docker_services_deploy_host_effective].docker_host_puid | default('1000') }}"
-    group: "{{ hostvars[docker_services_deploy_host_effective].docker_host_pgid | default('1000') }}"
+    owner: "{{ hostvars[docker_services_deploy_host_effective].container_host_puid | default('1000') }}"
+    group: "{{ hostvars[docker_services_deploy_host_effective].container_host_pgid | default('1000') }}"
     mode: "0755"
   delegate_to: "{{ docker_services_deploy_host_effective }}"
 
@@ -38,8 +38,8 @@
         '/opt/stacks/' ~ deploy_stack_name ~
         ( '-stack.yml' if (deploy_stack_type | string | trim) == 'swarm' else '-compose.yml' )
       }}
-    owner: "{{ hostvars[docker_services_deploy_host_effective].docker_host_puid | default('1000') }}"
-    group: "{{ hostvars[docker_services_deploy_host_effective].docker_host_pgid | default('1000') }}"
+    owner: "{{ hostvars[docker_services_deploy_host_effective].container_host_puid | default('1000') }}"
+    group: "{{ hostvars[docker_services_deploy_host_effective].container_host_pgid | default('1000') }}"
     mode: "0664"
     force: true
   delegate_to: "{{ docker_services_deploy_host_effective }}"

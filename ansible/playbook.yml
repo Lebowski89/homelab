@@ -14,9 +14,9 @@
     ansible_python_interpreter: /opt/ansible/ansible-venv/bin/python
 
     timezone: Australia/Melbourne
-    docker_host_puid: "1000"
-    docker_host_pgid: "1000"
-    docker_host_appdata_root: /opt
+    container_host_puid: "1000"
+    container_host_pgid: "1000"
+    container_host_appdata_root: /opt
 
     # Docker Swarm node name, not Ansible inventory name.
     netbox_swarm_node_hostname: mgt
@@ -46,8 +46,22 @@
   strategy: linear
 
   pre_tasks:
+    - name: Include runtime-neutral service host contract validation
+      ansible.builtin.include_tasks:
+        file: tasks/services_host_contract.yml
+        apply:
+          tags: always
+      tags: always
+
+    - name: Include runtime-neutral container host default normalization
+      ansible.builtin.include_tasks:
+        file: tasks/container_host_defaults.yml
+        apply:
+          tags: always
+      tags: always
+
     - name: Gather packages
-      when: inventory_hostname == docker_services_primary_manager
+      when: inventory_hostname == services_controller_host
       ansible.builtin.package_facts:
         manager: auto
       tags: always
@@ -67,19 +81,19 @@
         - reconcile
       block:
         - name: Set timezone variable on manager
-          when: inventory_hostname == docker_services_primary_manager
+          when: inventory_hostname == services_controller_host
           ansible.builtin.set_fact:
             timezone: "{{ ansible_facts.timezone | default('Australia/Melbourne') }}"
 
         - name: Timezone output
-          when: inventory_hostname == docker_services_primary_manager
+          when: inventory_hostname == services_controller_host
           ansible.builtin.debug:
             msg: "{{ timezone }}"
 
         - name: Share timezone to all hosts
-          when: inventory_hostname != docker_services_primary_manager
+          when: inventory_hostname != services_controller_host
           ansible.builtin.set_fact:
-            timezone: "{{ hostvars[docker_services_primary_manager].timezone }}"
+            timezone: "{{ hostvars[services_controller_host].timezone }}"
 
   tasks:
 
@@ -175,7 +189,7 @@
     ################################
 
     - name: Include Hugo role
-      when: inventory_hostname == docker_services_primary_manager
+      when: inventory_hostname == services_controller_host
       ansible.builtin.include_role:
         name: hugo
       tags:
@@ -187,7 +201,7 @@
     ################################
 
     - name: Include Infisical role
-      when: inventory_hostname == docker_services_primary_manager
+      when: inventory_hostname == services_controller_host
       ansible.builtin.include_role:
         name: infisical
       tags:
@@ -289,15 +303,29 @@
         fail_msg: "svcfiles is empty or not a dict. include_vars did not load your service files."
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
+    - name: Resolve runtime-neutral service controller host
+      ansible.builtin.set_fact:
+        service_catalog_controller_host: "{{ services_controller_host }}"
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+    - name: Validate runtime-neutral service controller host
+      ansible.builtin.assert:
+        that:
+          - service_catalog_controller_host | length > 0
+          - service_catalog_controller_host in hostvars
+        fail_msg: >-
+          The runtime-neutral service controller host must name a host in the current inventory.
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+
     - name: Build service catalog processing list from service definitions
-      when: inventory_hostname == docker_services_primary_manager
+      when: inventory_hostname == services_controller_host
       ansible.builtin.set_fact:
         service_catalog_effective: >-
-          {{ svcfiles | service_catalog_effective(docker_services_primary_manager) }}
+          {{ svcfiles | service_catalog_effective(services_controller_host) }}
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Assert service catalog processing list was built
-      when: inventory_hostname == docker_services_primary_manager
+      when: inventory_hostname == services_controller_host
       ansible.builtin.assert:
         that:
           - service_catalog_effective is defined
@@ -307,13 +335,13 @@
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Drift | Initialise image drift summary
-      when: inventory_hostname == docker_services_primary_manager
+      when: inventory_hostname == services_controller_host
       ansible.builtin.set_fact:
         docker_services_image_drift: []
       tags: [drift]
 
     - name: Build selected service catalog processing list
-      when: inventory_hostname == docker_services_primary_manager
+      when: inventory_hostname == services_controller_host
       ansible.builtin.set_fact:
         service_catalog_selection: >-
           {{
@@ -327,7 +355,7 @@
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Extract service catalog selection facts
-      when: inventory_hostname == docker_services_primary_manager
+      when: inventory_hostname == services_controller_host
       ansible.builtin.set_fact:
         service_catalog_matched: "{{ service_catalog_selection.matched }}"
         service_catalog_selected: "{{ service_catalog_selection.selected }}"
@@ -335,7 +363,7 @@
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Validate selected service dispatch hosts
-      when: inventory_hostname == docker_services_primary_manager
+      when: inventory_hostname == services_controller_host
       ansible.builtin.assert:
         that:
           - service_catalog_dispatch_item.dispatch_host in ansible_play_hosts_all
@@ -359,17 +387,17 @@
 
     - name: Share lightweight service catalog selection with play hosts
       ansible.builtin.set_fact:
-        service_catalog_matched: "{{ hostvars[docker_services_primary_manager].service_catalog_matched }}"
-        service_catalog_selected: "{{ hostvars[docker_services_primary_manager].service_catalog_selected }}"
+        service_catalog_matched: "{{ hostvars[services_controller_host].service_catalog_matched }}"
+        service_catalog_selected: "{{ hostvars[services_controller_host].service_catalog_selected }}"
         service_catalog_disabled_only_selection: >-
-          {{ hostvars[docker_services_primary_manager].service_catalog_disabled_only_selection }}
+          {{ hostvars[services_controller_host].service_catalog_disabled_only_selection }}
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Report disabled service selection in check mode
       when:
         - ansible_check_mode
         - service_catalog_disabled_only_selection | bool
-        - inventory_hostname == docker_services_primary_manager
+        - inventory_hostname == services_controller_host
       ansible.builtin.debug:
         msg: >-
           Requested service/tag matched only disabled service definitions:
@@ -425,13 +453,13 @@
 
     - name: Drift | Report image drift summary
       when:
-        - inventory_hostname == docker_services_primary_manager
-        - hostvars[docker_services_primary_manager].docker_services_image_drift is defined
-        - (hostvars[docker_services_primary_manager].docker_services_image_drift | length) > 0
+        - inventory_hostname == services_controller_host
+        - hostvars[services_controller_host].docker_services_image_drift is defined
+        - (hostvars[services_controller_host].docker_services_image_drift | length) > 0
       ansible.builtin.debug:
         msg: |
           Docker image drift detected:
-          {% for drift_item in hostvars[docker_services_primary_manager].docker_services_image_drift | sort(attribute='label') %}
+          {% for drift_item in hostvars[services_controller_host].docker_services_image_drift | sort(attribute='label') %}
           - {{ drift_item.label }}
             stack:   {{ drift_item.stack }}
             service: {{ drift_item.service }}
@@ -441,15 +469,22 @@
           {% endfor %}
       tags: [drift]
 
+    - name: Drift | Resolve notification credentials through common preflight
+      ansible.builtin.include_tasks:
+        file: tasks/drift_notification_preflight.yml
+        apply:
+          tags: [drift]
+      tags: [drift]
+
     - name: Drift | Import email notification tasks
       ansible.builtin.import_tasks: "{{ playbook_dir }}/roles/docker_services/tasks/sub_tasks/drift/notify_email.yml"
       tags: [drift]
 
     - name: Drift | Report no image drift found
       when:
-        - inventory_hostname == docker_services_primary_manager
-        - hostvars[docker_services_primary_manager].docker_services_image_drift is not defined
-          or (hostvars[docker_services_primary_manager].docker_services_image_drift | length) == 0
+        - inventory_hostname == services_controller_host
+        - hostvars[services_controller_host].docker_services_image_drift is not defined
+          or (hostvars[services_controller_host].docker_services_image_drift | length) == 0
       ansible.builtin.debug:
         msg: "No Docker service image drift detected."
       tags: [drift]
@@ -457,7 +492,8 @@
     - name: Deploy all Docker stacks
       no_log: true
       when:
-        - inventory_hostname == docker_services_primary_manager
+        - inventory_hostname == services_controller_host
+        - not ansible_check_mode
         - >-
           (
             service_catalog_selected

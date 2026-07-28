@@ -2,30 +2,41 @@
 
 tautulli:
   enabled: true
+  runtime: docker
   tags: [plex, tautulli]
   name: tautulli
   stack: tautulli
+
   image: ghcr.io/hotio/tautulli:release-v2.17.2
-  named_networks:
-    overlay:
-      external: true
+
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_plex_host].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_plex_host].docker_host_pgid }}"
+    PUID: "{{ hostvars[services_plex_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_plex_host].container_host_pgid }}"
     UMASK: "022"
     WEBUI_PORTS: "8181/tcp,8181/udp"
     TP_SCHEME: "http"
-    TP_DOMAIN: "{{ hostvars[docker_services_primary_manager].local_ip }}:8089"
+    TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
     TP_HOTIO: "true"
     TP_THEME: "hotline"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/tautulli"
+    - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/tautulli"
       state: directory
       mode: "0755"
   copies:
     - src: files/themepark/98-themepark-tautulli
-      dest: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/tautulli/98-themepark-tautulli"
+      dest: "{{ hostvars[services_plex_host].container_host_appdata_root }}/tautulli/98-themepark-tautulli"
       mode: "0755"
       force: false
       wait: true
@@ -33,14 +44,15 @@ tautulli:
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/tautulli"
+      source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/tautulli"
       target: /config
       read_only: false
     themepark:
       type: bind
-      source: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/tautulli/98-themepark-tautulli"
+      source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/tautulli/98-themepark-tautulli"
       target: /etc/cont-init.d/98-themepark
       read_only: false
+
   traefik:
     enable: true
     exposure: private
@@ -48,11 +60,12 @@ tautulli:
   themepark:
     app: tautulli
     theme: hotpink
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_plex_host }}"
+    host: "{{ services_plex_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_plex_host
+      - node.labels.docker_services_host == services_plex_host

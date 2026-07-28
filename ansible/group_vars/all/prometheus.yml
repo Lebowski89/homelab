@@ -8,11 +8,11 @@ prometheus_node_exporter_port: 9100
 prometheus_blackbox_exporter_address: blackbox-exporter:9115
 
 prometheus_blackbox_dns_query_name: "adminer.int.nosugarmaxtaste.com"
-prometheus_blackbox_dns_expected_a: "{{ hostvars[docker_services_primary_manager].local_ip }}"
+prometheus_blackbox_dns_expected_a: "{{ hostvars[services_controller_host].local_ip }}"
 
 prometheus_blackbox_dns_targets:
   dns_vip_a: "{{ keepalived_instances.dns_vip_a.virtual_ip }}"
   dns_vip_b: "{{ keepalived_instances.dns_vip_b.virtual_ip }}"
-  dns01: "{{ hostvars[docker_services_primary_manager].local_ip }}"
-  dns02: "{{ hostvars[docker_services_plex_host].local_ip }}"
+  dns01: "{{ hostvars[services_controller_host].local_ip }}"
+  dns02: "{{ hostvars[services_plex_host].local_ip }}"
   dns03: "{{ hostvars['dns03'].local_ip }}"

@@ -1,0 +1,23 @@
+---
+
+- name: Container host defaults | Normalize inventory values
+  ansible.builtin.set_fact:
+    container_host_defaults: "{{ hostvars[inventory_hostname] | container_host_defaults }}"
+
+- name: Container host defaults | Publish canonical inventory values
+  when: container_host_inventory_field.key in container_host_defaults
+  ansible.builtin.set_fact:
+    "{{ container_host_inventory_field.value }}": >-
+      {{ container_host_defaults[container_host_inventory_field.key] }}
+  loop:
+    - key: puid
+      value: container_host_puid
+    - key: pgid
+      value: container_host_pgid
+    - key: appdata_root
+      value: container_host_appdata_root
+    - key: data_root
+      value: container_host_data_root
+  loop_control:
+    loop_var: container_host_inventory_field
+    label: "{{ container_host_inventory_field.value }}"

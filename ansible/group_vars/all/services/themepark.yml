@@ -2,38 +2,44 @@
 
 themepark:
   enabled: true
+  runtime: docker
   tags: [utilities, themepark]
   name: theme-park
   stack: themepark
+
   image: ghcr.io/themepark-dev/theme.park:1.22.1
+
+  environment:
+    TZ: "{{ timezone }}"
+    PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
+    UMASK: "022"
+
   named_networks:
     overlay:
       external: true
-  environment:
-    TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
-    UMASK: "022"
   ports:
     web:
       published: 8089
       target: 80
       mode: host
+
   paths:
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/theme-park"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/theme-park"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/theme-park"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/theme-park"
       target: /config
       read_only: false
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+      - node.labels.docker_services_host == services_controller_host

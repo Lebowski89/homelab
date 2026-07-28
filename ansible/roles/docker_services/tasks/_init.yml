@@ -24,6 +24,70 @@
     docker_services_svc: "{{ docker_services_service_cfg }}"
   tags: [remove, drift]
 
+- name: Init | Validate dispatch-owned common context
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - docker_services_common_context is defined
+      - docker_services_common_context is mapping
+      - docker_services_common_context.runtime == 'docker'
+      - docker_services_common_context.dispatch_host == inventory_hostname
+      - docker_services_common_context.controller_host in hostvars
+      - docker_services_common_context.service_name == docker_services_role_prefix
+      - docker_services_common_context.lookup_values is mapping
+      - docker_services_common_context.resolved_environment is mapping
+      - docker_services_common_context.secret_declarations is sequence
+    fail_msg: "docker_services requires the current dispatch host's validated common service context."
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Init | Reset per-service common snapshots
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_common_values: {}
+    docker_services_secret_declarations: []
+    docker_services_resolved_environment: {}
+    docker_services_controller_host: ""
+    docker_services_application_template_vars: {}
+    docker_services_application_secret_values: {}
+    docker_services_application_secret_declarations: []
+    docker_services_application_bootstrap_requests: {}
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Init | Snapshot dispatch-owned common context
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_common_values: "{{ docker_services_common_context.lookup_values }}"
+    docker_services_secret_declarations: "{{ docker_services_common_context.secret_declarations }}"
+    docker_services_resolved_environment: "{{ docker_services_common_context.resolved_environment }}"
+    docker_services_controller_host: "{{ docker_services_common_context.controller_host }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Init | Validate Docker secret attachment metadata before cleanup
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_secret_attachments_validated: >-
+      {{
+        docker_services_svc.secrets
+        | default([])
+        | docker_services_secret_attachments(
+            docker_services_secret_declarations,
+            (docker_services_svc.deploy | default({})).type | default('swarm', true)
+          )
+      }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Init | Attach common resolved environment
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_svc: >-
+      {{ docker_services_svc | combine({'environment': docker_services_resolved_environment}, recursive=false) }}
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
 - name: Init | Determine whether schema validation should run
   ansible.builtin.set_fact:
     docker_services_validate_enabled: >-
@@ -110,21 +174,35 @@
     docker_services_fs_hosts_effective: "{{ docker_services_fs_hosts_effective | unique | list }}"
   tags: [remove, drift]
 
-- name: Init | Initialize runtime-neutral host ownership mapping
+- name: Init | Validate effective filesystem hosts
+  ansible.builtin.assert:
+    that:
+      - docker_services_fs_host is string
+      - docker_services_fs_host | trim | length > 0
+      - docker_services_fs_host in hostvars
+      - docker_services_fs_host in ansible_play_hosts_all
+    fail_msg: >-
+      Docker service filesystem hosts must be non-empty hosts in the active inventory play.
+  loop: "{{ docker_services_fs_hosts_effective }}"
+  loop_control:
+    loop_var: docker_services_fs_host
+    label: "{{ docker_services_fs_host | default('EMPTY') }}"
+  tags: [remove, drift]
+
+- name: Init | Initialize runtime-neutral container host defaults
   ansible.builtin.set_fact:
     docker_services_common_host_defaults: {}
   tags: [remove, drift]
 
-- name: Init | Build runtime-neutral host ownership mapping
+- name: Init | Build runtime-neutral container host defaults
   ansible.builtin.set_fact:
     docker_services_common_host_defaults: >-
       {{
         docker_services_common_host_defaults
         | combine({
-            docker_services_common_target_host: {
-              'owner': hostvars[docker_services_common_target_host].docker_host_puid | default('1000'),
-              'group': hostvars[docker_services_common_target_host].docker_host_pgid | default('1000')
-            }
+            docker_services_common_target_host:
+              hostvars[docker_services_common_target_host].container_host_defaults
+              | default(hostvars[docker_services_common_target_host] | container_host_defaults, true)
           })
       }}
   loop: "{{ docker_services_fs_hosts_effective }}"

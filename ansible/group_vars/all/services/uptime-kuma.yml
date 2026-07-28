@@ -2,38 +2,52 @@
 
 uptime_kuma:
   enabled: true
+  runtime: docker
   tags: [monitoring, uptime_kuma]
   name: uptime-kuma
   stack: uptime-kuma
+
   image: louislam/uptime-kuma:2.4.0
+
+  environment:
+    TZ: "{{ timezone }}"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
+
   named_networks:
     overlay:
       external: true
-  healthcheck:
-    test:
-      - "CMD-SHELL"
-      - "node /app/extra/healthcheck.js || exit 1"
-  environment:
-    TZ: "{{ timezone }}"
+
   paths:
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/uptime-kuma"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/uptime-kuma"
       state: directory
       mode: "0755"
   volumes:
     data:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/uptime-kuma"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/uptime-kuma"
       target: /app/data
       read_only: false
+
+  healthcheck:
+    test:
+      - "CMD-SHELL"
+      - "node /app/extra/healthcheck.js || exit 1"
+
   traefik:
     enable: true
     exposure: private
     port: 3001
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: careful
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+      - node.labels.docker_services_host == services_controller_host
