@@ -9,8 +9,24 @@
   register: service_prepare_temporary_stale_remove
   retries: 5
   delay: 5
-  until: service_prepare_temporary_stale_remove.msg is not defined
-  failed_when: false
+  until: service_prepare_temporary_stale_remove is succeeded
+  delegate_to: "{{ service_prepare_temporary_container.host }}"
+
+- name: Podman temporary preparation | Verify stale container is absent
+  when: not ansible_check_mode
+  containers.podman.podman_container_info:
+    name:
+      - "{{ service_prepare_temporary_container.name }}"
+  register: service_prepare_temporary_stale_absence
+  retries: 5
+  delay: 5
+  until:
+    - service_prepare_temporary_stale_absence is succeeded
+    - service_prepare_temporary_stale_absence.containers | default([{}]) | length == 0
+  failed_when: >-
+    service_prepare_temporary_stale_absence is failed
+    or service_prepare_temporary_stale_absence.containers | default([{}]) | length > 0
+  changed_when: false
   delegate_to: "{{ service_prepare_temporary_container.host }}"
 
 - name: Podman temporary preparation | Start container
@@ -20,6 +36,7 @@
     image: "{{ service_prepare_temporary_container.image }}"
     pull: always
     state: started
+    entrypoint: "{{ service_prepare_temporary_container.entrypoint | default(omit) }}"
     command: "{{ service_prepare_temporary_container.command | default(omit) }}"
     detach: "{{ service_prepare_temporary_container.detach | default(true) }}"
     rm: false
@@ -29,6 +46,24 @@
   register: service_prepare_temporary_container_result
   delegate_to: "{{ service_prepare_temporary_container.host }}"
 
+- name: Podman temporary preparation | Capture foreground output
+  when:
+    - not ansible_check_mode
+    - service_prepare_temporary_container.capture_output | default(false) | bool
+  no_log: true
+  diff: false
+  ansible.builtin.command:
+    argv:
+      - podman
+      - logs
+      - "{{ service_prepare_temporary_container.name }}"
+  register: service_prepare_temporary_container_capture
+  changed_when: false
+  failed_when: >-
+    service_prepare_temporary_container_capture is failed
+    or service_prepare_temporary_container_capture.rc | default(1) != 0
+  delegate_to: "{{ service_prepare_temporary_container.host }}"
+
 - name: Podman temporary preparation | Publish foreground output
   when:
     - not ansible_check_mode
@@ -36,5 +71,4 @@
   no_log: true
   diff: false
   ansible.builtin.set_fact:
-    service_prepare_temporary_container_output: >-
-      {{ service_prepare_temporary_container_result.stdout | default('') }}
+    service_prepare_temporary_container_output: "{{ service_prepare_temporary_container_capture.stdout }}"

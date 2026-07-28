@@ -265,6 +265,7 @@ def test_postgres_credential_guard_includes_disabled_malformed_declarations():
     services = {
         "disabled": {
             "enabled": False,
+            "runtime": "docker",
             "infisical": {
                 "secrets_map": [
                     {"var": "postgres_user", "path": "/Postgres", "name": "USER"},

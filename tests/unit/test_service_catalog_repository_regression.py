@@ -2,6 +2,7 @@ import importlib.util
 from copy import deepcopy
 from pathlib import Path
 
+import pytest
 import yaml
 from jinja2 import Environment, meta
 
@@ -88,7 +89,7 @@ def test_service_catalog_preserves_docker_selector_parity_for_real_services():
     assert_selector_parity(services, run_tags=["qbittorrent-xs"])
     assert_selector_parity(services, run_all=True)
 
-    disabled_name = next(name for name, cfg in services.items() if cfg.get("runtime", "docker") == "docker" and cfg.get("enabled") is False)
+    disabled_name = next(name for name, cfg in services.items() if cfg["runtime"] == "docker" and cfg.get("enabled") is False)
     assert_selector_parity(services, run_tags=[disabled_name], allow_disabled=False)
     assert_selector_parity(services, run_tags=[disabled_name], allow_disabled=True)
 
@@ -186,6 +187,32 @@ def test_real_sonarr_catalog_target_keeps_effective_configuration():
     assert effective["traefik"] == {"enable": True, "exposure": "private", "port": 8989}
 
 
+@pytest.mark.parametrize(
+    ("service_name", "target_name", "api_var"),
+    [
+        ("radarr", "radarr", "radarr_api"),
+        ("radarr", "radarr_4k", "radarr_4k_api"),
+        ("sonarr", "sonarr", "sonarr_api"),
+        ("sonarr", "sonarr_4k", "sonarr_4k_api"),
+    ],
+)
+def test_real_arr_targets_inherit_base_credentials_once_and_keep_target_api(service_name, target_name, api_var):
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        f"service_catalog_real_{service_name}_{target_name}",
+    )
+    service = load_services()[service_name]
+
+    effective = catalog_filters.service_catalog_merge_target(service, target_name)
+    declarations = [entry["var"] for entry in effective["infisical"]["secrets_map"]]
+
+    assert effective["runtime"] == service["runtime"] == "docker"
+    assert declarations.count("postgres_user") == 1
+    assert declarations.count("postgres_pass") == 1
+    assert declarations.count(api_var) == 1
+    assert "targets" not in effective
+
+
 def test_real_traefik_services_retain_lookup_only_cloudflare_zone_declaration():
     catalog_filters = load_module(
         REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
@@ -266,8 +293,14 @@ def test_cross_host_standalone_services_retain_global_catalog_order():
         "service_catalog_cross_host_order",
     )
     services = {
-        "first": {"deploy": {"type": "container", "host": "docker-a"}},
-        "second": {"deploy": {"type": "container", "host": "docker-b"}},
+        "first": {
+            "runtime": "docker",
+            "deploy": {"type": "container", "host": "docker-a"},
+        },
+        "second": {
+            "runtime": "docker",
+            "deploy": {"type": "container", "host": "docker-b"},
+        },
     }
 
     selected = catalog_filters.service_catalog_select(

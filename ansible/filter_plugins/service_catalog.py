@@ -46,7 +46,9 @@ def _as_bool(value: Any, *, name: str = "value", default: bool = True) -> bool:
 
 
 def _runtime(value: Any, *, name: str) -> str:
-    runtime = str(value or "docker").strip().lower()
+    if not isinstance(value, str) or not value.strip():
+        raise AnsibleFilterError(f"{name} must be a non-empty string containing one of: docker, podman; got {value!r}")
+    runtime = value
     if runtime not in VALID_RUNTIMES:
         raise AnsibleFilterError(f"{name} must be one of: docker, podman; got {runtime!r}")
     return runtime
@@ -118,14 +120,18 @@ def service_catalog_merge_target(service_cfg: Mapping[str, Any], target_name: st
 
     Raises:
         AnsibleFilterError: If ``service_cfg`` or ``targets`` is not a mapping,
-            the requested target is absent or not a mapping, or the target
-            contains nested ``targets``.
+            the base or explicit target runtime is invalid, the requested
+            target is absent or not a mapping, or the target contains nested
+            ``targets``.
 
     Note:
         Neither the base definition nor the selected target is mutated.
     """
     if not isinstance(service_cfg, Mapping):
         raise AnsibleFilterError(f"service_catalog_merge_target expected service_cfg to be a mapping, got {type(service_cfg).__name__}")
+    if "runtime" not in service_cfg:
+        raise AnsibleFilterError("service_catalog_merge_target base service must explicitly declare runtime")
+    _runtime(service_cfg["runtime"], name="service_catalog_merge_target service_cfg.runtime")
 
     base = deepcopy(dict(service_cfg))
     base.pop("targets", None)
@@ -134,6 +140,11 @@ def service_catalog_merge_target(service_cfg: Mapping[str, Any], target_name: st
 
     normalized_target_name = str(target_name).strip()
     target = _target_config(service_cfg, normalized_target_name)
+    if "runtime" in target:
+        _runtime(
+            target["runtime"],
+            name=f"service_catalog_merge_target target {normalized_target_name!r}.runtime",
+        )
     merged = _merge_recursive_append_rp(base, target)
 
     for key in _REPLACE_LIST_KEYS:
@@ -221,12 +232,13 @@ def _dispatch_host(
 def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) -> list[dict[str, Any]]:
     """Expand service definitions into lightweight dispatch metadata.
 
-    A missing base runtime defaults to Docker. A service without targets
-    produces one item; a service with targets produces one item per target.
-    Target runtime can override base runtime, target tags extend de-duplicated
-    base tags, and base and target enabled states are combined. Dispatch hosts
-    are resolved in the current inventory context, but complete service
-    configurations are deliberately not embedded.
+    Every base service must explicitly select Docker or Podman. A service
+    without targets produces one item; a service with targets produces one item
+    per target. Target runtime can override or inherit the validated base
+    runtime, target tags extend de-duplicated base tags, and base and target
+    enabled states are combined. Dispatch hosts are resolved in the current
+    inventory context, but complete service configurations are deliberately not
+    embedded.
 
     Args:
         services: Mapping of service names to canonical service definitions.
@@ -256,7 +268,9 @@ def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) 
         if not isinstance(service_cfg, Mapping):
             raise AnsibleFilterError(f"Service {service_name!r} must be a mapping, got {type(service_cfg).__name__}")
 
-        service_runtime = _runtime(service_cfg.get("runtime", "docker"), name=f"{service_name}.runtime")
+        if "runtime" not in service_cfg:
+            raise AnsibleFilterError(f"Service {service_name!r} must explicitly declare runtime as one of: docker, podman")
+        service_runtime = _runtime(service_cfg["runtime"], name=f"{service_name}.runtime")
         service_enabled = _as_bool(service_cfg.get("enabled", True), name=f"{service_name}.enabled", default=True)
         service_tags = _unique([service_name] + _as_list(service_cfg.get("tags", []), name=f"{service_name}.tags"))
         targets = service_cfg.get("targets")
@@ -351,7 +365,7 @@ def service_catalog_select(
         if not isinstance(item, Mapping):
             raise AnsibleFilterError(f"Selection item must be a mapping, got {type(item).__name__}")
         item_name = str(item.get("name", "")).strip()
-        _runtime(item.get("runtime", "docker"), name=f"{item_name}.runtime")
+        _runtime(item.get("runtime"), name=f"{item_name}.runtime")
         item_tags = set(_as_list(item.get("tags", []), name=f"{item_name}.tags"))
         if not (run_all_bool or not run_tags_set or item_name in run_tags_set or bool(item_tags.intersection(run_tags_set))):
             continue
@@ -367,8 +381,8 @@ def service_catalog_by_runtime(items: list[Mapping[str, Any]], runtime: str) -> 
 
     Args:
         items: Catalog records whose ``runtime`` values should be inspected.
-        runtime: Requested runtime name, normalized case-insensitively. Supported
-            values are ``docker`` and ``podman``.
+        runtime: Exact requested runtime name. Supported values are ``docker``
+            and ``podman``.
 
     Returns:
         Records matching the requested runtime, preserving input order and
@@ -382,7 +396,7 @@ def service_catalog_by_runtime(items: list[Mapping[str, Any]], runtime: str) -> 
         The input list and member mappings are not mutated.
     """
     wanted = _runtime(runtime, name="runtime")
-    return [item for item in items if _runtime(item.get("runtime", "docker"), name=f"{item.get('name', 'item')}.runtime") == wanted]
+    return [item for item in items if _runtime(item.get("runtime"), name=f"{item.get('name', 'item')}.runtime") == wanted]
 
 
 class FilterModule:

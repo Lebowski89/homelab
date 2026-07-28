@@ -15,6 +15,11 @@
         service_prepare_temporary_container.command is not defined
         or service_prepare_temporary_container.command is string
         or service_prepare_temporary_container.command is sequence
+      - >-
+        service_prepare_temporary_container.entrypoint is not defined
+        or service_prepare_temporary_container.entrypoint is string
+        or service_prepare_temporary_container.entrypoint is sequence
+      - service_prepare_temporary_container.name is match('^[A-Za-z0-9][A-Za-z0-9_.-]*$')
       - service_prepare_temporary_container.host is string
       - service_prepare_temporary_container.host | trim | length > 0
       - service_prepare_temporary_container.host in hostvars
@@ -87,6 +92,13 @@
       when: service_prepare_temporary_container.stabilization_seconds | default(0) | int > 0
       ansible.builtin.pause:
         seconds: "{{ service_prepare_temporary_container.stabilization_seconds | int }}"
+
+  rescue:
+    - name: Temporary preparation container | Report executor failure before cleanup
+      ansible.builtin.fail:
+        msg: >-
+          Temporary application preparation failed during
+          '{{ ansible_failed_task.name | default('an unknown task') }}'; cleanup will still be attempted.
 
   always:
     - name: Temporary preparation container | Remove selected runtime executor

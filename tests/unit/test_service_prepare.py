@@ -291,20 +291,94 @@ def test_temporary_executor_guarantees_cleanup_after_execution_block():
     tasks = yaml.safe_load((ROLE / "tasks/runtimes/temporary_container.yml").read_text())
     execute = task_named(tasks, "Temporary preparation container | Execute with guaranteed cleanup")
     start = task_named(execute["block"], "Temporary preparation container | Start selected runtime executor")
+    failure = task_named(execute["rescue"], "Temporary preparation container | Report executor failure before cleanup")
     cleanup = task_named(execute["always"], "Temporary preparation container | Remove selected runtime executor")
 
     assert execute["when"] == "not ansible_check_mode"
     assert "service_prepare_runtime_executor('start')" in start["ansible.builtin.include_tasks"]["file"]
     assert "service_prepare_runtime_executor('remove')" in cleanup["ansible.builtin.include_tasks"]["file"]
+    assert "ansible_failed_task.name" in failure["ansible.builtin.fail"]["msg"]
+    assert "ansible_failed_result" not in failure["ansible.builtin.fail"]["msg"]
 
     for runtime in ("docker", "podman"):
         start_tasks = yaml.safe_load((ROLE / f"tasks/runtimes/{runtime}/temporary_container_start.yml").read_text())
         remove_tasks = yaml.safe_load((ROLE / f"tasks/runtimes/{runtime}/temporary_container_remove.yml").read_text())
-        assert "not ansible_check_mode" in task_named(start_tasks, f"{runtime.title()} temporary preparation | Start container")["when"]
+        stale_remove = task_named(start_tasks, f"{runtime.title()} temporary preparation | Remove stale container")
+        stale_verify = task_named(start_tasks, f"{runtime.title()} temporary preparation | Verify stale container is absent")
+        runtime_start = task_named(start_tasks, f"{runtime.title()} temporary preparation | Start container")
         removal = task_named(remove_tasks, f"{runtime.title()} temporary preparation | Remove container")
-        assert removal["failed_when"] is False
+        verification = task_named(remove_tasks, f"{runtime.title()} temporary preparation | Verify container is absent")
+
+        assert "not ansible_check_mode" in runtime_start["when"]
+        assert start_tasks.index(stale_remove) < start_tasks.index(stale_verify) < start_tasks.index(runtime_start)
+        assert stale_remove["until"] == "service_prepare_temporary_stale_remove is succeeded"
+        assert removal["until"] == "service_prepare_temporary_remove is succeeded"
+        assert "failed_when" not in stale_remove
+        assert "failed_when" not in removal
         assert removal["retries"] == 5
-        assert removal["until"] == "service_prepare_temporary_remove.msg is not defined"
+        assert verification["retries"] == 5
+        assert verification["changed_when"] is False
+        assert verification["failed_when"]
+        assert remove_tasks.index(removal) < remove_tasks.index(verification)
+
+        runtime_text = "\n".join(path.read_text() for path in (ROLE / f"tasks/runtimes/{runtime}").glob("*.yml"))
+        assert "msg is not defined" not in runtime_text
+        assert "failed_when: false" not in runtime_text
+
+
+def test_temporary_cleanup_uses_runtime_information_modules_and_exact_names():
+    expected = {
+        "docker": ("community.docker.docker_container_info", "exists"),
+        "podman": ("containers.podman.podman_container_info", "containers"),
+    }
+
+    for runtime, (module_name, absence_field) in expected.items():
+        start_tasks = yaml.safe_load((ROLE / f"tasks/runtimes/{runtime}/temporary_container_start.yml").read_text())
+        remove_tasks = yaml.safe_load((ROLE / f"tasks/runtimes/{runtime}/temporary_container_remove.yml").read_text())
+        for tasks, name in (
+            (start_tasks, f"{runtime.title()} temporary preparation | Verify stale container is absent"),
+            (remove_tasks, f"{runtime.title()} temporary preparation | Verify container is absent"),
+        ):
+            verification = task_named(tasks, name)
+            module_args = verification[module_name]
+            assert "service_prepare_temporary_container.name" in str(module_args["name"])
+            assert absence_field in str(verification["until"])
+            assert absence_field in verification["failed_when"]
+            assert verification["retries"] == 5
+            assert verification["delay"] == 5
+
+
+def test_podman_capture_uses_logs_command_and_never_module_stdout():
+    podman_tasks = yaml.safe_load((ROLE / "tasks/runtimes/podman/temporary_container_start.yml").read_text())
+    capture = task_named(podman_tasks, "Podman temporary preparation | Capture foreground output")
+    publish = task_named(podman_tasks, "Podman temporary preparation | Publish foreground output")
+    start = task_named(podman_tasks, "Podman temporary preparation | Start container")
+
+    assert capture["ansible.builtin.command"]["argv"] == [
+        "podman",
+        "logs",
+        "{{ service_prepare_temporary_container.name }}",
+    ]
+    assert capture["changed_when"] is False
+    assert "service_prepare_temporary_container_capture is failed" in capture["failed_when"]
+    assert "service_prepare_temporary_container_capture.rc | default(1) != 0" in capture["failed_when"]
+    assert capture["no_log"] is True
+    assert capture["diff"] is False
+    assert publish["ansible.builtin.set_fact"]["service_prepare_temporary_container_output"] == (
+        "{{ service_prepare_temporary_container_capture.stdout }}"
+    )
+    assert podman_tasks.index(start) < podman_tasks.index(capture) < podman_tasks.index(publish)
+    assert (
+        "service_prepare_temporary_container_result.stdout"
+        not in (ROLE / "tasks/runtimes/podman/temporary_container_start.yml").read_text()
+    )
+
+    docker_tasks = yaml.safe_load((ROLE / "tasks/runtimes/docker/temporary_container_start.yml").read_text())
+    docker_publish = task_named(docker_tasks, "Docker temporary preparation | Publish foreground output")
+    assert (
+        "service_prepare_temporary_container_result.container.Output"
+        in docker_publish["ansible.builtin.set_fact"]["service_prepare_temporary_container_output"]
+    )
 
 
 def test_qbittorrent_derivation_precedes_common_templates_for_both_adapters():
@@ -572,6 +646,11 @@ def test_check_mode_selects_no_temporary_runtime_executor(tmp_path: Path):
     assert "Authelia prepare | Publish value-free declaration" in output
     assert "Docker temporary preparation | Start container" not in output
     assert "Podman temporary preparation | Start container" not in output
+    assert "Docker temporary preparation | Remove stale container" not in output
+    assert "Podman temporary preparation | Remove stale container" not in output
+    assert "Docker temporary preparation | Verify container is absent" not in output
+    assert "Podman temporary preparation | Verify container is absent" not in output
+    assert "Podman temporary preparation | Capture foreground output" not in output
     assert "example.invalid" not in output
 
 
