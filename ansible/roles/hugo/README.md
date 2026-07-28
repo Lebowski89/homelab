@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/15 |
+| Readme update        | 2026/07/29 |
 
 
 
@@ -27,8 +27,8 @@
 
 | Var          | Type         | Value       |
 |--------------|--------------|-------------|
-| [hugo_fs_host](defaults/main.yml#L3)   | str | `{{ docker_services_primary_manager }}` |    
-| [hugo_root_path](defaults/main.yml#L4)   | str | `{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}` |    
+| [hugo_fs_host](defaults/main.yml#L3)   | str | `{{ services_controller_host }}` |    
+| [hugo_root_path](defaults/main.yml#L4)   | str | `{{ hostvars[services_controller_host].container_host_appdata_root }}` |    
 | [hugo_site_path](defaults/main.yml#L5)   | str | `{{ hugo_root_path }}/blog` |    
 | [hugo_theme_path](defaults/main.yml#L6)   | str | `{{ hugo_site_path }}/themes/terminal` |    
 | [hugo_image](defaults/main.yml#L7)   | str | `ghcr.io/gohugoio/hugo:v0.163.3` |    

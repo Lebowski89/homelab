@@ -1,3 +1,11 @@
+"""Materialize selected service configurations in an Ansible host context.
+
+The action plugin receives lightweight service-catalog entries, resolves each
+entry through the repository's canonical target merge, and templates the
+result with variables belonging to the current dispatch host. It returns the
+materialized batch as a non-cacheable Ansible fact without reporting a change.
+"""
+
 from __future__ import annotations
 
 import importlib.util
@@ -14,6 +22,7 @@ _VALID_RUNTIMES = {"docker", "podman"}
 
 
 def _load_canonical_merge():
+    """Load the shared target-merge function without duplicating its behavior."""
     spec = importlib.util.spec_from_file_location("service_catalog_action", _SERVICE_CATALOG_PATH)
     if spec is None or spec.loader is None:
         raise ImportError(f"Unable to load canonical service catalog filter from {_SERVICE_CATALOG_PATH}")
@@ -31,6 +40,33 @@ def materialize_selected(
     template_config: Callable[[dict[str, Any]], dict[str, Any]],
     merge_target: Callable[[Mapping[str, Any], str | None], dict[str, Any]] = _CANONICAL_MERGE_TARGET,
 ) -> list[dict[str, Any]]:
+    """Resolve and template selected lightweight catalog entries.
+
+    Each selected entry must name an existing service, declare a supported
+    runtime, and omit ``config``. The canonical merge is called once per entry,
+    after which ``template_config`` resolves host-local Ansible values. Input
+    order is preserved.
+
+    Args:
+        services: Mapping of raw service names to service definitions.
+        selected: List of lightweight catalog entry mappings.
+        template_config: Callable that templates one merged configuration in
+            the current dispatch host's variable context.
+        merge_target: Callable used to merge a base service and optional target.
+            Defaults to the repository's canonical service-catalog merger.
+
+    Returns:
+        Deep-copied catalog entries with one concrete ``config`` mapping added
+        to each entry.
+
+    Raises:
+        AnsibleActionFail: If input shapes, names, runtimes, or targets are
+            invalid, an entry already contains ``config``, or canonical merge or
+            Ansible templating raises an ``AnsibleError``.
+
+    Note:
+        ``services`` and ``selected`` are not mutated.
+    """
     if not isinstance(services, Mapping):
         raise AnsibleActionFail(f"services source must be a mapping, got {type(services).__name__}")
     if not isinstance(selected, list):
@@ -77,10 +113,30 @@ def materialize_selected(
 
 
 class ActionModule(ActionBase):
+    """Expose host-local service materialization as an Ansible action plugin."""
+
     _VALID_ARGS = frozenset({"source_var", "selected"})
     _supports_check_mode = True
 
     def run(self, tmp=None, task_vars=None):
+        """Materialize the requested entries and publish a host-owned fact.
+
+        Args:
+            tmp: Optional temporary path supplied by Ansible's action executor.
+            task_vars: Variables for the current inventory host. The task's
+                ``source_var`` argument identifies the raw service mapping.
+
+        Returns:
+            The standard action result containing the non-cacheable
+            ``service_catalog_host_materialized`` fact and ``changed: false``.
+
+        Raises:
+            AnsibleActionFail: If ``source_var`` is absent, empty, or undefined,
+                or if selected entries cannot be materialized.
+
+        Note:
+            The action supports check mode and does not mutate ``task_vars``.
+        """
         task_vars = task_vars or {}
         result = super().run(tmp, task_vars)
 

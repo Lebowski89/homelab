@@ -1,0 +1,27 @@
+---
+
+- name: QBittorrent prepare | Derive password hash
+  no_log: true
+  diff: false
+  qbittorrent_passwd:
+    password: "{{ service_prepare_context.lookup_values[service_prepare_qbittorrent_password_var] }}"
+  register: service_prepare_qbittorrent_password_hash
+  delegate_to: "{{ service_prepare_context.filesystem_hosts | first }}"
+
+- name: QBittorrent prepare | Validate derived password hash
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_prepare_qbittorrent_password_hash.msg | default('') | string | trim | length > 0
+    fail_msg: "qBittorrent password hash derivation returned an empty value."
+
+- name: QBittorrent prepare | Publish template value
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_template_vars: >-
+      {{
+        service_prepare_template_vars
+        | combine({service_prepare_qbittorrent_template_var: service_prepare_qbittorrent_password_hash.msg})
+      }}

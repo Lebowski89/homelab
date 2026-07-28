@@ -12,47 +12,160 @@
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
 ################################
-# COMMON LOOKUP + ENVIRONMENT
+# APPLICATION VALIDATION
 ################################
 
-- name: Podman services | Resolve common Infisical values and environment
-  when: podman_services_common_action in ["deploy", "update", "recreate", "bootstrap"]
+- name: Podman services | Build runtime-neutral application context
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_application_context:
+      service_name: "{{ podman_services_service.name }}"
+      target: "{{ podman_services_service_target | default('') }}"
+      runtime: podman
+      operation: "{{ podman_services_common_action }}"
+      service: >-
+        {{ podman_services_service_cfg | combine({'environment': podman_services_resolved_environment}, recursive=false) }}
+      resolved_environment: "{{ podman_services_resolved_environment }}"
+      lookup_values: "{{ podman_services_common_values }}"
+      secret_declarations: "{{ podman_services_secret_declarations }}"
+      controller_host: "{{ podman_services_controller_host }}"
+      filesystem_hosts: ["{{ inventory_hostname }}"]
+      host_defaults: "{{ podman_services_common_host_defaults }}"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Podman services | Validate application preparation
   no_log: true
   ansible.builtin.include_role:
-    name: service_common
-    tasks_from: infisical
+    name: service_prepare
+    tasks_from: validate
+    apply:
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
+      no_log: true
+      diff: false
+  vars:
+    service_prepare_context: "{{ podman_services_application_context }}"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Podman services | Snapshot reset application outputs
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_application_template_vars: "{{ service_prepare_template_vars }}"
+    podman_services_application_secret_values: "{{ service_prepare_generated_secret_values }}"
+    podman_services_application_secret_declarations: "{{ service_prepare_generated_secret_declarations }}"
+    podman_services_application_bootstrap_requests: "{{ service_prepare_bootstrap_requests }}"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+################################
+# RUNTIME CLEANUP
+################################
+
+- name: Podman services | Stop deployed service before recreate preparation
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'recreate'
+  ansible.builtin.systemd_service:
+    name: "{{ podman_services_unit_name }}"
+    state: stopped
+  tags: [recreate]
+
+################################
+# APPLICATION SECRET GENERATION
+################################
+
+- name: Podman services | Generate runtime-neutral application secrets
+  when: podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_prepare
+    tasks_from: generate_secrets
     apply:
       tags: [deploy, update, recreate, bootstrap]
       no_log: true
       diff: false
   vars:
-    service_common_environment: "{{ podman_services_service.env }}"
-    service_common_infisical_secrets_map: >-
-      {{ (podman_services_service_cfg.infisical | default({})).secrets_map | default([]) }}
-    service_common_legacy_podman_secrets: "{{ podman_services_service_cfg.secrets | default([]) }}"
-    service_common_infisical_lookup_params: "{{ podman_services_infisical_lookup_params | default({}) }}"
-    service_common_infisical_fail_on_empty: >-
-      {{ (podman_services_service_cfg.infisical | default({})).fail_on_empty | default(true) }}
+    service_prepare_context: "{{ podman_services_application_context }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Podman services | Snapshot common Infisical values
-  when: podman_services_common_action in ["deploy", "update", "recreate", "bootstrap"]
+- name: Podman services | Build effective current-service secret inputs
   no_log: true
   diff: false
   ansible.builtin.set_fact:
-    podman_services_infisical_values: "{{ service_common_infisical_values }}"
+    podman_services_application_secret_values: "{{ service_prepare_generated_secret_values }}"
+    podman_services_application_secret_declarations: >-
+      {{ service_prepare_generated_secret_declarations | podman_secret_declarations }}
+    podman_services_effective_secret_values: >-
+      {{ podman_services_common_values | combine(service_prepare_generated_secret_values) }}
+    podman_services_effective_secret_declarations: >-
+      {{
+        podman_services_secret_declarations
+        + (service_prepare_generated_secret_declarations | podman_secret_declarations)
+      }}
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Podman services | Attach common resolved environment
-  when: podman_services_common_action in ["deploy", "update", "recreate", "bootstrap"]
+- name: Podman services | Validate canonical secret attachments
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - >-
+        podman_services_service.secret_attachments
+        | difference(podman_services_effective_secret_declarations | map(attribute='name') | list)
+        | length == 0
+    fail_msg: >-
+      A canonical secret attachment has no current-service declaration; Podman
+      native-secret materialization was stopped.
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Podman services | Attach effective native secret declarations
   no_log: true
   diff: false
   ansible.builtin.set_fact:
     podman_services_service: >-
       {{
         podman_services_service
-        | combine({"env": service_common_resolved_environment}, recursive=false)
+        | combine({'secrets': podman_services_effective_secret_declarations}, recursive=false)
       }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Podman services | Materialize Podman-native secrets
+  when:
+    - not ansible_check_mode
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_effective_secret_declarations | length > 0
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: sub_tasks/secrets/materialize.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate, bootstrap]
+
+################################
+# APPLICATION TEMPLATE VALUES
+################################
+
+- name: Podman services | Derive runtime-neutral application template values
+  when: podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_prepare
+    tasks_from: derive_templates
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  vars:
+    service_prepare_context: "{{ podman_services_application_context }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Podman services | Snapshot application template values
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_application_template_vars: "{{ service_prepare_template_vars }}"
   tags: [deploy, update, recreate, bootstrap]
 
 ################################
@@ -73,15 +186,47 @@
     service_common_runtime: podman
     service_common_action: "{{ podman_services_common_action }}"
     service_common_service: >-
-      {{ podman_services_service | combine({"paths": podman_services_service.host_paths}, recursive=true) }}
+      {{
+        podman_services_service_cfg
+        | combine({
+            'environment': podman_services_resolved_environment,
+            'paths': podman_services_service.host_paths
+          }, recursive=false)
+      }}
     service_common_target_hosts: ["{{ inventory_hostname }}"]
-    service_common_controller_host: "{{ podman_services_traefik_delegate }}"
-    service_common_infisical_values: "{{ podman_services_infisical_values }}"
+    service_common_controller_host: "{{ podman_services_controller_host }}"
+    service_common_infisical_values: "{{ podman_services_common_values }}"
+    service_common_host_defaults: "{{ podman_services_common_host_defaults }}"
     service_common_default_owner: >-
-      {{ podman_services_service.container.uid | default("1000") }}
+      {{
+        podman_services_service.container.uid
+        | default(podman_services_common_host_defaults[inventory_hostname].get('puid', '1000'))
+      }}
     service_common_default_group: >-
-      {{ podman_services_service.container.gid | default("1000") }}
+      {{
+        podman_services_service.container.gid
+        | default(podman_services_common_host_defaults[inventory_hostname].get('pgid', '1000'))
+      }}
     service_common_default_mode: "0750"
+    service_common_template_vars: "{{ podman_services_application_template_vars }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+################################
+# APPLICATION CONFIGURATION
+################################
+
+- name: Podman services | Apply runtime-neutral application configuration
+  when: podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_prepare
+    tasks_from: configure
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  vars:
+    service_prepare_context: "{{ podman_services_application_context }}"
   tags: [deploy, update, recreate, bootstrap]
 
 ################################
@@ -152,7 +297,7 @@
     service_common_service: "{{ podman_services_service }}"
     service_common_target_hosts: ["{{ inventory_hostname }}"]
     service_common_controller_host: "{{ podman_services_traefik_delegate }}"
-    service_common_traefik_base_zone: "{{ podman_services_infisical_values.cloudflare_zone }}"
+    service_common_traefik_base_zone: "{{ podman_services_common_values.cloudflare_zone }}"
     service_common_traefik_dynamic_dir: "{{ podman_services_traefik_dynamic_dir }}"
     service_common_traefik_owner: "{{ podman_services_traefik_dynamic_owner }}"
     service_common_traefik_group: "{{ podman_services_traefik_dynamic_group }}"

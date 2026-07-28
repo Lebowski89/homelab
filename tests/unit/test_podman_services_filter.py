@@ -1,4 +1,5 @@
 import importlib.util
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -15,14 +16,13 @@ def valid_cfg():
         "runtime": "podman",
         "container": {"image": "docker.io/n8nio/n8n:2.31.4", "ports": [{"host": 5678, "container": 5678}]},
         "host_paths": [{"path": "/opt/n8n"}],
-        "secrets": [{"name": "postgres_user_secret", "infisical_path": "/Postgres", "infisical_key": "USER"}],
     }
 
 
 def test_normalize_accepts_n8n_like_service():
     svc = podman_services.podman_service_normalize(valid_cfg(), "n8n")
     assert svc["image"] == "docker.io/n8nio/n8n:2.31.4"
-    assert svc["secrets"][0]["name"] == "postgres_user_secret"
+    assert svc["secrets"] == []
 
 
 @pytest.mark.parametrize("image", ["docker.io/n8nio/n8n:latest", "docker.io/n8nio/n8n", ""])
@@ -43,23 +43,33 @@ def test_unsafe_path_fails():
 def test_bad_secret_fails():
     cfg = valid_cfg()
     cfg["secrets"] = [{"name": "x"}]
-    with pytest.raises(AnsibleFilterError, match="infisical"):
+    with pytest.raises(AnsibleFilterError, match="not supported by Podman"):
         podman_services.podman_service_normalize(cfg, "n8n")
+
+
+def test_canonical_value_free_secret_attachments_are_adapter_metadata():
+    cfg = valid_cfg()
+    cfg["secrets"] = ["generated_secret", "canonical_secret"]
+    original = deepcopy(cfg)
+
+    svc = podman_services.podman_service_normalize(cfg, "n8n")
+
+    assert svc["secrets"] == []
+    assert svc["secret_attachments"] == ["generated_secret", "canonical_secret"]
+    assert cfg == original
 
 
 def test_immutable_secret_cannot_be_replaceable():
-    cfg = valid_cfg()
-    cfg["secrets"] = [
+    declarations = [
         {
             "name": "n8n_encryption_key_secret",
-            "infisical_path": "/N8N",
-            "infisical_key": "ENCRYPTION_KEY",
-            "immutable": True,
-            "replace": True,
+            "var": "n8n_encryption_key",
+            "target": "/run/secrets/n8n_encryption_key_secret",
+            "runtime_options": {"podman": {"immutable": True, "replace": True}},
         }
     ]
     with pytest.raises(AnsibleFilterError, match="immutable"):
-        podman_services.podman_service_normalize(cfg, "n8n")
+        podman_services.podman_secret_declarations(declarations)
 
 
 def test_volume_requires_target():
@@ -465,13 +475,12 @@ def test_secret_policy_rejects_invalid_booleans(value):
 
 def test_secret_and_network_booleans_are_normalized():
     cfg = minimal_canonical_cfg()
-    cfg["secrets"] = [
+    declarations = [
         {
             "name": "portable_secret",
-            "infisical_path": "/Portable",
-            "infisical_key": "VALUE",
-            "immutable": "false",
-            "replace": "true",
+            "var": "portable_secret",
+            "target": "/run/secrets/portable_secret",
+            "runtime_options": {"podman": {"immutable": "false", "replace": "true"}},
         }
     ]
     cfg["network"] = {
@@ -481,9 +490,10 @@ def test_secret_and_network_booleans_are_normalized():
     }
 
     svc = podman_services.podman_service_normalize(cfg, "portable")
+    secrets = podman_services.podman_secret_declarations(declarations)
 
-    assert svc["secrets"][0]["immutable"] is False
-    assert svc["secrets"][0]["replace"] is True
+    assert secrets[0]["immutable"] is False
+    assert secrets[0]["replace"] is True
     assert svc["network"]["delete_on_stop"] is True
 
 
@@ -534,14 +544,17 @@ def test_canonical_and_legacy_volume_read_only_values_are_strict_booleans():
 def test_nested_boolean_fields_reject_integer_two(section, field):
     cfg = minimal_canonical_cfg()
     if section == "secret":
-        cfg["secrets"] = [
+        declarations = [
             {
                 "name": "portable_secret",
-                "infisical_path": "/Portable",
-                "infisical_key": "VALUE",
-                field: 2,
+                "var": "portable_secret",
+                "target": "/run/secrets/portable_secret",
+                "runtime_options": {"podman": {field: 2}},
             }
         ]
+        with pytest.raises(AnsibleFilterError, match=field):
+            podman_services.podman_secret_declarations(declarations)
+        return
     elif section == "network":
         cfg["network"] = {"name": "portable", field: 2}
     else:
@@ -665,7 +678,7 @@ def test_port_host_ip_is_nonempty_ipv4_for_this_phase(host_ip):
         ("network", "bad/network", r"network\.name"),
         ("named_volume", "../data", r"volumes\[0\]\.source"),
         ("legacy_volume", "bad/volume", r"volumes\[0\]\.name"),
-        ("secret", "bad/secret", r"secrets\[0\]\.name"),
+        ("secret", "bad/secret", r"secret declarations\[0\]\.name"),
     ],
 )
 def test_quadlet_filename_and_resource_names_are_validated(location, value, match):
@@ -680,13 +693,17 @@ def test_quadlet_filename_and_resource_names_are_validated(location, value, matc
         cfg = valid_cfg()
         cfg["volumes"] = [{"name": value, "target": "/data"}]
     else:
-        cfg["secrets"] = [
+        declarations = [
             {
                 "name": value,
-                "infisical_path": "/Portable",
-                "infisical_key": "VALUE",
+                "var": "portable_secret",
+                "target": "/run/secrets/portable_secret",
             }
         ]
+
+        with pytest.raises(AnsibleFilterError, match=match):
+            podman_services.podman_secret_declarations(declarations)
+        return
 
     with pytest.raises(AnsibleFilterError, match=match):
         podman_services.podman_service_normalize(cfg, "portable")
@@ -723,8 +740,6 @@ def test_equivalent_canonical_and_legacy_descriptions_are_accepted():
         {"replicas": 0, "host": "podman01"},
         {"replicas": 2, "host": "podman01"},
         {"placement": {"constraints": ["node.role == worker"]}, "host": "podman01"},
-        {"constraints": ["node.labels.zone == internal"], "host": "podman01"},
-        {"profile": "standard", "host": "podman01"},
     ],
 )
 def test_unsupported_docker_deploy_semantics_are_rejected(deploy):
@@ -742,6 +757,14 @@ def test_unsupported_docker_deploy_semantics_are_rejected(deploy):
         {"type": "swarm", "mode": "replicated", "host": "podman01"},
         {"type": "swarm", "mode": "replicated", "replicas": 1, "host": "podman01"},
         {"type": "container", "replicas": "1", "host": "podman01"},
+        {
+            "type": "swarm",
+            "mode": "replicated",
+            "replicas": 1,
+            "profile": "standard",
+            "constraints": ["node.labels.zone == internal"],
+            "host": "podman01",
+        },
     ],
 )
 def test_supported_single_instance_deploy_forms_are_accepted(deploy):
@@ -751,6 +774,21 @@ def test_supported_single_instance_deploy_forms_are_accepted(deploy):
     svc = podman_services.podman_service_normalize(cfg, "portable")
 
     assert svc["container"]["host"] == "podman01"
+
+
+def test_docker_only_deploy_metadata_is_ignored_without_mutating_input():
+    cfg = minimal_canonical_cfg()
+    cfg["deploy"] = {
+        "host": "podman01",
+        "profile": "careful",
+        "constraints": ["node.labels.docker_services_host == manager"],
+    }
+    original = deepcopy(cfg)
+
+    svc = podman_services.podman_service_normalize(cfg, "portable")
+
+    assert svc["container"]["host"] == "podman01"
+    assert cfg == original
 
 
 @pytest.mark.parametrize(
@@ -891,13 +929,20 @@ def canonical_secret_cfg():
 
 
 def test_canonical_secret_normalizes_for_native_podman_and_keeps_lookup_only_entry():
-    svc = podman_services.podman_service_normalize(canonical_secret_cfg(), "portable")
+    service_common_spec = importlib.util.spec_from_file_location(
+        "service_common_for_podman",
+        Path("ansible/roles/service_common/filter_plugins/service_common.py"),
+    )
+    service_common = importlib.util.module_from_spec(service_common_spec)
+    service_common_spec.loader.exec_module(service_common)
+    normalized = service_common.service_common_infisical_normalize(canonical_secret_cfg()["infisical"]["secrets_map"])
+    secrets = podman_services.podman_secret_declarations(normalized["secret_declarations"])
 
-    assert svc["infisical"]["secrets_map"] == [
+    assert normalized["secrets_map"] == [
         {"var": "portable_secret", "path": "/Portable", "name": "VALUE"},
         {"var": "template_only", "path": "/Portable", "name": "TEMPLATE"},
     ]
-    assert svc["secrets"] == [
+    assert secrets == [
         {
             "name": "portable_secret",
             "var": "portable_secret",
@@ -911,7 +956,7 @@ def test_canonical_secret_normalizes_for_native_podman_and_keeps_lookup_only_ent
     ]
 
 
-def test_equivalent_canonical_and_legacy_podman_secret_deduplicates():
+def test_legacy_podman_secret_contract_is_rejected():
     cfg = canonical_secret_cfg()
     cfg["secrets"] = [
         {
@@ -927,28 +972,18 @@ def test_equivalent_canonical_and_legacy_podman_secret_deduplicates():
         }
     ]
 
-    svc = podman_services.podman_service_normalize(cfg, "portable")
+    with pytest.raises(AnsibleFilterError, match="not supported by Podman"):
+        podman_services.podman_service_normalize(cfg, "portable")
 
-    assert len(svc["secrets"]) == 1
 
-
-def test_check_mode_metadata_does_not_conflict_with_equivalent_legacy_lookup():
+def test_check_mode_metadata_remains_owned_by_common_declaration():
     cfg = canonical_secret_cfg()
     cfg["infisical"]["secrets_map"][1]["check_mode_value"] = "check-mode.invalid"
-    cfg["secrets"] = [
-        {
-            "name": "template_only",
-            "infisical_path": "/Portable",
-            "infisical_key": "TEMPLATE",
-        }
-    ]
 
-    svc = podman_services.podman_service_normalize(cfg, "portable")
-
-    assert svc["infisical"]["secrets_map"][1]["check_mode_value"] == "check-mode.invalid"
+    assert cfg["infisical"]["secrets_map"][1]["check_mode_value"] == "check-mode.invalid"
 
 
-def test_conflicting_canonical_and_legacy_podman_secret_fails():
+def test_runtime_adapter_does_not_merge_legacy_podman_lookup_metadata():
     cfg = canonical_secret_cfg()
     cfg["secrets"] = [
         {
@@ -958,7 +993,7 @@ def test_conflicting_canonical_and_legacy_podman_secret_fails():
         }
     ]
 
-    with pytest.raises(AnsibleFilterError, match="lookup differs"):
+    with pytest.raises(AnsibleFilterError, match="not supported by Podman"):
         podman_services.podman_service_normalize(cfg, "portable")
 
 

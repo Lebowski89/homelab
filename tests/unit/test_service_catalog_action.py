@@ -32,11 +32,12 @@ def identity(value):
 def test_selective_materialization_preserves_order_and_inputs_and_merges_once():
     services = {
         "first": {
+            "runtime": "docker",
             "environment": {"BASE": "first"},
             "targets": {"primary": {"environment": {"TARGET": "primary"}}},
         },
-        "second": {"environment": {"BASE": "second"}},
-        "unselected": {"environment": {"VALUE": "must-not-be-templated"}},
+        "second": {"runtime": "podman", "environment": {"BASE": "second"}},
+        "unselected": {"runtime": "docker", "environment": {"VALUE": "must-not-be-templated"}},
     }
     selected = [
         {"name": "second", "runtime": "podman", "dispatch_host": "host-a"},
@@ -92,12 +93,17 @@ def test_selective_materialization_preserves_order_and_inputs_and_merges_once():
             "entry 0.target must be a non-empty string",
         ),
         (
-            {"app": {"targets": {"primary": {}}}},
+            {"app": {"runtime": "docker", "targets": {"primary": {}}}},
             [{"name": "app", "runtime": "docker", "target": "missing"}],
             "Available targets: primary",
         ),
         (
-            {"app": {"targets": {"primary": {"targets": {"nested": {}}}}}},
+            {
+                "app": {
+                    "runtime": "docker",
+                    "targets": {"primary": {"targets": {"nested": {}}}},
+                }
+            },
             [{"name": "app", "runtime": "docker", "target": "primary"}],
             "must not contain nested targets",
         ),
@@ -182,6 +188,7 @@ def test_action_templates_selected_config_in_dispatch_host_context_only(tmp_path
   vars:
     svcfiles:
       selected:
+        runtime: docker
         environment:
           ADDRESS: "{{ hostvars[inventory_hostname].local_ip }}"
         targets:
@@ -189,6 +196,7 @@ def test_action_templates_selected_config_in_dispatch_host_context_only(tmp_path
             paths:
               - path: "{{ hostvars[inventory_hostname].application_root }}/selected"
       unselected:
+        runtime: docker
         environment:
           VALUE: "{{ deliberately_undefined }}"
     selected_entries:

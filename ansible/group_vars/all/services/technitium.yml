@@ -2,77 +2,88 @@
 
 technitium:
   enabled: true
+  runtime: docker
   tags: [dns]
+
   image: technitium/dns-server:15.3.0
-  named_networks:
-    outside:
-      external: true
-      name: host
+
+  environment:
+    TZ: "{{ timezone }}"
+    UMASK: "022"
+    DNS_SERVER_ADMIN_PASSWORD_FILE: /run/secrets/technitium_admin_secret
   infisical:
     fail_on_empty: true
     secrets_map:
       - var: technitium_admin_pass
         path: "/Technitium"
         name: ADMIN_PASS
-        docker_secret: technitium_admin_secret
-  secrets:
-    - technitium_admin_secret
-  environment:
-    TZ: "{{ timezone }}"
-    UMASK: "022"
-    DNS_SERVER_ADMIN_PASSWORD_FILE: /run/secrets/technitium_admin_secret
+        secret:
+          name: technitium_admin_secret
+
+  named_networks:
+    outside:
+      external: true
+      name: host
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: careful
+
   targets:
     ################################
     # TECHNITIUM PRIMARY SERVICE
     ################################
     technitium_primary:
+      tags: [technitium-primary, dns-primary]
       name: technitium-primary
       stack: technitium-primary
-      tags: [technitium-primary, dns-primary]
+
       environment:
-        PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
-        PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
+        PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
+        PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
+
       paths:
-        - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/technitium"
+        - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/technitium"
           state: directory
           mode: "0755"
       volumes:
         config:
           type: bind
-          source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/technitium"
+          source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/technitium"
           target: /etc/dns
           read_only: false
+
       deploy:
-        host: "{{ docker_services_primary_manager }}"
+        host: "{{ services_controller_host }}"
         constraints:
-          - "node.hostname == {{ docker_services_primary_manager }}"
+          - "node.hostname == {{ services_controller_host }}"
 
     ################################
     # TECHNITIUM SECONDARY SERVICE
     ################################
     technitium_secondary:
+      tags: [technitium-secondary, dns-secondary]
       name: technitium-secondary
       stack: technitium-secondary
-      tags: [technitium-secondary, dns-secondary]
+
       environment:
-        PUID: "{{ hostvars[docker_services_plex_host].docker_host_puid }}"
-        PGID: "{{ hostvars[docker_services_plex_host].docker_host_pgid }}"
+        PUID: "{{ hostvars[services_plex_host].container_host_puid }}"
+        PGID: "{{ hostvars[services_plex_host].container_host_pgid }}"
+
       paths:
-        - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/technitium"
+        - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/technitium"
           state: directory
           mode: "0755"
       volumes:
         config:
           type: bind
-          source: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/technitium"
+          source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/technitium"
           target: /etc/dns
           read_only: false
+
       deploy:
-        host: "{{ docker_services_plex_host }}"
+        host: "{{ services_plex_host }}"
         constraints:
-          - "node.hostname == {{ docker_services_plex_host }}"
+          - "node.hostname == {{ services_plex_host }}"

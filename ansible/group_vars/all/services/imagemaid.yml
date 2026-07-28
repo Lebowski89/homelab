@@ -2,17 +2,17 @@
 
 imagemaid:
   enabled: true
+  runtime: docker
   tags: [plex, imagemaid]
   name: imagemaid
   stack: imagemaid
+
   image: kometateam/imagemaid:v1.2.0
-  named_networks:
-    overlay:
-      external: true
+
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_plex_host].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_plex_host].docker_host_pgid }}"
+    PUID: "{{ hostvars[services_plex_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_plex_host].container_host_pgid }}"
     UMASK: "022"
   infisical:
     fail_on_empty: true
@@ -20,32 +20,38 @@ imagemaid:
       - var: plex_token
         path: "/Plex"
         name: TOKEN
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/imagemaid"
+    - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/imagemaid"
       state: directory
       mode: "0755"
   templates:
     - src: configs/imagemaid.j2
       no_log: true
-      dest: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/imagemaid/.env"
+      dest: "{{ hostvars[services_plex_host].container_host_appdata_root }}/imagemaid/.env"
       mode: "0664"
       force: false
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/imagemaid"
+      source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/imagemaid"
       target: /config
       read_only: false
     media:
       type: bind
-      source: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library/Application Support/Plex Media Server"
+      source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library/Application Support/Plex Media Server"
       target: /plex
       read_only: false
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_plex_host }}"
+    host: "{{ services_plex_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_plex_host

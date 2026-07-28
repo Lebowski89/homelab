@@ -1,0 +1,427 @@
+---
+
+- name: Prep - NZBHydra2 | Set filesystem host
+  ansible.builtin.set_fact:
+    service_prepare_nzbhydra2_fs_host: "{{ service_prepare_context.filesystem_hosts | first }}"
+  run_once: true
+
+- name: Prep - NZBHydra2 | Set derived vars
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_nzbhydra2_config_dir: >-
+      {{ hostvars[service_prepare_nzbhydra2_fs_host].container_host_appdata_root }}/nzbhydra2
+    service_prepare_nzbhydra2_config_path: >-
+      {{ hostvars[service_prepare_nzbhydra2_fs_host].container_host_appdata_root }}/nzbhydra2/nzbhydra.yml
+    service_prepare_nzbhydra2_image: "{{ service_prepare_context.service.image }}"
+
+    service_prepare_nzbhydra2_puid: >-
+      {{
+        (
+          (service_prepare_context.service.environment | default({})).PUID
+          | default(
+              hostvars[service_prepare_nzbhydra2_fs_host].container_host_puid
+              | default('1000')
+            )
+        )
+        | string
+      }}
+    service_prepare_nzbhydra2_pgid: >-
+      {{
+        (
+          (service_prepare_context.service.environment | default({})).PGID
+          | default(
+              hostvars[service_prepare_nzbhydra2_fs_host].container_host_pgid
+              | default('1000')
+            )
+        )
+        | string
+      }}
+    service_prepare_nzbhydra2_umask: >-
+      {{
+        (
+          (service_prepare_context.service.environment | default({})).UMASK
+          | default('027')
+        )
+        | string
+      }}
+
+    service_prepare_nzbhydra2_user: "{{ service_prepare_context.lookup_values.get('nzbhydra2_user', '') }}"
+    service_prepare_nzbhydra2_pass: "{{ service_prepare_context.lookup_values.get('nzbhydra2_pass', '') }}"
+    service_prepare_nzbhydra2_api: "{{ service_prepare_context.lookup_values.get('nzbhydra2_api', '') }}"
+
+    service_prepare_nzbhydra2_althub_user: "{{ service_prepare_context.lookup_values.get('althub_user', '') }}"
+    service_prepare_nzbhydra2_althub_api: "{{ service_prepare_context.lookup_values.get('althub_api', '') }}"
+    service_prepare_nzbhydra2_althub_vip_exp: >-
+      {{ service_prepare_context.lookup_values.get('althub_vip_expiration', '') }}
+    service_prepare_nzbhydra2_geek_user: "{{ service_prepare_context.lookup_values.get('geek_user', '') }}"
+    service_prepare_nzbhydra2_geek_api: "{{ service_prepare_context.lookup_values.get('geek_api', '') }}"
+    service_prepare_nzbhydra2_geek_vip_exp: >-
+      {{ service_prepare_context.lookup_values.get('geek_vip_expiration', '') }}
+    service_prepare_nzbhydra2_slug_user: "{{ service_prepare_context.lookup_values.get('slug_user', '') }}"
+    service_prepare_nzbhydra2_slug_api: "{{ service_prepare_context.lookup_values.get('slug_api', '') }}"
+    service_prepare_nzbhydra2_slug_vip_exp: >-
+      {{ service_prepare_context.lookup_values.get('slug_vip_expiration', '') }}
+
+    service_prepare_nzbhydra2_sabnzbd_url: "{{ service_prepare_context.service.prep.sabnzbd.url | default('http://sabnzbd:8080') }}"
+    service_prepare_nzbhydra2_sabnzbd_api: "{{ service_prepare_context.lookup_values.get('sabnzbd_api', '') }}"
+  run_once: true
+
+- name: Prep - NZBHydra2 | Assert required secrets are present
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - service_prepare_nzbhydra2_user | string | trim | length > 0
+      - service_prepare_nzbhydra2_pass | string | trim | length > 0
+      - service_prepare_nzbhydra2_api | string | trim | length > 0
+      - service_prepare_nzbhydra2_sabnzbd_api | string | trim | length > 0
+    fail_msg: >-
+      Required NZBHydra2 credentials are missing. Ensure nzbhydra2_user,
+      nzbhydra2_pass, nzbhydra2_api, and sabnzbd_api are populated before prep runs.
+  run_once: true
+
+- name: Prep - NZBHydra2 | Assert altHUB secrets are complete when used
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          (service_prepare_nzbhydra2_althub_user | string | trim == '')
+          and
+          (service_prepare_nzbhydra2_althub_api | string | trim == '')
+        )
+        or
+        (
+          service_prepare_nzbhydra2_althub_user | string | trim | length > 0
+          and service_prepare_nzbhydra2_althub_api | string | trim | length > 0
+        )
+    fail_msg: "altHUB must be either fully configured (user + api) or omitted entirely."
+  run_once: true
+
+- name: Prep - NZBHydra2 | Assert NZBGeek secrets are complete when used
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          (service_prepare_nzbhydra2_geek_user | string | trim == '')
+          and
+          (service_prepare_nzbhydra2_geek_api | string | trim == '')
+        )
+        or
+        (
+          service_prepare_nzbhydra2_geek_user | string | trim | length > 0
+          and service_prepare_nzbhydra2_geek_api | string | trim | length > 0
+        )
+    fail_msg: "NZBGeek must be either fully configured (user + api) or omitted entirely."
+  run_once: true
+
+- name: Prep - NZBHydra2 | Assert Drunken Slug secrets are complete when used
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          (service_prepare_nzbhydra2_slug_user | string | trim == '')
+          and
+          (service_prepare_nzbhydra2_slug_api | string | trim == '')
+        )
+        or
+        (
+          service_prepare_nzbhydra2_slug_user | string | trim | length > 0
+          and service_prepare_nzbhydra2_slug_api | string | trim | length > 0
+        )
+    fail_msg: "Drunken Slug must be either fully configured (user + api) or omitted entirely."
+  run_once: true
+
+- name: Prep - NZBHydra2 | Check whether initial config exists
+  ansible.builtin.stat:
+    path: "{{ service_prepare_nzbhydra2_config_path }}"
+  register: service_prepare_nzbhydra2_initial_config_stat
+  delegate_to: "{{ service_prepare_nzbhydra2_fs_host }}"
+  run_once: true
+
+- name: Prep - NZBHydra2 | Generate absent initial config with selected runtime
+  when: not service_prepare_nzbhydra2_initial_config_stat.stat.exists
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: bootstrap.yml
+    apply:
+      tags: [deploy, update, recreate]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate]
+
+- name: Prep - NZBHydra2 | Verify runtime bootstrap produced config
+  ansible.builtin.stat:
+    path: "{{ service_prepare_nzbhydra2_config_path }}"
+  register: service_prepare_nzbhydra2_stat
+  delegate_to: "{{ service_prepare_nzbhydra2_fs_host }}"
+  run_once: true
+
+- name: Prep - NZBHydra2 | Require generated config before mutation
+  ansible.builtin.assert:
+    that:
+      - service_prepare_nzbhydra2_stat.stat.exists
+      - service_prepare_nzbhydra2_stat.stat.isreg | default(false)
+    fail_msg: "NZBHydra2 runtime bootstrap did not produce its YAML config; mutation was stopped."
+  run_once: true
+
+- name: Prep - NZBHydra2 | Mark generated config ready for management
+  ansible.builtin.set_fact:
+    service_prepare_nzbhydra2_can_manage_config: true
+  run_once: true
+
+- name: Prep - NZBHydra2 | Build config facts
+  no_log: true
+  ansible.builtin.set_fact:
+    service_prepare_nzbhydra2_expected_indexer_count: >-
+      {{
+        [
+          (service_prepare_nzbhydra2_althub_user | string | trim | length > 0),
+          (service_prepare_nzbhydra2_geek_user | string | trim | length > 0),
+          (service_prepare_nzbhydra2_slug_user | string | trim | length > 0)
+        ]
+        | select('equalto', true)
+        | list
+        | length
+      }}
+
+    service_prepare_nzbhydra2_indexers: >-
+      {%- set out = [] -%}
+
+      {%- if service_prepare_nzbhydra2_althub_user | string | trim | length > 0 -%}
+      {%- set _ = out.append({
+            'allCapsChecked': true,
+            'backend': 'NEWZNAB',
+            'state': 'ENABLED',
+            'name': 'altHUB',
+            'host': 'https://api.althub.co.za',
+            'username': service_prepare_nzbhydra2_althub_user,
+            'apiKey': service_prepare_nzbhydra2_althub_api,
+            'searchModuleType': 'NEWZNAB',
+            'categories': [],
+            'vipExpirationDate': service_prepare_nzbhydra2_althub_vip_exp
+          }) -%}
+      {%- endif -%}
+
+      {%- if service_prepare_nzbhydra2_geek_user | string | trim | length > 0 -%}
+      {%- set _ = out.append({
+            'allCapsChecked': true,
+            'backend': 'NEWZNAB',
+            'state': 'ENABLED',
+            'name': 'NZBGeek',
+            'host': 'https://api.nzbgeek.info',
+            'username': service_prepare_nzbhydra2_geek_user,
+            'apiKey': service_prepare_nzbhydra2_geek_api,
+            'searchModuleType': 'NEWZNAB',
+            'categories': [],
+            'vipExpirationDate': service_prepare_nzbhydra2_geek_vip_exp
+          }) -%}
+      {%- endif -%}
+
+      {%- if service_prepare_nzbhydra2_slug_user | string | trim | length > 0 -%}
+      {%- set _ = out.append({
+            'allCapsChecked': true,
+            'backend': 'NZEDB',
+            'state': 'ENABLED',
+            'name': 'Drunken Slug',
+            'host': 'https://api.drunkenslug.com',
+            'username': service_prepare_nzbhydra2_slug_user,
+            'apiKey': service_prepare_nzbhydra2_slug_api,
+            'searchModuleType': 'NEWZNAB',
+            'categories': [],
+            'vipExpirationDate': service_prepare_nzbhydra2_slug_vip_exp
+          }) -%}
+      {%- endif -%}
+
+      {{ out }}
+
+    service_prepare_nzbhydra2_downloaders:
+      - apiKey: "{{ service_prepare_nzbhydra2_sabnzbd_api }}"
+        downloadType: NZB
+        enabled: true
+        name: SABnzbd
+        nzbAddingType: UPLOAD
+        downloaderType: SABNZBD
+        url: "{{ service_prepare_nzbhydra2_sabnzbd_url }}"
+  run_once: true
+
+- name: Prep - NZBHydra2 | Set auth user
+  no_log: true
+  yedit:
+    src: "{{ service_prepare_nzbhydra2_config_path }}"
+    key: auth.users
+    value:
+      - username: "{{ service_prepare_nzbhydra2_user }}"
+        password: "{noop}{{ service_prepare_nzbhydra2_pass }}"
+    state: present
+  delegate_to: "{{ service_prepare_nzbhydra2_fs_host }}"
+  run_once: true
+  when: service_prepare_nzbhydra2_can_manage_config | bool
+
+- name: Prep - NZBHydra2 | Set API key
+  no_log: true
+  yedit:
+    src: "{{ service_prepare_nzbhydra2_config_path }}"
+    key: main.apiKey
+    value: "{{ service_prepare_nzbhydra2_api }}"
+    state: present
+  delegate_to: "{{ service_prepare_nzbhydra2_fs_host }}"
+  run_once: true
+  when: service_prepare_nzbhydra2_can_manage_config | bool
+
+- name: Prep - NZBHydra2 | Report API key update in check mode
+  ansible.builtin.debug:
+    msg: >-
+      NZBHydra2 API key would be written to main.apiKey in
+      {{ service_prepare_nzbhydra2_config_path }} during a real run.
+  when:
+    - ansible_check_mode
+    - service_prepare_nzbhydra2_can_manage_config | bool
+  run_once: true
+
+- name: Prep - NZBHydra2 | Replace downloaders list
+  no_log: true
+  run_once: true
+  delegate_to: "{{ service_prepare_nzbhydra2_fs_host }}"
+  when: service_prepare_nzbhydra2_can_manage_config | bool
+  block:
+    - name: Prep - NZBHydra2 | Remove existing downloaders
+      yedit:
+        src: "{{ service_prepare_nzbhydra2_config_path }}"
+        key: downloading.downloaders
+        state: absent
+
+    - name: Prep - NZBHydra2 | Write managed downloaders
+      yedit:
+        src: "{{ service_prepare_nzbhydra2_config_path }}"
+        key: downloading.downloaders
+        value: "{{ service_prepare_nzbhydra2_downloaders }}"
+        state: present
+  rescue:
+    - name: Prep - NZBHydra2 | Fail downloader replacement with context
+      ansible.builtin.fail:
+        msg: >-
+          Failed while replacing NZBHydra2 downloaders in
+          {{ service_prepare_nzbhydra2_config_path }}. The existing list may have
+          been removed before the failure. Fix the failed task above and rerun.
+
+- name: Prep - NZBHydra2 | Replace indexers list
+  no_log: true
+  run_once: true
+  delegate_to: "{{ service_prepare_nzbhydra2_fs_host }}"
+  when: service_prepare_nzbhydra2_can_manage_config | bool
+  block:
+    - name: Prep - NZBHydra2 | Remove existing indexers
+      yedit:
+        src: "{{ service_prepare_nzbhydra2_config_path }}"
+        key: indexers
+        state: absent
+
+    - name: Prep - NZBHydra2 | Write managed indexers
+      yedit:
+        src: "{{ service_prepare_nzbhydra2_config_path }}"
+        key: indexers
+        value: "{{ service_prepare_nzbhydra2_indexers }}"
+        state: present
+  rescue:
+    - name: Prep - NZBHydra2 | Fail indexer replacement with context
+      ansible.builtin.fail:
+        msg: >-
+          Failed while replacing NZBHydra2 indexers in
+          {{ service_prepare_nzbhydra2_config_path }}. The existing list may have
+          been removed before the failure. Fix the failed task above and rerun.
+
+- name: Prep - NZBHydra2 | Report managed config update in check mode
+  ansible.builtin.debug:
+    msg: >-
+      NZBHydra2 managed auth users, downloader config, and indexer config
+      would be written to {{ service_prepare_nzbhydra2_config_path }} during a real run.
+  when:
+    - ansible_check_mode
+    - service_prepare_nzbhydra2_can_manage_config | bool
+  run_once: true
+
+- name: Prep - NZBHydra2 | Ensure config file permissions are restricted
+  ansible.builtin.file:
+    path: "{{ service_prepare_nzbhydra2_config_path }}"
+    owner: "{{ service_prepare_nzbhydra2_puid }}"
+    group: "{{ service_prepare_nzbhydra2_pgid }}"
+    mode: "0640"
+    state: file
+  delegate_to: "{{ service_prepare_nzbhydra2_fs_host }}"
+  run_once: true
+  when: service_prepare_nzbhydra2_can_manage_config | bool
+
+- name: Prep - NZBHydra2 | Slurp config
+  no_log: true
+  ansible.builtin.slurp:
+    src: "{{ service_prepare_nzbhydra2_config_path }}"
+  register: service_prepare_nzbhydra2_cfg_raw
+  delegate_to: "{{ service_prepare_nzbhydra2_fs_host }}"
+  run_once: true
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Prep - NZBHydra2 | Parse config YAML
+  no_log: true
+  ansible.builtin.set_fact:
+    service_prepare_nzbhydra2_cfg: "{{ (service_prepare_nzbhydra2_cfg_raw.content | b64decode) | from_yaml }}"
+  run_once: true
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Prep - NZBHydra2 | Assert API key set
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - service_prepare_nzbhydra2_cfg is mapping
+      - (service_prepare_nzbhydra2_api | string | trim | length) > 0
+      - (service_prepare_nzbhydra2_cfg.main.apiKey | default('') | string | trim | length) > 0
+      - (service_prepare_nzbhydra2_cfg.main.apiKey | string | trim) == (service_prepare_nzbhydra2_api | string | trim)
+    fail_msg: "nzbhydra2_api was not written correctly to main.apiKey in {{ service_prepare_nzbhydra2_config_path }}"
+  run_once: true
+  when: not ansible_check_mode
+
+- name: Prep - NZBHydra2 | Assert SABnzbd downloader is set
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - service_prepare_nzbhydra2_cfg is mapping
+      - service_prepare_nzbhydra2_cfg.downloading is defined
+      - service_prepare_nzbhydra2_cfg.downloading.downloaders is defined
+      - (service_prepare_nzbhydra2_cfg.downloading.downloaders | default([])) is sequence
+      - (service_prepare_nzbhydra2_cfg.downloading.downloaders | length) > 0
+      - (service_prepare_nzbhydra2_sabnzbd_url | string | trim | length) > 0
+      - (service_prepare_nzbhydra2_sabnzbd_api | string | trim | length) > 0
+      - >-
+        (
+          service_prepare_nzbhydra2_cfg.downloading.downloaders
+          | selectattr('url', 'defined')
+          | selectattr('apiKey', 'defined')
+          | selectattr('url', 'equalto', service_prepare_nzbhydra2_sabnzbd_url)
+          | selectattr('apiKey', 'equalto', service_prepare_nzbhydra2_sabnzbd_api)
+          | list
+          | length
+        ) > 0
+    fail_msg: >-
+      SABnzbd downloader was not written correctly to
+      {{ service_prepare_nzbhydra2_config_path }}.
+      Expected a downloader entry with url={{ service_prepare_nzbhydra2_sabnzbd_url }}
+      and the configured API key.
+  run_once: true
+  when: not ansible_check_mode
+
+- name: Prep - NZBHydra2 | Assert configured indexers were written
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - (service_prepare_nzbhydra2_cfg.indexers | default([])) is sequence
+      - (service_prepare_nzbhydra2_cfg.indexers | length) == service_prepare_nzbhydra2_expected_indexer_count
+    fail_msg: >-
+      Expected {{ service_prepare_nzbhydra2_expected_indexer_count }} configured indexers
+      in {{ service_prepare_nzbhydra2_config_path }}, got
+      {{ (service_prepare_nzbhydra2_cfg.indexers | default([])) | length }}
+  run_once: true
+  when: not ansible_check_mode

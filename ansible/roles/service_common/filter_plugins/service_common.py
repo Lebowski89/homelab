@@ -1,8 +1,16 @@
+"""Validate and normalize runtime-neutral service data for Ansible roles.
+
+The ``service_common`` role uses these filters to prepare environment values,
+Infisical lookup declarations and check-mode stand-ins, PostgreSQL connection
+metadata, and Traefik rendering context before Docker or Podman adapters perform
+runtime-specific materialization. Secret values are never included in errors.
+"""
+
 from __future__ import annotations
 
 import posixpath
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from copy import deepcopy
 from typing import Any
 
@@ -120,97 +128,6 @@ def _canonical_secret(value: Any, *, var: str, name: str) -> dict[str, Any]:
     return result
 
 
-def _legacy_podman_secret(value: Any, *, name: str) -> tuple[dict[str, str], dict[str, Any]]:
-    secret = _mapping(value, name=name)
-    supported = {"name", "infisical_path", "infisical_key", "target", "uid", "gid", "mode", "immutable", "replace"}
-    unsupported = set(secret) - supported
-    if unsupported:
-        raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(sorted(unsupported))}")
-    resource_name = _resource_name(secret.get("name"), name=f"{name}.name")
-    lookup = {
-        "var": resource_name,
-        "path": _nonempty_text(secret.get("infisical_path"), name=f"{name}.infisical_path"),
-        "name": _nonempty_text(secret.get("infisical_key"), name=f"{name}.infisical_key"),
-    }
-    declaration: dict[str, Any] = {
-        "name": resource_name,
-        "var": resource_name,
-        "target": _absolute_target(secret.get("target"), name=f"{name}.target", default=f"/run/secrets/{resource_name}"),
-        "runtime_options": {
-            "podman": _podman_options(
-                {"immutable": secret.get("immutable", False), "replace": secret.get("replace", False)},
-                name=f"{name}.policy",
-            )
-        },
-        "origins": ["legacy_podman"],
-    }
-    for field, converter in (("uid", _numeric_id), ("gid", _numeric_id), ("mode", _mode)):
-        if field in secret:
-            declaration[field] = converter(secret[field], name=f"{name}.{field}")
-    return lookup, declaration
-
-
-def _docker_attachments(value: Any) -> list[dict[str, Any]]:
-    if value is None:
-        return []
-    if isinstance(value, str):
-        entries: list[Any] = [value]
-    elif isinstance(value, Iterable) and not isinstance(value, Mapping):
-        entries = list(value)
-    else:
-        raise AnsibleFilterError("service_common_legacy_docker_secrets must be a string or list")
-    result: list[dict[str, Any]] = []
-    for index, entry in enumerate(entries):
-        item_name = f"service_common_legacy_docker_secrets[{index}]"
-        if isinstance(entry, str):
-            source = _resource_name(entry, name=item_name)
-            result.append(
-                {
-                    "name": source,
-                    "target": f"/run/secrets/{source}",
-                    "runtime_options": {},
-                    "origins": ["legacy_docker_attachment"],
-                }
-            )
-            continue
-        attachment = _mapping(entry, name=item_name)
-        unsupported = set(attachment) - {"source", "target", "uid", "gid", "mode"}
-        if unsupported:
-            raise AnsibleFilterError(f"{item_name} contains unsupported fields: {', '.join(sorted(unsupported))}")
-        source = _resource_name(attachment.get("source"), name=f"{item_name}.source")
-        raw_target = _nonempty_text(attachment.get("target"), name=f"{item_name}.target")
-        target = raw_target if posixpath.isabs(raw_target) else f"/run/secrets/{raw_target}"
-        declaration: dict[str, Any] = {
-            "name": source,
-            "target": target,
-            "runtime_options": {},
-            "origins": ["legacy_docker_attachment"],
-        }
-        for field in ("uid", "gid", "mode"):
-            if field in attachment:
-                declaration[field] = str(attachment[field])
-        result.append(declaration)
-    return result
-
-
-def _merge_declaration(current: dict[str, Any], incoming: dict[str, Any]) -> dict[str, Any]:
-    if current["name"] != incoming["name"]:
-        raise AnsibleFilterError(f"conflicting secret declaration: name differs ({current['name']!r} vs {incoming['name']!r})")
-    result = dict(current)
-    for field in ("var", "target", "uid", "gid", "mode"):
-        if field in result and field in incoming and result[field] != incoming[field]:
-            raise AnsibleFilterError(f"conflicting secret declaration for {result['name']!r}: {field} differs")
-        if field not in result and field in incoming:
-            result[field] = incoming[field]
-    current_options = result.get("runtime_options", {})
-    incoming_options = incoming.get("runtime_options", {})
-    if current_options and incoming_options and current_options != incoming_options:
-        raise AnsibleFilterError(f"conflicting secret declaration for {result['name']!r}: runtime_options differ")
-    result["runtime_options"] = current_options or incoming_options
-    result["origins"] = list(dict.fromkeys([*result.get("origins", []), *incoming.get("origins", [])]))
-    return result
-
-
 def _identifier(value: Any, *, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise AnsibleFilterError(f"{name} must be a non-empty identifier")
@@ -296,6 +213,29 @@ def _referenced_value(var: str, values: Mapping[str, Any], config: Mapping[str, 
 
 
 def service_common_environment_normalize(environment: Any, config: Any) -> dict[str, Any]:
+    """Validate canonical environment declarations without resolving secrets.
+
+    Scalar values may be strings, integers, booleans, or null. Typed mappings
+    must contain exactly one ``value_from.infisical`` reference or one
+    ``value_template`` string using ``${var}`` references; ``$$`` escapes a
+    literal dollar. Every referenced variable must be declared by the supplied
+    Infisical configuration.
+
+    Args:
+        environment: Mapping of environment keys to scalar or typed values.
+        config: Infisical configuration containing a ``secrets_map`` list.
+
+    Returns:
+        A new validated environment mapping retaining typed declarations for a
+        later resolution pass.
+
+    Raises:
+        AnsibleFilterError: If mappings, keys, scalar values, typed declaration
+            shapes, template syntax, declarations, or references are invalid.
+
+    Note:
+        Inputs are not mutated and no external lookup is performed.
+    """
     environment_mapping = _mapping(environment, name="service_common_environment")
     declared = _declared_infisical_vars(config)
     result: dict[str, Any] = {}
@@ -340,6 +280,29 @@ def service_common_environment_normalize(environment: Any, config: Any) -> dict[
 
 
 def service_common_environment_resolve(environment: Any, values: Any, config: Any) -> dict[str, Any]:
+    """Resolve validated environment references from fetched Infisical values.
+
+    Direct ``value_from`` entries retain the referenced scalar type. Template
+    references are rendered to text: null becomes empty text, booleans become
+    lowercase ``true``/``false``, and other scalar values use ``str``.
+
+    Args:
+        environment: Canonical environment declaration mapping.
+        values: Mapping of declared Infisical variable names to fetched values.
+        config: Infisical configuration controlling declarations and
+            ``fail_on_empty``.
+
+    Returns:
+        A new environment mapping containing only resolved scalar values.
+
+    Raises:
+        AnsibleFilterError: If normalization fails, value/config inputs are not
+            mappings, a referenced value is unavailable or invalid, or an empty
+            value is forbidden.
+
+    Note:
+        Inputs are not mutated and the filter performs no external lookup.
+    """
     config_mapping = _mapping(config, name="service_common_infisical_config")
     values_mapping = _mapping(values, name="service_common_infisical_values")
     normalized = service_common_environment_normalize(environment, config_mapping)
@@ -370,6 +333,23 @@ def service_common_environment_resolve(environment: Any, values: Any, config: An
 
 
 def service_common_infisical_check_values(config: Any) -> dict[str, str]:
+    """Build deterministic, non-sensitive Infisical values for check mode.
+
+    Args:
+        config: Normalized Infisical configuration with a ``secrets_map`` list.
+
+    Returns:
+        A variable-name-sorted mapping. Declarations with ``check_mode_value``
+        use that non-empty stand-in; others use
+        ``__CHECK_MODE_REDACTED_INFISICAL_<var>__``.
+
+    Raises:
+        AnsibleFilterError: If configuration/declaration shapes, variable names,
+            explicit stand-ins, or uniqueness are invalid.
+
+    Note:
+        No lookup is performed and ``config`` is not mutated.
+    """
     config_mapping = _mapping(config, name="service_common_infisical_config")
     secrets_map = config_mapping.get("secrets_map", [])
     if not isinstance(secrets_map, list):
@@ -397,6 +377,35 @@ def service_common_postgres_normalize(
     infisical_values: Any,
     check_mode: Any = False,
 ) -> dict[str, Any]:
+    """Validate PostgreSQL preparation settings and resolve connection metadata.
+
+    Explicit ``host`` is mutually exclusive with ``host_inventory``. Without an
+    explicit host, enabled configurations resolve ``local_ip`` from the
+    requested inventory host, which defaults to ``controller_host``. Credential
+    variable names default to ``postgres_user`` and ``postgres_pass`` and must
+    exist in current-service Infisical values; live mode additionally requires
+    non-empty values. Credential values are not returned.
+
+    Args:
+        postgres: PostgreSQL service declaration mapping.
+        controller_host: Default inventory hostname for PostgreSQL resolution.
+        inventory_hosts: Host-variable mapping used to resolve ``local_ip``.
+        infisical_values: Current-service mapping used only to validate required
+            credential variable presence and, outside check mode, content.
+        check_mode: Strict boolean-like flag allowing stand-in credential values.
+
+    Returns:
+        A normalized mapping containing enabled state, databases, port,
+        credential variable names, and explicit or resolved host metadata.
+
+    Raises:
+        AnsibleFilterError: If unsupported fields, booleans, databases, port,
+            credential identifiers, host selection, inventory data, or required
+            credential references are invalid.
+
+    Note:
+        Inputs are not mutated, and no database or secret service is contacted.
+    """
     config = _mapping(postgres, name="service_common_service.postgres")
     unsupported = set(config) - {
         "enable",
@@ -477,22 +486,42 @@ def service_common_postgres_normalize(
 def service_common_infisical_normalize(
     secrets_map: Any,
     fail_on_empty: Any = True,
-    legacy_docker_secrets: Any = None,
-    legacy_podman_secrets: Any = None,
 ) -> dict[str, Any]:
+    """Normalize Infisical lookups and runtime-neutral secret declarations.
+
+    Args:
+        secrets_map: List of lookup mappings containing ``var``, ``path``, and
+            ``name``, with optional ``check_mode_value`` and canonical ``secret``.
+        fail_on_empty: Strict boolean-like policy for required fetched values.
+
+    Returns:
+        A mapping containing normalized value-free ``secrets_map`` entries, a
+        list of ``secret_declarations`` unique by runtime resource name, and
+        normalized ``fail_on_empty``. Secret declarations include their source
+        variable, absolute target, optional numeric UID/GID and quoted mode,
+        Podman policy, and canonical origin metadata.
+
+    Raises:
+        AnsibleFilterError: If lookup or secret fields have invalid shapes,
+            unsupported keys, empty/duplicate variables, invalid targets or
+            metadata, conflicting resource declarations, or invalid policy.
+
+    Note:
+        Inputs are not mutated, secret values are not accepted, and no external
+        lookup is performed.
+    """
     if not isinstance(secrets_map, list):
         raise AnsibleFilterError("service_common_infisical_secrets_map must be a list")
 
     normalized: list[dict[str, str]] = []
     declarations: dict[str, dict[str, Any]] = {}
-    lookup_by_var: dict[str, dict[str, str]] = {}
     seen_vars: set[str] = set()
     for index, entry in enumerate(secrets_map):
         item_name = f"service_common_infisical_secrets_map[{index}]"
         if not isinstance(entry, Mapping):
             raise AnsibleFilterError(f"{item_name} must be a mapping")
         item: dict[str, str] = {}
-        unsupported_entry = set(entry) - {"var", "path", "name", "check_mode_value", "secret", "docker_secret"}
+        unsupported_entry = set(entry) - {"var", "path", "name", "check_mode_value", "secret"}
         if unsupported_entry:
             raise AnsibleFilterError(f"{item_name} contains unsupported fields: {', '.join(sorted(unsupported_entry))}")
         for field in ("var", "path", "name"):
@@ -514,47 +543,11 @@ def service_common_infisical_normalize(
         declaration = None
         if "secret" in entry:
             declaration = _canonical_secret(entry["secret"], var=item["var"], name=f"{item_name}.secret")
-        if "docker_secret" in entry:
-            docker_name = _resource_name(entry["docker_secret"], name=f"{item_name}.docker_secret")
-            legacy_declaration = {
-                "name": docker_name,
-                "var": item["var"],
-                "target": f"/run/secrets/{docker_name}",
-                "runtime_options": {},
-                "origins": ["legacy_docker_secret"],
-            }
-            declaration = legacy_declaration if declaration is None else _merge_declaration(declaration, legacy_declaration)
         if declaration is not None:
             existing = declarations.get(declaration["name"])
-            declarations[declaration["name"]] = declaration if existing is None else _merge_declaration(existing, declaration)
-        lookup_by_var[item["var"]] = item
-
-    for declaration in _docker_attachments(legacy_docker_secrets):
-        existing = declarations.get(declaration["name"])
-        declarations[declaration["name"]] = declaration if existing is None else _merge_declaration(existing, declaration)
-
-    if legacy_podman_secrets is not None:
-        if isinstance(legacy_podman_secrets, (str, Mapping)) or not isinstance(legacy_podman_secrets, Iterable):
-            raise AnsibleFilterError("service_common_legacy_podman_secrets must be a list")
-        for index, raw_secret in enumerate(legacy_podman_secrets):
-            lookup, declaration = _legacy_podman_secret(
-                raw_secret,
-                name=f"service_common_legacy_podman_secrets[{index}]",
-            )
-            existing = declarations.get(declaration["name"])
-            if existing is not None and "canonical" in existing.get("origins", []):
-                canonical_lookup = lookup_by_var.get(existing["var"])
-                if canonical_lookup is None or canonical_lookup["path"] != lookup["path"] or canonical_lookup["name"] != lookup["name"]:
-                    raise AnsibleFilterError(f"conflicting secret declaration for {declaration['name']!r}: lookup differs")
-                declaration["var"] = existing["var"]
-            elif lookup["var"] in lookup_by_var:
-                canonical_lookup = lookup_by_var[lookup["var"]]
-                if canonical_lookup["path"] != lookup["path"] or canonical_lookup["name"] != lookup["name"]:
-                    raise AnsibleFilterError(f"duplicate Infisical var {lookup['var']!r} has conflicting lookup")
-            else:
-                normalized.append(lookup)
-                lookup_by_var[lookup["var"]] = lookup
-            declarations[declaration["name"]] = declaration if existing is None else _merge_declaration(existing, declaration)
+            if existing is not None and existing != declaration:
+                raise AnsibleFilterError(f"conflicting secret declaration for {declaration['name']!r}")
+            declarations[declaration["name"]] = declaration
 
     return {
         "secrets_map": normalized,
@@ -567,6 +560,25 @@ def service_common_infisical_normalize(
 
 
 def service_common_infisical_finalize(values: Any, config: Any) -> dict[str, Any]:
+    """Restrict fetched values to declarations and enforce empty-value policy.
+
+    Args:
+        values: Mapping of fetched values keyed by declaration variable.
+        config: Infisical configuration revalidated by the normalization filter.
+
+    Returns:
+        A mapping in declaration order containing one entry per declared
+        variable. Missing values become empty strings when ``fail_on_empty`` is
+        false; extra fetched values are omitted.
+
+    Raises:
+        AnsibleFilterError: If inputs or declarations are invalid, declarations
+            conflict, or required variables are missing or empty. Failure text
+            lists variable names only, never values.
+
+    Note:
+        Input mappings are not mutated; returned value objects are not deep-copied.
+    """
     values = _mapping(values, name="service_common_infisical_values")
     config = _mapping(config, name="service_common_infisical_config")
     normalized = service_common_infisical_normalize(
@@ -574,11 +586,14 @@ def service_common_infisical_finalize(values: Any, config: Any) -> dict[str, Any
         config.get("fail_on_empty"),
     )
     result: dict[str, Any] = {}
+    invalid_vars: list[str] = []
     for entry in normalized["secrets_map"]:
         value = values.get(entry["var"], "")
         if normalized["fail_on_empty"] and not str(value if value is not None else "").strip():
-            raise AnsibleFilterError("Infisical returned an empty required secret value")
+            invalid_vars.append(entry["var"])
         result[entry["var"]] = value
+    if invalid_vars:
+        raise AnsibleFilterError(f"Infisical returned missing or empty values for declaration vars: {', '.join(invalid_vars)}")
     return result
 
 
@@ -595,6 +610,34 @@ def service_common_traefik_context(
     base_zone: str,
     inventory_hosts: Mapping[str, Any],
 ) -> dict[str, Any]:
+    """Build runtime-neutral values for a Traefik dynamic-config template.
+
+    Private exposure prefixes the fallback zone with ``int.`` and selects the
+    private entrypoint. Backend URLs may be supplied directly; otherwise service
+    mode addresses the service name and host mode resolves an explicit host,
+    inventory host, or first common target host. Optional Authelia, middleware,
+    internal-API, header, and Theme Park settings are normalized into template
+    fields.
+
+    Args:
+        service: Effective service mapping containing a ``traefik`` section.
+        name: Required effective service name.
+        target_hosts: Ordered common target hosts used as a host-backend fallback.
+        base_zone: Default public DNS zone; private routes derive ``int.<zone>``.
+        inventory_hosts: Host-variable mapping used to resolve backend
+            inventory ``local_ip`` values.
+
+    Returns:
+        A new mapping consumed by the common Traefik dynamic-file template.
+
+    Raises:
+        AnsibleFilterError: If mappings, name, exposure, zone, port, backend
+            mode/host resolution, target hosts, Theme Park data, or internal API
+            rules are invalid.
+
+    Note:
+        Inputs are not mutated and no DNS, inventory API, or backend is contacted.
+    """
     service = _mapping(service, name="service_common_service")
     traefik = _mapping(service.get("traefik", {}), name="service_common_service.traefik")
     inventory_hosts = _mapping(inventory_hosts, name="hostvars")
@@ -680,7 +723,20 @@ def service_common_traefik_context(
 
 
 class FilterModule:
+    """Register runtime-neutral service preparation filters with Ansible."""
+
     def filters(self) -> dict[str, Any]:
+        """Return all Jinja filters exposed by this plugin.
+
+        Returns:
+            A mapping exposing ``service_common_environment_normalize``,
+            ``service_common_environment_resolve``,
+            ``service_common_infisical_check_values``,
+            ``service_common_infisical_finalize``,
+            ``service_common_infisical_normalize``,
+            ``service_common_postgres_normalize``, and
+            ``service_common_traefik_context``.
+        """
         return {
             "service_common_environment_normalize": service_common_environment_normalize,
             "service_common_environment_resolve": service_common_environment_resolve,

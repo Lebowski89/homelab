@@ -4,6 +4,7 @@ from pathlib import Path
 import pytest
 import yaml
 from ansible.errors import AnsibleFilterError
+from jinja2 import Environment, FileSystemLoader
 
 FILTER_PATH = Path("ansible/roles/service_common/filter_plugins/service_common.py")
 spec = importlib.util.spec_from_file_location("service_common", FILTER_PATH)
@@ -18,12 +19,12 @@ def valid_map():
             "var": "postgres_pass",
             "path": "/Postgres",
             "name": "PASS",
-            "docker_secret": "postgres_pass_secret",
+            "secret": {"name": "postgres_pass_secret"},
         },
     ]
 
 
-def test_valid_map_keeps_lookup_config_separate_from_legacy_docker_declaration():
+def test_valid_map_keeps_lookup_config_separate_from_canonical_secret_declaration():
     normalized = service_common.service_common_infisical_normalize(valid_map(), "false")
 
     assert normalized["secrets_map"] == [
@@ -37,7 +38,7 @@ def test_valid_map_keeps_lookup_config_separate_from_legacy_docker_declaration()
             "var": "postgres_pass",
             "target": "/run/secrets/postgres_pass_secret",
             "runtime_options": {},
-            "origins": ["legacy_docker_secret"],
+            "origins": ["canonical"],
         }
     ]
 
@@ -142,8 +143,32 @@ def test_empty_values_fail_when_enabled():
         True,
     )
 
-    with pytest.raises(AnsibleFilterError, match="empty required secret value"):
+    with pytest.raises(AnsibleFilterError, match="declaration vars: token"):
         service_common.service_common_infisical_finalize({"token": "  "}, config)
+
+
+def test_finalize_reports_only_missing_or_empty_declaration_names():
+    config = service_common.service_common_infisical_normalize(
+        [
+            {"var": "first_token", "path": "/App", "name": "FIRST"},
+            {"var": "second_token", "path": "/App", "name": "SECOND"},
+            {"var": "third_token", "path": "/App", "name": "THIRD"},
+        ],
+        True,
+    )
+    retained_value = "synthetic-retained-value"
+
+    with pytest.raises(AnsibleFilterError) as exc_info:
+        service_common.service_common_infisical_finalize(
+            {"first_token": retained_value, "third_token": ""},
+            config,
+        )
+
+    message = str(exc_info.value)
+    assert "second_token" in message
+    assert "third_token" in message
+    assert "first_token" not in message
+    assert retained_value not in message
 
 
 def test_empty_values_are_retained_when_disabled():
@@ -263,43 +288,13 @@ def test_canonical_runtime_options_are_strict(runtime_options, match):
         service_common.service_common_infisical_normalize([entry])
 
 
-def test_equivalent_canonical_and_legacy_docker_forms_deduplicate():
+@pytest.mark.parametrize("field", ["docker_secret", "podman_secret", "infisical_path", "infisical_key"])
+def test_removed_runtime_specific_lookup_fields_are_rejected(field):
     entry = canonical_map()[0]
-    entry["docker_secret"] = "postgres_pass_secret"
+    entry[field] = "legacy-value"
 
-    normalized = service_common.service_common_infisical_normalize(
-        [entry],
-        legacy_docker_secrets=[
-            {
-                "source": "postgres_pass_secret",
-                "target": "postgres_pass_secret",
-                "uid": "1000",
-                "gid": "1000",
-                "mode": "0400",
-            }
-        ],
-    )
-
-    declaration = normalized["secret_declarations"][0]
-    assert len(normalized["secret_declarations"]) == 1
-    assert declaration["origins"] == [
-        "canonical",
-        "legacy_docker_secret",
-        "legacy_docker_attachment",
-    ]
-
-
-def test_conflicting_canonical_and_legacy_docker_forms_fail():
-    with pytest.raises(AnsibleFilterError, match="target differs"):
-        service_common.service_common_infisical_normalize(
-            canonical_map()[:1],
-            legacy_docker_secrets=[
-                {
-                    "source": "postgres_pass_secret",
-                    "target": "different",
-                }
-            ],
-        )
+    with pytest.raises(AnsibleFilterError, match=f"unsupported fields: {field}"):
+        service_common.service_common_infisical_normalize([entry])
 
 
 def test_duplicate_secret_name_with_different_vars_fails():
@@ -312,31 +307,8 @@ def test_duplicate_secret_name_with_different_vars_fails():
         }
     ]
 
-    with pytest.raises(AnsibleFilterError, match="var differs"):
+    with pytest.raises(AnsibleFilterError, match="conflicting secret declaration"):
         service_common.service_common_infisical_normalize(entries)
-
-
-def test_legacy_podman_secret_is_normalized_to_common_declaration():
-    normalized = service_common.service_common_infisical_normalize(
-        [],
-        legacy_podman_secrets=[
-            {
-                "name": "legacy_secret",
-                "infisical_path": "/Legacy",
-                "infisical_key": "VALUE",
-                "target": "/run/secrets/legacy_secret",
-                "uid": "1000",
-                "gid": "1000",
-                "mode": "0400",
-                "immutable": True,
-                "replace": False,
-            }
-        ],
-    )
-
-    assert normalized["secrets_map"] == [{"var": "legacy_secret", "path": "/Legacy", "name": "VALUE"}]
-    assert normalized["secret_declarations"][0]["var"] == "legacy_secret"
-    assert normalized["secret_declarations"][0]["runtime_options"] == {"podman": {"immutable": True, "replace": False}}
 
 
 def test_metadata_never_contains_secret_values():
@@ -352,27 +324,42 @@ def test_metadata_never_contains_secret_values():
     assert marker not in repr(normalized["secret_declarations"])
 
 
-def test_real_docker_legacy_secret_selection_is_preserved():
+def test_real_repository_uses_only_canonical_secret_declarations():
     selection_count = 0
     for path in sorted(Path("ansible/group_vars/all/services").glob("*.yml")):
         services = yaml.safe_load(path.read_text()) or {}
         for infisical in iter_infisical_declarations(services):
             expected = [
-                (entry["docker_secret"].strip(), entry["var"].strip())
+                (entry["secret"]["name"].strip(), entry["var"].strip())
                 for entry in infisical["secrets_map"]
-                if isinstance(entry, dict) and entry.get("docker_secret")
+                if isinstance(entry, dict) and entry.get("secret")
             ]
             normalized = service_common.service_common_infisical_normalize(
                 infisical["secrets_map"],
                 infisical.get("fail_on_empty", True),
             )
-            actual = [
-                (entry["name"], entry["var"]) for entry in normalized["secret_declarations"] if "legacy_docker_secret" in entry["origins"]
-            ]
+            actual = [(entry["name"], entry["var"]) for entry in normalized["secret_declarations"]]
             assert actual == expected
             selection_count += len(expected)
 
     assert selection_count > 0
+
+
+def test_real_common_template_renders_from_explicit_common_value_mapping():
+    environment = Environment(
+        loader=FileSystemLoader("ansible/roles/service_common/templates"),
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    rendered = environment.get_template("configs/gitea.env.j2").render(
+        service_common_infisical_values={
+            "postgres_user": "synthetic-user",
+            "postgres_pass": "SYNTHETIC_PASSWORD_DO_NOT_LOG",
+        }
+    )
+
+    assert "GITEA__database__USER=synthetic-user" in rendered
+    assert "GITEA__database__PASSWD=SYNTHETIC_PASSWORD_DO_NOT_LOG" in rendered
 
 
 def test_unsupported_lookup_and_secret_fields_are_rejected():

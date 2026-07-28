@@ -35,10 +35,10 @@ infisical_compose_path: "{{ infisical_base_path }}/{{ infisical_compose_file }}"
 
 infisical_image: docker.io/infisical/infisical:v0.162.9
 infisical_timezone: "{{ timezone | default('Australia/Melbourne') }}"
-infisical_puid: "{{ docker_host_puid | default('1000') }}"
-infisical_pgid: "{{ docker_host_pgid | default('1000') }}"
+infisical_puid: "{{ container_host_puid | default('1000') }}"
+infisical_pgid: "{{ container_host_pgid | default('1000') }}"
 infisical_port: 8066  # Host port used by ansible modules
-infisical_base_path: "{{ docker_host_appdata_root | default('/opt') }}/infisical"
+infisical_base_path: "{{ container_host_appdata_root | default('/opt') }}/infisical"
 infisical_env_path: "{{ infisical_base_path }}/.env"
 
 infisical_smtp_host: smtp.porkbun.com
@@ -65,8 +65,8 @@ infisical_restart_policy: unless-stopped
 
 infisical_redis_name: infisical-redis
 infisical_redis_image: valkey/valkey:9.1-alpine
-infisical_redis_puid: "{{ docker_host_puid | default('1000') }}"
-infisical_redis_pgid: "{{ docker_host_pgid | default('1000') }}"
+infisical_redis_puid: "{{ container_host_puid | default('1000') }}"
+infisical_redis_pgid: "{{ container_host_pgid | default('1000') }}"
 infisical_redis_path: "{{ infisical_base_path }}/redis"
 
 ################################

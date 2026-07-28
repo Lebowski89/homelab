@@ -1,7 +1,52 @@
 ---
 
 ################################
-# PREP (CLEANUP)
+# PHASE 2: APPLICATION VALIDATION
+################################
+
+- name: Prep - Application validation | Build runtime-neutral context
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_application_context:
+      service_name: "{{ docker_services_service_name }}"
+      target: "{{ docker_services_service_target | default('') }}"
+      runtime: docker
+      operation: "{{ docker_services_common_action }}"
+      service: "{{ docker_services_svc }}"
+      resolved_environment: "{{ docker_services_resolved_environment }}"
+      lookup_values: "{{ docker_services_common_values }}"
+      secret_declarations: "{{ docker_services_secret_declarations }}"
+      controller_host: "{{ docker_services_controller_host }}"
+      filesystem_hosts: "{{ docker_services_fs_hosts_effective }}"
+      host_defaults: "{{ docker_services_common_host_defaults }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Prep - Application validation | Validate current service
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_prepare
+    tasks_from: validate
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+      no_log: true
+      diff: false
+  vars:
+    service_prepare_context: "{{ docker_services_application_context }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Prep - Application validation | Snapshot reset outputs
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_application_template_vars: "{{ service_prepare_template_vars }}"
+    docker_services_application_secret_values: "{{ service_prepare_generated_secret_values }}"
+    docker_services_application_secret_declarations: "{{ service_prepare_generated_secret_declarations }}"
+    docker_services_application_bootstrap_requests: "{{ service_prepare_bootstrap_requests }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+################################
+# PHASE 3: RUNTIME CLEANUP
 ################################
 
 - name: Prep - Cleanup | Derive cleanup flags
@@ -31,6 +76,7 @@
 
 - name: Prep - Cleanup | Remove existing stack
   when:
+    - not ansible_check_mode
     - docker_services_is_deploy_host
     - docker_services_do_stack_cleanup | bool
   ansible.builtin.include_tasks:
@@ -41,88 +87,115 @@
 
 - name: Prep - Cleanup | Mark stack as cleaned
   when:
+    - not ansible_check_mode
     - docker_services_is_deploy_host
     - docker_services_do_stack_cleanup | bool
-    - (docker_services_stack_name_effective not in docker_services_stacks_cleaned)
+    - docker_services_stack_name_effective not in docker_services_stacks_cleaned
   ansible.builtin.set_fact:
     docker_services_stacks_cleaned: "{{ docker_services_stacks_cleaned + [docker_services_stack_name_effective] }}"
   tags: [remove, recreate]
 
 ################################
-# PREP (INFISICAL)
+# PHASE 4: APPLICATION SECRET GENERATION
 ################################
 
-- name: Prep - Infisical | Include tasker
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/infisical/tasker.yml
+- name: Prep - Application secrets | Run runtime-neutral generation
+  when: docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_prepare
+    tasks_from: generate_secrets
     apply:
       tags: [deploy, update, recreate, bootstrap]
-  tags: [deploy, update, recreate, bootstrap]
-
-################################
-# PREP (SWARM CONFIGS)
-################################
-
-- name: Prep - Swarm configs | Include tasker
-  when:
-    - inventory_hostname == docker_services_primary_manager
-    - docker_services_svc.swarm_configs is defined
-    - (docker_services_svc.swarm_configs | length) > 0
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/swarm_configs/tasker.yml
-    apply:
-      tags: [deploy, update, recreate]
+      no_log: true
+      diff: false
   vars:
-    swarm_configs: "{{ docker_services_svc.swarm_configs }}"
-    docker_services_deploy_host: "{{ docker_services_svc.swarm_config_host | default(docker_services_primary_manager, true) }}"
-  tags: [deploy, update, recreate]
+    service_prepare_context: "{{ docker_services_application_context }}"
+  tags: [deploy, update, recreate, bootstrap]
 
-################################
-# PREP (AUTHELIA)
-################################
+- name: Prep - Application secrets | Snapshot portable generation outputs
+  when: docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_application_secret_values: "{{ service_prepare_generated_secret_values }}"
+    docker_services_application_secret_declarations: "{{ service_prepare_generated_secret_declarations }}"
+  tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep - Authelia | Include bootstrap tasks
-  when:
-    - not ansible_check_mode
-    - inventory_hostname == docker_services_primary_manager
-    - (docker_services_svc.name | default('') | string | trim) == "authelia"
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/authelia/tasker.yml
-    apply:
-      tags: [deploy, bootstrap, recreate]
-  run_once: true
-  tags: [deploy, bootstrap, recreate]
+- name: Prep - Application secrets | Build effective current-service secret inputs
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_effective_secret_values: >-
+      {{ docker_services_common_values | combine(docker_services_application_secret_values) }}
+    docker_services_effective_secret_declarations: >-
+      {{ docker_services_secret_declarations + docker_services_application_secret_declarations }}
+  tags: [deploy, update, recreate, bootstrap]
 
-################################
-# PREP (QBITTORRENT)
-################################
-
-- name: Prep - qBittorrent | Include bootstrap tasks
-  when:
-    - not ansible_check_mode
-    - inventory_hostname == docker_services_primary_manager
-    - (docker_services_role_prefix | default('') | string | trim) == "qbittorrent"
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/qbittorrent.yml
-    apply:
-      tags: [deploy, update, recreate]
-  tags: [deploy, update, recreate]
-
-################################
-# PREP (TRAEFIK ZONE LOOKUP)
-################################
-
-- name: Prep - Traefik zone | Resolve Docker compatibility input
-  when:
-    - docker_services_svc.traefik.enable | default(false) | bool
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/traefik_zone.yml
-    apply:
-      tags: [deploy, update, recreate, bootstrap]
+- name: Prep - Application secrets | Validate effective attachment metadata
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_secret_attachments_validated: >-
+      {{
+        docker_services_svc.secrets
+        | default([])
+        | docker_services_secret_attachments(
+            docker_services_effective_secret_declarations,
+            docker_services_stack_deploy_type
+          )
+      }}
   tags: [deploy, update, recreate, bootstrap]
 
 ################################
-# PREP (RUNTIME-NEUTRAL SERVICE STATE)
+# PHASE 5: RUNTIME-NATIVE SECRETS
+################################
+
+- name: Prep - Secrets | Materialize Docker-native secrets
+  when:
+    - not ansible_check_mode
+    - docker_services_effective_secret_declarations | length > 0
+    - >-
+      (docker_services_stack_deploy_type == 'swarm')
+      | ternary(
+          inventory_hostname == docker_services_controller_host,
+          docker_services_is_deploy_host
+        )
+  ansible.builtin.include_tasks:
+    file: sub_tasks/prep/secrets.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate, bootstrap]
+
+################################
+# PHASE 6: APPLICATION TEMPLATE VALUES
+################################
+
+- name: Prep - Application templates | Derive runtime-neutral values
+  when: docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_prepare
+    tasks_from: derive_templates
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  vars:
+    service_prepare_context: "{{ docker_services_application_context }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Prep - Application templates | Snapshot portable values
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_application_template_vars: "{{ service_prepare_template_vars }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+################################
+# PHASE 7: COMMON FILES AND INTEGRATIONS
 ################################
 
 - name: Prep - Service common | Prepare files and Traefik integration
@@ -139,120 +212,86 @@
     service_common_action: "{{ docker_services_common_action }}"
     service_common_service: "{{ docker_services_svc }}"
     service_common_target_hosts: "{{ docker_services_fs_hosts_effective }}"
-    service_common_controller_host: "{{ docker_services_primary_manager }}"
-    service_common_infisical_values: "{{ docker_services_infisical_values }}"
+    service_common_controller_host: "{{ docker_services_controller_host }}"
+    service_common_infisical_values: "{{ docker_services_common_values }}"
     service_common_host_defaults: "{{ docker_services_common_host_defaults }}"
-    service_common_template_vars:
-      qbittorrent_pass_pbkdf2: "{{ docker_services_qbittorrent_pass_pbkdf2 | default('') }}"
-      qbittorrent_xs_pass_pbkdf2: "{{ docker_services_qbittorrent_xs_pass_pbkdf2 | default('') }}"
-    service_common_traefik_base_zone: >-
-      {{
-        (docker_services_infisical_values | default({}))
-        .get("cloudflare_zone", "")
-        | default(
-            hostvars[docker_services_primary_manager].cloudflare_zone
-            | default(
-                cloudflare_zone
-                | default(docker_services_traefik_check_base_zone | default(""))
-              ),
-            true
-          )
-      }}
+    service_common_template_vars: "{{ docker_services_application_template_vars }}"
+    service_common_traefik_base_zone: "{{ docker_services_common_values.get('cloudflare_zone', '') }}"
     service_common_traefik_dynamic_dir: >-
-      {{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/traefik/dynamic
+      {{ hostvars[docker_services_controller_host].container_host_appdata_root }}/traefik/dynamic
     service_common_traefik_owner: "1000"
     service_common_traefik_group: "1000"
   tags: [deploy, update, remove, recreate, bootstrap]
 
-################################
-# PREP (SWARM ENV TEMPLATES)
-################################
-
-- name: Prep - Swarm Env Templates | Render templates
+- name: Prep - Swarm environment templates | Render templates
   when:
-    - inventory_hostname == docker_services_primary_manager
-    - (docker_services_stack_deploy_type | string | trim) == "swarm"
-    - docker_services_svc.swarm_env_templates is defined
-    - (docker_services_svc.swarm_env_templates | length > 0)
+    - inventory_hostname == docker_services_controller_host
+    - docker_services_stack_deploy_type == 'swarm'
+    - docker_services_svc.swarm_env_templates | default([]) | length > 0
+  no_log: true
   ansible.builtin.include_role:
     name: service_common
     tasks_from: templates
     apply:
       tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
   vars:
     service_common_name: "{{ docker_services_service_name }}"
     service_common_templates: "{{ docker_services_svc.swarm_env_templates }}"
-    service_common_target_host: "{{ docker_services_primary_manager }}"
+    service_common_target_host: "{{ docker_services_controller_host }}"
+    service_common_infisical_values: "{{ docker_services_common_values }}"
     service_common_host_defaults: "{{ docker_services_common_host_defaults }}"
     service_common_default_owner: >-
-      {{ hostvars[docker_services_primary_manager].docker_host_puid | default('1000') }}
+      {{ hostvars[docker_services_controller_host].container_host_puid | default('1000') }}
     service_common_default_group: >-
-      {{ hostvars[docker_services_primary_manager].docker_host_pgid | default('1000') }}
-    service_common_template_vars:
-      qbittorrent_pass_pbkdf2: "{{ docker_services_qbittorrent_pass_pbkdf2 | default('') }}"
-      qbittorrent_xs_pass_pbkdf2: "{{ docker_services_qbittorrent_xs_pass_pbkdf2 | default('') }}"
+      {{ hostvars[docker_services_controller_host].container_host_pgid | default('1000') }}
+    service_common_template_vars: "{{ docker_services_application_template_vars }}"
   tags: [deploy, update, recreate, bootstrap]
 
 ################################
-# PREP (PLEX)
+# PHASE 8: APPLICATION CONFIGURATION / BOOTSTRAP
 ################################
 
-- name: Prep - Plex | Include bootstrap tasks
-  when:
-    - not ansible_check_mode
-    - inventory_hostname == docker_services_primary_manager
-    - (docker_services_svc.name | default('') | string | trim) == "plex"
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/plex/tasker.yml
-    apply:
-      tags: [deploy, bootstrap, recreate]
-  run_once: true
-  tags: [deploy, bootstrap, recreate]
-
-################################
-# PREP (BAZARR)
-################################
-
-- name: Prep - Bazarr | Include bootstrap tasks
-  when:
-    - not ansible_check_mode
-    - inventory_hostname == docker_services_primary_manager
-    - docker_services_svc.name  | default('') == "bazarr"
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/bazarr.yml
-    apply:
-      tags: [deploy, update, recreate]
-  run_once: true
-  tags: [deploy, update, recreate]
-
-################################
-# PREP (NZBHYDRA2)
-################################
-
-- name: Prep - NZBHydra2 | Include bootstrap tasks
-  when:
-    - not ansible_check_mode
-    - inventory_hostname == docker_services_primary_manager
-    - docker_services_svc.name  | default('') == "nzbhydra2"
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/nzbhydra2.yml
-    apply:
-      tags: [deploy, update, recreate]
-  run_once: true
-  tags: [deploy, update, recreate]
-
-################################
-# PREP (VAULTWARDEN)
-################################
-
-- name: Prep - Vaultwarden | Include bootstrap tasks
-  when:
-    - not ansible_check_mode
-    - inventory_hostname == docker_services_primary_manager
-    - docker_services_svc.name == "vaultwarden"
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prep/vaultwarden.yml
+- name: Prep - Application configuration | Apply runtime-neutral configuration
+  when: docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_prepare
+    tasks_from: configure
     apply:
       tags: [deploy, update, recreate, bootstrap]
-  run_once: true
+      no_log: true
+      diff: false
+  vars:
+    service_prepare_context: "{{ docker_services_application_context }}"
   tags: [deploy, update, recreate, bootstrap]
+
+- name: Prep - Application bootstrap | Run explicit Plex bootstrap
+  when:
+    - service_prepare_handler == 'plex'
+    - docker_services_is_deploy_host
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_prepare
+    tasks_from: bootstrap
+    apply:
+      tags: [never, bootstrap]
+      no_log: true
+      diff: false
+  vars:
+    service_prepare_context: "{{ docker_services_application_context }}"
+  tags: [never, bootstrap]
+
+- name: Prep - Swarm configs | Include tasker
+  when:
+    - inventory_hostname == docker_services_controller_host
+    - docker_services_svc.swarm_configs | default([]) | length > 0
+  ansible.builtin.include_tasks:
+    file: sub_tasks/prep/swarm_configs/tasker.yml
+    apply:
+      tags: [deploy, update, recreate]
+  vars:
+    swarm_configs: "{{ docker_services_svc.swarm_configs }}"
+    docker_services_deploy_host: "{{ docker_services_svc.swarm_config_host | default(docker_services_controller_host, true) }}"
+  tags: [deploy, update, recreate]

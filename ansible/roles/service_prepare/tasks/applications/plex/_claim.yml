@@ -1,0 +1,86 @@
+---
+
+- name: Claim | Set derived vars
+  ansible.builtin.set_fact:
+    service_prepare_plex_token_host: >-
+      {{ service_prepare_plex_controller_host | string | trim }}
+
+- name: Claim | Load token + client identifier from token host
+  ansible.builtin.set_fact:
+    service_prepare_plex_auth_token: >-
+      {{ hostvars[service_prepare_plex_token_host].service_prepare_plex_auth_token | default('') }}
+    service_prepare_plex_client_identifier: >-
+      {{ hostvars[service_prepare_plex_token_host].service_prepare_plex_client_identifier | default('') }}
+
+- name: Claim | Assert required vars exist
+  ansible.builtin.assert:
+    that:
+      - service_prepare_plex_auth_token | string | trim | length > 0
+      - service_prepare_plex_client_identifier | string | trim | length > 0
+    fail_msg: >-
+      service_prepare_plex_auth_token and/or service_prepare_plex_client_identifier are missing.
+      Ensure _plex_token.yml ran first and stored these facts on the Plex token host.
+
+- name: Claim | Check if Plex server is already claimed
+  ansible.builtin.stat:
+    path: "{{ service_prepare_plex_preferences_file }}"
+  register: service_prepare_prefs_stat
+
+- name: Claim | Read Preferences.xml
+  when: service_prepare_prefs_stat.stat.exists
+  community.general.xml:
+    path: "{{ service_prepare_plex_preferences_file }}"
+    xpath: /Preferences
+    content: attribute
+  register: service_prepare_prefs_xml
+  failed_when: false
+
+- name: Claim | Determine claimed status
+  ansible.builtin.set_fact:
+    service_prepare_plex_is_claimed: >-
+      {{
+        (service_prepare_prefs_stat.stat.exists | bool)
+        and (service_prepare_prefs_xml is succeeded)
+        and ((service_prepare_prefs_xml.matches | default([])) | length > 0)
+        and (service_prepare_prefs_xml.matches[0].Preferences.PlexOnlineToken is defined)
+        and (service_prepare_prefs_xml.matches[0].Preferences.PlexOnlineToken | string | trim | length > 0)
+      }}
+
+- name: Claim | Request claim token from plex.tv
+  when: not service_prepare_plex_is_claimed
+  ansible.builtin.uri:
+    url: "https://plex.tv/api/claim/token.json"
+    method: GET
+    return_content: true
+    headers:
+      Accept: "application/json"
+      X-Plex-Version: "1.0.0"
+      X-Plex-Product: "plex"
+      X-Plex-Client-Identifier: "{{ service_prepare_plex_client_identifier }}"
+      X-Plex-Token: "{{ service_prepare_plex_auth_token }}"
+    status_code: 200
+  register: service_prepare_plex_claim
+
+- name: Claim | Persist claim code to token host
+  when: not service_prepare_plex_is_claimed
+  ansible.builtin.set_fact:
+    service_prepare_plex_claim_code: "{{ service_prepare_plex_claim.json.token | default('') | string | trim }}"
+  delegate_to: "{{ service_prepare_plex_token_host }}"
+  run_once: true
+
+- name: Claim | Validate claim code
+  when: not service_prepare_plex_is_claimed
+  ansible.builtin.assert:
+    that:
+      - hostvars[service_prepare_plex_token_host].service_prepare_plex_claim_code is defined
+      - hostvars[service_prepare_plex_token_host].service_prepare_plex_claim_code | string | trim | length > 0
+    fail_msg: "Failed to retrieve Plex claim code from plex.tv"
+
+- name: Claim | Report claim status
+  ansible.builtin.debug:
+    msg: >-
+      Plex claim status: {{
+        'already claimed (no action)'
+        if service_prepare_plex_is_claimed
+        else 'claim code retrieved and stored on token host'
+      }}

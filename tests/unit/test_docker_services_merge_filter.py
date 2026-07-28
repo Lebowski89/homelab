@@ -21,6 +21,7 @@ def test_no_target_removes_targets_key():
     plugin = load_plugin()
 
     service = {
+        "runtime": "docker",
         "image": "example/app:1",
         "environment": {"TZ": "Australia/Melbourne"},
         "targets": {
@@ -31,6 +32,7 @@ def test_no_target_removes_targets_key():
     result = plugin.docker_services_merge_target(service, None)
 
     assert result == {
+        "runtime": "docker",
         "image": "example/app:1",
         "environment": {"TZ": "Australia/Melbourne"},
     }
@@ -40,6 +42,7 @@ def test_target_mappings_merge_recursively():
     plugin = load_plugin()
 
     service = {
+        "runtime": "docker",
         "environment": {
             "TZ": "Australia/Melbourne",
             "PUID": "99",
@@ -81,6 +84,7 @@ def test_lists_append_rp():
     plugin = load_plugin()
 
     service = {
+        "runtime": "docker",
         "secrets": [
             "parent_secret",
             "shared_secret",
@@ -108,6 +112,7 @@ def test_target_command_replaces_parent_command():
     plugin = load_plugin()
 
     service = {
+        "runtime": "docker",
         "command": ["parent", "command"],
         "targets": {
             "main": {
@@ -125,6 +130,7 @@ def test_target_entrypoint_replaces_parent_entrypoint():
     plugin = load_plugin()
 
     service = {
+        "runtime": "docker",
         "entrypoint": ["/parent-entrypoint.sh"],
         "targets": {
             "main": {
@@ -142,6 +148,7 @@ def test_target_healthcheck_test_replaces_parent_healthcheck_test():
     plugin = load_plugin()
 
     service = {
+        "runtime": "docker",
         "healthcheck": {
             "test": ["CMD", "parent"],
             "interval": "1m",
@@ -169,6 +176,7 @@ def test_missing_target_fails_clearly():
     plugin = load_plugin()
 
     service = {
+        "runtime": "docker",
         "targets": {
             "main": {},
         },

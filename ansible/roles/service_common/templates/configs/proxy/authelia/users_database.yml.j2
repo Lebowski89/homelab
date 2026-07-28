@@ -1,3 +1,6 @@
+{% set authelia_display_name = service_common_infisical_values.authelia_display_name %}
+{% set authelia_user = service_common_infisical_values.authelia_user %}
+{% set smtp_email = service_common_infisical_values.smtp_email %}
 ---
 ###############################################################
 #                         Users Database                      #
@@ -7,7 +10,7 @@ users:
   {{ authelia_user }}:
     disabled: false
     displayname: '{{ authelia_display_name }}'
-    password: '{{ authelia_argon2_password }}'
+    password: '{{ service_common_template_vars.authelia_argon2_password }}'
     email: "{{ smtp_email }}"
     groups:
       - admins

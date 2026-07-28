@@ -2,21 +2,21 @@
 
 grafana:
   enabled: true
+  runtime: docker
   tags: [monitoring, grafana]
   name: grafana
   stack: grafana
+
   image: grafana/grafana:13.1.0-ubuntu
-  named_networks:
-    overlay:
-      external: true
   user: "0"
+
   environment:
     TZ: "{{ timezone }}"
     GF_SECURITY_ADMIN_USER__FILE: /run/secrets/grafana_admin_user_secret
     GF_SECURITY_ADMIN_PASSWORD__FILE: /run/secrets/grafana_admin_pass_secret
     GF_AUTH_GENERIC_OAUTH_CLIENT_SECRET__FILE: /run/secrets/grafana_oidc_client_secret
   env_file:
-    - "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/.env"
+    - "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/.env"
   infisical:
     fail_on_empty: true
     secrets_map:
@@ -29,85 +29,93 @@ grafana:
       - var: grafana_oidc_client_secret
         path: "/Grafana"
         name: OIDC_CLIENT_SECRET
-        docker_secret: grafana_oidc_client_secret
+        secret:
+          name: grafana_oidc_client_secret
       - var: cloudflare_zone
         path: "/Cloudflare"
         name: ZONE
   secrets:
     - grafana_admin_user_secret
     - grafana_admin_pass_secret
-    - grafana_oidc_client_secret
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/provisioning/datasources"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/provisioning/datasources"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/provisioning/dashboards"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/provisioning/dashboards"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards"
       state: directory
       mode: "0755"
   templates:
     - src: configs/grafana/provisioning/datasources/prometheus.yml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/provisioning/datasources/prometheus.yml"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/provisioning/datasources/prometheus.yml"
       mode: "0644"
       force: true
     - src: configs/grafana/provisioning/dashboards/dashboards.yml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/provisioning/dashboards/dashboards.yml"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/provisioning/dashboards/dashboards.yml"
       mode: "0644"
       force: true
     - src: configs/grafana/dashboards/authelia-community-dashboard.json.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards/authelia-community-dashboard.json"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards/authelia-community-dashboard.json"
       mode: "0644"
       force: true
     - src: configs/grafana/dashboards/haproxy-postgres-overview.json.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards/haproxy-postgres-overview.json"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards/haproxy-postgres-overview.json"
       mode: "0644"
       force: true
     - src: configs/grafana/dashboards/homelab-overview.json.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards/homelab-overview.json"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards/homelab-overview.json"
       mode: "0644"
       force: true
     - src: configs/grafana/dashboards/traefik-official-standalone-dashboard.json.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards/traefik-official-standalone-dashboard.json"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards/traefik-official-standalone-dashboard.json"
       mode: "0644"
       force: true
     - src: configs/grafana/dashboards/node-exporter-full.json.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards/node-exporter-full.json"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards/node-exporter-full.json"
       mode: "0644"
       force: true
     - src: configs/grafana/grafana.env.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/.env"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/.env"
       mode: "0664"
       force: true
+      no_log: true
   volumes:
     data:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana"
       target: /var/lib/grafana
       read_only: false
     provisioning:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/provisioning"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/provisioning"
       target: /etc/grafana/provisioning
       read_only: true
     dashboards:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/grafana/dashboards"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards"
       target: /var/lib/grafana/dashboards
       read_only: true
+
   traefik:
     enable: true
     exposure: private
     port: 3000
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: careful
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_primary_manager

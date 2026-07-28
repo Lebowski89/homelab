@@ -6,6 +6,7 @@ import yaml
 TASKS_DIR = Path("ansible/roles/podman_services/tasks")
 MAIN_TASKS = (TASKS_DIR / "main.yml").read_text()
 PREPARE_TASKS = (TASKS_DIR / "sub_tasks" / "prepare.yml").read_text()
+SECRET_TASKS = (TASKS_DIR / "sub_tasks" / "secrets" / "materialize.yml").read_text()
 REMOVE_TASKS = (TASKS_DIR / "sub_tasks" / "remove.yml").read_text()
 SUB_TASK_FILES = (
     "init.yml",
@@ -16,7 +17,7 @@ SUB_TASK_FILES = (
     "remove.yml",
     "drift.yml",
 )
-TASKS = "\n".join((TASKS_DIR / "sub_tasks" / name).read_text() for name in SUB_TASK_FILES)
+TASKS = "\n".join((TASKS_DIR / "sub_tasks" / name).read_text() for name in SUB_TASK_FILES) + "\n" + SECRET_TASKS
 N8N = Path("ansible/group_vars/all/services/n8n.yml").read_text()
 NETWORK_TEMPLATE = Path("ansible/roles/podman_services/templates/network.network.j2").read_text()
 PODMAN_DEFAULTS = Path("ansible/roles/podman/defaults/main.yml").read_text()
@@ -105,15 +106,13 @@ def test_secret_skip_existing_semantics_are_explicit():
     assert "podman_secret_policy(podman_services_state)" in TASKS
 
 
-def test_podman_adapts_canonical_and_legacy_secrets_without_changing_materialization_policy():
-    assert "service_common_infisical_secrets_map:" in MAIN_TASKS
-    assert "service_common_legacy_podman_secrets:" in MAIN_TASKS
-    assert "tasks_from: infisical" in MAIN_TASKS
-    assert "Attach common resolved environment" in MAIN_TASKS
-    assert "service_common_resolved_environment" in MAIN_TASKS
-    assert "Validate and retrieve Infisical values through service common" not in TASKS
+def test_podman_consumes_canonical_dispatch_context_without_owning_lookup():
+    assert "podman_services_common_context" in (TASKS_DIR / "sub_tasks" / "init.yml").read_text()
+    assert "podman_services_common_values" in (TASKS_DIR / "sub_tasks" / "init.yml").read_text()
+    assert "tasks_from: infisical" not in MAIN_TASKS
+    assert "infisical.vault.read_secrets" not in TASKS
     assert 'name: "{{ podman_services_secret.name }}"' in TASKS
-    assert 'data: "{{ podman_services_infisical_values[podman_services_secret.var] }}"' in TASKS
+    assert 'data: "{{ podman_services_effective_secret_values[podman_services_secret.var] }}"' in TASKS
     assert "podman_secret_policy(podman_services_state)).force" in TASKS
     assert "podman_secret_policy(podman_services_state)).skip_existing" in TASKS
     assert "not ansible_check_mode" in TASKS
@@ -142,8 +141,8 @@ def test_split_tasks_notify_the_existing_daemon_reload_handler():
 
 
 def test_podman_secret_loop_uses_a_role_prefixed_variable_without_item_references():
-    tasks = yaml.safe_load(PREPARE_TASKS)
-    task = next(task for task in tasks if task["name"] == "Prep | Create/update Podman secrets")
+    tasks = yaml.safe_load(SECRET_TASKS)
+    task = next(task for task in tasks if task["name"] == "Prep | Create or update Podman-native secrets")
 
     assert task["loop_control"]["loop_var"] == "podman_services_secret"
     assert re.search(r"(?<![A-Za-z0-9_])item(?![A-Za-z0-9_])", str(task)) is None
@@ -172,17 +171,17 @@ def test_podman_render_tasks_publish_the_normalized_service_to_templates():
 
 
 def test_podman_common_resolution_precedes_shared_and_runtime_rendering():
-    resolve = MAIN_TASKS.index("Resolve common Infisical values and environment")
-    attach = MAIN_TASKS.index("Attach common resolved environment")
+    init = TASKS.index("Init | Snapshot dispatch-owned common context")
+    native_secret = MAIN_TASKS.index("Materialize Podman-native secrets")
     shared = MAIN_TASKS.index("Prepare runtime-neutral host state")
     prepare = MAIN_TASKS.index("Include preparation tasks")
     env_file = TASKS.index("Render protected environment file")
-    native_secret = TASKS.index("Create/update Podman secrets")
     quadlet = TASKS.index("Render container Quadlet")
 
-    assert resolve < attach < shared < prepare
-    assert env_file < native_secret < quadlet
-    assert "no_log: true\n  diff: false\n  when:" in TASKS[env_file:native_secret]
+    assert init < env_file
+    assert native_secret < shared < prepare
+    assert env_file < quadlet
+    assert "not ansible_check_mode" in MAIN_TASKS[:shared]
 
 
 def test_podman_dynamic_includes_propagate_required_tags():

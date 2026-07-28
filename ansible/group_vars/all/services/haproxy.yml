@@ -2,13 +2,13 @@
 
 haproxy:
   enabled: true
+  runtime: docker
   tags: [haproxy]
   name: haproxy
   stack: haproxy
+
   image: haproxy:3.4-alpine
-  named_networks:
-    overlay:
-      external: true
+
   swarm_configs:
     - name: haproxy_cfg
       src: templates/configs/haproxy.cfg.j2
@@ -17,11 +17,6 @@ haproxy:
     - source: haproxy_cfg
       target: /usr/local/etc/haproxy/haproxy.cfg
       mode: "0444"
-  ports:
-    postgres:
-      published: 5432
-      target: 5432
-      mode: host
   settings:
     haproxy_maxconn: 4096
     haproxy_timeout_connect: 5s
@@ -30,10 +25,20 @@ haproxy:
     haproxy_timeout_check: 5s
     haproxy_retries: 3
     haproxy_prometheus_port: 8405
+
+  named_networks:
+    overlay:
+      external: true
+  ports:
+    postgres:
+      published: 5432
+      target: 5432
+      mode: host
+
   deploy:
     type: swarm
     mode: global
     profile: careful
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
       - node.labels.haproxy == true

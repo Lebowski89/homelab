@@ -2,63 +2,70 @@
 
 qbittorrent:
   enabled: true
+  runtime: docker
   tags: [torrents, qbittorrent]
+
   image: ghcr.io/hotio/qbittorrent:release-v5.2.2
-  named_networks:
-    overlay:
-      external: true
-  cap_add:
-    - NET_ADMIN
-  devices:
-    - "/dev/net/tun:/dev/net/tun"
-  sysctls:
-    net.ipv4.conf.all.src_valid_mark: "1"
-    net.ipv6.conf.all.disable_ipv6: "1"
+
   environment:
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
+    PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_storage_host].container_host_pgid }}"
     TZ: "{{ timezone }}"
     FILE__VPN_PIA_USER: /run/secrets/qbittorrent_pia_user_secret
     FILE__VPN_PIA_PASS: /run/secrets/qbittorrent_pia_pass_secret
   infisical:
     fail_on_empty: true
     secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
       - var: qbittorrent_pia_user
         path: "/PIA"
         name: USER
-        docker_secret: qbittorrent_pia_user_secret
+        secret:
+          name: qbittorrent_pia_user_secret
       - var: qbittorrent_pia_pass
         path: "/PIA"
         name: PASS
-        docker_secret: qbittorrent_pia_pass_secret
-  secrets:
-    - qbittorrent_pia_user_secret
-    - qbittorrent_pia_pass_secret
+        secret:
+          name: qbittorrent_pia_pass_secret
+
+  application_prepare:
+    handler: qbittorrent
+
+  named_networks:
+    overlay:
+      external: true
+
+  devices:
+    - "/dev/net/tun:/dev/net/tun"
+  cap_add:
+    - NET_ADMIN
+  sysctls:
+    net.ipv4.conf.all.src_valid_mark: "1"
+    net.ipv6.conf.all.disable_ipv6: "1"
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_unraid_host }}"
+    host: "{{ services_storage_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_unraid_host
+
   targets:
 
     ################################
     # QBIT MAIN SERVICE
     ################################
     downloads:
-      name: qbittorrent
       tags: [qbittorrent-main]
+      name: qbittorrent
       stack: qbittorrent
+
       hostname: qbittorrent.internal
-      healthcheck:
-        test:
-          - "CMD"
-          - "wget"
-          - "--spider"
-          - "-q"
-          - "http://127.0.0.1:8090/"
+
       env_file:
         - /opt/stacks/qbittorrent.env
       infisical:
@@ -69,52 +76,62 @@ qbittorrent:
           - var: qbittorrent_pass
             path: "/qBittorrent"
             name: PASS
+      swarm_env_templates:
+        - src: configs/qbittorrent/qBittorrent.env.j2
+          dest: /opt/stacks/qbittorrent.env
+          owner: "{{ hostvars[services_storage_host].container_host_puid }}"
+          group: "{{ hostvars[services_storage_host].container_host_pgid }}"
+          mode: "0600"
+          force: true
+
       paths:
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent"
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent/config"
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent/config"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent/wireguard"
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent/wireguard"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/torrents"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/torrents/completed"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/completed"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/torrents/incoming"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/incoming"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/torrents/watched"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/watched"
           state: directory
           mode: "0755"
       templates:
         - src: configs/qbittorrent/qBittorrent.conf.j2
-          dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent/config/qBittorrent.conf"
+          dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent/config/qBittorrent.conf"
           mode: "0664"
           force: true
           no_log: true
-      swarm_env_templates:
-        - src: configs/qbittorrent/qBittorrent.env.j2
-          dest: /opt/stacks/qbittorrent.env
-          owner: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
-          group: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
-          mode: "0600"
-          force: true
       volumes:
         config:
           type: bind
-          source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent"
+          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent"
           target: /config
           read_only: false
         media:
           type: bind
-          source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/torrents"
+          source: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents"
           target: /data/torrents
           read_only: false
+
+      healthcheck:
+        test:
+          - "CMD"
+          - "wget"
+          - "--spider"
+          - "-q"
+          - "http://127.0.0.1:8090/"
+
       traefik:
         enable: true
         exposure: private
@@ -124,17 +141,12 @@ qbittorrent:
     # QBIT CROSS-SEED SERVICE
     ################################
     seeds:
-      name: qbittorrent-xs
       tags: [qbittorrent-xs]
+      name: qbittorrent-xs
       stack: qbittorrent-xs
+
       hostname: qbittorrent-xs.internal
-      healthcheck:
-        test:
-          - "CMD"
-          - "wget"
-          - "--spider"
-          - "-q"
-          - "http://127.0.0.1:8091/"
+
       env_file:
         - /opt/stacks/qbittorrent-xs.env
       infisical:
@@ -145,52 +157,62 @@ qbittorrent:
           - var: qbittorrent_xs_pass
             path: "/qBittorrent-XS"
             name: PASS
+      swarm_env_templates:
+        - src: configs/qbittorrent/qBittorrent-xs.env.j2
+          dest: /opt/stacks/qbittorrent-xs.env
+          owner: "{{ hostvars[services_storage_host].container_host_puid }}"
+          group: "{{ hostvars[services_storage_host].container_host_pgid }}"
+          mode: "0600"
+          force: true
+
       paths:
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent-xs"
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-xs"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent-xs/config"
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-xs/config"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent-xs/wireguard"
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-xs/wireguard"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/seeds"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/seeds/completed"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds/completed"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/seeds/incoming"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds/incoming"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/seeds/watched"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds/watched"
           state: directory
           mode: "0755"
       templates:
         - src: configs/qbittorrent/qBittorrent-xs.conf.j2
-          dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent-xs/config/qBittorrent.conf"
+          dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-xs/config/qBittorrent.conf"
           mode: "0664"
           force: true
           no_log: true
-      swarm_env_templates:
-        - src: configs/qbittorrent/qBittorrent-xs.env.j2
-          dest: /opt/stacks/qbittorrent-xs.env
-          owner: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
-          group: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
-          mode: "0600"
-          force: true
       volumes:
         config:
           type: bind
-          source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/qbittorrent-xs"
+          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-xs"
           target: /config
           read_only: false
         media:
           type: bind
-          source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}/seeds"
+          source: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds"
           target: /data/seeds
           read_only: false
+
+      healthcheck:
+        test:
+          - "CMD"
+          - "wget"
+          - "--spider"
+          - "-q"
+          - "http://127.0.0.1:8091/"
+
       traefik:
         enable: true
         exposure: private

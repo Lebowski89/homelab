@@ -1,0 +1,15 @@
+---
+
+- name: Application bootstrap | Include explicit Plex bootstrap
+  when:
+    - not ansible_check_mode
+    - service_prepare_handler == 'plex'
+    - (service_prepare_context.service.application_prepare.bootstrap.enabled | default(false)) | bool
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: applications/plex/tasker.yml
+    apply:
+      tags: [bootstrap]
+      no_log: true
+      diff: false
+  tags: [never, bootstrap]

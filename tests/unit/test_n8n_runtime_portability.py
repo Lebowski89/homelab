@@ -80,6 +80,7 @@ def normalize_both(*, check_mode=False):
         common_secrets,
     )
     podman_service["env"] = copy.deepcopy(resolved_environment)
+    podman_service["secrets"] = podman.podman_secret_declarations(common_secrets["secret_declarations"])
     docker_port_list = docker_ports.docker_services_canonical_ports(
         cfg["ports"],
         stack_deploy_type=cfg["deploy"]["type"],
@@ -502,7 +503,7 @@ def test_ansible_service_loading_finalizes_n8n_without_infisical_values(tmp_path
   connection: local
   gather_facts: false
   vars:
-    docker_services_primary_manager: localhost
+    services_controller_host: localhost
     local_ip: 192.0.2.10
   tasks:
     - name: Publish localhost inventory address
@@ -538,7 +539,7 @@ def test_ansible_service_loading_finalizes_n8n_without_infisical_values(tmp_path
     assert "undefined" not in result.stderr.lower()
 
 
-def test_n8n_docker_check_mode_keeps_infisical_facts_on_dispatch_host(tmp_path):
+def test_n8n_docker_check_mode_builds_dispatch_owned_common_context(tmp_path):
     ansible_playbook = Path(sys.executable).with_name("ansible-playbook")
     playbook = tmp_path / "n8n-docker-infisical-ownership.yml"
     playbook.write_text(
@@ -549,12 +550,12 @@ def test_n8n_docker_check_mode_keeps_infisical_facts_on_dispatch_host(tmp_path):
   connection: local
   gather_facts: false
   vars:
-    docker_services_primary_manager: manager
+    services_controller_host: manager
+    service_catalog_controller_host: manager
     docker_services_deploy_host_effective: dispatch
     docker_services_stack_deploy_type: container
     docker_services_is_deploy_host: true
     infisical_lookup_default_params: must-not-be-used-in-check-mode
-    infisical_flatten: true
   tasks:
     - name: Seed manager inventory and deliberately stale common facts
       when: inventory_hostname == "manager"
@@ -568,18 +569,13 @@ def test_n8n_docker_check_mode_keeps_infisical_facts_on_dispatch_host(tmp_path):
         service_common_infisical_values:
           cloudflare_zone: manager-stale.invalid
           manager_stale: manager-stale-value
-        service_common_secret_values:
-          manager_stale: manager-stale-value
         service_common_secret_declarations:
           - name: manager_stale_secret
         service_common_resolved_environment:
           N8N_HOST: manager-stale.invalid
-        docker_services_infisical_values:
-          manager_stale: manager-docker-stale-value
-        docker_services_secret_declarations:
-          - name: manager_docker_stale_secret
-        docker_services_resolved_environment:
-          N8N_HOST: manager-docker-stale.invalid
+        service_catalog_common_context:
+          service_name: manager-stale
+          dispatch_host: manager
 
     - name: Seed dispatch-host inventory values
       when: inventory_hostname == "dispatch"
@@ -592,37 +588,44 @@ def test_n8n_docker_check_mode_keeps_infisical_facts_on_dispatch_host(tmp_path):
         file: __N8N_PATH__
         name: n8n_svcfiles
 
-    - name: Switch only the n8n runtime to Docker
+    - name: Publish materialized n8n entry with only its runtime switched
       when: inventory_hostname == "dispatch"
       ansible.builtin.set_fact:
-        docker_services_svc: >-
-          {{ n8n_svcfiles.n8n | combine({"runtime": "docker"}, recursive=true) }}
+        service_catalog_dispatch_entry:
+          name: n8n
+          runtime: docker
+          dispatch_host: dispatch
+        service_catalog_materialized_service:
+          name: n8n
+          runtime: docker
+          dispatch_host: dispatch
+          config: >-
+            {{ n8n_svcfiles.n8n | combine({"runtime": "docker"}, recursive=true) }}
 
-    - name: Resolve n8n through the Docker Infisical tasker
+    - name: Resolve n8n through the runtime-neutral dispatch preflight
       when: inventory_hostname == "dispatch"
       ansible.builtin.include_tasks:
-        file: __DOCKER_INFISICAL_TASKER__
+        file: __COMMON_PREFLIGHT__
 
     - name: Verify dispatch ownership and stale-manager isolation
       when: inventory_hostname == "manager"
       ansible.builtin.assert:
         that:
-          - hostvars.dispatch.service_common_infisical_values.cloudflare_zone == "check-mode.invalid"
-          - hostvars.dispatch.service_common_secret_values.cloudflare_zone == "check-mode.invalid"
-          - hostvars.dispatch.service_common_resolved_environment.N8N_HOST == "n8n.int.check-mode.invalid"
-          - hostvars.dispatch.docker_services_infisical_values.cloudflare_zone == "check-mode.invalid"
-          - hostvars.dispatch.docker_services_resolved_environment.N8N_HOST == "n8n.int.check-mode.invalid"
-          - hostvars.dispatch.docker_services_svc.environment.N8N_HOST == "n8n.int.check-mode.invalid"
-          - hostvars.dispatch.docker_services_svc.environment.DB_POSTGRESDB_HOST == "192.0.2.10"
-          - hostvars.dispatch.service_common_infisical_config.secrets_map | map(attribute="var") | list == ["cloudflare_zone", "postgres_user", "postgres_pass", "n8n_encryption_key"]
-          - hostvars.dispatch.docker_services_secret_declarations | map(attribute="name") | list == ["postgres_user_secret", "postgres_pass_secret", "n8n_encryption_key_secret"]
+          - hostvars.dispatch.service_catalog_common_context.service_name == "n8n"
+          - hostvars.dispatch.service_catalog_common_context.runtime == "docker"
+          - hostvars.dispatch.service_catalog_common_context.dispatch_host == "dispatch"
+          - hostvars.dispatch.service_catalog_common_context.preflight_performed
+          - hostvars.dispatch.service_catalog_common_context.lookup_values.cloudflare_zone == "check-mode.invalid"
+          - hostvars.dispatch.service_catalog_common_context.resolved_environment.N8N_HOST == "n8n.int.check-mode.invalid"
+          - hostvars.dispatch.service_catalog_common_context.resolved_environment.DB_POSTGRESDB_HOST == "192.0.2.10"
+          - hostvars.dispatch.service_catalog_common_context.infisical_config.secrets_map | map(attribute="var") | list == ["cloudflare_zone", "postgres_user", "postgres_pass", "n8n_encryption_key"]
+          - hostvars.dispatch.service_catalog_common_context.secret_declarations | map(attribute="name") | list == ["postgres_user_secret", "postgres_pass_secret", "n8n_encryption_key_secret"]
           - hostvars.manager.service_common_infisical_values.manager_stale == "manager-stale-value"
           - hostvars.manager.service_common_resolved_environment.N8N_HOST == "manager-stale.invalid"
-          - hostvars.manager.docker_services_infisical_values.manager_stale == "manager-docker-stale-value"
-          - hostvars.manager.docker_services_resolved_environment.N8N_HOST == "manager-docker-stale.invalid"
+          - hostvars.manager.service_catalog_common_context.service_name == "manager-stale"
 """.replace("__N8N_PATH__", str(N8N_PATH)).replace(
-            "__DOCKER_INFISICAL_TASKER__",
-            str(REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/tasker.yml"),
+            "__COMMON_PREFLIGHT__",
+            str(REPO_ROOT / "ansible/tasks/service_catalog_common_preflight.yml"),
         )
     )
     environment = os.environ.copy()

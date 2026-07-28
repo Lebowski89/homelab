@@ -67,21 +67,27 @@ jobs:
       - name: ruff check
         run: |
           ruff check --output-format=github \
+            ansible/action_plugins \
             ansible/filter_plugins \
+            ansible/library \
             ansible/roles/docker_services/filter_plugins \
             ansible/roles/podman_services/filter_plugins \
             ansible/roles/service_common/filter_plugins \
-            ansible/roles/docker_services/library \
+            ansible/roles/service_prepare/filter_plugins \
+            ansible/roles/service_prepare/library \
             tests/unit
 
       - name: ruff format check
         run: |
           ruff format --check --diff \
+            ansible/action_plugins \
             ansible/filter_plugins \
+            ansible/library \
             ansible/roles/docker_services/filter_plugins \
             ansible/roles/podman_services/filter_plugins \
             ansible/roles/service_common/filter_plugins \
-            ansible/roles/docker_services/library \
+            ansible/roles/service_prepare/filter_plugins \
+            ansible/roles/service_prepare/library \
             tests/unit
 
       - name: pytest

@@ -17,16 +17,17 @@ TRAEFIK_TASKS = (ROLE / "tasks/traefik.yml").read_text()
 REMOVE_TASKS = (ROLE / "tasks/remove_integrations.yml").read_text()
 PLAYBOOK = Path("ansible/playbook.yml").read_text()
 GLOBAL_DISPATCH = Path("ansible/tasks/service_catalog_dispatch.yml").read_text()
+COMMON_PREFLIGHT = Path("ansible/tasks/service_catalog_common_preflight.yml").read_text()
 DOCKER_PREP = Path("ansible/roles/docker_services/tasks/_prep.yml").read_text()
+DOCKER_INIT = Path("ansible/roles/docker_services/tasks/_init.yml").read_text()
 PODMAN_MAIN = Path("ansible/roles/podman_services/tasks/main.yml").read_text()
+PODMAN_INIT = Path("ansible/roles/podman_services/tasks/sub_tasks/init.yml").read_text()
 PODMAN_PREP = Path("ansible/roles/podman_services/tasks/sub_tasks/prepare.yml").read_text()
 PODMAN_DISPATCH = Path("ansible/tasks/service_catalog_dispatch_podman.yml").read_text()
-DOCKER_SECRET_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/_secrets.yml").read_text()
+DOCKER_SECRET_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/secrets.yml").read_text()
+PODMAN_SECRET_TASKS = Path("ansible/roles/podman_services/tasks/sub_tasks/secrets/materialize.yml").read_text()
 DOCKER_PREP_TASKS = Path("ansible/roles/docker_services/tasks/_prep.yml").read_text()
 DOCKER_COMPOSE_TASKS = Path("ansible/roles/docker_services/tasks/_compose.yml").read_text()
-DOCKER_FETCH_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/_fetch.yml").read_text()
-DOCKER_RESOLVER_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/_resolver.yml").read_text()
-DOCKER_INFISICAL_TASKER = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/tasker.yml").read_text()
 COMMON_PATH_TASKS = (ROLE / "tasks/paths.yml").read_text()
 COMMON_COPY_TASKS = (ROLE / "tasks/copies.yml").read_text()
 COMMON_TEMPLATE_TASKS = (ROLE / "tasks/templates.yml").read_text()
@@ -147,6 +148,33 @@ def test_common_operational_code_has_no_runtime_role_variables_or_resources():
     assert "quadlet" not in OPERATIONAL_TEXT.lower()
 
 
+def test_infisical_lookup_and_schema_are_common_owned_without_adapter_wrappers():
+    production_files = [
+        path
+        for path in Path("ansible").rglob("*")
+        if path.is_file() and path.suffix in {".yml", ".yaml", ".py", ".j2"} and path.name != "README.md"
+    ]
+    orchestration_files = [path for path in production_files if "ansible/collections/" not in path.as_posix()]
+    lookup_sites = [path for path in orchestration_files if "infisical.vault.read_secrets" in path.read_text()]
+    assert lookup_sites == [Path("ansible/roles/service_common/tasks/infisical.yml")]
+
+    for role in ("docker_services", "podman_services"):
+        adapter_files = [
+            path
+            for path in Path("ansible/roles", role).rglob("*")
+            if path.is_file() and path.suffix in {".yml", ".yaml", ".py", ".j2"} and path.name != "README.md"
+        ]
+        adapter_text = "\n".join(path.read_text() for path in adapter_files)
+        assert "tasks_from: infisical" not in adapter_text
+        assert "infisical.vault.read_secrets" not in adapter_text
+        assert "infisical_lookup_default_params" not in adapter_text
+
+    assert not list(Path("ansible/roles/docker_services/tasks/sub_tasks/prep/infisical").glob("*"))
+    service_text = "\n".join(path.read_text() for path in Path("ansible/group_vars/all/services").glob("*.yml"))
+    for legacy_marker in ("__INFISICAL__:", "docker_secret:", "podman_secret:", "infisical_path:", "infisical_key:"):
+        assert legacy_marker not in service_text
+
+
 def test_docker_uses_normalized_service_and_effective_filesystem_hosts():
     assert 'service_common_service: "{{ docker_services_svc }}"' in DOCKER_PREP
     assert 'service_common_target_hosts: "{{ docker_services_fs_hosts_effective }}"' in DOCKER_PREP
@@ -188,7 +216,7 @@ def test_common_filesystem_and_integration_work_has_explicit_delegation():
 
 
 def test_podman_translates_host_paths_and_keeps_quadlets_runtime_owned():
-    assert '{"paths": podman_services_service.host_paths}' in PODMAN_MAIN
+    assert "'paths': podman_services_service.host_paths" in PODMAN_MAIN
     assert "Ensure host data paths exist" not in PODMAN_PREP
     assert "Render container Quadlet" in PODMAN_PREP
 
@@ -215,7 +243,7 @@ def test_docker_batch_deployment_remains_after_service_loops():
     assert global_loop < batch_deploy
 
 
-def test_secret_materialization_and_compatibility_paths_remain_adapter_owned():
+def test_native_secret_materialization_remains_adapter_owned():
     assert "Reject empty secret values before materialization" in DOCKER_SECRET_TASKS
     assert "runtime secret creation was stopped" in DOCKER_SECRET_TASKS
     assert "Create Docker Swarm secrets\n  no_log: true\n  diff: false" in DOCKER_SECRET_TASKS
@@ -223,10 +251,14 @@ def test_secret_materialization_and_compatibility_paths_remain_adapter_owned():
     assert "community.docker.docker_secret" in DOCKER_SECRET_TASKS
     assert 'path: "/opt/stacks/{{ docker_services_stack_name }}/secrets"' in DOCKER_SECRET_TASKS
     assert "default('0600')" in DOCKER_SECRET_TASKS
-    assert "service_common_infisical_values[infisical_secret_item.var]" in DOCKER_FETCH_TASKS
-    assert '"{{ infisical_secret_item.var }}":' in DOCKER_FETCH_TASKS
-    assert "Propagate Infisical flattened vars to deploy host\n  no_log: true\n  diff: false" in DOCKER_INFISICAL_TASKER
-    assert "Propagate Infisical dict to deploy host\n  no_log: true\n  diff: false" in DOCKER_INFISICAL_TASKER
+    assert "docker_services_effective_secret_values | default({})" in DOCKER_SECRET_TASKS
+    assert "values[declaration.var]" in DOCKER_SECRET_TASKS
+    assert "containers.podman.podman_secret" in PODMAN_SECRET_TASKS
+    assert "podman_services_effective_secret_values[podman_services_secret.var]" in PODMAN_SECRET_TASKS
+    assert "infisical.vault.read_secrets" not in DOCKER_SECRET_TASKS
+    assert "infisical.vault.read_secrets" not in PODMAN_SECRET_TASKS
+    assert "community.docker" not in OPERATIONAL_TEXT
+    assert "containers.podman" not in OPERATIONAL_TEXT
 
 
 def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
@@ -239,14 +271,12 @@ def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
     lookup_request = next(task for task in tasks if "Publish current-service lookup request" in task["name"])
     finalize = next(task for task in tasks if "Enforce empty-value policy" in task["name"])
     check_values = next(task for task in tasks if "Build deterministic check-mode values" in task["name"])
-    compatibility = next(task for task in tasks if "temporary values compatibility alias" in task["name"])
     resolve = next(task for task in tasks if "Resolve canonical environment" in task["name"])
 
     reset_facts = reset["ansible.builtin.set_fact"]
     assert reset_facts["service_common_infisical_config"] == {}
     assert reset_facts["service_common_infisical_lookup_request"] == {}
     assert reset_facts["service_common_infisical_values"] == {}
-    assert reset_facts["service_common_secret_values"] == {}
     assert reset_facts["service_common_secret_declarations"] == []
     assert reset_facts["service_common_resolved_environment"] == {}
     assert tasks.index(reset) < tasks.index(normalize_declarations) < tasks.index(normalize_environment)
@@ -264,23 +294,25 @@ def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
         "params": "{{ service_common_infisical_lookup_params }}",
         "secrets_map": "{{ service_common_infisical_config.secrets_map }}",
     }
-    assert "hostvars[inventory_hostname].service_common_infisical_lookup_request.controller_host" in fetch["delegate_to"]
+    assert "service_common_infisical_lookup_request.controller_host" in fetch["delegate_to"]
+    assert "hostvars[" not in fetch["delegate_to"]
     assert "default(inventory_hostname, true)" in fetch["delegate_to"]
     assert "delegate_facts" not in fetch
     assert all("delegate_to" not in task for task in tasks if task is not fetch)
     assert finalize["when"] == "not ansible_check_mode"
     assert check_values["when"] == "ansible_check_mode"
-    assert "service_common_infisical_values" in str(compatibility["ansible.builtin.set_fact"])
     fetch_expression = str(fetch["ansible.builtin.set_fact"]["service_common_infisical_values"])
     assert "check_mode_value" not in fetch_expression
     assert "service_common_infisical_item.path" in fetch_expression
     assert "service_common_infisical_item.name" in fetch_expression
-    assert "hostvars[inventory_hostname].service_common_infisical_values" in fetch_expression
-    assert "hostvars[inventory_hostname].service_common_infisical_lookup_request.params" in fetch_expression
-    assert "hostvars[inventory_hostname].service_common_infisical_lookup_request.secrets_map" in fetch["loop"]
+    assert "service_common_infisical_values" in fetch_expression
+    assert "service_common_infisical_lookup_request.params" in fetch_expression
+    assert "hostvars[" not in fetch_expression
+    assert "service_common_infisical_lookup_request.secrets_map" in fetch["loop"]
+    assert "hostvars[" not in fetch["loop"]
     assert "default([])" in fetch["loop"]
     assert "infisical.vault.read_secrets" in COMMON_INFISICAL_TASKS
-    assert "infisical.vault.read_secrets" not in DOCKER_FETCH_TASKS
+    assert "infisical.vault.read_secrets" not in DOCKER_PREP
     assert "infisical.vault.read_secrets" not in PODMAN_PREP
 
     for task in tasks:
@@ -290,28 +322,10 @@ def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
     assert validate_params["no_log"] is True
 
 
-def test_docker_compatibility_facts_are_not_recreated_in_check_mode():
-    tasks = yaml.safe_load(DOCKER_FETCH_TASKS)
-    compatibility_tasks = [
-        task
-        for task in tasks
-        if task["name"]
-        in {
-            "Prep - Infisical Fetch | Recreate flattened compatibility facts",
-            "Prep - Infisical Fetch | Recreate dictionary compatibility fact",
-        }
-    ]
-
-    assert len(compatibility_tasks) == 2
-
-    for task in compatibility_tasks:
-        assert "not ansible_check_mode" in task["when"]
-
-
 def test_empty_infisical_map_skips_live_lookup_and_keeps_empty_dispatch_owned_outputs(tmp_path):
     repo_root = Path(__file__).resolve().parents[2]
     ansible_playbook = Path(sys.executable).with_name("ansible-playbook")
-    tasker = repo_root / "ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/tasker.yml"
+    tasker = repo_root / "ansible/tasks/service_catalog_common_preflight.yml"
     playbook = tmp_path / "empty-infisical-map.yml"
     playbook.write_text(
         """---
@@ -322,43 +336,41 @@ def test_empty_infisical_map_skips_live_lookup_and_keeps_empty_dispatch_owned_ou
   gather_facts: false
   vars:
     docker_services_primary_manager: manager
-    docker_services_deploy_host_effective: dispatch
-    docker_services_stack_deploy_type: container
-    docker_services_is_deploy_host: true
+    service_catalog_controller_host: manager
     infisical_lookup_default_params: must-not-be-used
-    infisical_flatten: true
   tasks:
     - name: Seed deliberately stale manager outputs
       when: inventory_hostname == "manager"
       ansible.builtin.set_fact:
         service_common_infisical_values:
           manager_stale: manager-stale-value
-        service_common_secret_values:
-          manager_stale: manager-stale-value
         service_common_secret_declarations:
           - name: manager_stale_secret
         service_common_resolved_environment:
           OWNER: manager-stale
-        docker_services_infisical_values:
-          manager_stale: manager-docker-stale-value
-        docker_services_secret_declarations:
-          - name: manager_docker_stale_secret
-        docker_services_resolved_environment:
-          OWNER: manager-docker-stale
+        service_catalog_common_context:
+          service_name: manager-stale
+          dispatch_host: manager
 
     - name: Publish synthetic empty-map service on dispatch host
       when: inventory_hostname == "dispatch"
       ansible.builtin.set_fact:
-        docker_services_svc:
+        service_catalog_dispatch_entry:
           name: empty-map
           runtime: docker
-          environment:
-            OWNER: dispatch-owned
-          infisical:
-            fail_on_empty: true
-            secrets_map: []
+          dispatch_host: dispatch
+        service_catalog_materialized_service:
+          name: empty-map
+          runtime: docker
+          dispatch_host: dispatch
+          config:
+            environment:
+              OWNER: dispatch-owned
+            infisical:
+              fail_on_empty: true
+              secrets_map: []
 
-    - name: Resolve empty map through the Docker Infisical tasker
+    - name: Resolve empty map through common dispatch preflight
       when: inventory_hostname == "dispatch"
       ansible.builtin.include_tasks:
         file: __DOCKER_INFISICAL_TASKER__
@@ -370,17 +382,14 @@ def test_empty_infisical_map_skips_live_lookup_and_keeps_empty_dispatch_owned_ou
           - hostvars.dispatch.service_common_infisical_config.secrets_map == []
           - hostvars.dispatch.service_common_infisical_lookup_request == {}
           - hostvars.dispatch.service_common_infisical_values == {}
-          - hostvars.dispatch.service_common_secret_values == {}
           - hostvars.dispatch.service_common_secret_declarations == []
           - 'hostvars.dispatch.service_common_resolved_environment == {"OWNER": "dispatch-owned"}'
-          - hostvars.dispatch.docker_services_infisical_values == {}
-          - hostvars.dispatch.docker_services_secret_declarations == []
-          - 'hostvars.dispatch.docker_services_resolved_environment == {"OWNER": "dispatch-owned"}'
-          - 'hostvars.dispatch.docker_services_svc.environment == {"OWNER": "dispatch-owned"}'
+          - hostvars.dispatch.service_catalog_common_context.lookup_values == {}
+          - hostvars.dispatch.service_catalog_common_context.secret_declarations == []
+          - 'hostvars.dispatch.service_catalog_common_context.resolved_environment == {"OWNER": "dispatch-owned"}'
           - hostvars.manager.service_common_infisical_values.manager_stale == "manager-stale-value"
           - hostvars.manager.service_common_resolved_environment.OWNER == "manager-stale"
-          - hostvars.manager.docker_services_infisical_values.manager_stale == "manager-docker-stale-value"
-          - hostvars.manager.docker_services_resolved_environment.OWNER == "manager-docker-stale"
+          - hostvars.manager.service_catalog_common_context.service_name == "manager-stale"
 """.replace("__DOCKER_INFISICAL_TASKER__", str(tasker))
     )
     environment = os.environ.copy()
@@ -408,48 +417,48 @@ def test_empty_infisical_map_skips_live_lookup_and_keeps_empty_dispatch_owned_ou
     assert "undefined" not in output.lower()
 
 
-def test_check_mode_validates_infisical_declarations_without_lookup_or_materialization():
-    assert "Prep - Infisical | Include tasker\n  ansible.builtin.include_tasks:" in DOCKER_PREP_TASKS
-    tasker = yaml.safe_load(DOCKER_INFISICAL_TASKER)
-    include_fetch = next(task for task in tasker if task["name"] == "Prep - Infisical Fetch | Include tasks")
-    assert "when" not in include_fetch
-    fetch = yaml.safe_load(DOCKER_FETCH_TASKS)[0]
-    assert "delegate_to" not in fetch
-    assert "delegate_to" not in fetch["ansible.builtin.include_role"]["apply"]
-    assert fetch["vars"]["service_common_controller_host"] == "{{ docker_services_primary_manager }}"
-    assert (
-        "hostvars[docker_services_primary_manager].infisical_lookup_default_params"
-        in fetch["vars"]["service_common_infisical_lookup_params"]
-    )
-    assert "Prep - Infisical Resolver | Include tasks on deploy host\n  when:\n    - not ansible_check_mode" in DOCKER_INFISICAL_TASKER
-    assert "Prep - Infisical Secrets | Include tasks\n  when:\n    - not ansible_check_mode" in DOCKER_INFISICAL_TASKER
-    assert "Resolve common Infisical values and environment" in PODMAN_MAIN
-    assert "when: podman_services_common_action in" in PODMAN_MAIN
-    assert "Validate and retrieve Infisical values through service common" not in PODMAN_PREP
+def test_check_mode_preflight_is_common_owned_and_native_materialization_is_skipped():
+    dispatch = yaml.safe_load(GLOBAL_DISPATCH)
+    common = next(task for task in dispatch if task["name"] == "Service catalog dispatch | Run common service preflight")
+    assert common["ansible.builtin.include_tasks"]["file"] == "service_catalog_common_preflight.yml"
+    assert "service_catalog_common_context" in GLOBAL_DISPATCH
+    assert "tasks_from: infisical" in COMMON_PREFLIGHT
+    assert "tasks_from: infisical" not in DOCKER_PREP_TASKS
+    assert "tasks_from: infisical" not in PODMAN_MAIN
+    assert "not ansible_check_mode" in DOCKER_PREP_TASKS
+    assert "not ansible_check_mode" in PODMAN_MAIN
     assert "ansible_check_mode and service_common_template_item.no_log" in COMMON_TEMPLATE_TASKS
 
 
 def test_docker_validates_attachment_metadata_before_materialization():
-    validate = DOCKER_SECRET_TASKS.index("Validate runtime attachment metadata before materialization")
+    validate = DOCKER_INIT.index("Validate Docker secret attachment metadata before cleanup")
     reject_empty = DOCKER_SECRET_TASKS.index("Reject empty secret values before materialization")
     create_swarm = DOCKER_SECRET_TASKS.index("Create Docker Swarm secrets")
     write_file = DOCKER_SECRET_TASKS.index("Write secret files on deploy host")
 
-    assert validate < reject_empty < create_swarm
-    assert validate < write_file
+    assert "docker_services_secret_attachments" in DOCKER_INIT[validate:]
+    assert reject_empty < create_swarm
+    assert reject_empty < write_file
+    assert DOCKER_MAIN_TASKS.index("Init | Include tasks") < DOCKER_MAIN_TASKS.index("Prep | Include tasks")
 
 
-def test_docker_snapshots_service_declarations_before_later_compatibility_lookups():
-    snapshot = DOCKER_INFISICAL_TASKER.index("Snapshot common per-service outputs")
-    resolver = DOCKER_INFISICAL_TASKER.index("Prep - Infisical Resolver | Include tasks on deploy host")
+def test_dispatch_snapshots_common_context_before_adapter_owned_materialization():
+    dispatch_tasks = yaml.safe_load(GLOBAL_DISPATCH)
+    common_preflight = next(task for task in dispatch_tasks if task["name"] == "Service catalog dispatch | Run common service preflight")
+    docker_route = next(task for task in dispatch_tasks if task["name"] == "Service catalog dispatch | Process Docker entry")
+    podman_route = next(task for task in dispatch_tasks if task["name"] == "Service catalog dispatch | Process Podman entry")
 
-    assert snapshot < resolver
-    assert 'docker_services_infisical_values: "{{ service_common_infisical_values }}"' in DOCKER_INFISICAL_TASKER
-    assert 'docker_services_secret_declarations: "{{ service_common_secret_declarations }}"' in DOCKER_INFISICAL_TASKER
-    assert 'service_common_infisical_values: "{{ docker_services_infisical_values }}"' in DOCKER_PREP_TASKS
-    assert "docker_services_secret_declarations | default([])" in DOCKER_SECRET_TASKS
-    assert "docker_services_infisical_values | default({})" in DOCKER_SECRET_TASKS
-    assert "docker_services_secret_declarations | default([])" in DOCKER_COMPOSE_TASKS
+    assert dispatch_tasks.index(common_preflight) < dispatch_tasks.index(docker_route)
+    assert dispatch_tasks.index(common_preflight) < dispatch_tasks.index(podman_route)
+    assert 'service_catalog_common_context: "{{ service_catalog_common_context }}"' not in GLOBAL_DISPATCH
+    assert 'service_catalog_docker_common_context: "{{ service_catalog_common_context }}"' in GLOBAL_DISPATCH
+    assert 'service_catalog_podman_common_context: "{{ service_catalog_common_context }}"' in GLOBAL_DISPATCH
+    assert 'docker_services_common_values: "{{ docker_services_common_context.lookup_values }}"' in DOCKER_INIT
+    assert 'podman_services_common_values: "{{ podman_services_common_context.lookup_values }}"' in PODMAN_INIT
+    assert 'service_common_infisical_values: "{{ docker_services_common_values }}"' in DOCKER_PREP_TASKS
+    assert "docker_services_effective_secret_declarations | default([])" in DOCKER_SECRET_TASKS
+    assert "docker_services_effective_secret_values | default({})" in DOCKER_SECRET_TASKS
+    assert "docker_services_effective_secret_declarations" in DOCKER_COMPOSE_TASKS
     assert "hostvars[docker_services_primary_manager].docker_services_secret_declarations" not in DOCKER_SECRET_TASKS
     assert "hostvars[docker_services_primary_manager].docker_services_secret_declarations" not in DOCKER_COMPOSE_TASKS
 
@@ -531,27 +540,27 @@ def test_no_operational_ansible_file_references_internal_zone():
     assert offenders == []
 
 
-def test_docker_common_resolution_precedes_legacy_adapter_shared_prep_and_compose():
-    fetch = DOCKER_INFISICAL_TASKER.index("Prep - Infisical Fetch | Include tasks")
-    attach = DOCKER_INFISICAL_TASKER.index("Attach common resolved environment")
-    legacy = DOCKER_INFISICAL_TASKER.index("Prep - Infisical Resolver | Include tasks on deploy host")
-    native = DOCKER_INFISICAL_TASKER.index("Prep - Infisical Secrets | Include tasks")
-    common_prep = DOCKER_PREP_TASKS.index("Prep - Service common | Prepare files and Traefik integration")
+def test_common_resolution_precedes_adapter_cleanup_and_native_secret_materialization():
+    dispatch_preflight = GLOBAL_DISPATCH.index("Service catalog dispatch | Run common service preflight")
+    docker_route = GLOBAL_DISPATCH.index("Service catalog dispatch | Process Docker entry")
+    podman_route = GLOBAL_DISPATCH.index("Service catalog dispatch | Process Podman entry")
+    cleanup = DOCKER_PREP_TASKS.index("Prep - Cleanup | Remove existing stack")
+    native = DOCKER_PREP_TASKS.index("Prep - Secrets | Materialize Docker-native secrets")
 
-    assert fetch < attach < legacy < native
-    assert DOCKER_PREP_TASKS.index("Prep - Infisical | Include tasker") < common_prep
-    assert "docker_services_resolved_environment" in DOCKER_INFISICAL_TASKER
-    assert "service_common_resolved_environment" in DOCKER_INFISICAL_TASKER
+    assert dispatch_preflight < docker_route
+    assert dispatch_preflight < podman_route
+    assert cleanup < native
+    assert "service_common_resolved_environment" in COMMON_PREFLIGHT
+    assert "service_common_secret_declarations" in COMMON_PREFLIGHT
+    assert "service_common_infisical_values" in COMMON_PREFLIGHT
 
 
-def test_docker_legacy_placeholder_and_env_file_compatibility_remain_narrow_and_unchanged():
-    assert "__INFISICAL__:autobrr_session" in AUTOBRR
-    assert "__INFISICAL__:postgres_user" in AUTOBRR
-    assert "__INFISICAL__:postgres_pass" in AUTOBRR
-    assert "^__INFISICAL__:.+$" in DOCKER_RESOLVER_TASKS
-    assert "^__INFISICAL__:(.+)$" in DOCKER_RESOLVER_TASKS
-    assert "value_template" not in DOCKER_RESOLVER_TASKS
-    assert "value_from" not in DOCKER_RESOLVER_TASKS
+def test_autobrr_uses_canonical_environment_references_and_env_file_behavior_is_unchanged():
+    assert "__INFISICAL__:" not in AUTOBRR
+    assert "value_from:" in AUTOBRR
+    assert "infisical: autobrr_session" in AUTOBRR
+    assert "infisical: postgres_user" in AUTOBRR
+    assert "infisical: postgres_pass" in AUTOBRR
     assert "docker_services_svc.env_file" in DOCKER_ENV_FILE_TASKS
     assert "service_common" not in DOCKER_ENV_FILE_TASKS
 
@@ -566,13 +575,19 @@ def test_value_bearing_runtime_render_paths_are_no_log_and_diff_safe():
         assert include["apply"]["no_log"] is True
         assert include["apply"]["diff"] is False
 
+    common_preflight = yaml.safe_load(COMMON_PREFLIGHT)
+    resolver = next(task for task in common_preflight if "Resolve common Infisical and environment context" in task["name"])
+    snapshot = next(task for task in common_preflight if "Snapshot current-service common outputs" in task["name"])
+    assert resolver["no_log"] is True
+    assert "diff" not in resolver
+    assert resolver["ansible.builtin.include_role"]["apply"]["no_log"] is True
+    assert resolver["ansible.builtin.include_role"]["apply"]["diff"] is False
+    assert snapshot["no_log"] is True
+    assert snapshot["diff"] is False
+
     podman_main = yaml.safe_load(PODMAN_MAIN)
-    resolver = next(task for task in podman_main if "Resolve common Infisical values and environment" in task["name"])
-    attach = next(task for task in podman_main if "Attach common resolved environment" in task["name"])
     traefik = next(task for task in podman_main if "Include Traefik tasks" in task["name"])
-    assert attach["no_log"] is True
-    assert attach["diff"] is False
-    for task in (resolver, traefik):
+    for task in (traefik,):
         assert task["no_log"] is True
         assert "diff" not in task
         include = task["ansible.builtin.include_role"]
@@ -582,15 +597,13 @@ def test_value_bearing_runtime_render_paths_are_no_log_and_diff_safe():
 
 def test_required_docker_dynamic_includes_propagate_selection_tags():
     expectations = [
-        (DOCKER_MAIN_TASKS, "Prep | Include tasks", {"deploy", "update", "remove", "recreate", "bootstrap"}),
-        (DOCKER_PREP_TASKS, "Prep - Infisical | Include tasker", {"deploy", "update", "recreate", "bootstrap"}),
-        (DOCKER_INFISICAL_TASKER, "Prep - Infisical Fetch | Include tasks", {"deploy", "update", "recreate", "bootstrap"}),
         (
-            DOCKER_INFISICAL_TASKER,
-            "Prep - Infisical Resolver | Include tasks on deploy host",
-            {"deploy", "update", "recreate", "bootstrap"},
+            GLOBAL_DISPATCH,
+            "Service catalog dispatch | Run common service preflight",
+            {"deploy", "update", "remove", "recreate", "bootstrap", "drift"},
         ),
-        (DOCKER_INFISICAL_TASKER, "Prep - Infisical Secrets | Include tasks", {"deploy", "update", "recreate", "bootstrap"}),
+        (DOCKER_MAIN_TASKS, "Prep | Include tasks", {"deploy", "update", "remove", "recreate", "bootstrap"}),
+        (DOCKER_PREP_TASKS, "Prep - Secrets | Materialize Docker-native secrets", {"deploy", "update", "recreate", "bootstrap"}),
         (DOCKER_DEPLOY_ALL_TASKS, "Deploy - All | Deploy each stack", {"deploy", "update", "recreate"}),
     ]
 

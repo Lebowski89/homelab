@@ -2,20 +2,20 @@
 
 homepage:
   enabled: true
+  runtime: docker
   tags: [monitoring, homepage]
   name: homepage
   stack: homepage
+
   image: ghcr.io/gethomepage/homepage:v1.13.2
-  named_networks:
-    overlay:
-      external: true
+
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
+    PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
     UMASK: "022"
   env_file:
-    - "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/.env"
+    - "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/.env"
   infisical:
     fail_on_empty: true
     secrets_map:
@@ -88,70 +88,79 @@ homepage:
       - var: unifi_pass
         path: "/Unifi"
         name: PASS
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/images"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/images"
       state: directory
       mode: "0755"
   copies:
     - src: files/earth-rise-2.jpg
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/images/earth-rise-2.jpg"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/images/earth-rise-2.jpg"
       mode: "0755"
       force: false
       wait: true
       wait_timeout: 30
   templates:
     - src: configs/homepage/docker.yaml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/docker.yaml"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/docker.yaml"
       mode: "0664"
       force: true
     - src: configs/homepage/services.yaml.j2
       no_log: true
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/services.yaml"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/services.yaml"
       mode: "0664"
       force: true
     - src: configs/homepage/settings.yaml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/settings.yaml"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/settings.yaml"
       mode: "0664"
       force: true
+      no_log: true
     - src: configs/homepage/bookmarks.yaml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/bookmarks.yaml"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/bookmarks.yaml"
       mode: "0664"
       force: true
     - src: configs/homepage/widgets.yaml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/widgets.yaml"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/widgets.yaml"
       mode: "0664"
       force: true
     - src: configs/homepage/custom.css.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/custom.css"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/custom.css"
       mode: "0664"
       force: true
     - src: configs/homepage/homepage.env.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/.env"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/.env"
       mode: "0664"
       force: true
+      no_log: true
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage"
       target: /app/config
       read_only: false
     images:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/homepage/images"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/images"
       target: /app/public/images
       read_only: true
+
   traefik:
     enable: true
     exposure: private
     port: 3000
+
   deploy:
     type: swarm
     mode: replicated
     profile: standard
     replicas: 1
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_primary_manager

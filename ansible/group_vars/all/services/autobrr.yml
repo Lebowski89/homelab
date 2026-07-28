@@ -2,32 +2,41 @@
 
 autobrr:
   enabled: true
+  runtime: docker
   tags: [media, pgsql, autobrr]
   name: autobrr
   stack: autobrr
+
   image: ghcr.io/autobrr/autobrr:v1.80.0
-  named_networks:
-    overlay:
-      external: true
   user: >-
-    {{ hostvars[docker_services_primary_manager].docker_host_puid }}:{{ hostvars[docker_services_primary_manager].docker_host_pgid }}
+    {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
+
   environment:
     TZ: "{{ timezone }}"
     AUTOBRR__HOST: "0.0.0.0"
     AUTOBRR__PORT: "7474"
     AUTOBRR__LOG_LEVEL: "DEBUG"
     AUTOBRR__CHECK_FOR_UPDATES: "true"
-    AUTOBRR__SESSION_SECRET: "{{ autobrr_session | default('__INFISICAL__:autobrr_session', true) }}"
+    AUTOBRR__SESSION_SECRET:
+      value_from:
+        infisical: autobrr_session
     AUTOBRR__DATABASE_TYPE: "postgres"
     AUTOBRR__POSTGRES_HOST: "haproxy"
     AUTOBRR__POSTGRES_PORT: "5432"
     AUTOBRR__POSTGRES_DATABASE: "autobrr"
-    AUTOBRR__POSTGRES_USER: "{{ postgres_user | default('__INFISICAL__:postgres_user', true) }}"
-    AUTOBRR__POSTGRES_PASS: "{{ postgres_pass | default('__INFISICAL__:postgres_pass', true) }}"
+    AUTOBRR__POSTGRES_USER:
+      value_from:
+        infisical: postgres_user
+    AUTOBRR__POSTGRES_PASS:
+      value_from:
+        infisical: postgres_pass
     AUTOBRR__POSTGRES_SSLMODE: "disable"
   infisical:
     fail_on_empty: true
     secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
       - var: autobrr_session
         path: "/AutoBrr"
         name: SESSION_SECRET
@@ -37,29 +46,36 @@ autobrr:
       - var: postgres_pass
         path: "/Postgres"
         name: PASS
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/autobrr"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/autobrr"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/autobrr"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/autobrr"
       target: /config
       read_only: false
-  postgres:
-    enable: true
-    databases:
-      - autobrr
+
   traefik:
     enable: true
     exposure: private
     port: 7474
+  postgres:
+    enable: true
+    databases:
+      - autobrr
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_primary_manager

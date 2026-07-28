@@ -382,7 +382,7 @@
   vars:
     secrets: "{{ docker_services_svc.secrets | default([]) }}"
     secret_declarations: >-
-      {{ docker_services_secret_declarations | default([]) }}
+      {{ docker_services_effective_secret_declarations | default(docker_services_secret_declarations) }}
   tags: [deploy, update, recreate]
 
 ################################

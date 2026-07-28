@@ -1,3 +1,11 @@
+"""Build and select legacy Docker service catalog metadata for Ansible.
+
+The filters in this module support the Docker adapter's compatibility path.
+They expand Docker service definitions into lightweight base-or-target
+selection records and select records by Ansible run tags and enabled state.
+They do not merge full target configurations or mutate service declarations.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
@@ -59,6 +67,31 @@ def _unique(values: list[Any]) -> list[Any]:
 
 
 def docker_services_effective(services: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Expand Docker service definitions into lightweight selection records.
+
+    A missing runtime defaults to Docker; services whose normalized ``runtime``
+    is not ``docker`` are skipped. A service without ``targets`` produces one
+    record. A service with targets produces one record per target, combining
+    base and target tags and requiring both enabled states for the resulting
+    record to be enabled. Tag duplicates are removed while preserving their
+    first occurrence.
+
+    Args:
+        services: Mapping of service names to service definition mappings.
+
+    Returns:
+        Ordered records containing ``name``, ``tags``, and ``enabled`` plus
+        ``target`` for target-based services. No full service configuration is
+        embedded in a record.
+
+    Raises:
+        AnsibleFilterError: If the catalog, a service definition, ``targets``,
+            a target definition, an enabled value, or a tag value has an
+            unsupported shape or value.
+
+    Note:
+        The input mappings are not mutated.
+    """
     if not isinstance(services, Mapping):
         raise AnsibleFilterError(f"services must be a mapping, got {type(services).__name__}")
 
@@ -132,6 +165,31 @@ def docker_services_select(
     run_all: bool = False,
     allow_disabled: bool = False,
 ) -> dict[str, Any]:
+    """Select effective Docker records by name, tag, and enabled state.
+
+    With ``run_all`` false, an empty ``run_tags`` value matches every record;
+    otherwise a record matches when its service name or any of its tags was
+    requested. Disabled matches are omitted unless ``allow_disabled`` is true.
+
+    Args:
+        items: Effective Docker selection records in desired processing order.
+        run_tags: Optional service names or tags to match.
+        run_all: Boolean-like value that bypasses name and tag filtering.
+        allow_disabled: Boolean-like value that retains disabled matches.
+
+    Returns:
+        A mapping with ``matched`` records before enabled-state filtering,
+        ``selected`` records after that filtering, and ``disabled_only`` set
+        when matches existed but none were selectable. The returned lists
+        reference the original item mappings.
+
+    Raises:
+        AnsibleFilterError: If an item is not a mapping or a tag or boolean-like
+            input cannot be normalized.
+
+    Note:
+        Neither ``items`` nor its member mappings are mutated.
+    """
     run_tags_set = set(_as_list(run_tags or [], name="run_tags"))
     run_all_bool = _as_bool(run_all, name="run_all", default=False)
     allow_disabled_bool = _as_bool(allow_disabled, name="allow_disabled", default=False)
@@ -170,7 +228,15 @@ def docker_services_select(
 
 
 class FilterModule:
+    """Register Docker compatibility catalog filters with Ansible."""
+
     def filters(self) -> dict[str, Any]:
+        """Return the Jinja filters exposed by this plugin.
+
+        Returns:
+            A mapping exposing ``docker_services_effective`` for catalog
+            expansion and ``docker_services_select`` for run selection.
+        """
         return {
             "docker_services_effective": docker_services_effective,
             "docker_services_select": docker_services_select,

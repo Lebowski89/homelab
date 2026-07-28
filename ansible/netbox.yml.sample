@@ -27,6 +27,15 @@ compose:
   ansible_port: custom_fields['ssh_port'] | default('22', true)
   local_ip: primary_ip4.address | regex_replace('/.*', '')
 
+  container_host_puid: >-
+    custom_fields['container_host_puid'] | default(custom_fields['docker_host_puid'], true) | default(omit, true)
+  container_host_pgid: >-
+    custom_fields['container_host_pgid'] | default(custom_fields['docker_host_pgid'], true) | default(omit, true)
+  container_host_appdata_root: >-
+    custom_fields['container_host_appdata_root'] | default(custom_fields['docker_host_appdata_root'], true) | default(omit, true)
+  container_host_data_root: >-
+    custom_fields['container_host_data_root'] | default(custom_fields['docker_host_data_root'], true) | default(omit, true)
+
   docker_host_puid: custom_fields['docker_host_puid'] | default(omit, true)
   docker_host_pgid: custom_fields['docker_host_pgid'] | default(omit, true)
   docker_host_appdata_root: custom_fields['docker_host_appdata_root'] | default(omit, true)

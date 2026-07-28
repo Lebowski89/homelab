@@ -1,0 +1,71 @@
+---
+
+- name: Application prepare validation | Validate explicit context
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context is mapping
+      - service_prepare_context.service_name is string
+      - service_prepare_context.service_name | trim | length > 0
+      - service_prepare_context.runtime in ['docker', 'podman']
+      - service_prepare_context.operation in ['deploy', 'update', 'remove', 'recreate', 'bootstrap', 'drift']
+      - service_prepare_context.service is mapping
+      - service_prepare_context.resolved_environment is mapping
+      - service_prepare_context.lookup_values is mapping
+      - service_prepare_context.secret_declarations is sequence
+      - service_prepare_context.secret_declarations is not string
+      - service_prepare_context.controller_host is string
+      - service_prepare_context.controller_host | trim | length > 0
+      - service_prepare_context.controller_host in hostvars
+      - service_prepare_context.filesystem_hosts is sequence
+      - service_prepare_context.filesystem_hosts is not string
+      - service_prepare_context.host_defaults is mapping
+    fail_msg: "Application preparation requires an explicit runtime-neutral current-service context."
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Application prepare validation | Reset current-service outputs
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_template_vars: {}
+    service_prepare_generated_secret_values: {}
+    service_prepare_generated_secret_declarations: []
+    service_prepare_bootstrap_requests: {}
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Application prepare validation | Normalize handler declaration
+  ansible.builtin.set_fact:
+    service_prepare_handler: >-
+      {{ (service_prepare_context.service.application_prepare | default({})).handler | default('') | string | trim }}
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Application prepare validation | Validate handler declaration
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context.service.application_prepare | default({}) is mapping
+      - service_prepare_handler in ['', 'authelia', 'qbittorrent', 'plex', 'bazarr', 'nzbhydra2', 'vaultwarden']
+    fail_msg: >-
+      application_prepare must be a mapping with a supported handler for
+      {{ service_prepare_context.service_name }}.
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Application prepare validation | Reject remaining Docker-only Plex bootstrap on Podman
+  when:
+    - service_prepare_context.runtime == 'podman'
+    - service_prepare_handler == 'plex'
+  ansible.builtin.fail:
+    msg: >-
+      Application preparation handler 'plex' still has an explicit Docker-only
+      bootstrap boundary and cannot be selected with runtime: podman.
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Application prepare validation | Include handler validation
+  when:
+    - service_prepare_handler | length > 0
+    - service_prepare_context.operation not in ['remove', 'drift']
+  ansible.builtin.include_tasks:
+    file: "applications/{{ service_prepare_handler }}/validate.yml"
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+  tags: [deploy, update, remove, recreate, bootstrap, drift]

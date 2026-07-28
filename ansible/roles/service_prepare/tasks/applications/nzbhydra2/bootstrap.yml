@@ -1,0 +1,39 @@
+---
+
+- name: NZBHydra2 prepare | Build selected-runtime initial configuration request
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_temporary_container:
+      name: >-
+        {{
+          service_prepare_context.service_name
+          | service_prepare_temporary_name(
+              service_prepare_context.target | default(''),
+              'initial-config'
+            )
+        }}
+      image: "{{ service_prepare_context.service.image }}"
+      host: "{{ service_prepare_nzbhydra2_fs_host }}"
+      environment:
+        PUID: "{{ service_prepare_context.resolved_environment.get('PUID', '1000') | string }}"
+        PGID: "{{ service_prepare_context.resolved_environment.get('PGID', '1000') | string }}"
+        TZ: "{{ service_prepare_context.resolved_environment.get('TZ', 'UTC') }}"
+        UMASK: "{{ service_prepare_context.resolved_environment.get('UMASK', '027') | string }}"
+      mounts:
+        - "{{ service_prepare_nzbhydra2_config_dir }}:/config"
+      detach: true
+      capture_output: false
+      wait_path: "{{ service_prepare_nzbhydra2_config_path }}"
+      stabilization_seconds: 0
+      wait_for_stable_file: true
+
+- name: NZBHydra2 prepare | Run selected-runtime initial configuration generator
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: ../../runtimes/temporary_container.yml
+    apply:
+      tags: [deploy, update, recreate]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate]

@@ -2,17 +2,17 @@
 
 unpackerr:
   enabled: true
+  runtime: docker
   tags: [torrents, unpackerr]
   name: unpackerr
   stack: unpackerr
+
   image: ghcr.io/hotio/unpackerr:release-v0.15.2
-  named_networks:
-    overlay:
-      external: true
+
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
+    PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_storage_host].container_host_pgid }}"
     UMASK: "022"
     UN_WEBSERVER_METRICS: "true"
     UN_WEBSERVER_UPSTREAMS: "172.98.0.0/24"
@@ -47,50 +47,55 @@ unpackerr:
       - var: unpackerr_notifiarr_webhook
         path: "/Unpackerr"
         name: NOTIFIARR_WEBHOOK
-        docker_secret: unpackerr_webhook_secret
+        secret:
+          name: unpackerr_webhook_secret
       - var: lidarr_api
         path: "/Lidarr"
         name: API
-        docker_secret: lidarr_api_secret
+        secret:
+          name: lidarr_api_secret
       - var: radarr_api
         path: "/Radarr"
         name: API
-        docker_secret: radarr_api_secret
+        secret:
+          name: radarr_api_secret
       - var: radarr_4k_api
         path: "/Radarr-4K"
         name: API
-        docker_secret: radarr_4k_api_secret
+        secret:
+          name: radarr_4k_api_secret
       - var: sonarr_api
         path: "/Sonarr"
         name: API
-        docker_secret: sonarr_api_secret
+        secret:
+          name: sonarr_api_secret
       - var: sonarr_4k_api
         path: "/Sonarr-4K"
         name: API
-        docker_secret: sonarr_4k_api_secret
+        secret:
+          name: sonarr_4k_api_secret
       - var: whisparr_api
         path: "/Whisparr"
         name: API
-        docker_secret: whisparr_api_secret
-  secrets:
-    - lidarr_api_secret
-    - radarr_api_secret
-    - radarr_4k_api_secret
-    - sonarr_api_secret
-    - sonarr_4k_api_secret
-    - whisparr_api_secret
-    - unpackerr_webhook_secret
+        secret:
+          name: whisparr_api_secret
+
+  named_networks:
+    overlay:
+      external: true
+
   volumes:
     media:
       type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}"
+      source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_unraid_host }}"
+    host: "{{ services_storage_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_unraid_host

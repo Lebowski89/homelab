@@ -1,0 +1,58 @@
+---
+
+- name: Docker temporary preparation | Remove stale container
+  when: not ansible_check_mode
+  community.docker.docker_container:
+    name: "{{ service_prepare_temporary_container.name }}"
+    state: absent
+    container_default_behavior: compatibility
+    stop_timeout: 10
+  register: service_prepare_temporary_stale_remove
+  retries: 5
+  delay: 5
+  until: service_prepare_temporary_stale_remove is succeeded
+  delegate_to: "{{ service_prepare_temporary_container.host }}"
+
+- name: Docker temporary preparation | Verify stale container is absent
+  when: not ansible_check_mode
+  community.docker.docker_container_info:
+    name: "{{ service_prepare_temporary_container.name }}"
+  register: service_prepare_temporary_stale_absence
+  retries: 5
+  delay: 5
+  until:
+    - service_prepare_temporary_stale_absence is succeeded
+    - not (service_prepare_temporary_stale_absence.exists | default(true))
+  failed_when: >-
+    service_prepare_temporary_stale_absence is failed
+    or service_prepare_temporary_stale_absence.exists | default(true)
+  changed_when: false
+  delegate_to: "{{ service_prepare_temporary_container.host }}"
+
+- name: Docker temporary preparation | Start container
+  when: not ansible_check_mode
+  community.docker.docker_container:
+    name: "{{ service_prepare_temporary_container.name }}"
+    image: "{{ service_prepare_temporary_container.image }}"
+    pull: true
+    state: started
+    container_default_behavior: compatibility
+    entrypoint: "{{ service_prepare_temporary_container.entrypoint | default(omit) }}"
+    command: "{{ service_prepare_temporary_container.command | default(omit) }}"
+    detach: "{{ service_prepare_temporary_container.detach | default(true) }}"
+    cleanup: false
+    env: "{{ service_prepare_temporary_container.environment | default({}) }}"
+    volumes: "{{ service_prepare_temporary_container.mounts | default([]) }}"
+    restart_policy: "no"
+  register: service_prepare_temporary_container_result
+  delegate_to: "{{ service_prepare_temporary_container.host }}"
+
+- name: Docker temporary preparation | Publish foreground output
+  when:
+    - not ansible_check_mode
+    - service_prepare_temporary_container.capture_output | default(false) | bool
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_temporary_container_output: >-
+      {{ service_prepare_temporary_container_result.container.Output | default('') }}

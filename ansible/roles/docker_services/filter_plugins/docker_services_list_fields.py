@@ -1,3 +1,10 @@
+"""Normalize and update Docker Compose string-list fields for Ansible.
+
+The Docker role uses these filters for capabilities and similar string lists,
+for the container-only no-new-privileges security option, and for immutable
+updates to individual fields in accumulated Compose service mappings.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
@@ -47,6 +54,22 @@ def docker_services_no_new_privileges_security_opts(
     value: Any,
     stack_deploy_type: Any = "swarm",
 ) -> list[str]:
+    """Translate the canonical no-new-privileges flag into Compose syntax.
+
+    Args:
+        value: Strict boolean-like flag. Booleans, integer zero/one, and common
+            true/false strings are accepted.
+        stack_deploy_type: ``container`` or ``swarm``; missing values default to
+            ``swarm``.
+
+    Returns:
+        ``["no-new-privileges:true"]`` when enabled for a container deploy, or
+        an empty list when disabled.
+
+    Raises:
+        AnsibleFilterError: If the flag or deploy type is invalid, or if the
+            option is enabled for an unsupported Swarm deployment.
+    """
     deploy_type = _as_str(stack_deploy_type or "swarm")
     if deploy_type not in _VALID_STACK_DEPLOY_TYPES:
         raise AnsibleFilterError(f"stack_deploy_type must be one of {sorted(_VALID_STACK_DEPLOY_TYPES)}, got {deploy_type!r}.")
@@ -59,16 +82,18 @@ def docker_services_no_new_privileges_security_opts(
 
 
 def docker_services_string_list(value: Any = None) -> list[str]:
-    """
-    Normalize common compose list fields to list[str].
+    """Normalize a Compose string-list field and remove empty values.
 
-    Supported input:
-    - None -> []
-    - string -> [trimmed string], unless empty
-    - mapping -> list of trimmed mapping values
-    - iterable -> list of trimmed items
+    Args:
+        value: ``None``, a string, a mapping whose values are items, an iterable,
+            or a scalar treated as one item.
 
-    Empty values are removed.
+    Returns:
+        Trimmed string representations in input order. An empty or absent value
+        produces an empty list.
+
+    Note:
+        The input is not mutated.
     """
 
     if value is None:
@@ -93,13 +118,22 @@ def docker_services_merge_string_list(
     new: Any = None,
     action: Any = "append",
 ) -> list[str]:
-    """
-    Merge common compose string-list fields.
+    """Merge two normalized Compose string lists.
 
-    Actions:
-    - append: existing + new
-    - replace: new
-    - append_unique: existing + new, keeping first occurrence
+    Args:
+        existing: Existing string-list declaration.
+        new: New string-list declaration.
+        action: ``append``, ``replace``, or ``append_unique``. The unique mode
+            preserves the first occurrence across existing then new items.
+
+    Returns:
+        A newly allocated normalized list following the selected policy.
+
+    Raises:
+        AnsibleFilterError: If ``action`` is unsupported.
+
+    Note:
+        Input declarations are not mutated.
     """
 
     merge_action = _normalize_action(action)
@@ -132,14 +166,24 @@ def docker_services_set_service_field(
     field_name: Any,
     value: Any,
 ) -> dict[str, Any]:
-    """
-    Return docker_services_compose_services with one service field updated.
+    """Return a copied Compose service mapping with one field updated.
 
-    This mirrors the repeated Ansible combine pattern:
+    Args:
+        compose_services: Accumulated mapping of Compose service names. ``None``
+            is treated as an empty mapping.
+        service_name: Required service key after string conversion and trimming.
+        field_name: Required field key after string conversion and trimming.
+        value: Value to deep-copy into the selected service field.
 
-    docker_services_compose_services[service_name][field_name] = value
+    Returns:
+        A deep-copied top-level mapping preserving other services and fields.
 
-    Existing service keys are preserved.
+    Raises:
+        AnsibleFilterError: If the top-level or selected service value is not a
+            mapping, or either requested name is empty.
+
+    Note:
+        ``compose_services`` and ``value`` are not mutated.
     """
 
     if compose_services is None:
@@ -174,7 +218,17 @@ def docker_services_set_service_field(
 
 
 class FilterModule:
+    """Register Docker string-list and service-field filters with Ansible."""
+
     def filters(self) -> dict[str, Any]:
+        """Return all Jinja filters exposed by this plugin.
+
+        Returns:
+            A mapping exposing ``docker_services_string_list``,
+            ``docker_services_merge_string_list``,
+            ``docker_services_no_new_privileges_security_opts``, and
+            ``docker_services_set_service_field``.
+        """
         return {
             "docker_services_string_list": docker_services_string_list,
             "docker_services_merge_string_list": docker_services_merge_string_list,

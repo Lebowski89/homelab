@@ -1,0 +1,30 @@
+---
+
+- name: Docker temporary preparation | Remove container
+  when: not ansible_check_mode
+  community.docker.docker_container:
+    name: "{{ service_prepare_temporary_container.name }}"
+    state: absent
+    container_default_behavior: compatibility
+    stop_timeout: 10
+  register: service_prepare_temporary_remove
+  retries: 5
+  delay: 5
+  until: service_prepare_temporary_remove is succeeded
+  delegate_to: "{{ service_prepare_temporary_container.host }}"
+
+- name: Docker temporary preparation | Verify container is absent
+  when: not ansible_check_mode
+  community.docker.docker_container_info:
+    name: "{{ service_prepare_temporary_container.name }}"
+  register: service_prepare_temporary_absence
+  retries: 5
+  delay: 5
+  until:
+    - service_prepare_temporary_absence is succeeded
+    - not (service_prepare_temporary_absence.exists | default(true))
+  failed_when: >-
+    service_prepare_temporary_absence is failed
+    or service_prepare_temporary_absence.exists | default(true)
+  changed_when: false
+  delegate_to: "{{ service_prepare_temporary_container.host }}"

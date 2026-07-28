@@ -33,9 +33,9 @@ netbox_compose_path: "{{ netbox_base_path }}/{{ netbox_compose_file }}"
 
 netbox_image: lscr.io/linuxserver/netbox:v4.6.0-ls351
 netbox_timezone: "{{ timezone | default('Australia/Melbourne') }}"
-netbox_puid: "{{ docker_host_puid | default('1000') }}"
-netbox_pgid: "{{ docker_host_pgid | default('1000') }}"
-netbox_base_path: "{{ docker_host_appdata_root | default('/opt') }}/netbox"
+netbox_puid: "{{ container_host_puid | default('1000') }}"
+netbox_pgid: "{{ container_host_pgid | default('1000') }}"
+netbox_base_path: "{{ container_host_appdata_root | default('/opt') }}/netbox"
 
 netbox_frontend_fqdn: "{{ netbox_name }}.int.{{ netbox_domain }}"
 netbox_frontend_address: "https://{{ netbox_frontend_fqdn }}:8443"
@@ -63,8 +63,8 @@ netbox_restart_policy:
 
 netbox_redis_name: netbox-redis
 netbox_redis_image: valkey/valkey:9.1-alpine
-netbox_redis_puid: "{{ docker_host_puid | default('1000') }}"
-netbox_redis_pgid: "{{ docker_host_pgid | default('1000') }}"
+netbox_redis_puid: "{{ container_host_puid | default('1000') }}"
+netbox_redis_pgid: "{{ container_host_pgid | default('1000') }}"
 netbox_redis_path: "{{ netbox_base_path }}/redis"
 
 ################################

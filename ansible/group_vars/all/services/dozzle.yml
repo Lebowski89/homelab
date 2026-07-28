@@ -2,32 +2,45 @@
 
 dozzle:
   enabled: true
+  runtime: docker
   tags: [monitoring, dozzle]
   name: dozzle
   stack: dozzle
+
   image: amir20/dozzle:v10.6.7
-  named_networks:
-    overlay:
-      external: true
+
   environment:
     TZ: "{{ timezone }}"
     DOZZLE_MODE: "swarm"
     DOZZLE_NO_ANALYTICS: "true"
     DOZZLE_ENABLE_ACTIONS: "false"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
+
+  named_networks:
+    overlay:
+      external: true
+
   volumes:
     docker_sock:
       type: bind
       source: /var/run/docker.sock
       target: /var/run/docker.sock
       read_only: true
+
   traefik:
     enable: true
     exposure: private
     port: 8080
+
   deploy:
     type: swarm
     mode: global
     profile: careful
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
       - node.labels.haproxy == true

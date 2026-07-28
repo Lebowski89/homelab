@@ -1,0 +1,16 @@
+---
+
+- name: Plex prepare | Validate explicit bootstrap declaration
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context.runtime == 'docker'
+      - service_prepare_context.service.application_prepare.bootstrap | default({}) is mapping
+      - service_prepare_context.service.application_prepare.bootstrap.enabled is boolean
+      - service_prepare_context.filesystem_hosts | length > 0
+      - service_prepare_context.service.named_volumes.media_nfs | default({}) is mapping
+      - not (service_prepare_context.service.named_volumes.media_nfs.external | default(true) | bool)
+      - service_prepare_context.service.named_volumes.media_nfs.driver | default('') == 'local'
+      - service_prepare_context.service.named_volumes.media_nfs.driver_opts | default({}) is mapping
+    fail_msg: >-
+      Plex requires a strict bootstrap declaration and a canonical managed media_nfs volume.
+  tags: [deploy, update, remove, recreate, bootstrap, drift]

@@ -2,28 +2,27 @@
 
 alloy:
   enabled: true
+  runtime: docker
   tags: [monitoring, alloy]
   name: alloy
   stack: alloy
+
   image: grafana/alloy:v1.17.1
-  named_networks:
-    overlay:
-      external: true
+  user: "0"
   command:
     - "run"
     - "--server.http.listen-addr=0.0.0.0:12345"
     - "--storage.path=/etc/alloy/data"
     - "/etc/alloy/config.alloy"
+
   environment:
     TZ: "{{ timezone }}"
-  user: "0"
-  paths:
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/alloy"
-      state: directory
-      mode: "0755"
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/alloy/data"
-      state: directory
-      mode: "0755"
+  infisical:
+    fail_on_empty: true
+    secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
   swarm_configs:
     - name: alloy_config
       src: files/alloy_config.alloy
@@ -32,10 +31,22 @@ alloy:
     - source: alloy_config
       target: /etc/alloy/config.alloy
       mode: "0644"
+
+  named_networks:
+    overlay:
+      external: true
+
+  paths:
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/alloy"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/alloy/data"
+      state: directory
+      mode: "0755"
   volumes:
     data:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/alloy/data"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/alloy/data"
       target: /etc/alloy/data
       read_only: false
     docker_sock:
@@ -63,15 +74,17 @@ alloy:
       source: /var/lib/docker
       target: /var/lib/docker
       read_only: true
+
   traefik:
     enable: true
     exposure: private
     port: 12345
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: careful
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_primary_manager

@@ -1,3 +1,10 @@
+"""Normalize and merge Docker Compose port declarations for Ansible.
+
+The Docker role uses these filters to accept named mappings, lists, and legacy
+single-port fields, then render deploy-type-appropriate long-syntax Compose
+ports with explicit append, replace, or de-duplication behavior.
+"""
+
 from __future__ import annotations
 
 import ipaddress
@@ -166,6 +173,34 @@ def docker_services_canonical_ports(
     ports_protocol: Any = "tcp",
     ports_mode: Any = "ingress",
 ) -> list[dict[str, Any]]:
+    """Normalize new port declarations into Compose long syntax.
+
+    ``ports`` takes precedence over ``ports_list``; when both are absent, the
+    legacy container/host/protocol/mode arguments create one declaration.
+    Named mappings contribute their values in mapping order. Swarm ports include
+    ``mode`` and reject ``host_ip``; container ports omit mode and validate an
+    optional IPv4 ``host_ip``.
+
+    Args:
+        ports: Preferred list or named mapping of port dictionaries.
+        ports_list: Legacy list or named mapping fallback.
+        stack_deploy_type: ``swarm`` or ``container``.
+        ports_container: Legacy target-port value.
+        ports_host: Legacy published-port value.
+        ports_protocol: Legacy protocol, ``tcp`` or ``udp``.
+        ports_mode: Legacy Swarm publication mode.
+
+    Returns:
+        Newly allocated normalized port dictionaries in declaration order.
+
+    Raises:
+        AnsibleFilterError: If collection shapes, deploy type, required ports,
+            integer values, protocol, or host address are invalid, or if
+            ``host_ip`` is used for Swarm.
+
+    Note:
+        Input declarations are not mutated.
+    """
     deploy_type = _normalize_stack_deploy_type(stack_deploy_type)
 
     raw_ports = _raw_new_ports(
@@ -236,6 +271,34 @@ def docker_services_merge_ports(
     ports_protocol: Any = "tcp",
     ports_mode: Any = "ingress",
 ) -> list[dict[str, Any]]:
+    """Merge existing and newly normalized Compose ports.
+
+    Existing entries that are not mapping-based long-syntax ports with target
+    and published values are ignored during canonicalization. ``append_unique``
+    de-duplicates by published port, target port, protocol, mode, and host IP,
+    preserving the first occurrence.
+
+    Args:
+        existing: Existing list or named mapping of port dictionaries.
+        ports: Preferred new list or named mapping.
+        ports_list: Legacy new-list fallback.
+        action: ``append``, ``replace``, or ``append_unique``.
+        stack_deploy_type: ``swarm`` or ``container``.
+        ports_container: Legacy target-port value.
+        ports_host: Legacy published-port value.
+        ports_protocol: Legacy protocol value.
+        ports_mode: Legacy Swarm publication mode.
+
+    Returns:
+        A new list following the requested merge policy.
+
+    Raises:
+        AnsibleFilterError: If action or any new/existing canonical port value is
+            invalid according to the selected deploy type.
+
+    Note:
+        Existing and new declarations are not mutated.
+    """
     deploy_type = _normalize_stack_deploy_type(stack_deploy_type)
     merge_action = _normalize_action(action)
 
@@ -276,7 +339,15 @@ def docker_services_merge_ports(
 
 
 class FilterModule:
+    """Register Docker port filters with Ansible."""
+
     def filters(self) -> dict[str, Any]:
+        """Return the Jinja filters exposed by this plugin.
+
+        Returns:
+            A mapping exposing ``docker_services_canonical_ports`` and
+            ``docker_services_merge_ports``.
+        """
         return {
             "docker_services_canonical_ports": docker_services_canonical_ports,
             "docker_services_merge_ports": docker_services_merge_ports,

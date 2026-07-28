@@ -1,0 +1,15 @@
+---
+
+- name: Vaultwarden prepare | Validate persistent token contract
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context.filesystem_hosts | length > 0
+      - service_prepare_context.service.paths_vault | default({}) is mapping
+      - service_prepare_context.service.paths_vault.vault_dir | default('') | string | trim | length > 0
+      - service_prepare_context.service.paths_vault.vault_token_file | default('') | string | trim | length > 0
+      - service_prepare_context.service.paths_vault.vault_pass_file | default('') | string | trim | length > 0
+      - service_prepare_context.service.paths_vault.vault_secret_name | default('') | string | trim | length > 0
+    fail_msg: "Vaultwarden persistent token paths and secret name must be explicitly declared."
+  tags: [deploy, update, remove, recreate, bootstrap, drift]

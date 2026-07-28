@@ -1,3 +1,10 @@
+"""Normalize named Docker Compose stack resources for Ansible tasks.
+
+The Docker role uses these filters to convert compact network and volume
+declarations into Compose mappings and to immutably accumulate those resources
+under a selected stack without replacing unrelated stack content.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
@@ -49,25 +56,26 @@ def docker_services_normalize_stack_resources(
     *,
     default_external: bool = True,
 ) -> dict[str, dict[str, Any]]:
-    """
-    Normalize stack-level named networks/volumes into compose resource mappings.
+    """Normalize named network or volume declarations into Compose mappings.
 
-    Supported input:
-    - mapping:
-        app_net:
-          external: true
+    Mapping definitions are copied, while non-mapping definitions and iterable
+    name entries become definitions containing only the configured default for
+    ``external``. Existing explicit ``external`` values are retained and empty
+    resource names are ignored.
 
-    - list:
-        - app_net
-        - shared_net
+    Args:
+        value: Mapping of names to definitions or iterable of resource names.
+        default_external: Value assigned when a definition omits ``external``.
 
-    List input becomes:
-        app_net:
-          external: true
+    Returns:
+        A new mapping from normalized non-empty names to resource definitions.
 
-    Mapping entries without 'external' get external=true by default.
-    Non-mapping mapping values become {'external': true}.
-    Empty names are ignored.
+    Raises:
+        AnsibleFilterError: If the value is absent, a bare string, or neither a
+            mapping nor an iterable.
+
+    Note:
+        The input declaration is not mutated.
     """
 
     if value is None:
@@ -118,13 +126,26 @@ def docker_services_merge_stack_resources(
     *,
     default_external: bool = True,
 ) -> dict[str, Any]:
-    """
-    Merge named stack networks/volumes into docker_services_compose_stacks.
+    """Merge normalized networks or volumes into one accumulated stack.
 
-    Equivalent to:
+    Args:
+        compose_stacks: Existing stack mapping; ``None`` is treated as empty.
+        stack_name: Required stack key after string conversion and trimming.
+        resource_type: Either ``networks`` or ``volumes``.
+        resources: Resource declarations accepted by
+            ``docker_services_normalize_stack_resources``.
+        default_external: Default passed to resource normalization.
 
-    compose_stacks[stack_name][resource_type] =
-      existing_resources recursive-merged with normalized resources
+    Returns:
+        A deep-copied stack mapping with new definitions recursively overriding
+        matching existing resource fields.
+
+    Raises:
+        AnsibleFilterError: If names, resource type, declarations, or existing
+            stack/resource values have invalid shapes.
+
+    Note:
+        The accumulated stack and resource inputs are not mutated.
     """
 
     if compose_stacks is None:
@@ -175,7 +196,15 @@ def docker_services_merge_stack_resources(
 
 
 class FilterModule:
+    """Register Docker stack-resource filters with Ansible."""
+
     def filters(self) -> dict[str, Any]:
+        """Return the Jinja filters exposed by this plugin.
+
+        Returns:
+            A mapping exposing ``docker_services_normalize_stack_resources``
+            and ``docker_services_merge_stack_resources``.
+        """
         return {
             "docker_services_normalize_stack_resources": docker_services_normalize_stack_resources,
             "docker_services_merge_stack_resources": docker_services_merge_stack_resources,

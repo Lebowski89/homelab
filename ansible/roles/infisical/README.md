@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/21 |
+| Readme update        | 2026/07/29 |
 
 
 
@@ -47,10 +47,10 @@
 | [infisical_compose_path](defaults/main.yml#L34)   | str | `{{ infisical_base_path }}/{{ infisical_compose_file }}` |    
 | [infisical_image](defaults/main.yml#L36)   | str | `docker.io/infisical/infisical:v0.162.9` |    
 | [infisical_timezone](defaults/main.yml#L37)   | str | `{{ timezone ¦ default('Australia/Melbourne') }}` |    
-| [infisical_puid](defaults/main.yml#L38)   | str | `{{ docker_host_puid ¦ default('1000') }}` |    
-| [infisical_pgid](defaults/main.yml#L39)   | str | `{{ docker_host_pgid ¦ default('1000') }}` |    
+| [infisical_puid](defaults/main.yml#L38)   | str | `{{ container_host_puid ¦ default('1000') }}` |    
+| [infisical_pgid](defaults/main.yml#L39)   | str | `{{ container_host_pgid ¦ default('1000') }}` |    
 | [infisical_port](defaults/main.yml#L40)   | int | `8066` |    
-| [infisical_base_path](defaults/main.yml#L41)   | str | `{{ docker_host_appdata_root ¦ default('/opt') }}/infisical` |    
+| [infisical_base_path](defaults/main.yml#L41)   | str | `{{ container_host_appdata_root ¦ default('/opt') }}/infisical` |    
 | [infisical_env_path](defaults/main.yml#L42)   | str | `{{ infisical_base_path }}/.env` |    
 | [infisical_smtp_host](defaults/main.yml#L44)   | str | `smtp.porkbun.com` |    
 | [infisical_smtp_port](defaults/main.yml#L45)   | int | `587` |    
@@ -67,8 +67,8 @@
 | [infisical_restart_policy](defaults/main.yml#L60)   | str | `unless-stopped` |    
 | [infisical_redis_name](defaults/main.yml#L66)   | str | `infisical-redis` |    
 | [infisical_redis_image](defaults/main.yml#L67)   | str | `valkey/valkey:9.1-alpine` |    
-| [infisical_redis_puid](defaults/main.yml#L68)   | str | `{{ docker_host_puid ¦ default('1000') }}` |    
-| [infisical_redis_pgid](defaults/main.yml#L69)   | str | `{{ docker_host_pgid ¦ default('1000') }}` |    
+| [infisical_redis_puid](defaults/main.yml#L68)   | str | `{{ container_host_puid ¦ default('1000') }}` |    
+| [infisical_redis_pgid](defaults/main.yml#L69)   | str | `{{ container_host_pgid ¦ default('1000') }}` |    
 | [infisical_redis_path](defaults/main.yml#L70)   | str | `{{ infisical_base_path }}/redis` |    
 | [infisical_postgres_name](defaults/main.yml#L78)   | str | `haproxy` |    
 | [infisical_postgres_port](defaults/main.yml#L79)   | int | `5432` |    

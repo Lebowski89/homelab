@@ -2,67 +2,72 @@
 
 crowdsec:
   enabled: true
+  runtime: docker
   tags: [proxy, crowdsec]
   name: crowdsec
   stack: crowdsec
+
   image: crowdsecurity/crowdsec:v1.7.8
-  named_networks:
-    overlay:
-      external: true
+  user: "0:0"
+
   environment:
     TZ: "{{ timezone }}"
     COLLECTIONS: "crowdsecurity/linux crowdsecurity/traefik LePresidente/authelia"
-    GID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
-  user: "0:0"
+    GID: "{{ hostvars[services_controller_host].container_host_pgid }}"
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/crowdsec"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/data"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/crowdsec/data"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/crowdsec/config"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config/acquis.d"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/crowdsec/config/acquis.d"
       state: directory
       mode: "0755"
-    - path: "{{ docker_services_log_root }}"
-      state: directory
-      owner: "0"
-      group: "0"
-      mode: "0755"
-    - path: "{{ docker_services_log_root }}/traefik"
+    - path: "{{ services_log_root }}"
       state: directory
       owner: "0"
       group: "0"
       mode: "0755"
-    - path: "{{ docker_services_log_root }}/authelia"
+    - path: "{{ services_log_root }}/traefik"
+      state: directory
+      owner: "0"
+      group: "0"
+      mode: "0755"
+    - path: "{{ services_log_root }}/authelia"
       state: directory
       owner: "0"
       group: "0"
       mode: "0755"
   templates:
     - src: configs/crowdsec/acquis.yaml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config/acquis.yaml"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/crowdsec/config/acquis.yaml"
       owner: "0"
       group: "0"
       mode: "0644"
       force: true
     - src: configs/crowdsec/acquis.d/syslog.yaml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config/acquis.d/syslog.yaml"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/crowdsec/config/acquis.d/syslog.yaml"
       owner: "0"
       group: "0"
       mode: "0644"
       force: true
     - src: configs/crowdsec/acquis.d/traefik.yaml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config/acquis.d/traefik.yaml"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/crowdsec/config/acquis.d/traefik.yaml"
       owner: "0"
       group: "0"
       mode: "0644"
       force: true
     - src: configs/crowdsec/acquis.d/authelia.yaml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config/acquis.d/authelia.yaml"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/crowdsec/config/acquis.d/authelia.yaml"
       owner: "0"
       group: "0"
       mode: "0644"
@@ -70,12 +75,12 @@ crowdsec:
   volumes:
     crowdsec_data:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/data"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/crowdsec/data"
       target: /var/lib/crowdsec/data
       read_only: false
     crowdsec_config:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/crowdsec/config"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/crowdsec/config"
       target: /etc/crowdsec
       read_only: false
     syslog:
@@ -83,11 +88,12 @@ crowdsec:
       source: /var/log
       target: /var/log
       read_only: true
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: careful
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_primary_manager

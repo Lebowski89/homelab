@@ -2,47 +2,53 @@
 
 loki:
   enabled: true
+  runtime: docker
   tags: [monitoring, loki]
   name: loki
   stack: loki
+
   image: grafana/loki:3.7.3
+  user: >-
+    {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
+  command:
+    - "-config.file=/etc/loki/loki-config.yaml"
+
+  environment:
+    TZ: "{{ timezone }}"
+
   named_networks:
     overlay:
       external: true
-  command:
-    - "-config.file=/etc/loki/loki-config.yaml"
-  user: >-
-    {{ hostvars[docker_services_primary_manager].docker_host_puid }}:{{ hostvars[docker_services_primary_manager].docker_host_pgid }}
-  environment:
-    TZ: "{{ timezone }}"
+
   paths:
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/loki"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/loki"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/loki/data"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/loki/data"
       state: directory
       mode: "0755"
   templates:
     - src: configs/loki-config.yaml.j2
-      dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/loki/loki-config.yaml"
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/loki/loki-config.yaml"
       mode: "0644"
       force: true
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/loki"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/loki"
       target: /etc/loki
       read_only: true
     data:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/loki/data"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/loki/data"
       target: /loki
       read_only: false
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: careful
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_primary_manager

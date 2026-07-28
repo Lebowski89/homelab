@@ -1,0 +1,61 @@
+---
+
+- name: Service host contract | Validate singleton inventory roles
+  ansible.builtin.assert:
+    that:
+      - groups.get(services_controller_inventory_group, []) | length == 1
+      - groups.get(services_storage_inventory_group, []) | length == 1
+    fail_msg: >-
+      Runtime-neutral service host roles require exactly one host in
+      {{ services_controller_inventory_group }} and exactly one host in
+      {{ services_storage_inventory_group }}.
+  tags: always
+
+- name: Service host contract | Resolve group-derived canonical hosts
+  ansible.builtin.set_fact:
+    services_controller_host: "{{ groups[services_controller_inventory_group][0] }}"
+    services_storage_host: "{{ groups[services_storage_inventory_group][0] }}"
+  tags: always
+
+- name: Service host contract | Validate canonical host values
+  ansible.builtin.assert:
+    that:
+      - services_controller_host is string
+      - services_controller_host | trim | length > 0
+      - services_storage_host is string
+      - services_storage_host | trim | length > 0
+      - services_plex_host is string
+      - services_plex_host | trim | length > 0
+      - services_log_root is string
+      - services_log_root | trim | length > 0
+      - services_controller_host in hostvars
+      - services_storage_host in hostvars
+      - services_plex_host in hostvars
+      - services_controller_host in ansible_play_hosts_all
+      - services_storage_host in ansible_play_hosts_all
+      - services_plex_host in ansible_play_hosts_all
+    fail_msg: >-
+      Runtime-neutral service hosts must be non-empty active inventory hosts,
+      and services_log_root must be a non-empty string.
+  tags: always
+
+# Compatibility aliases flow only from the canonical service-host contract.
+# Remove these after all runtime-specific and legacy role consumers accept the
+# services_* inputs directly.
+- name: Service host contract | Publish Docker adapter compatibility aliases
+  ansible.builtin.set_fact:
+    docker_services_primary_manager: "{{ services_controller_host }}"
+    docker_services_plex_host: "{{ services_plex_host }}"
+    docker_services_unraid_host: "{{ services_storage_host }}"
+    docker_services_log_root: "{{ services_log_root }}"
+  tags: always
+
+- name: Service host contract | Validate Docker compatibility aliases
+  ansible.builtin.assert:
+    that:
+      - docker_services_primary_manager == services_controller_host
+      - docker_services_plex_host == services_plex_host
+      - docker_services_unraid_host == services_storage_host
+      - docker_services_log_root == services_log_root
+    fail_msg: "Docker service-host compatibility aliases must equal their canonical services_* sources."
+  tags: always

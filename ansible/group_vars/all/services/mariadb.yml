@@ -2,15 +2,15 @@
 
 mariadb:
   enabled: false
+  runtime: docker
   tags: [mariadb]
   name: mariadb
   stack: mariadb
+
   image: mariadb:12
-  named_networks:
-    overlay:
-      external: true
   user: >-
-    {{ hostvars[docker_services_primary_manager].docker_host_puid }}:{{ hostvars[docker_services_primary_manager].docker_host_pgid }}
+    {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
+
   environment:
     TZ: "{{ timezone }}"
     MARIADB_ROOT_PASSWORD_FILE: /run/secrets/mariadb_pass_secret
@@ -24,24 +24,29 @@ mariadb:
       - var: mariadb_pass
         path: "/MariaDB"
         name: PASS
-        docker_secret: mariadb_pass_secret
-  secrets:
-    - mariadb_pass_secret
+        secret:
+          name: mariadb_pass_secret
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/mariadb"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/mariadb"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/mariadb"
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/mariadb"
       target: /var/lib/mysql
       read_only: false
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: careful
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_primary_manager

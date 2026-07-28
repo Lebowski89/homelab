@@ -2,19 +2,19 @@
 
 opencloud:
   enabled: true
+  runtime: docker
   tags: [opencloud]
   name: opencloud
   stack: opencloud
+
   image: opencloudeu/opencloud-rolling:7.2.0
-  named_networks:
-    overlay:
-      external: true
+  user: "1000:1000"
   entrypoint:
     - /bin/sh
   command:
     - -c
     - "test -f /etc/opencloud/opencloud.yaml || opencloud init; exec opencloud server"
-  user: "1000:1000"
+
   environment:
     TZ: "{{ timezone }}"
   env_file:
@@ -43,18 +43,29 @@ opencloud:
       - var: smtp_username
         path: "/Porkbun"
         name: SMTP_USER
+  swarm_env_templates:
+    - src: configs/opencloud/opencloud.env.j2
+      no_log: true
+      dest: /opt/stacks/opencloud.env
+      mode: "0600"
+      force: true
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/opencloud"
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/opencloud"
       state: directory
       owner: "1000"
       group: "1000"
       mode: "0751"
-    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/opencloud/config"
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/opencloud/config"
       state: directory
       owner: "1000"
       group: "1000"
       mode: "0751"
-    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/opencloud/apps"
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/opencloud/apps"
       state: directory
       owner: "1000"
       group: "1000"
@@ -66,27 +77,21 @@ opencloud:
       mode: "0751"
   templates:
     - src: configs/opencloud/csp.yaml.j2
-      dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/opencloud/config/csp.yaml"
+      dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/opencloud/config/csp.yaml"
       owner: "1000"
       group: "1000"
       mode: "0664"
       force: true
     - src: configs/opencloud/banned-password-list.txt.j2
-      dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/opencloud/config/banned-password-list.txt"
+      dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/opencloud/config/banned-password-list.txt"
       owner: "1000"
       group: "1000"
       mode: "0664"
       force: true
-  swarm_env_templates:
-    - src: configs/opencloud/opencloud.env.j2
-      no_log: true
-      dest: /opt/stacks/opencloud.env
-      mode: "0600"
-      force: true
   volumes:
     opencloud_config:
       type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/opencloud/config"
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/opencloud/config"
       target: /etc/opencloud
       read_only: false
     opencloud_data:
@@ -96,17 +101,19 @@ opencloud:
       read_only: false
     opencloud_apps:
       type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/opencloud/apps"
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/opencloud/apps"
       target: /var/lib/opencloud/web/assets/apps
       read_only: false
+
   traefik:
     enable: true
     port: 9200
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: careful
-    host: "{{ docker_services_unraid_host }}"
+    host: "{{ services_storage_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_unraid_host

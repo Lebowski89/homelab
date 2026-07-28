@@ -56,9 +56,7 @@ infisical:
 
 `podman_services` remains responsible for `containers.podman.podman_secret` and Quadlet attachment. It reads the value through the declaration's `var`, creates the declared native Podman secret name, and preserves target, UID, GID, and mode in `Secret=`. Value-carrying tasks use `no_log: true` and `diff: false`; values never enter generated Quadlets. Native Podman secrets keep values out of repository files and generated unit arguments, but the default file-backed secret driver is not encrypted storage and root on the host can access it.
 
-Podman replacement policy is declared under `secret.runtime_options.podman`. `immutable` and `replace` are strict booleans and cannot both be true. Replaceable secrets are forced only during `update` and `recreate`; normal deploy/bootstrap creates missing secrets without rotating existing ones. Existing top-level Podman entries with `infisical_path`, `infisical_key`, mount metadata, `immutable`, and `replace` remain compatible. Equivalent canonical/legacy declarations deduplicate, while conflicts fail.
-
-Docker `secrets_map[].docker_secret` and top-level Docker secret attachments are also retained by the common compatibility normalizer, but Podman never creates Docker resources. Conversely, Docker ignores Podman rotation policy.
+Podman replacement policy is declared under `secret.runtime_options.podman`. `immutable` and `replace` are strict booleans and cannot both be true. Replaceable secrets are forced only during `update` and `recreate`; normal deploy/bootstrap creates missing secrets without rotating existing ones. Legacy top-level Podman lookup entries and runtime-specific Infisical metadata are no longer accepted; repository services use the canonical common declaration. Docker ignores Podman rotation policy.
 
 The canonical PostgreSQL declaration is shared by Docker and Podman:
 
@@ -78,7 +76,7 @@ When neither address field is supplied, `host_inventory` defaults to `service_co
 
 Portable services may use ordinary scalar environment values, direct `value_from.infisical` references, or `value_template` strings containing one or more `${identifier}` references. Every reference must match a `var` declared by that service. Substitution is deliberately single-pass and does not evaluate Jinja or shell expressions; `$$` represents a literal dollar sign. `service_common` produces the final scalar mapping consumed by the Podman adapter.
 
-Docker temporarily retains its exact `__INFISICAL__:var` whole-value placeholder for unchanged services and keeps existing `env_file` behaviour. That legacy syntax is not canonical and is not supported by Podman. Runtime-native secrets remain separate: only an Infisical entry with `secret` metadata creates and attaches a Podman secret.
+Docker and Podman now consume the same common-resolved environment. The former exact `__INFISICAL__:var` Docker placeholder has been removed after repository services migrated to typed references. Existing Docker `env_file` behaviour is unchanged. Runtime-native secrets remain separate: only an Infisical entry with `secret` metadata creates and attaches a Podman secret.
 
 ## n8n
 

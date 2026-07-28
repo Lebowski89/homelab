@@ -5,12 +5,13 @@ n8n:
   runtime: podman
   tags: [automation, pgsql, n8n]
   description: n8n workflow automation on dedicated VM
+
   image: docker.io/n8nio/n8n:2.31.4
   user: "1000:1000"
 
   environment:
     DB_TYPE: postgresdb
-    DB_POSTGRESDB_HOST: "{{ hostvars[docker_services_primary_manager].local_ip }}"
+    DB_POSTGRESDB_HOST: "{{ hostvars[services_controller_host].local_ip }}"
     DB_POSTGRESDB_PORT: "5432"
     DB_POSTGRESDB_DATABASE: n8n
     DB_POSTGRESDB_USER_FILE: /run/secrets/postgres_user_secret
@@ -36,44 +37,6 @@ n8n:
     EXECUTIONS_DATA_PRUNE: "true"
     EXECUTIONS_DATA_MAX_AGE: "336"
     NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.readWriteFile"]'
-
-  ports:
-    - host_ip: "{{ local_ip }}"
-      published: 5678
-      target: 5678
-      protocol: tcp
-
-  volumes:
-    data:
-      type: bind
-      source: /opt/n8n
-      target: /home/node/.n8n
-      read_only: false
-
-  paths:
-    - path: /opt/n8n
-      owner: "1000"
-      group: "1000"
-      mode: "0750"
-
-  deploy:
-    type: container
-    host: n8n
-
-  cap_add: []
-  cap_drop: [all]
-  no_new_privileges: true
-
-  healthcheck:
-    test:
-      - CMD-SHELL
-      - >-
-        node -e "fetch('http://127.0.0.1:5678/healthz/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-    interval: 30s
-    timeout: 10s
-    retries: 5
-    start_period: 90s
-
   infisical:
     fail_on_empty: true
     secrets_map:
@@ -121,6 +84,55 @@ n8n:
               immutable: true
               replace: false
 
+  ports:
+    - host_ip: "{{ local_ip }}"
+      published: 5678
+      target: 5678
+      protocol: tcp
+
+  paths:
+    - path: /opt/n8n
+      owner: "1000"
+      group: "1000"
+      mode: "0750"
+  volumes:
+    data:
+      type: bind
+      source: /opt/n8n
+      target: /home/node/.n8n
+      read_only: false
+
+  cap_add: []
+  cap_drop: [all]
+  no_new_privileges: true
+
+  healthcheck:
+    test:
+      - CMD-SHELL
+      - >-
+        node -e "fetch('http://127.0.0.1:5678/healthz/readiness').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+    interval: 30s
+    timeout: 10s
+    retries: 5
+    start_period: 90s
+
+  traefik:
+    enable: true
+    exposure: private
+    port: 5678
+    backend_mode: host
+    backend_host_inventory: n8n
+  postgres:
+    enable: true
+    databases:
+      - n8n
+    port: 5432
+    user_var: postgres_user
+    password_var: postgres_pass
+
+  deploy:
+    type: container
+    host: n8n
   runtime_options:
     podman:
       network:
@@ -131,18 +143,3 @@ n8n:
         after: [network-online.target]
         restart: on-failure
         restart_sec: 15s
-
-  postgres:
-    enable: true
-    databases:
-      - n8n
-    port: 5432
-    user_var: postgres_user
-    password_var: postgres_pass
-
-  traefik:
-    enable: true
-    exposure: private
-    port: 5678
-    backend_mode: host
-    backend_host_inventory: n8n

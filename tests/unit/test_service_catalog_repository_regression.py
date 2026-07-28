@@ -2,7 +2,9 @@ import importlib.util
 from copy import deepcopy
 from pathlib import Path
 
+import pytest
 import yaml
+from jinja2 import Environment, meta
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
@@ -14,6 +16,7 @@ PODMAN_TASKS_DIR = REPO_ROOT / "ansible/roles/podman_services/tasks"
 GLOBAL_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch.yml"
 DOCKER_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_docker.yml"
 PODMAN_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_podman.yml"
+COMMON_TEMPLATE_DIR = REPO_ROOT / "ansible/roles/service_common/templates"
 
 
 def load_module(path, name):
@@ -86,7 +89,7 @@ def test_service_catalog_preserves_docker_selector_parity_for_real_services():
     assert_selector_parity(services, run_tags=["qbittorrent-xs"])
     assert_selector_parity(services, run_all=True)
 
-    disabled_name = next(name for name, cfg in services.items() if cfg.get("runtime", "docker") == "docker" and cfg.get("enabled") is False)
+    disabled_name = next(name for name, cfg in services.items() if cfg["runtime"] == "docker" and cfg.get("enabled") is False)
     assert_selector_parity(services, run_tags=[disabled_name], allow_disabled=False)
     assert_selector_parity(services, run_tags=[disabled_name], allow_disabled=True)
 
@@ -131,7 +134,7 @@ def test_real_repository_dispatch_hosts_match_repository_host_definitions():
         configurations = [service, *(service.get("targets", {}) or {}).values()]
         for configuration in configurations:
             deploy = configuration.get("deploy", {})
-            if deploy.get("host") == "{{ docker_services_primary_manager }}":
+            if deploy.get("host") == "{{ services_controller_host }}":
                 deploy["host"] = "mgt"
 
     effective = catalog_filters.service_catalog_effective(services, "mgt")
@@ -142,14 +145,46 @@ def test_real_repository_dispatch_hosts_match_repository_host_definitions():
     assert all(entry["dispatch_host"] in repository_hosts for entry in effective)
 
 
-def test_real_services_without_runtime_still_default_to_docker():
-    catalog_filters = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog_defaults")
+def test_every_real_service_declares_a_supported_runtime():
     services = load_services()
-    service_name = next(name for name, cfg in services.items() if "runtime" not in cfg and "targets" not in cfg)
 
-    item = next(item for item in catalog_filters.service_catalog_effective(services, "manager") if item["name"] == service_name)
+    for service_name, service_cfg in services.items():
+        assert "runtime" in service_cfg, f"{service_name} must declare its runtime explicitly"
+        assert service_cfg["runtime"] in {"docker", "podman"}, f"{service_name} declares an unsupported runtime"
 
-    assert item["runtime"] == "docker"
+
+def test_real_docker_swarm_constraints_match_configured_node_label_values():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_repository_swarm_constraints",
+    )
+    services = load_services()
+    expected_by_host = {
+        "{{ services_controller_host }}": "node.labels.docker_services_host == docker_services_primary_manager",
+        "{{ services_plex_host }}": "node.labels.docker_services_host == docker_services_plex_host",
+        "{{ services_storage_host }}": "node.labels.docker_services_host == docker_services_unraid_host",
+    }
+    observed = set()
+
+    for item in catalog_filters.service_catalog_effective(services, "manager"):
+        effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
+        if effective["runtime"] != "docker":
+            continue
+
+        deploy = effective.get("deploy", {})
+        host_constraints = [
+            constraint for constraint in deploy.get("constraints", []) if constraint.startswith("node.labels.docker_services_host == ")
+        ]
+        if not host_constraints:
+            continue
+
+        target = item.get("target", "base")
+        expected = expected_by_host.get(deploy.get("host"))
+        assert expected is not None, f"{item['name']}/{target} has an unknown constrained deploy host"
+        assert host_constraints == [expected], f"{item['name']}/{target} has a mismatched Swarm host constraint"
+        observed.add(expected)
+
+    assert observed == set(expected_by_host.values())
 
 
 def test_real_sonarr_catalog_target_keeps_effective_configuration():
@@ -165,13 +200,125 @@ def test_real_sonarr_catalog_target_keeps_effective_configuration():
 
     services = load_services()
     effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item["target"])
+    common_filters = load_module(
+        REPO_ROOT / "ansible/roles/service_common/filter_plugins/service_common.py",
+        "service_common_real_sonarr",
+    )
+    normalized = common_filters.service_common_infisical_normalize(
+        effective["infisical"]["secrets_map"],
+        effective["infisical"]["fail_on_empty"],
+    )
 
     assert "targets" not in effective
     assert effective["name"] == "sonarr"
     assert effective["deploy"]["type"] == "swarm"
     assert effective["environment"]["SONARR__APP__INSTANCENAME"] == "Sonarr"
-    assert effective["secrets"] == ["postgres_user_secret", "postgres_pass_secret", "sonarr_api_secret"]
+    assert [declaration["name"] for declaration in normalized["secret_declarations"]] == [
+        "postgres_user_secret",
+        "postgres_pass_secret",
+        "sonarr_api_secret",
+    ]
     assert effective["traefik"] == {"enable": True, "exposure": "private", "port": 8989}
+
+
+@pytest.mark.parametrize(
+    ("service_name", "target_name", "api_var"),
+    [
+        ("radarr", "radarr", "radarr_api"),
+        ("radarr", "radarr_4k", "radarr_4k_api"),
+        ("sonarr", "sonarr", "sonarr_api"),
+        ("sonarr", "sonarr_4k", "sonarr_4k_api"),
+    ],
+)
+def test_real_arr_targets_inherit_base_credentials_once_and_keep_target_api(service_name, target_name, api_var):
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        f"service_catalog_real_{service_name}_{target_name}",
+    )
+    service = load_services()[service_name]
+
+    effective = catalog_filters.service_catalog_merge_target(service, target_name)
+    declarations = [entry["var"] for entry in effective["infisical"]["secrets_map"]]
+
+    assert effective["runtime"] == service["runtime"] == "docker"
+    assert declarations.count("postgres_user") == 1
+    assert declarations.count("postgres_pass") == 1
+    assert declarations.count(api_var) == 1
+    assert "targets" not in effective
+
+
+def test_real_traefik_services_retain_lookup_only_cloudflare_zone_declaration():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_real_traefik_infisical",
+    )
+    services = load_services()
+    checked = []
+
+    for item in catalog_filters.service_catalog_effective(services, "manager"):
+        effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
+        if (effective.get("traefik") or {}).get("enable") is not True:
+            continue
+        declared = [entry.get("var") for entry in (effective.get("infisical") or {}).get("secrets_map", [])]
+        identity = f"{item['name']}:{item.get('target', '<base>')}"
+        assert declared.count("cloudflare_zone") == 1, identity
+        checked.append(identity)
+
+    assert checked
+
+
+def test_real_docker_env_file_services_retain_their_effective_declarations():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_real_env_files",
+    )
+    services = load_services()
+    actual = set()
+
+    for item in catalog_filters.service_catalog_effective(services, "manager"):
+        effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
+        if effective.get("env_file"):
+            actual.add((item["name"], item.get("target", "<base>")))
+
+    assert actual == {
+        ("authelia", "main"),
+        ("gitea", "<base>"),
+        ("gotify", "<base>"),
+        ("grafana", "<base>"),
+        ("homepage", "<base>"),
+        ("opencloud", "<base>"),
+        ("qbittorrent", "downloads"),
+        ("qbittorrent", "seeds"),
+        ("qui", "<base>"),
+        ("seerr", "<base>"),
+        ("vaultwarden", "<base>"),
+    }
+
+
+def test_real_common_templates_consume_declared_infisical_values_through_common_mapping():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_real_common_templates",
+    )
+    services = load_services()
+    environment = Environment()
+    checked = []
+
+    for item in catalog_filters.service_catalog_effective(services, "manager"):
+        effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
+        declared = {entry.get("var") for entry in (effective.get("infisical") or {}).get("secrets_map", []) if isinstance(entry, dict)}
+        for field in ("templates", "swarm_env_templates"):
+            for declaration in effective.get(field, []) or []:
+                source = COMMON_TEMPLATE_DIR / declaration["src"]
+                undeclared = meta.find_undeclared_variables(environment.parse(source.read_text()))
+                identity = f"{item['name']}:{item.get('target', '<base>')}:{declaration['src']}"
+                assert not (declared & undeclared), identity
+                if "service_common_infisical_values." in source.read_text():
+                    assert "service_common_infisical_values" in undeclared, identity
+                    assert declaration.get("no_log") is True, identity
+                    checked.append(identity)
+
+    assert checked
 
 
 def test_cross_host_standalone_services_retain_global_catalog_order():
@@ -180,8 +327,14 @@ def test_cross_host_standalone_services_retain_global_catalog_order():
         "service_catalog_cross_host_order",
     )
     services = {
-        "first": {"deploy": {"type": "container", "host": "docker-a"}},
-        "second": {"deploy": {"type": "container", "host": "docker-b"}},
+        "first": {
+            "runtime": "docker",
+            "deploy": {"type": "container", "host": "docker-a"},
+        },
+        "second": {
+            "runtime": "docker",
+            "deploy": {"type": "container", "host": "docker-b"},
+        },
     }
 
     selected = catalog_filters.service_catalog_select(
@@ -208,14 +361,14 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     global_dispatch_task = task_named(playbook, "Process globally ordered service catalog")
     deploy_all_task = task_named(playbook, "Deploy all Docker stacks")
 
-    assert catalog_task["when"] == "inventory_hostname == docker_services_primary_manager"
-    assert selection_task["when"] == "inventory_hostname == docker_services_primary_manager"
+    assert catalog_task["when"] == "inventory_hostname == services_controller_host"
+    assert selection_task["when"] == "inventory_hostname == services_controller_host"
     catalog_expression = catalog_task["ansible.builtin.set_fact"]["service_catalog_effective"]
-    assert "svcfiles | service_catalog_effective(docker_services_primary_manager)" in catalog_expression
+    assert "svcfiles | service_catalog_effective(services_controller_host)" in catalog_expression
     assert "service_catalog_effective" not in share_task["ansible.builtin.set_fact"]
 
     expected_tags = {"deploy", "update", "remove", "recreate", "bootstrap", "drift"}
-    assert dispatch_host_validation["when"] == "inventory_hostname == docker_services_primary_manager"
+    assert dispatch_host_validation["when"] == "inventory_hostname == services_controller_host"
     assert dispatch_host_validation["loop"] == "{{ service_catalog_selected }}"
     assert dispatch_host_validation["loop_control"]["loop_var"] == "service_catalog_dispatch_item"
     assert dispatch_host_validation["ansible.builtin.assert"]["that"] == [

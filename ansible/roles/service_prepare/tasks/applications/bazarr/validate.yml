@@ -1,0 +1,31 @@
+---
+
+- name: Bazarr prepare | Validate configuration contract
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context.filesystem_hosts | length > 0
+      - service_prepare_context.service.image | default('') | string | trim | length > 0
+      - service_prepare_context.service.prep | default({}) is mapping
+      - service_prepare_context.service.prep.radarr.host | default('') | string | trim | length > 0
+      - service_prepare_context.service.prep.radarr.port | default('') | string | trim | length > 0
+      - service_prepare_context.service.prep.sonarr.host | default('') | string | trim | length > 0
+      - service_prepare_context.service.prep.sonarr.port | default('') | string | trim | length > 0
+      - service_prepare_context.lookup_values.get('bazarr_api', '') | string | trim | length > 0
+      - service_prepare_context.lookup_values.get('radarr_api', '') | string | trim | length > 0
+      - service_prepare_context.lookup_values.get('sonarr_api', '') | string | trim | length > 0
+      - >-
+        (service_prepare_context.lookup_values.get('opensubtitlescom_user', '') | string | trim | length > 0)
+        ==
+        (service_prepare_context.lookup_values.get('opensubtitlescom_pass', '') | string | trim | length > 0)
+      - >-
+        not (service_prepare_context.service.postgres.enable | default(false) | bool)
+        or (
+          service_prepare_context.service.prep.postgres.host | default('') | string | trim | length > 0
+          and service_prepare_context.service.prep.postgres.port | default('') | string | trim | length > 0
+          and service_prepare_context.lookup_values.get('postgres_user', '') | string | trim | length > 0
+          and service_prepare_context.lookup_values.get('postgres_pass', '') | string | trim | length > 0
+        )
+    fail_msg: "Bazarr preparation inputs are incomplete; cleanup and configuration were not started."
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
