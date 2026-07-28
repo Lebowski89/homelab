@@ -289,12 +289,14 @@
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Docker temporary preparation ¦ Remove container | community.docker.docker_container | True |
+| Docker temporary preparation ¦ Verify container is absent | community.docker.docker_container_info | True |
 
 #### File: tasks/runtimes/docker/temporary_container_start.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Docker temporary preparation ¦ Remove stale container | community.docker.docker_container | True |
+| Docker temporary preparation ¦ Verify stale container is absent | community.docker.docker_container_info | True |
 | Docker temporary preparation ¦ Start container | community.docker.docker_container | True |
 | Docker temporary preparation ¦ Publish foreground output | ansible.builtin.set_fact | True |
 
@@ -303,13 +305,16 @@
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Podman temporary preparation ¦ Remove container | containers.podman.podman_container | True |
+| Podman temporary preparation ¦ Verify container is absent | containers.podman.podman_container_info | True |
 
 #### File: tasks/runtimes/podman/temporary_container_start.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Podman temporary preparation ¦ Remove stale container | containers.podman.podman_container | True |
+| Podman temporary preparation ¦ Verify stale container is absent | containers.podman.podman_container_info | True |
 | Podman temporary preparation ¦ Start container | containers.podman.podman_container | True |
+| Podman temporary preparation ¦ Capture foreground output | ansible.builtin.command | True |
 | Podman temporary preparation ¦ Publish foreground output | ansible.builtin.set_fact | True |
 
 #### File: tasks/runtimes/temporary_container.yml
