@@ -1,3 +1,10 @@
+"""Normalize and merge Docker Compose volume declarations for Ansible.
+
+The Docker role uses these filters to accept named mappings, lists, and legacy
+single-volume fields, validate bind, named-volume, and tmpfs requirements, and
+combine them with explicit append, replace, or de-duplication behavior.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
@@ -186,6 +193,32 @@ def docker_services_canonical_volumes(
     paths_container: Any = "",
     paths_read_only: Any = False,
 ) -> list[dict[str, Any]]:
+    """Normalize new volume declarations into Compose long syntax.
+
+    ``volumes`` takes precedence over ``volumes_list``; when both are absent,
+    legacy path arguments create one volume. Named mappings contribute their
+    values in mapping order. Bind and named volumes require source and target;
+    tmpfs volumes require a target and optionally accept a non-negative integer
+    size.
+
+    Args:
+        volumes: Preferred list or named mapping of volume dictionaries.
+        volumes_list: Legacy list or named mapping fallback.
+        paths_type: Legacy type, defaulting to ``bind``.
+        paths_host: Legacy source value.
+        paths_container: Legacy target value.
+        paths_read_only: Legacy boolean-like read-only flag.
+
+    Returns:
+        Newly allocated normalized volume dictionaries in declaration order.
+
+    Raises:
+        AnsibleFilterError: If declaration shapes, volume type, required fields,
+            boolean values, or tmpfs options are invalid.
+
+    Note:
+        Input declarations are not mutated.
+    """
     raw_volumes = _raw_new_volumes(
         volumes,
         volumes_list,
@@ -208,6 +241,32 @@ def docker_services_merge_volumes(
     paths_container: Any = "",
     paths_read_only: Any = False,
 ) -> list[dict[str, Any]]:
+    """Merge existing and newly normalized Compose volumes.
+
+    Existing entries must be mappings but otherwise remain as declared.
+    ``append_unique`` de-duplicates bind and named volumes by type, source, and
+    target, and tmpfs volumes by type and target, preserving the first entry.
+
+    Args:
+        existing: Existing list or named mapping of volume dictionaries.
+        volumes: Preferred new list or named mapping.
+        volumes_list: Legacy new-list fallback.
+        action: ``append``, ``replace``, or ``append_unique``.
+        paths_type: Legacy volume type.
+        paths_host: Legacy source value.
+        paths_container: Legacy target value.
+        paths_read_only: Legacy boolean-like read-only flag.
+
+    Returns:
+        A newly allocated list following the requested merge policy.
+
+    Raises:
+        AnsibleFilterError: If action, existing entries, or new volume
+            declarations are invalid.
+
+    Note:
+        Existing and new declarations are not mutated.
+    """
     action = _as_str(action, default="append")
 
     if action not in _VALID_ACTIONS:
@@ -245,7 +304,15 @@ def docker_services_merge_volumes(
 
 
 class FilterModule:
+    """Register Docker volume filters with Ansible."""
+
     def filters(self) -> dict[str, Any]:
+        """Return the Jinja filters exposed by this plugin.
+
+        Returns:
+            A mapping exposing ``docker_services_canonical_volumes`` and
+            ``docker_services_merge_volumes``.
+        """
         return {
             "docker_services_canonical_volumes": docker_services_canonical_volumes,
             "docker_services_merge_volumes": docker_services_merge_volumes,

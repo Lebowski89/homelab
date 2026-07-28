@@ -1,3 +1,10 @@
+"""Normalize and merge Docker Compose labels for Ansible tasks.
+
+The Docker role uses these filters to accept mapping or ``key=value`` list
+declarations and to combine labels with explicit replacement, uniqueness, and
+precedence policies before constructing Compose service dictionaries.
+"""
+
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
@@ -75,6 +82,25 @@ def _labels_from_sequence(value: Iterable[Any]) -> dict[str, str]:
 
 
 def docker_services_canonical_labels(value: Any = None) -> dict[str, Any]:
+    """Normalize one label declaration into a Compose label mapping.
+
+    Mapping keys are stripped and empty keys ignored; values are deep-copied
+    without coercion. Iterable declarations are parsed as ``key=value`` strings,
+    ignoring malformed or empty entries and retaining the last repeated key.
+
+    Args:
+        value: ``None``, a label mapping, or an iterable of ``key=value`` items.
+
+    Returns:
+        A new normalized label mapping.
+
+    Raises:
+        AnsibleFilterError: If ``value`` is a bare string or is neither a
+            mapping nor an iterable.
+
+    Note:
+        The input declaration is not mutated.
+    """
     if value is None:
         return {}
 
@@ -106,6 +132,28 @@ def docker_services_merge_labels(
     action: Any = "append",
     precedence: Any = "new_wins",
 ) -> dict[str, Any]:
+    """Merge existing and new Compose labels according to explicit policy.
+
+    ``replace`` returns only new labels. ``append_unique`` retains existing
+    values for duplicate top-level keys. ``append`` recursively merges nested
+    mappings and uses ``precedence`` to choose which side wins conflicts.
+
+    Args:
+        existing: Existing label mapping or iterable declaration.
+        labels: New label mapping or iterable declaration.
+        action: One of ``append``, ``replace``, or ``append_unique``.
+        precedence: For ``append``, either ``new_wins`` or ``existing_wins``.
+
+    Returns:
+        A newly allocated merged label mapping.
+
+    Raises:
+        AnsibleFilterError: If a declaration shape, action, or precedence value
+            is unsupported.
+
+    Note:
+        Neither input declaration is mutated.
+    """
     merge_action = _normalize_action(action)
     merge_precedence = _normalize_precedence(precedence)
 
@@ -131,7 +179,15 @@ def docker_services_merge_labels(
 
 
 class FilterModule:
+    """Register Docker label filters with Ansible."""
+
     def filters(self) -> dict[str, Any]:
+        """Return the Jinja filters exposed by this plugin.
+
+        Returns:
+            A mapping exposing ``docker_services_canonical_labels`` and
+            ``docker_services_merge_labels``.
+        """
         return {
             "docker_services_canonical_labels": docker_services_canonical_labels,
             "docker_services_merge_labels": docker_services_merge_labels,

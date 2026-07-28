@@ -1,3 +1,11 @@
+"""Render Docker secret attachments and standalone bind mounts for Ansible.
+
+The Docker adapter uses these filters after runtime-neutral secret declaration
+normalization. Swarm services receive Compose secret attachments, while
+standalone services receive read-only bind mounts from the stack's materialized
+secret directory. Secret values are never accepted or returned here.
+"""
+
 from __future__ import annotations
 
 import posixpath
@@ -41,6 +49,31 @@ def docker_services_secret_attachments(
     declarations: Any,
     stack_deploy_type: Any = "swarm",
 ) -> list[Any]:
+    """Combine legacy and canonical Docker secret attachments.
+
+    Legacy string or mapping attachments are retained in input order. Only
+    declarations marked with the ``canonical`` origin are added. Swarm targets
+    must be direct children of ``/run/secrets`` and are rendered as filenames;
+    standalone-container targets remain absolute paths. Canonical metadata can
+    replace a legacy string attachment for the same source.
+
+    Args:
+        legacy_secrets: Existing string or iterable containing string and
+            mapping attachment declarations.
+        declarations: Iterable of runtime-neutral secret declaration mappings.
+        stack_deploy_type: ``swarm`` or ``container``.
+
+    Returns:
+        Compose-compatible secret attachment strings and mappings. No secret
+        values are included.
+
+    Raises:
+        AnsibleFilterError: If deploy type, declaration shapes, resource names,
+            targets, or supported attachment metadata are invalid.
+
+    Note:
+        Both input collections are left unchanged.
+    """
     deploy_type = str(stack_deploy_type or "swarm").strip()
     if deploy_type not in {"swarm", "container"}:
         raise AnsibleFilterError("stack_deploy_type must be swarm or container")
@@ -103,6 +136,25 @@ def docker_services_secret_attachments(
 
 
 def docker_services_secret_mounts(secrets: Any, stack_name: Any) -> list[dict[str, Any]]:
+    """Convert standalone Docker secret attachments into read-only bind mounts.
+
+    Args:
+        secrets: String or iterable of attachment strings/mappings. Relative
+            mapping targets are placed directly under ``/run/secrets``.
+        stack_name: Stack resource name used to locate materialized files below
+            ``/opt/stacks/<stack>/secrets``.
+
+    Returns:
+        Bind-mount dictionaries containing source, target, and
+        ``read_only: true``.
+
+    Raises:
+        AnsibleFilterError: If collection entries, resource names, stack name,
+            or mapping targets are invalid.
+
+    Note:
+        The input attachment declaration is not mutated.
+    """
     stack = _resource_name(str(stack_name), name="stack_name")
     mounts: list[dict[str, Any]] = []
     for index, entry in enumerate(_entries(secrets, name="secrets")):
@@ -130,7 +182,15 @@ def docker_services_secret_mounts(secrets: Any, stack_name: Any) -> list[dict[st
 
 
 class FilterModule:
+    """Register Docker secret-rendering filters with Ansible."""
+
     def filters(self) -> dict[str, Any]:
+        """Return the Jinja filters exposed by this plugin.
+
+        Returns:
+            A mapping exposing ``docker_services_secret_attachments`` and
+            ``docker_services_secret_mounts``.
+        """
         return {
             "docker_services_secret_attachments": docker_services_secret_attachments,
             "docker_services_secret_mounts": docker_services_secret_mounts,

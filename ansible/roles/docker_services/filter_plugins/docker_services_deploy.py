@@ -1,3 +1,10 @@
+"""Build and attach Docker Swarm deploy configuration for Ansible.
+
+The Docker role uses these filters to combine service deploy declarations with
+named profile defaults, normalize placement and replica settings, and attach
+the resulting Compose ``deploy`` mapping to an accumulated service dictionary.
+"""
+
 from __future__ import annotations
 
 import re
@@ -161,6 +168,40 @@ def docker_services_build_deploy_config(
     rollback_config: Any = None,
     resources: Any = None,
 ) -> dict[str, Any]:
+    """Build a normalized Compose deploy mapping from defaults and overrides.
+
+    Explicit function arguments take precedence over fields in ``deploy_cfg``.
+    Profile selection falls back through the service profile, default profile,
+    and ``none``. Profile mappings provide defaults for restart, update,
+    rollback, and resource sections; explicit section mappings recursively
+    override them. Global mode omits replicas.
+
+    Args:
+        deploy_cfg: Optional service-level deploy mapping.
+        mode: Optional ``replicated`` or ``global`` override.
+        replicas: Optional non-negative replica count.
+        constraints: Optional comma-separated string or iterable of placement
+            constraints.
+        profile: Highest-precedence deploy profile name.
+        service_profile: Service-level fallback profile name.
+        default_profile: Repository fallback profile name.
+        profiles: Mapping of profile names to deploy-section defaults. ``None``
+            provides an empty ``none`` profile.
+        restart_policy: Explicit restart-policy mapping override.
+        update_config: Explicit update-config mapping override.
+        rollback_config: Explicit rollback-config mapping override.
+        resources: Explicit resources mapping override.
+
+    Returns:
+        A new Compose deploy mapping containing only populated sections.
+
+    Raises:
+        AnsibleFilterError: If modes, replicas, constraints, profiles, or deploy
+            section mappings have unsupported values or shapes.
+
+    Note:
+        Input mappings are not mutated.
+    """
     if deploy_cfg is None:
         deploy_cfg = {}
 
@@ -244,6 +285,24 @@ def docker_services_attach_deploy_config(
     service_name: Any,
     deploy_config: Any,
 ) -> dict[str, Any]:
+    """Attach deploy configuration to one accumulated Compose service.
+
+    Args:
+        compose_services: Mapping of service names to Compose service mappings.
+        service_name: Required service key after string conversion and trimming.
+        deploy_config: Deploy mapping to recursively merge at ``deploy``.
+
+    Returns:
+        A new top-level mapping with an independently copied selected service;
+        unrelated service entries are preserved.
+
+    Raises:
+        AnsibleFilterError: If the top-level mapping, selected service, deploy
+            configuration, or service name is invalid.
+
+    Note:
+        Neither input mapping is mutated.
+    """
     if not _is_mapping(compose_services):
         raise AnsibleFilterError(f"docker_services_compose_services must be a mapping, got {type(compose_services).__name__}.")
 
@@ -266,7 +325,15 @@ def docker_services_attach_deploy_config(
 
 
 class FilterModule:
+    """Register Docker deploy-configuration filters with Ansible."""
+
     def filters(self) -> dict[str, Any]:
+        """Return the Jinja filters exposed by this plugin.
+
+        Returns:
+            A mapping exposing ``docker_services_build_deploy_config`` and
+            ``docker_services_attach_deploy_config``.
+        """
         return {
             "docker_services_build_deploy_config": docker_services_build_deploy_config,
             "docker_services_attach_deploy_config": docker_services_attach_deploy_config,
