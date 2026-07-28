@@ -19,7 +19,10 @@
   ansible.builtin.assert:
     that:
       - service_common_target_host | string | trim | length > 0
-    fail_msg: "service_common_target_hosts cannot contain empty host names."
+      - service_common_target_host in hostvars
+      - service_common_target_host in ansible_play_hosts_all
+    fail_msg: >-
+      service_common_target_hosts must contain non-empty hosts in the active inventory play.
   loop: "{{ service_common_target_hosts }}"
   loop_control:
     loop_var: service_common_target_host

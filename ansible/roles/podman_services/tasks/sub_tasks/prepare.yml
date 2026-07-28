@@ -59,24 +59,6 @@
   notify: Podman services | daemon reload
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep | Create/update Podman secrets
-  when:
-    - not ansible_check_mode
-    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
-  no_log: true
-  diff: false
-  containers.podman.podman_secret:
-    name: "{{ podman_services_secret.name }}"
-    data: "{{ podman_services_infisical_values[podman_services_secret.var] }}"
-    state: present
-    force: "{{ (podman_services_secret | podman_secret_policy(podman_services_state)).force }}"
-    skip_existing: "{{ (podman_services_secret | podman_secret_policy(podman_services_state)).skip_existing }}"
-  loop: "{{ podman_services_service.secrets }}"
-  loop_control:
-    loop_var: podman_services_secret
-  register: podman_services_secret_results
-  tags: [deploy, update, recreate, bootstrap]
-
 - name: Prep | Render container Quadlet
   no_log: true
   diff: false

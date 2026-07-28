@@ -14,15 +14,11 @@ service_common_template_vars: {}
 service_common_infisical_secrets_map: []
 service_common_infisical_lookup_params: {}
 service_common_infisical_fail_on_empty: true
-service_common_legacy_docker_secrets: []
-service_common_legacy_podman_secrets: []
 service_common_environment: {}
 service_common_infisical_config: {}
 service_common_infisical_values: {}
 service_common_secret_declarations: []
 service_common_resolved_environment: {}
-# Temporary compatibility alias for unchanged Docker callers.
-service_common_secret_values: {}
 service_common_traefik_base_zone: ""
 service_common_traefik_dynamic_dir: /opt/traefik/dynamic
 service_common_traefik_owner: "1000"

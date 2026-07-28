@@ -7,7 +7,6 @@
     service_common_infisical_config: {}
     service_common_infisical_lookup_request: {}
     service_common_infisical_values: {}
-    service_common_secret_values: {}
     service_common_secret_declarations: []
     service_common_environment_normalized: {}
     service_common_resolved_environment: {}
@@ -20,11 +19,7 @@
     service_common_infisical_normalized: >-
       {{
         service_common_infisical_secrets_map
-        | service_common_infisical_normalize(
-            service_common_infisical_fail_on_empty,
-            service_common_legacy_docker_secrets,
-            service_common_legacy_podman_secrets
-          )
+        | service_common_infisical_normalize(service_common_infisical_fail_on_empty)
       }}
   tags: [deploy, update, recreate, bootstrap, drift]
 
@@ -84,11 +79,11 @@
   ansible.builtin.set_fact:
     service_common_infisical_values: >-
       {{
-        hostvars[inventory_hostname].service_common_infisical_values
+        service_common_infisical_values
         | combine({
             service_common_infisical_item.var: lookup(
               "infisical.vault.read_secrets",
-              **(hostvars[inventory_hostname].service_common_infisical_lookup_request.params | combine({
+              **(service_common_infisical_lookup_request.params | combine({
                 "path": service_common_infisical_item.path,
                 "secret_name": service_common_infisical_item.name
               }))
@@ -96,13 +91,13 @@
           })
       }}
   loop: >-
-    {{ hostvars[inventory_hostname].service_common_infisical_lookup_request.secrets_map | default([]) }}
+    {{ service_common_infisical_lookup_request.secrets_map | default([]) }}
   loop_control:
     loop_var: service_common_infisical_item
     label: "{{ service_common_infisical_item.var }}"
   delegate_to: >-
     {{
-      hostvars[inventory_hostname].service_common_infisical_lookup_request.controller_host
+      service_common_infisical_lookup_request.controller_host
       | default(inventory_hostname, true)
     }}
   tags: [deploy, update, recreate, bootstrap, drift]
@@ -123,13 +118,6 @@
   ansible.builtin.set_fact:
     service_common_infisical_values: >-
       {{ service_common_infisical_config | service_common_infisical_check_values }}
-  tags: [deploy, update, recreate, bootstrap, drift]
-
-- name: Service common Infisical | Publish temporary values compatibility alias
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    service_common_secret_values: "{{ service_common_infisical_values }}"
   tags: [deploy, update, recreate, bootstrap, drift]
 
 - name: Service common environment | Resolve canonical environment

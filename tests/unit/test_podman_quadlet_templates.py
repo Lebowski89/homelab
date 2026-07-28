@@ -7,9 +7,13 @@ from jinja2 import Environment, FileSystemLoader
 
 TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "ansible" / "roles" / "podman_services" / "templates"
 FILTER_PATH = Path(__file__).resolve().parents[2] / "ansible" / "roles" / "podman_services" / "filter_plugins" / "podman_services.py"
+COMMON_FILTER_PATH = Path(__file__).resolve().parents[2] / "ansible" / "roles" / "service_common" / "filter_plugins" / "service_common.py"
 filter_spec = importlib.util.spec_from_file_location("podman_services", FILTER_PATH)
 podman_services_filters = importlib.util.module_from_spec(filter_spec)
 filter_spec.loader.exec_module(podman_services_filters)
+common_filter_spec = importlib.util.spec_from_file_location("service_common", COMMON_FILTER_PATH)
+service_common_filters = importlib.util.module_from_spec(common_filter_spec)
+common_filter_spec.loader.exec_module(service_common_filters)
 
 
 def render(name, service):
@@ -331,6 +335,8 @@ def test_canonical_secret_normalization_reaches_quadlet_without_value():
     }
 
     normalized = podman_services_filters.podman_service_normalize(cfg, "portable")
+    common = service_common_filters.service_common_infisical_normalize(cfg["infisical"]["secrets_map"])
+    normalized["secrets"] = podman_services_filters.podman_secret_declarations(common["secret_declarations"])
     rendered = render("container.container.j2", normalized)
 
     assert "Secret=app_secret,target=/run/secrets/app_secret,uid=1001,gid=1002,mode=0400" in rendered

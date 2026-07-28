@@ -1,3 +1,11 @@
+"""Normalize canonical service declarations for Podman Quadlet tasks.
+
+The Podman role uses these filters to validate portable Docker-shaped service
+fields, preserve supported legacy nested Podman declarations during migration,
+render safe environment values, evaluate image drift and secret replacement,
+and produce the internal structure consumed by Quadlet templates.
+"""
+
 from __future__ import annotations
 
 import ipaddress
@@ -18,13 +26,39 @@ _VALID_VOLUME_TYPES = {"bind", "tmpfs", "volume"}
 
 
 def podman_env_file_key(value: Any) -> str:
+    """Validate and return one Podman environment-file key.
+
+    Args:
+        value: Candidate key.
+
+    Returns:
+        The unchanged key when it matches shell-style environment identifier
+        syntax.
+
+    Raises:
+        AnsibleFilterError: If the value is not a string or contains invalid
+            identifier characters.
+    """
     if not isinstance(value, str) or not _ENV_KEY_RE.fullmatch(value):
         raise AnsibleFilterError(f"Podman env-file key must match {_ENV_KEY_RE.pattern}; got {value!r}")
     return value
 
 
 def podman_env_file_value(value: Any) -> str:
-    """Serialize one Podman env-file value; null intentionally means an empty value."""
+    """Serialize one scalar for a Podman environment file.
+
+    Args:
+        value: String, integer, boolean, or ``None``. ``None`` intentionally
+            represents an empty value.
+
+    Returns:
+        Text suitable for the value portion of an environment-file assignment;
+        booleans use lowercase ``true`` or ``false``.
+
+    Raises:
+        AnsibleFilterError: If the value is structured or a string contains a
+            carriage return, line feed, or NUL byte.
+    """
     if value is None:
         return ""
     if isinstance(value, bool):
@@ -41,6 +75,25 @@ def podman_env_file_value(value: Any) -> str:
 
 
 def podman_secret_policy(secret: Mapping[str, Any], state: str) -> dict[str, bool]:
+    """Derive Podman secret module flags for the requested service action.
+
+    Args:
+        secret: Normalized declaration containing an optional strict
+            boolean-like ``replace`` field.
+        state: Service action. Replacement is active only for ``update`` and
+            ``recreate``; other values preserve an existing secret.
+
+    Returns:
+        A mapping with complementary ``force`` and ``skip_existing`` flags.
+
+    Raises:
+        AnsibleFilterError: If ``secret`` is not a mapping or ``replace`` is not
+            a supported boolean-like value.
+
+    Note:
+        The declaration is not mutated, and this filter does not validate the
+        action name.
+    """
     if not isinstance(secret, Mapping):
         raise AnsibleFilterError("secret must be a mapping")
     replace = _as_bool(secret.get("replace", False), name="secret.replace")
@@ -48,7 +101,82 @@ def podman_secret_policy(secret: Mapping[str, Any], state: str) -> dict[str, boo
     return {"force": mutable_replace, "skip_existing": not mutable_replace}
 
 
+def podman_secret_declarations(value: Any) -> list[dict[str, Any]]:
+    """Normalize runtime-neutral secret declarations for Podman materialization.
+
+    Args:
+        value: ``None``, a list of declarations, or a named mapping whose values
+            are declarations.
+
+    Returns:
+        Copied declaration dictionaries containing validated ``name``, ``var``,
+        absolute ``target``, ``immutable``, and ``replace`` values, plus optional
+        numeric UID/GID strings and a quoted four-digit octal mode.
+
+    Raises:
+        AnsibleFilterError: If collection/declaration shapes, names, variables,
+            targets, policy booleans, IDs, or modes are invalid, or if a secret
+            is both immutable and replaceable.
+
+    Note:
+        The input declarations are not mutated.
+    """
+    declarations = _as_items(value, name="podman secret declarations")
+    result: list[dict[str, Any]] = []
+    for index, declaration_value in enumerate(declarations):
+        item_name = f"podman secret declarations[{index}]"
+        declaration = _as_mapping(declaration_value, name=item_name)
+        secret = {
+            "name": _resource_name(declaration.get("name"), name=f"{item_name}.name"),
+            "var": _nonempty_string(declaration.get("var"), name=f"{item_name}.var"),
+            "target": _nonempty_string(declaration.get("target"), name=f"{item_name}.target"),
+        }
+        if not posixpath.isabs(secret["target"]):
+            raise AnsibleFilterError(f"{item_name}.target must be an absolute path")
+        runtime_options = _as_mapping(declaration.get("runtime_options", {}), name=f"{item_name}.runtime_options")
+        podman_options = _as_mapping(runtime_options.get("podman", {}), name=f"{item_name}.runtime_options.podman")
+        secret["immutable"] = _as_bool(
+            podman_options.get("immutable", False),
+            name=f"{item_name}.runtime_options.podman.immutable",
+        )
+        secret["replace"] = _as_bool(
+            podman_options.get("replace", False),
+            name=f"{item_name}.runtime_options.podman.replace",
+        )
+        if secret["immutable"] and secret["replace"]:
+            raise AnsibleFilterError(f"{item_name} cannot be both immutable and replaceable")
+        for field in ("uid", "gid"):
+            if field in declaration:
+                secret[field] = _numeric_id(declaration[field], name=f"{item_name}.{field}")
+        if "mode" in declaration:
+            mode = declaration["mode"]
+            if not isinstance(mode, str) or not re.fullmatch(r"0[0-7]{3}", mode):
+                raise AnsibleFilterError(f'{item_name}.mode must be a quoted four-digit octal mode such as "0400"')
+            secret["mode"] = mode
+        result.append(secret)
+    return result
+
+
 def podman_image_reference_drift(current: Mapping[str, Any], desired: str) -> dict[str, Any]:
+    """Compare inspected and desired Podman image references.
+
+    Args:
+        current: Command-style result mapping containing ``rc`` and ``stdout``.
+        desired: Exact image reference expected by the Quadlet.
+
+    Returns:
+        A mapping with ``drift``, ``missing``, and a human-readable ``message``.
+        A nonzero inspection return code is classified as missing; unequal
+        stdout is drift but not missing.
+
+    Raises:
+        AttributeError: If ``current`` does not provide mapping-style ``get``.
+        TypeError: If ``current.rc`` has an incompatible type.
+        ValueError: If ``current.rc`` cannot be converted to an integer.
+
+    Note:
+        The command result is not mutated.
+    """
     rc = int(current.get("rc", 1))
     stdout = str(current.get("stdout", "")).strip()
     if rc != 0:
@@ -370,10 +498,12 @@ def _legacy_tmpfs(value: Any, *, name: str) -> list[dict[str, Any]]:
 
 def _deploy(value: Any, *, name: str) -> dict[str, Any]:
     deploy = _as_mapping(value, name=name)
-    supported = {"host", "mode", "replicas", "type"}
+    supported = {"host", "mode", "replicas", "type", "profile", "constraints"}
     for field in deploy:
         if field not in supported:
             raise AnsibleFilterError(f"{name}.{field} is not supported by Podman Quadlets in this phase")
+    deploy.pop("profile", None)
+    deploy.pop("constraints", None)
     if "type" in deploy:
         deploy_type = _nonempty_string(deploy["type"], name=f"{name}.type")
         if deploy_type not in {"container", "swarm"}:
@@ -402,156 +532,6 @@ def _systemd(value: Any, *, name: str) -> dict[str, Any]:
             raise AnsibleFilterError(f"{name}.after must be a list of non-empty unit names")
         systemd["after"] = [_nonempty_string(unit, name=f"{name}.after[{index}]") for index, unit in enumerate(after)]
     return systemd
-
-
-def _secret_mount(
-    value: Any,
-    *,
-    var: str,
-    name: str,
-    canonical: bool,
-) -> dict[str, Any]:
-    secret = _as_mapping(value, name=name)
-    if canonical:
-        supported = {"name", "target", "uid", "gid", "mode", "runtime_options"}
-    else:
-        supported = {"name", "infisical_path", "infisical_key", "target", "uid", "gid", "mode", "immutable", "replace"}
-    unsupported = set(secret) - supported
-    if unsupported:
-        raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(sorted(unsupported))}")
-
-    resource_name = _resource_name(secret.get("name"), name=f"{name}.name")
-    target = secret.get("target", f"/run/secrets/{resource_name}")
-    target = _nonempty_string(target, name=f"{name}.target")
-    if not posixpath.isabs(target):
-        raise AnsibleFilterError(f"{name}.target must be an absolute path")
-
-    if canonical:
-        runtime_options = _as_mapping(secret.get("runtime_options", {}), name=f"{name}.runtime_options")
-        unsupported_runtimes = set(runtime_options) - {"podman"}
-        if unsupported_runtimes:
-            raise AnsibleFilterError(f"{name}.runtime_options contains unsupported runtimes: {', '.join(sorted(unsupported_runtimes))}")
-        podman_options = _as_mapping(runtime_options.get("podman", {}), name=f"{name}.runtime_options.podman")
-        unsupported_options = set(podman_options) - {"immutable", "replace"}
-        if unsupported_options:
-            raise AnsibleFilterError(f"{name}.runtime_options.podman contains unsupported fields: {', '.join(sorted(unsupported_options))}")
-        immutable = _as_bool(podman_options.get("immutable", False), name=f"{name}.runtime_options.podman.immutable")
-        replace = _as_bool(podman_options.get("replace", False), name=f"{name}.runtime_options.podman.replace")
-    else:
-        immutable = _as_bool(secret.get("immutable", False), name=f"{name}.immutable")
-        replace = _as_bool(secret.get("replace", False), name=f"{name}.replace")
-    if immutable and replace:
-        raise AnsibleFilterError(f"{name} cannot be both immutable and replaceable")
-
-    result: dict[str, Any] = {
-        "name": resource_name,
-        "var": var,
-        "target": target,
-        "immutable": immutable,
-        "replace": replace,
-    }
-    for field in ("uid", "gid"):
-        if field in secret:
-            result[field] = _numeric_id(secret[field], name=f"{name}.{field}")
-    if "mode" in secret:
-        if not isinstance(secret["mode"], str) or not re.fullmatch(r"0[0-7]{3}", secret["mode"]):
-            raise AnsibleFilterError(f'{name}.mode must be a quoted four-digit octal mode such as "0400"')
-        result["mode"] = secret["mode"]
-    return result
-
-
-def _canonical_infisical(value: Any, *, name: str) -> tuple[dict[str, Any], list[dict[str, Any]]]:
-    if value is None:
-        return {"secrets_map": [], "fail_on_empty": True}, []
-    infisical = _as_mapping(value, name=name)
-    unsupported = set(infisical) - {"secrets_map", "fail_on_empty"}
-    if unsupported:
-        raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(sorted(unsupported))}")
-    raw_map = infisical.get("secrets_map", [])
-    if not isinstance(raw_map, list):
-        raise AnsibleFilterError(f"{name}.secrets_map must be a list")
-    lookups: list[dict[str, str]] = []
-    secrets: dict[str, dict[str, Any]] = {}
-    seen_vars: set[str] = set()
-    for index, raw_entry in enumerate(raw_map):
-        item_name = f"{name}.secrets_map[{index}]"
-        entry = _as_mapping(raw_entry, name=item_name)
-        unsupported_entry = set(entry) - {"var", "path", "name", "check_mode_value", "secret", "docker_secret"}
-        if unsupported_entry:
-            raise AnsibleFilterError(f"{item_name} contains unsupported fields: {', '.join(sorted(unsupported_entry))}")
-        lookup = {field: _nonempty_string(entry.get(field), name=f"{item_name}.{field}") for field in ("var", "path", "name")}
-        if "check_mode_value" in entry:
-            lookup["check_mode_value"] = _nonempty_string(
-                entry["check_mode_value"],
-                name=f"{item_name}.check_mode_value",
-            )
-        if lookup["var"] in seen_vars:
-            raise AnsibleFilterError(f"duplicate Infisical var {lookup['var']!r}")
-        seen_vars.add(lookup["var"])
-        lookups.append(lookup)
-        if "secret" not in entry:
-            continue
-        secret = _secret_mount(entry["secret"], var=lookup["var"], name=f"{item_name}.secret", canonical=True)
-        existing = secrets.get(secret["name"])
-        if existing is not None and existing != secret:
-            raise AnsibleFilterError(f"conflicting secret declaration for {secret['name']!r}")
-        secrets[secret["name"]] = secret
-    return {
-        "secrets_map": lookups,
-        "fail_on_empty": _as_bool(infisical.get("fail_on_empty", True), name=f"{name}.fail_on_empty"),
-    }, list(secrets.values())
-
-
-def _secrets(value: Any, *, name: str) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
-    if value is None:
-        return [], []
-    if isinstance(value, (str, Mapping)) or not isinstance(value, Iterable):
-        raise AnsibleFilterError(f"{name} must be a list of secret mappings")
-    lookups: list[dict[str, str]] = []
-    normalized: list[dict[str, Any]] = []
-    for index, secret in enumerate(value):
-        item_name = f"{name}[{index}]"
-        secret_map = _as_mapping(secret, name=item_name)
-        resource_name = _resource_name(secret_map.get("name"), name=f"{item_name}.name")
-        lookup = {
-            "var": resource_name,
-            "path": _nonempty_string(secret_map.get("infisical_path"), name=f"{item_name}.infisical_path"),
-            "name": _nonempty_string(secret_map.get("infisical_key"), name=f"{item_name}.infisical_key"),
-        }
-        lookups.append(lookup)
-        normalized.append(_secret_mount(secret_map, var=resource_name, name=item_name, canonical=False))
-    return lookups, normalized
-
-
-def _merge_secrets(
-    canonical_lookups: list[dict[str, str]],
-    canonical: list[dict[str, Any]],
-    legacy_lookups: list[dict[str, str]],
-    legacy: list[dict[str, Any]],
-) -> tuple[list[dict[str, str]], list[dict[str, Any]]]:
-    lookups = list(canonical_lookups)
-    lookup_by_var = {item["var"]: item for item in lookups}
-    declarations = {item["name"]: item for item in canonical}
-    for lookup, declaration in zip(legacy_lookups, legacy, strict=True):
-        existing = declarations.get(declaration["name"])
-        if existing is not None:
-            canonical_lookup = lookup_by_var[existing["var"]]
-            if canonical_lookup["path"] != lookup["path"] or canonical_lookup["name"] != lookup["name"]:
-                raise AnsibleFilterError(f"conflicting secret declaration for {declaration['name']!r}: lookup differs")
-            comparison = dict(declaration)
-            comparison["var"] = existing["var"]
-            if comparison != existing:
-                raise AnsibleFilterError(f"conflicting secret declaration for {declaration['name']!r}")
-            continue
-        if lookup["var"] in lookup_by_var:
-            canonical_lookup = lookup_by_var[lookup["var"]]
-            if canonical_lookup["path"] != lookup["path"] or canonical_lookup["name"] != lookup["name"]:
-                raise AnsibleFilterError(f"duplicate Infisical var {lookup['var']!r} has conflicting lookup")
-        else:
-            lookups.append(lookup)
-            lookup_by_var[lookup["var"]] = lookup
-        declarations[declaration["name"]] = declaration
-    return lookups, list(declarations.values())
 
 
 def _podman_runtime_options(value: Any, *, name: str) -> dict[str, Any]:
@@ -584,6 +564,37 @@ def _network(value: Any, *, name: str) -> dict[str, Any]:
 
 
 def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any]:
+    """Normalize one effective service into the Podman Quadlet model.
+
+    Portable top-level fields are translated to the role's internal container,
+    environment, host-path, named-volume, integration, and runtime-option
+    mappings. Supported legacy Podman fields remain accepted only when they do
+    not conflict with their canonical equivalents. Exact non-latest image tags,
+    ``UID:GID`` users, port ranges/protocols, paths below ``/opt``, volume
+    schemas, security values, health checks, single-instance deployment, and
+    dedicated managed networks are validated. Value-free secret attachment
+    names are de-duplicated in declaration order; secret values are not handled.
+
+    Args:
+        cfg: Effective canonical or transition-compatible service mapping whose
+            runtime must be ``podman``.
+        name: Service resource name used for validation and default unit naming.
+
+    Returns:
+        A newly allocated mapping consumed by Podman preparation and Quadlet
+        templates. It contains normalized ``container`` and ``env`` data,
+        ``host_paths``, named ``volumes``, ``secret_attachments``, Podman network
+        and runtime options, and copied PostgreSQL/Traefik integration mappings.
+
+    Raises:
+        AnsibleFilterError: If the service or any supported canonical/legacy
+            field has an invalid value or shape, canonical and legacy values
+            conflict, an unsupported field is present in a strictly validated
+            section, or current Podman phase limitations are violated.
+
+    Note:
+        ``cfg`` and its nested values are not mutated.
+    """
     if not isinstance(cfg, Mapping):
         raise AnsibleFilterError(f"{name} must be a mapping")
     if str(cfg.get("runtime", "docker")) != "podman":
@@ -779,18 +790,16 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
     if systemd_present:
         container["systemd"] = systemd
 
-    canonical_infisical, canonical_secrets = _canonical_infisical(cfg.get("infisical"), name=f"{name}.infisical")
-    legacy_lookups, legacy_secrets = _secrets(cfg.get("secrets"), name=f"{name}.secrets")
-    lookups, secrets = _merge_secrets(
-        canonical_infisical["secrets_map"],
-        canonical_secrets,
-        legacy_lookups,
-        legacy_secrets,
-    )
-    infisical = {
-        "secrets_map": lookups,
-        "fail_on_empty": canonical_infisical["fail_on_empty"],
-    }
+    secret_attachments: list[str] = []
+    if cfg.get("secrets"):
+        attachments = cfg["secrets"]
+        if isinstance(attachments, str) or not isinstance(attachments, Iterable):
+            raise AnsibleFilterError(f"{name}.secrets must be a list of value-free secret-name strings")
+        for index, attachment in enumerate(attachments):
+            if not isinstance(attachment, str) or not attachment.strip():
+                raise AnsibleFilterError(f"{name}.secrets[{index}] is not supported by Podman; use a value-free secret-name string")
+            if attachment.strip() not in secret_attachments:
+                secret_attachments.append(attachment.strip())
 
     legacy_network = _network(cfg["network"], name=f"{name}.network") if cfg.get("network") is not None else None
     network, _ = _choose(
@@ -811,8 +820,8 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         "image": image,
         "container": container,
         "env": env if env_present else {},
-        "infisical": infisical,
-        "secrets": secrets,
+        "secrets": [],
+        "secret_attachments": secret_attachments,
         "host_paths": host_paths,
         "network": network,
         "runtime_options": {"podman": podman_options},
@@ -823,11 +832,22 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
 
 
 class FilterModule:
+    """Register Podman normalization and policy filters with Ansible."""
+
     def filters(self) -> dict[str, Any]:
+        """Return all Jinja filters exposed by this plugin.
+
+        Returns:
+            A mapping exposing ``podman_service_normalize``,
+            ``podman_env_file_key``, ``podman_env_file_value``,
+            ``podman_image_reference_drift``, ``podman_secret_policy``, and
+            ``podman_secret_declarations``.
+        """
         return {
             "podman_service_normalize": podman_service_normalize,
             "podman_env_file_key": podman_env_file_key,
             "podman_env_file_value": podman_env_file_value,
             "podman_image_reference_drift": podman_image_reference_drift,
             "podman_secret_policy": podman_secret_policy,
+            "podman_secret_declarations": podman_secret_declarations,
         }

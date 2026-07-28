@@ -8,23 +8,27 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMON_PREPARE_PATH = REPO_ROOT / "ansible/roles/service_common/tasks/prepare.yml"
 COMMON_POSTGRES_PATH = REPO_ROOT / "ansible/roles/service_common/tasks/postgres.yml"
 DOCKER_PREP_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/_prep.yml"
-DOCKER_INFISICAL_TASKER_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/tasker.yml"
-DOCKER_SECRET_TASKS_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/infisical/_secrets.yml"
+DOCKER_INIT_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/_init.yml"
+DOCKER_SECRET_TASKS_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/secrets.yml"
 DOCKER_POSTGRES_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/postgres.yml"
+COMMON_PREFLIGHT_PATH = REPO_ROOT / "ansible/tasks/service_catalog_common_preflight.yml"
 PODMAN_MAIN_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/main.yml"
 PODMAN_INIT_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/init.yml"
 PODMAN_PREP_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/prepare.yml"
+PODMAN_SECRET_TASKS_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/secrets/materialize.yml"
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
 SERVICE_CATALOG_PATH = REPO_ROOT / "ansible/filter_plugins/service_catalog.py"
 
 COMMON_PREPARE = COMMON_PREPARE_PATH.read_text()
 COMMON_POSTGRES = COMMON_POSTGRES_PATH.read_text()
 DOCKER_PREP = DOCKER_PREP_PATH.read_text()
-DOCKER_INFISICAL_TASKER = DOCKER_INFISICAL_TASKER_PATH.read_text()
+DOCKER_INIT = DOCKER_INIT_PATH.read_text()
 DOCKER_SECRET_TASKS = DOCKER_SECRET_TASKS_PATH.read_text()
+COMMON_PREFLIGHT = COMMON_PREFLIGHT_PATH.read_text()
 PODMAN_MAIN = PODMAN_MAIN_PATH.read_text()
 PODMAN_INIT = PODMAN_INIT_PATH.read_text()
 PODMAN_PREP = PODMAN_PREP_PATH.read_text()
+PODMAN_SECRET_TASKS = PODMAN_SECRET_TASKS_PATH.read_text()
 
 EXPECTED_TAGS = {"deploy", "update", "recreate", "bootstrap"}
 
@@ -103,74 +107,69 @@ def assert_postgres_credentials_declared(services):
     assert not failures, "PostgreSQL credential declaration errors:\n" + "\n".join(failures)
 
 
-def test_runtime_adapters_snapshot_and_explicitly_handoff_common_infisical_values():
-    docker_tasker = yaml.safe_load(DOCKER_INFISICAL_TASKER)
-    docker_reset = task_named(
-        docker_tasker,
-        "Prep - Infisical Fetch | Reset per-service adapter values",
-    )
-    docker_fetch = task_named(docker_tasker, "Prep - Infisical Fetch | Include tasks")
-    docker_snapshot = task_named(
-        docker_tasker,
-        "Prep - Infisical Fetch | Snapshot common per-service outputs",
-    )
+def test_common_dispatch_context_is_snapshotted_into_both_runtime_adapters():
+    common_tasks = yaml.safe_load(COMMON_PREFLIGHT)
+    common_reset = task_named(common_tasks, "Service catalog preflight | Reset current-service common context")
+    common_lookup = task_named(common_tasks, "Service catalog preflight | Resolve common Infisical and environment context")
+    common_snapshot = task_named(common_tasks, "Service catalog preflight | Snapshot current-service common outputs")
+    docker_init = yaml.safe_load(DOCKER_INIT)
+    docker_reset = task_named(docker_init, "Init | Reset per-service common snapshots")
+    docker_snapshot = task_named(docker_init, "Init | Snapshot dispatch-owned common context")
     docker_prepare = task_named(
         yaml.safe_load(DOCKER_PREP),
         "Prep - Service common | Prepare files and Traefik integration",
     )
 
-    assert docker_reset["ansible.builtin.set_fact"]["docker_services_infisical_values"] == {}
+    assert common_reset["ansible.builtin.set_fact"]["service_catalog_common_context"]["lookup_values"] == {}
+    assert common_reset["no_log"] is True
+    assert common_reset["diff"] is False
+    assert common_tasks.index(common_reset) < common_tasks.index(common_lookup) < common_tasks.index(common_snapshot)
+    assert common_snapshot["ansible.builtin.set_fact"]["service_catalog_common_context"]["lookup_values"] == (
+        "{{ service_common_infisical_values }}"
+    )
+    assert docker_reset["ansible.builtin.set_fact"]["docker_services_common_values"] == {}
     assert docker_reset["no_log"] is True
     assert docker_reset["diff"] is False
-    assert docker_snapshot["ansible.builtin.set_fact"]["docker_services_infisical_values"] == ("{{ service_common_infisical_values }}")
+    assert docker_snapshot["ansible.builtin.set_fact"]["docker_services_common_values"] == (
+        "{{ docker_services_common_context.lookup_values }}"
+    )
     assert docker_snapshot["no_log"] is True
     assert docker_snapshot["diff"] is False
-    docker_reset_index = docker_tasker.index(docker_reset)
-    docker_fetch_index = docker_tasker.index(docker_fetch)
-    docker_snapshot_index = docker_tasker.index(docker_snapshot)
-    assert docker_reset_index + 1 == docker_fetch_index
-    assert docker_fetch_index + 1 == docker_snapshot_index
-    assert docker_prepare["vars"]["service_common_infisical_values"] == "{{ docker_services_infisical_values }}"
-    assert "docker_services_infisical_values" in docker_prepare["vars"]["service_common_traefik_base_zone"]
+    assert docker_init.index(docker_reset) < docker_init.index(docker_snapshot)
+    assert docker_prepare["vars"]["service_common_infisical_values"] == "{{ docker_services_common_values }}"
+    assert "docker_services_common_values" in docker_prepare["vars"]["service_common_traefik_base_zone"]
     assert "service_common_infisical_values" not in docker_prepare["vars"]["service_common_traefik_base_zone"]
-    assert "docker_services_infisical_values" in DOCKER_SECRET_TASKS
+    assert "docker_services_effective_secret_values" in DOCKER_SECRET_TASKS
     assert "service_common_infisical_values" not in DOCKER_SECRET_TASKS
 
-    podman_main = yaml.safe_load(PODMAN_MAIN)
     podman_reset = task_named(
         yaml.safe_load(PODMAN_INIT),
         "Init | Reset per-service transient facts",
     )
-    podman_lookup = task_named(
-        podman_main,
-        "Podman services | Resolve common Infisical values and environment",
-    )
     podman_snapshot = task_named(
-        podman_main,
-        "Podman services | Snapshot common Infisical values",
+        yaml.safe_load(PODMAN_INIT),
+        "Init | Snapshot dispatch-owned common context",
     )
     podman_prepare = task_named(
-        podman_main,
+        yaml.safe_load(PODMAN_MAIN),
         "Podman services | Prepare runtime-neutral host state",
     )
-    podman_traefik = task_named(podman_main, "Podman services | Include Traefik tasks")
-    podman_secret = task_named(yaml.safe_load(PODMAN_PREP), "Prep | Create/update Podman secrets")
+    podman_traefik = task_named(yaml.safe_load(PODMAN_MAIN), "Podman services | Include Traefik tasks")
+    podman_secret = task_named(yaml.safe_load(PODMAN_SECRET_TASKS), "Prep | Create or update Podman-native secrets")
 
-    assert podman_reset["ansible.builtin.set_fact"]["podman_services_infisical_values"] == {}
+    assert podman_reset["ansible.builtin.set_fact"]["podman_services_common_values"] == {}
     assert podman_reset["no_log"] is True
     assert podman_reset["diff"] is False
-    assert podman_snapshot["ansible.builtin.set_fact"]["podman_services_infisical_values"] == ("{{ service_common_infisical_values }}")
+    assert podman_snapshot["ansible.builtin.set_fact"]["podman_services_common_values"] == (
+        "{{ podman_services_common_context.lookup_values }}"
+    )
     assert podman_snapshot["no_log"] is True
     assert podman_snapshot["diff"] is False
-    podman_lookup_index = podman_main.index(podman_lookup)
-    podman_snapshot_index = podman_main.index(podman_snapshot)
-    assert podman_lookup_index + 1 == podman_snapshot_index
-    assert podman_snapshot_index < podman_main.index(podman_prepare)
-    assert podman_prepare["vars"]["service_common_infisical_values"] == "{{ podman_services_infisical_values }}"
+    assert podman_prepare["vars"]["service_common_infisical_values"] == "{{ podman_services_common_values }}"
     assert podman_secret["containers.podman.podman_secret"]["data"] == (
-        "{{ podman_services_infisical_values[podman_services_secret.var] }}"
+        "{{ podman_services_effective_secret_values[podman_services_secret.var] }}"
     )
-    assert podman_traefik["vars"]["service_common_traefik_base_zone"] == ("{{ podman_services_infisical_values.cloudflare_zone }}")
+    assert podman_traefik["vars"]["service_common_traefik_base_zone"] == ("{{ podman_services_common_values.cloudflare_zone }}")
 
 
 def test_both_runtime_paths_reach_common_postgres_after_infisical_resolution():
@@ -186,12 +185,10 @@ def test_both_runtime_paths_reach_common_postgres_after_infisical_resolution():
     assert set(postgres_include["tags"]) == EXPECTED_TAGS
     assert "service_common_service.postgres is defined" in postgres_include["when"]
 
-    assert DOCKER_PREP.index("Prep - Infisical | Include tasker") < DOCKER_PREP.index(
-        "Prep - Service common | Prepare files and Traefik integration"
-    )
+    assert "tasks_from: infisical" not in DOCKER_PREP
     assert "name: service_common" in DOCKER_PREP
 
-    assert PODMAN_MAIN.index("Resolve common Infisical values and environment") < PODMAN_MAIN.index("Prepare runtime-neutral host state")
+    assert "tasks_from: infisical" not in PODMAN_MAIN
     assert "tasks_from: prepare" in PODMAN_MAIN
 
 

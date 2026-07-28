@@ -32,6 +32,16 @@
         else ''
       }} did not return exactly one concrete configuration.
 
+- name: Service catalog dispatch | Run common service preflight
+  when: inventory_hostname == service_catalog_dispatch_entry.dispatch_host
+  ansible.builtin.include_tasks:
+    file: service_catalog_common_preflight.yml
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+  vars:
+    service_catalog_materialized_service: "{{ service_catalog_host_materialized[0] }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
 - name: Service catalog dispatch | Process Docker entry
   when:
     - inventory_hostname == service_catalog_dispatch_entry.dispatch_host
@@ -42,6 +52,7 @@
       tags: [deploy, update, remove, recreate, bootstrap, drift]
   vars:
     service_catalog_docker_service: "{{ service_catalog_host_materialized[0] }}"
+    service_catalog_docker_common_context: "{{ service_catalog_common_context }}"
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
 - name: Service catalog dispatch | Process Podman entry
@@ -54,4 +65,5 @@
       tags: [deploy, update, remove, recreate, bootstrap, drift]
   vars:
     service_catalog_podman_service: "{{ service_catalog_host_materialized[0] }}"
+    service_catalog_podman_common_context: "{{ service_catalog_common_context }}"
   tags: [deploy, update, remove, recreate, bootstrap, drift]

@@ -1,0 +1,84 @@
+---
+
+- name: Service catalog preflight | Reset current-service common context
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_catalog_common_context:
+      service_name: "{{ service_catalog_materialized_service.name }}"
+      target: "{{ service_catalog_materialized_service.target | default('') }}"
+      runtime: "{{ service_catalog_materialized_service.runtime }}"
+      dispatch_host: "{{ inventory_hostname }}"
+      controller_host: "{{ service_catalog_controller_host }}"
+      preflight_performed: false
+      infisical_config: {}
+      resolved_environment: >-
+        {{ service_catalog_materialized_service.config.environment | default({}) }}
+      lookup_values: {}
+      secret_declarations: []
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Service catalog preflight | Resolve common Infisical and environment context
+  when:
+    - "'remove' not in (ansible_run_tags | default([]))"
+    - "'drift' not in (ansible_run_tags | default([]))"
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: infisical
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  vars:
+    service_common_controller_host: "{{ service_catalog_controller_host }}"
+    service_common_environment: >-
+      {{ service_catalog_materialized_service.config.environment | default({}) }}
+    service_common_infisical_secrets_map: >-
+      {{ (service_catalog_materialized_service.config.infisical | default({})).secrets_map | default([]) }}
+    service_common_infisical_lookup_params: >-
+      {{ hostvars[service_catalog_controller_host].infisical_lookup_default_params | default({}, true) }}
+    service_common_infisical_fail_on_empty: >-
+      {{ (service_catalog_materialized_service.config.infisical | default({})).fail_on_empty | default(true) }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service catalog preflight | Snapshot current-service common outputs
+  when:
+    - "'remove' not in (ansible_run_tags | default([]))"
+    - "'drift' not in (ansible_run_tags | default([]))"
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_catalog_common_context:
+      service_name: "{{ service_catalog_materialized_service.name }}"
+      target: "{{ service_catalog_materialized_service.target | default('') }}"
+      runtime: "{{ service_catalog_materialized_service.runtime }}"
+      dispatch_host: "{{ inventory_hostname }}"
+      controller_host: "{{ service_catalog_controller_host }}"
+      preflight_performed: true
+      infisical_config: "{{ service_common_infisical_config }}"
+      resolved_environment: "{{ service_common_resolved_environment }}"
+      lookup_values: "{{ service_common_infisical_values }}"
+      secret_declarations: "{{ service_common_secret_declarations }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service catalog preflight | Validate current-service common context ownership
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_catalog_common_context is mapping
+      - service_catalog_common_context.service_name == service_catalog_dispatch_entry.name
+      - service_catalog_common_context.target == (service_catalog_dispatch_entry.target | default(''))
+      - service_catalog_common_context.runtime == service_catalog_dispatch_entry.runtime
+      - service_catalog_common_context.dispatch_host == inventory_hostname
+      - service_catalog_common_context.controller_host == service_catalog_controller_host
+      - service_catalog_common_context.controller_host in hostvars
+      - service_catalog_common_context.infisical_config is mapping
+      - service_catalog_common_context.resolved_environment is mapping
+      - service_catalog_common_context.lookup_values is mapping
+      - service_catalog_common_context.secret_declarations is sequence
+    fail_msg: >-
+      Common preflight context does not belong to the current selected service
+      and dispatch host.
+  tags: [deploy, update, remove, recreate, bootstrap, drift]

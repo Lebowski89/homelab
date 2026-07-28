@@ -1,3 +1,4 @@
+{% set plex_token = service_common_infisical_values.plex_token %}
 PLEX_PATH=/plex
 MODE=move
 SCHEDULE=21:00|weekly(monday)|mode=clear,22:00|weekly(monday)|mode=move,23:00|monthly(1)|mode=nothing;photo-transcoder=true

@@ -11,9 +11,9 @@
   vars:
     service_common_copy_host_defaults: "{{ service_common_host_defaults.get(service_common_target_host, {}) }}"
     service_common_copy_default_owner: >-
-      {{ service_common_copy_host_defaults.get('owner', service_common_default_owner) }}
+      {{ service_common_copy_host_defaults.get('puid', service_common_default_owner) }}
     service_common_copy_default_group: >-
-      {{ service_common_copy_host_defaults.get('group', service_common_default_group) }}
+      {{ service_common_copy_host_defaults.get('pgid', service_common_default_group) }}
   delegate_to: "{{ service_common_target_host }}"
   loop: "{{ service_common_copies }}"
   loop_control:

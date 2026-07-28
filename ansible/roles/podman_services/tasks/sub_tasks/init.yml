@@ -24,13 +24,73 @@
 - name: Init | Reset per-service transient facts
   ansible.builtin.set_fact:
     podman_services_secret_values: {}
-    podman_services_infisical_values: {}
-    podman_services_infisical_secrets_map: []
+    podman_services_common_values: {}
+    podman_services_secret_declarations: []
+    podman_services_resolved_environment: {}
     podman_services_secret_results: {}
     podman_services_image_pull: {}
     podman_services_requires_restart: false
+    podman_services_common_host_defaults: {}
+    podman_services_controller_host: ""
+    podman_services_application_template_vars: {}
+    podman_services_application_secret_values: {}
+    podman_services_application_secret_declarations: []
+    podman_services_application_bootstrap_requests: {}
   no_log: true
   diff: false
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Init | Validate dispatch-owned common context
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - podman_services_common_context is defined
+      - podman_services_common_context is mapping
+      - podman_services_common_context.runtime == 'podman'
+      - podman_services_common_context.dispatch_host == inventory_hostname
+      - podman_services_common_context.controller_host in hostvars
+      - podman_services_common_context.lookup_values is mapping
+      - podman_services_common_context.resolved_environment is mapping
+      - podman_services_common_context.secret_declarations is sequence
+    fail_msg: "podman_services requires the current dispatch host's validated common service context."
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Init | Snapshot dispatch-owned common context
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_common_values: "{{ podman_services_common_context.lookup_values }}"
+    podman_services_secret_declarations: >-
+      {{ podman_services_common_context.secret_declarations | podman_secret_declarations }}
+    podman_services_resolved_environment: "{{ podman_services_common_context.resolved_environment }}"
+    podman_services_controller_host: "{{ podman_services_common_context.controller_host }}"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Init | Attach common environment and native secret declarations
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_service: >-
+      {{
+        podman_services_service
+        | combine({
+            'env': podman_services_resolved_environment,
+            'secrets': podman_services_secret_declarations
+          }, recursive=false)
+      }}
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Init | Snapshot runtime-neutral container host defaults
+  ansible.builtin.set_fact:
+    podman_services_common_host_defaults: >-
+      {{
+        {
+          inventory_hostname:
+            hostvars[inventory_hostname].container_host_defaults
+            | default(hostvars[inventory_hostname] | container_host_defaults, true)
+        }
+      }}
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
 - name: Init | Assert inventory target matches selected host
@@ -41,36 +101,3 @@
       Podman service {{ podman_services_service.name }} is targeted at
       {{ podman_services_service.container.host | default(inventory_hostname) }}, not {{ inventory_hostname }}.
   tags: [deploy, update, remove, recreate, drift, bootstrap]
-
-- name: Init | Build Infisical lookup parameters for manager endpoint
-  ansible.builtin.set_fact:
-    podman_services_infisical_lookup_params: >-
-      {{
-        infisical_lookup_default_params
-        | combine({
-            'url': 'http://' ~ hostvars[podman_services_infisical_delegate].local_ip ~ ':8066'
-          })
-      }}
-  when:
-    - infisical_lookup_default_params is defined
-    - podman_services_infisical_delegate in hostvars
-    - hostvars[podman_services_infisical_delegate].local_ip is defined
-  no_log: true
-  diff: false
-  tags: [deploy, update, recreate, remove, drift, bootstrap]
-
-
-- name: Init | Assert Infisical lookup parameters for secrets
-  when:
-    - podman_services_service.secrets | length > 0
-    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
-  ansible.builtin.assert:
-    that:
-      - podman_services_infisical_lookup_params is defined
-      - podman_services_infisical_lookup_params is mapping
-    fail_msg: >-
-      podman_services requires infisical_lookup_default_params and
-      {{ podman_services_infisical_delegate }}.local_ip for secret-backed services.
-  no_log: true
-  diff: false
-  tags: [deploy, update, recreate, bootstrap]
