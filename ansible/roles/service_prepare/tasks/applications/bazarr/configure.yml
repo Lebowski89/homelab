@@ -1,0 +1,203 @@
+---
+
+- name: Prep - Bazarr | Set derived vars
+  ansible.builtin.set_fact:
+    service_prepare_bazarr_fs_host: "{{ service_prepare_context.filesystem_hosts | first }}"
+    service_prepare_bazarr_config_dir: >-
+      {{ hostvars[service_prepare_context.filesystem_hosts | first].container_host_appdata_root }}/bazarr
+    service_prepare_bazarr_config_file: >-
+      {{ hostvars[service_prepare_context.filesystem_hosts | first].container_host_appdata_root }}/bazarr/config/config.yaml
+    service_prepare_bazarr_image: "{{ service_prepare_context.service.image }}"
+    service_prepare_bazarr_puid: >-
+      {{ hostvars[service_prepare_context.filesystem_hosts | first].container_host_puid | default('1000') }}
+    service_prepare_bazarr_pgid: >-
+      {{ hostvars[service_prepare_context.filesystem_hosts | first].container_host_pgid | default('1000') }}
+    service_prepare_bazarr_port: >-
+      {{ service_prepare_context.service.traefik.port | default('6767') | string }}
+    service_prepare_bazarr_radarr_ip: "{{ service_prepare_context.service.prep.radarr.host }}"
+    service_prepare_bazarr_radarr_port: "{{ service_prepare_context.service.prep.radarr.port }}"
+    service_prepare_bazarr_sonarr_ip: "{{ service_prepare_context.service.prep.sonarr.host }}"
+    service_prepare_bazarr_sonarr_port: "{{ service_prepare_context.service.prep.sonarr.port }}"
+  run_once: true
+
+- name: Prep - Bazarr | Set secret vars
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_bazarr_api_key: "{{ service_prepare_context.lookup_values.get('bazarr_api', '') }}"
+    service_prepare_bazarr_opensubtitlescom_user: >-
+      {{ service_prepare_context.lookup_values.get('opensubtitlescom_user', '') }}
+    service_prepare_bazarr_opensubtitlescom_pass: >-
+      {{ service_prepare_context.lookup_values.get('opensubtitlescom_pass', '') }}
+    service_prepare_bazarr_radarr_api_key: "{{ service_prepare_context.lookup_values.get('radarr_api', '') }}"
+    service_prepare_bazarr_sonarr_api_key: "{{ service_prepare_context.lookup_values.get('sonarr_api', '') }}"
+  run_once: true
+
+- name: Prep - Bazarr | Set postgres vars
+  when: (service_prepare_context.service.postgres.enable | default(false)) | bool
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_bazarr_pg_db: >-
+      {{
+        (
+          service_prepare_context.service.postgres.databases | first
+        )
+        if (
+          service_prepare_context.service.postgres is defined
+          and service_prepare_context.service.postgres.databases is defined
+          and service_prepare_context.service.postgres.databases is sequence
+          and service_prepare_context.service.postgres.databases is not string
+          and (service_prepare_context.service.postgres.databases | length > 0)
+        )
+        else 'bazarr'
+      }}
+    service_prepare_bazarr_pg_host: "{{ service_prepare_context.service.prep.postgres.host }}"
+    service_prepare_bazarr_pg_port: "{{ service_prepare_context.service.prep.postgres.port }}"
+    service_prepare_bazarr_pg_user: "{{ service_prepare_context.lookup_values.get('postgres_user', '') }}"
+    service_prepare_bazarr_pg_pass: "{{ service_prepare_context.lookup_values.get('postgres_pass', '') }}"
+  run_once: true
+
+- name: Prep - Bazarr | Assert postgres inputs are complete
+  when: (service_prepare_context.service.postgres.enable | default(false)) | bool
+  no_log: true
+  ansible.builtin.assert:
+    that:
+      - service_prepare_bazarr_pg_host | string | trim | length > 0
+      - service_prepare_bazarr_pg_port | string | trim | length > 0
+      - service_prepare_bazarr_pg_user | string | trim | length > 0
+      - service_prepare_bazarr_pg_pass | string | trim | length > 0
+    fail_msg: "Bazarr postgres settings are incomplete."
+  run_once: true
+
+- name: Prep - Bazarr | Check whether initial config exists
+  ansible.builtin.stat:
+    path: "{{ service_prepare_bazarr_config_file }}"
+  register: service_prepare_bazarr_initial_config_stat
+  delegate_to: "{{ service_prepare_bazarr_fs_host }}"
+  run_once: true
+
+- name: Prep - Bazarr | Generate absent initial config with selected runtime
+  when: not service_prepare_bazarr_initial_config_stat.stat.exists
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: bootstrap.yml
+    apply:
+      tags: [deploy, update, recreate]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate]
+
+- name: Prep - Bazarr | Verify runtime bootstrap produced config
+  ansible.builtin.stat:
+    path: "{{ service_prepare_bazarr_config_file }}"
+  register: service_prepare_bazarr_cfg_stat
+  delegate_to: "{{ service_prepare_bazarr_fs_host }}"
+  run_once: true
+
+- name: Prep - Bazarr | Require generated config before mutation
+  ansible.builtin.assert:
+    that:
+      - service_prepare_bazarr_cfg_stat.stat.exists
+      - service_prepare_bazarr_cfg_stat.stat.isreg | default(false)
+    fail_msg: "Bazarr runtime bootstrap did not produce config.yaml; configuration mutation was stopped."
+  run_once: true
+
+- name: Prep - Bazarr | Configure api setting
+  no_log: true
+  yedit:
+    src: "{{ service_prepare_bazarr_config_file }}"
+    key: "auth.apikey"
+    value: "{{ service_prepare_bazarr_api_key }}"
+  delegate_to: "{{ service_prepare_bazarr_fs_host }}"
+  run_once: true
+
+- name: Prep - Bazarr | Configure misc settings
+  yedit:
+    src: "{{ service_prepare_bazarr_config_file }}"
+    key: "{{ bazarr_settings_misc.key }}"
+    value: "{{ bazarr_settings_misc.value }}"
+  loop: "{{ _bazarr_misc_config | dict2items }}"
+  loop_control:
+    loop_var: bazarr_settings_misc
+  vars:
+    _bazarr_misc_config:
+      analytics.enabled: "false"
+      general.port: "{{ service_prepare_bazarr_port }}"
+  delegate_to: "{{ service_prepare_bazarr_fs_host }}"
+  run_once: true
+
+- name: Prep - Bazarr | Configure opensubtitlescom settings
+  no_log: true
+  yedit:
+    src: "{{ service_prepare_bazarr_config_file }}"
+    key: "{{ bazarr_settings_subtitles.key }}"
+    value: "{{ bazarr_settings_subtitles.value }}"
+  loop: "{{ _bazarr_opensubtitlescom_config | dict2items }}"
+  loop_control:
+    loop_var: bazarr_settings_subtitles
+  vars:
+    _bazarr_opensubtitlescom_config:
+      opensubtitlescom.username: "{{ service_prepare_bazarr_opensubtitlescom_user }}"
+      opensubtitlescom.password: "{{ service_prepare_bazarr_opensubtitlescom_pass }}"
+      opensubtitlescom.use_hash: "true"
+  delegate_to: "{{ service_prepare_bazarr_fs_host }}"
+  run_once: true
+
+- name: Prep - Bazarr | Configure radarr settings
+  no_log: true
+  yedit:
+    src: "{{ service_prepare_bazarr_config_file }}"
+    key: "{{ bazarr_settings_radarr.key }}"
+    value: "{{ bazarr_settings_radarr.value }}"
+  loop: "{{ _bazarr_radarr_config | dict2items }}"
+  loop_control:
+    loop_var: bazarr_settings_radarr
+  vars:
+    _bazarr_radarr_config:
+      general.use_radarr: "true"
+      radarr.apikey: "{{ service_prepare_bazarr_radarr_api_key }}"
+      radarr.ip: "{{ service_prepare_bazarr_radarr_ip }}"
+      radarr.port: "{{ service_prepare_bazarr_radarr_port }}"
+      radarr.ssl: "false"
+  delegate_to: "{{ service_prepare_bazarr_fs_host }}"
+  run_once: true
+
+- name: Prep - Bazarr | Configure sonarr settings
+  no_log: true
+  yedit:
+    src: "{{ service_prepare_bazarr_config_file }}"
+    key: "{{ bazarr_settings_sonarr.key }}"
+    value: "{{ bazarr_settings_sonarr.value }}"
+  loop: "{{ _bazarr_sonarr_config | dict2items }}"
+  loop_control:
+    loop_var: bazarr_settings_sonarr
+  vars:
+    _bazarr_sonarr_config:
+      general.use_sonarr: "true"
+      sonarr.apikey: "{{ service_prepare_bazarr_sonarr_api_key }}"
+      sonarr.ip: "{{ service_prepare_bazarr_sonarr_ip }}"
+      sonarr.port: "{{ service_prepare_bazarr_sonarr_port }}"
+      sonarr.ssl: "false"
+  delegate_to: "{{ service_prepare_bazarr_fs_host }}"
+  run_once: true
+
+- name: Prep - Bazarr | Configure postgres settings
+  no_log: true
+  yedit:
+    src: "{{ service_prepare_bazarr_config_file }}"
+    key: "{{ bazarr_settings_postgres.key }}"
+    value: "{{ bazarr_settings_postgres.value }}"
+  loop: "{{ _bazarr_postgres_config | dict2items }}"
+  loop_control:
+    loop_var: bazarr_settings_postgres
+  vars:
+    _bazarr_postgres_config:
+      postgresql.database: "{{ service_prepare_bazarr_pg_db | default('bazarr') }}"
+      postgresql.enabled: "{{ ((service_prepare_context.service.postgres.enable | default(false)) | bool) | ternary('true', 'false') }}"
+      postgresql.host: "{{ service_prepare_bazarr_pg_host | default('') }}"
+      postgresql.port: "{{ service_prepare_bazarr_pg_port | default('') }}"
+      postgresql.username: "{{ service_prepare_bazarr_pg_user | default('') }}"
+      postgresql.password: "{{ service_prepare_bazarr_pg_pass | default('') }}"
+  delegate_to: "{{ service_prepare_bazarr_fs_host }}"
+  run_once: true

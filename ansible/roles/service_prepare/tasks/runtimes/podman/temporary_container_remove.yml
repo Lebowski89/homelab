@@ -1,0 +1,14 @@
+---
+
+- name: Podman temporary preparation | Remove container
+  when: not ansible_check_mode
+  containers.podman.podman_container:
+    name: "{{ service_prepare_temporary_container.name }}"
+    state: absent
+    delete_time: "10"
+  register: service_prepare_temporary_remove
+  retries: 5
+  delay: 5
+  until: service_prepare_temporary_remove.msg is not defined
+  failed_when: false
+  delegate_to: "{{ service_prepare_temporary_container.host }}"

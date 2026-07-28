@@ -1,0 +1,26 @@
+---
+
+- name: NZBHydra2 prepare | Validate configuration contract
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context.filesystem_hosts | length > 0
+      - service_prepare_context.service.image | default('') | string | trim | length > 0
+      - service_prepare_context.lookup_values.get('nzbhydra2_user', '') | string | trim | length > 0
+      - service_prepare_context.lookup_values.get('nzbhydra2_pass', '') | string | trim | length > 0
+      - service_prepare_context.lookup_values.get('nzbhydra2_api', '') | string | trim | length > 0
+      - service_prepare_context.lookup_values.get('sabnzbd_api', '') | string | trim | length > 0
+      - >-
+        (service_prepare_context.lookup_values.get('althub_user', '') | string | trim | length > 0)
+        == (service_prepare_context.lookup_values.get('althub_api', '') | string | trim | length > 0)
+      - >-
+        (service_prepare_context.lookup_values.get('geek_user', '') | string | trim | length > 0)
+        == (service_prepare_context.lookup_values.get('geek_api', '') | string | trim | length > 0)
+      - >-
+        (service_prepare_context.lookup_values.get('slug_user', '') | string | trim | length > 0)
+        == (service_prepare_context.lookup_values.get('slug_api', '') | string | trim | length > 0)
+    fail_msg: >-
+      NZBHydra2 required credentials or an optional credential pair is incomplete;
+      cleanup and configuration were not started.
+  tags: [deploy, update, remove, recreate, bootstrap, drift]

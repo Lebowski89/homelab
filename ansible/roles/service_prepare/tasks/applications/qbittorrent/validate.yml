@@ -1,0 +1,41 @@
+---
+
+- name: QBittorrent prepare | Resolve instance contract
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_qbittorrent_password_var: >-
+      {{
+        'qbittorrent_pass'
+        if service_prepare_context.service_name == 'qbittorrent'
+        else (
+          'qbittorrent_xs_pass'
+          if service_prepare_context.service_name == 'qbittorrent-xs'
+          else ''
+        )
+      }}
+    service_prepare_qbittorrent_template_var: >-
+      {{
+        'qbittorrent_pass_pbkdf2'
+        if service_prepare_context.service_name == 'qbittorrent'
+        else (
+          'qbittorrent_xs_pass_pbkdf2'
+          if service_prepare_context.service_name == 'qbittorrent-xs'
+          else ''
+        )
+      }}
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: QBittorrent prepare | Validate instance and password
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_prepare_qbittorrent_password_var | length > 0
+      - service_prepare_qbittorrent_template_var | length > 0
+      - service_prepare_context.lookup_values.get(service_prepare_qbittorrent_password_var, '') | string | trim | length > 0
+      - service_prepare_context.filesystem_hosts | length > 0
+    fail_msg: >-
+      qBittorrent preparation requires a downloads or seeds instance, its declared password,
+      and an explicit filesystem host.
+  tags: [deploy, update, remove, recreate, bootstrap, drift]

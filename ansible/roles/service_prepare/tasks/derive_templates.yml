@@ -1,0 +1,27 @@
+---
+
+- name: Application template derivation | Include Authelia derivation
+  when:
+    - not ansible_check_mode
+    - service_prepare_handler == 'authelia'
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: applications/authelia/derive_templates.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Application template derivation | Include qBittorrent derivation
+  when:
+    - not ansible_check_mode
+    - service_prepare_handler == 'qbittorrent'
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: applications/qbittorrent/derive_templates.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate, bootstrap]

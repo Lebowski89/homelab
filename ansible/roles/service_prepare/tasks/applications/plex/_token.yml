@@ -1,0 +1,240 @@
+---
+
+################################
+# FACTS
+################################
+
+- name: Prep - Plex Token | Set file ownership facts
+  ansible.builtin.set_fact:
+    service_prepare_plex_ini_owner: >-
+      {{
+        hostvars[service_prepare_plex_controller_host].container_host_puid
+        | default(hostvars[service_prepare_plex_controller_host].puid | default('1000'))
+      }}
+    service_prepare_plex_ini_group: >-
+      {{
+        hostvars[service_prepare_plex_controller_host].container_host_pgid
+        | default(hostvars[service_prepare_plex_controller_host].pgid | default('1000'))
+      }}
+  delegate_to: "{{ service_prepare_plex_controller_host }}"
+  run_once: true
+
+################################
+# TOKEN
+################################
+
+- name: Prep - Plex Token | Check if plex.ini exists
+  ansible.builtin.stat:
+    path: "{{ service_prepare_plex_ini_path }}"
+  register: service_prepare_plex_ini
+  delegate_to: "{{ service_prepare_plex_controller_host }}"
+  run_once: true
+
+- name: Prep - Plex Token | Set client identifier fact
+  when: service_prepare_plex_ini.stat.exists
+  delegate_to: "{{ service_prepare_plex_controller_host }}"
+  run_once: true
+  block:
+    - name: Prep - Plex Token | Lookup client_identifier
+      ansible.builtin.set_fact:
+        service_prepare_plex_client_identifier: >-
+          {{ lookup('ini', 'client_identifier section=plex file=' ~ service_prepare_plex_ini_path) }}
+        service_prepare_plex_client_identifier_missing: false
+  rescue:
+    - name: Prep - Plex Token | Set identifier to empty string
+      ansible.builtin.set_fact:
+        service_prepare_plex_client_identifier: ""
+        service_prepare_plex_client_identifier_missing: true
+
+- name: Prep - Plex Token | Generate new identifier
+  when: >-
+    (not service_prepare_plex_ini.stat.exists)
+    or
+    (service_prepare_plex_client_identifier_missing | default(false))
+  ansible.builtin.set_fact:
+    service_prepare_plex_client_identifier: >-
+      {{
+        'plex' +
+        (lookup('password', '/dev/null', chars=['ascii_lowercase', 'digits'], length=8))
+      }}
+  delegate_to: "{{ service_prepare_plex_controller_host }}"
+  run_once: true
+
+- name: Prep - Plex Token | Set token variable if previously saved
+  when:
+    - service_prepare_plex_ini.stat.exists
+    - not (service_prepare_plex_client_identifier_missing | default(false))
+  ansible.builtin.set_fact:
+    service_prepare_plex_auth_token: >-
+      {{
+        lookup('ini', 'token section=plex file=' ~ service_prepare_plex_ini_path)
+        | regex_replace('\n', '')
+      }}
+  delegate_to: "{{ service_prepare_plex_controller_host }}"
+  run_once: true
+
+- name: Prep - Plex Token | Set service_prepare_plex_no_token status
+  ansible.builtin.set_fact:
+    service_prepare_plex_no_token: >-
+      {{
+        (not service_prepare_plex_ini.stat.exists)
+        or (service_prepare_plex_client_identifier_missing | default(false))
+        or ((service_prepare_plex_auth_token | default('') | string | trim) == '')
+      }}
+  delegate_to: "{{ service_prepare_plex_controller_host }}"
+  run_once: true
+
+- name: Prep - Plex Token | Check if Token is valid
+  when:
+    - service_prepare_plex_ini.stat.exists
+    - not (service_prepare_plex_client_identifier_missing | default(false))
+    - (service_prepare_plex_auth_token | default('') | string | length) > 0
+  ansible.builtin.uri:
+    url: "https://plex.tv/api/v2/user"
+    method: GET
+    return_content: true
+    body:
+      X-Plex-Token: "{{ service_prepare_plex_auth_token }}"
+      X-Plex-Version: "1.0.0"
+      X-Plex-Product: "plex"
+      X-Plex-Client-Identifier: "{{ service_prepare_plex_client_identifier }}"
+      X-Plex-Platform: "linux"
+      X-Plex-Platform-Version: "1.0.0"
+      X-Plex-Device: >-
+        Debian {{ hostvars[service_prepare_plex_controller_host].ansible_facts['distribution_version'] }}
+        - {{ hostvars[service_prepare_plex_controller_host].ansible_facts['kernel'] }}
+      X-Plex-Device-Name: "Media Server"
+    body_format: form-urlencoded
+    headers:
+      Accept: "application/json"
+    status_code: [200, 401]
+    timeout: 60
+  register: service_prepare_plex_token
+  delegate_to: "{{ service_prepare_plex_controller_host }}"
+  run_once: true
+
+- name: Prep - Plex Token | Generate New Token
+  when:
+    - (service_prepare_plex_no_token | default(true)) | bool
+      or ((service_prepare_plex_token is defined) and (service_prepare_plex_token.status | default(0) | int) == 401)
+  delegate_to: "{{ service_prepare_plex_controller_host }}"
+  run_once: true
+  block:
+    - name: Prep - Plex Token | Generate PIN
+      ansible.builtin.uri:
+        url: "https://plex.tv/api/v2/pins"
+        method: POST
+        return_content: true
+        body:
+          strong: "true"
+          X-Plex-Version: "1.0.0"
+          X-Plex-Product: "plex"
+          X-Plex-Client-Identifier: "{{ service_prepare_plex_client_identifier }}"
+          X-Plex-Platform: "linux"
+          X-Plex-Platform-Version: "1.0.0"
+          X-Plex-Device: >-
+            Debian {{ hostvars[service_prepare_plex_controller_host].ansible_facts['distribution_version'] }}
+            - {{ hostvars[service_prepare_plex_controller_host].ansible_facts['kernel'] }}
+          X-Plex-Device-Name: "Media Server"
+        body_format: form-urlencoded
+        headers:
+          Accept: "application/json"
+        status_code: 201
+        timeout: 60
+      register: service_prepare_plex_pin
+
+    - name: Prep - Plex Token | Login prompt
+      ansible.builtin.pause:
+        prompt: >-
+          {% set plex_auth_url =
+            'https://app.plex.tv/auth#?clientID=' ~ service_prepare_plex_client_identifier
+            ~ '&code=' ~ service_prepare_plex_pin.json.code
+            ~ '&context%5Bdevice%5D%5Bproduct%5D=' ~ service_prepare_plex_pin.json.product
+          %}
+          Please open
+          {{ plex_auth_url }}
+          and login. Hit enter after having logged in
+
+    - name: Prep - Plex Token | Check PIN
+      ansible.builtin.uri:
+        url: "https://plex.tv/api/v2/pins/{{ service_prepare_plex_pin.json.id }}"
+        method: GET
+        return_content: true
+        body:
+          X-Plex-Client-Identifier: "{{ service_prepare_plex_client_identifier }}"
+        body_format: form-urlencoded
+        headers:
+          Accept: "application/json"
+        status_code: 200
+        timeout: 60
+      register: service_prepare_plex_token_new
+
+    - name: Prep - Plex Token | Set service_prepare_plex_auth_token variable
+      ansible.builtin.set_fact:
+        service_prepare_plex_auth_token: "{{ service_prepare_plex_token_new.json.authToken | regex_replace('\n', '') }}"
+      no_log: true
+
+    - name: Prep - Plex Token | Check if new Token is valid
+      ansible.builtin.uri:
+        url: "https://plex.tv/api/v2/user"
+        method: GET
+        return_content: true
+        body:
+          X-Plex-Token: "{{ service_prepare_plex_auth_token }}"
+          X-Plex-Version: "1.0.0"
+          X-Plex-Product: "plex"
+          X-Plex-Client-Identifier: "{{ service_prepare_plex_client_identifier }}"
+          X-Plex-Platform: "linux"
+          X-Plex-Platform-Version: "1.0.0"
+          X-Plex-Device: >-
+            Debian {{ hostvars[service_prepare_plex_controller_host].ansible_facts['distribution_version'] }}
+            - {{ hostvars[service_prepare_plex_controller_host].ansible_facts['kernel'] }}
+          X-Plex-Device-Name: "Media Server"
+        body_format: form-urlencoded
+        headers:
+          Accept: "application/json"
+        status_code: [200, 401]
+        timeout: 60
+      register: service_prepare_plex_new_token
+
+    - name: Prep - Plex Token | Fail if new token is invalid
+      when: (service_prepare_plex_new_token.status | int) == 401
+      ansible.builtin.fail:
+        msg: "Something went wrong with the creation of the new token"
+
+    - name: Prep - Plex Token | Add Client Identifier to plex.ini
+      community.general.ini_file:
+        path: "{{ service_prepare_plex_ini_path }}"
+        section: "plex"
+        option: "client_identifier"
+        value: "{{ service_prepare_plex_client_identifier }}"
+        create: true
+        owner: "{{ service_prepare_plex_ini_owner }}"
+        group: "{{ service_prepare_plex_ini_group }}"
+        mode: "0664"
+
+    - name: Prep - Plex Token | Add Token to plex.ini
+      community.general.ini_file:
+        path: "{{ service_prepare_plex_ini_path }}"
+        section: "plex"
+        option: "token"
+        value: "{{ service_prepare_plex_auth_token }}"
+        create: true
+        owner: "{{ service_prepare_plex_ini_owner }}"
+        group: "{{ service_prepare_plex_ini_group }}"
+        mode: "0664"
+
+  rescue:
+    - name: Prep - Plex Token | Fail token generation with context
+      ansible.builtin.fail:
+        msg: >-
+          Plex token generation failed. No valid new token was saved.
+          Re-run the task and complete the Plex login prompt when requested.
+
+- name: Prep - Plex Token | Report token status
+  ansible.builtin.debug:
+    msg: "Plex auth token is present."
+  when:
+    - (service_prepare_plex_auth_token | default('') | string | trim | length) > 0
+  delegate_to: "{{ service_prepare_plex_controller_host }}"
+  run_once: true

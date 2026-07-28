@@ -2,21 +2,24 @@
 
 nzbhydra2:
   enabled: true
+  runtime: docker
   tags: [usenet, nzbhydra2]
   name: nzbhydra2
   stack: nzbhydra2
+
   image: ghcr.io/hotio/nzbhydra2:release-v8.8.4
-  named_networks:
-    overlay:
-      external: true
+
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
+    PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_storage_host].container_host_pgid }}"
     UMASK: "022"
   infisical:
     fail_on_empty: true
     secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
       - var: nzbhydra2_user
         path: "/NZBHydra2"
         name: USER
@@ -56,29 +59,39 @@ nzbhydra2:
       - var: sabnzbd_api
         path: "/SABnzbd"
         name: API
+
+  application_prepare:
+    handler: nzbhydra2
+  prep:
+  ## used in tasks/sub_tasks/prep/nzbhydra2.yml
+    sabnzbd:
+      url: "http://sabnzbd:8080"
+
+  named_networks:
+    overlay:
+      external: true
+
   paths:
-    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/nzbhydra2"
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/nzbhydra2"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/nzbhydra2"
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/nzbhydra2"
       target: /config
       read_only: false
+
   traefik:
     enable: true
     exposure: private
     port: 5076
-  prep:
-  ## used in tasks/sub_tasks/prep/nzbhydra2.yml
-    sabnzbd:
-      url: "http://sabnzbd:8080"
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_unraid_host }}"
+    host: "{{ services_storage_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_unraid_host
+      - node.labels.docker_services_host == services_storage_host

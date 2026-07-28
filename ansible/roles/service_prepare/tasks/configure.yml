@@ -1,0 +1,27 @@
+---
+
+- name: Application configuration | Include Bazarr configuration
+  when:
+    - not ansible_check_mode
+    - service_prepare_handler == 'bazarr'
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: applications/bazarr/configure.yml
+    apply:
+      tags: [deploy, update, recreate]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate]
+
+- name: Application configuration | Include NZBHydra2 configuration
+  when:
+    - not ansible_check_mode
+    - service_prepare_handler == 'nzbhydra2'
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: applications/nzbhydra2/configure.yml
+    apply:
+      tags: [deploy, update, recreate]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate]

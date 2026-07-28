@@ -1,0 +1,27 @@
+---
+
+- name: Authelia prepare | Validate hash and key contract
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context.lookup_values.get('authelia_pass', '') | string | trim | length > 0
+      - service_prepare_context.lookup_values.get('authelia_storage_key', '') | string | trim | length > 0
+      - service_prepare_context.filesystem_hosts | length > 0
+    fail_msg: "Authelia preparation requires its password, canonical storage key, and filesystem host."
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Authelia prepare | Publish temporary generation request
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_bootstrap_requests:
+      authelia:
+        generate_user_password_hash: true
+        runtime: "{{ service_prepare_context.runtime }}"
+        generated_secrets:
+          - var: authelia_session_key
+            name: authelia_session_key_secret
+          - var: authelia_jwt_reset_key
+            name: authelia_jwt_key_secret
+  tags: [deploy, update, recreate, bootstrap]

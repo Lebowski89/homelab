@@ -1,0 +1,76 @@
+---
+
+################################
+# PLEX PREP
+################################
+
+- name: Prep - Plex Prep | Set derived vars
+  ansible.builtin.set_fact:
+    service_prepare_plex_fs_host: "{{ (service_prepare_context.filesystem_hosts | default([]) | first) | default('') }}"
+    service_prepare_plex_controller_host: "{{ service_prepare_context.controller_host | string | trim }}"
+    service_prepare_plex_ini_path: >-
+      {{ hostvars[service_prepare_context.controller_host].container_host_appdata_root }}/plex/plex.ini
+    service_prepare_plex_preferences_file: >-
+      {{
+        hostvars[service_prepare_context.filesystem_hosts | first].container_host_appdata_root
+      }}/plex/Library/Application Support/Plex Media Server/Preferences.xml
+  run_once: true
+
+- name: Prep - Plex Prep | Assert derived hosts are valid
+  ansible.builtin.assert:
+    that:
+      - service_prepare_plex_fs_host | string | trim | length > 0
+      - service_prepare_plex_fs_host in hostvars
+      - service_prepare_plex_controller_host | string | trim | length > 0
+      - service_prepare_plex_controller_host in hostvars
+    fail_msg: >-
+      Plex prep derived an invalid filesystem host or swarm manager host.
+  run_once: true
+
+################################
+# PLEX TOKEN
+################################
+
+- name: Prep - Plex Token | Include token tasks
+  ansible.builtin.include_tasks:
+    file: _token.yml
+    apply:
+      tags: [bootstrap]
+      delegate_to: "{{ service_prepare_plex_controller_host }}"
+      run_once: true
+      no_log: true
+      diff: false
+  run_once: true
+  tags: [bootstrap]
+
+################################
+# PLEX PREFERENCES
+################################
+
+- name: Prep - Plex Preferences | Include Plex preferences.xml tasks
+  ansible.builtin.include_tasks:
+    file: _preferences.yml
+    apply:
+      tags: [bootstrap]
+      delegate_to: "{{ service_prepare_plex_fs_host }}"
+      run_once: true
+      no_log: true
+      diff: false
+  run_once: true
+  tags: [bootstrap]
+
+################################
+# PLEX CLAIM SERVER
+################################
+
+- name: Prep - Plex Claim | Include claim server tasks
+  ansible.builtin.include_tasks:
+    file: _claim.yml
+    apply:
+      tags: [bootstrap]
+      delegate_to: "{{ service_prepare_plex_fs_host }}"
+      run_once: true
+      no_log: true
+      diff: false
+  run_once: true
+  tags: [bootstrap]

@@ -1,0 +1,98 @@
+---
+
+- name: Temporary preparation container | Validate request
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context.runtime in ['docker', 'podman']
+      - service_prepare_temporary_container is mapping
+      - service_prepare_temporary_container.name is string
+      - service_prepare_temporary_container.name | trim | length > 0
+      - service_prepare_temporary_container.image is string
+      - service_prepare_temporary_container.image | trim | length > 0
+      - >-
+        service_prepare_temporary_container.command is not defined
+        or service_prepare_temporary_container.command is string
+        or service_prepare_temporary_container.command is sequence
+      - service_prepare_temporary_container.host is string
+      - service_prepare_temporary_container.host | trim | length > 0
+      - service_prepare_temporary_container.host in hostvars
+      - service_prepare_temporary_container.environment | default({}) is mapping
+      - service_prepare_temporary_container.mounts | default([]) is sequence
+      - service_prepare_temporary_container.mounts | default([]) is not string
+      - service_prepare_temporary_container.detach | default(true) is boolean
+      - service_prepare_temporary_container.capture_output | default(false) is boolean
+      - service_prepare_temporary_container.wait_path | default('') is string
+      - service_prepare_temporary_container.stabilization_seconds | default(0) is integer
+      - service_prepare_temporary_container.stabilization_seconds | default(0) | int >= 0
+      - service_prepare_temporary_container.wait_for_stable_file | default(false) is boolean
+    fail_msg: "Temporary application preparation requires a valid selected-runtime container request."
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Temporary preparation container | Reset execution output
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_temporary_container_output: ""
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Temporary preparation container | Execute with guaranteed cleanup
+  when: not ansible_check_mode
+  no_log: true
+  tags: [deploy, update, recreate, bootstrap]
+  block:
+    - name: Temporary preparation container | Start selected runtime executor
+      ansible.builtin.include_tasks:
+        file: "{{ service_prepare_context.runtime | service_prepare_runtime_executor('start') }}"
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+          no_log: true
+          diff: false
+
+    - name: Temporary preparation container | Wait for generated file
+      when: service_prepare_temporary_container.wait_path | default('') | length > 0
+      ansible.builtin.wait_for:
+        path: "{{ service_prepare_temporary_container.wait_path }}"
+        state: present
+        timeout: 180
+      delegate_to: "{{ service_prepare_temporary_container.host }}"
+
+    - name: Temporary preparation container | Wait for generated file stability
+      when: service_prepare_temporary_container.wait_for_stable_file | default(false) | bool
+      ansible.builtin.shell: |
+        set -euo pipefail
+        previous_size=-1
+        stable_count=0
+        for _ in $(seq 1 12); do
+          current_size="$(stat -c %s {{ service_prepare_temporary_container.wait_path | quote }})"
+          if [ "$current_size" -gt 0 ] && [ "$current_size" -eq "$previous_size" ]; then
+            stable_count=$((stable_count + 1))
+            if [ "$stable_count" -ge 2 ]; then
+              exit 0
+            fi
+          else
+            stable_count=0
+          fi
+          previous_size="$current_size"
+          sleep 5
+        done
+        exit 1
+      args:
+        executable: /bin/bash
+      changed_when: false
+      delegate_to: "{{ service_prepare_temporary_container.host }}"
+
+    - name: Temporary preparation container | Allow generated file write to settle
+      when: service_prepare_temporary_container.stabilization_seconds | default(0) | int > 0
+      ansible.builtin.pause:
+        seconds: "{{ service_prepare_temporary_container.stabilization_seconds | int }}"
+
+  always:
+    - name: Temporary preparation container | Remove selected runtime executor
+      ansible.builtin.include_tasks:
+        file: "{{ service_prepare_context.runtime | service_prepare_runtime_executor('remove') }}"
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+          no_log: true
+          diff: false

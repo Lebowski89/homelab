@@ -2,26 +2,33 @@
 
 plex:
   enabled: true
+  runtime: docker
   tags: [plex, plex_server]
   name: plex
   stack: plex
+
   image: lscr.io/linuxserver/plex:1.43.2
-  named_networks:
-    overlay:
-      external: true
-  devices:
-    - /dev/dri:/dev/dri
+
   environment:
-    PUID: "{{ hostvars[docker_services_plex_host].docker_host_puid | string }}"
-    PGID: "{{ hostvars[docker_services_plex_host].docker_host_pgid | string }}"
+    PUID: "{{ hostvars[services_plex_host].container_host_puid | string }}"
+    PGID: "{{ hostvars[services_plex_host].container_host_pgid | string }}"
     TZ: "{{ timezone }}"
     VERSION: "docker"
     PLEX_CLAIM: "{{ plex_claim_code | default(omit) }}"
-    ADVERTISE_IP: "http://192.168.80.59:32400/"
+    ADVERTISE_IP: "http://{{ hostvars[services_plex_host].local_ip }}:32400/"
     TP_SCHEME: "http"
     DOCKER_MODS: "ghcr.io/themepark-dev/theme.park:plex"
-    TP_DOMAIN: "{{ hostvars[docker_services_primary_manager].local_ip }}:8089"
+    TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
     TP_THEME: "hotline"
+
+  application_prepare:
+    handler: plex
+    bootstrap:
+      enabled: true
+
+  named_networks:
+    overlay:
+      external: true
   ports:
     web:
       published: 32400
@@ -65,39 +72,44 @@ plex:
       target: 32414
       protocol: udp
       mode: host
+
   paths:
-    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex"
+    - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/plex"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library"
+    - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library/Application Support"
+    - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library/Application Support"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library/Application Support/Plex Media Server"
+    - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library/Application Support/Plex Media Server"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library/Application Support/Plex Media Server/Plug-ins"
+    - path: >-
+        {{ hostvars[services_plex_host].container_host_appdata_root
+        }}/plex/Library/Application Support/Plex Media Server/Plug-ins
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library/Logs"
+    - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library/Logs"
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex/Library/Logs/Plex Media Server"
+    - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library/Logs/Plex Media Server"
       state: directory
       mode: "0755"
   named_volumes:
     media_nfs:
-      external: true
-      # optional extras later:
-      # name: "media_nfs"
-      # driver: "local"
-      # driver_opts: { ... }
+      external: false
+      name: media_nfs
+      driver: local
+      driver_opts:
+        type: nfs
+        o: "addr={{ hostvars[services_storage_host].local_ip }},rw,nfsvers=4.2"
+        device: ":{{ hostvars[services_storage_host].container_host_data_root }}/media"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[docker_services_plex_host].docker_host_appdata_root }}/plex"
+      source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/plex"
       target: /config
       read_only: false
     transcode:
@@ -110,11 +122,15 @@ plex:
       source: media_nfs
       target: /data/media
       read_only: false
+
+  devices:
+    - /dev/dri:/dev/dri
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_plex_host }}"
+    host: "{{ services_plex_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_plex_host
+      - node.labels.docker_services_host == services_plex_host

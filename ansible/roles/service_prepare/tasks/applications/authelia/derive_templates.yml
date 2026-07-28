@@ -1,0 +1,57 @@
+---
+
+- name: Authelia prepare | Build selected-runtime password-hash request
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_temporary_container:
+      name: >-
+        {{
+          service_prepare_context.service_name
+          | service_prepare_temporary_name(
+              service_prepare_context.target | default(''),
+              'password-hash'
+            )
+        }}
+      image: "{{ service_prepare_context.service.image }}"
+      command: >-
+        authelia crypto hash generate argon2
+        --password {{ service_prepare_context.lookup_values.authelia_pass | quote }}
+      host: "{{ service_prepare_context.filesystem_hosts | first }}"
+      environment: {}
+      mounts: []
+      detach: false
+      capture_output: true
+
+- name: Authelia prepare | Run selected-runtime password-hash generator
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: ../../runtimes/temporary_container.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Authelia prepare | Publish password hash
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_template_vars: >-
+      {{
+        service_prepare_template_vars
+        | combine({
+            'authelia_argon2_password': (
+              service_prepare_temporary_container_output
+              | service_prepare_extract_output('Digest: ')
+            )
+          })
+      }}
+
+- name: Authelia prepare | Validate password hash
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_prepare_template_vars.authelia_argon2_password | length > 0
+    fail_msg: "Authelia password hash generation returned no usable output."

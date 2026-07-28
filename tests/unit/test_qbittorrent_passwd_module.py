@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-MODULE_PATH = REPO_ROOT / "ansible/roles/docker_services/library/qbittorrent_passwd.py"
+MODULE_PATH = REPO_ROOT / "ansible/roles/service_prepare/library/qbittorrent_passwd.py"
 
 
 def load_module():

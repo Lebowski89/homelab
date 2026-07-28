@@ -2,26 +2,29 @@
 
 bazarr:
   enabled: true
+  runtime: docker
   tags: [arrs, pgsql, bazarr]
   name: bazarr
   stack: bazarr
+
   image: ghcr.io/hotio/bazarr:release-v1.5.6
-  named_networks:
-    overlay:
-      external: true
+
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_unraid_host].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_unraid_host].docker_host_pgid }}"
+    PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_storage_host].container_host_pgid }}"
     UMASK: "022"
     WEBUI_PORTS: "6767/tcp,6767/udp"
     TP_SCHEME: "http"
-    TP_DOMAIN: "{{ hostvars[docker_services_primary_manager].local_ip }}:8089"
+    TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
     TP_HOTIO: "true"
     TP_THEME: "hotline"
   infisical:
     fail_on_empty: true
     secrets_map:
+      - var: cloudflare_zone
+        path: /Cloudflare
+        name: ZONE
       - var: bazarr_api
         path: "/Bazarr"
         name: API
@@ -43,47 +46,9 @@ bazarr:
       - var: postgres_pass
         path: "/Postgres"
         name: PASS
-  paths:
-    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/bazarr"
-      state: directory
-      mode: "0755"
-    - path: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/bazarr/config"
-      state: directory
-      mode: "0755"
-  copies:
-    - src: files/themepark/98-themepark-bazarr
-      dest: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/bazarr/98-themepark-bazarr"
-      mode: "0755"
-      force: false
-      wait: true
-      wait_timeout: 30
-  volumes:
-    config:
-      type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/bazarr"
-      target: /config
-      read_only: false
-    media:
-      type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_data_root }}"
-      target: /data
-      read_only: false
-    themepark:
-      type: bind
-      source: "{{ hostvars[docker_services_unraid_host].docker_host_appdata_root }}/bazarr/98-themepark-bazarr"
-      target: /etc/cont-init.d/98-themepark
-      read_only: false
-  traefik:
-    enable: true
-    exposure: private
-    port: 6767
-  themepark:
-    app: bazarr
-    theme: hotline
-  postgres:
-    enable: true
-    databases:
-      - bazarr
+
+  application_prepare:
+    handler: bazarr
   prep:
   ## used in tasks/sub_tasks/prep/bazarr.yml
     radarr:
@@ -95,11 +60,59 @@ bazarr:
     postgres:
       host: "haproxy"
       port: "5432"
+
+  named_networks:
+    overlay:
+      external: true
+
+  paths:
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/bazarr"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/bazarr/config"
+      state: directory
+      mode: "0755"
+  copies:
+    - src: files/themepark/98-themepark-bazarr
+      dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/bazarr/98-themepark-bazarr"
+      mode: "0755"
+      force: false
+      wait: true
+      wait_timeout: 30
+  volumes:
+    config:
+      type: bind
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/bazarr"
+      target: /config
+      read_only: false
+    media:
+      type: bind
+      source: "{{ hostvars[services_storage_host].container_host_data_root }}"
+      target: /data
+      read_only: false
+    themepark:
+      type: bind
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/bazarr/98-themepark-bazarr"
+      target: /etc/cont-init.d/98-themepark
+      read_only: false
+
+  traefik:
+    enable: true
+    exposure: private
+    port: 6767
+  themepark:
+    app: bazarr
+    theme: hotline
+  postgres:
+    enable: true
+    databases:
+      - bazarr
+
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ docker_services_unraid_host }}"
+    host: "{{ services_storage_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_unraid_host
+      - node.labels.docker_services_host == services_storage_host

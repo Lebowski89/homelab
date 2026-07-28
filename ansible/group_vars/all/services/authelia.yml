@@ -2,15 +2,14 @@
 
 authelia:
   enabled: true
+  runtime: docker
   tags: [proxy, pgsql, authelia]
   stack: authelia
-  named_networks:
-    overlay:
-      external: true
+
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[docker_services_primary_manager].docker_host_puid }}"
-    PGID: "{{ hostvars[docker_services_primary_manager].docker_host_pgid }}"
+    PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
+    PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
     UMASK: "022"
   infisical:
     fail_on_empty: true
@@ -18,18 +17,22 @@ authelia:
       - var: authelia_redis_key
         path: "/Authelia"
         name: REDIS_KEY
-        docker_secret: authelia_redis_secret
-  secrets:
-    - authelia_redis_secret
+        secret:
+          name: authelia_redis_secret
+
+  named_networks:
+    overlay:
+      external: true
 
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: careful
-    host: "{{ docker_services_primary_manager }}"
+    host: "{{ services_controller_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+      - node.labels.docker_services_host == services_controller_host
+
   targets:
 
     ################################
@@ -37,17 +40,19 @@ authelia:
     ################################
     redis:
       name: authelia-redis
+
       image: valkey/valkey:9.1-alpine
       command:
         - sh -c 'valkey-server --requirepass "$$(cat /run/secrets/authelia_redis_secret)"'
+
       paths:
-        - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/redis"
+        - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/redis"
           state: directory
           mode: "0755"
       volumes:
         config:
           type: bind
-          source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/redis"
+          source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/redis"
           target: /data
           read_only: false
 
@@ -56,7 +61,9 @@ authelia:
     ################################
     main:
       name: authelia
+
       image: authelia/authelia:4.39.20
+
       environment:
         AUTHELIA_SESSION_SECRET_FILE: /run/secrets/authelia_session_key_secret
         AUTHELIA_SESSION_REDIS_PASSWORD_FILE: /run/secrets/authelia_redis_secret
@@ -65,7 +72,7 @@ authelia:
         AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET_FILE: /run/secrets/authelia_jwt_key_secret
         AUTHELIA_IDENTITY_PROVIDERS_OIDC_HMAC_SECRET_FILE: /run/secrets/authelia_oidc_hmac_secret
       env_file:
-        - "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/.env"
+        - "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/.env"
       infisical:
         fail_on_empty: true
         secrets_map:
@@ -75,7 +82,8 @@ authelia:
           - var: postgres_pass
             path: "/Postgres"
             name: PASS
-            docker_secret: postgres_pass_secret
+            secret:
+              name: postgres_pass_secret
           - var: authelia_user
             path: "/Authelia"
             name: USER
@@ -88,11 +96,13 @@ authelia:
           - var: authelia_storage_key
             path: "/Authelia"
             name: STORAGE_KEY
-            docker_secret: authelia_storage_key_secret
+            secret:
+              name: authelia_storage_key_secret
           - var: authelia_oidc_hmac_secret
             path: "/Authelia"
             name: OIDC_HMAC_SECRET
-            docker_secret: authelia_oidc_hmac_secret
+            secret:
+              name: authelia_oidc_hmac_secret
           - var: authelia_oidc_jwks_rsa_private_key
             path: "/Authelia"
             name: OIDC_JWKS_RSA_PRIVATE_KEY
@@ -122,50 +132,53 @@ authelia:
             name: ZONE
       secrets:
         - authelia_session_key_secret
-        - authelia_storage_key_secret
         - authelia_jwt_key_secret
-        - authelia_oidc_hmac_secret
-        - postgres_pass_secret
+
+      application_prepare:
+        handler: authelia
+
       paths:
-        - path: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia"
+        - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia"
           state: directory
           mode: "0755"
-        - path: "{{ docker_services_log_root }}"
+        - path: "{{ services_log_root }}"
           state: directory
           owner: "0"
           group: "0"
           mode: "0755"
-        - path: "{{ docker_services_log_root }}/authelia"
+        - path: "{{ services_log_root }}/authelia"
           state: directory
           owner: "0"
           group: "0"
           mode: "0755"
       templates:
         - src: configs/proxy/authelia/config.yml.j2
-          dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/configuration.yml"
+          dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/configuration.yml"
           mode: "0660"
           force: true
           no_log: true
         - src: configs/proxy/authelia/users_database.yml.j2
-          dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/users_database.yml"
+          dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/users_database.yml"
           mode: "0664"
           force: true
           no_log: true
         - src: configs/proxy/authelia/authelia.env.j2
-          dest: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia/.env"
+          dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/.env"
           mode: "0664"
           force: true
+          no_log: true
       volumes:
         config:
           type: bind
-          source: "{{ hostvars[docker_services_primary_manager].docker_host_appdata_root }}/authelia"
+          source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia"
           target: /config
           read_only: false
         logs:
           type: bind
-          source: "{{ docker_services_log_root }}/authelia"
+          source: "{{ services_log_root }}/authelia"
           target: /config/logs
           read_only: false
+
       postgres:
         enable: true
         databases:
