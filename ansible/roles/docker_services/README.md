@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/27 |
+| Readme update        | 2026/07/29 |
 
 
 
@@ -130,6 +130,11 @@
 | Init ¦ Normalize role interface vars (compat with old names) | ansible.builtin.set_fact | False |  |
 | Init ¦ Ensure docker_services_service_cfg is provided | ansible.builtin.assert | False |  |
 | Init ¦ Use catalog-resolved service config | ansible.builtin.set_fact | False |  |
+| Init ¦ Validate dispatch-owned common context | ansible.builtin.assert | False |  |
+| Init ¦ Reset per-service common snapshots | ansible.builtin.set_fact | False |  |
+| Init ¦ Snapshot dispatch-owned common context | ansible.builtin.set_fact | False |  |
+| Init ¦ Validate Docker secret attachment metadata before cleanup | ansible.builtin.set_fact | False |  |
+| Init ¦ Attach common resolved environment | ansible.builtin.set_fact | False |  |
 | Init ¦ Determine whether schema validation should run | ansible.builtin.set_fact | False |  |
 | Init ¦ Validate normalized service config | ansible.builtin.include_tasks | True |  |
 | Init ¦ Derive common service context | ansible.builtin.set_fact | False |  |
@@ -139,8 +144,9 @@
 | Init ¦ Derive effective filesystem hosts | ansible.builtin.set_fact | False |  |
 | Init ¦ Expand filesystem hosts if a group name was provided | ansible.builtin.set_fact | True |  |
 | Init ¦ De-dupe filesystem hosts | ansible.builtin.set_fact | False |  |
-| Init ¦ Initialize runtime-neutral host ownership mapping | ansible.builtin.set_fact | False |  |
-| Init ¦ Build runtime-neutral host ownership mapping | ansible.builtin.set_fact | False |  |
+| Init ¦ Validate effective filesystem hosts | ansible.builtin.assert | False |  |
+| Init ¦ Initialize runtime-neutral container host defaults | ansible.builtin.set_fact | False |  |
+| Init ¦ Build runtime-neutral container host defaults | ansible.builtin.set_fact | False |  |
 | Init ¦ Assert container deploy has a single deploy.host | ansible.builtin.assert | True |  |
 | Init ¦ Determine if this host should build/deploy compose artifacts | ansible.builtin.set_fact | False |  |
 
@@ -148,22 +154,26 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Prep - Application validation ¦ Build runtime-neutral context | ansible.builtin.set_fact | False |  |
+| Prep - Application validation ¦ Validate current service | ansible.builtin.include_role | False |  |
+| Prep - Application validation ¦ Snapshot reset outputs | ansible.builtin.set_fact | False |  |
 | Prep - Cleanup ¦ Derive cleanup flags | ansible.builtin.set_fact | False |  |
 | Prep - Cleanup ¦ Init cleaned-stacks tracker | ansible.builtin.set_fact | True |  |
 | Prep - Cleanup ¦ Determine if stack cleanup should run | ansible.builtin.set_fact | True |  |
 | Prep - Cleanup ¦ Remove existing stack | ansible.builtin.include_tasks | True |  |
 | Prep - Cleanup ¦ Mark stack as cleaned | ansible.builtin.set_fact | True |  |
-| Prep - Infisical ¦ Include tasker | ansible.builtin.include_tasks | False |  |
-| Prep - Swarm configs ¦ Include tasker | ansible.builtin.include_tasks | True |  |
-| Prep - Authelia ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
-| Prep - qBittorrent ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
-| Prep - Traefik zone ¦ Resolve Docker compatibility input | ansible.builtin.include_tasks | True |  |
+| Prep - Application secrets ¦ Run runtime-neutral generation | ansible.builtin.include_role | True |  |
+| Prep - Application secrets ¦ Snapshot portable generation outputs | ansible.builtin.set_fact | True |  |
+| Prep - Application secrets ¦ Build effective current-service secret inputs | ansible.builtin.set_fact | False |  |
+| Prep - Application secrets ¦ Validate effective attachment metadata | ansible.builtin.set_fact | False |  |
+| Prep - Secrets ¦ Materialize Docker-native secrets | ansible.builtin.include_tasks | True |  |
+| Prep - Application templates ¦ Derive runtime-neutral values | ansible.builtin.include_role | True |  |
+| Prep - Application templates ¦ Snapshot portable values | ansible.builtin.set_fact | False |  |
 | Prep - Service common ¦ Prepare files and Traefik integration | ansible.builtin.include_role | False |  |
-| Prep - Swarm Env Templates ¦ Render templates | ansible.builtin.include_role | True |  |
-| Prep - Plex ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
-| Prep - Bazarr ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
-| Prep - NZBHydra2 ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
-| Prep - Vaultwarden ¦ Include bootstrap tasks | ansible.builtin.include_tasks | True |  |
+| Prep - Swarm environment templates ¦ Render templates | ansible.builtin.include_role | True |  |
+| Prep - Application configuration ¦ Apply runtime-neutral configuration | ansible.builtin.include_role | True |  |
+| Prep - Application bootstrap ¦ Run explicit Plex bootstrap | ansible.builtin.include_role | True |  |
+| Prep - Swarm configs ¦ Include tasker | ansible.builtin.include_tasks | True |  |
 
 #### File: tasks/main.yml
 
@@ -360,10 +370,6 @@
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Drift Notify ¦ Ensure SMTP creds exist | block | True |
-| Drift Notify ¦ Detect if SMTP creds are missing | ansible.builtin.set_fact | False |
-| Drift Notify ¦ Fetch SMTP creds from Infisical | ansible.builtin.include_tasks | True |
-| Drift Notify ¦ Assert SMTP creds are now present | ansible.builtin.assert | False |
 | Drift Notify ¦ Build image drift email body | ansible.builtin.set_fact | True |
 | Drift Notify ¦ Send image drift email | community.general.mail | True |
 
@@ -410,10 +416,6 @@
 | Init - Validate ¦ docker_services_svc.templates mode formatting | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.copies shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.copies entries | ansible.builtin.assert | True |
-| Init - Validate ¦ docker_services_svc.infisical shape | ansible.builtin.assert | True |
-| Init - Validate ¦ docker_services_svc.infisical.secrets_map | ansible.builtin.assert | True |
-| Init - Validate ¦ docker_services_svc.infisical.secrets_map var names | ansible.builtin.assert | True |
-| Init - Validate ¦ docker_services_svc.infisical.secrets_map docker_secret names | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.healthcheck shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.secrets shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.secrets string form | ansible.builtin.assert | True |
@@ -431,57 +433,6 @@
 | Init - Validate ¦ docker_services_svc.environment shape | ansible.builtin.assert | True |
 | Init - Validate ¦ docker_services_svc.labels shape | ansible.builtin.assert | True |
 
-#### File: tasks/sub_tasks/prep/authelia/_keys.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Authelia Keys ¦ Assert required inputs | ansible.builtin.assert | False |
-| Prep - Authelia Keys ¦ Resolve keys host | ansible.builtin.set_fact | False |
-| Prep - Authelia Keys ¦ Determine if key already exists | ansible.builtin.set_fact | False |
-| Prep - Authelia Keys ¦ Determine if docker secret creation is enabled | ansible.builtin.set_fact | False |
-| Prep - Authelia Keys ¦ Ensure secret exists | community.docker.docker_secret | True |
-| Prep - Authelia Keys ¦ Report missing key in check mode | ansible.builtin.debug | True |
-| Prep - Authelia Keys ¦ Set check-mode placeholder generated value | ansible.builtin.set_fact | True |
-| Prep - Authelia Keys ¦ Generate key | block | True |
-| Prep - Authelia Keys ¦ Run generator container | community.docker.docker_container | False |
-| Prep - Authelia Keys ¦ Extract generated value | ansible.builtin.shell | False |
-| Prep - Authelia Keys ¦ Mark generated this run | ansible.builtin.set_fact | False |
-| Prep - Authelia Keys ¦ Fail if generation produced empty output | ansible.builtin.assert | False |
-| Prep - Authelia Keys ¦ Save generated value as a mgt fact | ansible.builtin.set_fact | True |
-| Prep - Authelia Keys ¦ Ensure secret exists (generated key) | community.docker.docker_secret | True |
-
-#### File: tasks/sub_tasks/prep/authelia/tasker.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Authelia ¦ Generate argon2 + secrets | block | True |
-| Prep - Authelia ¦ Generate argon2 digest | ansible.builtin.include_tasks | False |
-| Prep - Authelia ¦ Ensure session key secret | ansible.builtin.include_tasks | False |
-| Prep - Authelia ¦ Ensure storage key secret | ansible.builtin.include_tasks | False |
-| Prep - Authelia ¦ Persist storage key in Infisical | ansible.builtin.debug | True |
-| Prep - Authelia ¦ Ensure JWT reset key secret | ansible.builtin.include_tasks | False |
-
-#### File: tasks/sub_tasks/prep/bazarr.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Bazarr ¦ Set derived vars | ansible.builtin.set_fact | False |
-| Prep - Bazarr ¦ Set secret vars | ansible.builtin.set_fact | False |
-| Prep - Bazarr ¦ Set postgres vars | ansible.builtin.set_fact | True |
-| Prep - Bazarr ¦ Assert postgres inputs are complete | ansible.builtin.assert | True |
-| Prep - Bazarr ¦ Ensure config dir exists | ansible.builtin.file | False |
-| Prep - Bazarr ¦ Check config exists | ansible.builtin.stat | False |
-| Prep - Bazarr ¦ Generate config | block | True |
-| Prep - Bazarr ¦ Start temp container to generate config | community.docker.docker_container | False |
-| Prep - Bazarr ¦ Wait for config.yaml to appear | ansible.builtin.wait_for | False |
-| Prep - Bazarr ¦ Give Bazarr time to finish writing config | ansible.builtin.pause | False |
-| Prep - Bazarr ¦ Configure api setting | yedit | False |
-| Prep - Bazarr ¦ Configure misc settings | yedit | False |
-| Prep - Bazarr ¦ Configure opensubtitlescom settings | yedit | False |
-| Prep - Bazarr ¦ Configure radarr settings | yedit | False |
-| Prep - Bazarr ¦ Configure sonarr settings | yedit | False |
-| Prep - Bazarr ¦ Configure postgres settings | yedit | False |
-
 #### File: tasks/sub_tasks/prep/cleanup.yml
 
 | Name | Module | Has Conditions |
@@ -498,164 +449,22 @@
 | Prep - Cleanup ¦ Stack down | community.docker.docker_stack | False |
 | Prep - Cleanup ¦ Remove stack file | ansible.builtin.file | False |
 
-#### File: tasks/sub_tasks/prep/infisical/_fetch.yml
-
-| Name | Module | Has Conditions | Tags |
-| ---- | ------ | -------------- | -----|
-| Prep - Infisical Fetch ¦ Retrieve values through service common | ansible.builtin.include_role | False |  |
-| Prep - Infisical Fetch ¦ Recreate flattened compatibility facts | ansible.builtin.set_fact | True |  |
-| Prep - Infisical Fetch ¦ Recreate dictionary compatibility fact | ansible.builtin.set_fact | True |  |
-
-#### File: tasks/sub_tasks/prep/infisical/_resolver.yml
+#### File: tasks/sub_tasks/prep/secrets.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Prep - Infisical Resolver ¦ Determine fail-on-empty behavior | ansible.builtin.set_fact | True |
-| Prep - Infisical Resolver ¦ Initialize resolved environment + placeholder key list | ansible.builtin.set_fact | True |
-| Prep - Infisical Resolver ¦ Resolve placeholders | ansible.builtin.set_fact | True |
-| Prep - Infisical Resolver ¦ Replace docker_services_svc.environment with resolved values | ansible.builtin.set_fact | True |
-| Prep - Infisical Resolver ¦ Fail if any placeholders remain | ansible.builtin.fail | True |
-| Prep - Infisical Resolver ¦ Fail if any placeholder-resolved env key is empty | ansible.builtin.assert | True |
-
-#### File: tasks/sub_tasks/prep/infisical/_secrets.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Infisical Secrets ¦ Resolve deploy host | ansible.builtin.set_fact | False |
-| Prep - Infisical Secrets ¦ Resolve effective secrets host | ansible.builtin.set_fact | False |
-| Prep - Infisical Secrets ¦ Build desired secret items from common declarations | ansible.builtin.set_fact | False |
-| Prep - Infisical Secrets ¦ Validate runtime attachment metadata before materialization | ansible.builtin.set_fact | False |
-| Prep - Infisical Secrets ¦ Reject empty secret values before materialization | ansible.builtin.assert | False |
-| Prep - Infisical Secrets ¦ Create Docker Swarm secrets | community.docker.docker_secret | True |
-| Prep - Infisical Secrets ¦ Ensure secrets directory exists on deploy host | ansible.builtin.file | True |
-| Prep - Infisical Secrets ¦ Remove secret path if it exists but is a directory | ansible.builtin.file | True |
-| Prep - Infisical Secrets ¦ Write secret files on deploy host | ansible.builtin.copy | True |
-| Prep - Infisical Secrets ¦ Verify secret paths exist and are files | ansible.builtin.stat | True |
-| Prep - Infisical Secrets ¦ Fail if any secret path is not a file | ansible.builtin.assert | True |
-
-#### File: tasks/sub_tasks/prep/infisical/tasker.yml
-
-| Name | Module | Has Conditions | Tags |
-| ---- | ------ | -------------- | -----|
-| Prep - Infisical Fetch ¦ Reset per-service adapter values | ansible.builtin.set_fact | False |  |
-| Prep - Infisical Fetch ¦ Include tasks | ansible.builtin.include_tasks | False |  |
-| Prep - Infisical Fetch ¦ Snapshot common per-service outputs | ansible.builtin.set_fact | False |  |
-| Prep - Infisical Fetch ¦ Attach common resolved environment on every role host | ansible.builtin.set_fact | False |  |
-| Prep - Infisical Resolver ¦ Include tasks on deploy host | ansible.builtin.include_tasks | True |  |
-| Prep - Infisical Resolver ¦ Propagate Infisical flattened vars to deploy host | ansible.builtin.set_fact | True |  |
-| Prep - Infisical Resolver ¦ Propagate Infisical dict to deploy host | ansible.builtin.set_fact | True |  |
-| Prep - Infisical Secrets ¦ Include tasks | ansible.builtin.include_tasks | True |  |
-
-#### File: tasks/sub_tasks/prep/nzbhydra2.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - NZBHydra2 ¦ Set filesystem host | ansible.builtin.set_fact | False |
-| Prep - NZBHydra2 ¦ Set derived vars | ansible.builtin.set_fact | False |
-| Prep - NZBHydra2 ¦ Assert required secrets are present | ansible.builtin.assert | False |
-| Prep - NZBHydra2 ¦ Assert altHUB secrets are complete when used | ansible.builtin.assert | False |
-| Prep - NZBHydra2 ¦ Assert NZBGeek secrets are complete when used | ansible.builtin.assert | False |
-| Prep - NZBHydra2 ¦ Assert Drunken Slug secrets are complete when used | ansible.builtin.assert | False |
-| Prep - NZBHydra2 ¦ Ensure config dir exists | ansible.builtin.file | False |
-| Prep - NZBHydra2 ¦ Check config exists | ansible.builtin.stat | False |
-| Prep - NZBHydra2 ¦ Report missing config in check mode | ansible.builtin.debug | True |
-| Prep - NZBHydra2 ¦ Determine whether config can be managed | ansible.builtin.set_fact | False |
-| Prep - NZBHydra2 ¦ Generate config | block | True |
-| Prep - NZBHydra2 ¦ Start temp container to generate config | community.docker.docker_container | False |
-| Prep - NZBHydra2 ¦ Wait for config to appear | ansible.builtin.wait_for | False |
-| Prep - NZBHydra2 ¦ Wait for config file size to stabilize | ansible.builtin.shell | False |
-| Prep - NZBHydra2 ¦ Build config facts | ansible.builtin.set_fact | False |
-| Prep - NZBHydra2 ¦ Set auth user | yedit | True |
-| Prep - NZBHydra2 ¦ Set API key | yedit | True |
-| Prep - NZBHydra2 ¦ Report API key update in check mode | ansible.builtin.debug | True |
-| Prep - NZBHydra2 ¦ Replace downloaders list | block | True |
-| Prep - NZBHydra2 ¦ Remove existing downloaders | yedit | False |
-| Prep - NZBHydra2 ¦ Write managed downloaders | yedit | False |
-| Prep - NZBHydra2 ¦ Replace indexers list | block | True |
-| Prep - NZBHydra2 ¦ Remove existing indexers | yedit | False |
-| Prep - NZBHydra2 ¦ Write managed indexers | yedit | False |
-| Prep - NZBHydra2 ¦ Report managed config update in check mode | ansible.builtin.debug | True |
-| Prep - NZBHydra2 ¦ Ensure config file permissions are restricted | ansible.builtin.file | True |
-| Prep - NZBHydra2 ¦ Slurp config | ansible.builtin.slurp | True |
-| Prep - NZBHydra2 ¦ Parse config YAML | ansible.builtin.set_fact | True |
-| Prep - NZBHydra2 ¦ Assert API key set | ansible.builtin.assert | True |
-| Prep - NZBHydra2 ¦ Assert SABnzbd downloader is set | ansible.builtin.assert | True |
-| Prep - NZBHydra2 ¦ Assert configured indexers were written | ansible.builtin.assert | True |
-
-#### File: tasks/sub_tasks/prep/plex/_claim.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Claim ¦ Set derived vars | ansible.builtin.set_fact | False |
-| Claim ¦ Load token + client identifier from token host | ansible.builtin.set_fact | False |
-| Claim ¦ Assert required vars exist | ansible.builtin.assert | False |
-| Claim ¦ Check if Plex server is already claimed | ansible.builtin.stat | False |
-| Claim ¦ Read Preferences.xml | community.general.xml | True |
-| Claim ¦ Determine claimed status | ansible.builtin.set_fact | False |
-| Claim ¦ Request claim token from plex.tv | ansible.builtin.uri | True |
-| Claim ¦ Persist claim code to token host | ansible.builtin.set_fact | True |
-| Claim ¦ Validate claim code | ansible.builtin.assert | True |
-| Claim ¦ Report claim status | ansible.builtin.debug | False |
-
-#### File: tasks/sub_tasks/prep/plex/_preferences.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Plex Preferences ¦ Conduct preferences.xml tasks | block | False |
-| Prep - Plex Preferences ¦ Set derived vars | ansible.builtin.set_fact | False |
-| Prep - Plex Preferences ¦ Check if Preferences.xml exists | ansible.builtin.stat | False |
-| Prep - Plex Preferences ¦ Read Preferences.xml attributes | community.general.xml | True |
-| Prep - Plex Preferences ¦ Remove Preferences.xml if malformed | ansible.builtin.file | True |
-| Prep - Plex Preferences ¦ Derive flags from Preferences.xml | ansible.builtin.set_fact | True |
-| Prep - Plex Preferences ¦ Fix TranscoderTempDirectory | community.general.xml | True |
-
-#### File: tasks/sub_tasks/prep/plex/_token.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Plex Token ¦ Set file ownership facts | ansible.builtin.set_fact | False |
-| Prep - Plex Token ¦ Check if plex.ini exists | ansible.builtin.stat | False |
-| Prep - Plex Token ¦ Set client identifier fact | block | True |
-| Prep - Plex Token ¦ Lookup client_identifier | ansible.builtin.set_fact | False |
-| Prep - Plex Token ¦ Generate new identifier | ansible.builtin.set_fact | True |
-| Prep - Plex Token ¦ Set token variable if previously saved | ansible.builtin.set_fact | True |
-| Prep - Plex Token ¦ Set docker_services_plex_no_token status | ansible.builtin.set_fact | False |
-| Prep - Plex Token ¦ Check if Token is valid | ansible.builtin.uri | True |
-| Prep - Plex Token ¦ Generate New Token | block | True |
-| Prep - Plex Token ¦ Generate PIN | ansible.builtin.uri | False |
-| Prep - Plex Token ¦ Login prompt | ansible.builtin.pause | False |
-| Prep - Plex Token ¦ Check PIN | ansible.builtin.uri | False |
-| Prep - Plex Token ¦ Set docker_services_plex_auth_token variable | ansible.builtin.set_fact | False |
-| Prep - Plex Token ¦ Check if new Token is valid | ansible.builtin.uri | False |
-| Prep - Plex Token ¦ Fail if new token is invalid | ansible.builtin.fail | True |
-| Prep - Plex Token ¦ Add Client Identifier to plex.ini | community.general.ini_file | False |
-| Prep - Plex Token ¦ Add Token to plex.ini | community.general.ini_file | False |
-| Prep - Plex Token ¦ Report token status | ansible.builtin.debug | True |
-
-#### File: tasks/sub_tasks/prep/plex/tasker.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Plex Prep ¦ Set derived vars | ansible.builtin.set_fact | False |
-| Prep - Plex Prep ¦ Assert derived hosts are valid | ansible.builtin.assert | False |
-| Prep - Plex Volume ¦ Create media volume (NFS) | community.docker.docker_volume | False |
-| Prep - Plex Token ¦ Include token tasks | ansible.builtin.include_tasks | False |
-| Prep - Plex Preferences ¦ Include Plex preferences.xml tasks | ansible.builtin.include_tasks | False |
-| Prep - Plex Claim ¦ Include claim server tasks | ansible.builtin.include_tasks | False |
-
-#### File: tasks/sub_tasks/prep/qbittorrent.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - qBittorrent ¦ Set derived vars | ansible.builtin.set_fact | False |
-| Prep - qBittorrent ¦ Assert downloads-instance password is present | ansible.builtin.assert | True |
-| Prep - qBittorrent ¦ Generate downloads-instance pass | qbittorrent_passwd | True |
-| Prep - qBittorrent ¦ Store downloads-instance pass hash | ansible.builtin.set_fact | True |
-| Prep - qBittorrent ¦ Assert downloads-instance pass hash was generated | ansible.builtin.assert | True |
-| Prep - qBittorrent ¦ Assert seeds-instance password is present | ansible.builtin.assert | True |
-| Prep - qBittorrent ¦ Generate seeds-instance pass | qbittorrent_passwd | True |
-| Prep - qBittorrent ¦ Store seeds-instance pass hash | ansible.builtin.set_fact | True |
-| Prep - qBittorrent ¦ Assert seeds-instance pass hash was generated | ansible.builtin.assert | True |
+| Prep - Secrets ¦ Resolve deploy host | ansible.builtin.set_fact | False |
+| Prep - Secrets ¦ Resolve effective secrets host | ansible.builtin.set_fact | False |
+| Prep - Secrets ¦ Build desired secret items from effective declarations | ansible.builtin.set_fact | False |
+| Prep - Secrets ¦ Reject empty secret values before materialization | ansible.builtin.assert | False |
+| Prep - Secrets ¦ Inspect immutable Docker Swarm secrets | ansible.builtin.command | True |
+| Prep - Secrets ¦ Resolve existing immutable Docker Swarm secrets | ansible.builtin.set_fact | False |
+| Prep - Secrets ¦ Create Docker Swarm secrets | community.docker.docker_secret | True |
+| Prep - Secrets ¦ Ensure secrets directory exists on deploy host | ansible.builtin.file | True |
+| Prep - Secrets ¦ Remove secret path if it exists but is a directory | ansible.builtin.file | True |
+| Prep - Secrets ¦ Write secret files on deploy host | ansible.builtin.copy | True |
+| Prep - Secrets ¦ Verify secret paths exist and are files | ansible.builtin.stat | True |
+| Prep - Secrets ¦ Fail if any secret path is not a file | ansible.builtin.assert | True |
 
 #### File: tasks/sub_tasks/prep/swarm_configs/_absent.yml
 
@@ -685,32 +494,6 @@
 | Prep - Swarm Configs ¦ Validate each config spec | ansible.builtin.assert | False |
 | Prep - Swarm Configs ¦ Process absent configs | ansible.builtin.include_tasks | True |
 | Prep - Swarm Configs ¦ Process present configs | ansible.builtin.include_tasks | True |
-
-#### File: tasks/sub_tasks/prep/traefik_zone.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Traefik zone ¦ Detect whether a base zone is required and missing | ansible.builtin.set_fact | False |
-| Prep - Traefik zone ¦ Fetch cloudflare_zone from Infisical | ansible.builtin.include_tasks | True |
-| Prep - Traefik zone ¦ Use a non-routable check-mode zone without fetching secrets | ansible.builtin.set_fact | True |
-
-#### File: tasks/sub_tasks/prep/vaultwarden.yml
-
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Prep - Vaultwarden ¦ Set derived vars | ansible.builtin.set_fact | False |
-| Prep - Vaultwarden ¦ Ensure vaultwarden dir exists | ansible.builtin.file | False |
-| Prep - Vaultwarden ¦ Check if admin token file exists | ansible.builtin.stat | False |
-| Prep - Vaultwarden ¦ Read existing token | ansible.builtin.slurp | True |
-| Prep - Vaultwarden ¦ Create new admin token | block | True |
-| Prep - Vaultwarden ¦ Generate random password | ansible.builtin.command | False |
-| Prep - Vaultwarden ¦ Save generated password | ansible.builtin.copy | False |
-| Prep - Vaultwarden ¦ Generate random salt | ansible.builtin.command | False |
-| Prep - Vaultwarden ¦ Generate Argon2 PHC string | ansible.builtin.command | False |
-| Prep - Vaultwarden ¦ Save argon2 token | ansible.builtin.copy | False |
-| Prep - Vaultwarden ¦ Set admin token fact | ansible.builtin.set_fact | False |
-| Prep - Vaultwarden ¦ Assert token looks like PHC argon2 string | ansible.builtin.assert | False |
-| Prep - Vaultwarden ¦ Ensure docker secret exists | community.docker.docker_secret | False |
 
 
 

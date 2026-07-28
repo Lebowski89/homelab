@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/26 |
+| Readme update        | 2026/07/29 |
 
 
 
@@ -36,11 +36,10 @@
 | [podman_services_common_action](defaults/main.yml#L9)   | str | `<multiline value: folded_strip>` |    
 | [podman_services_state](defaults/main.yml#L17)   | str | `<multiline value: folded_strip>` |    
 | [podman_services_pull_images](defaults/main.yml#L26)   | bool | `True` |    
-| [podman_services_traefik_delegate](defaults/main.yml#L27)   | str | `{{ docker_services_primary_manager ¦ default('mgt') }}` |    
+| [podman_services_traefik_delegate](defaults/main.yml#L27)   | str | `{{ podman_services_controller_host }}` |    
 | [podman_services_traefik_dynamic_dir](defaults/main.yml#L28)   | str | `/opt/traefik/dynamic` |    
 | [podman_services_traefik_dynamic_owner](defaults/main.yml#L29)   | str | `1000` |    
 | [podman_services_traefik_dynamic_group](defaults/main.yml#L30)   | str | `1000` |    
-| [podman_services_infisical_delegate](defaults/main.yml#L31)   | str | `{{ docker_services_primary_manager ¦ default('mgt') }}` |    
 
 
 
@@ -54,10 +53,19 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Podman services ¦ Include initialization tasks | ansible.builtin.include_tasks | False |  |
-| Podman services ¦ Resolve common Infisical values and environment | ansible.builtin.include_role | True |  |
-| Podman services ¦ Snapshot common Infisical values | ansible.builtin.set_fact | True |  |
-| Podman services ¦ Attach common resolved environment | ansible.builtin.set_fact | True |  |
+| Podman services ¦ Build runtime-neutral application context | ansible.builtin.set_fact | False |  |
+| Podman services ¦ Validate application preparation | ansible.builtin.include_role | False |  |
+| Podman services ¦ Snapshot reset application outputs | ansible.builtin.set_fact | False |  |
+| Podman services ¦ Stop deployed service before recreate preparation | ansible.builtin.systemd_service | True |  |
+| Podman services ¦ Generate runtime-neutral application secrets | ansible.builtin.include_role | True |  |
+| Podman services ¦ Build effective current-service secret inputs | ansible.builtin.set_fact | False |  |
+| Podman services ¦ Validate canonical secret attachments | ansible.builtin.assert | False |  |
+| Podman services ¦ Attach effective native secret declarations | ansible.builtin.set_fact | False |  |
+| Podman services ¦ Materialize Podman-native secrets | ansible.builtin.include_tasks | True |  |
+| Podman services ¦ Derive runtime-neutral application template values | ansible.builtin.include_role | True |  |
+| Podman services ¦ Snapshot application template values | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Prepare runtime-neutral host state | ansible.builtin.include_role | False |  |
+| Podman services ¦ Apply runtime-neutral application configuration | ansible.builtin.include_role | True |  |
 | Podman services ¦ Include preparation tasks | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Include image tasks | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Include changed network tasks | ansible.builtin.include_tasks | False |  |
@@ -92,9 +100,11 @@
 | Init ¦ Normalize service | ansible.builtin.set_fact | False |  |
 | Init ¦ Derive normalized systemd unit name | ansible.builtin.set_fact | False |  |
 | Init ¦ Reset per-service transient facts | ansible.builtin.set_fact | False |  |
+| Init ¦ Validate dispatch-owned common context | ansible.builtin.assert | False |  |
+| Init ¦ Snapshot dispatch-owned common context | ansible.builtin.set_fact | False |  |
+| Init ¦ Attach common environment and native secret declarations | ansible.builtin.set_fact | False |  |
+| Init ¦ Snapshot runtime-neutral container host defaults | ansible.builtin.set_fact | False |  |
 | Init ¦ Assert inventory target matches selected host | ansible.builtin.assert | False |  |
-| Init ¦ Build Infisical lookup parameters for manager endpoint | ansible.builtin.set_fact | True |  |
-| Init ¦ Assert Infisical lookup parameters for secrets | ansible.builtin.assert | True |  |
 
 #### File: tasks/sub_tasks/lifecycle.yml
 
@@ -124,7 +134,6 @@
 | Prep ¦ Render network Quadlet | ansible.builtin.template | True |  |
 | Prep ¦ Render volume Quadlets | ansible.builtin.template | True |  |
 | Prep ¦ Render protected environment file | ansible.builtin.template | True |  |
-| Prep ¦ Create/update Podman secrets | containers.podman.podman_secret | True |  |
 | Prep ¦ Render container Quadlet | ansible.builtin.template | True |  |
 
 #### File: tasks/sub_tasks/remove.yml
@@ -137,6 +146,12 @@
 | Remove ¦ Check dedicated network still exists for removal | ansible.builtin.command | True |  |
 | Remove ¦ Remove dedicated network if still present | ansible.builtin.command | True |  |
 | Remove ¦ Remove generated Quadlet and environment files only | ansible.builtin.file | True |  |
+
+#### File: tasks/sub_tasks/secrets/materialize.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Prep ¦ Create or update Podman-native secrets | containers.podman.podman_secret | False |  |
 
 
 

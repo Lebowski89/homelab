@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/15 |
+| Readme update        | 2026/07/29 |
 
 
 
@@ -46,9 +46,9 @@
 | [netbox_compose_path](defaults/main.yml#L32)   | str | `{{ netbox_base_path }}/{{ netbox_compose_file }}` |    
 | [netbox_image](defaults/main.yml#L34)   | str | `lscr.io/linuxserver/netbox:v4.6.0-ls351` |    
 | [netbox_timezone](defaults/main.yml#L35)   | str | `{{ timezone ¦ default('Australia/Melbourne') }}` |    
-| [netbox_puid](defaults/main.yml#L36)   | str | `{{ docker_host_puid ¦ default('1000') }}` |    
-| [netbox_pgid](defaults/main.yml#L37)   | str | `{{ docker_host_pgid ¦ default('1000') }}` |    
-| [netbox_base_path](defaults/main.yml#L38)   | str | `{{ docker_host_appdata_root ¦ default('/opt') }}/netbox` |    
+| [netbox_puid](defaults/main.yml#L36)   | str | `{{ container_host_puid ¦ default('1000') }}` |    
+| [netbox_pgid](defaults/main.yml#L37)   | str | `{{ container_host_pgid ¦ default('1000') }}` |    
+| [netbox_base_path](defaults/main.yml#L38)   | str | `{{ container_host_appdata_root ¦ default('/opt') }}/netbox` |    
 | [netbox_frontend_fqdn](defaults/main.yml#L40)   | str | `{{ netbox_name }}.int.{{ netbox_domain }}` |    
 | [netbox_frontend_address](defaults/main.yml#L41)   | str | `https://{{ netbox_frontend_fqdn }}:8443` |    
 | [netbox_backend_address](defaults/main.yml#L42)   | str | `http://{{ netbox_name }}:8000` |    
@@ -67,8 +67,8 @@
 | [netbox_restart_policy.**window**](defaults/main.yml#L58)   | str | `2m` |    
 | [netbox_redis_name](defaults/main.yml#L64)   | str | `netbox-redis` |    
 | [netbox_redis_image](defaults/main.yml#L65)   | str | `valkey/valkey:9.1-alpine` |    
-| [netbox_redis_puid](defaults/main.yml#L66)   | str | `{{ docker_host_puid ¦ default('1000') }}` |    
-| [netbox_redis_pgid](defaults/main.yml#L67)   | str | `{{ docker_host_pgid ¦ default('1000') }}` |    
+| [netbox_redis_puid](defaults/main.yml#L66)   | str | `{{ container_host_puid ¦ default('1000') }}` |    
+| [netbox_redis_pgid](defaults/main.yml#L67)   | str | `{{ container_host_pgid ¦ default('1000') }}` |    
 | [netbox_redis_path](defaults/main.yml#L68)   | str | `{{ netbox_base_path }}/redis` |    
 | [netbox_postgres_name](defaults/main.yml#L74)   | str | `netbox-postgres` |    
 | [netbox_postgres_image](defaults/main.yml#L75)   | str | `docker.io/library/postgres:18.4` |    
