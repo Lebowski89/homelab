@@ -68,4 +68,4 @@ tautulli:
     profile: standard
     host: "{{ services_plex_host }}"
     constraints:
-      - node.labels.docker_services_host == services_plex_host
+      - node.labels.docker_services_host == docker_services_plex_host

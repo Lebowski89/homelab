@@ -29,6 +29,11 @@ LEGACY_SERVICE_HOST_VARIABLES = {
     "docker_services_unraid_host",
     "docker_services_log_root",
 }
+SWARM_HOST_CONSTRAINTS = {
+    "node.labels.docker_services_host == docker_services_primary_manager",
+    "node.labels.docker_services_host == docker_services_plex_host",
+    "node.labels.docker_services_host == docker_services_unraid_host",
+}
 
 
 def load_module(path: Path, name: str):
@@ -145,7 +150,10 @@ def test_repository_service_host_contract_uses_real_netbox_groups_and_explicit_p
 def test_all_real_services_use_neutral_host_variables_and_keep_explicit_runtimes():
     offenders = {}
     for path in sorted(SERVICES_DIR.glob("*.yml")):
-        matches = sorted(variable for variable in LEGACY_SERVICE_HOST_VARIABLES if variable in path.read_text())
+        source_without_swarm_label_values = path.read_text()
+        for constraint in SWARM_HOST_CONSTRAINTS:
+            source_without_swarm_label_values = source_without_swarm_label_values.replace(constraint, "")
+        matches = sorted(variable for variable in LEGACY_SERVICE_HOST_VARIABLES if variable in source_without_swarm_label_values)
         if matches:
             offenders[path.name] = matches
 

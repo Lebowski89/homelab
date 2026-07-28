@@ -116,4 +116,4 @@ opencloud:
     profile: careful
     host: "{{ services_storage_host }}"
     constraints:
-      - node.labels.docker_services_host == services_storage_host
+      - node.labels.docker_services_host == docker_services_unraid_host

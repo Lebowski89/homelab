@@ -92,4 +92,4 @@ scraparr:
     profile: standard
     host: "{{ services_controller_host }}"
     constraints:
-      - node.labels.docker_services_host == services_controller_host
+      - node.labels.docker_services_host == docker_services_primary_manager

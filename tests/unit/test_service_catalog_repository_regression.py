@@ -153,6 +153,40 @@ def test_every_real_service_declares_a_supported_runtime():
         assert service_cfg["runtime"] in {"docker", "podman"}, f"{service_name} declares an unsupported runtime"
 
 
+def test_real_docker_swarm_constraints_match_configured_node_label_values():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_repository_swarm_constraints",
+    )
+    services = load_services()
+    expected_by_host = {
+        "{{ services_controller_host }}": "node.labels.docker_services_host == docker_services_primary_manager",
+        "{{ services_plex_host }}": "node.labels.docker_services_host == docker_services_plex_host",
+        "{{ services_storage_host }}": "node.labels.docker_services_host == docker_services_unraid_host",
+    }
+    observed = set()
+
+    for item in catalog_filters.service_catalog_effective(services, "manager"):
+        effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
+        if effective["runtime"] != "docker":
+            continue
+
+        deploy = effective.get("deploy", {})
+        host_constraints = [
+            constraint for constraint in deploy.get("constraints", []) if constraint.startswith("node.labels.docker_services_host == ")
+        ]
+        if not host_constraints:
+            continue
+
+        target = item.get("target", "base")
+        expected = expected_by_host.get(deploy.get("host"))
+        assert expected is not None, f"{item['name']}/{target} has an unknown constrained deploy host"
+        assert host_constraints == [expected], f"{item['name']}/{target} has a mismatched Swarm host constraint"
+        observed.add(expected)
+
+    assert observed == set(expected_by_host.values())
+
+
 def test_real_sonarr_catalog_target_keeps_effective_configuration():
     catalog_filters = load_module(
         REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
