@@ -73,11 +73,12 @@ context = {
     "groups": groups,
     "hostvars": hostvars,
     "docker_services_svc": prometheus_service_vars.get("prometheus", {}),
-    "smtp_host": "smtp.example.com",
-    "smtp_port": "587",
-    "smtp_email": "alerts@example.com",
-    "smtp_sender": "alertmanager@example.com",
-    "smtp_username": "alertmanager@example.com",
+    "service_common_infisical_values": {
+        "smtp_email": "alerts@example.com",
+        "smtp_host": "smtp.example.com",
+        "smtp_port": "587",
+        "smtp_username": "alertmanager@example.com",
+    },
 }
 
 

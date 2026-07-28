@@ -33,10 +33,6 @@ LEGACY_REFERENCE_ALLOWLIST = {
     # Runtime compatibility boundaries.
     "ansible/filter_plugins/container_host.py",
     "ansible/netbox.yml.sample",
-    # Generated documentation; source defaults are canonical and the repository generator owns these files.
-    "ansible/roles/hugo/README.md",
-    "ansible/roles/infisical/README.md",
-    "ansible/roles/netbox/README.md",
     # Deferred live NetBox custom-field schema and example values.
     "terraform/netbox/locals.tf",
     "terraform/netbox/private.auto.tfvars.sample",
