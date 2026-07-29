@@ -111,7 +111,11 @@ def canonical_service():
             "retries": 4,
             "start_period": "30s",
         },
-        "network": {"name": "portable", "driver": "bridge", "delete_on_stop": True},
+        "runtime_options": {
+            "podman": {
+                "network": {"name": "portable", "driver": "bridge", "delete_on_stop": True},
+            }
+        },
     }
 
 
