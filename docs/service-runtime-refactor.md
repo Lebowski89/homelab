@@ -4,7 +4,7 @@
 
 Service orchestration now has five responsibility boundaries:
 
-1. `service_catalog` loads definitions, selects and resolves targets with the canonical base-plus-target merge, preserves tag/enabled selection, and chooses `docker` or `podman` (defaulting legacy definitions to Docker).
+1. `service_catalog` loads definitions, requires every base service to declare `runtime: docker` or `runtime: podman`, selects and resolves targets with the canonical base-plus-target merge, and preserves tag/enabled selection. Targets inherit the validated base runtime and may explicitly override it with another supported runtime.
 2. The globally ordered dispatch materializes one selected service at a time on its dispatch host, runs the `service_common` Infisical/environment preflight exactly once, and snapshots the outputs into a host-local context owned by that service.
 3. `service_prepare` validates explicitly declared application handlers and owns application preparation. It receives one current-service context and returns template variables, generated secret values, value-free generated secret declarations, and runtime/bootstrap requests as separate outputs. A narrow selected-runtime executor may run short-lived Docker or Podman containers solely for preparation; it always removes them before deployed-service rendering and lifecycle.
 4. `service_common` validates and retrieves runtime-neutral Infisical values, resolves canonical environment values, prepares paths, copies static assets, renders application templates, manages shared Traefik dynamic files, and prepares PostgreSQL databases. It does not choose a runtime, contain application handlers, or create runtime resources.
@@ -27,13 +27,13 @@ lightweight catalog selection
 
 Docker continues to build Compose state inside the selected-service loop and deploy all accumulated stacks after the loop. Podman continues to handle each selected service immediately. Both adapters receive the same catalog-resolved configuration; neither adapter expands targets independently.
 
-The canonical target merge recursively combines mappings, appends ordinary additive lists with append-rp semantics, removes exact duplicates, and lets target scalars override base scalars. `command`, `entrypoint`, and `healthcheck.test` replace their base lists. Target `runtime` overrides the base runtime, base and target `enabled` values both participate in selection, and `targets` is removed from the resolved configuration before adapter dispatch. The legacy `docker_services_merge_target` filter remains only as a compatibility wrapper around this catalog-owned implementation.
+The canonical target merge recursively combines mappings, appends ordinary additive lists with append-rp semantics, removes exact duplicates, and lets target scalars override base scalars. `command`, `entrypoint`, and `healthcheck.test` replace their base lists. Target `runtime` overrides the base runtime, base and target `enabled` values both participate in selection, and `targets` is removed from the resolved configuration before adapter dispatch. `service_catalog_merge_target` is the sole target merger; runtime adapters do not expose or apply their own target-merge compatibility paths.
 
 ## Common role interface
 
 The required context is explicit: `service_common_name`, `service_common_runtime`, `service_common_action`, `service_common_service`, `service_common_target_hosts`, and `service_common_controller_host`. Ownership, host-specific ownership defaults, application template variables, and Traefik location/zone settings are optional adapter inputs with safe defaults. The canonical service-host contract resolves `services_controller_host` from the validated singleton `tags_ansible_manager` inventory group and `services_storage_host` from `device_roles_storage`. `services_plex_host` remains an explicit value because NetBox does not yet expose a unique Plex role or tag, and `services_log_root` remains an explicit path. The controller is then passed as `service_catalog_controller_host` at the orchestration boundary; common preflight and Podman routing have no Docker-prefixed manager dependency.
 
-Docker compatibility aliases flow in one direction from this canonical contract: `services_controller_host` to `docker_services_primary_manager`, `services_plex_host` to `docker_services_plex_host`, `services_storage_host` to `docker_services_unraid_host`, and `services_log_root` to `docker_services_log_root`. The aliases remain centralized at early orchestration and the Docker dispatch boundary for existing adapter and legacy-role consumers. They can be removed after those consumers accept the canonical inputs directly. Service definitions use only the neutral names.
+Docker compatibility aliases flow in one direction from this canonical contract: `services_controller_host` to `docker_services_primary_manager`, `services_plex_host` to `docker_services_plex_host`, `services_storage_host` to `docker_services_unraid_host`, and `services_log_root` to `docker_services_log_root`. The aliases remain centralized at early orchestration and the Docker dispatch boundary for existing adapter and legacy-role consumers. They can be removed after those consumers accept the canonical inputs directly. Service definitions use neutral names for host-variable references. Existing Swarm placement constraints deliberately retain literal `docker_services_primary_manager`, `docker_services_plex_host`, and `docker_services_unraid_host` node-label values because those strings identify current Docker node labels rather than Ansible variables.
 
 The common role never derives target topology from Docker fields. Docker passes `docker_services_fs_hosts_effective`; Podman passes its selected inventory host after translating `host_paths` to the existing portable `paths` preparation input.
 
@@ -82,7 +82,7 @@ Check mode runs declaration, handler, credential-reference, and bootstrap-contra
 
 ## Canonical portable service and secret schema
 
-The Docker-shaped top-level service fields are the canonical portable schema. Phase 1 maps them to the existing Podman internal structure. Every base service now declares its runtime explicitly: existing Docker services use `runtime: docker`, while n8n selects Podman with `runtime: podman`. The missing-runtime Docker default remains as transitional compatibility for external or legacy declarations. Portable fields include `image`, numeric `user: UID:GID`, `environment`, `deploy.host`, canonical ports and volumes, `paths`, security fields, `healthcheck`, `infisical`, `postgres`, and `traefik`.
+The Docker-shaped top-level service fields are the canonical portable schema. The Podman adapter maps them to its internal Quadlet structure. Every base service declares its runtime explicitly: existing Docker services use `runtime: docker`, while n8n selects Podman with `runtime: podman`. A missing or unsupported base runtime fails catalog validation; there is no implicit Docker default. Portable fields include `image`, numeric `user: UID:GID`, `environment`, `deploy.host`, canonical ports and volumes, `paths`, security fields, `healthcheck`, `infisical`, `postgres`, and `traefik`.
 
 Canonical environment entries are either scalar literals, a direct Infisical reference, or a narrowly composed template:
 
@@ -135,6 +135,27 @@ Podman-only network and systemd lifecycle policy belongs under `runtime_options.
 Static tests prove normalized portable-field equivalence and render structure; they do not prove live Docker/Podman behavioral parity. The n8n proof renders its trusted-address `host_ip` bind through both the Docker standalone and Podman adapters; Docker Swarm rejects `host_ip` explicitly. Swarm-only networks, configs, placement, replicas, application-specific preparation, and runtime installation remain adapter or operator concerns.
 
 Inventory topology and host identity remain unchanged. NetBox remains authoritative, services continue to resolve existing `local_ip`, hostnames, `deploy.host`, and Traefik inventory references, and no canonical address is hard-coded.
+
+## Compatibility closeout audit
+
+Phase 4A audited the refactor's compatibility paths against production tasks, repository service definitions, effective base-plus-target configurations, tests, documentation, and inventory declarations.
+
+| Mechanism | Classification | Producer and consumers |
+| --- | --- | --- |
+| Docker-prefixed catalog selection and target-merge filters | **Remove now** | The compatibility filters and their tests were the only references. Dispatch already uses `service_catalog_effective`, `service_catalog_select`, and `service_catalog_merge_target`, so the wrappers and their obsolete implicit runtime default were removed. |
+| `service_common_secret_values` | **Remove now** | No producer or production consumer remains. The explicit interfaces are `service_common_infisical_values` and value-free `service_common_secret_declarations`. |
+| Missing-runtime Docker default | **Remove now** | No implementation path remains. Catalog construction and target merging reject a missing base runtime; stale documentation was corrected. |
+| Exact `__INFISICAL__:var` environment placeholder | **Remove now** | No production or service-definition consumer remains. Typed `value_from.infisical` and `value_template` entries are canonical, while tests retain rejection/absence coverage. |
+| `secrets_map[].docker_secret`, `secrets_map[].podman_secret`, and old Podman lookup metadata | **Remove now** | Common declaration validation rejects these fields and no repository definition uses them. Canonical `secret` metadata remains runtime-neutral. |
+| Nested Podman service input and top-level Podman `network` | **Remove now** | Only transition tests used the old `container`, `env`, `host_paths`, legacy volume, and top-level network forms. The adapter now accepts the canonical service schema and `runtime_options.podman` policy only. |
+| Top-level `secrets` name attachments | **Retain intentionally** | These are not lookup metadata. Docker services and application preparation use them for generated or externally managed native secrets; Podman accepts only value-free names. |
+| Neutral-to-Docker `docker_services_*` host aliases | **Retain intentionally** | Docker adapter, standalone PostgreSQL role, drift email, stack accumulation, and current Swarm label contracts consume them. The aliases flow only from neutral orchestration inputs to Docker-prefixed compatibility facts. |
+| Literal Docker Swarm placement label values | **Retain intentionally** | Current service definitions and host label declarations use `docker_services_primary_manager`, `docker_services_plex_host`, and `docker_services_unraid_host`. Renaming them requires a node-label migration. |
+| `docker_host_*` inventory fallbacks | **Defer pending migration** | NetBox and static inventory still expose legacy custom fields. Phase 4B must create/populate canonical fields and migrate external consumers before fallback removal. |
+| Docker-specific drift email and Plex bootstrap/API path | **Retain intentionally** | Both have deliberate Docker-owned consumers and are not portable common preparation. |
+| Application-preparation entry points under `docker_services` | **Remove now** | No obsolete entry point or wrapper remains after `service_prepare`; runtime adapters consume its explicit outputs and retain only native materialization/lifecycle work. |
+
+Repository tests and documentation are not treated as production consumers. Negative tests remain where they prove that removed lookup metadata and placeholders fail or are absent; compatibility-only tests for removed executable paths were deleted.
 
 
 ## Remaining sequence

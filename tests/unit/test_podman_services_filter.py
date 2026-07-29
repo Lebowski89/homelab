@@ -14,8 +14,9 @@ spec.loader.exec_module(podman_services)
 def valid_cfg():
     return {
         "runtime": "podman",
-        "container": {"image": "docker.io/n8nio/n8n:2.31.4", "ports": [{"host": 5678, "container": 5678}]},
-        "host_paths": [{"path": "/opt/n8n"}],
+        "image": "docker.io/n8nio/n8n:2.31.4",
+        "ports": [{"published": 5678, "target": 5678}],
+        "paths": [{"path": "/opt/n8n"}],
     }
 
 
@@ -28,14 +29,14 @@ def test_normalize_accepts_n8n_like_service():
 @pytest.mark.parametrize("image", ["docker.io/n8nio/n8n:latest", "docker.io/n8nio/n8n", ""])
 def test_image_must_be_exact_non_latest(image):
     cfg = valid_cfg()
-    cfg["container"]["image"] = image
+    cfg["image"] = image
     with pytest.raises(AnsibleFilterError, match="exact, non-latest"):
         podman_services.podman_service_normalize(cfg, "n8n")
 
 
 def test_unsafe_path_fails():
     cfg = valid_cfg()
-    cfg["host_paths"] = [{"path": "/root/.ssh"}]
+    cfg["paths"] = [{"path": "/root/.ssh"}]
     with pytest.raises(AnsibleFilterError, match="/opt"):
         podman_services.podman_service_normalize(cfg, "n8n")
 
@@ -79,31 +80,16 @@ def test_volume_requires_target():
         podman_services.podman_service_normalize(cfg, "n8n")
 
 
-def test_container_user_string_rejected():
-    cfg = valid_cfg()
-    cfg["container"]["user"] = "1000:1000"
-    with pytest.raises(AnsibleFilterError, match="container.user"):
-        podman_services.podman_service_normalize(cfg, "n8n")
-
-
-def test_container_uid_gid_must_be_numeric():
-    cfg = valid_cfg()
-    cfg["container"]["uid"] = "abc"
-    cfg["container"]["gid"] = "1000"
-    with pytest.raises(AnsibleFilterError, match="numeric"):
-        podman_services.podman_service_normalize(cfg, "n8n")
-
-
 def test_managed_network_must_be_dedicated_delete_on_stop():
     cfg = valid_cfg()
-    cfg["network"] = {"name": "shared", "driver": "bridge", "delete_on_stop": False}
+    cfg["runtime_options"] = {"podman": {"network": {"name": "shared", "driver": "bridge", "delete_on_stop": False}}}
     with pytest.raises(AnsibleFilterError, match="dedicated"):
         podman_services.podman_service_normalize(cfg, "sharedsvc")
 
 
 def test_dedicated_managed_network_is_accepted():
     cfg = valid_cfg()
-    cfg["network"] = {"name": "dedicated", "driver": "bridge", "delete_on_stop": True}
+    cfg["runtime_options"] = {"podman": {"network": {"name": "dedicated", "driver": "bridge", "delete_on_stop": True}}}
     svc = podman_services.podman_service_normalize(cfg, "dedicatedsvc")
     assert svc["network"]["delete_on_stop"] is True
 
@@ -317,106 +303,27 @@ def test_canonical_image_preserves_exact_non_latest_validation(image):
 
 
 @pytest.mark.parametrize(
-    "cfg",
+    ("legacy_field", "legacy_value"),
     [
-        {
-            "runtime": "podman",
-            "image": "ghcr.io/example/portable:1.2.3",
-            "container": {"image": "ghcr.io/example/portable:1.2.4"},
-        },
-        {
-            "runtime": "podman",
-            "image": "ghcr.io/example/portable:1.2.3",
-            "environment": {"MODE": "canonical"},
-            "env": {"MODE": "legacy"},
-        },
-        {
-            "runtime": "podman",
-            "image": "ghcr.io/example/portable:1.2.3",
-            "user": "1000:1000",
-            "container": {"uid": "1001", "gid": "1000"},
-        },
-        {
-            "runtime": "podman",
-            "image": "ghcr.io/example/portable:1.2.3",
-            "deploy": {"host": "podman01"},
-            "container": {"host": "podman02"},
-        },
-        {
-            "runtime": "podman",
-            "image": "ghcr.io/example/portable:1.2.3",
-            "ports": [{"published": 8080, "target": 80}],
-            "container": {"ports": [{"host": 8081, "container": 80}]},
-        },
-        {
-            "runtime": "podman",
-            "image": "ghcr.io/example/portable:1.2.3",
-            "paths": [{"path": "/opt/portable"}],
-            "host_paths": [{"path": "/opt/other"}],
-        },
-        {
-            "runtime": "podman",
-            "image": "ghcr.io/example/portable:1.2.3",
-            "volumes": [{"type": "bind", "source": "/opt/portable", "target": "/data"}],
-            "container": {"mounts": [{"source": "/opt/other", "target": "/data"}]},
-        },
-        {
-            "runtime": "podman",
-            "image": "ghcr.io/example/portable:1.2.3",
-            "cap_drop": ["ALL"],
-            "container": {"cap_drop": ["NET_RAW"]},
-        },
-        {
-            "runtime": "podman",
-            "image": "ghcr.io/example/portable:1.2.3",
-            "read_only": True,
-            "container": {"read_only": False},
-        },
-        {
-            "runtime": "podman",
-            "image": "ghcr.io/example/portable:1.2.3",
-            "healthcheck": {"test": "true"},
-            "container": {"healthcheck": {"command": "false"}},
-        },
+        ("container", {"image": "ghcr.io/example/portable:1.2.3"}),
+        ("env", {"MODE": "legacy"}),
+        ("host_paths", [{"path": "/opt/legacy"}]),
+        ("network", {"name": "legacy", "delete_on_stop": True}),
     ],
 )
-def test_conflicting_canonical_and_legacy_declarations_fail(cfg):
-    with pytest.raises(AnsibleFilterError, match="Conflicting declarations"):
+def test_removed_legacy_podman_fields_fail_clearly(legacy_field, legacy_value):
+    cfg = minimal_canonical_cfg()
+    cfg[legacy_field] = legacy_value
+
+    with pytest.raises(AnsibleFilterError, match=rf"removed legacy Podman fields: {legacy_field}"):
         podman_services.podman_service_normalize(cfg, "portable")
 
 
-def test_equivalent_canonical_and_legacy_declarations_are_accepted():
-    cfg = {
-        "runtime": "podman",
-        "image": "ghcr.io/example/portable:1.2.3",
-        "user": "1000:1000",
-        "ports": [{"published": "8080", "target": "80"}],
-        "container": {
-            "image": "ghcr.io/example/portable:1.2.3",
-            "uid": 1000,
-            "gid": 1000,
-            "ports": [{"host": 8080, "container": 80, "protocol": "tcp"}],
-        },
-    }
+def test_legacy_named_volume_form_is_rejected():
+    cfg = minimal_canonical_cfg()
+    cfg["volumes"] = [{"name": "legacy-data", "target": "/legacy"}]
 
-    svc = podman_services.podman_service_normalize(cfg, "portable")
-
-    assert svc["container"]["uid"] == "1000"
-    assert svc["container"]["gid"] == "1000"
-    assert svc["container"]["ports"] == [{"host": 8080, "container": 80, "protocol": "tcp"}]
-
-
-def test_mixed_canonical_and_legacy_volume_entries_fail():
-    cfg = {
-        "runtime": "podman",
-        "image": "ghcr.io/example/portable:1.2.3",
-        "volumes": [
-            {"type": "bind", "source": "/opt/portable", "target": "/data"},
-            {"name": "legacy-data", "target": "/legacy"},
-        ],
-    }
-
-    with pytest.raises(AnsibleFilterError, match="cannot mix"):
+    with pytest.raises(AnsibleFilterError, match=r"volumes\[0\]\.source"):
         podman_services.podman_service_normalize(cfg, "portable")
 
 
@@ -483,10 +390,14 @@ def test_secret_and_network_booleans_are_normalized():
             "runtime_options": {"podman": {"immutable": "false", "replace": "true"}},
         }
     ]
-    cfg["network"] = {
-        "name": "portable",
-        "driver": "bridge",
-        "delete_on_stop": "true",
+    cfg["runtime_options"] = {
+        "podman": {
+            "network": {
+                "name": "portable",
+                "driver": "bridge",
+                "delete_on_stop": "true",
+            }
+        }
     }
 
     svc = podman_services.podman_service_normalize(cfg, "portable")
@@ -506,7 +417,7 @@ def test_top_level_security_boolean_rejects_integer_two(field):
         podman_services.podman_service_normalize(cfg, "portable")
 
 
-def test_canonical_and_legacy_volume_read_only_values_are_strict_booleans():
+def test_canonical_volume_read_only_values_are_strict_booleans():
     canonical = minimal_canonical_cfg()
     canonical["volumes"] = [
         {
@@ -516,20 +427,9 @@ def test_canonical_and_legacy_volume_read_only_values_are_strict_booleans():
             "read_only": "false",
         }
     ]
-    legacy = valid_cfg()
-    legacy["volumes"] = [
-        {
-            "name": "portable-data",
-            "target": "/data",
-            "read_only": "false",
-        }
-    ]
-
     canonical_svc = podman_services.podman_service_normalize(canonical, "portable")
-    legacy_svc = podman_services.podman_service_normalize(legacy, "n8n")
 
     assert canonical_svc["container"]["mounts"][0]["read_only"] is False
-    assert legacy_svc["volumes"][0]["read_only"] is False
 
 
 @pytest.mark.parametrize(
@@ -556,7 +456,7 @@ def test_nested_boolean_fields_reject_integer_two(section, field):
             podman_services.podman_secret_declarations(declarations)
         return
     elif section == "network":
-        cfg["network"] = {"name": "portable", field: 2}
+        cfg["runtime_options"] = {"podman": {"network": {"name": "portable", field: 2}}}
     else:
         cfg["volumes"] = [
             {
@@ -618,15 +518,15 @@ def test_postgres_and_traefik_must_be_mappings(field, value):
 @pytest.mark.parametrize("after", ["network.target", [""], [42], {"unit": "network.target"}])
 def test_systemd_after_must_be_list_of_nonempty_unit_names(after):
     cfg = valid_cfg()
-    cfg["container"]["systemd"] = {"after": after}
+    cfg["runtime_options"] = {"podman": {"systemd": {"after": after}}}
 
-    with pytest.raises(AnsibleFilterError, match=r"container\.systemd\.after"):
+    with pytest.raises(AnsibleFilterError, match=r"runtime_options\.podman\.systemd\.after"):
         podman_services.podman_service_normalize(cfg, "n8n")
 
 
 def test_systemd_after_is_normalized_when_valid():
     cfg = valid_cfg()
-    cfg["container"]["systemd"] = {"after": [" postgresql.service ", "custom.target"]}
+    cfg["runtime_options"] = {"podman": {"systemd": {"after": [" postgresql.service ", "custom.target"]}}}
 
     svc = podman_services.podman_service_normalize(cfg, "n8n")
 
@@ -674,24 +574,17 @@ def test_port_host_ip_is_nonempty_ipv4_for_this_phase(host_ip):
 @pytest.mark.parametrize(
     ("location", "value", "match"),
     [
-        ("unit", "../portable", r"container\.name"),
-        ("network", "bad/network", r"network\.name"),
+        ("network", "bad/network", r"runtime_options\.podman\.network\.name"),
         ("named_volume", "../data", r"volumes\[0\]\.source"),
-        ("legacy_volume", "bad/volume", r"volumes\[0\]\.name"),
         ("secret", "bad/secret", r"secret declarations\[0\]\.name"),
     ],
 )
 def test_quadlet_filename_and_resource_names_are_validated(location, value, match):
     cfg = minimal_canonical_cfg()
-    if location == "unit":
-        cfg["container"] = {"name": value}
-    elif location == "network":
-        cfg["network"] = {"name": value, "delete_on_stop": True}
+    if location == "network":
+        cfg["runtime_options"] = {"podman": {"network": {"name": value, "delete_on_stop": True}}}
     elif location == "named_volume":
         cfg["volumes"] = [{"type": "volume", "source": value, "target": "/data"}]
-    elif location == "legacy_volume":
-        cfg = valid_cfg()
-        cfg["volumes"] = [{"name": value, "target": "/data"}]
     else:
         declarations = [
             {
@@ -714,19 +607,9 @@ def test_service_name_used_for_unit_filename_is_validated():
         podman_services.podman_service_normalize(minimal_canonical_cfg(), "../portable")
 
 
-def test_description_conflict_is_rejected():
-    cfg = minimal_canonical_cfg()
-    cfg["description"] = "Canonical description"
-    cfg["container"] = {"description": "Legacy description"}
-
-    with pytest.raises(AnsibleFilterError, match="Conflicting declarations"):
-        podman_services.podman_service_normalize(cfg, "portable")
-
-
-def test_equivalent_canonical_and_legacy_descriptions_are_accepted():
+def test_canonical_description_is_accepted():
     cfg = minimal_canonical_cfg()
     cfg["description"] = "Portable service"
-    cfg["container"] = {"description": "Portable service"}
 
     svc = podman_services.podman_service_normalize(cfg, "portable")
 
@@ -789,91 +672,6 @@ def test_docker_only_deploy_metadata_is_ignored_without_mutating_input():
 
     assert svc["container"]["host"] == "podman01"
     assert cfg == original
-
-
-@pytest.mark.parametrize(
-    "canonical_volumes",
-    [
-        [],
-        [{"type": "volume", "source": "portable-data", "target": "/data"}],
-        [{"type": "tmpfs", "target": "/tmp"}],
-    ],
-)
-def test_canonical_volumes_do_not_silently_combine_with_legacy_mounts(canonical_volumes):
-    cfg = minimal_canonical_cfg()
-    cfg["volumes"] = canonical_volumes
-    cfg["container"] = {
-        "mounts": [
-            {
-                "source": "/opt/legacy",
-                "target": "/legacy",
-                "read_only": False,
-            }
-        ]
-    }
-
-    with pytest.raises(AnsibleFilterError, match="Conflicting declarations"):
-        podman_services.podman_service_normalize(cfg, "portable")
-
-
-def test_canonical_volumes_without_tmpfs_conflict_with_legacy_tmpfs():
-    cfg = minimal_canonical_cfg()
-    cfg["volumes"] = [{"type": "bind", "source": "/opt/portable", "target": "/data"}]
-    cfg["container"] = {"tmpfs": [{"target": "/tmp", "options": []}]}
-
-    with pytest.raises(AnsibleFilterError, match="Conflicting declarations"):
-        podman_services.podman_service_normalize(cfg, "portable")
-
-
-def test_equivalent_canonical_and_legacy_mount_and_tmpfs_declarations_are_accepted():
-    cfg = minimal_canonical_cfg()
-    cfg["volumes"] = [
-        {
-            "type": "bind",
-            "source": "/opt/portable",
-            "target": "/data",
-            "read_only": "false",
-        },
-        {
-            "type": "tmpfs",
-            "target": "/tmp",
-            "tmpfs": {"size": 1024},
-        },
-    ]
-    cfg["container"] = {
-        "mounts": [
-            {
-                "source": "/opt/portable",
-                "target": "/data",
-                "read_only": False,
-            }
-        ],
-        "tmpfs": [{"target": "/tmp", "options": ["size=1024"]}],
-    }
-
-    svc = podman_services.podman_service_normalize(cfg, "portable")
-
-    assert svc["container"]["mounts"] == cfg["container"]["mounts"]
-    assert svc["container"]["tmpfs"] == cfg["container"]["tmpfs"]
-
-
-def test_legacy_named_volumes_continue_combining_with_legacy_mounts_and_tmpfs():
-    cfg = valid_cfg()
-    cfg["volumes"] = [{"name": "portable-data", "target": "/data"}]
-    cfg["container"]["mounts"] = [
-        {
-            "source": "/opt/portable",
-            "target": "/config",
-            "read_only": False,
-        }
-    ]
-    cfg["container"]["tmpfs"] = [{"target": "/tmp", "options": ["size=1024"]}]
-
-    svc = podman_services.podman_service_normalize(cfg, "n8n")
-
-    assert svc["volumes"][0]["name"] == "portable-data"
-    assert svc["container"]["mounts"][0]["source"] == "/opt/portable"
-    assert svc["container"]["tmpfs"] == [{"target": "/tmp", "options": ["size=1024"]}]
 
 
 def test_environment_initial_normalization_rejects_invalid_keys_and_lists_but_preserves_typed_mappings():
@@ -1020,7 +818,7 @@ def test_runtime_options_podman_owns_network_and_systemd_policy():
     assert svc["container"]["systemd"]["restart"] == "on-failure"
 
 
-def test_conflicting_runtime_options_and_legacy_network_fail():
+def test_top_level_legacy_network_is_rejected_even_with_runtime_options():
     cfg = minimal_canonical_cfg()
     cfg["runtime_options"] = {
         "podman": {
@@ -1032,7 +830,7 @@ def test_conflicting_runtime_options_and_legacy_network_fail():
     }
     cfg["network"] = {"name": "legacy", "delete_on_stop": True}
 
-    with pytest.raises(AnsibleFilterError, match="Conflicting declarations"):
+    with pytest.raises(AnsibleFilterError, match="removed legacy Podman fields: network"):
         podman_services.podman_service_normalize(cfg, "portable")
 
 

@@ -1,13 +1,14 @@
 # Podman services and n8n
 
-The shared service catalogue in `ansible/group_vars/all/services/*.yml` is runtime-aware. Entries without `runtime` continue to default to Docker for backwards compatibility. Entries with `runtime: podman` are selected by the same `skynet install|update|check|recreate|remove|drift <service>` interface and dispatched to `podman_services`.
+The shared service catalogue in `ansible/group_vars/all/services/*.yml` is runtime-aware. Every base service must explicitly declare `runtime: docker` or `runtime: podman`; a missing or unsupported runtime fails catalog validation. Targets inherit the validated base runtime and may explicitly override it with another supported runtime. Podman entries are selected by the same `skynet install|update|check|recreate|remove|drift <service>` interface and dispatched to `podman_services`.
 
 ## Runtime layers
 
 1. `podman_services` intentionally renders Quadlets using Podman 5.7 syntax and is not compatible with Ubuntu 24.04 LTS (Noble), whose packaged Podman 4.9 lacks the required directives.
-2. `service_common` prepares runtime-neutral host paths and shared Traefik dynamic files from explicit adapter inputs.
-3. `podman_services` renders rootful system Quadlets in `/etc/containers/systemd` and retains native Podman secrets, image pulls, Quadlet validation, and systemd lifecycle. Shared preparation reconciles declared PostgreSQL databases before the runtime starts.
-4. The shared catalogue selects Docker and Podman services together, then splits the selected items by runtime.
+2. The linear, globally ordered dispatcher materializes one selected service on its dispatch host before invoking common preparation and its runtime adapter.
+3. `service_prepare` owns application validation, generated values, template derivation, and bootstrap requests. Its temporary preparation containers use the selected runtime and are removed before deployed-service lifecycle work.
+4. `service_common` prepares runtime-neutral Infisical values, environment, host paths, files, Traefik routes, and PostgreSQL databases from explicit adapter inputs.
+5. `podman_services` renders rootful system Quadlets in `/etc/containers/systemd` and retains native Podman secrets, image pulls, Quadlet validation, and systemd lifecycle.
 
 Rootful system Quadlets were chosen first because they are stable for boot-time services and fit the existing system-level Ansible model. Containers still run as non-root users through separate container UID/GID settings. Rootless user-systemd Quadlets can be added later by introducing a scoped Quadlet directory and user lingering management.
 
@@ -21,7 +22,7 @@ Rootful system Quadlets were chosen first because they are stable for boot-time 
 
 Generated `.container` files include `[Install] WantedBy=multi-user.target`; the role does not call `systemctl enable` for generated Quadlet services.
 
-For this initial version, any dedicated network mapping supplied to `podman_services` is role-managed and must set `delete_on_stop: true`. Canonical services place it under `runtime_options.podman.network`; the legacy top-level `network` form remains accepted. Validation rejects shared/external network mappings before rendering a Quadlet. `NetworkDeleteOnStop=true` is rendered only from that explicit setting and is appropriate for dedicated per-service networks such as n8n's network. Shared/external networks are not yet managed by this role, and the role must not stop, modify, or remove them. A future schema can add explicit dedicated/shared ownership.
+For this initial version, any dedicated network mapping supplied to `podman_services` is role-managed and must set `delete_on_stop: true`. Services place it under `runtime_options.podman.network`; the removed top-level Podman network form is rejected. Validation rejects shared/external network mappings before rendering a Quadlet. `NetworkDeleteOnStop=true` is rendered only from that explicit setting and is appropriate for dedicated per-service networks such as n8n's network. Shared/external networks are not yet managed by this role, and the role must not stop, modify, or remove them. A future schema can add explicit dedicated/shared ownership.
 
 
 Published ports accept an optional `host_ip` per port. When set, the generated `PublishPort=` entry binds only that address. When omitted, Podman binds the published port on every host interface; this can expose the service on management, LAN, Tailscale, or other reachable networks and can bypass the intended reverse proxy and its middleware. Prefer an explicit trusted bind address and enforce host/network firewall policy whenever direct access is not intended.
@@ -80,7 +81,7 @@ Docker and Podman now consume the same common-resolved environment. The former e
 
 ## n8n
 
-n8n is the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, canonical ports/volumes/paths, `deploy`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter; only the dedicated network and systemd lifecycle remain under `runtime_options.podman`.
+n8n is the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, canonical ports/volumes/paths, `deploy`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter; only the dedicated network and systemd lifecycle remain under `runtime_options.podman`. Further Podman adoption remains incremental: migrate and validate one portable service at a time rather than changing the repository runtime wholesale.
 
 n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.04. The selected host must already have the runtime required by the declaration: changing `runtime` to Docker is schema-valid for the tested portable subset but does not install Docker or establish live parity. The proof covers the trusted-address `host_ip` bind in both generated Docker standalone Compose and Podman Quadlet output. Static tests do not replace a live migration test.
 

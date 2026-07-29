@@ -1,4 +1,5 @@
 import importlib.util
+import re
 from copy import deepcopy
 from pathlib import Path
 
@@ -47,51 +48,6 @@ def walk_mappings(value):
 
 def task_named(value, name):
     return next(mapping for mapping in walk_mappings(value) if mapping.get("name") == name)
-
-
-def test_service_catalog_preserves_existing_docker_expansion_ordering():
-    docker_filters = load_module(REPO_ROOT / "ansible/filter_plugins/docker_services.py", "docker_services")
-    catalog_filters = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog")
-    services = load_services()
-
-    legacy = docker_filters.docker_services_effective(services)
-    effective = catalog_filters.service_catalog_effective(services, "manager")
-    catalog_docker = [
-        {key: value for key, value in item.items() if key not in {"runtime", "dispatch_host"}}
-        for item in catalog_filters.service_catalog_by_runtime(effective, "docker")
-    ]
-
-    assert catalog_docker == legacy
-
-
-def selected_without_runtime(items):
-    return [{key: value for key, value in item.items() if key not in {"runtime", "dispatch_host"}} for item in items]
-
-
-def assert_selector_parity(services, run_tags=None, run_all=False, allow_disabled=False):
-    docker_filters = load_module(REPO_ROOT / "ansible/filter_plugins/docker_services.py", "docker_services")
-    catalog_filters = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog")
-
-    legacy_effective = docker_filters.docker_services_effective(services)
-    legacy_selected = docker_filters.docker_services_select(legacy_effective, run_tags, run_all, allow_disabled)
-
-    catalog_effective = catalog_filters.service_catalog_effective(services, "manager")
-    catalog_selected = catalog_filters.service_catalog_select(catalog_effective, run_tags, run_all, allow_disabled)
-    catalog_docker_selected = catalog_filters.service_catalog_by_runtime(catalog_selected["selected"], "docker")
-
-    assert selected_without_runtime(catalog_docker_selected) == legacy_selected["selected"]
-
-
-def test_service_catalog_preserves_docker_selector_parity_for_real_services():
-    services = load_services()
-    assert_selector_parity(services, run_tags=["authelia"])
-    assert_selector_parity(services, run_tags=["media"])
-    assert_selector_parity(services, run_tags=["qbittorrent-xs"])
-    assert_selector_parity(services, run_all=True)
-
-    disabled_name = next(name for name, cfg in services.items() if cfg["runtime"] == "docker" and cfg.get("enabled") is False)
-    assert_selector_parity(services, run_tags=[disabled_name], allow_disabled=False)
-    assert_selector_parity(services, run_tags=[disabled_name], allow_disabled=True)
 
 
 def test_real_repository_catalog_contains_only_lightweight_selection_metadata():
@@ -151,6 +107,53 @@ def test_every_real_service_declares_a_supported_runtime():
     for service_name, service_cfg in services.items():
         assert "runtime" in service_cfg, f"{service_name} must declare its runtime explicitly"
         assert service_cfg["runtime"] in {"docker", "podman"}, f"{service_name} declares an unsupported runtime"
+
+
+def test_removed_compatibility_identifiers_have_no_production_references():
+    removed_plugin = REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_merge.py"
+    assert not removed_plugin.exists()
+
+    production_files = [
+        path for path in (REPO_ROOT / "ansible").rglob("*") if path.is_file() and path.suffix in {".j2", ".py", ".yaml", ".yml"}
+    ]
+    removed_identifiers = (
+        r"\bdocker_services_merge_target\b",
+        r"\bdocker_services_effective\b",
+        r"\bdocker_services_select\b",
+        r"\bservice_common_secret_values\b",
+        r"__INFISICAL__:",
+    )
+
+    for path in production_files:
+        contents = path.read_text()
+        for identifier in removed_identifiers:
+            assert re.search(identifier, contents) is None, f"{identifier} remains in {path.relative_to(REPO_ROOT)}"
+
+
+def test_real_podman_definitions_use_only_canonical_adapter_inputs():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_repository_podman_canonical",
+    )
+    podman_filters = load_module(
+        REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py",
+        "podman_services_repository_canonical",
+    )
+    services = load_services()
+    checked = []
+
+    for item in catalog_filters.service_catalog_effective(services, "manager"):
+        if item["runtime"] != "podman":
+            continue
+        effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
+        assert not ({"container", "env", "host_paths", "network"} & set(effective))
+        rendered_effective = deepcopy(effective)
+        rendered_effective["ports"][0]["host_ip"] = "192.0.2.10"
+        normalized = podman_filters.podman_service_normalize(rendered_effective, item.get("target", item["name"]))
+        assert normalized["image"] == effective["image"]
+        checked.append((item["name"], item.get("target")))
+
+    assert checked == [("n8n", None)]
 
 
 def test_real_docker_swarm_constraints_match_configured_node_label_values():

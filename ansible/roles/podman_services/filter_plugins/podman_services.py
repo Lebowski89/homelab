@@ -1,9 +1,8 @@
 """Normalize canonical service declarations for Podman Quadlet tasks.
 
 The Podman role uses these filters to validate portable Docker-shaped service
-fields, preserve supported legacy nested Podman declarations during migration,
-render safe environment values, evaluate image drift and secret replacement,
-and produce the internal structure consumed by Quadlet templates.
+fields, render safe environment values, evaluate image drift and secret
+replacement, and produce the internal structure consumed by Quadlet templates.
 """
 
 from __future__ import annotations
@@ -257,24 +256,6 @@ def _canonical_user(value: Any, *, name: str) -> tuple[str, str]:
     return uid, gid
 
 
-def _choose(
-    canonical: Any,
-    legacy: Any,
-    *,
-    canonical_present: bool,
-    legacy_present: bool,
-    canonical_name: str,
-    legacy_name: str,
-) -> tuple[Any, bool]:
-    if canonical_present and legacy_present and canonical != legacy:
-        raise AnsibleFilterError(f"Conflicting declarations: {canonical_name} and {legacy_name}")
-    if canonical_present:
-        return canonical, True
-    if legacy_present:
-        return legacy, True
-    return None, False
-
-
 def _image(value: Any, *, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise AnsibleFilterError(f"{name} must be an exact, non-latest image tag")
@@ -300,27 +281,24 @@ def _environment(value: Any, *, name: str) -> dict[str, Any]:
     return environment
 
 
-def _ports(value: Any, *, name: str, canonical: bool) -> list[dict[str, Any]]:
+def _ports(value: Any, *, name: str) -> list[dict[str, Any]]:
     normalized: list[dict[str, Any]] = []
-    host_key = "published" if canonical else "host"
-    container_key = "target" if canonical else "container"
     for index, port in enumerate(_as_items(value, name=name)):
         item_name = f"{name}[{index}]"
         if not isinstance(port, Mapping):
             raise AnsibleFilterError(f"{item_name} must be a mapping")
-        if canonical:
-            supported_fields = {"published", "target", "protocol", "host_ip"}
-            for field in port:
-                if field not in supported_fields:
-                    raise AnsibleFilterError(f"{item_name}.{field} is not supported by Podman Quadlets in this phase")
-        if host_key not in port or container_key not in port:
-            raise AnsibleFilterError(f"{item_name} must include both {host_key!r} and {container_key!r}")
-        host_port = _integer(port[host_key], name=f"{item_name}.{host_key}")
-        container_port = _integer(port[container_key], name=f"{item_name}.{container_key}")
+        supported_fields = {"published", "target", "protocol", "host_ip"}
+        for field in port:
+            if field not in supported_fields:
+                raise AnsibleFilterError(f"{item_name}.{field} is not supported by Podman Quadlets in this phase")
+        if "published" not in port or "target" not in port:
+            raise AnsibleFilterError(f"{item_name} must include both 'published' and 'target'")
+        host_port = _integer(port["published"], name=f"{item_name}.published")
+        container_port = _integer(port["target"], name=f"{item_name}.target")
         if not 1 <= host_port <= 65535:
-            raise AnsibleFilterError(f"{item_name}.{host_key} must be between 1 and 65535")
+            raise AnsibleFilterError(f"{item_name}.published must be between 1 and 65535")
         if not 1 <= container_port <= 65535:
-            raise AnsibleFilterError(f"{item_name}.{container_key} must be between 1 and 65535")
+            raise AnsibleFilterError(f"{item_name}.target must be between 1 and 65535")
         protocol = str(port.get("protocol", "tcp")).strip().lower()
         if protocol not in _VALID_PROTOCOLS:
             raise AnsibleFilterError(f"{item_name}.protocol must be one of {sorted(_VALID_PROTOCOLS)}")
@@ -338,9 +316,7 @@ def _ports(value: Any, *, name: str, canonical: bool) -> list[dict[str, Any]]:
     return normalized
 
 
-def _paths(value: Any, *, name: str, allow_none: bool = False) -> list[dict[str, Any]]:
-    if value is None and allow_none:
-        return []
+def _paths(value: Any, *, name: str) -> list[dict[str, Any]]:
     if isinstance(value, (str, Mapping)) or not isinstance(value, Iterable):
         raise AnsibleFilterError(f"{name} must be a list of path mappings")
     normalized: list[dict[str, Any]] = []
@@ -388,12 +364,8 @@ def _health_command(test: Any, *, name: str) -> str:
     raise AnsibleFilterError(f"{name}.test must be a non-empty string or list of non-empty strings")
 
 
-def _healthcheck(value: Any, *, name: str, canonical: bool) -> dict[str, Any]:
+def _healthcheck(value: Any, *, name: str) -> dict[str, Any]:
     healthcheck = _as_mapping(value, name=name)
-    if not canonical:
-        if "command" in healthcheck:
-            healthcheck["command"] = _nonempty_string(healthcheck["command"], name=f"{name}.command")
-        return healthcheck
     if "test" not in healthcheck:
         raise AnsibleFilterError(f"{name}.test is required")
     result = {"command": _health_command(healthcheck["test"], name=name)}
@@ -444,56 +416,6 @@ def _canonical_volumes(value: Any, *, name: str) -> tuple[list[dict[str, Any]], 
                 }
             )
     return mounts, volumes, tmpfs_mounts
-
-
-def _volume_schema(value: Any, *, name: str) -> tuple[str, list[Any]]:
-    entries = _as_items(value, name=name)
-    schemas: set[str] = set()
-    for index, volume in enumerate(entries):
-        if not isinstance(volume, Mapping):
-            raise AnsibleFilterError(f"{name}[{index}] must be a mapping")
-        schemas.add("legacy" if "name" in volume and "source" not in volume and "type" not in volume else "canonical")
-    if len(schemas) > 1:
-        raise AnsibleFilterError(f"{name} cannot mix canonical and legacy Podman volume entries")
-    return (schemas.pop() if schemas else "canonical"), entries
-
-
-def _legacy_volumes(entries: list[Any], *, name: str) -> list[dict[str, Any]]:
-    normalized: list[dict[str, Any]] = []
-    for index, volume in enumerate(entries):
-        item_name = f"{name}[{index}]"
-        if not isinstance(volume, Mapping):
-            raise AnsibleFilterError(f"{item_name} must be a mapping")
-        result = deepcopy(dict(volume))
-        result["name"] = _resource_name(result.get("name"), name=f"{item_name}.name")
-        result["target"] = _nonempty_string(result.get("target"), name=f"{item_name}.target")
-        result["read_only"] = _as_bool(result.get("read_only", False), name=f"{item_name}.read_only")
-        normalized.append(result)
-    return normalized
-
-
-def _legacy_mounts(value: Any, *, name: str) -> list[dict[str, Any]]:
-    mounts, volumes, tmpfs_mounts = _canonical_volumes(value, name=name)
-    if volumes or tmpfs_mounts:
-        raise AnsibleFilterError(f"{name} accepts bind mounts only")
-    return mounts
-
-
-def _legacy_tmpfs(value: Any, *, name: str) -> list[dict[str, Any]]:
-    normalized: list[dict[str, Any]] = []
-    for index, mount in enumerate(_as_items(value, name=name)):
-        item_name = f"{name}[{index}]"
-        if not isinstance(mount, Mapping):
-            raise AnsibleFilterError(f"{item_name} must be a mapping")
-        target = _nonempty_string(mount.get("target"), name=f"{item_name}.target")
-        options = mount.get("options", [])
-        if isinstance(options, str) or not isinstance(options, Iterable):
-            raise AnsibleFilterError(f"{item_name}.options must be a list")
-        normalized_options = [
-            _nonempty_string(option, name=f"{item_name}.options[{option_index}]") for option_index, option in enumerate(options)
-        ]
-        normalized.append({"target": target, "options": normalized_options})
-    return normalized
 
 
 def _deploy(value: Any, *, name: str) -> dict[str, Any]:
@@ -568,16 +490,15 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
 
     Portable top-level fields are translated to the role's internal container,
     environment, host-path, named-volume, integration, and runtime-option
-    mappings. Supported legacy Podman fields remain accepted only when they do
-    not conflict with their canonical equivalents. Exact non-latest image tags,
-    ``UID:GID`` users, port ranges/protocols, paths below ``/opt``, volume
-    schemas, security values, health checks, single-instance deployment, and
-    dedicated managed networks are validated. Value-free secret attachment
-    names are de-duplicated in declaration order; secret values are not handled.
+    mappings. Exact non-latest image tags, ``UID:GID`` users, port
+    ranges/protocols, paths below ``/opt``, volume schemas, security values,
+    health checks, single-instance deployment, and dedicated managed networks
+    are validated. Value-free secret attachment names are de-duplicated in
+    declaration order; secret values are not handled.
 
     Args:
-        cfg: Effective canonical or transition-compatible service mapping whose
-            runtime must be ``podman``.
+        cfg: Effective canonical service mapping whose runtime must be
+            ``podman``.
         name: Service resource name used for validation and default unit naming.
 
     Returns:
@@ -587,164 +508,52 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         and runtime options, and copied PostgreSQL/Traefik integration mappings.
 
     Raises:
-        AnsibleFilterError: If the service or any supported canonical/legacy
-            field has an invalid value or shape, canonical and legacy values
-            conflict, an unsupported field is present in a strictly validated
-            section, or current Podman phase limitations are violated.
+        AnsibleFilterError: If the service or any supported canonical field has
+            an invalid value or shape, a removed legacy Podman field is used,
+            an unsupported field is present in a strictly validated section,
+            or current Podman phase limitations are violated.
 
     Note:
         ``cfg`` and its nested values are not mutated.
     """
     if not isinstance(cfg, Mapping):
         raise AnsibleFilterError(f"{name} must be a mapping")
-    if str(cfg.get("runtime", "docker")) != "podman":
+    if cfg.get("runtime") != "podman":
         raise AnsibleFilterError(f"{name}.runtime must be podman for podman_services")
     service_name = _resource_name(name, name="service name")
 
-    raw_container = cfg.get("container", {})
-    if not isinstance(raw_container, Mapping):
-        raise AnsibleFilterError(f"{name}.container must be a mapping")
-    container = deepcopy(dict(raw_container))
-    unit_name = _resource_name(container.get("name", service_name), name=f"{name}.container.name")
-    if "systemd" in container:
-        container["systemd"] = _systemd(container["systemd"], name=f"{name}.container.systemd")
+    removed_fields = [field for field in ("container", "env", "host_paths", "network") if field in cfg]
+    if removed_fields:
+        raise AnsibleFilterError(f"{name} uses removed legacy Podman fields: {', '.join(removed_fields)}; use the canonical service schema")
 
-    canonical_description_present = "description" in cfg
-    legacy_description_present = "description" in raw_container
-    description, description_present = _choose(
-        _nonempty_string(cfg["description"], name=f"{name}.description") if canonical_description_present else None,
-        _nonempty_string(raw_container["description"], name=f"{name}.container.description") if legacy_description_present else None,
-        canonical_present=canonical_description_present,
-        legacy_present=legacy_description_present,
-        canonical_name=f"{name}.description",
-        legacy_name=f"{name}.container.description",
-    )
-    if not description_present:
-        description = f"{name} Podman service"
+    container: dict[str, Any] = {}
+    unit_name = service_name
+    description = _nonempty_string(cfg["description"], name=f"{name}.description") if "description" in cfg else f"{name} Podman service"
 
-    image, _ = _choose(
-        _image(cfg["image"], name=f"{name}.image") if "image" in cfg else None,
-        _image(raw_container["image"], name=f"{name}.container.image") if "image" in raw_container else None,
-        canonical_present="image" in cfg,
-        legacy_present="image" in raw_container,
-        canonical_name=f"{name}.image",
-        legacy_name=f"{name}.container.image",
-    )
-    if image is None:
+    if "image" not in cfg:
         raise AnsibleFilterError(f"{name}.image must be an exact, non-latest image tag")
+    image = _image(cfg["image"], name=f"{name}.image")
     container["image"] = image
 
-    if "user" in raw_container:
-        raise AnsibleFilterError(f"{name}.container.user is not supported; use top-level user or container.uid and container.gid")
-    legacy_user_present = "uid" in raw_container or "gid" in raw_container
-    legacy_user = None
-    if legacy_user_present:
-        if "uid" not in raw_container or "gid" not in raw_container:
-            raise AnsibleFilterError(f"{name}.container.uid and {name}.container.gid must be defined together")
-        legacy_user = (
-            _numeric_id(raw_container["uid"], name=f"{name}.container.uid"),
-            _numeric_id(raw_container["gid"], name=f"{name}.container.gid"),
-        )
-    user, user_present = _choose(
-        _canonical_user(cfg["user"], name=f"{name}.user") if "user" in cfg else None,
-        legacy_user,
-        canonical_present="user" in cfg,
-        legacy_present=legacy_user_present,
-        canonical_name=f"{name}.user",
-        legacy_name=f"{name}.container.uid/container.gid",
-    )
-    if user_present:
-        container["uid"], container["gid"] = user
+    if "user" in cfg:
+        container["uid"], container["gid"] = _canonical_user(cfg["user"], name=f"{name}.user")
 
-    canonical_env_present = "environment" in cfg
-    legacy_env_present = "env" in cfg
-    env, env_present = _choose(
-        _environment(cfg["environment"], name=f"{name}.environment") if canonical_env_present else None,
-        _environment(cfg["env"] or {}, name=f"{name}.env") if legacy_env_present else None,
-        canonical_present=canonical_env_present,
-        legacy_present=legacy_env_present,
-        canonical_name=f"{name}.environment",
-        legacy_name=f"{name}.env",
-    )
+    environment = _environment(cfg["environment"], name=f"{name}.environment") if "environment" in cfg else {}
 
     deploy = _deploy(cfg["deploy"], name=f"{name}.deploy") if "deploy" in cfg else {}
-    canonical_host_present = "host" in deploy
-    legacy_host_present = "host" in raw_container
-    host, host_present = _choose(
-        deploy.get("host"),
-        _nonempty_string(raw_container["host"], name=f"{name}.container.host") if legacy_host_present else None,
-        canonical_present=canonical_host_present,
-        legacy_present=legacy_host_present,
-        canonical_name=f"{name}.deploy.host",
-        legacy_name=f"{name}.container.host",
-    )
-    if host_present:
-        container["host"] = host
+    if "host" in deploy:
+        container["host"] = deploy["host"]
 
-    canonical_ports_present = "ports" in cfg
-    legacy_ports_present = "ports" in raw_container
-    ports, ports_present = _choose(
-        _ports(cfg["ports"], name=f"{name}.ports", canonical=True) if canonical_ports_present else None,
-        _ports(raw_container["ports"], name=f"{name}.container.ports", canonical=False) if legacy_ports_present else None,
-        canonical_present=canonical_ports_present,
-        legacy_present=legacy_ports_present,
-        canonical_name=f"{name}.ports",
-        legacy_name=f"{name}.container.ports",
-    )
-    if ports_present:
-        container["ports"] = ports
+    if "ports" in cfg:
+        container["ports"] = _ports(cfg["ports"], name=f"{name}.ports")
 
-    canonical_paths_present = "paths" in cfg
-    legacy_paths_present = "host_paths" in cfg
-    paths, paths_present = _choose(
-        _paths(cfg["paths"], name=f"{name}.paths") if canonical_paths_present else None,
-        _paths(cfg["host_paths"], name=f"{name}.host_paths", allow_none=True) if legacy_paths_present else None,
-        canonical_present=canonical_paths_present,
-        legacy_present=legacy_paths_present,
-        canonical_name=f"{name}.paths",
-        legacy_name=f"{name}.host_paths",
-    )
-    host_paths = paths if paths_present else []
+    host_paths = _paths(cfg["paths"], name=f"{name}.paths") if "paths" in cfg else []
 
-    volume_schema = None
-    volume_entries: list[Any] = []
+    volumes: list[dict[str, Any]] = []
     if "volumes" in cfg:
-        volume_schema, volume_entries = _volume_schema(cfg["volumes"], name=f"{name}.volumes")
-    canonical_mounts = canonical_volumes = canonical_tmpfs = None
-    if volume_schema == "canonical":
-        canonical_mounts, canonical_volumes, canonical_tmpfs = _canonical_volumes(cfg["volumes"], name=f"{name}.volumes")
-
-    legacy_mounts_present = "mounts" in raw_container
-    legacy_tmpfs_present = "tmpfs" in raw_container
-    legacy_mounts = _legacy_mounts(raw_container["mounts"], name=f"{name}.container.mounts") if legacy_mounts_present else None
-    legacy_tmpfs = _legacy_tmpfs(raw_container["tmpfs"], name=f"{name}.container.tmpfs") if legacy_tmpfs_present else None
-
-    if volume_schema == "canonical":
-        mounts, _ = _choose(
-            canonical_mounts,
-            legacy_mounts,
-            canonical_present=True,
-            legacy_present=legacy_mounts_present,
-            canonical_name=f"{name}.volumes (bind entries)",
-            legacy_name=f"{name}.container.mounts",
-        )
-        tmpfs_mounts, _ = _choose(
-            canonical_tmpfs,
-            legacy_tmpfs,
-            canonical_present=True,
-            legacy_present=legacy_tmpfs_present,
-            canonical_name=f"{name}.volumes (tmpfs entries)",
-            legacy_name=f"{name}.container.tmpfs",
-        )
+        mounts, volumes, tmpfs_mounts = _canonical_volumes(cfg["volumes"], name=f"{name}.volumes")
         container["mounts"] = mounts
         container["tmpfs"] = tmpfs_mounts
-        volumes = canonical_volumes or []
-    else:
-        if legacy_mounts_present:
-            container["mounts"] = legacy_mounts
-        if legacy_tmpfs_present:
-            container["tmpfs"] = legacy_tmpfs
-        volumes = _legacy_volumes(volume_entries, name=f"{name}.volumes") if volume_schema == "legacy" else []
 
     for field, converter in (
         ("cap_add", _capabilities),
@@ -752,43 +561,15 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         ("no_new_privileges", _as_bool),
         ("read_only", _as_bool),
     ):
-        canonical_present = field in cfg
-        legacy_present = field in raw_container
-        value, present = _choose(
-            converter(cfg[field], name=f"{name}.{field}") if canonical_present else None,
-            converter(raw_container[field], name=f"{name}.container.{field}") if legacy_present else None,
-            canonical_present=canonical_present,
-            legacy_present=legacy_present,
-            canonical_name=f"{name}.{field}",
-            legacy_name=f"{name}.container.{field}",
-        )
-        if present:
-            container[field] = value
+        if field in cfg:
+            container[field] = converter(cfg[field], name=f"{name}.{field}")
 
-    healthcheck, healthcheck_present = _choose(
-        _healthcheck(cfg["healthcheck"], name=f"{name}.healthcheck", canonical=True) if "healthcheck" in cfg else None,
-        _healthcheck(raw_container["healthcheck"], name=f"{name}.container.healthcheck", canonical=False)
-        if "healthcheck" in raw_container
-        else None,
-        canonical_present="healthcheck" in cfg,
-        legacy_present="healthcheck" in raw_container,
-        canonical_name=f"{name}.healthcheck",
-        legacy_name=f"{name}.container.healthcheck",
-    )
-    if healthcheck_present:
-        container["healthcheck"] = healthcheck
+    if "healthcheck" in cfg:
+        container["healthcheck"] = _healthcheck(cfg["healthcheck"], name=f"{name}.healthcheck")
 
     podman_options = _podman_runtime_options(cfg.get("runtime_options", {}), name=f"{name}.runtime_options")
-    systemd, systemd_present = _choose(
-        podman_options.get("systemd"),
-        container.get("systemd"),
-        canonical_present="systemd" in podman_options,
-        legacy_present="systemd" in raw_container,
-        canonical_name=f"{name}.runtime_options.podman.systemd",
-        legacy_name=f"{name}.container.systemd",
-    )
-    if systemd_present:
-        container["systemd"] = systemd
+    if "systemd" in podman_options:
+        container["systemd"] = podman_options["systemd"]
 
     secret_attachments: list[str] = []
     if cfg.get("secrets"):
@@ -801,15 +582,7 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
             if attachment.strip() not in secret_attachments:
                 secret_attachments.append(attachment.strip())
 
-    legacy_network = _network(cfg["network"], name=f"{name}.network") if cfg.get("network") is not None else None
-    network, _ = _choose(
-        podman_options.get("network"),
-        legacy_network,
-        canonical_present="network" in podman_options,
-        legacy_present=cfg.get("network") is not None,
-        canonical_name=f"{name}.runtime_options.podman.network",
-        legacy_name=f"{name}.network",
-    )
+    network = podman_options.get("network")
     postgres = _as_mapping(cfg["postgres"], name=f"{name}.postgres") if "postgres" in cfg else {}
     traefik = _as_mapping(cfg["traefik"], name=f"{name}.traefik") if "traefik" in cfg else {}
 
@@ -819,7 +592,7 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         "description": description,
         "image": image,
         "container": container,
-        "env": env if env_present else {},
+        "env": environment,
         "secrets": [],
         "secret_attachments": secret_attachments,
         "host_paths": host_paths,
