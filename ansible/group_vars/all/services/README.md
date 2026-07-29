@@ -51,7 +51,7 @@ the service does not need.
 | --- | ------------- |
 | `image` | The exact container image and tag to run. Keep the tag pinned. |
 | `hostname` | The hostname the application sees from inside the container. |
-| `container_name` | Forces a literal name for a standalone Docker container. Without it, Compose builds a name from the project, service, and replica number. It is not used by Swarm. |
+| `container_name` | Forces a literal name for a non-Swarm Docker container. |
 | `user` | The user ID the process runs as. Portable Podman services use `UID:GID`. |
 | `group` | A separate process group where the selected adapter supports one. Prefer `UID:GID` in `user` for portable services. |
 | `working_dir` | The directory the application starts in inside the container. |
@@ -134,7 +134,7 @@ Within `infisical.secrets_map`, keep each declaration in this order: `var`,
 | Key | What it means |
 | --- | ------------- |
 | `traefik` | Creates the Traefik route for the service, including exposure, port, and optional SSO. |
-| `themepark` | Applies a Theme Park skin to supported web applications. |
+| `themepark` | Applies a ThemePark skin to supported web applications. |
 | `postgres` | Ensures the service's PostgreSQL users or databases exist before deployment. Credentials come from the service's Infisical declarations. |
 
 ### 10. Runtime and lifecycle
@@ -153,11 +153,7 @@ Within `infisical.secrets_map`, keep each declaration in this order: `var`,
 
 | Key | What it means |
 | --- | ------------- |
-| `targets` | Named variations that inherit the base service and override only what differs. `targets` is always the final base-service key, and a target cannot contain another `targets` block. |
-
-Do not reorder arbitrary nested mappings to match this guide. Keep meaningful
-grouping inside `environment`, `deploy`, `postgres`, volume definitions, and
-other nested data.
+| `targets` | Named variations (including multiple instances, agents or redis companions) that inherit the base service and override only what differs. `targets` is always the final base-service key, and a target cannot contain another `targets` block. |
 
 ## Service file checklist
 
