@@ -1,14 +1,21 @@
 ---
 
 sportarr:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [arrs, sportarr]
   name: sportarr
   stack: sportarr
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: sportarr/sportarr:4.0.1016.1096
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
@@ -36,11 +43,15 @@ sportarr:
         name: PASS
         secret:
           name: postgres_pass_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sportarr"
       state: directory
@@ -62,7 +73,9 @@ sportarr:
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
@@ -71,7 +84,9 @@ sportarr:
     enable: true
     databases:
       - sportarr
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

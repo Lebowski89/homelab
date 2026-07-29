@@ -1,14 +1,21 @@
 ---
 
 kometa:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [plex, kometa]
   name: kometa
   stack: kometa
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: kometateam/kometa:v2.4.4
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_plex_host].container_host_puid }}"
@@ -41,11 +48,15 @@ kometa:
       - var: plex_token
         path: "/Plex"
         name: TOKEN
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/kometa"
       state: directory
@@ -62,7 +73,9 @@ kometa:
       source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/kometa"
       target: /config
       read_only: false
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

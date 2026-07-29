@@ -1,14 +1,21 @@
 ---
 
 stash:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [media, pgsql, stash]
   name: stash
   stack: stash
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/hotio/stash:release-v0.31.1
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
@@ -37,11 +44,15 @@ stash:
       - var: stashdb_api
         path: "/Stash"
         name: STASHDB_API
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/stash"
       state: directory
@@ -75,17 +86,23 @@ stash:
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
-
+  ################################
+  # HEALTH
+  ################################
   healthcheck:
     test:
       - "CMD-SHELL"
       - "touch /data/media/adult/.healthcheck && rm -f /data/media/adult/.healthcheck || exit 1"
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 9999
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

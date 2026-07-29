@@ -1,36 +1,53 @@
 ---
 
 portainer:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [monitoring, portainer]
   stack: portainer
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   infisical:
     fail_on_empty: true
     secrets_map:
       - var: cloudflare_zone
         path: /Cloudflare
         name: ZONE
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     profile: careful
-
+  ################################
+  # TARGETS (INSTANCES)
+  ################################
   targets:
-
     ################################
     # PORTAINER-AGENT SERVICE
     ################################
     agent:
+      ################################
+      # IDENTITY
+      ################################
       name: agent
-
+      ################################
+      # IMAGE/PROCESS
+      ################################
       image: portainer/agent:2.43.0-linux-amd64-alpine
-
+      ################################
+      # FILESYSTEM
+      ################################
       volumes:
         docker_volumes:
           type: bind
@@ -40,28 +57,38 @@ portainer:
           type: bind
           source: /var/run/docker.sock
           target: /var/run/docker.sock
-
+      ################################
+      # RUNTIME/LIFECYCLE
+      ################################
       deploy:
         mode: global
         constraints:
           - node.platform.os == linux
-
     ################################
     # PORTAINER SERVICE
     ################################
     main:
+      ################################
+      # IDENTITY
+      ################################
       name: portainer
-
+      ################################
+      # IMAGE/PROCESS
+      ################################
       image: portainer/portainer-ce:2.43.0-linux-amd64-alpine
       command:
         - "-H tcp://tasks.agent:9001 --tlsskipverify"
-
+      ################################
+      # ENVIRONMENT/SECRETS
+      ################################
       environment:
         TZ: "{{ timezone }}"
         PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
         PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
         UMASK: "022"
-
+      ################################
+      # FILESYSTEM
+      ################################
       paths:
         - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/portainer"
           state: directory
@@ -77,12 +104,16 @@ portainer:
           source: /var/run/docker.sock
           target: /var/run/docker.sock
           read_only: true
-
+      ################################
+      # INTEGRATIONS
+      ################################
       traefik:
         enable: true
         exposure: private
         port: 9000
-
+      ################################
+      # RUNTIME/LIFECYCLE
+      ################################
       deploy:
         mode: replicated
         replicas: 1

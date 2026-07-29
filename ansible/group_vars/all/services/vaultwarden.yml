@@ -1,16 +1,23 @@
 ---
 
 vaultwarden:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [utilities, pgsql, vaultwarden]
   name: vaultwarden
   stack: vaultwarden
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: vaultwarden/server:1.36.0
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     ADMIN_TOKEN_FILE: /run/secrets/vaultwarden_admin_secret
@@ -46,7 +53,6 @@ vaultwarden:
       - var: smtp_username
         path: "/Porkbun"
         name: SMTP_USER
-
   paths_vault:
     vault_dir: "{{ hostvars[services_controller_host].container_host_appdata_root }}/vaultwarden"
     vault_token_file: >-
@@ -56,11 +62,15 @@ vaultwarden:
     vault_secret_name: vaultwarden_admin_secret
   application_prepare:
     handler: vaultwarden
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/vaultwarden"
       state: directory
@@ -77,7 +87,9 @@ vaultwarden:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/vaultwarden"
       target: /data
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     port: 80
@@ -86,7 +98,9 @@ vaultwarden:
     enable: true
     databases:
       - vaultwarden
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

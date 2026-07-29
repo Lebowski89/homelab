@@ -1,12 +1,19 @@
 ---
 
 sonarr:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [arrs, pgsql, sonarr]
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/hotio/sonarr:release-4.0.18.2971
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     UMASK: "022"
@@ -38,18 +45,24 @@ sonarr:
         name: PASS
         secret:
           name: postgres_pass_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   volumes:
     media:
       type: bind
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
@@ -57,7 +70,9 @@ sonarr:
   themepark:
     app: sonarr
     theme: hotline
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated
@@ -70,17 +85,23 @@ sonarr:
       delay: 10s
       max_attempts: 5
       window: 2m
-
+  ################################
+  # TARGETS (INSTANCES)
+  ################################
   targets:
-
     ################################
     # SONARR 720/1080p SERVICE
     ################################
     sonarr:
+      ################################
+      # IDENTITY
+      ################################
       tags: [sonarr-1080p]
       name: sonarr
       stack: sonarr
-
+      ################################
+      # ENVIRONMENT/SECRETS
+      ################################
       environment:
         SONARR__APP__INSTANCENAME: "Sonarr"
         FILE__SONARR__AUTH__APIKEY: /run/secrets/sonarr_api_secret
@@ -93,7 +114,9 @@ sonarr:
             name: API
             secret:
               name: sonarr_api_secret
-
+      ################################
+      # FILESYSTEM
+      ################################
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr"
           state: directory
@@ -119,26 +142,34 @@ sonarr:
           source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr/98-themepark-sonarr"
           target: /etc/cont-init.d/98-themepark
           read_only: false
-
+      ################################
+      # HEALTH
+      ################################
       healthcheck:
         test:
           - "CMD-SHELL"
           - "touch /data/media/tv/.healthcheck && rm -f /data/media/tv/.healthcheck || exit 1"
-
+      ################################
+      # INTEGRATIONS
+      ################################
       postgres:
         enable: true
         databases:
           - sonarr-main
           - sonarr-log
-
     ################################
     # SONARR 2160p SERVICE
     ################################
     sonarr_4k:
+      ################################
+      # IDENTITY
+      ################################
       tags: [sonarr-4k]
       name: sonarr-4k
       stack: sonarr-4k
-
+      ################################
+      # ENVIRONMENT/SECRETS
+      ################################
       environment:
         SONARR__APP__INSTANCENAME: "Sonarr-4K"
         FILE__SONARR__AUTH__APIKEY: /run/secrets/sonarr_4k_api_secret
@@ -151,7 +182,9 @@ sonarr:
             name: API
             secret:
               name: sonarr_4k_api_secret
-
+      ################################
+      # FILESYSTEM
+      ################################
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr-4k"
           state: directory
@@ -177,12 +210,16 @@ sonarr:
           source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr-4k/98-themepark-sonarr"
           target: /etc/cont-init.d/98-themepark
           read_only: false
-
+      ################################
+      # HEALTH
+      ################################
       healthcheck:
         test:
           - "CMD-SHELL"
           - "touch /data/media/tv-4k/.healthcheck && rm -f /data/media/tv-4k/.healthcheck || exit 1"
-
+      ################################
+      # INTEGRATIONS
+      ################################
       postgres:
         enable: true
         databases:

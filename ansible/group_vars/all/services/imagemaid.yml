@@ -1,14 +1,21 @@
 ---
 
 imagemaid:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [plex, imagemaid]
   name: imagemaid
   stack: imagemaid
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: kometateam/imagemaid:v1.2.0
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_plex_host].container_host_puid }}"
@@ -20,11 +27,15 @@ imagemaid:
       - var: plex_token
         path: "/Plex"
         name: TOKEN
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/imagemaid"
       state: directory
@@ -46,7 +57,9 @@ imagemaid:
       source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library/Application Support/Plex Media Server"
       target: /plex
       read_only: false
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

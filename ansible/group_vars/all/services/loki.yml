@@ -1,25 +1,36 @@
 ---
 
 loki:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [monitoring, loki]
   name: loki
   stack: loki
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: grafana/loki:3.7.3
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
   command:
     - "-config.file=/etc/loki/loki-config.yaml"
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/loki"
       state: directory
@@ -43,7 +54,9 @@ loki:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/loki/data"
       target: /loki
       read_only: false
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

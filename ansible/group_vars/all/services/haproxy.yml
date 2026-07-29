@@ -1,14 +1,21 @@
 ---
 
 haproxy:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [haproxy]
   name: haproxy
   stack: haproxy
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: haproxy:3.4-alpine
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   swarm_configs:
     - name: haproxy_cfg
       src: templates/configs/haproxy.cfg.j2
@@ -25,7 +32,9 @@ haproxy:
     haproxy_timeout_check: 5s
     haproxy_retries: 3
     haproxy_prometheus_port: 8405
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
@@ -34,7 +43,9 @@ haproxy:
       published: 5432
       target: 5432
       mode: host
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: global

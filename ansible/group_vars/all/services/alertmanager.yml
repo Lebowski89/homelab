@@ -1,19 +1,26 @@
 ---
 
 alertmanager:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [monitoring, alertmanager]
   name: alertmanager
   stack: alertmanager
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: prom/alertmanager:v0.33.1
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
   command:
     - "--config.file=/etc/alertmanager/alertmanager.yml"
     - "--storage.path=/alertmanager"
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
   infisical:
@@ -39,11 +46,15 @@ alertmanager:
       - var: smtp_username
         path: "/Porkbun"
         name: SMTP_USER
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/alertmanager"
       state: directory
@@ -68,12 +79,16 @@ alertmanager:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/alertmanager/data"
       target: /alertmanager
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 9093
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

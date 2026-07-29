@@ -1,14 +1,21 @@
 ---
 
 prowlarr:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [arrs, pgsql, prowlarr]
   name: prowlarr
   stack: prowlarr
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/hotio/prowlarr:release-2.4.0.5397
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
@@ -49,11 +56,15 @@ prowlarr:
         name: PASS
         secret:
           name: postgres_pass_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/prowlarr"
       state: directory
@@ -81,7 +92,9 @@ prowlarr:
       source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/prowlarr/98-themepark-prowlarr"
       target: /etc/cont-init.d/98-themepark
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
@@ -94,7 +107,9 @@ prowlarr:
     databases:
       - prowlarr-main
       - prowlarr-log
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

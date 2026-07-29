@@ -1,30 +1,43 @@
 ---
 
 adminer:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [utilities, adminer]
   name: adminer
   stack: adminer
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: adminer:5.4.2
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   infisical:
     fail_on_empty: true
     secrets_map:
       - var: cloudflare_zone
         path: /Cloudflare
         name: ZONE
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 8080
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

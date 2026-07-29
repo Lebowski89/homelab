@@ -1,14 +1,21 @@
 ---
 
 romm:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [gaming, romm]
   name: romm
   stack: romm
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/rommapp/romm:4.9.2
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     ROMM_PORT: "8080"
@@ -52,11 +59,15 @@ romm:
         name: PASS
         secret:
           name: postgres_pass_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     # RomM application data root.
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/romm"
@@ -155,7 +166,9 @@ romm:
       source: "{{ hostvars[services_storage_host].container_host_data_root }}/games/romm/assets"
       target: /romm/assets
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
@@ -164,7 +177,9 @@ romm:
     enable: true
     databases:
       - romm
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

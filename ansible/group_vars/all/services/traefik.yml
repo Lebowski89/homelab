@@ -1,14 +1,21 @@
 ---
 
 traefik:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [proxy, traefik]
   name: traefik
   stack: traefik
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: traefik:v3.7.9
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
@@ -31,7 +38,9 @@ traefik:
         name: TRAEFIK_BOUNCER_KEY
         secret:
           name: crowdsec_traefik_bouncer_key_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
@@ -48,7 +57,9 @@ traefik:
       published: 8443
       target: 8443
       mode: host
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/traefik"
       state: directory
@@ -103,7 +114,9 @@ traefik:
       source: "{{ services_log_root }}/traefik"
       target: /etc/traefik/logs
       read_only: false
-
+  ################################
+  # HEALTH
+  ################################
   healthcheck:
     test:
       - "CMD"
@@ -111,7 +124,9 @@ traefik:
       - "--spider"
       - "-q"
       - "http://127.0.0.1:8081/ping"
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

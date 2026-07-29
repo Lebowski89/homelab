@@ -1,11 +1,16 @@
 ---
 
 authelia:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [proxy, pgsql, authelia]
   stack: authelia
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
@@ -19,11 +24,15 @@ authelia:
         name: REDIS_KEY
         secret:
           name: authelia_redis_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated
@@ -32,19 +41,27 @@ authelia:
     host: "{{ services_controller_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_primary_manager
-
+  ################################
+  # TARGETS (INSTANCES)
+  ################################
   targets:
-
     ################################
     # AUTHELIA-REDIS SERVICE
     ################################
     redis:
+      ################################
+      # IDENTITY
+      ################################
       name: authelia-redis
-
+      ################################
+      # IMAGE/PROCESS
+      ################################
       image: valkey/valkey:9.1-alpine
       command:
         - sh -c 'valkey-server --requirepass "$$(cat /run/secrets/authelia_redis_secret)"'
-
+      ################################
+      # FILESYSTEM
+      ################################
       paths:
         - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/redis"
           state: directory
@@ -55,15 +72,21 @@ authelia:
           source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/redis"
           target: /data
           read_only: false
-
     ################################
     # AUTHELIA SERVICE
     ################################
     main:
+      ################################
+      # IDENTITY
+      ################################
       name: authelia
-
+      ################################
+      # IMAGE/PROCESS
+      ################################
       image: authelia/authelia:4.39.20
-
+      ################################
+      # ENVIRONMENT/SECRETS
+      ################################
       environment:
         AUTHELIA_SESSION_SECRET_FILE: /run/secrets/authelia_session_key_secret
         AUTHELIA_SESSION_REDIS_PASSWORD_FILE: /run/secrets/authelia_redis_secret
@@ -133,10 +156,11 @@ authelia:
       secrets:
         - authelia_session_key_secret
         - authelia_jwt_key_secret
-
       application_prepare:
         handler: authelia
-
+      ################################
+      # FILESYSTEM
+      ################################
       paths:
         - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia"
           state: directory
@@ -178,7 +202,9 @@ authelia:
           source: "{{ services_log_root }}/authelia"
           target: /config/logs
           read_only: false
-
+      ################################
+      # INTEGRATIONS
+      ################################
       postgres:
         enable: true
         databases:

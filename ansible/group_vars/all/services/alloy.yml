@@ -1,12 +1,17 @@
 ---
 
 alloy:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [monitoring, alloy]
   name: alloy
   stack: alloy
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: grafana/alloy:v1.18.0
   user: "0"
   command:
@@ -14,7 +19,9 @@ alloy:
     - "--server.http.listen-addr=0.0.0.0:12345"
     - "--storage.path=/etc/alloy/data"
     - "/etc/alloy/config.alloy"
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
   infisical:
@@ -31,11 +38,15 @@ alloy:
     - source: alloy_config
       target: /etc/alloy/config.alloy
       mode: "0644"
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/alloy"
       state: directory
@@ -74,12 +85,16 @@ alloy:
       source: /var/lib/docker
       target: /var/lib/docker
       read_only: true
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 12345
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

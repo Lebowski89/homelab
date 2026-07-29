@@ -1,19 +1,28 @@
 ---
 
 unifi:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [unifi]
   name: unifi
   stack: unifi
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/lemker/unifi-os-server:v1.3.0
   container_name: unifi
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     UOS_SYSTEM_IP: "{{ hostvars[services_controller_host].local_ip }}"
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
@@ -84,7 +93,9 @@ unifi:
      #  hotspot_redirection_3:
      #    published: 8882
      #    target: 8882
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/unifi-os"
       state: directory
@@ -157,12 +168,16 @@ unifi:
     - /tmp:exec
     - /var/lib/journal
     - /var/opt/unifi/tmp:size=64m
-
+  ################################
+  # DEVICES/SECURITY
+  ################################
   cgroup: host
   cap_add:
     - NET_RAW
     - NET_ADMIN
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: container
     host: "{{ services_controller_host }}"

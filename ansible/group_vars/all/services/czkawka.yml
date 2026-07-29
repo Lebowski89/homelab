@@ -1,14 +1,21 @@
 ---
 
 czkawka:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [utilities, czkawka]
   name: czkawka
   stack: czkawka
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: jlesage/czkawka:v26.07.1
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     USER_ID: "{{ hostvars[services_storage_host].container_host_puid }}"
@@ -22,11 +29,15 @@ czkawka:
       - var: cloudflare_zone
         path: /Cloudflare
         name: ZONE
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/czkawka"
       state: directory
@@ -42,12 +53,16 @@ czkawka:
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /storage
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 5800
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

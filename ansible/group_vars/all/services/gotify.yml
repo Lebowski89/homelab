@@ -1,14 +1,21 @@
 ---
 
 gotify:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [monitoring, pgsql, gotify]
   name: gotify
   stack: gotify
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: gotify/server:2.9.1
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
@@ -27,11 +34,15 @@ gotify:
       - var: postgres_pass
         path: "/Postgres"
         name: PASS
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/gotify"
       state: directory
@@ -54,7 +65,9 @@ gotify:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/gotify"
       target: /app/data
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
@@ -63,7 +76,9 @@ gotify:
     enable: true
     databases:
       - gotify
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

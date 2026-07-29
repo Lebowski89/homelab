@@ -1,20 +1,29 @@
 ---
 
 themepark:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [utilities, themepark]
   name: theme-park
   stack: themepark
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/themepark-dev/theme.park:1.22.1
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
     PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
     UMASK: "022"
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
@@ -23,7 +32,9 @@ themepark:
       published: 8089
       target: 80
       mode: host
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/theme-park"
       state: directory
@@ -34,7 +45,9 @@ themepark:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/theme-park"
       target: /config
       read_only: false
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

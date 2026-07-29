@@ -1,14 +1,21 @@
 ---
 
 syncthing:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [utilities, syncthing]
   name: syncthing
   stack: syncthing
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: lscr.io/linuxserver/syncthing:v2.1.1-ls221
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
@@ -20,7 +27,9 @@ syncthing:
       - var: cloudflare_zone
         path: /Cloudflare
         name: ZONE
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
@@ -39,7 +48,9 @@ syncthing:
       target: 21027
       protocol: udp
       mode: host
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/syncthing"
       state: directory
@@ -55,12 +66,16 @@ syncthing:
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 8384
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

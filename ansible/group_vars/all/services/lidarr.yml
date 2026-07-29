@@ -1,14 +1,21 @@
 ---
 
 lidarr:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [arrs, pgsql, lidarr]
   name: lidarr
   stack: lidarr
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/hotio/lidarr:release-3.1.0.4875
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
@@ -49,11 +56,15 @@ lidarr:
         name: PASS
         secret:
           name: postgres_pass_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/lidarr"
       state: directory
@@ -84,12 +95,16 @@ lidarr:
       source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/lidarr/98-themepark-lidarr"
       target: /etc/cont-init.d/98-themepark
       read_only: false
-
+  ################################
+  # HEALTH
+  ################################
   healthcheck:
     test:
       - "CMD-SHELL"
       - "touch /data/media/music/.healthcheck && rm -f /data/media/music/.healthcheck || exit 1"
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
@@ -102,7 +117,9 @@ lidarr:
     databases:
       - lidarr-main
       - lidarr-log
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

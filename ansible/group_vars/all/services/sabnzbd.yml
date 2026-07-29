@@ -1,14 +1,21 @@
 ---
 
 sabnzbd:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [usenet, sabnzbd]
   name: sabnzbd
   stack: sabnzbd
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/hotio/sabnzbd:release-v5.0.4
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
@@ -51,11 +58,15 @@ sabnzbd:
       - var: easynews_pass
         path: "/SABnzbd"
         name: EASYNEWS_PASS
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sabnzbd"
       state: directory
@@ -130,12 +141,16 @@ sabnzbd:
       source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sabnzbd/98-themepark-sabnzbd"
       target: /etc/cont-init.d/98-themepark
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 8080
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

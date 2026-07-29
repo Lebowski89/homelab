@@ -1,12 +1,17 @@
 ---
 
 opencloud:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [opencloud]
   name: opencloud
   stack: opencloud
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: opencloudeu/opencloud-rolling:7.2.0
   user: "1000:1000"
   entrypoint:
@@ -14,7 +19,9 @@ opencloud:
   command:
     - -c
     - "test -f /etc/opencloud/opencloud.yaml || opencloud init; exec opencloud server"
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
   env_file:
@@ -49,11 +56,15 @@ opencloud:
       dest: /opt/stacks/opencloud.env
       mode: "0600"
       force: true
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/opencloud"
       state: directory
@@ -104,11 +115,15 @@ opencloud:
       source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/opencloud/apps"
       target: /var/lib/opencloud/web/assets/apps
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     port: 9200
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated
