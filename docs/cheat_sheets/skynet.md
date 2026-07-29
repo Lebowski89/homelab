@@ -10,15 +10,15 @@ The wrapper is installed on the Ansible manager host and is mainly intended to b
 
 `skynet` provides a consistent entrypoint for:
 
-* Deploying Docker Swarm services.
-* Updating existing Docker Swarm services.
+* Deploying catalog services through their declared Docker or Podman runtime.
+* Updating existing catalog services.
 * Removing services.
 * Recreating services.
 * Running check mode before real changes.
 * Running role/action tags without remembering raw Ansible tag names.
 * Running lint checks for YAML, Ansible, and Python helper modules.
 * Running basic repository/playbook health checks.
-* Listing known Docker service tags and role/action targets.
+* Listing known service tags and role/action targets.
 * Passing through raw `ansible-playbook` arguments when needed.
 
 It does **not** replace Ansible. It is a thin wrapper around this repository’s existing Ansible playbook, inventory, roles, service variable files, and tags.
@@ -34,14 +34,14 @@ The wrapper uses these default paths unless overridden with environment variable
 | `ANSIBLE_CONFIG`           | Repository Ansible config                             |
 | `BECOME_PASS_FILE`         | Become/sudo password file                             |
 | `VAULT_PASS_FILE`          | Ansible Vault password file                           |
-| `DOCKER_SERVICES_DIR`      | Directory containing Docker service variable files    |
+| `DOCKER_SERVICES_DIR`      | Directory containing catalog service variable files   |
 | `ANSIBLE_VENV_PATH`        | Python virtual environment containing Ansible tooling |
 | `REPO_ROOT`                | Repository root used for linting                      |
 | `PYTHON_LIBRARY_PATH`      | Custom Python module path checked by Ruff             |
 | `ANSIBLE_LOG_PATH`         | Ansible log output path                               |
 | `ANSIBLE_COLLECTIONS_PATH` | Repository-managed Ansible collections path           |
 
-By default, Docker service tags are discovered from:
+By default, service tags are discovered from:
 
 ```text
 <repo-root>/ansible/group_vars/all/services/
@@ -55,7 +55,7 @@ Example override:
 PLAYBOOK=/opt/homelab/ansible/playbook.yml skynet check all
 ```
 
-Example Docker services directory override:
+Example service directory override (the environment variable retains its legacy name):
 
 ```bash
 DOCKER_SERVICES_DIR=/opt/homelab/ansible/group_vars/all/services skynet tags
@@ -119,8 +119,8 @@ Checks include:
 * Inventory parses.
 * Playbook syntax check passes.
 * `--list-tags` works.
-* Docker service variable directory exists.
-* Docker service variable files are present.
+* Service variable directory exists.
+* Service variable files are present.
 * Vault password file exists.
 * Important Ansible collections are installed.
 
@@ -140,7 +140,7 @@ Runs Ansible in check mode with diff enabled:
 skynet check <target>
 ```
 
-For Docker services, this uses the normal service tag flow:
+For catalog services, this uses the normal service tag flow and the runtime declared by each selected service:
 
 ```bash
 skynet check authelia
@@ -162,7 +162,7 @@ skynet check docker swarm
 
 ### `skynet deploy`
 
-Deploys one or more Docker service targets:
+Deploys one or more service targets through their declared runtime:
 
 ```bash
 skynet deploy authelia
@@ -189,7 +189,7 @@ skynet update all
 
 Use this when image/tag updates or service updates should be applied without a full recreate.
 
-`update` is intended for Docker service targets. For role/action targets, use `skynet run <role-target> [action]`.
+`update` is intended for catalog service targets. For role/action targets, use `skynet run <role-target> [action]`.
 
 ### `skynet recreate`
 
@@ -247,7 +247,7 @@ skynet bootstrap netbox
 skynet bootstrap infisical-podman
 ```
 
-For Docker services, this passes the normal `bootstrap,<tag>` Ansible tag combination.
+For catalog services, this passes the normal `bootstrap,<tag>` Ansible tag combination.
 
 For role/action targets, it maps to the role-specific bootstrap tag where supported.
 
@@ -403,9 +403,9 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 | `skynet run infisical-podman recreate`  | `infisical_podman_recreate`  |
 | `skynet run infisical-podman remove`    | `infisical_podman_remove`    |
 
-## Docker service targets
+## Service targets
 
-Docker services are managed using service names and tags defined in the per-service variable files under:
+Docker and Podman services are managed using service names and tags defined in the per-service variable files under:
 
 ```text
 ansible/group_vars/all/services/
@@ -420,7 +420,7 @@ Each service file can define:
 
 `skynet tags` scans this directory and prints tags from enabled services and enabled targets.
 
-List available tags, including role/action tags and Docker service tags:
+List available tags, including role/action tags and catalog service tags:
 
 ```bash
 skynet tags
@@ -557,7 +557,7 @@ Print tool and path information:
 skynet versions
 ```
 
-This is useful when debugging the active Ansible virtual environment, inventory path, playbook path, Docker service vars directory, or lint tooling.
+This is useful when debugging the active Ansible virtual environment, inventory path, playbook path, service vars directory, or lint tooling.
 
 ## CI-style local check
 
@@ -647,17 +647,17 @@ skynet run docker swarm
 | ------------------------------ | --------------------------------------------- |
 | `skynet lint`                  | Run YAML, Python, and Ansible linting         |
 | `skynet doctor`                | Check local Ansible setup                     |
-| `skynet check all`             | Check all Docker services                     |
-| `skynet check <service>`       | Check one Docker service                      |
-| `skynet deploy <service>`      | Deploy one Docker service                     |
-| `skynet update <service>`      | Update one Docker service                     |
-| `skynet update all`            | Update all Docker services                    |
-| `skynet recreate <service>`    | Recreate one Docker service                   |
-| `skynet remove <service>`      | Remove one Docker service                     |
+| `skynet check all`             | Check all catalog services                    |
+| `skynet check <service>`       | Check one catalog service                     |
+| `skynet deploy <service>`      | Deploy one catalog service                    |
+| `skynet update <service>`      | Update one catalog service                    |
+| `skynet update all`            | Update all catalog services                   |
+| `skynet recreate <service>`    | Recreate one catalog service                  |
+| `skynet remove <service>`      | Remove one catalog service                    |
 | `skynet run <role> [action]`   | Run a role/action target                      |
 | `skynet check <role> [action]` | Check a role/action target                    |
 | `skynet targets`               | List role/action target mappings              |
-| `skynet tags`                  | List known role and Docker service tags       |
+| `skynet tags`                  | List known role and catalog service tags      |
 | `skynet inventory`             | Show inventory graph                          |
 | `skynet inventory --list`      | Show full inventory JSON                      |
 | `skynet syntax`                | Run Ansible syntax check                      |
@@ -668,7 +668,7 @@ skynet run docker swarm
 
 `skynet` supports two broad kinds of targets:
 
-1. **Docker service targets**, which are discovered from service variable files under `ansible/group_vars/all/services/` and used with commands like:
+1. **Catalog service targets**, which are discovered from service variable files under `ansible/group_vars/all/services/`, explicitly declare `runtime: docker` or `runtime: podman`, and are used with commands like:
 
 ```bash
 skynet check authelia
@@ -688,7 +688,7 @@ This section explains how to add new Ansible role tags to the wrapper.
 
 ### When to add a role/action target
 
-Add a role/action target when a role has its own tags and is not managed through the Docker service loop.
+Add a role/action target when a role has its own tags and is not managed through the service catalog loop.
 
 Good examples:
 
@@ -710,7 +710,7 @@ skynet run infisical-podman recreate
 skynet run postgres backup
 ```
 
-Do **not** add normal Docker service names here. Docker services should continue to use the service/tag flow from their service variable files:
+Do **not** add normal catalog service names here. Services should continue to use the service/tag flow from their service variable files:
 
 ```bash
 skynet check authelia
@@ -990,7 +990,7 @@ skynet run backup prune
 
 ### Avoiding tag confusion
 
-If the command is for a Docker service, use the service command style:
+If the command is for a catalog service, use the service command style:
 
 ```bash
 skynet check authelia
@@ -1027,9 +1027,9 @@ When adding a new role/action target:
 * Run `skynet doctor`.
 * Run `skynet check all` if the change affects shared playbook logic.
 
-## Adding new Docker service tags
+## Adding new service tags
 
-Docker service tags are now defined in the relevant service variable file under:
+Service tags are defined in the relevant service variable file under:
 
 ```text
 ansible/group_vars/all/services/
@@ -1040,6 +1040,7 @@ For a single-target service:
 ```yaml
 example:
   enabled: true
+  runtime: docker
   tags: [apps, example]
 ```
 
@@ -1048,6 +1049,7 @@ For a multi-target service:
 ```yaml
 example:
   enabled: true
+  runtime: docker
   tags: [apps, example]
 
   targets:

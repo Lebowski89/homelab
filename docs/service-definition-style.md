@@ -5,6 +5,13 @@ both Docker and Podman. This is a source-layout convention only: mapping order
 does not select a runtime or change service behavior. Keep existing values,
 list order, comments, quoting, and Jinja expressions intact when applying it.
 
+Every base service must include exactly one supported runtime declaration,
+`runtime: docker` or `runtime: podman`. A missing base runtime is invalid and
+does not default to Docker. Targets inherit the validated base runtime and add
+`runtime` only when intentionally overriding it with another supported adapter.
+Catalog selection remains lightweight; linear, globally ordered dispatch then
+materializes only the current selected service on its dispatch host.
+
 ## Canonical order
 
 Within the immediate mapping for a service or target, use the following
@@ -53,7 +60,9 @@ Shared configuration belongs in the base mapping. `targets` is always the last
 base key, target order is preserved, and each target uses the same canonical
 order for only the values it overrides. Do not copy inherited base values into
 a target for visual completeness, and do not add `runtime` unless that target
-really changes adapter. Nested `targets` are invalid.
+really changes adapter. Target mappings merge recursively, additive lists use
+append-rp semantics without exact duplicates, and `command`, `entrypoint`, and
+`healthcheck.test` replace their inherited lists. Nested `targets` are invalid.
 
 ```yaml
 example:

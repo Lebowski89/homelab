@@ -23,7 +23,7 @@ I use Ansible to install Terraform on my management VM using the `OpenTofu` role
 
 ### 3. Ansible takes the torch
 
-After Terraform creates the VM, I then hand it over to Ansible to automate everything, including filesystem config, installing and configuring Docker, Docker Swarm, and Infisical, and most importantly all the preparation, configuration, and deployment of my Docker containers and Swarm services via the aptly named `docker_services` role.
+After Terraform creates the VM, I then hand it over to Ansible to automate everything, including filesystem config and runtime installation. Service deployment now flows through the runtime-aware service catalog: `service_prepare` owns application-specific preparation, `service_common` owns shared configuration and integrations, and `docker_services` or `podman_services` owns the selected runtime lifecycle.
 
 ## The delineation point
 
