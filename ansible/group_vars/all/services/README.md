@@ -168,7 +168,7 @@ Before committing a new service file:
 - `targets` is last, and targets are not nested.
 - The image uses a pinned tag.
 - No secret values are stored in the file.
-- Templates that may contain secrets set `no_log: true`.
+- Secret-bearing tasks, including templates, set both `no_log: true` and `diff: false`.
 - Required host paths and volume sources point to the right host.
 - Swarm placement constraints use the correct node labels.
 - The health check is reliable or intentionally omitted.
