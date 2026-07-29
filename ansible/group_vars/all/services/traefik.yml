@@ -7,7 +7,7 @@ traefik:
   name: traefik
   stack: traefik
 
-  image: traefik:v3.7.8
+  image: traefik:v3.7.9
 
   environment:
     TZ: "{{ timezone }}"
