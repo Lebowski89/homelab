@@ -217,7 +217,6 @@ locals {
       description = "Hosts where the Docker role installs Docker."
     }
 
-
     podman = {
       name        = "podman"
       slug        = "podman"
@@ -373,40 +372,42 @@ locals {
       weight      = 120
     }
 
-    docker_host_puid = {
-      name        = "docker_host_puid"
-      label       = "Docker host PUID"
+    container_host_puid = {
+      name        = "container_host_puid"
+      label       = "Container host PUID"
       type        = "text"
-      group_name  = "Docker"
-      description = "Default PUID used for Docker services on this host."
+      group_name  = "Containers"
+      description = "Default PUID used for container services on this host."
       weight      = 200
     }
 
-    docker_host_pgid = {
-      name        = "docker_host_pgid"
-      label       = "Docker host PGID"
+    container_host_pgid = {
+      name        = "container_host_pgid"
+      label       = "Container host PGID"
       type        = "text"
-      group_name  = "Docker"
-      description = "Default PGID used for Docker services on this host."
+      group_name  = "Containers"
+      description = "Default PGID used for container services on this host."
       weight      = 210
     }
 
-    docker_host_appdata_root = {
-      name        = "docker_host_appdata_root"
-      label       = "Docker appdata root"
-      type        = "text"
-      group_name  = "Docker"
-      description = "Host path used as the appdata root for Docker services."
-      weight      = 220
+    container_host_appdata_root = {
+      name             = "container_host_appdata_root"
+      label            = "Container appdata root"
+      type             = "text"
+      group_name       = "Containers"
+      description      = "Host path used as the appdata root for container services."
+      validation_regex = "^/.*"
+      weight           = 220
     }
 
-    docker_host_data_root = {
-      name        = "docker_host_data_root"
-      label       = "Docker data root"
-      type        = "text"
-      group_name  = "Docker"
-      description = "Host path used as the data root for Docker services."
-      weight      = 230
+    container_host_data_root = {
+      name             = "container_host_data_root"
+      label            = "Container data root"
+      type             = "text"
+      group_name       = "Containers"
+      description      = "Host path used as the data root for container services."
+      validation_regex = "^/.*"
+      weight           = 230
     }
 
     dns_priority = {
@@ -443,10 +444,10 @@ locals {
     ansible_user                  = ""
     ssh_port                      = ""
     tailscale_ip                  = ""
-    docker_host_puid              = ""
-    docker_host_pgid              = ""
-    docker_host_appdata_root      = ""
-    docker_host_data_root         = ""
+    container_host_puid           = ""
+    container_host_pgid           = ""
+    container_host_appdata_root   = ""
+    container_host_data_root      = ""
     dns_priority                  = ""
     keepalived_priority_dns_vip_a = ""
     keepalived_priority_dns_vip_b = ""
@@ -471,6 +472,8 @@ locals {
         "ansible_manager",
         "docker",
         "docker_install",
+        "podman",
+        "podman_install",
         "haproxy",
         "node_exporter",
         "opentofu",

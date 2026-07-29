@@ -241,11 +241,15 @@ The real `netbox.yml` is ignored by Git.
 
 The following custom fields are expected on NetBox devices:
 
-| Name | Purpose |
-|---|---|
-| `tailscale_ip` | Primary Ansible connection address |
-| `ansible_user` | SSH username |
-| `ssh_port` | SSH port |
+| Name | Type | Purpose |
+|---|---|---|
+| `tailscale_ip` | Text | Primary Ansible connection address |
+| `ansible_user` | Text | SSH username |
+| `ssh_port` | Text | SSH port |
+| `container_host_puid` | Text | Runtime-neutral default container process UID |
+| `container_host_pgid` | Text | Runtime-neutral default container process GID |
+| `container_host_appdata_root` | Text | Absolute root for persistent application configuration |
+| `container_host_data_root` | Text | Absolute root for shared or bulk service data |
 
 These are used by the dynamic inventory `compose` block to build standard Ansible connection variables:
 
@@ -255,6 +259,10 @@ compose:
   ansible_user: custom_fields['ansible_user'] | default('mgt', true)
   ansible_port: custom_fields['ssh_port'] | default('22', true)
 ```
+
+The OpenTofu module under `terraform/netbox` owns these custom-field definitions and their per-host values. NetBox is the source of truth, and the dynamic inventory is the consumer. The canonical fields preserve the former working Text representation under runtime-neutral names and may remain empty for devices where a default does not apply.
+
+The runtime-neutral migration is complete: inventory reads the four canonical custom fields directly, and the superseded Docker-named fields are no longer defined or exported. Runtime selection remains in service definitions, and service-specific storage remains application configuration.
 
 ---
 
