@@ -1,16 +1,23 @@
 ---
 
 blackbox_exporter:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [monitoring, blackbox_exporter]
   name: blackbox-exporter
   stack: blackbox-exporter
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: prom/blackbox-exporter:v0.27.0
   command:
     - "--config.file=/etc/blackbox_exporter/config.yml"
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   swarm_configs:
     - name: blackbox_exporter_config
       src: templates/configs/prometheus/blackbox.yml.j2
@@ -19,11 +26,15 @@ blackbox_exporter:
     - source: blackbox_exporter_config
       target: /etc/blackbox_exporter/config.yml
       mode: "0444"
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

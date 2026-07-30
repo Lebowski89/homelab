@@ -1,16 +1,23 @@
 ---
 
 autobrr:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [media, pgsql, autobrr]
   name: autobrr
   stack: autobrr
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/autobrr/autobrr:v1.80.0
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     AUTOBRR__HOST: "0.0.0.0"
@@ -46,11 +53,15 @@ autobrr:
       - var: postgres_pass
         path: "/Postgres"
         name: PASS
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/autobrr"
       state: directory
@@ -61,7 +72,9 @@ autobrr:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/autobrr"
       target: /config
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
@@ -70,7 +83,9 @@ autobrr:
     enable: true
     databases:
       - autobrr
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

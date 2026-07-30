@@ -1,14 +1,21 @@
 ---
 
 znc:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [media, znc]
   name: znc
   stack: znc
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: lscr.io/linuxserver/znc:znc-1.10.2-ls181
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
@@ -20,11 +27,15 @@ znc:
       - var: cloudflare_zone
         path: /Cloudflare
         name: ZONE
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/znc"
       state: directory
@@ -35,12 +46,16 @@ znc:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/znc"
       target: /config
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 6501
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

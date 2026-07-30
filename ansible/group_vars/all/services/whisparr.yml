@@ -1,14 +1,21 @@
 ---
 
 whisparr:
+################################
+# IDENTITY
+################################
   enabled: true
   runtime: docker
   tags: [arrs, pgsql, whisparr]
   name: whisparr
   stack: whisparr
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/hotio/whisparr:v3-3.3.4-release.794
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
@@ -49,11 +56,15 @@ whisparr:
         name: PASS
         secret:
           name: postgres_pass_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/whisparr"
       state: directory
@@ -84,12 +95,16 @@ whisparr:
       source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/whisparr/98-themepark-whisparr"
       target: /etc/cont-init.d/98-themepark
       read_only: false
-
+  ################################
+  # HEALTH
+  ################################
   healthcheck:
     test:
       - "CMD-SHELL"
       - "touch /data/media/adult/.healthcheck && rm -f /data/media/adult/.healthcheck || exit 1"
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
@@ -102,7 +117,9 @@ whisparr:
     databases:
       - whisparr-main-v3
       - whisparr-log-v3
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

@@ -1,14 +1,20 @@
 ---
 
 n8n:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: podman
   tags: [automation, pgsql, n8n]
-  description: n8n workflow automation on dedicated VM
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: docker.io/n8nio/n8n:2.31.4
   user: "1000:1000"
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     DB_TYPE: postgresdb
     DB_POSTGRESDB_HOST: "{{ hostvars[services_controller_host].local_ip }}"
@@ -83,13 +89,17 @@ n8n:
             podman:
               immutable: true
               replace: false
-
+  ################################
+  # CONNECTIVITY
+  ################################
   ports:
     - host_ip: "{{ local_ip }}"
       published: 5678
       target: 5678
       protocol: tcp
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: /opt/n8n
       owner: "1000"
@@ -101,11 +111,15 @@ n8n:
       source: /opt/n8n
       target: /home/node/.n8n
       read_only: false
-
+  ################################
+  # DEVICES/SECURITY
+  ################################
   cap_add: []
   cap_drop: [all]
   no_new_privileges: true
-
+  ################################
+  # HEALTH
+  ################################
   healthcheck:
     test:
       - CMD-SHELL
@@ -115,7 +129,9 @@ n8n:
     timeout: 10s
     retries: 5
     start_period: 90s
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
@@ -129,7 +145,9 @@ n8n:
     port: 5432
     user_var: postgres_user
     password_var: postgres_pass
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: container
     host: n8n

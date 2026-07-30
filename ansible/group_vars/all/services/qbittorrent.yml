@@ -1,12 +1,19 @@
 ---
 
 qbittorrent:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [torrents, qbittorrent]
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/hotio/qbittorrent:release-v5.2.2
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
     PGID: "{{ hostvars[services_storage_host].container_host_pgid }}"
@@ -29,14 +36,17 @@ qbittorrent:
         name: PASS
         secret:
           name: qbittorrent_pia_pass_secret
-
   application_prepare:
     handler: qbittorrent
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # DEVICES/SECURITY
+  ################################
   devices:
     - "/dev/net/tun:/dev/net/tun"
   cap_add:
@@ -44,7 +54,9 @@ qbittorrent:
   sysctls:
     net.ipv4.conf.all.src_valid_mark: "1"
     net.ipv6.conf.all.disable_ipv6: "1"
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated
@@ -53,19 +65,24 @@ qbittorrent:
     host: "{{ services_storage_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_unraid_host
-
+  ################################
+  # TARGETS (INSTANCES)
+  ################################
   targets:
-
     ################################
     # QBIT MAIN SERVICE
     ################################
     downloads:
+      ################################
+      # IDENTITY
+      ################################
       tags: [qbittorrent-main]
       name: qbittorrent
       stack: qbittorrent
-
       hostname: qbittorrent.internal
-
+      ################################
+      # ENVIRONMENT/SECRETS
+      ################################
       env_file:
         - /opt/stacks/qbittorrent.env
       infisical:
@@ -83,7 +100,9 @@ qbittorrent:
           group: "{{ hostvars[services_storage_host].container_host_pgid }}"
           mode: "0600"
           force: true
-
+      ################################
+      # FILESYSTEM
+      ################################
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent"
           state: directory
@@ -123,7 +142,9 @@ qbittorrent:
           source: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents"
           target: /data/torrents
           read_only: false
-
+      ################################
+      # HEALTH
+      ################################
       healthcheck:
         test:
           - "CMD"
@@ -131,22 +152,27 @@ qbittorrent:
           - "--spider"
           - "-q"
           - "http://127.0.0.1:8090/"
-
+      ################################
+      # INTEGRATIONS
+      ################################
       traefik:
         enable: true
         exposure: private
         port: 8090
-
     ################################
     # QBIT CROSS-SEED SERVICE
     ################################
     seeds:
+      ################################
+      # IDENTITY
+      ################################
       tags: [qbittorrent-xs]
       name: qbittorrent-xs
       stack: qbittorrent-xs
-
       hostname: qbittorrent-xs.internal
-
+      ################################
+      # ENVIRONMENT/SECRETS
+      ################################
       env_file:
         - /opt/stacks/qbittorrent-xs.env
       infisical:
@@ -164,7 +190,9 @@ qbittorrent:
           group: "{{ hostvars[services_storage_host].container_host_pgid }}"
           mode: "0600"
           force: true
-
+      ################################
+      # FILESYSTEM
+      ################################
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-xs"
           state: directory
@@ -204,7 +232,9 @@ qbittorrent:
           source: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds"
           target: /data/seeds
           read_only: false
-
+      ################################
+      # HEALTH
+      ################################
       healthcheck:
         test:
           - "CMD"
@@ -212,7 +242,9 @@ qbittorrent:
           - "--spider"
           - "-q"
           - "http://127.0.0.1:8091/"
-
+      ################################
+      # INTEGRATIONS
+      ################################
       traefik:
         enable: true
         exposure: private

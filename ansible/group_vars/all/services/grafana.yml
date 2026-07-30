@@ -1,15 +1,22 @@
 ---
 
 grafana:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [monitoring, grafana]
   name: grafana
   stack: grafana
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: grafana/grafana:13.1.0-ubuntu
   user: "0"
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     GF_SECURITY_ADMIN_USER__FILE: /run/secrets/grafana_admin_user_secret
@@ -37,11 +44,15 @@ grafana:
   secrets:
     - grafana_admin_user_secret
     - grafana_admin_pass_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana"
       state: directory
@@ -105,12 +116,16 @@ grafana:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards"
       target: /var/lib/grafana/dashboards
       read_only: true
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 3000
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

@@ -1,14 +1,21 @@
 ---
 
 uptime_kuma:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [monitoring, uptime_kuma]
   name: uptime-kuma
   stack: uptime-kuma
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: louislam/uptime-kuma:2.4.0
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
   infisical:
@@ -17,11 +24,15 @@ uptime_kuma:
       - var: cloudflare_zone
         path: /Cloudflare
         name: ZONE
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/uptime-kuma"
       state: directory
@@ -32,17 +43,23 @@ uptime_kuma:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/uptime-kuma"
       target: /app/data
       read_only: false
-
+  ################################
+  # HEALTH
+  ################################
   healthcheck:
     test:
       - "CMD-SHELL"
       - "node /app/extra/healthcheck.js || exit 1"
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 3001
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

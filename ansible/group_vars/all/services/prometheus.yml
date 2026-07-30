@@ -1,12 +1,17 @@
 ---
 
 prometheus:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [monitoring, prometheus]
   name: prometheus
   stack: prometheus
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: prom/prometheus:v3.13.1
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
@@ -14,7 +19,9 @@ prometheus:
     - "--config.file=/etc/prometheus/prometheus.yml"
     - "--storage.tsdb.path=/prometheus"
     - "--web.enable-remote-write-receiver"
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
   infisical:
@@ -23,11 +30,15 @@ prometheus:
       - var: cloudflare_zone
         path: /Cloudflare
         name: ZONE
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus"
       state: directory
@@ -70,12 +81,16 @@ prometheus:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/data"
       target: /prometheus
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 9090
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

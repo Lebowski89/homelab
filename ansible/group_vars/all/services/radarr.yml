@@ -1,12 +1,19 @@
 ---
 
 radarr:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [arrs, pgsql, radarr]
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/hotio/radarr:release-6.2.1.10461
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
@@ -38,18 +45,24 @@ radarr:
         name: PASS
         secret:
           name: postgres_pass_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   volumes:
     media:
       type: bind
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
@@ -57,7 +70,9 @@ radarr:
   themepark:
     app: radarr
     theme: hotline
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated
@@ -66,17 +81,23 @@ radarr:
     host: "{{ services_storage_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_unraid_host
-
+  ################################
+  # TARGETS (INSTANCES)
+  ################################
   targets:
-
     ################################
     # RADARR 1080p SERVICE
     ################################
     radarr:
+      ################################
+      # IDENTITY
+      ################################
       tags: [radarr-1080p]
       name: radarr
       stack: radarr
-
+      ################################
+      # ENVIRONMENT/SECRETS
+      ################################
       environment:
         RADARR__APP__INSTANCENAME: "Radarr"
         FILE__RADARR__AUTH__APIKEY: /run/secrets/radarr_api_secret
@@ -89,7 +110,9 @@ radarr:
             name: API
             secret:
               name: radarr_api_secret
-
+      ################################
+      # FILESYSTEM
+      ################################
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr"
           state: directory
@@ -115,26 +138,34 @@ radarr:
           source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr/98-themepark-radarr"
           target: /etc/cont-init.d/98-themepark
           read_only: false
-
+      ################################
+      # HEALTH
+      ################################
       healthcheck:
         test:
           - "CMD-SHELL"
           - "touch /data/media/movies/.healthcheck && rm -f /data/media/movies/.healthcheck || exit 1"
-
+      ################################
+      # INTEGRATIONS
+      ################################
       postgres:
         enable: true
         databases:
           - radarr-main
           - radarr-log
-
     ################################
     # RADARR 2160p SERVICE
     ################################
     radarr_4k:
+      ################################
+      # IDENTITY
+      ################################
       tags: [radarr-4k]
       name: radarr-4k
       stack: radarr-4k
-
+      ################################
+      # ENVIRONMENT/SECRETS
+      ################################
       environment:
         RADARR__APP__INSTANCENAME: "Radarr-4K"
         FILE__RADARR__AUTH__APIKEY: /run/secrets/radarr_4k_api_secret
@@ -147,7 +178,9 @@ radarr:
             name: API
             secret:
               name: radarr_4k_api_secret
-
+      ################################
+      # FILESYSTEM
+      ################################
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr-4k"
           state: directory
@@ -173,12 +206,16 @@ radarr:
           source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr-4k/98-themepark-radarr"
           target: /etc/cont-init.d/98-themepark
           read_only: false
-
+      ################################
+      # HEALTH
+      ################################
       healthcheck:
         test:
           - "CMD-SHELL"
           - "touch /data/media/movies-4k/.healthcheck && rm -f /data/media/movies-4k/.healthcheck || exit 1"
-
+      ################################
+      # INTEGRATIONS
+      ################################
       postgres:
         enable: true
         databases:

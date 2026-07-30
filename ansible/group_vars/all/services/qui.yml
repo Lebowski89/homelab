@@ -1,14 +1,21 @@
 ---
 
 qui:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [torrents, pgsql, qui]
   name: qui
   stack: qui
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/autobrr/qui:v1.20.0
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
@@ -34,11 +41,15 @@ qui:
       dest: /opt/stacks/qui.env
       mode: "0600"
       force: true
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui"
       state: directory
@@ -54,7 +65,9 @@ qui:
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
@@ -63,7 +76,9 @@ qui:
     enable: true
     databases:
       - qui
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

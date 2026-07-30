@@ -1,14 +1,21 @@
 ---
 
 wallos:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [media, wallos]
   name: wallos
   stack: wallos
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: bellamy/wallos:latest
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
   infisical:
@@ -17,11 +24,15 @@ wallos:
       - var: cloudflare_zone
         path: /Cloudflare
         name: ZONE
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/wallos"
       state: directory
@@ -43,12 +54,16 @@ wallos:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/wallos/logos"
       target: /var/www/html/images/uploads/logos
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 80
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

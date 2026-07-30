@@ -1,16 +1,23 @@
 ---
 
 mariadb:
+  ################################
+  # IDENTITY
+  ################################
   enabled: false
   runtime: docker
   tags: [mariadb]
   name: mariadb
   stack: mariadb
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: mariadb:12
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     MARIADB_ROOT_PASSWORD_FILE: /run/secrets/mariadb_pass_secret
@@ -26,11 +33,15 @@ mariadb:
         name: PASS
         secret:
           name: mariadb_pass_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/mariadb"
       state: directory
@@ -41,7 +52,9 @@ mariadb:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/mariadb"
       target: /var/lib/mysql
       read_only: false
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

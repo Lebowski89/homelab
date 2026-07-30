@@ -1,16 +1,23 @@
 ---
 
 recyclarr:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [arrs, recyclarr]
   name: recyclarr
   stack: recyclarr
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/recyclarr/recyclarr:8.6.0
   user: >-
     {{ hostvars[services_storage_host].container_host_puid }}:{{ hostvars[services_storage_host].container_host_pgid }}
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
   infisical:
@@ -28,11 +35,15 @@ recyclarr:
       - var: sonarr_4k_api
         path: "/Sonarr-4K"
         name: API
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/recyclarr"
       state: directory
@@ -63,7 +74,9 @@ recyclarr:
       source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/recyclarr"
       target: /config
       read_only: false
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

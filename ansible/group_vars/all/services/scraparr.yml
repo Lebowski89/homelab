@@ -1,15 +1,21 @@
 ---
 
 scraparr:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [monitoring, scraparr]
   name: scraparr
   stack: scraparr
-
-  # image: thegameprofi/scraparr:3.0.3
-  image: scraparr-secrets:latest
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
+  image: thegameprofi/scraparr:3.0.3
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
@@ -80,11 +86,15 @@ scraparr:
           name: whisparr_api_secret
   secrets:
     - bazarr_api_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

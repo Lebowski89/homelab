@@ -1,14 +1,21 @@
 ---
 
 unpackerr:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [torrents, unpackerr]
   name: unpackerr
   stack: unpackerr
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/hotio/unpackerr:release-v0.15.2
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
@@ -79,18 +86,24 @@ unpackerr:
         name: API
         secret:
           name: whisparr_api_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   volumes:
     media:
       type: bind
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

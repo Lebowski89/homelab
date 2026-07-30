@@ -1,14 +1,21 @@
 ---
 
 thelounge:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [media, thelounge]
   name: thelounge
   stack: thelounge
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: lscr.io/linuxserver/thelounge:v4.5.1-ls225
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
@@ -20,11 +27,15 @@ thelounge:
       - var: cloudflare_zone
         path: /Cloudflare
         name: ZONE
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/thelounge"
       state: directory
@@ -35,12 +46,16 @@ thelounge:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/thelounge"
       target: /config
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 9000
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

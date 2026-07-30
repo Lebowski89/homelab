@@ -1,14 +1,21 @@
 ---
 
 tautulli:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [plex, tautulli]
   name: tautulli
   stack: tautulli
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/hotio/tautulli:release-v2.17.2
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_plex_host].container_host_puid }}"
@@ -25,11 +32,15 @@ tautulli:
       - var: cloudflare_zone
         path: /Cloudflare
         name: ZONE
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/tautulli"
       state: directory
@@ -52,7 +63,9 @@ tautulli:
       source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/tautulli/98-themepark-tautulli"
       target: /etc/cont-init.d/98-themepark
       read_only: false
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
@@ -60,7 +73,9 @@ tautulli:
   themepark:
     app: tautulli
     theme: hotpink
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

@@ -1,12 +1,19 @@
 ---
 
 technitium:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [dns]
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: technitium/dns-server:15.3.0
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     UMASK: "022"
@@ -19,31 +26,44 @@ technitium:
         name: ADMIN_PASS
         secret:
           name: technitium_admin_secret
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     outside:
       external: true
       name: host
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: careful
-
+  ################################
+  # TARGETS (INSTANCES)
+  ################################
   targets:
     ################################
     # TECHNITIUM PRIMARY SERVICE
     ################################
     technitium_primary:
+      ################################
+      # IDENTITY
+      ################################
       tags: [technitium-primary, dns-primary]
       name: technitium-primary
       stack: technitium-primary
-
+      ################################
+      # ENVIRONMENT/SECRETS
+      ################################
       environment:
         PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
         PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
-
+      ################################
+      # FILESYSTEM
+      ################################
       paths:
         - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/technitium"
           state: directory
@@ -54,24 +74,32 @@ technitium:
           source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/technitium"
           target: /etc/dns
           read_only: false
-
+      ################################
+      # RUNTIME/LIFECYCLE
+      ################################
       deploy:
         host: "{{ services_controller_host }}"
         constraints:
           - "node.hostname == {{ services_controller_host }}"
-
     ################################
     # TECHNITIUM SECONDARY SERVICE
     ################################
     technitium_secondary:
+      ################################
+      # IDENTITY
+      ################################
       tags: [technitium-secondary, dns-secondary]
       name: technitium-secondary
       stack: technitium-secondary
-
+      ################################
+      # ENVIRONMENT/SECRETS
+      ################################
       environment:
         PUID: "{{ hostvars[services_plex_host].container_host_puid }}"
         PGID: "{{ hostvars[services_plex_host].container_host_pgid }}"
-
+      ################################
+      # FILESYSTEM
+      ################################
       paths:
         - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/technitium"
           state: directory
@@ -82,7 +110,9 @@ technitium:
           source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/technitium"
           target: /etc/dns
           read_only: false
-
+      ################################
+      # RUNTIME/LIFECYCLE
+      ################################
       deploy:
         host: "{{ services_plex_host }}"
         constraints:

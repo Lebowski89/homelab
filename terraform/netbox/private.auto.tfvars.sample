@@ -15,10 +15,10 @@ host_private_values = {
       ansible_user                  = "user"
       ssh_port                      = "22"
       tailscale_ip                  = "100.xx.xx.xx"
-      docker_host_puid              = "1000"
-      docker_host_pgid              = "1000"
-      docker_host_appdata_root      = "/opt"
-      docker_host_data_root         = "/opt"
+      container_host_puid           = "1000"
+      container_host_pgid           = "1000"
+      container_host_appdata_root   = "/opt"
+      container_host_data_root      = "/opt"
       dns_priority                  = "010"
       keepalived_priority_dns_vip_a = "150"
       keepalived_priority_dns_vip_b = "110"
@@ -29,13 +29,13 @@ host_private_values = {
     mgmt_ip = "192.168.xx.xx/24"
 
     custom_fields = {
-      ansible_user             = "user"
-      ssh_port                 = "22"
-      tailscale_ip             = "100.xx.xx.xx"
-      docker_host_puid         = "99"
-      docker_host_pgid         = "100"
-      docker_host_appdata_root = "/mnt/user/appdata"
-      docker_host_data_root    = "/mnt/user/data"
+      ansible_user                = "user"
+      ssh_port                    = "22"
+      tailscale_ip                = "100.xx.xx.xx"
+      container_host_puid         = "99"
+      container_host_pgid         = "100"
+      container_host_appdata_root = "/mnt/user/appdata"
+      container_host_data_root    = "/mnt/user/data"
     }
   }
 
@@ -46,10 +46,10 @@ host_private_values = {
       ansible_user                  = "user"
       ssh_port                      = "22"
       tailscale_ip                  = "100.xx.xx.xx"
-      docker_host_puid              = "1000"
-      docker_host_pgid              = "1000"
-      docker_host_appdata_root      = "/opt"
-      docker_host_data_root         = "/opt"
+      container_host_puid           = "1000"
+      container_host_pgid           = "1000"
+      container_host_appdata_root   = "/opt"
+      container_host_data_root      = "/opt"
       dns_priority                  = "020"
       keepalived_priority_dns_vip_a = "120"
       keepalived_priority_dns_vip_b = "150"
@@ -60,9 +60,13 @@ host_private_values = {
     mgmt_ip = "192.168.xx.xx/24"
 
     custom_fields = {
-      ansible_user = "ubuntu"
-      ssh_port     = "22"
-      tailscale_ip = "100.xx.xx.xx"
+      ansible_user                = "ubuntu"
+      ssh_port                    = "22"
+      tailscale_ip                = "100.xx.xx.xx"
+      container_host_puid         = "1000"
+      container_host_pgid         = "1000"
+      container_host_appdata_root = "/opt"
+      container_host_data_root    = "/opt"
     }
   }
 

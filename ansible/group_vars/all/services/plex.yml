@@ -1,14 +1,21 @@
 ---
 
 plex:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [plex, plex_server]
   name: plex
   stack: plex
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: lscr.io/linuxserver/plex:1.43.2
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     PUID: "{{ hostvars[services_plex_host].container_host_puid | string }}"
     PGID: "{{ hostvars[services_plex_host].container_host_pgid | string }}"
@@ -20,12 +27,13 @@ plex:
     DOCKER_MODS: "ghcr.io/themepark-dev/theme.park:plex"
     TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
     TP_THEME: "hotline"
-
   application_prepare:
     handler: plex
     bootstrap:
       enabled: true
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
@@ -72,7 +80,9 @@ plex:
       target: 32414
       protocol: udp
       mode: host
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/plex"
       state: directory
@@ -122,10 +132,14 @@ plex:
       source: media_nfs
       target: /data/media
       read_only: false
-
+  ################################
+  # DEVICES/SECURITY
+  ################################
   devices:
     - /dev/dri:/dev/dri
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated

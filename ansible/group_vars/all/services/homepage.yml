@@ -1,14 +1,21 @@
 ---
 
 homepage:
+  ################################
+  # IDENTITY
+  ################################
   enabled: true
   runtime: docker
   tags: [monitoring, homepage]
   name: homepage
   stack: homepage
-
+  ################################
+  # IMAGE/PROCESS
+  ################################
   image: ghcr.io/gethomepage/homepage:v1.13.2
-
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
@@ -88,11 +95,15 @@ homepage:
       - var: unifi_pass
         path: "/Unifi"
         name: PASS
-
+  ################################
+  # CONNECTIVITY
+  ################################
   named_networks:
     overlay:
       external: true
-
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage"
       state: directory
@@ -150,12 +161,16 @@ homepage:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/images"
       target: /app/public/images
       read_only: true
-
+  ################################
+  # INTEGRATIONS
+  ################################
   traefik:
     enable: true
     exposure: private
     port: 3000
-
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
   deploy:
     type: swarm
     mode: replicated
