@@ -1,5 +1,10 @@
 # Podman services and n8n
 
+Use the
+[service-definition option reference](../ansible/group_vars/all/services/README.md)
+for canonical fields, defaults, and compatibility. This document focuses on
+Podman adapter behavior and operational limits.
+
 The shared service catalogue in `ansible/group_vars/all/services/*.yml` is runtime-aware. Every base service must explicitly declare `runtime: docker` or `runtime: podman`; a missing or unsupported runtime fails catalog validation. Targets inherit the validated base runtime and may explicitly override it with another supported runtime. Podman entries are selected by the same `skynet install|update|check|recreate|remove|drift <service>` interface and dispatched to `podman_services`.
 
 ## Runtime layers

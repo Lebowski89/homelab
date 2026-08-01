@@ -5,6 +5,10 @@ both Docker and Podman. This is a source-layout convention only: mapping order
 does not select a runtime or change service behavior. Keep existing values,
 list order, comments, quoting, and Jinja expressions intact when applying it.
 
+For types, defaults, validation, nested fields, lifecycle effects, and runtime
+limitations, use the
+[authoritative option reference](../ansible/group_vars/all/services/README.md).
+
 Every base service must include exactly one supported runtime declaration,
 `runtime: docker` or `runtime: podman`. A missing base runtime is invalid and
 does not default to Docker. Targets inherit the validated base runtime and add
@@ -20,23 +24,24 @@ between populated sections.
 
 1. Identity and selection: `enabled`, `runtime`, `tags`, `name`, `description`,
    `stack`.
-2. Image and process: `image`, `hostname`, `container_name`, `user`, `group`,
-   `working_dir`, `entrypoint`, `command`.
+2. Image and process: `image`, `hostname`, `container_name`, `user`, `pid`,
+   `cgroup`, `entrypoint`, `command`.
 3. Environment, secrets, and configuration inputs: `environment`, `env_file`,
    `infisical`, `secrets`, `swarm_configs`, `configs`,
    `swarm_env_templates`, `settings`.
 4. Application preparation: `paths_vault`, `application_prepare`, `prep`.
-5. Connectivity: `depends_on`, `named_networks`, `ports`, `expose`,
-   `extra_hosts`, `dns`.
+5. Connectivity: `depends_on`, `named_networks`, `networks`, `network_mode`,
+   `ports`.
 6. Filesystem and storage: `paths`, `copies`, `templates`, `named_volumes`,
    `volumes`, `tmpfs`.
-7. Devices, security, and resources: `devices`, `device_cgroup_rules`, `cgroup`,
-   `cap_add`, `cap_drop`, `security_opt`, `no_new_privileges`, `read_only`,
-   `privileged`, `sysctls`, `ulimits`, `shm_size`, `shm_tmpfs_size`.
+7. Devices, security, and resources: `devices`, `cap_add`, `cap_drop`,
+   `security_opt`, `no_new_privileges`, `read_only`, `sysctls`, `shm_size`,
+   `shm_tmpfs_size`.
 8. Health: `healthcheck`.
-9. Integrations: `traefik`, `themepark`, `postgres`.
-10. Runtime and lifecycle: `labels`, `cleanup`, `deploy`, `container`, `systemd`,
-    `runtime_options`, `drift`.
+9. Integrations: `traefik`, `themepark`, `postgres`. New Theme Park
+   configuration belongs under `traefik.themepark`; the top-level key remains in
+   the layout only for existing definitions and has no runtime consumer.
+10. Runtime and lifecycle: `labels`, `cleanup`, `deploy`, `systemd`.
 11. Target overrides: `targets`.
 
 The repository-specific keys added to the original proposed order have explicit
@@ -47,13 +52,12 @@ homes:
   them; `settings` contains application configuration inputs.
 - `paths_vault` supplies filesystem inputs to application preparation and
   therefore precedes `application_prepare`.
-- `cgroup` and `shm_tmpfs_size` are runtime security/resource controls.
+- `pid` and `cgroup` are standalone Docker process/runtime controls;
+  `shm_tmpfs_size` is a Swarm resource control.
 - `named_networks` is the canonical network declaration for both adapters.
   Podman currently accepts one entry and uses `external` to distinguish a
   role-managed network from one managed elsewhere.
 - `systemd` contains Podman-native unit dependencies and restart policy.
-- `runtime_options` remains available for other adapter-specific extensions;
-  Podman network and systemd policy do not belong there.
 
 Unknown immediate keys are not placed heuristically. Add any new portable or
 runtime-specific key deliberately to this guide and the ordering test.

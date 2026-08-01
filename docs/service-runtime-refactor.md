@@ -1,5 +1,9 @@
 # Service runtime refactor
 
+The complete author-facing schema lives in the
+[service-definition option reference](../ansible/group_vars/all/services/README.md);
+this document explains ownership and architecture.
+
 ## Runtime-neutral architecture
 
 Service orchestration now has five responsibility boundaries:
