@@ -266,6 +266,27 @@ def _run_standalone_secret_fixture(
     elif initial_kind != "missing":
         raise AssertionError(f"unsupported fixture kind: {initial_kind}")
 
+    inventory = tmp_path / "inventory.yml"
+    inventory.write_text(
+        yaml.safe_dump(
+            {
+                "all": {
+                    "hosts": {
+                        "localhost": {
+                            "ansible_connection": "local",
+                            "container_host_puid": str(os.getuid()),
+                            "container_host_pgid": str(os.getgid()),
+                        }
+                    }
+                }
+            },
+            sort_keys=False,
+        )
+    )
+    localhost_inventory = yaml.safe_load(inventory.read_text())["all"]["hosts"]["localhost"]
+    assert localhost_inventory["container_host_puid"] == str(os.getuid())
+    assert localhost_inventory["container_host_pgid"] == str(os.getgid())
+
     fixture_tasks = _standalone_materialization_tasks(tmp_path)
     playbook = tmp_path / "standalone-secret-playbook.yml"
     playbook.write_text(
@@ -282,8 +303,6 @@ def _run_standalone_secret_fixture(
                         "docker_services_stack_name": "synthetic",
                         "docker_services_secrets_host_effective": "localhost",
                         "docker_services_common_action": "update",
-                        "container_host_puid": "{{ omit }}",
-                        "container_host_pgid": "{{ omit }}",
                         "docker_services_docker_secret_items": [
                             {
                                 "name": "synthetic_secret",
@@ -311,6 +330,7 @@ def _run_standalone_secret_fixture(
             "ANSIBLE_CONFIG": str(Path(__file__).resolve().parents[2] / "ansible/ansible.cfg"),
             "ANSIBLE_FILTER_PLUGINS": str(PLUGIN_PATH.parent),
             "ANSIBLE_LOCAL_TEMP": str(tmp_path / "ansible-local"),
+            "ANSIBLE_LOG_PATH": str(tmp_path / "ansible.log"),
             "ANSIBLE_NOCOLOR": "true",
             "ANSIBLE_STDOUT_CALLBACK": "default",
         }
@@ -318,7 +338,7 @@ def _run_standalone_secret_fixture(
     command = [
         str(Path(sys.executable).with_name("ansible-playbook")),
         "-i",
-        "localhost,",
+        str(inventory),
         str(playbook),
     ]
     if check_mode:
