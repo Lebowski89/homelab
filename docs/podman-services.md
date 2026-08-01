@@ -15,14 +15,24 @@ Rootful system Quadlets were chosen first because they are stable for boot-time 
 ## Lifecycle semantics
 
 - `deploy` and `bootstrap` fetch missing secrets, create missing Podman secrets, pull the declared image, render configuration, and start the service if it is not already running.
-- `update` replaces configured mutable secrets and restarts the service when material inputs changed; because Podman cannot compare stored secret contents, update recreates/restarts when any mutable secret is declared. If a dedicated network Quadlet changed, the role stops the container, stops the generated network unit, checks `podman network exists <name>`, removes the named network only when it still exists, reloads systemd, and starts the container against the new Quadlet.
-- `recreate` replaces configured mutable secrets and always restarts the generated service after rendering current inputs. Dedicated network Quadlet changes follow the same explicit stop/check/remove/reload/start path as `update`.
-- `remove` stops the service, stops the generated network unit when present, explicitly removes a dedicated network only when `network.delete_on_stop: true` and `podman network exists <name>` succeeds, and removes generated Quadlets, environment files, and host-backed Traefik routing, but preserves application data and Podman secrets by default.
+- `update` reconciles secrets marked `update_policy: reconcile` and restarts the service when material inputs changed; because Podman cannot compare stored secret contents, a reconciled secret is recreated and triggers the existing restart path. An owned network remains in place through the restart. If its Quadlet definition changes, use an explicit remove followed by deploy when the network itself must be recreated.
+- `recreate` reconciles secrets marked `update_policy: reconcile` and always restarts the generated service after rendering current inputs. It retains the service network.
+- `remove` stops the service first, then stops and removes an owned network when it still exists. It removes generated Quadlets, environment files, and host-backed Traefik routing, but preserves application data and Podman secrets by default. Externally owned networks are never stopped, removed, or represented by a generated network Quadlet.
 - `drift` inspects the current container image reference and reports a changed task when it differs from the declared exact image reference. It is reference drift, not registry digest drift.
 
 Generated `.container` files include `[Install] WantedBy=multi-user.target`; the role does not call `systemctl enable` for generated Quadlet services.
 
-For this initial version, any dedicated network mapping supplied to `podman_services` is role-managed and must set `delete_on_stop: true`. Services place it under `runtime_options.podman.network`; the removed top-level Podman network form is rejected. Validation rejects shared/external network mappings before rendering a Quadlet. `NetworkDeleteOnStop=true` is rendered only from that explicit setting and is appropriate for dedicated per-service networks such as n8n's network. Shared/external networks are not yet managed by this role, and the role must not stop, modify, or remove them. A future schema can add explicit dedicated/shared ownership.
+Both adapters consume the top-level `named_networks` mapping. Podman currently
+supports exactly one attached named network. `external: false` makes the role
+responsible for its network Quadlet and explicit remove lifecycle;
+`external: true` attaches the container directly to an existing network and
+never creates or deletes it. `delete_on_stop` is not supported: ordinary
+stops, updates, recreates, and systemd restarts retain an owned network.
+
+Podman systemd policy is also first-class at top level. The supported fields are
+`after`, `restart`, and `restart_sec`, rendered as `After=`, `Restart=`,
+and `RestartSec=`. Service-level `runtime_options.podman.network` and
+`runtime_options.podman.systemd` are retired and fail with migration guidance. Secret update intent is runtime-neutral under `secret.update_policy`; secret-level `runtime_options` is retired and fails with guidance to use that canonical field.
 
 
 Published ports accept an optional `host_ip` per port. When set, the generated `PublishPort=` entry binds only that address. When omitted, Podman binds the published port on every host interface; this can expose the service on management, LAN, Tailscale, or other reachable networks and can bypass the intended reverse proxy and its middleware. Prefer an explicit trusted bind address and enforce host/network firewall policy whenever direct access is not intended.
@@ -77,7 +87,7 @@ Docker and Podman now consume the same common-resolved environment. The former e
 
 ## n8n
 
-n8n is the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, canonical ports/volumes/paths, `deploy`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter; only the dedicated network and systemd lifecycle remain under `runtime_options.podman`. Further Podman adoption remains incremental: migrate and validate one portable service at a time rather than changing the repository runtime wholesale.
+n8n is the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, `named_networks`, canonical ports/volumes/paths, `deploy`, `systemd`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter. Further Podman adoption remains incremental: migrate and validate one portable service at a time rather than changing the repository runtime wholesale.
 
 n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.04. The selected host must already have the runtime required by the declaration: changing `runtime` to Docker is schema-valid for the tested portable subset but does not install Docker or establish live parity. The proof covers the trusted-address `host_ip` bind in both generated Docker standalone Compose and Podman Quadlet output. Static tests do not replace a live migration test.
 

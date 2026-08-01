@@ -93,18 +93,22 @@ def test_volume_requires_target():
         podman_services.podman_service_normalize(cfg, "n8n")
 
 
-def test_managed_network_must_be_dedicated_delete_on_stop():
+def test_managed_named_network_is_accepted():
     cfg = valid_cfg()
-    cfg["runtime_options"] = {"podman": {"network": {"name": "shared", "driver": "bridge", "delete_on_stop": False}}}
-    with pytest.raises(AnsibleFilterError, match="dedicated"):
-        podman_services.podman_service_normalize(cfg, "sharedsvc")
+    cfg["named_networks"] = {"managed": {"driver": "bridge", "external": False}}
+
+    svc = podman_services.podman_service_normalize(cfg, "managedsvc")
+
+    assert svc["network"] == {"name": "managed", "driver": "bridge", "external": False}
 
 
-def test_dedicated_managed_network_is_accepted():
+def test_external_named_network_is_accepted_without_managed_driver():
     cfg = valid_cfg()
-    cfg["runtime_options"] = {"podman": {"network": {"name": "dedicated", "driver": "bridge", "delete_on_stop": True}}}
-    svc = podman_services.podman_service_normalize(cfg, "dedicatedsvc")
-    assert svc["network"]["delete_on_stop"] is True
+    cfg["named_networks"] = {"shared": {"external": True}}
+
+    svc = podman_services.podman_service_normalize(cfg, "sharedsvc")
+
+    assert svc["network"] == {"name": "shared", "external": True}
 
 
 def test_image_reference_drift_matching():
@@ -395,32 +399,23 @@ def test_secret_policy_rejects_invalid_update_policy(value):
         podman_services.podman_secret_policy({"update_policy": value}, "update")
 
 
-def test_secret_and_network_booleans_are_normalized():
+def test_secret_and_network_values_are_normalized():
     cfg = minimal_canonical_cfg()
     declarations = [
         {
             "name": "portable_secret",
             "var": "portable_secret",
             "target": "/run/secrets/portable_secret",
-            "runtime_options": {"podman": {"immutable": "false", "replace": "true"}},
+            "update_policy": "reconcile",
         }
     ]
-    cfg["runtime_options"] = {
-        "podman": {
-            "network": {
-                "name": "portable",
-                "driver": "bridge",
-                "delete_on_stop": "true",
-            }
-        }
-    }
+    cfg["named_networks"] = {"portable": {"driver": "bridge", "external": "false"}}
 
     svc = podman_services.podman_service_normalize(cfg, "portable")
     secrets = podman_services.podman_secret_declarations(declarations)
 
-    assert secrets[0]["immutable"] is False
-    assert secrets[0]["replace"] is True
-    assert svc["network"]["delete_on_stop"] is True
+    assert secrets[0]["update_policy"] == "reconcile"
+    assert svc["network"]["external"] is False
 
 
 @pytest.mark.parametrize("field", ["no_new_privileges", "read_only"])
@@ -449,29 +444,12 @@ def test_canonical_volume_read_only_values_are_strict_booleans():
 
 @pytest.mark.parametrize(
     ("section", "field"),
-    [
-        ("secret", "immutable"),
-        ("secret", "replace"),
-        ("network", "delete_on_stop"),
-        ("volume", "read_only"),
-    ],
+    [("network", "external"), ("volume", "read_only")],
 )
 def test_nested_boolean_fields_reject_integer_two(section, field):
     cfg = minimal_canonical_cfg()
-    if section == "secret":
-        declarations = [
-            {
-                "name": "portable_secret",
-                "var": "portable_secret",
-                "target": "/run/secrets/portable_secret",
-                "runtime_options": {"podman": {field: 2}},
-            }
-        ]
-        with pytest.raises(AnsibleFilterError, match=field):
-            podman_services.podman_secret_declarations(declarations)
-        return
-    elif section == "network":
-        cfg["runtime_options"] = {"podman": {"network": {"name": "portable", field: 2}}}
+    if section == "network":
+        cfg["named_networks"] = {"portable": {field: 2}}
     else:
         cfg["volumes"] = [
             {
@@ -533,15 +511,15 @@ def test_postgres_and_traefik_must_be_mappings(field, value):
 @pytest.mark.parametrize("after", ["network.target", [""], [42], {"unit": "network.target"}])
 def test_systemd_after_must_be_list_of_nonempty_unit_names(after):
     cfg = valid_cfg()
-    cfg["runtime_options"] = {"podman": {"systemd": {"after": after}}}
+    cfg["systemd"] = {"after": after}
 
-    with pytest.raises(AnsibleFilterError, match=r"runtime_options\.podman\.systemd\.after"):
+    with pytest.raises(AnsibleFilterError, match=r"n8n\.systemd\.after"):
         podman_services.podman_service_normalize(cfg, "n8n")
 
 
 def test_systemd_after_is_normalized_when_valid():
     cfg = valid_cfg()
-    cfg["runtime_options"] = {"podman": {"systemd": {"after": [" postgresql.service ", "custom.target"]}}}
+    cfg["systemd"] = {"after": [" postgresql.service ", "custom.target"]}
 
     svc = podman_services.podman_service_normalize(cfg, "n8n")
 
@@ -589,7 +567,7 @@ def test_port_host_ip_is_nonempty_ipv4_for_this_phase(host_ip):
 @pytest.mark.parametrize(
     ("location", "value", "match"),
     [
-        ("network", "bad/network", r"runtime_options\.podman\.network\.name"),
+        ("network", "bad/network", r"named_networks key"),
         ("named_volume", "../data", r"volumes\[0\]\.source"),
         ("secret", "bad/secret", r"secret declarations\[0\]\.name"),
     ],
@@ -597,7 +575,7 @@ def test_port_host_ip_is_nonempty_ipv4_for_this_phase(host_ip):
 def test_quadlet_filename_and_resource_names_are_validated(location, value, match):
     cfg = minimal_canonical_cfg()
     if location == "network":
-        cfg["runtime_options"] = {"podman": {"network": {"name": value, "delete_on_stop": True}}}
+        cfg["named_networks"] = {value: {"external": False}}
     elif location == "named_volume":
         cfg["volumes"] = [{"type": "volume", "source": value, "target": "/data"}]
     else:
@@ -723,12 +701,7 @@ def canonical_secret_cfg():
                     "uid": "1001",
                     "gid": "1002",
                     "mode": "0400",
-                    "runtime_options": {
-                        "podman": {
-                            "immutable": False,
-                            "replace": True,
-                        }
-                    },
+                    "update_policy": "reconcile",
                 },
             },
             {
@@ -763,8 +736,7 @@ def test_canonical_secret_normalizes_for_native_podman_and_keeps_lookup_only_ent
             "uid": "1001",
             "gid": "1002",
             "mode": "0400",
-            "immutable": False,
-            "replace": True,
+            "update_policy": "reconcile",
         }
     ]
 
@@ -810,21 +782,13 @@ def test_runtime_adapter_does_not_merge_legacy_podman_lookup_metadata():
         podman_services.podman_service_normalize(cfg, "portable")
 
 
-def test_runtime_options_podman_owns_network_and_systemd_policy():
+def test_top_level_named_networks_and_systemd_own_podman_policy():
     cfg = minimal_canonical_cfg()
-    cfg["runtime_options"] = {
-        "podman": {
-            "network": {
-                "name": "portable",
-                "driver": "bridge",
-                "delete_on_stop": True,
-            },
-            "systemd": {
-                "after": ["network-online.target"],
-                "restart": "on-failure",
-                "restart_sec": "15s",
-            },
-        }
+    cfg["named_networks"] = {"portable": {"driver": "bridge", "external": False}}
+    cfg["systemd"] = {
+        "after": ["network-online.target"],
+        "restart": "on-failure",
+        "restart_sec": "15s",
     }
 
     svc = podman_services.podman_service_normalize(cfg, "portable")
@@ -833,20 +797,73 @@ def test_runtime_options_podman_owns_network_and_systemd_policy():
     assert svc["container"]["systemd"]["restart"] == "on-failure"
 
 
-def test_top_level_legacy_network_is_rejected_even_with_runtime_options():
+@pytest.mark.parametrize(("field", "replacement"), [("network", "named_networks"), ("systemd", "top-level systemd")])
+def test_retired_service_runtime_options_fail_with_migration_message(field, replacement):
     cfg = minimal_canonical_cfg()
-    cfg["runtime_options"] = {
-        "podman": {
-            "network": {
-                "name": "canonical",
-                "delete_on_stop": True,
-            }
-        }
-    }
-    cfg["network"] = {"name": "legacy", "delete_on_stop": True}
+    cfg["runtime_options"] = {"podman": {field: {}}}
 
-    with pytest.raises(AnsibleFilterError, match="removed legacy Podman fields: network"):
+    with pytest.raises(AnsibleFilterError, match=replacement):
         podman_services.podman_service_normalize(cfg, "portable")
+
+
+@pytest.mark.parametrize(
+    ("field", "canonical"),
+    [
+        ("network", {"named_networks": {"portable": {"external": False}}}),
+        ("systemd", {"systemd": {"restart": "on-failure"}}),
+    ],
+)
+def test_dual_retired_and_canonical_declarations_fail_clearly(field, canonical):
+    cfg = minimal_canonical_cfg()
+    cfg.update(canonical)
+    cfg["runtime_options"] = {"podman": {field: {}}}
+
+    with pytest.raises(AnsibleFilterError, match="cannot both be declared"):
+        podman_services.podman_service_normalize(cfg, "portable")
+
+
+@pytest.mark.parametrize("value", [None, [], "on-failure", 1])
+def test_systemd_must_be_a_mapping(value):
+    cfg = minimal_canonical_cfg()
+    cfg["systemd"] = value
+
+    with pytest.raises(AnsibleFilterError, match=r"portable\.systemd must be a mapping"):
+        podman_services.podman_service_normalize(cfg, "portable")
+
+
+def test_systemd_rejects_unsupported_keys():
+    cfg = minimal_canonical_cfg()
+    cfg["systemd"] = {"restart": "on-failure", "wanted_by": "multi-user.target"}
+
+    with pytest.raises(AnsibleFilterError, match="unsupported fields: wanted_by"):
+        podman_services.podman_service_normalize(cfg, "portable")
+
+
+def test_podman_named_network_rejects_multiple_and_unsupported_options():
+    multiple = minimal_canonical_cfg()
+    multiple["named_networks"] = {"one": {"external": False}, "two": {"external": True}}
+    unsupported = minimal_canonical_cfg()
+    unsupported["named_networks"] = {"one": {"external": False, "delete_on_stop": True}}
+
+    with pytest.raises(AnsibleFilterError, match="exactly one attached network"):
+        podman_services.podman_service_normalize(multiple, "portable")
+    with pytest.raises(AnsibleFilterError, match="unsupported fields: delete_on_stop"):
+        podman_services.podman_service_normalize(unsupported, "portable")
+
+
+def test_network_and_systemd_state_do_not_leak_between_services():
+    first = minimal_canonical_cfg()
+    first["named_networks"] = {"first": {"driver": "bridge", "external": False}}
+    first["systemd"] = {"restart": "always"}
+    second = minimal_canonical_cfg()
+
+    first_service = podman_services.podman_service_normalize(first, "first")
+    second_service = podman_services.podman_service_normalize(second, "second")
+
+    assert first_service["network"]["name"] == "first"
+    assert first_service["container"]["systemd"] == {"restart": "always"}
+    assert second_service["network"] is None
+    assert "systemd" not in second_service["container"]
 
 
 @pytest.mark.parametrize(

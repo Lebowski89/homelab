@@ -299,6 +299,59 @@ def test_valid_target_runtime_override_is_allowed():
     assert service_catalog.service_catalog_effective(services, "manager")[0]["runtime"] == "podman"
 
 
+def test_top_level_systemd_is_valid_only_for_effective_podman_services():
+    podman_cfg = {"runtime": "podman", "systemd": {"restart": "on-failure"}}
+    docker_cfg = {"runtime": "docker", "systemd": {"restart": "on-failure"}}
+
+    assert service_catalog.service_catalog_effective({"app": podman_cfg}, "manager")[0]["runtime"] == "podman"
+    assert service_catalog.service_catalog_merge_target(podman_cfg)["systemd"] == {"restart": "on-failure"}
+    with pytest.raises(AnsibleFilterError, match=r"Service 'app'.*valid only with runtime: podman.*runtime: docker"):
+        service_catalog.service_catalog_effective({"app": docker_cfg}, "manager")
+    with pytest.raises(AnsibleFilterError, match=r"effective service.*valid only with runtime: podman"):
+        service_catalog.service_catalog_merge_target(docker_cfg)
+
+
+def test_target_systemd_merges_recursively_without_mutating_source():
+    service = {
+        "runtime": "podman",
+        "systemd": {
+            "after": ["network-online.target"],
+            "restart": "on-failure",
+            "restart_sec": "15s",
+        },
+        "targets": {
+            "worker": {
+                "systemd": {
+                    "restart": "always",
+                }
+            }
+        },
+    }
+    original = deepcopy(service)
+
+    merged = service_catalog.service_catalog_merge_target(service, "worker")
+
+    assert merged["systemd"] == {
+        "after": ["network-online.target"],
+        "restart": "always",
+        "restart_sec": "15s",
+    }
+    assert service == original
+
+
+def test_target_switching_to_docker_cannot_inherit_podman_systemd_policy():
+    service = {
+        "runtime": "podman",
+        "systemd": {"restart": "on-failure"},
+        "targets": {"docker": {"runtime": "docker"}},
+    }
+
+    with pytest.raises(AnsibleFilterError, match=r"target 'docker'.*runtime: docker"):
+        service_catalog.service_catalog_effective({"app": service}, "manager")
+    with pytest.raises(AnsibleFilterError, match=r"target 'docker'.*runtime: docker"):
+        service_catalog.service_catalog_merge_target(service, "docker")
+
+
 @pytest.mark.parametrize("runtime", ["", None, 1, "containerd"])
 def test_invalid_target_runtime_override_is_rejected(runtime):
     services = {

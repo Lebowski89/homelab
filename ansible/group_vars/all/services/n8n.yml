@@ -80,6 +80,10 @@ n8n:
   ################################
   # CONNECTIVITY
   ################################
+  named_networks:
+    n8n:
+      driver: bridge
+      external: false
   ports:
     - host_ip: "{{ local_ip }}"
       published: 5678
@@ -139,13 +143,7 @@ n8n:
   deploy:
     type: container
     host: n8n
-  runtime_options:
-    podman:
-      network:
-        name: n8n
-        driver: bridge
-        delete_on_stop: true
-      systemd:
-        after: [network-online.target]
-        restart: on-failure
-        restart_sec: 15s
+  systemd:
+    after: [network-online.target]
+    restart: on-failure
+    restart_sec: 15s

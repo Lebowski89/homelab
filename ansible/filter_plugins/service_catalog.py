@@ -54,6 +54,11 @@ def _runtime(value: Any, *, name: str) -> str:
     return runtime
 
 
+def _validate_runtime_fields(*, runtime: str, has_systemd: bool, name: str) -> None:
+    if has_systemd and runtime != "podman":
+        raise AnsibleFilterError(f"{name} declares top-level systemd, which is valid only with runtime: podman; got runtime: {runtime}")
+
+
 def _list_append_rp(base: list[Any], override: list[Any]) -> list[Any]:
     """Return append-rp list semantics without reusing mutable input values.
 
@@ -136,6 +141,9 @@ def service_catalog_merge_target(service_cfg: Mapping[str, Any], target_name: st
     base = deepcopy(dict(service_cfg))
     base.pop("targets", None)
     if target_name is None or str(target_name).strip() == "":
+        _validate_runtime_fields(
+            runtime=base["runtime"], has_systemd="systemd" in base, name="service_catalog_merge_target effective service"
+        )
         return base
 
     normalized_target_name = str(target_name).strip()
@@ -159,6 +167,12 @@ def service_catalog_merge_target(service_cfg: Mapping[str, Any], target_name: st
         merged_healthcheck = deepcopy(dict(merged_healthcheck))
         merged_healthcheck["test"] = deepcopy(target_healthcheck["test"])
         merged["healthcheck"] = merged_healthcheck
+
+    _validate_runtime_fields(
+        runtime=merged["runtime"],
+        has_systemd="systemd" in merged,
+        name=f"service_catalog_merge_target target {normalized_target_name!r}",
+    )
 
     return merged
 
@@ -276,6 +290,7 @@ def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) 
         targets = service_cfg.get("targets")
 
         if targets is None:
+            _validate_runtime_fields(runtime=service_runtime, has_systemd="systemd" in service_cfg, name=f"Service {service_name!r}")
             out.append(
                 {
                     "name": service_name,
@@ -304,6 +319,11 @@ def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) 
                 raise AnsibleFilterError(f"{service_name}.targets.{target_name} must not contain nested targets")
 
             target_runtime = _runtime(target_cfg.get("runtime", service_runtime), name=f"{service_name}.targets.{target_name}.runtime")
+            _validate_runtime_fields(
+                runtime=target_runtime,
+                has_systemd="systemd" in service_cfg or "systemd" in target_cfg,
+                name=f"Service {service_name!r} target {target_name!r}",
+            )
             target_enabled = _as_bool(target_cfg.get("enabled", True), name=f"{service_name}.targets.{target_name}.enabled", default=True)
             target_tags = _unique(
                 service_tags + [target_name] + _as_list(target_cfg.get("tags", []), name=f"{service_name}.targets.{target_name}.tags")

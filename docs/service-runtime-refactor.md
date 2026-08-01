@@ -126,7 +126,16 @@ Repository service definitions now use only canonical Infisical lookup declarati
 
 For Docker Swarm, canonical targets must be directly beneath `/run/secrets`; the adapter translates the absolute path to Swarm's filename target and uses long syntax when target or UID/GID/mode metadata requires it. `preserve` inspects the exact secret and creates it only when missing. `reconcile` does the same during deploy/bootstrap, while update/recreate invokes the module's content-aware replacement path for Ansible-managed secrets; unmanaged existing secrets are rejected rather than silently reported as reconciled. Swarm secret objects are replaced rather than mutated in place, and an in-use replacement failure is surfaced without logging the value. Standalone Docker creates missing protected files without overwriting them under `preserve`; `reconcile` overwrites only on update/recreate, while owner, group, mode, and file-type verification remain enforced. Legacy Docker string attachments keep their previous render form.
 
-Podman-only network and systemd lifecycle policy belongs under `runtime_options.podman`. Those options are ignored by Docker Compose. Changing `runtime` is a schema-level choice, not installation: the destination host must already have the selected runtime and supported version installed.
+Podman maps `preserve` to `force: false` and `skip_existing: true` for every action. It maps `reconcile` to `force: true` and `skip_existing: false` only during update/recreate. Because Podman cannot compare stored secret contents, this reconciliation recreates the native secret and relies on the existing failure-aware service restart path. Both adapters leave runtime-native secret removal under their existing adapter-owned remove behavior.
+
+`named_networks` is the canonical network location for both adapters. Podman
+currently accepts one entry: `external: false` is role-managed and
+`external: true` is attached without lifecycle ownership. Podman-only systemd
+policy uses the top-level `systemd` mapping and is rejected for an effective
+Docker service. Service-level `runtime_options.podman.network` and
+`runtime_options.podman.systemd` are retired. Secret-level runtime options are also retired; `secret.update_policy` is the single runtime-neutral lifecycle contract consumed by both adapters.
+Changing `runtime` is a schema-level choice, not installation: the destination
+host must already have the selected runtime and supported version installed.
 
 Static tests prove normalized portable-field equivalence and render structure; they do not prove live Docker/Podman behavioral parity. The n8n proof renders its trusted-address `host_ip` bind through both the Docker standalone and Podman adapters; Docker Swarm rejects `host_ip` explicitly. Swarm-only networks, configs, placement, replicas, application-specific preparation, and runtime installation remain adapter or operator concerns.
 
@@ -143,7 +152,7 @@ Phase 4A audited the refactor's compatibility paths against production tasks, re
 | Missing-runtime Docker default | **Remove now** | No implementation path remains. Catalog construction and target merging reject a missing base runtime; stale documentation was corrected. |
 | Exact `__INFISICAL__:var` environment placeholder | **Remove now** | No production or service-definition consumer remains. Typed `value_from.infisical` and `value_template` entries are canonical, while tests retain rejection/absence coverage. |
 | `secrets_map[].docker_secret`, `secrets_map[].podman_secret`, and old Podman lookup metadata | **Remove now** | Common declaration validation rejects these fields and no repository definition uses them. Canonical `secret` metadata remains runtime-neutral. |
-| Nested Podman service input and top-level Podman `network` | **Remove now** | Only transition tests used the old `container`, `env`, `host_paths`, legacy volume, and top-level network forms. The adapter now accepts the canonical service schema and `runtime_options.podman` policy only. |
+| Nested Podman service input and singular top-level Podman `network` | **Remove now** | Only transition tests used the old `container`, `env`, `host_paths`, legacy volume, and singular network forms. The adapter now accepts canonical `named_networks` and top-level `systemd`; secret lifecycle is expressed only through runtime-neutral `secret.update_policy`. |
 | Top-level `secrets` name attachments | **Retain intentionally** | These are not lookup metadata. Docker services and application preparation use them for generated or externally managed native secrets; Podman accepts only value-free names. |
 | Neutral-to-Docker `docker_services_*` host aliases | **Retain intentionally** | Docker adapter, standalone PostgreSQL role, drift email, stack accumulation, and current Swarm label contracts consume them. The aliases flow only from neutral orchestration inputs to Docker-prefixed compatibility facts. |
 | Literal Docker Swarm placement label values | **Retain intentionally** | Current service definitions and host label declarations use `docker_services_primary_manager`, `docker_services_plex_host`, and `docker_services_unraid_host`. Renaming them requires a node-label migration. |

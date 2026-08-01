@@ -32,7 +32,7 @@ def service():
         "unit_name": "n8n",
         "description": "n8n",
         "image": "docker.io/n8nio/n8n:2.31.4",
-        "network": {"name": "n8n", "driver": "bridge", "delete_on_stop": True},
+        "network": {"name": "n8n", "driver": "bridge", "external": False},
         "volumes": [{"name": "n8n-data", "target": "/home/node/.n8n"}],
         "env": {
             "DB_TYPE": "postgresdb",
@@ -111,10 +111,11 @@ def canonical_service():
             "retries": 4,
             "start_period": "30s",
         },
-        "runtime_options": {
-            "podman": {
-                "network": {"name": "portable", "driver": "bridge", "delete_on_stop": True},
-            }
+        "named_networks": {"portable": {"driver": "bridge", "external": False}},
+        "systemd": {
+            "after": ["network-online.target"],
+            "restart": "always",
+            "restart_sec": "20s",
         },
     }
 
@@ -163,6 +164,9 @@ def test_canonical_normalization_reaches_container_quadlet():
     assert "HealthTimeout=5s" in rendered
     assert "HealthRetries=4" in rendered
     assert "HealthStartPeriod=30s" in rendered
+    assert "After=network-online.target" in rendered
+    assert "Restart=always" in rendered
+    assert "RestartSec=20s" in rendered
     expected_lines = {
         "Image=ghcr.io/example/portable:1.2.3",
         "User=1001",
@@ -200,7 +204,7 @@ def test_network_quadlet_is_deterministic():
     assert rendered == render("network.network.j2", service())
     assert "NetworkName=n8n" in rendered
     assert "Driver=bridge" in rendered
-    assert "NetworkDeleteOnStop=true" in rendered
+    assert "NetworkDeleteOnStop" not in rendered
 
 
 @pytest.mark.parametrize(
@@ -286,11 +290,14 @@ def test_container_quadlet_default_port_binding():
     assert "PublishPort=192.0.2.98:5678:5678/tcp" not in rendered
 
 
-def test_generic_network_does_not_default_delete_on_stop():
+def test_external_network_is_referenced_directly():
     svc = service()
-    del svc["network"]["delete_on_stop"]
-    rendered = render("network.network.j2", svc)
-    assert "NetworkDeleteOnStop=true" not in rendered
+    svc["network"] = {"name": "shared", "external": True}
+
+    rendered = render("container.container.j2", svc)
+
+    assert "Network=shared\n" in rendered
+    assert "Network=shared.network" not in rendered
 
 
 def test_container_quadlet_has_no_manual_default_network_dependency():

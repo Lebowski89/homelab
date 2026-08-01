@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 import yaml
-from jinja2 import Environment, meta
+from jinja2 import Environment, StrictUndefined, meta
+from jinja2.nativetypes import NativeEnvironment
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
@@ -34,6 +35,16 @@ def load_services():
         data = yaml.safe_load(path.read_text()) or {}
         services.update(data)
     return services
+
+
+def render_structure(value, variables):
+    if isinstance(value, dict):
+        return {key: render_structure(item, variables) for key, item in value.items()}
+    if isinstance(value, list):
+        return [render_structure(item, variables) for item in value]
+    if isinstance(value, str) and ("{{" in value or "{%" in value):
+        return NativeEnvironment(undefined=StrictUndefined).from_string(value).render(**variables)
+    return value
 
 
 def walk_mappings(value):
@@ -141,19 +152,125 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
     )
     services = load_services()
     checked = []
+    expected = {
+        "n8n": {"network": "n8n", "host": "n8n", "port": 5678},
+    }
 
     for item in catalog_filters.service_catalog_effective(services, "manager"):
         if item["runtime"] != "podman":
             continue
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
         assert not ({"container", "env", "host_paths", "network"} & set(effective))
-        rendered_effective = deepcopy(effective)
-        rendered_effective["ports"][0]["host_ip"] = "192.0.2.10"
+        podman_runtime_options = effective.get("runtime_options", {}).get("podman", {})
+        assert "network" not in podman_runtime_options
+        assert "systemd" not in podman_runtime_options
+        rendered_effective = render_structure(
+            deepcopy(effective),
+            {
+                "hostvars": {
+                    "manager": {
+                        "container_host_appdata_root": "/opt",
+                        "local_ip": "192.0.2.10",
+                    }
+                },
+                "local_ip": "192.0.2.10",
+                "services_controller_host": "manager",
+                "timezone": "Australia/Melbourne",
+            },
+        )
         normalized = podman_filters.podman_service_normalize(rendered_effective, item.get("target", item["name"]))
         assert normalized["image"] == effective["image"]
+        behavior = expected[item["name"]]
+        assert normalized["network"] == {
+            "name": behavior["network"],
+            "driver": "bridge",
+            "external": False,
+        }
+        assert normalized["container"]["host"] == behavior["host"]
+        assert normalized["container"]["ports"][0]["host"] == behavior["port"]
+        assert normalized["container"]["ports"][0]["container"] == behavior["port"]
+        assert normalized["container"]["systemd"] == {
+            "after": ["network-online.target"],
+            "restart": "on-failure",
+            "restart_sec": "15s",
+        }
         checked.append((item["name"], item.get("target")))
 
     assert checked == [("n8n", None)]
+
+
+def test_repository_secret_policy_is_runtime_neutral_and_defaults_safely():
+    services = load_services()
+    policies = []
+
+    for service_name, service_cfg in services.items():
+        service_options = service_cfg.get("runtime_options", {}).get("podman", {})
+        assert "network" not in service_options, service_name
+        assert "systemd" not in service_options, service_name
+        for declaration in service_cfg.get("infisical", {}).get("secrets_map", []):
+            secret = declaration.get("secret", {})
+            assert "runtime_options" not in secret, service_name
+            assert "immutable" not in secret, service_name
+            assert "replace" not in secret, service_name
+            if secret:
+                policies.append((service_name, secret.get("update_policy", "preserve")))
+
+    assert policies
+    assert set(policy for _, policy in policies) <= {"preserve", "reconcile"}
+
+
+def test_every_effective_service_uses_the_canonical_secret_contract_and_default_empty_policy():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_secret_contract_repository",
+    )
+    common_filters = load_module(
+        REPO_ROOT / "ansible/roles/service_common/filter_plugins/service_common.py",
+        "service_common_secret_contract_repository",
+    )
+    podman_filters = load_module(
+        REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py",
+        "podman_secret_contract_repository",
+    )
+    services = load_services()
+    checked = []
+
+    for service_name, service_cfg in services.items():
+        for mapping in walk_mappings(service_cfg):
+            infisical = mapping.get("infisical")
+            if isinstance(infisical, dict):
+                assert infisical.get("fail_on_empty") is not True, service_name
+
+    for item in catalog_filters.service_catalog_effective(services, "manager"):
+        effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
+        infisical = effective.get("infisical", {})
+        normalized = common_filters.service_common_infisical_normalize(
+            infisical.get("secrets_map", []),
+            infisical.get("fail_on_empty", True),
+        )
+        check_values = common_filters.service_common_infisical_check_values(normalized)
+        resolved_environment = common_filters.service_common_environment_resolve(
+            effective.get("environment", {}),
+            check_values,
+            normalized,
+        )
+        identity = f"{item['name']}/{item.get('target', '<base>')}"
+        assert isinstance(resolved_environment, dict), identity
+        assert normalized["fail_on_empty"] is infisical.get("fail_on_empty", True), identity
+        for declaration in normalized["secret_declarations"]:
+            assert declaration["update_policy"] in {"preserve", "reconcile"}, identity
+            assert {"runtime_options", "immutable", "replace"}.isdisjoint(declaration), identity
+        if item["runtime"] == "podman":
+            podman_declarations = podman_filters.podman_secret_declarations(normalized["secret_declarations"])
+            assert all({"immutable", "replace"}.isdisjoint(declaration) for declaration in podman_declarations), identity
+        checked.append(identity)
+
+    n8n = catalog_filters.service_catalog_merge_target(services["n8n"])
+    n8n_normalized = common_filters.service_common_infisical_normalize(n8n["infisical"]["secrets_map"])
+    n8n_policies = {entry["name"]: entry["update_policy"] for entry in n8n_normalized["secret_declarations"]}
+    assert n8n_policies["n8n_encryption_key_secret"] == "preserve"
+    assert n8n_policies["postgres_pass_secret"] == "reconcile"
+    assert checked
 
 
 def test_real_docker_swarm_constraints_match_configured_node_label_values():
@@ -209,7 +326,7 @@ def test_real_sonarr_catalog_target_keeps_effective_configuration():
     )
     normalized = common_filters.service_common_infisical_normalize(
         effective["infisical"]["secrets_map"],
-        effective["infisical"]["fail_on_empty"],
+        effective["infisical"].get("fail_on_empty", True),
     )
 
     assert "targets" not in effective

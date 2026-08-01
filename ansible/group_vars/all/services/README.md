@@ -94,8 +94,7 @@ value is needed only when downstream validation requires a specific shape.
 | Key | What it means |
 | --- | ------------- |
 | `depends_on` | Starts standalone Compose dependencies before this service. It does not replace a health check. |
-| `network` | A single-network setting for adapters that support this form. Most Docker services use `named_networks`. |
-| `named_networks` | Declares the networks the service needs and whether they already exist outside this stack. |
+| `named_networks` | Declares the networks the service joins. Docker keeps its existing multi-network behavior. Podman currently accepts one: `external: false` makes it role-managed, while `external: true` joins an existing network without creating or deleting it. |
 | `ports` | Publishes container ports on the host, including protocol, host address, and Swarm publish mode when needed. |
 | `expose` | Makes ports available to other containers without publishing them on the host. |
 | `extra_hosts` | Adds fixed hostname-to-address entries inside the container. |
@@ -152,8 +151,8 @@ value is needed only when downstream validation requires a specific shape.
 | `cleanup` | Controls whether Docker removes the existing stack during remove or recreate operations. |
 | `deploy` | Chooses standalone container or Swarm mode, the host, replicas, placement, restart policy, and resource profile. |
 | `container` | A runtime-specific container block kept in the canonical order for compatibility. Prefer the portable top-level keys for new definitions. |
-| `systemd` | Runtime-specific systemd settings. New Podman definitions normally place these under `runtime_options.podman.systemd`. |
-| `runtime_options` | Holds settings that only make sense to one runtime, such as Podman's dedicated network and systemd restart policy. |
+| `systemd` | Sets Podman systemd dependencies and restart behavior with `after`, `restart`, and `restart_sec`. Docker services cannot use this field. |
+| `runtime_options` | Holds remaining adapter-specific extensions. Podman network and systemd settings are first-class fields and do not belong here. |
 | `drift` | Runtime-specific options for checking whether the running service still matches its declaration. |
 
 ### 11. Targets

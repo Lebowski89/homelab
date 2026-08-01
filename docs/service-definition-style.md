@@ -26,7 +26,7 @@ between populated sections.
    `infisical`, `secrets`, `swarm_configs`, `configs`,
    `swarm_env_templates`, `settings`.
 4. Application preparation: `paths_vault`, `application_prepare`, `prep`.
-5. Connectivity: `depends_on`, `network`, `named_networks`, `ports`, `expose`,
+5. Connectivity: `depends_on`, `named_networks`, `ports`, `expose`,
    `extra_hosts`, `dns`.
 6. Filesystem and storage: `paths`, `copies`, `templates`, `named_volumes`,
    `volumes`, `tmpfs`.
@@ -48,8 +48,12 @@ homes:
 - `paths_vault` supplies filesystem inputs to application preparation and
   therefore precedes `application_prepare`.
 - `cgroup` and `shm_tmpfs_size` are runtime security/resource controls.
-- `runtime_options` contains adapter-specific network and systemd policy and
-  belongs with runtime lifecycle fields.
+- `named_networks` is the canonical network declaration for both adapters.
+  Podman currently accepts one entry and uses `external` to distinguish a
+  role-managed network from one managed elsewhere.
+- `systemd` contains Podman-native unit dependencies and restart policy.
+- `runtime_options` remains available for other adapter-specific extensions;
+  Podman network and systemd policy do not belong there.
 
 Unknown immediate keys are not placed heuristically. Add any new portable or
 runtime-specific key deliberately to this guide and the ordering test.

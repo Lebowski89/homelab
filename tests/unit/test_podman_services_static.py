@@ -8,6 +8,7 @@ MAIN_TASKS = (TASKS_DIR / "main.yml").read_text()
 PREPARE_TASKS = (TASKS_DIR / "sub_tasks" / "prepare.yml").read_text()
 SECRET_TASKS = (TASKS_DIR / "sub_tasks" / "secrets" / "materialize.yml").read_text()
 REMOVE_TASKS = (TASKS_DIR / "sub_tasks" / "remove.yml").read_text()
+NETWORK_TASKS = (TASKS_DIR / "sub_tasks" / "network.yml").read_text()
 SUB_TASK_FILES = (
     "init.yml",
     "prepare.yml",
@@ -40,46 +41,75 @@ def test_quadlet_directory_prerequisite_exists_before_templates():
     assert 'mode: "0755"' in TASKS
 
 
-def test_n8n_explicitly_enables_dedicated_network_delete_on_stop():
-    assert "delete_on_stop: true" in N8N
-    assert "NetworkDeleteOnStop=true" in NETWORK_TEMPLATE
-    assert "default(false)" in NETWORK_TEMPLATE
+def test_n8n_declares_a_managed_network_without_delete_on_stop():
+    n8n = yaml.safe_load(N8N)["n8n"]
+
+    assert n8n["named_networks"] == {"n8n": {"driver": "bridge", "external": False}}
+    assert "delete_on_stop" not in N8N
+    assert "NetworkDeleteOnStop" not in NETWORK_TEMPLATE
 
 
 def test_remove_stops_container_before_network_then_removes_files():
     container_stop = TASKS.index("Stop service for removal without deleting data")
-    network_stop = TASKS.index("Stop generated network unit for removal")
-    exists = TASKS.index("Check dedicated network still exists for removal")
-    remove_network = TASKS.index("Remove dedicated network if still present")
+    network_stop = TASKS.index("Stop managed network unit for removal")
+    exists = TASKS.index("Check managed network still exists for removal")
+    remove_network = TASKS.index("Remove managed network if still present")
     remove_files = TASKS.index("Remove generated Quadlet and environment files only")
     assert container_stop < network_stop < exists < remove_network < remove_files
 
 
-def test_remove_shared_network_is_not_explicitly_removed():
-    check = TASKS.index("Check dedicated network still exists for removal")
-    remove = TASKS.index("Remove dedicated network if still present")
-    assert "podman_services_service.network.delete_on_stop | default(false) | bool" in TASKS[check:remove]
+def test_remove_only_orchestration_is_guarded_by_normalized_action():
+    tasks = yaml.safe_load(MAIN_TASKS)
+    remove_only_tasks = {
+        "Podman services | Include removal tasks",
+        "Podman services | Remove runtime-neutral integrations",
+        "Podman services | Flush removal daemon-reload handlers",
+    }
+
+    guarded = set()
+    for task in tasks:
+        if task["name"] not in remove_only_tasks:
+            continue
+        guarded.add(task["name"])
+        conditions = task.get("when", [])
+        if isinstance(conditions, str):
+            conditions = [conditions]
+        assert "podman_services_common_action == 'remove'" in conditions
+
+    assert guarded == remove_only_tasks
 
 
-def test_changed_dedicated_network_lifecycle_checks_and_removes_before_reload_and_start():
-    container_stop = TASKS.index("Stop container before changed dedicated network lifecycle")
-    network_stop = TASKS.index("Stop generated dedicated network after changed lifecycle")
-    exists = TASKS.index("Check changed dedicated network still exists")
-    remove = TASKS.index("Remove changed dedicated network if still present")
-    reload_pos = TASKS.index("Flush Quadlet daemon-reload handlers before lifecycle")
-    start_pos = TASKS.index("Restart service when update inputs changed")
-    assert container_stop < network_stop < exists < remove < reload_pos < start_pos
-    assert "argv: [podman, network, exists" in TASKS
-    assert "argv: [podman, network, rm" in TASKS
-    assert "podman_services_changed_network_exists.rc == 0" in TASKS
+def test_external_network_is_not_created_or_removed():
+    prepare = next(task for task in yaml.safe_load(PREPARE_TASKS) if task["name"] == "Prep | Render network Quadlet")
+    remove_tasks = yaml.safe_load(REMOVE_TASKS)
+    managed_network_tasks = [
+        task
+        for task in remove_tasks
+        if task["name"]
+        in {
+            "Remove | Stop managed network unit for removal",
+            "Remove | Check managed network still exists for removal",
+            "Remove | Remove managed network if still present",
+        }
+    ]
+
+    assert "not podman_services_service.network.external | bool" in prepare["when"]
+    assert len(managed_network_tasks) == 3
+    for task in managed_network_tasks:
+        assert "not podman_services_service.network.external | bool" in task["when"]
 
 
-def test_changed_dedicated_network_absent_is_idempotent():
-    exists = TASKS.index("Check changed dedicated network still exists")
-    remove = TASKS.index("Remove changed dedicated network if still present")
-    assert exists < remove
-    assert "failed_when: podman_services_changed_network_exists.rc not in [0, 1]" in TASKS
-    assert "changed_when: false" in TASKS[exists:remove]
+def test_changed_managed_network_is_retained_during_update_and_recreate():
+    tasks = yaml.safe_load(NETWORK_TASKS)
+
+    assert [task["name"] for task in tasks] == ["Network | Report retained managed network definition change"]
+    assert tasks[0]["changed_when"] is False
+    assert "podman network" not in NETWORK_TASKS
+    assert "ansible.builtin.systemd_service" not in NETWORK_TASKS
+
+
+def test_managed_network_quadlet_is_rendered_before_container_quadlet():
+    assert PREPARE_TASKS.index("Prep | Render network Quadlet") < PREPARE_TASKS.index("Prep | Render container Quadlet")
 
 
 def test_no_late_shared_network_migration_fail_after_template_render():
@@ -93,12 +123,11 @@ def test_network_validation_occurs_before_template_rendering():
     assert normalize < network_template
 
 
-def test_false_to_true_delete_on_stop_transition_removes_remaining_network():
-    stop = TASKS.index("Stop generated dedicated network after changed lifecycle")
-    exists = TASKS.index("Check changed dedicated network still exists")
-    remove = TASKS.index("Remove changed dedicated network if still present")
-    assert stop < exists < remove
-    assert "podman_services_service.network.delete_on_stop | default(false) | bool" in TASKS[stop:remove]
+def test_managed_network_remove_failure_is_not_suppressed():
+    task = next(task for task in yaml.safe_load(REMOVE_TASKS) if task["name"] == "Remove | Remove managed network if still present")
+
+    assert "failed_when" not in task
+    assert "not ansible_check_mode" in task["when"]
 
 
 def test_secret_skip_existing_semantics_are_explicit():
@@ -124,6 +153,24 @@ def test_absent_container_unit_is_checked_before_stop():
     assert load_state < stop
     assert "--property=LoadState" in TASKS
     assert "stdout | trim != 'not-found'" in TASKS
+
+
+def test_absent_container_unit_is_checked_before_recreate_preparation_stop():
+    tasks = yaml.safe_load(MAIN_TASKS)
+    load_state = next(task for task in tasks if task["name"] == "Podman services | Check deployed service unit before recreate preparation")
+    stop = next(task for task in tasks if task["name"] == "Podman services | Stop deployed service before recreate preparation")
+
+    assert tasks.index(load_state) < tasks.index(stop)
+    assert load_state["ansible.builtin.command"]["argv"] == [
+        "systemctl",
+        "show",
+        "{{ podman_services_unit_name }}",
+        "--property=LoadState",
+        "--value",
+    ]
+    assert load_state["changed_when"] is False
+    assert load_state["failed_when"] is False
+    assert "podman_services_recreate_unit_load_state.stdout | trim != 'not-found'" in stop["when"]
 
 
 def test_podman_role_targets_ubuntu_2604_resolute_and_podman_57():

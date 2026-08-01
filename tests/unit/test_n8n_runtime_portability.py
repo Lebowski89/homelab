@@ -111,8 +111,8 @@ def test_real_n8n_uses_only_canonical_portable_schema():
     assert cfg["runtime"] == "podman"
     assert {"container", "env", "host_paths", "secrets", "network"}.isdisjoint(cfg)
     assert cfg["deploy"] == {"type": "container", "host": "n8n"}
-    assert cfg["runtime_options"]["podman"]["network"]["delete_on_stop"] is True
-    assert cfg["runtime_options"]["podman"]["systemd"]["restart"] == "on-failure"
+    assert cfg["named_networks"] == {"n8n": {"driver": "bridge", "external": False}}
+    assert cfg["systemd"]["restart"] == "on-failure"
 
 
 def test_real_n8n_podman_normalization_preserves_behavior():
@@ -179,7 +179,7 @@ def test_real_n8n_podman_normalization_preserves_behavior():
     assert service["network"] == {
         "name": "n8n",
         "driver": "bridge",
-        "delete_on_stop": True,
+        "external": False,
     }
     assert service["container"]["systemd"] == {
         "after": ["network-online.target"],
@@ -195,16 +195,18 @@ def test_real_n8n_podman_normalization_preserves_behavior():
     ]
 
 
-def test_runtime_only_copy_is_accepted_by_docker_port_volume_secret_and_catalog_paths():
+def test_docker_copy_accepts_canonical_network_after_removing_podman_systemd_policy():
     cfg, _, common_secrets, ports, volumes, attachments, mounts, resolved_environment = normalize_both()
     docker_cfg = copy.deepcopy(cfg)
     docker_cfg["runtime"] = "docker"
+    docker_cfg.pop("systemd")
 
     docker_item = catalog.service_catalog_effective({"n8n": docker_cfg}, "manager")[0]
     assert docker_item["runtime"] == "docker"
     docker_service = catalog.service_catalog_merge_target(docker_cfg)
     assert docker_service["image"] == docker_cfg["image"]
     assert docker_service["environment"] == docker_cfg["environment"]
+    assert docker_service["named_networks"] == docker_cfg["named_networks"]
     assert resolved_environment["N8N_HOST"] == "n8n.int.example.test"
     assert docker_service["healthcheck"] == docker_cfg["healthcheck"]
     assert ports == [
@@ -269,6 +271,7 @@ def docker_compose_service_from_real_n8n():
     cfg, _, _, ports, volumes, _, mounts, resolved_environment = normalize_both()
     docker_cfg = copy.deepcopy(cfg)
     docker_cfg["runtime"] = "docker"
+    docker_cfg.pop("systemd")
     normalized = catalog.service_catalog_merge_target(docker_cfg)
     security_opt = docker_lists.docker_services_merge_string_list(
         normalized.get("security_opt", []),
@@ -392,10 +395,11 @@ def test_swarm_secret_long_syntax_renders_metadata_and_legacy_compatibility():
     assert "super-secret-value" not in rendered
 
 
-def test_real_n8n_requires_no_docker_only_declaration_for_current_podman_runtime():
+def test_real_n8n_uses_shared_named_networks_without_other_docker_only_fields():
     cfg = n8n_config()
 
-    assert {"stack", "named_networks", "networks", "configs", "placement", "constraints"}.isdisjoint(cfg)
+    assert {"stack", "networks", "configs", "placement", "constraints"}.isdisjoint(cfg)
+    assert cfg["named_networks"] == {"n8n": {"driver": "bridge", "external": False}}
     assert cfg["deploy"]["type"] == "container"
 
 
