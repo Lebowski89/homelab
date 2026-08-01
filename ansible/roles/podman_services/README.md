@@ -75,7 +75,7 @@
 | Podman services ¦ Include removal tasks | ansible.builtin.include_tasks | True |  |
 | Podman services ¦ Remove runtime-neutral integrations | ansible.builtin.include_role | True |  |
 | Podman services ¦ Include drift tasks | ansible.builtin.include_tasks | False |  |
-| Podman services ¦ Flush removal daemon-reload handlers | ansible.builtin.meta | True |  |
+| Podman services ¦ Include removal handler flush | ansible.builtin.include_tasks | True |  |
 
 #### File: tasks/sub_tasks/drift.yml
 
@@ -85,6 +85,12 @@
 | Drift ¦ Classify image reference drift | ansible.builtin.set_fact | True |  |
 | Drift ¦ Report Podman image reference drift | ansible.builtin.debug | True |  |
 | Drift ¦ Report no Podman image reference drift | ansible.builtin.debug | True |  |
+
+#### File: tasks/sub_tasks/flush_remove_handlers.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Podman services ¦ Flush removal daemon-reload handlers | ansible.builtin.meta | False |  |
 
 #### File: tasks/sub_tasks/image.yml
 
