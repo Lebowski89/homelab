@@ -45,11 +45,15 @@
 
 - name: Recreate Ansible virtualenv after Python ABI drift
   when:
-    - ubuntu_ansible_venv_python.stat.exists
+    - not ansible_check_mode
     - >-
-      not ubuntu_ansible_venv_site_packages.stat.exists
-      or ubuntu_ansible_venv_python_probe.rc != 0
-      or ubuntu_ansible_venv_python_probe.stdout | trim != ubuntu_controller_python_abi.stdout | trim
+      ({
+        'python_exists': ubuntu_ansible_venv_python.stat.exists,
+        'site_packages_exists': ubuntu_ansible_venv_site_packages.stat.exists,
+        'probe_rc': ubuntu_ansible_venv_python_probe.rc | default(1),
+        'probe_abi': ubuntu_ansible_venv_python_probe.stdout | default(''),
+        'controller_abi': ubuntu_controller_python_abi.stdout
+      } | ubuntu_venv_recovery_action) == 'recreate'
   ansible.builtin.command:
     argv:
       - python3
@@ -60,7 +64,16 @@
   changed_when: true
 
 - name: Create missing Ansible virtualenv
-  when: not ubuntu_ansible_venv_python.stat.exists
+  when:
+    - not ansible_check_mode
+    - >-
+      ({
+        'python_exists': ubuntu_ansible_venv_python.stat.exists,
+        'site_packages_exists': ubuntu_ansible_venv_site_packages.stat.exists,
+        'probe_rc': ubuntu_ansible_venv_python_probe.rc | default(1),
+        'probe_abi': ubuntu_ansible_venv_python_probe.stdout | default(''),
+        'controller_abi': ubuntu_controller_python_abi.stdout
+      } | ubuntu_venv_recovery_action) == 'create'
   ansible.builtin.command:
     argv:
       - python3

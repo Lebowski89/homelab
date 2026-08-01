@@ -157,9 +157,21 @@ it improves readability.
 
 Within `infisical.secrets_map`, preserve logical list grouping. Each declaration
 orders its keys as `var`, `path`, `name`, optional `check_mode_value`, then
-optional `secret`. `fail_on_empty` defaults to true and should be omitted; an
-explicit false is reserved for the exceptional declaration that permits empty
-values. `check_mode_value` is also optional: omit it for the deterministic
+optional `secret`. `infisical.fail_on_empty` is a sibling of `secrets_map` and
+controls the overall lookup configuration. It defaults to `true` and should be
+omitted; set it to `false` only when the service intentionally permits empty
+lookup values:
+
+```yaml
+infisical:
+  fail_on_empty: false
+  secrets_map:
+    - var: optional_value
+      path: /Synthetic
+      name: OPTIONAL_VALUE
+```
+
+`check_mode_value` is also optional: omit it for the deterministic
 `__CHECK_MODE_REDACTED_INFISICAL_<var>__` default, and use a visibly synthetic
 override only when downstream validation needs a hostname, port, email, URL,
 or another particular shape. Within `secret`, use `name`, optional `target`,

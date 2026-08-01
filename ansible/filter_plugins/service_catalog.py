@@ -127,7 +127,8 @@ def service_catalog_merge_target(service_cfg: Mapping[str, Any], target_name: st
         AnsibleFilterError: If ``service_cfg`` or ``targets`` is not a mapping,
             the base or explicit target runtime is invalid, the requested
             target is absent or not a mapping, or the target contains nested
-            ``targets``.
+            ``targets``, or top-level ``systemd`` survives on a non-Podman
+            effective service.
 
     Note:
         Neither the base definition nor the selected target is mutated.
@@ -266,8 +267,10 @@ def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) 
     Raises:
         AnsibleFilterError: If the catalog or one of its service/target sections
             has an invalid shape; a runtime, enabled value, or tag value is
-            invalid; nested targets are declared; or a dispatch host cannot be
-            resolved to a non-empty string.
+            invalid; ``targets`` is explicitly empty; nested targets are
+            declared; top-level ``systemd`` applies to a non-Podman effective
+            service; or a dispatch host cannot be resolved to a non-empty
+            string.
 
     Note:
         Input service definitions are not mutated.
@@ -311,6 +314,13 @@ def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) 
 
         if not isinstance(targets, Mapping):
             raise AnsibleFilterError(f"{service_name}.targets must be a mapping, got {type(targets).__name__}")
+        if not targets:
+            _validate_runtime_fields(
+                runtime=service_runtime,
+                has_systemd="systemd" in service_cfg,
+                name=f"Service {service_name!r}",
+            )
+            raise AnsibleFilterError(f"{service_name}.targets must contain at least one target; omit targets for a base-only service")
 
         for target_name, target_cfg in targets.items():
             if not isinstance(target_cfg, Mapping):

@@ -881,3 +881,23 @@ def test_runtime_options_shape_and_fields_are_strict(runtime_options):
 
     with pytest.raises(AnsibleFilterError, match="runtime_options"):
         podman_services.podman_service_normalize(cfg, "portable")
+
+
+@pytest.mark.parametrize("policy", ["preserve", "reconcile"])
+def test_secret_policy_and_declarations_share_supported_update_policies(policy):
+    declaration = {
+        "name": "portable_secret",
+        "var": "portable_secret",
+        "target": "/run/secrets/portable_secret",
+    }
+    if policy != "preserve":
+        declaration["update_policy"] = policy
+
+    normalized = podman_services.podman_secret_declarations([declaration])[0]
+    decision = podman_services.podman_secret_policy(declaration, "update")
+
+    assert normalized["update_policy"] == policy
+    assert decision == {
+        "force": policy == "reconcile",
+        "skip_existing": policy != "reconcile",
+    }

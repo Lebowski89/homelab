@@ -30,7 +30,7 @@ def test_main_orchestrates_sub_tasks_in_order():
     positions = [MAIN_TASKS.index(f"sub_tasks/{name}") for name in SUB_TASK_FILES]
     assert positions == sorted(positions)
     assert "Podman services | Normalize service" not in MAIN_TASKS
-    assert "Podman services | Flush removal daemon-reload handlers" in MAIN_TASKS
+    assert "Podman services | Include removal handler flush" in MAIN_TASKS
 
 
 def test_quadlet_directory_prerequisite_exists_before_templates():
@@ -63,7 +63,7 @@ def test_remove_only_orchestration_is_guarded_by_normalized_action():
     remove_only_tasks = {
         "Podman services | Include removal tasks",
         "Podman services | Remove runtime-neutral integrations",
-        "Podman services | Flush removal daemon-reload handlers",
+        "Podman services | Include removal handler flush",
     }
 
     guarded = set()
@@ -254,3 +254,25 @@ def test_podman_dynamic_includes_propagate_required_tags():
         checked.add(include_file)
 
     assert checked == set(required_tags)
+
+
+def test_remove_handler_flush_is_gated_by_a_conditional_dynamic_include():
+    main_tasks = yaml.safe_load(MAIN_TASKS)
+    include = next(task for task in main_tasks if task["name"] == "Podman services | Include removal handler flush")
+    flush_tasks = yaml.safe_load((TASKS_DIR / "sub_tasks" / "flush_remove_handlers.yml").read_text())
+
+    assert include["when"] == "podman_services_common_action == 'remove'"
+    assert include["ansible.builtin.include_tasks"] == {
+        "file": "sub_tasks/flush_remove_handlers.yml",
+        "apply": {"tags": ["remove"]},
+    }
+    assert include["tags"] == ["remove"]
+    assert "ansible.builtin.meta" not in include
+    assert flush_tasks == [
+        {
+            "name": "Podman services | Flush removal daemon-reload handlers",
+            "ansible.builtin.meta": "flush_handlers",
+            "tags": ["remove"],
+        }
+    ]
+    assert "when" not in flush_tasks[0]

@@ -22,6 +22,7 @@ _RESOURCE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _USER_RE = re.compile(r"^[0-9]+:[0-9]+$")
 _VALID_NETWORK_DRIVERS = {"bridge", "ipvlan", "macvlan"}
 _VALID_PROTOCOLS = {"tcp", "udp"}
+_VALID_SECRET_UPDATE_POLICIES = {"preserve", "reconcile"}
 _VALID_VOLUME_TYPES = {"bind", "tmpfs", "volume"}
 
 
@@ -74,6 +75,13 @@ def podman_env_file_value(value: Any) -> str:
     return value
 
 
+def _secret_update_policy(secret: Mapping[str, Any], *, name: str) -> str:
+    update_policy = secret.get("update_policy", "preserve")
+    if not isinstance(update_policy, str) or update_policy not in _VALID_SECRET_UPDATE_POLICIES:
+        raise AnsibleFilterError(f'{name}.update_policy must be exactly "preserve" or "reconcile"')
+    return update_policy
+
+
 def podman_secret_policy(secret: Mapping[str, Any], state: str) -> dict[str, bool]:
     """Derive Podman secret module flags for the requested service action.
 
@@ -95,9 +103,7 @@ def podman_secret_policy(secret: Mapping[str, Any], state: str) -> dict[str, boo
     """
     if not isinstance(secret, Mapping):
         raise AnsibleFilterError("secret must be a mapping")
-    update_policy = secret.get("update_policy", "preserve")
-    if not isinstance(update_policy, str) or update_policy not in {"preserve", "reconcile"}:
-        raise AnsibleFilterError('secret.update_policy must be exactly "preserve" or "reconcile"')
+    update_policy = _secret_update_policy(secret, name="secret")
     if state not in {"deploy", "bootstrap", "update", "recreate", "remove"}:
         raise AnsibleFilterError("state must be deploy, bootstrap, update, recreate, or remove")
     reconcile = update_policy == "reconcile" and state in {"update", "recreate"}
@@ -140,10 +146,7 @@ def podman_secret_declarations(value: Any) -> list[dict[str, Any]]:
         }
         if not posixpath.isabs(secret["target"]):
             raise AnsibleFilterError(f"{item_name}.target must be an absolute path")
-        update_policy = declaration.get("update_policy", "preserve")
-        if not isinstance(update_policy, str) or update_policy not in {"preserve", "reconcile"}:
-            raise AnsibleFilterError(f'{item_name}.update_policy must be exactly "preserve" or "reconcile"')
-        secret["update_policy"] = update_policy
+        secret["update_policy"] = _secret_update_policy(declaration, name=item_name)
         for field in ("uid", "gid"):
             if field in declaration:
                 secret[field] = _numeric_id(declaration[field], name=f"{item_name}.{field}")

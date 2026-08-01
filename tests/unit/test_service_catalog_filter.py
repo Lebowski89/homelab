@@ -457,3 +457,42 @@ def test_catalog_order_and_source_are_unchanged_by_runtime_validation():
 
     assert [item["name"] for item in items] == ["first", "second"]
     assert services == original
+
+
+def test_missing_and_null_targets_are_base_only_services():
+    missing = {"app": {"runtime": "docker"}}
+    explicit_null = {"app": {"runtime": "docker", "targets": None}}
+
+    assert service_catalog.service_catalog_effective(missing, "manager") == (
+        service_catalog.service_catalog_effective(explicit_null, "manager")
+    )
+
+
+def test_explicit_empty_targets_are_rejected_clearly():
+    services = {"empty_app": {"runtime": "docker", "targets": {}}}
+
+    with pytest.raises(
+        AnsibleFilterError,
+        match=r"empty_app\.targets must contain at least one target; omit targets for a base-only service",
+    ):
+        service_catalog.service_catalog_effective(services, "manager")
+
+
+def test_empty_targets_cannot_bypass_runtime_or_systemd_validation():
+    with pytest.raises(AnsibleFilterError, match=r"invalid\.runtime must be one of"):
+        service_catalog.service_catalog_effective(
+            {"invalid": {"runtime": "containerd", "targets": {}}},
+            "manager",
+        )
+
+    with pytest.raises(AnsibleFilterError, match=r"systemd.*valid only with runtime: podman"):
+        service_catalog.service_catalog_effective(
+            {
+                "invalid_systemd": {
+                    "runtime": "docker",
+                    "systemd": {"restart": "on-failure"},
+                    "targets": {},
+                }
+            },
+            "manager",
+        )

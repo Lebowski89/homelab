@@ -418,7 +418,7 @@ def test_vaultwarden_generation_returns_value_free_declaration_to_adapters():
     publish = generation.index("Publish generated value and value-free declaration")
     declarations = generation.index("service_prepare_generated_secret_declarations", publish)
     assert "service_prepare_vaultwarden_token" not in generation[declarations:]
-    assert "'update_policy': 'preserve'" in generation[declarations:]
+    assert "service_prepare_secret_declaration" in generation[declarations:]
     assert "runtime_options" not in generation[declarations:]
     assert "community.docker.docker_secret" in docker_secrets
     assert "containers.podman.podman_secret" in podman_secrets
@@ -438,7 +438,7 @@ def test_authelia_publishes_values_and_value_free_declarations_for_normal_materi
     assert storage["secret"]["name"] == "authelia_storage_key_secret"
     declaration_section = generation.split("service_prepare_generated_secret_declarations:", 1)[1]
     assert "service_prepare_authelia_generated_value" not in declaration_section
-    assert "'update_policy': 'preserve'" in declaration_section
+    assert "service_prepare_secret_declaration" in declaration_section
     assert "runtime_options" not in declaration_section
     assert "immutable" not in declaration_section
     assert "replace" not in declaration_section
@@ -729,3 +729,72 @@ def test_validation_resets_seeded_outputs_without_mutation_or_external_calls(tmp
     assert "community.docker" not in output
     assert "containers.podman" not in output
     assert "infisical" not in output.lower()
+
+
+def test_generated_application_secret_declarations_normalize_through_both_adapters():
+    prepare = load_module(PREPARE_FILTER_PATH, "service_prepare_generated_declarations")
+    common = load_module(
+        REPO_ROOT / "ansible/roles/service_common/filter_plugins/service_common.py",
+        "service_common_generated_declarations",
+    )
+    docker = load_module(
+        REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_secrets.py",
+        "docker_generated_declarations",
+    )
+    podman = load_module(
+        REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py",
+        "podman_generated_declarations",
+    )
+    identities = [
+        ("vaultwarden_admin_token", "vaultwarden_admin_token_secret"),
+        ("authelia_session_key", "authelia_session_key_secret"),
+        ("authelia_jwt_reset_key", "authelia_jwt_key_secret"),
+    ]
+    generated = [prepare.service_prepare_secret_declaration(variable, name) for variable, name in identities]
+    expected = [
+        {
+            "var": variable,
+            "name": name,
+            "target": f"/run/secrets/{name}",
+            "origins": ["canonical"],
+            "update_policy": "preserve",
+        }
+        for variable, name in identities
+    ]
+
+    assert generated == expected
+    assert all(set(declaration) == {"var", "name", "target", "origins", "update_policy"} for declaration in generated)
+
+    for declaration in generated:
+        common_declaration = common.service_common_infisical_normalize(
+            [
+                {
+                    "var": declaration["var"],
+                    "path": "/Synthetic",
+                    "name": "SYNTHETIC_VALUE",
+                    "secret": {"name": declaration["name"]},
+                }
+            ]
+        )["secret_declarations"][0]
+        assert common_declaration == declaration
+
+    podman_declarations = podman.podman_secret_declarations(generated)
+    assert podman_declarations == [
+        {
+            "name": declaration["name"],
+            "var": declaration["var"],
+            "target": declaration["target"],
+            "update_policy": "preserve",
+        }
+        for declaration in generated
+    ]
+    assert docker.docker_services_secret_attachments([], generated, "swarm") == [name for _, name in identities]
+    standalone = docker.docker_services_secret_attachments([], generated, "container")
+    assert standalone == [{"source": name, "target": f"/run/secrets/{name}"} for _, name in identities]
+
+    marker = "SYNTHETIC_SECRET_VALUE_MUST_NOT_APPEAR"
+    assert marker not in repr(generated)
+    assert marker not in repr(podman_declarations)
+    assert marker not in repr(standalone)
+    assert all("docker" not in repr(item).lower() for item in generated)
+    assert all("podman" not in repr(item).lower() for item in generated)
