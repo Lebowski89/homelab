@@ -60,7 +60,7 @@ def test_canonical_value_free_secret_attachments_are_adapter_metadata():
     assert cfg == original
 
 
-def test_immutable_secret_cannot_be_replaceable():
+def test_deprecated_secret_runtime_options_are_rejected():
     declarations = [
         {
             "name": "n8n_encryption_key_secret",
@@ -69,8 +69,21 @@ def test_immutable_secret_cannot_be_replaceable():
             "runtime_options": {"podman": {"immutable": True, "replace": True}},
         }
     ]
-    with pytest.raises(AnsibleFilterError, match="immutable"):
+    with pytest.raises(AnsibleFilterError, match=r"runtime_options is deprecated; use secret.update_policy"):
         podman_services.podman_secret_declarations(declarations)
+
+
+@pytest.mark.parametrize("value", [None, True, False, 0, 1, [], {}, "", " preserve", "Preserve"])
+def test_podman_declaration_rejects_invalid_update_policy(value):
+    declaration = {
+        "name": "portable_secret",
+        "var": "portable_secret",
+        "target": "/run/secrets/portable_secret",
+        "update_policy": value,
+    }
+
+    with pytest.raises(AnsibleFilterError, match="update_policy"):
+        podman_services.podman_secret_declarations([declaration])
 
 
 def test_volume_requires_target():
@@ -112,19 +125,28 @@ def test_image_reference_drift_missing_container():
     assert result["missing"] is True
 
 
-def test_secret_policy_deploy_preserves_existing_secret():
-    policy = podman_services.podman_secret_policy({"replace": True}, "deploy")
-    assert policy == {"force": False, "skip_existing": True}
+@pytest.mark.parametrize("action", ["deploy", "bootstrap", "update", "recreate", "remove"])
+def test_secret_policy_preserve_never_replaces(action):
+    assert podman_services.podman_secret_policy({"update_policy": "preserve"}, action) == {
+        "force": False,
+        "skip_existing": True,
+    }
 
 
-def test_secret_policy_update_replaces_mutable_secret():
-    policy = podman_services.podman_secret_policy({"replace": True}, "update")
-    assert policy == {"force": True, "skip_existing": False}
+@pytest.mark.parametrize("action", ["deploy", "bootstrap", "remove"])
+def test_secret_policy_reconcile_preserves_outside_rotation_actions(action):
+    assert podman_services.podman_secret_policy({"update_policy": "reconcile"}, action) == {
+        "force": False,
+        "skip_existing": True,
+    }
 
 
-def test_secret_policy_recreate_preserves_immutable_secret():
-    policy = podman_services.podman_secret_policy({"replace": False}, "recreate")
-    assert policy == {"force": False, "skip_existing": True}
+@pytest.mark.parametrize("action", ["update", "recreate"])
+def test_secret_policy_reconcile_forces_rotation(action):
+    assert podman_services.podman_secret_policy({"update_policy": "reconcile"}, action) == {
+        "force": True,
+        "skip_existing": False,
+    }
 
 
 def canonical_cfg():
@@ -367,17 +389,10 @@ def minimal_canonical_cfg():
     }
 
 
-def test_secret_policy_parses_false_string_strictly():
-    assert podman_services.podman_secret_policy({"replace": "false"}, "update") == {
-        "force": False,
-        "skip_existing": True,
-    }
-
-
-@pytest.mark.parametrize("value", [2, -1, "", "maybe", None])
-def test_secret_policy_rejects_invalid_booleans(value):
-    with pytest.raises(AnsibleFilterError, match=r"secret\.replace"):
-        podman_services.podman_secret_policy({"replace": value}, "update")
+@pytest.mark.parametrize("value", [None, True, False, 0, 1, [], {}, "", " preserve", "preserve ", "Preserve"])
+def test_secret_policy_rejects_invalid_update_policy(value):
+    with pytest.raises(AnsibleFilterError, match=r"secret\.update_policy"):
+        podman_services.podman_secret_policy({"update_policy": value}, "update")
 
 
 def test_secret_and_network_booleans_are_normalized():

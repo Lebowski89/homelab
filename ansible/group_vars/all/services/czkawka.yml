@@ -24,7 +24,6 @@ czkawka:
     DARK_MODE: "1"
     WEB_FILE_MANAGER: "1"
   infisical:
-    fail_on_empty: true
     secrets_map:
       - var: cloudflare_zone
         path: /Cloudflare

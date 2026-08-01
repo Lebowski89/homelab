@@ -33,7 +33,6 @@ Canonical materialized secrets are nested in an Infisical map entry:
 
 ```yaml
 infisical:
-  fail_on_empty: true
   secrets_map:
     - var: app_password
       path: /App
@@ -44,20 +43,17 @@ infisical:
         uid: "1000"
         gid: "1000"
         mode: "0400"
-        runtime_options:
-          podman:
-            immutable: false
-            replace: true
+        update_policy: reconcile
     - var: lookup_only
       path: /App
       name: TEMPLATE_VALUE
 ```
 
-`service_common` validates the lookup and value-free declaration metadata, resets all outputs per service, and retrieves lookup-only and secret-backed values into `service_common_infisical_values`, keyed by `var`. Entries without `secret` remain lookup-only. It also resolves the canonical environment before Podman renders its protected environment file or Quadlets. Check mode validates declarations and references without contacting Infisical or creating a native secret, using an optional declaration-owned `check_mode_value` when present and deterministic redacted stand-ins otherwise.
+`service_common` validates the lookup and value-free declaration metadata, resets all outputs per service, and retrieves lookup-only and secret-backed values into `service_common_infisical_values`, keyed by `var`. `fail_on_empty` defaults to true; setting it to false is an exceptional opt-out for declarations that intentionally permit empty values. Entries without `secret` remain lookup-only. It also resolves the canonical environment before Podman renders its protected environment file or Quadlets. Check mode validates declarations and references without contacting Infisical or creating a native secret, using an optional declaration-owned `check_mode_value` when present and deterministic redacted stand-ins otherwise.
 
 `podman_services` remains responsible for `containers.podman.podman_secret` and Quadlet attachment. It reads the value through the declaration's `var`, creates the declared native Podman secret name, and preserves target, UID, GID, and mode in `Secret=`. Value-carrying tasks use `no_log: true` and `diff: false`; values never enter generated Quadlets. Native Podman secrets keep values out of repository files and generated unit arguments, but the default file-backed secret driver is not encrypted storage and root on the host can access it.
 
-Podman replacement policy is declared under `secret.runtime_options.podman`. `immutable` and `replace` are strict booleans and cannot both be true. Replaceable secrets are forced only during `update` and `recreate`; normal deploy/bootstrap creates missing secrets without rotating existing ones. Legacy top-level Podman lookup entries and runtime-specific Infisical metadata are no longer accepted; repository services use the canonical common declaration. Docker ignores Podman rotation policy.
+`secret.update_policy` accepts exactly `preserve` or `reconcile` and defaults to `preserve`. Both policies create a missing native secret and preserve an existing one during deploy/bootstrap. Podman translates reconcile during update/recreate to `force: true` and `skip_existing: false`; preserve always uses `force: false` and `skip_existing: true`. Podman cannot compare stored secret contents, so reconcile recreates the secret and follows the existing restart path. Legacy runtime-specific secret policy blocks are rejected.
 
 The canonical PostgreSQL declaration is shared by Docker and Podman:
 
@@ -88,7 +84,7 @@ n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.
 
 The service uses pinned image `docker.io/n8nio/n8n:2.31.4`, UID/GID 1000:1000, application data in `/opt/n8n`, PostgreSQL database `n8n` through the shared HAProxy endpoint, and private routing at `https://n8n.int.<cloudflare-zone>:8443/`. The direct backend binds port 5678 to the VM management/LAN address; that direct port remains reachable on that network and bypasses Traefik TLS and middleware.
 
-Its three canonical secrets preserve existing policy: the PostgreSQL username and n8n encryption key are immutable, while the PostgreSQL password is replaceable during update/recreate. Shared preparation ensures the `n8n` database exists before the Podman service starts.
+Its three canonical secrets preserve their lifecycle intent: the PostgreSQL username and n8n encryption key use the default `preserve` policy, while the PostgreSQL password uses `reconcile` during update/recreate. Shared preparation ensures the `n8n` database exists before the Podman service starts.
 
 
 Required private values before deployment:

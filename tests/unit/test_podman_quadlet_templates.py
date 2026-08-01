@@ -327,12 +327,7 @@ def test_canonical_secret_normalization_reaches_quadlet_without_value():
                     "uid": "1001",
                     "gid": "1002",
                     "mode": "0400",
-                    "runtime_options": {
-                        "podman": {
-                            "immutable": True,
-                            "replace": False,
-                        }
-                    },
+                    "update_policy": "preserve",
                 },
             }
         ]

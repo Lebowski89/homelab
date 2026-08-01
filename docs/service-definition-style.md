@@ -76,7 +76,6 @@ example:
   environment:
     TZ: "{{ timezone }}"
   infisical:
-    fail_on_empty: true
     secrets_map: []
 
   named_networks:
@@ -150,7 +149,14 @@ it improves readability.
 
 Within `infisical.secrets_map`, preserve logical list grouping. Each declaration
 orders its keys as `var`, `path`, `name`, optional `check_mode_value`, then
-optional `secret`. Do not sort the declarations alphabetically. In `paths`,
+optional `secret`. `fail_on_empty` defaults to true and should be omitted; an
+explicit false is reserved for the exceptional declaration that permits empty
+values. `check_mode_value` is also optional: omit it for the deterministic
+`__CHECK_MODE_REDACTED_INFISICAL_<var>__` default, and use a visibly synthetic
+override only when downstream validation needs a hostname, port, email, URL,
+or another particular shape. Within `secret`, use `name`, optional `target`,
+`uid`, `gid`, `mode`, then optional `update_policy`. The exact policy values are
+`preserve` and `reconcile`; omission defaults safely to `preserve`. Do not sort the declarations alphabetically. In `paths`,
 parents precede their children. Keep configuration and data/media volumes, and
 primary and ancillary ports, in meaningful application order.
 

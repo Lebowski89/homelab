@@ -65,14 +65,21 @@ the service does not need.
 | `environment` | Environment variables passed to the application. Values can refer to inventory data or resolved secrets. |
 | `env_file` | One or more files whose variables are loaded into the container. |
 | `infisical` | Declares which values to fetch from Infisical. It contains names and paths, never the secret values themselves. |
-| `secrets` | Attaches declared runtime secrets to the service. |
+| `secrets` | Attaches value-free runtime secret names to the service. Secret lifecycle intent belongs to `infisical.secrets_map[].secret.update_policy`. |
 | `swarm_configs` | Creates Docker Swarm config objects from repository files or templates. |
 | `configs` | Mounts declared Swarm config objects into the service. |
 | `swarm_env_templates` | Renders environment files onto the Docker deployment host before the service is deployed. |
 | `settings` | Application-specific values used by repository templates. These are not automatically passed as environment variables. |
 
 Within `infisical.secrets_map`, keep each declaration in this order: `var`,
-`path`, `name`, optional `check_mode_value`, then optional `secret`.
+`path`, `name`, optional `check_mode_value`, then optional `secret`. Within
+`secret`, use `name`, optional `target`, `uid`, `gid`, `mode`, then optional
+`update_policy`. The policy defaults to `preserve`; use `reconcile` only when
+update/recreate should rotate the resolved value. `fail_on_empty` also defaults to
+true, so omit it unless the service intentionally accepts an empty lookup.
+`check_mode_value` is exceptional: the common default is
+`__CHECK_MODE_REDACTED_INFISICAL_<var>__`, and an explicit visibly synthetic
+value is needed only when downstream validation requires a specific shape.
 
 ### 4. Application preparation
 

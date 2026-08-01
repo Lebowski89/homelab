@@ -77,27 +77,30 @@ def podman_secret_policy(secret: Mapping[str, Any], state: str) -> dict[str, boo
     """Derive Podman secret module flags for the requested service action.
 
     Args:
-        secret: Normalized declaration containing an optional strict
-            boolean-like ``replace`` field.
-        state: Service action. Replacement is active only for ``update`` and
-            ``recreate``; other values preserve an existing secret.
+        secret: Normalized declaration containing the canonical
+            ``update_policy`` field.
+        state: Service action. Reconciliation is active only for ``update``
+            and ``recreate``; other actions preserve an existing secret.
 
     Returns:
         A mapping with complementary ``force`` and ``skip_existing`` flags.
 
     Raises:
-        AnsibleFilterError: If ``secret`` is not a mapping or ``replace`` is not
-            a supported boolean-like value.
+        AnsibleFilterError: If ``secret`` is not a mapping, the update policy is
+            invalid, or the action is unsupported.
 
     Note:
-        The declaration is not mutated, and this filter does not validate the
-        action name.
+        The declaration is not mutated.
     """
     if not isinstance(secret, Mapping):
         raise AnsibleFilterError("secret must be a mapping")
-    replace = _as_bool(secret.get("replace", False), name="secret.replace")
-    mutable_replace = state in {"update", "recreate"} and replace
-    return {"force": mutable_replace, "skip_existing": not mutable_replace}
+    update_policy = secret.get("update_policy", "preserve")
+    if not isinstance(update_policy, str) or update_policy not in {"preserve", "reconcile"}:
+        raise AnsibleFilterError('secret.update_policy must be exactly "preserve" or "reconcile"')
+    if state not in {"deploy", "bootstrap", "update", "recreate", "remove"}:
+        raise AnsibleFilterError("state must be deploy, bootstrap, update, recreate, or remove")
+    reconcile = update_policy == "reconcile" and state in {"update", "recreate"}
+    return {"force": reconcile, "skip_existing": not reconcile}
 
 
 def podman_secret_declarations(value: Any) -> list[dict[str, Any]]:
@@ -109,13 +112,12 @@ def podman_secret_declarations(value: Any) -> list[dict[str, Any]]:
 
     Returns:
         Copied declaration dictionaries containing validated ``name``, ``var``,
-        absolute ``target``, ``immutable``, and ``replace`` values, plus optional
-        numeric UID/GID strings and a quoted four-digit octal mode.
+        absolute ``target``, and canonical ``update_policy`` values, plus
+        optional numeric UID/GID strings and a quoted four-digit octal mode.
 
     Raises:
         AnsibleFilterError: If collection/declaration shapes, names, variables,
-            targets, policy booleans, IDs, or modes are invalid, or if a secret
-            is both immutable and replaceable.
+            targets, update policies, IDs, modes, or fields are invalid.
 
     Note:
         The input declarations are not mutated.
@@ -125,6 +127,11 @@ def podman_secret_declarations(value: Any) -> list[dict[str, Any]]:
     for index, declaration_value in enumerate(declarations):
         item_name = f"podman secret declarations[{index}]"
         declaration = _as_mapping(declaration_value, name=item_name)
+        if "runtime_options" in declaration:
+            raise AnsibleFilterError(f"{item_name}.runtime_options is deprecated; use secret.update_policy")
+        unsupported = set(declaration) - {"name", "var", "target", "uid", "gid", "mode", "update_policy", "origins"}
+        if unsupported:
+            raise AnsibleFilterError(f"{item_name} contains unsupported fields: {', '.join(sorted(unsupported))}")
         secret = {
             "name": _resource_name(declaration.get("name"), name=f"{item_name}.name"),
             "var": _nonempty_string(declaration.get("var"), name=f"{item_name}.var"),
@@ -132,18 +139,10 @@ def podman_secret_declarations(value: Any) -> list[dict[str, Any]]:
         }
         if not posixpath.isabs(secret["target"]):
             raise AnsibleFilterError(f"{item_name}.target must be an absolute path")
-        runtime_options = _as_mapping(declaration.get("runtime_options", {}), name=f"{item_name}.runtime_options")
-        podman_options = _as_mapping(runtime_options.get("podman", {}), name=f"{item_name}.runtime_options.podman")
-        secret["immutable"] = _as_bool(
-            podman_options.get("immutable", False),
-            name=f"{item_name}.runtime_options.podman.immutable",
-        )
-        secret["replace"] = _as_bool(
-            podman_options.get("replace", False),
-            name=f"{item_name}.runtime_options.podman.replace",
-        )
-        if secret["immutable"] and secret["replace"]:
-            raise AnsibleFilterError(f"{item_name} cannot be both immutable and replaceable")
+        update_policy = declaration.get("update_policy", "preserve")
+        if not isinstance(update_policy, str) or update_policy not in {"preserve", "reconcile"}:
+            raise AnsibleFilterError(f'{item_name}.update_policy must be exactly "preserve" or "reconcile"')
+        secret["update_policy"] = update_policy
         for field in ("uid", "gid"):
             if field in declaration:
                 secret[field] = _numeric_id(declaration[field], name=f"{item_name}.{field}")

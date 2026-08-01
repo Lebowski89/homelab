@@ -418,6 +418,8 @@ def test_vaultwarden_generation_returns_value_free_declaration_to_adapters():
     publish = generation.index("Publish generated value and value-free declaration")
     declarations = generation.index("service_prepare_generated_secret_declarations", publish)
     assert "service_prepare_vaultwarden_token" not in generation[declarations:]
+    assert "'update_policy': 'preserve'" in generation[declarations:]
+    assert "runtime_options" not in generation[declarations:]
     assert "community.docker.docker_secret" in docker_secrets
     assert "containers.podman.podman_secret" in podman_secrets
     assert "community.docker" not in generation
@@ -436,12 +438,12 @@ def test_authelia_publishes_values_and_value_free_declarations_for_normal_materi
     assert storage["secret"]["name"] == "authelia_storage_key_secret"
     declaration_section = generation.split("service_prepare_generated_secret_declarations:", 1)[1]
     assert "service_prepare_authelia_generated_value" not in declaration_section
-    assert "'runtime_options'" in declaration_section
-    assert "'docker'" in declaration_section
-    assert "'immutable': true" in declaration_section
-    assert "'replace': false" in declaration_section
+    assert "'update_policy': 'preserve'" in declaration_section
+    assert "runtime_options" not in declaration_section
+    assert "immutable" not in declaration_section
+    assert "replace" not in declaration_section
     assert "community.docker.docker_secret" in docker_secrets
-    assert "docker_services_existing_immutable_secret_names" in docker_secrets
+    assert "docker_services_existing_secret_names" in docker_secrets
     assert "docker secret inspect" not in generation
     assert "containers.podman.podman_secret" in podman_secrets
 

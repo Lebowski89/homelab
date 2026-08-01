@@ -4,6 +4,7 @@ import copy
 import importlib.util
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -71,7 +72,7 @@ def normalize_both(*, check_mode=False):
     podman_service = podman.podman_service_normalize(cfg, "n8n")
     common_secrets = common.service_common_infisical_normalize(
         cfg["infisical"]["secrets_map"],
-        cfg["infisical"]["fail_on_empty"],
+        cfg["infisical"].get("fail_on_empty", True),
     )
     infisical_values = common.service_common_infisical_check_values(common_secrets) if check_mode else {"cloudflare_zone": "example.test"}
     resolved_environment = common.service_common_environment_resolve(
@@ -187,10 +188,10 @@ def test_real_n8n_podman_normalization_preserves_behavior():
     }
     assert service["postgres"] == cfg["postgres"]
     assert service["traefik"] == cfg["traefik"]
-    assert [(secret["name"], secret["immutable"], secret["replace"]) for secret in service["secrets"]] == [
-        ("postgres_user_secret", True, False),
-        ("postgres_pass_secret", False, True),
-        ("n8n_encryption_key_secret", True, False),
+    assert [(secret["name"], secret["update_policy"]) for secret in service["secrets"]] == [
+        ("postgres_user_secret", "preserve"),
+        ("postgres_pass_secret", "reconcile"),
+        ("n8n_encryption_key_secret", "preserve"),
     ]
 
 
@@ -347,7 +348,7 @@ def test_swarm_secret_long_syntax_renders_metadata_and_legacy_compatibility():
             "uid": "1000",
             "gid": "1001",
             "mode": "0400",
-            "runtime_options": {"podman": {"immutable": True, "replace": False}},
+            "update_policy": "preserve",
             "origins": ["canonical"],
         },
         {
@@ -430,7 +431,7 @@ def test_real_n8n_declares_cloudflare_zone_as_lookup_only():
     lookup = next(item for item in cfg["infisical"]["secrets_map"] if item["var"] == "cloudflare_zone")
     normalized = common.service_common_infisical_normalize(
         cfg["infisical"]["secrets_map"],
-        cfg["infisical"]["fail_on_empty"],
+        cfg["infisical"].get("fail_on_empty", True),
     )
 
     assert lookup == {
@@ -459,6 +460,24 @@ def test_real_n8n_production_and_check_mode_environment_resolution():
     assert check_mode["N8N_HOST"] == "n8n.int.check-mode.invalid"
     assert check_mode["N8N_EDITOR_BASE_URL"] == "https://n8n.int.check-mode.invalid:8443/"
     assert check_mode["WEBHOOK_URL"] == "https://n8n.int.check-mode.invalid:8443/"
+
+
+def test_n8n_hostname_shape_requires_its_explicit_check_mode_override():
+    cfg = resolved_n8n_config()
+    without_override = copy.deepcopy(cfg)
+    cloudflare = next(item for item in without_override["infisical"]["secrets_map"] if item["var"] == "cloudflare_zone")
+    cloudflare.pop("check_mode_value")
+    default_config = common.service_common_infisical_normalize(without_override["infisical"]["secrets_map"])
+    default_environment = common.service_common_environment_resolve(
+        without_override["environment"],
+        common.service_common_infisical_check_values(default_config),
+        default_config,
+    )
+    _, _, _, _, _, _, _, explicit_environment = normalize_both(check_mode=True)
+    dns_label = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
+
+    assert not all(dns_label.fullmatch(label) for label in default_environment["N8N_HOST"].split("."))
+    assert all(dns_label.fullmatch(label) for label in explicit_environment["N8N_HOST"].split("."))
 
 
 def test_real_n8n_private_traefik_hostname_matches_resolved_application_hostname():

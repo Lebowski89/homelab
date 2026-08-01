@@ -1,4 +1,5 @@
 import importlib.util
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -37,9 +38,31 @@ def test_valid_map_keeps_lookup_config_separate_from_canonical_secret_declaratio
             "name": "postgres_pass_secret",
             "var": "postgres_pass",
             "target": "/run/secrets/postgres_pass_secret",
-            "runtime_options": {},
+            "update_policy": "preserve",
             "origins": ["canonical"],
         }
+    ]
+
+
+def test_explicit_preserve_and_source_order_are_retained_without_mutation():
+    declarations = valid_map()
+    declarations[1]["secret"]["update_policy"] = "preserve"
+    declarations.append(
+        {
+            "var": "second_secret",
+            "path": "/App",
+            "name": "SECOND",
+            "secret": {"name": "second_secret", "update_policy": "reconcile"},
+        }
+    )
+    original = deepcopy(declarations)
+
+    normalized = service_common.service_common_infisical_normalize(declarations)
+
+    assert declarations == original
+    assert [(item["name"], item["update_policy"]) for item in normalized["secret_declarations"]] == [
+        ("postgres_pass_secret", "preserve"),
+        ("second_secret", "reconcile"),
     ]
 
 
@@ -203,12 +226,7 @@ def canonical_map():
                 "uid": "1000",
                 "gid": "1000",
                 "mode": "0400",
-                "runtime_options": {
-                    "podman": {
-                        "immutable": False,
-                        "replace": True,
-                    }
-                },
+                "update_policy": "reconcile",
             },
         },
         {"var": "template_token", "path": "/App", "name": "TOKEN"},
@@ -230,7 +248,7 @@ def test_canonical_declaration_normalizes_and_lookup_only_stays_lookup_only():
             "uid": "1000",
             "gid": "1000",
             "mode": "0400",
-            "runtime_options": {"podman": {"immutable": False, "replace": True}},
+            "update_policy": "reconcile",
             "origins": ["canonical"],
         }
     ]
@@ -269,22 +287,23 @@ def test_canonical_secret_scalar_validation_is_strict(field, value, match):
 
 
 @pytest.mark.parametrize(
-    ("runtime_options", "match"),
-    [
-        ([], "runtime_options must be a mapping"),
-        ({"docker": {}}, "unsupported runtimes"),
-        ({"podman": []}, "podman must be a mapping"),
-        ({"podman": {"unsupported": True}}, "unsupported fields"),
-        ({"podman": {"immutable": "sometimes"}}, "strict boolean"),
-        ({"podman": {"replace": 2}}, "boolean or integer"),
-        ({"podman": {"immutable": True, "replace": True}}, "both immutable and replace"),
-    ],
+    "update_policy",
+    [None, True, False, 0, 1, [], {}, "", " preserve", "preserve ", "Preserve", "RECONCILE"],
 )
-def test_canonical_runtime_options_are_strict(runtime_options, match):
+def test_canonical_update_policy_is_strict(update_policy):
     entry = canonical_map()[0]
-    entry["secret"]["runtime_options"] = runtime_options
+    entry["secret"]["update_policy"] = update_policy
 
-    with pytest.raises(AnsibleFilterError, match=match):
+    with pytest.raises(AnsibleFilterError, match="update_policy"):
+        service_common.service_common_infisical_normalize([entry])
+
+
+@pytest.mark.parametrize("runtime", ["docker", "podman"])
+def test_deprecated_secret_runtime_options_direct_to_update_policy(runtime):
+    entry = canonical_map()[0]
+    entry["secret"]["runtime_options"] = {runtime: {}}
+
+    with pytest.raises(AnsibleFilterError, match=r"runtime_options is deprecated; use .*update_policy"):
         service_common.service_common_infisical_normalize([entry])
 
 

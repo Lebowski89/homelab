@@ -261,6 +261,38 @@ def test_native_secret_materialization_remains_adapter_owned():
     assert "containers.podman" not in OPERATIONAL_TEXT
 
 
+def test_runtime_adapters_apply_canonical_secret_policy_without_logging_values():
+    docker_tasks = yaml.safe_load(DOCKER_SECRET_TASKS)
+    inspect = next(task for task in docker_tasks if task["name"] == "Prep - Secrets | Inspect exact Docker Swarm secrets")
+    reject_unmanaged = next(
+        task for task in docker_tasks if task["name"] == "Prep - Secrets | Reject unmanaged existing secrets before reconciliation"
+    )
+    materialize = next(task for task in docker_tasks if task["name"] == "Prep - Secrets | Create Docker Swarm secrets")
+    write_file = next(task for task in docker_tasks if task["name"] == "Prep - Secrets | Write secret files on deploy host")
+    enforce_file = next(task for task in docker_tasks if task["name"] == "Prep - Secrets | Enforce secret file ownership and mode")
+    verify_file = next(task for task in docker_tasks if task["name"] == "Prep - Secrets | Verify secret paths exist and are files")
+
+    assert inspect["loop"] == "{{ docker_services_docker_secret_items }}"
+    assert docker_tasks.index(reject_unmanaged) < docker_tasks.index(materialize)
+    assert "docker_services_secret_policy" in " ".join(materialize["when"])
+    assert materialize["community.docker.docker_secret"]["force"] is False
+    assert "docker_services_secret_policy" in write_file["ansible.builtin.copy"]["force"]
+    assert docker_tasks.index(write_file) < docker_tasks.index(enforce_file) < docker_tasks.index(verify_file)
+    assert enforce_file["ansible.builtin.file"]["state"] == "file"
+    for task in (inspect, reject_unmanaged, materialize, write_file, enforce_file, verify_file):
+        assert task["no_log"] is True
+        assert task["diff"] is False
+
+    podman_materialize = yaml.safe_load(PODMAN_SECRET_TASKS)[0]
+    assert podman_materialize["no_log"] is True
+    assert podman_materialize["diff"] is False
+    assert "podman_secret_policy" in podman_materialize["containers.podman.podman_secret"]["force"]
+    assert "not ansible_check_mode" in PODMAN_MAIN
+    assert (
+        "selectattr('update_policy', 'equalto', 'reconcile')" in Path("ansible/roles/podman_services/tasks/sub_tasks/image.yml").read_text()
+    )
+
+
 def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
     tasks = yaml.safe_load(COMMON_INFISICAL_TASKS)
     reset = next(task for task in tasks if "Reset all per-service outputs" in task["name"])

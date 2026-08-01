@@ -23,7 +23,6 @@ traefik:
     UMASK: "022"
     CF_DNS_API_TOKEN_FILE: /run/secrets/cloudflare_api_secret
   infisical:
-    fail_on_empty: true
     secrets_map:
       - var: cloudflare_api
         path: "/Cloudflare"
