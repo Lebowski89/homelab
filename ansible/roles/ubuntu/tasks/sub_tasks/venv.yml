@@ -8,15 +8,66 @@
     group: "{{ ubuntu_ansible_group | default(ansible_user) }}"
     mode: "0755"
 
-- name: Create Python virtualenv
+- name: Determine controller Python ABI directory
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - >-
+        import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")
+  register: ubuntu_controller_python_abi
+  changed_when: false
+  check_mode: false
+
+- name: Check existing Ansible virtualenv interpreter
+  ansible.builtin.stat:
+    path: "{{ ubuntu_ansible_venv_path }}/bin/python"
+  register: ubuntu_ansible_venv_python
+
+- name: Check matching Ansible virtualenv site-packages
+  ansible.builtin.stat:
+    path: >-
+      {{ ubuntu_ansible_venv_path }}/lib/{{ ubuntu_controller_python_abi.stdout | trim }}/site-packages
+  register: ubuntu_ansible_venv_site_packages
+
+- name: Probe existing Ansible virtualenv interpreter
+  when: ubuntu_ansible_venv_python.stat.exists
+  ansible.builtin.command:
+    argv:
+      - "{{ ubuntu_ansible_venv_path }}/bin/python"
+      - -c
+      - >-
+        import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")
+  register: ubuntu_ansible_venv_python_probe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Recreate Ansible virtualenv after Python ABI drift
+  when:
+    - ubuntu_ansible_venv_python.stat.exists
+    - >-
+      not ubuntu_ansible_venv_site_packages.stat.exists
+      or ubuntu_ansible_venv_python_probe.rc != 0
+      or ubuntu_ansible_venv_python_probe.stdout | trim != ubuntu_controller_python_abi.stdout | trim
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - venv
+      - --clear
+      - "{{ ubuntu_ansible_venv_path }}"
+  changed_when: true
+
+- name: Create missing Ansible virtualenv
+  when: not ubuntu_ansible_venv_python.stat.exists
   ansible.builtin.command:
     argv:
       - python3
       - -m
       - venv
       - "{{ ubuntu_ansible_venv_path }}"
-  args:
-    creates: "{{ ubuntu_ansible_venv_path }}/bin/python"
+  changed_when: true
 
 - name: Upgrade pip tooling in virtualenv
   ansible.builtin.pip:
