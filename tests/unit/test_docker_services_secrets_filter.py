@@ -282,16 +282,14 @@ def _run_standalone_secret_fixture(
                         "docker_services_stack_name": "synthetic",
                         "docker_services_secrets_host_effective": "localhost",
                         "docker_services_common_action": "update",
-                        "container_host_puid": str(os.getuid()),
-                        "container_host_pgid": str(os.getgid()),
+                        "container_host_puid": "{{ omit }}",
+                        "container_host_pgid": "{{ omit }}",
                         "docker_services_docker_secret_items": [
                             {
                                 "name": "synthetic_secret",
                                 "var": "synthetic_secret_value",
                                 "value": desired_value,
                                 "update_policy": update_policy,
-                                "uid": str(os.getuid()),
-                                "gid": str(os.getgid()),
                                 "mode": "0600",
                             }
                         ],
