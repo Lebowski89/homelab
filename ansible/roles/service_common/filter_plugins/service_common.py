@@ -80,34 +80,17 @@ def _absolute_target(value: Any, *, name: str, default: str) -> str:
     return target
 
 
-def _podman_options(value: Any, *, name: str) -> dict[str, bool]:
-    options = _mapping(value, name=name)
-    unsupported = set(options) - {"immutable", "replace"}
-    if unsupported:
-        raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(sorted(unsupported))}")
-    result = {
-        "immutable": _strict_bool(options.get("immutable", False), name=f"{name}.immutable"),
-        "replace": _strict_bool(options.get("replace", False), name=f"{name}.replace"),
-    }
-    if result["immutable"] and result["replace"]:
-        raise AnsibleFilterError(f"{name} cannot set both immutable and replace to true")
-    return result
-
-
-def _runtime_options(value: Any, *, name: str) -> dict[str, Any]:
-    options = _mapping(value, name=name)
-    unsupported = set(options) - {"podman"}
-    if unsupported:
-        raise AnsibleFilterError(f"{name} contains unsupported runtimes: {', '.join(sorted(unsupported))}")
-    result: dict[str, Any] = {}
-    if "podman" in options:
-        result["podman"] = _podman_options(options["podman"], name=f"{name}.podman")
-    return result
+def _secret_update_policy(value: Any, *, name: str) -> str:
+    if not isinstance(value, str) or value not in {"preserve", "reconcile"}:
+        raise AnsibleFilterError(f'{name} must be exactly "preserve" or "reconcile"')
+    return value
 
 
 def _canonical_secret(value: Any, *, var: str, name: str) -> dict[str, Any]:
     secret = _mapping(value, name=name)
-    unsupported = set(secret) - {"name", "target", "uid", "gid", "mode", "runtime_options"}
+    if "runtime_options" in secret:
+        raise AnsibleFilterError(f"{name}.runtime_options is deprecated; use {name}.update_policy")
+    unsupported = set(secret) - {"name", "target", "uid", "gid", "mode", "update_policy"}
     if unsupported:
         raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(sorted(unsupported))}")
     resource_name = _resource_name(secret.get("name"), name=f"{name}.name")
@@ -119,7 +102,10 @@ def _canonical_secret(value: Any, *, var: str, name: str) -> dict[str, Any]:
             name=f"{name}.target",
             default=f"/run/secrets/{resource_name}",
         ),
-        "runtime_options": _runtime_options(secret.get("runtime_options", {}), name=f"{name}.runtime_options"),
+        "update_policy": _secret_update_policy(
+            secret.get("update_policy", "preserve"),
+            name=f"{name}.update_policy",
+        ),
         "origins": ["canonical"],
     }
     for field, converter in (("uid", _numeric_id), ("gid", _numeric_id), ("mode", _mode)):
@@ -499,7 +485,7 @@ def service_common_infisical_normalize(
         list of ``secret_declarations`` unique by runtime resource name, and
         normalized ``fail_on_empty``. Secret declarations include their source
         variable, absolute target, optional numeric UID/GID and quoted mode,
-        Podman policy, and canonical origin metadata.
+        update policy and canonical origin metadata.
 
     Raises:
         AnsibleFilterError: If lookup or secret fields have invalid shapes,

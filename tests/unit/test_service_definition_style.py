@@ -11,7 +11,7 @@ CANONICAL_SECTIONS = (
     ("image", "hostname", "container_name", "user", "group", "working_dir", "entrypoint", "command"),
     ("environment", "env_file", "infisical", "secrets", "swarm_configs", "configs", "swarm_env_templates", "settings"),
     ("paths_vault", "application_prepare", "prep"),
-    ("depends_on", "network", "named_networks", "ports", "expose", "extra_hosts", "dns"),
+    ("depends_on", "named_networks", "ports", "expose", "extra_hosts", "dns"),
     ("paths", "copies", "templates", "named_volumes", "volumes", "tmpfs"),
     (
         "devices",

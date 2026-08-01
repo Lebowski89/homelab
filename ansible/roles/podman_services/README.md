@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/29 |
+| Readme update        | 2026/08/02 |
 
 
 
@@ -56,6 +56,7 @@
 | Podman services ¦ Build runtime-neutral application context | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Validate application preparation | ansible.builtin.include_role | False |  |
 | Podman services ¦ Snapshot reset application outputs | ansible.builtin.set_fact | False |  |
+| Podman services ¦ Check deployed service unit before recreate preparation | ansible.builtin.command | True |  |
 | Podman services ¦ Stop deployed service before recreate preparation | ansible.builtin.systemd_service | True |  |
 | Podman services ¦ Generate runtime-neutral application secrets | ansible.builtin.include_role | True |  |
 | Podman services ¦ Build effective current-service secret inputs | ansible.builtin.set_fact | False |  |
@@ -71,10 +72,10 @@
 | Podman services ¦ Include changed network tasks | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Include service lifecycle tasks | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Include Traefik tasks | ansible.builtin.include_role | True |  |
-| Podman services ¦ Include removal tasks | ansible.builtin.include_tasks | False |  |
+| Podman services ¦ Include removal tasks | ansible.builtin.include_tasks | True |  |
 | Podman services ¦ Remove runtime-neutral integrations | ansible.builtin.include_role | True |  |
 | Podman services ¦ Include drift tasks | ansible.builtin.include_tasks | False |  |
-| Podman services ¦ Flush removal daemon-reload handlers | ansible.builtin.meta | False |  |
+| Podman services ¦ Include removal handler flush | ansible.builtin.include_tasks | True |  |
 
 #### File: tasks/sub_tasks/drift.yml
 
@@ -84,6 +85,12 @@
 | Drift ¦ Classify image reference drift | ansible.builtin.set_fact | True |  |
 | Drift ¦ Report Podman image reference drift | ansible.builtin.debug | True |  |
 | Drift ¦ Report no Podman image reference drift | ansible.builtin.debug | True |  |
+
+#### File: tasks/sub_tasks/flush_remove_handlers.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Podman services ¦ Flush removal daemon-reload handlers | ansible.builtin.meta | False |  |
 
 #### File: tasks/sub_tasks/image.yml
 
@@ -121,10 +128,7 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
-| Network ¦ Stop container before changed dedicated network lifecycle | ansible.builtin.systemd_service | True |  |
-| Network ¦ Stop generated dedicated network after changed lifecycle | ansible.builtin.systemd_service | True |  |
-| Network ¦ Check changed dedicated network still exists | ansible.builtin.command | True |  |
-| Network ¦ Remove changed dedicated network if still present | ansible.builtin.command | True |  |
+| Network ¦ Report retained managed network definition change | ansible.builtin.debug | True |  |
 
 #### File: tasks/sub_tasks/prepare.yml
 
@@ -142,9 +146,9 @@
 | ---- | ------ | -------------- | -----|
 | Remove ¦ Check container unit load state for removal | ansible.builtin.command | True |  |
 | Remove ¦ Stop service for removal without deleting data | ansible.builtin.systemd_service | True |  |
-| Remove ¦ Stop generated network unit for removal | ansible.builtin.systemd_service | True |  |
-| Remove ¦ Check dedicated network still exists for removal | ansible.builtin.command | True |  |
-| Remove ¦ Remove dedicated network if still present | ansible.builtin.command | True |  |
+| Remove ¦ Stop managed network unit for removal | ansible.builtin.systemd_service | True |  |
+| Remove ¦ Check managed network still exists for removal | ansible.builtin.command | True |  |
+| Remove ¦ Remove managed network if still present | ansible.builtin.command | True |  |
 | Remove ¦ Remove generated Quadlet and environment files only | ansible.builtin.file | True |  |
 
 #### File: tasks/sub_tasks/secrets/materialize.yml

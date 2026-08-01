@@ -299,6 +299,59 @@ def test_valid_target_runtime_override_is_allowed():
     assert service_catalog.service_catalog_effective(services, "manager")[0]["runtime"] == "podman"
 
 
+def test_top_level_systemd_is_valid_only_for_effective_podman_services():
+    podman_cfg = {"runtime": "podman", "systemd": {"restart": "on-failure"}}
+    docker_cfg = {"runtime": "docker", "systemd": {"restart": "on-failure"}}
+
+    assert service_catalog.service_catalog_effective({"app": podman_cfg}, "manager")[0]["runtime"] == "podman"
+    assert service_catalog.service_catalog_merge_target(podman_cfg)["systemd"] == {"restart": "on-failure"}
+    with pytest.raises(AnsibleFilterError, match=r"Service 'app'.*valid only with runtime: podman.*runtime: docker"):
+        service_catalog.service_catalog_effective({"app": docker_cfg}, "manager")
+    with pytest.raises(AnsibleFilterError, match=r"effective service.*valid only with runtime: podman"):
+        service_catalog.service_catalog_merge_target(docker_cfg)
+
+
+def test_target_systemd_merges_recursively_without_mutating_source():
+    service = {
+        "runtime": "podman",
+        "systemd": {
+            "after": ["network-online.target"],
+            "restart": "on-failure",
+            "restart_sec": "15s",
+        },
+        "targets": {
+            "worker": {
+                "systemd": {
+                    "restart": "always",
+                }
+            }
+        },
+    }
+    original = deepcopy(service)
+
+    merged = service_catalog.service_catalog_merge_target(service, "worker")
+
+    assert merged["systemd"] == {
+        "after": ["network-online.target"],
+        "restart": "always",
+        "restart_sec": "15s",
+    }
+    assert service == original
+
+
+def test_target_switching_to_docker_cannot_inherit_podman_systemd_policy():
+    service = {
+        "runtime": "podman",
+        "systemd": {"restart": "on-failure"},
+        "targets": {"docker": {"runtime": "docker"}},
+    }
+
+    with pytest.raises(AnsibleFilterError, match=r"target 'docker'.*runtime: docker"):
+        service_catalog.service_catalog_effective({"app": service}, "manager")
+    with pytest.raises(AnsibleFilterError, match=r"target 'docker'.*runtime: docker"):
+        service_catalog.service_catalog_merge_target(service, "docker")
+
+
 @pytest.mark.parametrize("runtime", ["", None, 1, "containerd"])
 def test_invalid_target_runtime_override_is_rejected(runtime):
     services = {
@@ -404,3 +457,42 @@ def test_catalog_order_and_source_are_unchanged_by_runtime_validation():
 
     assert [item["name"] for item in items] == ["first", "second"]
     assert services == original
+
+
+def test_missing_and_null_targets_are_base_only_services():
+    missing = {"app": {"runtime": "docker"}}
+    explicit_null = {"app": {"runtime": "docker", "targets": None}}
+
+    assert service_catalog.service_catalog_effective(missing, "manager") == (
+        service_catalog.service_catalog_effective(explicit_null, "manager")
+    )
+
+
+def test_explicit_empty_targets_are_rejected_clearly():
+    services = {"empty_app": {"runtime": "docker", "targets": {}}}
+
+    with pytest.raises(
+        AnsibleFilterError,
+        match=r"empty_app\.targets must contain at least one target; omit targets for a base-only service",
+    ):
+        service_catalog.service_catalog_effective(services, "manager")
+
+
+def test_empty_targets_cannot_bypass_runtime_or_systemd_validation():
+    with pytest.raises(AnsibleFilterError, match=r"invalid\.runtime must be one of"):
+        service_catalog.service_catalog_effective(
+            {"invalid": {"runtime": "containerd", "targets": {}}},
+            "manager",
+        )
+
+    with pytest.raises(AnsibleFilterError, match=r"systemd.*valid only with runtime: podman"):
+        service_catalog.service_catalog_effective(
+            {
+                "invalid_systemd": {
+                    "runtime": "docker",
+                    "systemd": {"restart": "on-failure"},
+                    "targets": {},
+                }
+            },
+            "manager",
+        )

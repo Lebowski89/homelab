@@ -1,0 +1,5 @@
+---
+
+- name: Podman services | Flush removal daemon-reload handlers
+  ansible.builtin.meta: flush_handlers
+  tags: [remove]

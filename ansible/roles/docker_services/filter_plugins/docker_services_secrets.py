@@ -8,6 +8,7 @@ secret directory. Secret values are never accepted or returned here.
 
 from __future__ import annotations
 
+import json
 import posixpath
 import re
 from collections.abc import Iterable, Mapping
@@ -17,12 +18,98 @@ from typing import Any
 from ansible.errors import AnsibleFilterError
 
 _RESOURCE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+_SECRET_ACTIONS = {"deploy", "bootstrap", "update", "recreate", "remove"}
 
 
 def _resource_name(value: Any, *, name: str) -> str:
     if not isinstance(value, str) or not value.strip() or not _RESOURCE_NAME_RE.fullmatch(value.strip()):
         raise AnsibleFilterError(f"{name} must be a valid Docker secret resource name")
     return value.strip()
+
+
+def docker_services_secret_policy(secret: Any, action: Any, exists: Any = False) -> dict[str, bool]:
+    """Translate a canonical secret update policy into Docker task decisions.
+
+    Missing secrets are always materialized. Existing secrets are reconciled
+    only when their policy is ``reconcile`` and the action is ``update`` or
+    ``recreate``. The ``overwrite`` result is used for standalone secret files;
+    Swarm tasks use ``materialize`` to decide whether to invoke Docker's
+    content-aware secret module.
+
+    Args:
+        secret: Secret declaration containing an optional ``update_policy``.
+        action: One of the supported service lifecycle actions.
+        exists: Exact boolean indicating whether the runtime resource exists.
+
+    Returns:
+        Boolean ``materialize``, ``reconcile``, and ``overwrite`` decisions.
+
+    Raises:
+        AnsibleFilterError: If the declaration, policy, action, or existence
+            flag is invalid.
+
+    Note:
+        Inputs are not mutated and secret values are neither inspected nor
+        returned.
+    """
+    if not isinstance(secret, Mapping):
+        raise AnsibleFilterError("secret must be a mapping")
+    update_policy = secret.get("update_policy", "preserve")
+    if not isinstance(update_policy, str) or update_policy not in {"preserve", "reconcile"}:
+        raise AnsibleFilterError('secret.update_policy must be exactly "preserve" or "reconcile"')
+    if not isinstance(action, str) or action not in _SECRET_ACTIONS:
+        raise AnsibleFilterError("action must be deploy, bootstrap, update, recreate, or remove")
+    if not isinstance(exists, bool):
+        raise AnsibleFilterError("exists must be a boolean")
+    reconcile = update_policy == "reconcile" and action in {"update", "recreate"}
+    return {
+        "materialize": not exists or reconcile,
+        "reconcile": exists and reconcile,
+        "overwrite": reconcile,
+    }
+
+
+def docker_services_secret_inspection(result: Any, secret: Any) -> dict[str, Any]:
+    """Classify an exact Docker Swarm secret inspection without its value.
+
+    Args:
+        result: Result from ``docker secret inspect``.
+        secret: Current normalized declaration, used only for its resource name.
+
+    Returns:
+        The secret name plus ``exists`` and ``ansible_managed`` booleans.
+
+    Raises:
+        AnsibleFilterError: If inputs or successful inspection JSON are invalid.
+
+    Note:
+        Docker inspection does not return secret data. The returned mapping and
+        all errors contain resource metadata only.
+    """
+    if not isinstance(result, Mapping):
+        raise AnsibleFilterError("Docker secret inspection result must be a mapping")
+    if not isinstance(secret, Mapping):
+        raise AnsibleFilterError("secret must be a mapping")
+    name = _resource_name(secret.get("name"), name="secret.name")
+    try:
+        rc = int(result.get("rc", 1))
+    except (TypeError, ValueError) as exc:
+        raise AnsibleFilterError(f"Docker secret inspection for {name!r} has an invalid return code") from exc
+    if rc != 0:
+        return {"name": name, "exists": False, "ansible_managed": False}
+    try:
+        payload = json.loads(result.get("stdout", ""))
+    except (TypeError, json.JSONDecodeError) as exc:
+        raise AnsibleFilterError(f"Docker secret inspection for {name!r} did not return valid JSON") from exc
+    if not isinstance(payload, list) or len(payload) != 1 or not isinstance(payload[0], Mapping):
+        raise AnsibleFilterError(f"Docker secret inspection for {name!r} did not return one secret")
+    spec = payload[0].get("Spec", {})
+    if not isinstance(spec, Mapping):
+        raise AnsibleFilterError(f"Docker secret inspection for {name!r} has invalid metadata")
+    labels = spec.get("Labels") or {}
+    if not isinstance(labels, Mapping):
+        raise AnsibleFilterError(f"Docker secret inspection for {name!r} has invalid labels")
+    return {"name": name, "exists": True, "ansible_managed": "ansible_key" in labels}
 
 
 def _entries(value: Any, *, name: str) -> list[Any]:
@@ -188,10 +275,12 @@ class FilterModule:
         """Return the Jinja filters exposed by this plugin.
 
         Returns:
-            A mapping exposing ``docker_services_secret_attachments`` and
-            ``docker_services_secret_mounts``.
+            A mapping exposing Docker secret policy, inspection, attachment,
+            and standalone mount filters.
         """
         return {
+            "docker_services_secret_policy": docker_services_secret_policy,
+            "docker_services_secret_inspection": docker_services_secret_inspection,
             "docker_services_secret_attachments": docker_services_secret_attachments,
             "docker_services_secret_mounts": docker_services_secret_mounts,
         }

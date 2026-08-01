@@ -1,3 +1,4 @@
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -10,6 +11,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 UBUNTU_ROLE = REPO_ROOT / "ansible/roles/ubuntu"
 MAIN_TASKS = yaml.safe_load((UBUNTU_ROLE / "tasks/main.yml").read_text())
 NETPLAN_TASKS = yaml.safe_load((UBUNTU_ROLE / "tasks/sub_tasks/netplan.yml").read_text())
+VENV_TASKS = yaml.safe_load((UBUNTU_ROLE / "tasks/sub_tasks/venv.yml").read_text())
+VENV_FILTER_PATH = UBUNTU_ROLE / "filter_plugins/ubuntu_venv.py"
+VENV_FILTER_SPEC = importlib.util.spec_from_file_location("ubuntu_venv", VENV_FILTER_PATH)
+ubuntu_venv = importlib.util.module_from_spec(VENV_FILTER_SPEC)
+assert VENV_FILTER_SPEC.loader is not None
+VENV_FILTER_SPEC.loader.exec_module(ubuntu_venv)
 NETPLAN_TEMPLATE_PATH = UBUNTU_ROLE / "templates/netplan-config.yaml.j2"
 NETPLAN_TEMPLATE = NETPLAN_TEMPLATE_PATH.read_text()
 ANSIBLE_BOOL = FilterModule().filters()["bool"]
@@ -243,3 +250,127 @@ def test_opentofu_inventory_tag_does_not_exclude_supported_vm(virtualization_typ
         "ubuntu_netplan",
     }
     assert set(task["tags"]) == {"ubuntu", "ubuntu_netplan"}
+
+
+def test_venv_detects_python_abi_drift_before_mutating_the_environment():
+    determine = task_named(VENV_TASKS, "Determine controller Python ABI directory")
+    interpreter = task_named(VENV_TASKS, "Check existing Ansible virtualenv interpreter")
+    site_packages = task_named(VENV_TASKS, "Check matching Ansible virtualenv site-packages")
+    probe = task_named(VENV_TASKS, "Probe existing Ansible virtualenv interpreter")
+    recreate = task_named(VENV_TASKS, "Recreate Ansible virtualenv after Python ABI drift")
+
+    assert (
+        VENV_TASKS.index(determine)
+        < VENV_TASKS.index(interpreter)
+        < VENV_TASKS.index(site_packages)
+        < VENV_TASKS.index(probe)
+        < VENV_TASKS.index(recreate)
+    )
+    assert determine["changed_when"] is False
+    assert determine["check_mode"] is False
+    assert site_packages["ansible.builtin.stat"]["path"] == (
+        "{{ ubuntu_ansible_venv_path }}/lib/{{ ubuntu_controller_python_abi.stdout | trim }}/site-packages"
+    )
+    assert probe["changed_when"] is False
+    assert probe["failed_when"] is False
+    assert probe["check_mode"] is False
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        ({"python_exists": False, "controller_abi": "python3.14"}, "create"),
+        (
+            {
+                "python_exists": True,
+                "site_packages_exists": True,
+                "probe_rc": 0,
+                "probe_abi": "python3.14",
+                "controller_abi": "python3.14",
+            },
+            "preserve",
+        ),
+        (
+            {
+                "python_exists": True,
+                "site_packages_exists": True,
+                "probe_rc": 126,
+                "probe_abi": "",
+                "controller_abi": "python3.14",
+            },
+            "recreate",
+        ),
+        (
+            {
+                "python_exists": True,
+                "site_packages_exists": False,
+                "probe_rc": 0,
+                "probe_abi": "python3.14",
+                "controller_abi": "python3.14",
+            },
+            "recreate",
+        ),
+        (
+            {
+                "python_exists": True,
+                "site_packages_exists": True,
+                "probe_rc": 0,
+                "probe_abi": "python3.13",
+                "controller_abi": "python3.14",
+            },
+            "recreate",
+        ),
+    ],
+)
+def test_venv_recovery_decision_covers_missing_compatible_and_drifted_states(status, expected):
+    original = status.copy()
+
+    assert ubuntu_venv.ubuntu_venv_recovery_action(status) == expected
+    assert status == original
+
+
+def test_venv_tasks_consume_recovery_decision_without_check_mode_mutation(tmp_path):
+    recreate = task_named(VENV_TASKS, "Recreate Ansible virtualenv after Python ABI drift")
+    create = task_named(VENV_TASKS, "Create missing Ansible virtualenv")
+    pip = task_named(VENV_TASKS, "Upgrade pip tooling in virtualenv")
+    fixture = tmp_path / "synthetic-venv"
+    fixture.mkdir()
+    marker = fixture / "preserved.txt"
+    marker.write_text("synthetic fixture")
+    before = {path.name: path.read_bytes() for path in fixture.iterdir()}
+
+    action = ubuntu_venv.ubuntu_venv_recovery_action(
+        {
+            "python_exists": True,
+            "site_packages_exists": False,
+            "probe_rc": 0,
+            "probe_abi": "python3.14",
+            "controller_abi": "python3.14",
+        }
+    )
+
+    assert action == "recreate"
+    assert {path.name: path.read_bytes() for path in fixture.iterdir()} == before
+    assert recreate["when"][0] == "not ansible_check_mode"
+    assert create["when"][0] == "not ansible_check_mode"
+    assert "ubuntu_venv_recovery_action" in recreate["when"][1]
+    assert "ubuntu_venv_recovery_action" in create["when"][1]
+    assert recreate["ansible.builtin.command"]["argv"] == [
+        "python3",
+        "-m",
+        "venv",
+        "--clear",
+        "{{ ubuntu_ansible_venv_path }}",
+    ]
+    assert create["ansible.builtin.command"]["argv"] == [
+        "python3",
+        "-m",
+        "venv",
+        "{{ ubuntu_ansible_venv_path }}",
+    ]
+    assert pip["ansible.builtin.pip"]["name"] == [
+        "pip==26.1.2",
+        "setuptools==83.0.0",
+        "wheel==0.47.0",
+    ]
+    assert VENV_TASKS.index(recreate) < VENV_TASKS.index(create) < VENV_TASKS.index(pip)

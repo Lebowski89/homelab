@@ -12,6 +12,7 @@
 - name: Prep | Render network Quadlet
   when:
     - podman_services_service.network is mapping
+    - not podman_services_service.network.external | bool
     - podman_services_state != 'remove'
   ansible.builtin.template:
     src: network.network.j2

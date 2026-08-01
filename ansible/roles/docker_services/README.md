@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/29 |
+| Readme update        | 2026/08/02 |
 
 
 
@@ -457,12 +457,17 @@
 | Prep - Secrets ¦ Resolve effective secrets host | ansible.builtin.set_fact | False |
 | Prep - Secrets ¦ Build desired secret items from effective declarations | ansible.builtin.set_fact | False |
 | Prep - Secrets ¦ Reject empty secret values before materialization | ansible.builtin.assert | False |
-| Prep - Secrets ¦ Inspect immutable Docker Swarm secrets | ansible.builtin.command | True |
-| Prep - Secrets ¦ Resolve existing immutable Docker Swarm secrets | ansible.builtin.set_fact | False |
+| Prep - Secrets ¦ Inspect exact Docker Swarm secrets | ansible.builtin.command | True |
+| Prep - Secrets ¦ Classify exact Docker Swarm secret inspections | ansible.builtin.set_fact | False |
+| Prep - Secrets ¦ Resolve existing Docker Swarm secrets | ansible.builtin.set_fact | False |
+| Prep - Secrets ¦ Reject unmanaged existing secrets before reconciliation | ansible.builtin.assert | True |
 | Prep - Secrets ¦ Create Docker Swarm secrets | community.docker.docker_secret | True |
 | Prep - Secrets ¦ Ensure secrets directory exists on deploy host | ansible.builtin.file | True |
-| Prep - Secrets ¦ Remove secret path if it exists but is a directory | ansible.builtin.file | True |
+| Prep - Secrets ¦ Inspect standalone secret paths | ansible.builtin.stat | True |
+| Prep - Secrets ¦ Remove incompatible standalone secret paths | ansible.builtin.file | True |
+| Prep - Secrets ¦ Predict file creation after incompatible path repair | ansible.builtin.debug | True |
 | Prep - Secrets ¦ Write secret files on deploy host | ansible.builtin.copy | True |
+| Prep - Secrets ¦ Enforce secret file ownership and mode | ansible.builtin.file | True |
 | Prep - Secrets ¦ Verify secret paths exist and are files | ansible.builtin.stat | True |
 | Prep - Secrets ¦ Fail if any secret path is not a file | ansible.builtin.assert | True |
 

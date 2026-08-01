@@ -17,7 +17,6 @@ adminer:
   # ENVIRONMENT/SECRETS
   ################################
   infisical:
-    fail_on_empty: true
     secrets_map:
       - var: cloudflare_zone
         path: /Cloudflare

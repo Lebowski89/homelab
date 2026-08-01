@@ -61,10 +61,27 @@
 # RUNTIME CLEANUP
 ################################
 
+- name: Podman services | Check deployed service unit before recreate preparation
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'recreate'
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - "{{ podman_services_unit_name }}"
+      - --property=LoadState
+      - --value
+  register: podman_services_recreate_unit_load_state
+  changed_when: false
+  failed_when: false
+  tags: [recreate]
+
 - name: Podman services | Stop deployed service before recreate preparation
   when:
     - not ansible_check_mode
     - podman_services_state == 'recreate'
+    - podman_services_recreate_unit_load_state.stdout | trim != 'not-found'
   ansible.builtin.systemd_service:
     name: "{{ podman_services_unit_name }}"
     state: stopped
@@ -308,6 +325,7 @@
 ################################
 
 - name: Podman services | Include removal tasks
+  when: podman_services_common_action == 'remove'
   ansible.builtin.include_tasks:
     file: sub_tasks/remove.yml
     apply:
@@ -315,7 +333,9 @@
   tags: [remove]
 
 - name: Podman services | Remove runtime-neutral integrations
-  when: podman_services_service.traefik.enable | default(false) | bool
+  when:
+    - podman_services_common_action == 'remove'
+    - podman_services_service.traefik.enable | default(false) | bool
   ansible.builtin.include_role:
     name: service_common
     tasks_from: remove_integrations
@@ -342,6 +362,10 @@
       tags: [drift]
   tags: [drift]
 
-- name: Podman services | Flush removal daemon-reload handlers
-  ansible.builtin.meta: flush_handlers
+- name: Podman services | Include removal handler flush
+  when: podman_services_common_action == 'remove'
+  ansible.builtin.include_tasks:
+    file: sub_tasks/flush_remove_handlers.yml
+    apply:
+      tags: [remove]
   tags: [remove]

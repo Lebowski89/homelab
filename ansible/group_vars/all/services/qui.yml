@@ -24,7 +24,6 @@ qui:
   env_file:
     - /opt/stacks/qui.env
   infisical:
-    fail_on_empty: true
     secrets_map:
       - var: cloudflare_zone
         path: /Cloudflare

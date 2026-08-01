@@ -1,5 +1,9 @@
 # Service runtime refactor
 
+The complete author-facing schema lives in the
+[service-definition option reference](../ansible/group_vars/all/services/README.md);
+this document explains ownership and architecture.
+
 ## Runtime-neutral architecture
 
 Service orchestration now has five responsibility boundaries:
@@ -37,7 +41,7 @@ Docker compatibility aliases flow in one direction from this canonical contract:
 
 The common role never derives target topology from Docker fields. Docker passes `docker_services_fs_hosts_effective`; Podman passes its selected inventory host after translating `host_paths` to the existing portable `paths` preparation input.
 
-The focused Infisical entry point accepts `service_common_infisical_secrets_map`, `service_common_infisical_lookup_params`, `service_common_infisical_fail_on_empty`, and `service_common_environment`. For every service it resets and separately returns `service_common_infisical_config` (normalized lookup declarations and policy), `service_common_infisical_values` (all fetched values keyed by `var`), value-free `service_common_secret_declarations`, and the final scalar `service_common_resolved_environment`. Lookup-only entries have no `secret` mapping and can feed environments or shared configuration without creating a runtime secret. An Infisical lookup may declare an optional non-empty `check_mode_value`; check mode uses that declaration-owned stand-in when present and otherwise uses `__CHECK_MODE_REDACTED_INFISICAL_<var>__`. This metadata is never sent to Infisical and does not affect live resolution. Check mode validates the complete declaration and environment graph without lookup or materialization, so downstream configuration shape remains testable.
+The focused Infisical entry point accepts `service_common_infisical_secrets_map`, `service_common_infisical_lookup_params`, `service_common_infisical_fail_on_empty`, and `service_common_environment`. For every service it resets and separately returns `service_common_infisical_config` (normalized lookup declarations and policy), `service_common_infisical_values` (all fetched values keyed by `var`), value-free `service_common_secret_declarations`, and the final scalar `service_common_resolved_environment`. Lookup-only entries have no `secret` mapping and can feed environments or shared configuration without creating a runtime secret. `fail_on_empty` defaults to true, so missing or empty fetched values fail unless a service deliberately opts out with false. An Infisical lookup may declare an optional non-empty `check_mode_value` only when downstream validation needs a specific safe shape; check mode uses that stand-in when present and otherwise uses `__CHECK_MODE_REDACTED_INFISICAL_<var>__`. This metadata is never sent to Infisical and does not affect live resolution. Check mode validates the complete declaration and environment graph without lookup or materialization, so downstream configuration shape remains testable.
 
 The ordered dispatcher stores these outputs in `service_catalog_common_context` with the service name, optional target, runtime, dispatch host, normalized lookup configuration, resolved environment, complete lookup values, and value-free native-secret declarations. It resets and validates that context before every adapter invocation. The lookup may execute on the configured controller, but the resulting facts and context remain owned by the original dispatch host. A failed declaration, lookup, empty-value policy, or environment resolution stops routing before Docker cleanup, Podman rendering, or native-secret mutation.
 
@@ -47,11 +51,11 @@ Shared Traefik files use `<service-name>-dynamic.yml`. A successful render remov
 
 `docker_services` retains schema compatibility, deploy-host calculation, cleanup, Compose construction and filters, labels, ports, volumes, Docker secrets, Swarm configs, stack accumulation/deployment, and image drift.
 
-`podman_services` retains exact-image and UID/GID validation, dedicated-network validation, Podman secrets and replacement policy, images, Quadlet rendering, generated systemd units, lifecycle operations, and image drift.
+`podman_services` retains exact-image and UID/GID validation, dedicated-network validation, Podman secrets and canonical policy translation, images, Quadlet rendering, generated systemd units, lifecycle operations, and image drift.
 
 Drift email remains Docker-owned because it consumes the Docker image-drift accumulator and imports the Docker notification task. Its `docker_services_drift_email_*` variables, including the existing Docker-specific subject, are deliberately not migrated in this phase.
 
-Infisical declaration validation, retrieval, empty-value enforcement, and canonical environment resolution are exclusively common-owned. Runtime adapters do not invoke the Infisical entry point and do not receive lookup paths, projects, environments, or credentials. Docker snapshots the context values, environment, and declarations it needs, then owns Docker secret selection, Swarm secrets, and protected standalone secret files. Podman snapshots the same common interfaces, then owns `containers.podman.podman_secret`, secret replacement policy, mount metadata, and Quadlet rendering. Both adapters keep native-secret materialization and permanent runtime state outside `service_common` and `service_prepare`.
+Infisical declaration validation, retrieval, empty-value enforcement, and canonical environment resolution are exclusively common-owned. Runtime adapters do not invoke the Infisical entry point and do not receive lookup paths, projects, environments, or credentials. Docker snapshots the context values, environment, and declarations it needs, then owns Docker secret selection, Swarm secrets, and protected standalone secret files. Podman snapshots the same common interfaces, then owns `containers.podman.podman_secret`, secret policy translation, mount metadata, and Quadlet rendering. Both adapters keep native-secret materialization and permanent runtime state outside `service_common` and `service_prepare`.
 
 PostgreSQL database preparation is runtime-neutral. After common Infisical resolution and before runtime rendering or lifecycle, `service_common` validates the canonical `postgres` declaration and idempotently ensures each declared database exists with `community.postgresql.postgresql_db state=present`. Database operations are delegated to `service_common_controller_host` and use the declared `user_var` and `password_var` from `service_common_infisical_values`. An explicit `host` bypasses inventory lookup; otherwise `host_inventory` defaults to the controller and resolves `local_ip` from only that inventory host. The former Docker-only Infisical `HOST` and `PORT` lookups were intentionally removed: addressing now comes from `postgres.host`, or `postgres.host_inventory` and the selected inventory host `local_ip`, while `postgres.port` defaults to `5432`. Docker and Podman secret materialization remain adapter-owned and are not part of database preparation.
 
@@ -72,8 +76,8 @@ Each selected service declares an optional `application_prepare.handler`. The ha
 | Application | Application-owned work | Runtime-owned compatibility boundary |
 | --- | --- | --- |
 | qBittorrent | Validates the downloads/seeds password contract and derives the PBKDF2 template value before common templates. | None; the hash task is runtime-neutral and is available to either adapter. |
-| Vaultwarden | Reads or creates the persistent Argon2 admin token and returns its value separately from its canonical declaration. | Docker or Podman materializes the resulting immutable native secret. |
-| Authelia | Validates the password/storage-key contract, generates session/JWT values, and derives the user hash with a selected-runtime temporary container. Values and value-free declarations remain separate. | Docker or Podman materializes the generated immutable native secrets. The canonical Infisical storage-key declaration remains separate and is materialized once through the normal adapter path. |
+| Vaultwarden | Reads or creates the persistent Argon2 admin token and returns its value separately from its canonical declaration. | Docker or Podman materializes the resulting preserve-policy native secret. |
+| Authelia | Validates the password/storage-key contract, generates session/JWT values, and derives the user hash with a selected-runtime temporary container. Values and value-free declarations remain separate. | Docker or Podman materializes the generated preserve-policy native secrets. The canonical Infisical storage-key declaration remains separate and is materialized once through the normal adapter path. |
 | Plex | Validates the explicit bootstrap declaration; token, claim, and preference handling is application-owned. | `media_nfs` is a canonical managed Compose volume. Plex API/login/claim work runs only with the explicit `bootstrap` operation. This workflow remains Docker-only. |
 | Bazarr | Validates all required and paired credentials before cleanup, starts a selected-runtime temporary container only when `config.yaml` is absent, and mutates the configuration after common paths exist. | The Docker or Podman executor guarantees temporary-container cleanup; deployed lifecycle remains adapter-owned. |
 | NZBHydra2 | Validates required and optional credential pairs before cleanup, starts a selected-runtime temporary container only when `nzbhydra.yml` is absent, mutates the generated YAML, and verifies the final schema. | The Docker or Podman executor guarantees temporary-container cleanup; deployed lifecycle remains adapter-owned. |
@@ -102,7 +106,6 @@ A materialized secret is declared next to its Infisical lookup:
 
 ```yaml
 infisical:
-  fail_on_empty: true
   secrets_map:
     - var: app_password
       path: /App
@@ -113,24 +116,30 @@ infisical:
         uid: "1000"
         gid: "1000"
         mode: "0400"
-        runtime_options:
-          podman:
-            immutable: false
-            replace: true
+        update_policy: reconcile
     - var: template_only_token
       path: /App
       name: TEMPLATE_TOKEN
 ```
 
-`secret.name` is a runtime resource name; `target` defaults to `/run/secrets/<name>` and must be absolute; UID/GID are numeric strings; and mode is a quoted four-digit octal string. Only strict `immutable` and `replace` booleans are accepted under `secret.runtime_options.podman`, and both cannot be true. Values are never copied into declaration metadata.
+`secret.name` is a runtime resource name; `target` defaults to `/run/secrets/<name>` and must be absolute; UID/GID are numeric strings; and mode is a quoted four-digit octal string. `update_policy` accepts exactly `preserve` or `reconcile` and defaults to `preserve`; deprecated secret-level `runtime_options` fail with migration guidance. Values are never copied into declaration metadata.
 
 Repository service definitions now use only canonical Infisical lookup declarations, typed environment references, and canonical value-free secret declarations. The runtime-specific `secrets_map[].docker_secret` and Podman lookup metadata, duplicated lookup/materialization declarations, and exact whole-value `__INFISICAL__:var` placeholder have been removed rather than retained as dormant compatibility paths. Unsupported legacy lookup fields fail validation. Existing Docker top-level `secrets` remains available only for runtime-generated or externally managed Docker secrets, and existing Docker `env_file` rendering is unchanged.
 
-`service_common` owns lookup and environment validation, lookup normalization, value retrieval, empty-value enforcement, and final scalar environment resolution. Docker owns `community.docker.docker_secret`, protected standalone files, and Compose/Swarm attachment. Podman owns `containers.podman.podman_secret`, replacement policy, and Quadlet `Secret=` lines.
+`service_common` owns lookup and environment validation, lookup normalization, value retrieval, empty-value enforcement, and canonical secret policy validation. Docker owns `community.docker.docker_secret`, protected standalone files, and Compose/Swarm attachment. Podman owns `containers.podman.podman_secret`, policy translation, and Quadlet `Secret=` lines.
 
-For Docker Swarm, canonical targets must be directly beneath `/run/secrets`; the adapter translates the absolute path to Swarm's filename target and uses long syntax when target or UID/GID/mode metadata requires it. Arbitrary canonical Swarm targets are rejected. Standalone Docker writes a protected host file and bind-mounts it at the canonical absolute target, applying canonical file ownership/mode when provided. Legacy Docker string attachments keep their previous render form.
+For Docker Swarm, canonical targets must be directly beneath `/run/secrets`; the adapter translates the absolute path to Swarm's filename target and uses long syntax when target or UID/GID/mode metadata requires it. `preserve` inspects the exact secret and creates it only when missing. `reconcile` does the same during deploy/bootstrap, while update/recreate invokes the module's content-aware replacement path for Ansible-managed secrets; unmanaged existing secrets are rejected rather than silently reported as reconciled. Swarm secret objects are replaced rather than mutated in place, and an in-use replacement failure is surfaced without logging the value. Standalone Docker creates missing protected files without overwriting them under `preserve`; `reconcile` overwrites only on update/recreate, while owner, group, mode, and file-type verification remain enforced. Legacy Docker string attachments keep their previous render form.
 
-Podman-only network and systemd lifecycle policy belongs under `runtime_options.podman`. Those options are ignored by Docker Compose. Changing `runtime` is a schema-level choice, not installation: the destination host must already have the selected runtime and supported version installed.
+Podman maps `preserve` to `force: false` and `skip_existing: true` for every action. It maps `reconcile` to `force: true` and `skip_existing: false` only during update/recreate. Because Podman cannot compare stored secret contents, this reconciliation recreates the native secret and relies on the existing failure-aware service restart path. Both adapters leave runtime-native secret removal under their existing adapter-owned remove behavior.
+
+`named_networks` is the canonical network location for both adapters. Podman
+currently accepts one entry: `external: false` is role-managed and
+`external: true` is attached without lifecycle ownership. Podman-only systemd
+policy uses the top-level `systemd` mapping and is rejected for an effective
+Docker service. Service-level `runtime_options.podman.network` and
+`runtime_options.podman.systemd` are retired. Secret-level runtime options are also retired; `secret.update_policy` is the single runtime-neutral lifecycle contract consumed by both adapters.
+Changing `runtime` is a schema-level choice, not installation: the destination
+host must already have the selected runtime and supported version installed.
 
 Static tests prove normalized portable-field equivalence and render structure; they do not prove live Docker/Podman behavioral parity. The n8n proof renders its trusted-address `host_ip` bind through both the Docker standalone and Podman adapters; Docker Swarm rejects `host_ip` explicitly. Swarm-only networks, configs, placement, replicas, application-specific preparation, and runtime installation remain adapter or operator concerns.
 
@@ -147,7 +156,7 @@ Phase 4A audited the refactor's compatibility paths against production tasks, re
 | Missing-runtime Docker default | **Remove now** | No implementation path remains. Catalog construction and target merging reject a missing base runtime; stale documentation was corrected. |
 | Exact `__INFISICAL__:var` environment placeholder | **Remove now** | No production or service-definition consumer remains. Typed `value_from.infisical` and `value_template` entries are canonical, while tests retain rejection/absence coverage. |
 | `secrets_map[].docker_secret`, `secrets_map[].podman_secret`, and old Podman lookup metadata | **Remove now** | Common declaration validation rejects these fields and no repository definition uses them. Canonical `secret` metadata remains runtime-neutral. |
-| Nested Podman service input and top-level Podman `network` | **Remove now** | Only transition tests used the old `container`, `env`, `host_paths`, legacy volume, and top-level network forms. The adapter now accepts the canonical service schema and `runtime_options.podman` policy only. |
+| Nested Podman service input and singular top-level Podman `network` | **Remove now** | Only transition tests used the old `container`, `env`, `host_paths`, legacy volume, and singular network forms. The adapter now accepts canonical `named_networks` and top-level `systemd`; secret lifecycle is expressed only through runtime-neutral `secret.update_policy`. |
 | Top-level `secrets` name attachments | **Retain intentionally** | These are not lookup metadata. Docker services and application preparation use them for generated or externally managed native secrets; Podman accepts only value-free names. |
 | Neutral-to-Docker `docker_services_*` host aliases | **Retain intentionally** | Docker adapter, standalone PostgreSQL role, drift email, stack accumulation, and current Swarm label contracts consume them. The aliases flow only from neutral orchestration inputs to Docker-prefixed compatibility facts. |
 | Literal Docker Swarm placement label values | **Retain intentionally** | Current service definitions and host label declarations use `docker_services_primary_manager`, `docker_services_plex_host`, and `docker_services_unraid_host`. Renaming them requires a node-label migration. |

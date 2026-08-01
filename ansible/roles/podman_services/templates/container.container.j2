@@ -10,7 +10,7 @@ After={{ after }}
 ContainerName={{ podman_service.unit_name }}
 Image={{ podman_service.image }}
 {% if podman_service.network %}
-Network={{ podman_service.network.name }}.network
+Network={{ podman_service.network.name }}{{ '' if podman_service.network.external else '.network' }}
 {% endif %}
 {% if podman_service.env | length > 0 %}
 EnvironmentFile={{ podman_services_quadlet_dir }}/{{ podman_service.unit_name }}.env

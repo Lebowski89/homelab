@@ -25,13 +25,12 @@
     name: "{{ podman_services_unit_name }}"
     state: stopped
   tags: [remove]
-
-
-- name: Remove | Stop generated network unit for removal
+- name: Remove | Stop managed network unit for removal
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
     - podman_services_service.network is mapping
+    - not podman_services_service.network.external | bool
   ansible.builtin.systemd_service:
     name: "{{ podman_services_service.network.name }}-network.service"
     state: stopped
@@ -41,12 +40,12 @@
     and (podman_services_remove_network_stop.msg | default('') is not search('not loaded|Could not find|not found'))
   tags: [remove]
 
-- name: Remove | Check dedicated network still exists for removal
+- name: Remove | Check managed network still exists for removal
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
     - podman_services_service.network is mapping
-    - podman_services_service.network.delete_on_stop | default(false) | bool
+    - not podman_services_service.network.external | bool
   ansible.builtin.command:
     argv: [podman, network, exists, "{{ podman_services_service.network.name }}"]
   register: podman_services_remove_network_exists
@@ -54,12 +53,12 @@
   failed_when: podman_services_remove_network_exists.rc not in [0, 1]
   tags: [remove]
 
-- name: Remove | Remove dedicated network if still present
+- name: Remove | Remove managed network if still present
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
     - podman_services_service.network is mapping
-    - podman_services_service.network.delete_on_stop | default(false) | bool
+    - not podman_services_service.network.external | bool
     - podman_services_remove_network_exists.rc == 0
   ansible.builtin.command:
     argv: [podman, network, rm, "{{ podman_services_service.network.name }}"]
@@ -80,6 +79,7 @@
       + (
         [podman_services_quadlet_dir ~ '/' ~ podman_services_service.network.name ~ '.network']
         if podman_services_service.network is mapping
+        and not (podman_services_service.network.external | bool)
         else []
       )
       + (

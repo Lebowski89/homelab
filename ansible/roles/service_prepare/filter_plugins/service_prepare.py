@@ -2,7 +2,8 @@
 
 The ``service_prepare`` role uses these filters to select the runtime-specific
 temporary-container task file, derive bounded collision-resistant container
-names, and extract explicitly prefixed values from preparation output.
+names, extract explicitly prefixed values from preparation output, and build
+value-free generated-secret declarations.
 """
 
 from __future__ import annotations
@@ -108,6 +109,42 @@ def service_prepare_extract_output(output: Any, prefix: Any) -> str:
     return ""
 
 
+def service_prepare_secret_declaration(var: Any, name: Any, update_policy: Any = "preserve") -> dict[str, Any]:
+    """Build one runtime-neutral generated-secret declaration.
+
+    Args:
+        var: Current-service value key used for adapter value lookup.
+        name: Runtime-native secret resource name and target filename.
+        update_policy: Exact canonical policy, ``preserve`` or ``reconcile``.
+
+    Returns:
+        A new value-free declaration using the canonical secret target and
+        origin metadata consumed by both runtime adapters.
+
+    Raises:
+        AnsibleFilterError: If either identity is empty or the update policy is
+            unsupported.
+
+    Note:
+        Secret values are neither accepted nor returned.
+    """
+    variable = var.strip() if isinstance(var, str) else ""
+    secret_name = name.strip() if isinstance(name, str) else ""
+    if not variable:
+        raise AnsibleFilterError("generated secret var must be a non-empty string")
+    if not secret_name:
+        raise AnsibleFilterError("generated secret name must be a non-empty string")
+    if not isinstance(update_policy, str) or update_policy not in {"preserve", "reconcile"}:
+        raise AnsibleFilterError('generated secret update_policy must be exactly "preserve" or "reconcile"')
+    return {
+        "var": variable,
+        "name": secret_name,
+        "target": f"/run/secrets/{secret_name}",
+        "origins": ["canonical"],
+        "update_policy": update_policy,
+    }
+
+
 class FilterModule:
     """Register application-preparation filters with Ansible."""
 
@@ -116,11 +153,13 @@ class FilterModule:
 
         Returns:
             A mapping exposing ``service_prepare_runtime_executor``,
-            ``service_prepare_temporary_name``, and
-            ``service_prepare_extract_output``.
+            ``service_prepare_temporary_name``,
+            ``service_prepare_extract_output``, and
+            ``service_prepare_secret_declaration``.
         """
         return {
             "service_prepare_runtime_executor": service_prepare_runtime_executor,
             "service_prepare_temporary_name": service_prepare_temporary_name,
             "service_prepare_extract_output": service_prepare_extract_output,
+            "service_prepare_secret_declaration": service_prepare_secret_declaration,
         }

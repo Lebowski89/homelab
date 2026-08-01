@@ -4,6 +4,3 @@ NetworkName={{ podman_service.network.name }}
 {% if podman_service.network.driver is defined %}
 Driver={{ podman_service.network.driver }}
 {% endif %}
-{% if podman_service.network.delete_on_stop | default(false) %}
-NetworkDeleteOnStop=true
-{% endif %}

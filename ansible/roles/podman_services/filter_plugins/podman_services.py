@@ -20,7 +20,9 @@ from ansible.errors import AnsibleFilterError
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RESOURCE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _USER_RE = re.compile(r"^[0-9]+:[0-9]+$")
+_VALID_NETWORK_DRIVERS = {"bridge", "ipvlan", "macvlan"}
 _VALID_PROTOCOLS = {"tcp", "udp"}
+_VALID_SECRET_UPDATE_POLICIES = {"preserve", "reconcile"}
 _VALID_VOLUME_TYPES = {"bind", "tmpfs", "volume"}
 
 
@@ -73,31 +75,39 @@ def podman_env_file_value(value: Any) -> str:
     return value
 
 
+def _secret_update_policy(secret: Mapping[str, Any], *, name: str) -> str:
+    update_policy = secret.get("update_policy", "preserve")
+    if not isinstance(update_policy, str) or update_policy not in _VALID_SECRET_UPDATE_POLICIES:
+        raise AnsibleFilterError(f'{name}.update_policy must be exactly "preserve" or "reconcile"')
+    return update_policy
+
+
 def podman_secret_policy(secret: Mapping[str, Any], state: str) -> dict[str, bool]:
     """Derive Podman secret module flags for the requested service action.
 
     Args:
-        secret: Normalized declaration containing an optional strict
-            boolean-like ``replace`` field.
-        state: Service action. Replacement is active only for ``update`` and
-            ``recreate``; other values preserve an existing secret.
+        secret: Normalized declaration containing the canonical
+            ``update_policy`` field.
+        state: Service action. Reconciliation is active only for ``update``
+            and ``recreate``; other actions preserve an existing secret.
 
     Returns:
         A mapping with complementary ``force`` and ``skip_existing`` flags.
 
     Raises:
-        AnsibleFilterError: If ``secret`` is not a mapping or ``replace`` is not
-            a supported boolean-like value.
+        AnsibleFilterError: If ``secret`` is not a mapping, the update policy is
+            invalid, or the action is unsupported.
 
     Note:
-        The declaration is not mutated, and this filter does not validate the
-        action name.
+        The declaration is not mutated.
     """
     if not isinstance(secret, Mapping):
         raise AnsibleFilterError("secret must be a mapping")
-    replace = _as_bool(secret.get("replace", False), name="secret.replace")
-    mutable_replace = state in {"update", "recreate"} and replace
-    return {"force": mutable_replace, "skip_existing": not mutable_replace}
+    update_policy = _secret_update_policy(secret, name="secret")
+    if state not in {"deploy", "bootstrap", "update", "recreate", "remove"}:
+        raise AnsibleFilterError("state must be deploy, bootstrap, update, recreate, or remove")
+    reconcile = update_policy == "reconcile" and state in {"update", "recreate"}
+    return {"force": reconcile, "skip_existing": not reconcile}
 
 
 def podman_secret_declarations(value: Any) -> list[dict[str, Any]]:
@@ -109,13 +119,12 @@ def podman_secret_declarations(value: Any) -> list[dict[str, Any]]:
 
     Returns:
         Copied declaration dictionaries containing validated ``name``, ``var``,
-        absolute ``target``, ``immutable``, and ``replace`` values, plus optional
-        numeric UID/GID strings and a quoted four-digit octal mode.
+        absolute ``target``, and canonical ``update_policy`` values, plus
+        optional numeric UID/GID strings and a quoted four-digit octal mode.
 
     Raises:
         AnsibleFilterError: If collection/declaration shapes, names, variables,
-            targets, policy booleans, IDs, or modes are invalid, or if a secret
-            is both immutable and replaceable.
+            targets, update policies, IDs, modes, or fields are invalid.
 
     Note:
         The input declarations are not mutated.
@@ -125,6 +134,11 @@ def podman_secret_declarations(value: Any) -> list[dict[str, Any]]:
     for index, declaration_value in enumerate(declarations):
         item_name = f"podman secret declarations[{index}]"
         declaration = _as_mapping(declaration_value, name=item_name)
+        if "runtime_options" in declaration:
+            raise AnsibleFilterError(f"{item_name}.runtime_options is deprecated; use secret.update_policy")
+        unsupported = set(declaration) - {"name", "var", "target", "uid", "gid", "mode", "update_policy", "origins"}
+        if unsupported:
+            raise AnsibleFilterError(f"{item_name} contains unsupported fields: {', '.join(sorted(unsupported))}")
         secret = {
             "name": _resource_name(declaration.get("name"), name=f"{item_name}.name"),
             "var": _nonempty_string(declaration.get("var"), name=f"{item_name}.var"),
@@ -132,18 +146,7 @@ def podman_secret_declarations(value: Any) -> list[dict[str, Any]]:
         }
         if not posixpath.isabs(secret["target"]):
             raise AnsibleFilterError(f"{item_name}.target must be an absolute path")
-        runtime_options = _as_mapping(declaration.get("runtime_options", {}), name=f"{item_name}.runtime_options")
-        podman_options = _as_mapping(runtime_options.get("podman", {}), name=f"{item_name}.runtime_options.podman")
-        secret["immutable"] = _as_bool(
-            podman_options.get("immutable", False),
-            name=f"{item_name}.runtime_options.podman.immutable",
-        )
-        secret["replace"] = _as_bool(
-            podman_options.get("replace", False),
-            name=f"{item_name}.runtime_options.podman.replace",
-        )
-        if secret["immutable"] and secret["replace"]:
-            raise AnsibleFilterError(f"{item_name} cannot be both immutable and replaceable")
+        secret["update_policy"] = _secret_update_policy(declaration, name=item_name)
         for field in ("uid", "gid"):
             if field in declaration:
                 secret[field] = _numeric_id(declaration[field], name=f"{item_name}.{field}")
@@ -448,49 +451,90 @@ def _deploy(value: Any, *, name: str) -> dict[str, Any]:
 
 def _systemd(value: Any, *, name: str) -> dict[str, Any]:
     systemd = _as_mapping(value, name=name)
+    unsupported = set(systemd) - {"after", "restart", "restart_sec"}
+    if unsupported:
+        raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(sorted(unsupported))}")
     if "after" in systemd:
         after = systemd["after"]
         if not isinstance(after, list):
             raise AnsibleFilterError(f"{name}.after must be a list of non-empty unit names")
         systemd["after"] = [_nonempty_string(unit, name=f"{name}.after[{index}]") for index, unit in enumerate(after)]
+    for field in ("restart", "restart_sec"):
+        if field in systemd:
+            systemd[field] = _nonempty_string(systemd[field], name=f"{name}.{field}")
     return systemd
 
 
-def _podman_runtime_options(value: Any, *, name: str) -> dict[str, Any]:
+def _validate_service_runtime_options(
+    value: Any,
+    *,
+    name: str,
+    has_named_networks: bool,
+    has_systemd: bool,
+) -> None:
     options = _as_mapping(value, name=name)
     unsupported_runtimes = set(options) - {"podman", "docker"}
     if unsupported_runtimes:
         raise AnsibleFilterError(f"{name} contains unsupported runtimes: {', '.join(sorted(unsupported_runtimes))}")
     podman = _as_mapping(options.get("podman", {}), name=f"{name}.podman")
-    unsupported = set(podman) - {"network", "systemd"}
+    if "network" in podman and has_named_networks:
+        raise AnsibleFilterError(
+            f"{name}.podman.network and top-level named_networks cannot both be declared; "
+            "remove the retired runtime_options.podman.network form"
+        )
+    if "systemd" in podman and has_systemd:
+        raise AnsibleFilterError(
+            f"{name}.podman.systemd and top-level systemd cannot both be declared; remove the retired runtime_options.podman.systemd form"
+        )
+    retired = set(podman) & {"network", "systemd"}
+    if retired:
+        replacements = []
+        if "network" in retired:
+            replacements.append("move network to top-level named_networks")
+        if "systemd" in retired:
+            replacements.append("move systemd to top-level systemd")
+        raise AnsibleFilterError(
+            f"{name}.podman uses retired service-level fields: {', '.join(sorted(retired))}; " + "; ".join(replacements)
+        )
+    unsupported = set(podman)
     if unsupported:
         raise AnsibleFilterError(f"{name}.podman contains unsupported fields: {', '.join(sorted(unsupported))}")
-    result: dict[str, Any] = {}
-    if "network" in podman:
-        result["network"] = _network(podman["network"], name=f"{name}.podman.network")
-    if "systemd" in podman:
-        result["systemd"] = _systemd(podman["systemd"], name=f"{name}.podman.systemd")
+
+
+def _named_networks(value: Any, *, name: str) -> dict[str, Any] | None:
+    networks = _as_mapping(value, name=name)
+    if len(networks) > 1:
+        raise AnsibleFilterError(f"{name} supports exactly one attached network for Podman; got {len(networks)}")
+    if not networks:
+        return None
+
+    declared_name, raw_options = next(iter(networks.items()))
+    item_name = f"{name}.{declared_name}"
+    logical_name = _resource_name(declared_name, name=f"{name} key")
+    options = _as_mapping(raw_options, name=item_name)
+    unsupported = set(options) - {"driver", "external", "name"}
+    if unsupported:
+        raise AnsibleFilterError(f"{item_name} contains unsupported fields: {', '.join(sorted(unsupported))}")
+
+    external = _as_bool(options.get("external", False), name=f"{item_name}.external")
+    network_name = _resource_name(options.get("name", logical_name), name=f"{item_name}.name")
+    result: dict[str, Any] = {"name": network_name, "external": external}
+    if "driver" in options:
+        driver = _nonempty_string(options["driver"], name=f"{item_name}.driver").lower()
+        if driver not in _VALID_NETWORK_DRIVERS:
+            raise AnsibleFilterError(f"{item_name}.driver must be one of {sorted(_VALID_NETWORK_DRIVERS)}")
+        if external:
+            raise AnsibleFilterError(f"{item_name}.driver cannot be set when external is true; the external owner controls its driver")
+        result["driver"] = driver
     return result
-
-
-def _network(value: Any, *, name: str) -> dict[str, Any]:
-    network = _as_mapping(value, name=name)
-    network["name"] = _resource_name(network.get("name"), name=f"{name}.name")
-    network["delete_on_stop"] = _as_bool(network.get("delete_on_stop", False), name=f"{name}.delete_on_stop")
-    if not network["delete_on_stop"]:
-        raise AnsibleFilterError(
-            f"{name} is managed by podman_services and must be dedicated; "
-            "set network.delete_on_stop: true. External/shared networks are not managed yet."
-        )
-    return network
 
 
 def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any]:
     """Normalize one effective service into the Podman Quadlet model.
 
     Portable top-level fields are translated to the role's internal container,
-    environment, host-path, named-volume, integration, and runtime-option
-    mappings. Exact non-latest image tags, ``UID:GID`` users, port
+    environment, host-path, named-network, named-volume, integration, and
+    systemd mappings. Exact non-latest image tags, ``UID:GID`` users, port
     ranges/protocols, paths below ``/opt``, volume schemas, security values,
     health checks, single-instance deployment, and dedicated managed networks
     are validated. Value-free secret attachment names are de-duplicated in
@@ -504,8 +548,8 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
     Returns:
         A newly allocated mapping consumed by Podman preparation and Quadlet
         templates. It contains normalized ``container`` and ``env`` data,
-        ``host_paths``, named ``volumes``, ``secret_attachments``, Podman network
-        and runtime options, and copied PostgreSQL/Traefik integration mappings.
+        ``host_paths``, named ``volumes``, ``secret_attachments``, a Podman
+        network, and copied PostgreSQL/Traefik integration mappings.
 
     Raises:
         AnsibleFilterError: If the service or any supported canonical field has
@@ -521,6 +565,13 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
     if cfg.get("runtime") != "podman":
         raise AnsibleFilterError(f"{name}.runtime must be podman for podman_services")
     service_name = _resource_name(name, name="service name")
+
+    _validate_service_runtime_options(
+        cfg.get("runtime_options", {}),
+        name=f"{name}.runtime_options",
+        has_named_networks="named_networks" in cfg,
+        has_systemd="systemd" in cfg,
+    )
 
     removed_fields = [field for field in ("container", "env", "host_paths", "network") if field in cfg]
     if removed_fields:
@@ -567,9 +618,8 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
     if "healthcheck" in cfg:
         container["healthcheck"] = _healthcheck(cfg["healthcheck"], name=f"{name}.healthcheck")
 
-    podman_options = _podman_runtime_options(cfg.get("runtime_options", {}), name=f"{name}.runtime_options")
-    if "systemd" in podman_options:
-        container["systemd"] = podman_options["systemd"]
+    if "systemd" in cfg:
+        container["systemd"] = _systemd(cfg["systemd"], name=f"{name}.systemd")
 
     secret_attachments: list[str] = []
     if cfg.get("secrets"):
@@ -582,7 +632,7 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
             if attachment.strip() not in secret_attachments:
                 secret_attachments.append(attachment.strip())
 
-    network = podman_options.get("network")
+    network = _named_networks(cfg["named_networks"], name=f"{name}.named_networks") if "named_networks" in cfg else None
     postgres = _as_mapping(cfg["postgres"], name=f"{name}.postgres") if "postgres" in cfg else {}
     traefik = _as_mapping(cfg["traefik"], name=f"{name}.traefik") if "traefik" in cfg else {}
 
@@ -597,7 +647,6 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         "secret_attachments": secret_attachments,
         "host_paths": host_paths,
         "network": network,
-        "runtime_options": {"podman": podman_options},
         "volumes": volumes,
         "postgres": postgres,
         "traefik": traefik,

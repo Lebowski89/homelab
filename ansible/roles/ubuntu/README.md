@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/26 |
+| Readme update        | 2026/08/02 |
 
 
 
@@ -277,7 +277,12 @@
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Ensure Ansible opt path exists | ansible.builtin.file | False |
-| Create Python virtualenv | ansible.builtin.command | False |
+| Determine controller Python ABI directory | ansible.builtin.command | False |
+| Check existing Ansible virtualenv interpreter | ansible.builtin.stat | False |
+| Check matching Ansible virtualenv site-packages | ansible.builtin.stat | False |
+| Probe existing Ansible virtualenv interpreter | ansible.builtin.command | True |
+| Recreate Ansible virtualenv after Python ABI drift | ansible.builtin.command | True |
+| Create missing Ansible virtualenv | ansible.builtin.command | True |
 | Upgrade pip tooling in virtualenv | ansible.builtin.pip | False |
 
 

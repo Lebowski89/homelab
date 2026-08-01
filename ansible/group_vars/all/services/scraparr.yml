@@ -47,7 +47,6 @@ scraparr:
     SONARR_SECONDARY_API_KEY_FILE: /run/secrets/sonarr_4k_api_secret
     SONARR_SECONDARY_ALIAS: "sonarr-4k"
   infisical:
-    fail_on_empty: true
     secrets_map:
       - var: lidarr_api
         path: "/Lidarr"
