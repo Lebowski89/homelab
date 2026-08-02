@@ -276,3 +276,77 @@ def test_remove_handler_flush_is_gated_by_a_conditional_dynamic_include():
         }
     ]
     assert "when" not in flush_tasks[0]
+
+
+def test_external_network_preflight_uses_exact_read_only_podman_argv():
+    tasks = yaml.safe_load(MAIN_TASKS)
+    check = next(task for task in tasks if task["name"] == "Podman services | Check external network exists")
+    require = next(task for task in tasks if task["name"] == "Podman services | Require external network")
+
+    assert check["ansible.builtin.command"] == {"argv": ["podman", "network", "exists", "{{ podman_services_service.network.name }}"]}
+    assert "ansible.builtin.shell" not in check
+    assert check["changed_when"] is False
+    assert check["failed_when"] is False
+    assert check["register"] == "podman_services_external_network_check"
+    assert require["ansible.builtin.assert"]["that"] == ["podman_services_external_network_check.rc == 0"]
+    assert "Podman network store" in require["ansible.builtin.assert"]["fail_msg"]
+
+
+def test_external_network_preflight_is_live_only_and_excludes_remove_and_managed_networks():
+    tasks = yaml.safe_load(MAIN_TASKS)
+    preflight = [
+        task
+        for task in tasks
+        if task["name"]
+        in {
+            "Podman services | Check external network exists",
+            "Podman services | Require external network",
+        }
+    ]
+
+    assert len(preflight) == 2
+    for task in preflight:
+        assert "not ansible_check_mode" in task["when"]
+        assert "podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']" in task["when"]
+        assert "podman_services_service.network is mapping" in task["when"]
+        assert "podman_services_service.network.external | bool" in task["when"]
+        assert "remove" not in task["tags"]
+        assert "drift" not in task["tags"]
+
+
+def test_external_network_failure_is_fatal_before_any_mutating_service_work():
+    tasks = yaml.safe_load(MAIN_TASKS)
+    names = [task["name"] for task in tasks]
+    require = names.index("Podman services | Require external network")
+    later_mutating_boundaries = [
+        "Podman services | Check deployed service unit before recreate preparation",
+        "Podman services | Generate runtime-neutral application secrets",
+        "Podman services | Materialize Podman-native secrets",
+        "Podman services | Prepare runtime-neutral host state",
+        "Podman services | Include preparation tasks",
+        "Podman services | Include service lifecycle tasks",
+    ]
+
+    assert names.index("Podman services | Include initialization tasks") < require
+    assert all(require < names.index(name) for name in later_mutating_boundaries)
+
+
+def test_normalized_unit_name_drives_generated_files_container_name_and_lifecycle_unit():
+    init_tasks = yaml.safe_load((TASKS_DIR / "sub_tasks" / "init.yml").read_text())
+    prepare_tasks = yaml.safe_load(PREPARE_TASKS)
+    lifecycle_tasks = yaml.safe_load((TASKS_DIR / "sub_tasks" / "lifecycle.yml").read_text())
+    derive = next(task for task in init_tasks if task["name"] == "Init | Derive normalized systemd unit name")
+    env_render = next(task for task in prepare_tasks if task["name"] == "Prep | Render protected environment file")
+    container_render = next(task for task in prepare_tasks if task["name"] == "Prep | Render container Quadlet")
+
+    assert derive["ansible.builtin.set_fact"]["podman_services_unit_name"] == ("{{ podman_services_service.unit_name ~ '.service' }}")
+    assert env_render["ansible.builtin.template"]["dest"].endswith("/{{ podman_services_service.unit_name }}.env")
+    assert container_render["ansible.builtin.template"]["dest"].endswith("/{{ podman_services_service.unit_name }}.container")
+    assert "ContainerName={{ podman_service.unit_name }}" in (
+        Path("ansible/roles/podman_services/templates/container.container.j2").read_text()
+    )
+    lifecycle_units = [
+        task["ansible.builtin.systemd_service"]["name"] for task in lifecycle_tasks if "ansible.builtin.systemd_service" in task
+    ]
+    assert lifecycle_units
+    assert set(lifecycle_units) == {"{{ podman_services_unit_name }}"}

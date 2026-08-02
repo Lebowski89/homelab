@@ -496,3 +496,22 @@ def test_empty_targets_cannot_bypass_runtime_or_systemd_validation():
             },
             "manager",
         )
+
+
+def test_canonical_target_merge_preserves_explicit_name_without_inventing_defaults():
+    service = {
+        "runtime": "podman",
+        "image": "example.invalid/app:1.0.0",
+        "targets": {
+            "defaulted": {},
+            "renamed": {"name": "custom-target"},
+        },
+    }
+
+    base = service_catalog.service_catalog_merge_target(service)
+    defaulted = service_catalog.service_catalog_merge_target(service, "defaulted")
+    renamed = service_catalog.service_catalog_merge_target(service, "renamed")
+
+    assert "name" not in base
+    assert "name" not in defaulted
+    assert renamed["name"] == "custom-target"

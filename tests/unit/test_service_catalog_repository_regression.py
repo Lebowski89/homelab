@@ -178,7 +178,10 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
                 "timezone": "Australia/Melbourne",
             },
         )
+        assert set(rendered_effective) <= podman_filters._SUPPORTED_TOP_LEVEL_FIELDS
         normalized = podman_filters.podman_service_normalize(rendered_effective, item.get("target", item["name"]))
+        assert normalized["name"] == item["name"]
+        assert normalized["unit_name"] == item["name"]
         assert normalized["image"] == effective["image"]
         behavior = expected[item["name"]]
         assert normalized["network"] == {
@@ -631,3 +634,66 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert "merge_target" not in adapter_tasks
     assert "docker_services_service_cfg.targets is not defined" in docker_assert["ansible.builtin.assert"]["that"]
     assert "podman_services_service_cfg.targets is not defined" in podman_assert["ansible.builtin.assert"]["that"]
+
+
+def test_runtime_partition_only_sends_podman_entries_to_strict_podman_normalization():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_runtime_guardrail_repository",
+    )
+    podman_filters = load_module(
+        REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py",
+        "podman_services_runtime_guardrail_repository",
+    )
+    services = {
+        "docker-app": {
+            "runtime": "docker",
+            "image": "example.invalid/docker-app:1.0.0",
+            "command": ["serve"],
+        },
+        "podman-app": {
+            "runtime": "podman",
+            "image": "example.invalid/podman-app:1.0.0",
+            "deploy": {"type": "container"},
+        },
+    }
+    selected = catalog_filters.service_catalog_select(
+        catalog_filters.service_catalog_effective(services, "manager"),
+        run_all=True,
+    )["selected"]
+    docker_entries = catalog_filters.service_catalog_by_runtime(selected, "docker")
+    podman_entries = catalog_filters.service_catalog_by_runtime(selected, "podman")
+
+    assert [entry["name"] for entry in docker_entries] == ["docker-app"]
+    assert [entry["name"] for entry in podman_entries] == ["podman-app"]
+    docker_config = catalog_filters.service_catalog_merge_target(services["docker-app"])
+    podman_config = catalog_filters.service_catalog_merge_target(services["podman-app"])
+    assert docker_config["command"] == ["serve"]
+    assert podman_filters.podman_service_normalize(podman_config, "podman-app")["name"] == "podman-app"
+
+
+def test_podman_target_role_prefix_and_explicit_name_produce_collision_free_names():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_target_name_guardrail_repository",
+    )
+    podman_filters = load_module(
+        REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py",
+        "podman_services_target_name_guardrail_repository",
+    )
+    service = {
+        "runtime": "podman",
+        "image": "example.invalid/app:1.0.0",
+        "targets": {
+            "blue": {},
+            "green": {"name": "custom-green"},
+        },
+    }
+
+    blue = catalog_filters.service_catalog_merge_target(service, "blue")
+    green = catalog_filters.service_catalog_merge_target(service, "green")
+    blue_normalized = podman_filters.podman_service_normalize(blue, "app-blue")
+    green_normalized = podman_filters.podman_service_normalize(green, "app-green")
+
+    assert blue_normalized["name"] == blue_normalized["unit_name"] == "app-blue"
+    assert green_normalized["name"] == green_normalized["unit_name"] == "custom-green"

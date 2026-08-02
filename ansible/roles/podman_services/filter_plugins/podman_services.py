@@ -25,6 +25,34 @@ _VALID_PROTOCOLS = {"tcp", "udp"}
 _VALID_SECRET_UPDATE_POLICIES = {"preserve", "reconcile"}
 _VALID_VOLUME_TYPES = {"bind", "tmpfs", "volume"}
 
+# Effective service fields accepted by the Podman adapter are grouped by the
+# component that owns their behavior. Keep this boundary explicit: accepting a
+# field here means a production path consumes or validates it.
+_CATALOG_METADATA_FIELDS = frozenset({"enabled", "runtime", "tags"})
+_PODMAN_SERVICE_FIELDS = frozenset(
+    {
+        "cap_add",
+        "cap_drop",
+        "deploy",
+        "description",
+        "healthcheck",
+        "image",
+        "name",
+        "named_networks",
+        "no_new_privileges",
+        "ports",
+        "read_only",
+        "runtime_options",
+        "secrets",
+        "systemd",
+        "user",
+        "volumes",
+    }
+)
+_SERVICE_COMMON_FIELDS = frozenset({"copies", "environment", "infisical", "paths", "postgres", "templates", "traefik"})
+_SERVICE_PREPARE_FIELDS = frozenset({"application_prepare", "paths_vault", "prep"})
+_SUPPORTED_TOP_LEVEL_FIELDS = _CATALOG_METADATA_FIELDS | _PODMAN_SERVICE_FIELDS | _SERVICE_COMMON_FIELDS | _SERVICE_PREPARE_FIELDS
+
 
 def podman_env_file_key(value: Any) -> str:
     """Validate and return one Podman environment-file key.
@@ -259,6 +287,12 @@ def _canonical_user(value: Any, *, name: str) -> tuple[str, str]:
     return uid, gid
 
 
+def _validate_top_level_fields(value: Mapping[Any, Any], *, name: str) -> None:
+    unsupported = sorted(str(field) for field in value if field not in _SUPPORTED_TOP_LEVEL_FIELDS)
+    if unsupported:
+        raise AnsibleFilterError(f"{name} contains unsupported top-level fields for Podman: {', '.join(unsupported)}")
+
+
 def _image(value: Any, *, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise AnsibleFilterError(f"{name} must be an exact, non-latest image tag")
@@ -423,16 +457,13 @@ def _canonical_volumes(value: Any, *, name: str) -> tuple[list[dict[str, Any]], 
 
 def _deploy(value: Any, *, name: str) -> dict[str, Any]:
     deploy = _as_mapping(value, name=name)
-    supported = {"host", "mode", "replicas", "type", "profile", "constraints"}
-    for field in deploy:
-        if field not in supported:
-            raise AnsibleFilterError(f"{name}.{field} is not supported by Podman Quadlets in this phase")
-    deploy.pop("profile", None)
-    deploy.pop("constraints", None)
+    unsupported = sorted(set(deploy) - {"host", "mode", "replicas", "type"})
+    if unsupported:
+        raise AnsibleFilterError(f"{name} contains unsupported fields for Podman: {', '.join(unsupported)}")
     if "type" in deploy:
         deploy_type = _nonempty_string(deploy["type"], name=f"{name}.type")
-        if deploy_type not in {"container", "swarm"}:
-            raise AnsibleFilterError(f"{name}.type {deploy_type!r} is not supported by Podman Quadlets")
+        if deploy_type != "container":
+            raise AnsibleFilterError(f'{name}.type must be exactly "container" for Podman; got {deploy_type!r}')
         deploy["type"] = deploy_type
     if "mode" in deploy:
         mode = _nonempty_string(deploy["mode"], name=f"{name}.mode")
@@ -477,6 +508,9 @@ def _validate_service_runtime_options(
     if unsupported_runtimes:
         raise AnsibleFilterError(f"{name} contains unsupported runtimes: {', '.join(sorted(unsupported_runtimes))}")
     podman = _as_mapping(options.get("podman", {}), name=f"{name}.podman")
+    docker = _as_mapping(options.get("docker", {}), name=f"{name}.docker")
+    if docker:
+        raise AnsibleFilterError(f"{name}.docker contains unsupported fields for Podman: {', '.join(sorted(docker))}")
     if "network" in podman and has_named_networks:
         raise AnsibleFilterError(
             f"{name}.podman.network and top-level named_networks cannot both be declared; "
@@ -543,7 +577,8 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
     Args:
         cfg: Effective canonical service mapping whose runtime must be
             ``podman``.
-        name: Service resource name used for validation and default unit naming.
+        name: Catalog or base-target role prefix used when ``cfg.name`` is
+            omitted.
 
     Returns:
         A newly allocated mapping consumed by Podman preparation and Quadlet
@@ -552,10 +587,9 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         network, and copied PostgreSQL/Traefik integration mappings.
 
     Raises:
-        AnsibleFilterError: If the service or any supported canonical field has
-            an invalid value or shape, a removed legacy Podman field is used,
-            an unsupported field is present in a strictly validated section,
-            or current Podman phase limitations are violated.
+        AnsibleFilterError: If the service has unsupported top-level fields, a
+            supported field has an invalid value or shape, or a current Podman
+            limitation is violated.
 
     Note:
         ``cfg`` and its nested values are not mutated.
@@ -564,7 +598,8 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         raise AnsibleFilterError(f"{name} must be a mapping")
     if cfg.get("runtime") != "podman":
         raise AnsibleFilterError(f"{name}.runtime must be podman for podman_services")
-    service_name = _resource_name(name, name="service name")
+    _validate_top_level_fields(cfg, name=name)
+    service_name = _resource_name(cfg.get("name", name), name=f"{name}.name")
 
     _validate_service_runtime_options(
         cfg.get("runtime_options", {}),
@@ -573,13 +608,11 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         has_systemd="systemd" in cfg,
     )
 
-    removed_fields = [field for field in ("container", "env", "host_paths", "network") if field in cfg]
-    if removed_fields:
-        raise AnsibleFilterError(f"{name} uses removed legacy Podman fields: {', '.join(removed_fields)}; use the canonical service schema")
-
     container: dict[str, Any] = {}
     unit_name = service_name
-    description = _nonempty_string(cfg["description"], name=f"{name}.description") if "description" in cfg else f"{name} Podman service"
+    description = (
+        _nonempty_string(cfg["description"], name=f"{name}.description") if "description" in cfg else f"{service_name} Podman service"
+    )
 
     if "image" not in cfg:
         raise AnsibleFilterError(f"{name}.image must be an exact, non-latest image tag")

@@ -17,6 +17,23 @@ The shared service catalogue in `ansible/group_vars/all/services/*.yml` is runti
 
 Rootful system Quadlets were chosen first because they are stable for boot-time services and fit the existing system-level Ansible model. Containers still run as non-root users through separate container UID/GID settings. Rootless user-systemd Quadlets can be added later by introducing a scoped Quadlet directory and user lingering management.
 
+## Migration guardrails
+
+The Podman adapter validates the complete effective service mapping. It accepts
+only catalog metadata, fields it renders or validates itself, runtime-neutral
+`service_common` fields, and real `service_prepare` inputs. Any Docker-only or
+unknown top-level field fails with every unsupported key listed in sorted order.
+Changing only `runtime` is therefore unsafe and rejected when behavior such as a
+custom command, entrypoint, config, device, host network, Swarm profile, or
+constraint still lacks a Podman implementation.
+
+An explicit canonical `name` controls the Podman container name, generated
+`.container` and protected `.env` filenames, and derived `.service` lifecycle
+unit. Without it, a base uses its catalog name and a target uses the existing
+base-target role prefix. If `deploy.type` is present it must be exactly
+`container`; `swarm`, `profile`, and `constraints` are invalid. Portable
+`mode: replicated` and `replicas: 1` remain accepted single-instance no-ops.
+
 ## Lifecycle semantics
 
 - `deploy` and `bootstrap` fetch missing secrets, create missing Podman secrets, pull the declared image, render configuration, and start the service if it is not already running.
@@ -31,14 +48,21 @@ Both adapters consume the top-level `named_networks` mapping. Podman currently
 supports exactly one attached named network. `external: false` makes the role
 responsible for its network Quadlet and explicit remove lifecycle;
 `external: true` attaches the container directly to an existing network and
-never creates or deletes it. `delete_on_stop` is not supported: ordinary
+never creates or deletes it. Before any live deploy, update, recreate, or
+bootstrap mutation, the role runs `podman network exists` for the exact validated
+name and fails if it is absent. Check mode validates the declaration without a
+runtime call. `delete_on_stop` is not supported: ordinary
 stops, updates, recreates, and systemd restarts retain an owned network.
+
+Docker and Podman keep separate network stores; a Docker network with a matching
+name does not satisfy this Podman preflight. Prefer a managed Podman network for
+an isolated service. Cross-runtime communication must use published host
+endpoints or another deliberately designed network path.
 
 Podman systemd policy is also first-class at top level. The supported fields are
 `after`, `restart`, and `restart_sec`, rendered as `After=`, `Restart=`,
 and `RestartSec=`. Service-level `runtime_options.podman.network` and
 `runtime_options.podman.systemd` are retired and fail with migration guidance. Secret update intent is runtime-neutral under `secret.update_policy`; secret-level `runtime_options` is retired and fails with guidance to use that canonical field.
-
 
 Published ports accept an optional `host_ip` per port. When set, the generated `PublishPort=` entry binds only that address. When omitted, Podman binds the published port on every host interface; this can expose the service on management, LAN, Tailscale, or other reachable networks and can bypass the intended reverse proxy and its middleware. Prefer an explicit trusted bind address and enforce host/network firewall policy whenever direct access is not intended.
 
@@ -94,7 +118,7 @@ Docker and Podman now consume the same common-resolved environment. The former e
 
 n8n is the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, `named_networks`, canonical ports/volumes/paths, `deploy`, `systemd`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter. Further Podman adoption remains incremental: migrate and validate one portable service at a time rather than changing the repository runtime wholesale.
 
-n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.04. The selected host must already have the runtime required by the declaration: changing `runtime` to Docker is schema-valid for the tested portable subset but does not install Docker or establish live parity. The proof covers the trusted-address `host_ip` bind in both generated Docker standalone Compose and Podman Quadlet output. Static tests do not replace a live migration test.
+n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.04. The selected host must already have the runtime required by the declaration. A runtime-only edit is valid only when the complete effective declaration passes the destination adapter; it does not install a runtime or establish live parity. The proof covers the trusted-address `host_ip` bind in both generated Docker standalone Compose and Podman Quadlet output. Static tests do not replace a live migration test.
 
 
 The service uses pinned image `docker.io/n8nio/n8n:2.31.4`, UID/GID 1000:1000, application data in `/opt/n8n`, PostgreSQL database `n8n` through the shared HAProxy endpoint, and private routing at `https://n8n.int.<cloudflare-zone>:8443/`. The direct backend binds port 5678 to the VM management/LAN address; that direct port remains reachable on that network and bypasses Traefik TLS and middleware.

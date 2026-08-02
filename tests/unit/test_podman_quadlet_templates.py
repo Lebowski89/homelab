@@ -71,7 +71,7 @@ def canonical_service():
         "image": "ghcr.io/example/portable:1.2.3",
         "user": "1001:1002",
         "environment": {"APP_ENV": "production"},
-        "deploy": {"type": "swarm", "mode": "replicated", "replicas": 1, "host": "podman01"},
+        "deploy": {"type": "container", "mode": "replicated", "replicas": 1, "host": "podman01"},
         "ports": {
             "web": {
                 "published": 8443,
@@ -348,3 +348,16 @@ def test_canonical_secret_normalization_reaches_quadlet_without_value():
     assert "Secret=app_secret,target=/run/secrets/app_secret,uid=1001,gid=1002,mode=0400" in rendered
     assert "app_secret_value" not in rendered
     assert "VALUE" not in rendered
+
+
+def test_explicit_canonical_name_controls_container_and_environment_artifacts():
+    cfg = canonical_service()
+    cfg["name"] = "portable-custom"
+    normalized = podman_services_filters.podman_service_normalize(cfg, "portable-target")
+    rendered = render("container.container.j2", normalized)
+
+    assert normalized["name"] == "portable-custom"
+    assert normalized["unit_name"] == "portable-custom"
+    assert "ContainerName=portable-custom" in rendered
+    assert "EnvironmentFile=/etc/containers/systemd/portable-custom.env" in rendered
+    assert "portable-target.env" not in rendered

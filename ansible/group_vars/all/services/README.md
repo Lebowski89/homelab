@@ -12,7 +12,8 @@ preferred key order. Ordering is for readability; it does not change behavior.
 > [!IMPORTANT]
 > Every base service must declare `runtime: docker` or `runtime: podman`. There
 > is no implicit Docker default. The destination host must already provide the
-> chosen runtime.
+> chosen runtime. Podman validates the complete effective declaration: changing only
+> `runtime` is invalid while Docker-only or otherwise unsupported fields remain.
 
 ## Contents
 
@@ -48,7 +49,7 @@ per target; the base is not separately dispatched.
 | `enabled` | Boolean-like | No | `true` | N/A | `service_catalog` | Includes or excludes the base. On a target, both base and target must be enabled. |
 | `runtime` | String enum | Yes | None | N/A | `service_catalog` | Exactly `docker` or `podman`. A target inherits it and may override it. |
 | `tags` | String or list of strings | No | `[]` | N/A | `service_catalog` | Adds selection tags. The catalog name is always added; a target also gains its target name. Duplicates are removed in first-seen order. |
-| `name` | Non-empty string | No | Catalog/role service name | Both | `docker_services` / `podman_services` | Runtime service/container name. It does not change the catalog selection key. |
+| `name` | Non-empty resource-name string | No | Base catalog name or base-target role prefix | Both | `docker_services` / `podman_services` | Runtime service/container name. For Podman it consistently names `ContainerName=`, `.container`, `.env`, and the derived `.service`; it does not change catalog selection. |
 | `description` | Non-empty string | No | `<name> Podman service` | Podman | `podman_services` | Text rendered as the Quadlet unit description. |
 | `stack` | String | No | Effective service name | Docker | `docker_services` | Compose/Swarm project name. Standalone Docker adds its deploy host to the internal stack key. |
 | `targets` | Mapping of target names to mappings | No | Absent | N/A | `service_catalog` | Named variants. Target order is selection order; nested `targets` are rejected. |
@@ -225,7 +226,7 @@ Check mode creates nothing.
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
 | `named_networks` | Mapping | No | `{}` | Both | `docker_services` / `podman_services` | Docker supports multiple entries; Podman supports zero or one mapping entry. |
 | `named_networks.<key>.name` | Resource-name string | No | Mapping key | Both | `docker_services` / `podman_services` | Runtime-visible name. |
-| `named_networks.<key>.external` | Strict Boolean-like | No | Docker `true`; Podman `false` | Both | `docker_services` / `podman_services` | External resources are attached but not owned. |
+| `named_networks.<key>.external` | Strict Boolean-like | No | Docker `true`; Podman `false` | Both | `docker_services` / `podman_services` | External resources are attached but not owned. Live Podman deploy/update/recreate/bootstrap first requires the exact network in the Podman network store. |
 | `named_networks.<key>.driver` | String | No | Runtime-native | Both | `docker_services` / `podman_services` | Docker passes it to Compose. Podman accepts `bridge`, `ipvlan`, or `macvlan` and rejects it on an external network. |
 | `networks` | List | No | Keys of `named_networks`, else `[docker_network]` | Docker | `docker_services` | Legacy direct Compose attachment list. Prefer `named_networks`. |
 | `network_mode` | Non-empty string | No | Omitted | Docker | `docker_services` | Compose network mode. When set, normal network attachments are omitted. |
@@ -234,7 +235,12 @@ Check mode creates nothing.
 Docker named resources default to external. Non-external definitions are
 Compose-owned with the stack. Podman generates one managed `.network` Quadlet
 when `external: false`, preserves it on update/recreate, and removes it only on
-explicit remove. External Podman networks are never rendered or deleted.
+explicit remove. External Podman networks are never rendered or deleted. They must already exist in
+the destination host Podman network store; a Docker network with the same name is
+a separate resource and does not satisfy the live preflight. Managed Podman
+networks remain the preferred default for isolated services. Cross-runtime
+communication requires published host endpoints or another deliberately designed
+network path.
 
 There are no service keys for `expose`, DNS servers, or extra hosts.
 
@@ -409,12 +415,12 @@ plan without lookup or database connection.
 | Option | Type | Required | Default | Runtime | Owner | Description |
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
 | `deploy` | Mapping | No | `{}` | Both | `docker_services` / `podman_services` | Placement and lifecycle metadata. |
-| `deploy.type` | String enum | No | Docker `swarm`; Podman single instance | Both | `docker_services` / `podman_services` | Docker accepts `swarm`/`container`. Podman accepts inherited `swarm` metadata or `container` but always renders one local Quadlet. |
+| `deploy.type` | String enum | No | Docker `swarm`; Podman single instance | Both | `docker_services` / `podman_services` | Docker accepts `swarm`/`container`. When supplied for Podman it must be exactly `container`; `swarm` is rejected. |
 | `deploy.host` | Host/group/list for Docker Swarm; one host for standalone/Podman | No | Docker controller; Podman catalog name | Both | `service_catalog` + `docker_services` / `podman_services` | Dispatch/filesystem placement. Swarm constraints, not this value, determine runtime node placement. |
 | `deploy.mode` | String enum | No | `replicated` | Both | `docker_services` / `podman_services` | Docker accepts `replicated`/`global`; Podman only `replicated`. |
 | `deploy.replicas` | Non-negative integer-like | No | `1` | Both | `docker_services` / `podman_services` | Docker replica count; Podman accepts only `1`. |
-| `deploy.profile` | Non-empty string | No | `none` | Both | `docker_services` | `none`, `standard`, `careful`, or `stateless_ha`. Non-`none` is invalid for standalone. |
-| `deploy.constraints` | String or list of strings | No | `[]` | Both | `docker_services` | Literal Swarm constraints. Docker node-label names are not inventory variables. |
+| `deploy.profile` | Non-empty string | No | `none` | Docker | `docker_services` | `none`, `standard`, `careful`, or `stateless_ha`. Non-`none` is invalid for standalone; Podman rejects the field. |
+| `deploy.constraints` | String or list of strings | No | `[]` | Docker | `docker_services` | Literal Swarm constraints. Docker node-label names are not inventory variables; Podman rejects the field. |
 
 ### Docker Swarm deploy mappings
 
@@ -511,19 +517,25 @@ newer digest, and there is no service-level `drift` mapping.
 
 ## Runtime compatibility
 
+Podman rejects every top-level field outside its catalog, adapter, common, and
+application-preparation contracts. A runtime-only edit is therefore not a valid
+migration when Docker-only fields such as `command`, `entrypoint`, configs,
+devices, Swarm profiles, or constraints remain. Add behavior deliberately to
+the adapter before migrating a service that needs it.
+
 | Section | Docker | Podman | Classification |
 | ------- | ------ | ------ | -------------- |
 | Environment | Common resolution; Compose and optional `env_file` | Common resolution; protected env file | Portable with rendering differences |
 | Infisical | Common-owned | Common-owned | Runtime-neutral |
 | Native secrets | Swarm objects/protected files | Podman secrets/Quadlet metadata | Supported with lifecycle limits |
 | Ports | Swarm/standalone long syntax | `PublishPort=` | Portable except `mode`/`host_ip` split |
-| Named networks | Multiple; default external | Zero/one managed or external | Supported with limitations |
+| Named networks | Multiple; default external | Zero/one; managed by default, external preflight required | Supported with separate runtime stores |
 | Volumes | Bind, named, tmpfs | Bind, volume Quadlets, tmpfs | Portable core; ownership differs |
 | Devices/security | Devices/sysctls/standalone options plus capabilities | Capabilities, read-only root, no-new-privileges | Supported with limitations |
 | Health | Compose defaults | Quadlet defaults | Portable with different defaults |
 | Traefik | Common dynamic file | Common dynamic file | Runtime-neutral preparation |
 | PostgreSQL | Common reconciliation | Common reconciliation | Runtime-neutral preparation |
-| Deployment | Swarm or standalone | One local Quadlet instance | Runtime-specific |
+| Deployment | Swarm or standalone | One local Quadlet; explicit type must be `container` | Runtime-specific |
 | Systemd | Rejected | Supported top-level mapping | Podman-only |
 | Application preparation | All; Plex bootstrap Docker-only | All except Plex | Supported with handler limits |
 | Drift | Swarm/Compose inspection | Podman inspection | Runtime-specific |

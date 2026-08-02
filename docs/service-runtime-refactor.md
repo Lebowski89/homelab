@@ -88,6 +88,16 @@ Check mode runs declaration, handler, credential-reference, and bootstrap-contra
 
 The Docker-shaped top-level service fields are the canonical portable schema. The Podman adapter maps them to its internal Quadlet structure. Every base service declares its runtime explicitly: existing Docker services use `runtime: docker`, while n8n selects Podman with `runtime: podman`. A missing or unsupported base runtime fails catalog validation; there is no implicit Docker default. Portable fields include `image`, numeric `user: UID:GID`, `environment`, `deploy.host`, canonical ports and volumes, `paths`, security fields, `healthcheck`, `infisical`, `postgres`, and `traefik`.
 
+Canonical does not mean every Docker-owned field is portable. The Podman adapter
+validates the complete top-level mapping and rejects unknown or unimplemented
+fields instead of discarding them. Changing only `runtime` is invalid while
+Docker-only behavior remains. Podman requires an explicit `deploy.type` to be
+`container` and rejects Swarm `profile` and `constraints`; only the
+single-instance `replicated`/`replicas: 1` form is portable. An explicit
+canonical `name` consistently controls the Podman container, `.container`,
+`.env`, and derived `.service` names, while omitted base and target names keep
+the existing catalog and base-target defaults.
+
 Canonical environment entries are either scalar literals, a direct Infisical reference, or a narrowly composed template:
 
 ```yaml
@@ -134,10 +144,17 @@ Podman maps `preserve` to `force: false` and `skip_existing: true` for every act
 
 `named_networks` is the canonical network location for both adapters. Podman
 currently accepts one entry: `external: false` is role-managed and
-`external: true` is attached without lifecycle ownership. Podman-only systemd
+`external: true` is attached without lifecycle ownership and must already exist
+in the destination host Podman network store. Live deploy/update/recreate/
+bootstrap checks the exact validated name before cleanup, secret materialization,
+rendering, or lifecycle work; check mode and remove make no external-network
+preflight call. Podman-only systemd
 policy uses the top-level `systemd` mapping and is rejected for an effective
 Docker service. Service-level `runtime_options.podman.network` and
 `runtime_options.podman.systemd` are retired. Secret-level runtime options are also retired; `secret.update_policy` is the single runtime-neutral lifecycle contract consumed by both adapters.
+Docker and Podman networks with the same name are still separate resources.
+Managed Podman networks remain preferred for isolated services; cross-runtime
+communication uses published host endpoints or another deliberate network path.
 Changing `runtime` is a schema-level choice, not installation: the destination
 host must already have the selected runtime and supported version installed.
 
