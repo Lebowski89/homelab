@@ -8,6 +8,7 @@
   when:
     - podman_services_state != 'remove'
     - not ansible_check_mode
+    - podman_services_execution.mode == 'rootful'
   ansible.builtin.command:
     argv:
       - "{{ podman_quadlet_generator_path | default('/usr/lib/systemd/system-generators/podman-system-generator') }}"
@@ -19,6 +20,7 @@
   when:
     - podman_services_state != 'remove'
     - not ansible_check_mode
+    - podman_services_execution.mode == 'rootful'
   ansible.builtin.command:
     argv:
       - systemd-analyze
@@ -28,10 +30,57 @@
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
+- name: Lifecycle | Validate user Quadlets with Podman generator dry run
+  when:
+    - podman_services_state != 'remove'
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  become: true
+  become_user: "{{ podman_services_execution.host_user }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.command:
+    argv:
+      - "{{ podman_quadlet_generator_path | default('/usr/lib/systemd/system-generators/podman-system-generator') }}"
+      - -user
+      - -dryrun
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Lifecycle | Verify generated user systemd unit
+  when:
+    - podman_services_state != 'remove'
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  become: true
+  become_user: "{{ podman_services_execution.host_user }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.command:
+    argv:
+      - systemd-analyze
+      - --user
+      - --generators=true
+      - verify
+      - "{{ podman_services_unit_name }}"
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Lifecycle | Include safe execution transition
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_execution_transition | bool
+  ansible.builtin.include_tasks:
+    file: execution_transition.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Lifecycle | Start service for deploy/bootstrap
   when:
     - not ansible_check_mode
     - podman_services_state in ['deploy', 'bootstrap']
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
   ansible.builtin.systemd_service:
     name: "{{ podman_services_unit_name }}"
     state: started
@@ -42,6 +91,8 @@
     - not ansible_check_mode
     - podman_services_state == 'update'
     - podman_services_requires_restart | bool
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
   ansible.builtin.systemd_service:
     name: "{{ podman_services_unit_name }}"
     state: restarted
@@ -51,7 +102,156 @@
   when:
     - not ansible_check_mode
     - podman_services_state == 'recreate'
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
   ansible.builtin.systemd_service:
     name: "{{ podman_services_unit_name }}"
     state: restarted
   tags: [recreate]
+
+- name: Lifecycle | Start user service for deploy/bootstrap
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'bootstrap']
+    - podman_services_execution.mode == 'rootless'
+    - not (podman_services_execution_transition | bool)
+  become: true
+  become_user: "{{ podman_services_execution.host_user }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.systemd_service:
+    scope: user
+    name: "{{ podman_services_unit_name }}"
+    state: started
+  tags: [deploy, bootstrap]
+
+- name: Lifecycle | Restart user service when update inputs changed
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'update'
+    - podman_services_requires_restart | bool
+    - podman_services_execution.mode == 'rootless'
+    - not (podman_services_execution_transition | bool)
+  become: true
+  become_user: "{{ podman_services_execution.host_user }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.systemd_service:
+    scope: user
+    name: "{{ podman_services_unit_name }}"
+    state: restarted
+  tags: [update]
+
+- name: Lifecycle | Recreate user service unconditionally
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'recreate'
+    - podman_services_execution.mode == 'rootless'
+    - not (podman_services_execution_transition | bool)
+  become: true
+  become_user: "{{ podman_services_execution.host_user }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.systemd_service:
+    scope: user
+    name: "{{ podman_services_unit_name }}"
+    state: restarted
+  tags: [recreate]
+
+- name: Lifecycle | Verify desired system service is active
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_execution.mode == 'rootful'
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ podman_services_unit_name }}"]
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Lifecycle | Verify desired user service is active
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_execution.mode == 'rootless'
+  become: true
+  become_user: "{{ podman_services_execution.host_user }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.command:
+    argv: [systemctl, --user, is-active, "{{ podman_services_unit_name }}"]
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Lifecycle | Ensure execution state directory
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.file:
+    path: "{{ podman_services_execution_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Lifecycle | Build successful execution resource metadata
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.set_fact:
+    podman_services_execution_resource_state:
+      network: >-
+        {{
+          {
+            'name': podman_services_service.network.name,
+            'managed': not (podman_services_service.network.external | bool)
+          }
+          if podman_services_service.network is mapping
+          else {}
+        }}
+      volumes: "{{ podman_services_service.volumes | map(attribute='name') | list }}"
+      generated_files: >-
+        {{
+          [podman_services_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.container']
+          + (
+            [podman_services_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.env']
+            if podman_services_service.env | length > 0
+            else []
+          )
+          + (
+            [podman_services_quadlet_dir ~ '/' ~ podman_services_service.network.name ~ '.network']
+            if podman_services_service.network is mapping
+            and not (podman_services_service.network.external | bool)
+            else []
+          )
+          + (
+            podman_services_service.volumes
+            | map(attribute='name')
+            | map('regex_replace', '^(.*)$', podman_services_quadlet_dir ~ '/\\1.volume')
+            | list
+          )
+        }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Lifecycle | Persist successful execution owner
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.copy:
+    dest: "{{ podman_services_execution_state_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Generated by Ansible. Do not edit manually.
+      version: 2
+      managed_by: podman_services
+      service: {{ podman_services_service.unit_name }}
+      mode: {{ podman_services_execution.mode }}
+      unit_name: {{ podman_services_unit_name }}
+      quadlet_dir: {{ podman_services_quadlet_dir }}
+      {% if podman_services_execution.mode == 'rootless' %}
+      host_user: {{ podman_services_execution.host_user }}
+      home: {{ podman_services_execution_home }}
+      uid: "{{ podman_services_execution_uid }}"
+      gid: "{{ podman_services_execution_gid }}"
+      {% endif %}
+      resources:
+      {{ podman_services_execution_resource_state | to_nice_yaml(indent=2, sort_keys=false) | indent(2, true) }}
+  tags: [deploy, update, recreate, bootstrap]

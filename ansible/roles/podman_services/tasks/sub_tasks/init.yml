@@ -36,6 +36,23 @@
     podman_services_application_secret_values: {}
     podman_services_application_secret_declarations: []
     podman_services_application_bootstrap_requests: {}
+    podman_services_execution: {}
+    podman_services_desired_execution: {}
+    podman_services_active_execution: {mode: none}
+    podman_services_operation_execution: {mode: none}
+    podman_services_execution_home: ""
+    podman_services_execution_uid: ""
+    podman_services_execution_gid: ""
+    podman_services_execution_owner: root
+    podman_services_execution_group: root
+    podman_services_runtime_environment: {}
+    podman_services_previous_execution: {mode: none}
+    podman_services_execution_transition: false
+    podman_services_execution_state: {}
+    podman_services_execution_state_path: ""
+    podman_services_account_marker: {}
+    podman_services_account_marker_path: ""
+    podman_services_remove_generated_paths: []
   no_log: true
   diff: false
   tags: [deploy, update, remove, recreate, drift, bootstrap]
@@ -100,4 +117,29 @@
     fail_msg: >-
       Podman service {{ podman_services_service.name }} is targeted at
       {{ podman_services_service.container.host | default(inventory_hostname) }}, not {{ inventory_hostname }}.
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Init | Derive check-safe execution context
+  ansible.builtin.set_fact:
+    podman_services_execution: "{{ podman_services_service.execution }}"
+    podman_services_desired_execution: "{{ podman_services_service.execution }}"
+    podman_services_execution_home: >-
+      {{
+        podman_services_rootless_home_root ~ '/' ~ podman_services_service.execution.host_user
+        if podman_services_service.execution.mode == 'rootless'
+        else '/root'
+      }}
+    podman_services_execution_owner: >-
+      {{ podman_services_service.execution.host_user if podman_services_service.execution.mode == 'rootless' else 'root' }}
+    podman_services_execution_group: >-
+      {{ podman_services_service.execution.host_user if podman_services_service.execution.mode == 'rootless' else 'root' }}
+    podman_services_quadlet_dir: >-
+      {{
+        podman_services_rootless_home_root ~ '/' ~ podman_services_service.execution.host_user ~ '/.config/containers/systemd'
+        if podman_services_service.execution.mode == 'rootless'
+        else podman_services_system_quadlet_dir
+      }}
+    podman_services_runtime_environment: {}
+    podman_services_execution_state_path: >-
+      {{ podman_services_execution_state_dir ~ '/' ~ podman_services_service.unit_name ~ '.yml' }}
   tags: [deploy, update, remove, recreate, drift, bootstrap]

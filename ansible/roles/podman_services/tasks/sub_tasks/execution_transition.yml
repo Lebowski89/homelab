@@ -1,0 +1,574 @@
+---
+
+- name: Transition | Derive previous execution resources
+  ansible.builtin.set_fact:
+    podman_services_previous_quadlet_dir: >-
+      {{
+        podman_services_previous_execution.quadlet_dir
+        | default(
+            podman_services_previous_execution.home ~ '/.config/containers/systemd'
+            if podman_services_previous_execution.mode == 'rootless'
+            else podman_services_system_quadlet_dir
+          )
+      }}
+    podman_services_previous_unit_name: >-
+      {{ podman_services_previous_execution.unit_name | default(podman_services_unit_name) }}
+    podman_services_previous_network: >-
+      {{ (podman_services_previous_execution.resources | default({})).network | default({}) }}
+    podman_services_stale_generated_paths: >-
+      {{
+        (podman_services_previous_execution.resources | default({})).generated_files
+        | default([
+            (
+              podman_services_previous_execution.quadlet_dir
+              | default(
+                  podman_services_previous_execution.home ~ '/.config/containers/systemd'
+                  if podman_services_previous_execution.mode == 'rootless'
+                  else podman_services_system_quadlet_dir
+                )
+            ) ~ '/' ~ podman_services_service.unit_name ~ '.container',
+            (
+              podman_services_previous_execution.quadlet_dir
+              | default(
+                  podman_services_previous_execution.home ~ '/.config/containers/systemd'
+                  if podman_services_previous_execution.mode == 'rootless'
+                  else podman_services_system_quadlet_dir
+                )
+            ) ~ '/' ~ podman_services_service.unit_name ~ '.env'
+          ])
+      }}
+    podman_services_previous_runtime_environment: >-
+      {{
+        {
+          'HOME': podman_services_previous_execution.home,
+          'XDG_RUNTIME_DIR': '/run/user/' ~ podman_services_previous_execution.uid,
+          'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/' ~ podman_services_previous_execution.uid ~ '/bus'
+        }
+        if podman_services_previous_execution.mode == 'rootless'
+        else {}
+      }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Validate previous resource metadata
+  ansible.builtin.assert:
+    that:
+      - podman_services_previous_unit_name == podman_services_unit_name
+      - podman_services_previous_quadlet_dir is match('^/')
+      - podman_services_stale_generated_paths is sequence
+      - >-
+        podman_services_stale_generated_paths
+        | reject('match', '^' ~ (podman_services_previous_quadlet_dir | regex_escape)
+            ~ '/[A-Za-z0-9][A-Za-z0-9_.-]*\\.(container|env|network|volume)$')
+        | list | length == 0
+      - >-
+        podman_services_previous_network | length == 0
+        or (
+          podman_services_previous_network is mapping
+          and podman_services_previous_network.name | default('') is match('^[A-Za-z0-9][A-Za-z0-9_.-]*$')
+          and podman_services_previous_network.managed | default(false) is boolean
+        )
+    fail_msg: >-
+      Refusing transition cleanup because the persisted resource metadata for
+      {{ podman_services_service.name }} is invalid.
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Inspect previous rootless account
+  when: podman_services_previous_execution.mode == 'rootless'
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ podman_services_previous_execution.host_user }}"
+    fail_key: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Inspect previous rootless primary group
+  when: podman_services_previous_execution.mode == 'rootless'
+  ansible.builtin.getent:
+    database: group
+    key: "{{ podman_services_previous_execution.host_user }}"
+    fail_key: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Inspect previous rootless home
+  when: podman_services_previous_execution.mode == 'rootless'
+  ansible.builtin.stat:
+    path: "{{ podman_services_previous_execution.home }}"
+  register: podman_services_previous_home_stat
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Inspect previous rootless password lock
+  when: podman_services_previous_execution.mode == 'rootless'
+  no_log: true
+  diff: false
+  ansible.builtin.command:
+    argv: [passwd, --status, "{{ podman_services_previous_execution.host_user }}"]
+  register: podman_services_previous_password_status
+  changed_when: false
+  failed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Inspect previous rootless group membership
+  when: podman_services_previous_execution.mode == 'rootless'
+  ansible.builtin.command:
+    argv: [id, -Gn, "{{ podman_services_previous_execution.host_user }}"]
+  register: podman_services_previous_group_membership
+  changed_when: false
+  failed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Require exact previous rootless account owner
+  when: podman_services_previous_execution.mode == 'rootless'
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - >-
+        not (
+          {
+            'host_user': podman_services_previous_execution.host_user,
+            'service': podman_services_service.unit_name,
+            'comment': 'Managed rootless Podman account for ' ~ podman_services_service.name,
+            'home': podman_services_previous_execution.home,
+            'shell': podman_services_nologin_shell,
+            'account': ansible_facts.getent_passwd.get(podman_services_previous_execution.host_user),
+            'group': ansible_facts.getent_group.get(podman_services_previous_execution.host_user),
+            'group_names': podman_services_previous_group_membership.stdout.split() | default([]),
+            'password_locked': (
+              podman_services_previous_password_status.rc | default(1) == 0
+              and podman_services_previous_password_status.stdout.split() | length > 1
+              and podman_services_previous_password_status.stdout.split()[1] == 'L'
+            ),
+            'home_exists': podman_services_previous_home_stat.stat.exists | default(false) | bool,
+            'marker': {},
+            'persisted': podman_services_previous_execution
+          }
+          | podman_rootless_account_contract
+        ).create
+    fail_msg: >-
+      Refusing to operate on an absent or incompatible previous rootless
+      account for {{ podman_services_service.name }}.
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Check previous system service state
+  when: podman_services_previous_execution.mode == 'rootful'
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ podman_services_previous_unit_name }}"]
+  register: podman_services_previous_system_active
+  changed_when: false
+  failed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Check previous user service state
+  when: podman_services_previous_execution.mode == 'rootless'
+  become: true
+  become_user: "{{ podman_services_previous_execution.host_user }}"
+  environment: "{{ podman_services_previous_runtime_environment }}"
+  ansible.builtin.command:
+    argv: [systemctl, --user, is-active, "{{ podman_services_previous_unit_name }}"]
+  register: podman_services_previous_user_active
+  changed_when: false
+  failed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Record whether previous service was active
+  ansible.builtin.set_fact:
+    podman_services_previous_was_active: >-
+      {{
+        podman_services_previous_system_active.rc | default(1) == 0
+        if podman_services_previous_execution.mode == 'rootful'
+        else podman_services_previous_user_active.rc | default(1) == 0
+      }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Require previous manager query
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          podman_services_previous_execution.mode == 'rootful'
+          and podman_services_previous_system_active.rc | default(1) in [0, 3]
+        )
+        or (
+          podman_services_previous_execution.mode == 'rootless'
+          and podman_services_previous_user_active.rc | default(1) in [0, 3]
+        )
+    fail_msg: "Could not query the previous execution manager for {{ podman_services_service.name }}."
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Stop previous system service
+  when:
+    - podman_services_previous_execution.mode == 'rootful'
+    - podman_services_previous_was_active | bool
+  ansible.builtin.systemd_service:
+    name: "{{ podman_services_previous_unit_name }}"
+    state: stopped
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Stop previous user service
+  when:
+    - podman_services_previous_execution.mode == 'rootless'
+    - podman_services_previous_was_active | bool
+  become: true
+  become_user: "{{ podman_services_previous_execution.host_user }}"
+  environment: "{{ podman_services_previous_runtime_environment }}"
+  ansible.builtin.systemd_service:
+    scope: user
+    name: "{{ podman_services_previous_unit_name }}"
+    state: stopped
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Start and verify desired execution owner
+  tags: [deploy, update, recreate, bootstrap]
+  block:
+    - name: Transition | Start desired system service
+      when: podman_services_execution.mode == 'rootful'
+      ansible.builtin.command:
+        argv: [systemctl, start, "{{ podman_services_unit_name }}"]
+      register: podman_services_transition_system_start
+      changed_when: podman_services_transition_system_start.rc == 0
+      failed_when: false
+
+    - name: Transition | Start desired user service
+      when: podman_services_execution.mode == 'rootless'
+      become: true
+      become_user: "{{ podman_services_execution.host_user }}"
+      environment: "{{ podman_services_runtime_environment }}"
+      ansible.builtin.command:
+        argv: [systemctl, --user, start, "{{ podman_services_unit_name }}"]
+      register: podman_services_transition_user_start
+      changed_when: podman_services_transition_user_start.rc == 0
+      failed_when: false
+
+    - name: Transition | Verify desired system service
+      when: podman_services_execution.mode == 'rootful'
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ podman_services_unit_name }}"]
+      register: podman_services_transition_system_verify
+      changed_when: false
+      failed_when: false
+
+    - name: Transition | Verify desired user service
+      when: podman_services_execution.mode == 'rootless'
+      become: true
+      become_user: "{{ podman_services_execution.host_user }}"
+      environment: "{{ podman_services_runtime_environment }}"
+      ansible.builtin.command:
+        argv: [systemctl, --user, is-active, "{{ podman_services_unit_name }}"]
+      register: podman_services_transition_user_verify
+      changed_when: false
+      failed_when: false
+
+    - name: Transition | Require desired start and verification success
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              podman_services_execution.mode == 'rootful'
+              and podman_services_transition_system_start.rc | default(1) == 0
+              and podman_services_transition_system_verify.rc | default(1) == 0
+            )
+            or (
+              podman_services_execution.mode == 'rootless'
+              and podman_services_transition_user_start.rc | default(1) == 0
+              and podman_services_transition_user_verify.rc | default(1) == 0
+            )
+        fail_msg: "Desired service start or active-state verification failed."
+  rescue:
+    - name: Transition | Stop failed desired system service
+      when: podman_services_execution.mode == 'rootful'
+      ansible.builtin.command:
+        argv: [systemctl, stop, "{{ podman_services_unit_name }}"]
+      register: podman_services_transition_system_stop_failed
+      changed_when: false
+      failed_when: false
+
+    - name: Transition | Stop failed desired user service
+      when: podman_services_execution.mode == 'rootless'
+      become: true
+      become_user: "{{ podman_services_execution.host_user }}"
+      environment: "{{ podman_services_runtime_environment }}"
+      ansible.builtin.command:
+        argv: [systemctl, --user, stop, "{{ podman_services_unit_name }}"]
+      register: podman_services_transition_user_stop_failed
+      changed_when: false
+      failed_when: false
+
+    - name: Transition | Restore previous system service
+      when:
+        - podman_services_previous_execution.mode == 'rootful'
+        - podman_services_previous_was_active | bool
+      ansible.builtin.command:
+        argv: [systemctl, start, "{{ podman_services_previous_unit_name }}"]
+      register: podman_services_transition_system_restore
+      changed_when: podman_services_transition_system_restore.rc == 0
+      failed_when: false
+
+    - name: Transition | Restore previous user service
+      when:
+        - podman_services_previous_execution.mode == 'rootless'
+        - podman_services_previous_was_active | bool
+      become: true
+      become_user: "{{ podman_services_previous_execution.host_user }}"
+      environment: "{{ podman_services_previous_runtime_environment }}"
+      ansible.builtin.command:
+        argv: [systemctl, --user, start, "{{ podman_services_previous_unit_name }}"]
+      register: podman_services_transition_user_restore
+      changed_when: podman_services_transition_user_restore.rc == 0
+      failed_when: false
+
+    - name: Transition | Report failed transition after rollback
+      ansible.builtin.fail:
+        msg: >-
+          Failed to transition {{ podman_services_service.name }} from
+          {{ podman_services_previous_execution.mode }} to {{ podman_services_execution.mode }}.
+          Desired start rc={{
+            podman_services_transition_system_start.rc
+            | default(podman_services_transition_user_start.rc | default('not-run'))
+          }}; error={{
+            podman_services_transition_system_start.stderr
+            | default(podman_services_transition_user_start.stderr | default(''))
+            | trim
+          }}. Desired verification rc={{
+            podman_services_transition_system_verify.rc
+            | default(podman_services_transition_user_verify.rc | default('not-run'))
+          }}; error={{
+            podman_services_transition_system_verify.stderr
+            | default(podman_services_transition_user_verify.stderr | default(''))
+            | trim
+          }}. Stopping the failed destination rc={{
+            podman_services_transition_system_stop_failed.rc
+            | default(podman_services_transition_user_stop_failed.rc | default('not-run'))
+          }}; error={{
+            podman_services_transition_system_stop_failed.stderr
+            | default(podman_services_transition_user_stop_failed.stderr | default(''))
+            | trim
+          }}. Restoring the previous service rc={{
+            podman_services_transition_system_restore.rc
+            | default(podman_services_transition_user_restore.rc | default(
+                'not-required' if not (podman_services_previous_was_active | bool) else 'not-run'
+              ))
+          }}; error={{
+            podman_services_transition_system_restore.stderr
+            | default(podman_services_transition_user_restore.stderr | default(''))
+            | trim
+          }}. Previous generated files were retained.
+
+- name: Transition | Inspect exact stale generated paths
+  ansible.builtin.stat:
+    path: "{{ podman_services_stale_path }}"
+  loop: "{{ podman_services_stale_generated_paths }}"
+  loop_control:
+    loop_var: podman_services_stale_path
+    label: "{{ podman_services_stale_path }}"
+  register: podman_services_stale_generated_stats
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Read exact stale generated files
+  when: podman_services_stale_stat.stat.exists | bool
+  no_log: true
+  diff: false
+  ansible.builtin.slurp:
+    path: "{{ podman_services_stale_stat.stat.path }}"
+  loop: "{{ podman_services_stale_generated_stats.results }}"
+  loop_control:
+    loop_var: podman_services_stale_stat
+    label: >-
+      {{ podman_services_stale_stat.stat.path
+         | default(podman_services_stale_stat.podman_services_stale_path) }}
+  register: podman_services_stale_generated_contents
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Require managed marker before stale deletion
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - >-
+        podman_services_stale_content.content | b64decode
+        is match('^# Generated by Ansible\\. Do not edit manually\\.')
+    fail_msg: >-
+      Refusing to remove an unmarked stale file while transitioning
+      {{ podman_services_service.name }}.
+  loop: "{{ podman_services_stale_generated_contents.results | rejectattr('skipped', 'defined') | list }}"
+  loop_control:
+    loop_var: podman_services_stale_content
+    label: "{{ podman_services_stale_content.source }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Report unproven previous network retention
+  when: podman_services_previous_network | length == 0
+  ansible.builtin.debug:
+    msg: >-
+      No persisted managed-network ownership metadata exists for the previous
+      {{ podman_services_previous_execution.mode }} store; its network is retained.
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Query previous system managed network unit
+  when:
+    - podman_services_previous_execution.mode == 'rootful'
+    - podman_services_previous_network.managed | default(false) | bool
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - "{{ podman_services_previous_network.name }}-network.service"
+      - --property=LoadState
+      - --value
+  register: podman_services_previous_system_network_unit
+  changed_when: false
+  failed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Query previous user managed network unit
+  when:
+    - podman_services_previous_execution.mode == 'rootless'
+    - podman_services_previous_network.managed | default(false) | bool
+  become: true
+  become_user: "{{ podman_services_previous_execution.host_user }}"
+  environment: "{{ podman_services_previous_runtime_environment }}"
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --user
+      - show
+      - "{{ podman_services_previous_network.name }}-network.service"
+      - --property=LoadState
+      - --value
+  register: podman_services_previous_user_network_unit
+  changed_when: false
+  failed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Require previous managed network unit query
+  when: podman_services_previous_network.managed | default(false) | bool
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          podman_services_previous_execution.mode == 'rootful'
+          and podman_services_previous_system_network_unit.rc | default(1) == 0
+          and podman_services_previous_system_network_unit.stdout | trim in ['loaded', 'not-found']
+        )
+        or (
+          podman_services_previous_execution.mode == 'rootless'
+          and podman_services_previous_user_network_unit.rc | default(1) == 0
+          and podman_services_previous_user_network_unit.stdout | trim in ['loaded', 'not-found']
+        )
+    fail_msg: >-
+      Could not confirm the previous managed network unit state for
+      {{ podman_services_service.name }}; previous files and ownership state are retained.
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Stop previous system managed network unit
+  when:
+    - podman_services_previous_execution.mode == 'rootful'
+    - podman_services_previous_network.managed | default(false) | bool
+    - podman_services_previous_system_network_unit.stdout | trim == 'loaded'
+  ansible.builtin.systemd_service:
+    name: "{{ podman_services_previous_network.name }}-network.service"
+    state: stopped
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Stop previous user managed network unit
+  when:
+    - podman_services_previous_execution.mode == 'rootless'
+    - podman_services_previous_network.managed | default(false) | bool
+    - podman_services_previous_user_network_unit.stdout | trim == 'loaded'
+  become: true
+  become_user: "{{ podman_services_previous_execution.host_user }}"
+  environment: "{{ podman_services_previous_runtime_environment }}"
+  ansible.builtin.systemd_service:
+    scope: user
+    name: "{{ podman_services_previous_network.name }}-network.service"
+    state: stopped
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Query previous managed network existence
+  when: podman_services_previous_network.managed | default(false) | bool
+  become: true
+  become_user: >-
+    {{
+      podman_services_previous_execution.host_user
+      if podman_services_previous_execution.mode == 'rootless'
+      else 'root'
+    }}
+  environment: "{{ podman_services_previous_runtime_environment }}"
+  ansible.builtin.command:
+    argv: [podman, network, exists, "{{ podman_services_previous_network.name }}"]
+  register: podman_services_previous_network_exists
+  changed_when: false
+  failed_when: podman_services_previous_network_exists.rc not in [0, 1]
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Remove proven unused previous managed network
+  when:
+    - podman_services_previous_network.managed | default(false) | bool
+    - podman_services_previous_network_exists.rc == 0
+  become: true
+  become_user: >-
+    {{
+      podman_services_previous_execution.host_user
+      if podman_services_previous_execution.mode == 'rootless'
+      else 'root'
+    }}
+  environment: "{{ podman_services_previous_runtime_environment }}"
+  ansible.builtin.command:
+    argv: [podman, network, rm, "{{ podman_services_previous_network.name }}"]
+  changed_when: true
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Verify previous managed network absence
+  when: podman_services_previous_network.managed | default(false) | bool
+  become: true
+  become_user: >-
+    {{
+      podman_services_previous_execution.host_user
+      if podman_services_previous_execution.mode == 'rootless'
+      else 'root'
+    }}
+  environment: "{{ podman_services_previous_runtime_environment }}"
+  ansible.builtin.command:
+    argv: [podman, network, exists, "{{ podman_services_previous_network.name }}"]
+  register: podman_services_previous_network_verify
+  changed_when: false
+  failed_when: podman_services_previous_network_verify.rc not in [0, 1]
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Require previous managed network absence
+  when: podman_services_previous_network.managed | default(false) | bool
+  ansible.builtin.assert:
+    that:
+      - podman_services_previous_network_verify.rc == 1
+    fail_msg: >-
+      The previous managed network for {{ podman_services_service.name }} still exists;
+      previous files and ownership state are retained.
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Remove exact marked stale generated files
+  when: podman_services_stale_stat.stat.exists | bool
+  ansible.builtin.file:
+    path: "{{ podman_services_stale_stat.stat.path }}"
+    state: absent
+  loop: "{{ podman_services_stale_generated_stats.results }}"
+  loop_control:
+    loop_var: podman_services_stale_stat
+    label: >-
+      {{ podman_services_stale_stat.stat.path
+         | default(podman_services_stale_stat.podman_services_stale_path) }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Reload previous system manager
+  when: podman_services_previous_execution.mode == 'rootful'
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Reload previous user manager
+  when: podman_services_previous_execution.mode == 'rootless'
+  become: true
+  become_user: "{{ podman_services_previous_execution.host_user }}"
+  environment: "{{ podman_services_previous_runtime_environment }}"
+  ansible.builtin.command:
+    argv: [systemctl, --user, daemon-reload]
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]

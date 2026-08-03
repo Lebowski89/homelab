@@ -1,14 +1,35 @@
 ---
 
+- name: Drift | Initialize missing active-service inspection
+  when: podman_services_state == 'drift'
+  ansible.builtin.set_fact:
+    podman_services_drift_inspection_result:
+      rc: 125
+      stdout: ""
+  tags: [drift]
+
 - name: Drift | Check current image reference
   when:
     - not ansible_check_mode
     - podman_services_state == 'drift'
+    - podman_services_active_execution.mode in ['rootful', 'rootless']
+  become: true
+  become_user: "{{ podman_services_active_execution.host_user | default('root') }}"
+  environment: "{{ podman_services_runtime_environment }}"
   ansible.builtin.command:
     argv: [podman, inspect, --format, "{{ '{{.ImageName}}' }}", "{{ podman_services_service.unit_name }}"]
-  register: podman_services_drift_inspect
+  register: podman_services_drift_inspect_command
   failed_when: false
   changed_when: false
+  tags: [drift]
+
+- name: Drift | Capture active-service inspection
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'drift'
+    - podman_services_active_execution.mode in ['rootful', 'rootless']
+  ansible.builtin.set_fact:
+    podman_services_drift_inspection_result: "{{ podman_services_drift_inspect_command }}"
   tags: [drift]
 
 - name: Drift | Classify image reference drift
@@ -16,7 +37,7 @@
   ansible.builtin.set_fact:
     podman_services_image_reference_drift: >-
       {{
-        podman_services_drift_inspect
+        podman_services_drift_inspection_result
         | podman_image_reference_drift(podman_services_service.image)
       }}
   changed_when: podman_services_image_reference_drift.drift | bool

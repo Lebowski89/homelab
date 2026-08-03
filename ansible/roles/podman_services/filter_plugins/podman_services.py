@@ -20,6 +20,7 @@ from ansible.errors import AnsibleFilterError
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RESOURCE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _USER_RE = re.compile(r"^[0-9]+:[0-9]+$")
+_HOST_USER_RE = re.compile(r"^podman-[a-z0-9](?:[a-z0-9_-]{0,23}[a-z0-9])?\Z")
 _VALID_NETWORK_DRIVERS = {"bridge", "ipvlan", "macvlan"}
 _VALID_PROTOCOLS = {"tcp", "udp"}
 _VALID_SECRET_UPDATE_POLICIES = {"preserve", "reconcile"}
@@ -455,11 +456,178 @@ def _canonical_volumes(value: Any, *, name: str) -> tuple[list[dict[str, Any]], 
     return mounts, volumes, tmpfs_mounts
 
 
+def _execution(value: Any, *, name: str) -> dict[str, str]:
+    execution = _as_mapping(value, name=name)
+    unsupported = sorted(set(execution) - {"mode", "host_user"})
+    if unsupported:
+        raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(unsupported)}")
+    if "mode" not in execution:
+        raise AnsibleFilterError(f'{name}.mode must be exactly "rootful" or "rootless"')
+    mode = _nonempty_string(execution["mode"], name=f"{name}.mode")
+    if mode not in {"rootful", "rootless"}:
+        raise AnsibleFilterError(f'{name}.mode must be exactly "rootful" or "rootless"; got {mode!r}')
+    if mode == "rootful":
+        if "host_user" in execution:
+            raise AnsibleFilterError(f"{name}.host_user is only valid when mode is rootless")
+        return {"mode": "rootful"}
+    if "host_user" not in execution:
+        raise AnsibleFilterError(f"{name}.host_user is required when mode is rootless")
+    host_user = _nonempty_string(execution["host_user"], name=f"{name}.host_user")
+    if not _HOST_USER_RE.fullmatch(host_user):
+        raise AnsibleFilterError(
+            f"{name}.host_user must be a dedicated account name using the reserved podman- prefix and matching "
+            f"{_HOST_USER_RE.pattern}; got {host_user!r}"
+        )
+    return {"mode": "rootless", "host_user": host_user}
+
+
+def podman_subid_range(value: Any, account: Any, minimum_count: Any = 65536) -> dict[str, int]:
+    """Validate one account's exact subordinate-ID range declaration.
+
+    Args:
+        value: Complete text from ``/etc/subuid`` or ``/etc/subgid``.
+        account: Dedicated rootless account whose entry is required.
+        minimum_count: Smallest acceptable range size. The role uses 65,536,
+            which is the normal rootless Podman allocation.
+
+    Returns:
+        A mapping containing integer ``start`` and ``count`` values.
+
+    Raises:
+        AnsibleFilterError: If inputs are malformed, the selected account has
+            zero or multiple entries, or its range is too small.
+
+    The input text is only parsed; it is never modified.
+    """
+    if not isinstance(value, str):
+        raise AnsibleFilterError("Subordinate-ID data must be text")
+    account_name = _nonempty_string(account, name="Subordinate-ID account")
+    count = _integer(minimum_count, name="Subordinate-ID minimum count")
+    if count < 1:
+        raise AnsibleFilterError("Subordinate-ID minimum count must be positive")
+
+    matches: list[tuple[int, int]] = []
+    for line_number, raw_line in enumerate(value.splitlines(), start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        fields = line.split(":")
+        if fields[0] != account_name:
+            continue
+        if len(fields) != 3 or not fields[1].isdigit() or not fields[2].isdigit():
+            raise AnsibleFilterError(f"Malformed subordinate-ID entry for {account_name} on line {line_number}")
+        start, range_count = int(fields[1]), int(fields[2])
+        if start < 1 or range_count < 1:
+            raise AnsibleFilterError(f"Subordinate-ID entry for {account_name} must use positive integers")
+        matches.append((start, range_count))
+
+    if len(matches) != 1:
+        raise AnsibleFilterError(f"Expected exactly one subordinate-ID entry for {account_name}; found {len(matches)}")
+    start, range_count = matches[0]
+    if range_count < count:
+        raise AnsibleFilterError(f"Subordinate-ID entry for {account_name} provides {range_count} IDs; at least {count} are required")
+    return {"start": start, "count": range_count}
+
+
+def podman_rootless_account_contract(value: Any) -> dict[str, bool]:
+    """Decide whether a dedicated rootless account may be created or reused.
+
+    Args:
+        value: Mapping containing the expected service/account identity plus
+            inspected passwd, group, home, password-lock, marker, and persisted
+            execution-state values.
+
+    Returns:
+        ``{"create": True}`` only when the account, primary group, home, and
+        marker are all absent. An exact previously managed account returns
+        ``{"create": False}``.
+
+    Raises:
+        AnsibleFilterError: If the declaration does not use the reserved
+            account prefix, UID/GID zero is observed, an existing object is
+            incompatible, or neither the account marker nor the service's
+            persisted execution state proves ownership.
+
+    The supplied inspection mapping and nested values are never modified.
+    """
+    context = _as_mapping(value, name="Rootless account contract")
+    host_user = _nonempty_string(context.get("host_user"), name="Rootless account host_user")
+    if not _HOST_USER_RE.fullmatch(host_user):
+        raise AnsibleFilterError("Rootless Podman accounts must use the reserved podman- prefix")
+    service = _nonempty_string(context.get("service"), name="Rootless account service")
+    expected_comment = _nonempty_string(context.get("comment"), name="Rootless account comment")
+    expected_home = _nonempty_string(context.get("home"), name="Rootless account home")
+    expected_shell = _nonempty_string(context.get("shell"), name="Rootless account shell")
+    account = context.get("account")
+    group = context.get("group")
+    marker = context.get("marker") or {}
+    persisted = context.get("persisted") or {}
+    home_exists = context.get("home_exists") is True
+
+    if account is None:
+        if home_exists or group is not None or marker:
+            raise AnsibleFilterError(
+                f"Refusing to create {host_user}: an unmanaged home, primary group, or ownership marker already exists"
+            )
+        return {"create": True}
+
+    if not isinstance(account, list) or len(account) < 6:
+        raise AnsibleFilterError(f"Existing account data for {host_user} is malformed")
+    if not isinstance(group, list) or len(group) < 2:
+        raise AnsibleFilterError(f"Existing account {host_user} lacks its dedicated primary group")
+    try:
+        uid = int(account[1])
+        gid = int(account[2])
+        group_gid = int(group[1])
+    except (TypeError, ValueError) as error:
+        raise AnsibleFilterError(f"Existing account IDs for {host_user} are malformed") from error
+    if uid == 0 or gid == 0:
+        raise AnsibleFilterError(f"Rootless account {host_user} must not use UID or GID 0")
+    group_names = context.get("group_names")
+    locked = context.get("password_locked") is True
+    exact_contract = (
+        account[3] == expected_comment
+        and account[4] == expected_home
+        and account[5] == expected_shell
+        and group_gid == gid
+        and group_names == [host_user]
+        and locked
+        and home_exists
+    )
+    if not exact_contract:
+        raise AnsibleFilterError(f"Existing account {host_user} does not match the dedicated managed contract")
+
+    marker_proves_owner = (
+        isinstance(marker, Mapping)
+        and marker.get("managed_by") == "podman_services"
+        and marker.get("service") == service
+        and marker.get("host_user") == host_user
+        and marker.get("home") == expected_home
+        and str(marker.get("uid", "")) == str(uid)
+        and str(marker.get("gid", "")) == str(gid)
+    )
+    state_proves_owner = (
+        isinstance(persisted, Mapping)
+        and persisted.get("managed_by") == "podman_services"
+        and persisted.get("service") == service
+        and persisted.get("mode") == "rootless"
+        and persisted.get("host_user") == host_user
+        and str(persisted.get("uid", "")) == str(uid)
+        and str(persisted.get("gid", "")) == str(gid)
+    )
+    if not marker_proves_owner and not state_proves_owner:
+        raise AnsibleFilterError(
+            f"Existing account {host_user} is not proven to belong to service {service}; cross-service reuse is forbidden"
+        )
+    return {"create": False}
+
+
 def _deploy(value: Any, *, name: str) -> dict[str, Any]:
     deploy = _as_mapping(value, name=name)
-    unsupported = sorted(set(deploy) - {"host", "mode", "replicas", "type"})
+    unsupported = sorted(set(deploy) - {"execution", "host", "mode", "replicas", "type"})
     if unsupported:
         raise AnsibleFilterError(f"{name} contains unsupported fields for Podman: {', '.join(unsupported)}")
+    deploy["execution"] = _execution(deploy["execution"], name=f"{name}.execution") if "execution" in deploy else {"mode": "rootful"}
     if "type" in deploy:
         deploy_type = _nonempty_string(deploy["type"], name=f"{name}.type")
         if deploy_type != "container":
@@ -478,6 +646,66 @@ def _deploy(value: Any, *, name: str) -> dict[str, Any]:
     if "host" in deploy:
         deploy["host"] = _nonempty_string(deploy["host"], name=f"{name}.host")
     return deploy
+
+
+def _has_native_infisical_secret(cfg: Mapping[str, Any]) -> bool:
+    infisical = cfg.get("infisical")
+    if not isinstance(infisical, Mapping):
+        return False
+    secrets_map = infisical.get("secrets_map", [])
+    if isinstance(secrets_map, Mapping):
+        entries = secrets_map.values()
+    elif isinstance(secrets_map, Iterable) and not isinstance(secrets_map, str):
+        entries = secrets_map
+    else:
+        return False
+    return any(isinstance(entry, Mapping) and "secret" in entry for entry in entries)
+
+
+def _validate_rootless_subset(
+    cfg: Mapping[str, Any],
+    *,
+    name: str,
+    image: str,
+    deploy: Mapping[str, Any],
+    container: Mapping[str, Any],
+    network: Mapping[str, Any] | None,
+    volumes: list[dict[str, Any]],
+    host_paths: list[dict[str, Any]],
+    secret_attachments: list[str],
+) -> None:
+    if deploy["execution"]["mode"] != "rootless":
+        return
+    registry = image.split("/", 1)[0] if "/" in image else ""
+    if not registry or not (registry == "localhost" or "." in registry or ":" in registry):
+        raise AnsibleFilterError(f"{name}.image must be fully qualified for rootless Podman; got {image!r}")
+    if deploy.get("type") != "container":
+        raise AnsibleFilterError(f"{name}.deploy.type must be exactly container for rootless Podman")
+    if network is None or network.get("external") or network.get("driver", "bridge") != "bridge":
+        raise AnsibleFilterError(f"{name}.named_networks must declare one managed bridge for rootless Podman")
+    for index, port in enumerate(container.get("ports", [])):
+        if port["host"] < 1024:
+            raise AnsibleFilterError(
+                f"{name}.ports[{index}].published uses privileged port {port['host']}; rootless Podman requires 1024 or higher"
+            )
+        if port["protocol"] != "tcp":
+            raise AnsibleFilterError(f"{name}.ports[{index}].protocol must be tcp for rootless Podman in this phase")
+    if host_paths:
+        raise AnsibleFilterError(f"{name}.paths is not supported for rootless Podman in this phase")
+    if volumes or container.get("mounts") or container.get("tmpfs"):
+        raise AnsibleFilterError(f"{name}.volumes is not supported for rootless Podman in this phase")
+    if container.get("cap_add"):
+        raise AnsibleFilterError(f"{name}.cap_add is not supported for rootless Podman in this phase")
+    if secret_attachments or _has_native_infisical_secret(cfg):
+        raise AnsibleFilterError(f"{name}.secrets is not supported for rootless Podman in this phase")
+    for field in ("copies", "templates"):
+        if cfg.get(field):
+            raise AnsibleFilterError(f"{name}.{field} is not supported for rootless Podman in this phase")
+    for field in ("application_prepare", "prep", "paths_vault"):
+        if cfg.get(field):
+            raise AnsibleFilterError(
+                f"{name}.{field} is not supported for rootless Podman until application preparation is execution-user aware"
+            )
 
 
 def _systemd(value: Any, *, name: str) -> dict[str, Any]:
@@ -624,7 +852,7 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
 
     environment = _environment(cfg["environment"], name=f"{name}.environment") if "environment" in cfg else {}
 
-    deploy = _deploy(cfg["deploy"], name=f"{name}.deploy") if "deploy" in cfg else {}
+    deploy = _deploy(cfg["deploy"], name=f"{name}.deploy") if "deploy" in cfg else {"execution": {"mode": "rootful"}}
     if "host" in deploy:
         container["host"] = deploy["host"]
 
@@ -669,11 +897,24 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
     postgres = _as_mapping(cfg["postgres"], name=f"{name}.postgres") if "postgres" in cfg else {}
     traefik = _as_mapping(cfg["traefik"], name=f"{name}.traefik") if "traefik" in cfg else {}
 
+    _validate_rootless_subset(
+        cfg,
+        name=name,
+        image=image,
+        deploy=deploy,
+        container=container,
+        network=network,
+        volumes=volumes,
+        host_paths=host_paths,
+        secret_attachments=secret_attachments,
+    )
+
     return {
         "name": service_name,
         "unit_name": unit_name,
         "description": description,
         "image": image,
+        "execution": deploy["execution"],
         "container": container,
         "env": environment,
         "secrets": [],
@@ -695,8 +936,9 @@ class FilterModule:
         Returns:
             A mapping exposing ``podman_service_normalize``,
             ``podman_env_file_key``, ``podman_env_file_value``,
-            ``podman_image_reference_drift``, ``podman_secret_policy``, and
-            ``podman_secret_declarations``.
+            ``podman_image_reference_drift``, ``podman_secret_policy``,
+            ``podman_secret_declarations``, ``podman_subid_range``, and
+            ``podman_rootless_account_contract``.
         """
         return {
             "podman_service_normalize": podman_service_normalize,
@@ -705,4 +947,6 @@ class FilterModule:
             "podman_image_reference_drift": podman_image_reference_drift,
             "podman_secret_policy": podman_secret_policy,
             "podman_secret_declarations": podman_secret_declarations,
+            "podman_subid_range": podman_subid_range,
+            "podman_rootless_account_contract": podman_rootless_account_contract,
         }

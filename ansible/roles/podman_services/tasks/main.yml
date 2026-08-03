@@ -12,6 +12,17 @@
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
 ################################
+# EXECUTION PREPARATION
+################################
+
+- name: Podman services | Include execution preparation tasks
+  ansible.builtin.include_tasks:
+    file: sub_tasks/execution_prepare.yml
+    apply:
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+################################
 # EXTERNAL NETWORK PREFLIGHT
 ################################
 
@@ -21,6 +32,9 @@
     - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
     - podman_services_service.network is mapping
     - podman_services_service.network.external | bool
+  become: true
+  become_user: "{{ podman_services_execution.host_user | default('root') }}"
+  environment: "{{ podman_services_runtime_environment }}"
   ansible.builtin.command:
     argv:
       - podman
@@ -100,6 +114,8 @@
   when:
     - not ansible_check_mode
     - podman_services_state == 'recreate'
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
   ansible.builtin.command:
     argv:
       - systemctl
@@ -116,6 +132,8 @@
   when:
     - not ansible_check_mode
     - podman_services_state == 'recreate'
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
     - podman_services_recreate_unit_load_state.stdout | trim != 'not-found'
   ansible.builtin.systemd_service:
     name: "{{ podman_services_unit_name }}"

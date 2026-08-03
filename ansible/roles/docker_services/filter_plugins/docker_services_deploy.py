@@ -209,6 +209,8 @@ def docker_services_build_deploy_config(
         raise AnsibleFilterError(f"deploy config must be a mapping, got {type(deploy_cfg).__name__}.")
 
     deploy_cfg = dict(deploy_cfg)
+    if "execution" in deploy_cfg:
+        raise AnsibleFilterError("deploy.execution is only supported by the Podman adapter")
 
     deploy_mode = _normalize_mode(_first_defined(mode, deploy_cfg.get("mode"), "replicated"))
 

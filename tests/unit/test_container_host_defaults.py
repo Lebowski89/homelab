@@ -364,6 +364,9 @@ all:
       when: inventory_hostname == 'storage'
       ansible.builtin.include_tasks: {REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/init.yml"}
       vars:
+        podman_services_execution_state_dir: /var/lib/podman-services
+        podman_services_rootless_home_root: /var/lib
+        podman_services_system_quadlet_dir: /etc/containers/systemd
         podman_services_service_cfg:
           enabled: true
           runtime: podman

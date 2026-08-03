@@ -335,3 +335,17 @@ def test_non_mapping_override_fails():
         assert "deploy_restart_policy override must be a mapping" in str(exc)
     else:
         raise AssertionError("Expected non-mapping override to fail")
+
+
+def test_docker_rejects_podman_execution_contract():
+    plugin = load_plugin()
+
+    try:
+        plugin.docker_services_build_deploy_config(
+            {"type": "container", "execution": {"mode": "rootless", "host_user": "podman-adminer"}},
+            profiles=deploy_profiles(),
+        )
+    except Exception as exc:
+        assert "deploy.execution is only supported by the Podman adapter" in str(exc)
+    else:
+        raise AssertionError("Expected Docker to reject deploy.execution")

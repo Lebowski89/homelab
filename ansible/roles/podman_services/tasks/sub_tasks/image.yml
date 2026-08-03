@@ -5,6 +5,9 @@
     - not ansible_check_mode
     - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
     - podman_services_pull_images | bool
+  become: true
+  become_user: "{{ podman_services_execution.host_user | default('root') }}"
+  environment: "{{ podman_services_runtime_environment }}"
   containers.podman.podman_image:
     name: "{{ podman_services_service.image }}"
     state: present

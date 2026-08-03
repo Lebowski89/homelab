@@ -16,13 +16,13 @@ service_common_filters = importlib.util.module_from_spec(common_filter_spec)
 common_filter_spec.loader.exec_module(service_common_filters)
 
 
-def render(name, service):
+def render(name, service, quadlet_dir="/etc/containers/systemd"):
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), trim_blocks=True, lstrip_blocks=True)
     env.filters["podman_env_file_key"] = podman_services_filters.podman_env_file_key
     env.filters["podman_env_file_value"] = podman_services_filters.podman_env_file_value
     return env.get_template(name).render(
         podman_service=service,
-        podman_services_quadlet_dir="/etc/containers/systemd",
+        podman_services_quadlet_dir=quadlet_dir,
     )
 
 
@@ -31,6 +31,7 @@ def service():
         "name": "n8n",
         "unit_name": "n8n",
         "description": "n8n",
+        "execution": {"mode": "rootful"},
         "image": "docker.io/n8nio/n8n:2.31.4",
         "network": {"name": "n8n", "driver": "bridge", "external": False},
         "volumes": [{"name": "n8n-data", "target": "/home/node/.n8n"}],
@@ -361,3 +362,19 @@ def test_explicit_canonical_name_controls_container_and_environment_artifacts():
     assert "ContainerName=portable-custom" in rendered
     assert "EnvironmentFile=/etc/containers/systemd/portable-custom.env" in rendered
     assert "portable-target.env" not in rendered
+
+
+def test_rootless_container_quadlet_uses_user_path_and_default_target_without_runtime_env_leakage():
+    svc = service()
+    svc["execution"] = {"mode": "rootless", "host_user": "podman-adminer"}
+    quadlet_dir = "/var/lib/podman-adminer/.config/containers/systemd"
+
+    rendered = render("container.container.j2", svc, quadlet_dir)
+
+    assert f"EnvironmentFile={quadlet_dir}/n8n.env" in rendered
+    assert "WantedBy=default.target" in rendered
+    assert "WantedBy=multi-user.target" not in rendered
+    assert "HOME=" not in rendered
+    assert "XDG_RUNTIME_DIR" not in rendered
+    assert "DBUS_SESSION_BUS_ADDRESS" not in rendered
+    assert "NoNewPrivileges=true" in rendered

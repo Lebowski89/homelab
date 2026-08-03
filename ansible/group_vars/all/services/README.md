@@ -100,6 +100,7 @@ dispatch, so inventory-derived values resolve in the correct host context.
 | `postgres.user_var` / `password_var` | Schema default | `postgres_user` / `postgres_pass`. |
 | PostgreSQL address | Derived | `host_inventory` becomes the controller and `host` becomes that host's `local_ip`. |
 | `deploy.type` | Docker role default | `swarm`. Podman always runs one local Quadlet instance. |
+| `deploy.execution.mode` | Podman default | `rootful`. Existing Podman services keep system Quadlets unless they opt into rootless execution. |
 | `deploy.mode` / `replicas` | Role default | Docker: `replicated` / `1`; Podman accepts only those explicit values. |
 | `deploy.profile` | Docker role default | `none`. Non-`none` profiles are Swarm-only. |
 | `paths[].state` | Common default | `directory`. |
@@ -417,6 +418,8 @@ plan without lookup or database connection.
 | `deploy` | Mapping | No | `{}` | Both | `docker_services` / `podman_services` | Placement and lifecycle metadata. |
 | `deploy.type` | String enum | No | Docker `swarm`; Podman single instance | Both | `docker_services` / `podman_services` | Docker accepts `swarm`/`container`. When supplied for Podman it must be exactly `container`; `swarm` is rejected. |
 | `deploy.host` | Host/group/list for Docker Swarm; one host for standalone/Podman | No | Docker controller; Podman catalog name | Both | `service_catalog` + `docker_services` / `podman_services` | Dispatch/filesystem placement. Swarm constraints, not this value, determine runtime node placement. |
+| `deploy.execution.mode` | String enum | No | `rootful` | Podman | `podman_services` | Selects `rootful` system Quadlets or `rootless` user Quadlets for container deployments. Docker rejects this Podman-owned declaration. |
+| `deploy.execution.host_user` | Host account name | Conditional | None | Podman | `podman_services` | Required when `mode` is `rootless` and must use the reserved `podman-` prefix. This dedicated locked, non-interactive host account owns Podman storage and its user systemd manager; it is separate from top-level container `user`. Existing accounts are reused only when persisted service ownership and the complete account contract match. |
 | `deploy.mode` | String enum | No | `replicated` | Both | `docker_services` / `podman_services` | Docker accepts `replicated`/`global`; Podman only `replicated`. |
 | `deploy.replicas` | Non-negative integer-like | No | `1` | Both | `docker_services` / `podman_services` | Docker replica count; Podman accepts only `1`. |
 | `deploy.profile` | Non-empty string | No | `none` | Docker | `docker_services` | `none`, `standard`, `careful`, or `stateless_ha`. Non-`none` is invalid for standalone; Podman rejects the field. |
@@ -729,8 +732,8 @@ example_quadlet:
     restart_sec: 15s
 ```
 
-For larger examples, see `n8n.yml` for Podman and
-`radarr.yml`/`sonarr.yml` for base-plus-target inheritance. Their values are
+For complete Podman examples, see `adminer.yml` and `n8n.yml`. For
+base-plus-target inheritance, see `radarr.yml` and `sonarr.yml`. Their values are
 environment-specific; this reference defines the schema.
 
 ## Removed and unsupported fields

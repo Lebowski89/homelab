@@ -1077,3 +1077,290 @@ def test_nonempty_docker_runtime_options_are_not_silently_ignored_by_podman():
 
     with pytest.raises(AnsibleFilterError, match=r"runtime_options\.docker.*synthetic"):
         podman_services.podman_service_normalize(cfg, "portable")
+
+
+def rootless_cfg():
+    return {
+        "runtime": "podman",
+        "image": "registry.example.invalid/adminer:5.4.2",
+        "user": "1000:1000",
+        "named_networks": {"adminer": {"driver": "bridge", "external": False}},
+        "ports": [{"published": 18080, "target": 8080, "protocol": "tcp"}],
+        "deploy": {
+            "type": "container",
+            "host": "manager",
+            "execution": {"mode": "rootless", "host_user": "podman-adminer"},
+        },
+        "cap_add": [],
+        "cap_drop": ["all"],
+        "no_new_privileges": True,
+    }
+
+
+def test_omitted_execution_defaults_to_rootful_without_mutating_source():
+    cfg = minimal_canonical_cfg()
+    original = deepcopy(cfg)
+
+    normalized = podman_services.podman_service_normalize(cfg, "portable")
+
+    assert normalized["execution"] == {"mode": "rootful"}
+    assert cfg == original
+
+
+def test_explicit_rootful_execution_is_accepted():
+    cfg = minimal_canonical_cfg()
+    cfg["deploy"] = {"type": "container", "execution": {"mode": "rootful"}}
+
+    normalized = podman_services.podman_service_normalize(cfg, "portable")
+
+    assert normalized["execution"] == {"mode": "rootful"}
+
+
+def test_rootless_execution_is_normalized_and_container_user_remains_independent():
+    cfg = rootless_cfg()
+    original = deepcopy(cfg)
+
+    normalized = podman_services.podman_service_normalize(cfg, "adminer")
+
+    assert normalized["execution"] == {"mode": "rootless", "host_user": "podman-adminer"}
+    assert normalized["container"]["uid"] == "1000"
+    assert normalized["container"]["gid"] == "1000"
+    assert cfg == original
+
+
+@pytest.mark.parametrize("execution", [{}, {"host_user": "podman-adminer"}])
+def test_present_execution_requires_mode(execution):
+    cfg = rootless_cfg()
+    cfg["deploy"]["execution"] = execution
+
+    with pytest.raises(AnsibleFilterError, match=r"deploy\.execution\.mode"):
+        podman_services.podman_service_normalize(cfg, "adminer")
+
+
+@pytest.mark.parametrize("mode", [None, "", 0, False, [], {}])
+def test_execution_rejects_null_empty_and_non_string_modes(mode):
+    cfg = rootless_cfg()
+    cfg["deploy"]["execution"]["mode"] = mode
+
+    with pytest.raises(AnsibleFilterError, match=r"deploy\.execution\.mode"):
+        podman_services.podman_service_normalize(cfg, "adminer")
+
+
+def test_execution_rejects_unsupported_mode():
+    cfg = rootless_cfg()
+    cfg["deploy"]["execution"]["mode"] = "daemonless"
+
+    with pytest.raises(AnsibleFilterError, match=r"rootful.*rootless"):
+        podman_services.podman_service_normalize(cfg, "adminer")
+
+
+@pytest.mark.parametrize("host_user", [None, "", "root", "mgt", "Adminer", "podman adminer", "42adminer", []])
+def test_rootless_execution_requires_valid_host_user(host_user):
+    cfg = rootless_cfg()
+    if host_user is None:
+        del cfg["deploy"]["execution"]["host_user"]
+    else:
+        cfg["deploy"]["execution"]["host_user"] = host_user
+
+    with pytest.raises(AnsibleFilterError, match=r"deploy\.execution\.host_user"):
+        podman_services.podman_service_normalize(cfg, "adminer")
+
+
+def test_rootful_execution_rejects_host_user():
+    cfg = minimal_canonical_cfg()
+    cfg["deploy"] = {
+        "type": "container",
+        "execution": {"mode": "rootful", "host_user": "podman-adminer"},
+    }
+
+    with pytest.raises(AnsibleFilterError, match=r"host_user is only valid"):
+        podman_services.podman_service_normalize(cfg, "portable")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("paths", [{"path": "/opt/adminer"}]),
+        ("volumes", [{"type": "volume", "source": "adminer", "target": "/data"}]),
+        ("cap_add", ["NET_ADMIN"]),
+        ("secrets", ["adminer_secret"]),
+        ("copies", [{"src": "synthetic", "dest": "/opt/adminer/config"}]),
+        ("templates", [{"src": "synthetic.j2", "dest": "/opt/adminer/config"}]),
+        ("application_prepare", {"handler": "synthetic"}),
+        ("prep", {"synthetic": True}),
+    ],
+)
+def test_rootless_execution_rejects_unsupported_initial_capabilities(field, value):
+    cfg = rootless_cfg()
+    cfg[field] = value
+
+    with pytest.raises(AnsibleFilterError, match=field):
+        podman_services.podman_service_normalize(cfg, "adminer")
+
+
+@pytest.mark.parametrize(
+    ("port", "message"),
+    [
+        ({"published": 443, "target": 8080, "protocol": "tcp"}, "privileged port"),
+        ({"published": 18080, "target": 8080, "protocol": "udp"}, "protocol"),
+    ],
+)
+def test_rootless_execution_rejects_unsupported_ports(port, message):
+    cfg = rootless_cfg()
+    cfg["ports"] = [port]
+
+    with pytest.raises(AnsibleFilterError, match=message):
+        podman_services.podman_service_normalize(cfg, "adminer")
+
+
+def test_rootless_execution_requires_managed_bridge_network():
+    cfg = rootless_cfg()
+    cfg["named_networks"] = {"adminer": {"external": True}}
+
+    with pytest.raises(AnsibleFilterError, match=r"managed bridge"):
+        podman_services.podman_service_normalize(cfg, "adminer")
+
+
+def test_rootless_execution_rejects_native_infisical_secret_metadata():
+    cfg = rootless_cfg()
+    cfg["infisical"] = {"secrets_map": [{"var": "key", "path": "/Synthetic", "name": "KEY", "secret": {"name": "key"}}]}
+
+    with pytest.raises(AnsibleFilterError, match=r"secrets"):
+        podman_services.podman_service_normalize(cfg, "adminer")
+
+
+def test_rootless_execution_requires_fully_qualified_exact_image():
+    cfg = rootless_cfg()
+    cfg["image"] = "adminer:5.4.2"
+
+    with pytest.raises(AnsibleFilterError, match=r"fully qualified"):
+        podman_services.podman_service_normalize(cfg, "adminer")
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("devices", ["/dev/null:/dev/null"]),
+        ("network_mode", "host"),
+        ("privileged", True),
+    ],
+)
+def test_rootless_execution_rejects_unsupported_host_access_fields(field, value):
+    cfg = rootless_cfg()
+    cfg[field] = value
+
+    with pytest.raises(AnsibleFilterError, match=rf"adminer.*{field}"):
+        podman_services.podman_service_normalize(cfg, "adminer")
+
+
+def rootless_account_context():
+    return {
+        "host_user": "podman-adminer",
+        "service": "adminer",
+        "comment": "Managed rootless Podman account for adminer",
+        "home": "/var/lib/podman-adminer",
+        "shell": "/usr/sbin/nologin",
+        "account": ["x", "1001", "1001", "Managed rootless Podman account for adminer", "/var/lib/podman-adminer", "/usr/sbin/nologin"],
+        "group": ["x", "1001", ""],
+        "group_names": ["podman-adminer"],
+        "password_locked": True,
+        "home_exists": True,
+        "marker": {},
+        "persisted": {
+            "managed_by": "podman_services",
+            "service": "adminer",
+            "mode": "rootless",
+            "host_user": "podman-adminer",
+            "uid": "1001",
+            "gid": "1001",
+        },
+    }
+
+
+def test_rootless_account_contract_creates_only_when_every_owned_object_is_absent():
+    context = rootless_account_context()
+    context.update(
+        {
+            "account": None,
+            "group": None,
+            "group_names": [],
+            "password_locked": False,
+            "home_exists": False,
+            "persisted": {},
+        }
+    )
+
+    assert podman_services.podman_rootless_account_contract(context) == {"create": True}
+
+
+def test_rootless_account_contract_adopts_the_exact_existing_adminer_account_from_legacy_state():
+    assert podman_services.podman_rootless_account_contract(rootless_account_context()) == {"create": False}
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("account", ["x", "1001", "1001", "ordinary account", "/var/lib/podman-adminer", "/usr/sbin/nologin"]),
+        ("group_names", ["podman-adminer", "sudo"]),
+        ("password_locked", False),
+    ],
+)
+def test_rootless_account_contract_rejects_incompatible_existing_accounts(field, value):
+    context = rootless_account_context()
+    context[field] = value
+
+    with pytest.raises(AnsibleFilterError, match=r"does not match the dedicated managed contract"):
+        podman_services.podman_rootless_account_contract(context)
+
+
+def test_rootless_account_contract_rejects_uid_zero_even_with_matching_metadata():
+    context = rootless_account_context()
+    context["account"][1] = "0"
+    context["persisted"]["uid"] = "0"
+
+    with pytest.raises(AnsibleFilterError, match=r"UID or GID 0"):
+        podman_services.podman_rootless_account_contract(context)
+
+
+def test_rootless_account_contract_rejects_an_unmanaged_preexisting_home():
+    context = rootless_account_context()
+    context.update({"account": None, "group": None, "marker": {}, "persisted": {}})
+
+    with pytest.raises(AnsibleFilterError, match=r"unmanaged home"):
+        podman_services.podman_rootless_account_contract(context)
+
+
+def test_rootless_account_contract_rejects_cross_service_account_reuse():
+    context = rootless_account_context()
+    context["persisted"] = {}
+    context["marker"] = {
+        "managed_by": "podman_services",
+        "service": "another-service",
+        "host_user": "podman-adminer",
+        "home": "/var/lib/podman-adminer",
+        "uid": "1001",
+        "gid": "1001",
+    }
+
+    with pytest.raises(AnsibleFilterError, match=r"cross-service reuse"):
+        podman_services.podman_rootless_account_contract(context)
+
+
+def test_subordinate_id_range_requires_one_full_rootless_allocation():
+    value = "other:100000:65536\npodman-adminer:165536:65536\n"
+
+    assert podman_services.podman_subid_range(value, "podman-adminer") == {"start": 165536, "count": 65536}
+
+
+@pytest.mark.parametrize(
+    ("value", "message"),
+    [
+        ("other:100000:65536\n", "found 0"),
+        ("podman-adminer:165536:1024\n", "at least 65536"),
+        ("podman-adminer:165536:65536\npodman-adminer:231072:65536\n", "found 2"),
+        ("podman-adminer:not-a-number:65536\n", "Malformed"),
+    ],
+)
+def test_subordinate_id_range_rejects_missing_small_duplicate_and_malformed_entries(value, message):
+    with pytest.raises(AnsibleFilterError, match=message):
+        podman_services.podman_subid_range(value, "podman-adminer")

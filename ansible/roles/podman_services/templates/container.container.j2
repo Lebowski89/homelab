@@ -62,4 +62,4 @@ Restart={{ container_systemd.restart | default('on-failure') }}
 RestartSec={{ container_systemd.restart_sec | default('15s') }}
 
 [Install]
-WantedBy=multi-user.target
+WantedBy={{ 'default.target' if (podman_service.execution | default({'mode': 'rootful'})).mode == 'rootless' else 'multi-user.target' }}
