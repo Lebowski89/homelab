@@ -23,6 +23,22 @@
       }}
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
+- name: Execution | Validate persisted execution state version
+  when: podman_services_execution_state_stat.stat.exists | bool
+  ansible.builtin.assert:
+    that:
+      - podman_services_execution_state is mapping
+      - >-
+        podman_services_execution_state.version is not defined
+        or podman_services_execution_state.version is integer
+      - >-
+        podman_services_execution_state.version is not defined
+        or podman_services_execution_state.version == 2
+    fail_msg: >-
+      Persisted execution state for {{ podman_services_service.name }} must be
+      versionless legacy state or explicit integer version 2.
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
 - name: Execution | Validate persisted execution state
   when: podman_services_execution_state_stat.stat.exists | bool
   ansible.builtin.assert:
@@ -52,6 +68,28 @@
       - >-
         podman_services_execution_state.resources is not defined
         or podman_services_execution_state.resources is mapping
+      - >-
+        podman_services_execution_state.version | default(0) != 2
+        or (
+          (podman_services_execution_state.resources | default({})).network
+          | default(none) is mapping
+        )
+      - >-
+        podman_services_execution_state.version | default(0) != 2
+        or (
+          (podman_services_execution_state.resources | default({})).volumes
+          | default(none) is sequence
+          and (podman_services_execution_state.resources | default({})).volumes
+          | default(none) is not string
+        )
+      - >-
+        podman_services_execution_state.version | default(0) != 2
+        or (
+          (podman_services_execution_state.resources | default({})).generated_files
+          | default(none) is sequence
+          and (podman_services_execution_state.resources | default({})).generated_files
+          | default(none) is not string
+        )
     fail_msg: >-
       Refusing to use invalid persisted execution state for
       {{ podman_services_service.name }}.
@@ -64,7 +102,7 @@
   register: podman_services_legacy_rootful_quadlet
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Execution | Derive active and previous execution owners
+- name: Execution | Derive active execution owner
   ansible.builtin.set_fact:
     podman_services_active_execution: >-
       {{
@@ -86,26 +124,11 @@
           else {'mode': 'none'}
         )
       }}
-    podman_services_previous_execution: >-
-      {{
-        podman_services_execution_state
-        if podman_services_execution_state_stat.stat.exists | bool
-        else (
-          {
-            'mode': 'rootful',
-            'quadlet_dir': podman_services_system_quadlet_dir,
-            'unit_name': podman_services_unit_name,
-            'resources': {
-              'generated_files': [
-                podman_services_system_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.container',
-                podman_services_system_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.env'
-              ]
-            }
-          }
-          if podman_services_legacy_rootful_quadlet.stat.exists | default(false) | bool
-          else {'mode': 'none'}
-        )
-      }}
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Preserve active execution as previous owner
+  ansible.builtin.set_fact:
+    podman_services_previous_execution: "{{ podman_services_active_execution }}"
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
 - name: Execution | Derive selected execution owner

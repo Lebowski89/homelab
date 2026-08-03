@@ -364,17 +364,34 @@ def test_explicit_canonical_name_controls_container_and_environment_artifacts():
     assert "portable-target.env" not in rendered
 
 
-def test_rootless_container_quadlet_uses_user_path_and_default_target_without_runtime_env_leakage():
-    svc = service()
-    svc["execution"] = {"mode": "rootless", "host_user": "podman-adminer"}
+def test_rootless_quadlet_uses_normalized_service_environment_without_task_environment_leakage():
+    cfg = {
+        "runtime": "podman",
+        "image": "docker.io/library/adminer:5.4.2",
+        "environment": {
+            "HOME": "/application/home",
+            "APP_MODE": "synthetic",
+        },
+        "named_networks": {"adminer": {"driver": "bridge", "external": False}},
+        "ports": [{"published": 18080, "target": 8080, "protocol": "tcp"}],
+        "no_new_privileges": True,
+        "deploy": {
+            "type": "container",
+            "host": "podman01",
+            "execution": {"mode": "rootless", "host_user": "podman-adminer"},
+        },
+    }
+    svc = podman_services_filters.podman_service_normalize(cfg, "adminer")
     quadlet_dir = "/var/lib/podman-adminer/.config/containers/systemd"
 
-    rendered = render("container.container.j2", svc, quadlet_dir)
+    container = render("container.container.j2", svc, quadlet_dir)
+    environment = render("env.env.j2", svc, quadlet_dir)
 
-    assert f"EnvironmentFile={quadlet_dir}/n8n.env" in rendered
-    assert "WantedBy=default.target" in rendered
-    assert "WantedBy=multi-user.target" not in rendered
-    assert "HOME=" not in rendered
-    assert "XDG_RUNTIME_DIR" not in rendered
-    assert "DBUS_SESSION_BUS_ADDRESS" not in rendered
-    assert "NoNewPrivileges=true" in rendered
+    assert f"EnvironmentFile={quadlet_dir}/adminer.env" in container
+    assert "WantedBy=default.target" in container
+    assert "WantedBy=multi-user.target" not in container
+    assert "NoNewPrivileges=true" in container
+    assert "HOME=/application/home" in environment
+    assert "APP_MODE=synthetic" in environment
+    assert "XDG_RUNTIME_DIR" not in environment
+    assert "DBUS_SESSION_BUS_ADDRESS" not in environment

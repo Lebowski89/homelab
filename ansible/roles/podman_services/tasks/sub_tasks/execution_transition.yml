@@ -1,6 +1,6 @@
 ---
 
-- name: Transition | Derive previous execution resources
+- name: Transition | Derive previous Quadlet directory
   ansible.builtin.set_fact:
     podman_services_previous_quadlet_dir: >-
       {{
@@ -11,31 +11,26 @@
             else podman_services_system_quadlet_dir
           )
       }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Derive previous execution resources
+  ansible.builtin.set_fact:
     podman_services_previous_unit_name: >-
       {{ podman_services_previous_execution.unit_name | default(podman_services_unit_name) }}
     podman_services_previous_network: >-
-      {{ (podman_services_previous_execution.resources | default({})).network | default({}) }}
+      {{
+        (podman_services_previous_execution.resources | default({})).network | default({})
+        if podman_services_previous_execution.version | default(0) == 2
+        else {}
+      }}
     podman_services_stale_generated_paths: >-
       {{
         (podman_services_previous_execution.resources | default({})).generated_files
-        | default([
-            (
-              podman_services_previous_execution.quadlet_dir
-              | default(
-                  podman_services_previous_execution.home ~ '/.config/containers/systemd'
-                  if podman_services_previous_execution.mode == 'rootless'
-                  else podman_services_system_quadlet_dir
-                )
-            ) ~ '/' ~ podman_services_service.unit_name ~ '.container',
-            (
-              podman_services_previous_execution.quadlet_dir
-              | default(
-                  podman_services_previous_execution.home ~ '/.config/containers/systemd'
-                  if podman_services_previous_execution.mode == 'rootless'
-                  else podman_services_system_quadlet_dir
-                )
-            ) ~ '/' ~ podman_services_service.unit_name ~ '.env'
-          ])
+        if podman_services_previous_execution.version | default(0) == 2
+        else [
+          podman_services_previous_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.container',
+          podman_services_previous_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.env'
+        ]
       }}
     podman_services_previous_runtime_environment: >-
       {{
@@ -47,6 +42,18 @@
         if podman_services_previous_execution.mode == 'rootless'
         else {}
       }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Transition | Report versionless unproven resource retention
+  when:
+    - podman_services_previous_execution.version is not defined
+    - podman_services_previous_execution.resources | default({}) | length > 0
+  ansible.builtin.debug:
+    msg: >-
+      Versionless execution state proves ownership only of the deliberate
+      container and environment fallback files; unproven networks, volumes,
+      and other generated resources are retained.
+  changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Transition | Validate previous resource metadata

@@ -596,7 +596,10 @@ def test_quadlet_filename_and_resource_names_are_validated(location, value, matc
 
 
 def test_service_name_used_for_unit_filename_is_validated():
-    with pytest.raises(AnsibleFilterError, match=r".name"):
+    with pytest.raises(
+        AnsibleFilterError,
+        match=r"\.\./portable\.name must be a valid Quadlet resource name",
+    ):
         podman_services.podman_service_normalize(minimal_canonical_cfg(), "../portable")
 
 
@@ -1245,7 +1248,7 @@ def test_rootless_execution_requires_fully_qualified_exact_image():
         ("privileged", True),
     ],
 )
-def test_rootless_execution_rejects_unsupported_host_access_fields(field, value):
+def test_unsupported_top_level_host_access_fields_are_rejected(field, value):
     cfg = rootless_cfg()
     cfg[field] = value
 
@@ -1295,6 +1298,21 @@ def test_rootless_account_contract_creates_only_when_every_owned_object_is_absen
 
 def test_rootless_account_contract_adopts_the_exact_existing_adminer_account_from_legacy_state():
     assert podman_services.podman_rootless_account_contract(rootless_account_context()) == {"create": False}
+
+
+def test_rootless_account_contract_adopts_an_exact_marker_owned_account_without_state():
+    context = rootless_account_context()
+    context["persisted"] = {}
+    context["marker"] = {
+        "managed_by": "podman_services",
+        "service": "adminer",
+        "host_user": "podman-adminer",
+        "home": "/var/lib/podman-adminer",
+        "uid": "1001",
+        "gid": "1001",
+    }
+
+    assert podman_services.podman_rootless_account_contract(context) == {"create": False}
 
 
 @pytest.mark.parametrize(

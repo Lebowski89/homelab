@@ -1,5 +1,16 @@
 ---
 
+- name: Prep | Validate rootless Quadlet render plan
+  when:
+    - ansible_check_mode
+    - podman_services_state != 'remove'
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.include_tasks:
+    file: sub_tasks/check_render.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Prep | Ensure selected Quadlet directory exists
   when:
     - podman_services_state != 'remove'

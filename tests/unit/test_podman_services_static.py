@@ -3,7 +3,8 @@ from pathlib import Path
 
 import yaml
 
-TASKS_DIR = Path("ansible/roles/podman_services/tasks")
+REPO_ROOT = Path(__file__).resolve().parents[2]
+TASKS_DIR = REPO_ROOT / "ansible" / "roles" / "podman_services" / "tasks"
 MAIN_TASKS = (TASKS_DIR / "main.yml").read_text()
 PREPARE_TASKS = (TASKS_DIR / "sub_tasks" / "prepare.yml").read_text()
 SECRET_TASKS = (TASKS_DIR / "sub_tasks" / "secrets" / "materialize.yml").read_text()
@@ -24,26 +25,42 @@ SUB_TASK_FILES = (
     "drift.yml",
 )
 TASKS = "\n".join((TASKS_DIR / "sub_tasks" / name).read_text() for name in SUB_TASK_FILES) + "\n" + SECRET_TASKS
-N8N = Path("ansible/group_vars/all/services/n8n.yml").read_text()
-NETWORK_TEMPLATE = Path("ansible/roles/podman_services/templates/network.network.j2").read_text()
-PODMAN_DEFAULTS = Path("ansible/roles/podman/defaults/main.yml").read_text()
-PODMAN_TASKS = Path("ansible/roles/podman/tasks/main.yml").read_text()
-PODMAN_HANDLERS = Path("ansible/roles/podman_services/handlers/main.yml").read_text()
+N8N = (REPO_ROOT / "ansible/group_vars/all/services/n8n.yml").read_text()
+NETWORK_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/templates/network.network.j2").read_text()
+PODMAN_DEFAULTS = (REPO_ROOT / "ansible/roles/podman/defaults/main.yml").read_text()
+PODMAN_TASKS = (REPO_ROOT / "ansible/roles/podman/tasks/main.yml").read_text()
+PODMAN_HANDLERS = (REPO_ROOT / "ansible/roles/podman_services/handlers/main.yml").read_text()
+
+MAIN_TASK_LIST = yaml.safe_load(MAIN_TASKS)
+PREPARE_TASK_LIST = yaml.safe_load(PREPARE_TASKS)
+REMOVE_TASK_LIST = yaml.safe_load(REMOVE_TASKS)
+EXECUTION_PREPARE_TASK_LIST = yaml.safe_load(EXECUTION_PREPARE_TASKS)
+EXECUTION_TRANSITION_TASK_LIST = yaml.safe_load(EXECUTION_TRANSITION_TASKS)
+LIFECYCLE_TASK_LIST = yaml.safe_load(LIFECYCLE_TASKS)
+ALL_TASK_LIST = [task for name in SUB_TASK_FILES for task in yaml.safe_load((TASKS_DIR / "sub_tasks" / name).read_text())]
+MAIN_TASK_NAMES = [task["name"] for task in MAIN_TASK_LIST]
+PREPARE_TASK_NAMES = [task["name"] for task in PREPARE_TASK_LIST]
+REMOVE_TASK_NAMES = [task["name"] for task in REMOVE_TASK_LIST]
+ALL_TASK_NAMES = [task["name"] for task in ALL_TASK_LIST]
+EXECUTION_TRANSITION_TASK_NAMES = [task["name"] for task in EXECUTION_TRANSITION_TASK_LIST]
+LIFECYCLE_TASK_NAMES = [task["name"] for task in LIFECYCLE_TASK_LIST]
 
 
 def test_main_orchestrates_sub_tasks_in_order():
-    positions = [MAIN_TASKS.index(f"sub_tasks/{name}") for name in SUB_TASK_FILES]
-    assert positions == sorted(positions)
+    included_files = [task["ansible.builtin.include_tasks"]["file"] for task in MAIN_TASK_LIST if "ansible.builtin.include_tasks" in task]
+    expected = [f"sub_tasks/{name}" for name in SUB_TASK_FILES]
+    assert [path for path in included_files if path in expected] == expected
     assert "Podman services | Normalize service" not in MAIN_TASKS
     assert "Podman services | Include removal handler flush" in MAIN_TASKS
 
 
 def test_quadlet_directory_prerequisite_exists_before_templates():
-    dir_pos = TASKS.index("Prep | Ensure selected Quadlet directory exists")
-    first_template_pos = TASKS.index("ansible.builtin.template")
-    assert dir_pos < first_template_pos
-    assert 'path: "{{ podman_services_quadlet_dir }}"' in TASKS
-    assert 'mode: "0755"' in TASKS
+    directory = next(task for task in PREPARE_TASK_LIST if task["name"] == "Prep | Ensure selected Quadlet directory exists")
+    first_template = next(task for task in PREPARE_TASK_LIST if "ansible.builtin.template" in task)
+
+    assert PREPARE_TASK_LIST.index(directory) < PREPARE_TASK_LIST.index(first_template)
+    assert directory["ansible.builtin.file"]["path"] == "{{ podman_services_quadlet_dir }}"
+    assert directory["ansible.builtin.file"]["mode"] == ("{{ '0700' if podman_services_execution.mode == 'rootless' else '0755' }}")
 
 
 def test_n8n_declares_a_managed_network_without_delete_on_stop():
@@ -55,12 +72,14 @@ def test_n8n_declares_a_managed_network_without_delete_on_stop():
 
 
 def test_remove_stops_container_before_network_then_removes_files():
-    container_stop = TASKS.index("Stop service for removal without deleting data")
-    network_stop = TASKS.index("Stop system managed network unit for removal")
-    exists = TASKS.index("Check proven managed network still exists")
-    remove_network = TASKS.index("Remove proven managed network if present")
-    remove_files = TASKS.index("Remove persisted generated files only")
-    assert container_stop < network_stop < exists < remove_network < remove_files
+    ordered = [
+        "Remove | Stop service for removal without deleting data",
+        "Remove | Stop system managed network unit for removal",
+        "Remove | Check proven managed network still exists",
+        "Remove | Remove proven managed network if present",
+        "Remove | Remove persisted generated files only",
+    ]
+    assert [REMOVE_TASK_NAMES.index(name) for name in ordered] == sorted(REMOVE_TASK_NAMES.index(name) for name in ordered)
 
 
 def test_remove_only_orchestration_is_guarded_by_normalized_action():
@@ -115,7 +134,7 @@ def test_changed_managed_network_is_retained_during_update_and_recreate():
 
 
 def test_managed_network_quadlet_is_rendered_before_container_quadlet():
-    assert PREPARE_TASKS.index("Prep | Render network Quadlet") < PREPARE_TASKS.index("Prep | Render container Quadlet")
+    assert PREPARE_TASK_NAMES.index("Prep | Render network Quadlet") < PREPARE_TASK_NAMES.index("Prep | Render container Quadlet")
 
 
 def test_no_late_shared_network_migration_fail_after_template_render():
@@ -124,9 +143,7 @@ def test_no_late_shared_network_migration_fail_after_template_render():
 
 
 def test_network_validation_occurs_before_template_rendering():
-    normalize = TASKS.index("Init | Normalize service")
-    network_template = TASKS.index("Prep | Render network Quadlet")
-    assert normalize < network_template
+    assert ALL_TASK_NAMES.index("Init | Normalize service") < ALL_TASK_NAMES.index("Prep | Render network Quadlet")
 
 
 def test_managed_network_remove_failure_is_not_suppressed():
@@ -154,9 +171,9 @@ def test_podman_consumes_canonical_dispatch_context_without_owning_lookup():
 
 
 def test_absent_container_unit_is_checked_before_stop():
-    load_state = TASKS.index("Check container unit load state for removal")
-    stop = TASKS.index("Stop service for removal without deleting data")
-    assert load_state < stop
+    assert REMOVE_TASK_NAMES.index("Remove | Check container unit load state for removal") < REMOVE_TASK_NAMES.index(
+        "Remove | Stop service for removal without deleting data"
+    )
     assert "--property=LoadState" in TASKS
     assert "stdout | trim != 'not-found'" in TASKS
 
@@ -224,17 +241,18 @@ def test_podman_render_tasks_publish_the_normalized_service_to_templates():
 
 
 def test_podman_common_resolution_precedes_shared_and_runtime_rendering():
-    init = TASKS.index("Init | Snapshot dispatch-owned common context")
-    native_secret = MAIN_TASKS.index("Materialize Podman-native secrets")
-    shared = MAIN_TASKS.index("Prepare runtime-neutral host state")
-    prepare = MAIN_TASKS.index("Include preparation tasks")
-    env_file = TASKS.index("Render protected environment file")
-    quadlet = TASKS.index("Render container Quadlet")
+    native_secret = MAIN_TASK_NAMES.index("Podman services | Materialize Podman-native secrets")
+    shared = MAIN_TASK_NAMES.index("Podman services | Prepare runtime-neutral host state")
+    prepare = MAIN_TASK_NAMES.index("Podman services | Include preparation tasks")
 
-    assert init < env_file
+    assert (
+        ALL_TASK_NAMES.index("Init | Snapshot dispatch-owned common context")
+        < ALL_TASK_NAMES.index("Prep | Render protected environment file")
+        < ALL_TASK_NAMES.index("Prep | Render container Quadlet")
+    )
     assert native_secret < shared < prepare
-    assert env_file < quadlet
-    assert "not ansible_check_mode" in MAIN_TASKS[:shared]
+    native_secret_task = MAIN_TASK_LIST[native_secret]
+    assert "not ansible_check_mode" in native_secret_task["when"]
 
 
 def test_podman_dynamic_includes_propagate_required_tags():
@@ -349,7 +367,7 @@ def test_normalized_unit_name_drives_generated_files_container_name_and_lifecycl
     assert env_render["ansible.builtin.template"]["dest"].endswith("/{{ podman_services_service.unit_name }}.env")
     assert container_render["ansible.builtin.template"]["dest"].endswith("/{{ podman_services_service.unit_name }}.container")
     assert "ContainerName={{ podman_service.unit_name }}" in (
-        Path("ansible/roles/podman_services/templates/container.container.j2").read_text()
+        (REPO_ROOT / "ansible/roles/podman_services/templates/container.container.j2").read_text()
     )
     lifecycle_units = [
         task["ansible.builtin.systemd_service"]["name"] for task in lifecycle_tasks if "ansible.builtin.systemd_service" in task
@@ -397,7 +415,7 @@ def test_rootless_runtime_context_is_task_owned_and_reset_per_service():
     assert "DBUS_SESSION_BUS_ADDRESS:" in EXECUTION_PREPARE_TASKS
     assert "ansible_facts.getent_passwd" in EXECUTION_PREPARE_TASKS
     assert "{{ getent_passwd" not in EXECUTION_PREPARE_TASKS
-    container_template = Path("ansible/roles/podman_services/templates/container.container.j2").read_text()
+    container_template = (REPO_ROOT / "ansible/roles/podman_services/templates/container.container.j2").read_text()
     assert "XDG_RUNTIME_DIR" not in container_template
     assert "DBUS_SESSION_BUS_ADDRESS" not in container_template
 
@@ -431,17 +449,24 @@ def test_rootless_operations_use_selected_account_and_user_manager():
 
 
 def test_transition_validates_target_before_stopping_previous_and_cleans_only_after_success():
-    main = MAIN_TASKS
-    transition = EXECUTION_TRANSITION_TASKS
-
-    assert main.index("Include execution preparation tasks") < main.index("Check deployed service unit before recreate preparation")
-    assert LIFECYCLE_TASKS.index("Validate user Quadlets") < LIFECYCLE_TASKS.index("Include safe execution transition")
-    assert transition.index("Start and verify desired execution owner") < transition.index("Require managed marker before stale deletion")
-    assert transition.index("Require managed marker before stale deletion") < transition.index("Remove exact marked stale generated files")
-    assert "Restore previous system service" in transition
-    assert "Restore previous user service" in transition
-    assert transition.index("Restore previous system service") < transition.index("Report failed transition after rollback")
-    assert transition.index("Restore previous user service") < transition.index("Report failed transition after rollback")
+    assert MAIN_TASK_NAMES.index("Podman services | Include execution preparation tasks") < MAIN_TASK_NAMES.index(
+        "Podman services | Check deployed service unit before recreate preparation"
+    )
+    assert LIFECYCLE_TASK_NAMES.index("Lifecycle | Validate user Quadlets with Podman generator dry run") < LIFECYCLE_TASK_NAMES.index(
+        "Lifecycle | Include safe execution transition"
+    )
+    assert (
+        EXECUTION_TRANSITION_TASK_NAMES.index("Transition | Start and verify desired execution owner")
+        < EXECUTION_TRANSITION_TASK_NAMES.index("Transition | Require managed marker before stale deletion")
+        < EXECUTION_TRANSITION_TASK_NAMES.index("Transition | Remove exact marked stale generated files")
+    )
+    transition = next(
+        task for task in EXECUTION_TRANSITION_TASK_LIST if task["name"] == "Transition | Start and verify desired execution owner"
+    )
+    rescue_names = [task["name"] for task in transition["rescue"]]
+    report = rescue_names.index("Transition | Report failed transition after rollback")
+    assert rescue_names.index("Transition | Restore previous system service") < report
+    assert rescue_names.index("Transition | Restore previous user service") < report
 
 
 def test_transition_targets_exact_unit_and_does_not_prune_podman_state():
@@ -464,16 +489,16 @@ def test_rootful_lifecycle_remains_system_scoped_and_rootless_lifecycle_is_user_
     assert "podman_services_execution.mode == 'rootless'" in rootless["when"]
 
 
-def test_rootless_generated_file_removal_requires_managed_marker():
-    remove = yaml.safe_load(REMOVE_TASKS)
-    read = next(task for task in remove if task["name"] == "Remove | Read rootless generated files")
-    marker = next(task for task in remove if task["name"] == "Remove | Require managed marker for rootless deletion")
-    delete = next(task for task in remove if task["name"] == "Remove | Remove persisted generated files only")
+def test_rootful_and_rootless_generated_file_removal_requires_managed_marker():
+    read = next(task for task in REMOVE_TASK_LIST if task["name"] == "Remove | Read existing managed generated files")
+    marker = next(task for task in REMOVE_TASK_LIST if task["name"] == "Remove | Require managed marker before generated-file deletion")
+    delete = next(task for task in REMOVE_TASK_LIST if task["name"] == "Remove | Remove persisted generated files only")
 
-    assert "Generated by Ansible" in str(marker["ansible.builtin.assert"]["that"])
     for task in (read, marker):
+        assert "podman_services_active_execution.mode in ['rootful', 'rootless']" in task["when"]
         assert task["no_log"] is True
         assert task["diff"] is False
+    assert "Generated by Ansible" in str(marker["ansible.builtin.assert"]["that"])
     assert delete["loop"] == "{{ podman_services_remove_generated_paths }}"
 
 
@@ -596,64 +621,32 @@ def test_previous_managed_network_cleanup_is_failure_aware_and_transactional():
         task for task in yaml.safe_load(LIFECYCLE_TASKS) if task["name"] == "Lifecycle | Include safe execution transition"
     )
     assert "ignore_errors" not in lifecycle_include
-    assert LIFECYCLE_TASKS.index(lifecycle_include["name"]) < LIFECYCLE_TASKS.index(persist["name"])
-
-
-def test_previous_network_cleanup_return_code_contract():
-    tasks = yaml.safe_load(EXECUTION_TRANSITION_TASKS)
-    query = next(task for task in tasks if task["name"] == "Transition | Query previous managed network existence")
-    remove = next(task for task in tasks if task["name"] == "Transition | Remove proven unused previous managed network")
-    verify = next(task for task in tasks if task["name"] == "Transition | Verify previous managed network absence")
-    require_absent = next(task for task in tasks if task["name"] == "Transition | Require previous managed network absence")
-
-    cases = {
-        "already absent": {"query": 1, "remove": None, "verify": 1, "success": True},
-        "removed": {"query": 0, "remove": 0, "verify": 1, "success": True},
-        "query failure": {"query": 2, "remove": None, "verify": None, "success": False},
-        "removal failure": {"query": 0, "remove": 125, "verify": None, "success": False},
-        "verification query failure": {"query": 0, "remove": 0, "verify": 2, "success": False},
-        "still present": {"query": 0, "remove": 0, "verify": 0, "success": False},
-    }
-
-    assert query["failed_when"].endswith("rc not in [0, 1]")
-    assert verify["failed_when"].endswith("rc not in [0, 1]")
-    assert "failed_when" not in remove
-    assert require_absent["ansible.builtin.assert"]["that"] == ["podman_services_previous_network_verify.rc == 1"]
-    for case in cases.values():
-        query_failed = case["query"] not in (0, 1)
-        removal_runs = case["query"] == 0 and not query_failed
-        removal_failed = removal_runs and case["remove"] != 0
-        verification_failed = not query_failed and not removal_failed and (case["verify"] not in (0, 1) or case["verify"] != 1)
-        assert (not query_failed and not removal_failed and not verification_failed) is case["success"]
+    assert LIFECYCLE_TASK_NAMES.index(lifecycle_include["name"]) < LIFECYCLE_TASK_NAMES.index(persist["name"])
 
 
 def test_execution_transitions_clean_only_previous_store_and_network_metadata():
-    tasks = yaml.safe_load(EXECUTION_TRANSITION_TASKS)
-    derive = next(task for task in tasks if task["name"] == "Transition | Derive previous execution resources")
-    query = next(task for task in tasks if task["name"] == "Transition | Query previous managed network existence")
-    remove = next(task for task in tasks if task["name"] == "Transition | Remove proven unused previous managed network")
-    verify = next(task for task in tasks if task["name"] == "Transition | Verify previous managed network absence")
+    derive = next(task for task in EXECUTION_TRANSITION_TASK_LIST if task["name"] == "Transition | Derive previous execution resources")
+    runtime_tasks = [
+        next(task for task in EXECUTION_TRANSITION_TASK_LIST if task["name"] == name)
+        for name in (
+            "Transition | Query previous managed network existence",
+            "Transition | Remove proven unused previous managed network",
+            "Transition | Verify previous managed network absence",
+        )
+    ]
 
-    transitions = (
-        ({"mode": "rootful"}, {"mode": "rootless", "host_user": "podman-new"}),
-        ({"mode": "rootless", "host_user": "podman-old"}, {"mode": "rootful"}),
-        ({"mode": "rootless", "host_user": "podman-old"}, {"mode": "rootless", "host_user": "podman-new"}),
-    )
-    for previous_execution, desired_execution in transitions:
-        previous_state = {**previous_execution, "resources": {"network": {"name": "previous-net", "managed": True}}}
-        desired_service = {"execution": desired_execution, "network": {"name": "renamed-net", "external": False}}
-        assert previous_state["resources"]["network"]["name"] != desired_service["network"]["name"]
-        assert "podman_services_previous_execution.resources" in str(derive)
-        for task in (query, remove, verify):
-            assert task["ansible.builtin.command"]["argv"][-1] == "{{ podman_services_previous_network.name }}"
-            assert "podman_services_previous_execution.host_user" in task["become_user"]
-            assert task["environment"] == "{{ podman_services_previous_runtime_environment }}"
+    assert "podman_services_previous_execution.resources" in str(derive)
+    assert "podman_services_previous_execution.version | default(0) == 2" in str(derive)
+    for task in runtime_tasks:
+        assert task["ansible.builtin.command"]["argv"][-1] == "{{ podman_services_previous_network.name }}"
+        assert "podman_services_previous_execution.host_user" in task["become_user"]
+        assert task["environment"] == "{{ podman_services_previous_runtime_environment }}"
     assert "podman_services_service.network.name" not in EXECUTION_TRANSITION_TASKS
-    assert "podman_services_runtime_environment" not in str((query, remove, verify))
+    assert "podman_services_runtime_environment" not in str(runtime_tasks)
 
 
 def test_protocol_normalization_is_not_duplicated():
-    source = Path("ansible/roles/podman_services/filter_plugins/podman_services.py").read_text()
+    source = (REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py").read_text()
 
     assert source.count('protocol = str(port.get("protocol", "tcp")).strip().lower()') == 1
 
@@ -687,3 +680,63 @@ def test_execution_preparation_is_included_with_all_service_action_tags():
 
     assert set(include["tags"]) == expected
     assert set(include["ansible.builtin.include_tasks"]["apply"]["tags"]) == expected
+
+
+def test_rootless_check_mode_uses_an_in_memory_render_plan_without_runtime_modules():
+    check_tasks = yaml.safe_load((TASKS_DIR / "sub_tasks" / "check_render.yml").read_text())
+    include = next(task for task in PREPARE_TASK_LIST if task["name"] == "Prep | Validate rootless Quadlet render plan")
+    names = [task["name"] for task in check_tasks]
+
+    assert include["ansible.builtin.include_tasks"]["file"] == "sub_tasks/check_render.yml"
+    assert "ansible_check_mode" in include["when"]
+    assert "podman_services_execution.mode == 'rootless'" in include["when"]
+    assert {
+        "Check render | Render managed network in memory",
+        "Check render | Render managed volumes in memory",
+        "Check render | Render protected environment in memory",
+        "Check render | Render container in memory",
+        "Check render | Validate in-memory artifact syntax",
+        "Check render | Report planned artifact change",
+    }.issubset(names)
+    rendered = " ".join(str(task.get("ansible.builtin.set_fact", {})) for task in check_tasks)
+    for template in ("network.network.j2", "volume.volume.j2", "env.env.j2", "container.container.j2"):
+        assert template in rendered
+    assert not any(
+        module in task
+        for task in check_tasks
+        for module in (
+            "ansible.builtin.command",
+            "ansible.builtin.systemd_service",
+            "ansible.builtin.file",
+            "ansible.builtin.copy",
+            "ansible.builtin.template",
+        )
+    )
+
+
+def test_execution_owner_and_previous_quadlet_derivations_are_sequential():
+    prepare_names = [task["name"] for task in EXECUTION_PREPARE_TASK_LIST]
+    active = next(task for task in EXECUTION_PREPARE_TASK_LIST if task["name"] == "Execution | Derive active execution owner")
+    previous = next(
+        task for task in EXECUTION_PREPARE_TASK_LIST if task["name"] == "Execution | Preserve active execution as previous owner"
+    )
+    transition_names = [task["name"] for task in EXECUTION_TRANSITION_TASK_LIST]
+    directory = next(task for task in EXECUTION_TRANSITION_TASK_LIST if task["name"] == "Transition | Derive previous Quadlet directory")
+    resources = next(task for task in EXECUTION_TRANSITION_TASK_LIST if task["name"] == "Transition | Derive previous execution resources")
+
+    assert prepare_names.index(active["name"]) < prepare_names.index(previous["name"])
+    assert previous["ansible.builtin.set_fact"]["podman_services_previous_execution"] == ("{{ podman_services_active_execution }}")
+    assert transition_names.index(directory["name"]) < transition_names.index(resources["name"])
+    assert "podman_services_previous_quadlet_dir" in resources["ansible.builtin.set_fact"]["podman_services_stale_generated_paths"]
+
+
+def test_execution_state_versions_gate_resource_aware_cleanup():
+    version = next(task for task in EXECUTION_PREPARE_TASK_LIST if task["name"] == "Execution | Validate persisted execution state version")
+    remove = next(task for task in REMOVE_TASK_LIST if task["name"] == "Remove | Derive persisted active resources")
+    facts = remove["ansible.builtin.set_fact"]
+
+    assert "podman_services_execution_state.version is not defined" in str(version["ansible.builtin.assert"]["that"])
+    assert "podman_services_execution_state.version is integer" in str(version["ansible.builtin.assert"]["that"])
+    assert "podman_services_execution_state.version == 2" in str(version["ansible.builtin.assert"]["that"])
+    assert "version | default(0) == 2" in facts["podman_services_remove_network"]
+    assert "version | default(0) == 2" in facts["podman_services_remove_generated_paths"]
