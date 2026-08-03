@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/03 |
+| Readme update        | 2026/08/04 |
 
 
 
@@ -94,9 +94,12 @@
 | Check render ¦ Render protected environment in memory | ansible.builtin.set_fact | True |  |
 | Check render ¦ Render container in memory | ansible.builtin.set_fact | False |  |
 | Check render ¦ Validate in-memory artifact syntax | ansible.builtin.assert | False |  |
+| Check render ¦ Build sanitized artifact metadata | ansible.builtin.set_fact | False |  |
 | Check render ¦ Inspect live artifact destinations | ansible.builtin.stat | False |  |
 | Check render ¦ Read existing live artifacts | ansible.builtin.slurp | True |  |
+| Check render ¦ Build sanitized artifact change plan | ansible.builtin.set_fact | False |  |
 | Check render ¦ Report planned artifact change | ansible.builtin.debug | True |  |
+| Check render ¦ Clear secret-bearing comparison state | ansible.builtin.set_fact | False |  |
 
 #### File: tasks/sub_tasks/drift.yml
 
