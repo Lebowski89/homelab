@@ -162,7 +162,8 @@ def test_all_real_services_use_neutral_host_variables_and_keep_explicit_runtimes
 
     assert offenders == {}
     assert len(services) == 53
-    assert runtimes == {"docker": 52, "podman": 1}
+    assert runtimes == {"docker": 51, "podman": 2}
+    assert services["adminer"]["runtime"] == "podman"
     assert services["n8n"]["runtime"] == "podman"
 
 

@@ -5,14 +5,13 @@ adminer:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
+  runtime: podman
   tags: [utilities, adminer]
   name: adminer
-  stack: adminer
   ################################
   # IMAGE/PROCESS
   ################################
-  image: adminer:5.4.2
+  image: docker.io/library/adminer:5.4.2
   ################################
   # ENVIRONMENT/SECRETS
   ################################
@@ -25,23 +24,33 @@ adminer:
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    adminer:
+      driver: bridge
+      external: false
+  ports:
+    - host_ip: "{{ local_ip }}"
+      published: 18080
+      target: 8080
+      protocol: tcp
   ################################
   # INTEGRATIONS
   ################################
   traefik:
     enable: true
     exposure: private
-    port: 8080
+    port: 18080
+    backend_mode: host
+    backend_host_inventory: "{{ services_controller_host }}"
   ################################
   # RUNTIME/LIFECYCLE
   ################################
   deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    profile: standard
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-adminer
+  systemd:
+    after: [network-online.target]
+    restart: on-failure
+    restart_sec: 10s

@@ -1,29 +1,48 @@
 import importlib.util
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
+import yaml
 from ansible.errors import AnsibleFilterError
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2.nativetypes import NativeEnvironment
 
-TEMPLATE_DIR = Path(__file__).resolve().parents[2] / "ansible" / "roles" / "podman_services" / "templates"
-FILTER_PATH = Path(__file__).resolve().parents[2] / "ansible" / "roles" / "podman_services" / "filter_plugins" / "podman_services.py"
-COMMON_FILTER_PATH = Path(__file__).resolve().parents[2] / "ansible" / "roles" / "service_common" / "filter_plugins" / "service_common.py"
+REPO_ROOT = Path(__file__).resolve().parents[2]
+TEMPLATE_DIR = REPO_ROOT / "ansible" / "roles" / "podman_services" / "templates"
+FILTER_PATH = REPO_ROOT / "ansible" / "roles" / "podman_services" / "filter_plugins" / "podman_services.py"
+COMMON_FILTER_PATH = REPO_ROOT / "ansible" / "roles" / "service_common" / "filter_plugins" / "service_common.py"
 filter_spec = importlib.util.spec_from_file_location("podman_services", FILTER_PATH)
 podman_services_filters = importlib.util.module_from_spec(filter_spec)
 filter_spec.loader.exec_module(podman_services_filters)
 common_filter_spec = importlib.util.spec_from_file_location("service_common", COMMON_FILTER_PATH)
 service_common_filters = importlib.util.module_from_spec(common_filter_spec)
 common_filter_spec.loader.exec_module(service_common_filters)
+catalog_spec = importlib.util.spec_from_file_location(
+    "service_catalog_adminer_quadlet", REPO_ROOT / "ansible" / "filter_plugins" / "service_catalog.py"
+)
+catalog_filters = importlib.util.module_from_spec(catalog_spec)
+catalog_spec.loader.exec_module(catalog_filters)
 
 
-def render(name, service):
+def render(name, service, quadlet_dir="/etc/containers/systemd"):
     env = Environment(loader=FileSystemLoader(TEMPLATE_DIR), trim_blocks=True, lstrip_blocks=True)
     env.filters["podman_env_file_key"] = podman_services_filters.podman_env_file_key
     env.filters["podman_env_file_value"] = podman_services_filters.podman_env_file_value
     return env.get_template(name).render(
         podman_service=service,
-        podman_services_quadlet_dir="/etc/containers/systemd",
+        podman_services_quadlet_dir=quadlet_dir,
     )
+
+
+def render_structure(value, variables):
+    if isinstance(value, dict):
+        return {key: render_structure(item, variables) for key, item in value.items()}
+    if isinstance(value, list):
+        return [render_structure(item, variables) for item in value]
+    if isinstance(value, str) and ("{{" in value or "{%" in value):
+        return NativeEnvironment(undefined=StrictUndefined).from_string(value).render(**variables)
+    return value
 
 
 def service():
@@ -31,6 +50,7 @@ def service():
         "name": "n8n",
         "unit_name": "n8n",
         "description": "n8n",
+        "execution": {"mode": "rootful"},
         "image": "docker.io/n8nio/n8n:2.31.4",
         "network": {"name": "n8n", "driver": "bridge", "external": False},
         "volumes": [{"name": "n8n-data", "target": "/home/node/.n8n"}],
@@ -71,7 +91,7 @@ def canonical_service():
         "image": "ghcr.io/example/portable:1.2.3",
         "user": "1001:1002",
         "environment": {"APP_ENV": "production"},
-        "deploy": {"type": "swarm", "mode": "replicated", "replicas": 1, "host": "podman01"},
+        "deploy": {"type": "container", "mode": "replicated", "replicas": 1, "host": "podman01"},
         "ports": {
             "web": {
                 "published": 8443,
@@ -348,3 +368,100 @@ def test_canonical_secret_normalization_reaches_quadlet_without_value():
     assert "Secret=app_secret,target=/run/secrets/app_secret,uid=1001,gid=1002,mode=0400" in rendered
     assert "app_secret_value" not in rendered
     assert "VALUE" not in rendered
+
+
+def test_explicit_canonical_name_controls_container_and_environment_artifacts():
+    cfg = canonical_service()
+    cfg["name"] = "portable-custom"
+    normalized = podman_services_filters.podman_service_normalize(cfg, "portable-target")
+    rendered = render("container.container.j2", normalized)
+
+    assert normalized["name"] == "portable-custom"
+    assert normalized["unit_name"] == "portable-custom"
+    assert "ContainerName=portable-custom" in rendered
+    assert "EnvironmentFile=/etc/containers/systemd/portable-custom.env" in rendered
+    assert "portable-target.env" not in rendered
+
+
+def test_rootless_quadlet_uses_normalized_service_environment_without_task_environment_leakage():
+    cfg = {
+        "runtime": "podman",
+        "image": "docker.io/library/adminer:5.4.2",
+        "environment": {
+            "HOME": "/application/home",
+            "APP_MODE": "synthetic",
+        },
+        "named_networks": {"adminer": {"driver": "bridge", "external": False}},
+        "ports": [{"published": 18080, "target": 8080, "protocol": "tcp"}],
+        "no_new_privileges": True,
+        "deploy": {
+            "type": "container",
+            "host": "podman01",
+            "execution": {"mode": "rootless", "host_user": "podman-adminer"},
+        },
+    }
+    svc = podman_services_filters.podman_service_normalize(cfg, "adminer")
+    quadlet_dir = "/var/lib/podman-adminer/.config/containers/systemd"
+
+    container = render("container.container.j2", svc, quadlet_dir)
+    environment = render("env.env.j2", svc, quadlet_dir)
+
+    assert f"EnvironmentFile={quadlet_dir}/adminer.env" in container
+    assert "WantedBy=default.target" in container
+    assert "WantedBy=multi-user.target" not in container
+    assert "NoNewPrivileges=true" in container
+    assert "HOME=/application/home" in environment
+    assert "APP_MODE=synthetic" in environment
+    assert "XDG_RUNTIME_DIR" not in environment
+    assert "DBUS_SESSION_BUS_ADDRESS" not in environment
+
+
+def test_real_adminer_catalog_contract_normalizes_and_renders_rootless_quadlets_without_mutation():
+    service_path = REPO_ROOT / "ansible" / "group_vars" / "all" / "services" / "adminer.yml"
+    source = yaml.safe_load(service_path.read_text())
+    original = deepcopy(source)
+    service_cfg = source["adminer"]
+
+    catalog = catalog_filters.service_catalog_effective(source, "manager")
+    assert catalog == [
+        {
+            "name": "adminer",
+            "tags": ["adminer", "utilities"],
+            "enabled": True,
+            "runtime": "podman",
+            "dispatch_host": "{{ services_controller_host }}",
+        }
+    ]
+    effective = catalog_filters.service_catalog_merge_target(service_cfg, catalog[0].get("target"))
+    rendered_effective = render_structure(
+        effective,
+        {
+            "local_ip": "192.0.2.10",
+            "services_controller_host": "manager",
+        },
+    )
+    normalized = podman_services_filters.podman_service_normalize(rendered_effective, "adminer")
+    quadlet_dir = "/var/lib/podman-adminer/.config/containers/systemd"
+    container = render("container.container.j2", normalized, quadlet_dir)
+    network = render("network.network.j2", normalized, quadlet_dir)
+
+    assert effective["runtime"] == "podman"
+    assert normalized["execution"] == {"mode": "rootless", "host_user": "podman-adminer"}
+    assert normalized["network"] == {"name": "adminer", "driver": "bridge", "external": False}
+    assert normalized["container"]["ports"] == [{"host_ip": "192.0.2.10", "host": 18080, "container": 8080, "protocol": "tcp"}]
+    assert normalized["container"]["systemd"] == {
+        "after": ["network-online.target"],
+        "restart": "on-failure",
+        "restart_sec": "10s",
+    }
+    assert "NetworkName=adminer" in network
+    assert "Driver=bridge" in network
+    assert "Network=adminer.network" in container
+    assert "PublishPort=192.0.2.10:18080:8080/tcp" in container
+    assert "After=network-online.target" in container
+    assert "Restart=on-failure" in container
+    assert "RestartSec=10s" in container
+    assert "WantedBy=default.target" in container
+    assert "WantedBy=multi-user.target" not in container
+    assert "EnvironmentFile=" not in container
+    assert source == original

@@ -1,0 +1,598 @@
+---
+
+- name: Execution | Check persisted execution state
+  ansible.builtin.stat:
+    path: "{{ podman_services_execution_state_path }}"
+  register: podman_services_execution_state_stat
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Read persisted execution state
+  when: podman_services_execution_state_stat.stat.exists | bool
+  ansible.builtin.slurp:
+    path: "{{ podman_services_execution_state_path }}"
+  register: podman_services_execution_state_content
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Parse persisted execution state
+  ansible.builtin.set_fact:
+    podman_services_execution_state: >-
+      {{
+        (podman_services_execution_state_content.content | b64decode | from_yaml)
+        if podman_services_execution_state_stat.stat.exists | bool
+        else {}
+      }}
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Validate persisted execution state version
+  when: podman_services_execution_state_stat.stat.exists | bool
+  ansible.builtin.assert:
+    that:
+      - podman_services_execution_state is mapping
+      - >-
+        podman_services_execution_state.version is not defined
+        or podman_services_execution_state.version is integer
+      - >-
+        podman_services_execution_state.version is not defined
+        or podman_services_execution_state.version == 2
+    fail_msg: >-
+      Persisted execution state for {{ podman_services_service.name }} must be
+      versionless legacy state or explicit integer version 2.
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Validate persisted execution state
+  when: podman_services_execution_state_stat.stat.exists | bool
+  ansible.builtin.assert:
+    that:
+      - podman_services_execution_state is mapping
+      - podman_services_execution_state.managed_by | default('') == 'podman_services'
+      - podman_services_execution_state.service | default('') == podman_services_service.unit_name
+      - podman_services_execution_state.mode | default('') in ['rootful', 'rootless']
+      - >-
+        podman_services_execution_state.mode != 'rootless'
+        or podman_services_execution_state.host_user | default('') is match('^podman-')
+      - >-
+        podman_services_execution_state.mode != 'rootless'
+        or podman_services_execution_state.home | default('') is match('^/')
+      - >-
+        podman_services_execution_state.mode != 'rootless'
+        or podman_services_execution_state.uid | default('') | string is match('^[1-9][0-9]*$')
+      - >-
+        podman_services_execution_state.mode != 'rootless'
+        or podman_services_execution_state.gid | default('') | string is match('^[1-9][0-9]*$')
+      - >-
+        podman_services_execution_state.quadlet_dir is not defined
+        or podman_services_execution_state.quadlet_dir is match('^/')
+      - >-
+        podman_services_execution_state.unit_name is not defined
+        or podman_services_execution_state.unit_name == podman_services_unit_name
+      - >-
+        podman_services_execution_state.resources is not defined
+        or podman_services_execution_state.resources is mapping
+      - >-
+        podman_services_execution_state.version | default(0) != 2
+        or (
+          (podman_services_execution_state.resources | default({})).network
+          | default(none) is mapping
+        )
+      - >-
+        podman_services_execution_state.version | default(0) != 2
+        or (
+          (podman_services_execution_state.resources | default({})).volumes
+          | default(none) is sequence
+          and (podman_services_execution_state.resources | default({})).volumes
+          | default(none) is not string
+        )
+      - >-
+        podman_services_execution_state.version | default(0) != 2
+        or (
+          (podman_services_execution_state.resources | default({})).generated_files
+          | default(none) is sequence
+          and (podman_services_execution_state.resources | default({})).generated_files
+          | default(none) is not string
+        )
+    fail_msg: >-
+      Refusing to use invalid persisted execution state for
+      {{ podman_services_service.name }}.
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Check legacy rootful Quadlet
+  when: not (podman_services_execution_state_stat.stat.exists | bool)
+  ansible.builtin.stat:
+    path: "{{ podman_services_system_quadlet_dir }}/{{ podman_services_service.unit_name }}.container"
+  register: podman_services_legacy_rootful_quadlet
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Derive active execution owner
+  ansible.builtin.set_fact:
+    podman_services_active_execution: >-
+      {{
+        podman_services_execution_state
+        if podman_services_execution_state_stat.stat.exists | bool
+        else (
+          {
+            'mode': 'rootful',
+            'quadlet_dir': podman_services_system_quadlet_dir,
+            'unit_name': podman_services_unit_name,
+            'resources': {
+              'generated_files': [
+                podman_services_system_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.container',
+                podman_services_system_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.env'
+              ]
+            }
+          }
+          if podman_services_legacy_rootful_quadlet.stat.exists | default(false) | bool
+          else {'mode': 'none'}
+        )
+      }}
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Preserve active execution as previous owner
+  ansible.builtin.set_fact:
+    podman_services_previous_execution: "{{ podman_services_active_execution }}"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Derive selected execution owner
+  ansible.builtin.set_fact:
+    podman_services_operation_execution: >-
+      {{
+        podman_services_active_execution
+        if podman_services_common_action in ['remove', 'drift']
+        else podman_services_desired_execution
+      }}
+    podman_services_execution_transition: >-
+      {{
+        podman_services_active_execution.mode != 'none'
+        and (
+          podman_services_active_execution.mode != podman_services_desired_execution.mode
+          or (
+            podman_services_active_execution.mode == 'rootless'
+            and podman_services_desired_execution.mode == 'rootless'
+            and podman_services_active_execution.host_user != podman_services_desired_execution.host_user
+          )
+        )
+      }}
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Materialize selected execution context
+  ansible.builtin.set_fact:
+    podman_services_execution: "{{ podman_services_operation_execution }}"
+    podman_services_execution_home: >-
+      {{
+        podman_services_operation_execution.home
+        | default(podman_services_rootless_home_root ~ '/' ~ podman_services_operation_execution.host_user)
+        if podman_services_operation_execution.mode == 'rootless'
+        else '/root'
+      }}
+    podman_services_execution_owner: >-
+      {{
+        podman_services_operation_execution.host_user
+        if podman_services_operation_execution.mode == 'rootless'
+        else 'root'
+      }}
+    podman_services_execution_group: >-
+      {{
+        podman_services_operation_execution.host_user
+        if podman_services_operation_execution.mode == 'rootless'
+        else 'root'
+      }}
+    podman_services_quadlet_dir: >-
+      {{
+        podman_services_operation_execution.quadlet_dir
+        | default(
+            podman_services_rootless_home_root
+            ~ '/' ~ podman_services_operation_execution.host_user
+            ~ '/.config/containers/systemd'
+          )
+        if podman_services_operation_execution.mode == 'rootless'
+        else podman_services_operation_execution.quadlet_dir | default(podman_services_system_quadlet_dir)
+      }}
+    podman_services_runtime_environment: {}
+    podman_services_account_marker_path: >-
+      {{
+        podman_services_execution_state_dir ~ '/accounts/' ~ podman_services_operation_execution.host_user ~ '.yml'
+        if podman_services_operation_execution.mode == 'rootless'
+        else ''
+      }}
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Inspect selected rootless account
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ podman_services_execution.host_user }}"
+    fail_key: false
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Inspect selected rootless primary group
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.getent:
+    database: group
+    key: "{{ podman_services_execution.host_user }}"
+    fail_key: false
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Inspect selected rootless home
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.stat:
+    path: "{{ podman_services_execution_home }}"
+  register: podman_services_rootless_home_stat
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Inspect selected account marker
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.stat:
+    path: "{{ podman_services_account_marker_path }}"
+  register: podman_services_account_marker_stat
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Read selected account marker
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_account_marker_stat.stat.exists | bool
+  no_log: true
+  diff: false
+  ansible.builtin.slurp:
+    path: "{{ podman_services_account_marker_path }}"
+  register: podman_services_account_marker_content
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Parse selected account marker
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_account_marker: >-
+      {{
+        (podman_services_account_marker_content.content | b64decode | from_yaml)
+        if podman_services_account_marker_stat.stat.exists | bool
+        else {}
+      }}
+    podman_services_rootless_account_exists: >-
+      {{ ansible_facts.getent_passwd.get(podman_services_execution.host_user) is not none }}
+    podman_services_rootless_group_exists: >-
+      {{ ansible_facts.getent_group.get(podman_services_execution.host_user) is not none }}
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Inspect existing account password lock
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_rootless_account_exists | bool
+  no_log: true
+  diff: false
+  ansible.builtin.command:
+    argv: [passwd, --status, "{{ podman_services_execution.host_user }}"]
+  register: podman_services_rootless_password_status
+  changed_when: false
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Inspect existing account group membership
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_rootless_account_exists | bool
+  ansible.builtin.command:
+    argv: [id, -Gn, "{{ podman_services_execution.host_user }}"]
+  register: podman_services_rootless_group_membership
+  changed_when: false
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Decide safe rootless account handling
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_rootless_account_plan: >-
+      {{
+        {
+          'host_user': podman_services_execution.host_user,
+          'service': podman_services_service.unit_name,
+          'comment': 'Managed rootless Podman account for ' ~ podman_services_service.name,
+          'home': podman_services_execution_home,
+          'shell': podman_services_nologin_shell,
+          'account': ansible_facts.getent_passwd.get(podman_services_execution.host_user),
+          'group': ansible_facts.getent_group.get(podman_services_execution.host_user),
+          'group_names': (
+            podman_services_rootless_group_membership.stdout.split()
+            if podman_services_rootless_account_exists | bool
+            else []
+          ),
+          'password_locked': (
+            podman_services_rootless_password_status.stdout.split() | length > 1
+            and podman_services_rootless_password_status.stdout.split()[1] == 'L'
+            if podman_services_rootless_account_exists | bool
+            else false
+          ),
+          'home_exists': podman_services_rootless_home_stat.stat.exists | bool,
+          'marker': podman_services_account_marker,
+          'persisted': podman_services_execution_state
+        }
+        | podman_rootless_account_contract
+      }}
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Ensure execution state directory for account ownership
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.file:
+    path: "{{ podman_services_execution_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Ensure account marker directory
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.file:
+    path: "{{ podman_services_execution_state_dir }}/accounts"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Provision dedicated rootless primary group
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_rootless_account_plan.create | bool
+  ansible.builtin.group:
+    name: "{{ podman_services_execution.host_user }}"
+    state: present
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Provision dedicated rootless account
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_rootless_account_plan.create | bool
+  ansible.builtin.user:
+    name: "{{ podman_services_execution.host_user }}"
+    comment: "Managed rootless Podman account for {{ podman_services_service.name }}"
+    home: "{{ podman_services_execution_home }}"
+    create_home: true
+    shell: "{{ podman_services_nologin_shell }}"
+    password_lock: true
+    group: "{{ podman_services_execution.host_user }}"
+    groups: ""
+    append: false
+    state: present
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Read dedicated rootless account
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ podman_services_execution.host_user }}"
+    fail_key: true
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Read dedicated rootless primary group
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.getent:
+    database: group
+    key: "{{ podman_services_execution.host_user }}"
+    fail_key: true
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Snapshot rootless account runtime context
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.set_fact:
+    podman_services_execution_uid: "{{ ansible_facts.getent_passwd[podman_services_execution.host_user][1] }}"
+    podman_services_execution_gid: "{{ ansible_facts.getent_passwd[podman_services_execution.host_user][2] }}"
+    podman_services_runtime_environment:
+      HOME: "{{ podman_services_execution_home }}"
+      XDG_RUNTIME_DIR: "/run/user/{{ ansible_facts.getent_passwd[podman_services_execution.host_user][1] }}"
+      DBUS_SESSION_BUS_ADDRESS: "unix:path=/run/user/{{ ansible_facts.getent_passwd[podman_services_execution.host_user][1] }}/bus"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Check dedicated account password lock
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  no_log: true
+  diff: false
+  ansible.builtin.command:
+    argv: [passwd, --status, "{{ podman_services_execution.host_user }}"]
+  register: podman_services_rootless_password_status
+  changed_when: false
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Check dedicated account group membership
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.command:
+    argv: [id, -Gn, "{{ podman_services_execution.host_user }}"]
+  register: podman_services_rootless_group_membership
+  changed_when: false
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Require dedicated rootless account contract
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - podman_services_execution_uid | int > 0
+      - podman_services_execution_gid | int > 0
+      - ansible_facts.getent_passwd[podman_services_execution.host_user][3]
+          == 'Managed rootless Podman account for ' ~ podman_services_service.name
+      - ansible_facts.getent_passwd[podman_services_execution.host_user][4] == podman_services_execution_home
+      - ansible_facts.getent_passwd[podman_services_execution.host_user][5] == podman_services_nologin_shell
+      - ansible_facts.getent_group[podman_services_execution.host_user][1] | int == podman_services_execution_gid | int
+      - podman_services_rootless_group_membership.stdout.split() == [podman_services_execution.host_user]
+      - podman_services_rootless_password_status.stdout.split() | length > 1
+      - podman_services_rootless_password_status.stdout.split()[1] == 'L'
+    fail_msg: >-
+      Rootless Podman account {{ podman_services_execution.host_user }} does
+      not satisfy its dedicated non-root account and primary-group contract.
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Persist dedicated account ownership marker
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.copy:
+    dest: "{{ podman_services_account_marker_path }}"
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      # Generated by Ansible. Do not edit manually.
+      managed_by: podman_services
+      service: {{ podman_services_service.unit_name }}
+      host_user: {{ podman_services_execution.host_user }}
+      home: {{ podman_services_execution_home }}
+      uid: "{{ podman_services_execution_uid }}"
+      gid: "{{ podman_services_execution_gid }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Read subordinate UID declarations
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  no_log: true
+  diff: false
+  ansible.builtin.slurp:
+    path: /etc/subuid
+  register: podman_services_rootless_subuid_content
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Read subordinate GID declarations
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  no_log: true
+  diff: false
+  ansible.builtin.slurp:
+    path: /etc/subgid
+  register: podman_services_rootless_subgid_content
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Validate exact subordinate ID ranges
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_rootless_subuid: >-
+      {{
+        podman_services_rootless_subuid_content.content
+        | b64decode
+        | podman_subid_range(podman_services_execution.host_user, 65536)
+      }}
+    podman_services_rootless_subgid: >-
+      {{
+        podman_services_rootless_subgid_content.content
+        | b64decode
+        | podman_subid_range(podman_services_execution.host_user, 65536)
+      }}
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Check rootless account linger state
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.stat:
+    path: "/var/lib/systemd/linger/{{ podman_services_execution.host_user }}"
+  register: podman_services_rootless_linger
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Enable rootless account linger
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - not (podman_services_rootless_linger.stat.exists | bool)
+  ansible.builtin.command:
+    argv: [loginctl, enable-linger, "{{ podman_services_execution.host_user }}"]
+  changed_when: true
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Start rootless user manager
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.systemd_service:
+    name: "user@{{ podman_services_execution_uid }}.service"
+    state: started
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Require rootless runtime directory
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.stat:
+    path: "{{ podman_services_runtime_environment.XDG_RUNTIME_DIR }}"
+  register: podman_services_rootless_runtime_dir
+  failed_when: not (podman_services_rootless_runtime_dir.stat.exists | default(false) | bool)
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Ensure rootless Podman directories
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.file:
+    path: "{{ podman_services_rootless_directory.path }}"
+    state: directory
+    owner: "{{ podman_services_execution.host_user }}"
+    group: "{{ podman_services_execution.host_user }}"
+    mode: "{{ podman_services_rootless_directory.mode }}"
+  loop:
+    - {path: "{{ podman_services_execution_home }}/.config", mode: "0700"}
+    - {path: "{{ podman_services_execution_home }}/.config/containers", mode: "0700"}
+    - {path: "{{ podman_services_quadlet_dir }}", mode: "0700"}
+    - {path: "{{ podman_services_execution_home }}/.local", mode: "0700"}
+    - {path: "{{ podman_services_execution_home }}/.local/share", mode: "0700"}
+    - {path: "{{ podman_services_execution_home }}/.local/share/containers", mode: "0700"}
+  loop_control:
+    loop_var: podman_services_rootless_directory
+    label: "{{ podman_services_rootless_directory.path }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Verify rootless user manager
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  become: true
+  become_user: "{{ podman_services_execution.host_user }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.command:
+    argv: [systemctl, --user, show-environment]
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]

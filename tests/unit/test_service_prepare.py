@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from ansible.errors import AnsibleFilterError
 from jinja2 import StrictUndefined
 from jinja2.nativetypes import NativeEnvironment
 
@@ -230,23 +231,27 @@ def test_real_migrated_docker_workflows_materialize_through_the_canonical_catalo
     assert actual == expected
 
 
-def test_real_temporary_container_services_normalize_for_docker_and_podman():
+def test_real_temporary_container_services_require_explicit_podman_migration():
     catalog = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog_prepare_runtime_real")
     podman = load_module(
         REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py",
         "podman_prepare_runtime_real",
     )
-    cases = (("authelia", "main"), ("bazarr", None), ("nzbhydra2", None))
+    cases = {
+        ("authelia", "main"): ["env_file", "stack"],
+        ("bazarr", None): ["stack", "themepark"],
+        ("nzbhydra2", None): ["stack"],
+    }
 
-    for service_name, target in cases:
+    for (service_name, target), unsupported in cases.items():
         effective = catalog.service_catalog_merge_target(load_service(service_name), target)
-        docker_effective = render_repository_value({**effective, "runtime": "docker"})
-        podman_effective = render_repository_value({**effective, "runtime": "podman"})
-        normalized = podman.podman_service_normalize(podman_effective, service_name)
+        docker_effective = render_repository_value(effective)
+        runtime_only_edit = render_repository_value({**effective, "runtime": "podman"})
 
         assert docker_effective["application_prepare"]["handler"] == service_name
-        assert normalized["image"] == docker_effective["image"]
-        assert normalized["container"]["host"] == "podman01"
+        with pytest.raises(AnsibleFilterError) as error:
+            podman.podman_service_normalize(runtime_only_edit, service_name)
+        assert str(error.value).endswith(", ".join(unsupported))
         assert "targets" not in docker_effective
 
 

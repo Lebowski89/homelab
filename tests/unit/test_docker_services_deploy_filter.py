@@ -3,7 +3,9 @@ from __future__ import annotations
 import importlib.util
 from pathlib import Path
 
+import pytest
 import yaml
+from ansible.errors import AnsibleFilterError
 from ansible.plugins.filter.core import combine
 from jinja2.nativetypes import NativeEnvironment
 
@@ -322,7 +324,7 @@ def test_unknown_profile_fails():
 def test_non_mapping_override_fails():
     plugin = load_plugin()
 
-    try:
+    with pytest.raises(AnsibleFilterError, match="deploy_restart_policy override must be a mapping"):
         plugin.docker_services_build_deploy_config(
             {
                 "mode": "replicated",
@@ -331,7 +333,13 @@ def test_non_mapping_override_fails():
             profiles=deploy_profiles(),
             restart_policy="not-a-dict",
         )
-    except Exception as exc:
-        assert "deploy_restart_policy override must be a mapping" in str(exc)
-    else:
-        raise AssertionError("Expected non-mapping override to fail")
+
+
+def test_docker_rejects_podman_execution_contract():
+    plugin = load_plugin()
+
+    with pytest.raises(AnsibleFilterError, match=r"deploy\.execution is only supported by the Podman adapter"):
+        plugin.docker_services_build_deploy_config(
+            {"type": "container", "execution": {"mode": "rootless", "host_user": "podman-adminer"}},
+            profiles=deploy_profiles(),
+        )

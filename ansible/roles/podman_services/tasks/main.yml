@@ -12,6 +12,55 @@
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
 ################################
+# EXECUTION PREPARATION
+################################
+
+- name: Podman services | Include execution preparation tasks
+  ansible.builtin.include_tasks:
+    file: sub_tasks/execution_prepare.yml
+    apply:
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+################################
+# EXTERNAL NETWORK PREFLIGHT
+################################
+
+- name: Podman services | Check external network exists
+  when:
+    - not ansible_check_mode
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_service.network is mapping
+    - podman_services_service.network.external | bool
+  become: true
+  become_user: "{{ podman_services_execution.host_user | default('root') }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.command:
+    argv:
+      - podman
+      - network
+      - exists
+      - "{{ podman_services_service.network.name }}"
+  register: podman_services_external_network_check
+  changed_when: false
+  failed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Podman services | Require external network
+  when:
+    - not ansible_check_mode
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_service.network is mapping
+    - podman_services_service.network.external | bool
+  ansible.builtin.assert:
+    that:
+      - podman_services_external_network_check.rc == 0
+    fail_msg: >-
+      External Podman network {{ podman_services_service.network.name }} does not exist
+      in this host's Podman network store; create it deliberately before running this service.
+  tags: [deploy, update, recreate, bootstrap]
+
+################################
 # APPLICATION VALIDATION
 ################################
 
@@ -65,6 +114,8 @@
   when:
     - not ansible_check_mode
     - podman_services_state == 'recreate'
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
   ansible.builtin.command:
     argv:
       - systemctl
@@ -81,6 +132,8 @@
   when:
     - not ansible_check_mode
     - podman_services_state == 'recreate'
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
     - podman_services_recreate_unit_load_state.stdout | trim != 'not-found'
   ansible.builtin.systemd_service:
     name: "{{ podman_services_unit_name }}"

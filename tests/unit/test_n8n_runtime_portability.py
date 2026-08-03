@@ -119,6 +119,8 @@ def test_real_n8n_podman_normalization_preserves_behavior():
     cfg, service, _, _, _, _, _, resolved_environment = normalize_both()
 
     assert service["image"] == "docker.io/n8nio/n8n:2.31.4"
+    assert service["name"] == "n8n"
+    assert service["unit_name"] == "n8n"
     assert service["container"]["uid"] == "1000"
     assert service["container"]["gid"] == "1000"
     assert service["container"]["host"] == "n8n"
@@ -401,6 +403,7 @@ def test_real_n8n_uses_shared_named_networks_without_other_docker_only_fields():
     assert {"stack", "networks", "configs", "placement", "constraints"}.isdisjoint(cfg)
     assert cfg["named_networks"] == {"n8n": {"driver": "bridge", "external": False}}
     assert cfg["deploy"]["type"] == "container"
+    assert set(cfg) <= podman._SUPPORTED_TOP_LEVEL_FIELDS
 
 
 def test_n8n_quadlet_contains_all_canonical_secret_mounts_without_values():

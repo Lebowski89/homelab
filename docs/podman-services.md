@@ -1,4 +1,4 @@
-# Podman services and n8n
+# Podman services
 
 Use the
 [service-definition option reference](../ansible/group_vars/all/services/README.md)
@@ -13,32 +13,110 @@ The shared service catalogue in `ansible/group_vars/all/services/*.yml` is runti
 2. The linear, globally ordered dispatcher materializes one selected service on its dispatch host before invoking common preparation and its runtime adapter.
 3. `service_prepare` owns application validation, generated values, template derivation, and bootstrap requests. Its temporary preparation containers use the selected runtime and are removed before deployed-service lifecycle work.
 4. `service_common` prepares runtime-neutral Infisical values, environment, host paths, files, Traefik routes, and PostgreSQL databases from explicit adapter inputs.
-5. `podman_services` renders rootful system Quadlets in `/etc/containers/systemd` and retains native Podman secrets, image pulls, Quadlet validation, and systemd lifecycle.
+5. `podman_services` renders rootful system Quadlets or the deliberately limited rootless user Quadlets described below. It retains Podman image, network, secret, Quadlet-validation, and systemd lifecycle ownership.
 
-Rootful system Quadlets were chosen first because they are stable for boot-time services and fit the existing system-level Ansible model. Containers still run as non-root users through separate container UID/GID settings. Rootless user-systemd Quadlets can be added later by introducing a scoped Quadlet directory and user lingering management.
+Omitting `deploy.execution` keeps the existing rootful behavior. Rootful
+Quadlets live in `/etc/containers/systemd`, use root's Podman storage, and run
+through the system manager. Rootless Quadlets live in the dedicated account's
+`$HOME/.config/containers/systemd`, use that account's separate Podman storage,
+and run through its user manager. The dispatcher enables Ansible SSH pipelining
+for Podman role tasks so privilege switching does not require a temporary module
+file shared with the locked service account. This controller transport setting
+is not placed in the application environment.
+
+`deploy.execution.host_user` is the host account that owns a rootless Podman
+instance. It must use the reserved `podman-` prefix and is separate from
+top-level `user: "UID:GID"`, which selects the identity inside the container.
+Before creating anything, the role inspects the account, primary group, home,
+and root-owned service marker. It creates them only when all four are absent,
+or reuses an account only when its full locked-account contract and persisted
+service ownership match exactly. Each account has a dedicated primary group,
+no supplementary groups, a non-interactive shell, at least 65,536 subordinate
+UIDs and GIDs, and systemd linger. The user manager receives explicit `HOME`,
+`XDG_RUNTIME_DIR`, and `DBUS_SESSION_BUS_ADDRESS` values without relying on an
+interactive login.
+
+## Migration guardrails
+
+The Podman adapter validates the complete effective service mapping. It accepts
+only catalog metadata, fields it renders or validates itself, runtime-neutral
+`service_common` fields, and real `service_prepare` inputs. Any Docker-only or
+unknown top-level field fails with every unsupported key listed in sorted order.
+Changing only `runtime` is therefore unsafe and rejected when behavior such as a
+custom command, entrypoint, config, device, host network, Swarm profile, or
+constraint still lacks a Podman implementation.
+
+An explicit canonical `name` controls the Podman container name, generated
+`.container` and protected `.env` filenames, and derived `.service` lifecycle
+unit. Without it, a base uses its catalog name and a target uses the existing
+base-target role prefix. If `deploy.type` is present it must be exactly
+`container`; `swarm`, `profile`, and `constraints` are invalid. Portable
+`mode: replicated` and `replicas: 1` remain accepted single-instance no-ops.
+
+Rootless execution is intentionally narrower than the general Podman schema.
+It currently requires `deploy.type: container`, a fully qualified exact image,
+one role-managed bridge, unprivileged published TCP ports, and no host paths,
+bind mounts, named volumes, tmpfs mounts, native secrets, added capabilities,
+devices, privileged mode, host networking, copies, templates, or application
+preparation. Unsupported combinations fail during normalization before account
+or runtime mutation. Adminer fits this subset; n8n does not and therefore keeps
+the omitted, rootful execution default.
 
 ## Lifecycle semantics
 
 - `deploy` and `bootstrap` fetch missing secrets, create missing Podman secrets, pull the declared image, render configuration, and start the service if it is not already running.
 - `update` reconciles secrets marked `update_policy: reconcile` and restarts the service when material inputs changed; because Podman cannot compare stored secret contents, a reconciled secret is recreated and triggers the existing restart path. An owned network remains in place through the restart. If its Quadlet definition changes, use an explicit remove followed by deploy when the network itself must be recreated.
 - `recreate` reconciles secrets marked `update_policy: reconcile` and always restarts the generated service after rendering current inputs. It retains the service network.
-- `remove` stops the service first, then stops and removes an owned network when it still exists. It removes generated Quadlets, environment files, and host-backed Traefik routing, but preserves application data and Podman secrets by default. Externally owned networks are never stopped, removed, or represented by a generated network Quadlet.
+- `remove` uses the last successfully persisted execution owner even when the declaration now requests another mode. It stops that service first, then stops and removes only a network whose persisted metadata proves role ownership. It removes exact generated Quadlets, environment files, and host-backed Traefik routing, but preserves application data, Podman secrets, images, the dedicated rootless account, its linger configuration, home, and user storage. Externally owned and unproven legacy networks are retained.
 - `drift` inspects the current container image reference and reports a changed task when it differs from the declared exact image reference. It is reference drift, not registry digest drift.
 
-Generated `.container` files include `[Install] WantedBy=multi-user.target`; the role does not call `systemctl enable` for generated Quadlet services.
+Generated rootful `.container` files use
+`[Install] WantedBy=multi-user.target`; rootless files use
+`WantedBy=default.target`. Quadlet generators connect them to the appropriate
+system or user manager, so the role does not separately enable each generated
+service.
+
+The role records the successfully started execution owner and its non-sensitive
+generated-resource metadata in root-owned state. `remove` and `drift` use that
+active owner; deploy-like actions use the desired owner. When the mode or
+rootless account changes, the role prepares and validates the destination
+first, stops only the exact old service unit, starts and verifies the new unit,
+and only then removes exact stale generated files bearing the Ansible marker.
+Old network cleanup uses only the name and ownership recorded for the previous
+Podman store; older state without that evidence deliberately leaves the network
+in place. A failed start reports safe systemctl return codes and error text,
+stops the failed destination, and restores the previously active unit when
+possible. It never prunes images, user storage, or volume data. To return a
+service to rootful execution, remove `deploy.execution` (or set `mode: rootful`
+without `host_user`) and run the normal recreate operation.
+
+Ordinary removal is intentionally not account retirement. Retiring a dedicated
+rootless account is a separate operator procedure after the service has been
+removed: verify that no persisted service marker refers to the account, inspect
+its Podman storage for data that must be retained, disable linger, stop its user
+manager, and only then remove the account, primary group, home, subordinate-ID
+entries, and storage deliberately. The role does not automate those destructive
+steps.
 
 Both adapters consume the top-level `named_networks` mapping. Podman currently
 supports exactly one attached named network. `external: false` makes the role
 responsible for its network Quadlet and explicit remove lifecycle;
 `external: true` attaches the container directly to an existing network and
-never creates or deletes it. `delete_on_stop` is not supported: ordinary
+never creates or deletes it. Before any live deploy, update, recreate, or
+bootstrap mutation, the role runs `podman network exists` for the exact validated
+name and fails if it is absent. Check mode validates the declaration without a
+runtime call. `delete_on_stop` is not supported: ordinary
 stops, updates, recreates, and systemd restarts retain an owned network.
+
+Docker and Podman keep separate network stores; a Docker network with a matching
+name does not satisfy this Podman preflight. Prefer a managed Podman network for
+an isolated service. Cross-runtime communication must use published host
+endpoints or another deliberately designed network path.
 
 Podman systemd policy is also first-class at top level. The supported fields are
 `after`, `restart`, and `restart_sec`, rendered as `After=`, `Restart=`,
 and `RestartSec=`. Service-level `runtime_options.podman.network` and
 `runtime_options.podman.systemd` are retired and fail with migration guidance. Secret update intent is runtime-neutral under `secret.update_policy`; secret-level `runtime_options` is retired and fails with guidance to use that canonical field.
-
 
 Published ports accept an optional `host_ip` per port. When set, the generated `PublishPort=` entry binds only that address. When omitted, Podman binds the published port on every host interface; this can expose the service on management, LAN, Tailscale, or other reachable networks and can bypass the intended reverse proxy and its middleware. Prefer an explicit trusted bind address and enforce host/network firewall policy whenever direct access is not intended.
 
@@ -92,9 +170,9 @@ Docker and Podman now consume the same common-resolved environment. The former e
 
 ## n8n
 
-n8n is the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, `named_networks`, canonical ports/volumes/paths, `deploy`, `systemd`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter. Further Podman adoption remains incremental: migrate and validate one portable service at a time rather than changing the repository runtime wholesale.
+n8n was the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, `named_networks`, canonical ports/volumes/paths, `deploy`, `systemd`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter. Adminer is the next deliberately migrated service; further adoption remains incremental, one validated service at a time.
 
-n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.04. The selected host must already have the runtime required by the declaration: changing `runtime` to Docker is schema-valid for the tested portable subset but does not install Docker or establish live parity. The proof covers the trusted-address `host_ip` bind in both generated Docker standalone Compose and Podman Quadlet output. Static tests do not replace a live migration test.
+n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.04. The selected host must already have the runtime required by the declaration. A runtime-only edit is valid only when the complete effective declaration passes the destination adapter; it does not install a runtime or establish live parity. The proof covers the trusted-address `host_ip` bind in both generated Docker standalone Compose and Podman Quadlet output. Static tests do not replace a live migration test.
 
 
 The service uses pinned image `docker.io/n8nio/n8n:2.31.4`, UID/GID 1000:1000, application data in `/opt/n8n`, PostgreSQL database `n8n` through the shared HAProxy endpoint, and private routing at `https://n8n.int.<cloudflare-zone>:8443/`. The direct backend binds port 5678 to the VM management/LAN address; that direct port remains reachable on that network and bypasses Traefik TLS and middleware.
@@ -112,3 +190,26 @@ During the first live start, verify `N8N_ENCRYPTION_KEY_FILE` with the selected 
 Back up the encryption key, PostgreSQL data, and `/opt/n8n`. n8n deliberately does not mount Docker/Podman sockets, host root, SSH keys, or unrelated directories.
 
 Future hardening: add network-level egress policy and evaluate a separate task-runner sidecar when it can be introduced without broadening the initial service.
+
+## Adminer
+
+Adminer is the first deliberately rootless Quadlet service. It runs on
+`services_controller_host` under the locked `podman-adminer` host account. Its
+former Docker stack, external overlay, Swarm profile, and placement constraint
+are not carried into Podman. Its Quadlets live under
+`/var/lib/podman-adminer/.config/containers/systemd`, and its image, container,
+and managed `adminer.network` bridge live only in that account's Podman storage.
+It publishes container port 8080 as host port 18080 on the controller
+`local_ip`. The common Traefik route uses that host endpoint, so it does not
+depend on cross-runtime network attachment.
+
+The declaration has no persistent volume or native secret. Its Infisical entry
+remains lookup-only for the private route zone. `systemd` retains the intended
+on-failure restart policy with a ten-second delay. Repository tests prove the
+effective catalog selection, common check-mode lookup shape, host-backed
+Traefik address, generated user Quadlet, account isolation, and transition
+ordering. Because the backend binds the controller's management/LAN address,
+clients on that network can bypass Traefik and its middleware by reaching port
+18080 directly. A future firewall rule should allow only the Traefik source
+address to TCP/18080 and reject other LAN sources after the source address is
+confirmed from live traffic.

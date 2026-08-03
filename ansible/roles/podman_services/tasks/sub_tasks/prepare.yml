@@ -1,12 +1,26 @@
 ---
 
-- name: Prep | Ensure system Quadlet directory exists
+- name: Prep | Validate rootless Quadlet render plan
+  when:
+    - ansible_check_mode
+    - podman_services_state != 'remove'
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.include_tasks:
+    file: sub_tasks/check_render.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Prep | Ensure selected Quadlet directory exists
+  when:
+    - podman_services_state != 'remove'
+    - not (ansible_check_mode and podman_services_execution.mode == 'rootless')
   ansible.builtin.file:
     path: "{{ podman_services_quadlet_dir }}"
     state: directory
-    owner: root
-    group: root
-    mode: "0755"
+    owner: "{{ podman_services_execution_owner }}"
+    group: "{{ podman_services_execution_group }}"
+    mode: "{{ '0700' if podman_services_execution.mode == 'rootless' else '0755' }}"
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
 - name: Prep | Render network Quadlet
@@ -14,11 +28,12 @@
     - podman_services_service.network is mapping
     - not podman_services_service.network.external | bool
     - podman_services_state != 'remove'
+    - not (ansible_check_mode and podman_services_execution.mode == 'rootless')
   ansible.builtin.template:
     src: network.network.j2
     dest: "{{ podman_services_quadlet_dir }}/{{ podman_services_service.network.name }}.network"
-    owner: root
-    group: root
+    owner: "{{ podman_services_execution_owner }}"
+    group: "{{ podman_services_execution_group }}"
     mode: "0644"
   vars:
     podman_service: "{{ podman_services_service }}"
@@ -27,12 +42,14 @@
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Prep | Render volume Quadlets
-  when: podman_services_state != 'remove'
+  when:
+    - podman_services_state != 'remove'
+    - not (ansible_check_mode and podman_services_execution.mode == 'rootless')
   ansible.builtin.template:
     src: volume.volume.j2
     dest: "{{ podman_services_quadlet_dir }}/{{ volume.name }}.volume"
-    owner: root
-    group: root
+    owner: "{{ podman_services_execution_owner }}"
+    group: "{{ podman_services_execution_group }}"
     mode: "0644"
   loop: "{{ podman_services_service.volumes }}"
   loop_control:
@@ -48,11 +65,12 @@
   when:
     - podman_services_service.env | length > 0
     - podman_services_state != 'remove'
+    - not (ansible_check_mode and podman_services_execution.mode == 'rootless')
   ansible.builtin.template:
     src: env.env.j2
     dest: "{{ podman_services_quadlet_dir }}/{{ podman_services_service.unit_name }}.env"
-    owner: root
-    group: root
+    owner: "{{ podman_services_execution_owner }}"
+    group: "{{ podman_services_execution_group }}"
     mode: "0600"
   vars:
     podman_service: "{{ podman_services_service }}"
@@ -63,12 +81,14 @@
 - name: Prep | Render container Quadlet
   no_log: true
   diff: false
-  when: podman_services_state != 'remove'
+  when:
+    - podman_services_state != 'remove'
+    - not (ansible_check_mode and podman_services_execution.mode == 'rootless')
   ansible.builtin.template:
     src: container.container.j2
     dest: "{{ podman_services_quadlet_dir }}/{{ podman_services_service.unit_name }}.container"
-    owner: root
-    group: root
+    owner: "{{ podman_services_execution_owner }}"
+    group: "{{ podman_services_execution_group }}"
     mode: "0644"
   vars:
     podman_service: "{{ podman_services_service }}"

@@ -1,16 +1,76 @@
 ---
 
+- name: Remove | Derive persisted active resources
+  when: podman_services_state == 'remove'
+  ansible.builtin.set_fact:
+    podman_services_remove_unit_name: >-
+      {{ podman_services_active_execution.unit_name | default(podman_services_unit_name) }}
+    podman_services_remove_network: >-
+      {{
+        (podman_services_active_execution.resources | default({})).network | default({})
+        if podman_services_active_execution.version | default(0) == 2
+        else {}
+      }}
+    podman_services_remove_generated_paths: >-
+      {{
+        (podman_services_active_execution.resources | default({})).generated_files
+        if podman_services_active_execution.version | default(0) == 2
+        else (
+          [
+            podman_services_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.container',
+            podman_services_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.env'
+          ]
+          if podman_services_active_execution.mode in ['rootful', 'rootless']
+          else []
+        )
+      }}
+  tags: [remove]
+
+- name: Remove | Report versionless unproven resource retention
+  when:
+    - podman_services_state == 'remove'
+    - podman_services_active_execution.version is not defined
+    - podman_services_active_execution.resources | default({}) | length > 0
+  ansible.builtin.debug:
+    msg: >-
+      Versionless execution state proves ownership only of the deliberate
+      container and environment fallback files; unproven networks, volumes,
+      and other generated resources are retained.
+  changed_when: false
+  tags: [remove]
+
+- name: Remove | Validate persisted active resources
+  when:
+    - podman_services_state == 'remove'
+    - podman_services_active_execution.mode in ['rootful', 'rootless']
+  ansible.builtin.assert:
+    that:
+      - podman_services_remove_unit_name == podman_services_unit_name
+      - podman_services_remove_generated_paths is sequence
+      - >-
+        podman_services_remove_generated_paths
+        | reject('match', '^' ~ (podman_services_quadlet_dir | regex_escape)
+            ~ '/[A-Za-z0-9][A-Za-z0-9_.-]*\\.(container|env|network|volume)$')
+        | list | length == 0
+      - >-
+        podman_services_remove_network | length == 0
+        or (
+          podman_services_remove_network is mapping
+          and podman_services_remove_network.name | default('') is match('^[A-Za-z0-9][A-Za-z0-9_.-]*$')
+          and podman_services_remove_network.managed | default(false) is boolean
+        )
+    fail_msg: >-
+      Refusing removal because persisted active-resource metadata for
+      {{ podman_services_service.name }} is invalid.
+  tags: [remove]
+
 - name: Remove | Check container unit load state for removal
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
+    - podman_services_active_execution.mode == 'rootful'
   ansible.builtin.command:
-    argv:
-      - systemctl
-      - show
-      - "{{ podman_services_unit_name }}"
-      - --property=LoadState
-      - --value
+    argv: [systemctl, show, "{{ podman_services_remove_unit_name }}", --property=LoadState, --value]
   register: podman_services_remove_unit_load_state
   changed_when: false
   failed_when: false
@@ -20,19 +80,63 @@
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
+    - podman_services_active_execution.mode == 'rootful'
     - podman_services_remove_unit_load_state.stdout | trim != 'not-found'
   ansible.builtin.systemd_service:
-    name: "{{ podman_services_unit_name }}"
+    name: "{{ podman_services_remove_unit_name }}"
     state: stopped
   tags: [remove]
-- name: Remove | Stop managed network unit for removal
+
+- name: Remove | Check user container unit load state for removal
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
-    - podman_services_service.network is mapping
-    - not podman_services_service.network.external | bool
+    - podman_services_active_execution.mode == 'rootless'
+  become: true
+  become_user: "{{ podman_services_active_execution.host_user }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.command:
+    argv: [systemctl, --user, show, "{{ podman_services_remove_unit_name }}", --property=LoadState, --value]
+  register: podman_services_remove_user_unit_load_state
+  changed_when: false
+  failed_when: false
+  tags: [remove]
+
+- name: Remove | Stop user service for removal without deleting data
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'remove'
+    - podman_services_active_execution.mode == 'rootless'
+    - podman_services_remove_user_unit_load_state.stdout | trim != 'not-found'
+  become: true
+  become_user: "{{ podman_services_active_execution.host_user }}"
+  environment: "{{ podman_services_runtime_environment }}"
   ansible.builtin.systemd_service:
-    name: "{{ podman_services_service.network.name }}-network.service"
+    scope: user
+    name: "{{ podman_services_remove_unit_name }}"
+    state: stopped
+  tags: [remove]
+
+- name: Remove | Report unproven managed network retention
+  when:
+    - podman_services_state == 'remove'
+    - podman_services_active_execution.mode in ['rootful', 'rootless']
+    - podman_services_remove_network | length == 0
+  ansible.builtin.debug:
+    msg: >-
+      No persisted managed-network ownership metadata exists for the active
+      {{ podman_services_active_execution.mode }} store; its network is retained.
+  changed_when: false
+  tags: [remove]
+
+- name: Remove | Stop system managed network unit for removal
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'remove'
+    - podman_services_active_execution.mode == 'rootful'
+    - podman_services_remove_network.managed | default(false) | bool
+  ansible.builtin.systemd_service:
+    name: "{{ podman_services_remove_network.name }}-network.service"
     state: stopped
   register: podman_services_remove_network_stop
   failed_when: >-
@@ -40,57 +144,121 @@
     and (podman_services_remove_network_stop.msg | default('') is not search('not loaded|Could not find|not found'))
   tags: [remove]
 
-- name: Remove | Check managed network still exists for removal
+- name: Remove | Stop user managed network unit for removal
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
-    - podman_services_service.network is mapping
-    - not podman_services_service.network.external | bool
+    - podman_services_active_execution.mode == 'rootless'
+    - podman_services_remove_network.managed | default(false) | bool
+  become: true
+  become_user: "{{ podman_services_active_execution.host_user }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.systemd_service:
+    scope: user
+    name: "{{ podman_services_remove_network.name }}-network.service"
+    state: stopped
+  register: podman_services_remove_user_network_stop
+  failed_when: >-
+    podman_services_remove_user_network_stop is failed
+    and (podman_services_remove_user_network_stop.msg | default('') is not search('not loaded|Could not find|not found'))
+  tags: [remove]
+
+- name: Remove | Check proven managed network still exists
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'remove'
+    - podman_services_active_execution.mode in ['rootful', 'rootless']
+    - podman_services_remove_network.managed | default(false) | bool
+  become: true
+  become_user: "{{ podman_services_active_execution.host_user | default('root') }}"
+  environment: "{{ podman_services_runtime_environment }}"
   ansible.builtin.command:
-    argv: [podman, network, exists, "{{ podman_services_service.network.name }}"]
+    argv: [podman, network, exists, "{{ podman_services_remove_network.name }}"]
   register: podman_services_remove_network_exists
   changed_when: false
   failed_when: podman_services_remove_network_exists.rc not in [0, 1]
   tags: [remove]
 
-- name: Remove | Remove managed network if still present
+- name: Remove | Remove proven managed network if present
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
-    - podman_services_service.network is mapping
-    - not podman_services_service.network.external | bool
+    - podman_services_remove_network.managed | default(false) | bool
     - podman_services_remove_network_exists.rc == 0
+  become: true
+  become_user: "{{ podman_services_active_execution.host_user | default('root') }}"
+  environment: "{{ podman_services_runtime_environment }}"
   ansible.builtin.command:
-    argv: [podman, network, rm, "{{ podman_services_service.network.name }}"]
+    argv: [podman, network, rm, "{{ podman_services_remove_network.name }}"]
   changed_when: true
   tags: [remove]
 
-- name: Remove | Remove generated Quadlet and environment files only
+- name: Remove | Inspect persisted generated paths
+  when: podman_services_state == 'remove'
+  ansible.builtin.stat:
+    path: "{{ podman_services_remove_path }}"
+  loop: "{{ podman_services_remove_generated_paths }}"
+  loop_control:
+    loop_var: podman_services_remove_path
+    label: "{{ podman_services_remove_path }}"
+  register: podman_services_remove_generated_stats
+  tags: [remove]
+
+- name: Remove | Read existing managed generated files
+  when:
+    - podman_services_state == 'remove'
+    - podman_services_active_execution.mode in ['rootful', 'rootless']
+    - podman_services_remove_stat.stat.exists | bool
+  no_log: true
+  diff: false
+  ansible.builtin.slurp:
+    path: "{{ podman_services_remove_stat.stat.path }}"
+  loop: "{{ podman_services_remove_generated_stats.results }}"
+  loop_control:
+    loop_var: podman_services_remove_stat
+    label: >-
+      {{ podman_services_remove_stat.stat.path
+         | default(podman_services_remove_stat.podman_services_remove_path) }}
+  register: podman_services_remove_generated_contents
+  tags: [remove]
+
+- name: Remove | Require managed marker before generated-file deletion
+  when:
+    - podman_services_state == 'remove'
+    - podman_services_active_execution.mode in ['rootful', 'rootless']
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - >-
+        podman_services_remove_content.content | b64decode
+        is match('^# Generated by Ansible\\. Do not edit manually\\.')
+    fail_msg: >-
+      Refusing to remove an unmarked generated file for
+      {{ podman_services_service.name }}.
+  loop: "{{ podman_services_remove_generated_contents.results | rejectattr('skipped', 'defined') | list }}"
+  loop_control:
+    loop_var: podman_services_remove_content
+    label: "{{ podman_services_remove_content.source }}"
+  tags: [remove]
+
+- name: Remove | Remove persisted generated files only
   when: podman_services_state == 'remove'
   ansible.builtin.file:
     path: "{{ podman_services_generated_path }}"
     state: absent
-  loop: >-
-    {{
-      [
-        podman_services_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.container',
-        podman_services_quadlet_dir ~ '/' ~ podman_services_service.unit_name ~ '.env'
-      ]
-      + (
-        [podman_services_quadlet_dir ~ '/' ~ podman_services_service.network.name ~ '.network']
-        if podman_services_service.network is mapping
-        and not (podman_services_service.network.external | bool)
-        else []
-      )
-      + (
-        podman_services_service.volumes
-        | map(attribute='name')
-        | map('regex_replace', '^(.*)$', podman_services_quadlet_dir ~ '/\\1.volume')
-        | list
-      )
-    }}
+  loop: "{{ podman_services_remove_generated_paths }}"
   loop_control:
     loop_var: podman_services_generated_path
     label: "{{ podman_services_generated_path }}"
   notify: Podman services | daemon reload
+  tags: [remove]
+
+- name: Remove | Remove persisted execution state after active cleanup
+  when:
+    - podman_services_state == 'remove'
+    - podman_services_execution_state_stat.stat.exists | bool
+  ansible.builtin.file:
+    path: "{{ podman_services_execution_state_path }}"
+    state: absent
   tags: [remove]

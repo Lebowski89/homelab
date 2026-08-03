@@ -12,6 +12,9 @@
   ansible.builtin.include_role:
     name: podman_services
   vars:
+    # Connection-plugin option: avoids unsafe shared temp files when Podman
+    # tasks switch from the SSH account to a locked rootless service account.
+    ansible_pipelining: true  # noqa var-naming[no-role-prefix]
     podman_services_service_cfg: "{{ podman_services_dispatch_config }}"
     podman_services_service_cfg_found: true
     podman_services_common_context: "{{ service_catalog_podman_common_context }}"

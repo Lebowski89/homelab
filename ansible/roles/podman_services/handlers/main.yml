@@ -1,6 +1,21 @@
 ---
 
-- name: Podman services | daemon reload
-  when: not ansible_check_mode
+- name: Podman services | Reload system manager
+  listen: Podman services | daemon reload
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootful'
   ansible.builtin.systemd_service:
     daemon_reload: true
+
+- name: Podman services | Reload selected user manager
+  listen: Podman services | daemon reload
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+  become: true
+  become_user: "{{ podman_services_execution.host_user }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.command:
+    argv: [systemctl, --user, daemon-reload]
+  changed_when: false

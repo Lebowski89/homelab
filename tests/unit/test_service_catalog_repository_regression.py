@@ -153,7 +153,30 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
     services = load_services()
     checked = []
     expected = {
-        "n8n": {"network": "n8n", "host": "n8n", "port": 5678},
+        "adminer": {
+            "network": "adminer",
+            "host": "manager",
+            "host_port": 18080,
+            "container_port": 8080,
+            "execution": {"mode": "rootless", "host_user": "podman-adminer"},
+            "systemd": {
+                "after": ["network-online.target"],
+                "restart": "on-failure",
+                "restart_sec": "10s",
+            },
+        },
+        "n8n": {
+            "network": "n8n",
+            "host": "n8n",
+            "host_port": 5678,
+            "container_port": 5678,
+            "execution": {"mode": "rootful"},
+            "systemd": {
+                "after": ["network-online.target"],
+                "restart": "on-failure",
+                "restart_sec": "15s",
+            },
+        },
     }
 
     for item in catalog_filters.service_catalog_effective(services, "manager"):
@@ -178,7 +201,10 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
                 "timezone": "Australia/Melbourne",
             },
         )
+        assert set(rendered_effective) <= podman_filters._SUPPORTED_TOP_LEVEL_FIELDS
         normalized = podman_filters.podman_service_normalize(rendered_effective, item.get("target", item["name"]))
+        assert normalized["name"] == item["name"]
+        assert normalized["unit_name"] == item["name"]
         assert normalized["image"] == effective["image"]
         behavior = expected[item["name"]]
         assert normalized["network"] == {
@@ -187,16 +213,13 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
             "external": False,
         }
         assert normalized["container"]["host"] == behavior["host"]
-        assert normalized["container"]["ports"][0]["host"] == behavior["port"]
-        assert normalized["container"]["ports"][0]["container"] == behavior["port"]
-        assert normalized["container"]["systemd"] == {
-            "after": ["network-online.target"],
-            "restart": "on-failure",
-            "restart_sec": "15s",
-        }
+        assert normalized["container"]["ports"][0]["host"] == behavior["host_port"]
+        assert normalized["container"]["ports"][0]["container"] == behavior["container_port"]
+        assert normalized["container"]["systemd"] == behavior["systemd"]
+        assert normalized["execution"] == behavior["execution"]
         checked.append((item["name"], item.get("target")))
 
-    assert checked == [("n8n", None)]
+    assert checked == [("adminer", None), ("n8n", None)]
 
 
 def test_repository_secret_policy_is_runtime_neutral_and_defaults_safely():
@@ -617,6 +640,8 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
 
     assert docker_include["vars"]["docker_services_service_cfg"] == "{{ docker_services_dispatch_config }}"
     assert podman_include["vars"]["podman_services_service_cfg"] == "{{ podman_services_dispatch_config }}"
+    assert podman_include["vars"]["ansible_pipelining"] is True
+    assert "ansible_pipelining" not in docker_include["vars"]
     assert "service_catalog_merge_target" not in str(docker_include["vars"])
     assert "service_catalog_merge_target" not in str(podman_include["vars"])
 
@@ -631,3 +656,176 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert "merge_target" not in adapter_tasks
     assert "docker_services_service_cfg.targets is not defined" in docker_assert["ansible.builtin.assert"]["that"]
     assert "podman_services_service_cfg.targets is not defined" in podman_assert["ansible.builtin.assert"]["that"]
+
+
+def test_runtime_partition_only_sends_podman_entries_to_strict_podman_normalization():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_runtime_guardrail_repository",
+    )
+    podman_filters = load_module(
+        REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py",
+        "podman_services_runtime_guardrail_repository",
+    )
+    services = {
+        "docker-app": {
+            "runtime": "docker",
+            "image": "example.invalid/docker-app:1.0.0",
+            "command": ["serve"],
+        },
+        "podman-app": {
+            "runtime": "podman",
+            "image": "example.invalid/podman-app:1.0.0",
+            "deploy": {"type": "container"},
+        },
+    }
+    selected = catalog_filters.service_catalog_select(
+        catalog_filters.service_catalog_effective(services, "manager"),
+        run_all=True,
+    )["selected"]
+    docker_entries = catalog_filters.service_catalog_by_runtime(selected, "docker")
+    podman_entries = catalog_filters.service_catalog_by_runtime(selected, "podman")
+
+    assert [entry["name"] for entry in docker_entries] == ["docker-app"]
+    assert [entry["name"] for entry in podman_entries] == ["podman-app"]
+    docker_config = catalog_filters.service_catalog_merge_target(services["docker-app"])
+    podman_config = catalog_filters.service_catalog_merge_target(services["podman-app"])
+    assert docker_config["command"] == ["serve"]
+    assert podman_filters.podman_service_normalize(podman_config, "podman-app")["name"] == "podman-app"
+
+
+def test_podman_target_role_prefix_and_explicit_name_produce_collision_free_names():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_target_name_guardrail_repository",
+    )
+    podman_filters = load_module(
+        REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py",
+        "podman_services_target_name_guardrail_repository",
+    )
+    service = {
+        "runtime": "podman",
+        "image": "example.invalid/app:1.0.0",
+        "targets": {
+            "blue": {},
+            "green": {"name": "custom-green"},
+        },
+    }
+
+    blue = catalog_filters.service_catalog_merge_target(service, "blue")
+    green = catalog_filters.service_catalog_merge_target(service, "green")
+    blue_normalized = podman_filters.podman_service_normalize(blue, "app-blue")
+    green_normalized = podman_filters.podman_service_normalize(green, "app-green")
+
+    assert blue_normalized["name"] == blue_normalized["unit_name"] == "app-blue"
+    assert green_normalized["name"] == green_normalized["unit_name"] == "custom-green"
+
+
+def test_real_adminer_podman_migration_preserves_runtime_contracts():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_adminer_podman_repository",
+    )
+    podman_filters = load_module(
+        REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py",
+        "podman_services_adminer_repository",
+    )
+    common_filters = load_module(
+        REPO_ROOT / "ansible/roles/service_common/filter_plugins/service_common.py",
+        "service_common_adminer_repository",
+    )
+    rendered_service = render_structure(
+        deepcopy(load_services()["adminer"]),
+        {
+            "hostvars": {"manager": {"local_ip": "192.0.2.10"}},
+            "local_ip": "192.0.2.10",
+            "services_controller_host": "manager",
+        },
+    )
+    entry = catalog_filters.service_catalog_effective({"adminer": rendered_service}, "manager")[0]
+    rendered_effective = catalog_filters.service_catalog_merge_target(rendered_service)
+    normalized = podman_filters.podman_service_normalize(rendered_effective, "adminer")
+    lookup_config = common_filters.service_common_infisical_normalize(rendered_effective["infisical"]["secrets_map"])
+    check_values = common_filters.service_common_infisical_check_values(lookup_config)
+    resolved_environment = common_filters.service_common_environment_resolve(
+        rendered_effective.get("environment", {}),
+        check_values,
+        lookup_config,
+    )
+    traefik = common_filters.service_common_traefik_context(
+        rendered_effective,
+        "adminer",
+        ["manager"],
+        "example.test",
+        {"manager": {"local_ip": "192.0.2.10"}},
+    )
+
+    assert entry["runtime"] == "podman"
+    assert entry["dispatch_host"] == "manager"
+    assert "stack" not in rendered_effective
+    assert {"profile", "constraints", "mode", "replicas"}.isdisjoint(rendered_effective["deploy"])
+    assert rendered_effective["deploy"] == {
+        "type": "container",
+        "host": "manager",
+        "execution": {"mode": "rootless", "host_user": "podman-adminer"},
+    }
+    assert normalized["name"] == normalized["unit_name"] == "adminer"
+    assert normalized["execution"] == {"mode": "rootless", "host_user": "podman-adminer"}
+    assert normalized["network"] == {"name": "adminer", "driver": "bridge", "external": False}
+    assert normalized["container"]["host"] == "manager"
+    assert normalized["container"]["ports"] == [
+        {
+            "host": 18080,
+            "container": 8080,
+            "protocol": "tcp",
+            "host_ip": "192.0.2.10",
+        }
+    ]
+    assert normalized["container"]["systemd"] == {
+        "after": ["network-online.target"],
+        "restart": "on-failure",
+        "restart_sec": "10s",
+    }
+    assert lookup_config["secret_declarations"] == []
+    assert set(check_values) == {"cloudflare_zone"}
+    assert resolved_environment == {}
+    assert traefik["address"] == "adminer.int.example.test"
+    assert traefik["backend_url"] == "http://192.0.2.10:18080"
+
+
+def test_real_adminer_renders_a_managed_network_and_host_published_quadlet():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_adminer_quadlet_repository",
+    )
+    podman_filters = load_module(
+        REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py",
+        "podman_services_adminer_quadlet_repository",
+    )
+    effective = catalog_filters.service_catalog_merge_target(load_services()["adminer"])
+    rendered_effective = render_structure(
+        deepcopy(effective),
+        {
+            "local_ip": "192.0.2.10",
+            "services_controller_host": "manager",
+        },
+    )
+    normalized = podman_filters.podman_service_normalize(rendered_effective, "adminer")
+    template = Environment(trim_blocks=True, lstrip_blocks=True).from_string(
+        (REPO_ROOT / "ansible/roles/podman_services/templates/container.container.j2").read_text()
+    )
+    rendered = template.render(
+        podman_service=normalized,
+        podman_services_quadlet_dir="/var/lib/podman-adminer/.config/containers/systemd",
+    )
+
+    assert "ContainerName=adminer" in rendered
+    assert "Image=docker.io/library/adminer:5.4.2" in rendered
+    assert "Network=adminer.network" in rendered
+    assert "PublishPort=192.0.2.10:18080:8080/tcp" in rendered
+    assert "After=network-online.target" in rendered
+    assert "Restart=on-failure" in rendered
+    assert "RestartSec=10s" in rendered
+    assert "WantedBy=default.target" in rendered
+    assert "NoNewPrivileges=true" in rendered
+    assert "overlay" not in rendered
