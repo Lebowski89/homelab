@@ -84,6 +84,20 @@
 | Podman services ¦ Include drift tasks | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Include removal handler flush | ansible.builtin.include_tasks | True |  |
 
+#### File: tasks/sub_tasks/check_render.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Check render ¦ Reset in-memory artifact plan | ansible.builtin.set_fact | False |  |
+| Check render ¦ Render managed network in memory | ansible.builtin.set_fact | True |  |
+| Check render ¦ Render managed volumes in memory | ansible.builtin.set_fact | False |  |
+| Check render ¦ Render protected environment in memory | ansible.builtin.set_fact | True |  |
+| Check render ¦ Render container in memory | ansible.builtin.set_fact | False |  |
+| Check render ¦ Validate in-memory artifact syntax | ansible.builtin.assert | False |  |
+| Check render ¦ Inspect live artifact destinations | ansible.builtin.stat | False |  |
+| Check render ¦ Read existing live artifacts | ansible.builtin.slurp | True |  |
+| Check render ¦ Report planned artifact change | ansible.builtin.debug | True |  |
+
 #### File: tasks/sub_tasks/drift.yml
 
 | Name | Module | Has Conditions | Tags |
@@ -102,9 +116,11 @@
 | Execution ¦ Check persisted execution state | ansible.builtin.stat | False |  |
 | Execution ¦ Read persisted execution state | ansible.builtin.slurp | True |  |
 | Execution ¦ Parse persisted execution state | ansible.builtin.set_fact | False |  |
+| Execution ¦ Validate persisted execution state version | ansible.builtin.assert | True |  |
 | Execution ¦ Validate persisted execution state | ansible.builtin.assert | True |  |
 | Execution ¦ Check legacy rootful Quadlet | ansible.builtin.stat | True |  |
-| Execution ¦ Derive active and previous execution owners | ansible.builtin.set_fact | False |  |
+| Execution ¦ Derive active execution owner | ansible.builtin.set_fact | False |  |
+| Execution ¦ Preserve active execution as previous owner | ansible.builtin.set_fact | False |  |
 | Execution ¦ Derive selected execution owner | ansible.builtin.set_fact | False |  |
 | Execution ¦ Materialize selected execution context | ansible.builtin.set_fact | False |  |
 | Execution ¦ Inspect selected rootless account | ansible.builtin.getent | True |  |
@@ -141,7 +157,9 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Transition ¦ Derive previous Quadlet directory | ansible.builtin.set_fact | False |  |
 | Transition ¦ Derive previous execution resources | ansible.builtin.set_fact | False |  |
+| Transition ¦ Report versionless unproven resource retention | ansible.builtin.debug | True |  |
 | Transition ¦ Validate previous resource metadata | ansible.builtin.assert | False |  |
 | Transition ¦ Inspect previous rootless account | ansible.builtin.getent | True |  |
 | Transition ¦ Inspect previous rootless primary group | ansible.builtin.getent | True |  |
@@ -238,6 +256,7 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Prep ¦ Validate rootless Quadlet render plan | ansible.builtin.include_tasks | True |  |
 | Prep ¦ Ensure selected Quadlet directory exists | ansible.builtin.file | True |  |
 | Prep ¦ Render network Quadlet | ansible.builtin.template | True |  |
 | Prep ¦ Render volume Quadlets | ansible.builtin.template | True |  |
@@ -249,6 +268,7 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Remove ¦ Derive persisted active resources | ansible.builtin.set_fact | True |  |
+| Remove ¦ Report versionless unproven resource retention | ansible.builtin.debug | True |  |
 | Remove ¦ Validate persisted active resources | ansible.builtin.assert | True |  |
 | Remove ¦ Check container unit load state for removal | ansible.builtin.command | True |  |
 | Remove ¦ Stop service for removal without deleting data | ansible.builtin.systemd_service | True |  |
@@ -260,8 +280,8 @@
 | Remove ¦ Check proven managed network still exists | ansible.builtin.command | True |  |
 | Remove ¦ Remove proven managed network if present | ansible.builtin.command | True |  |
 | Remove ¦ Inspect persisted generated paths | ansible.builtin.stat | True |  |
-| Remove ¦ Read rootless generated files | ansible.builtin.slurp | True |  |
-| Remove ¦ Require managed marker for rootless deletion | ansible.builtin.assert | True |  |
+| Remove ¦ Read existing managed generated files | ansible.builtin.slurp | True |  |
+| Remove ¦ Require managed marker before generated-file deletion | ansible.builtin.assert | True |  |
 | Remove ¦ Remove persisted generated files only | ansible.builtin.file | True |  |
 | Remove ¦ Remove persisted execution state after active cleanup | ansible.builtin.file | True |  |
 
