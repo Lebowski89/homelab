@@ -33,6 +33,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
     home = Path("/var/lib") / host_user
     quadlet_dir = home / ".config/containers/systemd"
     before = (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir))
+    secret_sentinel = "PODMAN_CHECK_SECRET_SENTINEL_7f40b03e"
     runtime_marker = tmp_path / "runtime-command-called"
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -55,7 +56,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
       image: registry.example.invalid/adminer:5.4.2
       environment:
         HOME: /application/home
-        CHECK_VALUE: synthetic
+        CHECK_SECRET: declaration-placeholder
       named_networks:
         check-mode:
           driver: bridge
@@ -78,7 +79,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
       lookup_values: {{}}
       resolved_environment:
         HOME: /application/home
-        CHECK_VALUE: synthetic
+        CHECK_SECRET: {secret_sentinel}
       secret_declarations: []
   tasks:
     - name: Include Podman initialization only
@@ -95,6 +96,16 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
       ansible.builtin.include_role:
         name: podman_services
         tasks_from: sub_tasks/prepare
+
+    - name: Publish sanitized check artifact plan
+      ansible.builtin.debug:
+        msg: "{{{{ podman_services_check_artifact_plan }}}}"
+
+    - name: Require secret-bearing check state is cleared
+      ansible.builtin.assert:
+        that:
+          - podman_services_check_rendered_artifacts == []
+          - podman_services_check_existing_artifacts == {{}}
 
     - name: Include rootless lifecycle only
       ansible.builtin.include_role:
@@ -132,6 +143,10 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
 
     assert result.returncode == 0, result.stdout + result.stderr
     callback = json.loads(result.stdout)
+    callback_text = json.dumps(callback, sort_keys=True)
+    assert secret_sentinel not in result.stdout
+    assert secret_sentinel not in result.stderr
+    assert secret_sentinel not in callback_text
     task_results = {
         task["task"]["name"].split(" : ")[-1]: task["hosts"].get("localhost", {}) for play in callback["plays"] for task in play["tasks"]
     }
@@ -158,9 +173,22 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         assert task_results[task_name].get("skipped", False) is False
         assert task_results[task_name].get("failed", False) is False
     assert task_results["Check render | Report planned artifact change"]["changed"] is True
+    sanitized_plan = task_results["Publish sanitized check artifact plan"]["msg"]
+    assert all(set(artifact) == {"kind", "path", "changed"} for artifact in sanitized_plan)
+    assert {
+        "kind": "environment",
+        "path": str(quadlet_dir / "rootless-check.env"),
+        "changed": True,
+    } in sanitized_plan
+    for artifact_result in task_results["Check render | Inspect live artifact destinations"]["results"]:
+        metadata = artifact_result["podman_services_check_artifact_metadata"]
+        assert set(metadata) == {"kind", "path"}
+    for report_result in task_results["Check render | Report planned artifact change"]["results"]:
+        plan_item = report_result["podman_services_check_planned_artifact"]
+        assert set(plan_item) == {"kind", "path", "changed"}
 
 
-def run_local_playbook(tmp_path, plays, *, check_mode=True):
+def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, extra_env=None):
     playbook = tmp_path / "behavior.yml"
     playbook.write_text(yaml.safe_dump(plays, sort_keys=False))
     env = os.environ.copy()
@@ -173,6 +201,10 @@ def run_local_playbook(tmp_path, plays, *, check_mode=True):
             "ANSIBLE_NOCOLOR": "1",
         }
     )
+    if structured:
+        env["ANSIBLE_STDOUT_CALLBACK"] = "ansible.posix.json"
+    if extra_env:
+        env.update(extra_env)
     return subprocess.run(
         [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", str(playbook), *(["--check"] if check_mode else [])],
         cwd=REPO_ROOT,
@@ -189,6 +221,13 @@ def run_local_playbook(tmp_path, plays, *, check_mode=True):
 def test_execution_state_version_contract_is_enforced_before_runtime_work(tmp_path, version, supported):
     state_dir = tmp_path / "state"
     quadlet_dir = tmp_path / "quadlets"
+    runtime_marker = tmp_path / "runtime-command-called"
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    for command in ("podman", "systemctl"):
+        executable = fake_bin / command
+        executable.write_text(f"#!/bin/sh\ntouch {runtime_marker}\nexit 99\n")
+        executable.chmod(0o755)
     state_dir.mkdir()
     quadlet_dir.mkdir()
     state = {
@@ -202,7 +241,10 @@ def test_execution_state_version_contract_is_enforced_before_runtime_work(tmp_pa
         state["version"] = version
     if version == 2 and not isinstance(version, bool):
         state["resources"] = {"network": {}, "volumes": [], "generated_files": []}
-    (state_dir / "synthetic.yml").write_text(yaml.safe_dump(state, sort_keys=False))
+    state_path = state_dir / "synthetic.yml"
+    state_path.write_text(yaml.safe_dump(state, sort_keys=False))
+    state_before = state_path.read_text()
+    quadlet_before = list(quadlet_dir.iterdir())
     result = run_local_playbook(
         tmp_path,
         [
@@ -241,18 +283,31 @@ def test_execution_state_version_contract_is_enforced_before_runtime_work(tmp_pa
                         "name": "Include execution state validation",
                         "ansible.builtin.include_role": {"name": "podman_services", "tasks_from": "sub_tasks/execution_prepare"},
                     },
+                    {
+                        "name": "Include removal after validation",
+                        "ansible.builtin.include_role": {"name": "podman_services", "tasks_from": "sub_tasks/remove"},
+                    },
                 ],
             }
         ],
+        structured=True,
+        extra_env={"PATH": f"{fake_bin}:{os.environ.get('PATH', '')}"},
     )
+    callback = json.loads(result.stdout)
+    task_names = [task["task"]["name"].split(" : ")[-1] for play in callback["plays"] for task in play["tasks"]]
     if supported:
         assert result.returncode == 0, result.stdout + result.stderr
-        assert "failed=0" in result.stdout
+        assert callback["stats"]["localhost"]["failures"] == 0
+        assert "Include removal after validation" in task_names
+        assert any(name.startswith("Remove |") for name in task_names)
     else:
         assert result.returncode != 0
         assert "versionless legacy state or explicit integer version 2" in result.stdout
-    assert "Lifecycle |" not in result.stdout
-    assert "Remove |" not in result.stdout
+        assert "Include removal after validation" not in task_names
+        assert not any(name.startswith("Remove |") for name in task_names)
+    assert not runtime_marker.exists()
+    assert state_path.read_text() == state_before
+    assert list(quadlet_dir.iterdir()) == quadlet_before
 
 
 @pytest.mark.parametrize("mode", ["rootful", "rootless"])
@@ -486,6 +541,9 @@ def test_remove_and_drift_materialize_the_persisted_active_owner(
         service["named_networks"] = {"synthetic": {"driver": "bridge", "external": False}}
         service["ports"] = [{"published": 18082, "target": 8080, "protocol": "tcp"}]
 
+    expected_quadlet_dir = (
+        Path("/var/lib/podman-synthetic/.config/containers/systemd") if expected_mode == "rootless" else system_quadlet_dir
+    )
     playbook = tmp_path / f"active-owner-{action}-{desired_mode}-{persisted_mode or ('legacy' if legacy_rootful else 'none')}.yml"
     playbook.write_text(
         yaml.safe_dump(
@@ -533,6 +591,7 @@ def test_remove_and_drift_materialize_the_persisted_active_owner(
                                 "that": [
                                     f"podman_services_active_execution.mode == '{expected_mode}'",
                                     f"podman_services_execution.mode == '{expected_mode}'",
+                                    f"podman_services_quadlet_dir == '{expected_quadlet_dir}'",
                                     (
                                         f"podman_services_execution.host_user == '{expected_user}'"
                                         if expected_user

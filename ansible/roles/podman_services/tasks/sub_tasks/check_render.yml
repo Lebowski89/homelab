@@ -5,6 +5,9 @@
   diff: false
   ansible.builtin.set_fact:
     podman_services_check_rendered_artifacts: []
+    podman_services_check_artifacts: []
+    podman_services_check_artifact_plan: []
+    podman_services_check_existing_artifacts: {}
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Check render | Render managed network in memory
@@ -122,13 +125,31 @@
     label: "{{ podman_services_check_artifact.path }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Inspect live artifact destinations
-  ansible.builtin.stat:
-    path: "{{ podman_services_check_artifact.path }}"
+- name: Check render | Build sanitized artifact metadata
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_check_artifacts: >-
+      {{
+        podman_services_check_artifacts
+        + [{
+            'kind': podman_services_check_artifact.kind,
+            'path': podman_services_check_artifact.path
+          }]
+      }}
   loop: "{{ podman_services_check_rendered_artifacts }}"
   loop_control:
     loop_var: podman_services_check_artifact
     label: "{{ podman_services_check_artifact.path }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Check render | Inspect live artifact destinations
+  ansible.builtin.stat:
+    path: "{{ podman_services_check_artifact_metadata.path }}"
+  loop: "{{ podman_services_check_artifacts }}"
+  loop_control:
+    loop_var: podman_services_check_artifact_metadata
+    label: "{{ podman_services_check_artifact_metadata.path }}"
   register: podman_services_check_artifact_stats
   tags: [deploy, update, recreate, bootstrap]
 
@@ -141,35 +162,63 @@
   loop: "{{ podman_services_check_artifact_stats.results }}"
   loop_control:
     loop_var: podman_services_check_artifact_stat
-    label: "{{ podman_services_check_artifact_stat.podman_services_check_artifact.path }}"
+    label: "{{ podman_services_check_artifact_stat.podman_services_check_artifact_metadata.path }}"
   register: podman_services_check_existing_artifacts
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Report planned artifact change
+- name: Check render | Build sanitized artifact change plan
+  no_log: true
+  diff: false
   vars:
     podman_services_check_existing_artifact: >-
       {{
         podman_services_check_existing_artifacts.results
         | selectattr(
-            'podman_services_check_artifact_stat.podman_services_check_artifact.path',
+            'podman_services_check_artifact_stat.podman_services_check_artifact_metadata.path',
             'equalto',
             podman_services_check_artifact.path
           )
         | first
       }}
-  when: >-
-    podman_services_check_existing_artifact.content is not defined
-    or (
-      podman_services_check_existing_artifact.content | b64decode
-      != podman_services_check_artifact.content
-    )
-  ansible.builtin.debug:
-    msg: >-
-      Rootless Podman {{ podman_services_check_artifact.kind }} artifact
-      {{ podman_services_check_artifact.path }} would be created or updated.
+  ansible.builtin.set_fact:
+    podman_services_check_artifact_plan: >-
+      {{
+        podman_services_check_artifact_plan
+        + [{
+            'kind': podman_services_check_artifact.kind,
+            'path': podman_services_check_artifact.path,
+            'changed': (
+              podman_services_check_existing_artifact.content is not defined
+              or (
+                podman_services_check_existing_artifact.content | b64decode
+                != podman_services_check_artifact.content
+              )
+            )
+          }]
+      }}
   loop: "{{ podman_services_check_rendered_artifacts }}"
   loop_control:
     loop_var: podman_services_check_artifact
     label: "{{ podman_services_check_artifact.path }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Check render | Report planned artifact change  # noqa no-handler
+  when: podman_services_check_planned_artifact.changed | bool
+  ansible.builtin.debug:
+    msg: >-
+      Rootless Podman {{ podman_services_check_planned_artifact.kind }} artifact
+      {{ podman_services_check_planned_artifact.path }} would be created or updated.
+  loop: "{{ podman_services_check_artifact_plan }}"
+  loop_control:
+    loop_var: podman_services_check_planned_artifact
+    label: "{{ podman_services_check_planned_artifact.path }}"
   changed_when: true
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Check render | Clear secret-bearing comparison state
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_check_rendered_artifacts: []
+    podman_services_check_existing_artifacts: {}
   tags: [deploy, update, recreate, bootstrap]
