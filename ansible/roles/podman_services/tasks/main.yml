@@ -266,19 +266,66 @@
     service_common_target_hosts: ["{{ inventory_hostname }}"]
     service_common_controller_host: "{{ podman_services_controller_host }}"
     service_common_infisical_values: "{{ podman_services_common_values }}"
-    service_common_host_defaults: "{{ podman_services_common_host_defaults }}"
+    service_common_host_defaults: >-
+      {{
+        {}
+        if (
+          podman_services_execution.mode == 'rootless'
+          and podman_services_service.container.mounts | default([]) | length > 0
+        )
+        else podman_services_common_host_defaults
+      }}
     service_common_default_owner: >-
       {{
-        podman_services_service.container.uid
-        | default(podman_services_common_host_defaults[inventory_hostname].get('puid', '1000'))
+        (omit if ansible_check_mode else podman_services_execution.host_user)
+        if (
+          podman_services_execution.mode == 'rootless'
+          and podman_services_service.container.mounts | default([]) | length > 0
+        )
+        else (
+          podman_services_service.container.uid
+          | default(podman_services_common_host_defaults[inventory_hostname].get('puid', '1000'))
+        )
       }}
     service_common_default_group: >-
       {{
-        podman_services_service.container.gid
-        | default(podman_services_common_host_defaults[inventory_hostname].get('pgid', '1000'))
+        (omit if ansible_check_mode else podman_services_execution.host_user)
+        if (
+          podman_services_execution.mode == 'rootless'
+          and podman_services_service.container.mounts | default([]) | length > 0
+        )
+        else (
+          podman_services_service.container.gid
+          | default(podman_services_common_host_defaults[inventory_hostname].get('pgid', '1000'))
+        )
       }}
     service_common_default_mode: "0750"
     service_common_template_vars: "{{ podman_services_application_template_vars }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Podman services | Reconcile rootless bind source ownership
+  when:
+    - not ansible_check_mode
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_service.container.mounts | default([]) | length > 0
+  become: true
+  ansible.builtin.file:
+    path: "{{ podman_services_rootless_bind_source }}"
+    state: directory
+    owner: "{{ podman_services_execution.host_user }}"
+    group: "{{ podman_services_execution.host_user }}"
+    recurse: true
+  loop: >-
+    {{
+      podman_services_service.container.mounts
+      | map(attribute='source')
+      | unique
+      | list
+    }}
+  loop_control:
+    loop_var: podman_services_rootless_bind_source
+    label: "{{ podman_services_rootless_bind_source }}"
   tags: [deploy, update, recreate, bootstrap]
 
 ################################

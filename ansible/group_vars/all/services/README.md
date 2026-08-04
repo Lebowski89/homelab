@@ -112,7 +112,7 @@ dispatch, so inventory-derived values resolve in the correct host context.
 | `ports[].protocol` | Schema default | `tcp`. Docker Swarm `mode` defaults to `ingress`. |
 | Health timings | Adapter default | Docker: `1m`, `15s`, `3`, `30s`; Podman: `30s`, `10s`, `3`, `60s`. |
 | Podman `no_new_privileges` | Quadlet default | `true` even when omitted. |
-| `systemd.restart` / `restart_sec` | Podman default | `on-failure` / `15s`. |
+| `systemd.restart` / `restart_sec` / `timeout_start_sec` | Podman default | `on-failure` / `15s` / omitted. |
 | `cleanup.enable` / `force` | Docker default | `true` / `false`. |
 
 ## Identity and process
@@ -258,13 +258,17 @@ deploy/update/recreate/bootstrap, not drift or remove.
 | `paths[].path` | Non-empty path string | Yes | None | Both | `service_common` | Destination on every filesystem host. |
 | `paths[].state` | String enum | No | `directory` | Both | `service_common` | `absent`, `directory`, `file`, `hard`, `link`, or `touch`. |
 | `paths[].src` | Non-empty string | Conditional | None | Both | `service_common` | Required for `hard` and `link`. |
-| `paths[].owner` | User/ID | No | Host PUID, then `1000` | Both | `service_common` | Filesystem owner. |
-| `paths[].group` | Group/ID | No | Host PGID, then `1000` | Both | `service_common` | Filesystem group. |
+| `paths[].owner` | User/ID | No | Host PUID, then `1000` | Both | `service_common` | Filesystem owner. Omit it for a rootless Podman bind source; the adapter assigns its dedicated execution account. |
+| `paths[].group` | Group/ID | No | Host PGID, then `1000` | Both | `service_common` | Filesystem group. Omit it for a rootless Podman bind source; the adapter assigns its dedicated execution account. |
 | `paths[].mode` | Octal-looking string | No | Docker `0755`; Podman `0750` | Both | `service_common` | Docker validation accepts three or four octal digits. |
 | `paths[].force` | Boolean-like | No | `false` | Both | `service_common` | Passed to `ansible.builtin.file`, mainly for link replacement. |
 
-There is no recursive option. List parents before children; existing directory
-trees are not recursively re-owned or re-moded.
+There is no author-facing recursive option. List parents before children;
+ordinary directory trees are not recursively re-owned or re-moded. As a narrow
+exception, the Podman adapter recursively assigns each validated rootless bind
+source—which must be a normalized proper descendant of `/opt`—to its dedicated
+execution account before rendering the Quadlet. It does
+not recursively change file modes.
 
 ### Copies and templates
 
@@ -420,6 +424,10 @@ plan without lookup or database connection.
 | `deploy.host` | Host/group/list for Docker Swarm; one host for standalone/Podman | No | Docker controller; Podman catalog name | Both | `service_catalog` + `docker_services` / `podman_services` | Dispatch/filesystem placement. Swarm constraints, not this value, determine runtime node placement. |
 | `deploy.execution.mode` | String enum | No | `rootful` | Podman | `podman_services` | Selects `rootful` system Quadlets or `rootless` user Quadlets for container deployments. Docker rejects this Podman-owned declaration. |
 | `deploy.execution.host_user` | Host account name | Conditional | None | Podman | `podman_services` | Required when `mode` is `rootless` and must use the reserved `podman-` prefix. This dedicated locked, non-interactive host account owns Podman storage and its user systemd manager; it is separate from top-level container `user`. Existing accounts are reused only when persisted service ownership and the complete account contract match. |
+| `deploy.execution.userns` | Mapping | Conditional | None | Podman | `podman_services` | Required for rootless bind mounts. Selects the validated `keep-id` mapping that makes the dedicated host account appear as the application UID/GID inside the container. |
+| `deploy.execution.userns.mode` | String enum | Conditional | None | Podman | `podman_services` | Exactly `keep-id`. |
+| `deploy.execution.userns.uid` | Numeric ID | Conditional | None | Podman | `podman_services` | Required with `userns` and must be between `0` and `65535`. Quadlet renders it in `UserNS=keep-id:uid=...`. |
+| `deploy.execution.userns.gid` | Numeric ID | Conditional | None | Podman | `podman_services` | Required with `userns` and must be between `0` and `65535`. Quadlet renders it in `UserNS=keep-id:...,gid=...`. |
 | `deploy.mode` | String enum | No | `replicated` | Both | `docker_services` / `podman_services` | Docker accepts `replicated`/`global`; Podman only `replicated`. |
 | `deploy.replicas` | Non-negative integer-like | No | `1` | Both | `docker_services` / `podman_services` | Docker replica count; Podman accepts only `1`. |
 | `deploy.profile` | Non-empty string | No | `none` | Docker | `docker_services` | `none`, `standard`, `careful`, or `stateless_ha`. Non-`none` is invalid for standalone; Podman rejects the field. |
@@ -462,6 +470,7 @@ catalog validation rejects it.
 | `systemd.after` | List of non-empty unit names | No | `[]` | Podman | `podman_services` | Renders one `After=` line per entry. |
 | `systemd.restart` | Non-empty string | No | `on-failure` | Podman | `podman_services` | Passed to `Restart=`; no repository enum is maintained. |
 | `systemd.restart_sec` | Non-empty string | No | `15s` | Podman | `podman_services` | Passed to `RestartSec=`. |
+| `systemd.timeout_start_sec` | Non-empty string | No | Omitted | Podman | `podman_services` | Passed to `TimeoutStartSec=`; bounds how long systemd waits for startup and does not delay a successful start. |
 
 ## Application preparation
 
@@ -730,6 +739,7 @@ example_quadlet:
     after: [network-online.target]
     restart: on-failure
     restart_sec: 15s
+    timeout_start_sec: 900s
 ```
 
 For complete Podman examples, see `adminer.yml` and `n8n.yml`. For

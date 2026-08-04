@@ -15,6 +15,9 @@ Network={{ podman_service.network.name }}{{ '' if podman_service.network.externa
 {% if podman_service.env | length > 0 %}
 EnvironmentFile={{ podman_services_quadlet_dir }}/{{ podman_service.unit_name }}.env
 {% endif %}
+{% if podman_service.execution.userns is defined %}
+UserNS={{ podman_service.execution.userns.mode }}:uid={{ podman_service.execution.userns.uid }},gid={{ podman_service.execution.userns.gid }}
+{% endif %}
 {% if podman_service.container.uid is defined %}
 User={{ podman_service.container.uid }}
 Group={{ podman_service.container.gid }}
@@ -60,6 +63,9 @@ HealthStartPeriod={{ podman_service.container.healthcheck.start_period | default
 [Service]
 Restart={{ container_systemd.restart | default('on-failure') }}
 RestartSec={{ container_systemd.restart_sec | default('15s') }}
+{% if container_systemd.timeout_start_sec is defined %}
+TimeoutStartSec={{ container_systemd.timeout_start_sec }}
+{% endif %}
 
 [Install]
 WantedBy={{ 'default.target' if (podman_service.execution | default({'mode': 'rootful'})).mode == 'rootless' else 'multi-user.target' }}

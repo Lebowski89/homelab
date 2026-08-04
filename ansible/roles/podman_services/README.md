@@ -73,6 +73,7 @@
 | Podman services ¦ Derive runtime-neutral application template values | ansible.builtin.include_role | True |  |
 | Podman services ¦ Snapshot application template values | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Prepare runtime-neutral host state | ansible.builtin.include_role | False |  |
+| Podman services ¦ Reconcile rootless bind source ownership | ansible.builtin.file | True |  |
 | Podman services ¦ Apply runtime-neutral application configuration | ansible.builtin.include_role | True |  |
 | Podman services ¦ Include preparation tasks | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Include image tasks | ansible.builtin.include_tasks | False |  |

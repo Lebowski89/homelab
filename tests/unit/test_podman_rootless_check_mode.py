@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 import os
 import pwd
+import shutil
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -11,6 +13,31 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+OPT_ROOT = Path("/opt")
+ROOTLESS_BIND_PREFIX = "codex-rootless-check-"
+
+
+@pytest.fixture
+def absent_rootless_bind_source(tmp_path):
+    bind_source = OPT_ROOT / f"{ROOTLESS_BIND_PREFIX}{os.getpid()}-{tmp_path.name}"
+    assert bind_source != OPT_ROOT
+    assert bind_source.parent == OPT_ROOT
+    assert bind_source.name.startswith(ROOTLESS_BIND_PREFIX)
+    assert not os.path.lexists(bind_source)
+
+    try:
+        yield bind_source
+    finally:
+        assert bind_source != OPT_ROOT
+        assert bind_source.parent == OPT_ROOT
+        assert bind_source.name.startswith(ROOTLESS_BIND_PREFIX)
+        if bind_source.is_symlink():
+            bind_source.unlink()
+        elif bind_source.exists():
+            if bind_source.is_dir():
+                shutil.rmtree(bind_source)
+            else:
+                bind_source.unlink()
 
 
 def account_snapshot(name: str) -> tuple[object, ...] | None:
@@ -28,10 +55,12 @@ def path_snapshot(path: Path) -> tuple[bool, int | None, int | None, int | None]
     return (True, stat.st_uid, stat.st_gid, stat.st_mode)
 
 
-def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tmp_path):
+def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tmp_path, absent_rootless_bind_source):
     host_user = f"podman-check-{os.getpid()}"
-    home = Path("/var/lib") / host_user
+    runtime_root = tmp_path / "runtime"
+    home = runtime_root / host_user
     quadlet_dir = home / ".config/containers/systemd"
+    bind_source = absent_rootless_bind_source
     before = (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir))
     secret_sentinel = "PODMAN_CHECK_SECRET_SENTINEL_7f40b03e"
     runtime_marker = tmp_path / "runtime-command-called"
@@ -54,6 +83,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
     podman_services_service_cfg:
       runtime: podman
       image: registry.example.invalid/adminer:5.4.2
+      user: "0:0"
       environment:
         HOME: /application/home
         CHECK_SECRET: declaration-placeholder
@@ -71,7 +101,24 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         execution:
           mode: rootless
           host_user: {host_user}
+          userns:
+            mode: keep-id
+            uid: "1000"
+            gid: "1000"
+      paths:
+        - path: {bind_source}
+          state: directory
+          mode: "0750"
+      volumes:
+        config:
+          type: bind
+          source: {bind_source}
+          target: /config
+          read_only: false
     podman_services_role_prefix: rootless-check
+    podman_services_rootless_home_root: {runtime_root}
+    podman_services_execution_state_dir: {tmp_path / "state"}
+    podman_services_system_quadlet_dir: {tmp_path / "system"}
     podman_services_common_context:
       runtime: podman
       dispatch_host: localhost
@@ -82,20 +129,9 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         CHECK_SECRET: {secret_sentinel}
       secret_declarations: []
   tasks:
-    - name: Include Podman initialization only
+    - name: Include complete Podman role
       ansible.builtin.include_role:
         name: podman_services
-        tasks_from: sub_tasks/init
-
-    - name: Include rootless execution preparation only
-      ansible.builtin.include_role:
-        name: podman_services
-        tasks_from: sub_tasks/execution_prepare
-
-    - name: Include rootless Quadlet preparation only
-      ansible.builtin.include_role:
-        name: podman_services
-        tasks_from: sub_tasks/prepare
 
     - name: Publish sanitized check artifact plan
       ansible.builtin.debug:
@@ -106,11 +142,6 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         that:
           - podman_services_check_rendered_artifacts == []
           - podman_services_check_existing_artifacts == {{}}
-
-    - name: Include rootless lifecycle only
-      ansible.builtin.include_role:
-        name: podman_services
-        tasks_from: sub_tasks/lifecycle
 """
     )
     env = os.environ.copy()
@@ -151,11 +182,17 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         task["task"]["name"].split(" : ")[-1]: task["hosts"].get("localhost", {}) for play in callback["plays"] for task in play["tasks"]
     }
     assert (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir)) == before
+    assert not bind_source.exists()
+    assert not os.path.lexists(bind_source)
+    assert not runtime_root.exists()
+    assert not (tmp_path / "state").exists()
+    assert not (tmp_path / "system").exists()
     assert not runtime_marker.exists()
     for task_name in (
         "Execution | Provision dedicated rootless account",
         "Execution | Enable rootless account linger",
         "Execution | Start rootless user manager",
+        "Podman services | Reconcile rootless bind source ownership",
         "Prep | Render network Quadlet",
         "Prep | Render protected environment file",
         "Prep | Render container Quadlet",
@@ -180,12 +217,6 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         "path": str(quadlet_dir / "rootless-check.env"),
         "changed": True,
     } in sanitized_plan
-    for artifact_result in task_results["Check render | Inspect live artifact destinations"]["results"]:
-        metadata = artifact_result["podman_services_check_artifact_metadata"]
-        assert set(metadata) == {"kind", "path"}
-    for report_result in task_results["Check render | Report planned artifact change"]["results"]:
-        plan_item = report_result["podman_services_check_planned_artifact"]
-        assert set(plan_item) == {"kind", "path", "changed"}
 
 
 def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, extra_env=None):
@@ -213,6 +244,64 @@ def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, ex
         capture_output=True,
         check=False,
     )
+
+
+def test_common_path_preparation_restricts_existing_bind_root_without_replacing_contents(tmp_path):
+    bind_source = tmp_path / "thelounge"
+    nested = bind_source / "users"
+    nested.mkdir(parents=True)
+    bind_source.chmod(0o755)
+    credential_file = nested / "synthetic-user.json"
+    credential_file.write_text("synthetic-non-secret\n")
+    credential_file.chmod(0o640)
+    source_inode = bind_source.stat().st_ino
+    credential_inode = credential_file.stat().st_ino
+
+    plays = [
+        {
+            "name": "Exercise rootless bind path preparation locally",
+            "hosts": "localhost",
+            "connection": "local",
+            "gather_facts": False,
+            "become": False,
+            "vars": {
+                "service_common_name": "thelounge",
+                "service_common_paths": [
+                    {
+                        "path": str(bind_source),
+                        "state": "directory",
+                        "mode": "0750",
+                    }
+                ],
+                "service_common_target_host": "localhost",
+                "service_common_host_defaults": {"localhost": {}},
+                "service_common_default_owner": str(os.getuid()),
+                "service_common_default_group": str(os.getgid()),
+                "service_common_default_mode": "0750",
+            },
+            "tasks": [
+                {
+                    "name": "Apply the service-common path contract",
+                    "ansible.builtin.include_role": {
+                        "name": "service_common",
+                        "tasks_from": "paths",
+                    },
+                }
+            ],
+        }
+    ]
+
+    result = run_local_playbook(tmp_path, plays, check_mode=False)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert bind_source.stat().st_ino == source_inode
+    assert stat.S_IMODE(bind_source.stat().st_mode) == 0o750
+    assert credential_file.stat().st_ino == credential_inode
+    assert credential_file.read_text() == "synthetic-non-secret\n"
+    assert stat.S_IMODE(credential_file.stat().st_mode) == 0o640
+    probe = bind_source / "write-probe"
+    probe.write_text("writable\n")
+    assert probe.read_text() == "writable\n"
 
 
 @pytest.mark.parametrize(

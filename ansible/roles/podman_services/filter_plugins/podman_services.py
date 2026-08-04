@@ -456,9 +456,26 @@ def _canonical_volumes(value: Any, *, name: str) -> tuple[list[dict[str, Any]], 
     return mounts, volumes, tmpfs_mounts
 
 
-def _execution(value: Any, *, name: str) -> dict[str, str]:
+def _execution_userns(value: Any, *, name: str) -> dict[str, str]:
+    userns = _as_mapping(value, name=name)
+    unsupported = sorted(set(userns) - {"mode", "uid", "gid"})
+    if unsupported:
+        raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(unsupported)}")
+    if userns.get("mode") != "keep-id":
+        raise AnsibleFilterError(f'{name}.mode must be exactly "keep-id"')
+    missing = [field for field in ("uid", "gid") if field not in userns]
+    if missing:
+        raise AnsibleFilterError(f"{name} requires both uid and gid")
+    uid = _numeric_id(userns["uid"], name=f"{name}.uid")
+    gid = _numeric_id(userns["gid"], name=f"{name}.gid")
+    if int(uid) > 65535 or int(gid) > 65535:
+        raise AnsibleFilterError(f"{name}.uid and {name}.gid must be between 0 and 65535")
+    return {"mode": "keep-id", "uid": uid, "gid": gid}
+
+
+def _execution(value: Any, *, name: str) -> dict[str, Any]:
     execution = _as_mapping(value, name=name)
-    unsupported = sorted(set(execution) - {"mode", "host_user"})
+    unsupported = sorted(set(execution) - {"mode", "host_user", "userns"})
     if unsupported:
         raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(unsupported)}")
     if "mode" not in execution:
@@ -469,6 +486,8 @@ def _execution(value: Any, *, name: str) -> dict[str, str]:
     if mode == "rootful":
         if "host_user" in execution:
             raise AnsibleFilterError(f"{name}.host_user is only valid when mode is rootless")
+        if "userns" in execution:
+            raise AnsibleFilterError(f"{name}.userns is only valid when mode is rootless")
         return {"mode": "rootful"}
     if "host_user" not in execution:
         raise AnsibleFilterError(f"{name}.host_user is required when mode is rootless")
@@ -478,7 +497,10 @@ def _execution(value: Any, *, name: str) -> dict[str, str]:
             f"{name}.host_user must be a dedicated account name using the reserved podman- prefix and matching "
             f"{_HOST_USER_RE.pattern}; got {host_user!r}"
         )
-    return {"mode": "rootless", "host_user": host_user}
+    result: dict[str, Any] = {"mode": "rootless", "host_user": host_user}
+    if "userns" in execution:
+        result["userns"] = _execution_userns(execution["userns"], name=f"{name}.userns")
+    return result
 
 
 def podman_subid_range(value: Any, account: Any, minimum_count: Any = 65536) -> dict[str, int]:
@@ -690,10 +712,33 @@ def _validate_rootless_subset(
             )
         if port["protocol"] != "tcp":
             raise AnsibleFilterError(f"{name}.ports[{index}].protocol must be tcp for rootless Podman in this phase")
-    if host_paths:
-        raise AnsibleFilterError(f"{name}.paths is not supported for rootless Podman in this phase")
-    if volumes or container.get("mounts") or container.get("tmpfs"):
-        raise AnsibleFilterError(f"{name}.volumes is not supported for rootless Podman in this phase")
+    mounts = container.get("mounts", [])
+    if volumes or container.get("tmpfs"):
+        raise AnsibleFilterError(f"{name}.volumes supports only bind mounts for rootless Podman in this phase")
+    if host_paths or mounts:
+        if "userns" not in deploy["execution"]:
+            raise AnsibleFilterError(f"{name}.deploy.execution.userns keep-id mapping is required for rootless bind mounts")
+        declared_paths = {path["path"]: path for path in host_paths}
+        mounted_sources: set[str] = set()
+        for index, mount in enumerate(mounts):
+            raw_source = mount["source"]
+            source = posixpath.normpath(raw_source)
+            if source != raw_source or not source.startswith("/opt/"):
+                raise AnsibleFilterError(
+                    f"{name}.volumes[{index}].source must be a normalized absolute proper descendant of /opt for rootless Podman"
+                )
+            mounted_sources.add(source)
+        if mounted_sources != set(declared_paths):
+            raise AnsibleFilterError(
+                f"{name}.paths must declare exactly the rootless bind-mount sources so ownership can be reconciled safely"
+            )
+        for path in host_paths:
+            if path.get("state", "directory") != "directory":
+                raise AnsibleFilterError(f"{name}.paths rootless bind sources must use state directory")
+            if "owner" in path or "group" in path:
+                raise AnsibleFilterError(
+                    f"{name}.paths rootless bind sources must omit owner and group; the dedicated execution account owns them"
+                )
     if container.get("cap_add"):
         raise AnsibleFilterError(f"{name}.cap_add is not supported for rootless Podman in this phase")
     if secret_attachments or _has_native_infisical_secret(cfg):
@@ -710,7 +755,7 @@ def _validate_rootless_subset(
 
 def _systemd(value: Any, *, name: str) -> dict[str, Any]:
     systemd = _as_mapping(value, name=name)
-    unsupported = set(systemd) - {"after", "restart", "restart_sec"}
+    unsupported = set(systemd) - {"after", "restart", "restart_sec", "timeout_start_sec"}
     if unsupported:
         raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(sorted(unsupported))}")
     if "after" in systemd:
@@ -718,7 +763,7 @@ def _systemd(value: Any, *, name: str) -> dict[str, Any]:
         if not isinstance(after, list):
             raise AnsibleFilterError(f"{name}.after must be a list of non-empty unit names")
         systemd["after"] = [_nonempty_string(unit, name=f"{name}.after[{index}]") for index, unit in enumerate(after)]
-    for field in ("restart", "restart_sec"):
+    for field in ("restart", "restart_sec", "timeout_start_sec"):
         if field in systemd:
             systemd[field] = _nonempty_string(systemd[field], name=f"{name}.{field}")
     return systemd

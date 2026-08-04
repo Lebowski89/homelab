@@ -136,6 +136,7 @@ def canonical_service():
             "after": ["network-online.target"],
             "restart": "always",
             "restart_sec": "20s",
+            "timeout_start_sec": "900s",
         },
     }
 
@@ -159,6 +160,7 @@ def test_container_quadlet_is_deterministic_and_secret_safe():
     assert "Volume=n8n-data.volume:/home/node/.n8n" in first
     assert "PublishPort=192.0.2.98:5678:5678/tcp" in first
     assert "After=custom-online.target" in first
+    assert "TimeoutStartSec=" not in first
     assert "WantedBy=multi-user.target" in first
 
 
@@ -187,6 +189,7 @@ def test_canonical_normalization_reaches_container_quadlet():
     assert "After=network-online.target" in rendered
     assert "Restart=always" in rendered
     assert "RestartSec=20s" in rendered
+    assert "TimeoutStartSec=900s" in rendered
     expected_lines = {
         "Image=ghcr.io/example/portable:1.2.3",
         "User=1001",
