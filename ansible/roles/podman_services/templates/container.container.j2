@@ -15,6 +15,9 @@ Network={{ podman_service.network.name }}{{ '' if podman_service.network.externa
 {% if podman_service.env | length > 0 %}
 EnvironmentFile={{ podman_services_quadlet_dir }}/{{ podman_service.unit_name }}.env
 {% endif %}
+{% if podman_service.execution.userns is defined %}
+UserNS={{ podman_service.execution.userns.mode }}:uid={{ podman_service.execution.userns.uid }},gid={{ podman_service.execution.userns.gid }}
+{% endif %}
 {% if podman_service.container.uid is defined %}
 User={{ podman_service.container.uid }}
 Group={{ podman_service.container.gid }}

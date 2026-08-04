@@ -369,7 +369,7 @@ def test_venv_tasks_consume_recovery_decision_without_check_mode_mutation(tmp_pa
         "{{ ubuntu_ansible_venv_path }}",
     ]
     assert pip["ansible.builtin.pip"]["name"] == [
-        "pip==26.1.2",
+        "pip==26.2",
         "setuptools==83.0.0",
         "wheel==0.47.0",
     ]

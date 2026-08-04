@@ -165,6 +165,23 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
                 "restart_sec": "10s",
             },
         },
+        "thelounge": {
+            "network": "thelounge",
+            "host": "manager",
+            "host_port": 19000,
+            "container_port": 9000,
+            "execution": {
+                "mode": "rootless",
+                "host_user": "podman-thelounge",
+                "userns": {"mode": "keep-id", "uid": "1000", "gid": "1000"},
+            },
+            "container_user": {"uid": "0", "gid": "0"},
+            "systemd": {
+                "after": ["network-online.target"],
+                "restart": "on-failure",
+                "restart_sec": "10s",
+            },
+        },
         "n8n": {
             "network": "n8n",
             "host": "n8n",
@@ -193,6 +210,8 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
                 "hostvars": {
                     "manager": {
                         "container_host_appdata_root": "/opt",
+                        "container_host_puid": 1000,
+                        "container_host_pgid": 1000,
                         "local_ip": "192.0.2.10",
                     }
                 },
@@ -217,9 +236,20 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
         assert normalized["container"]["ports"][0]["container"] == behavior["container_port"]
         assert normalized["container"]["systemd"] == behavior["systemd"]
         assert normalized["execution"] == behavior["execution"]
+        if item["name"] == "thelounge":
+            assert normalized["container"]["uid"] == behavior["container_user"]["uid"]
+            assert normalized["container"]["gid"] == behavior["container_user"]["gid"]
+            assert normalized["host_paths"] == [{"path": "/opt/thelounge", "state": "directory", "mode": "0750"}]
+            assert normalized["container"]["mounts"] == [
+                {
+                    "source": "/opt/thelounge",
+                    "target": "/config",
+                    "read_only": False,
+                }
+            ]
         checked.append((item["name"], item.get("target")))
 
-    assert checked == [("adminer", None), ("n8n", None)]
+    assert checked == [("adminer", None), ("n8n", None), ("thelounge", None)]
 
 
 def test_repository_secret_policy_is_runtime_neutral_and_defaults_safely():
@@ -829,3 +859,119 @@ def test_real_adminer_renders_a_managed_network_and_host_published_quadlet():
     assert "WantedBy=default.target" in rendered
     assert "NoNewPrivileges=true" in rendered
     assert "overlay" not in rendered
+
+
+def test_real_thelounge_catalog_contract_normalizes_and_renders_rootless_bind_quadlets_without_mutation():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_thelounge_repository",
+    )
+    podman_filters = load_module(
+        REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py",
+        "podman_services_thelounge_repository",
+    )
+    common_filters = load_module(
+        REPO_ROOT / "ansible/roles/service_common/filter_plugins/service_common.py",
+        "service_common_thelounge_repository",
+    )
+    source = load_services()["thelounge"]
+    original = deepcopy(source)
+    entry = catalog_filters.service_catalog_effective({"thelounge": source}, "manager")[0]
+    effective = catalog_filters.service_catalog_merge_target(source)
+    rendered_effective = render_structure(
+        deepcopy(effective),
+        {
+            "hostvars": {
+                "manager": {
+                    "container_host_appdata_root": "/opt/appdata",
+                    "container_host_puid": 1000,
+                    "container_host_pgid": 1000,
+                    "local_ip": "192.0.2.10",
+                }
+            },
+            "local_ip": "192.0.2.10",
+            "services_controller_host": "manager",
+            "timezone": "Australia/Melbourne",
+        },
+    )
+    normalized = podman_filters.podman_service_normalize(rendered_effective, "thelounge")
+    traefik = common_filters.service_common_traefik_context(
+        rendered_effective,
+        "thelounge",
+        ["manager"],
+        "example.test",
+        {"manager": {"local_ip": "192.0.2.10"}},
+    )
+    quadlet_dir = "/var/lib/podman-thelounge/.config/containers/systemd"
+    container_template = Environment(trim_blocks=True, lstrip_blocks=True).from_string(
+        (REPO_ROOT / "ansible/roles/podman_services/templates/container.container.j2").read_text()
+    )
+    network_template = Environment(trim_blocks=True, lstrip_blocks=True).from_string(
+        (REPO_ROOT / "ansible/roles/podman_services/templates/network.network.j2").read_text()
+    )
+    container = container_template.render(
+        podman_service=normalized,
+        podman_services_quadlet_dir=quadlet_dir,
+    )
+    network = network_template.render(podman_service=normalized)
+
+    assert entry["runtime"] == "podman"
+    assert entry["dispatch_host"] == "{{ services_controller_host }}"
+    assert "stack" not in effective
+    assert {"profile", "constraints", "mode", "replicas"}.isdisjoint(effective["deploy"])
+    assert normalized["execution"] == {
+        "mode": "rootless",
+        "host_user": "podman-thelounge",
+        "userns": {"mode": "keep-id", "uid": "1000", "gid": "1000"},
+    }
+    assert effective["user"] == "0:0"
+    assert normalized["container"]["uid"] == "0"
+    assert normalized["container"]["gid"] == "0"
+    assert normalized["host_paths"] == [
+        {
+            "path": "/opt/appdata/thelounge",
+            "state": "directory",
+            "mode": "0750",
+        }
+    ]
+    assert normalized["container"]["mounts"] == [
+        {
+            "source": "/opt/appdata/thelounge",
+            "target": "/config",
+            "read_only": False,
+        }
+    ]
+    assert normalized["container"]["ports"] == [
+        {
+            "host": 19000,
+            "container": 9000,
+            "protocol": "tcp",
+            "host_ip": "192.0.2.10",
+        }
+    ]
+    assert normalized["env"] == {
+        "TZ": "Australia/Melbourne",
+        "PUID": 1000,
+        "PGID": 1000,
+        "UMASK": "022",
+    }
+    assert str(normalized["env"]["PUID"]) == normalized["execution"]["userns"]["uid"]
+    assert str(normalized["env"]["PGID"]) == normalized["execution"]["userns"]["gid"]
+    assert traefik["backend_url"] == "http://192.0.2.10:19000"
+    assert "NetworkName=thelounge" in network
+    assert "Driver=bridge" in network
+    assert "Network=thelounge.network" in container
+    assert "PublishPort=192.0.2.10:19000:9000/tcp" in container
+    assert "Volume=/opt/appdata/thelounge:/config" in container
+    assert "UserNS=keep-id:uid=1000,gid=1000" in container
+    assert f"EnvironmentFile={quadlet_dir}/thelounge.env" in container
+    assert "User=0" in container
+    assert "Group=0" in container
+    assert "NoNewPrivileges=true" in container
+    assert "Tmpfs=/run" not in container
+    assert "After=network-online.target" in container
+    assert "Restart=on-failure" in container
+    assert "RestartSec=10s" in container
+    assert "WantedBy=default.target" in container
+    assert "overlay" not in container
+    assert source == original

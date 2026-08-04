@@ -258,13 +258,16 @@ deploy/update/recreate/bootstrap, not drift or remove.
 | `paths[].path` | Non-empty path string | Yes | None | Both | `service_common` | Destination on every filesystem host. |
 | `paths[].state` | String enum | No | `directory` | Both | `service_common` | `absent`, `directory`, `file`, `hard`, `link`, or `touch`. |
 | `paths[].src` | Non-empty string | Conditional | None | Both | `service_common` | Required for `hard` and `link`. |
-| `paths[].owner` | User/ID | No | Host PUID, then `1000` | Both | `service_common` | Filesystem owner. |
-| `paths[].group` | Group/ID | No | Host PGID, then `1000` | Both | `service_common` | Filesystem group. |
+| `paths[].owner` | User/ID | No | Host PUID, then `1000` | Both | `service_common` | Filesystem owner. Omit it for a rootless Podman bind source; the adapter assigns its dedicated execution account. |
+| `paths[].group` | Group/ID | No | Host PGID, then `1000` | Both | `service_common` | Filesystem group. Omit it for a rootless Podman bind source; the adapter assigns its dedicated execution account. |
 | `paths[].mode` | Octal-looking string | No | Docker `0755`; Podman `0750` | Both | `service_common` | Docker validation accepts three or four octal digits. |
 | `paths[].force` | Boolean-like | No | `false` | Both | `service_common` | Passed to `ansible.builtin.file`, mainly for link replacement. |
 
-There is no recursive option. List parents before children; existing directory
-trees are not recursively re-owned or re-moded.
+There is no author-facing recursive option. List parents before children;
+ordinary directory trees are not recursively re-owned or re-moded. As a narrow
+exception, the Podman adapter recursively assigns each validated rootless bind
+source to its dedicated execution account before rendering the Quadlet. It does
+not recursively change file modes.
 
 ### Copies and templates
 
@@ -420,6 +423,10 @@ plan without lookup or database connection.
 | `deploy.host` | Host/group/list for Docker Swarm; one host for standalone/Podman | No | Docker controller; Podman catalog name | Both | `service_catalog` + `docker_services` / `podman_services` | Dispatch/filesystem placement. Swarm constraints, not this value, determine runtime node placement. |
 | `deploy.execution.mode` | String enum | No | `rootful` | Podman | `podman_services` | Selects `rootful` system Quadlets or `rootless` user Quadlets for container deployments. Docker rejects this Podman-owned declaration. |
 | `deploy.execution.host_user` | Host account name | Conditional | None | Podman | `podman_services` | Required when `mode` is `rootless` and must use the reserved `podman-` prefix. This dedicated locked, non-interactive host account owns Podman storage and its user systemd manager; it is separate from top-level container `user`. Existing accounts are reused only when persisted service ownership and the complete account contract match. |
+| `deploy.execution.userns` | Mapping | Conditional | None | Podman | `podman_services` | Required for rootless bind mounts. Selects the validated `keep-id` mapping that makes the dedicated host account appear as the application UID/GID inside the container. |
+| `deploy.execution.userns.mode` | String enum | Conditional | None | Podman | `podman_services` | Exactly `keep-id`. |
+| `deploy.execution.userns.uid` | Numeric ID | Conditional | None | Podman | `podman_services` | Required with `userns` and must be between `0` and `65535`. Quadlet renders it in `UserNS=keep-id:uid=...`. |
+| `deploy.execution.userns.gid` | Numeric ID | Conditional | None | Podman | `podman_services` | Required with `userns` and must be between `0` and `65535`. Quadlet renders it in `UserNS=keep-id:...,gid=...`. |
 | `deploy.mode` | String enum | No | `replicated` | Both | `docker_services` / `podman_services` | Docker accepts `replicated`/`global`; Podman only `replicated`. |
 | `deploy.replicas` | Non-negative integer-like | No | `1` | Both | `docker_services` / `podman_services` | Docker replica count; Podman accepts only `1`. |
 | `deploy.profile` | Non-empty string | No | `none` | Docker | `docker_services` | `none`, `standard`, `careful`, or `stateless_ha`. Non-`none` is invalid for standalone; Podman rejects the field. |

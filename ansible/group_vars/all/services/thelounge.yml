@@ -5,14 +5,14 @@ thelounge:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
+  runtime: podman
   tags: [media, thelounge]
   name: thelounge
-  stack: thelounge
   ################################
   # IMAGE/PROCESS
   ################################
   image: lscr.io/linuxserver/thelounge:v4.5.1-ls225
+  user: "0:0"
   ################################
   # ENVIRONMENT/SECRETS
   ################################
@@ -30,15 +30,21 @@ thelounge:
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    thelounge:
+      driver: bridge
+      external: false
+  ports:
+    - host_ip: "{{ local_ip }}"
+      published: 19000
+      target: 9000
+      protocol: tcp
   ################################
   # FILESYSTEM
   ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/thelounge"
       state: directory
-      mode: "0755"
+      mode: "0750"
   volumes:
     config:
       type: bind
@@ -51,15 +57,23 @@ thelounge:
   traefik:
     enable: true
     exposure: private
-    port: 9000
+    port: 19000
+    backend_mode: host
+    backend_host_inventory: "{{ services_controller_host }}"
   ################################
   # RUNTIME/LIFECYCLE
   ################################
   deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    profile: standard
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-thelounge
+      userns:
+        mode: keep-id
+        uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+        gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
+  systemd:
+    after: [network-online.target]
+    restart: on-failure
+    restart_sec: 10s

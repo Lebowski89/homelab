@@ -54,6 +54,32 @@ def test_main_orchestrates_sub_tasks_in_order():
     assert "Podman services | Include removal handler flush" in MAIN_TASKS
 
 
+def test_rootless_bind_ownership_is_live_only_and_precedes_quadlet_rendering():
+    execution = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Include execution preparation tasks")
+    common = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Prepare runtime-neutral host state")
+    ownership = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Reconcile rootless bind source ownership")
+    prepare = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Include preparation tasks")
+
+    assert MAIN_TASK_LIST.index(execution) < MAIN_TASK_LIST.index(common) < MAIN_TASK_LIST.index(ownership) < MAIN_TASK_LIST.index(prepare)
+    assert "not ansible_check_mode" in ownership["when"]
+    assert "podman_services_execution.mode == 'rootless'" in ownership["when"]
+    assert "podman_services_service.container.mounts | default([]) | length > 0" in ownership["when"]
+    assert ownership["ansible.builtin.file"]["path"] == "{{ podman_services_rootless_bind_source }}"
+    assert ownership["ansible.builtin.file"]["state"] == "directory"
+    assert ownership["ansible.builtin.file"]["owner"] == "{{ podman_services_execution.host_user }}"
+    assert ownership["ansible.builtin.file"]["group"] == "{{ podman_services_execution.host_user }}"
+    assert ownership["ansible.builtin.file"]["recurse"] is True
+    assert "mode" not in ownership["ansible.builtin.file"]
+    assert ownership["loop_control"]["loop_var"] == "podman_services_rootless_bind_source"
+    assert "map(attribute='source')" in ownership["loop"]
+    assert "unique" in ownership["loop"]
+    assert "podman_services_service.container.mounts" in common["vars"]["service_common_host_defaults"]
+    assert "omit if ansible_check_mode" in common["vars"]["service_common_default_owner"]
+    assert "podman_services_execution.host_user" in common["vars"]["service_common_default_owner"]
+    assert "omit if ansible_check_mode" in common["vars"]["service_common_default_group"]
+    assert "podman_services_execution.host_user" in common["vars"]["service_common_default_group"]
+
+
 def test_quadlet_directory_prerequisite_exists_before_templates():
     directory = next(task for task in PREPARE_TASK_LIST if task["name"] == "Prep | Ensure selected Quadlet directory exists")
     first_template = next(task for task in PREPARE_TASK_LIST if "ansible.builtin.template" in task)

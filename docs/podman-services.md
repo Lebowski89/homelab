@@ -54,13 +54,18 @@ base-target role prefix. If `deploy.type` is present it must be exactly
 `mode: replicated` and `replicas: 1` remain accepted single-instance no-ops.
 
 Rootless execution is intentionally narrower than the general Podman schema.
-It currently requires `deploy.type: container`, a fully qualified exact image,
-one role-managed bridge, unprivileged published TCP ports, and no host paths,
-bind mounts, named volumes, tmpfs mounts, native secrets, added capabilities,
-devices, privileged mode, host networking, copies, templates, or application
-preparation. Unsupported combinations fail during normalization before account
-or runtime mutation. Adminer fits this subset; n8n does not and therefore keeps
-the omitted, rootful execution default.
+It requires `deploy.type: container`, a fully qualified exact image, one
+role-managed bridge, and unprivileged published TCP ports. A rootless bind mount
+must use an exact `/opt` source also declared in `paths`, omit explicit
+path ownership, and provide a validated
+`deploy.execution.userns: {mode: keep-id, uid: ..., gid: ...}` mapping. After
+the common path exists, the adapter recursively assigns that source to the
+dedicated execution account without changing descendant modes. Named volumes,
+tmpfs mounts, native secrets, added capabilities, devices, privileged mode,
+host networking, copies, templates, and application preparation remain
+unsupported for rootless execution. Unsupported combinations fail during
+normalization before account or runtime mutation. Adminer fits the mount-free
+subset, The Lounge exercises the bind-backed subset, and n8n remains rootful.
 
 ## Lifecycle semantics
 
@@ -170,7 +175,7 @@ Docker and Podman now consume the same common-resolved environment. The former e
 
 ## n8n
 
-n8n was the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, `named_networks`, canonical ports/volumes/paths, `deploy`, `systemd`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter. Adminer is the next deliberately migrated service; further adoption remains incremental, one validated service at a time.
+n8n was the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, `named_networks`, canonical ports/volumes/paths, `deploy`, `systemd`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter. Adminer and The Lounge are the next deliberately migrated services; further adoption remains incremental, one validated service at a time.
 
 n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.04. The selected host must already have the runtime required by the declaration. A runtime-only edit is valid only when the complete effective declaration passes the destination adapter; it does not install a runtime or establish live parity. The proof covers the trusted-address `host_ip` bind in both generated Docker standalone Compose and Podman Quadlet output. Static tests do not replace a live migration test.
 
@@ -213,3 +218,34 @@ clients on that network can bypass Traefik and its middleware by reaching port
 18080 directly. A future firewall rule should allow only the Traefik source
 address to TCP/18080 and reject other LAN sources after the source address is
 confirmed from live traffic.
+
+## The Lounge
+
+The Lounge runs on `services_controller_host` under the locked
+`podman-thelounge` account. It publishes container port 9000 as host port
+19000 on the controller `local_ip`; Traefik uses that host endpoint rather
+than a cross-runtime overlay.
+
+Its existing `/opt` application-data source remains mounted at `/config`.
+The declared `keep-id` user namespace maps the dedicated execution account to
+the configured application PUID/GID. An explicit container `user: "0:0"`
+keeps LinuxServer's s6 initialization running as container root; that identity
+maps to an unprivileged subordinate host ID, not host root. s6 can therefore
+apply `PUID`, `PGID`, and `UMASK` before dropping The Lounge to container
+UID/GID 1000, which maps back to `podman-thelounge`.
+
+Before Quadlet rendering, the adapter changes the existing bind root to mode
+`0750` and recursively assigns that exact source to `podman-thelounge` without
+changing descendant modes or replacing content. This ownership transition is
+necessary so the rootless application process can retain and update the
+existing configuration.
+
+Remove the old Docker Swarm stack while the Docker declaration is still active,
+then deploy the Podman declaration. The runtime adapters deliberately do not
+remove one another's deployed resources. Back up the configuration first; a
+later Docker rollback will need ownership reconvergence by the rootful
+LinuxServer container or an explicit operator correction.
+
+The managed `thelounge.network` bridge is private to this account's Podman
+store. The host-backed Traefik route and direct TCP/19000 exposure have the same
+firewall consideration as Adminer's direct backend.

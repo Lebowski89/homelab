@@ -1100,6 +1100,142 @@ def rootless_cfg():
     }
 
 
+def rootless_bind_cfg():
+    cfg = rootless_cfg()
+    cfg["user"] = "0:0"
+    cfg["image"] = "lscr.io/linuxserver/thelounge:v4.5.1-ls225"
+    cfg["environment"] = {"PUID": "1000", "PGID": "1000"}
+    cfg["deploy"]["execution"] = {
+        "mode": "rootless",
+        "host_user": "podman-thelounge",
+        "userns": {"mode": "keep-id", "uid": "1000", "gid": 1000},
+    }
+    cfg["paths"] = [{"path": "/opt/appdata/thelounge", "state": "directory", "mode": "0750"}]
+    cfg["volumes"] = {
+        "config": {
+            "type": "bind",
+            "source": "/opt/appdata/thelounge",
+            "target": "/config",
+            "read_only": False,
+        }
+    }
+    return cfg
+
+
+def test_rootless_bind_mount_uses_validated_keep_id_and_dedicated_path_ownership_without_mutation():
+    cfg = rootless_bind_cfg()
+    original = deepcopy(cfg)
+
+    normalized = podman_services.podman_service_normalize(cfg, "thelounge")
+
+    assert normalized["execution"] == {
+        "mode": "rootless",
+        "host_user": "podman-thelounge",
+        "userns": {"mode": "keep-id", "uid": "1000", "gid": "1000"},
+    }
+    assert normalized["container"]["uid"] == "0"
+    assert normalized["container"]["gid"] == "0"
+    assert normalized["execution"]["userns"]["uid"] == str(normalized["env"]["PUID"])
+    assert normalized["execution"]["userns"]["gid"] == str(normalized["env"]["PGID"])
+    assert normalized["host_paths"] == cfg["paths"]
+    assert normalized["container"]["mounts"] == [
+        {
+            "source": "/opt/appdata/thelounge",
+            "target": "/config",
+            "read_only": False,
+        }
+    ]
+    assert normalized["volumes"] == []
+    assert cfg == original
+
+
+def test_rootless_linuxserver_container_root_contract_is_separate_from_the_nonroot_execution_account():
+    normalized = podman_services.podman_service_normalize(rootless_bind_cfg(), "thelounge")
+    account = rootless_account_context()
+    account.update(
+        {
+            "host_user": "podman-thelounge",
+            "service": "thelounge",
+            "comment": "Managed rootless Podman account for thelounge",
+            "home": "/var/lib/podman-thelounge",
+            "account": [
+                "x",
+                "1001",
+                "1001",
+                "Managed rootless Podman account for thelounge",
+                "/var/lib/podman-thelounge",
+                "/usr/sbin/nologin",
+            ],
+            "group": ["x", "1001", ""],
+            "group_names": ["podman-thelounge"],
+            "persisted": {
+                "managed_by": "podman_services",
+                "service": "thelounge",
+                "mode": "rootless",
+                "host_user": "podman-thelounge",
+                "uid": "1001",
+                "gid": "1001",
+            },
+        }
+    )
+    subordinate_ids = podman_services.podman_subid_range(
+        "podman-thelounge:165536:65536\n",
+        "podman-thelounge",
+    )
+
+    assert normalized["container"]["uid"] == "0"
+    assert normalized["container"]["gid"] == "0"
+    assert int(account["account"][1]) > 0
+    assert int(account["account"][2]) > 0
+    assert subordinate_ids["start"] > 0
+    assert podman_services.podman_rootless_account_contract(account) == {"create": False}
+
+
+@pytest.mark.parametrize(
+    ("userns", "message"),
+    [
+        (None, "userns keep-id mapping is required"),
+        ({"mode": "host", "uid": "1000", "gid": "1000"}, "mode"),
+        ({"mode": "keep-id", "uid": "1000"}, "both uid and gid"),
+        ({"mode": "keep-id", "uid": "65536", "gid": "1000"}, "between 0 and 65535"),
+    ],
+)
+def test_rootless_bind_mount_requires_valid_keep_id_mapping(userns, message):
+    cfg = rootless_bind_cfg()
+    if userns is None:
+        del cfg["deploy"]["execution"]["userns"]
+    else:
+        cfg["deploy"]["execution"]["userns"] = userns
+
+    with pytest.raises(AnsibleFilterError, match=message):
+        podman_services.podman_service_normalize(cfg, "thelounge")
+
+
+@pytest.mark.parametrize(
+    ("mutation", "message"),
+    [
+        ("missing_path", "declare exactly"),
+        ("different_path", "declare exactly"),
+        ("explicit_owner", "must omit owner and group"),
+        ("outside_opt", "absolute path within /opt"),
+    ],
+)
+def test_rootless_bind_mount_requires_an_exact_adapter_owned_host_path(mutation, message):
+    cfg = rootless_bind_cfg()
+    if mutation == "missing_path":
+        cfg["paths"] = []
+    elif mutation == "different_path":
+        cfg["paths"][0]["path"] = "/opt/appdata/other"
+    elif mutation == "explicit_owner":
+        cfg["paths"][0]["owner"] = "podman-thelounge"
+    else:
+        cfg["paths"][0]["path"] = "/srv/thelounge"
+        cfg["volumes"]["config"]["source"] = "/srv/thelounge"
+
+    with pytest.raises(AnsibleFilterError, match=message):
+        podman_services.podman_service_normalize(cfg, "thelounge")
+
+
 def test_omitted_execution_defaults_to_rootful_without_mutating_source():
     cfg = minimal_canonical_cfg()
     original = deepcopy(cfg)
@@ -1180,10 +1316,23 @@ def test_rootful_execution_rejects_host_user():
         podman_services.podman_service_normalize(cfg, "portable")
 
 
+def test_rootful_execution_rejects_rootless_user_namespace_mapping():
+    cfg = minimal_canonical_cfg()
+    cfg["deploy"] = {
+        "type": "container",
+        "execution": {
+            "mode": "rootful",
+            "userns": {"mode": "keep-id", "uid": "1000", "gid": "1000"},
+        },
+    }
+
+    with pytest.raises(AnsibleFilterError, match=r"userns is only valid"):
+        podman_services.podman_service_normalize(cfg, "portable")
+
+
 @pytest.mark.parametrize(
     ("field", "value"),
     [
-        ("paths", [{"path": "/opt/adminer"}]),
         ("volumes", [{"type": "volume", "source": "adminer", "target": "/data"}]),
         ("cap_add", ["NET_ADMIN"]),
         ("secrets", ["adminer_secret"]),
