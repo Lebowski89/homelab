@@ -41,6 +41,18 @@ def test_unsafe_path_fails():
         podman_services.podman_service_normalize(cfg, "n8n")
 
 
+def test_opt_root_remains_valid_for_rootful_nonrecursive_path_preparation():
+    cfg = valid_cfg()
+    cfg["paths"] = [{"path": "/opt"}]
+    original = deepcopy(cfg)
+
+    svc = podman_services.podman_service_normalize(cfg, "n8n")
+
+    assert svc["execution"] == {"mode": "rootful"}
+    assert svc["host_paths"] == [{"path": "/opt"}]
+    assert cfg == original
+
+
 def test_bad_secret_fails():
     cfg = valid_cfg()
     cfg["secrets"] = [{"name": "x"}]
@@ -524,6 +536,26 @@ def test_systemd_after_is_normalized_when_valid():
     svc = podman_services.podman_service_normalize(cfg, "n8n")
 
     assert svc["container"]["systemd"]["after"] == ["postgresql.service", "custom.target"]
+
+
+def test_systemd_timeout_start_sec_is_normalized_without_mutating_source():
+    cfg = minimal_canonical_cfg()
+    cfg["systemd"] = {"timeout_start_sec": " 900s "}
+    original = deepcopy(cfg)
+
+    svc = podman_services.podman_service_normalize(cfg, "portable")
+
+    assert svc["container"]["systemd"]["timeout_start_sec"] == "900s"
+    assert cfg == original
+
+
+@pytest.mark.parametrize("value", [None, "", "   ", 0, False, [], {}])
+def test_systemd_timeout_start_sec_must_be_a_nonempty_string(value):
+    cfg = minimal_canonical_cfg()
+    cfg["systemd"] = {"timeout_start_sec": value}
+
+    with pytest.raises(AnsibleFilterError, match=r"portable\.systemd\.timeout_start_sec must be a non-empty string"):
+        podman_services.podman_service_normalize(cfg, "portable")
 
 
 @pytest.mark.parametrize(
@@ -1212,12 +1244,31 @@ def test_rootless_bind_mount_requires_valid_keep_id_mapping(userns, message):
 
 
 @pytest.mark.parametrize(
+    "source",
+    [
+        "/opt",
+        "/opt/",
+        "/opt/.",
+        "/opt/service/..",
+        "/opt/../opt",
+    ],
+)
+def test_opt_root_cannot_reach_rootless_recursive_ownership(source):
+    cfg = rootless_bind_cfg()
+    cfg["paths"][0]["path"] = source
+    cfg["volumes"]["config"]["source"] = source
+
+    with pytest.raises(AnsibleFilterError, match="normalized absolute proper descendant of /opt"):
+        podman_services.podman_service_normalize(cfg, "thelounge")
+
+
+@pytest.mark.parametrize(
     ("mutation", "message"),
     [
         ("missing_path", "declare exactly"),
         ("different_path", "declare exactly"),
         ("explicit_owner", "must omit owner and group"),
-        ("outside_opt", "absolute path within /opt"),
+        ("outside_opt", "within /opt"),
     ],
 )
 def test_rootless_bind_mount_requires_an_exact_adapter_owned_host_path(mutation, message):

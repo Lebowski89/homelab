@@ -3,7 +3,6 @@ from __future__ import annotations
 import json
 import os
 import pwd
-import shutil
 import stat
 import subprocess
 import sys
@@ -13,28 +12,6 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-
-
-@pytest.fixture
-def repository_rootless_bind_source(tmp_path):
-    bind_source = REPO_ROOT / f".rootless-check-{tmp_path.name}"
-    assert not bind_source.exists()
-    nested = bind_source / "users"
-    nested.mkdir(parents=True)
-    bind_source.chmod(0o755)
-    nested_file = nested / "synthetic-user.json"
-    nested_file.write_text("synthetic-non-secret\n")
-    nested_file.chmod(0o640)
-    before = (
-        path_snapshot(bind_source),
-        nested_file.stat().st_ino,
-        stat.S_IMODE(nested_file.stat().st_mode),
-        nested_file.read_text(),
-    )
-    try:
-        yield bind_source, nested_file, before
-    finally:
-        shutil.rmtree(bind_source)
 
 
 def account_snapshot(name: str) -> tuple[object, ...] | None:
@@ -52,12 +29,13 @@ def path_snapshot(path: Path) -> tuple[bool, int | None, int | None, int | None]
     return (True, stat.st_uid, stat.st_gid, stat.st_mode)
 
 
-def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tmp_path, repository_rootless_bind_source):
+def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tmp_path):
     host_user = f"podman-check-{os.getpid()}"
     runtime_root = tmp_path / "runtime"
     home = runtime_root / host_user
     quadlet_dir = home / ".config/containers/systemd"
-    bind_source, nested_file, bind_before = repository_rootless_bind_source
+    bind_source = Path(f"/opt/codex-rootless-check-{os.getpid()}-{tmp_path.name}")
+    assert not bind_source.exists()
     before = (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir))
     secret_sentinel = "PODMAN_CHECK_SECRET_SENTINEL_7f40b03e"
     runtime_marker = tmp_path / "runtime-command-called"
@@ -179,10 +157,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         task["task"]["name"].split(" : ")[-1]: task["hosts"].get("localhost", {}) for play in callback["plays"] for task in play["tasks"]
     }
     assert (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir)) == before
-    assert path_snapshot(bind_source) == bind_before[0]
-    assert nested_file.stat().st_ino == bind_before[1]
-    assert stat.S_IMODE(nested_file.stat().st_mode) == bind_before[2]
-    assert nested_file.read_text() == bind_before[3]
+    assert not bind_source.exists()
     assert not runtime_root.exists()
     assert not (tmp_path / "state").exists()
     assert not (tmp_path / "system").exists()

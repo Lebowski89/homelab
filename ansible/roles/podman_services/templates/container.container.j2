@@ -63,6 +63,9 @@ HealthStartPeriod={{ podman_service.container.healthcheck.start_period | default
 [Service]
 Restart={{ container_systemd.restart | default('on-failure') }}
 RestartSec={{ container_systemd.restart_sec | default('15s') }}
+{% if container_systemd.timeout_start_sec is defined %}
+TimeoutStartSec={{ container_systemd.timeout_start_sec }}
+{% endif %}
 
 [Install]
 WantedBy={{ 'default.target' if (podman_service.execution | default({'mode': 'rootful'})).mode == 'rootless' else 'multi-user.target' }}

@@ -77,3 +77,4 @@ thelounge:
     after: [network-online.target]
     restart: on-failure
     restart_sec: 10s
+    timeout_start_sec: 900s

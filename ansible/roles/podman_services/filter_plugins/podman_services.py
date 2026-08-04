@@ -723,9 +723,9 @@ def _validate_rootless_subset(
         for index, mount in enumerate(mounts):
             raw_source = mount["source"]
             source = posixpath.normpath(raw_source)
-            if source != raw_source or (source != "/opt" and not source.startswith("/opt/")):
+            if source != raw_source or not source.startswith("/opt/"):
                 raise AnsibleFilterError(
-                    f"{name}.volumes[{index}].source must normalize to an absolute path within /opt for rootless Podman"
+                    f"{name}.volumes[{index}].source must be a normalized absolute proper descendant of /opt for rootless Podman"
                 )
             mounted_sources.add(source)
         if mounted_sources != set(declared_paths):
@@ -755,7 +755,7 @@ def _validate_rootless_subset(
 
 def _systemd(value: Any, *, name: str) -> dict[str, Any]:
     systemd = _as_mapping(value, name=name)
-    unsupported = set(systemd) - {"after", "restart", "restart_sec"}
+    unsupported = set(systemd) - {"after", "restart", "restart_sec", "timeout_start_sec"}
     if unsupported:
         raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(sorted(unsupported))}")
     if "after" in systemd:
@@ -763,7 +763,7 @@ def _systemd(value: Any, *, name: str) -> dict[str, Any]:
         if not isinstance(after, list):
             raise AnsibleFilterError(f"{name}.after must be a list of non-empty unit names")
         systemd["after"] = [_nonempty_string(unit, name=f"{name}.after[{index}]") for index, unit in enumerate(after)]
-    for field in ("restart", "restart_sec"):
+    for field in ("restart", "restart_sec", "timeout_start_sec"):
         if field in systemd:
             systemd[field] = _nonempty_string(systemd[field], name=f"{name}.{field}")
     return systemd

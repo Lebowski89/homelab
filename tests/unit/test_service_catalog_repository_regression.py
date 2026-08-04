@@ -180,6 +180,7 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
                 "after": ["network-online.target"],
                 "restart": "on-failure",
                 "restart_sec": "10s",
+                "timeout_start_sec": "900s",
             },
         },
         "n8n": {
@@ -957,6 +958,12 @@ def test_real_thelounge_catalog_contract_normalizes_and_renders_rootless_bind_qu
     }
     assert str(normalized["env"]["PUID"]) == normalized["execution"]["userns"]["uid"]
     assert str(normalized["env"]["PGID"]) == normalized["execution"]["userns"]["gid"]
+    assert normalized["container"]["systemd"] == {
+        "after": ["network-online.target"],
+        "restart": "on-failure",
+        "restart_sec": "10s",
+        "timeout_start_sec": "900s",
+    }
     assert traefik["backend_url"] == "http://192.0.2.10:19000"
     assert "NetworkName=thelounge" in network
     assert "Driver=bridge" in network
@@ -972,6 +979,7 @@ def test_real_thelounge_catalog_contract_normalizes_and_renders_rootless_bind_qu
     assert "After=network-online.target" in container
     assert "Restart=on-failure" in container
     assert "RestartSec=10s" in container
+    assert "TimeoutStartSec=900s" in container
     assert "WantedBy=default.target" in container
     assert "overlay" not in container
     assert source == original

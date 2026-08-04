@@ -56,7 +56,8 @@ base-target role prefix. If `deploy.type` is present it must be exactly
 Rootless execution is intentionally narrower than the general Podman schema.
 It requires `deploy.type: container`, a fully qualified exact image, one
 role-managed bridge, and unprivileged published TCP ports. A rootless bind mount
-must use an exact `/opt` source also declared in `paths`, omit explicit
+must use an exact normalized proper descendant of `/opt` that is also declared
+in `paths`, omit explicit
 path ownership, and provide a validated
 `deploy.execution.userns: {mode: keep-id, uid: ..., gid: ...}` mapping. After
 the common path exists, the adapter recursively assigns that source to the
@@ -119,8 +120,10 @@ an isolated service. Cross-runtime communication must use published host
 endpoints or another deliberately designed network path.
 
 Podman systemd policy is also first-class at top level. The supported fields are
-`after`, `restart`, and `restart_sec`, rendered as `After=`, `Restart=`,
-and `RestartSec=`. Service-level `runtime_options.podman.network` and
+`after`, `restart`, `restart_sec`, and `timeout_start_sec`, rendered as
+`After=`, `Restart=`, `RestartSec=`, and optional `TimeoutStartSec=`. The
+startup timeout bounds how long systemd waits; it does not delay a service that
+starts successfully. Service-level `runtime_options.podman.network` and
 `runtime_options.podman.systemd` are retired and fail with migration guidance. Secret update intent is runtime-neutral under `secret.update_policy`; secret-level `runtime_options` is retired and fails with guidance to use that canonical field.
 
 Published ports accept an optional `host_ip` per port. When set, the generated `PublishPort=` entry binds only that address. When omitted, Podman binds the published port on every host interface; this can expose the service on management, LAN, Tailscale, or other reachable networks and can bypass the intended reverse proxy and its middleware. Prefer an explicit trusted bind address and enforce host/network firewall policy whenever direct access is not intended.
@@ -226,7 +229,7 @@ The Lounge runs on `services_controller_host` under the locked
 19000 on the controller `local_ip`; Traefik uses that host endpoint rather
 than a cross-runtime overlay.
 
-Its existing `/opt` application-data source remains mounted at `/config`.
+Its existing `/opt/thelounge` application-data source remains mounted at `/config`.
 The declared `keep-id` user namespace maps the dedicated execution account to
 the configured application PUID/GID. An explicit container `user: "0:0"`
 keeps LinuxServer's s6 initialization running as container root; that identity
@@ -238,7 +241,9 @@ Before Quadlet rendering, the adapter changes the existing bind root to mode
 `0750` and recursively assigns that exact source to `podman-thelounge` without
 changing descendant modes or replacing content. This ownership transition is
 necessary so the rootless application process can retain and update the
-existing configuration.
+existing configuration. Its `systemd.timeout_start_sec: 900s` setting allows a
+slow first container creation to complete; it only bounds systemd's wait and does
+not delay later successful starts.
 
 Remove the old Docker Swarm stack while the Docker declaration is still active,
 then deploy the Podman declaration. The runtime adapters deliberately do not
