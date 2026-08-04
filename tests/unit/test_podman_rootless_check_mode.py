@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import pwd
+import shutil
 import stat
 import subprocess
 import sys
@@ -12,6 +13,31 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+OPT_ROOT = Path("/opt")
+ROOTLESS_BIND_PREFIX = "codex-rootless-check-"
+
+
+@pytest.fixture
+def absent_rootless_bind_source(tmp_path):
+    bind_source = OPT_ROOT / f"{ROOTLESS_BIND_PREFIX}{os.getpid()}-{tmp_path.name}"
+    assert bind_source != OPT_ROOT
+    assert bind_source.parent == OPT_ROOT
+    assert bind_source.name.startswith(ROOTLESS_BIND_PREFIX)
+    assert not os.path.lexists(bind_source)
+
+    try:
+        yield bind_source
+    finally:
+        assert bind_source != OPT_ROOT
+        assert bind_source.parent == OPT_ROOT
+        assert bind_source.name.startswith(ROOTLESS_BIND_PREFIX)
+        if bind_source.is_symlink():
+            bind_source.unlink()
+        elif bind_source.exists():
+            if bind_source.is_dir():
+                shutil.rmtree(bind_source)
+            else:
+                bind_source.unlink()
 
 
 def account_snapshot(name: str) -> tuple[object, ...] | None:
@@ -29,13 +55,12 @@ def path_snapshot(path: Path) -> tuple[bool, int | None, int | None, int | None]
     return (True, stat.st_uid, stat.st_gid, stat.st_mode)
 
 
-def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tmp_path):
+def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tmp_path, absent_rootless_bind_source):
     host_user = f"podman-check-{os.getpid()}"
     runtime_root = tmp_path / "runtime"
     home = runtime_root / host_user
     quadlet_dir = home / ".config/containers/systemd"
-    bind_source = Path(f"/opt/codex-rootless-check-{os.getpid()}-{tmp_path.name}")
-    assert not bind_source.exists()
+    bind_source = absent_rootless_bind_source
     before = (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir))
     secret_sentinel = "PODMAN_CHECK_SECRET_SENTINEL_7f40b03e"
     runtime_marker = tmp_path / "runtime-command-called"
@@ -158,6 +183,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
     }
     assert (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir)) == before
     assert not bind_source.exists()
+    assert not os.path.lexists(bind_source)
     assert not runtime_root.exists()
     assert not (tmp_path / "state").exists()
     assert not (tmp_path / "system").exists()
