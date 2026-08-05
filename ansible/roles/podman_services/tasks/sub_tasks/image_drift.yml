@@ -1,6 +1,6 @@
 ---
 
-- name: Drift | Initialize missing active-service inspection
+- name: Image drift | Initialize service inspection result
   when: podman_services_state == 'drift'
   ansible.builtin.set_fact:
     podman_services_drift_inspection_result:
@@ -8,7 +8,7 @@
       stdout: ""
   tags: [drift]
 
-- name: Drift | Check current image reference
+- name: Image drift | Check running container image
   when:
     - not ansible_check_mode
     - podman_services_state == 'drift'
@@ -23,7 +23,7 @@
   changed_when: false
   tags: [drift]
 
-- name: Drift | Capture active-service inspection
+- name: Image drift | Store running container image
   when:
     - not ansible_check_mode
     - podman_services_state == 'drift'
@@ -32,7 +32,7 @@
     podman_services_drift_inspection_result: "{{ podman_services_drift_inspect_command }}"
   tags: [drift]
 
-- name: Drift | Classify image reference drift
+- name: Image drift | Compare desired and running images
   when: podman_services_state == 'drift'
   ansible.builtin.set_fact:
     podman_services_image_reference_drift: >-
@@ -43,7 +43,7 @@
   changed_when: podman_services_image_reference_drift.drift | bool
   tags: [drift]
 
-- name: Drift | Report Podman image reference drift
+- name: Image drift | Report Podman image drift
   when:
     - podman_services_state == 'drift'
     - podman_services_image_reference_drift.drift | bool
@@ -52,7 +52,7 @@
   changed_when: false
   tags: [drift]
 
-- name: Drift | Report no Podman image reference drift
+- name: Image drift | Report image is current
   when:
     - podman_services_state == 'drift'
     - not (podman_services_image_reference_drift.drift | bool)

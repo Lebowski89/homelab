@@ -1,6 +1,6 @@
 ---
 
-- name: Remove | Derive persisted active resources
+- name: Remove | Load saved resources for removal
   when: podman_services_state == 'remove'
   ansible.builtin.set_fact:
     podman_services_remove_unit_name: >-
@@ -26,7 +26,7 @@
       }}
   tags: [remove]
 
-- name: Remove | Report versionless unproven resource retention
+- name: Remove | Report resources kept from legacy state
   when:
     - podman_services_state == 'remove'
     - podman_services_active_execution.version is not defined
@@ -39,7 +39,7 @@
   changed_when: false
   tags: [remove]
 
-- name: Remove | Validate persisted active resources
+- name: Remove | Validate saved resources before removal
   when:
     - podman_services_state == 'remove'
     - podman_services_active_execution.mode in ['rootful', 'rootless']
@@ -64,7 +64,7 @@
       {{ podman_services_service.name }} is invalid.
   tags: [remove]
 
-- name: Remove | Check container unit load state for removal
+- name: Remove | Check system service before removal
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
@@ -76,7 +76,7 @@
   failed_when: false
   tags: [remove]
 
-- name: Remove | Stop service for removal without deleting data
+- name: Remove | Stop system service without deleting data
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
@@ -87,7 +87,7 @@
     state: stopped
   tags: [remove]
 
-- name: Remove | Check user container unit load state for removal
+- name: Remove | Check user service before removal
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
@@ -102,7 +102,7 @@
   failed_when: false
   tags: [remove]
 
-- name: Remove | Stop user service for removal without deleting data
+- name: Remove | Stop user service without deleting data
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
@@ -117,7 +117,7 @@
     state: stopped
   tags: [remove]
 
-- name: Remove | Report unproven managed network retention
+- name: Remove | Report network kept because ownership is unverified
   when:
     - podman_services_state == 'remove'
     - podman_services_active_execution.mode in ['rootful', 'rootless']
@@ -129,7 +129,7 @@
   changed_when: false
   tags: [remove]
 
-- name: Remove | Stop system managed network unit for removal
+- name: Remove | Stop managed system network service
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
@@ -144,7 +144,7 @@
     and (podman_services_remove_network_stop.msg | default('') is not search('not loaded|Could not find|not found'))
   tags: [remove]
 
-- name: Remove | Stop user managed network unit for removal
+- name: Remove | Stop managed user network service
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
@@ -163,7 +163,7 @@
     and (podman_services_remove_user_network_stop.msg | default('') is not search('not loaded|Could not find|not found'))
   tags: [remove]
 
-- name: Remove | Check proven managed network still exists
+- name: Remove | Check managed network before removal
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
@@ -179,7 +179,7 @@
   failed_when: podman_services_remove_network_exists.rc not in [0, 1]
   tags: [remove]
 
-- name: Remove | Remove proven managed network if present
+- name: Remove | Remove managed network if present
   when:
     - not ansible_check_mode
     - podman_services_state == 'remove'
@@ -193,7 +193,7 @@
   changed_when: true
   tags: [remove]
 
-- name: Remove | Inspect persisted generated paths
+- name: Remove | Check saved generated files
   when: podman_services_state == 'remove'
   ansible.builtin.stat:
     path: "{{ podman_services_remove_path }}"
@@ -222,7 +222,7 @@
   register: podman_services_remove_generated_contents
   tags: [remove]
 
-- name: Remove | Require managed marker before generated-file deletion
+- name: Remove | Verify files are Ansible-managed before deletion
   when:
     - podman_services_state == 'remove'
     - podman_services_active_execution.mode in ['rootful', 'rootless']
@@ -242,7 +242,7 @@
     label: "{{ podman_services_remove_content.source }}"
   tags: [remove]
 
-- name: Remove | Remove persisted generated files only
+- name: Remove | Remove saved generated files
   when: podman_services_state == 'remove'
   ansible.builtin.file:
     path: "{{ podman_services_generated_path }}"
@@ -254,7 +254,7 @@
   notify: Podman services | daemon reload
   tags: [remove]
 
-- name: Remove | Remove persisted execution state after active cleanup
+- name: Remove | Remove saved execution state
   when:
     - podman_services_state == 'remove'
     - podman_services_execution_state_stat.stat.exists | bool

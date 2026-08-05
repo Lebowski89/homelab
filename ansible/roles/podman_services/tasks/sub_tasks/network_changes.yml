@@ -1,6 +1,6 @@
 ---
 
-- name: Network | Report retained managed network definition change
+- name: Network | Report managed network change that requires recreate
   when:
     - podman_services_state in ['update', 'recreate']
     - podman_services_service.network is mapping
