@@ -1,0 +1,734 @@
+---
+
+- name: Validate service | Require service configuration
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc is defined
+      - docker_services_svc is mapping
+    fail_msg: "docker_services_svc must be defined as a mapping before calling validate_svc.yml"
+
+################################
+# BASIC FIELDS
+################################
+
+- name: Validate service | Check optional service name
+  when: docker_services_svc.name is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.name is string
+      - (docker_services_svc.name | string | trim | length) > 0
+    fail_msg: "docker_services_svc.name must be a non-empty string when provided."
+
+- name: Validate service | Require service image
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.image is defined
+      - docker_services_svc.image is string
+      - (docker_services_svc.image | string | trim | length) > 0
+    fail_msg: "docker_services_svc.image must be defined as a non-empty string."
+
+- name: Validate service | Check optional container user
+  when: docker_services_svc.user is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.user is string
+      - (docker_services_svc.user | string | trim | length) > 0
+    fail_msg: "docker_services_svc.user must be a non-empty string when provided."
+
+- name: Validate service | Check command type
+  when: docker_services_svc.command is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.command is string
+        or (docker_services_svc.command is sequence and docker_services_svc.command is not string)
+    fail_msg: "docker_services_svc.command must be a non-empty string or a list of non-empty strings."
+
+- name: Validate service | Check command string
+  when:
+    - docker_services_svc.command is defined
+    - docker_services_svc.command is string
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.command | trim | length) > 0
+    fail_msg: "docker_services_svc.command string form must be non-empty."
+
+- name: Validate service | Check command list
+  when:
+    - docker_services_svc.command is defined
+    - docker_services_svc.command is sequence
+    - docker_services_svc.command is not string
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.command | length) > 0
+      - (docker_services_svc.command | select('string') | list | length) == (docker_services_svc.command | length)
+      - >-
+        (docker_services_svc.command | select('string') | map('trim') |
+        reject('equalto', '') | list | length)
+        == (docker_services_svc.command | length)
+    fail_msg: "docker_services_svc.command list form must contain only non-empty strings."
+
+- name: Validate service | Check environment file type
+  when: docker_services_svc.env_file is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.env_file is string
+        or (docker_services_svc.env_file is sequence and docker_services_svc.env_file is not string)
+    fail_msg: "docker_services_svc.env_file must be a string or a list of strings."
+
+- name: Validate service | Check environment file string
+  when:
+    - docker_services_svc.env_file is defined
+    - docker_services_svc.env_file is string
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.env_file | trim | length) > 0
+    fail_msg: "docker_services_svc.env_file string form must be non-empty."
+
+- name: Validate service | Check environment file list
+  when:
+    - docker_services_svc.env_file is defined
+    - docker_services_svc.env_file is sequence
+    - docker_services_svc.env_file is not string
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.env_file | length) > 0
+      - (docker_services_svc.env_file | select('string') | list | length) == (docker_services_svc.env_file | length)
+      - >-
+        (docker_services_svc.env_file | select('string') | map('trim') |
+        reject('equalto', '') | list | length)
+        == (docker_services_svc.env_file | length)
+    fail_msg: "docker_services_svc.env_file list form must contain only non-empty strings."
+
+- name: Validate service | Check device list
+  when: docker_services_svc.devices is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.devices is sequence
+      - docker_services_svc.devices is not string
+      - (docker_services_svc.devices | select('string') | list | length) == (docker_services_svc.devices | length)
+      - >-
+        (docker_services_svc.devices | select('string') | map('trim') |
+        reject('equalto', '') | list | length)
+        == (docker_services_svc.devices | length)
+    fail_msg: "docker_services_svc.devices must be a list of non-empty strings."
+
+- name: Validate service | Check added capabilities
+  when: docker_services_svc.cap_add is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.cap_add is sequence
+      - docker_services_svc.cap_add is not string
+      - (docker_services_svc.cap_add | select('string') | list | length) == (docker_services_svc.cap_add | length)
+      - >-
+        (docker_services_svc.cap_add | select('string') | map('trim') |
+        reject('equalto', '') | list | length)
+        == (docker_services_svc.cap_add | length)
+    fail_msg: "docker_services_svc.cap_add must be a list of non-empty strings."
+
+- name: Validate service | Check dropped capabilities
+  when: docker_services_svc.cap_drop is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.cap_drop is sequence
+      - docker_services_svc.cap_drop is not string
+      - (docker_services_svc.cap_drop | select('string') | list | length) == (docker_services_svc.cap_drop | length)
+      - >-
+        (docker_services_svc.cap_drop | select('string') | map('trim') |
+        reject('equalto', '') | list | length)
+        == (docker_services_svc.cap_drop | length)
+    fail_msg: "docker_services_svc.cap_drop must be a list of non-empty strings."
+
+- name: Validate service | Check no-new-privileges setting
+  when: docker_services_svc.no_new_privileges is defined
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          docker_services_svc.no_new_privileges
+          | docker_services_no_new_privileges_security_opts(docker_services_stack_deploy_type)
+        ) is sequence
+    fail_msg: >-
+      docker_services_svc.no_new_privileges must be a strict boolean-like value and
+      true is supported only for deploy.type=container.
+
+- name: Validate service | Check sysctl settings
+  when: docker_services_svc.sysctls is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.sysctls is mapping
+    fail_msg: "docker_services_svc.sysctls must be a mapping when provided."
+
+################################
+# DEPLOY
+################################
+
+- name: Validate service | Check deploy settings
+  when: docker_services_svc.deploy is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.deploy is mapping
+    fail_msg: "docker_services_svc.deploy must be a mapping when provided."
+
+- name: Validate service | Check deploy type
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.type is defined
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.deploy.type | string | trim) in ['swarm', 'container']
+    fail_msg: "docker_services_svc.deploy.type must be 'swarm' or 'container' when provided."
+
+- name: Validate service | Check deploy profile
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.profile is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.deploy.profile is string
+      - (docker_services_svc.deploy.profile | string | trim | length) > 0
+      - >-
+        (docker_services_svc.deploy.profile | string | trim)
+        in ((docker_services_deploy_profiles | default({'none': {}})).keys() | list)
+    fail_msg: >-
+      docker_services_svc.deploy.profile must be a non-empty string and one of:
+      {{ (docker_services_deploy_profiles | default({'none': {}})).keys() | list | sort }}
+
+- name: Validate service | Require Swarm for non-default deploy profiles
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.profile is defined
+    - (docker_services_svc.deploy.profile | string | trim) != 'none'
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.deploy.type | default('swarm', true) | string | trim) == 'swarm'
+    fail_msg: >-
+      docker_services_svc.deploy.profile='{{ docker_services_svc.deploy.profile }}'
+      only applies to Swarm services. For deploy.type='container', omit deploy.profile
+      or set profile: none.
+
+- name: Validate service | Check Swarm deploy mode
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.mode is defined
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.deploy.mode | string | trim) in ['replicated', 'global']
+    fail_msg: "docker_services_svc.deploy.mode must be 'replicated' or 'global' when provided."
+
+- name: Validate service | Check replica count
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.replicas is defined
+  ansible.builtin.assert:
+    that:
+      - >
+        (
+          docker_services_svc.deploy.replicas is integer
+          or (
+            docker_services_svc.deploy.replicas is string
+            and (docker_services_svc.deploy.replicas | trim | regex_search('^[0-9]+$')) is not none
+          )
+        )
+      - (docker_services_svc.deploy.replicas | int) >= 0
+    fail_msg: "docker_services_svc.deploy.replicas must be an integer >= 0 when provided."
+
+- name: Validate service | Check deploy host
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.host is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.deploy.host is string
+        or (docker_services_svc.deploy.host is sequence and docker_services_svc.deploy.host is not string)
+      - >-
+        (
+          docker_services_svc.deploy.host is string
+          and (docker_services_svc.deploy.host | string | trim | length) > 0
+        )
+        or
+        (
+          docker_services_svc.deploy.host is sequence
+          and docker_services_svc.deploy.host is not string
+          and (docker_services_svc.deploy.host | length) > 0
+          and (docker_services_svc.deploy.host | select('string') | list | length) == (docker_services_svc.deploy.host | length)
+          and
+          (
+            docker_services_svc.deploy.host
+            | select('string')
+            | map('trim')
+            | reject('equalto', '')
+            | list
+            | length
+          ) == (docker_services_svc.deploy.host | length)
+        )
+    fail_msg: >-
+      docker_services_svc.deploy.host controls prep/filesystem target hosts and must be
+      a non-empty string, or a non-empty list of non-empty strings, when provided.
+
+- name: Validate service | Check placement constraints
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.constraints is defined
+  ansible.builtin.assert:
+    that:
+      - >
+        (
+          docker_services_svc.deploy.constraints is string
+          and (docker_services_svc.deploy.constraints | trim | length) > 0
+        )
+        or
+        (
+          docker_services_svc.deploy.constraints is sequence
+          and docker_services_svc.deploy.constraints is not string
+          and docker_services_svc.deploy.constraints is not mapping
+          and (docker_services_svc.deploy.constraints | length) > 0
+          and
+          (
+            docker_services_svc.deploy.constraints
+            | select('string')
+            | map('trim')
+            | reject('equalto', '')
+            | list
+            | length
+          ) == (docker_services_svc.deploy.constraints | length)
+        )
+    fail_msg: "docker_services_svc.deploy.constraints must be a string or a list of strings."
+
+- name: Validate service | Check restart policy
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.restart_policy is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.deploy.restart_policy is mapping
+    fail_msg: "docker_services_svc.deploy.restart_policy must be a mapping when provided."
+
+- name: Validate service | Check update settings
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.update_config is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.deploy.update_config is mapping
+    fail_msg: "docker_services_svc.deploy.update_config must be a mapping when provided."
+
+- name: Validate service | Check rollback settings
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.rollback_config is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.deploy.rollback_config is mapping
+    fail_msg: "docker_services_svc.deploy.rollback_config must be a mapping when provided."
+
+- name: Validate service | Check resource limits
+  when:
+    - docker_services_svc.deploy is defined
+    - docker_services_svc.deploy is mapping
+    - docker_services_svc.deploy.resources is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.deploy.resources is mapping
+    fail_msg: "docker_services_svc.deploy.resources must be a mapping when provided."
+
+################################
+# TARGETS
+################################
+
+- name: Validate service | Check targets mapping
+  when: docker_services_svc.targets is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.targets is mapping
+    fail_msg: "docker_services_svc.targets must be a mapping when provided."
+
+- name: Validate service | Check target entries
+  when:
+    - docker_services_svc.targets is defined
+    - (docker_services_svc.targets | length > 0)
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.targets.values() | select('mapping') | list | length)
+        == (docker_services_svc.targets | length)
+    fail_msg: "docker_services_svc.targets entries must be mappings."
+
+################################
+# NAMED NETWORKS / VOLUMES
+################################
+
+- name: Validate service | Check named networks
+  when: docker_services_svc.named_networks is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.named_networks is mapping
+    fail_msg: "docker_services_svc.named_networks must be a mapping when provided."
+
+- name: Validate service | Check named volumes
+  when: docker_services_svc.named_volumes is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.named_volumes is mapping
+    fail_msg: "docker_services_svc.named_volumes must be a mapping when provided."
+
+################################
+# PATHS
+################################
+
+- name: Validate service | Check path list
+  when: docker_services_svc.paths is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.paths is sequence
+      - docker_services_svc.paths is not string
+    fail_msg: "docker_services_svc.paths must be a list of path specs."
+
+- name: Validate service | Check path entries
+  when: docker_services_svc.paths is defined and (docker_services_svc.paths | length > 0)
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.paths | select('mapping') | list | length) == (docker_services_svc.paths | length)
+      - (docker_services_svc.paths | map(attribute='path') | select('defined') | list | length) == (docker_services_svc.paths | length)
+      - >-
+        (docker_services_svc.paths | map(attribute='path') | map('string') | map('trim') |
+        reject('equalto','') | list | length)
+        == (docker_services_svc.paths | length)
+    fail_msg: "docker_services_svc.paths must be a list of dicts and each entry must contain a non-empty 'path'."
+
+- name: Validate service | Check path permissions
+  when: docker_services_svc.paths is defined and (docker_services_svc.paths | length > 0)
+  ansible.builtin.assert:
+    that:
+      - >
+        (
+          docker_services_svc.paths
+          | selectattr('mode','defined')
+          | map(attribute='mode')
+          | map('string')
+          | map('trim')
+          | map('regex_search', '^[0-7]{3,4}$')
+          | reject('equalto', None)
+          | list
+          | length
+        )
+        ==
+        (docker_services_svc.paths | selectattr('mode','defined') | list | length)
+    fail_msg: "If provided, paths[].mode must look like '755' or '0755'."
+
+################################
+# TEMPLATES
+################################
+
+- name: Validate service | Check template list
+  when: docker_services_svc.templates is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.templates is sequence
+      - docker_services_svc.templates is not string
+    fail_msg: "docker_services_svc.templates must be a list of template specs."
+
+- name: Validate service | Check template entries
+  when: docker_services_svc.templates is defined and (docker_services_svc.templates | length > 0)
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.templates | select('mapping') | list | length) == (docker_services_svc.templates | length)
+      - >-
+        (docker_services_svc.templates | map(attribute='src') | select('defined') | list | length)
+        == (docker_services_svc.templates | length)
+      - >-
+        (docker_services_svc.templates | map(attribute='dest') | select('defined') | list | length)
+        == (docker_services_svc.templates | length)
+      - >-
+        (docker_services_svc.templates | map(attribute='src') | map('string') | map('trim') |
+        reject('equalto','') | list | length)
+        == (docker_services_svc.templates | length)
+      - >-
+        (docker_services_svc.templates | map(attribute='dest') | map('string') | map('trim') |
+        reject('equalto','') | list | length)
+        == (docker_services_svc.templates | length)
+    fail_msg: "docker_services_svc.templates must be a list of dicts and each entry must contain non-empty 'src' and 'dest'."
+
+- name: Validate service | Check template permissions
+  when: docker_services_svc.templates is defined and (docker_services_svc.templates | length > 0)
+  ansible.builtin.assert:
+    that:
+      - >
+        (
+          docker_services_svc.templates
+          | selectattr('mode','defined')
+          | map(attribute='mode')
+          | map('string')
+          | map('trim')
+          | map('regex_search', '^[0-7]{3,4}$')
+          | reject('equalto', None)
+          | list
+          | length
+        )
+        ==
+        (docker_services_svc.templates | selectattr('mode','defined') | list | length)
+    fail_msg: "If provided, templates[].mode must look like '664' or '0664'."
+
+################################
+# COPIES
+################################
+
+- name: Validate service | Check copy list
+  when: docker_services_svc.copies is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.copies is sequence
+      - docker_services_svc.copies is not string
+    fail_msg: "docker_services_svc.copies must be a list of copy specs."
+
+- name: Validate service | Check copy entries
+  when: docker_services_svc.copies is defined and (docker_services_svc.copies | length > 0)
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.copies | select('mapping') | list | length) == (docker_services_svc.copies | length)
+      - (docker_services_svc.copies | map(attribute='src') | select('defined') | list | length) == (docker_services_svc.copies | length)
+      - (docker_services_svc.copies | map(attribute='dest') | select('defined') | list | length) == (docker_services_svc.copies | length)
+      - >-
+        (docker_services_svc.copies | map(attribute='src') | map('string') | map('trim') |
+        reject('equalto','') | list | length)
+        == (docker_services_svc.copies | length)
+      - >-
+        (docker_services_svc.copies | map(attribute='dest') | map('string') | map('trim') |
+        reject('equalto','') | list | length)
+        == (docker_services_svc.copies | length)
+    fail_msg: "docker_services_svc.copies must be a list of dicts and each entry must contain non-empty 'src' and 'dest'."
+
+################################
+# HEALTHCHECK
+################################
+
+- name: Validate service | Check healthcheck
+  when: docker_services_svc.healthcheck is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.healthcheck is mapping
+      - docker_services_svc.healthcheck.test is defined
+      - >
+        (
+          (
+            docker_services_svc.healthcheck.test is sequence
+            and docker_services_svc.healthcheck.test is not string
+            and (docker_services_svc.healthcheck.test | length > 0)
+            and
+            (docker_services_svc.healthcheck.test | select('string') | list | length)
+            == (docker_services_svc.healthcheck.test | length)
+            and
+            (
+              docker_services_svc.healthcheck.test
+              | select('string')
+              | map('trim')
+              | reject('equalto', '')
+              | list
+              | length
+            ) == (docker_services_svc.healthcheck.test | length)
+          )
+          or
+          (
+            docker_services_svc.healthcheck.test is string
+            and (docker_services_svc.healthcheck.test | trim | length > 0)
+          )
+        )
+    fail_msg: >-
+      docker_services_svc.healthcheck must be a mapping with a non-empty test,
+      where string form must be non-empty and list form must contain only
+      non-empty strings.
+
+################################
+# SECRETS
+################################
+
+- name: Validate service | Check secrets setting
+  when: docker_services_svc.secrets is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.secrets is string
+        or (docker_services_svc.secrets is sequence and docker_services_svc.secrets is not string)
+    fail_msg: "docker_services_svc.secrets must be a string or a list."
+
+- name: Validate service | Check secret string
+  when:
+    - docker_services_svc.secrets is defined
+    - docker_services_svc.secrets is string
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.secrets | trim | length) > 0
+    fail_msg: "docker_services_svc.secrets string form must be non-empty."
+
+- name: Validate service | Require non-empty secret list
+  when:
+    - docker_services_svc.secrets is defined
+    - docker_services_svc.secrets is sequence
+    - docker_services_svc.secrets is not string
+  ansible.builtin.assert:
+    that:
+      - (docker_services_svc.secrets | length) > 0
+    fail_msg: "docker_services_svc.secrets list form must not be empty."
+
+- name: Validate service | Check secret list entries
+  when:
+    - docker_services_svc.secrets is defined
+    - docker_services_svc.secrets is sequence
+    - docker_services_svc.secrets is not string
+  ansible.builtin.assert:
+    that:
+      - >-
+        (docker_services_svc.secrets | select('string') | list | length)
+        +
+        (docker_services_svc.secrets | select('mapping') | list | length)
+        ==
+        (docker_services_svc.secrets | length)
+    fail_msg: "docker_services_svc.secrets list entries must be strings or dicts."
+
+- name: Validate service | Check secret names
+  when:
+    - docker_services_svc.secrets is defined
+    - docker_services_svc.secrets is sequence
+    - docker_services_svc.secrets is not string
+    - (docker_services_svc.secrets | select('string') | list | length) > 0
+  ansible.builtin.assert:
+    that:
+      - >-
+        (docker_services_svc.secrets | select('string') | map('trim') |
+        reject('equalto','') | list | length)
+        ==
+        (docker_services_svc.secrets | select('string') | list | length)
+    fail_msg: "docker_services_svc.secrets string entries must be non-empty."
+
+- name: Validate service | Check secret attachment fields
+  when:
+    - docker_services_svc.secrets is defined
+    - docker_services_svc.secrets is sequence
+    - docker_services_svc.secrets is not string
+    - (docker_services_svc.secrets | select('mapping') | list | length) > 0
+  ansible.builtin.assert:
+    that:
+      - >-
+        (docker_services_svc.secrets | select('mapping') | map(attribute='source') |
+        select('defined') | list | length)
+        ==
+        (docker_services_svc.secrets | select('mapping') | list | length)
+      - >-
+        (docker_services_svc.secrets | select('mapping') | map(attribute='target') |
+        select('defined') | list | length)
+        ==
+        (docker_services_svc.secrets | select('mapping') | list | length)
+    fail_msg: "docker_services_svc.secrets dict entries must include source and target."
+
+################################
+# PORTS
+################################
+
+- name: Validate service | Check ports setting
+  when: docker_services_svc.ports is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.ports is mapping
+        or (docker_services_svc.ports is sequence and docker_services_svc.ports is not string)
+    fail_msg: "docker_services_svc.ports must be a mapping (named ports) or a list of port dicts."
+
+- name: Validate service | Prepare port entries for validation
+  when: docker_services_svc.ports is defined
+  ansible.builtin.set_fact:
+    docker_services_validate_ports_items: >-
+      {{
+        (docker_services_svc.ports.values() | list)
+        if (docker_services_svc.ports is mapping)
+        else (docker_services_svc.ports | list)
+      }}
+
+- name: Validate service | Check port entries
+  when: docker_services_svc.ports is defined
+  ansible.builtin.assert:
+    that:
+      - (docker_services_validate_ports_items | select('mapping') | list | length) == (docker_services_validate_ports_items | length)
+      - >-
+        (docker_services_validate_ports_items | selectattr('published', 'defined') | list | length)
+        == (docker_services_validate_ports_items | length)
+      - >-
+        (docker_services_validate_ports_items | selectattr('target', 'defined') | list | length)
+        == (docker_services_validate_ports_items | length)
+    fail_msg: "docker_services_svc.ports entries must be dicts and include 'published' and 'target'."
+
+################################
+# VOLUMES
+################################
+
+- name: Validate service | Check volumes setting
+  when: docker_services_svc.volumes is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.volumes is mapping
+        or (docker_services_svc.volumes is sequence and docker_services_svc.volumes is not string)
+    fail_msg: "docker_services_svc.volumes must be a mapping (named volumes) or a list of volume dicts."
+
+- name: Validate service | Prepare volume entries for validation
+  when: docker_services_svc.volumes is defined
+  ansible.builtin.set_fact:
+    docker_services_validate_volume_items: >-
+      {{
+        (docker_services_svc.volumes.values() | list)
+        if (docker_services_svc.volumes is mapping)
+        else (docker_services_svc.volumes | list)
+      }}
+
+- name: Validate service | Check volume entries
+  when: docker_services_svc.volumes is defined
+  ansible.builtin.assert:
+    that:
+      - (docker_services_validate_volume_items | select('mapping') | list | length) == (docker_services_validate_volume_items | length)
+    fail_msg: "docker_services_svc.volumes entries must be dicts."
+
+- name: Validate service | Check volume fields by type
+  when: docker_services_svc.volumes is defined
+  ansible.builtin.assert:
+    that:
+      - _validate_volume_type in ['bind', 'volume', 'tmpfs']
+      - (_validate_volume_type == 'tmpfs') or (_validate_volume_source | length > 0)
+      - (_validate_volume_target | length > 0)
+    fail_msg: >-
+      Invalid volume entry for service '{{ docker_services_svc.name | default('unknown', true) }}':
+      type='{{ _validate_volume_type }}', source='{{ _validate_volume_source }}',
+      target='{{ _validate_volume_target }}'
+  vars:
+    _validate_volume_type: "{{ validate_volume_item.type | default('bind', true) | string | trim }}"
+    _validate_volume_source: "{{ validate_volume_item.source | default('', true) | string | trim }}"
+    _validate_volume_target: "{{ validate_volume_item.target | default('', true) | string | trim }}"
+  loop: "{{ docker_services_validate_volume_items }}"
+  loop_control:
+    loop_var: validate_volume_item
+
+################################
+# ENV
+################################
+
+- name: Validate service | Check environment settings
+  when: docker_services_svc.environment is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.environment is mapping
+    fail_msg: "docker_services_svc.environment must be a mapping when provided."
+
+################################
+# LABELS
+################################
+
+- name: Validate service | Check service labels
+  when: docker_services_svc.labels is defined
+  ansible.builtin.assert:
+    that:
+      - docker_services_svc.labels is mapping
+        or (docker_services_svc.labels is sequence and docker_services_svc.labels is not string)
+    fail_msg: "docker_services_svc.labels must be a mapping or a list when provided."

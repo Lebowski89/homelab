@@ -1,0 +1,63 @@
+---
+
+- name: Deploy stack | Validate stack settings
+  ansible.builtin.assert:
+    that:
+      - deploy_stack_name is defined
+      - deploy_stack_name | string | trim | length > 0
+      - deploy_stack_type is defined
+      - (deploy_stack_type | string | trim) in ['swarm', 'container']
+      - docker_services_compose_services is mapping
+      - stack_networks is mapping
+      - stack_volumes is mapping
+    fail_msg: "Invalid deploy inputs for stack={{ deploy_stack_name | default('UNSET') }}"
+
+- name: Deploy stack | Choose deploy host
+  ansible.builtin.set_fact:
+    docker_services_deploy_host_effective: >-
+      {{
+        docker_services_primary_manager
+        if (deploy_stack_type | string | trim) == 'swarm'
+        else (docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim)
+      }}
+
+- name: Deploy stack | Ensure stack directory exists
+  ansible.builtin.file:
+    path: /opt/stacks
+    state: directory
+    owner: "{{ hostvars[docker_services_deploy_host_effective].container_host_puid | default('1000') }}"
+    group: "{{ hostvars[docker_services_deploy_host_effective].container_host_pgid | default('1000') }}"
+    mode: "0755"
+  delegate_to: "{{ docker_services_deploy_host_effective }}"
+
+- name: Deploy stack | Render stack file
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/roles/docker_services/templates/compose.yml.j2"
+    dest: >-
+      {{
+        '/opt/stacks/' ~ deploy_stack_name ~
+        ( '-stack.yml' if (deploy_stack_type | string | trim) == 'swarm' else '-compose.yml' )
+      }}
+    owner: "{{ hostvars[docker_services_deploy_host_effective].container_host_puid | default('1000') }}"
+    group: "{{ hostvars[docker_services_deploy_host_effective].container_host_pgid | default('1000') }}"
+    mode: "0664"
+    force: true
+  delegate_to: "{{ docker_services_deploy_host_effective }}"
+
+- name: Deploy stack | Deploy Swarm stack
+  when: (deploy_stack_type | string | trim) == 'swarm'
+  community.docker.docker_stack:
+    state: present
+    name: "{{ deploy_stack_name }}"
+    compose:
+      - "/opt/stacks/{{ deploy_stack_name }}-stack.yml"
+  delegate_to: "{{ docker_services_deploy_host_effective }}"
+
+- name: Deploy stack | Deploy Compose project
+  when: (deploy_stack_type | string | trim) != 'swarm'
+  community.docker.docker_compose_v2:
+    project_src: /opt/stacks
+    project_name: "{{ deploy_stack_name }}"
+    files: "{{ deploy_stack_name }}-compose.yml"
+    state: present
+  delegate_to: "{{ docker_services_deploy_host_effective }}"

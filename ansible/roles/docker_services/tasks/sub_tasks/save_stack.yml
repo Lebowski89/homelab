@@ -1,0 +1,24 @@
+---
+
+- name: Save stack | Store completed Compose configuration
+  when: docker_services_is_deploy_host
+  ansible.builtin.set_fact:
+    docker_services_compose_stacks: >-
+      {{
+        (hostvars[docker_services_primary_manager].docker_services_compose_stacks | default({}))
+        | combine({
+            docker_services_stack_name_effective: (
+              (hostvars[docker_services_primary_manager].docker_services_compose_stacks | default({}))
+              .get(docker_services_stack_name_effective, {})
+              | combine({
+                  'type': (docker_services_stack_deploy_type | string | trim),
+                  'docker_services_deploy_host': (docker_services_deploy_host_effective | string | trim),
+                  'services': (docker_services_compose_services | default({}, true)),
+                  'networks': (stack_networks | default({}, true)),
+                  'volumes': (stack_volumes | default({}, true))
+                }, recursive=true)
+            )
+          }, recursive=true)
+      }}
+  delegate_to: "{{ docker_services_primary_manager | default('mgt') }}"
+  delegate_facts: true

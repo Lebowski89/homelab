@@ -1,0 +1,57 @@
+---
+
+- name: Swarm configs | Validate config list
+  ansible.builtin.assert:
+    that:
+      - swarm_configs is defined
+      - swarm_configs is sequence
+      - swarm_configs is not string
+    fail_msg: "swarm_configs must be a list of config specs."
+
+- name: Swarm configs | Choose Swarm manager
+  ansible.builtin.set_fact:
+    docker_services_swarm_cfg_host: "{{ docker_services_primary_manager | string | trim }}"
+
+- name: Swarm configs | Reset config state
+  ansible.builtin.set_fact:
+    docker_services_swarm_configs_effective: {}
+    docker_services_swarm_configs_changed: []
+  run_once: true
+
+- name: Swarm configs | Validate config settings
+  ansible.builtin.assert:
+    that:
+      - cfg.name is defined
+      - (cfg.name | string | trim | length) > 0
+      - (cfg.state | default('present', true)) in ['present', 'absent']
+      - >
+        (cfg.state | default('present', true)) == 'absent'
+        or (
+          (cfg.data is defined and (cfg.data | string | length) > 0)
+          or
+          (cfg.src is defined and (cfg.src | string | trim | length) > 0)
+        )
+    fail_msg: >-
+      Invalid config spec: name={{ cfg.name | default('MISSING') }},
+      state={{ cfg.state | default('present') }}.
+      For present, set either data or src.
+  loop: "{{ swarm_configs }}"
+  loop_control:
+    loop_var: cfg
+    label: "{{ cfg.name | default('MISSING') }}"
+
+- name: Swarm configs | Remove configs marked absent
+  when: (cfg.state | default('present', true)) == 'absent'
+  ansible.builtin.include_tasks: remove.yml
+  loop: "{{ swarm_configs }}"
+  loop_control:
+    loop_var: cfg
+    label: "{{ cfg.name }} [absent]"
+
+- name: Swarm configs | Create configs marked present
+  when: (cfg.state | default('present', true)) == 'present'
+  ansible.builtin.include_tasks: create.yml
+  loop: "{{ swarm_configs }}"
+  loop_control:
+    loop_var: cfg
+    label: "{{ cfg.name }} [present]"
