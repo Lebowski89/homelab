@@ -216,7 +216,7 @@ SECRET_TASKS_PATH = Path(__file__).resolve().parents[2] / "ansible/roles/docker_
 
 
 def _rewrite_secret_fixture_path(value):
-    production_root = "/opt/stacks/{{ docker_services_stack_name }}/secrets"
+    production_root = "/opt/stacks/{{ docker_services_stack_name_effective }}/secrets"
     if isinstance(value, dict):
         return {key: _rewrite_secret_fixture_path(item) for key, item in value.items()}
     if isinstance(value, list):

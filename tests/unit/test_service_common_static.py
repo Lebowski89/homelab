@@ -247,7 +247,7 @@ def test_native_secret_materialization_remains_adapter_owned():
     assert "Docker secrets | Create required Swarm secrets\n  no_log: true\n  diff: false" in DOCKER_SECRET_TASKS
     assert "Docker secrets | Write standalone secret files\n  no_log: true\n  diff: false" in DOCKER_SECRET_TASKS
     assert "community.docker.docker_secret" in DOCKER_SECRET_TASKS
-    assert 'path: "/opt/stacks/{{ docker_services_stack_name }}/secrets"' in DOCKER_SECRET_TASKS
+    assert 'path: "/opt/stacks/{{ docker_services_stack_name_effective }}/secrets"' in DOCKER_SECRET_TASKS
     assert "default('0600')" in DOCKER_SECRET_TASKS
     assert "docker_services_effective_secret_values | default({})" in DOCKER_SECRET_TASKS
     assert "values[declaration.var]" in DOCKER_SECRET_TASKS
