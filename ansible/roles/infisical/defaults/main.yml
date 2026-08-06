@@ -33,7 +33,7 @@ infisical_stack: infisical
 infisical_compose_file: infisical-compose.yml
 infisical_compose_path: "{{ infisical_base_path }}/{{ infisical_compose_file }}"
 
-infisical_image: docker.io/infisical/infisical:v0.162.13
+infisical_image: docker.io/infisical/infisical:v0.162.15
 infisical_timezone: "{{ timezone | default('Australia/Melbourne') }}"
 infisical_puid: "{{ container_host_puid | default('1000') }}"
 infisical_pgid: "{{ container_host_pgid | default('1000') }}"
