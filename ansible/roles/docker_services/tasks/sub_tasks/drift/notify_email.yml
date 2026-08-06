@@ -22,7 +22,6 @@
         current: {{ drift_item.current }}
 
       {% endfor %}
-  run_once: true
 
 ################################
 # SEND
@@ -60,5 +59,4 @@
       - "X-Skynet-Alert=docker-image-drift"
       - "X-Skynet-Host={{ inventory_hostname }}"
   delegate_to: localhost
-  run_once: true
   no_log: true
