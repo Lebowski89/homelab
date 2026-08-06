@@ -11,7 +11,7 @@ adminer:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: docker.io/library/adminer:5.4.2
+  image: docker.io/library/adminer:5.5.0
   ################################
   # ENVIRONMENT/SECRETS
   ################################

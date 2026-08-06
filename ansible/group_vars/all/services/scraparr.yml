@@ -12,7 +12,7 @@ scraparr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: thegameprofi/scraparr:3.0.3
+  image: thegameprofi/scraparr:3.1.0
   ################################
   # ENVIRONMENT/SECRETS
   ################################

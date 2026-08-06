@@ -12,7 +12,7 @@ blackbox_exporter:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: prom/blackbox-exporter:v0.27.0
+  image: prom/blackbox-exporter:v0.28.0
   command:
     - "--config.file=/etc/blackbox_exporter/config.yml"
   ################################
