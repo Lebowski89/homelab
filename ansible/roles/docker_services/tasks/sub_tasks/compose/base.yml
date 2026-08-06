@@ -1,5 +1,4 @@
 ---
-
 - name: Compose base | Validate service name
   ansible.builtin.assert:
     that:
@@ -14,89 +13,68 @@
 - name: Compose base | Create service definition
   ansible.builtin.set_fact:
     docker_services_compose_services: >-
+      {%- set service = {
+            'image': image,
+            'logging': {
+              'driver': 'json-file',
+              'options': {
+                'max-size': '50m',
+                'max-file': '5',
+                'compress': 'true'
+              }
+            }
+          } -%}
+      {%- if hostname is defined
+            and (hostname is not sameas omit)
+            and (hostname | string | trim | length > 0) -%}
+      {%- set _ = service.update({'hostname': hostname}) -%}
+      {%- endif -%}
+      {%- if docker_services_stack_deploy_type_effective != 'swarm'
+            and container_name is defined
+            and (container_name is not sameas omit)
+            and (container_name | string | trim | length > 0) -%}
+      {%- set _ = service.update({'container_name': container_name}) -%}
+      {%- endif -%}
+      {%- if docker_services_stack_deploy_type_effective != 'swarm'
+            and pid is defined
+            and (pid is not sameas omit)
+            and (pid | string | trim | length > 0) -%}
+      {%- set _ = service.update({'pid': pid}) -%}
+      {%- endif -%}
+      {%- if docker_services_stack_deploy_type_effective != 'swarm'
+            and cgroup is defined
+            and (cgroup is not sameas omit)
+            and (cgroup | string | trim | length > 0) -%}
+      {%- set _ = service.update({'cgroup': cgroup}) -%}
+      {%- endif -%}
+      {%- if entrypoint is defined
+            and (entrypoint is not sameas omit)
+            and (
+              ((entrypoint is string) and (entrypoint | trim | length > 0))
+              or
+              ((entrypoint is sequence) and (entrypoint is not string) and (entrypoint | length > 0))
+            ) -%}
+      {%- set _ = service.update({'entrypoint': entrypoint}) -%}
+      {%- endif -%}
+      {%- if networks is defined
+            and (networks is not sameas omit)
+            and (networks is sequence)
+            and (networks is not string)
+            and (networks | length > 0) -%}
+      {%- set _ = service.update({'networks': networks}) -%}
+      {%- endif -%}
+      {%- if docker_services_stack_deploy_type_effective != 'swarm'
+            and network_mode is defined
+            and (network_mode is not sameas omit)
+            and (network_mode | string | trim | length > 0) -%}
+      {%- set _ = service.update({'network_mode': network_mode}) -%}
+      {%- endif -%}
       {{
         (docker_services_compose_services | default({}))
         | combine({
             docker_services_service_name: (
               ((docker_services_compose_services | default({})).get(docker_services_service_name, {}))
-              | combine({
-                  'image': image,
-
-                  'hostname': (
-                    hostname
-                    if (hostname is defined)
-                       and (hostname is not sameas omit)
-                       and (hostname | string | trim | length > 0)
-                    else omit
-                  ),
-
-                  'container_name': (
-                    container_name
-                    if (docker_services_stack_deploy_type_effective != 'swarm'
-                        and (container_name is defined)
-                        and (container_name is not sameas omit)
-                        and (container_name | string | trim | length > 0))
-                    else omit
-                  ),
-
-                  'pid': (
-                    pid
-                    if (docker_services_stack_deploy_type_effective != 'swarm'
-                        and (pid is defined)
-                        and (pid is not sameas omit)
-                        and (pid | string | trim | length > 0))
-                    else omit
-                  ),
-
-                  'cgroup': (
-                    cgroup
-                    if (docker_services_stack_deploy_type_effective != 'swarm'
-                        and (cgroup is defined)
-                        and (cgroup is not sameas omit)
-                        and (cgroup | string | trim | length > 0))
-                    else omit
-                  ),
-
-                  'entrypoint': (
-                    entrypoint
-                    if (entrypoint is defined)
-                      and (entrypoint is not sameas omit)
-                      and (
-                        ((entrypoint is string) and (entrypoint | trim | length > 0))
-                        or
-                        ((entrypoint is sequence) and (entrypoint is not string) and (entrypoint | length > 0))
-                      )
-                    else omit
-                  ),
-
-                  'logging': {
-                    'driver': 'json-file',
-                    'options': {
-                      'max-size': '50m',
-                      'max-file': '5',
-                      'compress': 'true'
-                    }
-                  },
-
-                  'networks': (
-                    networks
-                    if (networks is defined
-                        and (networks is not sameas omit)
-                        and (networks is sequence)
-                        and (networks is not string)
-                        and (networks | length > 0))
-                    else omit
-                  ),
-
-                  'network_mode': (
-                    network_mode
-                    if (docker_services_stack_deploy_type_effective != 'swarm'
-                        and (network_mode is defined)
-                        and (network_mode is not sameas omit)
-                        and (network_mode | string | trim | length > 0))
-                    else omit
-                  )
-                }, recursive=true)
+              | combine(service, recursive=true)
             )
           }, recursive=true)
       }}

@@ -1,6 +1,6 @@
 ---
 
-- name: Deploy - All | Ensure docker_services_compose_stacks exists
+- name: Deploy | Load saved stack configurations
   ansible.builtin.set_fact:
     docker_services_compose_stacks_effective: >-
       {{
@@ -13,11 +13,11 @@
       }}
   run_once: true
 
-- name: Deploy - All | Deploy each stack
+- name: Deploy | Deploy each saved stack
   no_log: true
   when: (docker_services_compose_stacks_effective | length) > 0
   ansible.builtin.include_tasks:
-    file: one.yml
+    file: stack.yml
     apply:
       tags: [deploy, update, recreate]
       no_log: true
@@ -27,10 +27,10 @@
     loop_var: _stack_item
     label: "{{ _stack_item.key }}"
   vars:
-    deploy_stack_name: "{{ _stack_item.key }}"
+    docker_services_deploy_stack_name: "{{ _stack_item.key }}"
     _stack_def: "{{ _stack_item.value | default({}, true) }}"
-    deploy_stack_type: "{{ _stack_def.type | default('swarm', true) | string | trim }}"
-    docker_services_deploy_host: >-
+    docker_services_deploy_stack_type: "{{ _stack_def.type | default('swarm', true) | string | trim }}"
+    docker_services_deploy_stack_host: >-
       {{
         _stack_def.docker_services_deploy_host
         | default(docker_services_primary_manager, true)
@@ -38,7 +38,7 @@
         | trim
       }}
     docker_services_compose_services: "{{ _stack_def.services | default({}, true) }}"
-    stack_networks: "{{ _stack_def.networks | default({}, true) }}"
-    stack_volumes: "{{ _stack_def.volumes | default({}, true) }}"
+    docker_services_stack_networks: "{{ _stack_def.networks | default({}, true) }}"
+    docker_services_stack_volumes: "{{ _stack_def.volumes | default({}, true) }}"
   run_once: true
   tags: [deploy, update, recreate]

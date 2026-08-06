@@ -11,8 +11,8 @@ from jinja2.nativetypes import NativeEnvironment
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_PATH = REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_deploy.py"
-DEPLOY_TASK_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/deploy/config.yml"
-PERSIST_TASK_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/_deploy.yml"
+DEPLOY_TASK_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/compose/deploy.yml"
+PERSIST_TASK_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/save_stack.yml"
 
 
 def load_plugin():
@@ -83,7 +83,7 @@ def test_attach_deploy_config_only_rebuilds_selected_service():
 
 def test_attach_task_references_stack_mapping_once_without_recursive_combine():
     tasks = yaml.safe_load(DEPLOY_TASK_PATH.read_text())
-    attach = next(task for task in tasks if task["name"] == "Deploy - Config | Attach deploy config to service")
+    attach = next(task for task in tasks if task["name"] == "Compose deploy settings | Add deploy settings to service")
     expression = attach["ansible.builtin.set_fact"]["docker_services_compose_services"]
 
     assert expression.count("docker_services_compose_services") == 1
@@ -93,7 +93,7 @@ def test_attach_task_references_stack_mapping_once_without_recursive_combine():
 
 def test_sequential_manager_persistence_retains_services_and_stacks():
     tasks = yaml.safe_load(PERSIST_TASK_PATH.read_text())
-    persist = next(task for task in tasks if task["name"].startswith("Deploy | Persist compose into"))
+    persist = next(task for task in tasks if task["name"] == "Save stack | Store completed Compose configuration")
     expression = persist["ansible.builtin.set_fact"]["docker_services_compose_stacks"]
     environment = NativeEnvironment()
     environment.filters["combine"] = combine
@@ -107,8 +107,8 @@ def test_sequential_manager_persistence_retains_services_and_stacks():
             docker_services_stack_deploy_type="container",
             docker_services_deploy_host_effective=deploy_host,
             docker_services_compose_services=services,
-            stack_networks={},
-            stack_volumes={},
+            docker_services_stack_networks={},
+            docker_services_stack_volumes={},
         )
 
     stacks = persist_stack({}, "shared", {"one": {"image": "example/one:1"}}, "docker-a")

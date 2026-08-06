@@ -1,12 +1,12 @@
 ---
 
-- name: Compose - Env File | Ensure docker_services_service_name is set
+- name: Compose environment files | Validate service name
   ansible.builtin.assert:
     that:
       - docker_services_service_name is defined
       - docker_services_service_name | string | trim | length > 0
 
-- name: Compose - Env File | Normalize env_file to list
+- name: Compose environment files | Read environment file list
   ansible.builtin.set_fact:
     docker_services_env_file_final: >-
       {{
@@ -15,7 +15,7 @@
         else (docker_services_svc.env_file | list)
       }}
 
-- name: Compose - Env File | Attach env_file to service
+- name: Compose environment files | Add environment files to service
   ansible.builtin.set_fact:
     docker_services_compose_services: >-
       {{

@@ -8,7 +8,7 @@
   ansible.builtin.set_fact:
     docker_services_compose_stacks: >-
       {{ hostvars[docker_services_primary_manager].docker_services_compose_stacks | default({}) }}
-  delegate_to: "{{ docker_services_primary_manager | default('mgt') }}"
+  delegate_to: "{{ docker_services_primary_manager }}"
   delegate_facts: true
   run_once: true
 
@@ -508,3 +508,4 @@
     deploy_update_config: "{{ docker_services_svc.deploy.update_config | default({}, true) }}"
     deploy_rollback_config: "{{ docker_services_svc.deploy.rollback_config | default({}, true) }}"
     deploy_resources: "{{ docker_services_svc.deploy.resources | default({}, true) }}"
+

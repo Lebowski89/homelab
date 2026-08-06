@@ -212,7 +212,7 @@ def test_update_policy_stays_out_of_compose_attachment_metadata():
     assert "replace" not in repr(attachments)
 
 
-SECRET_TASKS_PATH = Path(__file__).resolve().parents[2] / "ansible/roles/docker_services/tasks/sub_tasks/prep/secrets.yml"
+SECRET_TASKS_PATH = Path(__file__).resolve().parents[2] / "ansible/roles/docker_services/tasks/sub_tasks/secrets/manage.yml"
 
 
 def _rewrite_secret_fixture_path(value):
@@ -228,14 +228,14 @@ def _rewrite_secret_fixture_path(value):
 
 def _standalone_materialization_tasks(tmp_path):
     selected_names = {
-        "Prep - Secrets | Ensure secrets directory exists on deploy host",
-        "Prep - Secrets | Inspect standalone secret paths",
-        "Prep - Secrets | Remove incompatible standalone secret paths",
-        "Prep - Secrets | Predict file creation after incompatible path repair",
-        "Prep - Secrets | Write secret files on deploy host",
-        "Prep - Secrets | Enforce secret file ownership and mode",
-        "Prep - Secrets | Verify secret paths exist and are files",
-        "Prep - Secrets | Fail if any secret path is not a file",
+        "Docker secrets | Ensure standalone secrets directory exists",
+        "Docker secrets | Inspect standalone secret paths",
+        "Docker secrets | Remove incompatible standalone secret paths",
+        "Docker secrets | Report standalone secret path repair in check mode",
+        "Docker secrets | Write standalone secret files",
+        "Docker secrets | Enforce standalone secret permissions",
+        "Docker secrets | Verify standalone secret files",
+        "Docker secrets | Require valid standalone secret files",
     }
     production_tasks = yaml.safe_load(SECRET_TASKS_PATH.read_text())
     selected = [task for task in production_tasks if task["name"] in selected_names]

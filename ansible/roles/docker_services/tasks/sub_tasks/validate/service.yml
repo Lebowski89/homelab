@@ -145,11 +145,19 @@
       - >-
         (
           docker_services_svc.no_new_privileges
-          | docker_services_no_new_privileges_security_opts(docker_services_stack_deploy_type)
+          | docker_services_no_new_privileges_security_opts(docker_services_validate_deploy_type)
         ) is sequence
     fail_msg: >-
       docker_services_svc.no_new_privileges must be a strict boolean-like value and
       true is supported only for deploy.type=container.
+  vars:
+    docker_services_validate_deploy_type: >-
+      {{
+        (docker_services_svc.deploy | default({})).type
+        | default('swarm', true)
+        | string
+        | trim
+      }}
 
 - name: Validate service | Check sysctl settings
   when: docker_services_svc.sysctls is defined

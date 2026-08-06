@@ -296,6 +296,7 @@
     apply:
       tags: [deploy, update, recreate]
   vars:
-    swarm_configs: "{{ docker_services_svc.swarm_configs }}"
-    docker_services_deploy_host: "{{ docker_services_svc.swarm_config_host | default(docker_services_controller_host, true) }}"
+    docker_services_swarm_configs: "{{ docker_services_svc.swarm_configs }}"
+    docker_services_swarm_cfg_host: >-
+      {{ docker_services_svc.swarm_config_host | default(docker_services_controller_host, true) }}
   tags: [deploy, update, recreate]

@@ -7,15 +7,15 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMON_PREPARE_PATH = REPO_ROOT / "ansible/roles/service_common/tasks/prepare.yml"
 COMMON_POSTGRES_PATH = REPO_ROOT / "ansible/roles/service_common/tasks/postgres.yml"
-DOCKER_PREP_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/_prep.yml"
-DOCKER_INIT_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/_init.yml"
-DOCKER_SECRET_TASKS_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/secrets.yml"
+DOCKER_PREP_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prepare.yml"
+DOCKER_INIT_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/init.yml"
+DOCKER_SECRET_TASKS_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/secrets/manage.yml"
 DOCKER_POSTGRES_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/postgres.yml"
 COMMON_PREFLIGHT_PATH = REPO_ROOT / "ansible/tasks/service_catalog_common_preflight.yml"
 PODMAN_MAIN_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/main.yml"
 PODMAN_INIT_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/init.yml"
-PODMAN_PREP_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/prepare.yml"
-PODMAN_SECRET_TASKS_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/secrets/materialize.yml"
+PODMAN_PREP_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/quadlets.yml"
+PODMAN_SECRET_TASKS_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/secrets/manage.yml"
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
 SERVICE_CATALOG_PATH = REPO_ROOT / "ansible/filter_plugins/service_catalog.py"
 
@@ -113,11 +113,11 @@ def test_common_dispatch_context_is_snapshotted_into_both_runtime_adapters():
     common_lookup = task_named(common_tasks, "Service catalog preflight | Resolve common Infisical and environment context")
     common_snapshot = task_named(common_tasks, "Service catalog preflight | Snapshot current-service common outputs")
     docker_init = yaml.safe_load(DOCKER_INIT)
-    docker_reset = task_named(docker_init, "Init | Reset per-service common snapshots")
-    docker_snapshot = task_named(docker_init, "Init | Snapshot dispatch-owned common context")
+    docker_reset = task_named(docker_init, "Initialize | Reset per-service state")
+    docker_snapshot = task_named(docker_init, "Initialize | Load shared service context")
     docker_prepare = task_named(
         yaml.safe_load(DOCKER_PREP),
-        "Prep - Service common | Prepare files and Traefik integration",
+        "Prepare | Prepare shared files and integrations",
     )
 
     assert common_reset["ansible.builtin.set_fact"]["service_catalog_common_context"]["lookup_values"] == {}
@@ -144,18 +144,18 @@ def test_common_dispatch_context_is_snapshotted_into_both_runtime_adapters():
 
     podman_reset = task_named(
         yaml.safe_load(PODMAN_INIT),
-        "Init | Reset per-service transient facts",
+        "Init | Reset temporary service state",
     )
     podman_snapshot = task_named(
         yaml.safe_load(PODMAN_INIT),
-        "Init | Snapshot dispatch-owned common context",
+        "Init | Store shared service context",
     )
     podman_prepare = task_named(
         yaml.safe_load(PODMAN_MAIN),
-        "Podman services | Prepare runtime-neutral host state",
+        "Podman services | Prepare service files and directories",
     )
-    podman_traefik = task_named(yaml.safe_load(PODMAN_MAIN), "Podman services | Include Traefik tasks")
-    podman_secret = task_named(yaml.safe_load(PODMAN_SECRET_TASKS), "Prep | Create or update Podman-native secrets")
+    podman_traefik = task_named(yaml.safe_load(PODMAN_MAIN), "Podman services | Configure Traefik integration")
+    podman_secret = task_named(yaml.safe_load(PODMAN_SECRET_TASKS), "Secrets | Create or update Podman secrets")
 
     assert podman_reset["ansible.builtin.set_fact"]["podman_services_common_values"] == {}
     assert podman_reset["no_log"] is True

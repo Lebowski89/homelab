@@ -4,7 +4,7 @@
 # EMAIL BODY
 ################################
 
-- name: Drift Notify | Build image drift email body
+- name: Image drift email | Build message
   when:
     - inventory_hostname == docker_services_primary_manager
     - docker_services_drift_email_enabled | default(false) | bool
@@ -28,7 +28,7 @@
 # SEND
 ################################
 
-- name: Drift Notify | Send image drift email
+- name: Image drift email | Send notification
   when:
     - inventory_hostname == docker_services_primary_manager
     - docker_services_drift_email_enabled | default(false) | bool

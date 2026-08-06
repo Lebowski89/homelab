@@ -16,8 +16,8 @@
   ansible.builtin.set_fact:
     docker_services_swarm_cfg_absent_matches: >-
       {{
-        docker_services_swarm_cfg_ls.stdout_lines
-        | select('match', '^' ~ (cfg.name | string | trim | regex_escape) ~ '(-.*)?$')
+        ((docker_services_swarm_cfg_ls | default({})).stdout_lines | default([], true))
+        | select('match', '^' ~ (cfg.name | string | trim | regex_escape) ~ '(-[0-9a-f]{12})?$')
         | list
       }}
 

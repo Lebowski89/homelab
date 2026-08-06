@@ -106,7 +106,11 @@
 
 - name: Initialize | Validate service schema
   when: docker_services_validate_enabled | bool
-  ansible.builtin.include_tasks: sub_tasks/validate/service.yml
+  ansible.builtin.include_tasks:
+    file: sub_tasks/validate/service.yml
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
 
 - name: Initialize | Set service name, deploy type, deploy host, and action
   ansible.builtin.set_fact:

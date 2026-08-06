@@ -1,13 +1,13 @@
 ---
 
-- name: Compose - Labels | Ensure docker_services_service_name is set
+- name: Compose labels | Validate service name
   ansible.builtin.assert:
     that:
       - docker_services_service_name is defined
       - docker_services_service_name | string | trim | length > 0
     fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Compose - Labels | Capture existing labels
+- name: Compose labels | Read existing labels
   ansible.builtin.set_fact:
     docker_services_labels_existing: >-
       {{
@@ -17,7 +17,7 @@
         | default({}, true)
       }}
 
-- name: Compose - Labels | Build final labels dict
+- name: Compose labels | Build final labels
   ansible.builtin.set_fact:
     docker_services_labels_h_final: >-
       {{
@@ -29,7 +29,7 @@
           )
       }}
 
-- name: Compose - Labels | Attach labels to service
+- name: Compose labels | Add labels to service
   ansible.builtin.set_fact:
     docker_services_compose_services: >-
       {{

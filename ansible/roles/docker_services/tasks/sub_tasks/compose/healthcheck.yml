@@ -1,13 +1,13 @@
 ---
 
-- name: Compose - Healthcheck | Ensure docker_services_service_name is set
+- name: Compose healthcheck | Validate service name
   ansible.builtin.assert:
     that:
       - docker_services_service_name is defined
       - docker_services_service_name | string | trim | length > 0
     fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Compose - Healthcheck | Ensure health_test is provided
+- name: Compose healthcheck | Require healthcheck command
   ansible.builtin.assert:
     that:
       - health_test is defined
@@ -16,7 +16,7 @@
         (health_test is sequence and health_test is not string and (health_test | length > 0))
     fail_msg: "health_test must be a non-empty string or a non-empty list."
 
-- name: Compose - Healthcheck | Normalize healthcheck test into list form
+- name: Compose healthcheck | Read healthcheck command
   ansible.builtin.set_fact:
     docker_services_health_test: >-
       {{
@@ -26,7 +26,7 @@
         ['CMD-SHELL', (health_test | string | trim)]
       }}
 
-- name: Compose - Healthcheck | Attach healthcheck to service
+- name: Compose healthcheck | Add healthcheck to service
   ansible.builtin.set_fact:
     docker_services_compose_services: >-
       {{
