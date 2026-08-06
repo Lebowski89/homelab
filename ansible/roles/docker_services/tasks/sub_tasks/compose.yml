@@ -497,7 +497,7 @@
   when:
     - docker_services_is_deploy_host
     - docker_services_svc.deploy is defined
-    - (docker_services_svc.deploy.type | default('swarm')) == 'swarm'
+    - docker_services_stack_deploy_type == 'swarm'
   ansible.builtin.include_tasks: sub_tasks/compose/deploy.yml
   vars:
     deploy_mode: "{{ docker_services_svc.deploy.mode | default('replicated') }}"
