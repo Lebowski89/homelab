@@ -1,17 +1,18 @@
 ## <img width="80%" alt="homelab_repo_banner_cropped" src="https://github.com/user-attachments/assets/ac402bb7-f469-44cf-a602-ff3ddf2c4160" />
 
-- Powered by Ansible <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/ansible.svg" alt="Ansible" width="24" />, Docker <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/docker.svg" alt="Docker" width="24" /> and Terraform <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/hashicorp-terraform.svg" alt="Terraform" width="24" />
+- Powered by Ansible <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/ansible.svg" alt="Ansible" width="24" />, Docker <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/docker.svg" alt="Docker" width="24" /> / Podman <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/podman.svg" alt="Podman" width="24" /> and OpenTofu <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/opentofu.svg" alt="OpenTofu" width="24" />
 - Uses Ansible Vault and Infisical <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/infisical.svg" alt="Infisical" width="24" /> for secrets management
 - Uses NetBox <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/netbox.svg" alt="NetBox" width="24" /> and its Ansible plugin for Ansible inventory management
 - Uses Authelia <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/authelia.svg" alt="Authelia" width="24" /> and Traefik <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/traefik.svg" alt="Traefik" width="24" /> for SSO and reverse proxy
 - Uses highly available PostgreSQL <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/postgresql.svg" alt="PostgreSQL" width="24" /> (PostgreSQL + Patroni + etcd + HAProxy)
+- Uses Technitium <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/technitium.svg" alt="Technitium" width="24" /> cluster for recursive DNS + Internal-DNS records
 - Strong focus on media-centric services, especially arrs apps and companion services
 
 ## Goals
 
 - Automate deployment of Proxmox VMs <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/proxmox.svg" alt="Proxmox" width="24" />
-- Automate deployment of apps and services, primarily via Docker and Docker Swarm
-- Automate app settings, configs, databases and other needs in a single Ansible run
+- Automate deployment of apps and services, primarily via Docker and Podman
+- Automate app settings, configs, databases and other needs in a single Ansible or OpenTofu run
 - Run on fresh Debian-based <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/debian.svg" alt="Debian" width="24" /> OS/VM and reliably deploy an app or service with my preferred settings
 
 ## Disclaimer
