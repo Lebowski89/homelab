@@ -1,10 +1,10 @@
 ---
 
-- name: Lifecycle | Flush Quadlet daemon-reload handlers before lifecycle
+- name: Service | Apply pending Quadlet changes
   ansible.builtin.meta: flush_handlers
   tags: [deploy, update, remove, recreate, bootstrap]
 
-- name: Lifecycle | Validate Quadlets with Podman generator dry run
+- name: Service | Validate system Quadlets with Podman generator
   when:
     - podman_services_state != 'remove'
     - not ansible_check_mode
@@ -16,7 +16,7 @@
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Lifecycle | Verify generated systemd unit
+- name: Service | Validate generated systemd service
   when:
     - podman_services_state != 'remove'
     - not ansible_check_mode
@@ -30,7 +30,7 @@
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Lifecycle | Validate user Quadlets with Podman generator dry run
+- name: Service | Validate user Quadlets with Podman generator
   when:
     - podman_services_state != 'remove'
     - not ansible_check_mode
@@ -46,7 +46,7 @@
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Lifecycle | Verify generated user systemd unit
+- name: Service | Validate generated user systemd service
   when:
     - podman_services_state != 'remove'
     - not ansible_check_mode
@@ -64,18 +64,18 @@
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Lifecycle | Include safe execution transition
+- name: Service | Switch execution settings when needed
   when:
     - not ansible_check_mode
     - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
     - podman_services_execution_transition | bool
   ansible.builtin.include_tasks:
-    file: execution_transition.yml
+    file: switch_execution.yml
     apply:
       tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Lifecycle | Start service for deploy/bootstrap
+- name: Service | Start system service
   when:
     - not ansible_check_mode
     - podman_services_state in ['deploy', 'bootstrap']
@@ -86,7 +86,7 @@
     state: started
   tags: [deploy, bootstrap]
 
-- name: Lifecycle | Restart service when update inputs changed
+- name: Service | Restart system service when configuration changed
   when:
     - not ansible_check_mode
     - podman_services_state == 'update'
@@ -98,7 +98,7 @@
     state: restarted
   tags: [update]
 
-- name: Lifecycle | Recreate service unconditionally
+- name: Service | Restart system service for recreate
   when:
     - not ansible_check_mode
     - podman_services_state == 'recreate'
@@ -109,7 +109,7 @@
     state: restarted
   tags: [recreate]
 
-- name: Lifecycle | Start user service for deploy/bootstrap
+- name: Service | Start user service
   when:
     - not ansible_check_mode
     - podman_services_state in ['deploy', 'bootstrap']
@@ -124,7 +124,7 @@
     state: started
   tags: [deploy, bootstrap]
 
-- name: Lifecycle | Restart user service when update inputs changed
+- name: Service | Restart user service when configuration changed
   when:
     - not ansible_check_mode
     - podman_services_state == 'update'
@@ -140,7 +140,7 @@
     state: restarted
   tags: [update]
 
-- name: Lifecycle | Recreate user service unconditionally
+- name: Service | Restart user service for recreate
   when:
     - not ansible_check_mode
     - podman_services_state == 'recreate'
@@ -155,7 +155,7 @@
     state: restarted
   tags: [recreate]
 
-- name: Lifecycle | Verify desired system service is active
+- name: Service | Verify system service is active
   when:
     - not ansible_check_mode
     - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
@@ -165,7 +165,7 @@
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Lifecycle | Verify desired user service is active
+- name: Service | Verify user service is active
   when:
     - not ansible_check_mode
     - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
@@ -178,7 +178,7 @@
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Lifecycle | Ensure execution state directory
+- name: Service | Ensure execution state directory exists
   when:
     - not ansible_check_mode
     - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
@@ -190,7 +190,7 @@
     mode: "0755"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Lifecycle | Build successful execution resource metadata
+- name: Service | Record managed resources after successful start
   when:
     - not ansible_check_mode
     - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
@@ -229,7 +229,7 @@
         }}
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Lifecycle | Persist successful execution owner
+- name: Service | Save successful execution state
   when:
     - not ansible_check_mode
     - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']

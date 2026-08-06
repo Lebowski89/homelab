@@ -1,6 +1,6 @@
 ---
 
-- name: Init - Validate | Assert docker_services_svc is defined and is a mapping
+- name: Validate service | Require service configuration
   ansible.builtin.assert:
     that:
       - docker_services_svc is defined
@@ -11,7 +11,7 @@
 # BASIC FIELDS
 ################################
 
-- name: Init - Validate | docker_services_svc.name
+- name: Validate service | Check optional service name
   when: docker_services_svc.name is defined
   ansible.builtin.assert:
     that:
@@ -19,7 +19,7 @@
       - (docker_services_svc.name | string | trim | length) > 0
     fail_msg: "docker_services_svc.name must be a non-empty string when provided."
 
-- name: Init - Validate | docker_services_svc.image (required)
+- name: Validate service | Require service image
   ansible.builtin.assert:
     that:
       - docker_services_svc.image is defined
@@ -27,7 +27,7 @@
       - (docker_services_svc.image | string | trim | length) > 0
     fail_msg: "docker_services_svc.image must be defined as a non-empty string."
 
-- name: Init - Validate | docker_services_svc.user
+- name: Validate service | Check optional container user
   when: docker_services_svc.user is defined
   ansible.builtin.assert:
     that:
@@ -35,7 +35,7 @@
       - (docker_services_svc.user | string | trim | length) > 0
     fail_msg: "docker_services_svc.user must be a non-empty string when provided."
 
-- name: Init - Validate | docker_services_svc.command shape
+- name: Validate service | Check command type
   when: docker_services_svc.command is defined
   ansible.builtin.assert:
     that:
@@ -43,7 +43,7 @@
         or (docker_services_svc.command is sequence and docker_services_svc.command is not string)
     fail_msg: "docker_services_svc.command must be a non-empty string or a list of non-empty strings."
 
-- name: Init - Validate | docker_services_svc.command string form
+- name: Validate service | Check command string
   when:
     - docker_services_svc.command is defined
     - docker_services_svc.command is string
@@ -52,7 +52,7 @@
       - (docker_services_svc.command | trim | length) > 0
     fail_msg: "docker_services_svc.command string form must be non-empty."
 
-- name: Init - Validate | docker_services_svc.command list form
+- name: Validate service | Check command list
   when:
     - docker_services_svc.command is defined
     - docker_services_svc.command is sequence
@@ -67,7 +67,7 @@
         == (docker_services_svc.command | length)
     fail_msg: "docker_services_svc.command list form must contain only non-empty strings."
 
-- name: Init - Validate | docker_services_svc.env_file shape
+- name: Validate service | Check environment file type
   when: docker_services_svc.env_file is defined
   ansible.builtin.assert:
     that:
@@ -75,7 +75,7 @@
         or (docker_services_svc.env_file is sequence and docker_services_svc.env_file is not string)
     fail_msg: "docker_services_svc.env_file must be a string or a list of strings."
 
-- name: Init - Validate | docker_services_svc.env_file string form
+- name: Validate service | Check environment file string
   when:
     - docker_services_svc.env_file is defined
     - docker_services_svc.env_file is string
@@ -84,7 +84,7 @@
       - (docker_services_svc.env_file | trim | length) > 0
     fail_msg: "docker_services_svc.env_file string form must be non-empty."
 
-- name: Init - Validate | docker_services_svc.env_file list form
+- name: Validate service | Check environment file list
   when:
     - docker_services_svc.env_file is defined
     - docker_services_svc.env_file is sequence
@@ -99,7 +99,7 @@
         == (docker_services_svc.env_file | length)
     fail_msg: "docker_services_svc.env_file list form must contain only non-empty strings."
 
-- name: Init - Validate | docker_services_svc.devices shape
+- name: Validate service | Check device list
   when: docker_services_svc.devices is defined
   ansible.builtin.assert:
     that:
@@ -112,7 +112,7 @@
         == (docker_services_svc.devices | length)
     fail_msg: "docker_services_svc.devices must be a list of non-empty strings."
 
-- name: Init - Validate | docker_services_svc.cap_add shape
+- name: Validate service | Check added capabilities
   when: docker_services_svc.cap_add is defined
   ansible.builtin.assert:
     that:
@@ -125,7 +125,7 @@
         == (docker_services_svc.cap_add | length)
     fail_msg: "docker_services_svc.cap_add must be a list of non-empty strings."
 
-- name: Init - Validate | docker_services_svc.cap_drop shape
+- name: Validate service | Check dropped capabilities
   when: docker_services_svc.cap_drop is defined
   ansible.builtin.assert:
     that:
@@ -138,20 +138,28 @@
         == (docker_services_svc.cap_drop | length)
     fail_msg: "docker_services_svc.cap_drop must be a list of non-empty strings."
 
-- name: Init - Validate | docker_services_svc.no_new_privileges
+- name: Validate service | Check no-new-privileges setting
   when: docker_services_svc.no_new_privileges is defined
   ansible.builtin.assert:
     that:
       - >-
         (
           docker_services_svc.no_new_privileges
-          | docker_services_no_new_privileges_security_opts(docker_services_stack_deploy_type)
+          | docker_services_no_new_privileges_security_opts(docker_services_validate_deploy_type)
         ) is sequence
     fail_msg: >-
       docker_services_svc.no_new_privileges must be a strict boolean-like value and
       true is supported only for deploy.type=container.
+  vars:
+    docker_services_validate_deploy_type: >-
+      {{
+        (docker_services_svc.deploy | default({})).type
+        | default('swarm', true)
+        | string
+        | trim
+      }}
 
-- name: Init - Validate | docker_services_svc.sysctls shape
+- name: Validate service | Check sysctl settings
   when: docker_services_svc.sysctls is defined
   ansible.builtin.assert:
     that:
@@ -162,14 +170,14 @@
 # DEPLOY
 ################################
 
-- name: Init - Validate | docker_services_svc.deploy shape
+- name: Validate service | Check deploy settings
   when: docker_services_svc.deploy is defined
   ansible.builtin.assert:
     that:
       - docker_services_svc.deploy is mapping
     fail_msg: "docker_services_svc.deploy must be a mapping when provided."
 
-- name: Init - Validate | docker_services_svc.deploy.type
+- name: Validate service | Check deploy type
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -179,7 +187,7 @@
       - (docker_services_svc.deploy.type | string | trim) in ['swarm', 'container']
     fail_msg: "docker_services_svc.deploy.type must be 'swarm' or 'container' when provided."
 
-- name: Init - Validate | docker_services_svc.deploy.profile
+- name: Validate service | Check deploy profile
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -195,7 +203,7 @@
       docker_services_svc.deploy.profile must be a non-empty string and one of:
       {{ (docker_services_deploy_profiles | default({'none': {}})).keys() | list | sort }}
 
-- name: Init - Validate | docker_services_svc.deploy.profile is swarm-only
+- name: Validate service | Require Swarm for non-default deploy profiles
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -209,7 +217,7 @@
       only applies to Swarm services. For deploy.type='container', omit deploy.profile
       or set profile: none.
 
-- name: Init - Validate | docker_services_svc.deploy.mode
+- name: Validate service | Check Swarm deploy mode
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -219,7 +227,7 @@
       - (docker_services_svc.deploy.mode | string | trim) in ['replicated', 'global']
     fail_msg: "docker_services_svc.deploy.mode must be 'replicated' or 'global' when provided."
 
-- name: Init - Validate | docker_services_svc.deploy.replicas
+- name: Validate service | Check replica count
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -237,7 +245,7 @@
       - (docker_services_svc.deploy.replicas | int) >= 0
     fail_msg: "docker_services_svc.deploy.replicas must be an integer >= 0 when provided."
 
-- name: Init - Validate | docker_services_svc.deploy.host (optional)
+- name: Validate service | Check deploy host
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -271,7 +279,7 @@
       docker_services_svc.deploy.host controls prep/filesystem target hosts and must be
       a non-empty string, or a non-empty list of non-empty strings, when provided.
 
-- name: Init - Validate | docker_services_svc.deploy.constraints
+- name: Validate service | Check placement constraints
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -301,7 +309,7 @@
         )
     fail_msg: "docker_services_svc.deploy.constraints must be a string or a list of strings."
 
-- name: Init - Validate | docker_services_svc.deploy.restart_policy
+- name: Validate service | Check restart policy
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -311,7 +319,7 @@
       - docker_services_svc.deploy.restart_policy is mapping
     fail_msg: "docker_services_svc.deploy.restart_policy must be a mapping when provided."
 
-- name: Init - Validate | docker_services_svc.deploy.update_config
+- name: Validate service | Check update settings
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -321,7 +329,7 @@
       - docker_services_svc.deploy.update_config is mapping
     fail_msg: "docker_services_svc.deploy.update_config must be a mapping when provided."
 
-- name: Init - Validate | docker_services_svc.deploy.rollback_config
+- name: Validate service | Check rollback settings
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -331,7 +339,7 @@
       - docker_services_svc.deploy.rollback_config is mapping
     fail_msg: "docker_services_svc.deploy.rollback_config must be a mapping when provided."
 
-- name: Init - Validate | docker_services_svc.deploy.resources
+- name: Validate service | Check resource limits
   when:
     - docker_services_svc.deploy is defined
     - docker_services_svc.deploy is mapping
@@ -345,14 +353,14 @@
 # TARGETS
 ################################
 
-- name: Init - Validate | docker_services_svc.targets shape
+- name: Validate service | Check targets mapping
   when: docker_services_svc.targets is defined
   ansible.builtin.assert:
     that:
       - docker_services_svc.targets is mapping
     fail_msg: "docker_services_svc.targets must be a mapping when provided."
 
-- name: Init - Validate | docker_services_svc.targets entries are mappings
+- name: Validate service | Check target entries
   when:
     - docker_services_svc.targets is defined
     - (docker_services_svc.targets | length > 0)
@@ -366,14 +374,14 @@
 # NAMED NETWORKS / VOLUMES
 ################################
 
-- name: Init - Validate | docker_services_svc.named_networks
+- name: Validate service | Check named networks
   when: docker_services_svc.named_networks is defined
   ansible.builtin.assert:
     that:
       - docker_services_svc.named_networks is mapping
     fail_msg: "docker_services_svc.named_networks must be a mapping when provided."
 
-- name: Init - Validate | docker_services_svc.named_volumes
+- name: Validate service | Check named volumes
   when: docker_services_svc.named_volumes is defined
   ansible.builtin.assert:
     that:
@@ -384,7 +392,7 @@
 # PATHS
 ################################
 
-- name: Init - Validate | docker_services_svc.paths shape
+- name: Validate service | Check path list
   when: docker_services_svc.paths is defined
   ansible.builtin.assert:
     that:
@@ -392,7 +400,7 @@
       - docker_services_svc.paths is not string
     fail_msg: "docker_services_svc.paths must be a list of path specs."
 
-- name: Init - Validate | docker_services_svc.paths entries
+- name: Validate service | Check path entries
   when: docker_services_svc.paths is defined and (docker_services_svc.paths | length > 0)
   ansible.builtin.assert:
     that:
@@ -404,7 +412,7 @@
         == (docker_services_svc.paths | length)
     fail_msg: "docker_services_svc.paths must be a list of dicts and each entry must contain a non-empty 'path'."
 
-- name: Init - Validate | docker_services_svc.paths mode formatting
+- name: Validate service | Check path permissions
   when: docker_services_svc.paths is defined and (docker_services_svc.paths | length > 0)
   ansible.builtin.assert:
     that:
@@ -428,7 +436,7 @@
 # TEMPLATES
 ################################
 
-- name: Init - Validate | docker_services_svc.templates shape
+- name: Validate service | Check template list
   when: docker_services_svc.templates is defined
   ansible.builtin.assert:
     that:
@@ -436,7 +444,7 @@
       - docker_services_svc.templates is not string
     fail_msg: "docker_services_svc.templates must be a list of template specs."
 
-- name: Init - Validate | docker_services_svc.templates entries
+- name: Validate service | Check template entries
   when: docker_services_svc.templates is defined and (docker_services_svc.templates | length > 0)
   ansible.builtin.assert:
     that:
@@ -457,7 +465,7 @@
         == (docker_services_svc.templates | length)
     fail_msg: "docker_services_svc.templates must be a list of dicts and each entry must contain non-empty 'src' and 'dest'."
 
-- name: Init - Validate | docker_services_svc.templates mode formatting
+- name: Validate service | Check template permissions
   when: docker_services_svc.templates is defined and (docker_services_svc.templates | length > 0)
   ansible.builtin.assert:
     that:
@@ -481,7 +489,7 @@
 # COPIES
 ################################
 
-- name: Init - Validate | docker_services_svc.copies shape
+- name: Validate service | Check copy list
   when: docker_services_svc.copies is defined
   ansible.builtin.assert:
     that:
@@ -489,7 +497,7 @@
       - docker_services_svc.copies is not string
     fail_msg: "docker_services_svc.copies must be a list of copy specs."
 
-- name: Init - Validate | docker_services_svc.copies entries
+- name: Validate service | Check copy entries
   when: docker_services_svc.copies is defined and (docker_services_svc.copies | length > 0)
   ansible.builtin.assert:
     that:
@@ -510,7 +518,7 @@
 # HEALTHCHECK
 ################################
 
-- name: Init - Validate | docker_services_svc.healthcheck shape
+- name: Validate service | Check healthcheck
   when: docker_services_svc.healthcheck is defined
   ansible.builtin.assert:
     that:
@@ -550,7 +558,7 @@
 # SECRETS
 ################################
 
-- name: Init - Validate | docker_services_svc.secrets shape
+- name: Validate service | Check secrets setting
   when: docker_services_svc.secrets is defined
   ansible.builtin.assert:
     that:
@@ -558,7 +566,7 @@
         or (docker_services_svc.secrets is sequence and docker_services_svc.secrets is not string)
     fail_msg: "docker_services_svc.secrets must be a string or a list."
 
-- name: Init - Validate | docker_services_svc.secrets string form
+- name: Validate service | Check secret string
   when:
     - docker_services_svc.secrets is defined
     - docker_services_svc.secrets is string
@@ -567,7 +575,7 @@
       - (docker_services_svc.secrets | trim | length) > 0
     fail_msg: "docker_services_svc.secrets string form must be non-empty."
 
-- name: Init - Validate | docker_services_svc.secrets list form is non-empty
+- name: Validate service | Require non-empty secret list
   when:
     - docker_services_svc.secrets is defined
     - docker_services_svc.secrets is sequence
@@ -577,7 +585,7 @@
       - (docker_services_svc.secrets | length) > 0
     fail_msg: "docker_services_svc.secrets list form must not be empty."
 
-- name: Init - Validate | docker_services_svc.secrets list items are strings or dicts
+- name: Validate service | Check secret list entries
   when:
     - docker_services_svc.secrets is defined
     - docker_services_svc.secrets is sequence
@@ -592,7 +600,7 @@
         (docker_services_svc.secrets | length)
     fail_msg: "docker_services_svc.secrets list entries must be strings or dicts."
 
-- name: Init - Validate | docker_services_svc.secrets string items are non-empty
+- name: Validate service | Check secret names
   when:
     - docker_services_svc.secrets is defined
     - docker_services_svc.secrets is sequence
@@ -607,7 +615,7 @@
         (docker_services_svc.secrets | select('string') | list | length)
     fail_msg: "docker_services_svc.secrets string entries must be non-empty."
 
-- name: Init - Validate | docker_services_svc.secrets dict items have source and target
+- name: Validate service | Check secret attachment fields
   when:
     - docker_services_svc.secrets is defined
     - docker_services_svc.secrets is sequence
@@ -631,7 +639,7 @@
 # PORTS
 ################################
 
-- name: Init - Validate | docker_services_svc.ports shape
+- name: Validate service | Check ports setting
   when: docker_services_svc.ports is defined
   ansible.builtin.assert:
     that:
@@ -639,7 +647,7 @@
         or (docker_services_svc.ports is sequence and docker_services_svc.ports is not string)
     fail_msg: "docker_services_svc.ports must be a mapping (named ports) or a list of port dicts."
 
-- name: Init - Validate | Normalize ports items
+- name: Validate service | Prepare port entries for validation
   when: docker_services_svc.ports is defined
   ansible.builtin.set_fact:
     docker_services_validate_ports_items: >-
@@ -649,7 +657,7 @@
         else (docker_services_svc.ports | list)
       }}
 
-- name: Init - Validate | docker_services_svc.ports entries
+- name: Validate service | Check port entries
   when: docker_services_svc.ports is defined
   ansible.builtin.assert:
     that:
@@ -666,7 +674,7 @@
 # VOLUMES
 ################################
 
-- name: Init - Validate | docker_services_svc.volumes shape
+- name: Validate service | Check volumes setting
   when: docker_services_svc.volumes is defined
   ansible.builtin.assert:
     that:
@@ -674,7 +682,7 @@
         or (docker_services_svc.volumes is sequence and docker_services_svc.volumes is not string)
     fail_msg: "docker_services_svc.volumes must be a mapping (named volumes) or a list of volume dicts."
 
-- name: Init - Validate | Normalize volume items
+- name: Validate service | Prepare volume entries for validation
   when: docker_services_svc.volumes is defined
   ansible.builtin.set_fact:
     docker_services_validate_volume_items: >-
@@ -684,14 +692,14 @@
         else (docker_services_svc.volumes | list)
       }}
 
-- name: Init - Validate | docker_services_svc.volumes entries basic
+- name: Validate service | Check volume entries
   when: docker_services_svc.volumes is defined
   ansible.builtin.assert:
     that:
       - (docker_services_validate_volume_items | select('mapping') | list | length) == (docker_services_validate_volume_items | length)
     fail_msg: "docker_services_svc.volumes entries must be dicts."
 
-- name: Init - Validate | docker_services_svc.volumes required keys by type
+- name: Validate service | Check volume fields by type
   when: docker_services_svc.volumes is defined
   ansible.builtin.assert:
     that:
@@ -714,7 +722,7 @@
 # ENV
 ################################
 
-- name: Init - Validate | docker_services_svc.environment shape
+- name: Validate service | Check environment settings
   when: docker_services_svc.environment is defined
   ansible.builtin.assert:
     that:
@@ -725,7 +733,7 @@
 # LABELS
 ################################
 
-- name: Init - Validate | docker_services_svc.labels shape
+- name: Validate service | Check service labels
   when: docker_services_svc.labels is defined
   ansible.builtin.assert:
     that:

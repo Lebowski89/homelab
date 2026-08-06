@@ -1,13 +1,13 @@
 ---
 
-- name: Compose - User | Ensure docker_services_service_name is set
+- name: Compose user | Validate service name
   ansible.builtin.assert:
     that:
       - docker_services_service_name is defined
       - docker_services_service_name | trim | length > 0
     fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Compose - User | Set user for service
+- name: Compose user | Set container user
   ansible.builtin.set_fact:
     docker_services_compose_services: >-
       {{

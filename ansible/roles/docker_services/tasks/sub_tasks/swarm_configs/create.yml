@@ -1,6 +1,6 @@
 ---
 
-- name: Prep - Swarm Configs (Present) | Render desired config content
+- name: Swarm configs | Render config content
   ansible.builtin.set_fact:
     docker_services_swarm_cfg_rendered: >-
       {{
@@ -19,13 +19,13 @@
         )
       }}
 
-- name: Prep - Swarm Configs (Present) | Hash rendered content
+- name: Swarm configs | Build versioned config name
   ansible.builtin.set_fact:
     docker_services_swarm_cfg_hash: "{{ docker_services_swarm_cfg_rendered | hash('sha1') | truncate(12, True, '') }}"
     docker_services_swarm_cfg_effective_name: >-
       {{ (cfg.name | string | trim) ~ '-' ~ (docker_services_swarm_cfg_rendered | hash('sha1') | truncate(12, True, '')) }}
 
-- name: Prep - Swarm Configs (Present) | Ensure versioned config exists
+- name: Swarm configs | Create versioned config
   community.docker.docker_config:
     name: "{{ docker_services_swarm_cfg_effective_name }}"
     state: present
@@ -34,7 +34,7 @@
   register: docker_services_swarm_cfg_create
   delegate_to: "{{ docker_services_swarm_cfg_host }}"
 
-- name: Prep - Swarm Configs (Present) | Store effective config mapping
+- name: Swarm configs | Record active config
   ansible.builtin.set_fact:
     docker_services_swarm_configs_effective: >-
       {{

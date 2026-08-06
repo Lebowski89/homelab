@@ -1,6 +1,6 @@
 ---
 
-- name: Check render | Reset in-memory artifact plan
+- name: Check mode | Reset planned Quadlet changes
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -10,7 +10,7 @@
     podman_services_check_existing_artifacts: {}
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Render managed network in memory
+- name: Check mode | Build network Quadlet preview
   when:
     - podman_services_service.network is mapping
     - not podman_services_service.network.external | bool
@@ -30,7 +30,7 @@
       }}
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Render managed volumes in memory
+- name: Check mode | Build volume Quadlet previews
   no_log: true
   diff: false
   vars:
@@ -52,7 +52,7 @@
     label: "{{ podman_services_check_volume.name }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Render protected environment in memory
+- name: Check mode | Build environment file preview
   when: podman_services_service.env | length > 0
   no_log: true
   diff: false
@@ -70,7 +70,7 @@
       }}
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Render container in memory
+- name: Check mode | Build container Quadlet preview
   no_log: true
   diff: false
   vars:
@@ -87,7 +87,7 @@
       }}
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Validate in-memory artifact syntax
+- name: Check mode | Validate generated Quadlet previews
   no_log: true
   diff: false
   ansible.builtin.assert:
@@ -125,7 +125,7 @@
     label: "{{ podman_services_check_artifact.path }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Build sanitized artifact metadata
+- name: Check mode | Build safe preview metadata
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -143,7 +143,7 @@
     label: "{{ podman_services_check_artifact.path }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Inspect live artifact destinations
+- name: Check mode | Check existing generated files
   ansible.builtin.stat:
     path: "{{ podman_services_check_artifact_metadata.path }}"
   loop: "{{ podman_services_check_artifacts }}"
@@ -153,7 +153,7 @@
   register: podman_services_check_artifact_stats
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Read existing live artifacts
+- name: Check mode | Read existing generated files
   when: podman_services_check_artifact_stat.stat.exists | bool
   no_log: true
   diff: false
@@ -166,7 +166,7 @@
   register: podman_services_check_existing_artifacts
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Build sanitized artifact change plan
+- name: Check mode | Compare planned and existing generated files
   no_log: true
   diff: false
   vars:
@@ -202,7 +202,7 @@
     label: "{{ podman_services_check_artifact.path }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Report planned artifact change  # noqa no-handler
+- name: Check mode | Report planned file change  # noqa no-handler
   when: podman_services_check_planned_artifact.changed | bool
   ansible.builtin.debug:
     msg: >-
@@ -215,7 +215,7 @@
   changed_when: true
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Check render | Clear secret-bearing comparison state
+- name: Check mode | Clear secret values from preview state
   no_log: true
   diff: false
   ansible.builtin.set_fact:

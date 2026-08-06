@@ -1,13 +1,13 @@
 ---
 
-- name: Compose - Ports | Ensure docker_services_service_name is set
+- name: Compose ports | Validate service name
   ansible.builtin.assert:
     that:
       - docker_services_service_name is defined
       - docker_services_service_name | string | trim | length > 0
     fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Compose - Ports | Capture existing ports list
+- name: Compose ports | Read existing ports
   ansible.builtin.set_fact:
     docker_services_ports_existing: >-
       {{
@@ -16,7 +16,7 @@
         | list
       }}
 
-- name: Compose - Ports | Compute merged ports list
+- name: Compose ports | Build final port list
   ansible.builtin.set_fact:
     docker_services_ports_merged: >-
       {{
@@ -33,7 +33,7 @@
           )
       }}
 
-- name: Compose - Ports | Attach ports to service
+- name: Compose ports | Add ports to service
   ansible.builtin.set_fact:
     docker_services_compose_services: >-
       {{

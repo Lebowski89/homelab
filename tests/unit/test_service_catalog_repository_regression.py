@@ -11,7 +11,7 @@ from jinja2.nativetypes import NativeEnvironment
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
-DOCKER_INIT_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/_init.yml"
+DOCKER_INIT_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/init.yml"
 PODMAN_INIT_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/init.yml"
 DOCKER_TASKS_DIR = REPO_ROOT / "ansible/roles/docker_services/tasks"
 PODMAN_TASKS_DIR = REPO_ROOT / "ansible/roles/podman_services/tasks"
@@ -677,10 +677,10 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert "service_catalog_merge_target" not in str(podman_include["vars"])
 
     docker_init = yaml.safe_load(DOCKER_INIT_PATH.read_text())
-    docker_config = task_named(docker_init, "Init | Use catalog-resolved service config")
-    docker_assert = task_named(docker_init, "Init | Ensure docker_services_service_cfg is provided")
+    docker_config = task_named(docker_init, "Initialize | Load service configuration")
+    docker_assert = task_named(docker_init, "Initialize | Validate service configuration input")
     podman_init = yaml.safe_load(PODMAN_INIT_PATH.read_text())
-    podman_assert = task_named(podman_init, "Init | Assert catalog-resolved service config")
+    podman_assert = task_named(podman_init, "Init | Validate selected service configuration")
 
     assert docker_config["ansible.builtin.set_fact"]["docker_services_svc"] == "{{ docker_services_service_cfg }}"
     adapter_tasks = "\n".join(path.read_text() for tasks_dir in (DOCKER_TASKS_DIR, PODMAN_TASKS_DIR) for path in tasks_dir.rglob("*.yml"))

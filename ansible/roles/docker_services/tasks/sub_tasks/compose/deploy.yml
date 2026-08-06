@@ -1,13 +1,13 @@
 ---
 
-- name: Deploy - Config | Ensure docker_services_service_name is set
+- name: Compose deploy settings | Validate service name
   ansible.builtin.assert:
     that:
       - docker_services_service_name is defined
       - docker_services_service_name | string | trim | length > 0
     fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Deploy - Config | Build deploy dict
+- name: Compose deploy settings | Build Swarm deploy settings
   ansible.builtin.set_fact:
     docker_services_deploy_dict: >-
       {{
@@ -27,7 +27,7 @@
           )
       }}
 
-- name: Deploy - Config | Attach deploy config to service
+- name: Compose deploy settings | Add deploy settings to service
   ansible.builtin.set_fact:
     docker_services_compose_services: >-
       {{

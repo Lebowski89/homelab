@@ -1,19 +1,19 @@
 ---
 
-- name: Compose - Command | Ensure docker_services_service_name is set
+- name: Compose command | Validate service name
   ansible.builtin.assert:
     that:
       - docker_services_service_name is defined
       - docker_services_service_name | string | trim | length > 0
     fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Compose - Command | Ensure command_action is valid
+- name: Compose command | Validate update action
   ansible.builtin.assert:
     that:
       - command_action | default('replace') in ['append', 'replace', 'append_unique']
     fail_msg: "command_action must be 'append', 'replace', or 'append_unique'"
 
-- name: Compose - Command | Select command input
+- name: Compose command | Choose input value
   ansible.builtin.set_fact:
     docker_services_cmd_in: >-
       {{
@@ -23,12 +23,12 @@
         (command_list if (command_list is defined) else none)
       }}
 
-- name: Compose - Command | Fail if no command provided
+- name: Compose command | Require a command
   when: docker_services_cmd_in is none
   ansible.builtin.fail:
     msg: "You must pass 'command' (string or list) or legacy 'command_list'."
 
-- name: Compose - Command | Normalize command list input
+- name: Compose command | Convert command list to strings
   when:
     - docker_services_cmd_in is sequence
     - docker_services_cmd_in is not string
@@ -42,7 +42,7 @@
         | list
       }}
 
-- name: Compose - Command | Normalize command
+- name: Compose command | Convert command to a consistent form
   ansible.builtin.set_fact:
     docker_services_cmd_new: >-
       {{
@@ -65,7 +65,7 @@
         )
       }}
 
-- name: Compose - Command | Read existing command
+- name: Compose command | Read existing command
   ansible.builtin.set_fact:
     docker_services_cmd_existing: >-
       {{
@@ -75,7 +75,7 @@
         | default(none, true)
       }}
 
-- name: Compose - Command | Normalize existing/new command values for merge actions
+- name: Compose command | Prepare values for merging
   ansible.builtin.set_fact:
     docker_services_cmd_existing_normalized: >-
       {{
@@ -100,7 +100,7 @@
         )
       }}
 
-- name: Compose - Command | Compute final command
+- name: Compose command | Build final command
   ansible.builtin.set_fact:
     docker_services_cmd_final: >-
       {{
@@ -119,7 +119,7 @@
         )
       }}
 
-- name: Compose - Command | Set command for service
+- name: Compose command | Save command to service
   ansible.builtin.set_fact:
     docker_services_compose_services: >-
       {{

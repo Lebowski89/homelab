@@ -1,21 +1,21 @@
 ---
 
 ################################
-# INIT
+# INITIALIZE
 ################################
 
-- name: Init | Include tasks
+- name: Docker services | Initialize service
   ansible.builtin.include_tasks:
-    file: _init.yml
+    file: sub_tasks/init.yml
     apply:
       tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
 ################################
-# DRIFT
+# IMAGE DRIFT
 ################################
 
-- name: Drift | Include image drift check
+- name: Docker services | Check image drift
   when: docker_services_is_deploy_host | bool
   ansible.builtin.include_tasks:
     file: sub_tasks/drift/image.yml
@@ -24,24 +24,24 @@
   tags: drift
 
 ################################
-# PREP
+# PREPARE
 ################################
 
-- name: Prep | Include tasks
+- name: Docker services | Prepare service
   ansible.builtin.include_tasks:
-    file: _prep.yml
+    file: sub_tasks/prepare.yml
     apply:
       tags: [remove, deploy, update, recreate, bootstrap]
   tags: [remove, deploy, update, recreate, bootstrap]
 
 ################################
-# COMPOSE
+# BUILD COMPOSE CONFIGURATION
 ################################
 
-- name: Compose | Include tasks
+- name: Docker services | Build Compose configuration
   no_log: true
   ansible.builtin.include_tasks:
-    file: _compose.yml
+    file: sub_tasks/compose.yml
     apply:
       tags: [deploy, update, recreate]
       no_log: true
@@ -49,13 +49,13 @@
   tags: [deploy, update, recreate]
 
 ################################
-# DEPLOY
+# SAVE STACK CONFIGURATION
 ################################
 
-- name: Deploy | Include tasks
+- name: Docker services | Save stack configuration
   no_log: true
   ansible.builtin.include_tasks:
-    file: _deploy.yml
+    file: sub_tasks/save_stack.yml
     apply:
       tags: [deploy, update, recreate]
       no_log: true

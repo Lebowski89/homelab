@@ -14,7 +14,7 @@ from jinja2.nativetypes import NativeEnvironment
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROLE = REPO_ROOT / "ansible/roles/service_prepare"
-DOCKER_PREP_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/_prep.yml"
+DOCKER_PREP_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prepare.yml"
 PODMAN_MAIN_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/main.yml"
 COMMON_PREFLIGHT_PATH = REPO_ROOT / "ansible/tasks/service_catalog_common_preflight.yml"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
@@ -78,34 +78,34 @@ def test_docker_preparation_declares_the_required_lifecycle_order():
     tasks = yaml.safe_load(DOCKER_PREP_PATH.read_text())
     names = [task["name"] for task in tasks]
     expected = [
-        "Prep - Application validation | Validate current service",
-        "Prep - Cleanup | Remove existing stack",
-        "Prep - Application secrets | Run runtime-neutral generation",
-        "Prep - Secrets | Materialize Docker-native secrets",
-        "Prep - Application templates | Derive runtime-neutral values",
-        "Prep - Service common | Prepare files and Traefik integration",
-        "Prep - Application configuration | Apply runtime-neutral configuration",
+        "Prepare | Validate application settings",
+        "Cleanup | Remove existing deployment",
+        "Prepare | Generate application secrets",
+        "Secrets | Manage Docker secrets",
+        "Prepare | Build application template values",
+        "Prepare | Prepare shared files and integrations",
+        "Prepare | Apply application configuration",
     ]
 
     assert [names.index(name) for name in expected] == sorted(names.index(name) for name in expected)
 
-    cleanup = task_named(tasks, "Prep - Cleanup | Remove existing stack")
+    cleanup = task_named(tasks, "Cleanup | Remove existing deployment")
     assert "not ansible_check_mode" in cleanup["when"]
-    native = task_named(tasks, "Prep - Secrets | Materialize Docker-native secrets")
+    native = task_named(tasks, "Secrets | Manage Docker secrets")
     assert "not ansible_check_mode" in native["when"]
 
     podman_tasks = yaml.safe_load(PODMAN_MAIN_PATH.read_text())
     podman_names = [task["name"] for task in podman_tasks]
     podman_expected = [
-        "Podman services | Validate application preparation",
-        "Podman services | Stop deployed service before recreate preparation",
-        "Podman services | Generate runtime-neutral application secrets",
-        "Podman services | Materialize Podman-native secrets",
-        "Podman services | Derive runtime-neutral application template values",
-        "Podman services | Prepare runtime-neutral host state",
-        "Podman services | Apply runtime-neutral application configuration",
-        "Podman services | Include preparation tasks",
-        "Podman services | Include service lifecycle tasks",
+        "Podman services | Validate application settings",
+        "Podman services | Stop service before recreate",
+        "Podman services | Generate application secrets",
+        "Podman services | Manage Podman secrets",
+        "Podman services | Build application template values",
+        "Podman services | Prepare service files and directories",
+        "Podman services | Configure application",
+        "Podman services | Write Quadlet files",
+        "Podman services | Manage service state",
     ]
     assert [podman_names.index(name) for name in podman_expected] == sorted(podman_names.index(name) for name in podman_expected)
 
@@ -171,7 +171,7 @@ def test_controller_host_is_resolved_only_at_orchestration_boundary():
 
 
 def test_standalone_swarm_and_podman_use_the_same_generic_controller_contract():
-    docker_init = (REPO_ROOT / "ansible/roles/docker_services/tasks/_init.yml").read_text()
+    docker_init = (REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/init.yml").read_text()
     podman_init = (REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/init.yml").read_text()
 
     assert 'docker_services_controller_host: "{{ docker_services_common_context.controller_host }}"' in docker_init
@@ -390,8 +390,10 @@ def test_qbittorrent_derivation_precedes_common_templates_for_both_adapters():
     docker = DOCKER_PREP_PATH.read_text()
     podman = PODMAN_MAIN_PATH.read_text()
 
-    assert docker.index("Derive runtime-neutral values") < docker.index("Prepare files and Traefik integration")
-    assert podman.index("Derive runtime-neutral application template values") < podman.index("Prepare runtime-neutral host state")
+    assert docker.index("Prepare | Build application template values") < docker.index("Prepare | Prepare shared files and integrations")
+    assert podman.index("Podman services | Build application template values") < podman.index(
+        "Podman services | Prepare service files and directories"
+    )
     assert 'service_common_template_vars: "{{ docker_services_application_template_vars }}"' in docker
     assert 'service_common_template_vars: "{{ podman_services_application_template_vars }}"' in podman
 
@@ -417,8 +419,8 @@ def test_authelia_users_database_consumes_runtime_neutral_template_values():
 
 def test_vaultwarden_generation_returns_value_free_declaration_to_adapters():
     generation = (ROLE / "tasks/applications/vaultwarden/generate_secrets.yml").read_text()
-    docker_secrets = (REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/secrets.yml").read_text()
-    podman_secrets = (REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/secrets/materialize.yml").read_text()
+    docker_secrets = (REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/secrets/manage.yml").read_text()
+    podman_secrets = (REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/secrets/manage.yml").read_text()
 
     publish = generation.index("Publish generated value and value-free declaration")
     declarations = generation.index("service_prepare_generated_secret_declarations", publish)
@@ -436,8 +438,8 @@ def test_authelia_publishes_values_and_value_free_declarations_for_normal_materi
     main = authelia["targets"]["main"]
     declarations = main["infisical"]["secrets_map"]
     generation = (ROLE / "tasks/applications/authelia/generate_secret.yml").read_text()
-    docker_secrets = (REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prep/secrets.yml").read_text()
-    podman_secrets = (REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/secrets/materialize.yml").read_text()
+    docker_secrets = (REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/secrets/manage.yml").read_text()
+    podman_secrets = (REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/secrets/manage.yml").read_text()
 
     storage = next(entry for entry in declarations if entry["var"] == "authelia_storage_key")
     assert storage["secret"]["name"] == "authelia_storage_key_secret"
@@ -472,8 +474,8 @@ def test_plex_volume_is_declarative_and_external_calls_are_bootstrap_only():
 
 def test_bazarr_and_nzbhydra_runtime_bootstraps_follow_common_paths_and_precede_mutation():
     docker = DOCKER_PREP_PATH.read_text()
-    common = docker.index("Prep - Service common | Prepare files and Traefik integration")
-    configure = docker.index("Apply runtime-neutral configuration")
+    common = docker.index("Prepare | Prepare shared files and integrations")
+    configure = docker.index("Prepare | Apply application configuration")
     bazarr_tasks = yaml.safe_load((ROLE / "tasks/applications/bazarr/configure.yml").read_text())
     nzbhydra_tasks = yaml.safe_load((ROLE / "tasks/applications/nzbhydra2/configure.yml").read_text())
 
@@ -548,13 +550,13 @@ def test_check_mode_guards_external_and_mutating_application_phases():
     playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
     deploy = next(play for play in playbook if play.get("name") == "Deploy homelab services")
 
-    guarded_docker = {"Prep - Cleanup | Remove existing stack", "Prep - Secrets | Materialize Docker-native secrets"}
+    guarded_docker = {"Cleanup | Remove existing deployment", "Secrets | Manage Docker secrets"}
     for name in guarded_docker:
         assert "not ansible_check_mode" in task_named(docker_tasks, name)["when"]
 
-    podman_native = task_named(podman_tasks, "Podman services | Materialize Podman-native secrets")
+    podman_native = task_named(podman_tasks, "Podman services | Manage Podman secrets")
     assert "not ansible_check_mode" in podman_native["when"]
-    podman_cleanup = task_named(podman_tasks, "Podman services | Stop deployed service before recreate preparation")
+    podman_cleanup = task_named(podman_tasks, "Podman services | Stop service before recreate")
     assert "not ansible_check_mode" in podman_cleanup["when"]
 
     runtime_execute = task_named(

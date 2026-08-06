@@ -1,13 +1,13 @@
 ---
 
-- name: Compose - Volumes | Ensure docker_services_service_name is set
+- name: Compose volumes | Validate service name
   ansible.builtin.assert:
     that:
       - docker_services_service_name is defined
       - docker_services_service_name | string | trim | length > 0
     fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Compose - Volumes | Capture existing volumes list
+- name: Compose volumes | Read existing volumes
   ansible.builtin.set_fact:
     docker_services_volumes_existing: >-
       {{
@@ -16,7 +16,7 @@
         | list
       }}
 
-- name: Compose - Volumes | Compute merged volumes list
+- name: Compose volumes | Build final volume list
   ansible.builtin.set_fact:
     docker_services_volumes_merged: >-
       {{
@@ -32,7 +32,7 @@
           )
       }}
 
-- name: Compose - Volumes | Attach volumes to service
+- name: Compose volumes | Add volumes to service
   ansible.builtin.set_fact:
     docker_services_compose_services: >-
       {{

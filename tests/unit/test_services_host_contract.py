@@ -20,7 +20,7 @@ PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
 DOCKER_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_docker.yml"
 PODMAN_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_podman.yml"
 CATALOG_FILTER_PATH = REPO_ROOT / "ansible/filter_plugins/service_catalog.py"
-DOCKER_INIT_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/_init.yml"
+DOCKER_INIT_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/init.yml"
 COMMON_VALIDATE_PATH = REPO_ROOT / "ansible/roles/service_common/tasks/validate.yml"
 
 LEGACY_SERVICE_HOST_VARIABLES = {
@@ -267,8 +267,8 @@ def test_host_contract_precedes_other_preparation_and_linear_dispatch_remains_ex
 
 def test_filesystem_hosts_are_validated_before_adapter_or_common_mutation():
     docker_init = yaml.safe_load(DOCKER_INIT_PATH.read_text())
-    docker_validate = task_named(docker_init, "Init | Validate effective filesystem hosts")
-    docker_defaults = task_named(docker_init, "Init | Build runtime-neutral container host defaults")
+    docker_validate = task_named(docker_init, "Initialize | Validate filesystem hosts")
+    docker_defaults = task_named(docker_init, "Initialize | Build container host defaults")
     common_validate = task_named(
         yaml.safe_load(COMMON_VALIDATE_PATH.read_text()),
         "Service common | Validate target hosts",

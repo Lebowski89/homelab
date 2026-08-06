@@ -1,6 +1,6 @@
 ---
 
-- name: Init | Assert catalog-resolved service config
+- name: Init | Validate selected service configuration
   ansible.builtin.assert:
     that:
       - podman_services_service_cfg is defined
@@ -11,17 +11,17 @@
       without a targets key.
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Init | Normalize service
+- name: Init | Build Podman service settings
   ansible.builtin.set_fact:
     podman_services_service: "{{ podman_services_service_cfg | podman_service_normalize(podman_services_role_prefix) }}"
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Init | Derive normalized systemd unit name
+- name: Init | Set systemd service name
   ansible.builtin.set_fact:
     podman_services_unit_name: "{{ podman_services_service.unit_name ~ '.service' }}"
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Init | Reset per-service transient facts
+- name: Init | Reset temporary service state
   ansible.builtin.set_fact:
     podman_services_secret_values: {}
     podman_services_common_values: {}
@@ -57,7 +57,7 @@
   diff: false
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Init | Validate dispatch-owned common context
+- name: Init | Validate shared service context
   no_log: true
   diff: false
   ansible.builtin.assert:
@@ -73,7 +73,7 @@
     fail_msg: "podman_services requires the current dispatch host's validated common service context."
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Init | Snapshot dispatch-owned common context
+- name: Init | Store shared service context
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -84,7 +84,7 @@
     podman_services_controller_host: "{{ podman_services_common_context.controller_host }}"
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Init | Attach common environment and native secret declarations
+- name: Init | Add environment and secret settings
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -98,7 +98,7 @@
       }}
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Init | Snapshot runtime-neutral container host defaults
+- name: Init | Store container host defaults
   ansible.builtin.set_fact:
     podman_services_common_host_defaults: >-
       {{
@@ -110,7 +110,7 @@
       }}
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Init | Assert inventory target matches selected host
+- name: Init | Verify service is running on selected host
   ansible.builtin.assert:
     that:
       - podman_services_service.container.host | default(inventory_hostname) == inventory_hostname
@@ -119,7 +119,7 @@
       {{ podman_services_service.container.host | default(inventory_hostname) }}, not {{ inventory_hostname }}.
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Init | Derive check-safe execution context
+- name: Init | Set initial execution settings
   ansible.builtin.set_fact:
     podman_services_execution: "{{ podman_services_service.execution }}"
     podman_services_desired_execution: "{{ podman_services_service.execution }}"

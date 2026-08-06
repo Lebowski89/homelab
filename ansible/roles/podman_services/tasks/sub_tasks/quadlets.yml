@@ -1,17 +1,17 @@
 ---
 
-- name: Prep | Validate rootless Quadlet render plan
+- name: Quadlets | Preview rootless Quadlet changes
   when:
     - ansible_check_mode
     - podman_services_state != 'remove'
     - podman_services_execution.mode == 'rootless'
   ansible.builtin.include_tasks:
-    file: sub_tasks/check_render.yml
+    file: sub_tasks/check_quadlets.yml
     apply:
       tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep | Ensure selected Quadlet directory exists
+- name: Quadlets | Ensure Quadlet directory exists
   when:
     - podman_services_state != 'remove'
     - not (ansible_check_mode and podman_services_execution.mode == 'rootless')
@@ -23,7 +23,7 @@
     mode: "{{ '0700' if podman_services_execution.mode == 'rootless' else '0755' }}"
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Prep | Render network Quadlet
+- name: Quadlets | Write network Quadlet
   when:
     - podman_services_service.network is mapping
     - not podman_services_service.network.external | bool
@@ -41,7 +41,7 @@
   notify: Podman services | daemon reload
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep | Render volume Quadlets
+- name: Quadlets | Write volume Quadlets
   when:
     - podman_services_state != 'remove'
     - not (ansible_check_mode and podman_services_execution.mode == 'rootless')
@@ -59,7 +59,7 @@
   notify: Podman services | daemon reload
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep | Render protected environment file
+- name: Quadlets | Write protected environment file
   no_log: true
   diff: false
   when:
@@ -78,7 +78,7 @@
   notify: Podman services | daemon reload
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep | Render container Quadlet
+- name: Quadlets | Write container Quadlet
   no_log: true
   diff: false
   when:

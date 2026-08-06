@@ -1,6 +1,6 @@
 ---
 
-- name: Drift | Derive clean service target label
+- name: Image drift | Set target label
   ansible.builtin.set_fact:
     docker_services_drift_target_label: >-
       {{
@@ -14,7 +14,7 @@
         else ''
       }}
 
-- name: Drift | Determine whether image drift check applies
+- name: Image drift | Check whether service has an image
   ansible.builtin.set_fact:
     docker_services_drift_image_enabled: >-
       {{
@@ -22,7 +22,7 @@
         and (docker_services_svc.image | string | trim | length) > 0
       }}
 
-- name: Drift | Skip services without an image
+- name: Image drift | Skip service without an image
   when:
     - not (docker_services_drift_image_enabled | bool)
   ansible.builtin.debug:
@@ -35,7 +35,7 @@
       }}
       because no image is defined.
 
-- name: Drift | Derive drift context
+- name: Image drift | Build comparison details
   when:
     - docker_services_drift_image_enabled | bool
   ansible.builtin.set_fact:
@@ -67,7 +67,7 @@
 # SWARM INSPECTION
 ################################
 
-- name: Drift | Inspect live Swarm service image
+- name: Image drift | Read live Swarm image
   when:
     - docker_services_drift_image_enabled | bool
     - (docker_services_drift_deploy_type | default('')) == 'swarm'
@@ -85,7 +85,7 @@
   delegate_to: "{{ docker_services_primary_manager }}"
   run_once: true
 
-- name: Drift | Normalise live Swarm service image
+- name: Image drift | Prepare live Swarm image for comparison
   when:
     - docker_services_drift_image_enabled | bool
     - (docker_services_drift_deploy_type | default('')) == 'swarm'
@@ -106,7 +106,7 @@
 # COMPOSE INSPECTION
 ################################
 
-- name: Drift | Derive Compose service context
+- name: Image drift | Build Compose lookup details
   when:
     - docker_services_drift_image_enabled | bool
     - (docker_services_drift_deploy_type | default('')) != 'swarm'
@@ -116,7 +116,7 @@
       /opt/stacks/{{ docker_services_stack_name_effective | string | trim }}-compose.yml
     docker_services_drift_compose_service_name: "{{ docker_services_service_name | string | trim }}"
 
-- name: Drift | Inspect live Compose container image
+- name: Image drift | Read live Compose image
   when:
     - docker_services_drift_image_enabled | bool
     - (docker_services_drift_deploy_type | default('')) != 'swarm'
@@ -154,7 +154,7 @@
   delegate_to: "{{ docker_services_deploy_host_effective }}"
   run_once: true
 
-- name: Drift | Normalise live Compose container image
+- name: Image drift | Prepare live Compose image for comparison
   when:
     - docker_services_drift_image_enabled | bool
     - (docker_services_drift_deploy_type | default('')) != 'swarm'
@@ -175,7 +175,7 @@
 # DRIFT STATE
 ################################
 
-- name: Drift | Determine image drift state
+- name: Image drift | Compare desired and live images
   when:
     - docker_services_drift_image_enabled | bool
   ansible.builtin.set_fact:
@@ -207,7 +207,7 @@
 # REPORTING
 ################################
 
-- name: Drift | Report missing runtime service/container
+- name: Image drift | Report missing service or container
   when:
     - docker_services_drift_image_enabled | bool
     - docker_services_drift_missing | bool
@@ -217,7 +217,7 @@
       Expected '{{ docker_services_drift_live_ref | default('unknown') }}'
       with image '{{ docker_services_drift_desired_image }}'.
 
-- name: Drift | Report image drift
+- name: Image drift | Report changed image
   when:
     - docker_services_drift_image_enabled | bool
     - docker_services_drift_image_changed | bool
@@ -228,7 +228,7 @@
       desired={{ docker_services_drift_desired_image_normalised }},
       current={{ docker_services_drift_live_image_normalised }}.
 
-- name: Drift | Report image is current
+- name: Image drift | Report current image
   when:
     - docker_services_drift_image_enabled | bool
     - not (docker_services_drift_detected | bool)
@@ -237,7 +237,7 @@
       Image is current for {{ docker_services_drift_label }}:
       {{ docker_services_drift_desired_image_normalised }}.
 
-- name: Drift | Add service to drift summary
+- name: Image drift | Add result to summary
   when:
     - docker_services_drift_image_enabled | bool
     - docker_services_drift_detected | bool

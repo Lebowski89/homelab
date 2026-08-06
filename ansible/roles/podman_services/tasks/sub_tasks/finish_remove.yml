@@ -1,0 +1,5 @@
+---
+
+- name: Removal | Apply pending systemd reloads
+  ansible.builtin.meta: flush_handlers
+  tags: [remove]

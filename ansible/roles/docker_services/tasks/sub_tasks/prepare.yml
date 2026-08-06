@@ -1,10 +1,10 @@
 ---
 
 ################################
-# PHASE 2: APPLICATION VALIDATION
+# APPLICATION CHECKS
 ################################
 
-- name: Prep - Application validation | Build runtime-neutral context
+- name: Prepare | Build application context
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -22,7 +22,7 @@
       host_defaults: "{{ docker_services_common_host_defaults }}"
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
-- name: Prep - Application validation | Validate current service
+- name: Prepare | Validate application settings
   no_log: true
   ansible.builtin.include_role:
     name: service_prepare
@@ -35,7 +35,7 @@
     service_prepare_context: "{{ docker_services_application_context }}"
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
-- name: Prep - Application validation | Snapshot reset outputs
+- name: Prepare | Save application validation results
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -46,22 +46,22 @@
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
 ################################
-# PHASE 3: RUNTIME CLEANUP
+# CLEANUP
 ################################
 
-- name: Prep - Cleanup | Derive cleanup flags
+- name: Cleanup | Read cleanup settings
   ansible.builtin.set_fact:
     docker_services_cleanup_enable: "{{ (docker_services_svc.cleanup.enable | default(true)) | bool }}"
     docker_services_cleanup_force: "{{ (docker_services_svc.cleanup.force | default(false)) | bool }}"
   tags: [remove, recreate]
 
-- name: Prep - Cleanup | Init cleaned-stacks tracker
+- name: Cleanup | Start cleaned-stack tracker
   when: docker_services_is_deploy_host
   ansible.builtin.set_fact:
     docker_services_stacks_cleaned: "{{ docker_services_stacks_cleaned | default([]) }}"
   tags: [remove, recreate]
 
-- name: Prep - Cleanup | Determine if stack cleanup should run
+- name: Cleanup | Decide whether cleanup is needed
   when: docker_services_is_deploy_host
   ansible.builtin.set_fact:
     docker_services_do_stack_cleanup: >-
@@ -74,18 +74,18 @@
       }}
   tags: [remove, recreate]
 
-- name: Prep - Cleanup | Remove existing stack
+- name: Cleanup | Remove existing deployment
   when:
     - not ansible_check_mode
     - docker_services_is_deploy_host
     - docker_services_do_stack_cleanup | bool
   ansible.builtin.include_tasks:
-    file: sub_tasks/prep/cleanup.yml
+    file: sub_tasks/cleanup.yml
     apply:
       tags: [remove, recreate]
   tags: [remove, recreate]
 
-- name: Prep - Cleanup | Mark stack as cleaned
+- name: Cleanup | Record cleaned stack
   when:
     - not ansible_check_mode
     - docker_services_is_deploy_host
@@ -96,10 +96,10 @@
   tags: [remove, recreate]
 
 ################################
-# PHASE 4: APPLICATION SECRET GENERATION
+# APPLICATION SECRETS
 ################################
 
-- name: Prep - Application secrets | Run runtime-neutral generation
+- name: Prepare | Generate application secrets
   when: docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
   no_log: true
   ansible.builtin.include_role:
@@ -113,7 +113,7 @@
     service_prepare_context: "{{ docker_services_application_context }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep - Application secrets | Snapshot portable generation outputs
+- name: Prepare | Save generated application secrets
   when: docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
   no_log: true
   diff: false
@@ -122,7 +122,7 @@
     docker_services_application_secret_declarations: "{{ service_prepare_generated_secret_declarations }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep - Application secrets | Build effective current-service secret inputs
+- name: Secrets | Combine shared and generated secrets
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -132,7 +132,7 @@
       {{ docker_services_secret_declarations + docker_services_application_secret_declarations }}
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep - Application secrets | Validate effective attachment metadata
+- name: Secrets | Validate service secret attachments
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -148,10 +148,10 @@
   tags: [deploy, update, recreate, bootstrap]
 
 ################################
-# PHASE 5: RUNTIME-NATIVE SECRETS
+# DOCKER SECRETS
 ################################
 
-- name: Prep - Secrets | Materialize Docker-native secrets
+- name: Secrets | Manage Docker secrets
   when:
     - not ansible_check_mode
     - docker_services_effective_secret_declarations | length > 0
@@ -162,7 +162,7 @@
           docker_services_is_deploy_host
         )
   ansible.builtin.include_tasks:
-    file: sub_tasks/prep/secrets.yml
+    file: sub_tasks/secrets/manage.yml
     apply:
       tags: [deploy, update, recreate, bootstrap]
       no_log: true
@@ -170,10 +170,10 @@
   tags: [deploy, update, recreate, bootstrap]
 
 ################################
-# PHASE 6: APPLICATION TEMPLATE VALUES
+# TEMPLATE VALUES
 ################################
 
-- name: Prep - Application templates | Derive runtime-neutral values
+- name: Prepare | Build application template values
   when: docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
   no_log: true
   ansible.builtin.include_role:
@@ -187,7 +187,7 @@
     service_prepare_context: "{{ docker_services_application_context }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep - Application templates | Snapshot portable values
+- name: Prepare | Save application template values
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -195,10 +195,10 @@
   tags: [deploy, update, recreate, bootstrap]
 
 ################################
-# PHASE 7: COMMON FILES AND INTEGRATIONS
+# SHARED FILES AND INTEGRATIONS
 ################################
 
-- name: Prep - Service common | Prepare files and Traefik integration
+- name: Prepare | Prepare shared files and integrations
   no_log: true
   ansible.builtin.include_role:
     name: service_common
@@ -223,7 +223,7 @@
     service_common_traefik_group: "1000"
   tags: [deploy, update, remove, recreate, bootstrap]
 
-- name: Prep - Swarm environment templates | Render templates
+- name: Prepare | Render Swarm environment templates
   when:
     - inventory_hostname == docker_services_controller_host
     - docker_services_stack_deploy_type == 'swarm'
@@ -250,10 +250,10 @@
   tags: [deploy, update, recreate, bootstrap]
 
 ################################
-# PHASE 8: APPLICATION CONFIGURATION / BOOTSTRAP
+# APPLICATION SETUP
 ################################
 
-- name: Prep - Application configuration | Apply runtime-neutral configuration
+- name: Prepare | Apply application configuration
   when: docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
   no_log: true
   ansible.builtin.include_role:
@@ -267,7 +267,7 @@
     service_prepare_context: "{{ docker_services_application_context }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Prep - Application bootstrap | Run explicit Plex bootstrap
+- name: Prepare | Run Plex bootstrap
   when:
     - service_prepare_handler == 'plex'
     - docker_services_is_deploy_host
@@ -283,15 +283,20 @@
     service_prepare_context: "{{ docker_services_application_context }}"
   tags: [never, bootstrap]
 
-- name: Prep - Swarm configs | Include tasker
+################################
+# SWARM CONFIGS
+################################
+
+- name: Swarm configs | Manage service configs
   when:
     - inventory_hostname == docker_services_controller_host
     - docker_services_svc.swarm_configs | default([]) | length > 0
   ansible.builtin.include_tasks:
-    file: sub_tasks/prep/swarm_configs/tasker.yml
+    file: sub_tasks/swarm_configs/manage.yml
     apply:
       tags: [deploy, update, recreate]
   vars:
-    swarm_configs: "{{ docker_services_svc.swarm_configs }}"
-    docker_services_deploy_host: "{{ docker_services_svc.swarm_config_host | default(docker_services_controller_host, true) }}"
+    docker_services_swarm_configs: "{{ docker_services_svc.swarm_configs }}"
+    docker_services_swarm_cfg_host: >-
+      {{ docker_services_svc.swarm_config_host | default(docker_services_controller_host, true) }}
   tags: [deploy, update, recreate]

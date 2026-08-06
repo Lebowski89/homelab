@@ -189,27 +189,27 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
     assert not (tmp_path / "system").exists()
     assert not runtime_marker.exists()
     for task_name in (
-        "Execution | Provision dedicated rootless account",
+        "Execution | Create dedicated rootless account",
         "Execution | Enable rootless account linger",
-        "Execution | Start rootless user manager",
-        "Podman services | Reconcile rootless bind source ownership",
-        "Prep | Render network Quadlet",
-        "Prep | Render protected environment file",
-        "Prep | Render container Quadlet",
-        "Lifecycle | Validate user Quadlets with Podman generator dry run",
-        "Lifecycle | Start user service for deploy/bootstrap",
-        "Lifecycle | Persist successful execution owner",
+        "Execution | Start rootless user systemd manager",
+        "Podman services | Set rootless bind mount ownership",
+        "Quadlets | Write network Quadlet",
+        "Quadlets | Write protected environment file",
+        "Quadlets | Write container Quadlet",
+        "Service | Validate user Quadlets with Podman generator",
+        "Service | Start user service",
+        "Service | Save successful execution state",
     ):
         assert task_results[task_name]["skipped"] is True
     for task_name in (
-        "Check render | Render managed network in memory",
-        "Check render | Render protected environment in memory",
-        "Check render | Render container in memory",
-        "Check render | Validate in-memory artifact syntax",
+        "Check mode | Build network Quadlet preview",
+        "Check mode | Build environment file preview",
+        "Check mode | Build container Quadlet preview",
+        "Check mode | Validate generated Quadlet previews",
     ):
         assert task_results[task_name].get("skipped", False) is False
         assert task_results[task_name].get("failed", False) is False
-    assert task_results["Check render | Report planned artifact change"]["changed"] is True
+    assert task_results["Check mode | Report planned file change"]["changed"] is True
     sanitized_plan = task_results["Publish sanitized check artifact plan"]["msg"]
     assert all(set(artifact) == {"kind", "path", "changed"} for artifact in sanitized_plan)
     assert {
@@ -370,7 +370,7 @@ def test_execution_state_version_contract_is_enforced_before_runtime_work(tmp_pa
                     },
                     {
                         "name": "Include execution state validation",
-                        "ansible.builtin.include_role": {"name": "podman_services", "tasks_from": "sub_tasks/execution_prepare"},
+                        "ansible.builtin.include_role": {"name": "podman_services", "tasks_from": "sub_tasks/execution"},
                     },
                     {
                         "name": "Include removal after validation",
@@ -457,7 +457,7 @@ def test_removal_requires_managed_marker_for_existing_rootful_and_rootless_files
                     },
                     {
                         "name": "Include execution ownership selection",
-                        "ansible.builtin.include_role": {"name": "podman_services", "tasks_from": "sub_tasks/execution_prepare"},
+                        "ansible.builtin.include_role": {"name": "podman_services", "tasks_from": "sub_tasks/execution"},
                     },
                     {
                         "name": "Include safe removal",
@@ -539,7 +539,7 @@ def test_versionless_cleanup_ignores_unproven_resource_metadata_but_version_two_
                         },
                         {
                             "name": "Include execution ownership selection",
-                            "ansible.builtin.include_role": {"name": "podman_services", "tasks_from": "sub_tasks/execution_prepare"},
+                            "ansible.builtin.include_role": {"name": "podman_services", "tasks_from": "sub_tasks/execution"},
                         },
                         {
                             "name": "Include version-aware removal",
@@ -671,7 +671,7 @@ def test_remove_and_drift_materialize_the_persisted_active_owner(
                             "name": "Include execution ownership selection",
                             "ansible.builtin.include_role": {
                                 "name": "podman_services",
-                                "tasks_from": "sub_tasks/execution_prepare",
+                                "tasks_from": "sub_tasks/execution",
                             },
                         },
                         {
@@ -694,7 +694,7 @@ def test_remove_and_drift_materialize_the_persisted_active_owner(
                             "when": "podman_services_common_action == 'drift'",
                             "ansible.builtin.include_role": {
                                 "name": "podman_services",
-                                "tasks_from": "sub_tasks/drift",
+                                "tasks_from": "sub_tasks/image_drift",
                             },
                         },
                         {
@@ -792,7 +792,7 @@ def test_drift_uses_the_persisted_rootless_owner_runtime_environment(tmp_path):
                             "name": "Include drift classification",
                             "ansible.builtin.include_role": {
                                 "name": "podman_services",
-                                "tasks_from": "sub_tasks/drift",
+                                "tasks_from": "sub_tasks/image_drift",
                             },
                         },
                         {

@@ -1,13 +1,13 @@
 ---
 
-- name: Compose - Swarm Configs | Ensure docker_services_service_name is set
+- name: Compose configs | Validate service name
   ansible.builtin.assert:
     that:
       - docker_services_service_name is defined
       - docker_services_service_name | string | trim | length > 0
     fail_msg: "docker_services_service_name must be set before the configs sub-tasks"
 
-- name: Compose - Swarm Configs | Ensure configs_list is a list
+- name: Compose configs | Validate config list
   ansible.builtin.assert:
     that:
       - configs_list is defined
@@ -16,7 +16,7 @@
       - configs_list | length > 0
     fail_msg: "configs_list must be a non-empty list of config mount specs."
 
-- name: Compose - Swarm Configs | Resolve effective config sources
+- name: Compose configs | Resolve config names
   ansible.builtin.set_fact:
     docker_services_configs_list_effective: >-
       {%- set out = [] -%}
@@ -38,7 +38,7 @@
       {%- endfor -%}
       {{ out }}
 
-- name: Compose - Swarm Configs | Attach configs to service
+- name: Compose configs | Add configs to service
   ansible.builtin.set_fact:
     docker_services_compose_services: >-
       {{

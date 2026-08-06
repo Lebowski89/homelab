@@ -1,6 +1,6 @@
 ---
 
-- name: Compose - Sysctls | Validate input
+- name: Compose sysctls | Validate settings
   ansible.builtin.assert:
     that:
       - docker_services_service_name is defined
@@ -9,7 +9,7 @@
       - sysctls_dict is mapping
     fail_msg: "sysctls_dict must be a mapping for service '{{ docker_services_service_name | default(role_prefix) }}'."
 
-- name: Compose - Sysctls | Normalize sysctls dict
+- name: Compose sysctls | Read sysctl values
   ansible.builtin.set_fact:
     docker_services_sysctls_clean: >-
       {%- set out = {} -%}
@@ -20,7 +20,7 @@
       {%- endfor -%}
       {{ out }}
 
-- name: Compose - Sysctls | Attach sysctls to service
+- name: Compose sysctls | Add sysctls to service
   when: (docker_services_sysctls_clean | length) > 0
   ansible.builtin.set_fact:
     docker_services_compose_services: >-

@@ -1,6 +1,6 @@
 ---
 
-- name: Init | Normalize role interface vars (compat with old names)
+- name: Initialize | Accept legacy role variable names
   ansible.builtin.set_fact:
     docker_services_service_cfg: "{{ docker_services_service_cfg | default(service_cfg, true) }}"
     docker_services_service_target: "{{ docker_services_service_target | default(service_target, true) }}"
@@ -8,7 +8,7 @@
     docker_services_service_cfg_found: "{{ docker_services_service_cfg_found | default(service_cfg_found, true) }}"
   tags: [remove, drift]
 
-- name: Init | Ensure docker_services_service_cfg is provided
+- name: Initialize | Validate service configuration input
   ansible.builtin.assert:
     that:
       - docker_services_service_cfg is defined
@@ -19,12 +19,12 @@
       without a targets key.
   tags: [remove, drift]
 
-- name: Init | Use catalog-resolved service config
+- name: Initialize | Load service configuration
   ansible.builtin.set_fact:
     docker_services_svc: "{{ docker_services_service_cfg }}"
   tags: [remove, drift]
 
-- name: Init | Validate dispatch-owned common context
+- name: Initialize | Validate shared service context
   no_log: true
   diff: false
   ansible.builtin.assert:
@@ -41,7 +41,7 @@
     fail_msg: "docker_services requires the current dispatch host's validated common service context."
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
-- name: Init | Reset per-service common snapshots
+- name: Initialize | Reset per-service state
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -55,7 +55,7 @@
     docker_services_application_bootstrap_requests: {}
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
-- name: Init | Snapshot dispatch-owned common context
+- name: Initialize | Load shared service context
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -65,7 +65,7 @@
     docker_services_controller_host: "{{ docker_services_common_context.controller_host }}"
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
-- name: Init | Validate Docker secret attachment metadata before cleanup
+- name: Initialize | Validate Docker secret attachments
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -80,7 +80,7 @@
       }}
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Init | Attach common resolved environment
+- name: Initialize | Add resolved environment to service
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -88,7 +88,7 @@
       {{ docker_services_svc | combine({'environment': docker_services_resolved_environment}, recursive=false) }}
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
-- name: Init | Determine whether schema validation should run
+- name: Initialize | Decide whether service schema validation is needed
   ansible.builtin.set_fact:
     docker_services_validate_enabled: >-
       {{
@@ -104,11 +104,15 @@
       }}
   tags: [remove, drift]
 
-- name: Init | Validate normalized service config
+- name: Initialize | Validate service schema
   when: docker_services_validate_enabled | bool
-  ansible.builtin.include_tasks: sub_tasks/init/validate.yml
+  ansible.builtin.include_tasks:
+    file: sub_tasks/validate/service.yml
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
 
-- name: Init | Derive common service context
+- name: Initialize | Set service name, deploy type, deploy host, and action
   ansible.builtin.set_fact:
     docker_services_service_name: >-
       {{ docker_services_svc.name | default(docker_services_role_prefix, true) | string | trim }}
@@ -125,13 +129,13 @@
       }}
   tags: [remove, drift]
 
-- name: Init | Derive stack name
+- name: Initialize | Set stack name
   ansible.builtin.set_fact:
     docker_services_stack_name: >-
       {{ docker_services_svc.stack | default(docker_services_service_name, true) | string | trim }}
   tags: [remove, drift]
 
-- name: Init | Derive effective deploy host
+- name: Initialize | Choose deploy host
   ansible.builtin.set_fact:
     docker_services_deploy_host_effective: >-
       {{
@@ -141,7 +145,7 @@
       }}
   tags: [remove, drift]
 
-- name: Init | Derive effective stack key
+- name: Initialize | Choose stack key
   ansible.builtin.set_fact:
     docker_services_stack_name_effective: >-
       {{
@@ -151,7 +155,7 @@
       }}
   tags: [remove, drift]
 
-- name: Init | Derive effective filesystem hosts
+- name: Initialize | Choose filesystem hosts
   ansible.builtin.set_fact:
     docker_services_fs_hosts_effective: >-
       {{
@@ -161,7 +165,7 @@
       }}
   tags: [remove, drift]
 
-- name: Init | Expand filesystem hosts if a group name was provided
+- name: Initialize | Expand filesystem host group
   when:
     - docker_services_fs_hosts_effective | length == 1
     - docker_services_fs_hosts_effective[0] in groups
@@ -169,12 +173,12 @@
     docker_services_fs_hosts_effective: "{{ groups[docker_services_fs_hosts_effective[0]] | list }}"
   tags: [remove, drift]
 
-- name: Init | De-dupe filesystem hosts
+- name: Initialize | Remove duplicate filesystem hosts
   ansible.builtin.set_fact:
     docker_services_fs_hosts_effective: "{{ docker_services_fs_hosts_effective | unique | list }}"
   tags: [remove, drift]
 
-- name: Init | Validate effective filesystem hosts
+- name: Initialize | Validate filesystem hosts
   ansible.builtin.assert:
     that:
       - docker_services_fs_host is string
@@ -189,12 +193,12 @@
     label: "{{ docker_services_fs_host | default('EMPTY') }}"
   tags: [remove, drift]
 
-- name: Init | Initialize runtime-neutral container host defaults
+- name: Initialize | Reset container host defaults
   ansible.builtin.set_fact:
     docker_services_common_host_defaults: {}
   tags: [remove, drift]
 
-- name: Init | Build runtime-neutral container host defaults
+- name: Initialize | Build container host defaults
   ansible.builtin.set_fact:
     docker_services_common_host_defaults: >-
       {{
@@ -210,7 +214,7 @@
     loop_var: docker_services_common_target_host
   tags: [remove, drift]
 
-- name: Init | Assert container deploy has a single deploy.host
+- name: Initialize | Require one host for standalone Docker
   when: (docker_services_stack_deploy_type | string | trim) != 'swarm'
   ansible.builtin.assert:
     that:
@@ -222,7 +226,7 @@
       Got: {{ docker_services_deploy_host }}
   tags: [remove, drift]
 
-- name: Init | Determine if this host should build/deploy compose artifacts
+- name: Initialize | Check whether this host builds Compose
   ansible.builtin.set_fact:
     docker_services_is_deploy_host: "{{ inventory_hostname == docker_services_deploy_host_effective }}"
   tags: [remove]

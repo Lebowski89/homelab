@@ -1,6 +1,6 @@
 ---
 
-- name: Image | Pull exact image when allowed
+- name: Image | Pull configured container image
   when:
     - not ansible_check_mode
     - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
@@ -15,7 +15,7 @@
   register: podman_services_image_pull
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Image | Compute restart requirement
+- name: Image | Decide whether service restart is needed
   ansible.builtin.set_fact:
     podman_services_requires_restart: >-
       {{

@@ -1,19 +1,19 @@
 ---
 
-- name: Compose - Env | Ensure docker_services_service_name is set
+- name: Compose environment | Validate service name
   ansible.builtin.assert:
     that:
       - docker_services_service_name is defined
       - docker_services_service_name | string | trim | length > 0
     fail_msg: "docker_services_service_name must be set before calling this helper"
 
-- name: Compose - Env | Ensure environment_action is valid
+- name: Compose environment | Validate update action
   ansible.builtin.assert:
     that:
       - environment_action | default('append') in ['append', 'replace', 'append_unique']
     fail_msg: "environment_action must be 'append', 'replace', or 'append_unique'"
 
-- name: Compose - Env | Normalize environment inputs
+- name: Compose environment | Read environment values
   ansible.builtin.set_fact:
     docker_services_env_action: "{{ environment_action | default('append', true) | string | trim }}"
     docker_services_env_new: "{{ environment_vars | default({}, true) }}"
@@ -25,7 +25,7 @@
         | default({}, true)
       }}
 
-- name: Compose - Env | Build final environment dict
+- name: Compose environment | Build final environment
   ansible.builtin.set_fact:
     docker_services_env_final: >-
       {{
@@ -40,7 +40,7 @@
         )
       }}
 
-- name: Compose - Env | Attach environment to service
+- name: Compose environment | Add environment to service
   ansible.builtin.set_fact:
     docker_services_compose_services: >-
       {{

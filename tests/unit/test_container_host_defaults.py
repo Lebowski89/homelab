@@ -288,7 +288,9 @@ all:
 
     - name: Resolve Docker defaults for the filesystem host
       when: inventory_hostname == 'manager'
-      ansible.builtin.include_tasks: {REPO_ROOT / "ansible/roles/docker_services/tasks/_init.yml"}
+      ansible.builtin.include_role:
+        name: docker_services
+        tasks_from: sub_tasks/init
       vars:
         docker_services_service_cfg:
           enabled: true
@@ -325,7 +327,9 @@ all:
 
     - name: Resolve Docker defaults for the next service
       when: inventory_hostname == 'manager'
-      ansible.builtin.include_tasks: {REPO_ROOT / "ansible/roles/docker_services/tasks/_init.yml"}
+      ansible.builtin.include_role:
+        name: docker_services
+        tasks_from: sub_tasks/init
       vars:
         docker_services_service_cfg:
           enabled: true
@@ -362,7 +366,9 @@ all:
 
     - name: Resolve Podman defaults for the same host
       when: inventory_hostname == 'storage'
-      ansible.builtin.include_tasks: {REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/init.yml"}
+      ansible.builtin.include_role:
+        name: podman_services
+        tasks_from: sub_tasks/init
       vars:
         podman_services_execution_state_dir: /var/lib/podman-services
         podman_services_rootless_home_root: /var/lib

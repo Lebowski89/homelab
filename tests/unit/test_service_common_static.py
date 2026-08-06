@@ -18,16 +18,16 @@ REMOVE_TASKS = (ROLE / "tasks/remove_integrations.yml").read_text()
 PLAYBOOK = Path("ansible/playbook.yml").read_text()
 GLOBAL_DISPATCH = Path("ansible/tasks/service_catalog_dispatch.yml").read_text()
 COMMON_PREFLIGHT = Path("ansible/tasks/service_catalog_common_preflight.yml").read_text()
-DOCKER_PREP = Path("ansible/roles/docker_services/tasks/_prep.yml").read_text()
-DOCKER_INIT = Path("ansible/roles/docker_services/tasks/_init.yml").read_text()
+DOCKER_PREP = Path("ansible/roles/docker_services/tasks/sub_tasks/prepare.yml").read_text()
+DOCKER_INIT = Path("ansible/roles/docker_services/tasks/sub_tasks/init.yml").read_text()
 PODMAN_MAIN = Path("ansible/roles/podman_services/tasks/main.yml").read_text()
 PODMAN_INIT = Path("ansible/roles/podman_services/tasks/sub_tasks/init.yml").read_text()
-PODMAN_PREP = Path("ansible/roles/podman_services/tasks/sub_tasks/prepare.yml").read_text()
+PODMAN_PREP = Path("ansible/roles/podman_services/tasks/sub_tasks/quadlets.yml").read_text()
 PODMAN_DISPATCH = Path("ansible/tasks/service_catalog_dispatch_podman.yml").read_text()
-DOCKER_SECRET_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prep/secrets.yml").read_text()
-PODMAN_SECRET_TASKS = Path("ansible/roles/podman_services/tasks/sub_tasks/secrets/materialize.yml").read_text()
-DOCKER_PREP_TASKS = Path("ansible/roles/docker_services/tasks/_prep.yml").read_text()
-DOCKER_COMPOSE_TASKS = Path("ansible/roles/docker_services/tasks/_compose.yml").read_text()
+DOCKER_SECRET_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/secrets/manage.yml").read_text()
+PODMAN_SECRET_TASKS = Path("ansible/roles/podman_services/tasks/sub_tasks/secrets/manage.yml").read_text()
+DOCKER_PREP_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prepare.yml").read_text()
+DOCKER_COMPOSE_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/compose.yml").read_text()
 COMMON_PATH_TASKS = (ROLE / "tasks/paths.yml").read_text()
 COMMON_COPY_TASKS = (ROLE / "tasks/copies.yml").read_text()
 COMMON_TEMPLATE_TASKS = (ROLE / "tasks/templates.yml").read_text()
@@ -35,7 +35,7 @@ COMMON_POSTGRES_TASKS = (ROLE / "tasks/postgres.yml").read_text()
 COMMON_INFISICAL_TASKS = (ROLE / "tasks/infisical.yml").read_text()
 DOCKER_MAIN_TASKS = Path("ansible/roles/docker_services/tasks/main.yml").read_text()
 DOCKER_DEPLOY_ALL_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/deploy/all.yml").read_text()
-DOCKER_DEPLOY_TASKS = Path("ansible/roles/docker_services/tasks/_deploy.yml").read_text()
+DOCKER_SAVE_STACK_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/save_stack.yml").read_text()
 DOCKER_DRIFT_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/drift/image.yml").read_text()
 DOCKER_ENV_FILE_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/compose/env_file.yml").read_text()
 AUTOBRR = Path("ansible/group_vars/all/services/autobrr.yml").read_text()
@@ -178,9 +178,7 @@ def test_infisical_lookup_and_schema_are_common_owned_without_adapter_wrappers()
 def test_docker_uses_normalized_service_and_effective_filesystem_hosts():
     assert 'service_common_service: "{{ docker_services_svc }}"' in DOCKER_PREP
     assert 'service_common_target_hosts: "{{ docker_services_fs_hosts_effective }}"' in DOCKER_PREP
-    prepare = next(
-        task for task in yaml.safe_load(DOCKER_PREP) if task["name"] == "Prep - Service common | Prepare files and Traefik integration"
-    )
+    prepare = next(task for task in yaml.safe_load(DOCKER_PREP) if task["name"] == "Prepare | Prepare shared files and integrations")
     assert "when" not in prepare
 
 
@@ -218,7 +216,7 @@ def test_common_filesystem_and_integration_work_has_explicit_delegation():
 def test_podman_translates_host_paths_and_keeps_quadlets_runtime_owned():
     assert "'paths': podman_services_service.host_paths" in PODMAN_MAIN
     assert "Ensure host data paths exist" not in PODMAN_PREP
-    assert "Render container Quadlet" in PODMAN_PREP
+    assert "Write container Quadlet" in PODMAN_PREP
 
 
 def test_legacy_traefik_file_is_removed_only_after_canonical_render():
@@ -244,12 +242,12 @@ def test_docker_batch_deployment_remains_after_service_loops():
 
 
 def test_native_secret_materialization_remains_adapter_owned():
-    assert "Reject empty secret values before materialization" in DOCKER_SECRET_TASKS
+    assert "Docker secrets | Reject empty secret values" in DOCKER_SECRET_TASKS
     assert "runtime secret creation was stopped" in DOCKER_SECRET_TASKS
-    assert "Create Docker Swarm secrets\n  no_log: true\n  diff: false" in DOCKER_SECRET_TASKS
-    assert "Write secret files on deploy host\n  no_log: true\n  diff: false" in DOCKER_SECRET_TASKS
+    assert "Docker secrets | Create required Swarm secrets\n  no_log: true\n  diff: false" in DOCKER_SECRET_TASKS
+    assert "Docker secrets | Write standalone secret files\n  no_log: true\n  diff: false" in DOCKER_SECRET_TASKS
     assert "community.docker.docker_secret" in DOCKER_SECRET_TASKS
-    assert 'path: "/opt/stacks/{{ docker_services_stack_name }}/secrets"' in DOCKER_SECRET_TASKS
+    assert 'path: "/opt/stacks/{{ docker_services_stack_name_effective }}/secrets"' in DOCKER_SECRET_TASKS
     assert "default('0600')" in DOCKER_SECRET_TASKS
     assert "docker_services_effective_secret_values | default({})" in DOCKER_SECRET_TASKS
     assert "values[declaration.var]" in DOCKER_SECRET_TASKS
@@ -263,14 +261,12 @@ def test_native_secret_materialization_remains_adapter_owned():
 
 def test_runtime_adapters_apply_canonical_secret_policy_without_logging_values():
     docker_tasks = yaml.safe_load(DOCKER_SECRET_TASKS)
-    inspect = next(task for task in docker_tasks if task["name"] == "Prep - Secrets | Inspect exact Docker Swarm secrets")
-    reject_unmanaged = next(
-        task for task in docker_tasks if task["name"] == "Prep - Secrets | Reject unmanaged existing secrets before reconciliation"
-    )
-    materialize = next(task for task in docker_tasks if task["name"] == "Prep - Secrets | Create Docker Swarm secrets")
-    write_file = next(task for task in docker_tasks if task["name"] == "Prep - Secrets | Write secret files on deploy host")
-    enforce_file = next(task for task in docker_tasks if task["name"] == "Prep - Secrets | Enforce secret file ownership and mode")
-    verify_file = next(task for task in docker_tasks if task["name"] == "Prep - Secrets | Verify secret paths exist and are files")
+    inspect = next(task for task in docker_tasks if task["name"] == "Docker secrets | Inspect existing Swarm secrets")
+    reject_unmanaged = next(task for task in docker_tasks if task["name"] == "Docker secrets | Protect unmanaged Swarm secrets")
+    materialize = next(task for task in docker_tasks if task["name"] == "Docker secrets | Create required Swarm secrets")
+    write_file = next(task for task in docker_tasks if task["name"] == "Docker secrets | Write standalone secret files")
+    enforce_file = next(task for task in docker_tasks if task["name"] == "Docker secrets | Enforce standalone secret permissions")
+    verify_file = next(task for task in docker_tasks if task["name"] == "Docker secrets | Verify standalone secret files")
 
     assert inspect["loop"] == "{{ docker_services_docker_secret_items }}"
     assert docker_tasks.index(reject_unmanaged) < docker_tasks.index(materialize)
@@ -463,15 +459,15 @@ def test_check_mode_preflight_is_common_owned_and_native_materialization_is_skip
 
 
 def test_docker_validates_attachment_metadata_before_materialization():
-    validate = DOCKER_INIT.index("Validate Docker secret attachment metadata before cleanup")
-    reject_empty = DOCKER_SECRET_TASKS.index("Reject empty secret values before materialization")
-    create_swarm = DOCKER_SECRET_TASKS.index("Create Docker Swarm secrets")
-    write_file = DOCKER_SECRET_TASKS.index("Write secret files on deploy host")
+    validate = DOCKER_INIT.index("Initialize | Validate Docker secret attachments")
+    reject_empty = DOCKER_SECRET_TASKS.index("Docker secrets | Reject empty secret values")
+    create_swarm = DOCKER_SECRET_TASKS.index("Docker secrets | Create required Swarm secrets")
+    write_file = DOCKER_SECRET_TASKS.index("Docker secrets | Write standalone secret files")
 
     assert "docker_services_secret_attachments" in DOCKER_INIT[validate:]
     assert reject_empty < create_swarm
     assert reject_empty < write_file
-    assert DOCKER_MAIN_TASKS.index("Init | Include tasks") < DOCKER_MAIN_TASKS.index("Prep | Include tasks")
+    assert DOCKER_MAIN_TASKS.index("Docker services | Initialize service") < DOCKER_MAIN_TASKS.index("Docker services | Prepare service")
 
 
 def test_dispatch_snapshots_common_context_before_adapter_owned_materialization():
@@ -497,7 +493,7 @@ def test_dispatch_snapshots_common_context_before_adapter_owned_materialization(
 
 def test_docker_canonical_no_new_privileges_uses_tagged_append_unique_list_helper():
     tasks = yaml.safe_load(DOCKER_COMPOSE_TASKS)
-    task = next(task for task in tasks if task["name"] == "Compose - Runtime | Add canonical no-new-privileges security option")
+    task = next(task for task in tasks if task["name"] == "Compose | Add no-new-privileges security option")
     include = task["ansible.builtin.include_tasks"]
 
     assert include["file"] == "sub_tasks/compose/list_field.yml"
@@ -533,13 +529,13 @@ def test_podman_dispatch_is_routed_from_the_single_global_iteration():
 
 def test_manager_owned_compose_and_drift_state_have_single_ordered_writers():
     compose_tasks = yaml.safe_load(DOCKER_COMPOSE_TASKS)
-    compose_init = next(task for task in compose_tasks if task["name"] == "Compose - Init | Ensure docker_services_compose_stacks exists")
-    deploy_tasks = yaml.safe_load(DOCKER_DEPLOY_TASKS)
-    persist = next(task for task in deploy_tasks if task["name"].startswith("Deploy | Persist compose into"))
+    compose_init = next(task for task in compose_tasks if task["name"] == "Compose | Load saved stack configurations")
+    save_stack_tasks = yaml.safe_load(DOCKER_SAVE_STACK_TASKS)
+    persist = next(task for task in save_stack_tasks if task["name"] == "Save stack | Store completed Compose configuration")
     drift_tasks = yaml.safe_load(DOCKER_DRIFT_TASKS)
-    drift_append = next(task for task in drift_tasks if task["name"] == "Drift | Add service to drift summary")
+    drift_append = next(task for task in drift_tasks if task["name"] == "Image drift | Add result to summary")
     docker_main = yaml.safe_load(DOCKER_MAIN_TASKS)
-    drift_include = next(task for task in docker_main if task["name"] == "Drift | Include image drift check")
+    drift_include = next(task for task in docker_main if task["name"] == "Docker services | Check image drift")
 
     for task in (compose_init, persist, drift_append):
         assert task["delegate_to"] == "{{ docker_services_primary_manager }}" or task["delegate_to"] == (
@@ -576,8 +572,8 @@ def test_common_resolution_precedes_adapter_cleanup_and_native_secret_materializ
     dispatch_preflight = GLOBAL_DISPATCH.index("Service catalog dispatch | Run common service preflight")
     docker_route = GLOBAL_DISPATCH.index("Service catalog dispatch | Process Docker entry")
     podman_route = GLOBAL_DISPATCH.index("Service catalog dispatch | Process Podman entry")
-    cleanup = DOCKER_PREP_TASKS.index("Prep - Cleanup | Remove existing stack")
-    native = DOCKER_PREP_TASKS.index("Prep - Secrets | Materialize Docker-native secrets")
+    cleanup = DOCKER_PREP_TASKS.index("Cleanup | Remove existing deployment")
+    native = DOCKER_PREP_TASKS.index("Secrets | Manage Docker secrets")
 
     assert dispatch_preflight < docker_route
     assert dispatch_preflight < podman_route
@@ -599,7 +595,7 @@ def test_autobrr_uses_canonical_environment_references_and_env_file_behavior_is_
 
 def test_value_bearing_runtime_render_paths_are_no_log_and_diff_safe():
     docker_main = yaml.safe_load(DOCKER_MAIN_TASKS)
-    for task_name in {"Compose | Include tasks", "Deploy | Include tasks"}:
+    for task_name in {"Docker services | Build Compose configuration", "Docker services | Save stack configuration"}:
         task = next(task for task in docker_main if task["name"] == task_name)
         assert task["no_log"] is True
         assert "diff" not in task
@@ -618,7 +614,7 @@ def test_value_bearing_runtime_render_paths_are_no_log_and_diff_safe():
     assert snapshot["diff"] is False
 
     podman_main = yaml.safe_load(PODMAN_MAIN)
-    traefik = next(task for task in podman_main if "Include Traefik tasks" in task["name"])
+    traefik = next(task for task in podman_main if task["name"] == "Podman services | Configure Traefik integration")
     for task in (traefik,):
         assert task["no_log"] is True
         assert "diff" not in task
@@ -634,9 +630,9 @@ def test_required_docker_dynamic_includes_propagate_selection_tags():
             "Service catalog dispatch | Run common service preflight",
             {"deploy", "update", "remove", "recreate", "bootstrap", "drift"},
         ),
-        (DOCKER_MAIN_TASKS, "Prep | Include tasks", {"deploy", "update", "remove", "recreate", "bootstrap"}),
-        (DOCKER_PREP_TASKS, "Prep - Secrets | Materialize Docker-native secrets", {"deploy", "update", "recreate", "bootstrap"}),
-        (DOCKER_DEPLOY_ALL_TASKS, "Deploy - All | Deploy each stack", {"deploy", "update", "recreate"}),
+        (DOCKER_MAIN_TASKS, "Docker services | Prepare service", {"deploy", "update", "remove", "recreate", "bootstrap"}),
+        (DOCKER_PREP_TASKS, "Secrets | Manage Docker secrets", {"deploy", "update", "recreate", "bootstrap"}),
+        (DOCKER_DEPLOY_ALL_TASKS, "Deploy | Deploy each saved stack", {"deploy", "update", "recreate"}),
     ]
 
     for content, task_name, required in expectations:
