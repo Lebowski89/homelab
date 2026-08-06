@@ -43,7 +43,7 @@ portainer:
       ################################
       # IMAGE/PROCESS
       ################################
-      image: portainer/agent:2.43.0-linux-amd64-alpine
+      image: portainer/agent:2.44.0-linux-amd64-alpine
       ################################
       # FILESYSTEM
       ################################
