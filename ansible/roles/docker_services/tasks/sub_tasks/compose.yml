@@ -508,4 +508,3 @@
     deploy_update_config: "{{ docker_services_svc.deploy.update_config | default({}, true) }}"
     deploy_rollback_config: "{{ docker_services_svc.deploy.rollback_config | default({}, true) }}"
     deploy_resources: "{{ docker_services_svc.deploy.resources | default({}, true) }}"
-
