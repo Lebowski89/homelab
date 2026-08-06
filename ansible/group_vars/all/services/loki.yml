@@ -12,7 +12,7 @@ loki:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: grafana/loki:3.7.3
+  image: grafana/loki:3.7.4
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
   command:
