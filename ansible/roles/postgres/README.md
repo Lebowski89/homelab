@@ -64,7 +64,7 @@
 | [postgres_backup_timer_randomized_delay_sec](defaults/main.yml#L71)   | str | `30m` |    
 | [postgres_backup_local_retention_days](defaults/main.yml#L72)   | int | `7` |    
 | [postgres_backup_failed_retention_days](defaults/main.yml#L73)   | int | `2` |    
-| [postgres_backup_metrics_file](defaults/main.yml#L74)   | str | `/var/lib/node_exporter/textfile_collector/postgres_logical_backup.prom` |    
+| [postgres_backup_metrics_file](defaults/main.yml#L74)   | str | `/var/lib/node_exporter/textfile_collector_postgres/postgres_logical_backup.prom` |    
 | [postgres_restore_dbs_dir](defaults/main.yml#L80)   | str | `/tmp` |    
 | [postgres_restore_dbs_drop_existing](defaults/main.yml#L81)   | bool | `True` |    
 | [postgres_restore_dbs_map](defaults/main.yml#L86)   | list | `[]` |    
@@ -88,6 +88,7 @@
 | Ensure dedicated PostgreSQL Uptime Kuma role exists | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,u,p,t,i,m,e,_,k,u,m,a |
 | Configure PostgreSQL logical backups | ansible.builtin.include_tasks | True | postgres,postgres_backup,postgres_backup_setup,postgres_backup_run |
 | Run PostgreSQL logical backup manually | ansible.builtin.include_tasks | True | postgres_backup,postgres_backup_run |
+| Report PostgreSQL logical backup manual check-mode plan | ansible.builtin.debug | True | postgres_backup,postgres_backup_run |
 | Restore PostgreSQL single database from pg_dump backup | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,r,e,s,t,o,r,e |
 | Reset PostgreSQL/Patroni node destructively | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,n,u,k,e,_,n,o,d,e |
 | Fix database ownership and privileges | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,f,i,x,_,o,w,n,e,r |
@@ -182,7 +183,7 @@
 | ---- | ------ | -------------- | -----|
 | Logical backup ¦ Validate configuration | ansible.builtin.assert | False |  |
 | Logical backup ¦ Create protected backup root | ansible.builtin.file | False |  |
-| Logical backup ¦ Ensure textfile collector directory exists | ansible.builtin.file | False |  |
+| Logical backup ¦ Ensure dedicated metrics directory exists | ansible.builtin.file | False |  |
 | Logical backup ¦ Pre-create narrowly writable metrics file | ansible.builtin.file | False |  |
 | Logical backup ¦ Install host-local runner | ansible.builtin.template | False |  |
 | Logical backup ¦ Manage systemd service and timer | ansible.builtin.include_role | False |  |
