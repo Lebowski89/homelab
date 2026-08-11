@@ -1,0 +1,30 @@
+[Unit]
+Description={{ systemd_jobs_job.description | default(systemd_jobs_job.name) }}
+{% if systemd_jobs_job.service.wants is defined and systemd_jobs_job.service.wants | length > 0 %}
+Wants={{ systemd_jobs_job.service.wants | join(' ') }}
+{% endif %}
+{% if systemd_jobs_job.service.after is defined and systemd_jobs_job.service.after | length > 0 %}
+After={{ systemd_jobs_job.service.after | join(' ') }}
+{% endif %}
+
+[Service]
+Type={{ systemd_jobs_job.service.type | default('oneshot') }}
+ExecStart={{ systemd_jobs_job.service.exec_start }}
+{% if systemd_jobs_job.service.user is defined %}
+User={{ systemd_jobs_job.service.user }}
+{% endif %}
+{% if systemd_jobs_job.service.group is defined %}
+Group={{ systemd_jobs_job.service.group }}
+{% endif %}
+{% if systemd_jobs_job.service.working_directory is defined %}
+WorkingDirectory={{ systemd_jobs_job.service.working_directory }}
+{% endif %}
+{% if systemd_jobs_job.service.nice is defined %}
+Nice={{ systemd_jobs_job.service.nice }}
+{% endif %}
+{% if systemd_jobs_job.service.io_scheduling_class is defined %}
+IOSchedulingClass={{ systemd_jobs_job.service.io_scheduling_class }}
+{% endif %}
+{% if systemd_jobs_job.service.io_scheduling_priority is defined %}
+IOSchedulingPriority={{ systemd_jobs_job.service.io_scheduling_priority }}
+{% endif %}
