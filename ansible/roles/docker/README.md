@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/15 |
+| Readme update        | 2026/08/11 |
 
 
 
@@ -121,14 +121,12 @@
 
 #### File: tasks/sub_tasks/prune/timer.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Docker prune timer ¦ Set whether host supports systemd timers | ansible.builtin.set_fact | False |
-| Docker prune timer ¦ Skip non-systemd hosts | ansible.builtin.debug | True |
-| Docker prune timer ¦ Install safe prune script | ansible.builtin.copy | True |
-| Docker prune timer ¦ Install systemd service | ansible.builtin.copy | True |
-| Docker prune timer ¦ Install systemd timer | ansible.builtin.copy | True |
-| Docker prune timer ¦ Enable timer | ansible.builtin.systemd | True |
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Docker prune timer ¦ Set whether host supports systemd timers | ansible.builtin.set_fact | False |  |
+| Docker prune timer ¦ Skip non-systemd hosts | ansible.builtin.debug | True |  |
+| Docker prune timer ¦ Install safe prune script | ansible.builtin.copy | True |  |
+| Docker prune timer ¦ Manage systemd job | ansible.builtin.include_role | True |  |
 
 #### File: tasks/sub_tasks/prune/unraid_user_script.yml
 
