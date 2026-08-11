@@ -36,7 +36,7 @@
 
 - name: Ensure dedicated PostgreSQL admin role exists
   when:
-    - inventory_hostname == docker_services_primary_manager
+    - inventory_hostname == services_controller_host
     - ansible_run_tags is not defined
       or 'all' in ansible_run_tags
       or 'postgres_admin' in ansible_run_tags
@@ -57,7 +57,7 @@
 
 - name: Ensure dedicated PostgreSQL Uptime Kuma role exists
   when:
-    - inventory_hostname == docker_services_primary_manager
+    - inventory_hostname == services_controller_host
     - ansible_run_tags is not defined
       or 'all' in ansible_run_tags
       or 'postgres_admin_uptime_kuma' in ansible_run_tags
@@ -67,19 +67,60 @@
       tags: postgres_admin_uptime_kuma
   tags: postgres_admin_uptime_kuma
 
-- name: Backup PostgreSQL single database with pg_dump
+- name: Configure PostgreSQL logical backups
   when:
-    - inventory_hostname == docker_services_primary_manager
-    - "'postgres_backup' in ansible_run_tags"
+    - "'tags_postgres' in group_names"
+  ansible.builtin.include_tasks:
+    file: sub_tasks/backup_setup.yml
+    apply:
+      tags:
+        - postgres
+        - postgres_backup
+        - postgres_backup_setup
+        - postgres_backup_run
+  tags:
+    - postgres
+    - postgres_backup
+    - postgres_backup_setup
+    - postgres_backup_run
+
+- name: Run PostgreSQL logical backup manually
+  when:
+    - inventory_hostname == services_controller_host
+    - not ansible_check_mode
+    - >-
+      ansible_run_tags | default([])
+      | intersect(['postgres_backup', 'postgres_backup_run'])
+      | length > 0
   ansible.builtin.include_tasks:
     file: sub_tasks/backup.yml
     apply:
-      tags: postgres_backup
-  tags: postgres_backup
+      tags:
+        - postgres_backup
+        - postgres_backup_run
+  tags:
+    - postgres_backup
+    - postgres_backup_run
+
+- name: Report PostgreSQL logical backup manual check-mode plan
+  when:
+    - inventory_hostname == services_controller_host
+    - ansible_check_mode
+    - >-
+      ansible_run_tags | default([])
+      | intersect(['postgres_backup', 'postgres_backup_run'])
+      | length > 0
+  ansible.builtin.debug:
+    msg: >-
+      Check mode: would discover the current Patroni leader and invoke the
+      installed leader-gated PostgreSQL logical backup runner.
+  tags:
+    - postgres_backup
+    - postgres_backup_run
 
 - name: Restore PostgreSQL single database from pg_dump backup
   when:
-    - inventory_hostname == docker_services_primary_manager
+    - inventory_hostname == services_controller_host
     - "'postgres_restore' in ansible_run_tags"
   ansible.builtin.include_tasks:
     file: sub_tasks/restore.yml
@@ -99,7 +140,7 @@
 
 - name: Fix database ownership and privileges
   when:
-    - inventory_hostname == docker_services_primary_manager
+    - inventory_hostname == services_controller_host
     - "'postgres_admin_fix_owner' in ansible_run_tags"
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/fix_owner.yml

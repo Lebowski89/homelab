@@ -36,7 +36,7 @@
     status_code: 200
   register: postgres_patroni_cluster_state
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
   retries: 12
   delay: 5
   until: >-
@@ -58,13 +58,13 @@
         | list
       }}
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Restore DBs | Determine Patroni leader member
   ansible.builtin.set_fact:
     postgres_patroni_leader_member: "{{ postgres_patroni_leader_candidates[0] }}"
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Restore DBs | Assert Patroni leader was found
   ansible.builtin.assert:
@@ -76,7 +76,7 @@
       Could not determine Patroni leader from REST API.
       Cluster response: {{ postgres_patroni_cluster_state.json | default({}) }}
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Restore DBs | Build resolved restore map
   ansible.builtin.set_fact:
@@ -89,7 +89,7 @@
         path: {{ (entry.file if (entry.file | regex_search('^/')) else (postgres_restore_dbs_dir ~ '/' ~ entry.file)) | to_json }}
       {% endfor %}
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Restore DBs | Check requested dump files exist
   ansible.builtin.stat:
@@ -111,7 +111,7 @@
   loop_control:
     label: "{{ item.item.db }} -> {{ item.item.path }}"
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Restore DBs | Drop databases if requested
   ansible.builtin.shell: |
@@ -178,4 +178,4 @@
       restore_dir: "{{ postgres_restore_dbs_dir }}"
       databases: "{{ postgres_restore_dbs_map_resolved | map(attribute='db') | list }}"
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"

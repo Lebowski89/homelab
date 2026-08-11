@@ -9,7 +9,7 @@
     status_code: 200
   register: postgres_patroni_cluster_state
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
   check_mode: false
   retries: 12
   delay: 5
@@ -32,13 +32,13 @@
         | list
       }}
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Patroni dynamic pg_hba | Determine Patroni leader member
   ansible.builtin.set_fact:
     postgres_patroni_leader_member: "{{ postgres_patroni_leader_candidates[0] }}"
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Patroni dynamic pg_hba | Assert Patroni leader was found
   ansible.builtin.assert:
@@ -47,7 +47,7 @@
       - postgres_patroni_leader_member.host is defined
     fail_msg: "Could not determine Patroni leader from REST API."
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Patroni dynamic pg_hba | Build desired pg_hba rules
   ansible.builtin.set_fact:
@@ -73,7 +73,7 @@
       - {{ rule }}
       {% endfor %}
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Patroni dynamic pg_hba | Read current dynamic config from leader
   # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
@@ -84,7 +84,7 @@
     status_code: 200
   register: postgres_patroni_dynamic_config
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Patroni dynamic pg_hba | Determine whether pg_hba update is needed
   ansible.builtin.set_fact:
@@ -96,7 +96,7 @@
         ) != postgres_patroni_pg_hba_desired
       }}
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Patroni dynamic pg_hba | Patch DCS config with desired pg_hba
   # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
@@ -111,7 +111,7 @@
     return_content: true
   register: postgres_patroni_dynamic_config_patch
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
   when: postgres_patroni_pg_hba_needs_restart | bool
 
 - name: Patroni dynamic pg_hba | Restart patroni on all postgres nodes if DCS config changed
@@ -128,7 +128,7 @@
     timeout: 60
     delay: 2
   when: postgres_patroni_pg_hba_needs_restart | bool
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Patroni dynamic pg_hba | Wait for live pg_hba.conf to contain HAProxy rules on all nodes
   ansible.builtin.command:

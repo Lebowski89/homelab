@@ -73,49 +73,34 @@
       docker system df || true
       echo "Docker prune safe cleanup completed"
 
-- name: Docker prune timer | Install systemd service
+- name: Docker prune timer | Manage systemd job
   when: docker_prune_timer_systemd_supported | bool
-  ansible.builtin.copy:
-    dest: "/etc/systemd/system/{{ docker_prune_timer_name }}.service"
-    owner: root
-    group: root
-    mode: "0644"
-    content: |
-      [Unit]
-      Description=Safe Docker prune cleanup
-      Wants=docker.service
-      After=docker.service
-
-      [Service]
-      Type=oneshot
-      ExecStart={{ docker_prune_script_path }}
-      Nice=10
-      IOSchedulingClass=best-effort
-      IOSchedulingPriority=7
-
-- name: Docker prune timer | Install systemd timer
-  when: docker_prune_timer_systemd_supported | bool
-  ansible.builtin.copy:
-    dest: "/etc/systemd/system/{{ docker_prune_timer_name }}.timer"
-    owner: root
-    group: root
-    mode: "0644"
-    content: |
-      [Unit]
-      Description=Run safe Docker prune cleanup
-
-      [Timer]
-      OnCalendar={{ docker_prune_timer_on_calendar }}
-      RandomizedDelaySec={{ docker_prune_timer_randomized_delay_sec }}
-      Persistent=true
-
-      [Install]
-      WantedBy=timers.target
-
-- name: Docker prune timer | Enable timer
-  when: docker_prune_timer_systemd_supported | bool
-  ansible.builtin.systemd:
-    name: "{{ docker_prune_timer_name }}.timer"
-    enabled: true
-    state: started
-    daemon_reload: true
+  ansible.builtin.include_role:
+    name: systemd_jobs
+    apply:
+      tags:
+        - docker_prune_timer
+        - systemd_jobs
+  vars:
+    systemd_jobs: # noqa var-naming[no-role-prefix]
+      - name: "{{ docker_prune_timer_name }}"
+        description: Safe Docker prune cleanup
+        service:
+          type: oneshot
+          exec_start: "{{ docker_prune_script_path }}"
+          wants:
+            - docker.service
+          after:
+            - docker.service
+          nice: 10
+          io_scheduling_class: best-effort
+          io_scheduling_priority: 7
+        timer:
+          description: Run safe Docker prune cleanup
+          on_calendar: "{{ docker_prune_timer_on_calendar }}"
+          randomized_delay_sec: "{{ docker_prune_timer_randomized_delay_sec }}"
+          persistent: true
+        enabled: true
+  tags:
+    - docker_prune_timer
+    - systemd_jobs

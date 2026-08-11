@@ -363,7 +363,6 @@ def test_empty_infisical_map_skips_live_lookup_and_keeps_empty_dispatch_owned_ou
   connection: local
   gather_facts: false
   vars:
-    docker_services_primary_manager: manager
     service_catalog_controller_host: manager
     infisical_lookup_default_params: must-not-be-used
   tasks:

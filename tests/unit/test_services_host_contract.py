@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import subprocess
 import sys
 from collections import Counter
@@ -9,7 +10,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from jinja2 import StrictUndefined
+from jinja2 import Environment, StrictUndefined, meta
 from jinja2.nativetypes import NativeEnvironment
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -22,6 +23,7 @@ PODMAN_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_podma
 CATALOG_FILTER_PATH = REPO_ROOT / "ansible/filter_plugins/service_catalog.py"
 DOCKER_INIT_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/init.yml"
 COMMON_VALIDATE_PATH = REPO_ROOT / "ansible/roles/service_common/tasks/validate.yml"
+POSTGRES_ROLE_PATH = REPO_ROOT / "ansible/roles/postgres"
 
 LEGACY_SERVICE_HOST_VARIABLES = {
     "docker_services_primary_manager",
@@ -34,6 +36,7 @@ SWARM_HOST_CONSTRAINTS = {
     "node.labels.docker_services_host == docker_services_plex_host",
     "node.labels.docker_services_host == docker_services_unraid_host",
 }
+DOCKER_SERVICES_VARIABLE_PATTERN = re.compile(r"\bdocker_services_[a-z0-9_]+\b")
 
 
 def load_module(path: Path, name: str):
@@ -49,13 +52,25 @@ SERVICE_CATALOG = load_module(CATALOG_FILTER_PATH, "services_host_contract_catal
 
 def load_services():
     services = {}
-    for path in sorted(SERVICES_DIR.glob("*.yml")):
+    for path in sorted((*SERVICES_DIR.glob("*.yml"), *SERVICES_DIR.glob("*.yaml"))):
         services.update(yaml.safe_load(path.read_text()) or {})
     return services
 
 
 def task_named(tasks, name: str):
     return next(task for task in tasks if task.get("name") == name)
+
+
+def scalar_strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            yield from scalar_strings(key)
+            yield from scalar_strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from scalar_strings(item)
 
 
 def render(value, **variables):
@@ -108,9 +123,6 @@ def run_host_contract(
           - services_controller_host == 'controller'
           - services_storage_host == 'storage'
           - docker_services_primary_manager == services_controller_host
-          - docker_services_plex_host == services_plex_host
-          - docker_services_unraid_host == services_storage_host
-          - docker_services_log_root == services_log_root
 """
     )
     environment = os.environ.copy()
@@ -149,7 +161,7 @@ def test_repository_service_host_contract_uses_real_netbox_groups_and_explicit_p
 
 def test_all_real_services_use_neutral_host_variables_and_keep_explicit_runtimes():
     offenders = {}
-    for path in sorted(SERVICES_DIR.glob("*.yml")):
+    for path in sorted((*SERVICES_DIR.glob("*.yml"), *SERVICES_DIR.glob("*.yaml"))):
         source_without_swarm_label_values = path.read_text()
         for constraint in SWARM_HOST_CONSTRAINTS:
             source_without_swarm_label_values = source_without_swarm_label_values.replace(constraint, "")
@@ -223,7 +235,7 @@ def test_real_service_hosts_paths_and_base_target_inheritance_are_preserved():
 
 def test_adapter_aliases_flow_only_from_canonical_values_and_podman_has_no_docker_coupling():
     contract = yaml.safe_load(HOST_CONTRACT_TASKS.read_text())
-    aliases = task_named(contract, "Service host contract | Publish Docker adapter compatibility aliases")["ansible.builtin.set_fact"]
+    aliases = task_named(contract, "Service host contract | Publish Docker adapter compatibility alias")["ansible.builtin.set_fact"]
     docker_vars = task_named(
         yaml.safe_load(DOCKER_DISPATCH_PATH.read_text()),
         "Service catalog dispatch | Include Docker service role",
@@ -235,9 +247,6 @@ def test_adapter_aliases_flow_only_from_canonical_values_and_podman_has_no_docke
 
     assert aliases == {
         "docker_services_primary_manager": "{{ services_controller_host }}",
-        "docker_services_plex_host": "{{ services_plex_host }}",
-        "docker_services_unraid_host": "{{ services_storage_host }}",
-        "docker_services_log_root": "{{ services_log_root }}",
     }
     assert {key: docker_vars[key] for key in aliases} == aliases
     assert podman_vars["podman_services_controller_host"] == "{{ services_controller_host }}"
@@ -253,6 +262,30 @@ def test_adapter_aliases_flow_only_from_canonical_values_and_podman_has_no_docke
         REPO_ROOT / "ansible/roles/podman_services/defaults/main.yml",
     ]
     assert all(legacy not in path.read_text() for path in neutral_orchestration_paths for legacy in LEGACY_SERVICE_HOST_VARIABLES)
+
+
+def test_postgres_role_has_no_docker_services_variable_dependencies():
+    offenders = {}
+    for path in sorted(POSTGRES_ROLE_PATH.rglob("*")):
+        if path.suffix in {".yaml", ".yml"}:
+            document = yaml.safe_load(path.read_text())
+            dependencies = {
+                match.group(0) for scalar in scalar_strings(document) for match in DOCKER_SERVICES_VARIABLE_PATTERN.finditer(scalar)
+            }
+        elif path.suffix == ".j2":
+            parsed_template = Environment().parse(path.read_text())
+            dependencies = {
+                variable
+                for variable in meta.find_undeclared_variables(parsed_template)
+                if DOCKER_SERVICES_VARIABLE_PATTERN.fullmatch(variable)
+            }
+        else:
+            continue
+
+        if dependencies:
+            offenders[str(path.relative_to(POSTGRES_ROLE_PATH))] = sorted(dependencies)
+
+    assert offenders == {}
 
 
 def test_host_contract_precedes_other_preparation_and_linear_dispatch_remains_explicit():
@@ -312,7 +345,7 @@ def test_singleton_group_validation_rejects_zero_or_multiple_matches(
 
     assert result.returncode != 0
     assert "require exactly one host" in output
-    assert "Publish Docker adapter compatibility aliases" not in output
+    assert "Publish Docker adapter compatibility alias" not in output
 
 
 def test_canonical_host_validation_rejects_unknown_explicit_plex_before_aliases(tmp_path: Path):
@@ -326,4 +359,4 @@ def test_canonical_host_validation_rejects_unknown_explicit_plex_before_aliases(
 
     assert result.returncode != 0
     assert "must be non-empty active inventory hosts" in output
-    assert "Publish Docker adapter compatibility aliases" not in output
+    assert "Publish Docker adapter compatibility alias" not in output

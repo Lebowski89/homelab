@@ -851,7 +851,7 @@ def test_real_adminer_renders_a_managed_network_and_host_published_quadlet():
     )
 
     assert "ContainerName=adminer" in rendered
-    assert "Image=docker.io/library/adminer:5.4.2" in rendered
+    assert f"Image={normalized['image']}" in rendered
     assert "Network=adminer.network" in rendered
     assert "PublishPort=192.0.2.10:18080:8080/tcp" in rendered
     assert "After=network-online.target" in rendered

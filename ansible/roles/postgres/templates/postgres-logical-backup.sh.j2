@@ -1,0 +1,338 @@
+#!/usr/bin/env bash
+set -euo pipefail
+umask 077
+set -E
+
+readonly BACKUP_ROOT='{{ postgres_backup_root }}'
+readonly METRICS_FILE='{{ postgres_backup_metrics_file }}'
+readonly POSTGRES_BIN_DIR='{{ postgres_patroni_bin_dir }}'
+readonly POSTGRES_PORT='{{ postgres_patroni_postgres_port }}'
+readonly PATRONI_MEMBER='{{ postgres_patroni_node_name }}'
+readonly PATRONI_LEADER_URL='http://127.0.0.1:{{ postgres_patroni_restapi_port }}/leader'
+readonly COMPLETED_RETENTION_DAYS='{{ postgres_backup_local_retention_days }}'
+readonly FAILED_RETENTION_DAYS='{{ postgres_backup_failed_retention_days }}'
+readonly LOCK_FILE="$BACKUP_ROOT/.backup.lock"
+
+readonly PSQL="$POSTGRES_BIN_DIR/psql"
+readonly PG_DUMP="$POSTGRES_BIN_DIR/pg_dump"
+readonly PG_DUMPALL="$POSTGRES_BIN_DIR/pg_dumpall"
+readonly PG_RESTORE="$POSTGRES_BIN_DIR/pg_restore"
+
+export PATH="$POSTGRES_BIN_DIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PGPASSFILE=/dev/null
+unset PGHOST PGUSER PGSERVICE PGSERVICEFILE
+
+ATTEMPT_EPOCH="$(date +%s)"
+RUN_START_EPOCH="$ATTEMPT_EPOCH"
+STAGING_DIR=""
+BACKUP_PROMOTED=0
+REPORT_FAILURE_METRICS=1
+LAST_SUCCESS_EPOCH=0
+LAST_SUCCESS_SIZE=0
+LAST_SUCCESS_DATABASE_COUNT=0
+
+log() {
+  printf '%s\n' "$*"
+}
+
+fail() {
+  log "ERROR: $*" >&2
+  return 1
+}
+
+existing_metric() {
+  local metric_name="$1"
+  local default_value="$2"
+  local metric_value=""
+
+  if [[ -r "$METRICS_FILE" ]]; then
+    metric_value="$(awk -v name="$metric_name" '$1 == name { print $2; exit }' "$METRICS_FILE")"
+  fi
+
+  if [[ "$metric_value" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$metric_value"
+  else
+    printf '%s\n' "$default_value"
+  fi
+}
+
+write_metrics() {
+  local attempt_epoch="$1"
+  local success_epoch="$2"
+  local run_success="$3"
+  local duration_seconds="$4"
+  local size_bytes="$5"
+  local database_count="$6"
+  local metrics_tmp
+
+  metrics_tmp="$(mktemp "${METRICS_FILE}.tmp.XXXXXX")"
+
+  {
+    printf '# HELP postgres_backup_last_attempt_timestamp_seconds Unix timestamp of the last leader backup attempt.\n'
+    printf '# TYPE postgres_backup_last_attempt_timestamp_seconds gauge\n'
+    printf 'postgres_backup_last_attempt_timestamp_seconds %s\n' "$attempt_epoch"
+    printf '# HELP postgres_backup_last_success_timestamp_seconds Unix timestamp of the last completed verified backup.\n'
+    printf '# TYPE postgres_backup_last_success_timestamp_seconds gauge\n'
+    printf 'postgres_backup_last_success_timestamp_seconds %s\n' "$success_epoch"
+    printf '# HELP postgres_backup_last_run_success Whether the last leader backup attempt completed successfully.\n'
+    printf '# TYPE postgres_backup_last_run_success gauge\n'
+    printf 'postgres_backup_last_run_success %s\n' "$run_success"
+    printf '# HELP postgres_backup_last_duration_seconds Duration of the last leader backup attempt.\n'
+    printf '# TYPE postgres_backup_last_duration_seconds gauge\n'
+    printf 'postgres_backup_last_duration_seconds %s\n' "$duration_seconds"
+    printf '# HELP postgres_backup_last_size_bytes Size of the last completed backup directory.\n'
+    printf '# TYPE postgres_backup_last_size_bytes gauge\n'
+    printf 'postgres_backup_last_size_bytes %s\n' "$size_bytes"
+    printf '# HELP postgres_backup_last_database_count Databases in the last completed backup.\n'
+    printf '# TYPE postgres_backup_last_database_count gauge\n'
+    printf 'postgres_backup_last_database_count %s\n' "$database_count"
+  } > "$metrics_tmp"
+  chmod 0644 "$metrics_tmp"
+  mv -f -- "$metrics_tmp" "$METRICS_FILE"
+}
+
+on_error() {
+  local exit_status="$?"
+  local failure_epoch
+  local duration_seconds
+
+  trap - ERR
+  set +e
+  failure_epoch="$(date +%s)"
+  duration_seconds=$((failure_epoch - RUN_START_EPOCH))
+
+  if (( REPORT_FAILURE_METRICS == 1 )); then
+    write_metrics \
+      "$ATTEMPT_EPOCH" \
+      "$LAST_SUCCESS_EPOCH" \
+      0 \
+      "$duration_seconds" \
+      "$LAST_SUCCESS_SIZE" \
+      "$LAST_SUCCESS_DATABASE_COUNT"
+  fi
+
+  if (( BACKUP_PROMOTED == 1 )); then
+    log "PostgreSQL logical backup was promoted, but post-promotion processing failed." >&2
+  elif [[ -n "$STAGING_DIR" ]]; then
+    log "PostgreSQL logical backup failed; partial data remains in $STAGING_DIR" >&2
+  else
+    log "PostgreSQL logical backup failed before staging began." >&2
+  fi
+  exit "$exit_status"
+}
+
+cleanup_expired_directories() {
+  local retention_days="$1"
+  local name_pattern="$2"
+  local retention_class="$3"
+  local candidates_file
+  local candidate
+  local candidate_name
+
+  candidates_file="$(mktemp "$BACKUP_ROOT/.retention-$retention_class.XXXXXX")"
+  if ! find "$BACKUP_ROOT" \
+    -mindepth 1 \
+    -maxdepth 1 \
+    -type d \
+    -mtime "+$retention_days" \
+    -print0 > "$candidates_file"; then
+    rm -f -- "$candidates_file"
+    fail "Unable to enumerate expired $retention_class backup directories."
+  fi
+
+  while IFS= read -r -d '' candidate; do
+    candidate_name="$(basename -- "$candidate")"
+    if [[ "$candidate_name" =~ $name_pattern ]] && [[ "$candidate" == "$BACKUP_ROOT/"* ]]; then
+      log "Removing expired $retention_class backup directory $candidate"
+      rm -rf -- "$candidate"
+    fi
+  done < "$candidates_file"
+
+  rm -f -- "$candidates_file"
+}
+
+trap on_error ERR
+
+[[ "$BACKUP_ROOT" == /* && "$BACKUP_ROOT" != "/" ]] || fail "Backup root must be a specific absolute path."
+[[ "$METRICS_FILE" == /* ]] || fail "Metrics file must be an absolute path."
+[[ "$COMPLETED_RETENTION_DAYS" =~ ^[0-9]+$ ]] || fail "Completed retention must be a non-negative integer."
+[[ "$FAILED_RETENTION_DAYS" =~ ^[0-9]+$ ]] || fail "Failed retention must be a non-negative integer."
+
+LAST_SUCCESS_EPOCH="$(existing_metric postgres_backup_last_success_timestamp_seconds 0)"
+LAST_SUCCESS_SIZE="$(existing_metric postgres_backup_last_size_bytes 0)"
+LAST_SUCCESS_DATABASE_COUNT="$(existing_metric postgres_backup_last_database_count 0)"
+
+patroni_http_code=""
+if patroni_http_code="$(curl \
+  --silent \
+  --show-error \
+  --output /dev/null \
+  --write-out '%{http_code}' \
+  --connect-timeout 5 \
+  --max-time 10 \
+  "$PATRONI_LEADER_URL")"; then
+  :
+else
+  fail "Unable to query local Patroni leader endpoint."
+fi
+
+case "$patroni_http_code" in
+  200)
+    log "Local Patroni node is leader; backup will proceed."
+    ;;
+  503)
+    REPORT_FAILURE_METRICS=0
+    trap - ERR
+    log "Local Patroni node is not leader; backup skipped."
+    log "POSTGRES_BACKUP_RESULT=SKIPPED_NOT_LEADER"
+    exit 0
+    ;;
+  *)
+    fail "Local Patroni leader endpoint returned unexpected HTTP status $patroni_http_code."
+    ;;
+esac
+
+exec 9>"$LOCK_FILE"
+if ! flock --nonblock 9; then
+  REPORT_FAILURE_METRICS=0
+  trap - ERR
+  log "Another local PostgreSQL logical backup is already running; backup skipped."
+  log "POSTGRES_BACKUP_RESULT=SKIPPED_OVERLAP"
+  exit 0
+fi
+
+write_metrics \
+  "$ATTEMPT_EPOCH" \
+  "$LAST_SUCCESS_EPOCH" \
+  0 \
+  0 \
+  "$LAST_SUCCESS_SIZE" \
+  "$LAST_SUCCESS_DATABASE_COUNT"
+
+START_TIMESTAMP="$(date -u +%Y%m%dT%H%M%SZ)"
+START_ISO="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+FINAL_DIR="$BACKUP_ROOT/$START_TIMESTAMP"
+readonly START_TIMESTAMP
+readonly START_ISO
+readonly FINAL_DIR
+STAGING_DIR="$BACKUP_ROOT/.staging-$START_TIMESTAMP-$$"
+
+[[ ! -e "$FINAL_DIR" ]] || fail "Final backup directory already exists: $FINAL_DIR"
+mkdir -p -- "$STAGING_DIR/databases"
+log "PostgreSQL logical backup started in $STAGING_DIR"
+
+unsafe_database_count="$("$PSQL" \
+  --no-psqlrc \
+  --tuples-only \
+  --no-align \
+  --set=ON_ERROR_STOP=1 \
+  --port="$POSTGRES_PORT" \
+  --dbname=postgres \
+  --command="SELECT count(*) FROM pg_database WHERE datallowconn AND NOT datistemplate AND datname !~ '^[A-Za-z0-9_.-]+\$';")"
+[[ "$unsafe_database_count" =~ ^[0-9]+$ ]] || fail "Database filename-safety query returned an invalid result."
+(( unsafe_database_count == 0 )) || fail "One or more database names cannot be represented safely as backup filenames."
+
+database_list_file="$STAGING_DIR/.database-list"
+"$PSQL" \
+  --no-psqlrc \
+  --tuples-only \
+  --no-align \
+  --set=ON_ERROR_STOP=1 \
+  --port="$POSTGRES_PORT" \
+  --dbname=postgres \
+  --command="SELECT datname FROM pg_database WHERE datallowconn AND NOT datistemplate ORDER BY datname;" \
+  > "$database_list_file"
+
+mapfile -t DATABASES < "$database_list_file"
+DATABASE_COUNT="${{ '{' }}#DATABASES[@]}"
+rm -f -- "$database_list_file"
+(( DATABASE_COUNT > 0 )) || fail "Database discovery returned no eligible databases."
+log "Discovered $DATABASE_COUNT connectable non-template databases."
+
+server_version="$("$PSQL" \
+  --no-psqlrc \
+  --tuples-only \
+  --no-align \
+  --set=ON_ERROR_STOP=1 \
+  --port="$POSTGRES_PORT" \
+  --dbname=postgres \
+  --command='SHOW server_version;')"
+
+for database in "${DATABASES[@]}"; do
+  [[ "$database" =~ ^[A-Za-z0-9_.-]+$ ]] || fail "Discovered database name failed filename validation."
+  dump_path="$STAGING_DIR/databases/$database.dump"
+  log "Dumping database $database"
+  "$PG_DUMP" \
+    --port="$POSTGRES_PORT" \
+    --dbname="$database" \
+    --format=custom \
+    --file="$dump_path"
+
+  log "Verifying database archive $database"
+  "$PG_RESTORE" --list "$dump_path" > /dev/null
+done
+
+log "Capturing PostgreSQL globals"
+"$PG_DUMPALL" \
+  --port="$POSTGRES_PORT" \
+  --globals-only \
+  --file="$STAGING_DIR/globals.sql"
+
+completion_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+{
+  printf 'start_utc=%s\n' "$START_ISO"
+  printf 'completion_utc=%s\n' "$completion_iso"
+  printf 'hostname=%s\n' "$(hostname)"
+  printf 'patroni_member=%s\n' "$PATRONI_MEMBER"
+  printf 'postgres_server_version=%s\n' "$server_version"
+  printf 'backup_format=custom\n'
+  printf 'database_count=%s\n' "$DATABASE_COUNT"
+  printf 'globals_captured=yes\n'
+  printf 'archive_verification=pg_restore_list_passed\n'
+  for database in "${DATABASES[@]}"; do
+    printf 'database=%s\tdump=databases/%s.dump\n' "$database" "$database"
+  done
+} > "$STAGING_DIR/manifest.txt"
+
+(
+  cd "$STAGING_DIR"
+  find databases -type f -name '*.dump' -print0 \
+    | LC_ALL=C sort -z \
+    | xargs -0 -r sha256sum
+  sha256sum globals.sql manifest.txt
+) > "$STAGING_DIR/SHA256SUMS"
+log "Backup checksums complete."
+
+touch "$STAGING_DIR/SUCCESS"
+mv -- "$STAGING_DIR" "$FINAL_DIR"
+STAGING_DIR=""
+BACKUP_PROMOTED=1
+
+cleanup_expired_directories \
+  "$COMPLETED_RETENTION_DAYS" \
+  '^[0-9]{8}T[0-9]{6}Z$' \
+  completed
+cleanup_expired_directories \
+  "$FAILED_RETENTION_DAYS" \
+  '^\.staging-[0-9]{8}T[0-9]{6}Z-[0-9]+$' \
+  staging
+log "Local backup retention complete."
+
+success_epoch="$(date +%s)"
+duration_seconds=$((success_epoch - RUN_START_EPOCH))
+backup_size_bytes="$(du --summarize --bytes "$FINAL_DIR" | awk '{ print $1 }')"
+[[ "$backup_size_bytes" =~ ^[0-9]+$ ]] || fail "Unable to determine completed backup size."
+
+write_metrics \
+  "$ATTEMPT_EPOCH" \
+  "$success_epoch" \
+  1 \
+  "$duration_seconds" \
+  "$backup_size_bytes" \
+  "$DATABASE_COUNT"
+
+REPORT_FAILURE_METRICS=0
+trap - ERR
+log "PostgreSQL logical backup completed at $FINAL_DIR"
+log "Backup duration: $duration_seconds seconds; size: $backup_size_bytes bytes."
+log "POSTGRES_BACKUP_RESULT=$FINAL_DIR"

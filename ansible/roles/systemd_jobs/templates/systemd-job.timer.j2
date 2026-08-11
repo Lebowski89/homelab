@@ -1,0 +1,12 @@
+[Unit]
+Description={{ systemd_jobs_job.timer.description | default(systemd_jobs_job.description | default(systemd_jobs_job.name)) }}
+
+[Timer]
+OnCalendar={{ systemd_jobs_job.timer.on_calendar }}
+{% if systemd_jobs_job.timer.randomized_delay_sec is defined %}
+RandomizedDelaySec={{ systemd_jobs_job.timer.randomized_delay_sec }}
+{% endif %}
+Persistent={{ systemd_jobs_job.timer.persistent | default(true) | string | lower }}
+
+[Install]
+WantedBy=timers.target

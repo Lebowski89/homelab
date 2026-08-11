@@ -1,0 +1,182 @@
+---
+
+- name: Systemd jobs | Validate job collection
+  ansible.builtin.assert:
+    that:
+      - systemd_jobs is sequence
+      - systemd_jobs is not string
+      - systemd_jobs is not mapping
+    fail_msg: "systemd_jobs must be a list of scheduled systemd job mappings."
+  tags: systemd_jobs
+
+- name: Systemd jobs | Validate job entries are mappings
+  ansible.builtin.assert:
+    that:
+      - systemd_jobs_job is mapping
+    fail_msg: "Each systemd_jobs entry must be a mapping."
+  loop: "{{ systemd_jobs }}"
+  loop_control:
+    loop_var: systemd_jobs_job
+    label: "{{ systemd_jobs_job.name | default('invalid-job') }}"
+  tags: systemd_jobs
+
+- name: Systemd jobs | Validate job names
+  ansible.builtin.assert:
+    that:
+      - systemd_jobs_job.name is defined
+      - systemd_jobs_job.name is string
+      - systemd_jobs_job.name | default('') | trim | length > 0
+      - (systemd_jobs_job.name | default('')) is match('^[A-Za-z0-9_.@-]+$')
+    fail_msg: >-
+      Each systemd job requires a non-empty name containing only
+      letters, digits, underscores, periods, @, and hyphens.
+  loop: "{{ systemd_jobs }}"
+  loop_control:
+    loop_var: systemd_jobs_job
+    label: "{{ systemd_jobs_job.name | default('unnamed-job') }}"
+  tags: systemd_jobs
+
+- name: Systemd jobs | Validate unique job names
+  ansible.builtin.assert:
+    that:
+      - systemd_jobs | map(attribute='name') | list | unique | length == systemd_jobs | length
+    fail_msg: "systemd_jobs names must be unique."
+  tags: systemd_jobs
+
+- name: Systemd jobs | Validate service and timer mappings
+  ansible.builtin.assert:
+    that:
+      - systemd_jobs_job.keys() | difference(['name', 'description', 'service', 'timer', 'enabled']) | length == 0
+      - systemd_jobs_job.service is defined
+      - systemd_jobs_job.service is mapping
+      - systemd_jobs_job.timer is defined
+      - systemd_jobs_job.timer is mapping
+    fail_msg: >-
+      Systemd job {{ systemd_jobs_job.name }} must contain service and timer
+      mappings and may use only the documented top-level fields.
+  loop: "{{ systemd_jobs }}"
+  loop_control:
+    loop_var: systemd_jobs_job
+    label: "{{ systemd_jobs_job.name }}"
+  tags: systemd_jobs
+
+- name: Systemd jobs | Validate supported job fields
+  ansible.builtin.assert:
+    that:
+      - systemd_jobs_job.description is not defined or systemd_jobs_job.description is string
+      - systemd_jobs_job.enabled is not defined or systemd_jobs_job.enabled is boolean
+      - systemd_jobs_job.service.keys()
+        | difference([
+          'type',
+          'exec_start',
+          'user',
+          'group',
+          'working_directory',
+          'wants',
+          'after',
+          'nice',
+          'io_scheduling_class',
+          'io_scheduling_priority'
+        ])
+        | length == 0
+      - systemd_jobs_job.service.exec_start is defined
+      - systemd_jobs_job.service.exec_start | default('') is string
+      - systemd_jobs_job.service.exec_start | default('') | trim | length > 0
+      - systemd_jobs_job.service.type | default('oneshot') is string
+      - systemd_jobs_job.service.type | default('oneshot') | trim | length > 0
+      - systemd_jobs_job.service.user is not defined or systemd_jobs_job.service.user is string
+      - systemd_jobs_job.service.group is not defined or systemd_jobs_job.service.group is string
+      - systemd_jobs_job.service.working_directory is not defined or systemd_jobs_job.service.working_directory is string
+      - systemd_jobs_job.service.wants is not defined
+        or (systemd_jobs_job.service.wants is sequence and systemd_jobs_job.service.wants is not string)
+      - systemd_jobs_job.service.after is not defined
+        or (systemd_jobs_job.service.after is sequence and systemd_jobs_job.service.after is not string)
+      - systemd_jobs_job.service.nice is not defined
+        or (systemd_jobs_job.service.nice is integer and systemd_jobs_job.service.nice is not boolean)
+      - systemd_jobs_job.service.io_scheduling_class is not defined
+        or systemd_jobs_job.service.io_scheduling_class is string
+      - systemd_jobs_job.service.io_scheduling_priority is not defined
+        or (
+          systemd_jobs_job.service.io_scheduling_priority is integer
+          and systemd_jobs_job.service.io_scheduling_priority is not boolean
+        )
+      - systemd_jobs_job.timer.keys()
+        | difference(['description', 'on_calendar', 'randomized_delay_sec', 'persistent'])
+        | length == 0
+      - systemd_jobs_job.timer.on_calendar is defined
+      - systemd_jobs_job.timer.on_calendar | default('') is string
+      - systemd_jobs_job.timer.on_calendar | default('') | trim | length > 0
+      - systemd_jobs_job.timer.description is not defined or systemd_jobs_job.timer.description is string
+      - systemd_jobs_job.timer.randomized_delay_sec is not defined
+        or systemd_jobs_job.timer.randomized_delay_sec is string
+      - systemd_jobs_job.timer.persistent is not defined or systemd_jobs_job.timer.persistent is boolean
+    fail_msg: "Systemd job {{ systemd_jobs_job.name }} contains missing, invalid, or unsupported fields."
+  loop: "{{ systemd_jobs }}"
+  loop_control:
+    loop_var: systemd_jobs_job
+    label: "{{ systemd_jobs_job.name }}"
+  tags: systemd_jobs
+
+- name: Systemd jobs | Validate systemd host
+  when: systemd_jobs | length > 0
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.service_mgr | default('') == 'systemd'
+    fail_msg: "systemd_jobs requires ansible_facts.service_mgr to be systemd."
+  tags: systemd_jobs
+
+- name: Systemd jobs | Render service units
+  ansible.builtin.template:
+    src: systemd-job.service.j2
+    dest: "/etc/systemd/system/{{ systemd_jobs_job.name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ systemd_jobs }}"
+  loop_control:
+    loop_var: systemd_jobs_job
+    label: "{{ systemd_jobs_job.name }}.service"
+  register: systemd_jobs_service_unit_results
+  tags: systemd_jobs
+
+- name: Systemd jobs | Render timer units
+  ansible.builtin.template:
+    src: systemd-job.timer.j2
+    dest: "/etc/systemd/system/{{ systemd_jobs_job.name }}.timer"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ systemd_jobs }}"
+  loop_control:
+    loop_var: systemd_jobs_job
+    label: "{{ systemd_jobs_job.name }}.timer"
+  register: systemd_jobs_timer_unit_results
+  tags: systemd_jobs
+
+- name: Systemd jobs | Reload systemd for changed units
+  when:
+    - not ansible_check_mode
+    - >-
+      (systemd_jobs_service_unit_results.results | default([]) | selectattr('changed') | list | length > 0)
+      or
+      (systemd_jobs_timer_unit_results.results | default([]) | selectattr('changed') | list | length > 0)
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  tags: systemd_jobs
+
+- name: Systemd jobs | Apply timer lifecycle
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: "{{ systemd_jobs_timer_result.systemd_jobs_job.name }}.timer"
+    enabled: "{{ systemd_jobs_timer_result.systemd_jobs_job.enabled | default(true) }}"
+    state: >-
+      {{
+        'stopped'
+        if not (systemd_jobs_timer_result.systemd_jobs_job.enabled | default(true))
+        else ('restarted' if systemd_jobs_timer_result.changed else 'started')
+      }}
+  loop: "{{ systemd_jobs_timer_unit_results.results | default([]) }}"
+  loop_control:
+    loop_var: systemd_jobs_timer_result
+    label: "{{ systemd_jobs_timer_result.systemd_jobs_job.name }}.timer"
+  tags: systemd_jobs

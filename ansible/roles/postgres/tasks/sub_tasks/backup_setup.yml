@@ -1,0 +1,109 @@
+---
+
+- name: Logical backup | Validate configuration
+  ansible.builtin.assert:
+    that:
+      - postgres_backup_root is string
+      - postgres_backup_root is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_script_path is string
+      - postgres_backup_script_path is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_metrics_file is string
+      - postgres_backup_metrics_file is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_patroni_bin_dir is string
+      - postgres_patroni_bin_dir is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_patroni_node_name is string
+      - postgres_patroni_node_name is match('^[A-Za-z0-9_.-]+$')
+      - postgres_patroni_postgres_port is integer
+      - postgres_patroni_postgres_port is not boolean
+      - postgres_patroni_postgres_port >= 1
+      - postgres_patroni_postgres_port <= 65535
+      - postgres_patroni_restapi_port is integer
+      - postgres_patroni_restapi_port is not boolean
+      - postgres_patroni_restapi_port >= 1
+      - postgres_patroni_restapi_port <= 65535
+      - postgres_backup_manage_timer is boolean
+      - postgres_backup_timer_name is string
+      - postgres_backup_timer_name is match('^[A-Za-z0-9_.@-]+$')
+      - postgres_backup_timer_on_calendar is string
+      - postgres_backup_timer_on_calendar | trim | length > 0
+      - postgres_backup_timer_randomized_delay_sec is string
+      - postgres_backup_timer_randomized_delay_sec | trim | length > 0
+      - postgres_backup_local_retention_days is integer
+      - postgres_backup_local_retention_days is not boolean
+      - postgres_backup_local_retention_days >= 0
+      - postgres_backup_failed_retention_days is integer
+      - postgres_backup_failed_retention_days is not boolean
+      - postgres_backup_failed_retention_days >= 0
+    fail_msg: PostgreSQL logical backup configuration is invalid.
+
+- name: Logical backup | Create protected backup root
+  ansible.builtin.file:
+    path: "{{ postgres_backup_root }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0750"
+
+- name: Logical backup | Ensure dedicated metrics directory exists
+  ansible.builtin.file:
+    path: "{{ postgres_backup_metrics_file | dirname }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0755"
+
+- name: Logical backup | Pre-create narrowly writable metrics file
+  ansible.builtin.file:
+    path: "{{ postgres_backup_metrics_file }}"
+    state: touch
+    owner: postgres
+    group: postgres
+    mode: "0644"
+    access_time: preserve
+    modification_time: preserve
+
+- name: Logical backup | Install host-local runner
+  ansible.builtin.template:
+    src: postgres-logical-backup.sh.j2
+    dest: "{{ postgres_backup_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Logical backup | Manage systemd service and timer
+  ansible.builtin.include_role:
+    name: systemd_jobs
+    apply:
+      tags:
+        - postgres
+        - systemd_jobs
+        - postgres_backup
+        - postgres_backup_setup
+        - postgres_backup_run
+  vars:
+    systemd_jobs: # noqa var-naming[no-role-prefix]
+      - name: "{{ postgres_backup_timer_name }}"
+        description: PostgreSQL leader logical backup
+        service:
+          type: oneshot
+          exec_start: "{{ postgres_backup_script_path }}"
+          user: postgres
+          group: postgres
+          working_directory: "{{ postgres_backup_root }}"
+          after:
+            - patroni.service
+          nice: 10
+          io_scheduling_class: best-effort
+          io_scheduling_priority: 7
+        timer:
+          description: Run PostgreSQL leader logical backup
+          on_calendar: "{{ postgres_backup_timer_on_calendar }}"
+          randomized_delay_sec: "{{ postgres_backup_timer_randomized_delay_sec }}"
+          persistent: true
+        enabled: "{{ postgres_backup_manage_timer }}"
+  tags:
+    - postgres
+    - systemd_jobs
+    - postgres_backup
+    - postgres_backup_setup
+    - postgres_backup_run

@@ -87,7 +87,6 @@ def test_live_lookup_loop_accumulates_all_values_on_dispatch_host_and_resets_nex
   gather_facts: false
   strategy: linear
   vars:
-    docker_services_primary_manager: manager
     service_catalog_controller_host: manager
     infisical_lookup_default_params: {{}}
   tasks:
@@ -200,7 +199,6 @@ def test_failed_infisical_preflight_stops_before_destructive_cleanup(tmp_path):
   gather_facts: false
   strategy: linear
   vars:
-    docker_services_primary_manager: manager
     service_catalog_controller_host: manager
     infisical_lookup_default_params: {{}}
   tasks:

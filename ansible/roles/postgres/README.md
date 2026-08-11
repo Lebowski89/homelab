@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/15 |
+| Readme update        | 2026/08/11 |
 
 
 
@@ -56,14 +56,19 @@
 | [postgres_uptime_kuma_monitor_role_name](defaults/main.yml#L58)   | str | `uptime_kuma_monitor` |    
 | [postgres_uptime_kuma_monitor_role_pass](defaults/main.yml#L59)   | str |  |    
 | [postgres_uptime_kuma_monitor_database](defaults/main.yml#L60)   | str | `postgres` |    
-| [postgres_backup_dir](defaults/main.yml#L72)   | str | `/tmp` |    
-| [postgres_backup_dbs](defaults/main.yml#L73)   | list | `[]` |    
-| [postgres_backup_dbs_dir](defaults/main.yml#L74)   | str | `{{ postgres_backup_dir }}` |    
-| [postgres_backup_dbs_format](defaults/main.yml#L75)   | str | `custom` |    
-| [postgres_restore_dbs_dir](defaults/main.yml#L81)   | str | `/tmp` |    
-| [postgres_restore_dbs_drop_existing](defaults/main.yml#L82)   | bool | `True` |    
-| [postgres_restore_dbs_map](defaults/main.yml#L87)   | list | `[]` |    
-| [postgres_fix_owner_map](defaults/main.yml#L102)   | list | `[]` |    
+| [postgres_backup_root](defaults/main.yml#L66)   | str | `/var/backups/postgresql` |    
+| [postgres_backup_script_path](defaults/main.yml#L67)   | str | `/usr/local/sbin/postgres-logical-backup` |    
+| [postgres_backup_manage_timer](defaults/main.yml#L68)   | bool | `False` |    
+| [postgres_backup_timer_name](defaults/main.yml#L69)   | str | `postgres-logical-backup` |    
+| [postgres_backup_timer_on_calendar](defaults/main.yml#L70)   | str | `*-*-* 03:00:00` |    
+| [postgres_backup_timer_randomized_delay_sec](defaults/main.yml#L71)   | str | `30m` |    
+| [postgres_backup_local_retention_days](defaults/main.yml#L72)   | int | `7` |    
+| [postgres_backup_failed_retention_days](defaults/main.yml#L73)   | int | `2` |    
+| [postgres_backup_metrics_file](defaults/main.yml#L74)   | str | `/var/lib/node_exporter/textfile_collector_postgres/postgres_logical_backup.prom` |    
+| [postgres_restore_dbs_dir](defaults/main.yml#L80)   | str | `/tmp` |    
+| [postgres_restore_dbs_drop_existing](defaults/main.yml#L81)   | bool | `True` |    
+| [postgres_restore_dbs_map](defaults/main.yml#L86)   | list | `[]` |    
+| [postgres_fix_owner_map](defaults/main.yml#L101)   | list | `[]` |    
 
 
 
@@ -81,7 +86,9 @@
 | Configure Patroni | ansible.builtin.include_tasks | True | postgres,postgres_patroni,postgres_patroni_reset |
 | Ensure dedicated PostgreSQL admin role exists | ansible.builtin.include_tasks | True | postgres_admin,postgres_admin_uptime_kuma |
 | Ensure dedicated PostgreSQL Uptime Kuma role exists | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,u,p,t,i,m,e,_,k,u,m,a |
-| Backup PostgreSQL single database with pg_dump | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,b,a,c,k,u,p |
+| Configure PostgreSQL logical backups | ansible.builtin.include_tasks | True | postgres,postgres_backup,postgres_backup_setup,postgres_backup_run |
+| Run PostgreSQL logical backup manually | ansible.builtin.include_tasks | True | postgres_backup,postgres_backup_run |
+| Report PostgreSQL logical backup manual check-mode plan | ansible.builtin.debug | True | postgres_backup,postgres_backup_run |
 | Restore PostgreSQL single database from pg_dump backup | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,r,e,s,t,o,r,e |
 | Reset PostgreSQL/Patroni node destructively | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,n,u,k,e,_,n,o,d,e |
 | Fix database ownership and privileges | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,f,i,x,_,o,w,n,e,r |
@@ -164,16 +171,22 @@
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Backup DBs ¦ Assert database list is provided | ansible.builtin.assert | False |
-| Backup DBs ¦ Query Patroni cluster state from first postgres node | ansible.builtin.uri | False |
-| Backup DBs ¦ Extract Patroni leader candidates | ansible.builtin.set_fact | False |
-| Backup DBs ¦ Determine Patroni leader member | ansible.builtin.set_fact | False |
-| Backup DBs ¦ Build timestamp | ansible.builtin.set_fact | False |
-| Backup DBs ¦ Set output extension | ansible.builtin.set_fact | False |
-| Backup DBs ¦ Ensure backup directory exists on leader | ansible.builtin.file | False |
-| Backup DBs ¦ Dump each database in custom format | ansible.builtin.shell | True |
-| Backup DBs ¦ Dump each database in plain SQL format | ansible.builtin.shell | True |
-| Backup DBs ¦ Show result | ansible.builtin.debug | False |
+| Logical backup run ¦ Query Patroni cluster state | ansible.builtin.uri | False |
+| Logical backup run ¦ Select current Patroni leader | ansible.builtin.set_fact | False |
+| Logical backup run ¦ Validate leader inventory mapping | ansible.builtin.assert | False |
+| Logical backup run ¦ Invoke installed leader-gated runner | ansible.builtin.command | False |
+| Logical backup run ¦ Report status and location | ansible.builtin.debug | False |
+
+#### File: tasks/sub_tasks/backup_setup.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Logical backup ¦ Validate configuration | ansible.builtin.assert | False |  |
+| Logical backup ¦ Create protected backup root | ansible.builtin.file | False |  |
+| Logical backup ¦ Ensure dedicated metrics directory exists | ansible.builtin.file | False |  |
+| Logical backup ¦ Pre-create narrowly writable metrics file | ansible.builtin.file | False |  |
+| Logical backup ¦ Install host-local runner | ansible.builtin.template | False |  |
+| Logical backup ¦ Manage systemd service and timer | ansible.builtin.include_role | False |  |
 
 #### File: tasks/sub_tasks/install/apt.yml
 

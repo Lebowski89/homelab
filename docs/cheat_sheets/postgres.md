@@ -213,21 +213,31 @@ etcdctl --endpoints=http://192.168.80.95:2379,http://192.168.80.96:2379,http://1
 
 ---
 
-## Backup file inspection
+## Logical backup inspection
 
-### List backup files
+See [PostgreSQL logical backups](../postgresql-logical-backups.md) for the
+architecture, completion contract, retention, metrics, and operation tags.
+
+### List completed and staging backups
 ```bash
-sudo ls -lah /var/backups/postgres
+sudo ls -lah /var/backups/postgresql
 ```
 
-### Inspect a directory of per-database dumps
+### Inspect a completed backup
 ```bash
-sudo ls -lah /var/backups/postgres/dbs-YYYYMMDD-HHMMSS
+sudo ls -lah /var/backups/postgresql/YYYYMMDDTHHMMSSZ
+```
+
+### Verify payload checksums
+```bash
+cd /var/backups/postgresql/YYYYMMDDTHHMMSSZ
+sudo sha256sum --check SHA256SUMS
 ```
 
 ### Inspect a custom-format dump
 ```bash
-pg_restore -l /var/backups/postgres/test_db-YYYYMMDD-HHMMSS.dump
+sudo -u postgres pg_restore --list \
+  /var/backups/postgresql/YYYYMMDDTHHMMSSZ/databases/test_db.dump
 ```
 
 ---

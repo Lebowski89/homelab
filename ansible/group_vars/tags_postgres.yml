@@ -30,3 +30,7 @@ postgres_patroni_superuser_name: postgres
 postgres_patroni_replication_name: replicator
 
 postgres_patroni_pg_hba_extra: []
+
+# The role default remains opt-in; PostgreSQL inventory hosts explicitly schedule
+# the leader-gated logical backup job.
+postgres_backup_manage_timer: true
