@@ -1,120 +1,72 @@
 ---
 
-- name: Backup DBs | Assert database list is provided
-  ansible.builtin.assert:
-    that:
-      - postgres_backup_dbs is sequence
-      - postgres_backup_dbs is not string
-      - postgres_backup_dbs | length > 0
-    fail_msg: >-
-      You must provide postgres_backup_dbs as a non-empty list.
-
-- name: Backup DBs | Query Patroni cluster state from first postgres node
+- name: Logical backup run | Query Patroni cluster state
   # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
   ansible.builtin.uri:
     url: "http://{{ hostvars[groups['tags_postgres'][0]].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster"
     method: GET
     return_content: true
     status_code: 200
-  register: postgres_patroni_cluster_state
+  register: postgres_backup_patroni_cluster_state
   run_once: true
   delegate_to: "{{ services_controller_host }}"
   retries: 12
   delay: 5
   until: >-
     (
-      postgres_patroni_cluster_state.json.members
+      postgres_backup_patroni_cluster_state.json.members
       | default([])
       | selectattr('role', 'equalto', 'leader')
       | list
       | length
     ) > 0
 
-- name: Backup DBs | Extract Patroni leader candidates
+- name: Logical backup run | Select current Patroni leader
   ansible.builtin.set_fact:
-    postgres_patroni_leader_candidates: >-
+    postgres_backup_patroni_leader: >-
       {{
-        postgres_patroni_cluster_state.json.members
-        | default([])
-        | selectattr('role', 'equalto', 'leader')
-        | list
+        (
+          postgres_backup_patroni_cluster_state.json.members
+          | default([])
+          | selectattr('role', 'equalto', 'leader')
+          | list
+          | first
+        ).name
       }}
   run_once: true
   delegate_to: "{{ services_controller_host }}"
 
-- name: Backup DBs | Determine Patroni leader member
-  ansible.builtin.set_fact:
-    postgres_patroni_leader_member: "{{ postgres_patroni_leader_candidates[0] }}"
+- name: Logical backup run | Validate leader inventory mapping
+  ansible.builtin.assert:
+    that:
+      - postgres_backup_patroni_leader in groups['tags_postgres']
+    fail_msg: >-
+      Patroni reported leader {{ postgres_backup_patroni_leader }}, but that
+      member is not an inventory host in tags_postgres.
   run_once: true
   delegate_to: "{{ services_controller_host }}"
 
-- name: Backup DBs | Build timestamp
-  ansible.builtin.set_fact:
-    postgres_backup_timestamp: "{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}"
+- name: Logical backup run | Invoke installed leader-gated runner
+  become: true
+  become_user: postgres
+  ansible.builtin.command:
+    argv:
+      - "{{ postgres_backup_script_path }}"
+  register: postgres_backup_manual_result
+  changed_when: "'POSTGRES_BACKUP_RESULT=' in postgres_backup_manual_result.stdout"
   run_once: true
-  delegate_to: "{{ services_controller_host }}"
+  delegate_to: "{{ postgres_backup_patroni_leader }}"
 
-- name: Backup DBs | Set output extension
-  ansible.builtin.set_fact:
-    postgres_backup_dbs_ext: "{{ 'dump' if postgres_backup_dbs_format == 'custom' else 'sql' }}"
-  run_once: true
-  delegate_to: "{{ services_controller_host }}"
-
-- name: Backup DBs | Ensure backup directory exists on leader
-  ansible.builtin.file:
-    path: "{{ postgres_backup_dbs_dir }}"
-    state: directory
-    owner: postgres
-    group: postgres
-    mode: "0750"
-  run_once: true
-  delegate_to: "{{ postgres_patroni_leader_member.name }}"
-
-- name: Backup DBs | Dump each database in custom format
-  ansible.builtin.shell: |
-    set -euo pipefail
-    export PGPASSWORD='{{ postgres_patroni_superuser_pass }}'
-    pg_dump \
-      -h 127.0.0.1 \
-      -p {{ postgres_patroni_postgres_port }} \
-      -U {{ postgres_patroni_superuser_name }} \
-      -d '{{ item }}' \
-      -Fc \
-      -f '{{ postgres_backup_dbs_dir }}/{{ item }}-{{ postgres_backup_timestamp }}.{{ postgres_backup_dbs_ext }}'
-  args:
-    executable: /bin/bash
-  when: postgres_backup_dbs_format == 'custom'
-  loop: "{{ postgres_backup_dbs }}"
-  run_once: true
-  delegate_to: "{{ postgres_patroni_leader_member.name }}"
-  no_log: true
-  changed_when: true
-
-- name: Backup DBs | Dump each database in plain SQL format
-  ansible.builtin.shell: |
-    set -euo pipefail
-    export PGPASSWORD='{{ postgres_patroni_superuser_pass }}'
-    pg_dump \
-      -h 127.0.0.1 \
-      -p {{ postgres_patroni_postgres_port }} \
-      -U {{ postgres_patroni_superuser_name }} \
-      -d '{{ item }}' \
-      -f '{{ postgres_backup_dbs_dir }}/{{ item }}-{{ postgres_backup_timestamp }}.{{ postgres_backup_dbs_ext }}'
-  args:
-    executable: /bin/bash
-  when: postgres_backup_dbs_format != 'custom'
-  loop: "{{ postgres_backup_dbs }}"
-  run_once: true
-  delegate_to: "{{ postgres_patroni_leader_member.name }}"
-  no_log: true
-  changed_when: true
-
-- name: Backup DBs | Show result
+- name: Logical backup run | Report status and location
   ansible.builtin.debug:
     msg:
-      leader: "{{ postgres_patroni_leader_member.name }}"
-      backup_dir: "{{ postgres_backup_dbs_dir }}"
-      databases: "{{ postgres_backup_dbs }}"
-      extension: "{{ postgres_backup_dbs_ext }}"
+      leader: "{{ postgres_backup_patroni_leader }}"
+      result: >-
+        {{
+          postgres_backup_manual_result.stdout_lines
+          | select('match', '^POSTGRES_BACKUP_RESULT=')
+          | list
+          | last
+        }}
   run_once: true
   delegate_to: "{{ services_controller_host }}"

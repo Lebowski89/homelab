@@ -366,6 +366,8 @@ role_tag() {
     postgres:patroni)               echo "postgres_patroni" ;;
     postgres:patroni-reset)         echo "postgres_patroni_reset" ;;
     postgres:backup)                echo "postgres_backup" ;;
+    postgres:backup-setup)          echo "postgres_backup_setup" ;;
+    postgres:backup-run)            echo "postgres_backup_run" ;;
     postgres:restore)               echo "postgres_restore" ;;
     postgres:admin)                 echo "postgres_admin" ;;
     postgres:admin-uptime-kuma)     echo "postgres_admin_uptime_kuma" ;;
@@ -527,6 +529,8 @@ Role/action targets:
     patroni             -> postgres_patroni
     patroni-reset       -> postgres_patroni_reset
     backup              -> postgres_backup
+    backup-setup        -> postgres_backup_setup
+    backup-run          -> postgres_backup_run
     restore             -> postgres_restore
     admin               -> postgres_admin
     admin-uptime-kuma   -> postgres_admin_uptime_kuma

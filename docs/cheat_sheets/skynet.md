@@ -380,6 +380,8 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 | `skynet run postgres patroni`             | `postgres_patroni`             |
 | `skynet run postgres patroni-reset`       | `postgres_patroni_reset`       |
 | `skynet run postgres backup`              | `postgres_backup`              |
+| `skynet run postgres backup-setup`        | `postgres_backup_setup`        |
+| `skynet run postgres backup-run`          | `postgres_backup_run`          |
 | `skynet run postgres restore`             | `postgres_restore`             |
 | `skynet run postgres admin`               | `postgres_admin`               |
 | `skynet run postgres admin-uptime-kuma`   | `postgres_admin_uptime_kuma`   |

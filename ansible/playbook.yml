@@ -238,6 +238,8 @@
         - postgres_patroni
         - postgres_patroni_reset
         - postgres_backup
+        - postgres_backup_setup
+        - postgres_backup_run
         - postgres_restore
         - postgres_admin
         - postgres_admin_uptime_kuma

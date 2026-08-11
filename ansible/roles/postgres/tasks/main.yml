@@ -67,15 +67,39 @@
       tags: postgres_admin_uptime_kuma
   tags: postgres_admin_uptime_kuma
 
-- name: Backup PostgreSQL single database with pg_dump
+- name: Configure PostgreSQL logical backups
+  when:
+    - "'tags_postgres' in group_names"
+  ansible.builtin.include_tasks:
+    file: sub_tasks/backup_setup.yml
+    apply:
+      tags:
+        - postgres
+        - postgres_backup
+        - postgres_backup_setup
+        - postgres_backup_run
+  tags:
+    - postgres
+    - postgres_backup
+    - postgres_backup_setup
+    - postgres_backup_run
+
+- name: Run PostgreSQL logical backup manually
   when:
     - inventory_hostname == services_controller_host
-    - "'postgres_backup' in ansible_run_tags"
+    - >-
+      ansible_run_tags | default([])
+      | intersect(['postgres_backup', 'postgres_backup_run'])
+      | length > 0
   ansible.builtin.include_tasks:
     file: sub_tasks/backup.yml
     apply:
-      tags: postgres_backup
-  tags: postgres_backup
+      tags:
+        - postgres_backup
+        - postgres_backup_run
+  tags:
+    - postgres_backup
+    - postgres_backup_run
 
 - name: Restore PostgreSQL single database from pg_dump backup
   when:

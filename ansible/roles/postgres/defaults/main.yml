@@ -60,19 +60,18 @@ postgres_uptime_kuma_monitor_role_pass: ""
 postgres_uptime_kuma_monitor_database: postgres
 
 ################################
-# BACKUP (DUMP DATABASES)
+# LOGICAL BACKUPS
 ################################
 
-  ## Example:
-  #  postgres_backup_dbs:
-  #    - gotify
-  #    - vaultwarden
-  #    - qui
-
-postgres_backup_dir: /tmp
-postgres_backup_dbs: []
-postgres_backup_dbs_dir: "{{ postgres_backup_dir }}"
-postgres_backup_dbs_format: custom
+postgres_backup_root: /var/backups/postgresql
+postgres_backup_script_path: /usr/local/sbin/postgres-logical-backup
+postgres_backup_manage_timer: false
+postgres_backup_timer_name: postgres-logical-backup
+postgres_backup_timer_on_calendar: "*-*-* 03:00:00"
+postgres_backup_timer_randomized_delay_sec: 30m
+postgres_backup_local_retention_days: 7
+postgres_backup_failed_retention_days: 2
+postgres_backup_metrics_file: /var/lib/node_exporter/textfile_collector/postgres_logical_backup.prom
 
 ################################
 # RESTORE (DATABASES)
