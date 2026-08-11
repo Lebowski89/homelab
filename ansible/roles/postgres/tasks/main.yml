@@ -36,7 +36,7 @@
 
 - name: Ensure dedicated PostgreSQL admin role exists
   when:
-    - inventory_hostname == docker_services_primary_manager
+    - inventory_hostname == services_controller_host
     - ansible_run_tags is not defined
       or 'all' in ansible_run_tags
       or 'postgres_admin' in ansible_run_tags
@@ -57,7 +57,7 @@
 
 - name: Ensure dedicated PostgreSQL Uptime Kuma role exists
   when:
-    - inventory_hostname == docker_services_primary_manager
+    - inventory_hostname == services_controller_host
     - ansible_run_tags is not defined
       or 'all' in ansible_run_tags
       or 'postgres_admin_uptime_kuma' in ansible_run_tags
@@ -69,7 +69,7 @@
 
 - name: Backup PostgreSQL single database with pg_dump
   when:
-    - inventory_hostname == docker_services_primary_manager
+    - inventory_hostname == services_controller_host
     - "'postgres_backup' in ansible_run_tags"
   ansible.builtin.include_tasks:
     file: sub_tasks/backup.yml
@@ -79,7 +79,7 @@
 
 - name: Restore PostgreSQL single database from pg_dump backup
   when:
-    - inventory_hostname == docker_services_primary_manager
+    - inventory_hostname == services_controller_host
     - "'postgres_restore' in ansible_run_tags"
   ansible.builtin.include_tasks:
     file: sub_tasks/restore.yml
@@ -99,7 +99,7 @@
 
 - name: Fix database ownership and privileges
   when:
-    - inventory_hostname == docker_services_primary_manager
+    - inventory_hostname == services_controller_host
     - "'postgres_admin_fix_owner' in ansible_run_tags"
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/fix_owner.yml

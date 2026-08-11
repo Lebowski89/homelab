@@ -17,9 +17,6 @@
     docker_services_common_context: "{{ service_catalog_docker_common_context }}"
     docker_services_service_target: "{{ service_catalog_docker_service.target | default(omit) }}"
     docker_services_role_prefix: "{{ service_catalog_docker_service.name }}"
-    # Temporary adapter aliases; remove when docker_services consumes the
-    # canonical services_* host interface directly.
+    # Temporary adapter alias; remove when docker_services consumes the
+    # canonical controller-host interface directly.
     docker_services_primary_manager: "{{ services_controller_host }}"
-    docker_services_plex_host: "{{ services_plex_host }}"
-    docker_services_unraid_host: "{{ services_storage_host }}"
-    docker_services_log_root: "{{ services_log_root }}"

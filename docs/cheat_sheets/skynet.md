@@ -726,7 +726,7 @@ Example:
 
 ```yaml
 - name: Include Example role
-  when: inventory_hostname == docker_services_primary_manager
+  when: inventory_hostname == services_controller_host
   ansible.builtin.include_role:
     name: example
   tags:
@@ -908,7 +908,7 @@ skynet run ubuntu sysctl
 
 ```yaml
 - name: Include Example role
-  when: inventory_hostname == docker_services_primary_manager
+  when: inventory_hostname == services_controller_host
   ansible.builtin.include_role:
     name: example
   tags:

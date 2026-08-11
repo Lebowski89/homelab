@@ -18,7 +18,7 @@
     status_code: 200
   register: postgres_patroni_cluster_state
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
   retries: 12
   delay: 5
   until: >-
@@ -40,25 +40,25 @@
         | list
       }}
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Backup DBs | Determine Patroni leader member
   ansible.builtin.set_fact:
     postgres_patroni_leader_member: "{{ postgres_patroni_leader_candidates[0] }}"
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Backup DBs | Build timestamp
   ansible.builtin.set_fact:
     postgres_backup_timestamp: "{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}"
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Backup DBs | Set output extension
   ansible.builtin.set_fact:
     postgres_backup_dbs_ext: "{{ 'dump' if postgres_backup_dbs_format == 'custom' else 'sql' }}"
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Backup DBs | Ensure backup directory exists on leader
   ansible.builtin.file:
@@ -117,4 +117,4 @@
       databases: "{{ postgres_backup_dbs }}"
       extension: "{{ postgres_backup_dbs_ext }}"
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"

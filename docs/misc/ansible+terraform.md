@@ -53,7 +53,7 @@ cloudflare:
 ```yaml
 - name: Ensure Cloudflare DNS record exists
   when:
-    - inventory_hostname == docker_services_primary_manager
+    - inventory_hostname == services_controller_host
     - docker_services_svc.cloudflare is defined
     - (docker_services_svc.cloudflare.enable | default(false)) | bool
   ansible.builtin.include_tasks:

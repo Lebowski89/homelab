@@ -9,7 +9,7 @@
     status_code: 200
   register: postgres_patroni_cluster_state
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
   check_mode: false
   retries: 12
   delay: 5
@@ -33,14 +33,14 @@
         | list
       }}
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Determine Patroni leader member
   ansible.builtin.set_fact:
     postgres_patroni_leader_member: "{{ postgres_patroni_leader_candidates[0] }}"
   when: (postgres_patroni_leader_candidates | length) > 0
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Assert Patroni leader was found
   ansible.builtin.assert:
@@ -53,7 +53,7 @@
       Could not determine Patroni leader from REST API.
       Cluster response: {{ postgres_patroni_cluster_state.json | default({}) }}
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Build Patroni admin role flags
   ansible.builtin.set_fact:
@@ -65,7 +65,7 @@
         + (['CREATEROLE'] if postgres_patroni_admin_role_createrole else [])
       }}
   run_once: true
-  delegate_to: "{{ docker_services_primary_manager }}"
+  delegate_to: "{{ services_controller_host }}"
 
 - name: Ensure dedicated Patroni admin role exists on leader
   community.postgresql.postgresql_user:
