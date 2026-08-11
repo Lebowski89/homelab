@@ -1,0 +1,720 @@
+---
+
+- name: Remote logical backup | Validate configuration
+  ansible.builtin.assert:
+    that:
+      - postgres_backup_remote_manage is boolean
+      - postgres_backup_remote_enabled is boolean
+      - postgres_backup_remote_repository is string
+      - "'\n' not in postgres_backup_remote_repository"
+      - postgres_backup_remote_restic_path is string
+      - postgres_backup_remote_restic_path is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_remote_script_path is string
+      - postgres_backup_remote_script_path is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_remote_script_path != postgres_backup_script_path
+      - postgres_backup_remote_state_dir is string
+      - postgres_backup_remote_state_dir is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_remote_state_dir != '/'
+      - postgres_backup_remote_config_dir is string
+      - postgres_backup_remote_config_dir is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_remote_config_dir != '/'
+      - postgres_backup_remote_config_dir[-1:] != '/'
+      - "'//' not in postgres_backup_remote_config_dir"
+      - postgres_backup_remote_config_dir.split('/') | intersect(['.', '..']) | length == 0
+      - postgres_backup_remote_config_dir != postgres_backup_root
+      - postgres_backup_remote_state_dir != postgres_backup_root
+      - postgres_backup_remote_config_dir != postgres_backup_remote_state_dir
+      - postgres_backup_remote_repository_file is string
+      - postgres_backup_remote_repository_file is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_remote_password_file is string
+      - postgres_backup_remote_password_file is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_remote_environment_file is string
+      - postgres_backup_remote_environment_file is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_remote_managed_secret_files_manifest is string
+      - postgres_backup_remote_managed_secret_files_manifest is match('^/[A-Za-z0-9_./-]+$')
+      - >-
+        postgres_backup_remote_managed_secret_files_manifest
+        | basename
+        is match('^[A-Za-z0-9_.-]+$')
+      - postgres_backup_remote_managed_secret_files_manifest | basename not in ['.', '..']
+      - "'//' not in postgres_backup_remote_managed_secret_files_manifest"
+      - >-
+        postgres_backup_remote_managed_secret_files_manifest.split('/')
+        | intersect(['.', '..'])
+        | length == 0
+      - postgres_backup_remote_repository_file | dirname == postgres_backup_remote_config_dir
+      - postgres_backup_remote_password_file | dirname == postgres_backup_remote_config_dir
+      - postgres_backup_remote_environment_file | dirname == postgres_backup_remote_config_dir
+      - >-
+        postgres_backup_remote_managed_secret_files_manifest | dirname
+        == postgres_backup_remote_config_dir
+      - >-
+        postgres_backup_remote_managed_secret_files_manifest
+        == postgres_backup_remote_config_dir
+           ~ '/'
+           ~ (postgres_backup_remote_managed_secret_files_manifest | basename)
+      - >-
+        [
+          postgres_backup_remote_repository_file,
+          postgres_backup_remote_password_file,
+          postgres_backup_remote_environment_file,
+          postgres_backup_remote_managed_secret_files_manifest
+        ]
+        | unique
+        | length == 4
+      - postgres_backup_remote_password_secret is mapping
+      - postgres_backup_remote_password_secret.keys() | difference(['path', 'name']) | length == 0
+      - postgres_backup_remote_password_secret.path | default('') is string
+      - postgres_backup_remote_password_secret.path | default('') | trim | length > 0
+      - postgres_backup_remote_password_secret.name | default('') is string
+      - postgres_backup_remote_password_secret.name | default('') | trim | length > 0
+      - postgres_backup_remote_backend_environment is mapping
+      - postgres_backup_remote_backend_secrets is sequence
+      - postgres_backup_remote_backend_secrets is not string
+      - postgres_backup_remote_backend_secrets is not mapping
+      - postgres_backup_remote_secret_files is sequence
+      - postgres_backup_remote_secret_files is not string
+      - postgres_backup_remote_secret_files is not mapping
+      - postgres_backup_remote_options is sequence
+      - postgres_backup_remote_options is not string
+      - postgres_backup_remote_options is not mapping
+      - postgres_backup_remote_retry_lock is string
+      - postgres_backup_remote_retry_lock | trim | length > 0
+      - >-
+        postgres_backup_remote_retry_lock
+        is match('^(?:[0-9]+(?:\.[0-9]+)?(?:ns|us|ms|s|m|h))+$')
+      - postgres_backup_remote_timer_name is string
+      - postgres_backup_remote_timer_name is match('^[A-Za-z0-9_.@-]+$')
+      - postgres_backup_remote_timer_name != postgres_backup_timer_name
+      - postgres_backup_remote_timer_name != postgres_backup_remote_maintenance_timer_name
+      - postgres_backup_remote_timer_on_calendar is string
+      - postgres_backup_remote_timer_on_calendar | trim | length > 0
+      - postgres_backup_remote_timer_randomized_delay_sec is string
+      - postgres_backup_remote_timer_randomized_delay_sec | trim | length > 0
+      - postgres_backup_remote_maintenance_timer_name is string
+      - postgres_backup_remote_maintenance_timer_name is match('^[A-Za-z0-9_.@-]+$')
+      - postgres_backup_remote_maintenance_timer_on_calendar is string
+      - postgres_backup_remote_maintenance_timer_on_calendar | trim | length > 0
+      - postgres_backup_remote_maintenance_timer_randomized_delay_sec is string
+      - postgres_backup_remote_maintenance_timer_randomized_delay_sec | trim | length > 0
+      - postgres_backup_remote_maintenance_host is string
+      - not postgres_backup_remote_manage
+        or postgres_backup_remote_maintenance_host in groups['tags_postgres']
+      - postgres_backup_remote_snapshot_host is string
+      - postgres_backup_remote_snapshot_host is match('^[A-Za-z0-9_.-]+$')
+      - postgres_patroni_scope is match('^[A-Za-z0-9_.-]+$')
+      - postgres_backup_remote_keep_daily is integer
+      - postgres_backup_remote_keep_daily is not boolean
+      - postgres_backup_remote_keep_daily >= 1
+      - postgres_backup_remote_keep_weekly is integer
+      - postgres_backup_remote_keep_weekly is not boolean
+      - postgres_backup_remote_keep_weekly >= 1
+      - postgres_backup_remote_keep_monthly is integer
+      - postgres_backup_remote_keep_monthly is not boolean
+      - postgres_backup_remote_keep_monthly >= 1
+      - postgres_backup_remote_metrics_file is string
+      - postgres_backup_remote_metrics_file is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_remote_metrics_file != postgres_backup_metrics_file
+      - not postgres_backup_remote_enabled or postgres_backup_remote_manage
+      - not postgres_backup_remote_enabled
+        or postgres_backup_remote_repository | trim | length > 0
+      - >-
+        ansible_run_tags | default([])
+        | intersect([
+          'postgres_backup_remote_init',
+          'postgres_backup_remote_run',
+          'postgres_backup_remote_maintenance'
+        ])
+        | length == 0
+        or postgres_backup_remote_manage
+      - >-
+        ansible_run_tags | default([])
+        | intersect([
+          'postgres_backup_remote_init',
+          'postgres_backup_remote_run',
+          'postgres_backup_remote_maintenance'
+        ])
+        | length == 0
+        or postgres_backup_remote_repository | trim | length > 0
+    fail_msg: PostgreSQL remote logical backup configuration is invalid.
+
+- name: Remote logical backup | Validate backend environment entries
+  ansible.builtin.assert:
+    that:
+      - postgres_backup_remote_environment_entry.key is match('^[A-Za-z_][A-Za-z0-9_]*$')
+      - postgres_backup_remote_environment_entry.value is string
+      - postgres_backup_remote_environment_entry.key not in postgres_backup_remote_reserved_environment_names
+    fail_msg: PostgreSQL remote backend environment entries must be safe string assignments.
+  vars:
+    postgres_backup_remote_reserved_environment_names:
+      - BASH_ENV
+      - BASHOPTS
+      - BASH_XTRACEFD
+      - CDPATH
+      - ENV
+      - GLOBIGNORE
+      - IFS
+      - LD_LIBRARY_PATH
+      - LD_PRELOAD
+      - PATH
+      - POSIXLY_CORRECT
+      - RESTIC_PASSWORD
+      - RESTIC_PASSWORD_COMMAND
+      - RESTIC_PASSWORD_FILE
+      - RESTIC_REPOSITORY
+      - RESTIC_REPOSITORY_FILE
+      - SHELLOPTS
+  loop: "{{ postgres_backup_remote_backend_environment | dict2items }}"
+  loop_control:
+    loop_var: postgres_backup_remote_environment_entry
+    label: "{{ postgres_backup_remote_environment_entry.key }}"
+
+- name: Remote logical backup | Validate backend secret declarations
+  ansible.builtin.assert:
+    that:
+      - postgres_backup_remote_backend_secret is mapping
+      - postgres_backup_remote_backend_secret.keys() | difference(['env', 'path', 'name']) | length == 0
+      - postgres_backup_remote_backend_secret.env | default('') is match('^[A-Za-z_][A-Za-z0-9_]*$')
+      - postgres_backup_remote_backend_secret.env | default('') not in postgres_backup_remote_reserved_environment_names
+      - postgres_backup_remote_backend_secret.path | default('') is string
+      - postgres_backup_remote_backend_secret.path | default('') | trim | length > 0
+      - postgres_backup_remote_backend_secret.name | default('') is string
+      - postgres_backup_remote_backend_secret.name | default('') | trim | length > 0
+    fail_msg: PostgreSQL remote backend secret declarations are invalid.
+  vars:
+    postgres_backup_remote_reserved_environment_names:
+      - BASH_ENV
+      - BASHOPTS
+      - BASH_XTRACEFD
+      - CDPATH
+      - ENV
+      - GLOBIGNORE
+      - IFS
+      - LD_LIBRARY_PATH
+      - LD_PRELOAD
+      - PATH
+      - POSIXLY_CORRECT
+      - RESTIC_PASSWORD
+      - RESTIC_PASSWORD_COMMAND
+      - RESTIC_PASSWORD_FILE
+      - RESTIC_REPOSITORY
+      - RESTIC_REPOSITORY_FILE
+      - SHELLOPTS
+  loop: "{{ postgres_backup_remote_backend_secrets }}"
+  loop_control:
+    loop_var: postgres_backup_remote_backend_secret
+    label: "{{ postgres_backup_remote_backend_secret.env | default('invalid-environment') }}"
+
+- name: Remote logical backup | Validate unique backend secret environment names
+  ansible.builtin.assert:
+    that:
+      - >-
+        postgres_backup_remote_backend_secrets | map(attribute='env') | list | unique | length
+        == postgres_backup_remote_backend_secrets | length
+      - >-
+        postgres_backup_remote_backend_secrets
+        | map(attribute='env')
+        | select('in', postgres_backup_remote_backend_environment.keys())
+        | list
+        | length == 0
+    fail_msg: PostgreSQL remote backend secret environment names must be unique and non-overlapping.
+
+- name: Remote logical backup | Validate secret file declarations
+  ansible.builtin.assert:
+    that:
+      - postgres_backup_remote_secret_file is mapping
+      - postgres_backup_remote_secret_file.keys() | difference(['path', 'infisical', 'mode']) | length == 0
+      - postgres_backup_remote_secret_file.path | default('') is string
+      - postgres_backup_remote_secret_file.path | default('') is match('^/')
+      - postgres_backup_remote_secret_file.path | default('') | dirname == postgres_backup_remote_config_dir
+      - >-
+        postgres_backup_remote_secret_file.path | default('')
+        == postgres_backup_remote_config_dir
+           ~ '/'
+           ~ (postgres_backup_remote_secret_file.path | default('') | basename)
+      - postgres_backup_remote_secret_file.path | default('') | basename is match('^[A-Za-z0-9_.-]+$')
+      - postgres_backup_remote_secret_file.path | default('') | basename not in ['.', '..']
+      - "'//' not in (postgres_backup_remote_secret_file.path | default(''))"
+      - >-
+        (postgres_backup_remote_secret_file.path | default('')).split('/')
+        | intersect(['.', '..'])
+        | length == 0
+      - postgres_backup_remote_secret_file.path | default('') not in postgres_backup_remote_reserved_config_files
+      - postgres_backup_remote_secret_file.mode | default('0600') == '0600'
+      - postgres_backup_remote_secret_file.infisical | default({}) is mapping
+      - >-
+        postgres_backup_remote_secret_file.infisical.keys() | default([])
+        | difference(['path', 'name'])
+        | length == 0
+      - postgres_backup_remote_secret_file.infisical.path | default('') is string
+      - postgres_backup_remote_secret_file.infisical.path | default('') | trim | length > 0
+      - postgres_backup_remote_secret_file.infisical.name | default('') is string
+      - postgres_backup_remote_secret_file.infisical.name | default('') | trim | length > 0
+    fail_msg: PostgreSQL remote secret-file declarations are invalid.
+  vars:
+    postgres_backup_remote_reserved_config_files:
+      - "{{ postgres_backup_remote_repository_file }}"
+      - "{{ postgres_backup_remote_password_file }}"
+      - "{{ postgres_backup_remote_environment_file }}"
+      - "{{ postgres_backup_remote_managed_secret_files_manifest }}"
+  loop: "{{ postgres_backup_remote_secret_files }}"
+  loop_control:
+    loop_var: postgres_backup_remote_secret_file
+    label: "{{ postgres_backup_remote_secret_file.path | default('invalid-secret-file') }}"
+
+- name: Remote logical backup | Validate unique secret file paths
+  ansible.builtin.assert:
+    that:
+      - >-
+        postgres_backup_remote_secret_files | map(attribute='path') | list | unique | length
+        == postgres_backup_remote_secret_files | length
+    fail_msg: PostgreSQL remote secret-file paths must be unique.
+
+- name: Remote logical backup | Validate additional Restic options
+  ansible.builtin.assert:
+    that:
+      - postgres_backup_remote_option is string
+      - postgres_backup_remote_option | trim | length > 0
+      - "'\n' not in postgres_backup_remote_option"
+      - >-
+        not postgres_backup_remote_option
+        is match(
+          '^(?:-r|--repo|--repository|--repository-file|--password|--password-command|--password-file)(?:=|$)'
+        )
+    fail_msg: Additional Restic options must be non-secret individual arguments.
+  loop: "{{ postgres_backup_remote_options }}"
+  loop_control:
+    loop_var: postgres_backup_remote_option
+    label: additional-option
+
+- name: Remote logical backup | Install Restic package
+  when: postgres_backup_remote_manage
+  ansible.builtin.apt:
+    name: restic
+    state: present
+
+- name: Remote logical backup | Create protected configuration directory
+  when: postgres_backup_remote_manage
+  ansible.builtin.file:
+    path: "{{ postgres_backup_remote_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Remote logical backup | Create protected state directories
+  when: postgres_backup_remote_manage
+  ansible.builtin.file:
+    path: "{{ postgres_backup_remote_state_path.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - path: "{{ postgres_backup_remote_state_dir }}"
+    - path: "{{ postgres_backup_remote_state_dir }}/uploaded"
+  loop_control:
+    loop_var: postgres_backup_remote_state_path
+    label: "{{ postgres_backup_remote_state_path.path }}"
+
+- name: Remote logical backup | Ensure PostgreSQL metrics directory exists
+  when: postgres_backup_remote_manage
+  ansible.builtin.file:
+    path: "{{ postgres_backup_remote_metrics_file | dirname }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0755"
+
+- name: Remote logical backup | Pre-create remote metrics file
+  when: postgres_backup_remote_manage
+  ansible.builtin.file:
+    path: "{{ postgres_backup_remote_metrics_file }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0644"
+    access_time: preserve
+    modification_time: preserve
+
+- name: Remote logical backup | Reset resolved credential state
+  when: postgres_backup_remote_manage
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    postgres_backup_remote_resolved_password: ""
+    postgres_backup_remote_resolved_backend_environment: >-
+      {{ postgres_backup_remote_backend_environment }}
+    postgres_backup_remote_resolved_secret_files: []
+
+- name: Remote logical backup | Resolve repository password through controller Infisical parameters
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length > 0
+    - not ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    postgres_backup_remote_resolved_password: >-
+      {{
+        lookup(
+          'infisical.vault.read_secrets',
+          **(
+            hostvars[services_controller_host].infisical_lookup_default_params
+            | combine({
+              'path': postgres_backup_remote_password_secret.path,
+              'secret_name': postgres_backup_remote_password_secret.name
+            })
+          )
+        ).value
+      }}
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Remote logical backup | Resolve backend environment secrets through controller
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length > 0
+    - not ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    postgres_backup_remote_resolved_backend_environment: >-
+      {{
+        postgres_backup_remote_resolved_backend_environment
+        | combine({
+          postgres_backup_remote_backend_secret.env: lookup(
+            'infisical.vault.read_secrets',
+            **(
+              hostvars[services_controller_host].infisical_lookup_default_params
+              | combine({
+                'path': postgres_backup_remote_backend_secret.path,
+                'secret_name': postgres_backup_remote_backend_secret.name
+              })
+            )
+          ).value
+        })
+      }}
+  loop: "{{ postgres_backup_remote_backend_secrets }}"
+  loop_control:
+    loop_var: postgres_backup_remote_backend_secret
+    label: "{{ postgres_backup_remote_backend_secret.env }}"
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Remote logical backup | Resolve backend secret files through controller
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length > 0
+    - not ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    postgres_backup_remote_resolved_secret_files: >-
+      {{
+        postgres_backup_remote_resolved_secret_files
+        + [postgres_backup_remote_secret_file | combine({
+          'value': lookup(
+            'infisical.vault.read_secrets',
+            **(
+              hostvars[services_controller_host].infisical_lookup_default_params
+              | combine({
+                'path': postgres_backup_remote_secret_file.infisical.path,
+                'secret_name': postgres_backup_remote_secret_file.infisical.name
+              })
+            )
+          ).value
+        })]
+      }}
+  loop: "{{ postgres_backup_remote_secret_files }}"
+  loop_control:
+    loop_var: postgres_backup_remote_secret_file
+    label: "{{ postgres_backup_remote_secret_file.path }}"
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Remote logical backup | Build deterministic check-mode credentials
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length > 0
+    - ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    postgres_backup_remote_resolved_password: CHECK_MODE_RESTIC_PASSWORD
+
+- name: Remote logical backup | Build deterministic check-mode backend secrets
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length > 0
+    - ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    postgres_backup_remote_resolved_backend_environment: >-
+      {{
+        postgres_backup_remote_resolved_backend_environment
+        | combine({postgres_backup_remote_backend_secret.env: 'CHECK_MODE_BACKEND_SECRET'})
+      }}
+  loop: "{{ postgres_backup_remote_backend_secrets }}"
+  loop_control:
+    loop_var: postgres_backup_remote_backend_secret
+    label: "{{ postgres_backup_remote_backend_secret.env }}"
+
+- name: Remote logical backup | Build deterministic check-mode secret files
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length > 0
+    - ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    postgres_backup_remote_resolved_secret_files: >-
+      {{
+        postgres_backup_remote_resolved_secret_files
+        + [postgres_backup_remote_secret_file | combine({'value': 'CHECK_MODE_SECRET_FILE'})]
+      }}
+  loop: "{{ postgres_backup_remote_secret_files }}"
+  loop_control:
+    loop_var: postgres_backup_remote_secret_file
+    label: "{{ postgres_backup_remote_secret_file.path }}"
+
+- name: Remote logical backup | Validate resolved credentials
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - postgres_backup_remote_resolved_password | string | length > 0
+      - >-
+        postgres_backup_remote_resolved_backend_environment.values()
+        | map('string')
+        | select('equalto', '')
+        | list
+        | length == 0
+      - >-
+        postgres_backup_remote_resolved_secret_files
+        | map(attribute='value')
+        | map('string')
+        | select('equalto', '')
+        | list
+        | length == 0
+    fail_msg: PostgreSQL remote backup credential resolution returned an empty value.
+
+- name: Remote logical backup | Write repository location
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.copy:
+    content: "{{ postgres_backup_remote_repository | trim }}\n"
+    dest: "{{ postgres_backup_remote_repository_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Remote logical backup | Write repository password
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.copy:
+    content: "{{ postgres_backup_remote_resolved_password }}"
+    dest: "{{ postgres_backup_remote_password_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Remote logical backup | Write protected backend environment
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.template:
+    src: postgres-logical-backup-remote.env.j2
+    dest: "{{ postgres_backup_remote_environment_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Remote logical backup | Write protected backend secret files
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.copy:
+    content: "{{ postgres_backup_remote_resolved_secret_file.value }}"
+    dest: "{{ postgres_backup_remote_resolved_secret_file.path }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop: "{{ postgres_backup_remote_resolved_secret_files }}"
+  loop_control:
+    loop_var: postgres_backup_remote_resolved_secret_file
+    label: protected-secret-file
+
+- name: Remote logical backup | Remove inactive core credential files
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length == 0
+  no_log: true
+  diff: false
+  ansible.builtin.file:
+    path: "{{ postgres_backup_remote_inactive_config_file }}"
+    state: absent
+  loop:
+    - "{{ postgres_backup_remote_repository_file }}"
+    - "{{ postgres_backup_remote_password_file }}"
+    - "{{ postgres_backup_remote_environment_file }}"
+  loop_control:
+    loop_var: postgres_backup_remote_inactive_config_file
+    label: protected-config-file
+
+- name: Remote logical backup | Remove declared inactive secret files
+  when:
+    - postgres_backup_remote_manage
+    - postgres_backup_remote_repository | trim | length == 0
+  no_log: true
+  diff: false
+  ansible.builtin.file:
+    path: "{{ postgres_backup_remote_secret_file.path }}"
+    state: absent
+  loop: "{{ postgres_backup_remote_secret_files }}"
+  loop_control:
+    loop_var: postgres_backup_remote_secret_file
+    label: protected-secret-file
+
+- name: Remote logical backup | Build desired managed secret-file paths
+  when: postgres_backup_remote_manage
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    postgres_backup_remote_desired_secret_file_paths: >-
+      {{
+        (
+          postgres_backup_remote_secret_files
+          | map(attribute='path')
+          | list
+          | sort
+        )
+        if postgres_backup_remote_repository | trim | length > 0
+        else []
+      }}
+
+- name: Remote logical backup | Reconcile managed secret files
+  when: postgres_backup_remote_manage
+  ansible.builtin.include_tasks:
+    file: backup_remote_secret_reconcile.yml
+    apply:
+      tags:
+        - postgres
+        - postgres_backup_remote_setup
+        - postgres_backup_remote_init
+        - postgres_backup_remote_run
+        - postgres_backup_remote_maintenance
+  tags:
+    - postgres
+    - postgres_backup_remote_setup
+    - postgres_backup_remote_init
+    - postgres_backup_remote_run
+    - postgres_backup_remote_maintenance
+
+- name: Remote logical backup | Install host-local runner
+  when: postgres_backup_remote_manage
+  ansible.builtin.template:
+    src: postgres-logical-backup-remote.sh.j2
+    dest: "{{ postgres_backup_remote_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Remote logical backup | Manage uploader systemd job
+  when: postgres_backup_remote_manage
+  ansible.builtin.include_role:
+    name: systemd_jobs
+    apply:
+      tags:
+        - postgres
+        - systemd_jobs
+        - postgres_backup_remote_setup
+        - postgres_backup_remote_init
+        - postgres_backup_remote_run
+        - postgres_backup_remote_maintenance
+  vars:
+    systemd_jobs: # noqa var-naming[no-role-prefix]
+      - name: "{{ postgres_backup_remote_timer_name }}"
+        description: Upload completed PostgreSQL logical backups to Restic
+        service:
+          type: oneshot
+          exec_start: "{{ postgres_backup_remote_script_path }} upload"
+          user: root
+          group: root
+          working_directory: "{{ postgres_backup_remote_state_dir }}"
+          wants:
+            - network-online.target
+          after:
+            - network-online.target
+          nice: 10
+          io_scheduling_class: best-effort
+          io_scheduling_priority: 7
+        timer:
+          description: Upload completed PostgreSQL logical backups to Restic
+          on_calendar: "{{ postgres_backup_remote_timer_on_calendar }}"
+          randomized_delay_sec: "{{ postgres_backup_remote_timer_randomized_delay_sec }}"
+          persistent: true
+        enabled: "{{ postgres_backup_remote_enabled }}"
+  tags:
+    - postgres
+    - systemd_jobs
+    - postgres_backup_remote_setup
+    - postgres_backup_remote_init
+    - postgres_backup_remote_run
+    - postgres_backup_remote_maintenance
+
+- name: Remote logical backup | Manage maintenance systemd job
+  when:
+    - postgres_backup_remote_manage
+    - inventory_hostname == postgres_backup_remote_maintenance_host
+  ansible.builtin.include_role:
+    name: systemd_jobs
+    apply:
+      tags:
+        - postgres
+        - systemd_jobs
+        - postgres_backup_remote_setup
+        - postgres_backup_remote_init
+        - postgres_backup_remote_run
+        - postgres_backup_remote_maintenance
+  vars:
+    systemd_jobs: # noqa var-naming[no-role-prefix]
+      - name: "{{ postgres_backup_remote_maintenance_timer_name }}"
+        description: Apply PostgreSQL Restic retention and prune repository data
+        service:
+          type: oneshot
+          exec_start: "{{ postgres_backup_remote_script_path }} maintenance"
+          user: root
+          group: root
+          working_directory: "{{ postgres_backup_remote_state_dir }}"
+          wants:
+            - network-online.target
+          after:
+            - network-online.target
+          nice: 10
+          io_scheduling_class: best-effort
+          io_scheduling_priority: 7
+        timer:
+          description: Maintain PostgreSQL logical backup Restic snapshots
+          on_calendar: "{{ postgres_backup_remote_maintenance_timer_on_calendar }}"
+          randomized_delay_sec: "{{ postgres_backup_remote_maintenance_timer_randomized_delay_sec }}"
+          persistent: true
+        enabled: "{{ postgres_backup_remote_enabled }}"
+  tags:
+    - postgres
+    - systemd_jobs
+    - postgres_backup_remote_setup
+    - postgres_backup_remote_init
+    - postgres_backup_remote_run
+    - postgres_backup_remote_maintenance

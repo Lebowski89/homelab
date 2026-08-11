@@ -1,0 +1,47 @@
+---
+
+- name: Remote logical backup action | Validate explicit action
+  ansible.builtin.assert:
+    that:
+      - postgres_backup_remote_manage
+      - postgres_backup_remote_repository | trim | length > 0
+      - postgres_backup_remote_action in ['init', 'upload', 'maintenance']
+    fail_msg: >-
+      PostgreSQL remote backup actions require remote management and a
+      configured repository.
+
+- name: Remote logical backup action | Invoke host-local runner
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv:
+      - "{{ postgres_backup_remote_script_path }}"
+      - "{{ postgres_backup_remote_action }}"
+  register: postgres_backup_remote_action_result
+  changed_when: >-
+    (
+      postgres_backup_remote_action == 'init'
+      and 'POSTGRES_BACKUP_REMOTE_RESULT=INITIALIZED'
+      in (postgres_backup_remote_action_result.stdout_lines | default([]))
+    )
+    or (
+      postgres_backup_remote_action == 'upload'
+      and postgres_backup_remote_action_result.stdout_lines
+      | default([])
+      | select('match', '^POSTGRES_BACKUP_REMOTE_RESULT=UPLOADED_COUNT=[1-9][0-9]*$')
+      | list
+      | length > 0
+    )
+    or postgres_backup_remote_action == 'maintenance'
+
+- name: Remote logical backup action | Report result
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        postgres_backup_remote_action_result.stdout_lines
+        | default([])
+        | select('match', '^POSTGRES_BACKUP_REMOTE_RESULT=')
+        | list
+        | last
+        | default('POSTGRES_BACKUP_REMOTE_RESULT=NO_RESULT_REPORTED', true)
+      }}

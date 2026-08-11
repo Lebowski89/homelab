@@ -148,7 +148,7 @@ def test_common_operational_code_has_no_runtime_role_variables_or_resources():
     assert "quadlet" not in OPERATIONAL_TEXT.lower()
 
 
-def test_infisical_lookup_and_schema_are_common_owned_without_adapter_wrappers():
+def test_infisical_lookup_sites_are_explicit_and_adapter_free():
     production_files = [
         path
         for path in Path("ansible").rglob("*")
@@ -156,7 +156,10 @@ def test_infisical_lookup_and_schema_are_common_owned_without_adapter_wrappers()
     ]
     orchestration_files = [path for path in production_files if "ansible/collections/" not in path.as_posix()]
     lookup_sites = [path for path in orchestration_files if "infisical.vault.read_secrets" in path.read_text()]
-    assert lookup_sites == [Path("ansible/roles/service_common/tasks/infisical.yml")]
+    assert set(lookup_sites) == {
+        Path("ansible/roles/service_common/tasks/infisical.yml"),
+        Path("ansible/roles/postgres/tasks/sub_tasks/backup_remote_setup.yml"),
+    }
 
     for role in ("docker_services", "podman_services"):
         adapter_files = [
