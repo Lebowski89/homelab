@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import os
-import shlex
+import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -24,6 +25,7 @@ SKYNET_DOC_PATH = REPO_ROOT / "docs/cheat_sheets/skynet.md"
 BACKUP_DOC_PATH = REPO_ROOT / "docs/postgresql-logical-backups.md"
 SYSTEMD_SERVICE_TEMPLATE = REPO_ROOT / "ansible/roles/systemd_jobs/templates/systemd-job.service.j2"
 SYSTEMD_TIMER_TEMPLATE = REPO_ROOT / "ansible/roles/systemd_jobs/templates/systemd-job.timer.j2"
+NODE_EXPORTER_SERVICE_TEMPLATE = REPO_ROOT / "ansible/roles/node_exporter/templates/node_exporter.service.j2"
 
 
 def task_named(tasks: list[dict], name: str) -> dict:
@@ -37,7 +39,6 @@ def render_jinja(path: Path, **variables) -> str:
         undefined=StrictUndefined,
         keep_trailing_newline=True,
     )
-    environment.filters["quote"] = lambda value: shlex.quote(str(value))
     return environment.from_string(path.read_text()).render(**variables)
 
 
@@ -86,6 +87,12 @@ else
 fi
 """,
         "pg_dump": """#!/usr/bin/env bash
+if [[ -n "${FAKE_PG_DUMP_SLEEP:-}" ]]; then
+  sleep "$FAKE_PG_DUMP_SLEEP"
+fi
+if [[ "${FAKE_PG_DUMP_FAIL:-0}" == 1 ]]; then
+  exit 42
+fi
 output=''
 for argument in "$@"; do
   case "$argument" in
@@ -117,9 +124,14 @@ printf '%s\\n' '-- PostgreSQL globals' > "$output"
     return script_path
 
 
-def run_runner(script_path: Path, mode: str) -> subprocess.CompletedProcess[str]:
+def run_runner(
+    script_path: Path,
+    mode: str,
+    **environment_overrides: str,
+) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["FAKE_PATRONI_MODE"] = mode
+    environment.update(environment_overrides)
     return subprocess.run(
         [str(script_path)],
         check=False,
@@ -173,14 +185,26 @@ def test_setup_installs_runner_on_postgres_hosts_with_restrictive_ownership():
 
 def test_metrics_permission_is_narrow():
     setup_tasks = yaml.safe_load(SETUP_TASKS_PATH.read_text())
-    directory = task_named(setup_tasks, "Logical backup | Ensure textfile collector directory exists")
+    directory = task_named(setup_tasks, "Logical backup | Ensure dedicated metrics directory exists")
     metrics = task_named(setup_tasks, "Logical backup | Pre-create narrowly writable metrics file")
 
-    assert "owner" not in directory["ansible.builtin.file"]
+    assert directory["ansible.builtin.file"]["owner"] == "postgres"
+    assert directory["ansible.builtin.file"]["group"] == "postgres"
     assert directory["ansible.builtin.file"]["mode"] == "0755"
     assert metrics["ansible.builtin.file"]["owner"] == "postgres"
     assert metrics["ansible.builtin.file"]["group"] == "postgres"
     assert metrics["ansible.builtin.file"]["mode"] == "0644"
+    assert "--collector.textfile.directory={{ node_exporter_textfile_dir }}*" in NODE_EXPORTER_SERVICE_TEMPLATE.read_text()
+
+
+def test_metrics_are_published_atomically_in_the_dedicated_directory():
+    defaults = yaml.safe_load(DEFAULTS_PATH.read_text())
+    source = SCRIPT_TEMPLATE_PATH.read_text()
+
+    assert defaults["postgres_backup_metrics_file"].startswith("/var/lib/node_exporter/textfile_collector_postgres/")
+    assert 'mktemp "${METRICS_FILE}.tmp.XXXXXX"' in source
+    assert 'mv -f -- "$metrics_tmp" "$METRICS_FILE"' in source
+    assert '> "$METRICS_FILE"' not in source
 
 
 def test_systemd_jobs_owns_service_and_timer_rendering():
@@ -244,6 +268,9 @@ def test_database_discovery_uses_actual_connectable_non_template_databases():
     assert "SELECT datname FROM pg_database" in source
     assert "WHERE datallowconn AND NOT datistemplate" in source
     assert "ORDER BY datname" in source
+    assert 'DATABASE_COUNT="${{' in source
+    assert '#DATABASES[@]}"' in source
+    assert "wc -l" not in source
 
 
 def test_database_names_are_validated_before_becoming_paths():
@@ -311,6 +338,17 @@ def test_retention_is_root_bounded_and_name_constrained():
     assert "'^[0-9]{8}T[0-9]{6}Z$'" in source
     assert "'^\\.staging-[0-9]{8}T[0-9]{6}Z-[0-9]+$'" in source
     assert '[[ "$candidate" == "$BACKUP_ROOT/"* ]]' in source
+    assert 'mktemp "$BACKUP_ROOT/.retention-$retention_class.XXXXXX"' in source
+
+
+def test_retention_runs_only_after_successful_promotion():
+    source = SCRIPT_TEMPLATE_PATH.read_text()
+
+    promotion = source.index('mv -- "$STAGING_DIR" "$FINAL_DIR"')
+    completed_retention = source.index('"$COMPLETED_RETENTION_DAYS"', promotion)
+    failed_retention = source.index('"$FAILED_RETENTION_DAYS"', completed_retention)
+
+    assert promotion < completed_retention < failed_retention
 
 
 def test_manual_run_discovers_leader_and_invokes_installed_runner():
@@ -325,6 +363,29 @@ def test_manual_run_discovers_leader_and_invokes_installed_runner():
     assert invoke["delegate_to"] == "{{ postgres_backup_patroni_leader }}"
 
 
+def test_manual_run_result_changes_only_for_completed_backup_paths():
+    tasks = yaml.safe_load(RUN_TASKS_PATH.read_text())
+    invoke = task_named(tasks, "Logical backup run | Invoke installed leader-gated runner")
+    changed_when = invoke["changed_when"]
+
+    assert "^POSTGRES_BACKUP_RESULT=/" in changed_when
+    assert "default([])" in changed_when
+    assert "failed_when" not in invoke
+    assert "ignore_errors" not in invoke
+    assert bool(re.match(r"^POSTGRES_BACKUP_RESULT=/", "POSTGRES_BACKUP_RESULT=/var/backups/one"))
+    assert not bool(re.match(r"^POSTGRES_BACKUP_RESULT=/", "POSTGRES_BACKUP_RESULT=SKIPPED_NOT_LEADER"))
+    assert not bool(re.match(r"^POSTGRES_BACKUP_RESULT=/", "POSTGRES_BACKUP_RESULT=SKIPPED_OVERLAP"))
+
+
+def test_manual_run_reporting_handles_missing_or_empty_result_output():
+    tasks = yaml.safe_load(RUN_TASKS_PATH.read_text())
+    report = task_named(tasks, "Logical backup run | Report status and location")
+    result_expression = report["ansible.builtin.debug"]["msg"]["result"]
+
+    assert "default([])" in result_expression
+    assert "POSTGRES_BACKUP_RESULT=NO_RESULT_REPORTED" in result_expression
+
+
 def test_normal_role_execution_does_not_run_an_immediate_backup():
     main_tasks = yaml.safe_load(MAIN_TASKS_PATH.read_text())
     run_include = task_named(main_tasks, "Run PostgreSQL logical backup manually")
@@ -333,6 +394,17 @@ def test_normal_role_execution_does_not_run_an_immediate_backup():
     assert "postgres_backup_run" in condition
     assert "postgres_backup" in condition
     assert "'all'" not in condition
+
+
+def test_manual_backup_check_mode_reports_plan_without_live_discovery():
+    main_tasks = yaml.safe_load(MAIN_TASKS_PATH.read_text())
+    run_include = task_named(main_tasks, "Run PostgreSQL logical backup manually")
+    check_plan = task_named(main_tasks, "Report PostgreSQL logical backup manual check-mode plan")
+
+    assert "not ansible_check_mode" in run_include["when"]
+    assert "ansible_check_mode" in check_plan["when"]
+    assert "would discover the current Patroni leader and invoke" in check_plan["ansible.builtin.debug"]["msg"]
+    assert set(check_plan["tags"]) == {"postgres_backup", "postgres_backup_run"}
 
 
 def test_setup_run_and_compatibility_tags_are_wired_and_documented():
@@ -405,6 +477,78 @@ def test_successful_runner_builds_verified_promoted_backup_and_metrics(tmp_path:
     metrics = (tmp_path / "textfile" / "postgres_logical_backup.prom").read_text()
     assert "postgres_backup_last_run_success 1" in metrics
     assert "postgres_backup_last_database_count 2" in metrics
+    assert len([line for line in metrics.splitlines() if line.startswith("postgres_backup_")]) == 6
+    assert not list((tmp_path / "textfile").glob("*.tmp.*"))
+
+
+def test_pre_promotion_failure_does_not_apply_completed_retention(tmp_path: Path):
+    script = render_runner(tmp_path)
+    expired_completed = tmp_path / "backups" / "20000101T000000Z"
+    expired_completed.mkdir()
+    (expired_completed / "SUCCESS").touch()
+    os.utime(expired_completed, (1, 1))
+
+    result = run_runner(script, "leader", FAKE_PG_DUMP_FAIL="1")
+
+    assert result.returncode != 0
+    assert expired_completed.is_dir()
+
+
+def test_successful_promotion_applies_bounded_retention_without_following_symlinks(tmp_path: Path):
+    script = render_runner(tmp_path)
+    backup_root = tmp_path / "backups"
+    expired_completed = backup_root / "20000101T000000Z"
+    expired_staging = backup_root / ".staging-20000101T000000Z-123"
+    nonmatching = backup_root / "do-not-remove"
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    for path in (expired_completed, expired_staging, nonmatching):
+        path.mkdir()
+        os.utime(path, (1, 1))
+    matching_symlink = backup_root / "20000101T000001Z"
+    matching_symlink.symlink_to(outside, target_is_directory=True)
+
+    result = run_runner(script, "leader")
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not expired_completed.exists()
+    assert not expired_staging.exists()
+    assert nonmatching.is_dir()
+    assert matching_symlink.is_symlink()
+    assert outside.is_dir()
+    assert not list(backup_root.glob(".retention-*"))
+
+
+def test_flock_skips_an_overlapping_run_without_starting_another_backup(tmp_path: Path):
+    script = render_runner(tmp_path)
+    first_environment = os.environ.copy()
+    first_environment.update({"FAKE_PATRONI_MODE": "leader", "FAKE_PG_DUMP_SLEEP": "1"})
+    first = subprocess.Popen(
+        [str(script)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env=first_environment,
+    )
+    try:
+        for _ in range(100):
+            if list((tmp_path / "backups").glob(".staging-*")):
+                break
+            if first.poll() is not None:
+                break
+            time.sleep(0.02)
+
+        overlap = run_runner(script, "leader")
+        first_stdout, first_stderr = first.communicate(timeout=10)
+    finally:
+        if first.poll() is None:
+            first.terminate()
+            first.wait(timeout=5)
+
+    assert first.returncode == 0, first_stdout + first_stderr
+    assert overlap.returncode == 0, overlap.stdout + overlap.stderr
+    assert "POSTGRES_BACKUP_RESULT=SKIPPED_OVERLAP" in overlap.stdout
+    assert len(list((tmp_path / "backups").glob("[0-9]*Z"))) == 1
 
 
 def test_rendered_runner_passes_bash_syntax(tmp_path: Path):

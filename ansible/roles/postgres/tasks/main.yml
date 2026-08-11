@@ -87,6 +87,7 @@
 - name: Run PostgreSQL logical backup manually
   when:
     - inventory_hostname == services_controller_host
+    - not ansible_check_mode
     - >-
       ansible_run_tags | default([])
       | intersect(['postgres_backup', 'postgres_backup_run'])
@@ -97,6 +98,22 @@
       tags:
         - postgres_backup
         - postgres_backup_run
+  tags:
+    - postgres_backup
+    - postgres_backup_run
+
+- name: Report PostgreSQL logical backup manual check-mode plan
+  when:
+    - inventory_hostname == services_controller_host
+    - ansible_check_mode
+    - >-
+      ansible_run_tags | default([])
+      | intersect(['postgres_backup', 'postgres_backup_run'])
+      | length > 0
+  ansible.builtin.debug:
+    msg: >-
+      Check mode: would discover the current Patroni leader and invoke the
+      installed leader-gated PostgreSQL logical backup runner.
   tags:
     - postgres_backup
     - postgres_backup_run

@@ -28,7 +28,7 @@ The role defaults are:
 | `postgres_backup_timer_randomized_delay_sec` | `30m` | Per-node scheduling jitter |
 | `postgres_backup_local_retention_days` | `7` | Completed-backup retention |
 | `postgres_backup_failed_retention_days` | `2` | Abandoned-staging retention |
-| `postgres_backup_metrics_file` | `/var/lib/node_exporter/textfile_collector/postgres_logical_backup.prom` | Node Exporter metrics file |
+| `postgres_backup_metrics_file` | `/var/lib/node_exporter/textfile_collector_postgres/postgres_logical_backup.prom` | Node Exporter metrics file |
 
 The safe role default leaves scheduling disabled. This repository explicitly
 sets `postgres_backup_manage_timer: true` in
@@ -78,16 +78,21 @@ verification, globals capture, manifest, and checksum succeeds. Only then is
 failure exits non-zero and leaves identifiable staging data. The runner uses a
 local `flock` file to prevent overlaps.
 
-Retention only considers direct children of `postgres_backup_root` whose
-names exactly match the completed or staging formats. Completed and abandoned
-staging directories use their separate retention periods.
+Only after promotion does retention consider direct children of
+`postgres_backup_root` whose names exactly match the completed or staging
+formats. Completed and abandoned staging directories use their separate
+retention periods, so a failed pre-promotion backup cannot remove an older
+completed backup.
 
 ## Metrics
 
-Ansible pre-creates only the configured metrics file as
-`postgres:postgres 0644`; the Node Exporter collector directory remains
-`0755` and is not made writable by `postgres`. The runner overwrites that
-single file with these gauges:
+Ansible creates a dedicated sibling metrics directory as
+`postgres:postgres 0755` and pre-creates the configured file as
+`postgres:postgres 0644`. The shared Node Exporter collector directory remains
+owned by Node Exporter and is not made writable by `postgres`; Node Exporter
+reads both directories through the configured textfile-directory glob. The
+runner writes a complete temporary file in its dedicated directory and then
+atomically renames it over the `.prom` file. It publishes these gauges:
 
 - `postgres_backup_last_attempt_timestamp_seconds`: last leader attempt, also
   updated when the local Patroni endpoint fails.
@@ -122,6 +127,10 @@ skynet run postgres backup-setup
 skynet run postgres backup-run
 skynet run postgres backup
 ```
+
+In check mode, `skynet check postgres backup-run` configures and validates the
+backup resources, then reports that it would discover the leader and invoke
+the runner. It does not query Patroni or run a backup.
 
 The runner repeats the local leader check even after Ansible selected a leader,
 so a failover between discovery and execution cannot produce a backup on a

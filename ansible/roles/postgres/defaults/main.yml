@@ -71,7 +71,7 @@ postgres_backup_timer_on_calendar: "*-*-* 03:00:00"
 postgres_backup_timer_randomized_delay_sec: 30m
 postgres_backup_local_retention_days: 7
 postgres_backup_failed_retention_days: 2
-postgres_backup_metrics_file: /var/lib/node_exporter/textfile_collector/postgres_logical_backup.prom
+postgres_backup_metrics_file: /var/lib/node_exporter/textfile_collector_postgres/postgres_logical_backup.prom
 
 ################################
 # RESTORE (DATABASES)

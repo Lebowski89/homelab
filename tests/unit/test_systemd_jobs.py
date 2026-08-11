@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -8,7 +9,7 @@ from pathlib import Path
 
 import pytest
 import yaml
-from jinja2 import Environment, StrictUndefined
+from jinja2 import Environment, StrictUndefined, meta
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROLE_PATH = REPO_ROOT / "ansible/roles/systemd_jobs"
@@ -18,6 +19,15 @@ SERVICE_TEMPLATE_PATH = ROLE_PATH / "templates/systemd-job.service.j2"
 TIMER_TEMPLATE_PATH = ROLE_PATH / "templates/systemd-job.timer.j2"
 DOCKER_TIMER_PATH = REPO_ROOT / "ansible/roles/docker/tasks/sub_tasks/prune/timer.yml"
 DOCKER_MAIN_PATH = REPO_ROOT / "ansible/roles/docker/tasks/main.yml"
+ANSIBLE_PLAYBOOK = shutil.which(
+    "ansible-playbook",
+    path=os.pathsep.join((str(Path(sys.executable).parent), os.environ.get("PATH", ""))),
+)
+requires_ansible_playbook = pytest.mark.skipif(
+    ANSIBLE_PLAYBOOK is None,
+    reason="ansible-playbook is unavailable",
+)
+DOCKER_VARIABLE_PATTERN = re.compile(r"\b(?:docker|docker_services)_[a-z0-9_]+\b")
 
 
 def task_named(tasks, name: str):
@@ -30,6 +40,18 @@ def valid_job(name: str = "example-job"):
         "service": {"exec_start": "/bin/true"},
         "timer": {"on_calendar": "daily"},
     }
+
+
+def scalar_strings(value):
+    if isinstance(value, str):
+        yield value
+    elif isinstance(value, dict):
+        for key, item in value.items():
+            yield from scalar_strings(key)
+            yield from scalar_strings(item)
+    elif isinstance(value, list):
+        for item in value:
+            yield from scalar_strings(item)
 
 
 def run_role_check(
@@ -61,7 +83,7 @@ def run_role_check(
             "ANSIBLE_REMOTE_TEMP": str(tmp_path / "ansible-remote"),
         }
     )
-    command = [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", str(playbook), "--check"]
+    command = [ANSIBLE_PLAYBOOK, "-i", "localhost,", str(playbook), "--check"]
     if tags is not None:
         command.extend(["--tags", tags])
     return subprocess.run(
@@ -79,6 +101,7 @@ def render_template(path: Path, job: dict):
     return environment.from_string(path.read_text()).render(systemd_jobs_job=job)
 
 
+@requires_ansible_playbook
 def test_defaults_to_empty_job_list_and_empty_role_is_safe(tmp_path: Path):
     assert yaml.safe_load(DEFAULTS_PATH.read_text()) == {"systemd_jobs": []}
 
@@ -88,6 +111,7 @@ def test_defaults_to_empty_job_list_and_empty_role_is_safe(tmp_path: Path):
     assert "skipping: [localhost]" in result.stdout
 
 
+@requires_ansible_playbook
 def test_valid_job_check_mode_renders_units_without_systemd_lifecycle(tmp_path: Path):
     result = run_role_check(tmp_path, [valid_job()])
     output = result.stdout + result.stderr
@@ -110,6 +134,7 @@ def test_valid_job_check_mode_renders_units_without_systemd_lifecycle(tmp_path: 
     ],
     ids=["missing-name", "unsafe-name", "duplicate-name", "missing-exec-start", "missing-on-calendar"],
 )
+@requires_ansible_playbook
 def test_invalid_job_definitions_are_rejected(tmp_path: Path, jobs, expected_message: str):
     result = run_role_check(tmp_path, jobs)
     output = result.stdout + result.stderr
@@ -256,6 +281,7 @@ def test_docker_prune_maps_existing_api_to_generic_role_and_preserves_tags():
     }
 
 
+@requires_ansible_playbook
 def test_docker_prune_timer_tag_reaches_generic_role_and_non_systemd_hosts_skip(tmp_path: Path):
     systemd_result = run_role_check(tmp_path, role_name="docker", tags="docker_prune_timer")
     systemd_output = systemd_result.stdout + systemd_result.stderr
@@ -319,13 +345,13 @@ def test_docker_retains_non_systemd_skip_boundary_and_generic_role_has_no_docker
     assert "systemd" in support_expression
     assert "not docker_prune_timer_systemd_supported | bool" in skip["when"]
 
-    implementation = "\n".join(
-        path.read_text()
-        for path in (
-            TASKS_PATH,
-            SERVICE_TEMPLATE_PATH,
-            TIMER_TEMPLATE_PATH,
-        )
-    )
-    assert "docker" not in implementation.lower()
+    task_variables = set(DOCKER_VARIABLE_PATTERN.findall("\n".join(scalar_strings(yaml.safe_load(TASKS_PATH.read_text())))))
+    environment = Environment()
+    template_variables = set()
+    for path in (SERVICE_TEMPLATE_PATH, TIMER_TEMPLATE_PATH):
+        template_variables.update(meta.find_undeclared_variables(environment.parse(path.read_text())))
+    docker_template_variables = {variable for variable in template_variables if DOCKER_VARIABLE_PATTERN.fullmatch(variable)}
+
+    assert task_variables == set()
+    assert docker_template_variables == set()
     assert all(task["tags"] == "systemd_jobs" for task in yaml.safe_load(TASKS_PATH.read_text()))

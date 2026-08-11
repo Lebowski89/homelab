@@ -25,6 +25,7 @@ unset PGHOST PGUSER PGSERVICE PGSERVICEFILE
 ATTEMPT_EPOCH="$(date +%s)"
 RUN_START_EPOCH="$ATTEMPT_EPOCH"
 STAGING_DIR=""
+BACKUP_PROMOTED=0
 REPORT_FAILURE_METRICS=1
 LAST_SUCCESS_EPOCH=0
 LAST_SUCCESS_SIZE=0
@@ -62,6 +63,9 @@ write_metrics() {
   local duration_seconds="$4"
   local size_bytes="$5"
   local database_count="$6"
+  local metrics_tmp
+
+  metrics_tmp="$(mktemp "${METRICS_FILE}.tmp.XXXXXX")"
 
   {
     printf '# HELP postgres_backup_last_attempt_timestamp_seconds Unix timestamp of the last leader backup attempt.\n'
@@ -82,7 +86,9 @@ write_metrics() {
     printf '# HELP postgres_backup_last_database_count Databases in the last completed backup.\n'
     printf '# TYPE postgres_backup_last_database_count gauge\n'
     printf 'postgres_backup_last_database_count %s\n' "$database_count"
-  } > "$METRICS_FILE"
+  } > "$metrics_tmp"
+  chmod 0644 "$metrics_tmp"
+  mv -f -- "$metrics_tmp" "$METRICS_FILE"
 }
 
 on_error() {
@@ -105,7 +111,9 @@ on_error() {
       "$LAST_SUCCESS_DATABASE_COUNT"
   fi
 
-  if [[ -n "$STAGING_DIR" ]]; then
+  if (( BACKUP_PROMOTED == 1 )); then
+    log "PostgreSQL logical backup was promoted, but post-promotion processing failed." >&2
+  elif [[ -n "$STAGING_DIR" ]]; then
     log "PostgreSQL logical backup failed; partial data remains in $STAGING_DIR" >&2
   else
     log "PostgreSQL logical backup failed before staging began." >&2
@@ -117,16 +125,20 @@ cleanup_expired_directories() {
   local retention_days="$1"
   local name_pattern="$2"
   local retention_class="$3"
-  local candidates_file="$STAGING_DIR/.retention-$retention_class"
+  local candidates_file
   local candidate
   local candidate_name
 
-  find "$BACKUP_ROOT" \
+  candidates_file="$(mktemp "$BACKUP_ROOT/.retention-$retention_class.XXXXXX")"
+  if ! find "$BACKUP_ROOT" \
     -mindepth 1 \
     -maxdepth 1 \
     -type d \
     -mtime "+$retention_days" \
-    -print0 > "$candidates_file"
+    -print0 > "$candidates_file"; then
+    rm -f -- "$candidates_file"
+    fail "Unable to enumerate expired $retention_class backup directories."
+  fi
 
   while IFS= read -r -d '' candidate; do
     candidate_name="$(basename -- "$candidate")"
@@ -232,7 +244,7 @@ database_list_file="$STAGING_DIR/.database-list"
   > "$database_list_file"
 
 mapfile -t DATABASES < "$database_list_file"
-DATABASE_COUNT="$(wc -l < "$database_list_file")"
+DATABASE_COUNT="${{ '{' }}#DATABASES[@]}"
 rm -f -- "$database_list_file"
 (( DATABASE_COUNT > 0 )) || fail "Database discovery returned no eligible databases."
 log "Discovered $DATABASE_COUNT connectable non-template databases."
@@ -266,16 +278,6 @@ log "Capturing PostgreSQL globals"
   --globals-only \
   --file="$STAGING_DIR/globals.sql"
 
-cleanup_expired_directories \
-  "$COMPLETED_RETENTION_DAYS" \
-  '^[0-9]{8}T[0-9]{6}Z$' \
-  completed
-cleanup_expired_directories \
-  "$FAILED_RETENTION_DAYS" \
-  '^\.staging-[0-9]{8}T[0-9]{6}Z-[0-9]+$' \
-  staging
-log "Local backup retention complete."
-
 completion_iso="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 {
   printf 'start_utc=%s\n' "$START_ISO"
@@ -304,6 +306,17 @@ log "Backup checksums complete."
 touch "$STAGING_DIR/SUCCESS"
 mv -- "$STAGING_DIR" "$FINAL_DIR"
 STAGING_DIR=""
+BACKUP_PROMOTED=1
+
+cleanup_expired_directories \
+  "$COMPLETED_RETENTION_DAYS" \
+  '^[0-9]{8}T[0-9]{6}Z$' \
+  completed
+cleanup_expired_directories \
+  "$FAILED_RETENTION_DAYS" \
+  '^\.staging-[0-9]{8}T[0-9]{6}Z-[0-9]+$' \
+  staging
+log "Local backup retention complete."
 
 success_epoch="$(date +%s)"
 duration_seconds=$((success_epoch - RUN_START_EPOCH))

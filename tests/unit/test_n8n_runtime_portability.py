@@ -118,7 +118,7 @@ def test_real_n8n_uses_only_canonical_portable_schema():
 def test_real_n8n_podman_normalization_preserves_behavior():
     cfg, service, _, _, _, _, _, resolved_environment = normalize_both()
 
-    assert service["image"] == "docker.io/n8nio/n8n:2.31.4"
+    assert service["image"] == cfg["image"]
     assert service["name"] == "n8n"
     assert service["unit_name"] == "n8n"
     assert service["container"]["uid"] == "1000"

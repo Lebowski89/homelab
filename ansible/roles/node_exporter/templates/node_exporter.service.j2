@@ -16,7 +16,7 @@ ExecStart={{ node_exporter_install_dir }}/node_exporter \
 {% for collector in node_exporter_disabled_collectors %}
   --no-collector.{{ collector }} \
 {% endfor %}
-  --collector.textfile.directory={{ node_exporter_textfile_dir }} \
+  --collector.textfile.directory={{ node_exporter_textfile_dir }}* \
 {% for arg in node_exporter_extra_args %}
   {{ arg }} \
 {% endfor %}

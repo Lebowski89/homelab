@@ -52,7 +52,7 @@ SERVICE_CATALOG = load_module(CATALOG_FILTER_PATH, "services_host_contract_catal
 
 def load_services():
     services = {}
-    for path in sorted(SERVICES_DIR.glob("*.yml")):
+    for path in sorted((*SERVICES_DIR.glob("*.yml"), *SERVICES_DIR.glob("*.yaml"))):
         services.update(yaml.safe_load(path.read_text()) or {})
     return services
 
@@ -161,7 +161,7 @@ def test_repository_service_host_contract_uses_real_netbox_groups_and_explicit_p
 
 def test_all_real_services_use_neutral_host_variables_and_keep_explicit_runtimes():
     offenders = {}
-    for path in sorted(SERVICES_DIR.glob("*.yml")):
+    for path in sorted((*SERVICES_DIR.glob("*.yml"), *SERVICES_DIR.glob("*.yaml"))):
         source_without_swarm_label_values = path.read_text()
         for constraint in SWARM_HOST_CONSTRAINTS:
             source_without_swarm_label_values = source_without_swarm_label_values.replace(constraint, "")
@@ -267,7 +267,7 @@ def test_adapter_aliases_flow_only_from_canonical_values_and_podman_has_no_docke
 def test_postgres_role_has_no_docker_services_variable_dependencies():
     offenders = {}
     for path in sorted(POSTGRES_ROLE_PATH.rglob("*")):
-        if path.suffix == ".yml":
+        if path.suffix in {".yaml", ".yml"}:
             document = yaml.safe_load(path.read_text())
             dependencies = {
                 match.group(0) for scalar in scalar_strings(document) for match in DOCKER_SERVICES_VARIABLE_PATTERN.finditer(scalar)

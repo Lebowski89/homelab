@@ -46,6 +46,9 @@ jobs:
 
           python -m pip install ansible-core ansible-lint yamllint ruff pytest
 
+      - name: Prepare ansible log dir
+        run: mkdir -p .ansible
+
       - name: Install Ansible collections
         run: |
           if [ -f ansible/requirements.yml ]; then
@@ -93,9 +96,6 @@ jobs:
       - name: pytest
         run: |
           python -m pytest tests/unit
-
-      - name: Prepare ansible log dir
-        run: mkdir -p .ansible
 
       - name: ansible-lint
         run: |

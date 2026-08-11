@@ -44,10 +44,12 @@
     group: postgres
     mode: "0750"
 
-- name: Logical backup | Ensure textfile collector directory exists
+- name: Logical backup | Ensure dedicated metrics directory exists
   ansible.builtin.file:
     path: "{{ postgres_backup_metrics_file | dirname }}"
     state: directory
+    owner: postgres
+    group: postgres
     mode: "0755"
 
 - name: Logical backup | Pre-create narrowly writable metrics file
