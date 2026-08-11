@@ -187,6 +187,19 @@ def test_metrics_permission_is_narrow():
     setup_tasks = yaml.safe_load(SETUP_TASKS_PATH.read_text())
     directory = task_named(setup_tasks, "Logical backup | Ensure dedicated metrics directory exists")
     metrics = task_named(setup_tasks, "Logical backup | Pre-create narrowly writable metrics file")
+    textfile_dir = "/var/lib/node_exporter/textfile_collector"
+    rendered_unit = render_jinja(
+        NODE_EXPORTER_SERVICE_TEMPLATE,
+        node_exporter_user="node_exporter",
+        node_exporter_group="node_exporter",
+        node_exporter_install_dir="/usr/local/bin",
+        node_exporter_listen_address="0.0.0.0:9100",
+        node_exporter_enabled_collectors=["textfile"],
+        node_exporter_disabled_collectors=[],
+        node_exporter_textfile_dir=textfile_dir,
+        node_exporter_extra_args=[],
+    )
+    exec_start = rendered_unit.split("ExecStart=", maxsplit=1)[1].split("\n\nRestart=", maxsplit=1)[0]
 
     assert directory["ansible.builtin.file"]["owner"] == "postgres"
     assert directory["ansible.builtin.file"]["group"] == "postgres"
@@ -194,7 +207,7 @@ def test_metrics_permission_is_narrow():
     assert metrics["ansible.builtin.file"]["owner"] == "postgres"
     assert metrics["ansible.builtin.file"]["group"] == "postgres"
     assert metrics["ansible.builtin.file"]["mode"] == "0644"
-    assert "--collector.textfile.directory={{ node_exporter_textfile_dir }}*" in NODE_EXPORTER_SERVICE_TEMPLATE.read_text()
+    assert f"--collector.textfile.directory={textfile_dir}*" in exec_start
 
 
 def test_metrics_are_published_atomically_in_the_dedicated_directory():
