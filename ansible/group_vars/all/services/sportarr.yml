@@ -12,7 +12,7 @@ sportarr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: sportarr/sportarr:4.0.1025.1105
+  image: sportarr/sportarr:4.1.0.1110
   ################################
   # ENVIRONMENT/SECRETS
   ################################
