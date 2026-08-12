@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/02 |
+| Readme update        | 2026/08/12 |
 
 
 
@@ -76,90 +76,92 @@
 | [ubuntu_apt_firewall_packages](defaults/main.yml#L55)   | list | `[]` |    
 | [ubuntu_apt_firewall_packages.**0**](defaults/main.yml#L56)   | str | `ufw` |    
 | [ubuntu_apt_docker_packages](defaults/main.yml#L58)   | list | `[]` |    
-| [ubuntu_apt_swarm_packages](defaults/main.yml#L59)   | list | `[]` |    
-| [ubuntu_apt_haproxy_packages](defaults/main.yml#L60)   | list | `[]` |    
-| [ubuntu_apt_opentofu_packages](defaults/main.yml#L61)   | list | `[]` |    
-| [ubuntu_apt_env_vars](defaults/main.yml#L63)   | dict | `{}` |    
-| [ubuntu_apt_env_vars.**DEBIAN_FRONTEND**](defaults/main.yml#L64)   | str | `noninteractive` |    
-| [ubuntu_apt_env_vars.**DEBIAN_PRIORITY**](defaults/main.yml#L65)   | str | `critical` |    
-| [ubuntu_ansible_repo_root](defaults/main.yml#L67)   | str | `/opt` |    
-| [ubuntu_ansible_repo_dirname](defaults/main.yml#L68)   | str | `homelab` |    
-| [ubuntu_ansible_repo_path](defaults/main.yml#L69)   | str | `{{ ubuntu_ansible_repo_root }}/{{ ubuntu_ansible_repo_dirname }}` |    
-| [ubuntu_ansible_dirname](defaults/main.yml#L70)   | str | `ansible` |    
-| [ubuntu_ansible_path](defaults/main.yml#L71)   | str | `{{ ubuntu_ansible_repo_path }}/{{ ubuntu_ansible_dirname }}` |    
-| [ubuntu_manage_repo_clone](defaults/main.yml#L73)   | bool | `True` |    
-| [ubuntu_repo_url](defaults/main.yml#L74)   | str | `https://github.com/Lebowski89/homelab.git` |    
-| [ubuntu_repo_version](defaults/main.yml#L75)   | str | `main` |    
-| [ubuntu_ansible_opt_path](defaults/main.yml#L77)   | str | `/opt/ansible` |    
-| [ubuntu_ansible_venv_path](defaults/main.yml#L78)   | str | `{{ ubuntu_ansible_opt_path }}/ansible-venv` |    
-| [ubuntu_ansible_secrets_path](defaults/main.yml#L79)   | str | `{{ ubuntu_ansible_opt_path }}/.secrets` |    
-| [ubuntu_ansible_become_pass_file](defaults/main.yml#L80)   | str | `{{ ubuntu_ansible_secrets_path }}/.ansible_become_pass` |    
-| [ubuntu_ansible_vault_pass_file](defaults/main.yml#L81)   | str | `{{ ubuntu_ansible_secrets_path }}/.ansible_vault_pass` |    
-| [ubuntu_skynet_install](defaults/main.yml#L83)   | bool | `True` |    
-| [ubuntu_skynet_install_path](defaults/main.yml#L84)   | str | `/usr/local/bin/skynet` |    
-| [ubuntu_skynet_doctor_ping_target](defaults/main.yml#L85)   | str | `tags_skynet` |    
-| [ubuntu_sysctl_file](defaults/main.yml#L87)   | str | `/etc/sysctl.d/99-ubuntu-tuning.conf` |    
-| [ubuntu_sysctl_settings](defaults/main.yml#L89)   | dict | `{}` |    
-| [ubuntu_sysctl_settings.fs.inotify.**max_user_watches**](defaults/main.yml#L90)   | int | `524288` |    
-| [ubuntu_sysctl_settings.net.core.**default_qdisc**](defaults/main.yml#L91)   | str | `fq` |    
-| [ubuntu_sysctl_settings.net.core.**netdev_budget**](defaults/main.yml#L92)   | int | `50000` |    
-| [ubuntu_sysctl_settings.net.core.**netdev_max_backlog**](defaults/main.yml#L93)   | int | `100000` |    
-| [ubuntu_sysctl_settings.net.core.**rmem_max**](defaults/main.yml#L94)   | int | `67108864` |    
-| [ubuntu_sysctl_settings.net.core.**somaxconn**](defaults/main.yml#L95)   | int | `4096` |    
-| [ubuntu_sysctl_settings.net.core.**wmem_max**](defaults/main.yml#L96)   | int | `67108864` |    
-| [ubuntu_sysctl_settings.net.ipv4.conf.all.**accept_redirects**](defaults/main.yml#L97)   | int | `0` |    
-| [ubuntu_sysctl_settings.net.ipv4.conf.all.**accept_source_route**](defaults/main.yml#L98)   | int | `0` |    
-| [ubuntu_sysctl_settings.net.ipv4.conf.all.**secure_redirects**](defaults/main.yml#L99)   | int | `0` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_adv_win_scale**](defaults/main.yml#L100)   | int | `2` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_congestion_control**](defaults/main.yml#L101)   | str | `bbr` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_fin_timeout**](defaults/main.yml#L102)   | int | `10` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_max_syn_backlog**](defaults/main.yml#L103)   | int | `30000` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_max_tw_buckets**](defaults/main.yml#L104)   | int | `2000000` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_mtu_probing**](defaults/main.yml#L105)   | int | `1` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_rfc1337**](defaults/main.yml#L106)   | int | `1` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_rmem**](defaults/main.yml#L107)   | str | `4096 87380 33554432` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_sack**](defaults/main.yml#L108)   | int | `1` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_slow_start_after_idle**](defaults/main.yml#L109)   | int | `0` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_tw_reuse**](defaults/main.yml#L110)   | int | `2` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_window_scaling**](defaults/main.yml#L111)   | int | `1` |    
-| [ubuntu_sysctl_settings.net.ipv4.**tcp_wmem**](defaults/main.yml#L112)   | str | `4096 87380 33554432` |    
-| [ubuntu_sysctl_settings.net.ipv4.**udp_rmem_min**](defaults/main.yml#L113)   | int | `8192` |    
-| [ubuntu_sysctl_settings.net.ipv4.**udp_wmem_min**](defaults/main.yml#L114)   | int | `8192` |    
-| [ubuntu_sysctl_settings.net.ipv4.neigh.default.**gc_thresh1**](defaults/main.yml#L115)   | int | `1024` |    
-| [ubuntu_sysctl_settings.net.ipv4.neigh.default.**gc_thresh2**](defaults/main.yml#L116)   | int | `2048` |    
-| [ubuntu_sysctl_settings.net.ipv4.neigh.default.**gc_thresh3**](defaults/main.yml#L117)   | int | `4096` |    
-| [ubuntu_sysctl_settings.vm.**dirty_background_ratio**](defaults/main.yml#L118)   | int | `10` |    
-| [ubuntu_sysctl_settings.vm.**dirty_ratio**](defaults/main.yml#L119)   | int | `15` |    
-| [ubuntu_sysctl_settings.vm.**swappiness**](defaults/main.yml#L120)   | int | `10` |    
-| [ubuntu_pam_limits](defaults/main.yml#L122)   | list | `[]` |    
-| [ubuntu_pam_limits.**0**](defaults/main.yml#L123)   | dict | `{}` |    
-| [ubuntu_pam_limits.0.**domain**](defaults/main.yml#L123)   | str | `*` |    
-| [ubuntu_pam_limits.0.**limit_type**](defaults/main.yml#L124)   | str | `-` |    
-| [ubuntu_pam_limits.0.**limit_item**](defaults/main.yml#L125)   | str | `nofile` |    
-| [ubuntu_pam_limits.0.**value**](defaults/main.yml#L126)   | str | `100000` |    
-| [ubuntu_pam_limits.**1**](defaults/main.yml#L127)   | dict | `{}` |    
-| [ubuntu_pam_limits.1.**domain**](defaults/main.yml#L127)   | str | `*` |    
-| [ubuntu_pam_limits.1.**limit_type**](defaults/main.yml#L128)   | str | `soft` |    
-| [ubuntu_pam_limits.1.**limit_item**](defaults/main.yml#L129)   | str | `memlock` |    
-| [ubuntu_pam_limits.1.**value**](defaults/main.yml#L130)   | str | `unlimited` |    
-| [ubuntu_pam_limits.**2**](defaults/main.yml#L131)   | dict | `{}` |    
-| [ubuntu_pam_limits.2.**domain**](defaults/main.yml#L131)   | str | `*` |    
-| [ubuntu_pam_limits.2.**limit_type**](defaults/main.yml#L132)   | str | `hard` |    
-| [ubuntu_pam_limits.2.**limit_item**](defaults/main.yml#L133)   | str | `memlock` |    
-| [ubuntu_pam_limits.2.**value**](defaults/main.yml#L134)   | str | `unlimited` |    
-| [ubuntu_netplan_enabled](defaults/main.yml#L136)   | bool | `True` |    
-| [ubuntu_netplan_disable_cloud_init_networking](defaults/main.yml#L137)   | bool | `True` |    
-| [ubuntu_netplan_verify_address](defaults/main.yml#L138)   | bool | `True` |    
-| [ubuntu_netplan_interface](defaults/main.yml#L139)   | str |  |    
-| [ubuntu_defaults_netplan_config](defaults/main.yml#L141)   | str | `netplan-config.yaml` |    
-| [ubuntu_netplan_config_path](defaults/main.yml#L142)   | str | `/etc/netplan/{{ ubuntu_defaults_netplan_config }}` |    
-| [ubuntu_defaults_netplan_gateway](defaults/main.yml#L144)   | str | `<multiline value: folded_strip>` |    
-| [ubuntu_defaults_netplan_nameservers](defaults/main.yml#L151)   | str | `<multiline value: folded_strip>` |    
-| [ubuntu_netplan_nameservers](defaults/main.yml#L161)   | str | `{{ ubuntu_defaults_netplan_nameservers }}` |    
-| [ubuntu_netplan_search_domains](defaults/main.yml#L162)   | list | `[]` |    
-| [ubuntu_netplan_prefix](defaults/main.yml#L163)   | int | `24` |    
-| [ubuntu_nic_tuning_enabled](defaults/main.yml#L165)   | bool | `True` |    
-| [ubuntu_vnstat_enabled](defaults/main.yml#L166)   | bool | `True` |    
+| [ubuntu_apt_postgres_packages](defaults/main.yml#L59)   | list | `[]` |    
+| [ubuntu_apt_postgres_packages.**0**](defaults/main.yml#L60)   | str | `acl` |    
+| [ubuntu_apt_swarm_packages](defaults/main.yml#L61)   | list | `[]` |    
+| [ubuntu_apt_haproxy_packages](defaults/main.yml#L62)   | list | `[]` |    
+| [ubuntu_apt_opentofu_packages](defaults/main.yml#L63)   | list | `[]` |    
+| [ubuntu_apt_env_vars](defaults/main.yml#L65)   | dict | `{}` |    
+| [ubuntu_apt_env_vars.**DEBIAN_FRONTEND**](defaults/main.yml#L66)   | str | `noninteractive` |    
+| [ubuntu_apt_env_vars.**DEBIAN_PRIORITY**](defaults/main.yml#L67)   | str | `critical` |    
+| [ubuntu_ansible_repo_root](defaults/main.yml#L69)   | str | `/opt` |    
+| [ubuntu_ansible_repo_dirname](defaults/main.yml#L70)   | str | `homelab` |    
+| [ubuntu_ansible_repo_path](defaults/main.yml#L71)   | str | `{{ ubuntu_ansible_repo_root }}/{{ ubuntu_ansible_repo_dirname }}` |    
+| [ubuntu_ansible_dirname](defaults/main.yml#L72)   | str | `ansible` |    
+| [ubuntu_ansible_path](defaults/main.yml#L73)   | str | `{{ ubuntu_ansible_repo_path }}/{{ ubuntu_ansible_dirname }}` |    
+| [ubuntu_manage_repo_clone](defaults/main.yml#L75)   | bool | `True` |    
+| [ubuntu_repo_url](defaults/main.yml#L76)   | str | `https://github.com/Lebowski89/homelab.git` |    
+| [ubuntu_repo_version](defaults/main.yml#L77)   | str | `main` |    
+| [ubuntu_ansible_opt_path](defaults/main.yml#L79)   | str | `/opt/ansible` |    
+| [ubuntu_ansible_venv_path](defaults/main.yml#L80)   | str | `{{ ubuntu_ansible_opt_path }}/ansible-venv` |    
+| [ubuntu_ansible_secrets_path](defaults/main.yml#L81)   | str | `{{ ubuntu_ansible_opt_path }}/.secrets` |    
+| [ubuntu_ansible_become_pass_file](defaults/main.yml#L82)   | str | `{{ ubuntu_ansible_secrets_path }}/.ansible_become_pass` |    
+| [ubuntu_ansible_vault_pass_file](defaults/main.yml#L83)   | str | `{{ ubuntu_ansible_secrets_path }}/.ansible_vault_pass` |    
+| [ubuntu_skynet_install](defaults/main.yml#L85)   | bool | `True` |    
+| [ubuntu_skynet_install_path](defaults/main.yml#L86)   | str | `/usr/local/bin/skynet` |    
+| [ubuntu_skynet_doctor_ping_target](defaults/main.yml#L87)   | str | `tags_skynet` |    
+| [ubuntu_sysctl_file](defaults/main.yml#L89)   | str | `/etc/sysctl.d/99-ubuntu-tuning.conf` |    
+| [ubuntu_sysctl_settings](defaults/main.yml#L91)   | dict | `{}` |    
+| [ubuntu_sysctl_settings.fs.inotify.**max_user_watches**](defaults/main.yml#L92)   | int | `524288` |    
+| [ubuntu_sysctl_settings.net.core.**default_qdisc**](defaults/main.yml#L93)   | str | `fq` |    
+| [ubuntu_sysctl_settings.net.core.**netdev_budget**](defaults/main.yml#L94)   | int | `50000` |    
+| [ubuntu_sysctl_settings.net.core.**netdev_max_backlog**](defaults/main.yml#L95)   | int | `100000` |    
+| [ubuntu_sysctl_settings.net.core.**rmem_max**](defaults/main.yml#L96)   | int | `67108864` |    
+| [ubuntu_sysctl_settings.net.core.**somaxconn**](defaults/main.yml#L97)   | int | `4096` |    
+| [ubuntu_sysctl_settings.net.core.**wmem_max**](defaults/main.yml#L98)   | int | `67108864` |    
+| [ubuntu_sysctl_settings.net.ipv4.conf.all.**accept_redirects**](defaults/main.yml#L99)   | int | `0` |    
+| [ubuntu_sysctl_settings.net.ipv4.conf.all.**accept_source_route**](defaults/main.yml#L100)   | int | `0` |    
+| [ubuntu_sysctl_settings.net.ipv4.conf.all.**secure_redirects**](defaults/main.yml#L101)   | int | `0` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_adv_win_scale**](defaults/main.yml#L102)   | int | `2` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_congestion_control**](defaults/main.yml#L103)   | str | `bbr` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_fin_timeout**](defaults/main.yml#L104)   | int | `10` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_max_syn_backlog**](defaults/main.yml#L105)   | int | `30000` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_max_tw_buckets**](defaults/main.yml#L106)   | int | `2000000` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_mtu_probing**](defaults/main.yml#L107)   | int | `1` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_rfc1337**](defaults/main.yml#L108)   | int | `1` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_rmem**](defaults/main.yml#L109)   | str | `4096 87380 33554432` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_sack**](defaults/main.yml#L110)   | int | `1` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_slow_start_after_idle**](defaults/main.yml#L111)   | int | `0` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_tw_reuse**](defaults/main.yml#L112)   | int | `2` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_window_scaling**](defaults/main.yml#L113)   | int | `1` |    
+| [ubuntu_sysctl_settings.net.ipv4.**tcp_wmem**](defaults/main.yml#L114)   | str | `4096 87380 33554432` |    
+| [ubuntu_sysctl_settings.net.ipv4.**udp_rmem_min**](defaults/main.yml#L115)   | int | `8192` |    
+| [ubuntu_sysctl_settings.net.ipv4.**udp_wmem_min**](defaults/main.yml#L116)   | int | `8192` |    
+| [ubuntu_sysctl_settings.net.ipv4.neigh.default.**gc_thresh1**](defaults/main.yml#L117)   | int | `1024` |    
+| [ubuntu_sysctl_settings.net.ipv4.neigh.default.**gc_thresh2**](defaults/main.yml#L118)   | int | `2048` |    
+| [ubuntu_sysctl_settings.net.ipv4.neigh.default.**gc_thresh3**](defaults/main.yml#L119)   | int | `4096` |    
+| [ubuntu_sysctl_settings.vm.**dirty_background_ratio**](defaults/main.yml#L120)   | int | `10` |    
+| [ubuntu_sysctl_settings.vm.**dirty_ratio**](defaults/main.yml#L121)   | int | `15` |    
+| [ubuntu_sysctl_settings.vm.**swappiness**](defaults/main.yml#L122)   | int | `10` |    
+| [ubuntu_pam_limits](defaults/main.yml#L124)   | list | `[]` |    
+| [ubuntu_pam_limits.**0**](defaults/main.yml#L125)   | dict | `{}` |    
+| [ubuntu_pam_limits.0.**domain**](defaults/main.yml#L125)   | str | `*` |    
+| [ubuntu_pam_limits.0.**limit_type**](defaults/main.yml#L126)   | str | `-` |    
+| [ubuntu_pam_limits.0.**limit_item**](defaults/main.yml#L127)   | str | `nofile` |    
+| [ubuntu_pam_limits.0.**value**](defaults/main.yml#L128)   | str | `100000` |    
+| [ubuntu_pam_limits.**1**](defaults/main.yml#L129)   | dict | `{}` |    
+| [ubuntu_pam_limits.1.**domain**](defaults/main.yml#L129)   | str | `*` |    
+| [ubuntu_pam_limits.1.**limit_type**](defaults/main.yml#L130)   | str | `soft` |    
+| [ubuntu_pam_limits.1.**limit_item**](defaults/main.yml#L131)   | str | `memlock` |    
+| [ubuntu_pam_limits.1.**value**](defaults/main.yml#L132)   | str | `unlimited` |    
+| [ubuntu_pam_limits.**2**](defaults/main.yml#L133)   | dict | `{}` |    
+| [ubuntu_pam_limits.2.**domain**](defaults/main.yml#L133)   | str | `*` |    
+| [ubuntu_pam_limits.2.**limit_type**](defaults/main.yml#L134)   | str | `hard` |    
+| [ubuntu_pam_limits.2.**limit_item**](defaults/main.yml#L135)   | str | `memlock` |    
+| [ubuntu_pam_limits.2.**value**](defaults/main.yml#L136)   | str | `unlimited` |    
+| [ubuntu_netplan_enabled](defaults/main.yml#L138)   | bool | `True` |    
+| [ubuntu_netplan_disable_cloud_init_networking](defaults/main.yml#L139)   | bool | `True` |    
+| [ubuntu_netplan_verify_address](defaults/main.yml#L140)   | bool | `True` |    
+| [ubuntu_netplan_interface](defaults/main.yml#L141)   | str |  |    
+| [ubuntu_defaults_netplan_config](defaults/main.yml#L143)   | str | `netplan-config.yaml` |    
+| [ubuntu_netplan_config_path](defaults/main.yml#L144)   | str | `/etc/netplan/{{ ubuntu_defaults_netplan_config }}` |    
+| [ubuntu_defaults_netplan_gateway](defaults/main.yml#L146)   | str | `<multiline value: folded_strip>` |    
+| [ubuntu_defaults_netplan_nameservers](defaults/main.yml#L153)   | str | `<multiline value: folded_strip>` |    
+| [ubuntu_netplan_nameservers](defaults/main.yml#L163)   | str | `{{ ubuntu_defaults_netplan_nameservers }}` |    
+| [ubuntu_netplan_search_domains](defaults/main.yml#L164)   | list | `[]` |    
+| [ubuntu_netplan_prefix](defaults/main.yml#L165)   | int | `24` |    
+| [ubuntu_nic_tuning_enabled](defaults/main.yml#L167)   | bool | `True` |    
+| [ubuntu_vnstat_enabled](defaults/main.yml#L168)   | bool | `True` |    
 
 
 

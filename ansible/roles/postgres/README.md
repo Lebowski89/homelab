@@ -317,6 +317,7 @@
 | ---- | ------ | -------------- | -----|
 | Logical backup ¦ Validate configuration | ansible.builtin.assert | False |  |
 | Logical backup ¦ Create protected backup root | ansible.builtin.file | False |  |
+| Logical backup ¦ Create empty protected libpq password file | ansible.builtin.copy | False |  |
 | Logical backup ¦ Ensure dedicated metrics directory exists | ansible.builtin.file | False |  |
 | Logical backup ¦ Pre-create narrowly writable metrics file | ansible.builtin.file | False |  |
 | Logical backup ¦ Install host-local runner | ansible.builtin.template | False |  |
