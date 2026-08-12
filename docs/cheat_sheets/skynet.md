@@ -386,6 +386,8 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 | `skynet run postgres backup-remote-init`  | `postgres_backup_remote_init`  |
 | `skynet run postgres backup-remote-run`   | `postgres_backup_remote_run`   |
 | `skynet run postgres backup-remote-maintenance` | `postgres_backup_remote_maintenance` |
+| `skynet run postgres backup-restore-validation-setup` | `postgres_backup_restore_validation_setup` |
+| `skynet run postgres backup-restore-validation-run` | `postgres_backup_restore_validation_run` |
 | `skynet run postgres restore`             | `postgres_restore`             |
 | `skynet run postgres admin`               | `postgres_admin`               |
 | `skynet run postgres admin-uptime-kuma`   | `postgres_admin_uptime_kuma`   |

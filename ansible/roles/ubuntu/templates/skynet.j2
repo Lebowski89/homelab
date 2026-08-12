@@ -372,6 +372,8 @@ role_tag() {
     postgres:backup-remote-init)    echo "postgres_backup_remote_init" ;;
     postgres:backup-remote-run)     echo "postgres_backup_remote_run" ;;
     postgres:backup-remote-maintenance) echo "postgres_backup_remote_maintenance" ;;
+    postgres:backup-restore-validation-setup) echo "postgres_backup_restore_validation_setup" ;;
+    postgres:backup-restore-validation-run) echo "postgres_backup_restore_validation_run" ;;
     postgres:restore)               echo "postgres_restore" ;;
     postgres:admin)                 echo "postgres_admin" ;;
     postgres:admin-uptime-kuma)     echo "postgres_admin_uptime_kuma" ;;
@@ -539,6 +541,8 @@ Role/action targets:
     backup-remote-init  -> postgres_backup_remote_init
     backup-remote-run   -> postgres_backup_remote_run
     backup-remote-maintenance -> postgres_backup_remote_maintenance
+    backup-restore-validation-setup -> postgres_backup_restore_validation_setup
+    backup-restore-validation-run -> postgres_backup_restore_validation_run
     restore             -> postgres_restore
     admin               -> postgres_admin
     admin-uptime-kuma   -> postgres_admin_uptime_kuma

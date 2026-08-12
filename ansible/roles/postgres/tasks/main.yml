@@ -129,12 +129,16 @@
         - postgres_backup_remote_init
         - postgres_backup_remote_run
         - postgres_backup_remote_maintenance
+        - postgres_backup_restore_validation_setup
+        - postgres_backup_restore_validation_run
   tags:
     - postgres
     - postgres_backup_remote_setup
     - postgres_backup_remote_init
     - postgres_backup_remote_run
     - postgres_backup_remote_maintenance
+    - postgres_backup_restore_validation_setup
+    - postgres_backup_restore_validation_run
 
 - name: Initialize PostgreSQL remote backup repository explicitly
   when:
@@ -209,6 +213,44 @@
       Check mode - would apply scoped PostgreSQL Restic retention and prune
       unreferenced repository data.
   tags: postgres_backup_remote_maintenance
+
+- name: Configure PostgreSQL backup restore validation
+  when: "'tags_postgres' in group_names"
+  ansible.builtin.include_tasks:
+    file: sub_tasks/backup_restore_validation_setup.yml
+    apply:
+      tags:
+        - postgres
+        - postgres_backup_restore_validation_setup
+        - postgres_backup_restore_validation_run
+  tags:
+    - postgres
+    - postgres_backup_restore_validation_setup
+    - postgres_backup_restore_validation_run
+
+- name: Run PostgreSQL backup restore validation manually
+  when:
+    - "'tags_postgres' in group_names"
+    - inventory_hostname == postgres_backup_restore_validation_host
+    - not ansible_check_mode
+    - "'postgres_backup_restore_validation_run' in (ansible_run_tags | default([]))"
+  ansible.builtin.include_tasks:
+    file: sub_tasks/backup_restore_validation_action.yml
+    apply:
+      tags: postgres_backup_restore_validation_run
+  tags: postgres_backup_restore_validation_run
+
+- name: Report PostgreSQL backup restore validation check-mode plan
+  when:
+    - "'tags_postgres' in group_names"
+    - inventory_hostname == postgres_backup_restore_validation_host
+    - ansible_check_mode
+    - "'postgres_backup_restore_validation_run' in (ansible_run_tags | default([]))"
+  ansible.builtin.debug:
+    msg: >-
+      Check mode: would select a recent PostgreSQL Restic snapshot and validate
+      every database dump in an isolated temporary PostgreSQL cluster.
+  tags: postgres_backup_restore_validation_run
 
 - name: Restore PostgreSQL single database from pg_dump backup
   when:

@@ -1,0 +1,187 @@
+---
+
+- name: Backup restore validation | Validate configuration
+  ansible.builtin.assert:
+    that:
+      - postgres_backup_restore_validation_manage is boolean
+      - postgres_backup_restore_validation_enabled is boolean
+      - not postgres_backup_restore_validation_enabled
+        or postgres_backup_restore_validation_manage
+      - not postgres_backup_restore_validation_manage
+        or postgres_backup_remote_manage
+      - not postgres_backup_restore_validation_manage
+        or postgres_backup_remote_repository | trim | length > 0
+      - postgres_backup_restore_validation_host is string
+      - not postgres_backup_restore_validation_manage
+        or postgres_backup_restore_validation_host
+           in (groups['tags_postgres'] | default([]))
+      - postgres_backup_restore_validation_script_path is string
+      - postgres_backup_restore_validation_script_path
+        is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_restore_validation_script_path
+        not in [postgres_backup_script_path, postgres_backup_remote_script_path]
+      - postgres_backup_restore_validation_runuser_path is string
+      - postgres_backup_restore_validation_runuser_path
+        is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_restore_validation_work_root is string
+      - postgres_backup_restore_validation_work_root
+        is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_restore_validation_work_root != '/'
+      - postgres_backup_restore_validation_work_root[-1:] != '/'
+      - "'//' not in postgres_backup_restore_validation_work_root"
+      - >-
+        postgres_backup_restore_validation_work_root.split('/')
+        | intersect(['.', '..'])
+        | length == 0
+      - postgres_backup_restore_validation_work_root
+        not in [
+          postgres_backup_root,
+          postgres_backup_remote_state_dir,
+          postgres_backup_remote_config_dir,
+          postgres_patroni_data_dir
+        ]
+      - >-
+        not (
+          postgres_backup_restore_validation_work_root
+          is match('^' ~ (postgres_backup_root | regex_escape) ~ '(?:/|$)')
+        )
+      - >-
+        not (
+          postgres_backup_root
+          is match(
+            '^'
+            ~ (postgres_backup_restore_validation_work_root | regex_escape)
+            ~ '(?:/|$)'
+          )
+        )
+      - postgres_backup_restore_validation_timer_name is string
+      - postgres_backup_restore_validation_timer_name
+        is match('^[A-Za-z0-9_.@-]+$')
+      - postgres_backup_restore_validation_timer_name
+        not in [
+          postgres_backup_timer_name,
+          postgres_backup_remote_timer_name,
+          postgres_backup_remote_maintenance_timer_name
+        ]
+      - postgres_backup_restore_validation_timer_on_calendar is string
+      - postgres_backup_restore_validation_timer_on_calendar | trim | length > 0
+      - postgres_backup_restore_validation_timer_randomized_delay_sec is string
+      - >-
+        postgres_backup_restore_validation_timer_randomized_delay_sec
+        | trim
+        | length > 0
+      - postgres_backup_restore_validation_port is integer
+      - postgres_backup_restore_validation_port is not boolean
+      - postgres_backup_restore_validation_port >= 1
+      - postgres_backup_restore_validation_port <= 65535
+      - postgres_backup_restore_validation_port != postgres_patroni_postgres_port
+      - postgres_backup_restore_validation_max_snapshot_age_hours is integer
+      - postgres_backup_restore_validation_max_snapshot_age_hours is not boolean
+      - postgres_backup_restore_validation_max_snapshot_age_hours >= 1
+      - postgres_backup_restore_validation_min_free_bytes is integer
+      - postgres_backup_restore_validation_min_free_bytes is not boolean
+      - postgres_backup_restore_validation_min_free_bytes >= 0
+      - postgres_backup_restore_validation_metrics_file is string
+      - postgres_backup_restore_validation_metrics_file
+        is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_backup_restore_validation_metrics_file
+        not in [postgres_backup_metrics_file, postgres_backup_remote_metrics_file]
+      - postgres_patroni_bin_dir is string
+      - postgres_patroni_bin_dir is match('^/[A-Za-z0-9_./-]+$')
+      - >-
+        'postgres_backup_restore_validation_run'
+        not in (ansible_run_tags | default([]))
+        or postgres_backup_restore_validation_manage
+      - >-
+        'postgres_backup_restore_validation_run'
+        not in (ansible_run_tags | default([]))
+        or postgres_backup_remote_repository | trim | length > 0
+    fail_msg: PostgreSQL backup restore-validation configuration is invalid.
+
+- name: Backup restore validation | Create protected work root
+  when:
+    - postgres_backup_restore_validation_manage
+    - inventory_hostname == postgres_backup_restore_validation_host
+  ansible.builtin.file:
+    path: "{{ postgres_backup_restore_validation_work_root }}"
+    state: directory
+    owner: root
+    group: postgres
+    mode: "0710"
+
+- name: Backup restore validation | Ensure PostgreSQL metrics directory exists
+  when:
+    - postgres_backup_restore_validation_manage
+    - inventory_hostname == postgres_backup_restore_validation_host
+  ansible.builtin.file:
+    path: "{{ postgres_backup_restore_validation_metrics_file | dirname }}"
+    state: directory
+    owner: postgres
+    group: postgres
+    mode: "0755"
+
+- name: Backup restore validation | Pre-create metrics file
+  when:
+    - postgres_backup_restore_validation_manage
+    - inventory_hostname == postgres_backup_restore_validation_host
+  ansible.builtin.file:
+    path: "{{ postgres_backup_restore_validation_metrics_file }}"
+    state: touch
+    owner: root
+    group: root
+    mode: "0644"
+    access_time: preserve
+    modification_time: preserve
+
+- name: Backup restore validation | Install host-local runner
+  when:
+    - postgres_backup_restore_validation_manage
+    - inventory_hostname == postgres_backup_restore_validation_host
+  ansible.builtin.template:
+    src: postgres-logical-backup-restore-validate.sh.j2
+    dest: "{{ postgres_backup_restore_validation_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Backup restore validation | Manage systemd job
+  when:
+    - postgres_backup_restore_validation_manage
+    - inventory_hostname == postgres_backup_restore_validation_host
+  ansible.builtin.include_role:
+    name: systemd_jobs
+    apply:
+      tags:
+        - postgres
+        - systemd_jobs
+        - postgres_backup_restore_validation_setup
+        - postgres_backup_restore_validation_run
+  vars:
+    systemd_jobs: # noqa var-naming[no-role-prefix]
+      - name: "{{ postgres_backup_restore_validation_timer_name }}"
+        description: Validate PostgreSQL logical backups restored from Restic
+        service:
+          type: oneshot
+          exec_start: "{{ postgres_backup_restore_validation_script_path }}"
+          user: root
+          group: root
+          working_directory: "{{ postgres_backup_restore_validation_work_root }}"
+          wants:
+            - network-online.target
+          after:
+            - network-online.target
+          nice: 10
+          io_scheduling_class: best-effort
+          io_scheduling_priority: 7
+        timer:
+          description: Validate PostgreSQL logical backups restored from Restic
+          on_calendar: "{{ postgres_backup_restore_validation_timer_on_calendar }}"
+          randomized_delay_sec: >-
+            {{ postgres_backup_restore_validation_timer_randomized_delay_sec }}
+          persistent: true
+        enabled: "{{ postgres_backup_restore_validation_enabled }}"
+  tags:
+    - postgres
+    - systemd_jobs
+    - postgres_backup_restore_validation_setup
+    - postgres_backup_restore_validation_run

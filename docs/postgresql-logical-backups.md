@@ -186,6 +186,70 @@ Upload and maintenance use the same probe but never initialize. Check-mode
 variants render and validate configuration, substitute deterministic secret
 stand-ins, and print the planned action without contacting Infisical or Restic.
 
+### Automated restore validation
+
+Restore validation is a separate, opt-in capability. It runs only on
+`postgres_backup_restore_validation_host`, which defaults to the single Restic
+maintenance host, and reuses the protected repository, password, backend
+environment, provider files, Restic options, and retry-lock configuration.
+Both `postgres_backup_restore_validation_manage` and
+`postgres_backup_restore_validation_enabled` default to `false`; the latter
+controls a Sunday 07:00 timer with up to 30 minutes of randomized delay, after
+the normal Sunday 05:00 maintenance window without a hard dependency.
+
+Each run uses `restic snapshots --json` and selects the newest timestamped
+snapshot whose host is the stable Patroni scope, whose tags identify the
+PostgreSQL logical-backup stream and cluster, and whose single
+`backup-id=<timestamp>` matches its path beneath `postgres_backup_root`.
+The snapshot must be no older than
+`postgres_backup_restore_validation_max_snapshot_age_hours` (48 by default).
+The validator restores that exact snapshot subdirectory beneath a unique,
+root-bounded workspace only after checking the configured free-space floor.
+
+The restored `SUCCESS`, `SHA256SUMS`, manifest, non-empty `globals.sql`,
+and every declared custom-format dump are revalidated. The manifest must
+exactly match the dump files; missing, duplicate, unsafe, or unexpected dumps
+fail before PostgreSQL starts.
+
+The throwaway PostgreSQL 18 cluster runs as OS user `postgres`, with TCP
+disabled, a private workspace socket, its own PGDATA, and a non-production
+port. Before any database is created, the validator queries
+`data_directory`, `listen_addresses`, `unix_socket_directories`, and
+`port` through explicit socket, port, and user arguments and requires exact
+agreement with the temporary configuration. Every dump is then restored
+sequentially into one clean `template0`-based validation database using
+`--exit-on-error --no-owner --no-acl --no-tablespaces`, followed by generic
+connectivity and catalog queries. The database is dropped before the next
+dump, bounding active expanded storage to one source database.
+
+`globals.sql` remains checksummed, required, remotely protected, and available
+for deliberate disaster recovery, but the automated validator never executes
+it. Cluster-global SQL can contain roles and tablespace paths with host-level
+effects, so automated validation intentionally proves database archive
+restorability independently from production ownership, ACL, and tablespace
+state.
+
+The validation root is `root:postgres` mode `0710`: PostgreSQL can traverse to
+its private runtime directories without gaining directory listing or write
+access. The validator always stops the temporary cluster and removes only its
+strictly named run workspace. Before stopping PostgreSQL recorded in an old
+workspace, cleanup proves through `/proc` that the live process belongs to the
+`postgres` user, is PostgreSQL, and uses that exact validation PGDATA. Ambiguous
+or reused PIDs fail closed, so stale state cannot stop production or unrelated
+processes. An overlap exits successfully without overwriting health metrics.
+Real attempts atomically publish:
+
+- `postgres_backup_restore_validation_last_attempt_timestamp_seconds`
+- `postgres_backup_restore_validation_last_success_timestamp_seconds`
+- `postgres_backup_restore_validation_last_run_success`
+- `postgres_backup_restore_validation_last_duration_seconds`
+- `postgres_backup_restore_validation_last_database_count`
+- `postgres_backup_restore_validation_last_snapshot_timestamp_seconds`
+
+The success timestamp, database count, and snapshot timestamp describe the
+latest fully successful validation and are preserved on failure. Metrics have
+no database, snapshot, repository, provider, or host labels.
+
 ### Conceptual backend examples
 
 These examples use placeholders and do not recommend a provider.
@@ -345,16 +409,25 @@ skynet run postgres backup-remote-setup
 skynet run postgres backup-remote-init
 skynet run postgres backup-remote-run
 skynet run postgres backup-remote-maintenance
+skynet run postgres backup-restore-validation-setup
+skynet run postgres backup-restore-validation-run
 ```
 
 The corresponding raw tags are `postgres_backup_remote_setup`,
 `postgres_backup_remote_init`, `postgres_backup_remote_run`, and
 `postgres_backup_remote_maintenance`. Manual upload runs on all PostgreSQL
 nodes; init and maintenance run only on the deterministic maintenance host.
+Restore-validation setup and manual execution use
+`postgres_backup_restore_validation_setup` and
+`postgres_backup_restore_validation_run`, and run only on the designated
+validation host.
 
 In check mode, `skynet check postgres backup-run` configures and validates the
 backup resources, then reports that it would discover the leader and invoke
 the runner. It does not query Patroni or run a backup.
+`skynet check postgres backup-restore-validation-run` reports the isolated
+restore plan without contacting Restic, restoring data, starting PostgreSQL, or
+cleaning real workspaces.
 
 The runner repeats the local leader check even after Ansible selected a leader,
 so a failover between discovery and execution cannot produce a backup on a
@@ -377,7 +450,13 @@ postgres_restore_dbs_map:
     file: /var/backups/postgresql/20260811T013000Z/databases/gotify.dump
 ```
 
-Phase 3b.2 remains responsible for automated restore validation: disposable
-PostgreSQL environments, restoring globals and databases, application-level
-queries, periodic restore tests, and restore-success metrics are not included
-here. WAL/PITR and physical backup mechanisms also remain separate future work.
+Inspect restore-validation scheduling and logs on its designated host with:
+
+```bash
+systemctl status postgres-logical-backup-restore-validation.timer
+systemctl status postgres-logical-backup-restore-validation.service
+journalctl -u postgres-logical-backup-restore-validation.service
+```
+
+WAL/PITR, physical backups, automatic execution of cluster globals, and
+application-specific semantic queries remain separate recovery decisions.

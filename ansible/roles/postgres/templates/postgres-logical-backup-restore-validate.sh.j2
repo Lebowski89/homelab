@@ -1,0 +1,841 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+readonly BACKUP_ROOT='{{ postgres_backup_root | string | replace("'", "'\"'\"'") }}'
+readonly WORK_ROOT='{{ postgres_backup_restore_validation_work_root | string | replace("'", "'\"'\"'") }}'
+readonly METRICS_FILE='{{ postgres_backup_restore_validation_metrics_file | string | replace("'", "'\"'\"'") }}'
+readonly RESTIC_BIN='{{ postgres_backup_remote_restic_path | string | replace("'", "'\"'\"'") }}'
+readonly REPOSITORY_FILE='{{ postgres_backup_remote_repository_file | string | replace("'", "'\"'\"'") }}'
+readonly PASSWORD_FILE='{{ postgres_backup_remote_password_file | string | replace("'", "'\"'\"'") }}'
+readonly BACKEND_ENV_FILE='{{ postgres_backup_remote_environment_file | string | replace("'", "'\"'\"'") }}'
+readonly SNAPSHOT_HOST='{{ postgres_backup_remote_snapshot_host | string | replace("'", "'\"'\"'") }}'
+readonly CLUSTER_SCOPE='{{ postgres_patroni_scope | string | replace("'", "'\"'\"'") }}'
+readonly POSTGRES_BIN_DIR='{{ postgres_patroni_bin_dir | string | replace("'", "'\"'\"'") }}'
+readonly RETRY_LOCK='{{ postgres_backup_remote_retry_lock | string | replace("'", "'\"'\"'") }}'
+readonly VALIDATION_PORT={{ postgres_backup_restore_validation_port }}
+readonly MAX_SNAPSHOT_AGE_HOURS={{ postgres_backup_restore_validation_max_snapshot_age_hours }}
+readonly MIN_FREE_BYTES={{ postgres_backup_restore_validation_min_free_bytes }}
+readonly VALIDATION_DATABASE="postgres_restore_validation"
+readonly PYTHON_BIN="/usr/bin/python3"
+readonly RUNUSER_BIN='{{ postgres_backup_restore_validation_runuser_path | string | replace("'", "'\"'\"'") }}'
+readonly PROC_ROOT="${POSTGRES_BACKUP_RESTORE_VALIDATION_PROC_ROOT:-/proc}"
+readonly LOCK_FILE="$WORK_ROOT/validation.lock"
+readonly INITDB="$POSTGRES_BIN_DIR/initdb"
+readonly PG_CTL="$POSTGRES_BIN_DIR/pg_ctl"
+readonly CREATEDB="$POSTGRES_BIN_DIR/createdb"
+readonly DROPDB="$POSTGRES_BIN_DIR/dropdb"
+readonly PG_RESTORE="$POSTGRES_BIN_DIR/pg_restore"
+readonly PSQL="$POSTGRES_BIN_DIR/psql"
+
+RESTIC_OPTIONS=(
+{% for postgres_backup_remote_option in postgres_backup_remote_options %}
+  '{{ postgres_backup_remote_option | string | replace("'", "'\"'\"'") }}'
+{% endfor %}
+)
+
+export PATH="$POSTGRES_BIN_DIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+export PGPASSFILE=/dev/null
+unset PGHOST PGPORT PGDATABASE PGUSER PGSERVICE PGSERVICEFILE PGPASSWORD
+
+ATTEMPT_EPOCH=0
+RUN_START_EPOCH=0
+REPORT_FAILURE_METRICS=0
+LAST_SUCCESS_EPOCH=0
+LAST_SUCCESS_DATABASE_COUNT=0
+LAST_SUCCESS_SNAPSHOT_EPOCH=0
+RUN_DIR=""
+CLUSTER_DIR=""
+PGDATA=""
+SOCKET_DIR=""
+CLUSTER_START_ATTEMPTED=0
+POSTGRES_UID=""
+STALE_POSTMASTER_PID=""
+STALE_POSTMASTER_DATA_DIR=""
+
+log() {
+  printf '%s\n' "$*"
+}
+
+fail() {
+  log "ERROR: $*" >&2
+  return 1
+}
+
+existing_metric() {
+  local metric_name="$1"
+  local default_value="$2"
+  local metric_value=""
+
+  if [[ -r "$METRICS_FILE" ]]; then
+    metric_value="$(awk -v name="$metric_name" '$1 == name { print $2; exit }' "$METRICS_FILE")"
+  fi
+
+  if [[ "$metric_value" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$metric_value"
+  else
+    printf '%s\n' "$default_value"
+  fi
+}
+
+write_metrics() {
+  local attempt_epoch="$1"
+  local success_epoch="$2"
+  local run_success="$3"
+  local duration_seconds="$4"
+  local database_count="$5"
+  local snapshot_epoch="$6"
+  local metrics_tmp
+
+  metrics_tmp="$(mktemp "${METRICS_FILE}.tmp.XXXXXX")"
+  {
+    printf '# HELP postgres_backup_restore_validation_last_attempt_timestamp_seconds Unix timestamp of the last restore-validation attempt.\n'
+    printf '# TYPE postgres_backup_restore_validation_last_attempt_timestamp_seconds gauge\n'
+    printf 'postgres_backup_restore_validation_last_attempt_timestamp_seconds %s\n' "$attempt_epoch"
+    printf '# HELP postgres_backup_restore_validation_last_success_timestamp_seconds Unix timestamp of the last successful full restore validation.\n'
+    printf '# TYPE postgres_backup_restore_validation_last_success_timestamp_seconds gauge\n'
+    printf 'postgres_backup_restore_validation_last_success_timestamp_seconds %s\n' "$success_epoch"
+    printf '# HELP postgres_backup_restore_validation_last_run_success Whether the last restore-validation attempt succeeded.\n'
+    printf '# TYPE postgres_backup_restore_validation_last_run_success gauge\n'
+    printf 'postgres_backup_restore_validation_last_run_success %s\n' "$run_success"
+    printf '# HELP postgres_backup_restore_validation_last_duration_seconds Duration of the last restore-validation attempt.\n'
+    printf '# TYPE postgres_backup_restore_validation_last_duration_seconds gauge\n'
+    printf 'postgres_backup_restore_validation_last_duration_seconds %s\n' "$duration_seconds"
+    printf '# HELP postgres_backup_restore_validation_last_database_count Databases restored by the latest successful validation.\n'
+    printf '# TYPE postgres_backup_restore_validation_last_database_count gauge\n'
+    printf 'postgres_backup_restore_validation_last_database_count %s\n' "$database_count"
+    printf '# HELP postgres_backup_restore_validation_last_snapshot_timestamp_seconds Restic snapshot timestamp used by the latest successful validation.\n'
+    printf '# TYPE postgres_backup_restore_validation_last_snapshot_timestamp_seconds gauge\n'
+    printf 'postgres_backup_restore_validation_last_snapshot_timestamp_seconds %s\n' "$snapshot_epoch"
+  } > "$metrics_tmp"
+  chmod 0644 "$metrics_tmp"
+  mv -f -- "$metrics_tmp" "$METRICS_FILE"
+}
+
+run_restic() {
+  "$RESTIC_BIN" "${RESTIC_OPTIONS[@]}" --retry-lock "$RETRY_LOCK" "$@"
+}
+
+valid_run_directory() {
+  local candidate="$1"
+  local candidate_name
+
+  candidate_name="$(basename -- "$candidate")"
+  [[ "$(dirname -- "$candidate")" == "$WORK_ROOT" ]] || return 1
+  [[ "$candidate" == "$WORK_ROOT/$candidate_name" ]] || return 1
+  [[ "$candidate_name" =~ ^run-[0-9]{8}T[0-9]{6}Z-[0-9]+-[A-Za-z0-9]{6}$ ]]
+}
+
+cleanup_current_run() {
+  local cleanup_status=0
+  local cluster_stopped=1
+
+  if (( CLUSTER_START_ATTEMPTED == 1 )) && [[ -n "$PGDATA" && -f "$PGDATA/postmaster.pid" ]]; then
+    if ! "$RUNUSER_BIN" -u postgres -- \
+      "$PG_CTL" -D "$PGDATA" -m fast -w -t 60 stop; then
+      log "ERROR: Failed to stop the temporary PostgreSQL validation cluster." >&2
+      cleanup_status=1
+      cluster_stopped=0
+    fi
+  fi
+  if (( cluster_stopped == 1 )); then
+    CLUSTER_START_ATTEMPTED=0
+  fi
+
+  if [[ -n "$RUN_DIR" ]]; then
+    if ! valid_run_directory "$RUN_DIR"; then
+      log "ERROR: Refusing to remove an unbounded restore-validation path." >&2
+      cleanup_status=1
+    elif (( cluster_stopped == 1 )); then
+      if ! rm -rf -- "$RUN_DIR"; then
+        log "ERROR: Failed to remove restore-validation workspace $RUN_DIR." >&2
+        cleanup_status=1
+      else
+        RUN_DIR=""
+      fi
+    fi
+  fi
+
+  return "$cleanup_status"
+}
+
+on_exit() {
+  local exit_status="$?"
+  local cleanup_status=0
+  local failure_epoch
+  local duration_seconds
+
+  trap - EXIT INT TERM
+  set +e
+  cleanup_current_run || cleanup_status=$?
+  if (( exit_status == 0 && cleanup_status != 0 )); then
+    exit_status="$cleanup_status"
+  fi
+
+  if (( exit_status != 0 && REPORT_FAILURE_METRICS == 1 )); then
+    failure_epoch="$(date +%s)"
+    duration_seconds=$((failure_epoch - RUN_START_EPOCH))
+    write_metrics \
+      "$ATTEMPT_EPOCH" \
+      "$LAST_SUCCESS_EPOCH" \
+      0 \
+      "$duration_seconds" \
+      "$LAST_SUCCESS_DATABASE_COUNT" \
+      "$LAST_SUCCESS_SNAPSHOT_EPOCH" || exit_status=1
+    log "PostgreSQL backup restore validation failed." >&2
+  fi
+
+  exit "$exit_status"
+}
+
+read_postmaster_pid() {
+  local pid_file="$1"
+  local -a postmaster_lines=()
+
+  STALE_POSTMASTER_PID=""
+  STALE_POSTMASTER_DATA_DIR=""
+  if ! mapfile -t -n 2 postmaster_lines < "$pid_file"; then
+    return 1
+  fi
+  (( ${{ '{' }}#postmaster_lines[@]} >= 1 )) || return 1
+  [[ "${postmaster_lines[0]}" =~ ^[1-9][0-9]*$ ]] || return 1
+  STALE_POSTMASTER_PID="${postmaster_lines[0]}"
+  if (( ${{ '{' }}#postmaster_lines[@]} >= 2 )); then
+    STALE_POSTMASTER_DATA_DIR="${postmaster_lines[1]}"
+  fi
+}
+
+process_is_alive() {
+  local pid="$1"
+  local process_dir="$PROC_ROOT/$pid"
+
+  [[ -d "$process_dir" && ! -L "$process_dir" ]]
+}
+
+process_belongs_to_validator_pgdata() {
+  local pid="$1"
+  local expected_pgdata="$2"
+  local recorded_pgdata="$3"
+  local process_dir="$PROC_ROOT/$pid"
+  local process_uid=""
+  local process_executable=""
+  local status_key=""
+  local status_value=""
+  local status_remainder=""
+  local argument_index
+  local data_argument_count=0
+  local -a process_arguments=()
+
+  process_is_alive "$pid" || return 1
+  [[ "$recorded_pgdata" == "$expected_pgdata" ]] || return 2
+  if [[ ! -f "$process_dir/status" || -L "$process_dir/status" ]]; then
+    process_is_alive "$pid" || return 1
+    return 2
+  fi
+  while IFS=$' \t' read -r status_key status_value status_remainder; do
+    if [[ "$status_key" == "Uid:" ]]; then
+      process_uid="$status_value"
+      break
+    fi
+  done < "$process_dir/status"
+  [[ "$process_uid" == "$POSTGRES_UID" ]] || {
+    process_is_alive "$pid" || return 1
+    return 2
+  }
+
+  process_executable="$(readlink -- "$process_dir/exe")" || {
+    process_is_alive "$pid" || return 1
+    return 2
+  }
+  [[ "$(basename -- "$process_executable")" == "postgres" ]] || {
+    process_is_alive "$pid" || return 1
+    return 2
+  }
+  if [[ ! -f "$process_dir/cmdline" || -L "$process_dir/cmdline" ]]; then
+    process_is_alive "$pid" || return 1
+    return 2
+  fi
+  if ! mapfile -d '' -t process_arguments < "$process_dir/cmdline"; then
+    process_is_alive "$pid" || return 1
+    return 2
+  fi
+  for ((argument_index = 0; argument_index + 1 < ${{ '{' }}#process_arguments[@]}; argument_index++)); do
+    if [[ "${process_arguments[$argument_index]}" == "-D" ]]; then
+      data_argument_count=$((data_argument_count + 1))
+      [[ "${process_arguments[$((argument_index + 1))]}" == "$expected_pgdata" ]] || return 2
+    fi
+  done
+  (( data_argument_count == 1 )) || return 2
+  process_is_alive "$pid" || return 1
+}
+
+remove_bounded_stale_workspace() {
+  local candidate="$1"
+
+  if ! valid_run_directory "$candidate"; then
+    fail "Refusing to remove an unbounded stale restore-validation path."
+    return 1
+  fi
+  log "Removing stale restore-validation workspace $candidate"
+  if ! rm -rf -- "$candidate"; then
+    fail "Unable to remove stale restore-validation workspace $candidate."
+    return 1
+  fi
+}
+
+cleanup_stale_workspace() {
+  local candidate="$1"
+  local stale_cluster_dir="$candidate/cluster"
+  local stale_pgdata="$stale_cluster_dir/data"
+  local pid_file="$stale_pgdata/postmaster.pid"
+  local identity_status=0
+
+  if [[ ! -e "$pid_file" && ! -L "$pid_file" ]]; then
+    remove_bounded_stale_workspace "$candidate"
+    return
+  fi
+  if [[ ! -d "$stale_cluster_dir" || -L "$stale_cluster_dir" || \
+    ! -d "$stale_pgdata" || -L "$stale_pgdata" || \
+    ! -f "$pid_file" || -L "$pid_file" ]]; then
+    fail "Stale restore-validation workspace has unsafe PostgreSQL state."
+    return 1
+  fi
+  if ! read_postmaster_pid "$pid_file"; then
+    fail "Stale restore-validation workspace has a malformed postmaster.pid; refusing cleanup."
+    return 1
+  fi
+  if ! process_is_alive "$STALE_POSTMASTER_PID"; then
+    log "Stale PostgreSQL PID $STALE_POSTMASTER_PID is not alive; no stop is required."
+    remove_bounded_stale_workspace "$candidate"
+    return
+  fi
+
+  process_belongs_to_validator_pgdata \
+    "$STALE_POSTMASTER_PID" \
+    "$stale_pgdata" \
+    "$STALE_POSTMASTER_DATA_DIR" || identity_status=$?
+  case "$identity_status" in
+    0)
+      ;;
+    1)
+      log "Stale PostgreSQL PID $STALE_POSTMASTER_PID exited before cleanup; no stop is required."
+      remove_bounded_stale_workspace "$candidate"
+      return
+      ;;
+    *)
+      fail "Refusing to stop live PID $STALE_POSTMASTER_PID: process identity does not match validation PGDATA $stale_pgdata."
+      return 1
+      ;;
+  esac
+
+  identity_status=0
+  process_belongs_to_validator_pgdata \
+    "$STALE_POSTMASTER_PID" \
+    "$stale_pgdata" \
+    "$STALE_POSTMASTER_DATA_DIR" || identity_status=$?
+  case "$identity_status" in
+    0)
+      ;;
+    1)
+      log "Stale PostgreSQL PID $STALE_POSTMASTER_PID exited before stop; no stop is required."
+      remove_bounded_stale_workspace "$candidate"
+      return
+      ;;
+    *)
+      fail "Refusing to stop live PID $STALE_POSTMASTER_PID after revalidation: process identity does not match validation PGDATA $stale_pgdata."
+      return 1
+      ;;
+  esac
+
+  if ! "$RUNUSER_BIN" -u postgres -- \
+    "$PG_CTL" -D "$stale_pgdata" -m fast -w -t 60 stop; then
+    if ! process_is_alive "$STALE_POSTMASTER_PID"; then
+      log "Stale PostgreSQL PID $STALE_POSTMASTER_PID exited during cleanup; no further stop is required."
+      remove_bounded_stale_workspace "$candidate"
+      return
+    fi
+    fail "Unable to stop the proven stale PostgreSQL validation cluster at $stale_pgdata."
+    return 1
+  fi
+  remove_bounded_stale_workspace "$candidate"
+}
+
+remove_stale_run_directories() {
+  local candidates_file
+  local candidate
+
+  candidates_file="$(mktemp "$WORK_ROOT/.stale-runs.XXXXXX")"
+  if ! find "$WORK_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'run-*' -print0 \
+    > "$candidates_file"; then
+    rm -f -- "$candidates_file"
+    fail "Unable to enumerate stale restore-validation workspaces."
+    return 1
+  fi
+
+  while IFS= read -r -d '' candidate; do
+    if valid_run_directory "$candidate"; then
+      if ! cleanup_stale_workspace "$candidate"; then
+        rm -f -- "$candidates_file"
+        return 1
+      fi
+    fi
+  done < "$candidates_file"
+  rm -f -- "$candidates_file"
+}
+
+require_repository() {
+  local probe_status=0
+
+  run_restic cat config > /dev/null || probe_status=$?
+  case "$probe_status" in
+    0)
+      return 0
+      ;;
+    10)
+      fail "Configured Restic repository is not initialized."
+      ;;
+    12)
+      fail "Configured Restic repository rejected its password."
+      ;;
+    *)
+      fail "Configured Restic repository/backend access failed with exit code $probe_status."
+      ;;
+  esac
+}
+
+select_snapshot() {
+  local snapshots_file="$1"
+  local selected_file="$2"
+
+  "$PYTHON_BIN" - \
+    "$snapshots_file" \
+    "$SNAPSHOT_HOST" \
+    "$CLUSTER_SCOPE" \
+    "$BACKUP_ROOT" > "$selected_file" <<'PYTHON'
+import datetime
+import json
+import pathlib
+import re
+import sys
+
+
+def reject(message):
+    print(f"Snapshot metadata validation failed: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+snapshot_file = pathlib.Path(sys.argv[1])
+expected_host = sys.argv[2]
+expected_cluster_tag = f"cluster={sys.argv[3]}"
+backup_root = sys.argv[4]
+try:
+    snapshots = json.loads(snapshot_file.read_text())
+except (OSError, UnicodeError, json.JSONDecodeError) as error:
+    reject(f"invalid snapshots JSON ({error})")
+if not isinstance(snapshots, list):
+    reject("snapshots JSON is not an array")
+
+candidates = []
+for snapshot in snapshots:
+    if not isinstance(snapshot, dict):
+        continue
+    if snapshot.get("hostname") != expected_host:
+        continue
+    tags = snapshot.get("tags")
+    if not isinstance(tags, list) or not all(isinstance(tag, str) for tag in tags):
+        reject("matching-host snapshot has malformed tags")
+    if "postgres-logical-backup" not in tags or expected_cluster_tag not in tags:
+        continue
+    if tags.count("postgres-logical-backup") != 1 or tags.count(expected_cluster_tag) != 1:
+        reject("logical-backup snapshot has duplicate stream tags")
+
+    snapshot_id = snapshot.get("id")
+    if not isinstance(snapshot_id, str) or not re.fullmatch(r"[0-9a-f]{64}", snapshot_id):
+        reject("logical-backup snapshot has an unsafe ID")
+    backup_tags = [tag.removeprefix("backup-id=") for tag in tags if tag.startswith("backup-id=")]
+    if len(backup_tags) != 1:
+        reject("logical-backup snapshot must have exactly one backup-id tag")
+    backup_id = backup_tags[0]
+    if not re.fullmatch(r"[0-9]{8}T[0-9]{6}Z", backup_id):
+        reject("logical-backup snapshot has an invalid backup ID")
+
+    expected_path = f"{backup_root}/{backup_id}"
+    paths = snapshot.get("paths")
+    if paths != [expected_path]:
+        reject("logical-backup snapshot has an unexpected source path")
+
+    snapshot_time = snapshot.get("time")
+    if not isinstance(snapshot_time, str):
+        reject("logical-backup snapshot has no timestamp")
+    try:
+        parsed_time = datetime.datetime.fromisoformat(snapshot_time.replace("Z", "+00:00"))
+    except ValueError:
+        reject("logical-backup snapshot timestamp is invalid")
+    if parsed_time.tzinfo is None:
+        reject("logical-backup snapshot timestamp has no timezone")
+    candidates.append((parsed_time, snapshot_id, backup_id, expected_path))
+
+if not candidates:
+    reject("no matching PostgreSQL logical-backup snapshots found")
+
+snapshot_time, snapshot_id, backup_id, backup_path = max(candidates)
+print(snapshot_id)
+print(backup_id)
+print(int(snapshot_time.timestamp()))
+print(backup_path)
+PYTHON
+}
+
+validate_restored_artifact() {
+  local artifact_dir="$1"
+  local database_list_file="$2"
+
+  "$PYTHON_BIN" - "$artifact_dir" > "$database_list_file" <<'PYTHON'
+import pathlib
+import re
+import stat
+import sys
+
+
+def reject(message):
+    print(f"Restored artifact validation failed: {message}", file=sys.stderr)
+    raise SystemExit(1)
+
+
+artifact = pathlib.Path(sys.argv[1])
+
+
+def require_regular(relative_path, nonempty=False):
+    path = artifact / relative_path
+    try:
+        mode = path.lstat().st_mode
+    except OSError:
+        reject(f"missing {relative_path}")
+    if not stat.S_ISREG(mode):
+        reject(f"{relative_path} is not a regular file")
+    if nonempty and path.stat().st_size == 0:
+        reject(f"{relative_path} is empty")
+    return path
+
+
+require_regular("SUCCESS")
+checksum_path = require_regular("SHA256SUMS", nonempty=True)
+manifest_path = require_regular("manifest.txt", nonempty=True)
+require_regular("globals.sql", nonempty=True)
+databases_dir = artifact / "databases"
+try:
+    databases_mode = databases_dir.lstat().st_mode
+except OSError:
+    reject("missing databases directory")
+if not stat.S_ISDIR(databases_mode):
+    reject("databases is not a real directory")
+
+try:
+    manifest_lines = manifest_path.read_text().splitlines()
+except (OSError, UnicodeError) as error:
+    reject(f"manifest cannot be read ({error})")
+count_values = [line.removeprefix("database_count=") for line in manifest_lines if line.startswith("database_count=")]
+if len(count_values) != 1 or not re.fullmatch(r"[1-9][0-9]*", count_values[0]):
+    reject("manifest database_count is missing or invalid")
+declared_count = int(count_values[0])
+
+databases = []
+dump_paths = []
+for line in manifest_lines:
+    if not line.startswith("database="):
+        continue
+    match = re.fullmatch(r"database=([A-Za-z0-9_.-]+)\tdump=databases/([A-Za-z0-9_.-]+)\.dump", line)
+    if match is None or match.group(1) != match.group(2):
+        reject("manifest contains an unsafe database mapping")
+    database = match.group(1)
+    relative_dump = f"databases/{database}.dump"
+    if database in databases or relative_dump in dump_paths:
+        reject("manifest contains a duplicate database")
+    require_regular(relative_dump, nonempty=True)
+    databases.append(database)
+    dump_paths.append(relative_dump)
+
+if len(databases) != declared_count:
+    reject("manifest database count does not match its database entries")
+
+actual_dumps = set()
+for dump in artifact.rglob("*.dump"):
+    relative_dump = dump.relative_to(artifact).as_posix()
+    if not stat.S_ISREG(dump.lstat().st_mode):
+        reject(f"{relative_dump} is not a regular file")
+    actual_dumps.add(relative_dump)
+if actual_dumps != set(dump_paths):
+    reject("restored dump files do not exactly match the manifest")
+
+expected_checksums = {"globals.sql", "manifest.txt", *dump_paths}
+checksum_entries = []
+try:
+    checksum_lines = checksum_path.read_text().splitlines()
+except (OSError, UnicodeError) as error:
+    reject(f"SHA256SUMS cannot be read ({error})")
+for line in checksum_lines:
+    match = re.fullmatch(r"([0-9a-f]{64})(?:  | \*)(.+)", line)
+    if match is None:
+        reject("SHA256SUMS contains a malformed entry")
+    relative_path = match.group(2)
+    if relative_path.startswith("/") or ".." in pathlib.PurePosixPath(relative_path).parts:
+        reject("SHA256SUMS contains an unsafe path")
+    if relative_path in checksum_entries:
+        reject("SHA256SUMS contains a duplicate path")
+    checksum_entries.append(relative_path)
+if set(checksum_entries) != expected_checksums:
+    reject("SHA256SUMS does not exactly cover the manifest, globals, and dumps")
+
+for database in databases:
+    print(database)
+PYTHON
+}
+
+psql_value() {
+  local database="$1"
+  local query="$2"
+
+  "$PSQL" \
+    --host="$SOCKET_DIR" \
+    --port="$VALIDATION_PORT" \
+    --username=postgres \
+    --dbname="$database" \
+    --no-psqlrc \
+    --tuples-only \
+    --no-align \
+    --set=ON_ERROR_STOP=1 \
+    --command="$query"
+}
+
+trap on_exit EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+[[ "$WORK_ROOT" == /* && "$WORK_ROOT" != "/" && "$WORK_ROOT" != */ ]] ||
+  fail "Restore-validation work root must be a specific absolute path."
+[[ "$WORK_ROOT" != *"//"* && "$WORK_ROOT/" != *"/../"* && "$WORK_ROOT/" != *"/./"* ]] ||
+  fail "Restore-validation work root contains unsafe path components."
+[[ "$BACKUP_ROOT" == /* && "$BACKUP_ROOT" != "/" && "$BACKUP_ROOT" != */ ]] ||
+  fail "PostgreSQL backup root must be a specific absolute path."
+[[ "$BACKUP_ROOT" != *"//"* && "$BACKUP_ROOT/" != *"/../"* && "$BACKUP_ROOT/" != *"/./"* ]] ||
+  fail "PostgreSQL backup root contains unsafe path components."
+[[ "$WORK_ROOT/" != "$BACKUP_ROOT/"* && "$BACKUP_ROOT/" != "$WORK_ROOT/"* ]] ||
+  fail "Restore-validation work root and PostgreSQL backup root must not overlap."
+[[ "$PROC_ROOT" == /* && "$PROC_ROOT" != "/" && "$PROC_ROOT" != */ ]] ||
+  fail "Process inspection root must be a specific absolute path."
+[[ "$PROC_ROOT" =~ ^/[A-Za-z0-9_./-]+$ ]] ||
+  fail "Process inspection root contains unsupported characters."
+[[ "$PROC_ROOT" != *"//"* && "$PROC_ROOT/" != *"/../"* && "$PROC_ROOT/" != *"/./"* ]] ||
+  fail "Process inspection root contains unsafe path components."
+[[ -d "$PROC_ROOT" && ! -L "$PROC_ROOT" ]] ||
+  fail "Process inspection root is missing or unsafe."
+[[ "$VALIDATION_PORT" =~ ^[0-9]+$ ]] &&
+  (( VALIDATION_PORT >= 1 && VALIDATION_PORT <= 65535 )) ||
+  fail "Restore-validation port must be between 1 and 65535."
+[[ "$MAX_SNAPSHOT_AGE_HOURS" =~ ^[0-9]+$ ]] && (( MAX_SNAPSHOT_AGE_HOURS >= 1 )) ||
+  fail "Maximum snapshot age must be a positive integer."
+[[ "$MIN_FREE_BYTES" =~ ^[0-9]+$ ]] ||
+  fail "Minimum free bytes must be a non-negative integer."
+[[ -d "$WORK_ROOT" ]] || fail "Restore-validation work root is missing."
+
+exec 9> "$LOCK_FILE"
+if ! flock --nonblock 9; then
+  trap - EXIT INT TERM
+  log "Another PostgreSQL backup restore validation is already running; skipping."
+  log "POSTGRES_BACKUP_RESTORE_VALIDATION_RESULT=SKIPPED_OVERLAP"
+  exit 0
+fi
+
+ATTEMPT_EPOCH="$(date +%s)"
+RUN_START_EPOCH="$ATTEMPT_EPOCH"
+LAST_SUCCESS_EPOCH="$(
+  existing_metric postgres_backup_restore_validation_last_success_timestamp_seconds 0
+)"
+LAST_SUCCESS_DATABASE_COUNT="$(
+  existing_metric postgres_backup_restore_validation_last_database_count 0
+)"
+LAST_SUCCESS_SNAPSHOT_EPOCH="$(
+  existing_metric postgres_backup_restore_validation_last_snapshot_timestamp_seconds 0
+)"
+REPORT_FAILURE_METRICS=1
+write_metrics \
+  "$ATTEMPT_EPOCH" \
+  "$LAST_SUCCESS_EPOCH" \
+  0 \
+  0 \
+  "$LAST_SUCCESS_DATABASE_COUNT" \
+  "$LAST_SUCCESS_SNAPSHOT_EPOCH"
+
+for required_binary in \
+  "$RESTIC_BIN" \
+  "$PYTHON_BIN" \
+  "$RUNUSER_BIN" \
+  "$INITDB" \
+  "$PG_CTL" \
+  "$CREATEDB" \
+  "$DROPDB" \
+  "$PG_RESTORE" \
+  "$PSQL"; do
+  [[ -x "$required_binary" ]] || fail "Required executable is missing: $required_binary"
+done
+POSTGRES_UID="$(id -u postgres)" || fail "Unable to resolve the PostgreSQL OS user."
+[[ "$POSTGRES_UID" =~ ^[1-9][0-9]*$ ]] ||
+  fail "PostgreSQL OS user must resolve to a non-root numeric UID."
+[[ -s "$REPOSITORY_FILE" ]] || fail "Restic repository file is missing or empty."
+[[ -s "$PASSWORD_FILE" ]] || fail "Restic password file is missing or empty."
+
+if [[ -s "$BACKEND_ENV_FILE" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$BACKEND_ENV_FILE"
+  set +a
+fi
+export RESTIC_REPOSITORY_FILE="$REPOSITORY_FILE"
+export RESTIC_PASSWORD_FILE="$PASSWORD_FILE"
+
+remove_stale_run_directories
+require_repository
+
+run_timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
+RUN_DIR="$(mktemp -d "$WORK_ROOT/run-$run_timestamp-$$-XXXXXX")"
+chown root:postgres "$RUN_DIR"
+chmod 0710 "$RUN_DIR"
+
+snapshots_file="$RUN_DIR/snapshots.json"
+selected_file="$RUN_DIR/selected-snapshot"
+run_restic snapshots \
+  --json \
+  --host "$SNAPSHOT_HOST" \
+  --tag "postgres-logical-backup,cluster=$CLUSTER_SCOPE" > "$snapshots_file"
+select_snapshot "$snapshots_file" "$selected_file"
+mapfile -t SELECTED_SNAPSHOT < "$selected_file"
+(( ${{ '{' }}#SELECTED_SNAPSHOT[@]} == 4 )) ||
+  fail "Snapshot selection did not return the required metadata."
+snapshot_id="${SELECTED_SNAPSHOT[0]}"
+backup_id="${SELECTED_SNAPSHOT[1]}"
+snapshot_epoch="${SELECTED_SNAPSHOT[2]}"
+backup_path="${SELECTED_SNAPSHOT[3]}"
+[[ "$snapshot_id" =~ ^[0-9a-f]{64}$ ]] || fail "Selected snapshot ID is unsafe."
+[[ "$backup_id" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || fail "Selected backup ID is unsafe."
+[[ "$snapshot_epoch" =~ ^[0-9]+$ ]] || fail "Selected snapshot timestamp is invalid."
+[[ "$backup_path" == "$BACKUP_ROOT/$backup_id" ]] ||
+  fail "Selected snapshot path is outside the expected backup root."
+
+maximum_age_seconds=$((MAX_SNAPSHOT_AGE_HOURS * 3600))
+snapshot_age_seconds=$((ATTEMPT_EPOCH - snapshot_epoch))
+(( snapshot_age_seconds >= -300 )) ||
+  fail "Selected Restic snapshot timestamp is unexpectedly in the future."
+(( snapshot_age_seconds <= maximum_age_seconds )) ||
+  fail "Newest valid PostgreSQL Restic snapshot is older than $MAX_SNAPSHOT_AGE_HOURS hours."
+
+available_bytes="$(df --output=avail -B1 "$WORK_ROOT" | awk 'NR == 2 { print $1 }')"
+[[ "$available_bytes" =~ ^[0-9]+$ ]] ||
+  fail "Unable to determine free space for restore validation."
+(( available_bytes >= MIN_FREE_BYTES )) ||
+  fail "Restore-validation filesystem is below the configured free-space floor."
+
+artifact_dir="$RUN_DIR/artifact"
+mkdir -m 0700 -- "$artifact_dir"
+log "Restoring PostgreSQL logical backup $backup_id from exact Restic snapshot $snapshot_id."
+run_restic restore "$snapshot_id:$backup_path" --target "$artifact_dir"
+
+database_list_file="$RUN_DIR/databases"
+validate_restored_artifact "$artifact_dir" "$database_list_file"
+(
+  cd "$artifact_dir"
+  sha256sum --check --strict SHA256SUMS
+)
+mapfile -t DATABASES < "$database_list_file"
+(( ${{ '{' }}#DATABASES[@]} > 0 )) || fail "Validated manifest contains no databases."
+
+CLUSTER_DIR="$RUN_DIR/cluster"
+PGDATA="$CLUSTER_DIR/data"
+SOCKET_DIR="$CLUSTER_DIR/socket"
+install -d -o postgres -g postgres -m 0700 "$CLUSTER_DIR" "$PGDATA" "$SOCKET_DIR"
+
+"$RUNUSER_BIN" -u postgres -- \
+  "$INITDB" \
+  -D "$PGDATA" \
+  --username=postgres \
+  --auth-local=trust \
+  --auth-host=reject \
+  --no-instructions
+{
+  printf "\nlisten_addresses = ''\n"
+  printf "unix_socket_directories = '%s'\n" "$SOCKET_DIR"
+  printf "unix_socket_permissions = 0700\n"
+  printf "port = %s\n" "$VALIDATION_PORT"
+} >> "$PGDATA/postgresql.conf"
+chown postgres:postgres "$PGDATA/postgresql.conf"
+
+CLUSTER_START_ATTEMPTED=1
+"$RUNUSER_BIN" -u postgres -- \
+  "$PG_CTL" \
+  -D "$PGDATA" \
+  -l "$CLUSTER_DIR/postgresql.log" \
+  -w \
+  -t 60 \
+  start
+
+actual_data_directory="$(psql_value postgres 'SHOW data_directory;')"
+actual_listen_addresses="$(psql_value postgres 'SHOW listen_addresses;')"
+actual_socket_directory="$(psql_value postgres 'SHOW unix_socket_directories;')"
+actual_port="$(psql_value postgres 'SHOW port;')"
+[[ "$actual_data_directory" == "$PGDATA" ]] ||
+  fail "Temporary PostgreSQL safety check found an unexpected data directory."
+[[ -z "$actual_listen_addresses" ]] ||
+  fail "Temporary PostgreSQL safety check found TCP listening enabled."
+[[ "$actual_socket_directory" == "$SOCKET_DIR" ]] ||
+  fail "Temporary PostgreSQL safety check found an unexpected socket directory."
+[[ "$actual_port" == "$VALIDATION_PORT" ]] ||
+  fail "Temporary PostgreSQL safety check found an unexpected port."
+
+validated_database_count=0
+for source_database in "${DATABASES[@]}"; do
+  [[ "$source_database" =~ ^[A-Za-z0-9_.-]+$ ]] ||
+    fail "Manifest database name is unsafe."
+  dump_path="$artifact_dir/databases/$source_database.dump"
+  log "Validating restore of source database $source_database."
+  "$CREATEDB" \
+    --host="$SOCKET_DIR" \
+    --port="$VALIDATION_PORT" \
+    --username=postgres \
+    --template=template0 \
+    "$VALIDATION_DATABASE"
+  "$PG_RESTORE" \
+    --host="$SOCKET_DIR" \
+    --port="$VALIDATION_PORT" \
+    --username=postgres \
+    --dbname="$VALIDATION_DATABASE" \
+    --exit-on-error \
+    --no-owner \
+    --no-acl \
+    --no-tablespaces \
+    "$dump_path"
+  psql_value \
+    "$VALIDATION_DATABASE" \
+    'SELECT 1; SELECT count(*) FROM pg_catalog.pg_class WHERE relkind IN ('"'"'r'"'"', '"'"'p'"'"', '"'"'v'"'"', '"'"'m'"'"');' \
+    > /dev/null
+  "$DROPDB" \
+    --host="$SOCKET_DIR" \
+    --port="$VALIDATION_PORT" \
+    --username=postgres \
+    "$VALIDATION_DATABASE"
+  validated_database_count=$((validated_database_count + 1))
+done
+(( validated_database_count == ${{ '{' }}#DATABASES[@]} )) ||
+  fail "Not every manifest database was restored."
+
+cleanup_current_run
+success_epoch="$(date +%s)"
+duration_seconds=$((success_epoch - RUN_START_EPOCH))
+write_metrics \
+  "$ATTEMPT_EPOCH" \
+  "$success_epoch" \
+  1 \
+  "$duration_seconds" \
+  "$validated_database_count" \
+  "$snapshot_epoch"
+REPORT_FAILURE_METRICS=0
+log "PostgreSQL backup restore validation completed for $validated_database_count database(s)."
+log "POSTGRES_BACKUP_RESTORE_VALIDATION_RESULT=VALIDATED"

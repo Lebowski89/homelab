@@ -244,6 +244,8 @@
         - postgres_backup_remote_init
         - postgres_backup_remote_run
         - postgres_backup_remote_maintenance
+        - postgres_backup_restore_validation_setup
+        - postgres_backup_restore_validation_run
         - postgres_restore
         - postgres_admin
         - postgres_admin_uptime_kuma

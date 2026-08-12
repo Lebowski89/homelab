@@ -615,12 +615,16 @@
         - postgres_backup_remote_init
         - postgres_backup_remote_run
         - postgres_backup_remote_maintenance
+        - postgres_backup_restore_validation_setup
+        - postgres_backup_restore_validation_run
   tags:
     - postgres
     - postgres_backup_remote_setup
     - postgres_backup_remote_init
     - postgres_backup_remote_run
     - postgres_backup_remote_maintenance
+    - postgres_backup_restore_validation_setup
+    - postgres_backup_restore_validation_run
 
 - name: Remote logical backup | Install host-local runner
   when: postgres_backup_remote_manage
@@ -643,6 +647,8 @@
         - postgres_backup_remote_init
         - postgres_backup_remote_run
         - postgres_backup_remote_maintenance
+        - postgres_backup_restore_validation_setup
+        - postgres_backup_restore_validation_run
   vars:
     systemd_jobs: # noqa var-naming[no-role-prefix]
       - name: "{{ postgres_backup_remote_timer_name }}"
@@ -673,6 +679,8 @@
     - postgres_backup_remote_init
     - postgres_backup_remote_run
     - postgres_backup_remote_maintenance
+    - postgres_backup_restore_validation_setup
+    - postgres_backup_restore_validation_run
 
 - name: Remote logical backup | Manage maintenance systemd job
   when:
@@ -688,6 +696,8 @@
         - postgres_backup_remote_init
         - postgres_backup_remote_run
         - postgres_backup_remote_maintenance
+        - postgres_backup_restore_validation_setup
+        - postgres_backup_restore_validation_run
   vars:
     systemd_jobs: # noqa var-naming[no-role-prefix]
       - name: "{{ postgres_backup_remote_maintenance_timer_name }}"
@@ -718,3 +728,5 @@
     - postgres_backup_remote_init
     - postgres_backup_remote_run
     - postgres_backup_remote_maintenance
+    - postgres_backup_restore_validation_setup
+    - postgres_backup_restore_validation_run
