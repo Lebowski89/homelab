@@ -14,19 +14,21 @@ spec.loader.exec_module(podman_services)
 def valid_cfg():
     return {
         "runtime": "podman",
-        "image": "docker.io/n8nio/n8n:2.31.4",
+        "image": "registry.example.invalid/n8n:1.2.3",
         "ports": [{"published": 5678, "target": 5678}],
         "paths": [{"path": "/opt/n8n"}],
     }
 
 
 def test_normalize_accepts_n8n_like_service():
-    svc = podman_services.podman_service_normalize(valid_cfg(), "n8n")
-    assert svc["image"] == "docker.io/n8nio/n8n:2.31.4"
+    cfg = valid_cfg()
+    svc = podman_services.podman_service_normalize(cfg, "n8n")
+
+    assert svc["image"] == cfg["image"]
     assert svc["secrets"] == []
 
 
-@pytest.mark.parametrize("image", ["docker.io/n8nio/n8n:latest", "docker.io/n8nio/n8n", ""])
+@pytest.mark.parametrize("image", ["registry.example.invalid/n8n:latest", "registry.example.invalid/n8n", ""])
 def test_image_must_be_exact_non_latest(image):
     cfg = valid_cfg()
     cfg["image"] = image
@@ -124,19 +126,23 @@ def test_external_named_network_is_accepted_without_managed_driver():
 
 
 def test_image_reference_drift_matching():
-    result = podman_services.podman_image_reference_drift({"rc": 0, "stdout": "docker.io/n8nio/n8n:2.31.4"}, "docker.io/n8nio/n8n:2.31.4")
+    result = podman_services.podman_image_reference_drift(
+        {"rc": 0, "stdout": "registry.example.invalid/n8n:1.2.3"}, "registry.example.invalid/n8n:1.2.3"
+    )
     assert result["drift"] is False
     assert "No Podman image reference drift" in result["message"]
 
 
 def test_image_reference_drift_mismatching():
-    result = podman_services.podman_image_reference_drift({"rc": 0, "stdout": "docker.io/n8nio/n8n:2.31.3"}, "docker.io/n8nio/n8n:2.31.4")
+    result = podman_services.podman_image_reference_drift(
+        {"rc": 0, "stdout": "registry.example.invalid/n8n:1.2.2"}, "registry.example.invalid/n8n:1.2.3"
+    )
     assert result["drift"] is True
     assert result["missing"] is False
 
 
 def test_image_reference_drift_missing_container():
-    result = podman_services.podman_image_reference_drift({"rc": 125, "stdout": ""}, "docker.io/n8nio/n8n:2.31.4")
+    result = podman_services.podman_image_reference_drift({"rc": 125, "stdout": ""}, "registry.example.invalid/n8n:1.2.3")
     assert result["drift"] is True
     assert result["missing"] is True
 
@@ -218,9 +224,10 @@ def canonical_cfg():
 
 
 def test_normalize_maps_every_canonical_docker_style_field():
-    svc = podman_services.podman_service_normalize(canonical_cfg(), "portable")
+    cfg = canonical_cfg()
+    svc = podman_services.podman_service_normalize(cfg, "portable")
 
-    assert svc["image"] == "ghcr.io/example/portable:1.2.3"
+    assert svc["image"] == cfg["image"]
     assert svc["container"]["image"] == svc["image"]
     assert svc["container"]["uid"] == "1001"
     assert svc["container"]["gid"] == "1002"
@@ -1117,7 +1124,7 @@ def test_nonempty_docker_runtime_options_are_not_silently_ignored_by_podman():
 def rootless_cfg():
     return {
         "runtime": "podman",
-        "image": "registry.example.invalid/adminer:5.4.2",
+        "image": "registry.example.invalid/adminer:1.2.3",
         "user": "1000:1000",
         "named_networks": {"adminer": {"driver": "bridge", "external": False}},
         "ports": [{"published": 18080, "target": 8080, "protocol": "tcp"}],
@@ -1135,7 +1142,7 @@ def rootless_cfg():
 def rootless_bind_cfg():
     cfg = rootless_cfg()
     cfg["user"] = "0:0"
-    cfg["image"] = "lscr.io/linuxserver/thelounge:v4.5.1-ls225"
+    cfg["image"] = "registry.example.invalid/thelounge:1.0.0"
     cfg["environment"] = {"PUID": "1000", "PGID": "1000"}
     cfg["deploy"]["execution"] = {
         "mode": "rootless",
@@ -1434,7 +1441,7 @@ def test_rootless_execution_rejects_native_infisical_secret_metadata():
 
 def test_rootless_execution_requires_fully_qualified_exact_image():
     cfg = rootless_cfg()
-    cfg["image"] = "adminer:5.4.2"
+    cfg["image"] = "adminer:1.2.3"
 
     with pytest.raises(AnsibleFilterError, match=r"fully qualified"):
         podman_services.podman_service_normalize(cfg, "adminer")
