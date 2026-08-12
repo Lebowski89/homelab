@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/12 |
+| Readme update        | 2026/08/13 |
 
 
 
@@ -175,6 +175,7 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Ubuntu ¦ Install common packages | ansible.builtin.include_tasks | True |  |
+| Ubuntu ¦ Install PostgreSQL backup prerequisites | ansible.builtin.include_tasks | True |  |
 | Ubuntu ¦ Clone Homelab repo | ansible.builtin.include_tasks | True |  |
 | Ubuntu ¦ Setup Python venv | ansible.builtin.include_tasks | True |  |
 | Ubuntu ¦ Install required collections | ansible.builtin.include_tasks | True |  |
@@ -233,6 +234,12 @@
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Configure PAM limits | community.general.pam_limits | False |
+
+#### File: tasks/sub_tasks/postgres_backup_prerequisites.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Ubuntu PostgreSQL backup prerequisites ¦ Install package profile | ansible.builtin.apt | False |
 
 #### File: tasks/sub_tasks/repo.yml
 
