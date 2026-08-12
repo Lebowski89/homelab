@@ -218,23 +218,62 @@ etcdctl --endpoints=http://192.168.80.95:2379,http://192.168.80.96:2379,http://1
 See [PostgreSQL logical backups](../postgresql-logical-backups.md) for the
 architecture, completion contract, retention, metrics, and operation tags.
 
+### Logical backup status and operations
+
+Preview or configure the backup machinery, then run a backup on the current
+Patroni leader:
+
+```bash
+skynet check postgres backup-setup
+skynet run postgres backup-setup
+skynet run postgres backup-run
+```
+
+Check the timer schedule and service state:
+
+```bash
+systemctl status postgres-logical-backup.timer
+systemctl status postgres-logical-backup.service
+systemctl list-timers --all postgres-logical-backup.timer
+```
+
+Inspect the service journal:
+
+```bash
+journalctl -u postgres-logical-backup.service
+journalctl -u postgres-logical-backup.service -n 100 --no-pager
+```
+
+Inspect the Node Exporter textfile metrics:
+
+```bash
+sudo cat /var/lib/node_exporter/textfile_collector_postgres/postgres_logical_backup.prom
+```
+
 ### List completed and staging backups
+
 ```bash
 sudo ls -lah /var/backups/postgresql
 ```
 
 ### Inspect a completed backup
+
 ```bash
 sudo ls -lah /var/backups/postgresql/YYYYMMDDTHHMMSSZ
+sudo cat /var/backups/postgresql/YYYYMMDDTHHMMSSZ/manifest.txt
+sudo test -f /var/backups/postgresql/YYYYMMDDTHHMMSSZ/SUCCESS \
+  && echo "SUCCESS marker present"
 ```
 
 ### Verify payload checksums
+
 ```bash
 cd /var/backups/postgresql/YYYYMMDDTHHMMSSZ
 sudo sha256sum --check SHA256SUMS
 ```
 
 ### Inspect a custom-format dump
+
 ```bash
 sudo -u postgres pg_restore --list \
   /var/backups/postgresql/YYYYMMDDTHHMMSSZ/databases/test_db.dump
