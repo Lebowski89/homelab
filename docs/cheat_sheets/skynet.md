@@ -382,6 +382,12 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 | `skynet run postgres backup`              | `postgres_backup`              |
 | `skynet run postgres backup-setup`        | `postgres_backup_setup`        |
 | `skynet run postgres backup-run`          | `postgres_backup_run`          |
+| `skynet run postgres backup-remote-setup` | `postgres_backup_remote_setup` |
+| `skynet run postgres backup-remote-init`  | `postgres_backup_remote_init`  |
+| `skynet run postgres backup-remote-run`   | `postgres_backup_remote_run`   |
+| `skynet run postgres backup-remote-maintenance` | `postgres_backup_remote_maintenance` |
+| `skynet run postgres backup-restore-validation-setup` | `postgres_backup_restore_validation_setup` |
+| `skynet run postgres backup-restore-validation-run` | `postgres_backup_restore_validation_run` |
 | `skynet run postgres restore`             | `postgres_restore`             |
 | `skynet run postgres admin`               | `postgres_admin`               |
 | `skynet run postgres admin-uptime-kuma`   | `postgres_admin_uptime_kuma`   |
@@ -700,6 +706,7 @@ docker_swarm
 opentofu_pve_user
 infisical_podman_recreate
 postgres_backup
+postgres_backup_remote_run
 ```
 
 These are better exposed as:
@@ -710,6 +717,7 @@ skynet run docker swarm
 skynet run opentofu pve-user
 skynet run infisical-podman recreate
 skynet run postgres backup
+skynet run postgres backup-remote-run
 ```
 
 Do **not** add normal catalog service names here. Services should continue to use the service/tag flow from their service variable files:

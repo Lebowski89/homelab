@@ -9,10 +9,15 @@ not move during failover.
 
 Patroni replicas provide high availability, not backups.
 
-These are local logical backups only. An encrypted off-host backup repository
-is still required to protect against host, cluster, site, and administrative
-failure. WAL archiving, point-in-time recovery, physical base backups, and
-automated disposable restore tests are deliberately deferred.
+The optional remote layer copies only completed, checksum-verified backup trees
+to a provider-neutral encrypted Restic repository. It is intentionally
+disabled until a repository and its backend are selected. An optional restore
+validation capability restores recent snapshots into an isolated throwaway
+PostgreSQL cluster. WAL archiving, point-in-time recovery, and physical base
+backups are deliberately deferred.
+
+These local logical backups only become off-host protection when the separate
+uploader copies them into the configured encrypted off-host backup repository.
 
 ## Configuration
 
@@ -40,6 +45,264 @@ installs the runner as `root:root` with mode `0755`, and runs the oneshot
 service as OS user and group `postgres`. PostgreSQL commands omit `-h` and
 use the local Unix socket with peer authentication. No PostgreSQL password is
 stored in the script or systemd unit.
+
+## Provider-neutral encrypted remote backups
+
+Local production and remote transfer are separate operations:
+
+```text
+local verified logical backup
+          |
+          v
+completed backup + SUCCESS
+          |
+          v
+checksum verification
+          |
+          v
+Restic encrypted remote snapshot
+          |
+          v
+remote retention
+```
+
+`postgres-logical-backup` remains PostgreSQL-specific and performs no network
+operations. When remote management is enabled, the role installs Restic and a
+separate root-run `postgres-logical-backup-remote` runner on every
+`tags_postgres` host. Every node needs the uploader because a completed local
+backup stays on whichever Patroni member was leader when it was created.
+
+The remote capability is intentionally disabled until a repository/provider is
+configured. Its main variables are:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `postgres_backup_remote_manage` | `false` | Install and configure the capability |
+| `postgres_backup_remote_enabled` | `false` | Enable upload and maintenance timers |
+| `postgres_backup_remote_repository` | empty | Provider-neutral Restic repository URL |
+| `postgres_backup_remote_password_secret` | `/Restic/Postgres` / `PASSWORD` | Infisical repository-password declaration |
+| `postgres_backup_remote_backend_environment` | `{}` | Non-secret backend environment |
+| `postgres_backup_remote_backend_secrets` | `[]` | Infisical-backed environment declarations |
+| `postgres_backup_remote_secret_files` | `[]` | Root-only Infisical-backed files |
+| `postgres_backup_remote_options` | `[]` | Additional non-secret Restic argv elements |
+| `postgres_backup_remote_retry_lock` | `10m` | Restic repository-lock retry duration |
+| `postgres_backup_remote_maintenance_host` | first sorted PostgreSQL host | Sole maintenance scheduler |
+| `postgres_backup_remote_snapshot_host` | `postgres_patroni_scope` | Cluster-stable snapshot host identity |
+| `postgres_backup_remote_keep_daily` | `14` | Daily snapshots retained remotely |
+| `postgres_backup_remote_keep_weekly` | `8` | Weekly snapshots retained remotely |
+| `postgres_backup_remote_keep_monthly` | `12` | Monthly snapshots retained remotely |
+
+`manage` controls package, configuration, runner, state, and unit management.
+`enabled` controls scheduled network activity. A repository is not required
+while both remain false, and this repository does not enable either variable in
+`tags_postgres.yml`.
+
+The role writes `/etc/restic/postgres-logical-backup` as `root:root 0700`.
+The repository, password, backend environment, and optional backend secret
+files are `root:root 0600`. The repository password and backend secrets are
+looked up through
+`hostvars[services_controller_host].infisical_lookup_default_params` on the
+controller. They are never placed in the runner, a systemd unit, or command
+arguments. The runner exports `RESTIC_REPOSITORY_FILE` and
+`RESTIC_PASSWORD_FILE` and safely sources the protected backend environment.
+
+Backend environment keys must be shell identifiers. Secret files must be
+direct children of the protected Restic config directory and use mode `0600`.
+Additional Restic options are individual array arguments, never a shell command
+and never evaluated with `eval`; keep credentials in Infisical-backed
+environment or files instead. Do not embed provider credentials in the
+repository URL.
+
+The role records only its declared provider secret-file paths in the root-only
+`.managed-secret-files` manifest. When a provider configuration changes, files
+that were previously recorded but are no longer declared are removed. Other
+administrator-created files in the protected configuration directory are not
+scanned or deleted.
+
+### Upload eligibility and snapshot identity
+
+The uploader considers only direct children of `postgres_backup_root` whose
+names exactly match `YYYYMMDDTHHMMSSZ` and contain `SUCCESS`. It ignores
+staging directories, lock/retention files, arbitrary names, and incomplete
+backups. Before upload it runs `sha256sum --check SHA256SUMS` inside the
+candidate. A checksum or Restic failure leaves the local backup untouched and
+does not create an uploaded-state marker.
+
+Each successful `restic backup` creates one snapshot and then atomically writes
+a root-only marker under
+`/var/lib/postgres-logical-backup-remote/uploaded/<repository-id>/<backup-id>`.
+The namespace is Restic's unique repository ID from `restic cat config`, so
+switching providers or recreating a repository at the same URL automatically
+makes locally retained backups eligible for the new repository. Marker
+directories for prior repositories are preserved. Missing markers retry on
+later runs; existing markers skip duplicates for that repository. A separate
+local flock prevents overlapping upload processes without changing metrics on
+a clean overlap skip. Restic operations also use
+`postgres_backup_remote_retry_lock: 10m` by default so short-lived shared
+repository lock contention is retried by Restic itself.
+
+Snapshots use the Patroni scope as their stable Restic host and carry these
+tags:
+
+- `postgres-logical-backup`
+- `cluster=<patroni-scope>`
+- `backup-id=<timestamp>`
+- `source-member=<inventory-host>`
+
+The source member is diagnostic only. Retention scopes to the stable host and
+`postgres-logical-backup` tag, then groups by host so changing source paths and
+leaders remain one logical cluster stream. This prevents maintenance from
+touching unrelated snapshots if the repository is shared.
+
+Upload timers are rendered on all PostgreSQL nodes. A separate Sunday
+maintenance timer is rendered only on
+`postgres_backup_remote_maintenance_host`; it applies 14 daily, 8 weekly, and
+12 monthly retention by default and performs the repository prune. Upload runs
+never call `forget` or `prune`.
+
+### Activation workflow
+
+The future administrator must provide the repository URL/server, create a
+strong random Restic repository password in Infisical, add any provider
+credentials to Infisical, and provide any safe provider options. Then:
+
+1. Set `postgres_backup_remote_repository`.
+2. Configure `postgres_backup_remote_backend_environment`, secret environment
+   declarations, secret files, or non-secret options required by the backend.
+3. Set `postgres_backup_remote_manage: true`.
+4. Run `skynet run postgres backup-remote-setup`.
+5. After independently confirming the destination, explicitly run
+   `skynet run postgres backup-remote-init` once.
+6. Run `skynet run postgres backup-remote-run` and inspect snapshots and
+   metrics.
+7. Set `postgres_backup_remote_enabled: true`, rerun setup, and verify both
+   timers.
+
+Normal role execution and setup never initialize, upload, forget, or prune.
+All remote actions first probe `restic cat config`. Explicit initialization
+runs `restic init` only when that probe returns the precise missing-repository
+exit code `10`. An existing repository returns success; wrong-password exit
+`12` and every connectivity/backend failure fail without initialization.
+Minimum supported Restic version is 0.17.1 because these workflows rely on
+the differentiated repository and password failure exit codes.
+Upload and maintenance use the same probe but never initialize. Check-mode
+variants render and validate configuration, substitute deterministic secret
+stand-ins, and print the planned action without contacting Infisical or Restic.
+
+### Automated restore validation
+
+Restore validation is a separate, opt-in capability. It runs only on
+`postgres_backup_restore_validation_host`, which defaults to the single Restic
+maintenance host, and reuses the protected repository, password, backend
+environment, provider files, Restic options, and retry-lock configuration.
+Both `postgres_backup_restore_validation_manage` and
+`postgres_backup_restore_validation_enabled` default to `false`; the latter
+controls a Sunday 07:00 timer with up to 30 minutes of randomized delay, after
+the normal Sunday 05:00 maintenance window without a hard dependency.
+
+Each run uses `restic snapshots --json` and selects the newest timestamped
+snapshot whose host is the stable Patroni scope, whose tags identify the
+PostgreSQL logical-backup stream and cluster, and whose single
+`backup-id=<timestamp>` matches its path beneath `postgres_backup_root`.
+The snapshot must be no older than
+`postgres_backup_restore_validation_max_snapshot_age_hours` (48 by default).
+The validator restores that exact snapshot subdirectory beneath a unique,
+root-bounded workspace only after checking the configured free-space floor.
+
+The restored `SUCCESS`, `SHA256SUMS`, manifest, non-empty `globals.sql`,
+and every declared custom-format dump are revalidated. The manifest must
+exactly match the dump files; missing, duplicate, unsafe, or unexpected dumps
+fail before PostgreSQL starts.
+
+The throwaway PostgreSQL 18 cluster runs as OS user `postgres`, with TCP
+disabled, a private workspace socket, its own PGDATA, a non-production port,
+and configurable deterministic `UTF8` / `C.UTF-8` encoding and locale defaults.
+These defaults do not claim to reproduce the source cluster locale. Before any
+database is created, the validator queries
+`data_directory`, `listen_addresses`, `unix_socket_directories`, and
+`port` through explicit socket, port, and user arguments and requires exact
+agreement with the temporary configuration. Every dump is then restored
+sequentially into one clean `template0`-based validation database using
+`--exit-on-error --no-owner --no-acl --no-tablespaces`, followed by generic
+connectivity and catalog queries. The database is dropped before the next
+dump, bounding active expanded storage to one source database.
+
+`globals.sql` remains checksummed, required, remotely protected, and available
+for deliberate disaster recovery, but the automated validator never executes
+it. Cluster-global SQL can contain roles and tablespace paths with host-level
+effects, so automated validation intentionally proves database archive
+restorability independently from production ownership, ACL, and tablespace
+state.
+
+The validation root is `root:postgres` mode `0710`: PostgreSQL can traverse to
+its private runtime directories without gaining directory listing or write
+access. The validator always stops the temporary cluster and removes only its
+strictly named run workspace. Before stopping PostgreSQL recorded in an old
+workspace, cleanup proves through `/proc` that the live process belongs to the
+`postgres` user, is PostgreSQL, and uses that exact validation PGDATA. Ambiguous
+or reused PIDs fail closed, so stale state cannot stop production or unrelated
+processes. An overlap exits successfully without overwriting health metrics.
+Real attempts atomically publish:
+
+- `postgres_backup_restore_validation_last_attempt_timestamp_seconds`
+- `postgres_backup_restore_validation_last_success_timestamp_seconds`
+- `postgres_backup_restore_validation_last_run_success`
+- `postgres_backup_restore_validation_last_duration_seconds`
+- `postgres_backup_restore_validation_last_database_count`
+- `postgres_backup_restore_validation_last_snapshot_timestamp_seconds`
+
+The success timestamp, database count, and snapshot timestamp describe the
+latest fully successful validation and are preserved on failure. Metrics have
+no database, snapshot, repository, provider, or host labels.
+
+### Conceptual backend examples
+
+These examples use placeholders and do not recommend a provider.
+
+Unconfigured safe state:
+
+```yaml
+postgres_backup_remote_manage: false
+postgres_backup_remote_enabled: false
+postgres_backup_remote_repository: ""
+```
+
+Conceptual SFTP state:
+
+```yaml
+postgres_backup_remote_repository: sftp:backup@example.invalid:/srv/restic/postgres
+postgres_backup_remote_secret_files:
+  - path: /etc/restic/postgres-logical-backup/backend-key
+    infisical:
+      path: /Restic/Postgres
+      name: SFTP_PRIVATE_KEY
+    mode: "0600"
+postgres_backup_remote_options:
+  - --option
+  - sftp.command=ssh -i /etc/restic/postgres-logical-backup/backend-key
+```
+
+Before using SFTP, independently verify the server host key and install it in a
+root-readable known-hosts file. Do not disable strict host-key checking and do
+not automatically trust the first presented key.
+
+Conceptual S3-compatible state:
+
+```yaml
+postgres_backup_remote_repository: s3:https://objects.example.invalid/backups/postgres
+postgres_backup_remote_backend_environment:
+  AWS_DEFAULT_REGION: example-region-1
+postgres_backup_remote_backend_secrets:
+  - env: AWS_ACCESS_KEY_ID
+    path: /Restic/Postgres
+    name: S3_ACCESS_KEY_ID
+  - env: AWS_SECRET_ACCESS_KEY
+    path: /Restic/Postgres
+    name: S3_SECRET_ACCESS_KEY
+```
+
+No provider URL, account, credentials, or SSH host key is committed by this
+phase.
 
 ## Backup contents and completion contract
 
@@ -110,6 +373,22 @@ A normal replica skip and a local overlap skip do not overwrite genuine backup
 health. A failed metrics write is visible as a failed systemd invocation; it
 cannot turn a failed database backup into a success.
 
+The remote uploader atomically publishes a separate metrics file containing:
+
+- `postgres_backup_remote_last_attempt_timestamp_seconds`: the latest
+  non-overlap upload attempt.
+- `postgres_backup_remote_last_success_timestamp_seconds`: the latest actual
+  successful upload; a successful no-work run preserves it.
+- `postgres_backup_remote_last_run_success`: whether the whole uploader run
+  completed, including successful no-work runs.
+- `postgres_backup_remote_last_duration_seconds`: duration of the latest run.
+- `postgres_backup_remote_last_uploaded_count`: backups uploaded by that run.
+- `postgres_backup_remote_pending_count`: eligible unmarked backups remaining
+  after discovery at completion or failure. It is `0` if a preflight failure
+  occurs before local eligibility can be counted.
+
+Repository URLs, hostnames, backup IDs, and credentials are not metric labels.
+
 ## Setup, manual runs, and inspection
 
 A normal full play configures the runner and timer but does not run an
@@ -128,9 +407,32 @@ skynet run postgres backup-run
 skynet run postgres backup
 ```
 
+Remote Restic operations use distinct tags and commands:
+
+```bash
+skynet run postgres backup-remote-setup
+skynet run postgres backup-remote-init
+skynet run postgres backup-remote-run
+skynet run postgres backup-remote-maintenance
+skynet run postgres backup-restore-validation-setup
+skynet run postgres backup-restore-validation-run
+```
+
+The corresponding raw tags are `postgres_backup_remote_setup`,
+`postgres_backup_remote_init`, `postgres_backup_remote_run`, and
+`postgres_backup_remote_maintenance`. Manual upload runs on all PostgreSQL
+nodes; init and maintenance run only on the deterministic maintenance host.
+Restore-validation setup and manual execution use
+`postgres_backup_restore_validation_setup` and
+`postgres_backup_restore_validation_run`, and run only on the designated
+validation host.
+
 In check mode, `skynet check postgres backup-run` configures and validates the
 backup resources, then reports that it would discover the leader and invoke
 the runner. It does not query Patroni or run a backup.
+`skynet check postgres backup-restore-validation-run` reports the isolated
+restore plan without contacting Restic, restoring data, starting PostgreSQL, or
+cleaning real workspaces.
 
 The runner repeats the local leader check even after Ansible selected a leader,
 so a failover between discovery and execution cannot produce a backup on a
@@ -153,5 +455,13 @@ postgres_restore_dbs_map:
     file: /var/backups/postgresql/20260811T013000Z/databases/gotify.dump
 ```
 
-Selecting the latest backup automatically and proving full recovery in a
-disposable restore environment remain follow-up work.
+Inspect restore-validation scheduling and logs on its designated host with:
+
+```bash
+systemctl status postgres-logical-backup-restore-validation.timer
+systemctl status postgres-logical-backup-restore-validation.service
+journalctl -u postgres-logical-backup-restore-validation.service
+```
+
+WAL/PITR, physical backups, automatic execution of cluster globals, and
+application-specific semantic queries remain separate recovery decisions.

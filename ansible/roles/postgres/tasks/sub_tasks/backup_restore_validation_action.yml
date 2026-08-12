@@ -1,0 +1,38 @@
+---
+
+- name: Backup restore validation action | Validate explicit action
+  ansible.builtin.assert:
+    that:
+      - postgres_backup_restore_validation_manage
+      - postgres_backup_remote_manage
+      - postgres_backup_remote_repository | trim | length > 0
+      - inventory_hostname == postgres_backup_restore_validation_host
+    fail_msg: >-
+      PostgreSQL backup restore validation requires its managed designated host
+      and a configured remote Restic repository.
+
+- name: Backup restore validation action | Invoke host-local runner
+  become: true
+  become_user: root
+  ansible.builtin.command:
+    argv:
+      - "{{ postgres_backup_restore_validation_script_path }}"
+  register: postgres_backup_restore_validation_action_result
+  changed_when: >-
+    'POSTGRES_BACKUP_RESTORE_VALIDATION_RESULT=VALIDATED'
+    in (postgres_backup_restore_validation_action_result.stdout_lines | default([]))
+
+- name: Backup restore validation action | Report result
+  ansible.builtin.debug:
+    msg: >-
+      {{
+        postgres_backup_restore_validation_action_result.stdout_lines
+        | default([])
+        | select('match', '^POSTGRES_BACKUP_RESTORE_VALIDATION_RESULT=')
+        | list
+        | last
+        | default(
+          'POSTGRES_BACKUP_RESTORE_VALIDATION_RESULT=NO_RESULT_REPORTED',
+          true
+        )
+      }}

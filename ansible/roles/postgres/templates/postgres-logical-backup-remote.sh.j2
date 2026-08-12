@@ -1,0 +1,369 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+umask 077
+
+readonly BACKUP_ROOT='{{ postgres_backup_root | string | replace("'", "'\"'\"'") }}'
+readonly STATE_DIR='{{ postgres_backup_remote_state_dir | string | replace("'", "'\"'\"'") }}'
+readonly UPLOADED_DIR="$STATE_DIR/uploaded"
+readonly PYTHON_BIN="/usr/bin/python3"
+readonly LOCK_FILE="$STATE_DIR/remote.lock"
+readonly METRICS_FILE='{{ postgres_backup_remote_metrics_file | string | replace("'", "'\"'\"'") }}'
+readonly RESTIC_BIN='{{ postgres_backup_remote_restic_path | string | replace("'", "'\"'\"'") }}'
+readonly REPOSITORY_FILE='{{ postgres_backup_remote_repository_file | string | replace("'", "'\"'\"'") }}'
+readonly PASSWORD_FILE='{{ postgres_backup_remote_password_file | string | replace("'", "'\"'\"'") }}'
+readonly BACKEND_ENV_FILE='{{ postgres_backup_remote_environment_file | string | replace("'", "'\"'\"'") }}'
+readonly SNAPSHOT_HOST='{{ postgres_backup_remote_snapshot_host | string | replace("'", "'\"'\"'") }}'
+readonly CLUSTER_SCOPE='{{ postgres_patroni_scope | string | replace("'", "'\"'\"'") }}'
+readonly SOURCE_MEMBER='{{ inventory_hostname | string | replace("'", "'\"'\"'") }}'
+readonly KEEP_DAILY={{ postgres_backup_remote_keep_daily }}
+readonly KEEP_WEEKLY={{ postgres_backup_remote_keep_weekly }}
+readonly KEEP_MONTHLY={{ postgres_backup_remote_keep_monthly }}
+readonly RETRY_LOCK='{{ postgres_backup_remote_retry_lock | string | replace("'", "'\"'\"'") }}'
+
+RESTIC_OPTIONS=(
+{% for postgres_backup_remote_option in postgres_backup_remote_options %}
+  '{{ postgres_backup_remote_option | string | replace("'", "'\"'\"'") }}'
+{% endfor %}
+)
+
+MODE="${1:-upload}"
+ATTEMPT_EPOCH=0
+RUN_START_EPOCH=0
+REPORT_FAILURE_METRICS=0
+LAST_SUCCESS_EPOCH=0
+UPLOADED_COUNT=0
+PENDING_COUNT=0
+CANDIDATES_FILE=""
+MARKER_TMP=""
+REPOSITORY_CONFIG=""
+REPOSITORY_ID=""
+REPOSITORY_UPLOADED_DIR=""
+
+log() {
+  printf '%s\n' "$*"
+}
+
+fail() {
+  log "ERROR: $*" >&2
+  return 1
+}
+
+existing_metric() {
+  local metric_name="$1"
+  local default_value="$2"
+  local metric_value=""
+
+  if [[ -r "$METRICS_FILE" ]]; then
+    metric_value="$(awk -v name="$metric_name" '$1 == name { print $2; exit }' "$METRICS_FILE")"
+  fi
+
+  if [[ "$metric_value" =~ ^[0-9]+$ ]]; then
+    printf '%s\n' "$metric_value"
+  else
+    printf '%s\n' "$default_value"
+  fi
+}
+
+write_metrics() {
+  local attempt_epoch="$1"
+  local success_epoch="$2"
+  local run_success="$3"
+  local duration_seconds="$4"
+  local uploaded_count="$5"
+  local pending_count="$6"
+  local metrics_tmp
+
+  metrics_tmp="$(mktemp "${METRICS_FILE}.tmp.XXXXXX")"
+  {
+    printf '# HELP postgres_backup_remote_last_attempt_timestamp_seconds Unix timestamp of the last remote upload attempt.\n'
+    printf '# TYPE postgres_backup_remote_last_attempt_timestamp_seconds gauge\n'
+    printf 'postgres_backup_remote_last_attempt_timestamp_seconds %s\n' "$attempt_epoch"
+    printf '# HELP postgres_backup_remote_last_success_timestamp_seconds Unix timestamp of the last successful remote upload.\n'
+    printf '# TYPE postgres_backup_remote_last_success_timestamp_seconds gauge\n'
+    printf 'postgres_backup_remote_last_success_timestamp_seconds %s\n' "$success_epoch"
+    printf '# HELP postgres_backup_remote_last_run_success Whether the last uploader run completed successfully.\n'
+    printf '# TYPE postgres_backup_remote_last_run_success gauge\n'
+    printf 'postgres_backup_remote_last_run_success %s\n' "$run_success"
+    printf '# HELP postgres_backup_remote_last_duration_seconds Duration of the last uploader run.\n'
+    printf '# TYPE postgres_backup_remote_last_duration_seconds gauge\n'
+    printf 'postgres_backup_remote_last_duration_seconds %s\n' "$duration_seconds"
+    printf '# HELP postgres_backup_remote_last_uploaded_count Backups uploaded by the last uploader run.\n'
+    printf '# TYPE postgres_backup_remote_last_uploaded_count gauge\n'
+    printf 'postgres_backup_remote_last_uploaded_count %s\n' "$uploaded_count"
+    printf '# HELP postgres_backup_remote_pending_count Eligible local backups still pending upload.\n'
+    printf '# TYPE postgres_backup_remote_pending_count gauge\n'
+    printf 'postgres_backup_remote_pending_count %s\n' "$pending_count"
+  } > "$metrics_tmp"
+  chmod 0644 "$metrics_tmp"
+  mv -f -- "$metrics_tmp" "$METRICS_FILE"
+}
+
+cleanup_transients() {
+  if [[ -n "$CANDIDATES_FILE" ]]; then
+    rm -f -- "$CANDIDATES_FILE"
+  fi
+  if [[ -n "$MARKER_TMP" ]]; then
+    rm -f -- "$MARKER_TMP"
+  fi
+}
+
+on_error() {
+  local exit_status="$?"
+  local failure_epoch
+  local duration_seconds
+
+  trap - ERR
+  set +e
+  failure_epoch="$(date +%s)"
+  duration_seconds=$((failure_epoch - RUN_START_EPOCH))
+
+  if [[ "$MODE" == upload ]] && (( REPORT_FAILURE_METRICS == 1 )); then
+    write_metrics \
+      "$ATTEMPT_EPOCH" \
+      "$LAST_SUCCESS_EPOCH" \
+      0 \
+      "$duration_seconds" \
+      "$UPLOADED_COUNT" \
+      "$PENDING_COUNT"
+  fi
+
+  log "PostgreSQL remote backup $MODE operation failed." >&2
+  exit "$exit_status"
+}
+
+run_restic() {
+  "$RESTIC_BIN" "${RESTIC_OPTIONS[@]}" --retry-lock "$RETRY_LOCK" "$@"
+}
+
+eligible_backup() {
+  local candidate="$1"
+  local backup_id
+
+  backup_id="$(basename -- "$candidate")"
+  [[ "$backup_id" =~ ^[0-9]{8}T[0-9]{6}Z$ ]] || return 1
+  [[ -f "$candidate/SUCCESS" ]] || return 1
+  return 0
+}
+
+probe_repository() {
+  local probe_output=""
+  local probe_status=0
+
+  probe_output="$(run_restic cat config)" || probe_status=$?
+  if (( probe_status == 0 )); then
+    REPOSITORY_CONFIG="$probe_output"
+  else
+    REPOSITORY_CONFIG=""
+  fi
+  return "$probe_status"
+}
+
+set_repository_upload_directory() {
+  local repository_id=""
+
+  [[ -x "$PYTHON_BIN" ]] || fail "Python 3 is required to parse the Restic repository config."
+  if ! repository_id="$(
+    printf '%s' "$REPOSITORY_CONFIG" |
+      "$PYTHON_BIN" -c 'import json, re, sys; repository_id = json.load(sys.stdin).get("id"); isinstance(repository_id, str) and re.fullmatch(r"[0-9a-f]{64}", repository_id) or sys.exit(1); print(repository_id, end="")' 2> /dev/null
+  )"; then
+    fail "Restic repository config is not valid JSON with a string id."
+  fi
+  [[ "$repository_id" =~ ^[0-9a-f]{64}$ ]] ||
+    fail "Restic repository config id is empty or does not match the expected 64-character lowercase hexadecimal format."
+
+  REPOSITORY_ID="$repository_id"
+  REPOSITORY_UPLOADED_DIR="$UPLOADED_DIR/$REPOSITORY_ID"
+  [[ ! -e "$REPOSITORY_UPLOADED_DIR" || -d "$REPOSITORY_UPLOADED_DIR" ]] ||
+    fail "Restic repository upload-state path exists but is not a directory."
+  mkdir -p -- "$REPOSITORY_UPLOADED_DIR"
+  chmod 0700 -- "$REPOSITORY_UPLOADED_DIR"
+}
+
+require_initialized_repository() {
+  local probe_status=0
+
+  probe_repository || probe_status=$?
+  case "$probe_status" in
+    0)
+      return 0
+      ;;
+    10)
+      fail "Configured Restic repository is not initialized; run the explicit init action."
+      ;;
+    12)
+      fail "Configured Restic repository rejected its password."
+      ;;
+    *)
+      fail "Configured Restic repository/backend access failed with exit code $probe_status."
+      ;;
+  esac
+}
+
+initialize_repository() {
+  local probe_status=0
+
+  REPORT_FAILURE_METRICS=0
+  probe_repository || probe_status=$?
+  case "$probe_status" in
+    0)
+      log "Configured Restic repository is already initialized and accessible."
+      log "POSTGRES_BACKUP_REMOTE_RESULT=ALREADY_INITIALIZED"
+      ;;
+    10)
+      run_restic init
+      log "Configured Restic repository initialized explicitly."
+      log "POSTGRES_BACKUP_REMOTE_RESULT=INITIALIZED"
+      ;;
+    12)
+      fail "Configured Restic repository rejected its password; refusing initialization."
+      ;;
+    *)
+      fail "Configured Restic repository/backend access failed with exit code $probe_status; refusing initialization."
+      ;;
+  esac
+}
+
+upload_backups() {
+  local candidate
+  local backup_id
+  local marker
+  local success_epoch
+  local duration_seconds
+
+  require_initialized_repository
+  set_repository_upload_directory
+
+  CANDIDATES_FILE="$(mktemp "$STATE_DIR/.candidates.XXXXXX")"
+  if ! find "$BACKUP_ROOT" -mindepth 1 -maxdepth 1 -type d -print0 \
+    | LC_ALL=C sort -z > "$CANDIDATES_FILE"; then
+    fail "Unable to enumerate local PostgreSQL backup directories."
+  fi
+
+  while IFS= read -r -d '' candidate; do
+    if eligible_backup "$candidate"; then
+      backup_id="$(basename -- "$candidate")"
+      if [[ ! -f "$REPOSITORY_UPLOADED_DIR/$backup_id" ]]; then
+        PENDING_COUNT=$((PENDING_COUNT + 1))
+      fi
+    fi
+  done < "$CANDIDATES_FILE"
+
+  write_metrics "$ATTEMPT_EPOCH" "$LAST_SUCCESS_EPOCH" 0 0 0 "$PENDING_COUNT"
+
+  while IFS= read -r -d '' candidate; do
+    eligible_backup "$candidate" || continue
+    backup_id="$(basename -- "$candidate")"
+    marker="$REPOSITORY_UPLOADED_DIR/$backup_id"
+    [[ ! -f "$marker" ]] || continue
+
+    [[ -f "$candidate/SHA256SUMS" ]] || fail "Backup $backup_id has no SHA256SUMS file."
+    if ! (cd "$candidate" && sha256sum --check SHA256SUMS); then
+      fail "Checksum verification failed for backup $backup_id."
+    fi
+
+    log "Uploading completed PostgreSQL logical backup $backup_id."
+    if ! run_restic backup \
+      --host "$SNAPSHOT_HOST" \
+      --group-by host \
+      --tag postgres-logical-backup \
+      --tag "cluster=$CLUSTER_SCOPE" \
+      --tag "backup-id=$backup_id" \
+      --tag "source-member=$SOURCE_MEMBER" \
+      "$candidate"; then
+      fail "Restic backup failed for local backup $backup_id."
+    fi
+
+    MARKER_TMP="$(mktemp "$REPOSITORY_UPLOADED_DIR/.${backup_id}.XXXXXX")"
+    printf 'uploaded_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > "$MARKER_TMP"
+    chmod 0600 "$MARKER_TMP"
+    mv -f -- "$MARKER_TMP" "$marker"
+    MARKER_TMP=""
+
+    UPLOADED_COUNT=$((UPLOADED_COUNT + 1))
+    PENDING_COUNT=$((PENDING_COUNT - 1))
+    LAST_SUCCESS_EPOCH="$(date +%s)"
+  done < "$CANDIDATES_FILE"
+
+  success_epoch="$(date +%s)"
+  duration_seconds=$((success_epoch - RUN_START_EPOCH))
+  write_metrics \
+    "$ATTEMPT_EPOCH" \
+    "$LAST_SUCCESS_EPOCH" \
+    1 \
+    "$duration_seconds" \
+    "$UPLOADED_COUNT" \
+    "$PENDING_COUNT"
+
+  REPORT_FAILURE_METRICS=0
+  log "PostgreSQL remote upload completed; uploaded $UPLOADED_COUNT backup(s), $PENDING_COUNT pending."
+  log "POSTGRES_BACKUP_REMOTE_RESULT=UPLOADED_COUNT=$UPLOADED_COUNT"
+}
+
+maintain_repository() {
+  REPORT_FAILURE_METRICS=0
+  require_initialized_repository
+
+  run_restic forget \
+    --prune \
+    --host "$SNAPSHOT_HOST" \
+    --tag postgres-logical-backup \
+    --group-by host \
+    --keep-daily "$KEEP_DAILY" \
+    --keep-weekly "$KEEP_WEEKLY" \
+    --keep-monthly "$KEEP_MONTHLY"
+  log "Scoped PostgreSQL Restic retention and prune completed."
+  log "POSTGRES_BACKUP_REMOTE_RESULT=MAINTENANCE_COMPLETE"
+}
+
+trap cleanup_transients EXIT
+trap on_error ERR
+
+case "$MODE" in
+  init | upload | maintenance)
+    ;;
+  *)
+    fail "Usage: $0 {init|upload|maintenance}"
+    ;;
+esac
+
+exec 9> "$LOCK_FILE"
+if ! flock --nonblock 9; then
+  REPORT_FAILURE_METRICS=0
+  trap - ERR
+  log "Another local PostgreSQL remote backup operation is already running; skipping."
+  log "POSTGRES_BACKUP_REMOTE_RESULT=SKIPPED_OVERLAP"
+  exit 0
+fi
+
+if [[ "$MODE" == upload ]]; then
+  ATTEMPT_EPOCH="$(date +%s)"
+  RUN_START_EPOCH="$ATTEMPT_EPOCH"
+  LAST_SUCCESS_EPOCH="$(existing_metric postgres_backup_remote_last_success_timestamp_seconds 0)"
+  REPORT_FAILURE_METRICS=1
+  write_metrics "$ATTEMPT_EPOCH" "$LAST_SUCCESS_EPOCH" 0 0 0 0
+fi
+
+[[ -x "$RESTIC_BIN" ]] || fail "Restic binary is missing or not executable."
+[[ -s "$REPOSITORY_FILE" ]] || fail "Restic repository file is missing or empty."
+[[ -s "$PASSWORD_FILE" ]] || fail "Restic password file is missing or empty."
+
+if [[ -s "$BACKEND_ENV_FILE" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "$BACKEND_ENV_FILE"
+  set +a
+fi
+export RESTIC_REPOSITORY_FILE="$REPOSITORY_FILE"
+export RESTIC_PASSWORD_FILE="$PASSWORD_FILE"
+
+case "$MODE" in
+  init)
+    initialize_repository
+    ;;
+  upload)
+    upload_backups
+    ;;
+  maintenance)
+    maintain_repository
+    ;;
+esac

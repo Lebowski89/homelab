@@ -74,6 +74,66 @@ postgres_backup_failed_retention_days: 2
 postgres_backup_metrics_file: /var/lib/node_exporter/textfile_collector_postgres/postgres_logical_backup.prom
 
 ################################
+# LOGICAL BACKUPS - REMOTE / RESTIC
+################################
+
+postgres_backup_remote_manage: false
+postgres_backup_remote_enabled: false
+postgres_backup_remote_restic_path: /usr/bin/restic
+postgres_backup_remote_script_path: /usr/local/sbin/postgres-logical-backup-remote
+postgres_backup_remote_state_dir: /var/lib/postgres-logical-backup-remote
+postgres_backup_remote_repository: ""
+postgres_backup_remote_config_dir: /etc/restic/postgres-logical-backup
+postgres_backup_remote_repository_file: "{{ postgres_backup_remote_config_dir }}/repository"
+postgres_backup_remote_password_file: "{{ postgres_backup_remote_config_dir }}/password"
+postgres_backup_remote_environment_file: "{{ postgres_backup_remote_config_dir }}/backend.env"
+postgres_backup_remote_managed_secret_files_manifest: >-
+  {{ postgres_backup_remote_config_dir }}/.managed-secret-files
+postgres_backup_remote_password_secret:
+  path: /Restic/Postgres
+  name: PASSWORD
+postgres_backup_remote_backend_environment: {}
+postgres_backup_remote_backend_secrets: []
+postgres_backup_remote_secret_files: []
+postgres_backup_remote_options: []
+postgres_backup_remote_retry_lock: 10m
+postgres_backup_remote_timer_name: postgres-logical-backup-remote
+postgres_backup_remote_timer_on_calendar: "*-*-* 04:00:00"
+postgres_backup_remote_timer_randomized_delay_sec: 30m
+postgres_backup_remote_maintenance_timer_name: postgres-logical-backup-remote-maintenance
+postgres_backup_remote_maintenance_timer_on_calendar: "Sun *-*-* 05:00:00"
+postgres_backup_remote_maintenance_timer_randomized_delay_sec: 30m
+postgres_backup_remote_maintenance_host: >-
+  {{ (groups['tags_postgres'] | default([]) | sort | first) | default('') }}
+postgres_backup_remote_snapshot_host: "{{ postgres_patroni_scope }}"
+postgres_backup_remote_keep_daily: 14
+postgres_backup_remote_keep_weekly: 8
+postgres_backup_remote_keep_monthly: 12
+postgres_backup_remote_metrics_file: >-
+  /var/lib/node_exporter/textfile_collector_postgres/postgres_logical_backup_remote.prom
+
+################################
+# LOGICAL BACKUPS - RESTORE VALIDATION
+################################
+
+postgres_backup_restore_validation_manage: false
+postgres_backup_restore_validation_enabled: false
+postgres_backup_restore_validation_host: "{{ postgres_backup_remote_maintenance_host }}"
+postgres_backup_restore_validation_script_path: /usr/local/sbin/postgres-logical-backup-restore-validate
+postgres_backup_restore_validation_runuser_path: /usr/sbin/runuser
+postgres_backup_restore_validation_work_root: /var/lib/postgres-logical-backup-restore-validation
+postgres_backup_restore_validation_timer_name: postgres-logical-backup-restore-validation
+postgres_backup_restore_validation_timer_on_calendar: "Sun *-*-* 07:00:00"
+postgres_backup_restore_validation_timer_randomized_delay_sec: 30m
+postgres_backup_restore_validation_port: 55432
+postgres_backup_restore_validation_max_snapshot_age_hours: 48
+postgres_backup_restore_validation_min_free_bytes: 5368709120
+postgres_backup_restore_validation_encoding: UTF8
+postgres_backup_restore_validation_locale: C.UTF-8
+postgres_backup_restore_validation_metrics_file: >-
+  /var/lib/node_exporter/textfile_collector_postgres/postgres_logical_backup_restore_validation.prom
+
+################################
 # RESTORE (DATABASES)
 ################################
 
