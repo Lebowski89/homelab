@@ -45,6 +45,8 @@
     mode: "0750"
 
 - name: Logical backup | Create empty protected libpq password file
+  no_log: true
+  diff: false
   ansible.builtin.copy:
     content: ""
     dest: "{{ postgres_backup_root }}/.pgpass"

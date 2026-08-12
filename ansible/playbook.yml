@@ -134,6 +134,8 @@
         - ubuntu_pam
         - ubuntu_network
         - ubuntu_netplan
+        - postgres_backup
+        - postgres_backup_run
 
     ################################
     # SYSTEMD-RESOLVED / NSS

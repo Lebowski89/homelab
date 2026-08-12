@@ -21,7 +21,9 @@ SCRIPT_TEMPLATE_PATH = ROLE_PATH / "templates/postgres-logical-backup.sh.j2"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
 GROUP_VARS_PATH = REPO_ROOT / "ansible/group_vars/tags_postgres.yml"
 UBUNTU_DEFAULTS_PATH = REPO_ROOT / "ansible/roles/ubuntu/defaults/main.yml"
+UBUNTU_MAIN_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/main.yml"
 UBUNTU_APT_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/sub_tasks/apt.yml"
+UBUNTU_BACKUP_PREREQUISITES_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/sub_tasks/postgres_backup_prerequisites.yml"
 SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
 SKYNET_DOC_PATH = REPO_ROOT / "docs/cheat_sheets/skynet.md"
 BACKUP_DOC_PATH = REPO_ROOT / "docs/postgresql-logical-backups.md"
@@ -85,6 +87,7 @@ esac
 [[ -f "${PGPASSFILE:-}" && ! -L "$PGPASSFILE" && ! -s "$PGPASSFILE" ]]
 [[ "$(stat --format='%a' -- "$PGPASSFILE")" == 600 ]]
 [[ -z "${PGPASSWORD:-}" ]]
+[[ -z "${PGHOSTADDR:-}" ]]
 if [[ "$*" == *"SELECT count(*)"* ]]; then
   printf '0\\n'
 elif [[ "$*" == *"SELECT datname"* ]]; then
@@ -193,6 +196,24 @@ def test_postgres_package_profile_installs_acl_for_unprivileged_backup_become():
     assert invoke["become_user"] == "postgres"
 
 
+def test_backup_run_tag_selects_only_the_ubuntu_package_prerequisite_path():
+    playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
+    ubuntu_tasks = yaml.safe_load(UBUNTU_MAIN_TASKS_PATH.read_text())
+    prerequisite_tasks = yaml.safe_load(UBUNTU_BACKUP_PREREQUISITES_PATH.read_text())
+    deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")
+    ubuntu_include = task_named(deploy_play["tasks"], "Include Ubuntu role")
+    prerequisite_include = task_named(ubuntu_tasks, "Ubuntu | Install PostgreSQL backup prerequisites")
+    install = task_named(prerequisite_tasks, "Ubuntu PostgreSQL backup prerequisites | Install package profile")
+
+    assert "postgres_backup_run" in ubuntu_include["tags"]
+    assert "apply" not in ubuntu_include["ansible.builtin.include_role"]
+    assert "postgres_backup_run" in prerequisite_include["tags"]
+    assert "postgres_backup_run" in prerequisite_include["ansible.builtin.include_tasks"]["apply"]["tags"]
+    assert prerequisite_include["ansible.builtin.include_tasks"]["file"] == "sub_tasks/postgres_backup_prerequisites.yml"
+    assert install["ansible.builtin.apt"]["name"] == "{{ ubuntu_apt_postgres_packages }}"
+    assert len(prerequisite_tasks) == 1
+
+
 def test_setup_installs_runner_on_postgres_hosts_with_restrictive_ownership():
     main_tasks = yaml.safe_load(MAIN_TASKS_PATH.read_text())
     setup_tasks = yaml.safe_load(SETUP_TASKS_PATH.read_text())
@@ -223,6 +244,8 @@ def test_setup_manages_empty_protected_libpq_password_file():
         "group": "postgres",
         "mode": "0600",
     }
+    assert pgpass["no_log"] is True
+    assert pgpass["diff"] is False
 
 
 def test_metrics_permission_is_narrow():
@@ -398,14 +421,19 @@ def test_retention_is_root_bounded_and_name_constrained():
     assert 'mktemp "$BACKUP_ROOT/.retention-$retention_class.XXXXXX"' in source
 
 
-def test_runner_establishes_safe_backup_root_working_directory():
-    source = SCRIPT_TEMPLATE_PATH.read_text()
-    validate_root = source.index('[[ -d "$BACKUP_ROOT" && ! -L "$BACKUP_ROOT" ]]')
-    enter_root = source.index('cd -- "$BACKUP_ROOT"')
-    first_operation = source.index("LAST_SUCCESS_EPOCH=", enter_root)
+def test_runner_rejects_symlinked_backup_root(tmp_path: Path):
+    script = render_runner(tmp_path)
+    backup_root = tmp_path / "backups"
+    real_backup_root = tmp_path / "real-backups"
+    real_backup_root.mkdir()
+    (backup_root / ".pgpass").unlink()
+    backup_root.rmdir()
+    backup_root.symlink_to(real_backup_root, target_is_directory=True)
 
-    assert validate_root < enter_root < first_operation
-    assert 'fail "Unable to enter PostgreSQL backup root."' in source
+    result = run_runner(script, "leader")
+
+    assert result.returncode != 0
+    assert "Backup root must be an existing real directory." in result.stderr
 
 
 def test_retention_runs_only_after_successful_promotion():
@@ -524,7 +552,7 @@ def test_unexpected_patroni_http_status_fails(tmp_path: Path):
 def test_successful_runner_builds_verified_promoted_backup_and_metrics(tmp_path: Path):
     script = render_runner(tmp_path)
 
-    result = run_runner(script, "leader")
+    result = run_runner(script, "leader", PGHOSTADDR="192.0.2.1")
 
     assert result.returncode == 0, result.stdout + result.stderr
     final_directories = list((tmp_path / "backups").glob("[0-9]*Z"))

@@ -1,0 +1,8 @@
+---
+
+- name: Ubuntu PostgreSQL backup prerequisites | Install package profile
+  ansible.builtin.apt:
+    name: "{{ ubuntu_apt_postgres_packages }}"
+    state: present
+    update_cache: "{{ ubuntu_apt_update_cache | default(true) | bool }}"
+  environment: "{{ ubuntu_apt_env_vars }}"
