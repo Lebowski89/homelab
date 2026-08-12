@@ -67,6 +67,11 @@
             else []
           )
           + (
+            ubuntu_apt_postgres_packages | default([])
+            if 'postgres' in (ubuntu_apt_package_profiles_effective | default([]))
+            else []
+          )
+          + (
             ubuntu_apt_swarm_packages | default([])
             if 'swarm' in (ubuntu_apt_package_profiles_effective | default([]))
             else []

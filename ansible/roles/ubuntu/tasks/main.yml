@@ -12,6 +12,24 @@
     - ubuntu
     - ubuntu_apt
 
+- name: Ubuntu | Install PostgreSQL backup prerequisites
+  when:
+    - "'tags_postgres' in group_names"
+    - ubuntu_apt_enabled | default(true) | bool
+  ansible.builtin.include_tasks:
+    file: sub_tasks/postgres_backup_prerequisites.yml
+    apply:
+      tags:
+        - never
+        - postgres_backup
+        - postgres_backup_setup
+        - postgres_backup_run
+  tags:
+    - never
+    - postgres_backup
+    - postgres_backup_setup
+    - postgres_backup_run
+
 - name: Ubuntu | Clone Homelab repo
   when: "'tags_ansible_manager' in group_names"
   ansible.builtin.include_tasks:

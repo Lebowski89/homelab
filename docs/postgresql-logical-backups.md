@@ -42,9 +42,11 @@ receive the enabled timer.
 
 The setup creates the backup root as `postgres:postgres` with mode `0750`,
 installs the runner as `root:root` with mode `0755`, and runs the oneshot
-service as OS user and group `postgres`. PostgreSQL commands omit `-h` and
-use the local Unix socket with peer authentication. No PostgreSQL password is
-stored in the script or systemd unit.
+service as OS user and group `postgres`. The PostgreSQL Ubuntu package profile
+also installs the host ACL utilities Ansible needs to become the unprivileged
+OS user `postgres` safely during a manual run. PostgreSQL commands omit `-h`,
+use the local Unix socket with peer authentication, and point libpq at a
+managed empty protected password file. No PostgreSQL password is stored.
 
 ## Provider-neutral encrypted remote backups
 
@@ -436,7 +438,9 @@ cleaning real workspaces.
 
 The runner repeats the local leader check even after Ansible selected a leader,
 so a failover between discovery and execution cannot produce a backup on a
-replica.
+replica. It also enters its protected backup root before doing any work, so a
+direct invocation does not depend on whether the caller's working directory is
+accessible to OS user `postgres`.
 
 Inspect the schedule and logs on a PostgreSQL node with:
 
