@@ -22,10 +22,12 @@
       tags:
         - never
         - postgres_backup
+        - postgres_backup_setup
         - postgres_backup_run
   tags:
     - never
     - postgres_backup
+    - postgres_backup_setup
     - postgres_backup_run
 
 - name: Ubuntu | Clone Homelab repo

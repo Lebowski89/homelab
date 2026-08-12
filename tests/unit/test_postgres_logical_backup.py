@@ -196,22 +196,28 @@ def test_postgres_package_profile_installs_acl_for_unprivileged_backup_become():
     assert invoke["become_user"] == "postgres"
 
 
-def test_backup_run_tag_selects_only_the_ubuntu_package_prerequisite_path():
+def test_local_backup_tags_select_only_the_ubuntu_package_prerequisite_path():
     playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
     ubuntu_tasks = yaml.safe_load(UBUNTU_MAIN_TASKS_PATH.read_text())
     prerequisite_tasks = yaml.safe_load(UBUNTU_BACKUP_PREREQUISITES_PATH.read_text())
+    backup_tags = {"postgres_backup", "postgres_backup_setup", "postgres_backup_run"}
     deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")
     ubuntu_include = task_named(deploy_play["tasks"], "Include Ubuntu role")
     prerequisite_include = task_named(ubuntu_tasks, "Ubuntu | Install PostgreSQL backup prerequisites")
     install = task_named(prerequisite_tasks, "Ubuntu PostgreSQL backup prerequisites | Install package profile")
+    invoke = task_named(yaml.safe_load(RUN_TASKS_PATH.read_text()), "Logical backup run | Invoke installed leader-gated runner")
 
-    assert "postgres_backup_run" in ubuntu_include["tags"]
+    assert backup_tags <= set(ubuntu_include["tags"])
     assert "apply" not in ubuntu_include["ansible.builtin.include_role"]
-    assert "postgres_backup_run" in prerequisite_include["tags"]
-    assert "postgres_backup_run" in prerequisite_include["ansible.builtin.include_tasks"]["apply"]["tags"]
+    assert backup_tags <= set(prerequisite_include["tags"])
+    assert backup_tags <= set(prerequisite_include["ansible.builtin.include_tasks"]["apply"]["tags"])
     assert prerequisite_include["ansible.builtin.include_tasks"]["file"] == "sub_tasks/postgres_backup_prerequisites.yml"
     assert install["ansible.builtin.apt"]["name"] == "{{ ubuntu_apt_postgres_packages }}"
     assert len(prerequisite_tasks) == 1
+    for backup_tag in backup_tags:
+        selected_tasks = [task["name"] for task in ubuntu_tasks if backup_tag in task.get("tags", [])]
+        assert selected_tasks == ["Ubuntu | Install PostgreSQL backup prerequisites"]
+    assert invoke["become_user"] == "postgres"
 
 
 def test_setup_installs_runner_on_postgres_hosts_with_restrictive_ownership():
