@@ -175,8 +175,8 @@ set_repository_upload_directory() {
   REPOSITORY_UPLOADED_DIR="$UPLOADED_DIR/$REPOSITORY_ID"
   [[ ! -e "$REPOSITORY_UPLOADED_DIR" || -d "$REPOSITORY_UPLOADED_DIR" ]] ||
     fail "Restic repository upload-state path exists but is not a directory."
-  mkdir -p -m 0700 -- "$REPOSITORY_UPLOADED_DIR"
-  chmod 0700 "$REPOSITORY_UPLOADED_DIR"
+  mkdir -p -- "$REPOSITORY_UPLOADED_DIR"
+  chmod 0700 -- "$REPOSITORY_UPLOADED_DIR"
 }
 
 require_initialized_repository() {

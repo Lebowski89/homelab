@@ -108,11 +108,13 @@
 | [postgres_backup_restore_validation_port](defaults/main.yml#L128)   | int | `55432` |    
 | [postgres_backup_restore_validation_max_snapshot_age_hours](defaults/main.yml#L129)   | int | `48` |    
 | [postgres_backup_restore_validation_min_free_bytes](defaults/main.yml#L130)   | int | `5368709120` |    
-| [postgres_backup_restore_validation_metrics_file](defaults/main.yml#L131)   | str | `<multiline value: folded_strip>` |    
-| [postgres_restore_dbs_dir](defaults/main.yml#L138)   | str | `/tmp` |    
-| [postgres_restore_dbs_drop_existing](defaults/main.yml#L139)   | bool | `True` |    
-| [postgres_restore_dbs_map](defaults/main.yml#L144)   | list | `[]` |    
-| [postgres_fix_owner_map](defaults/main.yml#L159)   | list | `[]` |    
+| [postgres_backup_restore_validation_encoding](defaults/main.yml#L131)   | str | `UTF8` |    
+| [postgres_backup_restore_validation_locale](defaults/main.yml#L132)   | str | `C.UTF-8` |    
+| [postgres_backup_restore_validation_metrics_file](defaults/main.yml#L133)   | str | `<multiline value: folded_strip>` |    
+| [postgres_restore_dbs_dir](defaults/main.yml#L140)   | str | `/tmp` |    
+| [postgres_restore_dbs_drop_existing](defaults/main.yml#L141)   | bool | `True` |    
+| [postgres_restore_dbs_map](defaults/main.yml#L146)   | list | `[]` |    
+| [postgres_fix_owner_map](defaults/main.yml#L161)   | list | `[]` |    
 
 
 
@@ -134,15 +136,15 @@
 | Run PostgreSQL logical backup manually | ansible.builtin.include_tasks | True | postgres_backup,postgres_backup_run |
 | Report PostgreSQL logical backup manual check-mode plan | ansible.builtin.debug | True | postgres_backup,postgres_backup_run |
 | Configure PostgreSQL remote logical backups | ansible.builtin.include_tasks | True | postgres,postgres_backup_remote_setup,postgres_backup_remote_init,postgres_backup_remote_run,postgres_backup_remote_maintenance,postgres_backup_restore_validation_setup,postgres_backup_restore_validation_run |
-| Initialize PostgreSQL remote backup repository explicitly | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,b,a,c,k,u,p,_,r,e,m,o,t,e,_,i,n,i,t |
-| Run PostgreSQL remote backup uploader manually | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,b,a,c,k,u,p,_,r,e,m,o,t,e,_,r,u,n |
-| Run PostgreSQL remote backup maintenance manually | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,b,a,c,k,u,p,_,r,e,m,o,t,e,_,m,a,i,n,t,e,n,a,n,c,e |
-| Report PostgreSQL remote backup init check-mode plan | ansible.builtin.debug | True | p,o,s,t,g,r,e,s,_,b,a,c,k,u,p,_,r,e,m,o,t,e,_,i,n,i,t |
-| Report PostgreSQL remote backup upload check-mode plan | ansible.builtin.debug | True | p,o,s,t,g,r,e,s,_,b,a,c,k,u,p,_,r,e,m,o,t,e,_,r,u,n |
-| Report PostgreSQL remote backup maintenance check-mode plan | ansible.builtin.debug | True | p,o,s,t,g,r,e,s,_,b,a,c,k,u,p,_,r,e,m,o,t,e,_,m,a,i,n,t,e,n,a,n,c,e |
+| Initialize PostgreSQL remote backup repository explicitly | ansible.builtin.include_tasks | True | postgres_backup_remote_init |
+| Run PostgreSQL remote backup uploader manually | ansible.builtin.include_tasks | True | postgres_backup_remote_run |
+| Run PostgreSQL remote backup maintenance manually | ansible.builtin.include_tasks | True | postgres_backup_remote_maintenance |
+| Report PostgreSQL remote backup init check-mode plan | ansible.builtin.debug | True | postgres_backup_remote_init |
+| Report PostgreSQL remote backup upload check-mode plan | ansible.builtin.debug | True | postgres_backup_remote_run |
+| Report PostgreSQL remote backup maintenance check-mode plan | ansible.builtin.debug | True | postgres_backup_remote_maintenance |
 | Configure PostgreSQL backup restore validation | ansible.builtin.include_tasks | True | postgres,postgres_backup_restore_validation_setup,postgres_backup_restore_validation_run |
-| Run PostgreSQL backup restore validation manually | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,b,a,c,k,u,p,_,r,e,s,t,o,r,e,_,v,a,l,i,d,a,t,i,o,n,_,r,u,n |
-| Report PostgreSQL backup restore validation check-mode plan | ansible.builtin.debug | True | p,o,s,t,g,r,e,s,_,b,a,c,k,u,p,_,r,e,s,t,o,r,e,_,v,a,l,i,d,a,t,i,o,n,_,r,u,n |
+| Run PostgreSQL backup restore validation manually | ansible.builtin.include_tasks | True | postgres_backup_restore_validation_run |
+| Report PostgreSQL backup restore validation check-mode plan | ansible.builtin.debug | True | postgres_backup_restore_validation_run |
 | Restore PostgreSQL single database from pg_dump backup | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,r,e,s,t,o,r,e |
 | Reset PostgreSQL/Patroni node destructively | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,n,u,k,e,_,n,o,d,e |
 | Fix database ownership and privileges | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,f,i,x,_,o,w,n,e,r |
@@ -264,6 +266,8 @@
 | Remote logical backup ¦ Validate unique secret file paths | ansible.builtin.assert | False |  |
 | Remote logical backup ¦ Validate additional Restic options | ansible.builtin.assert | False |  |
 | Remote logical backup ¦ Install Restic package | ansible.builtin.apt | True |  |
+| Remote logical backup ¦ Query installed Restic version | ansible.builtin.command | True |  |
+| Remote logical backup ¦ Require supported Restic version | ansible.builtin.assert | True |  |
 | Remote logical backup ¦ Create protected configuration directory | ansible.builtin.file | True |  |
 | Remote logical backup ¦ Create protected state directories | ansible.builtin.file | True |  |
 | Remote logical backup ¦ Ensure PostgreSQL metrics directory exists | ansible.builtin.file | True |  |
@@ -285,8 +289,8 @@
 | Remote logical backup ¦ Build desired managed secret-file paths | ansible.builtin.set_fact | True |  |
 | Remote logical backup ¦ Reconcile managed secret files | ansible.builtin.include_tasks | True |  |
 | Remote logical backup ¦ Install host-local runner | ansible.builtin.template | True |  |
-| Remote logical backup ¦ Manage uploader systemd job | ansible.builtin.include_role | True |  |
-| Remote logical backup ¦ Manage maintenance systemd job | ansible.builtin.include_role | True |  |
+| Remote logical backup ¦ Manage uploader systemd job | ansible.builtin.include_role | False |  |
+| Remote logical backup ¦ Manage maintenance systemd job | ansible.builtin.include_role | False |  |
 
 #### File: tasks/sub_tasks/backup_restore_validation_action.yml
 
@@ -305,7 +309,7 @@
 | Backup restore validation ¦ Ensure PostgreSQL metrics directory exists | ansible.builtin.file | True |  |
 | Backup restore validation ¦ Pre-create metrics file | ansible.builtin.file | True |  |
 | Backup restore validation ¦ Install host-local runner | ansible.builtin.template | True |  |
-| Backup restore validation ¦ Manage systemd job | ansible.builtin.include_role | True |  |
+| Backup restore validation ¦ Manage systemd job | ansible.builtin.include_role | False |  |
 
 #### File: tasks/sub_tasks/backup_setup.yml
 

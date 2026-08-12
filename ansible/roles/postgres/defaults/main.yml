@@ -128,6 +128,8 @@ postgres_backup_restore_validation_timer_randomized_delay_sec: 30m
 postgres_backup_restore_validation_port: 55432
 postgres_backup_restore_validation_max_snapshot_age_hours: 48
 postgres_backup_restore_validation_min_free_bytes: 5368709120
+postgres_backup_restore_validation_encoding: UTF8
+postgres_backup_restore_validation_locale: C.UTF-8
 postgres_backup_restore_validation_metrics_file: >-
   /var/lib/node_exporter/textfile_collector_postgres/postgres_logical_backup_restore_validation.prom
 

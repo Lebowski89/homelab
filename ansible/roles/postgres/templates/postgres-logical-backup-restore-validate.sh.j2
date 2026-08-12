@@ -16,6 +16,8 @@ readonly RETRY_LOCK='{{ postgres_backup_remote_retry_lock | string | replace("'"
 readonly VALIDATION_PORT={{ postgres_backup_restore_validation_port }}
 readonly MAX_SNAPSHOT_AGE_HOURS={{ postgres_backup_restore_validation_max_snapshot_age_hours }}
 readonly MIN_FREE_BYTES={{ postgres_backup_restore_validation_min_free_bytes }}
+readonly VALIDATION_ENCODING='{{ postgres_backup_restore_validation_encoding | string | replace("'", "'\"'\"'") }}'
+readonly VALIDATION_LOCALE='{{ postgres_backup_restore_validation_locale | string | replace("'", "'\"'\"'") }}'
 readonly VALIDATION_DATABASE="postgres_restore_validation"
 readonly PYTHON_BIN="/usr/bin/python3"
 readonly RUNUSER_BIN='{{ postgres_backup_restore_validation_runuser_path | string | replace("'", "'\"'\"'") }}'
@@ -221,7 +223,6 @@ process_belongs_to_validator_pgdata() {
   local process_executable=""
   local status_key=""
   local status_value=""
-  local status_remainder=""
   local argument_index
   local data_argument_count=0
   local -a process_arguments=()
@@ -232,7 +233,7 @@ process_belongs_to_validator_pgdata() {
     process_is_alive "$pid" || return 1
     return 2
   fi
-  while IFS=$' \t' read -r status_key status_value status_remainder; do
+  while IFS=$' \t' read -r status_key status_value _; do
     if [[ "$status_key" == "Uid:" ]]; then
       process_uid="$status_value"
       break
@@ -363,6 +364,7 @@ cleanup_stale_workspace() {
 remove_stale_run_directories() {
   local candidates_file
   local candidate
+  local cleanup_status=0
 
   candidates_file="$(mktemp "$WORK_ROOT/.stale-runs.XXXXXX")"
   if ! find "$WORK_ROOT" -mindepth 1 -maxdepth 1 -type d -name 'run-*' -print0 \
@@ -375,12 +377,13 @@ remove_stale_run_directories() {
   while IFS= read -r -d '' candidate; do
     if valid_run_directory "$candidate"; then
       if ! cleanup_stale_workspace "$candidate"; then
-        rm -f -- "$candidates_file"
-        return 1
+        cleanup_status=1
+        break
       fi
     fi
   done < "$candidates_file"
   rm -f -- "$candidates_file"
+  return "$cleanup_status"
 }
 
 require_repository() {
@@ -467,8 +470,13 @@ for snapshot in snapshots:
     snapshot_time = snapshot.get("time")
     if not isinstance(snapshot_time, str):
         reject("logical-backup snapshot has no timestamp")
+    normalized_time = re.sub(
+        r"(\.\d{6})\d+(Z|[+-]\d{2}:\d{2})$",
+        r"\1\2",
+        snapshot_time,
+    )
     try:
-        parsed_time = datetime.datetime.fromisoformat(snapshot_time.replace("Z", "+00:00"))
+        parsed_time = datetime.datetime.fromisoformat(normalized_time.replace("Z", "+00:00"))
     except ValueError:
         reject("logical-backup snapshot timestamp is invalid")
     if parsed_time.tzinfo is None:
@@ -629,11 +637,18 @@ trap 'exit 143' TERM
   fail "Process inspection root contains unsafe path components."
 [[ -d "$PROC_ROOT" && ! -L "$PROC_ROOT" ]] ||
   fail "Process inspection root is missing or unsafe."
-[[ "$VALIDATION_PORT" =~ ^[0-9]+$ ]] &&
-  (( VALIDATION_PORT >= 1 && VALIDATION_PORT <= 65535 )) ||
+if ! [[ "$VALIDATION_PORT" =~ ^[0-9]+$ ]]; then
   fail "Restore-validation port must be between 1 and 65535."
-[[ "$MAX_SNAPSHOT_AGE_HOURS" =~ ^[0-9]+$ ]] && (( MAX_SNAPSHOT_AGE_HOURS >= 1 )) ||
+fi
+if (( VALIDATION_PORT < 1 || VALIDATION_PORT > 65535 )); then
+  fail "Restore-validation port must be between 1 and 65535."
+fi
+if ! [[ "$MAX_SNAPSHOT_AGE_HOURS" =~ ^[0-9]+$ ]]; then
   fail "Maximum snapshot age must be a positive integer."
+fi
+if (( MAX_SNAPSHOT_AGE_HOURS < 1 )); then
+  fail "Maximum snapshot age must be a positive integer."
+fi
 [[ "$MIN_FREE_BYTES" =~ ^[0-9]+$ ]] ||
   fail "Minimum free bytes must be a non-negative integer."
 [[ -d "$WORK_ROOT" ]] || fail "Restore-validation work root is missing."
@@ -757,6 +772,8 @@ install -d -o postgres -g postgres -m 0700 "$CLUSTER_DIR" "$PGDATA" "$SOCKET_DIR
   "$INITDB" \
   -D "$PGDATA" \
   --username=postgres \
+  --encoding="$VALIDATION_ENCODING" \
+  --locale="$VALIDATION_LOCALE" \
   --auth-local=trust \
   --auth-host=reject \
   --no-instructions

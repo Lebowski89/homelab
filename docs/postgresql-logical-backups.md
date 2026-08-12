@@ -11,9 +11,10 @@ Patroni replicas provide high availability, not backups.
 
 The optional remote layer copies only completed, checksum-verified backup trees
 to a provider-neutral encrypted Restic repository. It is intentionally
-disabled until a repository and its backend are selected. WAL archiving,
-point-in-time recovery, physical base backups, and automated disposable restore
-tests are deliberately deferred.
+disabled until a repository and its backend are selected. An optional restore
+validation capability restores recent snapshots into an isolated throwaway
+PostgreSQL cluster. WAL archiving, point-in-time recovery, and physical base
+backups are deliberately deferred.
 
 These local logical backups only become off-host protection when the separate
 uploader copies them into the configured encrypted off-host backup repository.
@@ -182,6 +183,8 @@ All remote actions first probe `restic cat config`. Explicit initialization
 runs `restic init` only when that probe returns the precise missing-repository
 exit code `10`. An existing repository returns success; wrong-password exit
 `12` and every connectivity/backend failure fail without initialization.
+Minimum supported Restic version is 0.17.1 because these workflows rely on
+the differentiated repository and password failure exit codes.
 Upload and maintenance use the same probe but never initialize. Check-mode
 variants render and validate configuration, substitute deterministic secret
 stand-ins, and print the planned action without contacting Infisical or Restic.
@@ -212,8 +215,10 @@ exactly match the dump files; missing, duplicate, unsafe, or unexpected dumps
 fail before PostgreSQL starts.
 
 The throwaway PostgreSQL 18 cluster runs as OS user `postgres`, with TCP
-disabled, a private workspace socket, its own PGDATA, and a non-production
-port. Before any database is created, the validator queries
+disabled, a private workspace socket, its own PGDATA, a non-production port,
+and configurable deterministic `UTF8` / `C.UTF-8` encoding and locale defaults.
+These defaults do not claim to reproduce the source cluster locale. Before any
+database is created, the validator queries
 `data_directory`, `listen_addresses`, `unix_socket_directories`, and
 `port` through explicit socket, port, and user arguments and requires exact
 agreement with the temporary configuration. Every dump is then restored

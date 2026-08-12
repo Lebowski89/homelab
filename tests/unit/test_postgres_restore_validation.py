@@ -49,6 +49,11 @@ def render_jinja(path: Path, **variables) -> str:
     return environment.from_string(path.read_text()).render(**variables)
 
 
+def render_value(value: str, **variables):
+    environment = Environment(undefined=StrictUndefined)
+    return yaml.safe_load(environment.from_string(value).render(**variables))
+
+
 def write_executable(path: Path, source: str) -> None:
     path.write_text(source)
     path.chmod(0o755)
@@ -133,6 +138,8 @@ def render_validator(
     artifact: Path | None = None,
     max_age_hours: int = 48,
     min_free_bytes: int = 0,
+    encoding: str = "UTF8",
+    locale: str = "C.UTF-8",
 ) -> Path:
     backup_root = tmp_path / "backups"
     work_root = tmp_path / "work"
@@ -278,7 +285,7 @@ set -euo pipefail
 printf 'PG_RESTORE' >> "$FAKE_COMMAND_LOG"
 printf '\t%s' "$@" >> "$FAKE_COMMAND_LOG"
 printf '\n' >> "$FAKE_COMMAND_LOG"
-if [[ -n "${FAKE_PG_RESTORE_SLEEP:-}" ]]; then sleep "$FAKE_PG_RESTORE_SLEEP"; fi
+if [[ -n "${FAKE_PG_RESTORE_SLEEP:-}" ]]; then /bin/sleep "$FAKE_PG_RESTORE_SLEEP"; fi
 [[ "${FAKE_PG_RESTORE_FAIL:-0}" != 1 ]]
 """,
     )
@@ -347,6 +354,8 @@ done
         postgres_backup_restore_validation_port=55432,
         postgres_backup_restore_validation_max_snapshot_age_hours=max_age_hours,
         postgres_backup_restore_validation_min_free_bytes=min_free_bytes,
+        postgres_backup_restore_validation_encoding=encoding,
+        postgres_backup_restore_validation_locale=locale,
         postgres_backup_restore_validation_runuser_path=str(fake_bin / "runuser"),
         postgres_backup_remote_options=[],
     )
@@ -431,6 +440,8 @@ def test_restore_validation_defaults_are_disabled_and_reuse_remote_contract():
     assert defaults["postgres_backup_restore_validation_timer_on_calendar"] == "Sun *-*-* 07:00:00"
     assert defaults["postgres_backup_restore_validation_max_snapshot_age_hours"] == 48
     assert defaults["postgres_backup_restore_validation_min_free_bytes"] == 5368709120
+    assert defaults["postgres_backup_restore_validation_encoding"] == "UTF8"
+    assert defaults["postgres_backup_restore_validation_locale"] == "C.UTF-8"
     assert not any(key.startswith("postgres_backup_restore_validation_") for key in group_vars)
 
 
@@ -462,19 +473,50 @@ def test_validation_host_and_remote_capability_are_required_before_mutation():
     assert 'install -d -o postgres -g postgres -m 0700 "$CLUSTER_DIR" "$PGDATA" "$SOCKET_DIR"' in runner
 
 
-def test_systemd_job_exists_only_on_designated_host_and_uses_network_online():
+def test_systemd_job_converges_validation_host_migration_and_uses_network_online():
     tasks = yaml.safe_load(SETUP_TASKS_PATH.read_text())
     include = task_named(tasks, "Backup restore validation | Manage systemd job")
     job = include["vars"]["systemd_jobs"][0]
 
     assert include["ansible.builtin.include_role"]["name"] == "systemd_jobs"
-    assert "inventory_hostname == postgres_backup_restore_validation_host" in include["when"]
+    assert "when" not in include
     assert job["service"]["user"] == "root"
     assert job["service"]["group"] == "root"
     assert job["service"]["wants"] == ["network-online.target"]
     assert job["service"]["after"] == ["network-online.target"]
     assert job["timer"]["on_calendar"] == "{{ postgres_backup_restore_validation_timer_on_calendar }}"
-    assert job["enabled"] == "{{ postgres_backup_restore_validation_enabled }}"
+    first_designation = {
+        host: render_value(
+            job["enabled"],
+            postgres_backup_restore_validation_manage=True,
+            postgres_backup_restore_validation_enabled=True,
+            inventory_hostname=host,
+            postgres_backup_restore_validation_host="pg95",
+        )
+        for host in ("pg95", "pg96")
+    }
+    migrated_designation = {
+        host: render_value(
+            job["enabled"],
+            postgres_backup_restore_validation_manage=True,
+            postgres_backup_restore_validation_enabled=True,
+            inventory_hostname=host,
+            postgres_backup_restore_validation_host="pg96",
+        )
+        for host in ("pg95", "pg96")
+    }
+    assert first_designation == {"pg95": True, "pg96": False}
+    assert migrated_designation == {"pg95": False, "pg96": True}
+    assert (
+        render_value(
+            job["enabled"],
+            postgres_backup_restore_validation_manage=False,
+            postgres_backup_restore_validation_enabled=False,
+            inventory_hostname="pg95",
+            postgres_backup_restore_validation_host="pg95",
+        )
+        is False
+    )
     rendered = render_jinja(SYSTEMD_SERVICE_TEMPLATE, systemd_jobs_job=job)
     assert "Wants=network-online.target" in rendered
     assert "After=network-online.target" in rendered
@@ -585,6 +627,8 @@ def test_successful_validation_restores_every_database_sequentially_and_emits_me
     assert "PG_CTL\t" in joined and "\tstart" in joined and "\tstop" in joined
     assert "--auth-local=trust" in joined
     assert "--auth-host=reject" in joined
+    assert "--encoding=UTF8" in joined
+    assert "--locale=C.UTF-8" in joined
     assert "--template=template0" in joined
     for line in [line for line in log if line.startswith(("CREATEDB\t", "DROPDB\t"))]:
         assert line.endswith("\tpostgres_restore_validation")
@@ -634,6 +678,45 @@ def test_newest_valid_matching_snapshot_is_selected_and_unrelated_snapshot_is_ig
     assert f"{SNAPSHOT_ID_B}:{backup_root}/{BACKUP_ID_B}" in restore
     assert SNAPSHOT_ID_A not in restore
     assert "d" * 64 not in restore
+
+
+def test_nanosecond_snapshot_timestamp_with_offset_is_parsed_and_ordered(tmp_path: Path):
+    backup_root = tmp_path / "backups"
+    earlier = snapshot(
+        backup_root,
+        snapshot_id=SNAPSHOT_ID_A,
+        backup_id=BACKUP_ID_A,
+    )
+    earlier["time"] = "2026-08-11T01:02:03.123456788Z"
+    newest = snapshot(
+        backup_root,
+        snapshot_id=SNAPSHOT_ID_B,
+        backup_id=BACKUP_ID_B,
+    )
+    newest["time"] = "2026-08-11T12:02:03.123456789+10:00"
+    script = render_validator(
+        tmp_path,
+        snapshots=[earlier, newest],
+        max_age_hours=10**6,
+    )
+
+    result = run_validator(script)
+    restore = next(line for line in command_log(tmp_path) if "\trestore\t" in line)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert f"{SNAPSHOT_ID_B}:{backup_root}/{BACKUP_ID_B}" in restore
+    assert "2026-08-11T12:02:03.123456789+10:00" in (tmp_path / "snapshots.json").read_text()
+
+
+def test_validation_encoding_and_locale_overrides_reach_initdb(tmp_path: Path):
+    script = render_validator(tmp_path, encoding="LATIN1", locale="C")
+
+    result = run_validator(script)
+    initdb_call = next(line for line in command_log(tmp_path) if line.startswith("INITDB\t"))
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "\t--encoding=LATIN1" in initdb_call
+    assert "\t--locale=C" in initdb_call
 
 
 @pytest.mark.parametrize(

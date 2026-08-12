@@ -293,6 +293,36 @@
     name: restic
     state: present
 
+- name: Remote logical backup | Query installed Restic version
+  when:
+    - postgres_backup_remote_manage
+    - not ansible_check_mode
+  ansible.builtin.command:
+    argv:
+      - "{{ postgres_backup_remote_restic_path }}"
+      - version
+  register: postgres_backup_remote_restic_version_result
+  changed_when: false
+
+- name: Remote logical backup | Require supported Restic version
+  when:
+    - postgres_backup_remote_manage
+    - not ansible_check_mode
+  ansible.builtin.assert:
+    that:
+      - >-
+        postgres_backup_remote_restic_version_result.stdout
+        is match('^restic [0-9]+\.[0-9]+\.[0-9]+(?:[-+~][^ ]+)?(?: |$)')
+      - >-
+        (
+          postgres_backup_remote_restic_version_result.stdout
+          | regex_replace('^restic ([0-9]+\.[0-9]+\.[0-9]+).*', '\1')
+        )
+        is version('0.17.1', '>=')
+    fail_msg: >-
+      PostgreSQL remote backups require Restic 0.17.1 or newer for
+      differentiated repository and password failure exit codes.
+
 - name: Remote logical backup | Create protected configuration directory
   when: postgres_backup_remote_manage
   ansible.builtin.file:
@@ -636,7 +666,6 @@
     mode: "0755"
 
 - name: Remote logical backup | Manage uploader systemd job
-  when: postgres_backup_remote_manage
   ansible.builtin.include_role:
     name: systemd_jobs
     apply:
@@ -671,7 +700,8 @@
           on_calendar: "{{ postgres_backup_remote_timer_on_calendar }}"
           randomized_delay_sec: "{{ postgres_backup_remote_timer_randomized_delay_sec }}"
           persistent: true
-        enabled: "{{ postgres_backup_remote_enabled }}"
+        enabled: >-
+          {{ postgres_backup_remote_manage and postgres_backup_remote_enabled }}
   tags:
     - postgres
     - systemd_jobs
@@ -683,9 +713,6 @@
     - postgres_backup_restore_validation_run
 
 - name: Remote logical backup | Manage maintenance systemd job
-  when:
-    - postgres_backup_remote_manage
-    - inventory_hostname == postgres_backup_remote_maintenance_host
   ansible.builtin.include_role:
     name: systemd_jobs
     apply:
@@ -720,7 +747,12 @@
           on_calendar: "{{ postgres_backup_remote_maintenance_timer_on_calendar }}"
           randomized_delay_sec: "{{ postgres_backup_remote_maintenance_timer_randomized_delay_sec }}"
           persistent: true
-        enabled: "{{ postgres_backup_remote_enabled }}"
+        enabled: >-
+          {{
+            postgres_backup_remote_manage
+            and postgres_backup_remote_enabled
+            and inventory_hostname == postgres_backup_remote_maintenance_host
+          }}
   tags:
     - postgres
     - systemd_jobs

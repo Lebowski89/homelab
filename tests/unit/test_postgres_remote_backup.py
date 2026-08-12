@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import os
 import pwd
+import re
 import shlex
 import shutil
 import subprocess
@@ -12,6 +13,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from ansible.plugins.test.core import version_compare
 from jinja2 import Environment, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -59,6 +61,16 @@ def render_jinja(path: Path, **variables) -> str:
     )
     environment.filters["quote"] = lambda value: shlex.quote(str(value))
     return environment.from_string(path.read_text()).render(**variables)
+
+
+def render_value(value: str, **variables):
+    environment = Environment(undefined=StrictUndefined)
+    return yaml.safe_load(environment.from_string(value).render(**variables))
+
+
+def restic_version_is_supported(output: str) -> bool:
+    match = re.match(r"^restic ([0-9]+\.[0-9]+\.[0-9]+)(?:[-+~][^ ]+)?(?: |$)", output)
+    return match is not None and version_compare(match.group(1), "0.17.1", ">=")
 
 
 def render_remote_runner(
@@ -378,6 +390,41 @@ def test_restic_install_and_runner_are_scoped_to_managed_postgres_hosts():
     assert "restic" not in LOCAL_RUNNER_TEMPLATE_PATH.read_text().lower()
 
 
+@pytest.mark.parametrize(
+    ("output", "supported"),
+    [
+        ("restic 0.16.5 compiled with go1.22", False),
+        ("restic 0.17.0 compiled with go1.23", False),
+        ("restic 0.17.1 compiled with go1.23", True),
+        ("restic 0.17.1+ds compiled with go1.23", True),
+        ("restic 0.18.2 compiled with go1.24", True),
+        ("restic 1.0.0 compiled with go1.25", True),
+    ],
+)
+def test_restic_minimum_version_contract(output: str, supported: bool):
+    assert restic_version_is_supported(output) is supported
+
+
+def test_restic_version_is_checked_after_install_and_before_configuration():
+    tasks = yaml.safe_load(REMOTE_SETUP_TASKS_PATH.read_text())
+    task_names = [task.get("name") for task in tasks]
+    install_name = "Remote logical backup | Install Restic package"
+    query_name = "Remote logical backup | Query installed Restic version"
+    require_name = "Remote logical backup | Require supported Restic version"
+    configure_name = "Remote logical backup | Create protected configuration directory"
+    query = task_named(tasks, query_name)
+    requirement = task_named(tasks, require_name)
+
+    assert task_names.index(install_name) < task_names.index(query_name) < task_names.index(require_name)
+    assert task_names.index(require_name) < task_names.index(configure_name)
+    assert query["ansible.builtin.command"]["argv"] == ["{{ postgres_backup_remote_restic_path }}", "version"]
+    assert query["changed_when"] is False
+    assert query["when"] == ["postgres_backup_remote_manage", "not ansible_check_mode"]
+    assert "version('0.17.1', '>=')" in " ".join(requirement["ansible.builtin.assert"]["that"])
+    assert "Restic 0.17.1 or newer" in requirement["ansible.builtin.assert"]["fail_msg"]
+    assert "Minimum supported Restic version is 0.17.1" in BACKUP_DOC_PATH.read_text()
+
+
 def test_infisical_lookups_use_controller_contract_and_hide_secret_material():
     tasks = yaml.safe_load(REMOTE_SETUP_TASKS_PATH.read_text())
     lookup_names = (
@@ -640,7 +687,7 @@ def test_backend_environment_template_quotes_values_as_literal_assignments(tmp_p
     assert not marker.exists()
 
 
-def test_systemd_jobs_run_as_root_on_all_nodes_and_maintenance_is_single_host():
+def test_systemd_jobs_converge_lifecycle_and_maintenance_host_transitions():
     tasks = yaml.safe_load(REMOTE_SETUP_TASKS_PATH.read_text())
     uploader = task_named(tasks, "Remote logical backup | Manage uploader systemd job")
     maintenance = task_named(tasks, "Remote logical backup | Manage maintenance systemd job")
@@ -648,18 +695,64 @@ def test_systemd_jobs_run_as_root_on_all_nodes_and_maintenance_is_single_host():
     maintenance_job = maintenance["vars"]["systemd_jobs"][0]
 
     assert uploader["ansible.builtin.include_role"]["name"] == "systemd_jobs"
-    assert uploader["when"] == "postgres_backup_remote_manage"
+    assert "when" not in uploader
     assert uploader_job["service"]["exec_start"] == "{{ postgres_backup_remote_script_path }} upload"
     assert uploader_job["service"]["user"] == "root"
     assert uploader_job["service"]["group"] == "root"
     assert uploader_job["service"]["wants"] == ["network-online.target"]
     assert uploader_job["service"]["after"] == ["network-online.target"]
-    assert uploader_job["enabled"] == "{{ postgres_backup_remote_enabled }}"
+    assert (
+        render_value(
+            uploader_job["enabled"],
+            postgres_backup_remote_manage=True,
+            postgres_backup_remote_enabled=True,
+        )
+        is True
+    )
+    assert (
+        render_value(
+            uploader_job["enabled"],
+            postgres_backup_remote_manage=False,
+            postgres_backup_remote_enabled=False,
+        )
+        is False
+    )
     assert maintenance_job["service"]["exec_start"] == "{{ postgres_backup_remote_script_path }} maintenance"
-    assert "inventory_hostname == postgres_backup_remote_maintenance_host" in maintenance["when"]
+    assert "when" not in maintenance
     assert maintenance_job["service"]["wants"] == ["network-online.target"]
     assert maintenance_job["service"]["after"] == ["network-online.target"]
-    assert maintenance_job["enabled"] == "{{ postgres_backup_remote_enabled }}"
+    first_designation = {
+        host: render_value(
+            maintenance_job["enabled"],
+            postgres_backup_remote_manage=True,
+            postgres_backup_remote_enabled=True,
+            inventory_hostname=host,
+            postgres_backup_remote_maintenance_host="pg95",
+        )
+        for host in ("pg95", "pg96")
+    }
+    migrated_designation = {
+        host: render_value(
+            maintenance_job["enabled"],
+            postgres_backup_remote_manage=True,
+            postgres_backup_remote_enabled=True,
+            inventory_hostname=host,
+            postgres_backup_remote_maintenance_host="pg96",
+        )
+        for host in ("pg95", "pg96")
+    }
+    assert first_designation == {"pg95": True, "pg96": False}
+    assert migrated_designation == {"pg95": False, "pg96": True}
+    assert (
+        render_value(
+            maintenance_job["enabled"],
+            postgres_backup_remote_manage=False,
+            postgres_backup_remote_enabled=False,
+            inventory_hostname="pg95",
+            postgres_backup_remote_maintenance_host="pg95",
+        )
+        is False
+    )
     assert "repository" not in str(uploader_job).lower()
     assert "password" not in str(uploader_job).lower()
     assert "secret" not in str(uploader_job).lower()
