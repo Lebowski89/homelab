@@ -56,6 +56,8 @@ ubuntu_apt_firewall_packages:
   - ufw
 
 ubuntu_apt_docker_packages: []
+ubuntu_apt_postgres_packages:
+  - acl
 ubuntu_apt_swarm_packages: []
 ubuntu_apt_haproxy_packages: []
 ubuntu_apt_opentofu_packages: []

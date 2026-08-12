@@ -12,6 +12,7 @@ readonly PATRONI_LEADER_URL='http://127.0.0.1:{{ postgres_patroni_restapi_port }
 readonly COMPLETED_RETENTION_DAYS='{{ postgres_backup_local_retention_days }}'
 readonly FAILED_RETENTION_DAYS='{{ postgres_backup_failed_retention_days }}'
 readonly LOCK_FILE="$BACKUP_ROOT/.backup.lock"
+readonly PGPASS_FILE="$BACKUP_ROOT/.pgpass"
 
 readonly PSQL="$POSTGRES_BIN_DIR/psql"
 readonly PG_DUMP="$POSTGRES_BIN_DIR/pg_dump"
@@ -19,8 +20,7 @@ readonly PG_DUMPALL="$POSTGRES_BIN_DIR/pg_dumpall"
 readonly PG_RESTORE="$POSTGRES_BIN_DIR/pg_restore"
 
 export PATH="$POSTGRES_BIN_DIR:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-export PGPASSFILE=/dev/null
-unset PGHOST PGUSER PGSERVICE PGSERVICEFILE
+unset PGPASSWORD PGHOST PGUSER PGSERVICE PGSERVICEFILE
 
 ATTEMPT_EPOCH="$(date +%s)"
 RUN_START_EPOCH="$ATTEMPT_EPOCH"
@@ -157,6 +157,15 @@ trap on_error ERR
 [[ "$METRICS_FILE" == /* ]] || fail "Metrics file must be an absolute path."
 [[ "$COMPLETED_RETENTION_DAYS" =~ ^[0-9]+$ ]] || fail "Completed retention must be a non-negative integer."
 [[ "$FAILED_RETENTION_DAYS" =~ ^[0-9]+$ ]] || fail "Failed retention must be a non-negative integer."
+[[ -d "$BACKUP_ROOT" && ! -L "$BACKUP_ROOT" ]] || fail "Backup root must be an existing real directory."
+if ! cd -- "$BACKUP_ROOT"; then
+  fail "Unable to enter PostgreSQL backup root."
+fi
+[[ -f "$PGPASS_FILE" && ! -L "$PGPASS_FILE" ]] || fail "libpq password file must be a regular file."
+[[ -O "$PGPASS_FILE" ]] || fail "libpq password file must be owned by the backup user."
+[[ ! -s "$PGPASS_FILE" ]] || fail "libpq password file must remain empty."
+[[ "$(stat --format='%a' -- "$PGPASS_FILE")" == 600 ]] || fail "libpq password file must have mode 0600."
+export PGPASSFILE="$PGPASS_FILE"
 
 LAST_SUCCESS_EPOCH="$(existing_metric postgres_backup_last_success_timestamp_seconds 0)"
 LAST_SUCCESS_SIZE="$(existing_metric postgres_backup_last_size_bytes 0)"

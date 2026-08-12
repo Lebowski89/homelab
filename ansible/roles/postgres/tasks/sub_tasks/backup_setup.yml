@@ -44,6 +44,14 @@
     group: postgres
     mode: "0750"
 
+- name: Logical backup | Create empty protected libpq password file
+  ansible.builtin.copy:
+    content: ""
+    dest: "{{ postgres_backup_root }}/.pgpass"
+    owner: postgres
+    group: postgres
+    mode: "0600"
+
 - name: Logical backup | Ensure dedicated metrics directory exists
   ansible.builtin.file:
     path: "{{ postgres_backup_metrics_file | dirname }}"

@@ -8,6 +8,7 @@
 
 ubuntu_apt_package_profiles_postgres:
   - network
+  - postgres
 
 postgres_etcd_node_name: "{{ inventory_hostname }}"
 postgres_patroni_node_name: "{{ inventory_hostname }}"

@@ -20,6 +20,8 @@ RUN_TASKS_PATH = ROLE_PATH / "tasks/sub_tasks/backup.yml"
 SCRIPT_TEMPLATE_PATH = ROLE_PATH / "templates/postgres-logical-backup.sh.j2"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
 GROUP_VARS_PATH = REPO_ROOT / "ansible/group_vars/tags_postgres.yml"
+UBUNTU_DEFAULTS_PATH = REPO_ROOT / "ansible/roles/ubuntu/defaults/main.yml"
+UBUNTU_APT_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/sub_tasks/apt.yml"
 SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
 SKYNET_DOC_PATH = REPO_ROOT / "docs/cheat_sheets/skynet.md"
 BACKUP_DOC_PATH = REPO_ROOT / "docs/postgresql-logical-backups.md"
@@ -48,6 +50,9 @@ def render_runner(tmp_path: Path) -> Path:
     backup_root.mkdir()
     metrics_file.parent.mkdir()
     metrics_file.write_text("")
+    pgpass_file = backup_root / ".pgpass"
+    pgpass_file.write_text("")
+    pgpass_file.chmod(0o600)
     fake_bin = tmp_path / "fake-bin"
     fake_bin.mkdir()
 
@@ -76,6 +81,10 @@ case "${FAKE_PATRONI_MODE:-leader}" in
 esac
 """,
         "psql": """#!/usr/bin/env bash
+[[ "${PGPASSFILE:-}" != /dev/null ]]
+[[ -f "${PGPASSFILE:-}" && ! -L "$PGPASSFILE" && ! -s "$PGPASSFILE" ]]
+[[ "$(stat --format='%a' -- "$PGPASSFILE")" == 600 ]]
+[[ -z "${PGPASSWORD:-}" ]]
 if [[ "$*" == *"SELECT count(*)"* ]]; then
   printf '0\\n'
 elif [[ "$*" == *"SELECT datname"* ]]; then
@@ -85,6 +94,12 @@ elif [[ "$*" == *"SHOW server_version"* ]]; then
 else
   exit 2
 fi
+""",
+        "find": """#!/usr/bin/env bash
+if [[ "${FAKE_RETENTION_FIND_FAIL:-0}" == 1 && "$1" == */backups ]]; then
+  exit 55
+fi
+exec /usr/bin/find "$@"
 """,
         "pg_dump": """#!/usr/bin/env bash
 if [[ -n "${FAKE_PG_DUMP_SLEEP:-}" ]]; then
@@ -164,6 +179,20 @@ def test_role_default_is_opt_in_but_postgres_group_enables_timer():
     assert group_vars["postgres_backup_manage_timer"] is True
 
 
+def test_postgres_package_profile_installs_acl_for_unprivileged_backup_become():
+    ubuntu_defaults = yaml.safe_load(UBUNTU_DEFAULTS_PATH.read_text())
+    group_vars = yaml.safe_load(GROUP_VARS_PATH.read_text())
+    apt_tasks = yaml.safe_load(UBUNTU_APT_TASKS_PATH.read_text())
+    selection = task_named(apt_tasks, "Ubuntu APT | Build selected package list")
+    invoke = task_named(yaml.safe_load(RUN_TASKS_PATH.read_text()), "Logical backup run | Invoke installed leader-gated runner")
+
+    assert "postgres" in group_vars["ubuntu_apt_package_profiles_postgres"]
+    assert ubuntu_defaults["ubuntu_apt_postgres_packages"] == ["acl"]
+    assert "ubuntu_apt_postgres_packages" in selection["ansible.builtin.set_fact"]["ubuntu_apt_selected_packages"]
+    assert "if 'postgres' in" in selection["ansible.builtin.set_fact"]["ubuntu_apt_selected_packages"]
+    assert invoke["become_user"] == "postgres"
+
+
 def test_setup_installs_runner_on_postgres_hosts_with_restrictive_ownership():
     main_tasks = yaml.safe_load(MAIN_TASKS_PATH.read_text())
     setup_tasks = yaml.safe_load(SETUP_TASKS_PATH.read_text())
@@ -181,6 +210,19 @@ def test_setup_installs_runner_on_postgres_hosts_with_restrictive_ownership():
     }
     assert backup_root["ansible.builtin.file"]["owner"] == "postgres"
     assert backup_root["ansible.builtin.file"]["mode"] == "0750"
+
+
+def test_setup_manages_empty_protected_libpq_password_file():
+    setup_tasks = yaml.safe_load(SETUP_TASKS_PATH.read_text())
+    pgpass = task_named(setup_tasks, "Logical backup | Create empty protected libpq password file")
+
+    assert pgpass["ansible.builtin.copy"] == {
+        "content": "",
+        "dest": "{{ postgres_backup_root }}/.pgpass",
+        "owner": "postgres",
+        "group": "postgres",
+        "mode": "0600",
+    }
 
 
 def test_metrics_permission_is_narrow():
@@ -267,12 +309,14 @@ def test_runner_uses_local_patroni_leader_endpoint():
 def test_runner_uses_peer_authentication_without_password_or_tcp_host():
     source = SCRIPT_TEMPLATE_PATH.read_text()
 
-    assert "PGPASSWORD" not in source
+    assert "unset PGPASSWORD" in source
     assert "postgres_patroni_superuser_pass" not in source
     assert " -h " not in source
     assert "--host" not in source
-    assert "export PGPASSFILE=/dev/null" in source
-    assert "unset PGHOST" in source
+    assert "PGPASSFILE=/dev/null" not in source
+    assert 'export PGPASSFILE="$PGPASS_FILE"' in source
+    assert '[[ ! -s "$PGPASS_FILE" ]]' in source
+    assert "unset PGPASSWORD PGHOST" in source
 
 
 def test_database_discovery_uses_actual_connectable_non_template_databases():
@@ -352,6 +396,16 @@ def test_retention_is_root_bounded_and_name_constrained():
     assert "'^\\.staging-[0-9]{8}T[0-9]{6}Z-[0-9]+$'" in source
     assert '[[ "$candidate" == "$BACKUP_ROOT/"* ]]' in source
     assert 'mktemp "$BACKUP_ROOT/.retention-$retention_class.XXXXXX"' in source
+
+
+def test_runner_establishes_safe_backup_root_working_directory():
+    source = SCRIPT_TEMPLATE_PATH.read_text()
+    validate_root = source.index('[[ -d "$BACKUP_ROOT" && ! -L "$BACKUP_ROOT" ]]')
+    enter_root = source.index('cd -- "$BACKUP_ROOT"')
+    first_operation = source.index("LAST_SUCCESS_EPOCH=", enter_root)
+
+    assert validate_root < enter_root < first_operation
+    assert 'fail "Unable to enter PostgreSQL backup root."' in source
 
 
 def test_retention_runs_only_after_successful_promotion():
@@ -490,8 +544,43 @@ def test_successful_runner_builds_verified_promoted_backup_and_metrics(tmp_path:
     metrics = (tmp_path / "textfile" / "postgres_logical_backup.prom").read_text()
     assert "postgres_backup_last_run_success 1" in metrics
     assert "postgres_backup_last_database_count 2" in metrics
+    assert 'password file "/dev/null" is not a plain file' not in result.stderr
     assert len([line for line in metrics.splitlines() if line.startswith("postgres_backup_")]) == 6
     assert not list((tmp_path / "textfile").glob("*.tmp.*"))
+
+
+def test_runner_retention_succeeds_from_inaccessible_caller_working_directory(tmp_path: Path):
+    script = render_runner(tmp_path)
+    backup_root = tmp_path / "backups"
+    expired_completed = backup_root / "20000101T000000Z"
+    expired_completed.mkdir()
+    os.utime(expired_completed, (1, 1))
+    caller_directory = tmp_path / "inaccessible-caller"
+    caller_directory.mkdir()
+    environment = os.environ.copy()
+    environment["FAKE_PATRONI_MODE"] = "leader"
+
+    try:
+        result = subprocess.run(
+            [
+                "bash",
+                "-c",
+                'cd -- "$1" && chmod 000 -- . && exec "$2"',
+                "_",
+                str(caller_directory),
+                str(script),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            env=environment,
+        )
+    finally:
+        caller_directory.chmod(0o700)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not expired_completed.exists()
+    assert "Failed to restore initial working directory" not in result.stderr
 
 
 def test_pre_promotion_failure_does_not_apply_completed_retention(tmp_path: Path):
@@ -505,6 +594,30 @@ def test_pre_promotion_failure_does_not_apply_completed_retention(tmp_path: Path
 
     assert result.returncode != 0
     assert expired_completed.is_dir()
+
+
+def test_post_promotion_retention_failure_preserves_last_success_metrics(tmp_path: Path):
+    script = render_runner(tmp_path)
+    metrics_file = tmp_path / "textfile" / "postgres_logical_backup.prom"
+    metrics_file.write_text(
+        "postgres_backup_last_attempt_timestamp_seconds 100\n"
+        "postgres_backup_last_success_timestamp_seconds 90\n"
+        "postgres_backup_last_run_success 1\n"
+        "postgres_backup_last_duration_seconds 10\n"
+        "postgres_backup_last_size_bytes 123456\n"
+        "postgres_backup_last_database_count 39\n"
+    )
+
+    result = run_runner(script, "leader", FAKE_RETENTION_FIND_FAIL="1")
+
+    assert result.returncode != 0
+    assert "PostgreSQL logical backup was promoted, but post-promotion processing failed." in result.stderr
+    assert len(list((tmp_path / "backups").glob("[0-9]*Z"))) == 1
+    metrics = metrics_file.read_text()
+    assert "postgres_backup_last_run_success 0" in metrics
+    assert "postgres_backup_last_success_timestamp_seconds 90" in metrics
+    assert "postgres_backup_last_size_bytes 123456" in metrics
+    assert "postgres_backup_last_database_count 39" in metrics
 
 
 def test_successful_promotion_applies_bounded_retention_without_following_symlinks(tmp_path: Path):
