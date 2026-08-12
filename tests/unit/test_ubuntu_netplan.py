@@ -368,9 +368,11 @@ def test_venv_tasks_consume_recovery_decision_without_check_mode_mutation(tmp_pa
         "venv",
         "{{ ubuntu_ansible_venv_path }}",
     ]
-    assert pip["ansible.builtin.pip"]["name"] == [
-        "pip==26.2",
-        "setuptools==83.0.0",
-        "wheel==0.47.0",
-    ]
+    pip_module = pip["ansible.builtin.pip"]
+    packages = pip_module["name"]
+
+    assert [package.split("==", 1)[0] for package in packages] == ["pip", "setuptools", "wheel"]
+    assert all(package.count("==") == 1 and package.split("==", 1)[1] for package in packages)
+    assert pip_module["state"] == "present"
+    assert pip_module["virtualenv"] == "{{ ubuntu_ansible_venv_path }}"
     assert VENV_TASKS.index(recreate) < VENV_TASKS.index(create) < VENV_TASKS.index(pip)

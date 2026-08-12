@@ -82,7 +82,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
   vars:
     podman_services_service_cfg:
       runtime: podman
-      image: registry.example.invalid/adminer:5.4.2
+      image: registry.example.invalid/adminer:1.2.3
       user: "0:0"
       environment:
         HOME: /application/home
