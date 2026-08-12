@@ -18,8 +18,6 @@ gotify:
   ################################
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
-    PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
   env_file:
     - "{{ hostvars[services_controller_host].container_host_appdata_root }}/gotify/.env"
   infisical:
