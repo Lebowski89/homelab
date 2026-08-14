@@ -47,18 +47,41 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Classify Renovate Docker tag-only change
+        id: classify
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python scripts/ci/classify_renovate_docker_tag_only.py \
+            --event-name "$GITHUB_EVENT_NAME" \
+            --pr-author "$PR_AUTHOR" \
+            --base-sha "$PR_BASE_SHA" \
+            --head-sha "$PR_HEAD_SHA" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Renovate Docker tag-only fast path
+        if: fromJSON(steps.classify.outputs.renovate_docker_tag_only)
+        run: echo "Checkov is not required for a proven Docker tag-only Renovate change."
 
       - name: Set up Python
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.14.7"
 
       - name: Install Checkov
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           python -m pip install --upgrade pip
           python -m pip install checkov
 
       - name: Run Checkov
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           checkov \
             --directory . \
@@ -69,7 +92,7 @@ jobs:
             --soft-fail
 
       - name: Upload Checkov SARIF
-        if: success() || failure()
+        if: (success() || failure()) && !fromJSON(steps.classify.outputs.renovate_docker_tag_only)
         uses: github/codeql-action/upload-sarif@v4.37.6
         with:
           sarif_file: checkov.sarif

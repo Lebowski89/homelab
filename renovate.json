@@ -18,9 +18,8 @@
         "**/ansible/collections/**",
         "**/.ansible/**"
     ],
-    "prConcurrentLimit": 5,
-    "prHourlyLimit": 1,
-    "branchConcurrentLimit": 5,
+    "prConcurrentLimit": 10,
+    "prHourlyLimit": 3,
     "rangeStrategy": "pin",
     "semanticCommits": "enabled",
     "semanticCommitType": "chore",
@@ -199,7 +198,7 @@
             ]
         },
         {
-            "description": "Weekly batch for non-critical Docker minor/patch updates",
+            "description": "Nightly batch for non-critical Docker minor/patch updates",
             "matchDatasources": [
                 "docker"
             ],
@@ -210,10 +209,10 @@
             "groupName": "weekly non-critical docker image updates",
             "groupSlug": "weekly-docker-minor-patch",
             "schedule": [
-                "* 3-7 * * 1"
+                "* 3-7 * * *"
             ],
             "minimumGroupSize": 2,
-            "prPriority": -5,
+            "prPriority": 0,
             "addLabels": [
                 "docker",
                 "batch"

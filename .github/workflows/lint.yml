@@ -6,12 +6,14 @@ on:
   push:
     paths:
       - "ansible/**"
+      - "scripts/ci/**"
       - "tests/**"
       - "pyproject.toml"
       - ".github/workflows/lint.yml"
   pull_request:
     paths:
       - "ansible/**"
+      - "scripts/ci/**"
       - "tests/**"
       - "pyproject.toml"
       - ".github/workflows/lint.yml"
@@ -30,13 +32,34 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Classify Renovate Docker tag-only change
+        id: classify
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python scripts/ci/classify_renovate_docker_tag_only.py \
+            --event-name "$GITHUB_EVENT_NAME" \
+            --pr-author "$PR_AUTHOR" \
+            --base-sha "$PR_BASE_SHA" \
+            --head-sha "$PR_HEAD_SHA" \
+            >> "$GITHUB_OUTPUT"
 
       - name: Set up Python
         uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.14.7"
 
+      - name: Install fast-path tooling
+        if: fromJSON(steps.classify.outputs.renovate_docker_tag_only)
+        run: python -m pip install yamllint
+
       - name: Install Python tooling
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           python -m pip install --upgrade pip
 
@@ -47,9 +70,11 @@ jobs:
           python -m pip install ansible-core ansible-lint yamllint ruff pytest
 
       - name: Prepare ansible log dir
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: mkdir -p .ansible
 
       - name: Install Ansible collections
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           if [ -f ansible/requirements.yml ]; then
             ansible-galaxy collection install \
@@ -59,6 +84,7 @@ jobs:
           fi
 
       - name: yamllint (tracked YAML files only)
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           files=$(git ls-files '*.yml' '*.yaml')
           if [ -z "$files" ]; then
@@ -67,7 +93,19 @@ jobs:
           fi
           yamllint $files
 
+      - name: Renovate Docker tag-only validation
+        if: fromJSON(steps.classify.outputs.renovate_docker_tag_only)
+        env:
+          CHANGED_FILES: ${{ steps.classify.outputs.changed_files }}
+          COMPARISON_BASE: ${{ steps.classify.outputs.comparison_base }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          mapfile -t changed_files <<< "$CHANGED_FILES"
+          git diff --check "$COMPARISON_BASE" "$PR_HEAD_SHA"
+          yamllint "${changed_files[@]}"
+
       - name: ruff check
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           ruff check --output-format=github \
             ansible/action_plugins \
@@ -78,9 +116,11 @@ jobs:
             ansible/roles/service_common/filter_plugins \
             ansible/roles/service_prepare/filter_plugins \
             ansible/roles/service_prepare/library \
+            scripts/ci \
             tests/unit
 
       - name: ruff format check
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           ruff format --check --diff \
             ansible/action_plugins \
@@ -91,12 +131,15 @@ jobs:
             ansible/roles/service_common/filter_plugins \
             ansible/roles/service_prepare/filter_plugins \
             ansible/roles/service_prepare/library \
+            scripts/ci \
             tests/unit
 
       - name: pytest
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           python -m pytest tests/unit
 
       - name: ansible-lint
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           ansible-lint --format=pep8 ansible
