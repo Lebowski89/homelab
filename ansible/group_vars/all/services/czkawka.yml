@@ -12,7 +12,7 @@ czkawka:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: jlesage/czkawka:v26.07.3
+  image: jlesage/czkawka:v26.08.1
   ################################
   # ENVIRONMENT/SECRETS
   ################################
