@@ -12,7 +12,7 @@ unifi:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/lemker/unifi-os-server:v1.3.0
+  image: ghcr.io/lemker/unifi-os-server:v1.4.0
   container_name: unifi
   ################################
   # ENVIRONMENT/SECRETS

@@ -12,7 +12,7 @@ kometa:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: kometateam/kometa:v2.4.6
+  image: kometateam/kometa:v2.4.7
   ################################
   # ENVIRONMENT/SECRETS
   ################################

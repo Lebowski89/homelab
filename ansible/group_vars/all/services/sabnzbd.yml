@@ -12,7 +12,7 @@ sabnzbd:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/sabnzbd:release-v5.0.4
+  image: ghcr.io/hotio/sabnzbd:release-v5.1.0
   ################################
   # ENVIRONMENT/SECRETS
   ################################

@@ -12,7 +12,7 @@ obsidian:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: lscr.io/linuxserver/obsidian:v1.12.7-ls135
+  image: lscr.io/linuxserver/obsidian:v1.13.7-ls143
   ################################
   # ENVIRONMENT/SECRETS
   ################################

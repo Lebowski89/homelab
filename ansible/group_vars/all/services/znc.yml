@@ -12,7 +12,7 @@ znc:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: lscr.io/linuxserver/znc:znc-1.10.2-ls181
+  image: lscr.io/linuxserver/znc:znc-1.10.2-ls184
   ################################
   # ENVIRONMENT/SECRETS
   ################################

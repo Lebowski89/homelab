@@ -4,7 +4,7 @@ hugo_fs_host: "{{ services_controller_host }}"
 hugo_root_path: "{{ hostvars[services_controller_host].container_host_appdata_root }}"
 hugo_site_path: "{{ hugo_root_path }}/blog"
 hugo_theme_path: "{{ hugo_site_path }}/themes/terminal"
-hugo_image: "ghcr.io/gohugoio/hugo:v0.163.3"
+hugo_image: "ghcr.io/gohugoio/hugo:v0.165.0"
 
 hugo_directory_paths:
   - path: "{{ hugo_site_path }}"

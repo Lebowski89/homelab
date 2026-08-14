@@ -10,7 +10,7 @@ qbittorrent:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/qbittorrent:release-v5.2.2
+  image: ghcr.io/hotio/qbittorrent:release-v5.2.3
   ################################
   # ENVIRONMENT/SECRETS
   ################################
