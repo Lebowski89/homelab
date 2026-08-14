@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.ci.classify_renovate_docker_tag_only import RENOVATE_AUTHOR, classify
+from scripts.ci.classify_renovate_docker_tag_only import RENOVATE_AUTHOR, classify, main
 
 QUI_PATH = "ansible/group_vars/all/services/qui.yml"
 DOZZLE_PATH = "ansible/group_vars/all/services/dozzle.yml"
@@ -105,6 +105,95 @@ def test_digest_only_change_uses_fast_path(git_repository: tuple[Path, str]) -> 
     head_sha = _commit(repository, "update digest", {QUI_PATH: base_content.replace("a" * 64, "b" * 64)})
 
     assert _classify(repository, base_sha, head_sha).renovate_docker_tag_only is True
+
+
+def test_multiple_target_image_changes_in_one_service_use_fast_path(git_repository: tuple[Path, str]) -> None:
+    repository, _ = git_repository
+    base_content = """---
+service:
+  runtime: docker
+  targets:
+    agent:
+      image: example/agent:1.0.0
+    main:
+      image: example/main:2.0.0
+"""
+    base_sha = _commit(repository, "add multi-target service", {QUI_PATH: base_content})
+    head_content = base_content.replace("example/agent:1.0.0", "example/agent:1.1.0").replace("example/main:2.0.0", "example/main:2.1.0")
+    head_sha = _commit(repository, "update target images", {QUI_PATH: head_content})
+
+    assert _classify(repository, base_sha, head_sha).renovate_docker_tag_only is True
+
+
+def test_podman_runtime_image_change_uses_fast_path(git_repository: tuple[Path, str]) -> None:
+    repository, _ = git_repository
+    base_content = """---
+service:
+  runtime: podman
+  image: example/app:1.0.0
+"""
+    base_sha = _commit(repository, "add podman service", {QUI_PATH: base_content})
+    head_sha = _commit(repository, "update podman image", {QUI_PATH: base_content.replace("1.0.0", "1.1.0")})
+
+    assert _classify(repository, base_sha, head_sha).renovate_docker_tag_only is True
+
+
+def test_cli_emits_true_github_output_contract(git_repository: tuple[Path, str], capsys: pytest.CaptureFixture[str]) -> None:
+    repository, base_sha = git_repository
+    head_sha = _commit(repository, "update qui", {QUI_PATH: SERVICE_YAML.replace("v1.20.0", "v1.25.0")})
+
+    exit_code = main(
+        [
+            "--event-name",
+            "pull_request",
+            "--pr-author",
+            RENOVATE_AUTHOR,
+            "--base-sha",
+            base_sha,
+            "--head-sha",
+            head_sha,
+            "--repository",
+            str(repository),
+        ]
+    )
+    output_lines = capsys.readouterr().out.splitlines()
+
+    assert exit_code == 0
+    assert "renovate_docker_tag_only=true" in output_lines
+    assert f"comparison_base={base_sha}" in output_lines
+    changed_files_header = next(line for line in output_lines if line.startswith("changed_files<<"))
+    changed_files_footer = changed_files_header.removeprefix("changed_files<<")
+    header_index = output_lines.index(changed_files_header)
+    footer_index = output_lines.index(changed_files_footer)
+    assert QUI_PATH in output_lines[header_index + 1 : footer_index]
+
+
+def test_cli_emits_false_github_output_contract(git_repository: tuple[Path, str], capsys: pytest.CaptureFixture[str]) -> None:
+    repository, base_sha = git_repository
+    head_sha = _commit(repository, "update qui", {QUI_PATH: SERVICE_YAML.replace("v1.20.0", "v1.25.0")})
+
+    exit_code = main(
+        [
+            "--event-name",
+            "pull_request",
+            "--pr-author",
+            "human",
+            "--base-sha",
+            base_sha,
+            "--head-sha",
+            head_sha,
+            "--repository",
+            str(repository),
+        ]
+    )
+    output_lines = capsys.readouterr().out.splitlines()
+
+    assert exit_code == 0
+    assert "renovate_docker_tag_only=false" in output_lines
+    assert "comparison_base=" in output_lines
+    assert "changed_files=" in output_lines
+    reason = next(line for line in output_lines if line.startswith("classification_reason="))
+    assert reason.removeprefix("classification_reason=")
 
 
 @pytest.mark.parametrize(
