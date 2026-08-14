@@ -10,7 +10,7 @@ sonarr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/sonarr:release-4.0.18.2971
+  image: ghcr.io/hotio/sonarr:release-4.0.19.2979
   ################################
   # ENVIRONMENT/SECRETS
   ################################

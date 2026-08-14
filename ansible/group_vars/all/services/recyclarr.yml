@@ -12,7 +12,7 @@ recyclarr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/recyclarr/recyclarr:8.6.0
+  image: ghcr.io/recyclarr/recyclarr:8.7.1
   user: >-
     {{ hostvars[services_storage_host].container_host_puid }}:{{ hostvars[services_storage_host].container_host_pgid }}
   ################################

@@ -12,7 +12,7 @@ prowlarr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/prowlarr:release-2.4.0.5397
+  image: ghcr.io/hotio/prowlarr:release-2.5.2.5491
   ################################
   # ENVIRONMENT/SECRETS
   ################################
