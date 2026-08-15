@@ -5,64 +5,41 @@
   background: rgba(2, 6, 23, 0.88) !important;
   border: 1px solid rgba(148, 163, 184, 0.22) !important;
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
+  color: rgba(248, 250, 252, 0.96) !important;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease !important;
 }
 
 /* Service cards on hover */
 .service-card:hover {
   background: rgba(15, 23, 42, 0.94) !important;
-  border-color: rgba(148, 163, 184, 0.38) !important;
+  border-color: rgba(56, 189, 248, 0.45) !important;
+  box-shadow:
+    0 0 16px rgba(56, 189, 248, 0.14),
+    0 12px 30px rgba(0, 0, 0, 0.62) !important;
+  transform: translateY(-2px);
 }
 
 /* Bookmark cards */
-.bookmark-card,
-.bookmark-item {
-  background: rgba(2, 6, 23, 0.88) !important;
-  border: 1px solid rgba(148, 163, 184, 0.22) !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
-}
-
-.bookmark-card:hover,
-.bookmark-item:hover {
-  background: rgba(15, 23, 42, 0.94) !important;
-  border-color: rgba(148, 163, 184, 0.38) !important;
-}
-
-/* Top widgets / info widgets */
-div[class*="widget"],
-section[class*="widget"] {
-  background: rgba(2, 6, 23, 0.88) !important;
-  border: 1px solid rgba(148, 163, 184, 0.22) !important;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
-}
-
-/* Optional: make text pop slightly more */
-.service-card,
-.bookmark-card,
-.bookmark-item,
-div[class*="widget"],
-section[class*="widget"] {
-  color: rgba(248, 250, 252, 0.96) !important;
-}
-
-/* Extra-dark bookmarks for readability over bright background areas */
-.bookmark-card,
-.bookmark-item,
-a.bookmark-card,
-a.bookmark-item,
-div[class*="bookmark"] a {
+.bookmark > a {
   background: rgba(2, 6, 23, 0.96) !important;
   border: 1px solid rgba(148, 163, 184, 0.32) !important;
   box-shadow:
     0 8px 24px rgba(0, 0, 0, 0.65),
     inset 0 0 0 1px rgba(255, 255, 255, 0.03) !important;
+  color: rgba(248, 250, 252, 0.98) !important;
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    background 0.15s ease !important;
 }
 
 /* Bookmark hover: tiny Skynet glow */
-.bookmark-card:hover,
-.bookmark-item:hover,
-a.bookmark-card:hover,
-a.bookmark-item:hover,
-div[class*="bookmark"] a:hover {
+.bookmark:hover > a {
   background: rgba(15, 23, 42, 0.98) !important;
   border-color: rgba(56, 189, 248, 0.55) !important;
   box-shadow:
@@ -72,14 +49,19 @@ div[class*="bookmark"] a:hover {
 }
 
 /* Make bookmark text more readable */
-.bookmark-card,
-.bookmark-item,
-.bookmark-card *,
-.bookmark-item *,
-div[class*="bookmark"] a,
-div[class*="bookmark"] a * {
+.bookmark > a,
+.bookmark > a * {
   color: rgba(248, 250, 252, 0.98) !important;
   text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+}
+
+/* Top widgets / info widgets */
+div[class*="widget"],
+section[class*="widget"] {
+  background: rgba(2, 6, 23, 0.88) !important;
+  border: 1px solid rgba(148, 163, 184, 0.22) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45) !important;
+  color: rgba(248, 250, 252, 0.96) !important;
 }
 
 /* Slight Cyberdyne / terminal feel for group headings */
@@ -102,30 +84,20 @@ body::after {
   pointer-events: none;
   z-index: -1;
   background:
-    radial-gradient(circle at center, transparent 35%, rgba(0, 0, 0, 0.38) 100%),
-    linear-gradient(to bottom, rgba(0, 0, 0, 0.15), rgba(0, 0, 0, 0.38));
-}
-
-/* Subtle service hover glow */
-.service-card {
-  transition:
-    transform 0.15s ease,
-    border-color 0.15s ease,
-    box-shadow 0.15s ease,
-    background 0.15s ease !important;
-}
-
-.service-card:hover {
-  transform: translateY(-2px);
-  border-color: rgba(56, 189, 248, 0.45) !important;
-  box-shadow:
-    0 0 16px rgba(56, 189, 248, 0.14),
-    0 12px 30px rgba(0, 0, 0, 0.62) !important;
+    radial-gradient(
+      circle at center,
+      transparent 35%,
+      rgba(0, 0, 0, 0.38) 100%
+    ),
+    linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.15),
+      rgba(0, 0, 0, 0.38)
+    );
 }
 
 /* Slightly brighten icons on hover */
 .service-card:hover img,
-.bookmark-card:hover img,
-.bookmark-item:hover img {
+.bookmark:hover img {
   filter: saturate(1.2) contrast(1.08) brightness(1.08);
 }
