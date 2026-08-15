@@ -1,11 +1,11 @@
-{% set cloudflare_zone = service_common_infisical_values.cloudflare_zone %}
+{% set secrets = service_common_infisical_values %}
 ---
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/settings/
 
 title: Cyberdyne Systems
 description: Putting the net in Skynet.
-startUrl: "https://homepage.int.{{ cloudflare_zone }}:8443"
+startUrl: "https://homepage.int.{{ secrets.cloudflare_zone }}:8443"
 
 background:
   image: /images/earth-rise-2.jpg
@@ -46,6 +46,12 @@ layout:
     icon: mdi-download-network
     initiallyCollapsed: false
 
+  finances:
+    style: row
+    columns: 1
+    icon: mdi-finance
+    initiallyCollapsed: false
+
   gaming:
     style: row
     columns: 1
@@ -54,19 +60,19 @@ layout:
 
   media:
     style: row
-    columns: 4
+    columns: 3
     icon: mdi-multimedia
     initiallyCollapsed: true
 
   monitoring:
     style: row
-    columns: 3
+    columns: 4
     icon: mdi-chart-line
     initiallyCollapsed: true
 
   network:
     style: row
-    columns: 2
+    columns: 3
     icon: mdi-lan
     initiallyCollapsed: true
 
@@ -78,13 +84,13 @@ layout:
 
   torrents:
     style: row
-    columns: 2
+    columns: 3
     icon: mdi-download
     initiallyCollapsed: true
 
   usenet:
     style: row
-    columns: 1
+    columns: 2
     icon: mdi-cloud-download
     initiallyCollapsed: true
 
@@ -102,6 +108,6 @@ layout:
 
   providers:
     style: row
-    columns: 6
+    columns: 4
     icon: mdi-terraform
     initiallyCollapsed: true

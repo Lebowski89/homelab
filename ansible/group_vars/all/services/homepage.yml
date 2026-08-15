@@ -33,6 +33,12 @@ homepage:
       - var: cloudflare_zone
         path: "/Cloudflare"
         name: ZONE
+      - var: gitea_homepage_api
+        path: "/Gitea"
+        name: HOMEPAGE_API
+      - var: gotify_homepage_token
+        path: "/Gotify"
+        name: HOMEPAGE_TOKEN
       - var: grafana_user
         path: "/Grafana"
         name: USER
@@ -78,6 +84,9 @@ homepage:
       - var: sonarr_4k_api
         path: "/Sonarr-4K"
         name: API
+      - var: sportarr_api
+        path: "/Sportarr"
+        name: API
       - var: stash_api
         path: "/Stash"
         name: API
@@ -87,12 +96,9 @@ homepage:
       - var: technitium_token
         path: "/HomePage"
         name: TECHNITIUM_TOKEN
-      - var: unifi_user
-        path: "/Unifi"
-        name: USER
-      - var: unifi_pass
-        path: "/Unifi"
-        name: PASS
+      - var: wallos_api
+        path: "/Wallos"
+        name: API
   ################################
   # CONNECTIVITY
   ################################
