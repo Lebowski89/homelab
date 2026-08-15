@@ -12,7 +12,7 @@ romm:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/rommapp/romm:4.9.2
+  image: ghcr.io/rommapp/romm:5.1.0
   ################################
   # ENVIRONMENT/SECRETS
   ################################
