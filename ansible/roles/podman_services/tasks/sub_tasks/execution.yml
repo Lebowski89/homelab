@@ -187,6 +187,24 @@
         else podman_services_operation_execution.quadlet_dir | default(podman_services_system_quadlet_dir)
       }}
     podman_services_runtime_environment: {}
+    podman_services_rootless_network_conf_dir: >-
+      {{
+        (
+          podman_services_operation_execution.home
+          | default(podman_services_rootless_home_root ~ '/' ~ podman_services_operation_execution.host_user)
+        ) ~ '/.config/containers/containers.conf.d'
+        if podman_services_operation_execution.mode == 'rootless'
+        else ''
+      }}
+    podman_services_rootless_network_conf_path: >-
+      {{
+        (
+          podman_services_operation_execution.home
+          | default(podman_services_rootless_home_root ~ '/' ~ podman_services_operation_execution.host_user)
+        ) ~ '/.config/containers/containers.conf.d/20-podman-services-network.conf'
+        if podman_services_operation_execution.mode == 'rootless'
+        else ''
+      }}
     podman_services_account_marker_path: >-
       {{
         podman_services_execution_state_dir ~ '/accounts/' ~ podman_services_operation_execution.host_user ~ '.yml'
@@ -194,6 +212,74 @@
         else ''
       }}
   tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Execution | Validate managed rootless pasta configuration
+  when:
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.set_fact:
+    podman_services_rootless_pasta_config: >-
+      {{
+        podman_services_rootless_pasta_subnet
+        | podman_rootless_pasta_config(
+            podman_services_rootless_pasta_gateway,
+            podman_services_rootless_pasta_dns_forward
+          )
+      }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Report planned rootless pasta configuration
+  when:
+    - ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.debug:
+    msg: >-
+      Would manage {{ podman_services_rootless_network_conf_path }} for
+      {{ podman_services_execution.host_user }} with pasta subnet
+      {{ podman_services_rootless_pasta_config.subnet }}.
+  changed_when: true
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Read host IPv4 routes for pasta conflict detection
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.command:
+    argv: [ip, -j, "-4", route, show, table, all]
+  register: podman_services_rootless_host_routes
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Detect conflicting host IPv4 routes
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.set_fact:
+    podman_services_rootless_host_route_overlaps: >-
+      {{
+        podman_services_rootless_host_routes.stdout
+        | from_json
+        | podman_rootless_pasta_route_overlaps(podman_services_rootless_pasta_config.subnet)
+      }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Reject conflicting host IPv4 routes
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.assert:
+    that:
+      - podman_services_rootless_host_route_overlaps | length == 0
+    fail_msg: >-
+      Rootless pasta subnet {{ podman_services_rootless_pasta_config.subnet }}
+      overlaps host IPv4 route(s)
+      {{ podman_services_rootless_host_route_overlaps | join(', ') }};
+      choose a non-overlapping role-level subnet before managing the account.
+  tags: [deploy, update, recreate, bootstrap]
 
 - name: Execution | Check selected rootless account
   when:
@@ -575,6 +661,7 @@
   loop:
     - {path: "{{ podman_services_execution_home }}/.config", mode: "0700"}
     - {path: "{{ podman_services_execution_home }}/.config/containers", mode: "0700"}
+    - {path: "{{ podman_services_rootless_network_conf_dir }}", mode: "0700"}
     - {path: "{{ podman_services_quadlet_dir }}", mode: "0700"}
     - {path: "{{ podman_services_execution_home }}/.local", mode: "0700"}
     - {path: "{{ podman_services_execution_home }}/.local/share", mode: "0700"}
@@ -582,6 +669,19 @@
   loop_control:
     loop_var: podman_services_rootless_directory
     label: "{{ podman_services_rootless_directory.path }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Manage rootless pasta network drop-in
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.template:
+    src: rootless-network.conf.j2
+    dest: "{{ podman_services_rootless_network_conf_path }}"
+    owner: "{{ podman_services_execution.host_user }}"
+    group: "{{ podman_services_execution.host_user }}"
+    mode: "0600"
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Execution | Verify rootless user systemd manager

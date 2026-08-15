@@ -46,6 +46,10 @@
     podman_services_execution_owner: root
     podman_services_execution_group: root
     podman_services_runtime_environment: {}
+    podman_services_rootless_pasta_config: {}
+    podman_services_rootless_network_conf_dir: ""
+    podman_services_rootless_network_conf_path: ""
+    podman_services_rootless_host_route_overlaps: []
     podman_services_previous_execution: {mode: none}
     podman_services_execution_transition: false
     podman_services_execution_state: {}
@@ -140,6 +144,20 @@
         else podman_services_system_quadlet_dir
       }}
     podman_services_runtime_environment: {}
+    podman_services_rootless_network_conf_dir: >-
+      {{
+        podman_services_rootless_home_root ~ '/' ~ podman_services_service.execution.host_user
+        ~ '/.config/containers/containers.conf.d'
+        if podman_services_service.execution.mode == 'rootless'
+        else ''
+      }}
+    podman_services_rootless_network_conf_path: >-
+      {{
+        podman_services_rootless_home_root ~ '/' ~ podman_services_service.execution.host_user
+        ~ '/.config/containers/containers.conf.d/20-podman-services-network.conf'
+        if podman_services_service.execution.mode == 'rootless'
+        else ''
+      }}
     podman_services_execution_state_path: >-
       {{ podman_services_execution_state_dir ~ '/' ~ podman_services_service.unit_name ~ '.yml' }}
   tags: [deploy, update, remove, recreate, drift, bootstrap]

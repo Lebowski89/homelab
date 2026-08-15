@@ -75,6 +75,55 @@ mount-free subset, The Lounge exercises the bind-backed subset, Homepage uses
 confined templates, a static copy, and stale Docker-file cleanup, and n8n
 remains rootful.
 
+Every dedicated rootless account receives one role-owned Podman configuration
+drop-in at
+`/var/lib/<host_user>/.config/containers/containers.conf.d/20-podman-services-network.conf`.
+The role never replaces the account's operator-managed `containers.conf` and
+does not change global `/etc/containers` configuration. This corrects a pasta
+same-host routing failure: pasta normally copies the host primary-interface
+addresses, so a container resolving a canonical internal FQDN to that host's
+real LAN address can treat the destination as its own address and refuse the
+connection. Podman's documented account-specific `containers.conf.d` loading
+and pasta behavior are described in the upstream
+[`containers.conf(5)` documentation](https://github.com/containers/common/blob/main/docs/containers.conf.5.md)
+and [`podman-run(1)` network documentation](https://docs.podman.io/en/latest/markdown/podman-run.1.html#network-mode-networks).
+
+The managed `[network]` table uses the documented private IPv4 pasta shape:
+
+```toml
+pasta_options = [
+  "--ipv4-only",
+  "-a", "10.0.2.0",
+  "-n", "24",
+  "-g", "10.0.2.2",
+  "--dns-forward", "10.0.2.3",
+  "--no-ndp",
+  "--no-dhcpv6",
+  "--no-dhcp",
+]
+```
+
+This deliberately disables IPv6 in the account's rootless pasta namespace so
+neither address family copies a host-interface address. Podman still owns
+interface setup and port forwarding; the role does not override pasta's MTU or
+TCP/UDP forwarding behavior. Before live account or file mutation, the role
+validates the RFC 1918 subnet/gateway/DNS-forward tuple and rejects overlap with
+any non-default host IPv4 route. The same range is safe for separate dedicated
+accounts because each account has distinct rootless runtime state and an extra
+rootless network namespace. Internal DNS remains unchanged, applications keep
+using canonical internal FQDNs, and `host.containers.internal` remains available
+as a diagnostic address rather than an application configuration convention.
+Rootful Podman is unaffected.
+
+The drop-in is managed only during deploy, update, recreate, and bootstrap.
+Check mode validates and reports its exact intended path without creating an
+account, directory, or file. A changed drop-in takes effect when the selected
+service's rootless networking namespace is re-established, so use an explicit
+service recreate; the role does not restart other rootless accounts. Ordinary
+remove preserves the dedicated account, home, Podman storage, and this network
+drop-in. Account and configuration retirement remain a separate deliberate
+operator procedure.
+
 ## Lifecycle semantics
 
 - `deploy` and `bootstrap` fetch missing secrets, create missing Podman secrets, pull the declared image, render configuration, and start the service if it is not already running.

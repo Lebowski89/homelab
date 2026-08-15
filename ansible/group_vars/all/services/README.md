@@ -442,6 +442,16 @@ plan without lookup or database connection.
 | `deploy.profile` | Non-empty string | No | `none` | Docker | `docker_services` | `none`, `standard`, `careful`, or `stateless_ha`. Non-`none` is invalid for standalone; Podman rejects the field. |
 | `deploy.constraints` | String or list of strings | No | `[]` | Docker | `docker_services` | Literal Swarm constraints. Docker node-label names are not inventory variables; Podman rejects the field. |
 
+Rootless pasta addressing is role-level infrastructure, not service schema.
+Every dedicated `podman-*` account receives only the role-owned
+`~/.config/containers/containers.conf.d/20-podman-services-network.conf`
+drop-in. It uses a validated private IPv4 namespace range so canonical internal
+FQDNs that resolve to the container host's LAN address remain reachable; the
+role neither rewrites DNS/application URLs nor replaces an operator-managed
+`containers.conf`. Rootful Podman is unaffected. A changed drop-in requires an
+explicit recreate of the selected service, and normal remove preserves the
+drop-in with the retained account/home until deliberate account retirement.
+
 ### Docker Swarm deploy mappings
 
 | Option | Type | Required | Default | Runtime | Owner | Description |

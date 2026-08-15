@@ -551,6 +551,84 @@ def podman_subid_range(value: Any, account: Any, minimum_count: Any = 65536) -> 
     return {"start": start, "count": range_count}
 
 
+def podman_rootless_pasta_config(subnet: Any, gateway: Any, dns_forward: Any) -> dict[str, Any]:
+    """Validate and render the role-wide rootless pasta IPv4 configuration."""
+    if not all(isinstance(value, str) and value == value.strip() and value for value in (subnet, gateway, dns_forward)):
+        raise AnsibleFilterError("Rootless pasta subnet, gateway, and DNS forwarder must be non-empty trimmed strings")
+    try:
+        network = ipaddress.ip_network(subnet, strict=True)
+        gateway_address = ipaddress.ip_address(gateway)
+        dns_address = ipaddress.ip_address(dns_forward)
+    except ValueError as error:
+        raise AnsibleFilterError(f"Invalid rootless pasta IPv4 configuration: {error}") from error
+    if not isinstance(network, ipaddress.IPv4Network):
+        raise AnsibleFilterError("Rootless pasta subnet must be IPv4")
+    private_ranges = tuple(ipaddress.ip_network(value) for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
+    if not any(network.subnet_of(private_range) for private_range in private_ranges):
+        raise AnsibleFilterError("Rootless pasta subnet must be within an RFC 1918 private IPv4 range")
+    if network.prefixlen > 30:
+        raise AnsibleFilterError("Rootless pasta subnet must provide usable gateway and DNS-forward addresses")
+    for label, address in (("gateway", gateway_address), ("DNS forwarder", dns_address)):
+        if not isinstance(address, ipaddress.IPv4Address):
+            raise AnsibleFilterError(f"Rootless pasta {label} must be IPv4")
+        if address not in network or address in {network.network_address, network.broadcast_address}:
+            raise AnsibleFilterError(f"Rootless pasta {label} must be a usable address inside {network}")
+    if gateway_address == dns_address:
+        raise AnsibleFilterError("Rootless pasta gateway and DNS forwarder must be distinct")
+
+    options = [
+        "--ipv4-only",
+        "-a",
+        str(network.network_address),
+        "-n",
+        str(network.prefixlen),
+        "-g",
+        str(gateway_address),
+        "--dns-forward",
+        str(dns_address),
+        "--no-ndp",
+        "--no-dhcpv6",
+        "--no-dhcp",
+    ]
+    return {
+        "subnet": str(network),
+        "address": str(network.network_address),
+        "prefix_length": network.prefixlen,
+        "gateway": str(gateway_address),
+        "dns_forward": str(dns_address),
+        "options": options,
+    }
+
+
+def podman_rootless_pasta_route_overlaps(value: Any, subnet: Any) -> list[str]:
+    """Return non-default host IPv4 routes that overlap the pasta subnet."""
+    if isinstance(value, (str, Mapping)) or not isinstance(value, Iterable):
+        raise AnsibleFilterError("Host IPv4 routes must be a list of mappings")
+    try:
+        network = ipaddress.ip_network(subnet, strict=True)
+    except ValueError as error:
+        raise AnsibleFilterError(f"Invalid rootless pasta subnet for route comparison: {error}") from error
+    if not isinstance(network, ipaddress.IPv4Network):
+        raise AnsibleFilterError("Rootless pasta route comparison requires an IPv4 subnet")
+
+    overlaps: set[str] = set()
+    for index, route in enumerate(value):
+        if not isinstance(route, Mapping):
+            raise AnsibleFilterError(f"Host IPv4 route[{index}] must be a mapping")
+        destination = route.get("dst")
+        if destination in (None, "default", "0.0.0.0/0"):
+            continue
+        if not isinstance(destination, str):
+            raise AnsibleFilterError(f"Host IPv4 route[{index}].dst must be a string")
+        try:
+            route_network = ipaddress.ip_network(destination, strict=False)
+        except ValueError as error:
+            raise AnsibleFilterError(f"Host IPv4 route[{index}].dst is invalid: {destination!r}") from error
+        if isinstance(route_network, ipaddress.IPv4Network) and network.overlaps(route_network):
+            overlaps.add(str(route_network))
+    return sorted(overlaps)
+
+
 def podman_rootless_account_contract(value: Any) -> dict[str, bool]:
     """Decide whether a dedicated rootless account may be created or reused.
 
@@ -1040,7 +1118,9 @@ class FilterModule:
             ``podman_env_file_key``, ``podman_env_file_value``,
             ``podman_image_reference_drift``, ``podman_secret_policy``,
             ``podman_secret_declarations``, ``podman_subid_range``, and
-            ``podman_rootless_account_contract``.
+            ``podman_rootless_account_contract``,
+            ``podman_rootless_pasta_config``, and
+            ``podman_rootless_pasta_route_overlaps``.
         """
         return {
             "podman_service_normalize": podman_service_normalize,
@@ -1051,4 +1131,6 @@ class FilterModule:
             "podman_secret_declarations": podman_secret_declarations,
             "podman_subid_range": podman_subid_range,
             "podman_rootless_account_contract": podman_rootless_account_contract,
+            "podman_rootless_pasta_config": podman_rootless_pasta_config,
+            "podman_rootless_pasta_route_overlaps": podman_rootless_pasta_route_overlaps,
         }

@@ -30,6 +30,8 @@ NETWORK_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/templates/network
 PODMAN_DEFAULTS = (REPO_ROOT / "ansible/roles/podman/defaults/main.yml").read_text()
 PODMAN_TASKS = (REPO_ROOT / "ansible/roles/podman/tasks/main.yml").read_text()
 PODMAN_HANDLERS = (REPO_ROOT / "ansible/roles/podman_services/handlers/main.yml").read_text()
+PODMAN_SERVICES_DEFAULTS = (REPO_ROOT / "ansible/roles/podman_services/defaults/main.yml").read_text()
+ROOTLESS_NETWORK_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/templates/rootless-network.conf.j2").read_text()
 COMMON_COPIES = yaml.safe_load((REPO_ROOT / "ansible/roles/service_common/tasks/copies.yml").read_text())
 COMMON_TEMPLATES = yaml.safe_load((REPO_ROOT / "ansible/roles/service_common/tasks/templates.yml").read_text())
 
@@ -455,6 +457,73 @@ def test_rootless_account_preparation_is_separate_and_safe_in_check_mode():
         "{{ podman_services_execution.host_user }}",
     ]
     assert manager["ansible.builtin.systemd_service"]["name"] == "user@{{ podman_services_execution_uid }}.service"
+
+
+def test_rootless_pasta_configuration_is_account_scoped_and_precedes_account_mutation():
+    tasks = yaml.safe_load(EXECUTION_PREPARE_TASKS)
+    names = [task["name"] for task in tasks]
+    validate = next(task for task in tasks if task["name"] == "Execution | Validate managed rootless pasta configuration")
+    routes = next(task for task in tasks if task["name"] == "Execution | Read host IPv4 routes for pasta conflict detection")
+    reject = next(task for task in tasks if task["name"] == "Execution | Reject conflicting host IPv4 routes")
+    account = next(task for task in tasks if task["name"] == "Execution | Create dedicated rootless account")
+    directories = next(task for task in tasks if task["name"] == "Execution | Ensure rootless Podman directories exist")
+    manage = next(task for task in tasks if task["name"] == "Execution | Manage rootless pasta network drop-in")
+
+    assert "podman_rootless_pasta_config" in validate["ansible.builtin.set_fact"]["podman_services_rootless_pasta_config"]
+    assert routes["ansible.builtin.command"]["argv"] == ["ip", "-j", "-4", "route", "show", "table", "all"]
+    assert routes["changed_when"] is False
+    assert reject["ansible.builtin.assert"]["that"] == ["podman_services_rootless_host_route_overlaps | length == 0"]
+    assert names.index(validate["name"]) < names.index(routes["name"]) < names.index(reject["name"]) < names.index(account["name"])
+    assert names.index(directories["name"]) < names.index(manage["name"])
+
+    assert manage["ansible.builtin.template"] == {
+        "src": "rootless-network.conf.j2",
+        "dest": "{{ podman_services_rootless_network_conf_path }}",
+        "owner": "{{ podman_services_execution.host_user }}",
+        "group": "{{ podman_services_execution.host_user }}",
+        "mode": "0600",
+    }
+    assert "podman_services_execution.mode == 'rootless'" in manage["when"]
+    assert "not ansible_check_mode" in manage["when"]
+    assert "podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']" in manage["when"]
+    assert "/.config/containers/containers.conf.d/20-podman-services-network.conf" in EXECUTION_PREPARE_TASKS
+    assert "/.config/containers/containers.conf'" not in EXECUTION_PREPARE_TASKS
+
+
+def test_rootless_pasta_defaults_and_template_do_not_change_mtu_or_port_forwarding():
+    assert "podman_services_rootless_pasta_subnet: 10.0.2.0/24" in PODMAN_SERVICES_DEFAULTS
+    assert "podman_services_rootless_pasta_gateway: 10.0.2.2" in PODMAN_SERVICES_DEFAULTS
+    assert "podman_services_rootless_pasta_dns_forward: 10.0.2.3" in PODMAN_SERVICES_DEFAULTS
+    assert "[network]" in ROOTLESS_NETWORK_TEMPLATE
+    assert "pasta_options" in ROOTLESS_NETWORK_TEMPLATE
+    assert "mtu" not in ROOTLESS_NETWORK_TEMPLATE.lower()
+    assert '"-t"' not in ROOTLESS_NETWORK_TEMPLATE
+    assert '"-u"' not in ROOTLESS_NETWORK_TEMPLATE
+    assert '"-T"' not in ROOTLESS_NETWORK_TEMPLATE
+    assert '"-U"' not in ROOTLESS_NETWORK_TEMPLATE
+
+
+def test_rootless_pasta_dropin_is_preserved_on_remove_and_prepared_before_transitions():
+    manage = next(task for task in EXECUTION_PREPARE_TASK_LIST if task["name"] == "Execution | Manage rootless pasta network drop-in")
+
+    assert "remove" not in manage["tags"]
+    assert "drift" not in manage["tags"]
+    assert "20-podman-services-network.conf" not in REMOVE_TASKS
+    assert "containers.conf.d" not in REMOVE_TASKS
+    assert MAIN_TASK_NAMES.index("Podman services | Prepare execution environment") < MAIN_TASK_NAMES.index(
+        "Podman services | Manage service state"
+    )
+
+
+def test_rootless_pasta_check_mode_reports_the_exact_dropin_without_mutation():
+    tasks = yaml.safe_load(EXECUTION_PREPARE_TASKS)
+    report = next(task for task in tasks if task["name"] == "Execution | Report planned rootless pasta configuration")
+    manage = next(task for task in tasks if task["name"] == "Execution | Manage rootless pasta network drop-in")
+
+    assert "ansible_check_mode" in report["when"]
+    assert report["changed_when"] is True
+    assert "podman_services_rootless_network_conf_path" in report["ansible.builtin.debug"]["msg"]
+    assert "not ansible_check_mode" in manage["when"]
 
 
 def test_rootless_runtime_context_is_task_owned_and_reset_per_service():

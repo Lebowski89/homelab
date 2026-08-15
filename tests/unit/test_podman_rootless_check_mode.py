@@ -60,8 +60,9 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
     runtime_root = tmp_path / "runtime"
     home = runtime_root / host_user
     quadlet_dir = home / ".config/containers/systemd"
+    network_dropin = home / ".config/containers/containers.conf.d/20-podman-services-network.conf"
     bind_source = absent_rootless_bind_source
-    before = (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir))
+    before = (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir), path_snapshot(network_dropin))
     secret_sentinel = "PODMAN_CHECK_SECRET_SENTINEL_7f40b03e"
     runtime_marker = tmp_path / "runtime-command-called"
     fake_bin = tmp_path / "bin"
@@ -193,7 +194,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
     task_results = {
         task["task"]["name"].split(" : ")[-1]: task["hosts"].get("localhost", {}) for play in callback["plays"] for task in play["tasks"]
     }
-    assert (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir)) == before
+    assert (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir), path_snapshot(network_dropin)) == before
     assert not bind_source.exists()
     assert not os.path.lexists(bind_source)
     assert not runtime_root.exists()
@@ -204,6 +205,10 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         "Execution | Create dedicated rootless account",
         "Execution | Enable rootless account linger",
         "Execution | Start rootless user systemd manager",
+        "Execution | Read host IPv4 routes for pasta conflict detection",
+        "Execution | Detect conflicting host IPv4 routes",
+        "Execution | Reject conflicting host IPv4 routes",
+        "Execution | Manage rootless pasta network drop-in",
         "Podman services | Set rootless bind mount ownership",
         "Quadlets | Write network Quadlet",
         "Quadlets | Write protected environment file",
@@ -213,6 +218,9 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         "Service | Save successful execution state",
     ):
         assert task_results[task_name]["skipped"] is True
+    assert task_results["Execution | Validate managed rootless pasta configuration"].get("failed", False) is False
+    assert task_results["Execution | Report planned rootless pasta configuration"]["changed"] is True
+    assert str(network_dropin) in task_results["Execution | Report planned rootless pasta configuration"]["msg"]
     for task_name in (
         "Check mode | Build network Quadlet preview",
         "Check mode | Build environment file preview",

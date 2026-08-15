@@ -106,6 +106,22 @@ secrets, and application-preparation fields remain unsupported for rootless
 execution and fail before host mutation. This is deliberately not general
 rootless filesystem parity outside declared bind trees.
 
+The runtime adapter also owns one account-specific pasta configuration drop-in
+at
+`/var/lib/<host_user>/.config/containers/containers.conf.d/20-podman-services-network.conf`.
+It assigns the dedicated rootless namespace the validated private
+`10.0.2.0/24` IPv4 shape instead of pasta copying the host's primary LAN
+address, which otherwise prevents a rootless container from reaching services
+through that same host address. A pre-mutation host-route check rejects obvious
+subnet conflicts. This is role-level execution infrastructure: service YAML has
+no pasta tuning fields, separate accounts may reuse the range because their
+rootless runtime/network namespaces are distinct, and rootful Podman is
+unchanged. Normal DNS and canonical application FQDNs remain authoritative;
+`host.containers.internal` is diagnostic, not a service endpoint contract.
+Changing the drop-in requires recreating the selected service to establish a
+new rootless network namespace. Normal removal preserves it with the retained
+account and home; account retirement remains deliberate and separate.
+
 Canonical does not mean every Docker-owned field is portable. The Podman adapter
 validates the complete top-level mapping and rejects unknown or unimplemented
 fields instead of discarding them. Changing only `runtime` is invalid while
