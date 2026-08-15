@@ -684,6 +684,39 @@ def _has_native_infisical_secret(cfg: Mapping[str, Any]) -> bool:
     return any(isinstance(entry, Mapping) and "secret" in entry for entry in entries)
 
 
+def _proper_descendant(value: Any, roots: Iterable[str], *, name: str, root_description: str) -> str:
+    if not isinstance(value, str) or not value or not posixpath.isabs(value) or posixpath.normpath(value) != value:
+        raise AnsibleFilterError(f"{name} must be a normalized absolute proper descendant of {root_description}; got {value!r}")
+    for root in roots:
+        try:
+            if value != root and posixpath.commonpath((root, value)) == root:
+                return value
+        except (TypeError, ValueError):
+            continue
+    raise AnsibleFilterError(f"{name} must be a normalized absolute proper descendant of {root_description}; got {value!r}")
+
+
+def _validate_rootless_managed_files(cfg: Mapping[str, Any], *, name: str, bind_sources: list[str]) -> None:
+    for field in ("copies", "templates"):
+        declarations = cfg.get(field, [])
+        if not declarations:
+            continue
+        if isinstance(declarations, (str, Mapping)) or not isinstance(declarations, Iterable):
+            raise AnsibleFilterError(f"{name}.{field} must be a list of mappings")
+        for index, declaration in enumerate(declarations):
+            item_name = f"{name}.{field}[{index}]"
+            if not isinstance(declaration, Mapping):
+                raise AnsibleFilterError(f"{item_name} must be a mapping")
+            _proper_descendant(
+                declaration.get("dest"),
+                bind_sources,
+                name=f"{item_name}.dest",
+                root_description="a declared rootless bind source",
+            )
+            if "owner" in declaration or "group" in declaration:
+                raise AnsibleFilterError(f"{item_name} must omit owner and group; the dedicated execution account owns generated files")
+
+
 def _validate_rootless_subset(
     cfg: Mapping[str, Any],
     *,
@@ -715,37 +748,61 @@ def _validate_rootless_subset(
     mounts = container.get("mounts", [])
     if volumes or container.get("tmpfs"):
         raise AnsibleFilterError(f"{name}.volumes supports only bind mounts for rootless Podman in this phase")
-    if host_paths or mounts:
+    bind_sources: list[str] = []
+    if host_paths or mounts or cfg.get("copies") or cfg.get("templates"):
         if "userns" not in deploy["execution"]:
             raise AnsibleFilterError(f"{name}.deploy.execution.userns keep-id mapping is required for rootless bind mounts")
-        declared_paths = {path["path"]: path for path in host_paths}
-        mounted_sources: set[str] = set()
         for index, mount in enumerate(mounts):
-            raw_source = mount["source"]
-            source = posixpath.normpath(raw_source)
-            if source != raw_source or not source.startswith("/opt/"):
-                raise AnsibleFilterError(
-                    f"{name}.volumes[{index}].source must be a normalized absolute proper descendant of /opt for rootless Podman"
+            bind_sources.append(
+                _proper_descendant(
+                    mount["source"],
+                    ("/opt",),
+                    name=f"{name}.volumes[{index}].source",
+                    root_description="/opt for rootless Podman",
                 )
-            mounted_sources.add(source)
-        if mounted_sources != set(declared_paths):
-            raise AnsibleFilterError(
-                f"{name}.paths must declare exactly the rootless bind-mount sources so ownership can be reconciled safely"
             )
-        for path in host_paths:
-            if path.get("state", "directory") != "directory":
-                raise AnsibleFilterError(f"{name}.paths rootless bind sources must use state directory")
-            if "owner" in path or "group" in path:
+
+        bind_path_counts = dict.fromkeys(bind_sources, 0)
+        raw_paths = cfg.get("paths", [])
+        for index, path in enumerate(host_paths):
+            candidate = _proper_descendant(
+                raw_paths[index].get("path") if isinstance(raw_paths[index], Mapping) else None,
+                ("/opt",),
+                name=f"{name}.paths[{index}].path",
+                root_description="/opt for rootless Podman",
+            )
+            if candidate in bind_path_counts:
+                bind_path_counts[candidate] += 1
+                if path.get("state", "directory") != "directory":
+                    raise AnsibleFilterError(f"{name}.paths[{index}] matching a rootless bind source must use state directory")
+                if "owner" in path or "group" in path:
+                    raise AnsibleFilterError(
+                        f"{name}.paths[{index}] matching a rootless bind source must omit owner and group; "
+                        "the dedicated execution account owns it"
+                    )
+                continue
+            if path.get("state", "directory") != "absent":
                 raise AnsibleFilterError(
-                    f"{name}.paths rootless bind sources must omit owner and group; the dedicated execution account owns them"
+                    f"{name}.paths[{index}] is not a declared rootless bind source and must use state absent for confined cleanup"
                 )
+            _proper_descendant(
+                candidate,
+                bind_sources,
+                name=f"{name}.paths[{index}].path",
+                root_description="a declared rootless bind source for state absent cleanup",
+            )
+            if "owner" in path or "group" in path:
+                raise AnsibleFilterError(f"{name}.paths[{index}] state absent cleanup must omit owner and group")
+
+        if any(count != 1 for count in bind_path_counts.values()):
+            raise AnsibleFilterError(
+                f"{name}.paths must declare each rootless bind-mount source exactly once so ownership can be reconciled safely"
+            )
+        _validate_rootless_managed_files(cfg, name=name, bind_sources=bind_sources)
     if container.get("cap_add"):
         raise AnsibleFilterError(f"{name}.cap_add is not supported for rootless Podman in this phase")
     if secret_attachments or _has_native_infisical_secret(cfg):
         raise AnsibleFilterError(f"{name}.secrets is not supported for rootless Podman in this phase")
-    for field in ("copies", "templates"):
-        if cfg.get(field):
-            raise AnsibleFilterError(f"{name}.{field} is not supported for rootless Podman in this phase")
     for field in ("application_prepare", "prep", "paths_vault"):
         if cfg.get(field):
             raise AnsibleFilterError(

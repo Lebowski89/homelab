@@ -254,7 +254,7 @@ deploy/update/recreate/bootstrap, not drift or remove.
 
 | Option | Type | Required | Default | Runtime | Owner | Description |
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
-| `paths` | List of mappings | No | `[]` | Both | `service_common` | Ensures host filesystem objects. Podman paths must normalize within `/opt`. |
+| `paths` | List of mappings | No | `[]` | Both | `service_common` | Ensures host filesystem objects. Podman paths must normalize within `/opt`; rootless entries beyond bind roots are cleanup-only. |
 | `paths[].path` | Non-empty path string | Yes | None | Both | `service_common` | Destination on every filesystem host. |
 | `paths[].state` | String enum | No | `directory` | Both | `service_common` | `absent`, `directory`, `file`, `hard`, `link`, or `touch`. |
 | `paths[].src` | Non-empty string | Conditional | None | Both | `service_common` | Required for `hard` and `link`. |
@@ -268,7 +268,11 @@ ordinary directory trees are not recursively re-owned or re-moded. As a narrow
 exception, the Podman adapter recursively assigns each validated rootless bind
 source—which must be a normalized proper descendant of `/opt`—to its dedicated
 execution account before rendering the Quadlet. It does
-not recursively change file modes.
+not recursively change file modes. Every rootless bind source must have exactly
+one matching directory `paths` entry without explicit owner/group. Additional
+rootless `paths` entries may only use `state: absent` for normalized absolute
+proper descendants of a declared bind source, also without ownership
+overrides.
 
 ### Copies and templates
 
@@ -277,8 +281,8 @@ not recursively change file modes.
 | `copies` | List of mappings | No | `[]` | Both | `service_common` | Copies static role files to each filesystem host. |
 | `copies[].src` | Non-empty string | Yes | None | Both | `service_common` | Path relative to the common role, commonly under `files/`. |
 | `copies[].dest` | Non-empty string | Yes | None | Both | `service_common` | Destination path. |
-| `copies[].owner` | User or ID | No | Host PUID, then `1000` | Both | `service_common` | Destination owner. |
-| `copies[].group` | Group or ID | No | Host PGID, then `1000` | Both | `service_common` | Destination group. |
+| `copies[].owner` | User or ID | No | Effective filesystem owner | Both | `service_common` | Destination owner. Forbidden for rootless Podman managed files, which inherit the dedicated execution account. |
+| `copies[].group` | Group or ID | No | Effective filesystem group | Both | `service_common` | Destination group. Forbidden for rootless Podman managed files, which inherit the dedicated execution account. |
 | `copies[].mode` | Mode string | No | Module default | Both | `service_common` | Explicit destination mode. |
 | `copies[].force` | Boolean-like | No | `false` | Both | `service_common` | Replaces differing existing content when true. |
 | `copies[].wait` | Boolean-like | No | `false` | Both | `service_common` | Waits for `dest` after copying. |
@@ -286,12 +290,17 @@ not recursively change file modes.
 | `templates` | List of mappings | No | `[]` | Both | `service_common` | Renders from `service_common/templates` to every filesystem host. |
 | `templates[].src` | Non-empty string | Yes | None | Both | `service_common` | Common-template-relative source. |
 | `templates[].dest` | Non-empty string | Yes | None | Both | `service_common` | Destination path. |
-| `templates[].owner` | User or ID | No | Host PUID, then `1000` | Both | `service_common` | Destination owner. |
-| `templates[].group` | Group or ID | No | Host PGID, then `1000` | Both | `service_common` | Destination group. |
+| `templates[].owner` | User or ID | No | Effective filesystem owner | Both | `service_common` | Destination owner. Forbidden for rootless Podman managed files, which inherit the dedicated execution account. |
+| `templates[].group` | Group or ID | No | Effective filesystem group | Both | `service_common` | Destination group. Forbidden for rootless Podman managed files, which inherit the dedicated execution account. |
 | `templates[].mode` | Mode string | No | `0664` | Both | `service_common` | Docker validation accepts three or four octal digits. |
 | `templates[].force` | Boolean-like | No | `true` | Both | `service_common` | Replaces changed destination content. |
 | `templates[].no_log` | Boolean-like | No | `false` | Both | `service_common` | Hides secret-bearing rendering and disables diff; such templates are skipped in check mode. |
 | `swarm_env_templates` | List of template mappings | No | `[]` | Docker | `docker_services` + `service_common` | Same nested fields as `templates`, rendered on the controller for Compose `env_file` use. |
+
+For rootless Podman, every `copies[].dest` and `templates[].dest` must be a
+normalized absolute proper descendant of a declared bind source. This narrow
+contract supports service-managed content inside an existing bind tree; it does
+not permit arbitrary rootless host-file management.
 
 ### Mounts and named volumes
 

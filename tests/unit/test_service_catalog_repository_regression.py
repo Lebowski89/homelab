@@ -165,6 +165,22 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
                 "restart_sec": "10s",
             },
         },
+        "homepage": {
+            "network": "homepage",
+            "host": "manager",
+            "host_port": 13000,
+            "container_port": 3000,
+            "execution": {
+                "mode": "rootless",
+                "host_user": "podman-homepage",
+                "userns": {"mode": "keep-id", "uid": "1000", "gid": "1000"},
+            },
+            "systemd": {
+                "after": ["network-online.target"],
+                "restart": "on-failure",
+                "restart_sec": "10s",
+            },
+        },
         "thelounge": {
             "network": "thelounge",
             "host": "manager",
@@ -250,7 +266,7 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
             ]
         checked.append((item["name"], item.get("target")))
 
-    assert checked == [("adminer", None), ("n8n", None), ("thelounge", None)]
+    assert checked == [("adminer", None), ("homepage", None), ("n8n", None), ("thelounge", None)]
 
 
 def test_repository_secret_policy_is_runtime_neutral_and_defaults_safely():
@@ -459,7 +475,6 @@ def test_real_docker_env_file_services_retain_their_effective_declarations():
         ("gitea", "<base>"),
         ("gotify", "<base>"),
         ("grafana", "<base>"),
-        ("homepage", "<base>"),
         ("opencloud", "<base>"),
         ("qbittorrent", "downloads"),
         ("qbittorrent", "seeds"),

@@ -5,10 +5,9 @@ homepage:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
+  runtime: podman
   tags: [monitoring, homepage]
   name: homepage
-  stack: homepage
   ################################
   # IMAGE/PROCESS
   ################################
@@ -21,8 +20,8 @@ homepage:
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
     PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
     UMASK: "022"
-  env_file:
-    - "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/.env"
+    HOMEPAGE_ALLOWED_HOSTS:
+      value_template: "homepage.int.${cloudflare_zone}:8443"
   infisical:
     secrets_map:
       - var: autobrr_api
@@ -98,8 +97,14 @@ homepage:
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    homepage:
+      driver: bridge
+      external: false
+  ports:
+    - host_ip: "{{ local_ip }}"
+      published: 13000
+      target: 3000
+      protocol: tcp
   ################################
   # FILESYSTEM
   ################################
@@ -110,6 +115,10 @@ homepage:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/images"
       state: directory
       mode: "0755"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/.env"
+      state: absent
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/docker.yaml"
+      state: absent
   copies:
     - src: files/earth-rise-2.jpg
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/images/earth-rise-2.jpg"
@@ -118,10 +127,6 @@ homepage:
       wait: true
       wait_timeout: 30
   templates:
-    - src: configs/homepage/docker.yaml.j2
-      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/docker.yaml"
-      mode: "0664"
-      force: true
     - src: configs/homepage/services.yaml.j2
       no_log: true
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/services.yaml"
@@ -144,11 +149,6 @@ homepage:
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/custom.css"
       mode: "0664"
       force: true
-    - src: configs/homepage/homepage.env.j2
-      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/.env"
-      mode: "0664"
-      force: true
-      no_log: true
   volumes:
     config:
       type: bind
@@ -166,15 +166,23 @@ homepage:
   traefik:
     enable: true
     exposure: private
-    port: 3000
+    port: 13000
+    backend_mode: host
+    backend_host_inventory: "{{ services_controller_host }}"
   ################################
   # RUNTIME/LIFECYCLE
   ################################
   deploy:
-    type: swarm
-    mode: replicated
-    profile: standard
-    replicas: 1
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-homepage
+      userns:
+        mode: keep-id
+        uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+        gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
+  systemd:
+    after: [network-online.target]
+    restart: on-failure
+    restart_sec: 10s

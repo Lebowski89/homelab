@@ -30,6 +30,8 @@ NETWORK_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/templates/network
 PODMAN_DEFAULTS = (REPO_ROOT / "ansible/roles/podman/defaults/main.yml").read_text()
 PODMAN_TASKS = (REPO_ROOT / "ansible/roles/podman/tasks/main.yml").read_text()
 PODMAN_HANDLERS = (REPO_ROOT / "ansible/roles/podman_services/handlers/main.yml").read_text()
+COMMON_COPIES = yaml.safe_load((REPO_ROOT / "ansible/roles/service_common/tasks/copies.yml").read_text())
+COMMON_TEMPLATES = yaml.safe_load((REPO_ROOT / "ansible/roles/service_common/tasks/templates.yml").read_text())
 
 MAIN_TASK_LIST = yaml.safe_load(MAIN_TASKS)
 PREPARE_TASK_LIST = yaml.safe_load(PREPARE_TASKS)
@@ -78,6 +80,21 @@ def test_rootless_bind_ownership_is_live_only_and_precedes_quadlet_rendering():
     assert "podman_services_execution.host_user" in common["vars"]["service_common_default_owner"]
     assert "omit if ansible_check_mode" in common["vars"]["service_common_default_group"]
     assert "podman_services_execution.host_user" in common["vars"]["service_common_default_group"]
+
+
+def test_rootless_common_managed_files_inherit_the_dedicated_execution_owner():
+    common = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Prepare service files and directories")
+    copy = next(task for task in COMMON_COPIES if task["name"] == "Service common copies | Copy static files")
+    template = next(
+        task for task in COMMON_TEMPLATES if task["name"] == "Service common templates | Render application templates on target host"
+    )
+
+    assert "podman_services_execution.host_user" in common["vars"]["service_common_default_owner"]
+    assert "podman_services_execution.host_user" in common["vars"]["service_common_default_group"]
+    assert "service_common_copy_default_owner" in copy["ansible.builtin.copy"]["owner"]
+    assert "service_common_copy_default_group" in copy["ansible.builtin.copy"]["group"]
+    assert "service_common_template_default_owner" in template["ansible.builtin.template"]["owner"]
+    assert "service_common_template_default_group" in template["ansible.builtin.template"]["group"]
 
 
 def test_quadlet_directory_prerequisite_exists_before_templates():

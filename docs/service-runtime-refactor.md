@@ -86,7 +86,7 @@ Check mode runs declaration, handler, credential-reference, and bootstrap-contra
 
 ## Canonical portable service and secret schema
 
-The Docker-shaped top-level service fields are the canonical portable schema. The Podman adapter maps them to its internal Quadlet structure. Every base service declares its runtime explicitly: existing Docker services use `runtime: docker`, while n8n, Adminer, and The Lounge select Podman with `runtime: podman`. A missing or unsupported base runtime fails catalog validation; there is no implicit Docker default. Portable fields include `image`, numeric `user: UID:GID`, `environment`, `deploy.host`, canonical ports and volumes, `paths`, security fields, `healthcheck`, `infisical`, `postgres`, and `traefik`.
+The Docker-shaped top-level service fields are the canonical portable schema. The Podman adapter maps them to its internal Quadlet structure. Every base service declares its runtime explicitly: existing Docker services use `runtime: docker`, while n8n, Adminer, The Lounge, and Homepage select Podman with `runtime: podman`. A missing or unsupported base runtime fails catalog validation; there is no implicit Docker default. Portable fields include `image`, numeric `user: UID:GID`, `environment`, `deploy.host`, canonical ports and volumes, `paths`, security fields, `healthcheck`, `infisical`, `postgres`, and `traefik`.
 
 Podman additionally owns `deploy.execution`. Omission preserves rootful system
 Quadlets. `mode: rootless` requires a dedicated `host_user` and selects that
@@ -95,9 +95,16 @@ host execution account is independent of the container's top-level numeric
 `user`. Adminer uses the mount-free rootless subset. The Lounge adds a
 validated bind-backed subset: an exact `/opt` path, a matching bind source,
 adapter-owned recursive ownership, and an explicit `keep-id` mapping for the
-application UID/GID. Named volumes, tmpfs, native secrets, and
-application-preparation fields remain unsupported for rootless execution and
-fail before host mutation.
+application UID/GID. Homepage additionally exercises confined common managed
+files: copy and template destinations must be normalized absolute proper
+descendants of a declared bind source, explicit owner/group overrides are
+forbidden, and extra `paths` entries may only remove descendants of that bind
+tree. The common role therefore creates those files as the dedicated execution
+account before the adapter's final recursive ownership reconciliation; the
+adapter does not recursively change modes. Named volumes, tmpfs, native
+secrets, and application-preparation fields remain unsupported for rootless
+execution and fail before host mutation. This is deliberately not general
+rootless filesystem parity outside declared bind trees.
 
 Canonical does not mean every Docker-owned field is portable. The Podman adapter
 validates the complete top-level mapping and rejects unknown or unimplemented
