@@ -6,9 +6,8 @@ http:
     traefik-dashboard-chain:
       chain:
         middlewares:
-          - "crowdsec@file"
-          - "authelia@file"
           - "secure-headers@file"
+          - "robots-noindex@file"
           - "hsts@file"
           - "gzip@file"
 
