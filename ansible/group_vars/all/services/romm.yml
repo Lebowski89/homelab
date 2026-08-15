@@ -27,6 +27,7 @@ romm:
     DB_PASSWD_FILE: /run/secrets/postgres_pass_secret
     ROMM_BASE_URL_FILE: /run/secrets/romm_base_url_secret
     ROMM_AUTH_SECRET_KEY_FILE: /run/secrets/romm_auth_key_secret
+    ROMM_SESSION_SECURE_COOKIE: "true"
     HASHEOUS_API_ENABLED: "true"
     # Add later after creating accounts/API keys.
     # IGDB_CLIENT_ID: ""
