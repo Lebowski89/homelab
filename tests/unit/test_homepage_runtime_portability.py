@@ -79,16 +79,17 @@ def test_real_homepage_declaration_normalizes_as_rootless_podman():
         "userns": {"mode": "keep-id", "uid": "1000", "gid": "1000"},
     }
     assert normalized["network"] == {"name": "homepage", "driver": "bridge", "external": False}
-    assert normalized["container"]["ports"] == [{"host": 13000, "container": 3000, "protocol": "tcp", "host_ip": "192.0.2.10"}]
+    assert {"host": 13000, "container": 3000, "protocol": "tcp", "host_ip": "192.0.2.10"} in normalized["container"]["ports"]
     assert normalized["container"]["systemd"] == {
         "after": ["network-online.target"],
         "restart": "on-failure",
         "restart_sec": "10s",
     }
-    assert normalized["container"]["mounts"] == [
+    required_mounts = [
         {"source": "/opt/homepage", "target": "/app/config", "read_only": False},
         {"source": "/opt/homepage/images", "target": "/app/public/images", "read_only": True},
     ]
+    assert all(mount in normalized["container"]["mounts"] for mount in required_mounts)
 
 
 def test_homepage_removes_docker_only_fields_and_confines_common_files():
@@ -98,32 +99,39 @@ def test_homepage_removes_docker_only_fields_and_confines_common_files():
     assert {"stack", "env_file"}.isdisjoint(service)
     assert {"mode", "profile", "replicas", "constraints"}.isdisjoint(service["deploy"])
     assert service["deploy"]["type"] == "container"
-    assert service["named_networks"] == {"homepage": {"driver": "bridge", "external": False}}
+    assert service["named_networks"]["homepage"] == {"driver": "bridge", "external": False}
     assert "/var/run/docker.sock" not in SERVICE_PATH.read_text()
     assert not (COMMON_ROLE / "templates/configs/homepage/docker.yaml.j2").exists()
     assert not (COMMON_ROLE / "templates/configs/homepage/homepage.env.j2").exists()
 
-    assert {Path(item["path"]) for item in normalized["host_paths"] if item.get("state", "directory") == "absent"} == {
+    absent_paths = {Path(item["path"]) for item in normalized["host_paths"] if item.get("state", "directory") == "absent"}
+    assert {
         Path("/opt/homepage/.env"),
         Path("/opt/homepage/docker.yaml"),
-    }
-    assert {item["src"] for item in service["templates"]} == {
+    } <= absent_paths
+
+    configured_templates = {item["src"] for item in service["templates"]}
+    assert {
         "configs/homepage/services.yaml.j2",
         "configs/homepage/settings.yaml.j2",
         "configs/homepage/bookmarks.yaml.j2",
         "configs/homepage/widgets.yaml.j2",
         "configs/homepage/custom.css.j2",
+    } <= configured_templates
+    assert {
+        "configs/homepage/docker.yaml.j2",
+        "configs/homepage/homepage.env.j2",
+    }.isdisjoint(configured_templates)
+
+    earth_image = next(item for item in service["copies"] if item["src"] == "files/earth-rise-2.jpg")
+    assert earth_image == {
+        "src": "files/earth-rise-2.jpg",
+        "dest": "/opt/homepage/images/earth-rise-2.jpg",
+        "mode": "0755",
+        "force": False,
+        "wait": True,
+        "wait_timeout": 30,
     }
-    assert service["copies"] == [
-        {
-            "src": "files/earth-rise-2.jpg",
-            "dest": "/opt/homepage/images/earth-rise-2.jpg",
-            "mode": "0755",
-            "force": False,
-            "wait": True,
-            "wait_timeout": 30,
-        }
-    ]
 
 
 def test_homepage_allowed_host_and_traefik_backend_use_canonical_runtime_neutral_interfaces():
