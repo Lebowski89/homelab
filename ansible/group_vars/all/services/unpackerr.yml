@@ -24,25 +24,31 @@ unpackerr:
     UN_WEBSERVER_METRICS: "true"
     UN_WEBSERVER_UPSTREAMS: "172.98.0.0/24"
     ## Lidarr Settings
-    UN_LIDARR_0_URL: "http://lidarr:8686"
+    UN_LIDARR_0_URL: >-
+      https://lidarr.{{ services_internal_zone }}:{{ services_private_https_port }}
     FILE__UN_LIDARR_0_API_KEY: /run/secrets/lidarr_api_secret
     UN_LIDARR_0_PATHS_0: "/data/torrents/completed"
     ## Radarr Settings
-    UN_RADARR_0_URL: "http://radarr:7878"
+    UN_RADARR_0_URL: >-
+      https://radarr.{{ services_internal_zone }}:{{ services_private_https_port }}
     FILE__UN_RADARR_0_API_KEY: /run/secrets/radarr_api_secret
     UN_RADARR_0_PATHS_0: "/data/torrents/completed"
-    UN_RADARR_1_URL: "http://radarr-4k:7878"
+    UN_RADARR_1_URL: >-
+      https://radarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}
     FILE__UN_RADARR_1_API_KEY: /run/secrets/radarr_4k_api_secret
     UN_RADARR_1_PATHS_1: "/data/torrents/completed"
     ## Sonarr Settings
-    UN_SONARR_0_URL: "http://sonarr:8989"
+    UN_SONARR_0_URL: >-
+      https://sonarr.{{ services_internal_zone }}:{{ services_private_https_port }}
     FILE__UN_SONARR_0_API_KEY: /run/secrets/sonarr_api_secret
     UN_SONARR_0_PATHS_0: "/data/torrents/completed"
-    UN_SONARR_1_URL: "http://sonarr-4k:8989"
+    UN_SONARR_1_URL: >-
+      https://sonarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}
     FILE__UN_SONARR_1_API_KEY: /run/secrets/sonarr_4k_api_secret
     UN_SONARR_1_PATHS_1: "/data/torrents/completed"
     ## Whisparr Settings
-    UN_WHISPARR_0_URL: "http://whisparr:6969"
+    UN_WHISPARR_0_URL: >-
+      https://whisparr.{{ services_internal_zone }}:{{ services_private_https_port }}
     UN_WHISPARR_0_API_KEY: /run/secrets/whisparr_api_secret
     UN_WHISPARR_0_PATHS_0: "/data/torrents/completed"
     ## Webhook Settings

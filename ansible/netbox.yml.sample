@@ -12,6 +12,7 @@ validate_certs: false
 
 interfaces: true
 virtual_chassis: false
+config_context: true
 
 query_filters:
   - has_primary_ip: 'true'
@@ -34,3 +35,7 @@ compose:
 
   keepalived_priority_dns_vip_a: custom_fields['keepalived_priority_dns_vip_a'] | default(omit, true)
   keepalived_priority_dns_vip_b: custom_fields['keepalived_priority_dns_vip_b'] | default(omit, true)
+
+  services_public_zone: config_context['services']['public_zone']
+  services_internal_zone: config_context['services']['internal_zone']
+  services_private_https_port: config_context['services']['private_https_port']

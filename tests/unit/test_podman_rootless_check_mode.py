@@ -60,8 +60,9 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
     runtime_root = tmp_path / "runtime"
     home = runtime_root / host_user
     quadlet_dir = home / ".config/containers/systemd"
+    network_dropin = home / ".config/containers/containers.conf.d/20-podman-services-network.conf"
     bind_source = absent_rootless_bind_source
-    before = (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir))
+    before = (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir), path_snapshot(network_dropin))
     secret_sentinel = "PODMAN_CHECK_SECRET_SENTINEL_7f40b03e"
     runtime_marker = tmp_path / "runtime-command-called"
     fake_bin = tmp_path / "bin"
@@ -109,6 +110,18 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         - path: {bind_source}
           state: directory
           mode: "0750"
+        - path: {bind_source}/docker.yaml
+          state: absent
+        - path: {bind_source}/.env
+          state: absent
+      copies:
+        - src: files/earth-rise-2.jpg
+          dest: {bind_source}/background.jpg
+          mode: "0644"
+      templates:
+        - src: configs/homepage/custom.css.j2
+          dest: {bind_source}/custom.css
+          mode: "0664"
       volumes:
         config:
           type: bind
@@ -181,7 +194,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
     task_results = {
         task["task"]["name"].split(" : ")[-1]: task["hosts"].get("localhost", {}) for play in callback["plays"] for task in play["tasks"]
     }
-    assert (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir)) == before
+    assert (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir), path_snapshot(network_dropin)) == before
     assert not bind_source.exists()
     assert not os.path.lexists(bind_source)
     assert not runtime_root.exists()
@@ -192,6 +205,10 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         "Execution | Create dedicated rootless account",
         "Execution | Enable rootless account linger",
         "Execution | Start rootless user systemd manager",
+        "Execution | Read host IPv4 routes for pasta conflict detection",
+        "Execution | Detect conflicting host IPv4 routes",
+        "Execution | Reject conflicting host IPv4 routes",
+        "Execution | Manage rootless pasta network drop-in",
         "Podman services | Set rootless bind mount ownership",
         "Quadlets | Write network Quadlet",
         "Quadlets | Write protected environment file",
@@ -201,6 +218,9 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         "Service | Save successful execution state",
     ):
         assert task_results[task_name]["skipped"] is True
+    assert task_results["Execution | Validate managed rootless pasta configuration"].get("failed", False) is False
+    assert task_results["Execution | Report planned rootless pasta configuration"]["changed"] is True
+    assert str(network_dropin) in task_results["Execution | Report planned rootless pasta configuration"]["msg"]
     for task_name in (
         "Check mode | Build network Quadlet preview",
         "Check mode | Build environment file preview",
@@ -244,6 +264,71 @@ def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, ex
         capture_output=True,
         check=False,
     )
+
+
+@pytest.mark.parametrize(
+    ("field", "destination"),
+    [
+        ("templates", "/etc/rootless-check/settings.yml"),
+        ("copies", "/opt/rootless-check-evil/background.jpg"),
+    ],
+)
+def test_rootless_check_mode_rejects_managed_files_outside_the_bind_tree(tmp_path, field, destination):
+    bind_source = "/opt/rootless-check-owned"
+    service = {
+        "runtime": "podman",
+        "image": "registry.example.invalid/synthetic:1.0",
+        "named_networks": {"synthetic": {"driver": "bridge", "external": False}},
+        "ports": [{"published": 18081, "target": 8080, "protocol": "tcp"}],
+        "deploy": {
+            "type": "container",
+            "host": "localhost",
+            "execution": {
+                "mode": "rootless",
+                "host_user": "podman-check-invalid",
+                "userns": {"mode": "keep-id", "uid": "1000", "gid": "1000"},
+            },
+        },
+        "paths": [{"path": bind_source, "state": "directory", "mode": "0750"}],
+        "volumes": {
+            "config": {
+                "type": "bind",
+                "source": bind_source,
+                "target": "/config",
+                "read_only": False,
+            }
+        },
+        field: [{"src": "synthetic", "dest": destination}],
+    }
+    result = run_local_playbook(
+        tmp_path,
+        [
+            {
+                "name": "Reject unsafe rootless managed file in check mode",
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "become": False,
+                "vars": {
+                    "podman_services_service_cfg": service,
+                    "podman_services_role_prefix": "synthetic",
+                    "podman_services_common_context": {
+                        "runtime": "podman",
+                        "dispatch_host": "localhost",
+                        "controller_host": "localhost",
+                        "lookup_values": {},
+                        "resolved_environment": {},
+                        "secret_declarations": [],
+                    },
+                },
+                "tasks": [{"name": "Include complete Podman role", "ansible.builtin.include_role": {"name": "podman_services"}}],
+            }
+        ],
+    )
+
+    assert result.returncode != 0
+    assert f"{field}[0].dest" in result.stdout
+    assert "declared rootless bind source" in result.stdout
 
 
 def test_common_path_preparation_restricts_existing_bind_root_without_replacing_contents(tmp_path):

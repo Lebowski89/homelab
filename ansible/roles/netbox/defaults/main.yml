@@ -11,6 +11,7 @@ netbox_superuser_password: ""
 netbox_postgres_user: ""
 netbox_postgres_pass: ""
 netbox_redis_password: ""
+# Bootstrap exception: NetBox cannot depend on topology provided by its own inventory.
 netbox_domain: ""
 
 netbox_required_docker_secrets:

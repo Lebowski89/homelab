@@ -551,6 +551,84 @@ def podman_subid_range(value: Any, account: Any, minimum_count: Any = 65536) -> 
     return {"start": start, "count": range_count}
 
 
+def podman_rootless_pasta_config(subnet: Any, gateway: Any, dns_forward: Any) -> dict[str, Any]:
+    """Validate and render the role-wide rootless pasta IPv4 configuration."""
+    if not all(isinstance(value, str) and value == value.strip() and value for value in (subnet, gateway, dns_forward)):
+        raise AnsibleFilterError("Rootless pasta subnet, gateway, and DNS forwarder must be non-empty trimmed strings")
+    try:
+        network = ipaddress.ip_network(subnet, strict=True)
+        gateway_address = ipaddress.ip_address(gateway)
+        dns_address = ipaddress.ip_address(dns_forward)
+    except ValueError as error:
+        raise AnsibleFilterError(f"Invalid rootless pasta IPv4 configuration: {error}") from error
+    if not isinstance(network, ipaddress.IPv4Network):
+        raise AnsibleFilterError("Rootless pasta subnet must be IPv4")
+    private_ranges = tuple(ipaddress.ip_network(value) for value in ("10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"))
+    if not any(network.subnet_of(private_range) for private_range in private_ranges):
+        raise AnsibleFilterError("Rootless pasta subnet must be within an RFC 1918 private IPv4 range")
+    if network.prefixlen > 30:
+        raise AnsibleFilterError("Rootless pasta subnet must provide usable gateway and DNS-forward addresses")
+    for label, address in (("gateway", gateway_address), ("DNS forwarder", dns_address)):
+        if not isinstance(address, ipaddress.IPv4Address):
+            raise AnsibleFilterError(f"Rootless pasta {label} must be IPv4")
+        if address not in network or address in {network.network_address, network.broadcast_address}:
+            raise AnsibleFilterError(f"Rootless pasta {label} must be a usable address inside {network}")
+    if gateway_address == dns_address:
+        raise AnsibleFilterError("Rootless pasta gateway and DNS forwarder must be distinct")
+
+    options = [
+        "--ipv4-only",
+        "-a",
+        str(network.network_address),
+        "-n",
+        str(network.prefixlen),
+        "-g",
+        str(gateway_address),
+        "--dns-forward",
+        str(dns_address),
+        "--no-ndp",
+        "--no-dhcpv6",
+        "--no-dhcp",
+    ]
+    return {
+        "subnet": str(network),
+        "address": str(network.network_address),
+        "prefix_length": network.prefixlen,
+        "gateway": str(gateway_address),
+        "dns_forward": str(dns_address),
+        "options": options,
+    }
+
+
+def podman_rootless_pasta_route_overlaps(value: Any, subnet: Any) -> list[str]:
+    """Return non-default host IPv4 routes that overlap the pasta subnet."""
+    if isinstance(value, (str, Mapping)) or not isinstance(value, Iterable):
+        raise AnsibleFilterError("Host IPv4 routes must be a list of mappings")
+    try:
+        network = ipaddress.ip_network(subnet, strict=True)
+    except ValueError as error:
+        raise AnsibleFilterError(f"Invalid rootless pasta subnet for route comparison: {error}") from error
+    if not isinstance(network, ipaddress.IPv4Network):
+        raise AnsibleFilterError("Rootless pasta route comparison requires an IPv4 subnet")
+
+    overlaps: set[str] = set()
+    for index, route in enumerate(value):
+        if not isinstance(route, Mapping):
+            raise AnsibleFilterError(f"Host IPv4 route[{index}] must be a mapping")
+        destination = route.get("dst")
+        if destination in (None, "default", "0.0.0.0/0"):
+            continue
+        if not isinstance(destination, str):
+            raise AnsibleFilterError(f"Host IPv4 route[{index}].dst must be a string")
+        try:
+            route_network = ipaddress.ip_network(destination, strict=False)
+        except ValueError as error:
+            raise AnsibleFilterError(f"Host IPv4 route[{index}].dst is invalid: {destination!r}") from error
+        if isinstance(route_network, ipaddress.IPv4Network) and network.overlaps(route_network):
+            overlaps.add(str(route_network))
+    return sorted(overlaps)
+
+
 def podman_rootless_account_contract(value: Any) -> dict[str, bool]:
     """Decide whether a dedicated rootless account may be created or reused.
 
@@ -684,6 +762,39 @@ def _has_native_infisical_secret(cfg: Mapping[str, Any]) -> bool:
     return any(isinstance(entry, Mapping) and "secret" in entry for entry in entries)
 
 
+def _proper_descendant(value: Any, roots: Iterable[str], *, name: str, root_description: str) -> str:
+    if not isinstance(value, str) or not value or not posixpath.isabs(value) or posixpath.normpath(value) != value:
+        raise AnsibleFilterError(f"{name} must be a normalized absolute proper descendant of {root_description}; got {value!r}")
+    for root in roots:
+        try:
+            if value != root and posixpath.commonpath((root, value)) == root:
+                return value
+        except (TypeError, ValueError):
+            continue
+    raise AnsibleFilterError(f"{name} must be a normalized absolute proper descendant of {root_description}; got {value!r}")
+
+
+def _validate_rootless_managed_files(cfg: Mapping[str, Any], *, name: str, bind_sources: list[str]) -> None:
+    for field in ("copies", "templates"):
+        declarations = cfg.get(field, [])
+        if not declarations:
+            continue
+        if isinstance(declarations, (str, Mapping)) or not isinstance(declarations, Iterable):
+            raise AnsibleFilterError(f"{name}.{field} must be a list of mappings")
+        for index, declaration in enumerate(declarations):
+            item_name = f"{name}.{field}[{index}]"
+            if not isinstance(declaration, Mapping):
+                raise AnsibleFilterError(f"{item_name} must be a mapping")
+            _proper_descendant(
+                declaration.get("dest"),
+                bind_sources,
+                name=f"{item_name}.dest",
+                root_description="a declared rootless bind source",
+            )
+            if "owner" in declaration or "group" in declaration:
+                raise AnsibleFilterError(f"{item_name} must omit owner and group; the dedicated execution account owns generated files")
+
+
 def _validate_rootless_subset(
     cfg: Mapping[str, Any],
     *,
@@ -715,37 +826,61 @@ def _validate_rootless_subset(
     mounts = container.get("mounts", [])
     if volumes or container.get("tmpfs"):
         raise AnsibleFilterError(f"{name}.volumes supports only bind mounts for rootless Podman in this phase")
-    if host_paths or mounts:
+    bind_sources: list[str] = []
+    if host_paths or mounts or cfg.get("copies") or cfg.get("templates"):
         if "userns" not in deploy["execution"]:
             raise AnsibleFilterError(f"{name}.deploy.execution.userns keep-id mapping is required for rootless bind mounts")
-        declared_paths = {path["path"]: path for path in host_paths}
-        mounted_sources: set[str] = set()
         for index, mount in enumerate(mounts):
-            raw_source = mount["source"]
-            source = posixpath.normpath(raw_source)
-            if source != raw_source or not source.startswith("/opt/"):
-                raise AnsibleFilterError(
-                    f"{name}.volumes[{index}].source must be a normalized absolute proper descendant of /opt for rootless Podman"
+            bind_sources.append(
+                _proper_descendant(
+                    mount["source"],
+                    ("/opt",),
+                    name=f"{name}.volumes[{index}].source",
+                    root_description="/opt for rootless Podman",
                 )
-            mounted_sources.add(source)
-        if mounted_sources != set(declared_paths):
-            raise AnsibleFilterError(
-                f"{name}.paths must declare exactly the rootless bind-mount sources so ownership can be reconciled safely"
             )
-        for path in host_paths:
-            if path.get("state", "directory") != "directory":
-                raise AnsibleFilterError(f"{name}.paths rootless bind sources must use state directory")
-            if "owner" in path or "group" in path:
+
+        bind_path_counts = dict.fromkeys(bind_sources, 0)
+        raw_paths = cfg.get("paths", [])
+        for index, path in enumerate(host_paths):
+            candidate = _proper_descendant(
+                raw_paths[index].get("path") if isinstance(raw_paths[index], Mapping) else None,
+                ("/opt",),
+                name=f"{name}.paths[{index}].path",
+                root_description="/opt for rootless Podman",
+            )
+            if candidate in bind_path_counts:
+                bind_path_counts[candidate] += 1
+                if path.get("state", "directory") != "directory":
+                    raise AnsibleFilterError(f"{name}.paths[{index}] matching a rootless bind source must use state directory")
+                if "owner" in path or "group" in path:
+                    raise AnsibleFilterError(
+                        f"{name}.paths[{index}] matching a rootless bind source must omit owner and group; "
+                        "the dedicated execution account owns it"
+                    )
+                continue
+            if path.get("state", "directory") != "absent":
                 raise AnsibleFilterError(
-                    f"{name}.paths rootless bind sources must omit owner and group; the dedicated execution account owns them"
+                    f"{name}.paths[{index}] is not a declared rootless bind source and must use state absent for confined cleanup"
                 )
+            _proper_descendant(
+                candidate,
+                bind_sources,
+                name=f"{name}.paths[{index}].path",
+                root_description="a declared rootless bind source for state absent cleanup",
+            )
+            if "owner" in path or "group" in path:
+                raise AnsibleFilterError(f"{name}.paths[{index}] state absent cleanup must omit owner and group")
+
+        if any(count != 1 for count in bind_path_counts.values()):
+            raise AnsibleFilterError(
+                f"{name}.paths must declare each rootless bind-mount source exactly once so ownership can be reconciled safely"
+            )
+        _validate_rootless_managed_files(cfg, name=name, bind_sources=bind_sources)
     if container.get("cap_add"):
         raise AnsibleFilterError(f"{name}.cap_add is not supported for rootless Podman in this phase")
     if secret_attachments or _has_native_infisical_secret(cfg):
         raise AnsibleFilterError(f"{name}.secrets is not supported for rootless Podman in this phase")
-    for field in ("copies", "templates"):
-        if cfg.get(field):
-            raise AnsibleFilterError(f"{name}.{field} is not supported for rootless Podman in this phase")
     for field in ("application_prepare", "prep", "paths_vault"):
         if cfg.get(field):
             raise AnsibleFilterError(
@@ -983,7 +1118,9 @@ class FilterModule:
             ``podman_env_file_key``, ``podman_env_file_value``,
             ``podman_image_reference_drift``, ``podman_secret_policy``,
             ``podman_secret_declarations``, ``podman_subid_range``, and
-            ``podman_rootless_account_contract``.
+            ``podman_rootless_account_contract``,
+            ``podman_rootless_pasta_config``, and
+            ``podman_rootless_pasta_route_overlaps``.
         """
         return {
             "podman_service_normalize": podman_service_normalize,
@@ -994,4 +1131,6 @@ class FilterModule:
             "podman_secret_declarations": podman_secret_declarations,
             "podman_subid_range": podman_subid_range,
             "podman_rootless_account_contract": podman_rootless_account_contract,
+            "podman_rootless_pasta_config": podman_rootless_pasta_config,
+            "podman_rootless_pasta_route_overlaps": podman_rootless_pasta_route_overlaps,
         }

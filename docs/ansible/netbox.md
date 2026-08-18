@@ -235,6 +235,18 @@ token: your-netbox-api-token
 
 The real `netbox.yml` is ignored by Git.
 
+The inventory enables Config Context retrieval and composes the global
+`services` context into the canonical application topology interface:
+
+- `services_public_zone`
+- `services_internal_zone`
+- `services_private_https_port`
+
+Service code consumes only these scalar composed variables. The raw
+`config_context` shape is an inventory-plugin detail and must not be used by
+roles or templates. The internal and public zones are independent values, and
+Infisical is reserved for secret material rather than DNS topology.
+
 ---
 
 ## Required NetBox custom fields

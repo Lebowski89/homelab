@@ -4,7 +4,9 @@ locals {
     automation     = { name = "automation", color = "#ea4b71" }
     auth           = { name = "auth", color = "#7c3aed" }
     critical       = { name = "critical", color = "#dc2626" }
+    direct         = { name = "direct", color = "#6b7280" }
     dns            = { name = "dns", color = "#9333ea" }
+    finance        = { name = "finance", color = "#f97316" }
     gaming         = { name = "gaming", color = "#9333ea" }
     infrastructure = { name = "infrastructure", color = "#2563eb" }
     private        = { name = "private", color = "#64748b" }

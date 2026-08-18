@@ -48,5 +48,3 @@ hugo_templates:
     dest: "{{ hugo_site_path }}/hugo.yaml"
     mode: "0664"
     force: true
-
-hugo_cloudflare_zone: ""

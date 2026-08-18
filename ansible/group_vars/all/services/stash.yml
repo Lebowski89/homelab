@@ -25,9 +25,6 @@ stash:
     STASH_METADATA: "/config/metadata"
   infisical:
     secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
       - var: stash_api
         path: "/Stash"
         name: API

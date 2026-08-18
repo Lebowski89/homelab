@@ -1,4 +1,3 @@
-{% set cloudflare_zone = service_common_infisical_values.cloudflare_zone %}
 ---
 
 http:
@@ -6,16 +5,15 @@ http:
     traefik-dashboard-chain:
       chain:
         middlewares:
-          - "crowdsec@file"
-          - "authelia@file"
           - "secure-headers@file"
+          - "robots-noindex@file"
           - "hsts@file"
           - "gzip@file"
 
   routers:
     traefik-dashboard:
-      entryPoints: ["https"]
-      rule: "Host(`traefik.{{ cloudflare_zone }}`)"
+      entryPoints: ["https_private"]
+      rule: "Host(`traefik.{{ services_internal_zone }}`)"
       priority: 10
       tls:
         options: "securetls@file"

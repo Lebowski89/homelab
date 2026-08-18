@@ -24,11 +24,6 @@ alloy:
   ################################
   environment:
     TZ: "{{ timezone }}"
-  infisical:
-    secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
   swarm_configs:
     - name: alloy_config
       src: files/alloy_config.alloy

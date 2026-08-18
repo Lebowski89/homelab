@@ -183,3 +183,20 @@ primary and ancillary ports, in meaningful application order.
 The unit test enforces immediate base and target key order and the explicit
 Infisical declaration convention. Runtime normalization, target inheritance,
 and execution behavior remain owned by their existing filters and roles.
+
+## Cross-service application endpoints
+
+Service topology is supplied by the NetBox global Config Context through the
+dynamic inventory variables `services_public_zone`, `services_internal_zone`,
+and `services_private_https_port`. Service code must consume those composed
+variables rather than raw `config_context` data or Infisical domain values, and
+must not derive the internal zone from the public zone. Infisical remains the
+source for credentials and other secret material.
+
+Cross-service HTTP/API integrations should use the provider's stable private
+application FQDN when that provider exposes one, rather than runtime-local
+Docker or Podman DNS. Runtime-local addressing remains appropriate for tightly
+coupled infrastructure, monitoring and control-plane traffic, and container
+self-healthchecks. When an application has no private route, use another stable
+interface such as an inventory-derived host address instead of inventing a new
+Traefik route.

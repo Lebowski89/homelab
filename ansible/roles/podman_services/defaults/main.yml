@@ -3,6 +3,9 @@
 podman_services_system_quadlet_dir: /etc/containers/systemd
 podman_services_quadlet_dir: "{{ podman_services_system_quadlet_dir }}"
 podman_services_rootless_home_root: /var/lib
+podman_services_rootless_pasta_subnet: 10.0.2.0/24
+podman_services_rootless_pasta_gateway: 10.0.2.2
+podman_services_rootless_pasta_dns_forward: 10.0.2.3
 podman_services_execution_state_dir: /var/lib/podman-services
 podman_services_nologin_shell: /usr/sbin/nologin
 podman_services_action_remove: "{{ 'remove' in (ansible_run_tags | default([])) }}"

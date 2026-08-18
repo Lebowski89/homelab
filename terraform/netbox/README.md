@@ -18,6 +18,7 @@
 | <a name="input_netbox_request_timeout"></a> [netbox\_request\_timeout](#input\_netbox\_request\_timeout) | NetBox API request timeout in seconds. | `number` | `30` | no |
 | <a name="input_netbox_server_url"></a> [netbox\_server\_url](#input\_netbox\_server\_url) | NetBox URL, including scheme and port if required. Example: https://netbox.int.example.com:8443 | `string` | n/a | yes |
 | <a name="input_netbox_skip_version_check"></a> [netbox\_skip\_version\_check](#input\_netbox\_skip\_version\_check) | Skip provider NetBox version compatibility check. | `bool` | `false` | no |
+| <a name="input_private_https_port"></a> [private\_https\_port](#input\_private\_https\_port) | Client-facing HTTPS port for private Traefik application routes. | `number` | `8443` | no |
 | <a name="input_reserved_ip_private_values"></a> [reserved\_ip\_private\_values](#input\_reserved\_ip\_private\_values) | Private values for reserved infrastructure IPs, such as Keepalived DNS VIPs. | <pre>map(object({<br/>    ip_address = string<br/>  }))</pre> | n/a | yes |
 
 ## Outputs
@@ -37,4 +38,5 @@
 | <a name="output_managed_prefixes"></a> [managed\_prefixes](#output\_managed\_prefixes) | Prefixes managed in NetBox. |
 | <a name="output_managed_reserved_ips"></a> [managed\_reserved\_ips](#output\_managed\_reserved\_ips) | Standalone/reserved IP addresses managed in NetBox. |
 | <a name="output_managed_tags"></a> [managed\_tags](#output\_managed\_tags) | Tags managed in NetBox. |
+| <a name="output_private_https_port"></a> [private\_https\_port](#output\_private\_https\_port) | Client-facing HTTPS port for private Traefik application routes. |
 <!-- END_TF_DOCS -->

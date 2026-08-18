@@ -216,7 +216,8 @@
     service_common_infisical_values: "{{ docker_services_common_values }}"
     service_common_host_defaults: "{{ docker_services_common_host_defaults }}"
     service_common_template_vars: "{{ docker_services_application_template_vars }}"
-    service_common_traefik_base_zone: "{{ docker_services_common_values.get('cloudflare_zone', '') }}"
+    service_common_traefik_public_zone: "{{ services_public_zone }}"
+    service_common_traefik_internal_zone: "{{ services_internal_zone }}"
     service_common_traefik_dynamic_dir: >-
       {{ hostvars[docker_services_controller_host].container_host_appdata_root }}/traefik/dynamic
     service_common_traefik_owner: "1000"

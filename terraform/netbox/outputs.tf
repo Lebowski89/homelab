@@ -61,6 +61,11 @@ output "internal_zone" {
   description = "Private DNS zone used to build NetBox device DNS names."
 }
 
+output "private_https_port" {
+  value       = local.private_https_port
+  description = "Client-facing HTTPS port for private Traefik application routes."
+}
+
 output "dns_ips" {
   value = {
     dns01     = split("/", netbox_ip_address.mgmt["mgt"].ip_address)[0]

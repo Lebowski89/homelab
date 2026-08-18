@@ -24,8 +24,6 @@ infisical_postgres_pass: "replace-me"
 
 infisical_redis_password: "replace-me"
 
-infisical_domain: "replace-me"
-
 infisical_smtp_email: "replace-me"
 
 infisical_smtp_user: "replace-me"

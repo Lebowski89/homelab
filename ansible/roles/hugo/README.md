@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/29 |
+| Readme update        | 2026/08/19 |
 
 
 
@@ -31,7 +31,7 @@
 | [hugo_root_path](defaults/main.yml#L4)   | str | `{{ hostvars[services_controller_host].container_host_appdata_root }}` |    
 | [hugo_site_path](defaults/main.yml#L5)   | str | `{{ hugo_root_path }}/blog` |    
 | [hugo_theme_path](defaults/main.yml#L6)   | str | `{{ hugo_site_path }}/themes/terminal` |    
-| [hugo_image](defaults/main.yml#L7)   | str | `ghcr.io/gohugoio/hugo:v0.163.3` |    
+| [hugo_image](defaults/main.yml#L7)   | str | `ghcr.io/gohugoio/hugo:v0.165.0` |    
 | [hugo_directory_paths](defaults/main.yml#L9)   | list | `[]` |    
 | [hugo_directory_paths.**0**](defaults/main.yml#L10)   | dict | `{}` |    
 | [hugo_directory_paths.0.**path**](defaults/main.yml#L10)   | str | `{{ hugo_site_path }}` |    
@@ -80,7 +80,6 @@
 | [hugo_templates.0.**dest**](defaults/main.yml#L48)   | str | `{{ hugo_site_path }}/hugo.yaml` |    
 | [hugo_templates.0.**mode**](defaults/main.yml#L49)   | str | `0664` |    
 | [hugo_templates.0.**force**](defaults/main.yml#L50)   | bool | `True` |    
-| [hugo_cloudflare_zone](defaults/main.yml#L52)   | str |  |    
 
 
 

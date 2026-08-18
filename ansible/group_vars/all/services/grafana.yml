@@ -37,9 +37,6 @@ grafana:
         name: OIDC_CLIENT_SECRET
         secret:
           name: grafana_oidc_client_secret
-      - var: cloudflare_zone
-        path: "/Cloudflare"
-        name: ZONE
   secrets:
     - grafana_admin_user_secret
     - grafana_admin_pass_secret
@@ -98,7 +95,6 @@ grafana:
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/.env"
       mode: "0664"
       force: true
-      no_log: true
   volumes:
     data:
       type: bind

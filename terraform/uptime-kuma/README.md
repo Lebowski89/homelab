@@ -22,7 +22,7 @@
 | <a name="input_internal_zone"></a> [internal\_zone](#input\_internal\_zone) | Optional internal/private DNS zone fallback. Normally sourced from terraform/netbox outputs.internal\_zone. | `string` | `""` | no |
 | <a name="input_netbox_state_path"></a> [netbox\_state\_path](#input\_netbox\_state\_path) | Path to the terraform/netbox state file. | `string` | `"../netbox/terraform.tfstate"` | no |
 | <a name="input_postgres_monitor_connection_strings"></a> [postgres\_monitor\_connection\_strings](#input\_postgres\_monitor\_connection\_strings) | PostgreSQL connection strings for Uptime Kuma PostgreSQL monitors. These are sensitive and will be stored in OpenTofu state. | `map(string)` | `{}` | no |
-| <a name="input_private_https_port"></a> [private\_https\_port](#input\_private\_https\_port) | Traefik private HTTPS entrypoint port. | `number` | `8443` | no |
+| <a name="input_private_https_port"></a> [private\_https\_port](#input\_private\_https\_port) | Optional Traefik private HTTPS entrypoint port override. Defaults to terraform/netbox, then 8443. | `number` | `null` | no |
 | <a name="input_uptime_kuma_endpoint"></a> [uptime\_kuma\_endpoint](#input\_uptime\_kuma\_endpoint) | Optional explicit Uptime Kuma base URL. Defaults to https://uptime-kuma.<internal\_zone>:<private\_https\_port>. | `string` | `""` | no |
 | <a name="input_uptime_kuma_max_retries"></a> [uptime\_kuma\_max\_retries](#input\_uptime\_kuma\_max\_retries) | Provider connection maximum retry count. | `number` | `5` | no |
 | <a name="input_uptime_kuma_password"></a> [uptime\_kuma\_password](#input\_uptime\_kuma\_password) | Uptime Kuma password. Can also be supplied with TF\_VAR\_uptime\_kuma\_password. | `string` | n/a | yes |

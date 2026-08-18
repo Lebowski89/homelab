@@ -1,9 +1,9 @@
-{% set plex_token = service_common_infisical_values.plex_token %}
+{% set secrets = service_common_infisical_values %}
 PLEX_PATH=/plex
 MODE=move
 SCHEDULE=21:00|weekly(monday)|mode=clear,22:00|weekly(monday)|mode=move,23:00|monthly(1)|mode=nothing;photo-transcoder=true
-PLEX_URL=http://plex:32400/
-PLEX_TOKEN={{ plex_token }}
+PLEX_URL=http://{{ hostvars[services_plex_host].local_ip }}:32400/
+PLEX_TOKEN={{ secrets.plex_token }}
 DISCORD=
 TIMEOUT=600
 SLEEP=60

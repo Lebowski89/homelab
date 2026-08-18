@@ -1,5 +1,4 @@
 {% set authelia_oidc_jwks_rsa_private_key = service_common_infisical_values.authelia_oidc_jwks_rsa_private_key %}
-{% set cloudflare_zone = service_common_infisical_values.cloudflare_zone %}
 {% set grafana_oidc_client_secret_digest = service_common_infisical_values.grafana_oidc_client_secret_digest %}
 {% set smtp_host = service_common_infisical_values.smtp_host %}
 {% set smtp_password = service_common_infisical_values.smtp_password %}
@@ -15,8 +14,8 @@ access_control:
   default_policy: deny
   rules:
     - domain:
-        - "*.{{ cloudflare_zone }}"
-        - "{{ cloudflare_zone }}"
+        - "*.{{ services_public_zone }}"
+        - "{{ services_public_zone }}"
       policy: one_factor
 
 server:
@@ -40,7 +39,7 @@ identity_providers:
         public: false
         authorization_policy: one_factor
         redirect_uris:
-          - "https://grafana.int.{{ cloudflare_zone }}:8443/login/generic_oauth"
+          - "https://grafana.{{ services_internal_zone }}:{{ services_private_https_port }}/login/generic_oauth"
         scopes:
           - openid
           - profile
@@ -54,9 +53,9 @@ identity_providers:
 
 session:
   cookies:
-    - domain: "{{ cloudflare_zone }}"
-      authelia_url: "https://authelia.{{ cloudflare_zone }}"
-      default_redirection_url: "https://www.{{ cloudflare_zone }}"
+    - domain: "{{ services_public_zone }}"
+      authelia_url: "https://authelia.{{ services_public_zone }}"
+      default_redirection_url: "https://www.{{ services_public_zone }}"
 
 notifier:
   disable_startup_check: false

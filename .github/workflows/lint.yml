@@ -77,10 +77,23 @@ jobs:
         if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           if [ -f ansible/requirements.yml ]; then
-            ansible-galaxy collection install \
-              -r ansible/requirements.yml \
-              -p ansible/collections \
-              --force
+            for attempt in 1 2 3; do
+              echo "Installing Ansible collections (attempt ${attempt}/3)..."
+
+              if ansible-galaxy collection install \
+                -r ansible/requirements.yml \
+                -p ansible/collections \
+                --force; then
+                exit 0
+              fi
+
+              if [ "$attempt" -eq 3 ]; then
+                echo "Ansible Galaxy install failed after 3 attempts."
+                exit 1
+              fi
+
+              sleep $((attempt * 10))
+            done
           fi
 
       - name: yamllint (tracked YAML files only)

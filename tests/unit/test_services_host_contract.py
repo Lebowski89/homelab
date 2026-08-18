@@ -77,10 +77,23 @@ def render(value, **variables):
     return NativeEnvironment(undefined=StrictUndefined).from_string(value).render(**variables)
 
 
-def write_inventory(path: Path, *, controllers: list[str], storage_hosts: list[str]):
+def write_inventory(
+    path: Path,
+    *,
+    controllers: list[str],
+    storage_hosts: list[str],
+    topology: dict[str, object] | None = None,
+):
     all_hosts = [*controllers, *storage_hosts, "plex"]
+    if topology is None:
+        topology = {
+            "services_public_zone": "public.example",
+            "services_internal_zone": "private.example.internal",
+            "services_private_https_port": 9443,
+        }
     inventory = {
         "all": {
+            "vars": topology,
             "children": {
                 "tags_ansible_manager": {"hosts": {host: {} for host in controllers}},
                 "device_roles_storage": {"hosts": {host: {} for host in storage_hosts}},
@@ -97,10 +110,11 @@ def run_host_contract(
     controllers: list[str],
     storage_hosts: list[str],
     plex_host: str = "plex",
+    topology: dict[str, object] | None = None,
 ):
     inventory = tmp_path / "inventory.yml"
     playbook = tmp_path / "host-contract.yml"
-    write_inventory(inventory, controllers=controllers, storage_hosts=storage_hosts)
+    write_inventory(inventory, controllers=controllers, storage_hosts=storage_hosts, topology=topology)
     playbook.write_text(
         f"""---
 - name: Exercise runtime-neutral service host contract
@@ -158,6 +172,42 @@ def test_repository_service_host_contract_uses_real_netbox_groups_and_explicit_p
     assert 'slug      = "storage"' in netbox_locals
     assert "services_plex_host: plex" in SERVICE_HOST_VARS.read_text()
 
+    assert inventory["config_context"] is True
+    assert not inventory.get("flatten_config_context", False)
+    assert (
+        inventory["compose"]
+        | {
+            "services_public_zone": "config_context['services']['public_zone']",
+            "services_internal_zone": "config_context['services']['internal_zone']",
+            "services_private_https_port": "config_context['services']['private_https_port']",
+        }
+        == inventory["compose"]
+    )
+
+
+def test_netbox_terraform_config_context_matches_inventory_topology_contract():
+    main = (REPO_ROOT / "terraform/netbox/main.tf").read_text()
+    variables = (REPO_ROOT / "terraform/netbox/variables.tf").read_text()
+    outputs = (REPO_ROOT / "terraform/netbox/outputs.tf").read_text()
+
+    assert 'resource "netbox_config_context" "services"' in main
+    for key in ("public_zone", "internal_zone", "private_https_port"):
+        assert f"{key}" in main
+    assert "private_https_port = local.private_https_port" in main
+    assert 'variable "private_https_port"' in variables
+    assert 'output "private_https_port"' in outputs
+
+
+def test_existing_netbox_state_consumers_prefer_explicit_private_port_then_canonical_output():
+    for root in ("uptime-kuma", "seerr"):
+        locals_source = (REPO_ROOT / f"terraform/{root}/locals.tf").read_text()
+        variables_source = (REPO_ROOT / f"terraform/{root}/variables.tf").read_text()
+
+        assert "outputs.private_https_port" in locals_source
+        assert "coalesce(var.private_https_port, local.netbox_private_https_port, 8443)" in locals_source
+        private_port_block = variables_source.split('variable "private_https_port"', 1)[1].split("variable ", 1)[0]
+        assert "default     = null" in private_port_block
+
 
 def test_all_real_services_use_neutral_host_variables_and_keep_explicit_runtimes():
     offenders = {}
@@ -174,7 +224,7 @@ def test_all_real_services_use_neutral_host_variables_and_keep_explicit_runtimes
 
     assert offenders == {}
     assert len(services) == 53
-    assert runtimes == {"docker": 50, "podman": 3}
+    assert runtimes == {"docker": 49, "podman": 4}
     assert services["adminer"]["runtime"] == "podman"
     assert services["n8n"]["runtime"] == "podman"
     assert services["thelounge"]["runtime"] == "podman"
@@ -360,3 +410,38 @@ def test_canonical_host_validation_rejects_unknown_explicit_plex_before_aliases(
     assert result.returncode != 0
     assert "must be non-empty active inventory hosts" in output
     assert "Publish Docker adapter compatibility alias" not in output
+
+
+def test_service_topology_validation_rejects_missing_or_malformed_values(tmp_path: Path):
+    invalid_topologies = [
+        {},
+        {
+            "services_public_zone": "https://public.example",
+            "services_internal_zone": "private.example.internal",
+            "services_private_https_port": 9443,
+        },
+        {
+            "services_public_zone": "public.example",
+            "services_internal_zone": "private.example.internal/",
+            "services_private_https_port": 9443,
+        },
+        {
+            "services_public_zone": "public.example",
+            "services_internal_zone": "private.example.internal",
+            "services_private_https_port": 65536,
+        },
+    ]
+
+    for index, topology in enumerate(invalid_topologies):
+        case_path = tmp_path / f"case-{index}"
+        case_path.mkdir()
+        result = run_host_contract(
+            case_path,
+            controllers=["controller"],
+            storage_hosts=["storage"],
+            topology=topology,
+        )
+        output = result.stdout + result.stderr
+        assert result.returncode != 0
+        assert "Validate canonical service topology" in output
+        assert "Publish Docker adapter compatibility alias" not in output

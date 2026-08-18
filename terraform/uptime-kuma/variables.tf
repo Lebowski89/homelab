@@ -47,9 +47,14 @@ variable "internal_zone" {
 }
 
 variable "private_https_port" {
-  description = "Traefik private HTTPS entrypoint port."
+  description = "Optional Traefik private HTTPS entrypoint port override. Defaults to terraform/netbox, then 8443."
   type        = number
-  default     = 8443
+  default     = null
+
+  validation {
+    condition     = var.private_https_port == null || (var.private_https_port >= 1 && var.private_https_port <= 65535)
+    error_message = "private_https_port must be null or between 1 and 65535."
+  }
 }
 
 variable "postgres_monitor_connection_strings" {

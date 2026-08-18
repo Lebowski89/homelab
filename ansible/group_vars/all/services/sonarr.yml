@@ -31,9 +31,6 @@ sonarr:
     TP_THEME: "hotline"
   infisical:
     secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
       - var: postgres_user
         path: "/Postgres"
         name: USER

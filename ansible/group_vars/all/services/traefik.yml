@@ -29,9 +29,6 @@ traefik:
         name: API
         secret:
           name: cloudflare_api_secret
-      - var: cloudflare_zone
-        path: "/Cloudflare"
-        name: ZONE
       - var: crowdsec_traefik_bouncer_key
         path: "/CrowdSec"
         name: TRAEFIK_BOUNCER_KEY
@@ -53,8 +50,8 @@ traefik:
       target: 443
       mode: host
     web_secure_private:
-      published: 8443
-      target: 8443
+      published: "{{ services_private_https_port }}"
+      target: "{{ services_private_https_port }}"
       mode: host
   ################################
   # FILESYSTEM
@@ -84,7 +81,6 @@ traefik:
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/traefik/traefik.yml"
       mode: "0664"
       force: true
-      no_log: true
     - src: configs/proxy/traefik/middlewares.yml.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/traefik/dynamic/middlewares.yml"
       mode: "0664"
@@ -96,12 +92,10 @@ traefik:
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/traefik/dynamic/authelia-router.yml"
       mode: "0664"
       force: true
-      no_log: true
     - src: configs/proxy/traefik/dashboard.yml.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/traefik/dynamic/traefik-dashboard.yml"
       mode: "0664"
       force: true
-      no_log: true
   volumes:
     config:
       type: bind

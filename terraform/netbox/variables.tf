@@ -44,6 +44,17 @@ variable "internal_zone" {
   default     = ""
 }
 
+variable "private_https_port" {
+  type        = number
+  description = "Client-facing HTTPS port for private Traefik application routes."
+  default     = 8443
+
+  validation {
+    condition     = var.private_https_port >= 1 && var.private_https_port <= 65535
+    error_message = "private_https_port must be between 1 and 65535."
+  }
+}
+
 variable "host_private_values" {
   description = "Private per-host values such as LAN IPs, DNS names, and custom fields."
   type = map(object({

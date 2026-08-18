@@ -57,16 +57,72 @@ Rootless execution is intentionally narrower than the general Podman schema.
 It requires `deploy.type: container`, a fully qualified exact image, one
 role-managed bridge, and unprivileged published TCP ports. A rootless bind mount
 must use an exact normalized proper descendant of `/opt` that is also declared
-in `paths`, omit explicit
-path ownership, and provide a validated
+in `paths`, omit explicit path ownership, and provide a validated
 `deploy.execution.userns: {mode: keep-id, uid: ..., gid: ...}` mapping. After
 the common path exists, the adapter recursively assigns that source to the
 dedicated execution account without changing descendant modes. Named volumes,
 tmpfs mounts, native secrets, added capabilities, devices, privileged mode,
-host networking, copies, templates, and application preparation remain
-unsupported for rootless execution. Unsupported combinations fail during
-normalization before account or runtime mutation. Adminer fits the mount-free
-subset, The Lounge exercises the bind-backed subset, and n8n remains rootful.
+host networking, and application preparation remain unsupported for rootless
+execution. Rootless `copies` and `templates` are supported only when every
+destination is a normalized absolute proper descendant of a declared bind
+source; explicit file owner/group overrides are rejected so `service_common`
+uses the dedicated execution account. Additional `paths` entries are limited to
+`state: absent` descendants of a declared bind source, also without ownership
+overrides. This intentionally provides managed-file parity inside an existing
+bind tree, not general rootless filesystem parity. Unsupported combinations
+fail during normalization before account or runtime mutation. Adminer fits the
+mount-free subset, The Lounge exercises the bind-backed subset, Homepage uses
+confined templates, a static copy, and stale Docker-file cleanup, and n8n
+remains rootful.
+
+Every dedicated rootless account receives one role-owned Podman configuration
+drop-in at
+`/var/lib/<host_user>/.config/containers/containers.conf.d/20-podman-services-network.conf`.
+The role never replaces the account's operator-managed `containers.conf` and
+does not change global `/etc/containers` configuration. This corrects a pasta
+same-host routing failure: pasta normally copies the host primary-interface
+addresses, so a container resolving a canonical internal FQDN to that host's
+real LAN address can treat the destination as its own address and refuse the
+connection. Podman's documented account-specific `containers.conf.d` loading
+and pasta behavior are described in the upstream
+[`containers.conf(5)` documentation](https://github.com/containers/common/blob/main/docs/containers.conf.5.md)
+and [`podman-run(1)` network documentation](https://docs.podman.io/en/latest/markdown/podman-run.1.html#network-mode-networks).
+
+The managed `[network]` table uses the documented private IPv4 pasta shape:
+
+```toml
+pasta_options = [
+  "--ipv4-only",
+  "-a", "10.0.2.0",
+  "-n", "24",
+  "-g", "10.0.2.2",
+  "--dns-forward", "10.0.2.3",
+  "--no-ndp",
+  "--no-dhcpv6",
+  "--no-dhcp",
+]
+```
+
+This deliberately disables IPv6 in the account's rootless pasta namespace so
+neither address family copies a host-interface address. Podman still owns
+interface setup and port forwarding; the role does not override pasta's MTU or
+TCP/UDP forwarding behavior. Before live account or file mutation, the role
+validates the RFC 1918 subnet/gateway/DNS-forward tuple and rejects overlap with
+any non-default host IPv4 route. The same range is safe for separate dedicated
+accounts because each account has distinct rootless runtime state and an extra
+rootless network namespace. Internal DNS remains unchanged, applications keep
+using canonical internal FQDNs, and `host.containers.internal` remains available
+as a diagnostic address rather than an application configuration convention.
+Rootful Podman is unaffected.
+
+The drop-in is managed only during deploy, update, recreate, and bootstrap.
+Check mode validates and reports its exact intended path without creating an
+account, directory, or file. A changed drop-in takes effect when the selected
+service's rootless networking namespace is re-established, so use an explicit
+service recreate; the role does not restart other rootless accounts. Ordinary
+remove preserves the dedicated account, home, Podman storage, and this network
+drop-in. Account and configuration retirement remain a separate deliberate
+operator procedure.
 
 ## Lifecycle semantics
 
@@ -178,12 +234,12 @@ Docker and Podman now consume the same common-resolved environment. The former e
 
 ## n8n
 
-n8n was the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, `named_networks`, canonical ports/volumes/paths, `deploy`, `systemd`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter. Adminer and The Lounge are the next deliberately migrated services; further adoption remains incremental, one validated service at a time.
+n8n was the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, `named_networks`, canonical ports/volumes/paths, `deploy`, `systemd`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter. Adminer, The Lounge, and Homepage are the next deliberately migrated services; further adoption remains incremental, one validated service at a time.
 
 n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.04. The selected host must already have the runtime required by the declaration. A runtime-only edit is valid only when the complete effective declaration passes the destination adapter; it does not install a runtime or establish live parity. The proof covers the trusted-address `host_ip` bind in both generated Docker standalone Compose and Podman Quadlet output. Static tests do not replace a live migration test.
 
 
-The service uses pinned image `docker.io/n8nio/n8n:2.31.4`, UID/GID 1000:1000, application data in `/opt/n8n`, PostgreSQL database `n8n` through the shared HAProxy endpoint, and private routing at `https://n8n.int.<cloudflare-zone>:8443/`. The direct backend binds port 5678 to the VM management/LAN address; that direct port remains reachable on that network and bypasses Traefik TLS and middleware.
+The service uses pinned image `docker.io/n8nio/n8n:2.31.4`, UID/GID 1000:1000, application data in `/opt/n8n`, PostgreSQL database `n8n` through the shared HAProxy endpoint, and private routing at `https://n8n.<services_internal_zone>:<services_private_https_port>/`. The direct backend binds port 5678 to the VM management/LAN address; that direct port remains reachable on that network and bypasses Traefik TLS and middleware.
 
 Its three canonical secrets preserve their lifecycle intent: the PostgreSQL username and n8n encryption key use the default `preserve` policy, while the PostgreSQL password uses `reconcile` during update/recreate. Shared preparation ensures the `n8n` database exists before the Podman service starts.
 

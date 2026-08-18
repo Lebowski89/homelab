@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -563,11 +564,31 @@ def test_manager_owned_compose_and_drift_state_have_single_ordered_writers():
     assert PLAYBOOK.count('loop: "{{ service_catalog_selected }}"') == 2
 
 
-def test_no_operational_ansible_file_references_internal_zone():
-    operational_files = [path for path in Path("ansible").rglob("*") if path.is_file() and path.suffix in {".yml", ".yaml", ".j2", ".py"}]
+def test_operational_ansible_uses_only_canonical_service_topology_vars():
+    operational_roots = [
+        Path("ansible/group_vars/all/services"),
+        Path("ansible/roles/service_common/templates/configs"),
+        Path("ansible/roles/service_prepare/tasks/applications"),
+        Path("ansible/roles/docker_services/tasks"),
+        Path("ansible/roles/podman_services/tasks"),
+        Path("ansible/tasks"),
+    ]
+    operational_files = [
+        path for root in operational_roots for path in root.rglob("*") if path.is_file() and path.suffix in {".yml", ".yaml", ".j2", ".py"}
+    ]
+    legacy_patterns = {
+        "bare internal_zone": re.compile(r"\binternal_zone\b"),
+        "cloudflare_zone topology": re.compile(r"\bcloudflare_zone\b"),
+        "secret topology alias": re.compile(r"secrets\.cloudflare_zone"),
+        "late topology substitution": re.compile(r"\{cloudflare_zone\}"),
+    }
+    offenders = {
+        str(path): [name for name, pattern in legacy_patterns.items() if pattern.search(path.read_text())]
+        for path in operational_files
+        if any(pattern.search(path.read_text()) for pattern in legacy_patterns.values())
+    }
 
-    offenders = [str(path) for path in operational_files if "internal_zone" in path.read_text()]
-    assert offenders == []
+    assert offenders == {}
 
 
 def test_common_resolution_precedes_adapter_cleanup_and_native_secret_materialization():

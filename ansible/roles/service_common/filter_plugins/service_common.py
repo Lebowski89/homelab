@@ -593,13 +593,14 @@ def service_common_traefik_context(
     service: Mapping[str, Any],
     name: str,
     target_hosts: Sequence[str],
-    base_zone: str,
+    public_zone: str,
+    internal_zone: str,
     inventory_hosts: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Build runtime-neutral values for a Traefik dynamic-config template.
 
-    Private exposure prefixes the fallback zone with ``int.`` and selects the
-    private entrypoint. Backend URLs may be supplied directly; otherwise service
+    Private exposure selects the explicit internal zone and private entrypoint;
+    public exposure selects the explicit public zone. Backend URLs may be supplied directly; otherwise service
     mode addresses the service name and host mode resolves an explicit host,
     inventory host, or first common target host. Optional Authelia, middleware,
     internal-API, header, and Theme Park settings are normalized into template
@@ -609,7 +610,8 @@ def service_common_traefik_context(
         service: Effective service mapping containing a ``traefik`` section.
         name: Required effective service name.
         target_hosts: Ordered common target hosts used as a host-backend fallback.
-        base_zone: Default public DNS zone; private routes derive ``int.<zone>``.
+        public_zone: Default public DNS zone.
+        internal_zone: Default private DNS zone; independent of the public zone.
         inventory_hosts: Host-variable mapping used to resolve backend
             inventory ``local_ip`` values.
 
@@ -637,10 +639,13 @@ def service_common_traefik_context(
     private = exposure == "private"
 
     configured_zone = _text(traefik.get("zone"))
-    base_zone = _text(base_zone)
-    if not configured_zone and not base_zone:
-        raise AnsibleFilterError("service_common_traefik_base_zone or traefik.zone is required")
-    zone = configured_zone or (f"int.{base_zone}" if private else base_zone)
+    public_zone = _text(public_zone)
+    internal_zone = _text(internal_zone)
+    selected_zone = internal_zone if private else public_zone
+    if not configured_zone and not selected_zone:
+        selected_name = "service_common_traefik_internal_zone" if private else "service_common_traefik_public_zone"
+        raise AnsibleFilterError(f"{selected_name} or traefik.zone is required")
+    zone = configured_zone or selected_zone
     address = f"{_text(traefik.get('subdomain')) or name}.{zone}"
 
     try:

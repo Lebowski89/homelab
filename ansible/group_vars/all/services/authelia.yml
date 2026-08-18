@@ -148,9 +148,6 @@ authelia:
           - var: smtp_username
             path: "/Porkbun"
             name: SMTP_USER
-          - var: cloudflare_zone
-            path: "/Cloudflare"
-            name: ZONE
       secrets:
         - authelia_session_key_secret
         - authelia_jwt_key_secret

@@ -1,11 +1,10 @@
-{% set cloudflare_zone = service_common_infisical_values.cloudflare_zone %}
 ---
 
 http:
   routers:
     authelia:
       entryPoints: ["https"]
-      rule: "Host(`authelia.{{ cloudflare_zone }}`)"
+      rule: "Host(`authelia.{{ services_public_zone }}`)"
       priority: 50
       tls:
         options: "securetls@file"

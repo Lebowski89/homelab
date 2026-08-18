@@ -22,9 +22,6 @@ qbittorrent:
     FILE__VPN_PIA_PASS: /run/secrets/qbittorrent_pia_pass_secret
   infisical:
     secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
       - var: qbittorrent_pia_user
         path: "/PIA"
         name: USER

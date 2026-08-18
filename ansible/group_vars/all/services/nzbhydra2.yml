@@ -23,9 +23,6 @@ nzbhydra2:
     UMASK: "022"
   infisical:
     secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
       - var: nzbhydra2_user
         path: "/NZBHydra2"
         name: USER
@@ -67,10 +64,6 @@ nzbhydra2:
         name: API
   application_prepare:
     handler: nzbhydra2
-  prep:
-  ## used in tasks/sub_tasks/prep/nzbhydra2.yml
-    sabnzbd:
-      url: "http://sabnzbd:8080"
   ################################
   # CONNECTIVITY
   ################################

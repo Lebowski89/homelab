@@ -3,7 +3,10 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+import yaml
 from ansible.errors import AnsibleFilterError
+from jinja2 import StrictUndefined
+from jinja2.nativetypes import NativeEnvironment
 
 MODULE_PATH = Path(__file__).resolve().parents[2] / "ansible" / "roles" / "podman_services" / "filter_plugins" / "podman_services.py"
 spec = importlib.util.spec_from_file_location("podman_services", MODULE_PATH)
@@ -1161,6 +1164,27 @@ def rootless_bind_cfg():
     return cfg
 
 
+def real_rootless_service(name):
+    services_dir = Path(__file__).resolve().parents[2] / "ansible" / "group_vars" / "all" / "services"
+    rendered = (
+        NativeEnvironment(undefined=StrictUndefined)
+        .from_string((services_dir / f"{name}.yml").read_text())
+        .render(
+            services_controller_host="manager",
+            local_ip="192.0.2.10",
+            timezone="Australia/Melbourne",
+            hostvars={
+                "manager": {
+                    "container_host_puid": 1000,
+                    "container_host_pgid": 1000,
+                    "container_host_appdata_root": "/opt/appdata",
+                }
+            },
+        )
+    )
+    return yaml.safe_load(rendered)[name]
+
+
 def test_rootless_bind_mount_uses_validated_keep_id_and_dedicated_path_ownership_without_mutation():
     cfg = rootless_bind_cfg()
     original = deepcopy(cfg)
@@ -1186,6 +1210,159 @@ def test_rootless_bind_mount_uses_validated_keep_id_and_dedicated_path_ownership
     ]
     assert normalized["volumes"] == []
     assert cfg == original
+
+
+@pytest.mark.parametrize(
+    ("field", "destinations"),
+    [
+        ("templates", ["/opt/appdata/thelounge/settings.yml"]),
+        ("templates", ["/opt/appdata/thelounge/settings.yml", "/opt/appdata/thelounge/users.yml"]),
+        ("copies", ["/opt/appdata/thelounge/background.jpg"]),
+    ],
+)
+def test_rootless_managed_files_are_allowed_inside_a_declared_bind_tree(field, destinations):
+    cfg = rootless_bind_cfg()
+    cfg[field] = [
+        {"src": f"synthetic-{index}{'.j2' if field == 'templates' else ''}", "dest": destination}
+        for index, destination in enumerate(destinations)
+    ]
+
+    normalized = podman_services.podman_service_normalize(cfg, "thelounge")
+
+    assert normalized["container"]["mounts"][0]["source"] == "/opt/appdata/thelounge"
+
+
+@pytest.mark.parametrize("field", ["templates", "copies"])
+def test_rootless_managed_files_are_allowed_inside_a_nested_bind_source(field):
+    cfg = rootless_bind_cfg()
+    cfg["paths"].append({"path": "/opt/appdata/thelounge/images", "state": "directory", "mode": "0750"})
+    cfg["volumes"]["images"] = {
+        "type": "bind",
+        "source": "/opt/appdata/thelounge/images",
+        "target": "/app/public/images",
+        "read_only": True,
+    }
+    cfg[field] = [{"src": "synthetic", "dest": "/opt/appdata/thelounge/images/background.jpg"}]
+
+    podman_services.podman_service_normalize(cfg, "thelounge")
+
+
+def test_rootless_template_can_use_parent_bind_tree_when_a_nested_bind_also_exists():
+    cfg = rootless_bind_cfg()
+    cfg["paths"].append({"path": "/opt/appdata/thelounge/images", "state": "directory", "mode": "0750"})
+    cfg["volumes"]["images"] = {
+        "type": "bind",
+        "source": "/opt/appdata/thelounge/images",
+        "target": "/app/public/images",
+        "read_only": True,
+    }
+    cfg["templates"] = [{"src": "settings.yml.j2", "dest": "/opt/appdata/thelounge/settings.yml"}]
+
+    podman_services.podman_service_normalize(cfg, "thelounge")
+
+
+@pytest.mark.parametrize(
+    "cleanup_paths",
+    [
+        ["/opt/appdata/thelounge/docker.yaml"],
+        ["/opt/appdata/thelounge/docker.yaml", "/opt/appdata/thelounge/.env"],
+    ],
+)
+def test_rootless_paths_allow_confined_state_absent_cleanup(cleanup_paths):
+    cfg = rootless_bind_cfg()
+    cfg["paths"].extend({"path": path, "state": "absent"} for path in cleanup_paths)
+
+    normalized = podman_services.podman_service_normalize(cfg, "thelounge")
+
+    assert normalized["host_paths"][-len(cleanup_paths) :] == [{"path": path, "state": "absent"} for path in cleanup_paths]
+
+
+@pytest.mark.parametrize("service_name", ["adminer", "thelounge"])
+def test_existing_rootless_service_declarations_remain_valid(service_name):
+    cfg = real_rootless_service(service_name)
+
+    normalized = podman_services.podman_service_normalize(cfg, service_name)
+
+    assert normalized["execution"]["mode"] == "rootless"
+
+
+@pytest.mark.parametrize(
+    ("field", "destination"),
+    [
+        ("templates", "/etc/thelounge/settings.yml"),
+        ("copies", "/opt/another-service/background.jpg"),
+        ("templates", "settings.yml"),
+        ("copies", "/opt/appdata/thelounge/../outside/background.jpg"),
+        ("templates", "/opt/appdata/thelounge-evil/settings.yml"),
+        ("templates", "/opt/appdata/thelounge"),
+        ("copies", "/opt/appdata/thelounge"),
+    ],
+)
+def test_rootless_managed_file_destinations_must_be_confined_normalized_descendants(field, destination):
+    cfg = rootless_bind_cfg()
+    cfg[field] = [{"src": "synthetic", "dest": destination}]
+
+    with pytest.raises(AnsibleFilterError, match=rf"{field}\[0\]\.dest.*proper descendant"):
+        podman_services.podman_service_normalize(cfg, "thelounge")
+
+
+@pytest.mark.parametrize("field", ["templates", "copies"])
+@pytest.mark.parametrize("ownership_field", ["owner", "group"])
+def test_rootless_managed_files_reject_explicit_ownership(field, ownership_field):
+    cfg = rootless_bind_cfg()
+    cfg[field] = [
+        {
+            "src": "synthetic",
+            "dest": "/opt/appdata/thelounge/generated.conf",
+            ownership_field: "root",
+        }
+    ]
+
+    with pytest.raises(AnsibleFilterError, match=rf"{field}\[0\].*omit owner and group"):
+        podman_services.podman_service_normalize(cfg, "thelounge")
+
+
+def test_rootless_paths_reject_extra_non_bind_directories():
+    cfg = rootless_bind_cfg()
+    cfg["paths"].append({"path": "/opt/appdata/thelounge/cache", "state": "directory"})
+
+    with pytest.raises(AnsibleFilterError, match=r"paths\[1\].*must use state absent"):
+        podman_services.podman_service_normalize(cfg, "thelounge")
+
+
+@pytest.mark.parametrize(
+    "cleanup_path",
+    [
+        "/etc/thelounge/stale.conf",
+        "/opt/another-service/stale.conf",
+        "/opt/appdata/thelounge/../outside/stale.conf",
+        "/opt/appdata/thelounge-evil/stale.conf",
+    ],
+)
+def test_rootless_paths_reject_state_absent_cleanup_outside_the_bind_tree(cleanup_path):
+    cfg = rootless_bind_cfg()
+    cfg["paths"].append({"path": cleanup_path, "state": "absent"})
+
+    with pytest.raises(AnsibleFilterError, match=r"paths\[1\]\.path.*(/opt|proper descendant)"):
+        podman_services.podman_service_normalize(cfg, "thelounge")
+
+
+def test_rootless_state_absent_cleanup_rejects_explicit_ownership():
+    cfg = rootless_bind_cfg()
+    cfg["paths"].append({"path": "/opt/appdata/thelounge/stale.conf", "state": "absent", "owner": "root"})
+
+    with pytest.raises(AnsibleFilterError, match=r"state absent cleanup must omit owner and group"):
+        podman_services.podman_service_normalize(cfg, "thelounge")
+
+
+@pytest.mark.parametrize("field", ["templates", "copies"])
+def test_rootless_managed_files_require_a_bind_tree(field):
+    cfg = rootless_cfg()
+    cfg["deploy"]["execution"]["userns"] = {"mode": "keep-id", "uid": "1000", "gid": "1000"}
+    cfg[field] = [{"src": "synthetic", "dest": "/opt/adminer/generated.conf"}]
+
+    with pytest.raises(AnsibleFilterError, match=rf"{field}\[0\]\.dest.*declared rootless bind source"):
+        podman_services.podman_service_normalize(cfg, "adminer")
 
 
 def test_rootless_linuxserver_container_root_contract_is_separate_from_the_nonroot_execution_account():
@@ -1272,8 +1449,8 @@ def test_opt_root_cannot_reach_rootless_recursive_ownership(source):
 @pytest.mark.parametrize(
     ("mutation", "message"),
     [
-        ("missing_path", "declare exactly"),
-        ("different_path", "declare exactly"),
+        ("missing_path", "exactly once"),
+        ("different_path", "must use state absent"),
         ("explicit_owner", "must omit owner and group"),
         ("outside_opt", "within /opt"),
     ],
@@ -1394,8 +1571,6 @@ def test_rootful_execution_rejects_rootless_user_namespace_mapping():
         ("volumes", [{"type": "volume", "source": "adminer", "target": "/data"}]),
         ("cap_add", ["NET_ADMIN"]),
         ("secrets", ["adminer_secret"]),
-        ("copies", [{"src": "synthetic", "dest": "/opt/adminer/config"}]),
-        ("templates", [{"src": "synthetic.j2", "dest": "/opt/adminer/config"}]),
         ("application_prepare", {"handler": "synthetic"}),
         ("prep", {"synthetic": True}),
     ],

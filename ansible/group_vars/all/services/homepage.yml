@@ -5,10 +5,9 @@ homepage:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
+  runtime: podman
   tags: [monitoring, homepage]
   name: homepage
-  stack: homepage
   ################################
   # IMAGE/PROCESS
   ################################
@@ -21,8 +20,8 @@ homepage:
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
     PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
     UMASK: "022"
-  env_file:
-    - "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/.env"
+    HOMEPAGE_ALLOWED_HOSTS: >-
+      homepage.{{ services_internal_zone }}:{{ services_private_https_port }}
   infisical:
     secrets_map:
       - var: autobrr_api
@@ -31,9 +30,12 @@ homepage:
       - var: bazarr_api
         path: "/Bazarr"
         name: API
-      - var: cloudflare_zone
-        path: "/Cloudflare"
-        name: ZONE
+      - var: gitea_homepage_api
+        path: "/Gitea"
+        name: HOMEPAGE_API
+      - var: gotify_homepage_token
+        path: "/Gotify"
+        name: HOMEPAGE_TOKEN
       - var: grafana_user
         path: "/Grafana"
         name: USER
@@ -79,6 +81,9 @@ homepage:
       - var: sonarr_4k_api
         path: "/Sonarr-4K"
         name: API
+      - var: sportarr_api
+        path: "/Sportarr"
+        name: API
       - var: stash_api
         path: "/Stash"
         name: API
@@ -88,18 +93,21 @@ homepage:
       - var: technitium_token
         path: "/HomePage"
         name: TECHNITIUM_TOKEN
-      - var: unifi_user
-        path: "/Unifi"
-        name: USER
-      - var: unifi_pass
-        path: "/Unifi"
-        name: PASS
+      - var: wallos_api
+        path: "/Wallos"
+        name: API
   ################################
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    homepage:
+      driver: bridge
+      external: false
+  ports:
+    - host_ip: "{{ local_ip }}"
+      published: 13000
+      target: 3000
+      protocol: tcp
   ################################
   # FILESYSTEM
   ################################
@@ -110,6 +118,10 @@ homepage:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/images"
       state: directory
       mode: "0755"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/.env"
+      state: absent
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/docker.yaml"
+      state: absent
   copies:
     - src: files/earth-rise-2.jpg
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/images/earth-rise-2.jpg"
@@ -118,10 +130,6 @@ homepage:
       wait: true
       wait_timeout: 30
   templates:
-    - src: configs/homepage/docker.yaml.j2
-      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/docker.yaml"
-      mode: "0664"
-      force: true
     - src: configs/homepage/services.yaml.j2
       no_log: true
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/services.yaml"
@@ -131,7 +139,6 @@ homepage:
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/settings.yaml"
       mode: "0664"
       force: true
-      no_log: true
     - src: configs/homepage/bookmarks.yaml.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/bookmarks.yaml"
       mode: "0664"
@@ -144,11 +151,6 @@ homepage:
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/custom.css"
       mode: "0664"
       force: true
-    - src: configs/homepage/homepage.env.j2
-      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/.env"
-      mode: "0664"
-      force: true
-      no_log: true
   volumes:
     config:
       type: bind
@@ -166,15 +168,23 @@ homepage:
   traefik:
     enable: true
     exposure: private
-    port: 3000
+    port: 13000
+    backend_mode: host
+    backend_host_inventory: "{{ services_controller_host }}"
   ################################
   # RUNTIME/LIFECYCLE
   ################################
   deploy:
-    type: swarm
-    mode: replicated
-    profile: standard
-    replicas: 1
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-homepage
+      userns:
+        mode: keep-id
+        uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+        gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
+  systemd:
+    after: [network-online.target]
+    restart: on-failure
+    restart_sec: 10s

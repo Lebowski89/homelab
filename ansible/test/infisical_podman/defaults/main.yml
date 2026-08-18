@@ -11,7 +11,6 @@ infisical_podman_jwt_key: "{{ infisical_jwt_key }}"
 infisical_podman_postgres_user: "{{ infisical_postgres_user }}"
 infisical_podman_postgres_pass: "{{ infisical_postgres_pass }}"
 infisical_podman_redis_password: "{{ infisical_redis_password }}"
-infisical_podman_domain: "{{ infisical_domain }}"
 infisical_podman_smtp_email: "{{ infisical_smtp_email }}"
 infisical_podman_smtp_user: "{{ infisical_smtp_user }}"
 infisical_podman_smtp_pass: "{{ infisical_smtp_pass }}"
@@ -31,8 +30,8 @@ infisical_podman_env_path: "{{ infisical_podman_base_path }}/.env"
 infisical_podman_smtp_host: smtp.porkbun.com
 infisical_podman_smtp_port: 587
 
-infisical_podman_frontend_fqdn: "{{ infisical_podman_name }}.int.{{ infisical_podman_domain }}"
-infisical_podman_frontend_address: "https://{{ infisical_podman_frontend_fqdn }}:8443"
+infisical_podman_frontend_fqdn: "{{ infisical_podman_name }}.{{ services_internal_zone }}"
+infisical_podman_frontend_address: "https://{{ infisical_podman_frontend_fqdn }}:{{ services_private_https_port }}"
 infisical_podman_backend_address: "http://{{ infisical_podman_name }}:8080"
 
 infisical_podman_network: infisical.network

@@ -25,9 +25,6 @@ alertmanager:
     TZ: "{{ timezone }}"
   infisical:
     secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
       - var: smtp_email
         path: "/Porkbun"
         name: SMTP_EMAIL

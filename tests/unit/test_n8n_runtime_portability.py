@@ -4,14 +4,14 @@ import copy
 import importlib.util
 import json
 import os
-import re
 import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import yaml
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2.nativetypes import NativeEnvironment
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 N8N_PATH = REPO_ROOT / "ansible/group_vars/all/services/n8n.yml"
@@ -61,8 +61,26 @@ def n8n_config():
     return document["n8n"]
 
 
+def render_structure(value, variables):
+    if isinstance(value, dict):
+        return {key: render_structure(item, variables) for key, item in value.items()}
+    if isinstance(value, list):
+        return [render_structure(item, variables) for item in value]
+    if isinstance(value, str) and ("{{" in value or "{%" in value):
+        return NativeEnvironment(undefined=StrictUndefined).from_string(value).render(**variables)
+    return value
+
+
 def resolved_n8n_config():
-    cfg = copy.deepcopy(n8n_config())
+    cfg = render_structure(
+        copy.deepcopy(n8n_config()),
+        {
+            "services_controller_host": "manager",
+            "services_internal_zone": "private.example.internal",
+            "services_private_https_port": 9443,
+            "hostvars": {"manager": {"local_ip": "192.0.2.10"}},
+        },
+    )
     cfg["ports"][0]["host_ip"] = "192.0.2.98"
     return cfg
 
@@ -74,7 +92,7 @@ def normalize_both(*, check_mode=False):
         cfg["infisical"]["secrets_map"],
         cfg["infisical"].get("fail_on_empty", True),
     )
-    infisical_values = common.service_common_infisical_check_values(common_secrets) if check_mode else {"cloudflare_zone": "example.test"}
+    infisical_values = common.service_common_infisical_check_values(common_secrets) if check_mode else {}
     resolved_environment = common.service_common_environment_resolve(
         cfg["environment"],
         infisical_values,
@@ -209,7 +227,7 @@ def test_docker_copy_accepts_canonical_network_after_removing_podman_systemd_pol
     assert docker_service["image"] == docker_cfg["image"]
     assert docker_service["environment"] == docker_cfg["environment"]
     assert docker_service["named_networks"] == docker_cfg["named_networks"]
-    assert resolved_environment["N8N_HOST"] == "n8n.int.example.test"
+    assert resolved_environment["N8N_HOST"] == "n8n.private.example.internal"
     assert docker_service["healthcheck"] == docker_cfg["healthcheck"]
     assert ports == [
         {
@@ -249,7 +267,7 @@ def test_adapters_resolve_equivalent_portable_runtime_values():
 
     assert podman_service["image"] == cfg["image"]
     assert podman_service["env"] == resolved_environment
-    assert resolved_environment["N8N_EDITOR_BASE_URL"] == "https://n8n.int.example.test:8443/"
+    assert resolved_environment["N8N_EDITOR_BASE_URL"] == "https://n8n.private.example.internal:9443/"
     assert podman_service["container"]["ports"][0]["host"] == docker_port_list[0]["published"]
     assert podman_service["container"]["ports"][0]["container"] == docker_port_list[0]["target"]
     assert podman_service["container"]["mounts"][0] == {key: docker_volume_list[0][key] for key in ("source", "target", "read_only")}
@@ -309,9 +327,9 @@ def test_real_n8n_docker_copy_renders_all_portable_fields_without_podman_options
     for key, value in cfg["environment"].items():
         if not isinstance(value, dict):
             assert service["environment"][key] == value
-    assert service["environment"]["N8N_HOST"] == "n8n.int.example.test"
-    assert service["environment"]["N8N_EDITOR_BASE_URL"] == "https://n8n.int.example.test:8443/"
-    assert service["environment"]["WEBHOOK_URL"] == "https://n8n.int.example.test:8443/"
+    assert service["environment"]["N8N_HOST"] == "n8n.private.example.internal"
+    assert service["environment"]["N8N_EDITOR_BASE_URL"] == "https://n8n.private.example.internal:9443/"
+    assert service["environment"]["WEBHOOK_URL"] == "https://n8n.private.example.internal:9443/"
     assert service["ports"] == ["192.0.2.98:5678:5678"]
     assert rendered.count("192.0.2.98:5678:5678") == 1
     assert rendered.count("5678:5678") == 1
@@ -422,34 +440,29 @@ def test_n8n_quadlet_contains_all_canonical_secret_mounts_without_values():
     assert "do-not-render-secret-values" not in rendered
 
 
-def test_real_n8n_service_yaml_is_safe_before_infisical_values_exist():
+def test_real_n8n_service_yaml_uses_inventory_topology_without_value_templates():
     text = N8N_PATH.read_text()
     cfg = n8n_config()
 
-    assert "internal_zone" not in text
-    assert "{{ cloudflare_zone" not in text
-    assert cfg["environment"]["N8N_HOST"] == {"value_template": "n8n.int.${cloudflare_zone}"}
-    assert cfg["environment"]["N8N_EDITOR_BASE_URL"] == {"value_template": "https://n8n.int.${cloudflare_zone}:8443/"}
-    assert cfg["environment"]["WEBHOOK_URL"] == {"value_template": "https://n8n.int.${cloudflare_zone}:8443/"}
+    assert "cloudflare_zone" not in text
+    assert "value_template" not in text
+    assert cfg["environment"]["N8N_HOST"] == "n8n.{{ services_internal_zone }}"
+    assert cfg["environment"]["N8N_EDITOR_BASE_URL"] == ("https://n8n.{{ services_internal_zone }}:{{ services_private_https_port }}/")
+    assert cfg["environment"]["WEBHOOK_URL"] == ("https://n8n.{{ services_internal_zone }}:{{ services_private_https_port }}/")
 
 
-def test_real_n8n_declares_cloudflare_zone_as_lookup_only():
+def test_real_n8n_infisical_contract_contains_only_actual_secrets():
     cfg = n8n_config()
-    lookup = next(item for item in cfg["infisical"]["secrets_map"] if item["var"] == "cloudflare_zone")
     normalized = common.service_common_infisical_normalize(
         cfg["infisical"]["secrets_map"],
         cfg["infisical"].get("fail_on_empty", True),
     )
 
-    assert lookup == {
-        "var": "cloudflare_zone",
-        "path": "/Cloudflare",
-        "name": "ZONE",
-        "check_mode_value": "check-mode.invalid",
-    }
-    assert lookup in normalized["secrets_map"]
-    assert "secret" not in lookup
-    assert "cloudflare_zone" not in {item["var"] for item in normalized["secret_declarations"]}
+    assert [item["var"] for item in normalized["secrets_map"]] == [
+        "postgres_user",
+        "postgres_pass",
+        "n8n_encryption_key",
+    ]
     assert [item["name"] for item in normalized["secret_declarations"]] == [
         "postgres_user_secret",
         "postgres_pass_secret",
@@ -457,34 +470,14 @@ def test_real_n8n_declares_cloudflare_zone_as_lookup_only():
     ]
 
 
-def test_real_n8n_production_and_check_mode_environment_resolution():
+def test_real_n8n_production_and_check_mode_keep_the_same_inventory_topology():
     _, _, _, _, _, _, _, production = normalize_both()
     _, _, _, _, _, _, _, check_mode = normalize_both(check_mode=True)
 
-    assert production["N8N_HOST"] == "n8n.int.example.test"
-    assert production["N8N_EDITOR_BASE_URL"] == "https://n8n.int.example.test:8443/"
-    assert production["WEBHOOK_URL"] == "https://n8n.int.example.test:8443/"
-    assert check_mode["N8N_HOST"] == "n8n.int.check-mode.invalid"
-    assert check_mode["N8N_EDITOR_BASE_URL"] == "https://n8n.int.check-mode.invalid:8443/"
-    assert check_mode["WEBHOOK_URL"] == "https://n8n.int.check-mode.invalid:8443/"
-
-
-def test_n8n_hostname_shape_requires_its_explicit_check_mode_override():
-    cfg = resolved_n8n_config()
-    without_override = copy.deepcopy(cfg)
-    cloudflare = next(item for item in without_override["infisical"]["secrets_map"] if item["var"] == "cloudflare_zone")
-    cloudflare.pop("check_mode_value")
-    default_config = common.service_common_infisical_normalize(without_override["infisical"]["secrets_map"])
-    default_environment = common.service_common_environment_resolve(
-        without_override["environment"],
-        common.service_common_infisical_check_values(default_config),
-        default_config,
-    )
-    _, _, _, _, _, _, _, explicit_environment = normalize_both(check_mode=True)
-    dns_label = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$")
-
-    assert not all(dns_label.fullmatch(label) for label in default_environment["N8N_HOST"].split("."))
-    assert all(dns_label.fullmatch(label) for label in explicit_environment["N8N_HOST"].split("."))
+    assert check_mode == production
+    assert production["N8N_HOST"] == "n8n.private.example.internal"
+    assert production["N8N_EDITOR_BASE_URL"] == "https://n8n.private.example.internal:9443/"
+    assert production["WEBHOOK_URL"] == "https://n8n.private.example.internal:9443/"
 
 
 def test_real_n8n_private_traefik_hostname_matches_resolved_application_hostname():
@@ -493,13 +486,14 @@ def test_real_n8n_private_traefik_hostname_matches_resolved_application_hostname
         cfg,
         "n8n",
         ["n8n"],
-        "example.test",
+        "public.example",
+        "private.example.internal",
         {"n8n": {"local_ip": "192.0.2.98"}},
     )
 
-    assert context["address"] == environment["N8N_HOST"] == "n8n.int.example.test"
-    assert environment["N8N_EDITOR_BASE_URL"].endswith(":8443/")
-    assert environment["WEBHOOK_URL"].endswith(":8443/")
+    assert context["address"] == environment["N8N_HOST"] == "n8n.private.example.internal"
+    assert environment["N8N_EDITOR_BASE_URL"].endswith(":9443/")
+    assert environment["WEBHOOK_URL"].endswith(":9443/")
 
 
 def test_real_n8n_resolved_environment_is_scalar_before_podman_env_file_render():
@@ -511,9 +505,9 @@ def test_real_n8n_resolved_environment_is_scalar_before_podman_env_file_render()
 
     assert service["env"] == resolved_environment
     assert all(not isinstance(value, dict) for value in service["env"].values())
-    assert "N8N_HOST=n8n.int.example.test" in rendered
-    assert "N8N_EDITOR_BASE_URL=https://n8n.int.example.test:8443/" in rendered
-    assert "WEBHOOK_URL=https://n8n.int.example.test:8443/" in rendered
+    assert "N8N_HOST=n8n.private.example.internal" in rendered
+    assert "N8N_EDITOR_BASE_URL=https://n8n.private.example.internal:9443/" in rendered
+    assert "WEBHOOK_URL=https://n8n.private.example.internal:9443/" in rendered
     assert "value_template" not in rendered
     assert "value_from" not in rendered
 
@@ -530,6 +524,8 @@ def test_ansible_service_loading_finalizes_n8n_without_infisical_values(tmp_path
   gather_facts: false
   vars:
     services_controller_host: localhost
+    services_internal_zone: private.example.internal
+    services_private_https_port: 9443
     local_ip: 192.0.2.10
   tasks:
     - name: Publish localhost inventory address
@@ -545,11 +541,11 @@ def test_ansible_service_loading_finalizes_n8n_without_infisical_values(tmp_path
       ansible.builtin.set_fact:
         services: "{{ svcfiles }}"
 
-    - name: Assert typed domain entries remain unevaluated
+    - name: Assert inventory topology is resolved during service loading
       ansible.builtin.assert:
         that:
-          - services.n8n.environment.N8N_HOST.value_template == "n8n.int.${cloudflare_zone}"
-          - services.n8n.environment.N8N_EDITOR_BASE_URL.value_template == "https://n8n.int.${cloudflare_zone}:8443/"
+          - services.n8n.environment.N8N_HOST == "n8n.private.example.internal"
+          - services.n8n.environment.N8N_EDITOR_BASE_URL == "https://n8n.private.example.internal:9443/"
 """.replace("__N8N_PATH__", str(N8N_PATH))
     )
 
@@ -577,6 +573,9 @@ def test_n8n_docker_check_mode_builds_dispatch_owned_common_context(tmp_path):
   gather_facts: false
   vars:
     services_controller_host: manager
+    services_public_zone: public.example
+    services_internal_zone: private.example.internal
+    services_private_https_port: 9443
     service_catalog_controller_host: manager
     docker_services_deploy_host_effective: dispatch
     docker_services_stack_deploy_type: container
@@ -593,7 +592,6 @@ def test_n8n_docker_check_mode_builds_dispatch_owned_common_context(tmp_path):
               path: /Synthetic
               name: STALE
         service_common_infisical_values:
-          cloudflare_zone: manager-stale.invalid
           manager_stale: manager-stale-value
         service_common_secret_declarations:
           - name: manager_stale_secret
@@ -641,10 +639,10 @@ def test_n8n_docker_check_mode_builds_dispatch_owned_common_context(tmp_path):
           - hostvars.dispatch.service_catalog_common_context.runtime == "docker"
           - hostvars.dispatch.service_catalog_common_context.dispatch_host == "dispatch"
           - hostvars.dispatch.service_catalog_common_context.preflight_performed
-          - hostvars.dispatch.service_catalog_common_context.lookup_values.cloudflare_zone == "check-mode.invalid"
-          - hostvars.dispatch.service_catalog_common_context.resolved_environment.N8N_HOST == "n8n.int.check-mode.invalid"
+          - hostvars.dispatch.service_catalog_common_context.lookup_values.keys() | list | sort == ["n8n_encryption_key", "postgres_pass", "postgres_user"]
+          - hostvars.dispatch.service_catalog_common_context.resolved_environment.N8N_HOST == "n8n.private.example.internal"
           - hostvars.dispatch.service_catalog_common_context.resolved_environment.DB_POSTGRESDB_HOST == "192.0.2.10"
-          - hostvars.dispatch.service_catalog_common_context.infisical_config.secrets_map | map(attribute="var") | list == ["cloudflare_zone", "postgres_user", "postgres_pass", "n8n_encryption_key"]
+          - hostvars.dispatch.service_catalog_common_context.infisical_config.secrets_map | map(attribute="var") | list == ["postgres_user", "postgres_pass", "n8n_encryption_key"]
           - hostvars.dispatch.service_catalog_common_context.secret_declarations | map(attribute="name") | list == ["postgres_user_secret", "postgres_pass_secret", "n8n_encryption_key_secret"]
           - hostvars.manager.service_common_infisical_values.manager_stale == "manager-stale-value"
           - hostvars.manager.service_common_resolved_environment.N8N_HOST == "manager-stale.invalid"

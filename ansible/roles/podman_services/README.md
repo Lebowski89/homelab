@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/06 |
+| Readme update        | 2026/08/16 |
 
 
 
@@ -30,20 +30,23 @@
 | [podman_services_system_quadlet_dir](defaults/main.yml#L3)   | str | `/etc/containers/systemd` |    
 | [podman_services_quadlet_dir](defaults/main.yml#L4)   | str | `{{ podman_services_system_quadlet_dir }}` |    
 | [podman_services_rootless_home_root](defaults/main.yml#L5)   | str | `/var/lib` |    
-| [podman_services_execution_state_dir](defaults/main.yml#L6)   | str | `/var/lib/podman-services` |    
-| [podman_services_nologin_shell](defaults/main.yml#L7)   | str | `/usr/sbin/nologin` |    
-| [podman_services_action_remove](defaults/main.yml#L8)   | str | `{{ 'remove' in (ansible_run_tags ¦ default([])) }}` |    
-| [podman_services_action_recreate](defaults/main.yml#L9)   | str | `{{ 'recreate' in (ansible_run_tags ¦ default([])) }}` |    
-| [podman_services_action_update](defaults/main.yml#L10)   | str | `{{ 'update' in (ansible_run_tags ¦ default([])) }}` |    
-| [podman_services_action_drift](defaults/main.yml#L11)   | str | `{{ 'drift' in (ansible_run_tags ¦ default([])) }}` |    
-| [podman_services_action_bootstrap](defaults/main.yml#L12)   | str | `{{ 'bootstrap' in (ansible_run_tags ¦ default([])) }}` |    
-| [podman_services_common_action](defaults/main.yml#L13)   | str | `<multiline value: folded_strip>` |    
-| [podman_services_state](defaults/main.yml#L21)   | str | `<multiline value: folded_strip>` |    
-| [podman_services_pull_images](defaults/main.yml#L30)   | bool | `True` |    
-| [podman_services_traefik_delegate](defaults/main.yml#L31)   | str | `{{ podman_services_controller_host }}` |    
-| [podman_services_traefik_dynamic_dir](defaults/main.yml#L32)   | str | `/opt/traefik/dynamic` |    
-| [podman_services_traefik_dynamic_owner](defaults/main.yml#L33)   | str | `1000` |    
-| [podman_services_traefik_dynamic_group](defaults/main.yml#L34)   | str | `1000` |    
+| [podman_services_rootless_pasta_subnet](defaults/main.yml#L6)   | str | `10.0.2.0/24` |    
+| [podman_services_rootless_pasta_gateway](defaults/main.yml#L7)   | str | `10.0.2.2` |    
+| [podman_services_rootless_pasta_dns_forward](defaults/main.yml#L8)   | str | `10.0.2.3` |    
+| [podman_services_execution_state_dir](defaults/main.yml#L9)   | str | `/var/lib/podman-services` |    
+| [podman_services_nologin_shell](defaults/main.yml#L10)   | str | `/usr/sbin/nologin` |    
+| [podman_services_action_remove](defaults/main.yml#L11)   | str | `{{ 'remove' in (ansible_run_tags ¦ default([])) }}` |    
+| [podman_services_action_recreate](defaults/main.yml#L12)   | str | `{{ 'recreate' in (ansible_run_tags ¦ default([])) }}` |    
+| [podman_services_action_update](defaults/main.yml#L13)   | str | `{{ 'update' in (ansible_run_tags ¦ default([])) }}` |    
+| [podman_services_action_drift](defaults/main.yml#L14)   | str | `{{ 'drift' in (ansible_run_tags ¦ default([])) }}` |    
+| [podman_services_action_bootstrap](defaults/main.yml#L15)   | str | `{{ 'bootstrap' in (ansible_run_tags ¦ default([])) }}` |    
+| [podman_services_common_action](defaults/main.yml#L16)   | str | `<multiline value: folded_strip>` |    
+| [podman_services_state](defaults/main.yml#L24)   | str | `<multiline value: folded_strip>` |    
+| [podman_services_pull_images](defaults/main.yml#L33)   | bool | `True` |    
+| [podman_services_traefik_delegate](defaults/main.yml#L34)   | str | `{{ podman_services_controller_host }}` |    
+| [podman_services_traefik_dynamic_dir](defaults/main.yml#L35)   | str | `/opt/traefik/dynamic` |    
+| [podman_services_traefik_dynamic_owner](defaults/main.yml#L36)   | str | `1000` |    
+| [podman_services_traefik_dynamic_group](defaults/main.yml#L37)   | str | `1000` |    
 
 
 
@@ -116,6 +119,11 @@
 | Execution ¦ Store current execution settings | ansible.builtin.set_fact | False |  |
 | Execution ¦ Select execution settings for this action | ansible.builtin.set_fact | False |  |
 | Execution ¦ Apply selected execution settings | ansible.builtin.set_fact | False |  |
+| Execution ¦ Validate managed rootless pasta configuration | ansible.builtin.set_fact | True |  |
+| Execution ¦ Report planned rootless pasta configuration | ansible.builtin.debug | True |  |
+| Execution ¦ Read host IPv4 routes for pasta conflict detection | ansible.builtin.command | True |  |
+| Execution ¦ Detect conflicting host IPv4 routes | ansible.builtin.set_fact | True |  |
+| Execution ¦ Reject conflicting host IPv4 routes | ansible.builtin.assert | True |  |
 | Execution ¦ Check selected rootless account | ansible.builtin.getent | True |  |
 | Execution ¦ Check selected rootless primary group | ansible.builtin.getent | True |  |
 | Execution ¦ Check selected rootless home | ansible.builtin.stat | True |  |
@@ -144,6 +152,7 @@
 | Execution ¦ Start rootless user systemd manager | ansible.builtin.systemd_service | True |  |
 | Execution ¦ Verify rootless runtime directory exists | ansible.builtin.stat | True |  |
 | Execution ¦ Ensure rootless Podman directories exist | ansible.builtin.file | True |  |
+| Execution ¦ Manage rootless pasta network drop-in | ansible.builtin.template | True |  |
 | Execution ¦ Verify rootless user systemd manager | ansible.builtin.command | True |  |
 
 #### File: tasks/sub_tasks/finish_remove.yml
