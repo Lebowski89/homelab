@@ -1,4 +1,3 @@
-{% set cloudflare_zone = service_common_infisical_values.cloudflare_zone %}
 ---
 
 http:
@@ -14,7 +13,7 @@ http:
   routers:
     traefik-dashboard:
       entryPoints: ["https_private"]
-      rule: "Host(`traefik.int.{{ cloudflare_zone }}`)"
+      rule: "Host(`traefik.{{ services_internal_zone }}`)"
       priority: 10
       tls:
         options: "securetls@file"

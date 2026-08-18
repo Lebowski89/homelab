@@ -10,6 +10,12 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVICE_PATH = REPO_ROOT / "ansible/group_vars/all/services/homepage.yml"
 TEMPLATE_PATH = REPO_ROOT / "ansible/roles/service_common/templates/configs/homepage/services.yaml.j2"
 SETTINGS_PATH = REPO_ROOT / "ansible/roles/service_common/templates/configs/homepage/settings.yaml.j2"
+SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
+TOPOLOGY = {
+    "services_public_zone": "public.example",
+    "services_internal_zone": "private.example.internal",
+    "services_private_https_port": 9443,
+}
 
 # The rendered Homepage configuration is the source of truth for card and
 # layout content. These tests validate rendering, structure, and runtime
@@ -28,7 +34,7 @@ def homepage_infisical_vars():
 
 
 def fake_homepage_infisical_values():
-    return {var: "example.test" if var == "cloudflare_zone" else f"https://fixture.example.test/{var}" for var in homepage_infisical_vars()}
+    return {var: f"https://fixture.example.test/{var}" for var in homepage_infisical_vars()}
 
 
 def render_yaml_template(path, *, source=None, values=None):
@@ -36,7 +42,16 @@ def render_yaml_template(path, *, source=None, values=None):
     rendered = (
         Environment(undefined=StrictUndefined)
         .from_string(template_source)
-        .render(service_common_infisical_values=fake_homepage_infisical_values() if values is None else values)
+        .render(
+            service_common_infisical_values=fake_homepage_infisical_values() if values is None else values,
+            services_controller_host="manager",
+            services_plex_host="plex",
+            hostvars={
+                "manager": {"local_ip": "192.0.2.10"},
+                "plex": {"local_ip": "192.0.2.59"},
+            },
+            **TOPOLOGY,
+        )
     )
     return yaml.safe_load(rendered)
 
@@ -93,8 +108,8 @@ def test_fake_infisical_values_are_derived_from_homepage_declaration():
     fake_values = fake_homepage_infisical_values()
 
     assert set(fake_values) == set(declared_vars)
-    assert fake_values["cloudflare_zone"] == "example.test"
-    assert all(fake_values[var] == f"https://fixture.example.test/{var}" for var in declared_vars if var != "cloudflare_zone")
+    assert all(fake_values[var] == f"https://fixture.example.test/{var}" for var in declared_vars)
+    assert "cloudflare_zone" not in declared_vars
 
 
 def test_services_template_renders_as_valid_yaml_with_declared_infisical_values():
@@ -151,6 +166,45 @@ def test_layout_contract_allows_curated_groups_columns_and_incomplete_rows():
 def test_layout_contract_rejects_service_groups_without_layout_entries():
     with pytest.raises(AssertionError, match="missing-layout"):
         assert_service_group_layouts_are_valid({"missing-layout": []}, {"layout": {}})
+
+
+def service_exposures():
+    exposures = {}
+    for path in sorted(SERVICES_DIR.glob("*.yml")):
+        for key, service in (yaml.safe_load(path.read_text()) or {}).items():
+            candidates = [(key, service)]
+            candidates.extend((target_key, {**service, **target}) for target_key, target in (service.get("targets") or {}).items())
+            for candidate_key, candidate in candidates:
+                traefik = candidate.get("traefik") or {}
+                if traefik.get("enable") is not True:
+                    continue
+                name = candidate.get("name") or candidate_key.replace("_", "-")
+                host = f"{traefik.get('subdomain') or name}.{traefik.get('zone') or (TOPOLOGY['services_internal_zone'] if traefik.get('exposure', 'public') == 'private' else TOPOLOGY['services_public_zone'])}"
+                exposures[name] = (host, traefik.get("exposure", "public"))
+    return exposures
+
+
+def test_homepage_links_follow_provider_exposure_without_a_card_inventory():
+    exposures = service_exposures()
+    checked = []
+    for card_name, body in iter_service_cards(render_services()):
+        href = body.get("href")
+        if not isinstance(href, str):
+            continue
+        parsed = urlparse(href)
+        service_name = (parsed.hostname or "").split(".", 1)[0]
+        if service_name not in exposures:
+            continue
+        expected_host, exposure = exposures[service_name]
+        assert parsed.hostname == expected_host, card_name
+        assert parsed.port == (9443 if exposure == "private" else None), card_name
+        checked.append(card_name)
+    assert checked
+
+
+def test_homepage_template_requires_inventory_topology():
+    with pytest.raises(UndefinedError, match="services_internal_zone"):
+        Environment(undefined=StrictUndefined).from_string(SETTINGS_PATH.read_text()).render()
 
 
 def test_widget_http_urls_do_not_use_runtime_local_hostnames():

@@ -25,14 +25,13 @@ n8n:
     N8N_ENCRYPTION_KEY_FILE: /run/secrets/n8n_encryption_key_secret
     TZ: Australia/Melbourne
     GENERIC_TIMEZONE: Australia/Melbourne
-    N8N_HOST:
-      value_template: "n8n.int.${cloudflare_zone}"
+    N8N_HOST: "n8n.{{ services_internal_zone }}"
     N8N_PROTOCOL: https
     N8N_PORT: "5678"
-    N8N_EDITOR_BASE_URL:
-      value_template: "https://n8n.int.${cloudflare_zone}:8443/"
-    WEBHOOK_URL:
-      value_template: "https://n8n.int.${cloudflare_zone}:8443/"
+    N8N_EDITOR_BASE_URL: >-
+      https://n8n.{{ services_internal_zone }}:{{ services_private_https_port }}/
+    WEBHOOK_URL: >-
+      https://n8n.{{ services_internal_zone }}:{{ services_private_https_port }}/
     N8N_PROXY_HOPS: "1"
     N8N_SECURE_COOKIE: "true"
     N8N_ENFORCE_SETTINGS_FILE_PERMISSIONS: "true"
@@ -45,10 +44,6 @@ n8n:
     NODES_EXCLUDE: '["n8n-nodes-base.executeCommand","n8n-nodes-base.readWriteFile"]'
   infisical:
     secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
-        check_mode_value: check-mode.invalid
       - var: postgres_user
         path: /Postgres
         name: USER

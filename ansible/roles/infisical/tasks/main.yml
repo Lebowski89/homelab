@@ -7,8 +7,10 @@
 - name: Infisical | Assert required non-secret values are defined
   ansible.builtin.assert:
     that:
-      - infisical_domain is defined
-      - infisical_domain | string | length > 0
+      - services_internal_zone is string
+      - services_internal_zone | trim | length > 0
+      - services_private_https_port | int >= 1
+      - services_private_https_port | int <= 65535
       - infisical_base_path is defined
       - infisical_base_path | string | length > 0
       - infisical_docker_network is defined

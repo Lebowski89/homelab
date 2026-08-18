@@ -22,28 +22,36 @@ scraparr:
     PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
     UMASK: "022"
     GENERAL_PORT: "7100"
-    BAZARR_URL: "http://bazarr:6767"
+    BAZARR_URL: >-
+      https://bazarr.{{ services_internal_zone }}:{{ services_private_https_port }}
     BAZARR_API_KEY_FILE: /run/secrets/bazarr_api_secret
     BAZARR_ALIAS: "bazarr"
-    LIDARR_URL: "http://lidarr:8686"
+    LIDARR_URL: >-
+      https://lidarr.{{ services_internal_zone }}:{{ services_private_https_port }}
     LIDARR_API_KEY_FILE: /run/secrets/lidarr_api_secret
     LIDARR_ALIAS: "lidarr"
-    PROWLARR_URL: "http://prowlarr:9696"
+    PROWLARR_URL: >-
+      https://prowlarr.{{ services_internal_zone }}:{{ services_private_https_port }}
     PROWLARR_API_KEY_FILE: /run/secrets/prowlarr_api_secret
     PROWLARR_ALIAS: "prowlarr"
-    RADARR_MAIN_URL: "http://radarr:7878"
+    RADARR_MAIN_URL: >-
+      https://radarr.{{ services_internal_zone }}:{{ services_private_https_port }}
     RADARR_MAIN_API_KEY_FILE: /run/secrets/radarr_api_secret
     RADARR_MAIN_ALIAS: "radarr"
-    RADARR_SECONDARY_URL: "http://radarr-4k:7878"
+    RADARR_SECONDARY_URL: >-
+      https://radarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}
     RADARR_SECONDARY_API_KEY_FILE: /run/secrets/radarr_4k_api_secret
     RADARR_SECONDARY_ALIAS: "radarr-4k"
-    RADARR_WHISPARR_URL: "http://whisparr:6969"
+    RADARR_WHISPARR_URL: >-
+      https://whisparr.{{ services_internal_zone }}:{{ services_private_https_port }}
     RADARR_WHISPARR_API_KEY_FILE: /run/secrets/whisparr_api_secret
     RADARR_WHISPARR_ALIAS: "whisparr"
-    SONARR_MAIN_URL: "http://sonarr:8989"
+    SONARR_MAIN_URL: >-
+      https://sonarr.{{ services_internal_zone }}:{{ services_private_https_port }}
     SONARR_MAIN_API_KEY_FILE: /run/secrets/sonarr_api_secret
     SONARR_MAIN_ALIAS: "sonarr"
-    SONARR_SECONDARY_URL: "http://sonarr-4k:8989"
+    SONARR_SECONDARY_URL: >-
+      https://sonarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}
     SONARR_SECONDARY_API_KEY_FILE: /run/secrets/sonarr_4k_api_secret
     SONARR_SECONDARY_ALIAS: "sonarr-4k"
   infisical:

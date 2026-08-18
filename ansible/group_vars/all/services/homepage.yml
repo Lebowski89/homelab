@@ -20,8 +20,8 @@ homepage:
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
     PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
     UMASK: "022"
-    HOMEPAGE_ALLOWED_HOSTS:
-      value_template: "homepage.int.${cloudflare_zone}:8443"
+    HOMEPAGE_ALLOWED_HOSTS: >-
+      homepage.{{ services_internal_zone }}:{{ services_private_https_port }}
   infisical:
     secrets_map:
       - var: autobrr_api
@@ -30,9 +30,6 @@ homepage:
       - var: bazarr_api
         path: "/Bazarr"
         name: API
-      - var: cloudflare_zone
-        path: "/Cloudflare"
-        name: ZONE
       - var: gitea_homepage_api
         path: "/Gitea"
         name: HOMEPAGE_API
@@ -142,7 +139,6 @@ homepage:
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/settings.yaml"
       mode: "0664"
       force: true
-      no_log: true
     - src: configs/homepage/bookmarks.yaml.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/homepage/bookmarks.yaml"
       mode: "0664"

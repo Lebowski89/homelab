@@ -17,7 +17,8 @@
         | service_common_traefik_context(
             service_common_name,
             service_common_target_hosts,
-            service_common_traefik_base_zone,
+            service_common_traefik_public_zone,
+            service_common_traefik_internal_zone,
             hostvars
           )
       }}

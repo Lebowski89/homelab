@@ -7,7 +7,7 @@ prometheus_node_exporter_port: 9100
 
 prometheus_blackbox_exporter_address: blackbox-exporter:9115
 
-prometheus_blackbox_dns_query_name: "adminer.int.nosugarmaxtaste.com"
+prometheus_blackbox_dns_query_name: "adminer.{{ services_internal_zone }}"
 prometheus_blackbox_dns_expected_a: "{{ hostvars[services_controller_host].local_ip }}"
 
 prometheus_blackbox_dns_targets:

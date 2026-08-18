@@ -14,10 +14,6 @@
       {{ hostvars[service_prepare_context.filesystem_hosts | first].container_host_pgid | default('1000') }}
     service_prepare_bazarr_port: >-
       {{ service_prepare_context.service.traefik.port | default('6767') | string }}
-    service_prepare_bazarr_radarr_ip: "{{ service_prepare_context.service.prep.radarr.host }}"
-    service_prepare_bazarr_radarr_port: "{{ service_prepare_context.service.prep.radarr.port }}"
-    service_prepare_bazarr_sonarr_ip: "{{ service_prepare_context.service.prep.sonarr.host }}"
-    service_prepare_bazarr_sonarr_port: "{{ service_prepare_context.service.prep.sonarr.port }}"
   run_once: true
 
 - name: Prep - Bazarr | Set secret vars
@@ -29,7 +25,13 @@
       {{ service_prepare_context.lookup_values.get('opensubtitlescom_user', '') }}
     service_prepare_bazarr_opensubtitlescom_pass: >-
       {{ service_prepare_context.lookup_values.get('opensubtitlescom_pass', '') }}
+    service_prepare_bazarr_radarr_ip: >-
+      radarr.{{ services_internal_zone }}
+    service_prepare_bazarr_radarr_port: "{{ services_private_https_port }}"
     service_prepare_bazarr_radarr_api_key: "{{ service_prepare_context.lookup_values.get('radarr_api', '') }}"
+    service_prepare_bazarr_sonarr_ip: >-
+      sonarr.{{ services_internal_zone }}
+    service_prepare_bazarr_sonarr_port: "{{ services_private_https_port }}"
     service_prepare_bazarr_sonarr_api_key: "{{ service_prepare_context.lookup_values.get('sonarr_api', '') }}"
   run_once: true
 
@@ -159,7 +161,7 @@
       radarr.apikey: "{{ service_prepare_bazarr_radarr_api_key }}"
       radarr.ip: "{{ service_prepare_bazarr_radarr_ip }}"
       radarr.port: "{{ service_prepare_bazarr_radarr_port }}"
-      radarr.ssl: "false"
+      radarr.ssl: "true"
   delegate_to: "{{ service_prepare_bazarr_fs_host }}"
   run_once: true
 
@@ -178,7 +180,7 @@
       sonarr.apikey: "{{ service_prepare_bazarr_sonarr_api_key }}"
       sonarr.ip: "{{ service_prepare_bazarr_sonarr_ip }}"
       sonarr.port: "{{ service_prepare_bazarr_sonarr_port }}"
-      sonarr.ssl: "false"
+      sonarr.ssl: "true"
   delegate_to: "{{ service_prepare_bazarr_fs_host }}"
   run_once: true
 

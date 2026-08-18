@@ -5,7 +5,7 @@ datasources:
     uid: PBFA97CFB590B2093
     type: prometheus
     access: proxy
-    url: http://prometheus:9090
+    url: https://prometheus.{{ services_internal_zone }}:{{ services_private_https_port }}
     isDefault: true
     editable: true
     jsonData:
@@ -16,7 +16,7 @@ datasources:
     uid: alertmanager
     type: alertmanager
     access: proxy
-    url: http://alertmanager:9093
+    url: https://alertmanager.{{ services_internal_zone }}:{{ services_private_https_port }}
     editable: true
     jsonData:
       implementation: prometheus

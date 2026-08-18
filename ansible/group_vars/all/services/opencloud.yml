@@ -31,9 +31,6 @@ opencloud:
       - var: opencloud_admin_pass
         path: "/OpenCloud"
         name: IDM_ADMIN_PASS
-      - var: cloudflare_zone
-        path: "/Cloudflare"
-        name: ZONE
       - var: smtp_host
         path: "/Porkbun"
         name: SMTP_HOST

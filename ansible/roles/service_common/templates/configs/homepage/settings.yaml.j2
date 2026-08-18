@@ -1,11 +1,10 @@
-{% set secrets = service_common_infisical_values %}
 ---
 # For configuration options and examples, please see:
 # https://gethomepage.dev/configs/settings/
 
 title: Cyberdyne Systems
 description: Putting the net in Skynet.
-startUrl: "https://homepage.int.{{ secrets.cloudflare_zone }}:8443"
+startUrl: "https://homepage.{{ services_internal_zone }}:{{ services_private_https_port }}"
 
 background:
   image: /images/earth-rise-2.jpg

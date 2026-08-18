@@ -17,6 +17,7 @@ preferred key order. Ordering is for readability; it does not change behavior.
 
 ## Contents
 
+- [Service topology](#service-topology)
 - [Schema fundamentals](#schema-fundamentals)
 - [Defaults at a glance](#defaults-at-a-glance)
 - [Identity and process](#identity-and-process)
@@ -35,6 +36,22 @@ preferred key order. Ordering is for readability; it does not change behavior.
 - [Runtime compatibility](#runtime-compatibility)
 - [Examples](#examples)
 - [Removed and unsupported fields](#removed-and-unsupported-fields)
+
+## Service topology
+
+NetBox global Config Context is exposed by dynamic-inventory compose as three
+canonical variables:
+
+- `services_public_zone`: public application DNS zone.
+- `services_internal_zone`: private application DNS zone.
+- `services_private_https_port`: client-facing private Traefik HTTPS port.
+
+Service definitions, templates, and preparation handlers consume these normal
+inventory variables. They must not read raw `config_context`, fetch DNS zones
+from Infisical, or derive the internal zone as `int.` plus the public zone.
+Infisical remains the source for credentials and other secret material. Direct
+infrastructure, monitoring/control-plane, and self-healthcheck connections may
+continue to use runtime-local addressing.
 
 ## Schema fundamentals
 
@@ -385,8 +402,8 @@ targets an inventory-derived or explicit host address.
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
 | `traefik` | Mapping | No | `{}` | Both | `service_common` | Runtime-neutral route declaration. |
 | `traefik.enable` | Boolean-like | No | `false` | Both | `service_common` | Creates/removes the dynamic route on relevant actions. |
-| `traefik.exposure` | String enum | No | `public` | Both | `service_common` | `public` uses public zone/entrypoint; `private` derives `int.<base-zone>` and the private entrypoint. |
-| `traefik.zone` | Non-empty string | Conditional | Common base zone | Both | `service_common` | Explicit frontend zone; required only without a common base zone. |
+| `traefik.exposure` | String enum | No | `public` | Both | `service_common` | `public` uses `services_public_zone`; `private` uses the independent `services_internal_zone` and private entrypoint. |
+| `traefik.zone` | Non-empty string | No | Selected canonical zone | Both | `service_common` | Explicit frontend-zone override; otherwise the exposure selects the public or internal inventory zone. |
 | `traefik.subdomain` | String | No | Effective service name | Both | `service_common` | Frontend label in `<subdomain>.<zone>`. |
 | `traefik.port` | Positive integer-like | Conditional | None | Both | `service_common` | Backend port. |
 | `traefik.backend_mode` | String enum | No | `service` | Both | `service_common` | `service` targets effective service name; `host` resolves a host address. |
@@ -499,20 +516,15 @@ catalog validation rejects it.
 | `application_prepare.handler` | String enum | No | Empty/no handler | Both | `service_prepare` | `authelia`, `qbittorrent`, `plex`, `bazarr`, `nzbhydra2`, or `vaultwarden`. |
 | `application_prepare.bootstrap` | Mapping | Conditional | `{}` | Docker | `service_prepare` | Plex bootstrap settings only. |
 | `application_prepare.bootstrap.enabled` | Strict YAML Boolean | Conditional | None | Docker | `service_prepare` | Allows Plex API/token/claim work only with explicit bootstrap action. |
-| `prep` | Mapping | Conditional | `{}` | Both | `service_prepare` | Non-secret connection input for Bazarr/NZBHydra2. |
+| `prep` | Mapping | Conditional | `{}` | Both | `service_prepare` | Handler-specific non-secret preparation input. Bazarr uses it for its PostgreSQL connection. |
 | `paths_vault` | Mapping | Conditional | None | Both | `service_prepare` | Persistent Vaultwarden token paths; not a general path list. |
 
 ### Handler-specific fields
 
 | Option | Type | Required | Default | Runtime | Owner | Description |
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
-| `prep.radarr.host` | Non-empty string | Conditional | None | Both | `service_prepare` | Radarr address written into Bazarr config. |
-| `prep.radarr.port` | Non-empty value | Conditional | None | Both | `service_prepare` | Radarr port. |
-| `prep.sonarr.host` | Non-empty string | Conditional | None | Both | `service_prepare` | Sonarr address. |
-| `prep.sonarr.port` | Non-empty value | Conditional | None | Both | `service_prepare` | Sonarr port. |
 | `prep.postgres.host` | Non-empty string | Conditional | None | Both | `service_prepare` | Application-side database address, separate from common reconciliation addressing. |
 | `prep.postgres.port` | Non-empty value | Conditional | None | Both | `service_prepare` | Application-side database port. |
-| `prep.sabnzbd.url` | String | No | `http://sabnzbd:8080` | Both | `service_prepare` | Downloader URL. |
 | `paths_vault.vault_dir` | Non-empty path | Conditional | None | Both | `service_prepare` | Persistent directory, created mode `0700`. |
 | `paths_vault.vault_token_file` | Non-empty path | Conditional | None | Both | `service_prepare` | Argon2 PHC token file. |
 | `paths_vault.vault_pass_file` | Non-empty path | Conditional | None | Both | `service_prepare` | Generated source-password file. |
@@ -523,8 +535,8 @@ catalog validation rejects it.
 | Authelia | Generates session/JWT values and derives a password hash on deploy/update/recreate/bootstrap. | Needs declared `authelia_pass` and `authelia_storage_key`. Uses a selected-runtime temporary container outside check mode. No extra fields beyond handler. |
 | qBittorrent | Derives PBKDF2 template value on deploy/update/recreate/bootstrap. | Name must be `qbittorrent` or `qbittorrent-xs` with matching declared password. No extra fields. |
 | Plex | Runs only under explicit bootstrap, never check mode. | Docker-only; requires strict bootstrap flag and managed `named_volumes.media_nfs` with Docker local-driver options. |
-| Conditional | Creates initial config only when absent, then updates it on deploy/update/recreate. | Requires listed `prep` fields and declared API values; optional subtitle credentials must be paired. |
-| NZBHydra2 | Creates initial YAML only when absent, then manages auth/downloader/indexers on deploy/update/recreate. | Required values and every optional provider user/API pair must be complete. |
+| Bazarr | Creates initial config only when absent, then updates it on deploy/update/recreate. | Derives private Radarr/Sonarr endpoints from the canonical inventory topology; requires PostgreSQL `prep` fields and declared API values; optional subtitle credentials must be paired. |
+| NZBHydra2 | Creates initial YAML only when absent, then manages auth/downloader/indexers on deploy/update/recreate. | Derives the private SABnzbd endpoint from the canonical inventory topology; required values and every optional provider user/API pair must be complete. |
 | Conditional | Reads or creates a persistent Argon2 token on deploy/update/recreate/bootstrap. | Requires all `paths_vault` fields; partial files are removed after failure. |
 
 Validation occurs before destructive runtime cleanup. Outputs reset per service.

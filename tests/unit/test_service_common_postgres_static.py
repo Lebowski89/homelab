@@ -137,8 +137,10 @@ def test_common_dispatch_context_is_snapshotted_into_both_runtime_adapters():
     assert docker_snapshot["diff"] is False
     assert docker_init.index(docker_reset) < docker_init.index(docker_snapshot)
     assert docker_prepare["vars"]["service_common_infisical_values"] == "{{ docker_services_common_values }}"
-    assert "docker_services_common_values" in docker_prepare["vars"]["service_common_traefik_base_zone"]
-    assert "service_common_infisical_values" not in docker_prepare["vars"]["service_common_traefik_base_zone"]
+    assert docker_prepare["vars"]["service_common_traefik_public_zone"] == "{{ services_public_zone }}"
+    assert docker_prepare["vars"]["service_common_traefik_internal_zone"] == "{{ services_internal_zone }}"
+    assert "docker_services_common_values" not in docker_prepare["vars"]["service_common_traefik_public_zone"]
+    assert "docker_services_common_values" not in docker_prepare["vars"]["service_common_traefik_internal_zone"]
     assert "docker_services_effective_secret_values" in DOCKER_SECRET_TASKS
     assert "service_common_infisical_values" not in DOCKER_SECRET_TASKS
 
@@ -169,7 +171,10 @@ def test_common_dispatch_context_is_snapshotted_into_both_runtime_adapters():
     assert podman_secret["containers.podman.podman_secret"]["data"] == (
         "{{ podman_services_effective_secret_values[podman_services_secret.var] }}"
     )
-    assert podman_traefik["vars"]["service_common_traefik_base_zone"] == ("{{ podman_services_common_values.cloudflare_zone }}")
+    assert podman_traefik["vars"]["service_common_traefik_public_zone"] == "{{ services_public_zone }}"
+    assert podman_traefik["vars"]["service_common_traefik_internal_zone"] == "{{ services_internal_zone }}"
+    assert "podman_services_common_values" not in podman_traefik["vars"]["service_common_traefik_public_zone"]
+    assert "podman_services_common_values" not in podman_traefik["vars"]["service_common_traefik_internal_zone"]
 
 
 def test_both_runtime_paths_reach_common_postgres_after_infisical_resolution():

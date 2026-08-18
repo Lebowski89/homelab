@@ -13,14 +13,6 @@ adminer:
   ################################
   image: docker.io/library/adminer:5.5.1
   ################################
-  # ENVIRONMENT/SECRETS
-  ################################
-  infisical:
-    secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
-  ################################
   # CONNECTIVITY
   ################################
   named_networks:

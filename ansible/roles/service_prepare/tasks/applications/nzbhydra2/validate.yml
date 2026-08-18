@@ -7,6 +7,10 @@
     that:
       - service_prepare_context.filesystem_hosts | length > 0
       - service_prepare_context.service.image | default('') | string | trim | length > 0
+      - services_internal_zone is string
+      - services_internal_zone | trim | length > 0
+      - services_private_https_port | int >= 1
+      - services_private_https_port | int <= 65535
       - service_prepare_context.lookup_values.get('nzbhydra2_user', '') | string | trim | length > 0
       - service_prepare_context.lookup_values.get('nzbhydra2_pass', '') | string | trim | length > 0
       - service_prepare_context.lookup_values.get('nzbhydra2_api', '') | string | trim | length > 0

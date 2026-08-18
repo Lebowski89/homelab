@@ -26,11 +26,6 @@ tautulli:
     TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
     TP_HOTIO: "true"
     TP_THEME: "hotline"
-  infisical:
-    secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
   ################################
   # CONNECTIVITY
   ################################

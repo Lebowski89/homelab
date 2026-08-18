@@ -37,9 +37,6 @@ prowlarr:
     TP_THEME: "hotline"
   infisical:
     secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
       - var: prowlarr_api
         path: "/Prowlarr"
         name: API

@@ -18,11 +18,6 @@ uptime_kuma:
   ################################
   environment:
     TZ: "{{ timezone }}"
-  infisical:
-    secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
   ################################
   # CONNECTIVITY
   ################################

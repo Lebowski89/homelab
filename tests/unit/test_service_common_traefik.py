@@ -1,6 +1,7 @@
 import importlib.util
 from pathlib import Path
 
+import pytest
 import yaml
 from jinja2 import Environment, FileSystemLoader
 
@@ -12,12 +13,20 @@ service_common = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(service_common)
 
 
-def render(service, name="example", target_hosts=None, hostvars=None, base_zone="example.test"):
+def render(
+    service,
+    name="example",
+    target_hosts=None,
+    hostvars=None,
+    public_zone="public.example",
+    internal_zone="private.example.internal",
+):
     context = service_common.service_common_traefik_context(
         service,
         name,
         target_hosts or ["manager"],
-        base_zone,
+        public_zone,
+        internal_zone,
         hostvars or {"manager": {"local_ip": "192.0.2.10"}},
     )
     env = Environment(loader=FileSystemLoader(ROLE_DIR / "templates"), trim_blocks=True, lstrip_blocks=True)
@@ -42,7 +51,7 @@ def test_public_docker_baseline_renders_all_existing_middleware_and_tls_behaviou
 
     router = document["http"]["routers"]["sonarr"]
     assert router["entryPoints"] == ["https"]
-    assert router["rule"] == "Host(`sonarr.example.test`)"
+    assert router["rule"] == "Host(`sonarr.public.example`)"
     assert router["tls"] == {"options": "securetls@file", "certResolver": "dns-cloudflare"}
     assert document["http"]["services"]["sonarr-svc"]["loadBalancer"]["servers"] == [{"url": "http://sonarr:8080"}]
     assert "crowdsec@file" in text
@@ -60,7 +69,7 @@ def test_private_route_uses_private_entrypoint_and_excludes_crowdsec():
 
     router = document["http"]["routers"]["grafana"]
     assert router["entryPoints"] == ["https_private"]
-    assert router["rule"] == "Host(`grafana.int.example.test`)"
+    assert router["rule"] == "Host(`grafana.private.example.internal`)"
     assert router["middlewares"] == ["grafana-private-ui-chain"]
     assert "crowdsec@file" not in text
 
@@ -117,6 +126,33 @@ def test_backend_url_scheme_and_middleware_overrides_are_preserved():
     assert router["middlewares"] == ["custom-chain@file"]
     assert "custom-headers@file" in text
     assert document["http"]["services"]["example-svc"]["loadBalancer"]["servers"][0]["url"] == ("https://upstream.example.test:9443/base")
+
+
+def test_explicit_zone_override_wins_for_either_exposure():
+    _, document = render(
+        {"traefik": {"enable": True, "exposure": "private", "zone": "override.example", "port": 8080}},
+        name="app",
+        public_zone="",
+        internal_zone="",
+    )
+
+    assert document["http"]["routers"]["app"]["rule"] == "Host(`app.override.example`)"
+
+
+@pytest.mark.parametrize(
+    ("exposure", "public_zone", "internal_zone", "missing_name"),
+    [
+        ("public", "", "private.example.internal", "service_common_traefik_public_zone"),
+        ("private", "public.example", "", "service_common_traefik_internal_zone"),
+    ],
+)
+def test_selected_exposure_requires_its_independent_zone(exposure, public_zone, internal_zone, missing_name):
+    with pytest.raises(service_common.AnsibleFilterError, match=missing_name):
+        render(
+            {"traefik": {"enable": True, "exposure": exposure, "port": 8080}},
+            public_zone=public_zone,
+            internal_zone=internal_zone,
+        )
 
 
 def test_equivalent_docker_and_podman_inputs_render_identically():

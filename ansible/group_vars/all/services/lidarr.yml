@@ -37,9 +37,6 @@ lidarr:
     TP_THEME: "hotline"
   infisical:
     secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
       - var: lidarr_api
         path: "/Lidarr"
         name: API

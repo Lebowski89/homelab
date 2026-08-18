@@ -63,7 +63,8 @@
     service_prepare_nzbhydra2_slug_vip_exp: >-
       {{ service_prepare_context.lookup_values.get('slug_vip_expiration', '') }}
 
-    service_prepare_nzbhydra2_sabnzbd_url: "{{ service_prepare_context.service.prep.sabnzbd.url | default('http://sabnzbd:8080') }}"
+    service_prepare_nzbhydra2_sabnzbd_url: >-
+      https://sabnzbd.{{ services_internal_zone }}:{{ services_private_https_port }}
     service_prepare_nzbhydra2_sabnzbd_api: "{{ service_prepare_context.lookup_values.get('sabnzbd_api', '') }}"
   run_once: true
 

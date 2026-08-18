@@ -19,7 +19,8 @@ service_common_infisical_config: {}
 service_common_infisical_values: {}
 service_common_secret_declarations: []
 service_common_resolved_environment: {}
-service_common_traefik_base_zone: ""
+service_common_traefik_public_zone: ""
+service_common_traefik_internal_zone: ""
 service_common_traefik_dynamic_dir: /opt/traefik/dynamic
 service_common_traefik_owner: "1000"
 service_common_traefik_group: "1000"

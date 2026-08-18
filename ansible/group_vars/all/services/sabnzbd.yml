@@ -24,9 +24,6 @@ sabnzbd:
     WEBUI_PORTS: "8080/tcp,8080/udp"
   infisical:
     secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
       - var: sabnzbd_user
         path: "/SABnzbd"
         name: USER

@@ -8,10 +8,10 @@
       - service_prepare_context.filesystem_hosts | length > 0
       - service_prepare_context.service.image | default('') | string | trim | length > 0
       - service_prepare_context.service.prep | default({}) is mapping
-      - service_prepare_context.service.prep.radarr.host | default('') | string | trim | length > 0
-      - service_prepare_context.service.prep.radarr.port | default('') | string | trim | length > 0
-      - service_prepare_context.service.prep.sonarr.host | default('') | string | trim | length > 0
-      - service_prepare_context.service.prep.sonarr.port | default('') | string | trim | length > 0
+      - services_internal_zone is string
+      - services_internal_zone | trim | length > 0
+      - services_private_https_port | int >= 1
+      - services_private_https_port | int <= 65535
       - service_prepare_context.lookup_values.get('bazarr_api', '') | string | trim | length > 0
       - service_prepare_context.lookup_values.get('radarr_api', '') | string | trim | length > 0
       - service_prepare_context.lookup_values.get('sonarr_api', '') | string | trim | length > 0

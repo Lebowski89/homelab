@@ -1,4 +1,3 @@
-{% set cloudflare_zone = service_common_infisical_values.cloudflare_zone %}
 ---
 
 global:
@@ -68,9 +67,9 @@ entryPoints:
         options: securetls@file
         certResolver: dns-cloudflare
         domains:
-          - main: {{ cloudflare_zone }}
+          - main: {{ services_public_zone }}
             sans:
-              - "*.{{ cloudflare_zone }}"
+              - "*.{{ services_public_zone }}"
     forwardedHeaders:
       insecure: false
       trustedIPs:
@@ -103,15 +102,15 @@ entryPoints:
         idleTimeout: 180s
 
   https_private:
-    address: ":8443"
+    address: ":{{ services_private_https_port }}"
     http:
       tls:
         options: securetls@file
         certResolver: dns-cloudflare
         domains:
-          - main: int.{{ cloudflare_zone }}
+          - main: {{ services_internal_zone }}
             sans:
-              - "*.int.{{ cloudflare_zone }}"
+              - "*.{{ services_internal_zone }}"
     transport:
       respondingTimeouts:
         readTimeout: 600s

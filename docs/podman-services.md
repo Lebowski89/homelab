@@ -239,7 +239,7 @@ n8n was the first service migrated to the portable Docker-shaped schema. Its dec
 n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.04. The selected host must already have the runtime required by the declaration. A runtime-only edit is valid only when the complete effective declaration passes the destination adapter; it does not install a runtime or establish live parity. The proof covers the trusted-address `host_ip` bind in both generated Docker standalone Compose and Podman Quadlet output. Static tests do not replace a live migration test.
 
 
-The service uses pinned image `docker.io/n8nio/n8n:2.31.4`, UID/GID 1000:1000, application data in `/opt/n8n`, PostgreSQL database `n8n` through the shared HAProxy endpoint, and private routing at `https://n8n.int.<cloudflare-zone>:8443/`. The direct backend binds port 5678 to the VM management/LAN address; that direct port remains reachable on that network and bypasses Traefik TLS and middleware.
+The service uses pinned image `docker.io/n8nio/n8n:2.31.4`, UID/GID 1000:1000, application data in `/opt/n8n`, PostgreSQL database `n8n` through the shared HAProxy endpoint, and private routing at `https://n8n.<services_internal_zone>:<services_private_https_port>/`. The direct backend binds port 5678 to the VM management/LAN address; that direct port remains reachable on that network and bypasses Traefik TLS and middleware.
 
 Its three canonical secrets preserve their lifecycle intent: the PostgreSQL username and n8n encryption key use the default `preserve` policy, while the PostgreSQL password uses `reconcile` during update/recreate. Shared preparation ensures the `n8n` database exists before the Podman service starts.
 

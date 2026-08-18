@@ -23,11 +23,6 @@ czkawka:
     UMASK: "022"
     DARK_MODE: "1"
     WEB_FILE_MANAGER: "1"
-  infisical:
-    secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
   ################################
   # CONNECTIVITY
   ################################

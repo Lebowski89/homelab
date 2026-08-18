@@ -28,9 +28,6 @@ bazarr:
     TP_THEME: "hotline"
   infisical:
     secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
       - var: bazarr_api
         path: "/Bazarr"
         name: API
@@ -55,13 +52,6 @@ bazarr:
   application_prepare:
     handler: bazarr
   prep:
-  ## used in tasks/sub_tasks/prep/bazarr.yml
-    radarr:
-      host: "radarr"
-      port: "7878"
-    sonarr:
-      host: "sonarr"
-      port: "8989"
     postgres:
       host: "haproxy"
       port: "5432"

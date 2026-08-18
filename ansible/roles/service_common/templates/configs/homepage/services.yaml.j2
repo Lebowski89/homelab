@@ -8,236 +8,236 @@
 - arrs:
     - Bazarr:
         icon: bazarr.svg
-        href: https://bazarr.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://bazarr.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: PVR (Subtitles)
         widget:
           type: bazarr
-          url: https://bazarr.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://bazarr.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.bazarr_api }}
           fields: ["missingEpisodes", "missingMovies"]
     - Lidarr:
         icon: lidarr.svg
-        href: https://lidarr.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://lidarr.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: PVR (Music)
         widget:
           type: lidarr
-          url: https://lidarr.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://lidarr.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.lidarr_api }}
           fields: ["wanted", "queued", "artists"]
     - Prowlarr:
         icon: prowlarr.svg
-        href: https://prowlarr.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://prowlarr.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: The Middleman
         widget:
           type: prowlarr
-          url: https://prowlarr.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://prowlarr.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.prowlarr_api }}
           fields: ["numberOfGrabs", "numberOfQueries", "numberOfFailGrabs", "numberOfFailQueries"]
     - Radarr:
         icon: radarr.svg
-        href: https://radarr.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://radarr.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: PVR (Movies)
         widget:
           type: radarr
-          url: https://radarr.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://radarr.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.radarr_api }}
           fields: ["wanted", "missing", "queued", "movies"]
           enableQueue: false
     - Radarr-4K:
         icon: radarr.svg
-        href: https://radarr-4k.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://radarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: PVR (4K-Movies)
         widget:
           type: radarr
-          url: https://radarr-4k.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://radarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.radarr_4k_api }}
           fields: ["wanted", "missing", "queued", "movies"]
           enableQueue: false
     - Sonarr:
         icon: sonarr.svg
-        href: https://sonarr.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://sonarr.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: PVR (TV)
         widget:
           type: sonarr
-          url: https://sonarr.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://sonarr.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.sonarr_api }}
           fields: ["wanted", "queued", "series"]
           enableQueue: false
     - Sonarr-4K:
         icon: sonarr.svg
-        href: https://sonarr-4k.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://sonarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: PVR (4K-TV)
         widget:
           type: sonarr
-          url: https://sonarr-4k.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://sonarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.sonarr_4k_api }}
           fields: ["wanted", "queued", "series"]
           enableQueue: false
     - Sportarr:
         icon: https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/sportarr.svg
-        href: https://sportarr.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://sportarr.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: PVR (Sport)
         widget:
           type: sportarr
-          url: https://sportarr.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://sportarr.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.sportarr_api }}
           fields: ["wanted", "queued", "leagues"]
           enableQueue: false
     - Whisparr:
         icon: whisparr.svg
-        href: https://whisparr.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://whisparr.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: PVR (Adult)
 
 - finances:
     - Wallos:
         icon: wallos.svg
-        href: https://wallos.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://wallos.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Subscription tracker
         widget:
           type: wallos
-          url: https://wallos.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://wallos.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.wallos_api }}
 
 - gaming:
     - RomM:
         icon: https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/romm.svg
-        href: https://romm.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://romm.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: ROM library and browser player
         widget:
           type: romm
-          url: https://romm.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://romm.{{ services_internal_zone }}:{{ services_private_https_port }}
           fields: ["platforms", "totalRoms", "saves", "states"]
 
 - media:
     - Autobrr:
         icon: autobrr.svg
-        href: https://autobrr.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://autobrr.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Download automation tool for torrents
         widget:
           type: autobrr
-          url: https://autobrr.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://autobrr.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.autobrr_api }}
           fields: ["approvedPushes", "rejectedPushes", "filters", "indexers"]
     - Obsidian:
         icon: obsidian.svg
-        href: https://obsidian.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://obsidian.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Browser-based knowledge base
     - Ombi:
         icon: ombi.svg
-        href: https://ombi.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://ombi.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Content Requests for Plex/Emby
         widget:
           type: ombi
-          url: https://ombi.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://ombi.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.ombi_api }}
           fields: ["pending", "approved", "available"]
     - OpenCloud:
         icon: open-cloud.svg
-        href: https://opencloud.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://opencloud.{{ services_public_zone }}
         description: Cloud Storage.. but Local
     - Seerr:
         icon: seerr.svg
-        href: https://seerr.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://seerr.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Content Requests for Plex/Emby/Jellyfin
         widget:
           type: seerr
-          url: https://seerr.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://seerr.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.seerr_api }}
           fields: ["pending", "approved", "available", "completed", "processing", "issues"]
     - Stash:
         icon: stash.svg
-        href: https://stash.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://stash.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Plex for P*rn
         widget:
           type: stash
-          url: https://stash.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://stash.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.stash_api }}
           fields: ["scenes", "images"]
     - TheLounge:
         icon: thelounge.svg
-        href: https://thelounge.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://thelounge.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: IRC Client
     - ZNC:
         icon: znc.png
-        href: https://znc.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://znc.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: IRC Bouncer
 
 - monitoring:
     - Alertmanager:
         icon: alertmanager.svg
-        href: https://alertmanager.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://alertmanager.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Alert routing and notification management
     - Alloy:
         icon: https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/grafana-alloy.svg
-        href: https://alloy.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://alloy.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Telemetry collector and forwarder
     - Dozzle:
         icon: dozzle.svg
-        href: https://dozzle.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://dozzle.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Real-time container log viewer
     - Gotify:
         icon: gotify.svg
-        href: https://gotify.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://gotify.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Self-hosted notification server
         widget:
           type: gotify
-          url: https://gotify.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://gotify.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.gotify_homepage_token }}
           fields: ["apps", "clients", "messages"]
     - Grafana:
         icon: grafana.svg
-        href: https://grafana.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://grafana.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Data visualization platform
         widget:
           type: grafana
-          url: https://grafana.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://grafana.{{ services_internal_zone }}:{{ services_private_https_port }}
           username: {{ secrets.grafana_user }}
           password: {{ secrets.grafana_pass }}
           fields: ["dashboards", "datasources", "totalalerts", "alertstriggered"]
     - Portainer:
         icon: portainer.svg
-        href: https://portainer.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://portainer.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Docker Manager
         widget:
           type: portainer
-          url: https://portainer.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://portainer.{{ services_internal_zone }}:{{ services_private_https_port }}
           env: 1
           key: {{ secrets.portainer_token }}
           fields: ["running", "stopped", "total"]
     - Prometheus:
         icon: prometheus.svg
-        href: https://prometheus.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://prometheus.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Metrics monitoring system
         widget:
           type: prometheus
-          url: https://prometheus.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://prometheus.{{ services_internal_zone }}:{{ services_private_https_port }}
           fields: ["targets_up", "targets_down", "targets_total"]
     - Uptime Kuma:
         icon: uptime-kuma.svg
-        href: https://uptime-kuma.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://uptime-kuma.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Service availability monitoring
         widget:
           type: uptimekuma
-          url: https://uptime-kuma.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://uptime-kuma.{{ services_internal_zone }}:{{ services_private_https_port }}
           slug: homelab
           fields: ["up", "down", "uptime", "incident"]
 
 - network:
     - Traefik:
         icon: traefik-proxy.svg
-        href: https://traefik.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://traefik.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Traefik Reverse Proxy
         widget:
           type: traefik
-          url: https://traefik.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://traefik.{{ services_internal_zone }}:{{ services_private_https_port }}
           fields: ["routers", "services", "middleware"]
     - Technitium:
         icon: technitium.png
-        href: http://192.168.80.48:5380
+        href: http://{{ hostvars[services_controller_host].local_ip }}:5380
         description: Technitium DNS
         widget:
           type: technitium
-          url: http://192.168.80.48:5380
+          url: http://{{ hostvars[services_controller_host].local_ip }}:5380
           key: {{ secrets.technitium_token }}
           fields: ["totalQueries", "totalRecursive", "totalBlocked", "totalClients"]
           range: LastDay
@@ -245,20 +245,20 @@
 - plex:
     - Plex:
         icon: plex.svg
-        href: http://192.168.80.59:32400
+        href: http://{{ hostvars[services_plex_host].local_ip }}:32400
         description: Plex Media Server
         widget:
           type: plex
-          url: http://192.168.80.59:32400
+          url: http://{{ hostvars[services_plex_host].local_ip }}:32400
           key: {{ secrets.plex_token }}
           fields: ["streams", "albums", "movies", "tv"]
     - Tautulli:
         icon: tautulli.svg
-        href: https://tautulli.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://tautulli.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Plex Monitoring
         widget:
           type: tautulli
-          url: https://tautulli.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://tautulli.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.tautulli_api }}
           enableUser: true
           showEpisodeNumber: true
@@ -267,11 +267,11 @@
 - torrents:
     - Qui:
         icon: https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/qui.svg
-        href: https://qui.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://qui.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Unified qBittorrent interface
     - qBittorrent:
         icon: qbittorrent.svg
-        href: https://qbittorrent.int.{{ secrets.cloudflare_zone }}:8443/
+        href: https://qbittorrent.{{ services_internal_zone }}:{{ services_private_https_port }}/
         description: Torrent download client
         widget:
           type: qbittorrent
@@ -280,7 +280,7 @@
           enableLeechProgress: false
     - qBittorrent-XS:
         icon: qbittorrent.svg
-        href: https://qbittorrent-xs.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://qbittorrent-xs.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Torrent download client
         widget:
           type: qbittorrent
@@ -291,45 +291,45 @@
 - usenet:
     - NZBHydra2:
         icon: https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/nzbhydra.png
-        href: https://nzbhydra2.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://nzbhydra2.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Usenet indexer aggregation and search
     - SABnzbd:
         icon: sabnzbd.svg
-        href: https://sabnzbd.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://sabnzbd.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Usenet download client
         widget:
           type: sabnzbd
-          url: https://sabnzbd.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://sabnzbd.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.sabnzbd_api }}
           fields: ["rate", "queue", "timeleft"]
 
 - utilities:
     - Adminer:
         icon: adminer.svg
-        href: https://adminer.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://adminer.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Database administration
     - Czkawka:
         icon: https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/czkawka.svg
-        href: https://czkawka.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://czkawka.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Duplicate file and media cleanup
     - Gitea:
         icon: gitea.svg
-        href: https://gitea.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://gitea.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Self-hosted Git service
         widget:
           type: gitea
-          url: https://gitea.int.{{ secrets.cloudflare_zone }}:8443
+          url: https://gitea.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.gitea_homepage_api }}
           fields: ["repositories", "notifications", "issues", "pulls"]
     - n8n:
         icon: n8n.svg
-        href: https://n8n.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://n8n.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Workflow automation
     - Syncthing:
         icon: syncthing.svg
-        href: https://syncthing.int.{{ secrets.cloudflare_zone }}:8443
+        href: https://syncthing.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Save/state/device sync
     - Vaultwarden:
         icon: vaultwarden.png
-        href: https://vaultwarden.{{ secrets.cloudflare_zone }}
+        href: https://vaultwarden.{{ services_public_zone }}
         description: Password Manager

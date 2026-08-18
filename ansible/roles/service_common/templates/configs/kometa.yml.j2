@@ -1,11 +1,4 @@
-{% set mdblist_api = service_common_infisical_values.mdblist_api %}
-{% set plex_token = service_common_infisical_values.plex_token %}
-{% set radarr_api = service_common_infisical_values.radarr_api %}
-{% set sonarr_api = service_common_infisical_values.sonarr_api %}
-{% set tautulli_api = service_common_infisical_values.tautulli_api %}
-{% set tmdb_api = service_common_infisical_values.tmdb_api %}
-{% set trakt_id = service_common_infisical_values.trakt_id %}
-{% set trakt_secret = service_common_infisical_values.trakt_secret %}
+{% set secrets = service_common_infisical_values %}
 libraries:
   Movies:
     remove_overlays: false
@@ -83,8 +76,8 @@ settings:
   overlay_artwork_filetype: jpg
   overlay_artwork_quality: 75
 plex:  # Can be individually specified per library as well; REQUIRED for the script to run
-  url: http://plex:32400
-  token: {{ plex_token }}
+  url: http://{{ hostvars[services_plex_host].local_ip }}:32400
+  token: {{ secrets.plex_token }}
   timeout: 60
   db_cache:
   clean_bundles: false
@@ -92,19 +85,19 @@ plex:  # Can be individually specified per library as well; REQUIRED for the scr
   optimize: false
   verify_ssl:
 tmdb:  # REQUIRED for the script to run
-  apikey: {{ tmdb_api }}
+  apikey: {{ secrets.tmdb_api }}
   language: en
   cache_expiration: 60
   region:
 tautulli:  # Can be individually specified per library as well
-  url: https://tautulli:8181
-  apikey: {{ tautulli_api }}
+  url: https://tautulli.{{ services_internal_zone }}:{{ services_private_https_port }}
+  apikey: {{ secrets.tautulli_api }}
 mdblist:
-  apikey: {{ mdblist_api }}
+  apikey: {{ secrets.mdblist_api }}
   cache_expiration: 60
 radarr:  # Can be individually specified per library as well
-  url: http://radarr:7878
-  token: {{ radarr_api }}
+  url: https://radarr.{{ services_internal_zone }}:{{ services_private_https_port }}
+  token: {{ secrets.radarr_api }}
   add_missing: false
   add_existing: false
   upgrade_existing: false
@@ -119,8 +112,8 @@ radarr:  # Can be individually specified per library as well
   plex_path:
   ignore_cache: false
 sonarr:  # Can be individually specified per library as well
-  url: http://sonarr:8989
-  token: {{ sonarr_api }}
+  url: https://sonarr.{{ services_internal_zone }}:{{ services_private_https_port }}
+  token: {{ secrets.sonarr_api }}
   add_missing: false
   add_existing: false
   upgrade_existing: false
@@ -138,8 +131,8 @@ sonarr:  # Can be individually specified per library as well
   plex_path:
   ignore_cache: false
 trakt:
-  client_id: {{ trakt_id }}
-  client_secret: {{ trakt_secret }}
+  client_id: {{ secrets.trakt_id }}
+  client_secret: {{ secrets.trakt_secret }}
   pin:
   authorization:
     # everything below is autofilled by the script

@@ -36,9 +36,6 @@ romm:
     # RETROACHIEVEMENTS_API_KEY_FILE: /run/secrets/romm_retroachievements_api_key
   infisical:
     secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
       - var: romm_base_url
         path: "/RomM"
         name: BASE_URL

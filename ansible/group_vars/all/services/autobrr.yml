@@ -40,9 +40,6 @@ autobrr:
     AUTOBRR__POSTGRES_SSLMODE: "disable"
   infisical:
     secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
       - var: autobrr_session
         path: "/AutoBrr"
         name: SESSION_SECRET

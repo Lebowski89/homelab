@@ -21,11 +21,6 @@ thelounge:
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
     PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
     UMASK: "022"
-  infisical:
-    secrets_map:
-      - var: cloudflare_zone
-        path: /Cloudflare
-        name: ZONE
   ################################
   # CONNECTIVITY
   ################################

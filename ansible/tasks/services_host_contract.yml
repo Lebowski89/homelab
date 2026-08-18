@@ -39,6 +39,40 @@
       and services_log_root must be a non-empty string.
   tags: always
 
+- name: Service host contract | Validate canonical service topology
+  ansible.builtin.assert:
+    that:
+      - services_public_zone is string
+      - services_public_zone == services_public_zone | trim
+      - services_public_zone | length > 0
+      - "'://' not in services_public_zone"
+      - "'/' not in services_public_zone"
+      - services_internal_zone is string
+      - services_internal_zone == services_internal_zone | trim
+      - services_internal_zone | length > 0
+      - "'://' not in services_internal_zone"
+      - "'/' not in services_internal_zone"
+      - services_private_https_port | string | regex_replace('[0-9]', '') | length == 0
+      - services_private_https_port | int >= 1
+      - services_private_https_port | int <= 65535
+    fail_msg: >-
+      NetBox Config Context / dynamic inventory did not provide valid required
+      service-topology vars: services_public_zone, services_internal_zone, and
+      services_private_https_port.
+  tags: always
+
+# NetBox global Config Context provides the canonical service topology through
+# dynamic-inventory compose:
+#
+# - services_public_zone: public application DNS zone
+# - services_internal_zone: private application DNS zone
+# - services_private_https_port: client-facing private Traefik HTTPS port
+#
+# Service definitions and templates consume only these composed values. Raw
+# config_context data is an inventory implementation detail; DNS topology does
+# not come from Infisical, and the internal zone is not derived from the public
+# zone. Direct control-plane and infrastructure networking remains valid.
+
 # The remaining compatibility alias flows only from the canonical service-host
 # contract. Remove it after the Docker adapter accepts the canonical input.
 - name: Service host contract | Publish Docker adapter compatibility alias

@@ -41,6 +41,9 @@ def homepage_service():
         service,
         {
             "services_controller_host": "manager",
+            "services_public_zone": "public.example",
+            "services_internal_zone": "private.example.internal",
+            "services_private_https_port": 9443,
             "local_ip": "192.0.2.10",
             "timezone": "Australia/Melbourne",
             "hostvars": {
@@ -139,19 +142,20 @@ def test_homepage_allowed_host_and_traefik_backend_use_canonical_runtime_neutral
     lookup_config = common_filters.service_common_infisical_normalize(service["infisical"]["secrets_map"])
     resolved_environment = common_filters.service_common_environment_resolve(
         service["environment"],
-        {"cloudflare_zone": "example.test"},
+        {},
         lookup_config,
     )
     traefik = common_filters.service_common_traefik_context(
         service,
         "homepage",
         ["manager"],
-        "example.test",
+        "public.example",
+        "private.example.internal",
         {"manager": {"local_ip": "192.0.2.10"}},
     )
 
-    assert resolved_environment["HOMEPAGE_ALLOWED_HOSTS"] == "homepage.int.example.test:8443"
-    assert traefik["address"] == "homepage.int.example.test"
+    assert resolved_environment["HOMEPAGE_ALLOWED_HOSTS"] == "homepage.private.example.internal:9443"
+    assert traefik["address"] == "homepage.private.example.internal"
     assert traefik["backend_url"] == "http://192.0.2.10:13000"
 
     normalized = podman_filters.podman_service_normalize(deepcopy(service), "homepage")
@@ -162,4 +166,4 @@ def test_homepage_allowed_host_and_traefik_backend_use_canonical_runtime_neutral
     assert "PublishPort=192.0.2.10:13000:3000/tcp" in container
     assert "Volume=/opt/homepage:/app/config" in container
     assert "Volume=/opt/homepage/images:/app/public/images:ro" in container
-    assert "HOMEPAGE_ALLOWED_HOSTS=homepage.int.example.test:8443" in env_file
+    assert "HOMEPAGE_ALLOWED_HOSTS=homepage.private.example.internal:9443" in env_file

@@ -234,6 +234,9 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
                 },
                 "local_ip": "192.0.2.10",
                 "services_controller_host": "manager",
+                "services_public_zone": "public.example",
+                "services_internal_zone": "private.example.internal",
+                "services_private_https_port": 9443,
                 "timezone": "Australia/Melbourne",
             },
         )
@@ -437,7 +440,7 @@ def test_real_arr_targets_inherit_base_credentials_once_and_keep_target_api(serv
     assert "targets" not in effective
 
 
-def test_real_traefik_services_retain_lookup_only_cloudflare_zone_declaration():
+def test_real_traefik_services_do_not_require_cloudflare_zone_infisical_declarations():
     catalog_filters = load_module(
         REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
         "service_catalog_real_traefik_infisical",
@@ -451,7 +454,7 @@ def test_real_traefik_services_retain_lookup_only_cloudflare_zone_declaration():
             continue
         declared = [entry.get("var") for entry in (effective.get("infisical") or {}).get("secrets_map", [])]
         identity = f"{item['name']}:{item.get('target', '<base>')}"
-        assert declared.count("cloudflare_zone") == 1, identity
+        assert "cloudflare_zone" not in declared, identity
         checked.append(identity)
 
     assert checked
@@ -791,7 +794,7 @@ def test_real_adminer_podman_migration_preserves_runtime_contracts():
     entry = catalog_filters.service_catalog_effective({"adminer": rendered_service}, "manager")[0]
     rendered_effective = catalog_filters.service_catalog_merge_target(rendered_service)
     normalized = podman_filters.podman_service_normalize(rendered_effective, "adminer")
-    lookup_config = common_filters.service_common_infisical_normalize(rendered_effective["infisical"]["secrets_map"])
+    lookup_config = common_filters.service_common_infisical_normalize(rendered_effective.get("infisical", {}).get("secrets_map") or [])
     check_values = common_filters.service_common_infisical_check_values(lookup_config)
     resolved_environment = common_filters.service_common_environment_resolve(
         rendered_effective.get("environment", {}),
@@ -802,7 +805,8 @@ def test_real_adminer_podman_migration_preserves_runtime_contracts():
         rendered_effective,
         "adminer",
         ["manager"],
-        "example.test",
+        "public.example",
+        "private.example.internal",
         {"manager": {"local_ip": "192.0.2.10"}},
     )
 
@@ -833,9 +837,9 @@ def test_real_adminer_podman_migration_preserves_runtime_contracts():
         "restart_sec": "10s",
     }
     assert lookup_config["secret_declarations"] == []
-    assert set(check_values) == {"cloudflare_zone"}
+    assert check_values == {}
     assert resolved_environment == {}
-    assert traefik["address"] == "adminer.int.example.test"
+    assert traefik["address"] == "adminer.private.example.internal"
     assert traefik["backend_url"] == "http://192.0.2.10:18080"
 
 
@@ -907,6 +911,9 @@ def test_real_thelounge_catalog_contract_normalizes_and_renders_rootless_bind_qu
             },
             "local_ip": "192.0.2.10",
             "services_controller_host": "manager",
+            "services_public_zone": "public.example",
+            "services_internal_zone": "private.example.internal",
+            "services_private_https_port": 9443,
             "timezone": "Australia/Melbourne",
         },
     )
@@ -915,7 +922,8 @@ def test_real_thelounge_catalog_contract_normalizes_and_renders_rootless_bind_qu
         rendered_effective,
         "thelounge",
         ["manager"],
-        "example.test",
+        "public.example",
+        "private.example.internal",
         {"manager": {"local_ip": "192.0.2.10"}},
     )
     quadlet_dir = "/var/lib/podman-thelounge/.config/containers/systemd"
