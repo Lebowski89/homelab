@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/29 |
+| Readme update        | 2026/08/19 |
 
 
 
@@ -46,17 +46,18 @@
 | [service_common_infisical_values](defaults/main.yml#L19)   | dict | `{}` |    
 | [service_common_secret_declarations](defaults/main.yml#L20)   | list | `[]` |    
 | [service_common_resolved_environment](defaults/main.yml#L21)   | dict | `{}` |    
-| [service_common_traefik_base_zone](defaults/main.yml#L22)   | str |  |    
-| [service_common_traefik_dynamic_dir](defaults/main.yml#L23)   | str | `/opt/traefik/dynamic` |    
-| [service_common_traefik_owner](defaults/main.yml#L24)   | str | `1000` |    
-| [service_common_traefik_group](defaults/main.yml#L25)   | str | `1000` |    
-| [service_common_prepare_actions](defaults/main.yml#L26)   | list | `[]` |    
-| [service_common_prepare_actions.**0**](defaults/main.yml#L26)   | str | `deploy` |    
-| [service_common_prepare_actions.**1**](defaults/main.yml#L26)   | str | `update` |    
-| [service_common_prepare_actions.**2**](defaults/main.yml#L26)   | str | `recreate` |    
-| [service_common_prepare_actions.**3**](defaults/main.yml#L26)   | str | `bootstrap` |    
-| [service_common_remove_actions](defaults/main.yml#L27)   | list | `[]` |    
-| [service_common_remove_actions.**0**](defaults/main.yml#L27)   | str | `remove` |    
+| [service_common_traefik_public_zone](defaults/main.yml#L22)   | str |  |    
+| [service_common_traefik_internal_zone](defaults/main.yml#L23)   | str |  |    
+| [service_common_traefik_dynamic_dir](defaults/main.yml#L24)   | str | `/opt/traefik/dynamic` |    
+| [service_common_traefik_owner](defaults/main.yml#L25)   | str | `1000` |    
+| [service_common_traefik_group](defaults/main.yml#L26)   | str | `1000` |    
+| [service_common_prepare_actions](defaults/main.yml#L27)   | list | `[]` |    
+| [service_common_prepare_actions.**0**](defaults/main.yml#L27)   | str | `deploy` |    
+| [service_common_prepare_actions.**1**](defaults/main.yml#L27)   | str | `update` |    
+| [service_common_prepare_actions.**2**](defaults/main.yml#L27)   | str | `recreate` |    
+| [service_common_prepare_actions.**3**](defaults/main.yml#L27)   | str | `bootstrap` |    
+| [service_common_remove_actions](defaults/main.yml#L28)   | list | `[]` |    
+| [service_common_remove_actions.**0**](defaults/main.yml#L28)   | str | `remove` |    
 
 
 

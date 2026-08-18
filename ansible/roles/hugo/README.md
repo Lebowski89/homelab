@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/16 |
+| Readme update        | 2026/08/19 |
 
 
 
@@ -80,7 +80,6 @@
 | [hugo_templates.0.**dest**](defaults/main.yml#L48)   | str | `{{ hugo_site_path }}/hugo.yaml` |    
 | [hugo_templates.0.**mode**](defaults/main.yml#L49)   | str | `0664` |    
 | [hugo_templates.0.**force**](defaults/main.yml#L50)   | bool | `True` |    
-| [hugo_cloudflare_zone](defaults/main.yml#L52)   | str |  |    
 
 
 
