@@ -42,12 +42,17 @@ locals {
       ]
     },
     {
-      name     = "Automation"
-      weight   = 11
+      name     = "Monitoring"
+      weight   = 3
       send_url = true
       monitors = [
-        "http.n8n-direct",
-        "http.n8n-private",
+        "http.dozzle-private",
+        "http.gotify-private",
+        "http.grafana-private",
+        "http.homepage-private",
+        "http.portainer-private",
+        "http.prometheus-private",
+        "http.uptime-kuma-private",
       ]
     },
     {
@@ -56,77 +61,33 @@ locals {
       send_url = true
       monitors = [
         "http.bazarr-private",
-        "http.bazarr-direct",
         "http.lidarr-private",
-        "http.lidarr-direct",
         "http.prowlarr-private",
-        "http.prowlarr-direct",
         "http.radarr-private",
-        "http.radarr-direct",
         "http.radarr-4k-private",
-        "http.radarr-4k-direct",
         "http.sonarr-private",
-        "http.sonarr-direct",
         "http.sonarr-4k-private",
-        "http.sonarr-4k-direct",
         "http.sportarr-private",
-        "http.sportarr-direct",
         "http.whisparr-private",
-        "http.whisparr-direct",
       ]
     },
     {
-      name     = "Media"
-      weight   = 8
+      name     = "Torrents"
+      weight   = 5
       send_url = true
       monitors = [
-        "http.autobrr-private",
-        "http.autobrr-direct",
-        "http.obsidian-private",
-        "http.obsidian-direct",
-        "http.ombi-private",
-        "http.ombi-direct",
-        "http.opencloud-direct",
-        "http.opencloud-public",
-        "http.seerr-private",
-        "http.seerr-direct",
-        "http.stash-private",
-        "http.stash-direct",
-        "http.thelounge-private",
-        "http.thelounge-direct",
-        "http.znc-private",
-        "http.znc-direct",
+        "http.qbittorrent-private",
+        "http.qbittorrent-xs-private",
+        "http.qui-private",
       ]
     },
     {
-      name     = "Monitoring"
-      weight   = 3
+      name     = "Usenet"
+      weight   = 6
       send_url = true
       monitors = [
-        "http.blackbox-exporter-direct",
-        "http.gotify-private",
-        "http.gotify-direct",
-        "http.grafana-private",
-        "http.grafana-direct",
-        "http.homepage-private",
-        "http.homepage-direct",
-        "http.portainer-private",
-        "http.portainer-direct",
-        "http.prometheus-private",
-        "http.prometheus-direct",
-        "http.uptime-kuma-private",
-        "http.uptime-kuma-direct",
-      ]
-    },
-    {
-      name     = "Network"
-      weight   = 9
-      send_url = true
-      monitors = [
-        "http.authelia-direct",
-        "http.authelia-public",
-        "http.traefik-direct",
-        "http.traefik-public",
+        "http.nzbhydra2-private",
+        "http.sabnzbd-private",
       ]
     },
     {
@@ -136,50 +97,71 @@ locals {
       monitors = [
         "http.plex-direct",
         "http.tautulli-private",
-        "http.tautulli-direct",
       ]
     },
     {
-      name     = "Torrents"
-      weight   = 5
+      name     = "Media"
+      weight   = 8
       send_url = true
       monitors = [
-        "http.qbittorrent-private",
-        "http.qbittorrent-direct",
-        "http.qbittorrent-xs-private",
-        "http.qbittorrent-xs-direct",
-        "http.qui-private",
-        "http.qui-direct",
+        "http.autobrr-private",
+        "http.gitea-private",
+        "http.obsidian-private",
+        "http.ombi-private",
+        "http.opencloud-public",
+        "http.seerr-private",
+        "http.stash-private",
+        "http.thelounge-private",
+        "http.znc-private",
       ]
     },
     {
-      name     = "Usenet"
-      weight   = 6
+      name     = "Gaming"
+      weight   = 9
       send_url = true
       monitors = [
-        "http.nzbhydra2-private",
-        "http.nzbhydra2-direct",
-        "http.sabnzbd-private",
-        "http.sabnzbd-direct",
+        "http.romm-private",
+      ]
+    },
+    {
+      name     = "Finance"
+      weight   = 10
+      send_url = true
+      monitors = [
+        "http.wallos-private",
+      ]
+    },
+    {
+      name     = "Network"
+      weight   = 11
+      send_url = true
+      monitors = [
+        "http.authelia-public",
+        "http.netbox-private",
+        "http.traefik-private",
       ]
     },
     {
       name     = "Utilities"
-      weight   = 10
+      weight   = 12
       send_url = true
       monitors = [
         "http.adminer-private",
-        "http.adminer-direct",
         "http.czkawka-private",
-        "http.czkawka-direct",
-        "http.gitea-private",
-        "http.gitea-direct",
-        "http.infisical-direct",
         "http.infisical-private",
-        "http.vaultwarden-direct",
+        "http.syncthing-private",
         "http.vaultwarden-public",
       ]
-    }
+    },
+    {
+      name     = "Automation"
+      weight   = 13
+      send_url = true
+      monitors = [
+        "http.n8n-direct",
+        "http.n8n-private",
+      ]
+    },
   ]
 }
 

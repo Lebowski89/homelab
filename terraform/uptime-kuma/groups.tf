@@ -14,6 +14,11 @@ locals {
       parent_key = "apps"
     }
 
+    finance = {
+      name       = "Finance"
+      parent_key = "apps"
+    }
+
     gaming = {
       name       = "Gaming"
       parent_key = "apps"

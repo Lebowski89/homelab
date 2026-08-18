@@ -13,15 +13,16 @@ locals {
   # NETBOX (OUTPUTS)
   ################################
 
-  netbox_host_ips        = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.host_primary_ipv4, {}) : {}
-  netbox_cloudflare_zone = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.cloudflare_zone, "") : ""
-  netbox_internal_zone   = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
+  netbox_host_ips           = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.host_primary_ipv4, {}) : {}
+  netbox_cloudflare_zone    = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.cloudflare_zone, "") : ""
+  netbox_internal_zone      = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
+  netbox_private_https_port = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.private_https_port, null) : null
 
   cloudflare_zone = trimspace(var.cloudflare_zone) != "" ? trimspace(var.cloudflare_zone) : local.netbox_cloudflare_zone
 
   internal_zone = trimspace(var.internal_zone) != "" ? trimspace(var.internal_zone) : local.netbox_internal_zone
 
-  private_https_port = var.private_https_port
+  private_https_port = coalesce(var.private_https_port, local.netbox_private_https_port, 8443)
 
   uptime_kuma_endpoint = trimspace(var.uptime_kuma_endpoint) != "" ? trimspace(var.uptime_kuma_endpoint) : "https://uptime-kuma.${local.internal_zone}:${local.private_https_port}"
 
@@ -48,6 +49,9 @@ locals {
     sportarr  = { group = "arrs", tag_keys = ["arrs"] }
     whisparr  = { group = "arrs", tag_keys = ["arrs"] }
 
+    # Finance
+    wallos = { group = "finance", tag_keys = ["finance"] }
+
     # Gaming
     romm = { group = "gaming", tag_keys = ["gaming"] }
 
@@ -59,7 +63,6 @@ locals {
     seerr     = { group = "media", tag_keys = ["media"] }
     stash     = { group = "media", tag_keys = ["media"] }
     thelounge = { group = "media", tag_keys = ["media"] }
-    wallos    = { group = "media", tag_keys = ["media"] }
     znc       = { group = "media", tag_keys = ["media"] }
 
     # Automation
@@ -81,7 +84,8 @@ locals {
     uptime-kuma = { group = "monitoring", tag_keys = ["monitoring"] }
 
     # Network
-    netbox = { group = "network", tag_keys = ["network"] }
+    netbox  = { group = "network", tag_keys = ["network"] }
+    traefik = { group = "network", tag_keys = ["network"] }
 
     # Plex
     tautulli = {
@@ -142,11 +146,6 @@ locals {
       tag_keys = ["public", "media"]
     }
 
-    traefik = {
-      group    = "network"
-      tag_keys = ["public", "network"]
-    }
-
     vaultwarden = {
       group    = "utilities"
       tag_keys = ["public", "utilities"]
@@ -171,168 +170,37 @@ locals {
   }
 
   ################################
-  # SERVICES (DIRECT)
+  # SERVICES (DIRECT / SPECIAL)
   ################################
 
-  # These test Docker overlay/service reachability without Technitium/Traefik.
-  direct_http_group_defaults = {
-    arrs       = { group = "arrs", tag_keys = ["arrs"] }
-    gaming     = { group = "gaming", tag_keys = ["gaming"] }
-    media      = { group = "media", tag_keys = ["media"] }
-    automation = { group = "automation", tag_keys = ["automation"] }
-    monitoring = { group = "monitoring", tag_keys = ["monitoring"] }
-    network    = { group = "network", tag_keys = ["network"] }
-    plex       = { group = "plex", tag_keys = ["plex"] }
-    torrents   = { group = "torrents", tag_keys = ["torrents"] }
-    usenet     = { group = "usenet", tag_keys = ["usenet"] }
-    utilities  = { group = "utilities", tag_keys = ["utilities"] }
-  }
-
-  direct_http_services = {
-    # ARRs
-    bazarr    = { category = "arrs", port = 6767 }
-    lidarr    = { category = "arrs", port = 8686 }
-    prowlarr  = { category = "arrs", port = 9696 }
-    radarr    = { category = "arrs", port = 7878 }
-    radarr-4k = { category = "arrs", port = 7878 }
-    sonarr    = { category = "arrs", port = 8989 }
-    sonarr-4k = { category = "arrs", port = 8989 }
-    sportarr  = { category = "arrs", port = 1867 }
-    whisparr  = { category = "arrs", port = 6969 }
-
-    # Gaming
-    romm = { category = "gaming", port = 8080 }
-
-    # Media
-    autobrr   = { category = "media", port = 7474 }
-    obsidian  = { category = "media", port = 3000 }
-    ombi      = { category = "media", port = 3579 }
-    opencloud = { category = "media", port = 9200 }
-    seerr     = { category = "media", port = 5055 }
-    stash     = { category = "media", port = 9999 }
-    thelounge = { category = "media", port = 9000 }
-    znc       = { category = "media", port = 6501 }
-    wallos    = { category = "media", port = 80 }
-
-    # Automation
-    n8n = {
-      category              = "automation"
-      hostname              = local.host_ips["n8n"]
-      port                  = 5678
-      path                  = "/healthz/readiness"
+  # Stable host endpoints that intentionally bypass Traefik.
+  extra_http_monitors = {
+    n8n-direct = {
+      name                  = "n8n [Direct]"
+      url                   = "http://${local.host_ips["n8n"]}:5678/healthz/readiness"
+      description           = "Direct n8n VM readiness endpoint"
+      group                 = "automation"
+      tag_keys              = ["automation", "direct"]
       accepted_status_codes = ["200-299"]
+      method                = "GET"
+      ignore_tls            = true
+      expiry_notification   = false
+      max_redirects         = 0
     }
 
-    # Monitoring
-    alloy = {
-      category              = "monitoring"
-      port                  = 12345
-      path                  = "/-/ready"
+    plex-direct = {
+      name                  = "Plex [Direct]"
+      url                   = "http://${local.host_ips["plex"]}:32400/identity"
+      description           = "Direct Plex host endpoint"
+      group                 = "plex"
+      tag_keys              = ["plex", "direct"]
       accepted_status_codes = ["200-299"]
-    }
-
-    blackbox-exporter = {
-      category              = "monitoring"
-      port                  = 9115
-      path                  = "/metrics"
-      accepted_status_codes = ["200-299"]
-    }
-
-    dozzle = { category = "monitoring", port = 8080 }
-
-    gotify = { category = "monitoring", port = 80 }
-
-    grafana = {
-      category = "monitoring"
-      port     = 3000
-      path     = "/login"
-    }
-
-    homepage = { category = "monitoring", port = 3000 }
-
-    loki = {
-      category              = "monitoring"
-      port                  = 3100
-      path                  = "/ready"
-      accepted_status_codes = ["200-299"]
-    }
-
-    portainer = { category = "monitoring", port = 9000 }
-
-    prometheus = {
-      category              = "monitoring"
-      port                  = 9090
-      path                  = "/-/ready"
-      accepted_status_codes = ["200-299"]
-    }
-
-    uptime-kuma = { category = "monitoring", port = 3001 }
-
-    # Network
-    authelia = {
-      category              = "network"
-      port                  = 9091
-      path                  = "/api/health"
-      accepted_status_codes = ["200-299"]
-    }
-
-    traefik = {
-      category              = "network"
-      port                  = 8081
-      path                  = "/ping"
-      accepted_status_codes = ["200-299"]
-    }
-
-    # Plex
-    plex = {
-      category              = "plex"
-      hostname              = local.host_ips["plex"]
-      port                  = 32400
-      path                  = "/identity"
-      accepted_status_codes = ["200-299"]
-    }
-
-    tautulli = { category = "plex", port = 8181 }
-
-    # Torrents
-    qbittorrent    = { category = "torrents", port = 8090 }
-    qbittorrent-xs = { category = "torrents", port = 8091 }
-    qui            = { category = "torrents", port = 7476 }
-    unpackerr      = { category = "torrents", port = 5656 }
-
-    # Usenet
-    nzbhydra2 = { category = "usenet", port = 5076 }
-    sabnzbd   = { category = "usenet", port = 8080 }
-
-    # Utilities
-    adminer     = { category = "utilities", port = 8080 }
-    czkawka     = { category = "utilities", port = 5800 }
-    gitea       = { category = "utilities", port = 3000 }
-    infisical   = { category = "utilities", port = 8080 }
-    syncthing   = { category = "utilities", port = 8384 }
-    vaultwarden = { category = "utilities", port = 80 }
-  }
-
-  direct_http_monitors = {
-    for service, cfg in local.direct_http_services : "${service}-direct" => {
-      name        = "${join(" ", [for word in split("-", service) : title(word)])} [Direct]"
-      url         = "http://${try(cfg.hostname, service)}:${cfg.port}${try(cfg.path, "")}"
-      description = "Direct backend HTTP check for ${service}"
-
-      group    = local.direct_http_group_defaults[cfg.category].group
-      tag_keys = try(cfg.tag_keys, local.direct_http_group_defaults[cfg.category].tag_keys)
-
-      accepted_status_codes = try(cfg.accepted_status_codes, ["200-399", "401", "403"])
       method                = "GET"
       ignore_tls            = true
       expiry_notification   = false
       max_redirects         = 10
     }
-  }
 
-  # Hand-written monitors for things that are not just https://service.int.zone:8443
-  # or http://service:container_port.
-  extra_http_monitors = {
     proxmox = {
       name                  = "Proxmox (Web UI)"
       url                   = "https://${local.host_ips["pve1"]}:8006"
@@ -349,7 +217,6 @@ locals {
 
   http_monitors = merge(
     local.private_http_monitors,
-    local.direct_http_monitors,
     local.public_http_monitors,
     local.extra_http_monitors
   )
