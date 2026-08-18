@@ -17,9 +17,14 @@ variable "seerr_url" {
 }
 
 variable "private_https_port" {
-  description = "Private HTTPS entrypoint port used for internal service URLs."
+  description = "Optional private HTTPS port override. Defaults to terraform/netbox, then 8443."
   type        = number
-  default     = 8443
+  default     = null
+
+  validation {
+    condition     = var.private_https_port == null || (var.private_https_port >= 1 && var.private_https_port <= 65535)
+    error_message = "private_https_port must be null or between 1 and 65535."
+  }
 }
 
 variable "seerr_api_key" {

@@ -11,6 +11,19 @@ locals {
   }
 }
 
+resource "netbox_config_context" "services" {
+  name        = "services"
+  description = "Global service topology consumed by Ansible."
+
+  data = jsonencode({
+    services = {
+      public_zone        = local.cloudflare_zone
+      internal_zone      = local.internal_zone
+      private_https_port = local.private_https_port
+    }
+  })
+}
+
 resource "netbox_site" "this" {
   for_each = local.sites
 

@@ -3,12 +3,13 @@ locals {
   # NETBOX (OUTPUTS)
   ################################
 
-  netbox_host_ips      = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.host_primary_ipv4, {}) : {}
-  netbox_internal_zone = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
+  netbox_host_ips           = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.host_primary_ipv4, {}) : {}
+  netbox_internal_zone      = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
+  netbox_private_https_port = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.private_https_port, null) : null
 
   domain_int = trimspace(var.domain_int) != "" ? trimspace(var.domain_int) : local.netbox_internal_zone
 
-  private_https_port = var.private_https_port
+  private_https_port = coalesce(var.private_https_port, local.netbox_private_https_port, 8443)
 
   seerr_url = trimspace(var.seerr_url) != "" ? trimspace(var.seerr_url) : "https://seerr.${local.domain_int}:${local.private_https_port}"
 

@@ -1,6 +1,7 @@
 locals {
-  internal_zone   = trimspace(var.internal_zone)
-  cloudflare_zone = trimspace(var.cloudflare_zone)
+  internal_zone      = trimspace(var.internal_zone)
+  cloudflare_zone    = trimspace(var.cloudflare_zone)
+  private_https_port = var.private_https_port
 
   sites = {
     homelab = {
