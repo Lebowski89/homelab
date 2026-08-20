@@ -17,6 +17,8 @@ postgres_etcd_initial_cluster: >-
   {%- for host in groups['tags_postgres'] | default([]) | sort -%}
   {{ host }}=http://{{ hostvars[host].local_ip }}:2380{{ ',' if not loop.last else '' }}{%- endfor -%}
 
+postgres_etcd_initial_cluster_state: existing
+
 postgres_patroni_etcd_hosts: >-
   {{
     groups['tags_postgres']

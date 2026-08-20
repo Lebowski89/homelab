@@ -19,14 +19,16 @@ proxmox_api_bootstrap_user: "root@pam"
 tailscale_bootstrap_guest: ""
 tailscale_bootstrap_guests: {}
 
-# Populate the variables above before running the bootstrap role.
+# Populate the variables above before running:
+#
+#  skynet bootstrap tailscale
 #
 # Example:
 #
-# tailscale_bootstrap_guest: n8n
+# tailscale_bootstrap_guest: guest-name
 #
 # tailscale_bootstrap_guests:
-#   n8n:
-#     vmid: 9010
-#     hostname: n8n
+#   guest-name:
+#     vmid: 9000
+#     hostname: guest-name
 #     enable_ssh: true

@@ -31,11 +31,8 @@
       - services_controller_host in hostvars
       - services_storage_host in hostvars
       - services_plex_host in hostvars
-      - services_controller_host in ansible_play_hosts_all
-      - services_storage_host in ansible_play_hosts_all
-      - services_plex_host in ansible_play_hosts_all
     fail_msg: >-
-      Runtime-neutral service hosts must be non-empty active inventory hosts,
+      Runtime-neutral service hosts must be non-empty inventory hosts,
       and services_log_root must be a non-empty string.
   tags: always
 

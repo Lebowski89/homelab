@@ -8,5 +8,5 @@ ETCD_LISTEN_PEER_URLS="http://{{ local_ip }}:{{ postgres_etcd_peer_port }}"
 ETCD_INITIAL_ADVERTISE_PEER_URLS="http://{{ local_ip }}:{{ postgres_etcd_peer_port }}"
 
 ETCD_INITIAL_CLUSTER="{{ postgres_etcd_initial_cluster | replace(' ', '') }}"
-ETCD_INITIAL_CLUSTER_STATE="new"
+ETCD_INITIAL_CLUSTER_STATE="{{ postgres_etcd_initial_cluster_state }}"
 ETCD_INITIAL_CLUSTER_TOKEN="{{ postgres_etcd_cluster_token }}"
