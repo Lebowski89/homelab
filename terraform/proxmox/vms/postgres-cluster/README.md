@@ -12,7 +12,7 @@
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
 | <a name="input_ci_user"></a> [ci\_user](#input\_ci\_user) | n/a | `string` | `"ubuntu"` | no |
-| <a name="input_clone_template_vmid"></a> [clone\_template\_vmid](#input\_clone\_template\_vmid) | VMID of the Ubuntu 24.04 Cloud-Init template in Proxmox | `number` | n/a | yes |
+| <a name="input_clone_template_vmid"></a> [clone\_template\_vmid](#input\_clone\_template\_vmid) | Default Proxmox Cloud-Init template VMID for PostgreSQL nodes | `number` | n/a | yes |
 | <a name="input_default_tags"></a> [default\_tags](#input\_default\_tags) | n/a | `string` | `"terraform;postgres;patroni"` | no |
 | <a name="input_dns_ips"></a> [dns\_ips](#input\_dns\_ips) | Fallback DNS node/VIP IPs. Normally sourced from terraform/netbox outputs.dns\_ips. | `map(string)` | `{}` | no |
 | <a name="input_enable_netbox_remote_state"></a> [enable\_netbox\_remote\_state](#input\_enable\_netbox\_remote\_state) | Read DNS topology data from the terraform/netbox local state. | `bool` | `true` | no |
@@ -20,11 +20,11 @@
 | <a name="input_pm_api_token"></a> [pm\_api\_token](#input\_pm\_api\_token) | Terraform Proxmox API token in format user@realm!tokenid=secret | `string` | n/a | yes |
 | <a name="input_pm_api_url"></a> [pm\_api\_url](#input\_pm\_api\_url) | Proxmox API URL, e.g. https://pve.example.com:8006/ | `string` | n/a | yes |
 | <a name="input_pm_ssh_host"></a> [pm\_ssh\_host](#input\_pm\_ssh\_host) | n/a | `string` | n/a | yes |
+| <a name="input_pm_ssh_port"></a> [pm\_ssh\_port](#input\_pm\_ssh\_port) | SSH port of the target Proxmox node. | `number` | `22` | no |
 | <a name="input_pm_ssh_username"></a> [pm\_ssh\_username](#input\_pm\_ssh\_username) | n/a | `string` | `"root"` | no |
 | <a name="input_pm_tls_insecure"></a> [pm\_tls\_insecure](#input\_pm\_tls\_insecure) | Disable Proxmox API TLS certificate verification. Keep false when the Proxmox CA is trusted; set true only for an explicitly accepted self-signed or untrusted certificate. | `bool` | `false` | no |
-| <a name="input_postgres_vms"></a> [postgres\_vms](#input\_postgres\_vms) | Postgres cluster VM definitions | <pre>map(object({<br/>    vmid         = number<br/>    ip           = string<br/>    cores        = number<br/>    sockets      = number<br/>    memory       = number<br/>    disk_size_gb = number<br/>    vlan_tag     = optional(number)<br/>    onboot       = optional(bool, true)<br/>    ci_user      = optional(string)<br/>  }))</pre> | n/a | yes |
+| <a name="input_postgres_vms"></a> [postgres\_vms](#input\_postgres\_vms) | Postgres cluster VM definitions | <pre>map(object({<br/>    vmid                = number<br/>    ip                  = string<br/>    cores               = number<br/>    sockets             = number<br/>    memory              = number<br/>    disk_size_gb        = number<br/>    clone_template_vmid = optional(number)<br/>    vlan_tag            = optional(number)<br/>    onboot              = optional(bool, true)<br/>    ci_user             = optional(string)<br/>  }))</pre> | n/a | yes |
 | <a name="input_ssh_public_key_path"></a> [ssh\_public\_key\_path](#input\_ssh\_public\_key\_path) | n/a | `string` | n/a | yes |
-| <a name="input_tailscale_auth_key"></a> [tailscale\_auth\_key](#input\_tailscale\_auth\_key) | n/a | `string` | n/a | yes |
 | <a name="input_target_node"></a> [target\_node](#input\_target\_node) | Proxmox node to place the VMs on | `string` | n/a | yes |
 | <a name="input_vm_bridge"></a> [vm\_bridge](#input\_vm\_bridge) | n/a | `string` | `"vmbr0"` | no |
 | <a name="input_vm_cidr"></a> [vm\_cidr](#input\_vm\_cidr) | n/a | `number` | `24` | no |
