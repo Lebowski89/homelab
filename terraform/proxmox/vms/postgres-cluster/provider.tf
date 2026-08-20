@@ -10,7 +10,7 @@ provider "proxmox" {
     node {
       name    = var.target_node
       address = var.pm_ssh_host
-      port    = 22
+      port    = var.pm_ssh_port
     }
   }
 }
