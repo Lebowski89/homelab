@@ -57,6 +57,8 @@
       - local all all peer
       - host all all 127.0.0.1/32 scram-sha-256
       - host all all ::1/128 scram-sha-256
+      - host replication {{ postgres_patroni_replication_name }} 127.0.0.1/32 scram-sha-256
+      - host replication {{ postgres_patroni_replication_name }} ::1/128 scram-sha-256
       {% for host in groups['tags_postgres'] %}
       - host replication {{ postgres_patroni_replication_name }} {{ hostvars[host].local_ip }}/32 scram-sha-256
       {% endfor %}

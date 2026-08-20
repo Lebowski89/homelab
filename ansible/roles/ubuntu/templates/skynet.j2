@@ -79,6 +79,7 @@ Role/action examples:
   skynet check infisical-podman recreate
   skynet run infisical-podman deploy
   skynet run infisical-podman remove
+  skynet bootstrap tailscale
   skynet check keepalived
   skynet check technitium-native
   skynet check node-exporter
@@ -355,6 +356,8 @@ role_tag() {
     infisical:recreate)             echo "infisical_recreate" ;;
     infisical:remove)               echo "infisical_remove" ;;
 
+    tailscale:bootstrap)            echo "tailscale_bootstrap" ;;
+
     opentofu:deploy)                echo "opentofu" ;;
     opentofu:install)               echo "opentofu_install" ;;
     opentofu:pve-user)              echo "opentofu_pve_user" ;;
@@ -522,6 +525,9 @@ Role/action targets:
     recreate  -> infisical_recreate
     remove    -> infisical_remove
 
+  tailscale:
+    bootstrap -> tailscale_bootstrap
+
   opentofu:
     deploy   -> opentofu
     install  -> opentofu_install
@@ -584,6 +590,7 @@ Examples:
   skynet check infisical-podman recreate
   skynet run infisical-podman deploy
   skynet run infisical-podman remove
+  skynet bootstrap tailscale
   skynet check keepalived
   skynet check technitium-native
   skynet check node-exporter

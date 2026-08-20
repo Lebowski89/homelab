@@ -8,9 +8,9 @@ target_node         = "pve1"
 clone_template_vmid = 9001
 vm_storage          = "local-zfs"
 
-vm_bridge       = "vmbr1"
-vm_gateway      = "192.168.xx.x"
-vm_cidr         = 24
+vm_bridge  = "vmbr1"
+vm_gateway = "192.168.xx.x"
+vm_cidr    = 24
 
 ci_user = "user"
 
@@ -18,29 +18,32 @@ ssh_public_key_path = "~/.ssh/proxmox_terraform.pub"
 
 postgres_vms = {
   pg95 = {
-    vmid         = 9005
-    ip           = "192.168.xx.xx"
-    cores        = 2
-    sockets      = 1
-    memory       = 2048
-    disk_size_gb = 60
+    vmid                = 9005
+    ip                  = "192.168.xx.xx"
+    cores               = 2
+    sockets             = 1
+    memory              = 2048
+    disk_size_gb        = 60
+    clone_template_vmid = 9003
   }
 
   pg96 = {
-    vmid         = 9006
-    ip           = "192.168.xx.xx"
-    cores        = 2
-    sockets      = 1
-    memory       = 2048
-    disk_size_gb = 60
+    vmid                = 9006
+    ip                  = "192.168.xx.xx"
+    cores               = 2
+    sockets             = 1
+    memory              = 2048
+    disk_size_gb        = 60
+    clone_template_vmid = 9003
   }
 
   pg97 = {
-    vmid         = 9007
-    ip           = "192.168.xx.xx"
-    cores        = 2
-    sockets      = 1
-    memory       = 2048
-    disk_size_gb = 60
+    vmid                = 9007
+    ip                  = "192.168.80.97"
+    cores               = 2
+    sockets             = 1
+    memory              = 2048
+    disk_size_gb        = 60
+    clone_template_vmid = 9003
   }
 }

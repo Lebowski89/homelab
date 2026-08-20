@@ -196,6 +196,13 @@ sudo journalctl -u patroni -f
 
 ## etcd checks
 
+### Bootstrap mode during node replacement
+
+`postgres_etcd_initial_cluster_state` defaults to `new` for a fresh cluster or
+full-cluster bootstrap. Set it to `existing` only as an explicit, temporary
+host-scoped override for one replacement member joining surviving etcd members,
+then remove the override after that replacement.
+
 ### Check etcd endpoint health
 ```bash
 etcdctl --endpoints=http://192.168.80.95:2379,http://192.168.80.96:2379,http://192.168.80.97:2379 endpoint health

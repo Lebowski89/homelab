@@ -241,7 +241,7 @@ terraform apply -no-color
 # terraform.tfvars
 pm_api_url      = "https://192.168.80.80:8006/api2/json"
 target_node     = "pve01"
-clone_template  = "ubuntu-2404-cloudinit-template"
+clone_template  = "ubuntu-2604-lts-cloudinit-template"
 vm_storage      = "local-zfs"
 
 ```

@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/12 |
+| Readme update        | 2026/08/21 |
 
 
 
@@ -33,88 +33,89 @@
 | [postgres_etcd_peer_port](defaults/main.yml#L15)   | int | `2380` |    
 | [postgres_etcd_cluster_token](defaults/main.yml#L16)   | str | `pg-ha-1` |    
 | [postgres_etcd_initial_cluster](defaults/main.yml#L18)   | list | `[]` |    
-| [postgres_patroni_scope](defaults/main.yml#L24)   | str | `pg-cluster` |    
-| [postgres_patroni_namespace](defaults/main.yml#L25)   | str | `/service` |    
-| [postgres_patroni_node_name](defaults/main.yml#L26)   | str | `{{ inventory_hostname }}` |    
-| [postgres_patroni_config_dir](defaults/main.yml#L28)   | str | `/etc/patroni` |    
-| [postgres_patroni_config_path](defaults/main.yml#L29)   | str | `{{ postgres_patroni_config_dir }}/config.yml` |    
-| [postgres_patroni_data_dir](defaults/main.yml#L30)   | str | `/var/lib/postgresql/{{ postgres_version }}/main` |    
-| [postgres_patroni_bin_dir](defaults/main.yml#L31)   | str | `/usr/lib/postgresql/{{ postgres_version }}/bin` |    
-| [postgres_patroni_restapi_port](defaults/main.yml#L32)   | int | `8008` |    
-| [postgres_patroni_postgres_port](defaults/main.yml#L33)   | int | `5432` |    
-| [postgres_patroni_superuser_name](defaults/main.yml#L39)   | str | `postgres` |    
-| [postgres_patroni_superuser_pass](defaults/main.yml#L40)   | str |  |    
-| [postgres_patroni_replication_name](defaults/main.yml#L42)   | str | `replicator` |    
-| [postgres_patroni_replication_pass](defaults/main.yml#L43)   | str |  |    
-| [postgres_patroni_admin_role_name](defaults/main.yml#L45)   | str | `admin` |    
-| [postgres_patroni_admin_role_pass](defaults/main.yml#L46)   | str |  |    
-| [postgres_patroni_admin_role_login](defaults/main.yml#L47)   | bool | `True` |    
-| [postgres_patroni_admin_role_createdb](defaults/main.yml#L48)   | bool | `True` |    
-| [postgres_patroni_admin_role_createrole](defaults/main.yml#L49)   | bool | `False` |    
-| [postgres_patroni_etcd_hosts](defaults/main.yml#L51)   | list | `[]` |    
-| [postgres_patroni_pg_hba_extra](defaults/main.yml#L52)   | list | `[]` |    
-| [postgres_uptime_kuma_monitor_role_name](defaults/main.yml#L58)   | str | `uptime_kuma_monitor` |    
-| [postgres_uptime_kuma_monitor_role_pass](defaults/main.yml#L59)   | str |  |    
-| [postgres_uptime_kuma_monitor_database](defaults/main.yml#L60)   | str | `postgres` |    
-| [postgres_backup_root](defaults/main.yml#L66)   | str | `/var/backups/postgresql` |    
-| [postgres_backup_script_path](defaults/main.yml#L67)   | str | `/usr/local/sbin/postgres-logical-backup` |    
-| [postgres_backup_manage_timer](defaults/main.yml#L68)   | bool | `False` |    
-| [postgres_backup_timer_name](defaults/main.yml#L69)   | str | `postgres-logical-backup` |    
-| [postgres_backup_timer_on_calendar](defaults/main.yml#L70)   | str | `*-*-* 03:00:00` |    
-| [postgres_backup_timer_randomized_delay_sec](defaults/main.yml#L71)   | str | `30m` |    
-| [postgres_backup_local_retention_days](defaults/main.yml#L72)   | int | `7` |    
-| [postgres_backup_failed_retention_days](defaults/main.yml#L73)   | int | `2` |    
-| [postgres_backup_metrics_file](defaults/main.yml#L74)   | str | `/var/lib/node_exporter/textfile_collector_postgres/postgres_logical_backup.prom` |    
-| [postgres_backup_remote_manage](defaults/main.yml#L80)   | bool | `False` |    
-| [postgres_backup_remote_enabled](defaults/main.yml#L81)   | bool | `False` |    
-| [postgres_backup_remote_restic_path](defaults/main.yml#L82)   | str | `/usr/bin/restic` |    
-| [postgres_backup_remote_script_path](defaults/main.yml#L83)   | str | `/usr/local/sbin/postgres-logical-backup-remote` |    
-| [postgres_backup_remote_state_dir](defaults/main.yml#L84)   | str | `/var/lib/postgres-logical-backup-remote` |    
-| [postgres_backup_remote_repository](defaults/main.yml#L85)   | str |  |    
-| [postgres_backup_remote_config_dir](defaults/main.yml#L86)   | str | `/etc/restic/postgres-logical-backup` |    
-| [postgres_backup_remote_repository_file](defaults/main.yml#L87)   | str | `{{ postgres_backup_remote_config_dir }}/repository` |    
-| [postgres_backup_remote_password_file](defaults/main.yml#L88)   | str | `{{ postgres_backup_remote_config_dir }}/password` |    
-| [postgres_backup_remote_environment_file](defaults/main.yml#L89)   | str | `{{ postgres_backup_remote_config_dir }}/backend.env` |    
-| [postgres_backup_remote_managed_secret_files_manifest](defaults/main.yml#L90)   | str | `<multiline value: folded_strip>` |    
-| [postgres_backup_remote_password_secret](defaults/main.yml#L92)   | dict | `{}` |    
-| [postgres_backup_remote_password_secret.**path**](defaults/main.yml#L93)   | str | `/Restic/Postgres` |    
-| [postgres_backup_remote_password_secret.**name**](defaults/main.yml#L94)   | str | `PASSWORD` |    
-| [postgres_backup_remote_backend_environment](defaults/main.yml#L95)   | dict | `{}` |    
-| [postgres_backup_remote_backend_secrets](defaults/main.yml#L96)   | list | `[]` |    
-| [postgres_backup_remote_secret_files](defaults/main.yml#L97)   | list | `[]` |    
-| [postgres_backup_remote_options](defaults/main.yml#L98)   | list | `[]` |    
-| [postgres_backup_remote_retry_lock](defaults/main.yml#L99)   | str | `10m` |    
-| [postgres_backup_remote_timer_name](defaults/main.yml#L100)   | str | `postgres-logical-backup-remote` |    
-| [postgres_backup_remote_timer_on_calendar](defaults/main.yml#L101)   | str | `*-*-* 04:00:00` |    
-| [postgres_backup_remote_timer_randomized_delay_sec](defaults/main.yml#L102)   | str | `30m` |    
-| [postgres_backup_remote_maintenance_timer_name](defaults/main.yml#L103)   | str | `postgres-logical-backup-remote-maintenance` |    
-| [postgres_backup_remote_maintenance_timer_on_calendar](defaults/main.yml#L104)   | str | `Sun *-*-* 05:00:00` |    
-| [postgres_backup_remote_maintenance_timer_randomized_delay_sec](defaults/main.yml#L105)   | str | `30m` |    
-| [postgres_backup_remote_maintenance_host](defaults/main.yml#L106)   | str | `<multiline value: folded_strip>` |    
-| [postgres_backup_remote_snapshot_host](defaults/main.yml#L108)   | str | `{{ postgres_patroni_scope }}` |    
-| [postgres_backup_remote_keep_daily](defaults/main.yml#L109)   | int | `14` |    
-| [postgres_backup_remote_keep_weekly](defaults/main.yml#L110)   | int | `8` |    
-| [postgres_backup_remote_keep_monthly](defaults/main.yml#L111)   | int | `12` |    
-| [postgres_backup_remote_metrics_file](defaults/main.yml#L112)   | str | `<multiline value: folded_strip>` |    
-| [postgres_backup_restore_validation_manage](defaults/main.yml#L119)   | bool | `False` |    
-| [postgres_backup_restore_validation_enabled](defaults/main.yml#L120)   | bool | `False` |    
-| [postgres_backup_restore_validation_host](defaults/main.yml#L121)   | str | `{{ postgres_backup_remote_maintenance_host }}` |    
-| [postgres_backup_restore_validation_script_path](defaults/main.yml#L122)   | str | `/usr/local/sbin/postgres-logical-backup-restore-validate` |    
-| [postgres_backup_restore_validation_runuser_path](defaults/main.yml#L123)   | str | `/usr/sbin/runuser` |    
-| [postgres_backup_restore_validation_work_root](defaults/main.yml#L124)   | str | `/var/lib/postgres-logical-backup-restore-validation` |    
-| [postgres_backup_restore_validation_timer_name](defaults/main.yml#L125)   | str | `postgres-logical-backup-restore-validation` |    
-| [postgres_backup_restore_validation_timer_on_calendar](defaults/main.yml#L126)   | str | `Sun *-*-* 07:00:00` |    
-| [postgres_backup_restore_validation_timer_randomized_delay_sec](defaults/main.yml#L127)   | str | `30m` |    
-| [postgres_backup_restore_validation_port](defaults/main.yml#L128)   | int | `55432` |    
-| [postgres_backup_restore_validation_max_snapshot_age_hours](defaults/main.yml#L129)   | int | `48` |    
-| [postgres_backup_restore_validation_min_free_bytes](defaults/main.yml#L130)   | int | `5368709120` |    
-| [postgres_backup_restore_validation_encoding](defaults/main.yml#L131)   | str | `UTF8` |    
-| [postgres_backup_restore_validation_locale](defaults/main.yml#L132)   | str | `C.UTF-8` |    
-| [postgres_backup_restore_validation_metrics_file](defaults/main.yml#L133)   | str | `<multiline value: folded_strip>` |    
-| [postgres_restore_dbs_dir](defaults/main.yml#L140)   | str | `/tmp` |    
-| [postgres_restore_dbs_drop_existing](defaults/main.yml#L141)   | bool | `True` |    
-| [postgres_restore_dbs_map](defaults/main.yml#L146)   | list | `[]` |    
-| [postgres_fix_owner_map](defaults/main.yml#L161)   | list | `[]` |    
+| [postgres_etcd_initial_cluster_state](defaults/main.yml#L21)   | str | `new` |    
+| [postgres_patroni_scope](defaults/main.yml#L27)   | str | `pg-cluster` |    
+| [postgres_patroni_namespace](defaults/main.yml#L28)   | str | `/service` |    
+| [postgres_patroni_node_name](defaults/main.yml#L29)   | str | `{{ inventory_hostname }}` |    
+| [postgres_patroni_config_dir](defaults/main.yml#L31)   | str | `/etc/patroni` |    
+| [postgres_patroni_config_path](defaults/main.yml#L32)   | str | `{{ postgres_patroni_config_dir }}/config.yml` |    
+| [postgres_patroni_data_dir](defaults/main.yml#L33)   | str | `/var/lib/postgresql/{{ postgres_version }}/main` |    
+| [postgres_patroni_bin_dir](defaults/main.yml#L34)   | str | `/usr/lib/postgresql/{{ postgres_version }}/bin` |    
+| [postgres_patroni_restapi_port](defaults/main.yml#L35)   | int | `8008` |    
+| [postgres_patroni_postgres_port](defaults/main.yml#L36)   | int | `5432` |    
+| [postgres_patroni_superuser_name](defaults/main.yml#L42)   | str | `postgres` |    
+| [postgres_patroni_superuser_pass](defaults/main.yml#L43)   | str |  |    
+| [postgres_patroni_replication_name](defaults/main.yml#L45)   | str | `replicator` |    
+| [postgres_patroni_replication_pass](defaults/main.yml#L46)   | str |  |    
+| [postgres_patroni_admin_role_name](defaults/main.yml#L48)   | str | `admin` |    
+| [postgres_patroni_admin_role_pass](defaults/main.yml#L49)   | str |  |    
+| [postgres_patroni_admin_role_login](defaults/main.yml#L50)   | bool | `True` |    
+| [postgres_patroni_admin_role_createdb](defaults/main.yml#L51)   | bool | `True` |    
+| [postgres_patroni_admin_role_createrole](defaults/main.yml#L52)   | bool | `False` |    
+| [postgres_patroni_etcd_hosts](defaults/main.yml#L54)   | list | `[]` |    
+| [postgres_patroni_pg_hba_extra](defaults/main.yml#L55)   | list | `[]` |    
+| [postgres_uptime_kuma_monitor_role_name](defaults/main.yml#L61)   | str | `uptime_kuma_monitor` |    
+| [postgres_uptime_kuma_monitor_role_pass](defaults/main.yml#L62)   | str |  |    
+| [postgres_uptime_kuma_monitor_database](defaults/main.yml#L63)   | str | `postgres` |    
+| [postgres_backup_root](defaults/main.yml#L69)   | str | `/var/backups/postgresql` |    
+| [postgres_backup_script_path](defaults/main.yml#L70)   | str | `/usr/local/sbin/postgres-logical-backup` |    
+| [postgres_backup_manage_timer](defaults/main.yml#L71)   | bool | `False` |    
+| [postgres_backup_timer_name](defaults/main.yml#L72)   | str | `postgres-logical-backup` |    
+| [postgres_backup_timer_on_calendar](defaults/main.yml#L73)   | str | `*-*-* 03:00:00` |    
+| [postgres_backup_timer_randomized_delay_sec](defaults/main.yml#L74)   | str | `30m` |    
+| [postgres_backup_local_retention_days](defaults/main.yml#L75)   | int | `7` |    
+| [postgres_backup_failed_retention_days](defaults/main.yml#L76)   | int | `2` |    
+| [postgres_backup_metrics_file](defaults/main.yml#L77)   | str | `/var/lib/node_exporter/textfile_collector_postgres/postgres_logical_backup.prom` |    
+| [postgres_backup_remote_manage](defaults/main.yml#L83)   | bool | `False` |    
+| [postgres_backup_remote_enabled](defaults/main.yml#L84)   | bool | `False` |    
+| [postgres_backup_remote_restic_path](defaults/main.yml#L85)   | str | `/usr/bin/restic` |    
+| [postgres_backup_remote_script_path](defaults/main.yml#L86)   | str | `/usr/local/sbin/postgres-logical-backup-remote` |    
+| [postgres_backup_remote_state_dir](defaults/main.yml#L87)   | str | `/var/lib/postgres-logical-backup-remote` |    
+| [postgres_backup_remote_repository](defaults/main.yml#L88)   | str |  |    
+| [postgres_backup_remote_config_dir](defaults/main.yml#L89)   | str | `/etc/restic/postgres-logical-backup` |    
+| [postgres_backup_remote_repository_file](defaults/main.yml#L90)   | str | `{{ postgres_backup_remote_config_dir }}/repository` |    
+| [postgres_backup_remote_password_file](defaults/main.yml#L91)   | str | `{{ postgres_backup_remote_config_dir }}/password` |    
+| [postgres_backup_remote_environment_file](defaults/main.yml#L92)   | str | `{{ postgres_backup_remote_config_dir }}/backend.env` |    
+| [postgres_backup_remote_managed_secret_files_manifest](defaults/main.yml#L93)   | str | `<multiline value: folded_strip>` |    
+| [postgres_backup_remote_password_secret](defaults/main.yml#L95)   | dict | `{}` |    
+| [postgres_backup_remote_password_secret.**path**](defaults/main.yml#L96)   | str | `/Restic/Postgres` |    
+| [postgres_backup_remote_password_secret.**name**](defaults/main.yml#L97)   | str | `PASSWORD` |    
+| [postgres_backup_remote_backend_environment](defaults/main.yml#L98)   | dict | `{}` |    
+| [postgres_backup_remote_backend_secrets](defaults/main.yml#L99)   | list | `[]` |    
+| [postgres_backup_remote_secret_files](defaults/main.yml#L100)   | list | `[]` |    
+| [postgres_backup_remote_options](defaults/main.yml#L101)   | list | `[]` |    
+| [postgres_backup_remote_retry_lock](defaults/main.yml#L102)   | str | `10m` |    
+| [postgres_backup_remote_timer_name](defaults/main.yml#L103)   | str | `postgres-logical-backup-remote` |    
+| [postgres_backup_remote_timer_on_calendar](defaults/main.yml#L104)   | str | `*-*-* 04:00:00` |    
+| [postgres_backup_remote_timer_randomized_delay_sec](defaults/main.yml#L105)   | str | `30m` |    
+| [postgres_backup_remote_maintenance_timer_name](defaults/main.yml#L106)   | str | `postgres-logical-backup-remote-maintenance` |    
+| [postgres_backup_remote_maintenance_timer_on_calendar](defaults/main.yml#L107)   | str | `Sun *-*-* 05:00:00` |    
+| [postgres_backup_remote_maintenance_timer_randomized_delay_sec](defaults/main.yml#L108)   | str | `30m` |    
+| [postgres_backup_remote_maintenance_host](defaults/main.yml#L109)   | str | `<multiline value: folded_strip>` |    
+| [postgres_backup_remote_snapshot_host](defaults/main.yml#L111)   | str | `{{ postgres_patroni_scope }}` |    
+| [postgres_backup_remote_keep_daily](defaults/main.yml#L112)   | int | `14` |    
+| [postgres_backup_remote_keep_weekly](defaults/main.yml#L113)   | int | `8` |    
+| [postgres_backup_remote_keep_monthly](defaults/main.yml#L114)   | int | `12` |    
+| [postgres_backup_remote_metrics_file](defaults/main.yml#L115)   | str | `<multiline value: folded_strip>` |    
+| [postgres_backup_restore_validation_manage](defaults/main.yml#L122)   | bool | `False` |    
+| [postgres_backup_restore_validation_enabled](defaults/main.yml#L123)   | bool | `False` |    
+| [postgres_backup_restore_validation_host](defaults/main.yml#L124)   | str | `{{ postgres_backup_remote_maintenance_host }}` |    
+| [postgres_backup_restore_validation_script_path](defaults/main.yml#L125)   | str | `/usr/local/sbin/postgres-logical-backup-restore-validate` |    
+| [postgres_backup_restore_validation_runuser_path](defaults/main.yml#L126)   | str | `/usr/sbin/runuser` |    
+| [postgres_backup_restore_validation_work_root](defaults/main.yml#L127)   | str | `/var/lib/postgres-logical-backup-restore-validation` |    
+| [postgres_backup_restore_validation_timer_name](defaults/main.yml#L128)   | str | `postgres-logical-backup-restore-validation` |    
+| [postgres_backup_restore_validation_timer_on_calendar](defaults/main.yml#L129)   | str | `Sun *-*-* 07:00:00` |    
+| [postgres_backup_restore_validation_timer_randomized_delay_sec](defaults/main.yml#L130)   | str | `30m` |    
+| [postgres_backup_restore_validation_port](defaults/main.yml#L131)   | int | `55432` |    
+| [postgres_backup_restore_validation_max_snapshot_age_hours](defaults/main.yml#L132)   | int | `48` |    
+| [postgres_backup_restore_validation_min_free_bytes](defaults/main.yml#L133)   | int | `5368709120` |    
+| [postgres_backup_restore_validation_encoding](defaults/main.yml#L134)   | str | `UTF8` |    
+| [postgres_backup_restore_validation_locale](defaults/main.yml#L135)   | str | `C.UTF-8` |    
+| [postgres_backup_restore_validation_metrics_file](defaults/main.yml#L136)   | str | `<multiline value: folded_strip>` |    
+| [postgres_restore_dbs_dir](defaults/main.yml#L143)   | str | `/tmp` |    
+| [postgres_restore_dbs_drop_existing](defaults/main.yml#L144)   | bool | `True` |    
+| [postgres_restore_dbs_map](defaults/main.yml#L149)   | list | `[]` |    
+| [postgres_fix_owner_map](defaults/main.yml#L164)   | list | `[]` |    
 
 
 

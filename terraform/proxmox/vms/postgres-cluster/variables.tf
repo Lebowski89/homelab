@@ -24,9 +24,20 @@ variable "pm_ssh_host" {
   type = string
 }
 
-variable "tailscale_auth_key" {
-  type      = string
-  sensitive = true
+variable "pm_ssh_port" {
+  description = "SSH port of the target Proxmox node."
+  type        = number
+  default     = 22
+  nullable    = false
+
+  validation {
+    condition = (
+      var.pm_ssh_port >= 1 &&
+      var.pm_ssh_port <= 65535 &&
+      floor(var.pm_ssh_port) == var.pm_ssh_port
+    )
+    error_message = "pm_ssh_port must be an integer between 1 and 65535."
+  }
 }
 
 variable "target_node" {
@@ -36,7 +47,7 @@ variable "target_node" {
 
 variable "clone_template_vmid" {
   type        = number
-  description = "VMID of the Ubuntu 24.04 Cloud-Init template in Proxmox"
+  description = "Default Proxmox Cloud-Init template VMID for PostgreSQL nodes"
 }
 
 variable "vm_bridge" {
@@ -87,15 +98,16 @@ variable "vm_storage" {
 variable "postgres_vms" {
   description = "Postgres cluster VM definitions"
   type = map(object({
-    vmid         = number
-    ip           = string
-    cores        = number
-    sockets      = number
-    memory       = number
-    disk_size_gb = number
-    vlan_tag     = optional(number)
-    onboot       = optional(bool, true)
-    ci_user      = optional(string)
+    vmid                = number
+    ip                  = string
+    cores               = number
+    sockets             = number
+    memory              = number
+    disk_size_gb        = number
+    clone_template_vmid = optional(number)
+    vlan_tag            = optional(number)
+    onboot              = optional(bool, true)
+    ci_user             = optional(string)
   }))
 }
 

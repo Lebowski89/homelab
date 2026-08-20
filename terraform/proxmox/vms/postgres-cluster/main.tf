@@ -33,22 +33,24 @@ locals {
   vm_searchdomain        = trim(trimspace(local.vm_searchdomain_source), ".")
 }
 
-resource "proxmox_virtual_environment_file" "tailscale_cloudinit" {
+resource "proxmox_virtual_environment_file" "qemu_guest_agent_cloud_init" {
   content_type = "snippets"
   datastore_id = "local"
   node_name    = var.target_node
 
   source_raw {
-    file_name = "tailscale-bootstrap.yaml"
-    data      = <<-EOF
+    file_name = "postgres-qemu-guest-agent.yaml"
+
+    data = <<-EOF
       #cloud-config
       package_update: true
       package_upgrade: false
 
+      packages:
+        - qemu-guest-agent
+
       runcmd:
-        - curl -fsSL https://tailscale.com/install.sh | sh
-        - systemctl enable --now tailscaled
-        - tailscale up --auth-key='${var.tailscale_auth_key}' --hostname="$(hostname)" --ssh
+        - systemctl enable --now qemu-guest-agent
     EOF
   }
 }
@@ -78,7 +80,11 @@ resource "proxmox_virtual_environment_vm" "postgres" {
   }
 
   clone {
-    vm_id   = var.clone_template_vmid
+    vm_id = coalesce(
+      try(each.value.clone_template_vmid, null),
+      var.clone_template_vmid,
+    )
+
     full    = true
     retries = 3
   }
@@ -117,7 +123,7 @@ resource "proxmox_virtual_environment_vm" "postgres" {
 
   initialization {
     datastore_id        = var.vm_storage
-    vendor_data_file_id = proxmox_virtual_environment_file.tailscale_cloudinit.id
+    vendor_data_file_id = proxmox_virtual_environment_file.qemu_guest_agent_cloud_init.id
 
     ip_config {
       ipv4 {

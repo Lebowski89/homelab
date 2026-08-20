@@ -63,6 +63,7 @@
       - "postgresql-contrib-{{ postgres_version }}"
       - patroni
       - python3-psycopg2
+      - python3-etcd
       - etcd-server
       - etcd-client
     state: present
