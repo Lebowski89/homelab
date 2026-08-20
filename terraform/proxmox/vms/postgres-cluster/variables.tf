@@ -28,6 +28,16 @@ variable "pm_ssh_port" {
   description = "SSH port of the target Proxmox node."
   type        = number
   default     = 22
+  nullable    = false
+
+  validation {
+    condition = (
+      var.pm_ssh_port >= 1 &&
+      var.pm_ssh_port <= 65535 &&
+      floor(var.pm_ssh_port) == var.pm_ssh_port
+    )
+    error_message = "pm_ssh_port must be an integer between 1 and 65535."
+  }
 }
 
 variable "target_node" {

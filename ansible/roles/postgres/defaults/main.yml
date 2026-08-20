@@ -16,6 +16,8 @@ postgres_etcd_peer_port: 2380
 postgres_etcd_cluster_token: pg-ha-1
 
 postgres_etcd_initial_cluster: []
+# new: fresh cluster or full-cluster bootstrap.
+# existing: explicit temporary per-host override for one replacement member joining surviving etcd members.
 postgres_etcd_initial_cluster_state: new
 
 ################################

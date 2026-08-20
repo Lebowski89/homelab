@@ -110,6 +110,7 @@ def run_host_contract(
     controllers: list[str],
     storage_hosts: list[str],
     plex_host: str = "plex",
+    play_hosts: str = "all",
     topology: dict[str, object] | None = None,
 ):
     inventory = tmp_path / "inventory.yml"
@@ -118,7 +119,7 @@ def run_host_contract(
     playbook.write_text(
         f"""---
 - name: Exercise runtime-neutral service host contract
-  hosts: all
+  hosts: {play_hosts}
   connection: local
   gather_facts: false
   vars:
@@ -376,6 +377,26 @@ def test_singleton_group_resolution_and_aliases_succeed_with_one_host(tmp_path: 
     assert "Confirm canonical and compatibility values" in result.stdout
 
 
+def test_canonical_inventory_hosts_need_not_be_active_play_hosts(tmp_path: Path):
+    contract = yaml.safe_load(HOST_CONTRACT_TASKS.read_text())
+    validation = task_named(contract, "Service host contract | Validate canonical host values")
+    conditions = validation["ansible.builtin.assert"]["that"]
+
+    for variable in ("services_controller_host", "services_storage_host", "services_plex_host"):
+        assert f"{variable} in hostvars" in conditions
+        assert f"{variable} in ansible_play_hosts_all" not in conditions
+
+    result = run_host_contract(
+        tmp_path,
+        controllers=["controller"],
+        storage_hosts=["storage"],
+        play_hosts="localhost",
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Confirm canonical and compatibility values" in result.stdout
+
+
 @pytest.mark.parametrize(
     ("controllers", "storage_hosts"),
     [
@@ -408,7 +429,7 @@ def test_canonical_host_validation_rejects_unknown_explicit_plex_before_aliases(
     output = result.stdout + result.stderr
 
     assert result.returncode != 0
-    assert "must be non-empty active inventory hosts" in output
+    assert "must be non-empty inventory hosts" in output
     assert "Publish Docker adapter compatibility alias" not in output
 
 
