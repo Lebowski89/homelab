@@ -12,7 +12,7 @@ vaultwarden:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: vaultwarden/server:1.37.1
+  image: vaultwarden/server:1.37.2
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
   ################################
