@@ -12,7 +12,7 @@ uptime_kuma:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: louislam/uptime-kuma:2.5.0
+  image: louislam/uptime-kuma:2.5.3
   ################################
   # ENVIRONMENT/SECRETS
   ################################

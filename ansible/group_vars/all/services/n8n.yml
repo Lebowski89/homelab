@@ -10,7 +10,7 @@ n8n:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: docker.io/n8nio/n8n:2.35.3
+  image: docker.io/n8nio/n8n:2.36.6
   user: "1000:1000"
   ################################
   # ENVIRONMENT/SECRETS
