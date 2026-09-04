@@ -12,7 +12,7 @@ grafana:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: grafana/grafana:13.2.0-ubuntu
+  image: grafana/grafana:13.2.1-ubuntu
   user: "0"
   ################################
   # ENVIRONMENT/SECRETS
