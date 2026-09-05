@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/19 |
+| Readme update        | 2026/09/05 |
 
 
 
@@ -71,7 +71,7 @@
 | [netbox_redis_pgid](defaults/main.yml#L68)   | str | `{{ container_host_pgid ¦ default('1000') }}` |    
 | [netbox_redis_path](defaults/main.yml#L69)   | str | `{{ netbox_base_path }}/redis` |    
 | [netbox_postgres_name](defaults/main.yml#L75)   | str | `netbox-postgres` |    
-| [netbox_postgres_image](defaults/main.yml#L76)   | str | `docker.io/library/postgres:18.4` |    
+| [netbox_postgres_image](defaults/main.yml#L76)   | str | `docker.io/library/postgres:18.6` |    
 | [netbox_postgres_puid](defaults/main.yml#L77)   | str | `999` |    
 | [netbox_postgres_pgid](defaults/main.yml#L78)   | str | `999` |    
 | [netbox_postgres_path](defaults/main.yml#L79)   | str | `{{ netbox_base_path }}/postgres` |    
