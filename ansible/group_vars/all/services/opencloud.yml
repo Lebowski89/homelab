@@ -12,7 +12,7 @@ opencloud:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: opencloudeu/opencloud-rolling:7.4.0
+  image: opencloudeu/opencloud-rolling:7.5.0
   user: "1000:1000"
   entrypoint:
     - /bin/sh
