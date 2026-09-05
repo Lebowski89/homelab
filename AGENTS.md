@@ -384,6 +384,21 @@ Anything that contacts providers, refreshes remote state, changes state, or perf
 
 Tests must prove behaviour rather than merely duplicate implementation strings.
 
+### Service definition test policy
+
+Adding or changing an ordinary declarative service definition does not by
+itself require a service-specific Python test when repository-wide tests
+already load the real catalog and enforce the affected contracts.
+
+Prefer repository-wide invariant and parametrized tests. Add service-specific
+regression coverage only for distinct behaviour, such as a new schema or
+adapter path, preparation handler, normalization or merge rule, generated
+configuration contract, complicated secret handling, or a demonstrated
+regression.
+
+Do not add tests that merely restate declarative values such as a service's
+name, runtime, image, host, port, or tags.
+
 Static tests are useful for:
 
 * wiring;

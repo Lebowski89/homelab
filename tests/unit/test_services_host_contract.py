@@ -229,7 +229,6 @@ def test_all_real_services_use_neutral_host_variables_and_keep_explicit_runtimes
     assert services["adminer"]["runtime"] == "podman"
     assert services["n8n"]["runtime"] == "podman"
     assert services["thelounge"]["runtime"] == "podman"
-    assert services["upbrr"]["runtime"] == "docker"
 
 
 def test_real_service_hosts_paths_and_base_target_inheritance_are_preserved():

@@ -13,7 +13,8 @@ upbrr:
   # IMAGE/PROCESS
   ################################
   image: ghcr.io/autobrr/upbrr:0.3.1
-  user: "99:100"
+  user: >-
+    {{ hostvars[services_storage_host].container_host_puid }}:{{ hostvars[services_storage_host].container_host_pgid }}
   ################################
   # ENVIRONMENT/SECRETS
   ################################
