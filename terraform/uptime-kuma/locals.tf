@@ -100,6 +100,7 @@ locals {
     qbittorrent    = { group = "torrents", tag_keys = ["torrents"] }
     qbittorrent-xs = { group = "torrents", tag_keys = ["torrents"] }
     qui            = { group = "torrents", tag_keys = ["torrents"] }
+    upbrr          = { group = "torrents", tag_keys = ["torrents"] }
 
     # Usenet
     nzbhydra2 = { group = "usenet", tag_keys = ["usenet"] }

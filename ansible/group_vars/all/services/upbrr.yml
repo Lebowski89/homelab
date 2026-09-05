@@ -1,0 +1,69 @@
+---
+
+upbrr:
+  ################################
+  # IDENTITY
+  ################################
+  enabled: true
+  runtime: docker
+  tags: [torrents, upbrr]
+  name: upbrr
+  stack: upbrr
+  ################################
+  # IMAGE/PROCESS
+  ################################
+  image: ghcr.io/autobrr/upbrr:0.3.1
+  user: "99:100"
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
+  environment:
+    TZ: "{{ timezone }}"
+    UPBRR_WEB_TRUSTED_PROXIES: 172.98.0.0/24
+  ################################
+  # CONNECTIVITY
+  ################################
+  named_networks:
+    overlay:
+      external: true
+  ################################
+  # FILESYSTEM
+  ################################
+  paths:
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/upbrr"
+      state: directory
+      mode: "0755"
+  volumes:
+    config:
+      type: bind
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/upbrr"
+      target: /config
+      read_only: false
+    torrents:
+      type: bind
+      source: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents"
+      target: /data/torrents
+      read_only: true
+    seeds:
+      type: bind
+      source: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds"
+      target: /data/seeds
+      read_only: true
+  ################################
+  # INTEGRATIONS
+  ################################
+  traefik:
+    enable: true
+    exposure: private
+    port: 7480
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
+  deploy:
+    type: swarm
+    mode: replicated
+    replicas: 1
+    profile: standard
+    host: "{{ services_storage_host }}"
+    constraints:
+      - node.labels.docker_services_host == docker_services_unraid_host

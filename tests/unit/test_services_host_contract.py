@@ -224,11 +224,12 @@ def test_all_real_services_use_neutral_host_variables_and_keep_explicit_runtimes
     runtimes = Counter(service["runtime"] for service in services.values())
 
     assert offenders == {}
-    assert len(services) == 53
-    assert runtimes == {"docker": 49, "podman": 4}
+    assert len(services) == 54
+    assert runtimes == {"docker": 50, "podman": 4}
     assert services["adminer"]["runtime"] == "podman"
     assert services["n8n"]["runtime"] == "podman"
     assert services["thelounge"]["runtime"] == "podman"
+    assert services["upbrr"]["runtime"] == "docker"
 
 
 def test_real_service_hosts_paths_and_base_target_inheritance_are_preserved():
