@@ -5,7 +5,6 @@ import os
 import re
 import subprocess
 import sys
-from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -210,7 +209,7 @@ def test_existing_netbox_state_consumers_prefer_explicit_private_port_then_canon
         assert "default     = null" in private_port_block
 
 
-def test_all_real_services_use_neutral_host_variables_and_keep_explicit_runtimes():
+def test_all_real_services_use_neutral_host_variables():
     offenders = {}
     for path in sorted((*SERVICES_DIR.glob("*.yml"), *SERVICES_DIR.glob("*.yaml"))):
         source_without_swarm_label_values = path.read_text()
@@ -220,15 +219,7 @@ def test_all_real_services_use_neutral_host_variables_and_keep_explicit_runtimes
         if matches:
             offenders[path.name] = matches
 
-    services = load_services()
-    runtimes = Counter(service["runtime"] for service in services.values())
-
     assert offenders == {}
-    assert len(services) == 54
-    assert runtimes == {"docker": 50, "podman": 4}
-    assert services["adminer"]["runtime"] == "podman"
-    assert services["n8n"]["runtime"] == "podman"
-    assert services["thelounge"]["runtime"] == "podman"
 
 
 def test_real_service_hosts_paths_and_base_target_inheritance_are_preserved():

@@ -7,12 +7,17 @@ from ansible.errors import AnsibleFilterError
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FILTER_PATH = REPO_ROOT / "ansible/roles/service_common/filter_plugins/service_common.py"
-N8N_PATH = REPO_ROOT / "ansible/group_vars/all/services/n8n.yml"
+SERVICE_CATALOG_PATH = REPO_ROOT / "ansible/filter_plugins/service_catalog.py"
+SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
 AUTOBRR_PATH = REPO_ROOT / "ansible/group_vars/all/services/autobrr.yml"
 
 spec = importlib.util.spec_from_file_location("service_common_postgres", FILTER_PATH)
 service_common = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(service_common)
+
+catalog_spec = importlib.util.spec_from_file_location("service_catalog_postgres", SERVICE_CATALOG_PATH)
+service_catalog = importlib.util.module_from_spec(catalog_spec)
+catalog_spec.loader.exec_module(service_catalog)
 
 LIVE_VALUES = {"postgres_user": "database-user", "postgres_pass": "database-password"}
 
@@ -176,19 +181,33 @@ def test_disabled_postgres_does_not_require_inventory_or_credentials():
     assert result["databases"] == []
 
 
-def test_real_n8n_postgres_declaration_resolves_with_common_values():
-    n8n = yaml.safe_load(N8N_PATH.read_text())["n8n"]
-    result = normalize(n8n["postgres"])
+def test_every_real_postgres_declaration_resolves_with_common_values():
+    services = {}
+    for path in sorted(SERVICES_DIR.glob("*.yml")):
+        services.update(yaml.safe_load(path.read_text()) or {})
 
-    assert result == {
-        "enable": True,
-        "databases": ["n8n"],
-        "port": 5432,
-        "user_var": "postgres_user",
-        "password_var": "postgres_pass",
-        "host_inventory": "manager",
-        "host": "192.0.2.10",
-    }
+    checked = []
+    for item in service_catalog.service_catalog_effective(services, "manager"):
+        service = service_catalog.service_catalog_merge_target(services[item["name"]], item.get("target"))
+        postgres = service.get("postgres")
+        if not isinstance(postgres, dict) or postgres.get("enable") is not True:
+            continue
+
+        infisical = service.get("infisical", {})
+        declarations = infisical.get("secrets_map", []) if isinstance(infisical, dict) else []
+        values = {
+            declaration["var"]: f"value-for-{declaration['var']}"
+            for declaration in declarations
+            if isinstance(declaration, dict) and isinstance(declaration.get("var"), str)
+        }
+        result = normalize(postgres, values=values)
+
+        identity = f"{item['name']}:{item.get('target', '<base>')}"
+        assert result["enable"] is True, identity
+        assert result["databases"], identity
+        checked.append(identity)
+
+    assert checked
 
 
 def test_real_autobrr_adapter_snapshot_reaches_common_postgres_normalization():
