@@ -79,6 +79,7 @@ locals {
     "technitium",
     "thelounge",
     "traefik",
+    "upbrr",
     "uptime-kuma",
     "vaultwarden",
     "wallos",

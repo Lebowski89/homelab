@@ -287,6 +287,10 @@
           url: {{ secrets.qui_seeds_token }}
           fields: ["leech", "download", "seed", "upload"]
           enableLeechProgress: false
+    - upbrr:
+        icon: https://upbrr.com/img/icon-512.png
+        href: https://upbrr.{{ services_internal_zone }}:{{ services_private_https_port }}
+        description: Torrent upload preparation
 
 - usenet:
     - NZBHydra2:

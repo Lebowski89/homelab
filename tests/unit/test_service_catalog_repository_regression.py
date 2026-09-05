@@ -79,16 +79,25 @@ def test_real_repository_dispatch_hosts_are_lightweight_and_runtime_specific():
         REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
         "service_catalog_repository_dispatch",
     )
-    effective = catalog_filters.service_catalog_effective(load_services(), "manager")
-    arrs = [item for item in effective if "arrs" in item["tags"]]
-    n8n = next(item for item in effective if item["name"] == "n8n")
+    services = load_services()
+    effective = catalog_filters.service_catalog_effective(services, "manager")
+    seen_runtimes = set()
 
-    assert arrs
-    assert all(item["runtime"] == "docker" for item in arrs)
-    assert all(item["dispatch_host"] == "manager" for item in arrs)
-    assert n8n["runtime"] == "podman"
-    assert n8n["dispatch_host"] == "n8n"
-    assert all("config" not in item for item in [*arrs, n8n])
+    for item in effective:
+        service = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
+        deploy = service.get("deploy", {})
+        if item["runtime"] == "docker":
+            deploy_type = str(deploy.get("type", "swarm") or "swarm").strip()
+            expected_host = "manager" if deploy_type == "swarm" else (deploy.get("host") or "manager")
+        else:
+            expected_host = deploy.get("host") or service.get("container", {}).get("host") or item["name"]
+
+        identity = f"{item['name']}:{item.get('target', '<base>')}"
+        assert item["dispatch_host"] == expected_host, identity
+        assert "config" not in item, identity
+        seen_runtimes.add(item["runtime"])
+
+    assert seen_runtimes == catalog_filters.VALID_RUNTIMES
 
 
 def test_real_repository_dispatch_hosts_match_repository_host_definitions():
@@ -97,18 +106,24 @@ def test_real_repository_dispatch_hosts_match_repository_host_definitions():
         "service_catalog_repository_hosts",
     )
     services = deepcopy(load_services())
+    host_context = {
+        "services_controller_host": "mgt",
+        "services_storage_host": "unraid",
+        "services_plex_host": "plex",
+    }
     for service in services.values():
         configurations = [service, *(service.get("targets", {}) or {}).values()]
         for configuration in configurations:
             deploy = configuration.get("deploy", {})
-            if deploy.get("host") == "{{ services_controller_host }}":
-                deploy["host"] = "mgt"
+            host = deploy.get("host")
+            if isinstance(host, str) and "{{" in host:
+                deploy["host"] = NativeEnvironment(undefined=StrictUndefined).from_string(host).render(**host_context)
 
     effective = catalog_filters.service_catalog_effective(services, "mgt")
     repository_hosts = {path.stem for path in (REPO_ROOT / "ansible/host_vars").glob("*.yml")}
     repository_hosts.update(path.name for path in (REPO_ROOT / "terraform/proxmox/vms").iterdir() if path.is_dir())
 
-    assert {entry["dispatch_host"] for entry in effective} == {"mgt", "n8n"}
+    assert effective
     assert all(entry["dispatch_host"] in repository_hosts for entry in effective)
 
 

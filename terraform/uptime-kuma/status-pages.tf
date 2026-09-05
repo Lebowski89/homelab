@@ -79,6 +79,7 @@ locals {
         "http.qbittorrent-private",
         "http.qbittorrent-xs-private",
         "http.qui-private",
+        "http.upbrr-private",
       ]
     },
     {

@@ -1,42 +1,26 @@
 ---
 
-qui:
+upbrr:
   ################################
   # IDENTITY
   ################################
   enabled: true
   runtime: docker
-  tags: [torrents, pgsql, qui]
-  name: qui
-  stack: qui
+  tags: [torrents, upbrr]
+  name: upbrr
+  stack: upbrr
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/autobrr/qui:v1.27.0
+  image: ghcr.io/autobrr/upbrr:0.3.1
+  user: >-
+    {{ hostvars[services_storage_host].container_host_puid }}:{{ hostvars[services_storage_host].container_host_pgid }}
   ################################
   # ENVIRONMENT/SECRETS
   ################################
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
-    PGID: "{{ hostvars[services_storage_host].container_host_pgid }}"
-    UMASK: "022"
-  env_file:
-    - /opt/stacks/qui.env
-  infisical:
-    secrets_map:
-      - var: postgres_user
-        path: /Postgres
-        name: USER
-      - var: postgres_pass
-        path: /Postgres
-        name: PASS
-  swarm_env_templates:
-    - src: configs/qui.env.j2
-      no_log: true
-      dest: /opt/stacks/qui.env
-      mode: "0600"
-      force: true
+    UPBRR_WEB_TRUSTED_PROXIES: 172.98.0.0/24
   ################################
   # CONNECTIVITY
   ################################
@@ -47,31 +31,32 @@ qui:
   # FILESYSTEM
   ################################
   paths:
-    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui"
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/upbrr"
       state: directory
       mode: "0755"
   volumes:
     config:
       type: bind
-      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui"
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/upbrr"
       target: /config
       read_only: false
-    media:
+    torrents:
       type: bind
-      source: "{{ hostvars[services_storage_host].container_host_data_root }}"
-      target: /data
-      read_only: false
+      source: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents"
+      target: /data/torrents
+      read_only: true
+    seeds:
+      type: bind
+      source: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds"
+      target: /data/seeds
+      read_only: true
   ################################
   # INTEGRATIONS
   ################################
   traefik:
     enable: true
     exposure: private
-    port: 7476
-  postgres:
-    enable: true
-    databases:
-      - qui
+    port: 7480
   ################################
   # RUNTIME/LIFECYCLE
   ################################
