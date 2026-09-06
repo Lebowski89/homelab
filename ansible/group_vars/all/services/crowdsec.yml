@@ -12,7 +12,7 @@ crowdsec:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: crowdsecurity/crowdsec:v1.8.0
+  image: crowdsecurity/crowdsec:v1.8.1
   user: "0:0"
   ################################
   # ENVIRONMENT/SECRETS
