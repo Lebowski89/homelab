@@ -21,7 +21,7 @@ infisical_podman_smtp_sender: "{{ infisical_smtp_sender }}"
 ################################
 
 infisical_podman_name: infisical
-infisical_podman_image: docker.io/infisical/infisical:v0.165.2
+infisical_podman_image: docker.io/infisical/infisical:v0.165.3
 infisical_podman_timezone: "{{ timezone | default('Australia/Melbourne') }}"
 infisical_podman_port: 8066
 infisical_podman_base_path: "/opt/{{ infisical_podman_name }}"
