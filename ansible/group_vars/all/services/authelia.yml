@@ -82,7 +82,7 @@ authelia:
       ################################
       # IMAGE/PROCESS
       ################################
-      image: authelia/authelia:4.39.20
+      image: authelia/authelia:4.39.22
       ################################
       # ENVIRONMENT/SECRETS
       ################################
