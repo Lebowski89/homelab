@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/21 |
+| Readme update        | 2026/09/07 |
 
 
 
@@ -132,6 +132,7 @@
 | Configure etcd | ansible.builtin.include_tasks | True | postgres,postgres_etcd,postgres_etcd_reset |
 | Configure Patroni | ansible.builtin.include_tasks | True | postgres,postgres_patroni,postgres_patroni_reset |
 | Ensure dedicated PostgreSQL admin role exists | ansible.builtin.include_tasks | True | postgres_admin,postgres_admin_uptime_kuma |
+| Report PostgreSQL admin role check-mode plan | ansible.builtin.debug | True | postgres_admin,postgres_admin_uptime_kuma |
 | Ensure dedicated PostgreSQL Uptime Kuma role exists | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,u,p,t,i,m,e,_,k,u,m,a |
 | Configure PostgreSQL logical backups | ansible.builtin.include_tasks | True | postgres,postgres_backup,postgres_backup_setup,postgres_backup_run |
 | Run PostgreSQL logical backup manually | ansible.builtin.include_tasks | True | postgres_backup,postgres_backup_run |
@@ -150,6 +151,7 @@
 | Reset PostgreSQL/Patroni node destructively | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,n,u,k,e,_,n,o,d,e |
 | Fix database ownership and privileges | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,f,i,x,_,o,w,n,e,r |
 | Update Patroni dynamic pg_hba in DCS | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,u,p,d,a,t,e,_,p,g,_,h,b,a |
+| Report Patroni dynamic pg_hba check-mode plan | ansible.builtin.debug | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,u,p,d,a,t,e,_,p,g,_,h,b,a |
 
 #### File: tasks/sub_tasks/admin/fix_owner.yml
 
@@ -342,8 +344,8 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Assert etcd vars are defined | ansible.builtin.assert | False | postgres,postgres_etcd |
-| Stop etcd before optional reset | ansible.builtin.systemd_service | False | p,o,s,t,g,r,e,s,_,e,t,c,d,_,r,e,s,e,t |
-| Remove etcd data directory for reset | ansible.builtin.file | False | p,o,s,t,g,r,e,s,_,e,t,c,d,_,r,e,s,e,t |
+| Stop etcd before optional reset | ansible.builtin.systemd_service | True | never,postgres_etcd_reset |
+| Remove etcd data directory for reset | ansible.builtin.file | True | never,postgres_etcd_reset |
 | Ensure etcd data directory exists | ansible.builtin.file | False | postgres,postgres_etcd |
 | Template etcd defaults | ansible.builtin.template | False | postgres,postgres_etcd |
 | Enable and start etcd | ansible.builtin.systemd_service | False | postgres,postgres_etcd |
@@ -354,9 +356,9 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Ensure Patroni config directory exists | ansible.builtin.file | False | postgres,postgres_patroni |
-| Stop Patroni before optional reset | ansible.builtin.systemd_service | False | p,o,s,t,g,r,e,s,_,p,a,t,r,o,n,i,_,r,e,s,e,t |
-| Stop default PostgreSQL service before optional reset | ansible.builtin.systemd_service | False | p,o,s,t,g,r,e,s,_,p,a,t,r,o,n,i,_,r,e,s,e,t |
-| Drop default Debian PostgreSQL cluster | ansible.builtin.command | False | p,o,s,t,g,r,e,s,_,p,a,t,r,o,n,i,_,r,e,s,e,t |
+| Stop Patroni before optional reset | ansible.builtin.systemd_service | True | never,postgres_patroni_reset |
+| Stop default PostgreSQL service before optional reset | ansible.builtin.systemd_service | True | never,postgres_patroni_reset |
+| Drop default Debian PostgreSQL cluster | ansible.builtin.command | True | never,postgres_patroni_reset |
 | Ensure Patroni PostgreSQL data directory exists | ansible.builtin.file | False | postgres,postgres_patroni |
 | Stop and disable default PostgreSQL service | ansible.builtin.systemd_service | False | postgres,postgres_patroni |
 | Template Patroni config | ansible.builtin.template | False | postgres,postgres_patroni |
