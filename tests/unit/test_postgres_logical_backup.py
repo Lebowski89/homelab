@@ -13,6 +13,10 @@ from jinja2 import Environment, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROLE_PATH = REPO_ROOT / "ansible/roles/postgres"
+ETCD_TASKS_PATH = ROLE_PATH / "tasks/sub_tasks/install/etcd.yml"
+PATRONI_TASKS_PATH = ROLE_PATH / "tasks/sub_tasks/install/patroni.yml"
+PG_ADMIN_TASKS_PATH = ROLE_PATH / "tasks/sub_tasks/admin/pg_admin.yml"
+PG_HBA_TASKS_PATH = ROLE_PATH / "tasks/sub_tasks/admin/pg_hba.yml"
 DEFAULTS_PATH = ROLE_PATH / "defaults/main.yml"
 MAIN_TASKS_PATH = ROLE_PATH / "tasks/main.yml"
 SETUP_TASKS_PATH = ROLE_PATH / "tasks/sub_tasks/backup_setup.yml"
@@ -506,6 +510,65 @@ def test_manual_backup_check_mode_reports_plan_without_live_discovery():
     assert "ansible_check_mode" in check_plan["when"]
     assert "would discover the current Patroni leader and invoke" in check_plan["ansible.builtin.debug"]["msg"]
     assert set(check_plan["tags"]) == {"postgres_backup", "postgres_backup_run"}
+
+
+@pytest.mark.parametrize(
+    ("path", "reset_tag", "destructive_tasks"),
+    [
+        (
+            ETCD_TASKS_PATH,
+            "postgres_etcd_reset",
+            ["Stop etcd before optional reset", "Remove etcd data directory for reset"],
+        ),
+        (
+            PATRONI_TASKS_PATH,
+            "postgres_patroni_reset",
+            [
+                "Stop Patroni before optional reset",
+                "Stop default PostgreSQL service before optional reset",
+                "Drop default Debian PostgreSQL cluster",
+            ],
+        ),
+    ],
+)
+def test_postgres_reset_tasks_require_explicit_reset_intent(path: Path, reset_tag: str, destructive_tasks: list[str]):
+    tasks = yaml.safe_load(path.read_text())
+
+    for task_name in destructive_tasks:
+        task = task_named(tasks, task_name)
+        tags = set(task["tags"])
+
+        assert "never" in tags
+        assert reset_tag in tags
+        assert task["when"] == f"'{reset_tag}' in (ansible_run_tags | default([]))"
+
+    main_tasks = yaml.safe_load(MAIN_TASKS_PATH.read_text())
+    include_name = "Configure etcd" if reset_tag == "postgres_etcd_reset" else "Configure Patroni"
+    assert reset_tag in task_named(main_tasks, include_name)["tags"]
+    skynet_action = "etcd-reset" if reset_tag == "postgres_etcd_reset" else "patroni-reset"
+    mapping = next(line for line in SKYNET_TEMPLATE_PATH.read_text().splitlines() if f"postgres:{skynet_action})" in line)
+    assert f'echo "{reset_tag}"' in mapping
+
+
+def test_postgres_admin_check_mode_reports_without_live_patroni_discovery():
+    tasks = yaml.safe_load(MAIN_TASKS_PATH.read_text())
+    admin = task_named(tasks, "Ensure dedicated PostgreSQL admin role exists")
+    uptime = task_named(tasks, "Ensure dedicated PostgreSQL Uptime Kuma role exists")
+    admin_plan = task_named(tasks, "Report PostgreSQL admin role check-mode plan")
+    pg_hba = task_named(tasks, "Update Patroni dynamic pg_hba in DCS")
+    pg_hba_plan = task_named(tasks, "Report Patroni dynamic pg_hba check-mode plan")
+
+    assert "not ansible_check_mode" in admin["when"]
+    assert "not ansible_check_mode" in uptime["when"]
+    assert "not ansible_check_mode" in pg_hba["when"]
+    assert "ansible_check_mode" in admin_plan["when"]
+    assert "ansible_check_mode" in pg_hba_plan["when"]
+    assert admin_plan["changed_when"] is False
+    assert pg_hba_plan["changed_when"] is False
+    assert "would discover the current Patroni leader" in admin_plan["ansible.builtin.debug"]["msg"]
+    assert "patch DCS and restart Patroni only" in pg_hba_plan["ansible.builtin.debug"]["msg"]
+    assert "check_mode: false" not in PG_ADMIN_TASKS_PATH.read_text()
+    assert "check_mode: false" not in PG_HBA_TASKS_PATH.read_text()
 
 
 def test_setup_run_and_compatibility_tags_are_wired_and_documented():

@@ -36,6 +36,7 @@
 
 - name: Ensure dedicated PostgreSQL admin role exists
   when:
+    - not ansible_check_mode
     - inventory_hostname == services_controller_host
     - ansible_run_tags is not defined
       or 'all' in ansible_run_tags
@@ -51,12 +52,30 @@
     - postgres_admin
     - postgres_admin_uptime_kuma
 
+- name: Report PostgreSQL admin role check-mode plan
+  when:
+    - ansible_check_mode
+    - inventory_hostname == services_controller_host
+    - ansible_run_tags is not defined
+      or 'all' in ansible_run_tags
+      or 'postgres_admin' in ansible_run_tags
+      or 'postgres_admin_uptime_kuma' in ansible_run_tags
+  ansible.builtin.debug:
+    msg: >-
+      Check mode: would discover the current Patroni leader and reconcile the
+      dedicated PostgreSQL admin role during a real run.
+  changed_when: false
+  tags:
+    - postgres_admin
+    - postgres_admin_uptime_kuma
+
 ################################
 # ADMIN TASKS
 ################################
 
 - name: Ensure dedicated PostgreSQL Uptime Kuma role exists
   when:
+    - not ansible_check_mode
     - inventory_hostname == services_controller_host
     - ansible_run_tags is not defined
       or 'all' in ansible_run_tags
@@ -296,10 +315,24 @@
 
 - name: Update Patroni dynamic pg_hba in DCS
   when:
+    - not ansible_check_mode
     - "'tags_postgres' in group_names"
     - "'postgres_admin_update_pg_hba' in ansible_run_tags"
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/pg_hba.yml
     apply:
       tags: postgres_admin_update_pg_hba
+  tags: postgres_admin_update_pg_hba
+
+- name: Report Patroni dynamic pg_hba check-mode plan
+  when:
+    - ansible_check_mode
+    - "'tags_postgres' in group_names"
+    - "'postgres_admin_update_pg_hba' in ansible_run_tags"
+  ansible.builtin.debug:
+    msg: >-
+      Check mode: would discover the current Patroni leader and DCS configuration,
+      compare the desired pg_hba rules, and patch DCS and restart Patroni only
+      when the live configuration differs.
+  changed_when: false
   tags: postgres_admin_update_pg_hba

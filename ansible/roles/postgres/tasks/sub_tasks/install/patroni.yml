@@ -12,20 +12,27 @@
     - postgres_patroni
 
 - name: Stop Patroni before optional reset
+  when: "'postgres_patroni_reset' in (ansible_run_tags | default([]))"
   ansible.builtin.systemd_service:
     name: patroni
     state: stopped
   failed_when: false
-  tags: postgres_patroni_reset
+  tags:
+    - never
+    - postgres_patroni_reset
 
 - name: Stop default PostgreSQL service before optional reset
+  when: "'postgres_patroni_reset' in (ansible_run_tags | default([]))"
   ansible.builtin.systemd_service:
     name: postgresql
     state: stopped
   failed_when: false
-  tags: postgres_patroni_reset
+  tags:
+    - never
+    - postgres_patroni_reset
 
 - name: Drop default Debian PostgreSQL cluster
+  when: "'postgres_patroni_reset' in (ansible_run_tags | default([]))"
   ansible.builtin.command:
     argv:
       - pg_dropcluster
@@ -35,7 +42,9 @@
   register: postgres_pg_dropcluster
   changed_when: postgres_pg_dropcluster.rc == 0
   failed_when: postgres_pg_dropcluster.rc not in [0, 2]
-  tags: postgres_patroni_reset
+  tags:
+    - never
+    - postgres_patroni_reset
 
 - name: Ensure Patroni PostgreSQL data directory exists
   ansible.builtin.file:

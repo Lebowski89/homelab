@@ -27,10 +27,12 @@
     state: directory
     owner: "{{ hostvars[docker_services_deploy_stack_host_effective].container_host_puid | default('1000') }}"
     group: "{{ hostvars[docker_services_deploy_stack_host_effective].container_host_pgid | default('1000') }}"
-    mode: "0755"
+    mode: "0700"
   delegate_to: "{{ docker_services_deploy_stack_host_effective }}"
 
 - name: Deploy stack | Render stack file
+  no_log: true
+  diff: false
   ansible.builtin.template:
     src: "{{ playbook_dir }}/roles/docker_services/templates/compose.yml.j2"
     dest: >-
@@ -40,7 +42,7 @@
       }}
     owner: "{{ hostvars[docker_services_deploy_stack_host_effective].container_host_puid | default('1000') }}"
     group: "{{ hostvars[docker_services_deploy_stack_host_effective].container_host_pgid | default('1000') }}"
-    mode: "0664"
+    mode: "0600"
     force: true
   vars:
     deploy_stack_type: "{{ docker_services_deploy_stack_type }}"

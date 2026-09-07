@@ -37,9 +37,41 @@ COMMON_INFISICAL_TASKS = (ROLE / "tasks/infisical.yml").read_text()
 DOCKER_MAIN_TASKS = Path("ansible/roles/docker_services/tasks/main.yml").read_text()
 DOCKER_DEPLOY_ALL_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/deploy/all.yml").read_text()
 DOCKER_SAVE_STACK_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/save_stack.yml").read_text()
+OPENTOFU_PVE_USER_TASKS = Path("ansible/roles/opentofu/tasks/sub_tasks/pve_user.yml").read_text()
 DOCKER_DRIFT_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/drift/image.yml").read_text()
 DOCKER_ENV_FILE_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/compose/env_file.yml").read_text()
 AUTOBRR = Path("ansible/group_vars/all/services/autobrr.yml").read_text()
+
+
+def test_proxmox_api_token_uses_protected_temporary_handoff():
+    tasks = yaml.safe_load(OPENTOFU_PVE_USER_TASKS)
+    temporary = next(task for task in tasks if task.get("name") == "Create root-only temporary token handoff file")
+    create = next(task for task in tasks if task.get("name") == "Create OpenTofu API token if missing")
+    write = next(task for task in tasks if task.get("name") == "Write new API token secret to handoff file")
+    pause = next(task for task in tasks if task.get("name") == "Pause so operator can copy token")
+    cleanup = next(task for task in tasks if task.get("name") == "Remove temporary token handoff file")
+
+    assert temporary["no_log"] is True
+    assert temporary["diff"] is False
+    assert temporary["ansible.builtin.tempfile"]["path"] == "/root"
+
+    assert create["no_log"] is True
+    assert create["diff"] is False
+    assert all("opentofu_pve_token_create" not in str(task.get("ansible.builtin.debug", {})) for task in tasks)
+
+    assert write["no_log"] is True
+    assert write["diff"] is False
+    assert write["ansible.builtin.copy"]["mode"] == "0600"
+    assert "opentofu_pve_token_create.stdout" in write["ansible.builtin.copy"]["content"]
+
+    prompt = pause["ansible.builtin.pause"]["prompt"]
+    assert "opentofu_pve_token_create" not in prompt
+    assert "opentofu_pve_token_handoff.path" in prompt
+    assert cleanup["ansible.builtin.file"] == {
+        "path": "{{ opentofu_pve_token_handoff.path }}",
+        "state": "absent",
+    }
+    assert tasks.index(temporary) < tasks.index(create) < tasks.index(write) < tasks.index(pause) < tasks.index(cleanup)
 
 
 def test_expected_common_dynamic_includes_propagate_required_tags():
