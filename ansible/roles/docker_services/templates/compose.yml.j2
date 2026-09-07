@@ -97,7 +97,7 @@ services:
 {% if svc.healthcheck.test is sequence and svc.healthcheck.test is not string %}
       test: {{ svc.healthcheck.test | to_json }}
 {% else %}
-      test: ["CMD-SHELL", "{{ svc.healthcheck.test | string | trim }}"]
+      test: {{ ['CMD-SHELL', (svc.healthcheck.test | string | trim)] | to_json }}
 {% endif %}
 {% if svc.healthcheck.interval is defined and (svc.healthcheck.interval | string | trim | length > 0) %}
       interval: {{ svc.healthcheck.interval }}
@@ -116,10 +116,10 @@ services:
 {% if svc.entrypoint is defined %}
     entrypoint:
 {% if svc.entrypoint is string %}
-      {{ svc.entrypoint }}
+      {{ svc.entrypoint | string | to_json }}
 {% elif svc.entrypoint is iterable and (svc.entrypoint | length > 0) %}
 {% for ep in svc.entrypoint %}
-      - "{{ ep }}"
+      - {{ ep | string | to_json }}
 {% endfor %}
 {% endif %}
 {% endif %}
@@ -127,10 +127,10 @@ services:
 {% if svc.command is defined %}
     command:
 {% if svc.command is string %}
-      {{ svc.command | trim }}
+      {{ svc.command | string | trim | to_json }}
 {% elif svc.command is sequence and svc.command is not string and (svc.command | length > 0) %}
 {% for cmd in svc.command %}
-      - "{{ cmd | string | trim }}"
+      - {{ cmd | string | trim | to_json }}
 {% endfor %}
 {% endif %}
 {% endif %}

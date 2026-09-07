@@ -287,6 +287,44 @@ def render_compose(stack_type, service):
     )
 
 
+def test_compose_yaml_safely_preserves_command_entrypoint_and_healthcheck_strings():
+    yaml_sensitive = [
+        'printf "%s" example',
+        "value: # [] {} & * ! | > @ `",
+        "line one\nline two",
+    ]
+    service = {
+        "image": "registry.example.invalid/app:1.0.0",
+        "logging": {"driver": "json-file", "options": {}},
+        "entrypoint": yaml_sensitive,
+        "command": yaml_sensitive,
+        "healthcheck": {"test": 'printf "%s" "ready: # []"'},
+    }
+
+    parsed = yaml.safe_load(render_compose("container", service))
+    rendered_service = parsed["services"]["n8n"]
+
+    assert rendered_service["entrypoint"] == yaml_sensitive
+    assert rendered_service["command"] == yaml_sensitive
+    assert rendered_service["healthcheck"]["test"] == ["CMD-SHELL", 'printf "%s" "ready: # []"']
+
+    scalar_entrypoint = "/bin/sh -c 'printf \"%s\" value'"
+    scalar_command = 'printf "%s" "value: #still-data"'
+    scalar_healthcheck = 'printf "%s" "ready: # {}"'
+    scalar_service = {
+        **service,
+        "entrypoint": scalar_entrypoint,
+        "command": scalar_command,
+        "healthcheck": {"test": scalar_healthcheck},
+    }
+    scalar_parsed = yaml.safe_load(render_compose("container", scalar_service))
+    scalar_rendered = scalar_parsed["services"]["n8n"]
+
+    assert scalar_rendered["entrypoint"] == scalar_entrypoint
+    assert scalar_rendered["command"] == scalar_command
+    assert scalar_rendered["healthcheck"]["test"] == ["CMD-SHELL", scalar_healthcheck]
+
+
 def docker_compose_service_from_real_n8n():
     cfg, _, _, ports, volumes, _, mounts, resolved_environment = normalize_both()
     docker_cfg = copy.deepcopy(cfg)

@@ -75,7 +75,7 @@ vaultwarden:
     - src: configs/vaultwarden.env.j2
       no_log: true
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/vaultwarden/.env"
-      mode: "0664"
+      mode: "0600"
       force: true
   volumes:
     config:

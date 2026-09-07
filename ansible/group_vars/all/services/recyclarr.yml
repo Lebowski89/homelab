@@ -57,7 +57,7 @@ recyclarr:
     - src: configs/recyclarr/secrets.yml.j2
       no_log: true
       dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/recyclarr/secrets.yml"
-      mode: "0664"
+      mode: "0600"
       force: true
     - src: configs/recyclarr/config_radarr.yml.j2
       dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/recyclarr/configs/radarr.yml"

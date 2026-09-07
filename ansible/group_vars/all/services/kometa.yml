@@ -64,7 +64,7 @@ kometa:
     - src: configs/kometa.yml.j2
       no_log: true
       dest: "{{ hostvars[services_plex_host].container_host_appdata_root }}/kometa/config.yml"
-      mode: "0664"
+      mode: "0600"
       force: false
   volumes:
     config:
