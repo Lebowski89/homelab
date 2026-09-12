@@ -12,7 +12,19 @@ from jinja2.nativetypes import NativeEnvironment
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PLUGIN_PATH = REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_deploy.py"
 DEPLOY_TASK_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/compose/deploy.yml"
+STACK_DEPLOY_TASK_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/deploy/stack.yml"
 PERSIST_TASK_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/save_stack.yml"
+
+
+def test_generated_stack_files_use_restrictive_permissions():
+    tasks = yaml.safe_load(STACK_DEPLOY_TASK_PATH.read_text())
+    directory = next(task for task in tasks if task["name"] == "Deploy stack | Ensure stack directory exists")
+    render = next(task for task in tasks if task["name"] == "Deploy stack | Render stack file")
+
+    assert directory["ansible.builtin.file"]["mode"] == "0700"
+    assert render["ansible.builtin.template"]["mode"] == "0600"
+    assert render["no_log"] is True
+    assert render["diff"] is False
 
 
 def load_plugin():

@@ -106,7 +106,22 @@
     - opentofu_pve_token_list.rc == 0
     - opentofu_pve_token_list.stdout | default("") | trim | length > 0
 
+- name: Create root-only temporary token handoff file
+  no_log: true
+  diff: false
+  when:
+    - opentofu_pve_token_missing | default(false)
+    - not ansible_check_mode
+  ansible.builtin.tempfile:
+    state: file
+    path: /root
+    prefix: opentofu-api-token-
+  register: opentofu_pve_token_handoff
+  become: true
+
 - name: Create OpenTofu API token if missing
+  no_log: true
+  diff: false
   when:
     - opentofu_pve_token_missing | default(false)
     - not ansible_check_mode
@@ -121,18 +136,37 @@
   become: true
   changed_when: opentofu_pve_token_create.rc == 0
 
-- name: Show OpenTofu API token secret once when created
+- name: Write new API token secret to handoff file
   when:
     - opentofu_pve_token_missing | default(false)
     - not ansible_check_mode
-  ansible.builtin.debug:
-    msg: >-
-      Save this token secret now:
-      {{ (opentofu_pve_token_create.stdout | from_json).value }}
+  no_log: true
+  diff: false
+  ansible.builtin.copy:
+    dest: "{{ opentofu_pve_token_handoff.path }}"
+    content: "{{ (opentofu_pve_token_create.stdout | from_json).value }}\n"
+    owner: root
+    group: root
+    mode: "0600"
+  become: true
 
 - name: Pause so operator can copy token
   when:
     - opentofu_pve_token_missing | default(false)
     - not ansible_check_mode
   ansible.builtin.pause:
-    prompt: "Copy the OpenTofu API token now, then press Enter to continue."
+    prompt: >-
+      The new OpenTofu API token for
+      {{ hostvars[opentofu_pve_host].opentofu_api_user }} is stored at
+      {{ opentofu_pve_token_handoff.path }} on {{ inventory_hostname }}.
+      Retrieve it as root, save it securely, then press Enter to remove the temporary file.
+
+- name: Remove temporary token handoff file
+  when:
+    - opentofu_pve_token_missing | default(false)
+    - not ansible_check_mode
+    - opentofu_pve_token_handoff.path is defined
+  ansible.builtin.file:
+    path: "{{ opentofu_pve_token_handoff.path }}"
+    state: absent
+  become: true

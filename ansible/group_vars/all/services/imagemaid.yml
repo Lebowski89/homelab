@@ -43,7 +43,7 @@ imagemaid:
     - src: configs/imagemaid.j2
       no_log: true
       dest: "{{ hostvars[services_plex_host].container_host_appdata_root }}/imagemaid/.env"
-      mode: "0664"
+      mode: "0600"
       force: false
   volumes:
     config:
