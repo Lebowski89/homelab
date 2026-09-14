@@ -10,7 +10,6 @@
   register: postgres_patroni_cluster_state
   run_once: true
   delegate_to: "{{ services_controller_host }}"
-  check_mode: false
   retries: 12
   delay: 5
   until: >-

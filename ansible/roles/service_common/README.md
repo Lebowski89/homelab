@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/19 |
+| Readme update        | 2026/09/14 |
 
 
 
@@ -135,7 +135,11 @@
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
+| Service common templates ¦ Reset effective template declarations | ansible.builtin.set_fact | False |
+| Service common templates ¦ Resolve effective template metadata | ansible.builtin.set_fact | False |
+| Service common templates ¦ Inspect application template destinations | ansible.builtin.stat | False |
 | Service common templates ¦ Render application templates on target host | ansible.builtin.template | True |
+| Service common templates ¦ Reconcile application template filesystem metadata | ansible.builtin.file | True |
 
 #### File: tasks/traefik.yml
 

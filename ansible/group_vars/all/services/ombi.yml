@@ -53,7 +53,7 @@ ombi:
     - src: configs/ombi.json.j2
       no_log: true
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/ombi/config/database.json"
-      mode: "0664"
+      mode: "0600"
       force: true
   volumes:
     config:

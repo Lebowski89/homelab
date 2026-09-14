@@ -64,7 +64,7 @@ def test_every_common_copy_and_template_source_exists():
     assert not missing, "Missing common assets:\n" + "\n".join(missing)
 
 
-def test_secret_bearing_common_templates_disable_logging_and_diffs():
+def test_secret_bearing_common_templates_disable_logging_and_use_restrictive_modes():
     configured = {}
 
     def collect(value):
@@ -81,3 +81,4 @@ def test_secret_bearing_common_templates_disable_logging_and_diffs():
 
     assert set(configured) == SENSITIVE_COMMON_TEMPLATES
     assert all(item.get("no_log") is True for item in configured.values())
+    assert all(item.get("mode") == "0600" for item in configured.values())

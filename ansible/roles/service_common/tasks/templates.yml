@@ -1,5 +1,54 @@
 ---
 
+- name: Service common templates | Reset effective template declarations
+  ansible.builtin.set_fact:
+    service_common_effective_templates: []
+  changed_when: false
+  no_log: true
+  diff: false
+
+- name: Service common templates | Resolve effective template metadata
+  ansible.builtin.set_fact:
+    service_common_effective_templates: >-
+      {{
+        service_common_effective_templates
+        + [
+          service_common_template_item
+          | combine({'mode': service_common_template_effective_mode})
+        ]
+      }}
+  vars:
+    service_common_template_effective_mode: >-
+      {{
+        service_common_template_item.mode
+        if service_common_template_item.mode is defined
+        else (
+          '0600'
+          if (service_common_template_item.no_log | default(false) | bool)
+          else '0664'
+        )
+      }}
+  loop: "{{ service_common_templates }}"
+  loop_control:
+    loop_var: service_common_template_item
+    label: "{{ service_common_template_item.dest }}"
+  changed_when: false
+  no_log: true
+  diff: false
+
+- name: Service common templates | Inspect application template destinations
+  ansible.builtin.stat:
+    path: "{{ service_common_template_item.dest }}"
+    follow: true
+  loop: "{{ service_common_effective_templates }}"
+  loop_control:
+    loop_var: service_common_template_item
+    label: "{{ service_common_template_item.dest }}"
+  delegate_to: "{{ service_common_target_host }}"
+  register: service_common_template_destination_status
+  no_log: "{{ service_common_template_item.no_log | default(false) | bool }}"
+  diff: false
+
 - name: Service common templates | Render application templates on target host
   when: not (ansible_check_mode and service_common_template_item.no_log | default(false) | bool)
   ansible.builtin.template:
@@ -7,7 +56,7 @@
     dest: "{{ service_common_template_item.dest }}"
     owner: "{{ service_common_template_item.owner | default(service_common_template_default_owner, true) }}"
     group: "{{ service_common_template_item.group | default(service_common_template_default_group, true) }}"
-    mode: "{{ service_common_template_item.mode | default('0664', true) }}"
+    mode: "{{ service_common_template_item.mode }}"
     force: "{{ service_common_template_item.force | default(true) | bool }}"
   vars:
     service_common_template_host_defaults: "{{ service_common_host_defaults.get(service_common_target_host, {}) }}"
@@ -15,10 +64,35 @@
       {{ service_common_template_host_defaults.get('puid', service_common_default_owner) }}
     service_common_template_default_group: >-
       {{ service_common_template_host_defaults.get('pgid', service_common_default_group) }}
-  loop: "{{ service_common_templates }}"
+  loop: "{{ service_common_effective_templates }}"
   loop_control:
     loop_var: service_common_template_item
     label: "{{ service_common_template_item.dest }}"
   delegate_to: "{{ service_common_target_host }}"
   no_log: "{{ service_common_template_item.no_log | default(false) | bool }}"
   diff: "{{ not (service_common_template_item.no_log | default(false) | bool) }}"
+
+- name: Service common templates | Reconcile application template filesystem metadata
+  when:
+    - not (ansible_check_mode and service_common_template_metadata_item.no_log | default(false) | bool)
+    - not ansible_check_mode or (service_common_template_status.stat.exists | default(false))
+  ansible.builtin.file:
+    path: "{{ service_common_template_metadata_item.dest }}"
+    state: file
+    owner: "{{ service_common_template_metadata_item.owner | default(service_common_template_default_owner, true) }}"
+    group: "{{ service_common_template_metadata_item.group | default(service_common_template_default_group, true) }}"
+    mode: "{{ service_common_template_metadata_item.mode }}"
+  vars:
+    service_common_template_metadata_item: "{{ service_common_template_status.service_common_template_item }}"
+    service_common_template_host_defaults: "{{ service_common_host_defaults.get(service_common_target_host, {}) }}"
+    service_common_template_default_owner: >-
+      {{ service_common_template_host_defaults.get('puid', service_common_default_owner) }}
+    service_common_template_default_group: >-
+      {{ service_common_template_host_defaults.get('pgid', service_common_default_group) }}
+  loop: "{{ service_common_template_destination_status.results }}"
+  loop_control:
+    loop_var: service_common_template_status
+    label: "{{ service_common_template_metadata_item.dest }}"
+  delegate_to: "{{ service_common_target_host }}"
+  no_log: "{{ service_common_template_metadata_item.no_log | default(false) | bool }}"
+  diff: "{{ not (service_common_template_metadata_item.no_log | default(false) | bool) }}"
