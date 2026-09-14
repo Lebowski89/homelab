@@ -12,7 +12,7 @@ tautulli:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/tautulli:release-v2.17.2
+  image: ghcr.io/hotio/tautulli:release-v2.18.1
   ################################
   # ENVIRONMENT/SECRETS
   ################################

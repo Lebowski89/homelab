@@ -12,7 +12,7 @@ themepark:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/themepark-dev/theme.park:1.22.1
+  image: ghcr.io/themepark-dev/theme.park:1.22.2
   ################################
   # ENVIRONMENT/SECRETS
   ################################

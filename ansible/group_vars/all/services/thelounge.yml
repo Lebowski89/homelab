@@ -11,7 +11,7 @@ thelounge:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: lscr.io/linuxserver/thelounge:v4.5.2-ls229
+  image: lscr.io/linuxserver/thelounge:v4.5.2-ls230
   user: "0:0"
   ################################
   # ENVIRONMENT/SECRETS
