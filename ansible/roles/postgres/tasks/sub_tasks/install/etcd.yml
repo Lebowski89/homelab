@@ -15,7 +15,9 @@
     - postgres_etcd
 
 - name: Stop etcd before optional reset
-  when: "'postgres_etcd_reset' in (ansible_run_tags | default([]))"
+  when:
+    - not ansible_check_mode
+    - "'postgres_etcd_reset' in (ansible_run_tags | default([]))"
   ansible.builtin.systemd_service:
     name: etcd
     state: stopped
@@ -25,10 +27,23 @@
     - postgres_etcd_reset
 
 - name: Remove etcd data directory for reset
-  when: "'postgres_etcd_reset' in (ansible_run_tags | default([]))"
+  when:
+    - not ansible_check_mode
+    - "'postgres_etcd_reset' in (ansible_run_tags | default([]))"
   ansible.builtin.file:
     path: "{{ postgres_etcd_data_dir }}"
     state: absent
+  tags:
+    - never
+    - postgres_etcd_reset
+
+- name: Report etcd reset check-mode plan
+  when:
+    - ansible_check_mode
+    - "'postgres_etcd_reset' in (ansible_run_tags | default([]))"
+  ansible.builtin.debug:
+    msg: Check mode - would stop etcd and remove its data directory for reset.
+  changed_when: false
   tags:
     - never
     - postgres_etcd_reset

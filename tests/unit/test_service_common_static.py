@@ -1,5 +1,6 @@
 import os
 import re
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -43,13 +44,30 @@ DOCKER_ENV_FILE_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/comp
 AUTOBRR = Path("ansible/group_vars/all/services/autobrr.yml").read_text()
 
 
-def test_proxmox_api_token_uses_protected_temporary_handoff():
+def test_proxmox_api_token_handoff_is_transactional_and_recoverable():
     tasks = yaml.safe_load(OPENTOFU_PVE_USER_TASKS)
-    temporary = next(task for task in tasks if task.get("name") == "Create root-only temporary token handoff file")
-    create = next(task for task in tasks if task.get("name") == "Create OpenTofu API token if missing")
-    write = next(task for task in tasks if task.get("name") == "Write new API token secret to handoff file")
-    pause = next(task for task in tasks if task.get("name") == "Pause so operator can copy token")
-    cleanup = next(task for task in tasks if task.get("name") == "Remove temporary token handoff file")
+    initialize = next(task for task in tasks if task.get("name") == "Initialize OpenTofu API token handoff state")
+    transaction = next(task for task in tasks if task.get("name") == "Create and hand off OpenTofu API token transactionally")
+    transaction_tasks = transaction["block"]
+    rescue_tasks = transaction["rescue"]
+
+    temporary = next(task for task in transaction_tasks if task.get("name") == "Create root-only temporary token handoff file")
+    create = next(task for task in transaction_tasks if task.get("name") == "Create OpenTofu API token if missing")
+    write = next(task for task in transaction_tasks if task.get("name") == "Write new API token secret to handoff file")
+    mark_recoverable = next(task for task in transaction_tasks if task.get("name") == "Record that the API token secret is recoverable")
+    pause = next(task for task in transaction_tasks if task.get("name") == "Pause so operator can copy token")
+    cleanup = next(task for task in transaction_tasks if task.get("name") == "Remove temporary token handoff file after acknowledgment")
+    rollback = next(task for task in rescue_tasks if task.get("name") == "Roll back API token when secret handoff failed")
+    incomplete_cleanup = next(
+        task for task in rescue_tasks if task.get("name") == "Remove incomplete token handoff file when recovery is unnecessary"
+    )
+    safe_failure = next(task for task in rescue_tasks if task.get("name") == "Report API token handoff failure safely")
+
+    assert initialize["ansible.builtin.set_fact"] == {
+        "opentofu_pve_token_handoff_written": False,
+    }
+    assert "not ansible_check_mode" in transaction["when"]
+    assert "always" not in transaction
 
     assert temporary["no_log"] is True
     assert temporary["diff"] is False
@@ -57,12 +75,12 @@ def test_proxmox_api_token_uses_protected_temporary_handoff():
 
     assert create["no_log"] is True
     assert create["diff"] is False
-    assert all("opentofu_pve_token_create" not in str(task.get("ansible.builtin.debug", {})) for task in tasks)
 
     assert write["no_log"] is True
     assert write["diff"] is False
     assert write["ansible.builtin.copy"]["mode"] == "0600"
     assert "opentofu_pve_token_create.stdout" in write["ansible.builtin.copy"]["content"]
+    assert mark_recoverable["ansible.builtin.set_fact"]["opentofu_pve_token_handoff_written"] is True
 
     prompt = pause["ansible.builtin.pause"]["prompt"]
     assert "opentofu_pve_token_create" not in prompt
@@ -71,7 +89,32 @@ def test_proxmox_api_token_uses_protected_temporary_handoff():
         "path": "{{ opentofu_pve_token_handoff.path }}",
         "state": "absent",
     }
-    assert tasks.index(temporary) < tasks.index(create) < tasks.index(write) < tasks.index(pause) < tasks.index(cleanup)
+    assert transaction_tasks.index(temporary) < transaction_tasks.index(create) < transaction_tasks.index(write)
+    assert transaction_tasks.index(write) < transaction_tasks.index(mark_recoverable)
+    assert transaction_tasks.index(mark_recoverable) < transaction_tasks.index(pause) < transaction_tasks.index(cleanup)
+
+    assert rollback["no_log"] is True
+    assert rollback["diff"] is False
+    assert rollback["ansible.builtin.command"]["argv"][:4] == ["pveum", "user", "token", "delete"]
+    assert rollback["when"] == [
+        "(opentofu_pve_token_create | default({})).get('rc', 1) == 0",
+        "not (opentofu_pve_token_handoff_written | default(false))",
+    ]
+    assert rollback["failed_when"] is False
+
+    incomplete_conditions = " ".join(incomplete_cleanup["when"])
+    assert "not (opentofu_pve_token_handoff_written | default(false))" in incomplete_conditions
+    assert "not ((opentofu_pve_token_create | default({})).get('rc', 1) == 0)" in incomplete_conditions
+    assert "opentofu_pve_token_rollback" in incomplete_conditions
+    assert incomplete_cleanup["no_log"] is True
+    assert incomplete_cleanup["diff"] is False
+
+    failure_message = safe_failure["ansible.builtin.fail"]["msg"]
+    assert "opentofu_pve_token_create.stdout" not in failure_message
+    assert "root-only recovery file" in failure_message
+    assert "created by this run was removed" in failure_message
+    assert "rollback also failed" in failure_message
+    assert all("ansible.builtin.debug" not in task for task in tasks)
 
 
 def test_expected_common_dynamic_includes_propagate_required_tags():
@@ -695,3 +738,113 @@ def test_required_docker_dynamic_includes_propagate_selection_tags():
         include = task["ansible.builtin.include_tasks"]
         assert required.issubset(set(task.get("tags", [])))
         assert required.issubset(set(include.get("apply", {}).get("tags", [])))
+
+
+def test_template_metadata_converges_without_replacing_force_false_content(tmp_path):
+    existing = tmp_path / "existing-sensitive.conf"
+    absent = tmp_path / "new-sensitive.conf"
+    sentinel = "operator-maintained sentinel content\n"
+    existing.write_text(sentinel)
+    existing.chmod(0o664)
+
+    playbook = tmp_path / "template-metadata.yml"
+    playbook.write_text(
+        yaml.safe_dump(
+            [
+                {
+                    "name": "Exercise service-common template metadata reconciliation",
+                    "hosts": "localhost",
+                    "connection": "local",
+                    "gather_facts": False,
+                    "become": False,
+                    "vars": {
+                        "service_common_templates": [
+                            {
+                                "src": "configs/homepage/custom.css.j2",
+                                "dest": str(existing),
+                                "mode": "0600",
+                                "force": False,
+                                "no_log": True,
+                            },
+                            {
+                                "src": "configs/homepage/custom.css.j2",
+                                "dest": str(absent),
+                                "mode": "0600",
+                                "force": False,
+                                "no_log": True,
+                            },
+                        ],
+                        "service_common_target_host": "localhost",
+                        "service_common_host_defaults": {"localhost": {}},
+                        "service_common_default_owner": str(os.getuid()),
+                        "service_common_default_group": str(os.getgid()),
+                    },
+                    "tasks": [
+                        {
+                            "name": "Apply real service-common template tasks",
+                            "ansible.builtin.include_role": {
+                                "name": "service_common",
+                                "tasks_from": "templates",
+                            },
+                        }
+                    ],
+                }
+            ],
+            sort_keys=False,
+        )
+    )
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "ANSIBLE_CONFIG": str(Path(__file__).resolve().parents[2] / "ansible/ansible.cfg"),
+            "ANSIBLE_LOCAL_TEMP": str(tmp_path / "ansible-local"),
+            "ANSIBLE_REMOTE_TEMP": str(tmp_path / "ansible-remote"),
+            "ANSIBLE_LOG_PATH": str(tmp_path / "ansible.log"),
+            "ANSIBLE_NOCOLOR": "1",
+        }
+    )
+
+    result = subprocess.run(
+        [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", str(playbook)],
+        cwd=Path(__file__).resolve().parents[2],
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert existing.read_text() == sentinel
+    assert stat.S_IMODE(existing.stat().st_mode) == 0o600
+    assert existing.stat().st_uid == os.getuid()
+    assert existing.stat().st_gid == os.getgid()
+    assert absent.exists()
+    assert absent.read_text() != sentinel
+    assert stat.S_IMODE(absent.stat().st_mode) == 0o600
+    assert absent.stat().st_uid == os.getuid()
+    assert absent.stat().st_gid == os.getgid()
+
+
+def test_template_metadata_reconciliation_uses_runtime_neutral_ownership_and_secrecy_contract():
+    inspect, render, metadata = yaml.safe_load(COMMON_TEMPLATE_TASKS)
+
+    assert inspect["loop"] == render["loop"]
+    assert inspect["delegate_to"] == render["delegate_to"]
+    assert inspect["no_log"] == render["no_log"]
+    assert metadata["ansible.builtin.file"] == {
+        "path": "{{ service_common_template_metadata_item.dest }}",
+        "state": "file",
+        "owner": "{{ service_common_template_metadata_item.owner | default(service_common_template_default_owner, true) }}",
+        "group": "{{ service_common_template_metadata_item.group | default(service_common_template_default_group, true) }}",
+        "mode": "{{ service_common_template_metadata_item.mode | default('0664', true) }}",
+    }
+    for variable in (
+        "service_common_template_host_defaults",
+        "service_common_template_default_owner",
+        "service_common_template_default_group",
+    ):
+        assert metadata["vars"][variable] == render["vars"][variable]
+    assert metadata["loop"] == "{{ service_common_template_destination_status.results }}"
+    assert metadata["delegate_to"] == render["delegate_to"]
+    assert "service_common_template_metadata_item.no_log" in metadata["no_log"]
+    assert "service_common_template_metadata_item.no_log" in metadata["diff"]

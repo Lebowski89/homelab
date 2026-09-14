@@ -321,8 +321,10 @@
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/pg_hba.yml
     apply:
-      tags: postgres_admin_update_pg_hba
-  tags: postgres_admin_update_pg_hba
+      tags:
+        - postgres_admin_update_pg_hba
+  tags:
+    - postgres_admin_update_pg_hba
 
 - name: Report Patroni dynamic pg_hba check-mode plan
   when:
@@ -335,4 +337,5 @@
       compare the desired pg_hba rules, and patch DCS and restart Patroni only
       when the live configuration differs.
   changed_when: false
-  tags: postgres_admin_update_pg_hba
+  tags:
+    - postgres_admin_update_pg_hba

@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -540,7 +541,7 @@ def test_postgres_reset_tasks_require_explicit_reset_intent(path: Path, reset_ta
 
         assert "never" in tags
         assert reset_tag in tags
-        assert task["when"] == f"'{reset_tag}' in (ansible_run_tags | default([]))"
+        assert task["when"] == ["not ansible_check_mode", f"'{reset_tag}' in (ansible_run_tags | default([]))"]
 
     main_tasks = yaml.safe_load(MAIN_TASKS_PATH.read_text())
     include_name = "Configure etcd" if reset_tag == "postgres_etcd_reset" else "Configure Patroni"
@@ -849,3 +850,218 @@ def test_documentation_covers_architecture_operations_and_deferred_protection():
         "journalctl -u postgres-logical-backup.service",
     ):
         assert statement in docs
+
+
+@pytest.mark.parametrize(
+    ("path", "reset_tag", "plan_name"),
+    [
+        (ETCD_TASKS_PATH, "postgres_etcd_reset", "Report etcd reset check-mode plan"),
+        (PATRONI_TASKS_PATH, "postgres_patroni_reset", "Report Patroni reset check-mode plan"),
+    ],
+)
+def test_postgres_reset_check_mode_plans_share_explicit_guards(path: Path, reset_tag: str, plan_name: str):
+    tasks = yaml.safe_load(path.read_text())
+    plan = task_named(tasks, plan_name)
+
+    assert set(plan["tags"]) == {"never", reset_tag}
+    assert plan["when"] == ["ansible_check_mode", f"'{reset_tag}' in (ansible_run_tags | default([]))"]
+    assert plan["changed_when"] is False
+
+
+def run_postgres_role_selection(
+    tmp_path: Path,
+    *,
+    tags: str | None,
+    direct_components: bool = False,
+    list_tasks: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    inventory = tmp_path / "inventory.ini"
+    inventory.write_text("[tags_postgres]\nlocalhost ansible_connection=local local_ip=192.0.2.10\n")
+    playbook = tmp_path / ("postgres-components.yml" if direct_components else "postgres-role.yml")
+    role_tasks = (
+        [
+            {
+                "name": "Import real etcd task path",
+                "ansible.builtin.import_role": {
+                    "name": "postgres",
+                    "tasks_from": "sub_tasks/install/etcd",
+                },
+            },
+            {
+                "name": "Import real Patroni task path",
+                "ansible.builtin.import_role": {
+                    "name": "postgres",
+                    "tasks_from": "sub_tasks/install/patroni",
+                },
+            },
+        ]
+        if direct_components
+        else None
+    )
+    play = {
+        "name": "Exercise PostgreSQL tag selection without live infrastructure",
+        "hosts": "tags_postgres",
+        "connection": "local",
+        "gather_facts": False,
+        "become": False,
+        "vars": {
+            "services_controller_host": "localhost",
+            "postgres_etcd_data_dir": str(tmp_path / "etcd"),
+            "postgres_etcd_node_name": "localhost",
+            "postgres_etcd_initial_cluster": "localhost=http://192.0.2.10:2380",
+            "postgres_patroni_config_dir": str(tmp_path / "patroni"),
+            "postgres_patroni_config_path": str(tmp_path / "patroni/config.yml"),
+            "postgres_patroni_data_dir": str(tmp_path / "postgres-data"),
+            "postgres_patroni_etcd_hosts": ["192.0.2.10:2379"],
+            "postgres_patroni_superuser_pass": "CHECK_MODE_SUPERUSER_PASSWORD",
+            "postgres_patroni_replication_pass": "CHECK_MODE_REPLICATION_PASSWORD",
+        },
+    }
+    if direct_components:
+        play["tasks"] = role_tasks
+    else:
+        play["roles"] = [{"role": "postgres"}]
+    playbook.write_text(yaml.safe_dump([play], sort_keys=False))
+
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "ANSIBLE_CONFIG": str(REPO_ROOT / "ansible/ansible.cfg"),
+            "ANSIBLE_ROLES_PATH": str(REPO_ROOT / "ansible/roles"),
+            "ANSIBLE_LOCAL_TEMP": str(tmp_path / "ansible-local"),
+            "ANSIBLE_REMOTE_TEMP": str(tmp_path / "ansible-remote"),
+            "ANSIBLE_LOG_PATH": str(tmp_path / "ansible.log"),
+            "ANSIBLE_NOCOLOR": "1",
+        }
+    )
+    command = [
+        str(Path(sys.executable).with_name("ansible-playbook")),
+        "-i",
+        str(inventory),
+        str(playbook),
+        "--check",
+    ]
+    if tags is not None:
+        command.extend(["--tags", tags])
+    if list_tasks:
+        command.append("--list-tasks")
+
+    return subprocess.run(
+        command,
+        cwd=REPO_ROOT,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+def postgres_task_output(output: str, task_name: str) -> str:
+    start = output.index(task_name)
+    end = output.find("\nTASK [", start + len(task_name))
+    return output[start:] if end == -1 else output[start:end]
+
+
+@pytest.mark.parametrize("tags", [None, "postgres", "postgres_etcd", "postgres_patroni"])
+def test_ordinary_postgres_tag_selection_excludes_reset_tasks(tmp_path: Path, tags: str | None):
+    result = run_postgres_role_selection(tmp_path, tags=tags, direct_components=True, list_tasks=True)
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    for task_name in (
+        "Stop etcd before optional reset",
+        "Remove etcd data directory for reset",
+        "Report etcd reset check-mode plan",
+        "Stop Patroni before optional reset",
+        "Stop default PostgreSQL service before optional reset",
+        "Drop default Debian PostgreSQL cluster",
+        "Report Patroni reset check-mode plan",
+    ):
+        assert task_name not in output
+
+
+def test_never_tag_alone_cannot_bypass_explicit_reset_intent(tmp_path: Path):
+    result = run_postgres_role_selection(tmp_path, tags="never", direct_components=True)
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    for task_name in (
+        "Stop etcd before optional reset",
+        "Remove etcd data directory for reset",
+        "Report etcd reset check-mode plan",
+        "Stop Patroni before optional reset",
+        "Stop default PostgreSQL service before optional reset",
+        "Drop default Debian PostgreSQL cluster",
+        "Report Patroni reset check-mode plan",
+    ):
+        assert "skipping: [localhost]" in postgres_task_output(output, task_name)
+    assert "would stop etcd" not in output
+    assert "would stop Patroni" not in output
+
+
+@pytest.mark.parametrize(
+    ("reset_tag", "include_name", "plan_name", "plan_message", "destructive_tasks"),
+    [
+        (
+            "postgres_etcd_reset",
+            "Configure etcd",
+            "Report etcd reset check-mode plan",
+            "would stop etcd and remove its data directory",
+            ["Stop etcd before optional reset", "Remove etcd data directory for reset"],
+        ),
+        (
+            "postgres_patroni_reset",
+            "Configure Patroni",
+            "Report Patroni reset check-mode plan",
+            "would stop Patroni and the default PostgreSQL service",
+            [
+                "Stop Patroni before optional reset",
+                "Stop default PostgreSQL service before optional reset",
+                "Drop default Debian PostgreSQL cluster",
+            ],
+        ),
+    ],
+)
+def test_explicit_reset_tags_reach_real_role_path_safely_in_check_mode(
+    tmp_path: Path,
+    reset_tag: str,
+    include_name: str,
+    plan_name: str,
+    plan_message: str,
+    destructive_tasks: list[str],
+):
+    result = run_postgres_role_selection(tmp_path, tags=reset_tag)
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    assert include_name in output
+    assert plan_name in output
+    assert plan_message in output
+    for task_name in destructive_tasks:
+        assert "skipping: [localhost]" in postgres_task_output(output, task_name)
+
+
+@pytest.mark.parametrize(
+    ("tag", "plan_name", "forbidden_live_task"),
+    [
+        ("postgres_admin", "Report PostgreSQL admin role check-mode plan", "Query Patroni cluster state"),
+        (
+            "postgres_admin_update_pg_hba",
+            "Report Patroni dynamic pg_hba check-mode plan",
+            "Patroni dynamic pg_hba | Query Patroni cluster state",
+        ),
+    ],
+)
+def test_postgres_admin_check_mode_executes_static_plan_only(
+    tmp_path: Path,
+    tag: str,
+    plan_name: str,
+    forbidden_live_task: str,
+):
+    result = run_postgres_role_selection(tmp_path, tags=tag)
+    output = result.stdout + result.stderr
+
+    assert result.returncode == 0, output
+    assert plan_name in output
+    assert "would discover the current Patroni leader" in output
+    assert forbidden_live_task not in output

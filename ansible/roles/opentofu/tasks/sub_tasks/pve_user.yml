@@ -106,67 +106,123 @@
     - opentofu_pve_token_list.rc == 0
     - opentofu_pve_token_list.stdout | default("") | trim | length > 0
 
-- name: Create root-only temporary token handoff file
-  no_log: true
-  diff: false
+- name: Initialize OpenTofu API token handoff state
   when:
     - opentofu_pve_token_missing | default(false)
     - not ansible_check_mode
-  ansible.builtin.tempfile:
-    state: file
-    path: /root
-    prefix: opentofu-api-token-
-  register: opentofu_pve_token_handoff
-  become: true
+  ansible.builtin.set_fact:
+    opentofu_pve_token_handoff_written: false
+  changed_when: false
 
-- name: Create OpenTofu API token if missing
-  no_log: true
-  diff: false
+- name: Create and hand off OpenTofu API token transactionally
   when:
     - opentofu_pve_token_missing | default(false)
     - not ansible_check_mode
-  ansible.builtin.command:
-    cmd: >-
-      pveum user token add
-      {{ hostvars[opentofu_pve_host].opentofu_api_user }}
-      {{ hostvars[opentofu_pve_host].opentofu_api_token_name }}
-      --privsep=0
-      --output-format json
-  register: opentofu_pve_token_create
-  become: true
-  changed_when: opentofu_pve_token_create.rc == 0
+  block:
+    - name: Create root-only temporary token handoff file
+      no_log: true
+      diff: false
+      ansible.builtin.tempfile:
+        state: file
+        path: /root
+        prefix: opentofu-api-token-
+      register: opentofu_pve_token_handoff
+      become: true
 
-- name: Write new API token secret to handoff file
-  when:
-    - opentofu_pve_token_missing | default(false)
-    - not ansible_check_mode
-  no_log: true
-  diff: false
-  ansible.builtin.copy:
-    dest: "{{ opentofu_pve_token_handoff.path }}"
-    content: "{{ (opentofu_pve_token_create.stdout | from_json).value }}\n"
-    owner: root
-    group: root
-    mode: "0600"
-  become: true
+    - name: Create OpenTofu API token if missing
+      no_log: true
+      diff: false
+      ansible.builtin.command:
+        cmd: >-
+          pveum user token add
+          {{ hostvars[opentofu_pve_host].opentofu_api_user }}
+          {{ hostvars[opentofu_pve_host].opentofu_api_token_name }}
+          --privsep=0
+          --output-format json
+      register: opentofu_pve_token_create
+      become: true
+      changed_when: opentofu_pve_token_create.rc == 0
 
-- name: Pause so operator can copy token
-  when:
-    - opentofu_pve_token_missing | default(false)
-    - not ansible_check_mode
-  ansible.builtin.pause:
-    prompt: >-
-      The new OpenTofu API token for
-      {{ hostvars[opentofu_pve_host].opentofu_api_user }} is stored at
-      {{ opentofu_pve_token_handoff.path }} on {{ inventory_hostname }}.
-      Retrieve it as root, save it securely, then press Enter to remove the temporary file.
+    - name: Write new API token secret to handoff file
+      no_log: true
+      diff: false
+      ansible.builtin.copy:
+        dest: "{{ opentofu_pve_token_handoff.path }}"
+        content: "{{ (opentofu_pve_token_create.stdout | from_json).value }}\n"
+        owner: root
+        group: root
+        mode: "0600"
+      become: true
 
-- name: Remove temporary token handoff file
-  when:
-    - opentofu_pve_token_missing | default(false)
-    - not ansible_check_mode
-    - opentofu_pve_token_handoff.path is defined
-  ansible.builtin.file:
-    path: "{{ opentofu_pve_token_handoff.path }}"
-    state: absent
-  become: true
+    - name: Record that the API token secret is recoverable
+      ansible.builtin.set_fact:
+        opentofu_pve_token_handoff_written: true
+      changed_when: false
+
+    - name: Pause so operator can copy token
+      ansible.builtin.pause:
+        prompt: >-
+          The new OpenTofu API token for
+          {{ hostvars[opentofu_pve_host].opentofu_api_user }} is stored at
+          {{ opentofu_pve_token_handoff.path }} on {{ inventory_hostname }}.
+          Retrieve it as root, save it securely, then press Enter to remove the temporary file.
+
+    - name: Remove temporary token handoff file after acknowledgment
+      ansible.builtin.file:
+        path: "{{ opentofu_pve_token_handoff.path }}"
+        state: absent
+      become: true
+
+  rescue:
+    - name: Roll back API token when secret handoff failed
+      when:
+        - (opentofu_pve_token_create | default({})).get('rc', 1) == 0
+        - not (opentofu_pve_token_handoff_written | default(false))
+      no_log: true
+      diff: false
+      ansible.builtin.command:
+        argv:
+          - pveum
+          - user
+          - token
+          - delete
+          - "{{ hostvars[opentofu_pve_host].opentofu_api_user }}"
+          - "{{ hostvars[opentofu_pve_host].opentofu_api_token_name }}"
+      register: opentofu_pve_token_rollback
+      become: true
+      changed_when: opentofu_pve_token_rollback.rc == 0
+      failed_when: false
+
+    - name: Remove incomplete token handoff file when recovery is unnecessary
+      when:
+        - opentofu_pve_token_handoff.path is defined
+        - not (opentofu_pve_token_handoff_written | default(false))
+        - >-
+          not ((opentofu_pve_token_create | default({})).get('rc', 1) == 0)
+          or (opentofu_pve_token_rollback | default({})).get('rc', 1) == 0
+      no_log: true
+      diff: false
+      ansible.builtin.file:
+        path: "{{ opentofu_pve_token_handoff.path }}"
+        state: absent
+      become: true
+
+    - name: Report API token handoff failure safely
+      ansible.builtin.fail:
+        msg: >-
+          {% if opentofu_pve_token_handoff_written | default(false) %}
+          API token handoff was interrupted after the secret was written. The valid
+          token was preserved, and any remaining root-only recovery file is at
+          {{ opentofu_pve_token_handoff.path }}.
+          {% elif (opentofu_pve_token_create | default({})).get('rc', 1) == 0
+             and (opentofu_pve_token_rollback | default({})).get('rc', 1) == 0 %}
+          API token handoff failed before the secret became recoverable. The token
+          created by this run was removed and the incomplete handoff file was cleaned up.
+          {% elif (opentofu_pve_token_create | default({})).get('rc', 1) == 0 %}
+          API token handoff failed before the secret became recoverable, and token
+          rollback also failed. The token may still exist; any root-only handoff file
+          was preserved for recovery. Remove the named token manually before retrying.
+          {% else %}
+          API token handoff failed before token creation completed. Any empty temporary
+          handoff file was cleaned up.
+          {% endif %}
