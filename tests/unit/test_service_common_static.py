@@ -743,6 +743,10 @@ def test_required_docker_dynamic_includes_propagate_selection_tags():
 def test_template_metadata_converges_without_replacing_force_false_content(tmp_path):
     existing = tmp_path / "existing-sensitive.conf"
     absent = tmp_path / "new-sensitive.conf"
+    secret_default = tmp_path / "secret-default.conf"
+    public_default = tmp_path / "public-default.conf"
+    secret_override = tmp_path / "secret-override.conf"
+    public_override = tmp_path / "public-override.conf"
     sentinel = "operator-maintained sentinel content\n"
     existing.write_text(sentinel)
     existing.chmod(0o664)
@@ -772,6 +776,30 @@ def test_template_metadata_converges_without_replacing_force_false_content(tmp_p
                                 "mode": "0600",
                                 "force": False,
                                 "no_log": True,
+                            },
+                            {
+                                "src": "configs/homepage/custom.css.j2",
+                                "dest": str(secret_default),
+                                "force": False,
+                                "no_log": True,
+                            },
+                            {
+                                "src": "configs/homepage/custom.css.j2",
+                                "dest": str(public_default),
+                                "force": False,
+                            },
+                            {
+                                "src": "configs/homepage/custom.css.j2",
+                                "dest": str(secret_override),
+                                "mode": "0640",
+                                "force": False,
+                                "no_log": True,
+                            },
+                            {
+                                "src": "configs/homepage/custom.css.j2",
+                                "dest": str(public_override),
+                                "mode": "0644",
+                                "force": False,
                             },
                         ],
                         "service_common_target_host": "localhost",
@@ -823,20 +851,39 @@ def test_template_metadata_converges_without_replacing_force_false_content(tmp_p
     assert stat.S_IMODE(absent.stat().st_mode) == 0o600
     assert absent.stat().st_uid == os.getuid()
     assert absent.stat().st_gid == os.getgid()
+    assert stat.S_IMODE(secret_default.stat().st_mode) == 0o600
+    assert stat.S_IMODE(public_default.stat().st_mode) == 0o664
+    assert stat.S_IMODE(secret_override.stat().st_mode) == 0o640
+    assert stat.S_IMODE(public_override.stat().st_mode) == 0o644
 
 
 def test_template_metadata_reconciliation_uses_runtime_neutral_ownership_and_secrecy_contract():
-    inspect, render, metadata = yaml.safe_load(COMMON_TEMPLATE_TASKS)
+    tasks = yaml.safe_load(COMMON_TEMPLATE_TASKS)
+    resolve = next(task for task in tasks if task["name"] == "Service common templates | Resolve effective template metadata")
+    inspect = next(task for task in tasks if task["name"] == "Service common templates | Inspect application template destinations")
+    render = next(task for task in tasks if task["name"] == "Service common templates | Render application templates on target host")
+    metadata = next(
+        task for task in tasks if task["name"] == "Service common templates | Reconcile application template filesystem metadata"
+    )
 
     assert inspect["loop"] == render["loop"]
+    assert render["loop"] == "{{ service_common_effective_templates }}"
     assert inspect["delegate_to"] == render["delegate_to"]
     assert inspect["no_log"] == render["no_log"]
+    effective_mode = resolve["vars"]["service_common_template_effective_mode"]
+    assert "service_common_template_item.mode is defined" in effective_mode
+    assert "service_common_template_item.no_log | default(false) | bool" in effective_mode
+    assert "'0600'" in effective_mode
+    assert "'0664'" in effective_mode
+    assert resolve["no_log"] is True
+    assert resolve["diff"] is False
+    assert render["ansible.builtin.template"]["mode"] == "{{ service_common_template_item.mode }}"
     assert metadata["ansible.builtin.file"] == {
         "path": "{{ service_common_template_metadata_item.dest }}",
         "state": "file",
         "owner": "{{ service_common_template_metadata_item.owner | default(service_common_template_default_owner, true) }}",
         "group": "{{ service_common_template_metadata_item.group | default(service_common_template_default_group, true) }}",
-        "mode": "{{ service_common_template_metadata_item.mode | default('0664', true) }}",
+        "mode": "{{ service_common_template_metadata_item.mode }}",
     }
     for variable in (
         "service_common_template_host_defaults",
