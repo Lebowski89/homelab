@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/09/07 |
+| Readme update        | 2026/09/14 |
 
 
 
@@ -150,8 +150,8 @@
 | Restore PostgreSQL single database from pg_dump backup | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,r,e,s,t,o,r,e |
 | Reset PostgreSQL/Patroni node destructively | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,n,u,k,e,_,n,o,d,e |
 | Fix database ownership and privileges | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,f,i,x,_,o,w,n,e,r |
-| Update Patroni dynamic pg_hba in DCS | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,u,p,d,a,t,e,_,p,g,_,h,b,a |
-| Report Patroni dynamic pg_hba check-mode plan | ansible.builtin.debug | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,u,p,d,a,t,e,_,p,g,_,h,b,a |
+| Update Patroni dynamic pg_hba in DCS | ansible.builtin.include_tasks | True | postgres_admin_update_pg_hba |
+| Report Patroni dynamic pg_hba check-mode plan | ansible.builtin.debug | True | postgres_admin_update_pg_hba |
 
 #### File: tasks/sub_tasks/admin/fix_owner.yml
 
@@ -346,6 +346,7 @@
 | Assert etcd vars are defined | ansible.builtin.assert | False | postgres,postgres_etcd |
 | Stop etcd before optional reset | ansible.builtin.systemd_service | True | never,postgres_etcd_reset |
 | Remove etcd data directory for reset | ansible.builtin.file | True | never,postgres_etcd_reset |
+| Report etcd reset check-mode plan | ansible.builtin.debug | True | never,postgres_etcd_reset |
 | Ensure etcd data directory exists | ansible.builtin.file | False | postgres,postgres_etcd |
 | Template etcd defaults | ansible.builtin.template | False | postgres,postgres_etcd |
 | Enable and start etcd | ansible.builtin.systemd_service | False | postgres,postgres_etcd |
@@ -359,6 +360,7 @@
 | Stop Patroni before optional reset | ansible.builtin.systemd_service | True | never,postgres_patroni_reset |
 | Stop default PostgreSQL service before optional reset | ansible.builtin.systemd_service | True | never,postgres_patroni_reset |
 | Drop default Debian PostgreSQL cluster | ansible.builtin.command | True | never,postgres_patroni_reset |
+| Report Patroni reset check-mode plan | ansible.builtin.debug | True | never,postgres_patroni_reset |
 | Ensure Patroni PostgreSQL data directory exists | ansible.builtin.file | False | postgres,postgres_patroni |
 | Stop and disable default PostgreSQL service | ansible.builtin.systemd_service | False | postgres,postgres_patroni |
 | Template Patroni config | ansible.builtin.template | False | postgres,postgres_patroni |
