@@ -12,7 +12,7 @@ ombi:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: lscr.io/linuxserver/ombi:v4.53.10-ls265
+  image: lscr.io/linuxserver/ombi:v4.53.10-ls268
   ################################
   # ENVIRONMENT/SECRETS
   ################################
