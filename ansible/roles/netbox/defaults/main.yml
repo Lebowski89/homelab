@@ -63,7 +63,7 @@ netbox_restart_policy:
 ################################
 
 netbox_redis_name: netbox-redis
-netbox_redis_image: valkey/valkey:9.1-alpine
+netbox_redis_image: valkey/valkey:9.2-alpine
 netbox_redis_puid: "{{ container_host_puid | default('1000') }}"
 netbox_redis_pgid: "{{ container_host_pgid | default('1000') }}"
 netbox_redis_path: "{{ netbox_base_path }}/redis"
