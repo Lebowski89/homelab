@@ -11,7 +11,6 @@
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| <a name="input_cloudflare_zone"></a> [cloudflare\_zone](#input\_cloudflare\_zone) | Optional public Cloudflare DNS zone fallback. Normally sourced from terraform/netbox outputs.cloudflare\_zone. | `string` | `""` | no |
 | <a name="input_dns_ips"></a> [dns\_ips](#input\_dns\_ips) | Fallback or override DNS node/VIP IPs used by DNS-related monitors. Normally sourced from terraform/netbox outputs.dns\_ips. | `map(string)` | `{}` | no |
 | <a name="input_enable_gotify_notification"></a> [enable\_gotify\_notification](#input\_enable\_gotify\_notification) | Create and attach the Gotify notification channel to monitors by default. | `bool` | `true` | no |
 | <a name="input_enable_netbox_remote_state"></a> [enable\_netbox\_remote\_state](#input\_enable\_netbox\_remote\_state) | Read host/IP and DNS topology data from the terraform/netbox local state. | `bool` | `true` | no |
