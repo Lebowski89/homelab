@@ -36,6 +36,8 @@ locals {
     var.dns_ips,
   )
 
+  dns_vip_a = trimspace(lookup(local.dns_ips, "dns_vip_a", ""))
+
   ################################
   # SERVICES (PRIVATE)
   ################################
@@ -327,7 +329,7 @@ locals {
     technitium_internal = {
       name               = "Technitium resolves internal service zone"
       hostname           = "opencloud.${local.internal_zone}"
-      dns_resolve_server = local.dns_ips["dns_vip_a"]
+      dns_resolve_server = local.dns_vip_a
       dns_resolve_type   = "A"
       port               = 53
       description        = "Internal DNS sanity check through the Technitium VIP"

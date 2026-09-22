@@ -403,7 +403,7 @@ targets an inventory-derived or explicit host address.
 | `traefik` | Mapping | No | `{}` | Both | `service_common` | Runtime-neutral route declaration. |
 | `traefik.enable` | Boolean-like | No | `false` | Both | `service_common` | Creates/removes the dynamic route on relevant actions. |
 | `traefik.exposure` | String enum | No | `private` | Both | `service_common` | Only `private` is supported; public homelab application routing has been removed. |
-| `traefik.zone` | Non-empty string | No | Selected canonical zone | Both | `service_common` | Explicit frontend-zone override; otherwise the exposure selects the public or internal inventory zone. |
+| `traefik.zone` | Non-empty string | No | Internal inventory zone | Both | `service_common` | Explicit frontend-zone override; when omitted, uses the internal inventory zone. |
 | `traefik.subdomain` | String | No | Effective service name | Both | `service_common` | Frontend label in `<subdomain>.<zone>`. |
 | `traefik.port` | Positive integer-like | Conditional | None | Both | `service_common` | Backend port. |
 | `traefik.backend_mode` | String enum | No | `service` | Both | `service_common` | `service` targets effective service name; `host` resolves a host address. |
@@ -413,7 +413,7 @@ targets an inventory-derived or explicit host address.
 | `traefik.backend_scheme` | Non-empty string | No | `http` | Both | `service_common` | Scheme used to construct a backend URL. |
 | `traefik.entrypoint` | String enum | No | `https_private` | Both | `service_common` | Must be `https_private`. |
 | `traefik.sso` | String | No | Disabled | Both | `service_common` | Exactly `authelia` enables Authelia middleware. |
-| `traefik.middleware_chain` | Non-empty string | No | `<name>-ui-chain` or `<name>-private-ui-chain` | Both | `service_common` | Middleware chain reference. |
+| `traefik.middleware_chain` | Non-empty string | No | `<name>-private-ui-chain` | Both | `service_common` | Middleware chain reference. |
 | `traefik.headers_middleware` | Non-empty string | No | `secure-headers@file` | Both | `service_common` | Headers middleware reference. |
 | `traefik.themepark` | Mapping | No | `{}` | Both | `service_common` | Enabled only when both nested values are non-empty. |
 | `traefik.themepark.app` | String | Conditional | None | Both | `service_common` | Theme Park application identifier. |

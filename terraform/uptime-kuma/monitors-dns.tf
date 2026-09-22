@@ -1,6 +1,13 @@
 resource "uptimekuma_monitor_dns" "this" {
   for_each = local.dns_monitors
 
+  lifecycle {
+    precondition {
+      condition     = can(cidrhost("${each.value.dns_resolve_server}/32", 0))
+      error_message = "Unable to determine a valid Technitium DNS resolver address. Set dns_ips.dns_vip_a explicitly or ensure terraform/netbox outputs.dns_ips contains dns_vip_a."
+    }
+  }
+
   name               = each.value.name
   hostname           = each.value.hostname
   dns_resolve_server = each.value.dns_resolve_server

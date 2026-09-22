@@ -333,6 +333,7 @@ def test_observability_control_plane_links_remain_direct():
 
 def test_uptime_kuma_uses_only_internal_homelab_routes_and_dns():
     locals_source = (REPO_ROOT / "terraform/uptime-kuma/locals.tf").read_text()
+    dns_monitor_source = (REPO_ROOT / "terraform/uptime-kuma/monitors-dns.tf").read_text()
     tags_source = (REPO_ROOT / "terraform/uptime-kuma/tags.tf").read_text()
     private_services = locals_source.split("private_http_services = {", 1)[1].split("private_http_monitors = {", 1)[0]
     status_pages = (REPO_ROOT / "terraform/uptime-kuma/status-pages.tf").read_text()
@@ -351,7 +352,10 @@ def test_uptime_kuma_uses_only_internal_homelab_routes_and_dns():
     assert "traefik_private_tcp = {" in locals_source
     assert "traefik_public_tcp = {" not in locals_source
     assert 'hostname           = "opencloud.${local.internal_zone}"' in locals_source
-    assert 'dns_resolve_server = local.dns_ips["dns_vip_a"]' in locals_source
+    assert 'dns_vip_a = trimspace(lookup(local.dns_ips, "dns_vip_a", ""))' in locals_source
+    assert "dns_resolve_server = local.dns_vip_a" in locals_source
+    assert 'can(cidrhost("${each.value.dns_resolve_server}/32", 0))' in dns_monitor_source
+    assert "Set dns_ips.dns_vip_a explicitly" in dns_monitor_source
     assert "dns.technitium_internal" in status_pages
     assert used_tag_keys <= declared_tag_keys
 
