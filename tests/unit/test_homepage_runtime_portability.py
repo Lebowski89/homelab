@@ -149,7 +149,6 @@ def test_homepage_allowed_host_and_traefik_backend_use_canonical_runtime_neutral
         service,
         "homepage",
         ["manager"],
-        "public.example",
         "private.example.internal",
         {"manager": {"local_ip": "192.0.2.10"}},
     )

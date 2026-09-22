@@ -1,23 +1,3 @@
-output "service_a_record_names" {
-  value = sort(keys(cloudflare_dns_record.service_a))
-}
-
-output "service_a_record_fqdns" {
-  value = sort([
-    for record in cloudflare_dns_record.service_a : record.name
-  ])
-}
-
-output "service_a_record_ids" {
-  value = {
-    for name, record in cloudflare_dns_record.service_a : name => record.id
-  }
-}
-
-output "service_a_public_ipv4" {
-  value = var.public_ipv4
-}
-
 output "mx_records" {
   value = [
     {

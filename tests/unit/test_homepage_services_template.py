@@ -179,8 +179,8 @@ def service_exposures():
                 if traefik.get("enable") is not True:
                     continue
                 name = candidate.get("name") or candidate_key.replace("_", "-")
-                host = f"{traefik.get('subdomain') or name}.{traefik.get('zone') or (TOPOLOGY['services_internal_zone'] if traefik.get('exposure', 'public') == 'private' else TOPOLOGY['services_public_zone'])}"
-                exposures[name] = (host, traefik.get("exposure", "public"))
+                host = f"{traefik.get('subdomain') or name}.{traefik.get('zone') or TOPOLOGY['services_internal_zone']}"
+                exposures[name] = host
     return exposures
 
 
@@ -195,9 +195,9 @@ def test_homepage_links_follow_provider_exposure_without_a_card_inventory():
         service_name = (parsed.hostname or "").split(".", 1)[0]
         if service_name not in exposures:
             continue
-        expected_host, exposure = exposures[service_name]
+        expected_host = exposures[service_name]
         assert parsed.hostname == expected_host, card_name
-        assert parsed.port == (9443 if exposure == "private" else None), card_name
+        assert parsed.port == 9443, card_name
         checked.append(card_name)
     assert checked
 

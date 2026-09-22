@@ -365,37 +365,33 @@ cloudflare:
 
 ### The Terraform way
 
-<a href="https://github.com/Lebowski89/homelab/tree/main/terraform/cloudflare/homelab">See terraform/cloudflare/homelab for full module</a>
+Cloudflare now manages only the public website and generic domain/mail DNS.
+Homelab application records are published exclusively through Technitium; see
+`terraform/technitium/internal-dns`. The generic Cloudflare mail records live
+in `terraform/cloudflare/homelab`. This root manages only the public DNS
+records required for the domain's Porkbun-backed mail configuration; public
+website DNS remains in `terraform/cloudflare/hugo`, and self-hosted application
+DNS remains in `terraform/technitium/internal-dns`.
 
 <details>
 <summary>Show Terraform example</summary>
 
 ```tf
-locals {
-  ipv4_records = [
-    "authelia",
-    "infisical",
-    "opencloud",
-    "traefik",
-    "vaultwarden",
-  ]
-}
-
-resource "cloudflare_dns_record" "service_a" {
-  for_each = toset(local.ipv4_records)
-
-  zone_id = var.cloudflare_zone_id
-  name    = each.value
-  type    = "A"
-  content = var.public_ipv4
-  ttl     = 1
-  proxied = false
+resource "cloudflare_dns_record" "mx_fwd1" {
+  zone_id  = var.cloudflare_zone_id
+  name     = "@"
+  type     = "MX"
+  content  = "fwd1.porkbun.com"
+  priority = 10
+  ttl      = 600
+  proxied  = false
 }
 ```
 
 </details>
 
-Using Terraform, I've explicitly defined which records should exist, and anything outside of this gets removed.
+Using OpenTofu, the public-site and domain-mail records remain explicit without
+coupling them to private homelab ingress.
 
 ## Conclusion
 

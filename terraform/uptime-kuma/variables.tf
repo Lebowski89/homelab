@@ -34,12 +34,6 @@ variable "uptime_kuma_max_retries" {
   default     = 5
 }
 
-variable "cloudflare_zone" {
-  description = "Optional public Cloudflare DNS zone fallback. Normally sourced from terraform/netbox outputs.cloudflare_zone."
-  type        = string
-  default     = ""
-}
-
 variable "internal_zone" {
   description = "Optional internal/private DNS zone fallback. Normally sourced from terraform/netbox outputs.internal_zone."
   type        = string

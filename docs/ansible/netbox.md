@@ -242,7 +242,8 @@ The inventory enables Config Context retrieval and composes the global
 - `services_internal_zone`
 - `services_private_https_port`
 
-Service code consumes only these scalar composed variables. The raw
+The public zone is retained for the externally hosted Hugo site. Homelab
+application routes consume the internal zone and private HTTPS port. The raw
 `config_context` shape is an inventory-plugin detail and must not be used by
 roles or templates. The internal and public zones are independent values, and
 Infisical is reserved for secret material rather than DNS topology.

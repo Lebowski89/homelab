@@ -61,7 +61,7 @@
 # NetBox global Config Context provides the canonical service topology through
 # dynamic-inventory compose:
 #
-# - services_public_zone: public application DNS zone
+# - services_public_zone: public website DNS zone used by Hugo
 # - services_internal_zone: private application DNS zone
 # - services_private_https_port: client-facing private Traefik HTTPS port
 #

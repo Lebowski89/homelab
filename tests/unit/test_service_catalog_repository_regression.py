@@ -821,7 +821,6 @@ def test_real_adminer_podman_migration_preserves_runtime_contracts():
         rendered_effective,
         "adminer",
         ["manager"],
-        "public.example",
         "private.example.internal",
         {"manager": {"local_ip": "192.0.2.10"}},
     )
@@ -938,7 +937,6 @@ def test_real_thelounge_catalog_contract_normalizes_and_renders_rootless_bind_qu
         rendered_effective,
         "thelounge",
         ["manager"],
-        "public.example",
         "private.example.internal",
         {"manager": {"local_ip": "192.0.2.10"}},
     )
