@@ -55,7 +55,7 @@ authelia:
       ################################
       # IMAGE/PROCESS
       ################################
-      image: valkey/valkey:9.1-alpine
+      image: valkey/valkey:9.2-alpine
       command:
         - sh -c 'valkey-server --requirepass "$$(cat /run/secrets/authelia_redis_secret)"'
       ################################
