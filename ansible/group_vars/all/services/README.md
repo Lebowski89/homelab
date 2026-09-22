@@ -533,7 +533,7 @@ catalog validation rejects it.
 | Handler | Behavior/actions | Contract |
 | ------- | ---------------- | -------- |
 | Authelia | Generates session/JWT values and derives a password hash on deploy/update/recreate/bootstrap. | Needs declared `authelia_pass` and `authelia_storage_key`. Uses a selected-runtime temporary container outside check mode. No extra fields beyond handler. |
-| qBittorrent | Derives PBKDF2 template value on deploy/update/recreate/bootstrap. | Name must be `qbittorrent` or `qbittorrent-xs` with matching declared password. No extra fields. |
+| qBittorrent | Derives PBKDF2 template value on deploy/update/recreate/bootstrap. | Name must be `qbittorrent-alpha` or `qbittorrent-bravo` with a current-service `qbittorrent_pass` declaration. No extra fields. |
 | Plex | Runs only under explicit bootstrap, never check mode. | Docker-only; requires strict bootstrap flag and managed `named_volumes.media_nfs` with Docker local-driver options. |
 | Bazarr | Creates initial config only when absent, then updates it on deploy/update/recreate. | Derives private Radarr/Sonarr endpoints from the canonical inventory topology; requires PostgreSQL `prep` fields and declared API values; optional subtitle credentials must be paired. |
 | NZBHydra2 | Creates initial YAML only when absent, then manages auth/downloader/indexers on deploy/update/recreate. | Derives the private SABnzbd endpoint from the canonical inventory topology; required values and every optional provider user/API pair must be complete. |

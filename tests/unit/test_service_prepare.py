@@ -210,8 +210,8 @@ def test_real_migrated_docker_workflows_materialize_through_the_canonical_catalo
     services = {name: load_service(name) for name in ("authelia", "qbittorrent", "plex", "bazarr", "nzbhydra2", "vaultwarden")}
     expected = {
         ("authelia", "main", "authelia"),
-        ("qbittorrent", "downloads", "qbittorrent"),
-        ("qbittorrent", "seeds", "qbittorrent"),
+        ("qbittorrent", "alpha", "qbittorrent"),
+        ("qbittorrent", "bravo", "qbittorrent"),
         ("plex", None, "plex"),
         ("bazarr", None, "bazarr"),
         ("nzbhydra2", None, "nzbhydra2"),
@@ -255,21 +255,27 @@ def test_real_temporary_container_services_require_explicit_podman_migration():
         assert "targets" not in docker_effective
 
 
-def test_qbittorrent_targets_retain_handler_inputs_and_instance_behavior():
+def test_qbittorrent_targets_keep_separate_credentials():
     catalog = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog_prepare_qbit")
     base = load_service("qbittorrent")
 
-    downloads = catalog.service_catalog_merge_target(base, "downloads")
-    seeds = catalog.service_catalog_merge_target(base, "seeds")
+    alpha = catalog.service_catalog_merge_target(base, "alpha")
+    bravo = catalog.service_catalog_merge_target(base, "bravo")
 
-    assert downloads["application_prepare"]["handler"] == "qbittorrent"
-    assert seeds["application_prepare"]["handler"] == "qbittorrent"
-    assert downloads["name"] == "qbittorrent"
-    assert seeds["name"] == "qbittorrent-xs"
-    assert [entry["var"] for entry in downloads["infisical"]["secrets_map"]].count("qbittorrent_pass") == 1
-    assert [entry["var"] for entry in seeds["infisical"]["secrets_map"]].count("qbittorrent_xs_pass") == 1
-    assert downloads["volumes"]["media"]["target"] == "/data/torrents"
-    assert seeds["volumes"]["media"]["target"] == "/data/seeds"
+    for instance in (alpha, bravo):
+        assert instance["application_prepare"]["handler"] == "qbittorrent"
+        assert [entry["var"] for entry in instance["infisical"]["secrets_map"]].count("qbittorrent_pass") == 1
+        assert len(instance["templates"]) == 1
+        assert instance["templates"][0]["src"] == "configs/qbittorrent/qBittorrent.conf.j2"
+
+    assert alpha["volumes"]["config"]["source"] != bravo["volumes"]["config"]["source"]
+    credential_paths = [
+        {entry["path"] for entry in instance["infisical"]["secrets_map"] if entry["var"] in {"qbittorrent_user", "qbittorrent_pass"}}
+        for instance in (alpha, bravo)
+    ]
+    assert all(len(paths) == 1 for paths in credential_paths)
+    assert credential_paths[0].isdisjoint(credential_paths[1])
+    assert alpha["traefik"]["port"] != bravo["traefik"]["port"]
 
 
 def test_runtime_executor_selection_names_and_output_parsing_are_behavioral():

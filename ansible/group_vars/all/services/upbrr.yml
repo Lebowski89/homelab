@@ -45,11 +45,6 @@ upbrr:
       source: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents"
       target: /data/torrents
       read_only: true
-    seeds:
-      type: bind
-      source: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds"
-      target: /data/seeds
-      read_only: true
   ################################
   # INTEGRATIONS
   ################################

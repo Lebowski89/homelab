@@ -265,28 +265,22 @@
           expandOneStreamToTwoRows: true
 
 - torrents:
-    - Qui:
+    - Qui Alpha:
         icon: https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/qui.svg
-        href: https://qui.{{ services_internal_zone }}:{{ services_private_https_port }}
+        href: https://qui-alpha.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Unified qBittorrent interface
-    - qBittorrent:
+    - Qui Bravo:
+        icon: https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/qui.svg
+        href: https://qui-bravo.{{ services_internal_zone }}:{{ services_private_https_port }}
+        description: Unified qBittorrent interface
+    - qBittorrent Alpha:
         icon: qbittorrent.svg
-        href: https://qbittorrent.{{ services_internal_zone }}:{{ services_private_https_port }}/
+        href: https://qbittorrent-alpha.{{ services_internal_zone }}:{{ services_private_https_port }}/
         description: Torrent download client
-        widget:
-          type: qbittorrent
-          url: {{ secrets.qui_downloads_token }}
-          fields: ["leech", "download", "seed", "upload"]
-          enableLeechProgress: false
-    - qBittorrent-XS:
+    - qBittorrent Bravo:
         icon: qbittorrent.svg
-        href: https://qbittorrent-xs.{{ services_internal_zone }}:{{ services_private_https_port }}
+        href: https://qbittorrent-bravo.{{ services_internal_zone }}:{{ services_private_https_port }}/
         description: Torrent download client
-        widget:
-          type: qbittorrent
-          url: {{ secrets.qui_seeds_token }}
-          fields: ["leech", "download", "seed", "upload"]
-          enableLeechProgress: false
     - upbrr:
         icon: https://upbrr.com/img/icon-512.png
         href: https://upbrr.{{ services_internal_zone }}:{{ services_private_https_port }}

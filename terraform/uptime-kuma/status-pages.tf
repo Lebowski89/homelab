@@ -76,9 +76,10 @@ locals {
       weight   = 5
       send_url = true
       monitors = [
-        "http.qbittorrent-private",
-        "http.qbittorrent-xs-private",
-        "http.qui-private",
+        "http.qbittorrent-alpha-private",
+        "http.qbittorrent-bravo-private",
+        "http.qui-alpha-private",
+        "http.qui-bravo-private",
         "http.upbrr-private",
       ]
     },

@@ -27,30 +27,36 @@ unpackerr:
     UN_LIDARR_0_URL: >-
       https://lidarr.{{ services_internal_zone }}:{{ services_private_https_port }}
     FILE__UN_LIDARR_0_API_KEY: /run/secrets/lidarr_api_secret
-    UN_LIDARR_0_PATHS_0: "/data/torrents/completed"
+    UN_LIDARR_0_PATHS_0: "/data/torrents/alpha/completed"
+    UN_LIDARR_0_PATHS_1: "/data/torrents/bravo/completed"
     ## Radarr Settings
     UN_RADARR_0_URL: >-
       https://radarr.{{ services_internal_zone }}:{{ services_private_https_port }}
     FILE__UN_RADARR_0_API_KEY: /run/secrets/radarr_api_secret
-    UN_RADARR_0_PATHS_0: "/data/torrents/completed"
+    UN_RADARR_0_PATHS_0: "/data/torrents/alpha/completed"
+    UN_RADARR_0_PATHS_1: "/data/torrents/bravo/completed"
     UN_RADARR_1_URL: >-
       https://radarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}
     FILE__UN_RADARR_1_API_KEY: /run/secrets/radarr_4k_api_secret
-    UN_RADARR_1_PATHS_1: "/data/torrents/completed"
+    UN_RADARR_1_PATHS_0: "/data/torrents/alpha/completed"
+    UN_RADARR_1_PATHS_1: "/data/torrents/bravo/completed"
     ## Sonarr Settings
     UN_SONARR_0_URL: >-
       https://sonarr.{{ services_internal_zone }}:{{ services_private_https_port }}
     FILE__UN_SONARR_0_API_KEY: /run/secrets/sonarr_api_secret
-    UN_SONARR_0_PATHS_0: "/data/torrents/completed"
+    UN_SONARR_0_PATHS_0: "/data/torrents/alpha/completed"
+    UN_SONARR_0_PATHS_1: "/data/torrents/bravo/completed"
     UN_SONARR_1_URL: >-
       https://sonarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}
     FILE__UN_SONARR_1_API_KEY: /run/secrets/sonarr_4k_api_secret
-    UN_SONARR_1_PATHS_1: "/data/torrents/completed"
+    UN_SONARR_1_PATHS_0: "/data/torrents/alpha/completed"
+    UN_SONARR_1_PATHS_1: "/data/torrents/bravo/completed"
     ## Whisparr Settings
     UN_WHISPARR_0_URL: >-
       https://whisparr.{{ services_internal_zone }}:{{ services_private_https_port }}
     UN_WHISPARR_0_API_KEY: /run/secrets/whisparr_api_secret
-    UN_WHISPARR_0_PATHS_0: "/data/torrents/completed"
+    UN_WHISPARR_0_PATHS_0: "/data/torrents/alpha/completed"
+    UN_WHISPARR_0_PATHS_1: "/data/torrents/bravo/completed"
     ## Webhook Settings
     UN_WEBHOOK_0_URL: /run/secrets/unpackerr_webhook_secret
     UN_WEBHOOK_0_NAME: "Notifiarr"

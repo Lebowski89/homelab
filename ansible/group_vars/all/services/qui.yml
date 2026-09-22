@@ -7,8 +7,6 @@ qui:
   enabled: true
   runtime: docker
   tags: [torrents, pgsql, qui]
-  name: qui
-  stack: qui
   ################################
   # IMAGE/PROCESS
   ################################
@@ -21,8 +19,6 @@ qui:
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
     PGID: "{{ hostvars[services_storage_host].container_host_pgid }}"
     UMASK: "022"
-  env_file:
-    - /opt/stacks/qui.env
   infisical:
     secrets_map:
       - var: postgres_user
@@ -31,12 +27,6 @@ qui:
       - var: postgres_pass
         path: /Postgres
         name: PASS
-  swarm_env_templates:
-    - src: configs/qui.env.j2
-      no_log: true
-      dest: /opt/stacks/qui.env
-      mode: "0600"
-      force: true
   ################################
   # CONNECTIVITY
   ################################
@@ -46,16 +36,7 @@ qui:
   ################################
   # FILESYSTEM
   ################################
-  paths:
-    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui"
-      state: directory
-      mode: "0755"
   volumes:
-    config:
-      type: bind
-      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui"
-      target: /config
-      read_only: false
     media:
       type: bind
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
@@ -70,8 +51,6 @@ qui:
     port: 7476
   postgres:
     enable: true
-    databases:
-      - qui
   ################################
   # RUNTIME/LIFECYCLE
   ################################
@@ -83,3 +62,89 @@ qui:
     host: "{{ services_storage_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_unraid_host
+  ################################
+  # TARGETS (INSTANCES)
+  ################################
+  targets:
+    alpha:
+      ################################
+      # IDENTITY
+      ################################
+      tags: [qui-alpha]
+      name: qui-alpha
+      stack: qui-alpha
+      ################################
+      # IMAGE/PROCESS
+      ################################
+      hostname: qui-alpha.internal
+      ################################
+      # ENVIRONMENT/SECRETS
+      ################################
+      env_file:
+        - /opt/stacks/qui-alpha.env
+      swarm_env_templates:
+        - src: configs/qui.env.j2
+          no_log: true
+          dest: /opt/stacks/qui-alpha.env
+          mode: "0600"
+          force: true
+      ################################
+      # FILESYSTEM
+      ################################
+      paths:
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui-alpha"
+          state: directory
+          mode: "0755"
+      volumes:
+        config:
+          type: bind
+          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui-alpha"
+          target: /config
+          read_only: false
+      ################################
+      # INTEGRATIONS
+      ################################
+      postgres:
+        databases:
+          - qui-alpha
+    bravo:
+      ################################
+      # IDENTITY
+      ################################
+      tags: [qui-bravo]
+      name: qui-bravo
+      stack: qui-bravo
+      ################################
+      # IMAGE/PROCESS
+      ################################
+      hostname: qui-bravo.internal
+      ################################
+      # ENVIRONMENT/SECRETS
+      ################################
+      env_file:
+        - /opt/stacks/qui-bravo.env
+      swarm_env_templates:
+        - src: configs/qui.env.j2
+          no_log: true
+          dest: /opt/stacks/qui-bravo.env
+          mode: "0600"
+          force: true
+      ################################
+      # FILESYSTEM
+      ################################
+      paths:
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui-bravo"
+          state: directory
+          mode: "0755"
+      volumes:
+        config:
+          type: bind
+          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui-bravo"
+          target: /config
+          read_only: false
+      ################################
+      # INTEGRATIONS
+      ################################
+      postgres:
+        databases:
+          - qui-bravo
