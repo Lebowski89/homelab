@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -12,6 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
 TEMPLATE_DIR = REPO_ROOT / "ansible/roles/service_common/templates/configs"
 PREPARE_DIR = REPO_ROOT / "ansible/roles/service_prepare/tasks/applications"
+CLOUDFLARE_HOMELAB_DIR = REPO_ROOT / "terraform/cloudflare/homelab"
 TOPOLOGY = {
     "services_public_zone": "public.example",
     "services_internal_zone": "private.example.internal",
@@ -122,11 +124,120 @@ def test_touched_environment_templates_render_strictly():
         assert "{{" not in rendered
 
 
-def test_vaultwarden_public_domain_uses_inventory_topology():
+def test_former_public_application_urls_use_private_inventory_topology():
     rendered = render_template("vaultwarden", "vaultwarden.env.j2")
     environment = dict(line.split("=", 1) for line in rendered.splitlines() if line and not line.startswith("#") and "=" in line)
+    assert environment["DOMAIN"] == "https://vaultwarden.private.example.internal:9443"
 
-    assert environment["DOMAIN"] == "https://vaultwarden.public.example"
+    opencloud = dict(
+        line.split("=", 1)
+        for line in render_template("opencloud", "opencloud/opencloud.env.j2").splitlines()
+        if line and not line.startswith("#") and "=" in line
+    )
+    assert opencloud["OC_URL"] == "https://opencloud.private.example.internal:9443"
+
+    grafana = dict(
+        line.split("=", 1)
+        for line in render_template("grafana", "grafana/grafana.env.j2").splitlines()
+        if line and not line.startswith("#") and "=" in line
+    )
+    assert grafana["GF_AUTH_GENERIC_OAUTH_AUTH_URL"] == ("https://authelia.private.example.internal:9443/api/oidc/authorization")
+    assert grafana["GF_AUTH_GENERIC_OAUTH_TOKEN_URL"] == "https://authelia.private.example.internal:9443/api/oidc/token"
+    assert grafana["GF_AUTH_GENERIC_OAUTH_API_URL"] == "https://authelia.private.example.internal:9443/api/oidc/userinfo"
+    assert grafana["GF_AUTH_SIGNOUT_REDIRECT_URL"] == "https://authelia.private.example.internal:9443/logout"
+
+    authelia = yaml.safe_load(render_template("authelia", "proxy/authelia/config.yml.j2"))
+    assert authelia["access_control"]["rules"][0]["domain"] == [
+        "*.private.example.internal",
+        "private.example.internal",
+    ]
+    cookie = authelia["session"]["cookies"][0]
+    assert cookie == {
+        "domain": "private.example.internal",
+        "authelia_url": "https://authelia.private.example.internal:9443",
+        "default_redirection_url": "https://homepage.private.example.internal:9443",
+    }
+
+    authelia_env = dict(
+        line.split("=", 1)
+        for line in render_template("authelia", "proxy/authelia/authelia.env.j2").splitlines()
+        if line and not line.startswith("#") and "=" in line
+    )
+    assert authelia_env["AUTHELIA_SESSION_NAME"] == "authelia_session_internal"
+    assert authelia_env["AUTHELIA_TOTP_ISSUER"] == "private.example.internal"
+    assert "https://*.private.example.internal:9443" in authelia_env["AUTHELIA_SERVER_HEADERS_CSP_TEMPLATE"]
+    assert "public.example" not in authelia_env["AUTHELIA_SERVER_HEADERS_CSP_TEMPLATE"]
+
+    router = yaml.safe_load(render_template("traefik", "proxy/authelia/router.yml.j2"))["http"]["routers"]["authelia"]
+    assert router["entryPoints"] == ["https_private"]
+    assert router["rule"] == "Host(`authelia.private.example.internal`)"
+
+
+def test_every_catalog_traefik_route_is_private_and_published_by_technitium():
+    route_names = {"authelia"}
+    for path in sorted(SERVICES_DIR.glob("*.yml")):
+        for base_key, base in (yaml.safe_load(path.read_text()) or {}).items():
+            targets = base.get("targets") or {}
+            candidates = [] if targets else [(base_key, base)]
+            for target_key, target in targets.items():
+                effective = {**base, **target}
+                effective["traefik"] = {**(base.get("traefik") or {}), **(target.get("traefik") or {})}
+                candidates.append((target_key, effective))
+
+            for candidate_key, service in candidates:
+                traefik = service.get("traefik") or {}
+                if traefik.get("enable") is not True:
+                    continue
+                assert traefik.get("exposure", "private") == "private", path.name
+                route_names.add(traefik.get("subdomain") or service.get("name") or candidate_key.replace("_", "-"))
+
+    technitium_source = (REPO_ROOT / "terraform/technitium/internal-dns/main.tf").read_text()
+    record_block = technitium_source.split("ipv4_records = [", 1)[1].split("]", 1)[0]
+    internal_aliases = set(re.findall(r'^\s+"([^"]+)",$', record_block, flags=re.MULTILINE))
+
+    assert route_names <= internal_aliases
+
+
+def test_cloudflare_homelab_root_owns_mail_dns_without_application_a_records():
+    main_source = (CLOUDFLARE_HOMELAB_DIR / "main.tf").read_text()
+    root_source = "\n".join(path.read_text() for path in sorted(CLOUDFLARE_HOMELAB_DIR.glob("*.tf")))
+    sample_variables = (CLOUDFLARE_HOMELAB_DIR / "secrets.auto.tfvars.sample").read_text()
+    record_resources = set(
+        re.findall(
+            r'resource\s+"cloudflare_dns_record"\s+"([^"]+)"',
+            main_source,
+        )
+    )
+
+    assert record_resources == {
+        "mx_fwd1",
+        "mx_fwd2",
+        "txt_dkim_default",
+        "txt_dmarc",
+        "txt_spf",
+    }
+    assert re.search(r'\btype\s*=\s*"A"', main_source) is None
+    assert "service_a" not in root_source
+    assert "public_ipv4" not in root_source
+    assert "public_ipv4" not in sample_variables
+
+    workflow = (REPO_ROOT / ".github/workflows/tofu-check.yml").read_text()
+    assert "terraform/cloudflare/homelab" in workflow
+    assert "terraform/cloudflare/domain" not in workflow
+
+
+def test_traefik_exposes_only_private_https_and_operational_entrypoints():
+    config = yaml.safe_load(render_template("traefik", "proxy/traefik/config.yml.j2"))
+    assert set(config["entryPoints"]) == {"https_private", "ping", "metrics"}
+    assert config["entryPoints"]["https_private"]["address"] == ":9443"
+    assert config["entryPoints"]["https_private"]["http"]["tls"]["domains"] == [
+        {"main": "private.example.internal", "sans": ["*.private.example.internal"]}
+    ]
+    assert "dns-cloudflare" in config["certificatesResolvers"]
+
+    ports = load_service("traefik")["ports"]
+    assert set(ports) == {"web_secure_private"}
+    assert ports["web_secure_private"]["published"] == "{{ services_private_https_port }}"
 
 
 def test_sabnzbd_whitelist_accepts_stable_internal_endpoint_and_inventory_host():
@@ -220,18 +331,33 @@ def test_observability_control_plane_links_remain_direct():
     assert loki["ruler"]["alertmanager_url"] == "http://alertmanager:9093"
 
 
-def test_uptime_kuma_monitors_private_traefik_dashboard_and_both_https_listeners():
+def test_uptime_kuma_uses_only_internal_homelab_routes_and_dns():
     locals_source = (REPO_ROOT / "terraform/uptime-kuma/locals.tf").read_text()
+    dns_monitor_source = (REPO_ROOT / "terraform/uptime-kuma/monitors-dns.tf").read_text()
+    tags_source = (REPO_ROOT / "terraform/uptime-kuma/tags.tf").read_text()
     private_services = locals_source.split("private_http_services = {", 1)[1].split("private_http_monitors = {", 1)[0]
-    public_services = locals_source.split("public_http_services = {", 1)[1].split("public_http_monitors = {", 1)[0]
     status_pages = (REPO_ROOT / "terraform/uptime-kuma/status-pages.tf").read_text()
 
-    assert "traefik = { group =" in private_services
-    assert "traefik" not in public_services
+    declared_tag_keys = set(re.findall(r"^    ([a-z0-9_-]+)\s+=\s+\{ name =", tags_source, flags=re.MULTILINE))
+    used_tag_keys = {
+        tag_key for tag_list in re.findall(r"tag_keys\s+=\s+\[([^]]+)]", locals_source) for tag_key in re.findall(r'"([^"]+)"', tag_list)
+    }
+
+    assert re.search(r"^\s*traefik\s*=", private_services, flags=re.MULTILINE)
+    assert all(f"{service} " in private_services for service in ("authelia", "opencloud", "vaultwarden"))
+    assert "public_http_services" not in locals_source
+    assert "cloudflare_zone" not in locals_source
     assert "http.traefik-private" in status_pages
     assert "http.traefik-public" not in status_pages
     assert "traefik_private_tcp = {" in locals_source
-    assert "traefik_public_tcp = {" in locals_source
+    assert "traefik_public_tcp = {" not in locals_source
+    assert 'hostname           = "opencloud.${local.internal_zone}"' in locals_source
+    assert 'dns_vip_a = trimspace(lookup(local.dns_ips, "dns_vip_a", ""))' in locals_source
+    assert "dns_resolve_server = local.dns_vip_a" in locals_source
+    assert 'can(cidrhost("${each.value.dns_resolve_server}/32", 0))' in dns_monitor_source
+    assert "Set dns_ips.dns_vip_a explicitly" in dns_monitor_source
+    assert "dns.technitium_internal" in status_pages
+    assert used_tag_keys <= declared_tag_keys
 
 
 def test_orphaned_endpoint_templates_are_removed():

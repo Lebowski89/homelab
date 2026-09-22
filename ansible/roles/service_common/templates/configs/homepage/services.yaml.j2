@@ -133,7 +133,7 @@
           fields: ["pending", "approved", "available"]
     - OpenCloud:
         icon: open-cloud.svg
-        href: https://opencloud.{{ services_public_zone }}
+        href: https://opencloud.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Cloud Storage.. but Local
     - Seerr:
         icon: seerr.svg
@@ -329,5 +329,5 @@
         description: Save/state/device sync
     - Vaultwarden:
         icon: vaultwarden.png
-        href: https://vaultwarden.{{ services_public_zone }}
+        href: https://vaultwarden.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Password Manager

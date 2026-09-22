@@ -3,13 +3,12 @@
 http:
   routers:
     authelia:
-      entryPoints: ["https"]
-      rule: "Host(`authelia.{{ services_public_zone }}`)"
+      entryPoints: ["https_private"]
+      rule: "Host(`authelia.{{ services_internal_zone }}`)"
       priority: 50
       tls:
         options: "securetls@file"
       middlewares:
-        - "crowdsec@file"
         - "secure-headers@file"
         - "hsts@file"
         - "gzip@file"

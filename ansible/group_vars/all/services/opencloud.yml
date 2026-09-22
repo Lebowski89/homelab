@@ -116,6 +116,7 @@ opencloud:
   ################################
   traefik:
     enable: true
+    exposure: private
     port: 9200
   ################################
   # RUNTIME/LIFECYCLE

@@ -14,8 +14,8 @@ access_control:
   default_policy: deny
   rules:
     - domain:
-        - "*.{{ services_public_zone }}"
-        - "{{ services_public_zone }}"
+        - "*.{{ services_internal_zone }}"
+        - "{{ services_internal_zone }}"
       policy: one_factor
 
 server:
@@ -53,9 +53,9 @@ identity_providers:
 
 session:
   cookies:
-    - domain: "{{ services_public_zone }}"
-      authelia_url: "https://authelia.{{ services_public_zone }}"
-      default_redirection_url: "https://www.{{ services_public_zone }}"
+    - domain: "{{ services_internal_zone }}"
+      authelia_url: "https://authelia.{{ services_internal_zone }}:{{ services_private_https_port }}"
+      default_redirection_url: "https://homepage.{{ services_internal_zone }}:{{ services_private_https_port }}"
 
 notifier:
   disable_startup_check: false

@@ -593,25 +593,22 @@ def service_common_traefik_context(
     service: Mapping[str, Any],
     name: str,
     target_hosts: Sequence[str],
-    public_zone: str,
     internal_zone: str,
     inventory_hosts: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Build runtime-neutral values for a Traefik dynamic-config template.
 
-    Private exposure selects the explicit internal zone and private entrypoint;
-    public exposure selects the explicit public zone. Backend URLs may be supplied directly; otherwise service
-    mode addresses the service name and host mode resolves an explicit host,
-    inventory host, or first common target host. Optional Authelia, middleware,
-    internal-API, header, and Theme Park settings are normalized into template
-    fields.
+    Routes use the explicit internal zone and private HTTPS entrypoint. Backend
+    URLs may be supplied directly; otherwise service mode addresses the service
+    name and host mode resolves an explicit host, inventory host, or first
+    common target host. Optional Authelia, middleware, header, and Theme Park
+    settings are normalized into template fields.
 
     Args:
         service: Effective service mapping containing a ``traefik`` section.
         name: Required effective service name.
         target_hosts: Ordered common target hosts used as a host-backend fallback.
-        public_zone: Default public DNS zone.
-        internal_zone: Default private DNS zone; independent of the public zone.
+        internal_zone: Default private DNS zone.
         inventory_hosts: Host-variable mapping used to resolve backend
             inventory ``local_ip`` values.
 
@@ -620,8 +617,7 @@ def service_common_traefik_context(
 
     Raises:
         AnsibleFilterError: If mappings, name, exposure, zone, port, backend
-            mode/host resolution, target hosts, Theme Park data, or internal API
-            rules are invalid.
+            mode/host resolution, target hosts, or Theme Park data are invalid.
 
     Note:
         Inputs are not mutated and no DNS, inventory API, or backend is contacted.
@@ -633,19 +629,22 @@ def service_common_traefik_context(
     if not name:
         raise AnsibleFilterError("service_common_name must be non-empty")
 
-    exposure = _text(traefik.get("exposure", "public")) or "public"
-    if exposure not in {"private", "public"}:
-        raise AnsibleFilterError("traefik.exposure must be private or public")
-    private = exposure == "private"
+    exposure = _text(traefik.get("exposure", "private")) or "private"
+    if exposure != "private":
+        raise AnsibleFilterError("traefik.exposure must be private")
+
+    entrypoint = _text(traefik.get("entrypoint")) or "https_private"
+    if entrypoint != "https_private":
+        raise AnsibleFilterError("traefik.entrypoint must be https_private")
+
+    if "internal_api" in traefik or "internal_api_rules" in traefik:
+        raise AnsibleFilterError("traefik.internal_api and traefik.internal_api_rules are no longer supported")
 
     configured_zone = _text(traefik.get("zone"))
-    public_zone = _text(public_zone)
     internal_zone = _text(internal_zone)
-    selected_zone = internal_zone if private else public_zone
-    if not configured_zone and not selected_zone:
-        selected_name = "service_common_traefik_internal_zone" if private else "service_common_traefik_public_zone"
-        raise AnsibleFilterError(f"{selected_name} or traefik.zone is required")
-    zone = configured_zone or selected_zone
+    if not configured_zone and not internal_zone:
+        raise AnsibleFilterError("service_common_traefik_internal_zone or traefik.zone is required")
+    zone = configured_zone or internal_zone
     address = f"{_text(traefik.get('subdomain')) or name}.{zone}"
 
     try:
@@ -692,19 +691,12 @@ def service_common_traefik_context(
     theme_app = _text(themepark.get("app"))
     theme = _text(themepark.get("theme"))
     theme_enabled = bool(theme_app and theme)
-    internal_api_rules = traefik.get("internal_api_rules", []) or []
-    if not isinstance(internal_api_rules, Sequence) or isinstance(internal_api_rules, str):
-        raise AnsibleFilterError("traefik.internal_api_rules must be a list")
-
     return {
         "name": name,
-        "private": private,
-        "entrypoint": _text(traefik.get("entrypoint")) or ("https_private" if private else "https"),
+        "entrypoint": entrypoint,
         "address": address,
         "authelia_enabled": _text(traefik.get("sso")) == "authelia",
-        "middleware_chain": _text(traefik.get("middleware_chain")) or f"{name}-{'private-' if private else ''}ui-chain",
-        "internal_api": bool(traefik.get("internal_api", False)),
-        "internal_api_rules": list(internal_api_rules),
+        "middleware_chain": _text(traefik.get("middleware_chain")) or f"{name}-private-ui-chain",
         "headers_middleware": _text(traefik.get("headers_middleware")) or "secure-headers@file",
         "theme_enabled": theme_enabled,
         "theme_app": theme_app,

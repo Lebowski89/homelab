@@ -524,7 +524,6 @@ def test_real_n8n_private_traefik_hostname_matches_resolved_application_hostname
         cfg,
         "n8n",
         ["n8n"],
-        "public.example",
         "private.example.internal",
         {"n8n": {"local_ip": "192.0.2.98"}},
     )

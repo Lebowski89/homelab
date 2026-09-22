@@ -41,14 +41,6 @@ traefik:
     overlay:
       external: true
   ports:
-    web:
-      published: 80
-      target: 80
-      mode: host
-    web_secure:
-      published: 443
-      target: 443
-      mode: host
     web_secure_private:
       published: "{{ services_private_https_port }}"
       target: "{{ services_private_https_port }}"

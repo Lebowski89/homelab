@@ -88,6 +88,7 @@ vaultwarden:
   ################################
   traefik:
     enable: true
+    exposure: private
     port: 80
     sso: authelia
   postgres:

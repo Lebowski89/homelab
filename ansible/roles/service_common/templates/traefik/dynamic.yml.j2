@@ -12,9 +12,6 @@ http:
     {{ service_common_traefik.name }}-ui-chain:
       chain:
         middlewares:
-{% if not service_common_traefik.private %}
-          - "crowdsec@file"
-{% endif %}
 {% if service_common_traefik.authelia_enabled %}
           - "authelia@file"
 {% endif %}
@@ -26,19 +23,12 @@ http:
 {% endif %}
           - "gzip@file"
 
-    {{ service_common_traefik.name }}-api-chain:
-      chain:
-        middlewares:
-{% if not service_common_traefik.private %}
-          - "crowdsec@file"
-{% endif %}
-          - "{{ service_common_traefik.headers_middleware }}"
-          - "hsts@file"
-          - "gzip@file"
-
     {{ service_common_traefik.name }}-private-ui-chain:
       chain:
         middlewares:
+{% if service_common_traefik.authelia_enabled %}
+          - "authelia@file"
+{% endif %}
           - "{{ service_common_traefik.headers_middleware }}"
           - "robots-noindex@file"
           - "hsts@file"
@@ -57,15 +47,6 @@ http:
         certResolver: "dns-cloudflare"
       middlewares: ["{{ service_common_traefik.middleware_chain }}"]
       service: "{{ service_common_traefik.name }}-svc"
-
-{% if service_common_traefik.internal_api and service_common_traefik.internal_api_rules | length > 0 %}
-    {{ service_common_traefik.name }}-api:
-      entryPoints: ["internal"]
-      rule: "Host(`{{ service_common_traefik.address }}`) && ({% for m in service_common_traefik.internal_api_rules %}{{ m }}{% if not loop.last %} || {% endif %}{% endfor %})"
-      priority: 30
-      middlewares: ["{{ service_common_traefik.name }}-api-chain"]
-      service: "{{ service_common_traefik.name }}-svc"
-{% endif %}
 
   services:
     {{ service_common_traefik.name }}-svc:

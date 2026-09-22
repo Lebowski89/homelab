@@ -187,11 +187,13 @@ and execution behavior remain owned by their existing filters and roles.
 ## Cross-service application endpoints
 
 Service topology is supplied by the NetBox global Config Context through the
-dynamic inventory variables `services_public_zone`, `services_internal_zone`,
-and `services_private_https_port`. Service code must consume those composed
-variables rather than raw `config_context` data or Infisical domain values, and
-must not derive the internal zone from the public zone. Infisical remains the
-source for credentials and other secret material.
+dynamic inventory variables `services_internal_zone` and
+`services_private_https_port`. `services_public_zone` remains available for the
+separate public Hugo site, but homelab application routes must not consume it.
+Service code must consume the composed variables rather than raw
+`config_context` data or Infisical domain values, and must not derive the
+internal zone from the public zone. Infisical remains the source for
+credentials and other secret material.
 
 Cross-service HTTP/API integrations should use the provider's stable private
 application FQDN when that provider exposes one, rather than runtime-local

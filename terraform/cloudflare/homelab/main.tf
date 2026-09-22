@@ -1,22 +1,3 @@
-locals {
-  ipv4_records = [
-    "authelia",
-    "opencloud",
-    "vaultwarden",
-  ]
-}
-
-resource "cloudflare_dns_record" "service_a" {
-  for_each = toset(local.ipv4_records)
-
-  zone_id = var.cloudflare_zone_id
-  name    = each.value
-  type    = "A"
-  content = var.public_ipv4
-  ttl     = 1
-  proxied = false
-}
-
 resource "cloudflare_dns_record" "mx_fwd1" {
   zone_id  = var.cloudflare_zone_id
   name     = "@"

@@ -14,11 +14,9 @@ locals {
   ################################
 
   netbox_host_ips           = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.host_primary_ipv4, {}) : {}
-  netbox_cloudflare_zone    = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.cloudflare_zone, "") : ""
+  netbox_dns_ips            = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.dns_ips, {}) : {}
   netbox_internal_zone      = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.internal_zone, "") : ""
   netbox_private_https_port = var.enable_netbox_remote_state ? try(data.terraform_remote_state.netbox[0].outputs.private_https_port, null) : null
-
-  cloudflare_zone = trimspace(var.cloudflare_zone) != "" ? trimspace(var.cloudflare_zone) : local.netbox_cloudflare_zone
 
   internal_zone = trimspace(var.internal_zone) != "" ? trimspace(var.internal_zone) : local.netbox_internal_zone
 
@@ -32,6 +30,13 @@ locals {
     local.netbox_host_ips,
     var.host_ips,
   )
+
+  dns_ips = merge(
+    local.netbox_dns_ips,
+    var.dns_ips,
+  )
+
+  dns_vip_a = trimspace(lookup(local.dns_ips, "dns_vip_a", ""))
 
   ################################
   # SERVICES (PRIVATE)
@@ -60,6 +65,7 @@ locals {
     gitea     = { group = "media", tag_keys = ["media"] }
     obsidian  = { group = "media", tag_keys = ["media"] }
     ombi      = { group = "media", tag_keys = ["media"] }
+    opencloud = { group = "media", tag_keys = ["media"] }
     seerr     = { group = "media", tag_keys = ["media"] }
     stash     = { group = "media", tag_keys = ["media"] }
     thelounge = { group = "media", tag_keys = ["media"] }
@@ -84,8 +90,9 @@ locals {
     uptime-kuma = { group = "monitoring", tag_keys = ["monitoring"] }
 
     # Network
-    netbox  = { group = "network", tag_keys = ["network"] }
-    traefik = { group = "network", tag_keys = ["network"] }
+    authelia = { group = "network", tag_keys = ["network"] }
+    netbox   = { group = "network", tag_keys = ["network"] }
+    traefik  = { group = "network", tag_keys = ["network"] }
 
     # Plex
     tautulli = {
@@ -108,10 +115,11 @@ locals {
     sabnzbd   = { group = "usenet", tag_keys = ["usenet"] }
 
     # Utilities
-    adminer   = { group = "utilities", tag_keys = ["utilities"] }
-    czkawka   = { group = "utilities", tag_keys = ["utilities"] }
-    infisical = { group = "utilities", tag_keys = ["utilities"] }
-    syncthing = { group = "utilities", tag_keys = ["utilities"] }
+    adminer     = { group = "utilities", tag_keys = ["utilities"] }
+    czkawka     = { group = "utilities", tag_keys = ["utilities"] }
+    infisical   = { group = "utilities", tag_keys = ["utilities"] }
+    syncthing   = { group = "utilities", tag_keys = ["utilities"] }
+    vaultwarden = { group = "utilities", tag_keys = ["utilities"] }
   }
 
   private_http_monitors = {
@@ -126,46 +134,6 @@ locals {
       accepted_status_codes = try(cfg.accepted_status_codes, ["200-399", "401", "403"])
       method                = try(cfg.method, "GET")
       ignore_tls            = try(cfg.ignore_tls, true)
-      expiry_notification   = try(cfg.expiry_notification, true)
-      max_redirects         = try(cfg.max_redirects, 10)
-    }
-  }
-
-  ################################
-  # SERVICES (PUBLIC)
-  ################################
-
-  public_http_services = {
-    # Public Cloudflare / Traefik routes.
-
-    authelia = {
-      group    = "network"
-      tag_keys = ["public", "network"]
-    }
-
-    opencloud = {
-      group    = "media"
-      tag_keys = ["public", "media"]
-    }
-
-    vaultwarden = {
-      group    = "utilities"
-      tag_keys = ["public", "utilities"]
-    }
-  }
-
-  public_http_monitors = {
-    for service, cfg in local.public_http_services : "${service}-public" => {
-      name        = try(cfg.name, "${join(" ", [for word in split("-", service) : title(word)])} [Public]")
-      url         = try(cfg.url, "https://${service}.${local.cloudflare_zone}")
-      description = try(cfg.description, "Public Cloudflare/Traefik route for ${service}")
-
-      group    = try(cfg.group, "apps")
-      tag_keys = try(cfg.tag_keys, ["public"])
-
-      accepted_status_codes = try(cfg.accepted_status_codes, ["200-399", "401", "403"])
-      method                = try(cfg.method, "GET")
-      ignore_tls            = try(cfg.ignore_tls, false)
       expiry_notification   = try(cfg.expiry_notification, true)
       max_redirects         = try(cfg.max_redirects, 10)
     }
@@ -219,7 +187,6 @@ locals {
 
   http_monitors = merge(
     local.private_http_monitors,
-    local.public_http_monitors,
     local.extra_http_monitors
   )
 
@@ -307,15 +274,6 @@ locals {
       tag_keys    = ["critical", "networking", "traefik"]
     }
 
-    traefik_public_tcp = {
-      name        = "Traefik (Public) HTTPS TCP"
-      hostname    = local.host_ips["mgt"]
-      port        = 443
-      description = "Traefik public HTTPS entrypoint listener"
-      group       = "networking"
-      tag_keys    = ["critical", "networking", "traefik"]
-    }
-
     postgres_pg95_tcp = {
       name        = "pg95 (PostgreSQL TCP)"
       hostname    = local.host_ips["pg95"]
@@ -368,15 +326,15 @@ locals {
   }
 
   dns_monitors = {
-    cloudflare_public = {
-      name               = "Cloudflare (Public) resolves public zone"
-      hostname           = "opencloud.${local.cloudflare_zone}"
-      dns_resolve_server = "1.1.1.1"
+    technitium_internal = {
+      name               = "Technitium resolves internal service zone"
+      hostname           = "opencloud.${local.internal_zone}"
+      dns_resolve_server = local.dns_vip_a
       dns_resolve_type   = "A"
       port               = 53
-      description        = "Public DNS sanity check"
+      description        = "Internal DNS sanity check through the Technitium VIP"
       group              = "networking"
-      tag_keys           = ["dns", "public", "networking"]
+      tag_keys           = ["dns", "private", "networking"]
     }
   }
 }

@@ -36,9 +36,8 @@ locals {
       weight   = 2
       send_url = false
       monitors = [
-        "dns.cloudflare_public",
+        "dns.technitium_internal",
         "tcp.traefik_private_tcp",
-        "tcp.traefik_public_tcp",
       ]
     },
     {
@@ -110,7 +109,7 @@ locals {
         "http.gitea-private",
         "http.obsidian-private",
         "http.ombi-private",
-        "http.opencloud-public",
+        "http.opencloud-private",
         "http.seerr-private",
         "http.stash-private",
         "http.thelounge-private",
@@ -138,7 +137,7 @@ locals {
       weight   = 11
       send_url = true
       monitors = [
-        "http.authelia-public",
+        "http.authelia-private",
         "http.netbox-private",
         "http.traefik-private",
       ]
@@ -152,7 +151,7 @@ locals {
         "http.czkawka-private",
         "http.infisical-private",
         "http.syncthing-private",
-        "http.vaultwarden-public",
+        "http.vaultwarden-private",
       ]
     },
     {
