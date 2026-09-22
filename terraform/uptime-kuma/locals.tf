@@ -97,10 +97,11 @@ locals {
     }
 
     # Torrents
-    qbittorrent    = { group = "torrents", tag_keys = ["torrents"] }
-    qbittorrent-xs = { group = "torrents", tag_keys = ["torrents"] }
-    qui            = { group = "torrents", tag_keys = ["torrents"] }
-    upbrr          = { group = "torrents", tag_keys = ["torrents"] }
+    qbittorrent-alpha = { group = "torrents", tag_keys = ["torrents"] }
+    qbittorrent-bravo = { group = "torrents", tag_keys = ["torrents"] }
+    qui-alpha         = { group = "torrents", tag_keys = ["torrents"] }
+    qui-bravo         = { group = "torrents", tag_keys = ["torrents"] }
+    upbrr             = { group = "torrents", tag_keys = ["torrents"] }
 
     # Usenet
     nzbhydra2 = { group = "usenet", tag_keys = ["usenet"] }

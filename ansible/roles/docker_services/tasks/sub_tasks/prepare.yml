@@ -239,6 +239,7 @@
       diff: false
   vars:
     service_common_name: "{{ docker_services_service_name }}"
+    service_common_service: "{{ docker_services_svc }}"
     service_common_templates: "{{ docker_services_svc.swarm_env_templates }}"
     service_common_target_host: "{{ docker_services_controller_host }}"
     service_common_infisical_values: "{{ docker_services_common_values }}"

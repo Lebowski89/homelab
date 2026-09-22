@@ -41,6 +41,13 @@ qbittorrent:
     overlay:
       external: true
   ################################
+  # FILESYSTEM
+  ################################
+  paths:
+    - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents"
+      state: directory
+      mode: "0755"
+  ################################
   # DEVICES/SECURITY
   ################################
   devices:
@@ -66,32 +73,35 @@ qbittorrent:
   ################################
   targets:
     ################################
-    # QBIT MAIN SERVICE
+    # ALPHA
     ################################
-    downloads:
+    alpha:
       ################################
       # IDENTITY
       ################################
-      tags: [qbittorrent-main]
-      name: qbittorrent
-      stack: qbittorrent
-      hostname: qbittorrent.internal
+      tags: [qbittorrent-alpha]
+      name: qbittorrent-alpha
+      stack: qbittorrent-alpha
+      ################################
+      # IMAGE/PROCESS
+      ################################
+      hostname: qbittorrent-alpha.internal
       ################################
       # ENVIRONMENT/SECRETS
       ################################
       env_file:
-        - /opt/stacks/qbittorrent.env
+        - /opt/stacks/qbittorrent-alpha.env
       infisical:
         secrets_map:
           - var: qbittorrent_user
-            path: "/qBittorrent"
+            path: "/qBittorrent-Alpha"
             name: USER
           - var: qbittorrent_pass
-            path: "/qBittorrent"
+            path: "/qBittorrent-Alpha"
             name: PASS
       swarm_env_templates:
         - src: configs/qbittorrent/qBittorrent.env.j2
-          dest: /opt/stacks/qbittorrent.env
+          dest: /opt/stacks/qbittorrent-alpha.env
           owner: "{{ hostvars[services_storage_host].container_host_puid }}"
           group: "{{ hostvars[services_storage_host].container_host_pgid }}"
           mode: "0600"
@@ -100,43 +110,43 @@ qbittorrent:
       # FILESYSTEM
       ################################
       paths:
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent"
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent/config"
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha/config"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent/wireguard"
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha/wireguard"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/alpha"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/completed"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/alpha/completed"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/incoming"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/alpha/incoming"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/watched"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/alpha/watched"
           state: directory
           mode: "0755"
       templates:
         - src: configs/qbittorrent/qBittorrent.conf.j2
-          dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent/config/qBittorrent.conf"
+          dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha/config/qBittorrent.conf"
           mode: "0664"
           force: true
           no_log: true
       volumes:
         config:
           type: bind
-          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent"
+          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha"
           target: /config
           read_only: false
         media:
           type: bind
-          source: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents"
-          target: /data/torrents
+          source: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/alpha"
+          target: /data/torrents/alpha
           read_only: false
       ################################
       # HEALTH
@@ -156,32 +166,35 @@ qbittorrent:
         exposure: private
         port: 8090
     ################################
-    # QBIT CROSS-SEED SERVICE
+    # BRAVO
     ################################
-    seeds:
+    bravo:
       ################################
       # IDENTITY
       ################################
-      tags: [qbittorrent-xs]
-      name: qbittorrent-xs
-      stack: qbittorrent-xs
-      hostname: qbittorrent-xs.internal
+      tags: [qbittorrent-bravo]
+      name: qbittorrent-bravo
+      stack: qbittorrent-bravo
+      ################################
+      # IMAGE/PROCESS
+      ################################
+      hostname: qbittorrent-bravo.internal
       ################################
       # ENVIRONMENT/SECRETS
       ################################
       env_file:
-        - /opt/stacks/qbittorrent-xs.env
+        - /opt/stacks/qbittorrent-bravo.env
       infisical:
         secrets_map:
-          - var: qbittorrent_xs_user
-            path: "/qBittorrent-XS"
+          - var: qbittorrent_user
+            path: "/qBittorrent-Bravo"
             name: USER
-          - var: qbittorrent_xs_pass
-            path: "/qBittorrent-XS"
+          - var: qbittorrent_pass
+            path: "/qBittorrent-Bravo"
             name: PASS
       swarm_env_templates:
-        - src: configs/qbittorrent/qBittorrent-xs.env.j2
-          dest: /opt/stacks/qbittorrent-xs.env
+        - src: configs/qbittorrent/qBittorrent.env.j2
+          dest: /opt/stacks/qbittorrent-bravo.env
           owner: "{{ hostvars[services_storage_host].container_host_puid }}"
           group: "{{ hostvars[services_storage_host].container_host_pgid }}"
           mode: "0600"
@@ -190,43 +203,43 @@ qbittorrent:
       # FILESYSTEM
       ################################
       paths:
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-xs"
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-xs/config"
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo/config"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-xs/wireguard"
+        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo/wireguard"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/bravo"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds/completed"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/bravo/completed"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds/incoming"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/bravo/incoming"
           state: directory
           mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds/watched"
+        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/bravo/watched"
           state: directory
           mode: "0755"
       templates:
-        - src: configs/qbittorrent/qBittorrent-xs.conf.j2
-          dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-xs/config/qBittorrent.conf"
+        - src: configs/qbittorrent/qBittorrent.conf.j2
+          dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo/config/qBittorrent.conf"
           mode: "0664"
           force: true
           no_log: true
       volumes:
         config:
           type: bind
-          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-xs"
+          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo"
           target: /config
           read_only: false
         media:
           type: bind
-          source: "{{ hostvars[services_storage_host].container_host_data_root }}/seeds"
-          target: /data/seeds
+          source: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/bravo"
+          target: /data/torrents/bravo
           read_only: false
       ################################
       # HEALTH
