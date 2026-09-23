@@ -1,0 +1,85 @@
+---
+
+- name: Workstation | Validate configuration and resolve user
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags:
+        - workstation
+        - workstation_apt
+        - workstation_dev
+        - workstation_vscode
+        - workstation_shell
+        - workstation_desktop
+  tags:
+    - workstation
+    - workstation_apt
+    - workstation_dev
+    - workstation_vscode
+    - workstation_shell
+    - workstation_desktop
+
+- name: Workstation | Configure timezone
+  ansible.builtin.include_tasks:
+    file: timezone.yml
+    apply:
+      tags:
+        - workstation
+  tags:
+    - workstation
+
+- name: Workstation | Install baseline packages
+  ansible.builtin.include_tasks:
+    file: apt.yml
+    apply:
+      tags:
+        - workstation
+        - workstation_apt
+  tags:
+    - workstation
+    - workstation_apt
+
+- name: Workstation | Configure development tooling
+  ansible.builtin.include_tasks:
+    file: development.yml
+    apply:
+      tags:
+        - workstation
+        - workstation_dev
+  tags:
+    - workstation
+    - workstation_dev
+
+- name: Workstation | Configure Visual Studio Code
+  when: workstation_vscode_enabled
+  ansible.builtin.include_tasks:
+    file: vscode.yml
+    apply:
+      tags:
+        - workstation
+        - workstation_vscode
+  tags:
+    - workstation
+    - workstation_vscode
+
+- name: Workstation | Configure shell directories
+  ansible.builtin.include_tasks:
+    file: shell.yml
+    apply:
+      tags:
+        - workstation
+        - workstation_shell
+  tags:
+    - workstation
+    - workstation_shell
+
+- name: Workstation | Configure desktop baseline
+  ansible.builtin.include_tasks:
+    file: desktop.yml
+    apply:
+      tags:
+        - workstation
+        - workstation_desktop
+  tags:
+    - workstation
+    - workstation_desktop

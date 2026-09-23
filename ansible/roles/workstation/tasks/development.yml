@@ -1,0 +1,73 @@
+---
+
+- name: Workstation Development | Install development packages
+  when: workstation_dev_packages | length > 0
+  become: true
+  ansible.builtin.apt:
+    name: "{{ workstation_dev_packages }}"
+    state: present
+    update_cache: "{{ workstation_apt_update_cache }}"
+    cache_valid_time: 3600
+
+- name: Workstation Development | Ensure Ansible virtualenv parent exists
+  when: workstation_ansible_venv_enabled
+  become: true
+  become_user: "{{ workstation_user }}"
+  ansible.builtin.file:
+    path: "{{ workstation_ansible_venv_path | dirname }}"
+    state: directory
+    mode: "0755"
+
+- name: Workstation Development | Install repository Python requirements
+  when: workstation_ansible_venv_enabled
+  become: true
+  become_user: "{{ workstation_user }}"
+  ansible.builtin.pip:
+    requirements: "{{ workstation_ansible_requirements_path }}"
+    virtualenv: "{{ workstation_ansible_venv_path }}"
+    virtualenv_command: /usr/bin/python3 -m venv
+
+- name: Workstation Development | Ensure Ansible collections directory exists
+  when: workstation_ansible_venv_enabled
+  become: true
+  become_user: "{{ workstation_user }}"
+  ansible.builtin.file:
+    path: "{{ workstation_ansible_collections_path }}"
+    state: directory
+    mode: "0755"
+
+- name: Workstation Development | Install repository Ansible collections
+  when:
+    - workstation_ansible_venv_enabled
+    - not ansible_check_mode
+  become: true
+  become_user: "{{ workstation_user }}"
+  ansible.builtin.command:
+    argv:
+      - "{{ workstation_ansible_venv_path }}/bin/ansible-galaxy"
+      - collection
+      - install
+      - --requirements-file
+      - "{{ workstation_ansible_collections_requirements_path }}"
+      - --collections-path
+      - "{{ workstation_ansible_collections_path }}"
+  register: workstation_ansible_galaxy_install
+  changed_when: "'Nothing to do' not in workstation_ansible_galaxy_install.stdout"
+  environment:
+    HOME: "{{ workstation_user_home }}"
+
+- name: Workstation Development | Manage Git identity block
+  when: workstation_git_manage_config
+  become: true
+  become_user: "{{ workstation_user }}"
+  ansible.builtin.blockinfile:
+    path: "{{ workstation_user_home }}/.gitconfig"
+    create: true
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user_gid }}"
+    mode: "0600"
+    marker: "# {mark} ANSIBLE MANAGED WORKSTATION IDENTITY"
+    block: |
+      [user]
+        name = {{ workstation_git_user_name }}
+        email = {{ workstation_git_user_email }}
