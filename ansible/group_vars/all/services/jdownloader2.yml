@@ -6,7 +6,7 @@ jdownloader2:
   ################################
   enabled: true
   runtime: podman
-  tags: [downloads, jdownloader2]
+  tags: [jdownloader2, gluetun_stack]
   name: jdownloader2
   ################################
   # IMAGE/PROCESS

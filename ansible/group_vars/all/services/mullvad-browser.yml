@@ -6,7 +6,7 @@ mullvad_browser:
   ################################
   enabled: true
   runtime: podman
-  tags: [privacy, mullvad-browser]
+  tags: [mullvad-browser, gluetun_stack]
   name: mullvad-browser
   ################################
   # IMAGE/PROCESS

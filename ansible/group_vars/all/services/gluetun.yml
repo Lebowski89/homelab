@@ -6,7 +6,7 @@ gluetun:
   ################################
   enabled: true
   runtime: podman
-  tags: [vpn, gluetun]
+  tags: [gluetun, gluetun_stack]
   name: gluetun
   ################################
   # IMAGE/PROCESS
