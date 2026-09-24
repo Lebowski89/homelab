@@ -9,7 +9,7 @@ The shared service catalogue in `ansible/group_vars/all/services/*.yml` is runti
 
 ## Runtime layers
 
-1. `podman_services` intentionally renders Quadlets using Podman 5.7 syntax and is not compatible with Ubuntu 24.04 LTS (Noble), whose packaged Podman 4.9 lacks the required directives.
+1. The `podman` role supports Ubuntu 26.04+ and Linux Mint Debian Edition 7 (based on Debian 13), requires Podman 5.4.2 or newer, and verifies cgroup v2 plus the system Quadlet generator. The current `podman_services` templates use directives available in Podman 5.4.2 for both system and rootless Quadlets. Ubuntu 24.04 LTS (Noble) remains unsupported because its packaged Podman 4.9 is below this baseline.
 2. The linear, globally ordered dispatcher materializes one selected service on its dispatch host before invoking common preparation and its runtime adapter.
 3. `service_prepare` owns application validation, generated values, template derivation, and bootstrap requests. Its temporary preparation containers use the selected runtime and are removed before deployed-service lifecycle work.
 4. `service_common` prepares runtime-neutral Infisical values, environment, host paths, files, Traefik routes, and PostgreSQL databases from explicit adapter inputs.
@@ -23,6 +23,11 @@ and run through its user manager. The dispatcher enables Ansible SSH pipelining
 for Podman role tasks so privilege switching does not require a temporary module
 file shared with the locked service account. This controller transport setting
 is not placed in the application environment.
+
+The runtime package set explicitly includes `passt` for the rootless `pasta`
+network backend and `dbus-user-session` for the per-user systemd manager, in
+addition to the existing Podman, network-plugin, subordinate-ID, slirp4netns,
+and fuse-overlayfs packages.
 
 `deploy.execution.host_user` is the host account that owns a rootless Podman
 instance. It must use the reserved `podman-` prefix and is separate from

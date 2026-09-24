@@ -27,8 +27,6 @@ SUB_TASK_FILES = (
 TASKS = "\n".join((TASKS_DIR / "sub_tasks" / name).read_text() for name in SUB_TASK_FILES) + "\n" + SECRET_TASKS
 N8N = (REPO_ROOT / "ansible/group_vars/all/services/n8n.yml").read_text()
 NETWORK_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/templates/network.network.j2").read_text()
-PODMAN_DEFAULTS = (REPO_ROOT / "ansible/roles/podman/defaults/main.yml").read_text()
-PODMAN_TASKS = (REPO_ROOT / "ansible/roles/podman/tasks/main.yml").read_text()
 PODMAN_HANDLERS = (REPO_ROOT / "ansible/roles/podman_services/handlers/main.yml").read_text()
 PODMAN_SERVICES_DEFAULTS = (REPO_ROOT / "ansible/roles/podman_services/defaults/main.yml").read_text()
 ROOTLESS_NETWORK_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/templates/rootless-network.conf.j2").read_text()
@@ -248,12 +246,6 @@ def test_absent_container_unit_is_checked_before_recreate_preparation_stop():
     assert load_state["changed_when"] is False
     assert load_state["failed_when"] is False
     assert "podman_services_recreate_unit_load_state.stdout | trim != 'not-found'" in stop["when"]
-
-
-def test_podman_role_targets_ubuntu_2604_resolute_and_podman_57():
-    assert 'podman_min_version: "5.7.0"' in PODMAN_DEFAULTS
-    assert "distribution_version is version('26.04', '>=')" in PODMAN_TASKS
-    assert "Ubuntu 26.04 LTS (Resolute)" in PODMAN_TASKS
 
 
 def test_split_tasks_notify_the_existing_daemon_reload_handler():
