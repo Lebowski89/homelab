@@ -48,7 +48,7 @@ only catalog metadata, fields it renders or validates itself, runtime-neutral
 `service_common` fields, and real `service_prepare` inputs. Any Docker-only or
 unknown top-level field fails with every unsupported key listed in sorted order.
 Changing only `runtime` is therefore unsafe and rejected when behavior such as a
-custom command, entrypoint, config, device, host network, Swarm profile, or
+custom command, entrypoint, config, privileged mode, host network, Swarm profile, or
 constraint still lacks a Podman implementation.
 
 An explicit canonical `name` controls the Podman container name, generated
@@ -58,6 +58,16 @@ base-target role prefix. If `deploy.type` is present it must be exactly
 `container`; `swarm`, `profile`, and `constraints` are invalid. Portable
 `mode: replicated` and `replicas: 1` remain accepted single-instance no-ops.
 
+Rootful execution additionally supports three constrained native Quadlet
+features. Canonical `devices` entries use
+`HOST_DEVICE[:CONTAINER_DEVICE[:PERMISSIONS]]` syntax with normalized paths
+below `/dev` and render as `AddDevice=`. Canonical `shm_size` accepts a
+positive byte-size value such as `1gb` and renders as `ShmSize=`.
+`network_mode` accepts only `container:<managed-container-name>`, cannot be
+combined with `named_networks`, and renders as
+`Network=<managed-container-name>.container`. No arbitrary `PodmanArgs` or
+generic pod support is implied by these fields.
+
 Rootless execution is intentionally narrower than the general Podman schema.
 It requires `deploy.type: container`, a fully qualified exact image, one
 role-managed bridge, and unprivileged published TCP ports. A rootless bind mount
@@ -66,8 +76,9 @@ in `paths`, omit explicit path ownership, and provide a validated
 `deploy.execution.userns: {mode: keep-id, uid: ..., gid: ...}` mapping. After
 the common path exists, the adapter recursively assigns that source to the
 dedicated execution account without changing descendant modes. Named volumes,
-tmpfs mounts, native secrets, added capabilities, devices, privileged mode,
-host networking, and application preparation remain unsupported for rootless
+tmpfs mounts, native secrets, added capabilities, devices, shared container
+network namespaces, `shm_size`, privileged mode, host networking, and
+application preparation remain unsupported for rootless
 execution. Rootless `copies` and `templates` are supported only when every
 destination is a normalized absolute proper descendant of a declared bind
 source; explicit file owner/group overrides are rejected so `service_common`
@@ -179,6 +190,15 @@ Docker and Podman keep separate network stores; a Docker network with a matching
 name does not satisfy this Podman preflight. Prefer a managed Podman network for
 an isolated service. Cross-runtime communication must use published host
 endpoints or another deliberately designed network path.
+
+For shared network namespaces, the referenced `.container` suffix lets Quadlet
+derive the systemd dependency on the provider container unit. The provider must
+be deployed first; a child start fails if that unit or its network namespace is
+unavailable. Publish every host-facing port on the provider because namespace
+children cannot publish ports independently. A provider restart or recreation
+does not force an already-running child to join the provider's replacement
+namespace, so recreate or restart each child afterward. Stop or remove the
+children before removing the provider.
 
 Podman systemd policy is also first-class at top level. The supported fields are
 `after`, `restart`, `restart_sec`, and `timeout_start_sec`, rendered as

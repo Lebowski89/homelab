@@ -1,0 +1,58 @@
+---
+
+jdownloader2:
+  ################################
+  # IDENTITY
+  ################################
+  enabled: true
+  runtime: podman
+  tags: [downloads, jdownloader2]
+  name: jdownloader2
+  ################################
+  # IMAGE/PROCESS
+  ################################
+  image: docker.io/jlesage/jdownloader-2:v26.09.1
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
+  environment:
+    GROUP_ID: "{{ hostvars['blacktop'].container_host_pgid }}"
+    TZ: "{{ timezone }}"
+    USER_ID: "{{ hostvars['blacktop'].container_host_puid }}"
+  ################################
+  # CONNECTIVITY
+  ################################
+  network_mode: "container:gluetun"
+  ################################
+  # FILESYSTEM
+  ################################
+  paths:
+    - path: "{{ hostvars['blacktop'].container_host_appdata_root }}/jdownloader-2"
+      state: directory
+      mode: "0750"
+    - path: "{{ hostvars['blacktop'].container_host_data_root }}/jdownloader-2"
+      state: directory
+      mode: "0750"
+  volumes:
+    config:
+      type: bind
+      source: "{{ hostvars['blacktop'].container_host_appdata_root }}/jdownloader-2"
+      target: /config
+      read_only: false
+    downloads:
+      type: bind
+      source: "{{ hostvars['blacktop'].container_host_data_root }}/jdownloader-2"
+      target: /output
+      read_only: false
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
+  deploy:
+    type: container
+    host: blacktop
+    execution:
+      mode: rootful
+  systemd:
+    after: [network-online.target]
+    restart: on-failure
+    restart_sec: 10s

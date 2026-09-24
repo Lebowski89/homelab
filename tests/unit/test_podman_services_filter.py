@@ -903,6 +903,70 @@ def test_network_and_systemd_state_do_not_leak_between_services():
     assert "systemd" not in second_service["container"]
 
 
+def test_rootful_normalizes_devices_container_network_namespace_and_shm_size():
+    cfg = minimal_canonical_cfg()
+    cfg.update(
+        {
+            "devices": ["/dev/net/tun:/dev/net/tun"],
+            "network_mode": "container:gluetun",
+            "shm_size": "1GB",
+        }
+    )
+
+    normalized = podman_services.podman_service_normalize(cfg, "portable")
+
+    assert normalized["container"]["devices"] == ["/dev/net/tun:/dev/net/tun"]
+    assert normalized["container"]["network_mode"] == "gluetun.container"
+    assert normalized["container"]["shm_size"] == "1gb"
+
+
+@pytest.mark.parametrize(
+    "declaration",
+    [
+        "/tmp/tun:/dev/net/tun",
+        "/dev/net/../null:/dev/null",
+        "/dev/net/tun:relative",
+        "/dev/net/tun:/dev/net/tun:rr",
+        "/dev/net/tun:/dev/net/tun:rwx",
+        "/dev/net/tun:/dev/net/tun:rwm:extra",
+        "",
+    ],
+)
+def test_podman_devices_reject_malformed_declarations(declaration):
+    cfg = minimal_canonical_cfg()
+    cfg["devices"] = [declaration]
+
+    with pytest.raises(AnsibleFilterError, match=r"portable\.devices"):
+        podman_services.podman_service_normalize(cfg, "portable")
+
+
+@pytest.mark.parametrize("network_mode", ["", "host", "container:", "container:bad/name", "service:gluetun"])
+def test_podman_network_mode_accepts_only_container_references(network_mode):
+    cfg = minimal_canonical_cfg()
+    cfg["network_mode"] = network_mode
+
+    with pytest.raises(AnsibleFilterError, match=r"portable\.network_mode"):
+        podman_services.podman_service_normalize(cfg, "portable")
+
+
+def test_podman_container_network_mode_rejects_named_networks():
+    cfg = minimal_canonical_cfg()
+    cfg["network_mode"] = "container:gluetun"
+    cfg["named_networks"] = {"portable": {"driver": "bridge", "external": False}}
+
+    with pytest.raises(AnsibleFilterError, match=r"named_networks cannot be combined"):
+        podman_services.podman_service_normalize(cfg, "portable")
+
+
+@pytest.mark.parametrize("shm_size", [None, True, 0, -1, "", "0", "1i", "1 gb", "lots", [], {}])
+def test_podman_shm_size_rejects_invalid_values(shm_size):
+    cfg = minimal_canonical_cfg()
+    cfg["shm_size"] = shm_size
+
+    with pytest.raises(AnsibleFilterError, match=r"portable\.shm_size"):
+        podman_services.podman_service_normalize(cfg, "portable")
+
+
 @pytest.mark.parametrize(
     "runtime_options",
     [
@@ -949,7 +1013,6 @@ UNSUPPORTED_PODMAN_TOP_LEVEL_FIELDS = [
     "container_name",
     "depends_on",
     "device_cgroup_rules",
-    "devices",
     "dns",
     "drift",
     "entrypoint",
@@ -964,14 +1027,12 @@ UNSUPPORTED_PODMAN_TOP_LEVEL_FIELDS = [
     "labels",
     "named_volumes",
     "network",
-    "network_mode",
     "networks",
     "pid",
     "privileged",
     "pull_policy",
     "security_opt",
     "settings",
-    "shm_size",
     "shm_tmpfs_size",
     "stack",
     "stop_grace_period",
@@ -1626,7 +1687,8 @@ def test_rootless_execution_requires_fully_qualified_exact_image():
     ("field", "value"),
     [
         ("devices", ["/dev/null:/dev/null"]),
-        ("network_mode", "host"),
+        ("network_mode", "container:gluetun"),
+        ("shm_size", "1gb"),
         ("privileged", True),
     ],
 )

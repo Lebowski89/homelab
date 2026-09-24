@@ -9,7 +9,9 @@ After={{ after }}
 [Container]
 ContainerName={{ podman_service.unit_name }}
 Image={{ podman_service.image }}
-{% if podman_service.network %}
+{% if podman_service.container.network_mode is defined %}
+Network={{ podman_service.container.network_mode }}
+{% elif podman_service.network %}
 Network={{ podman_service.network.name }}{{ '' if podman_service.network.external else '.network' }}
 {% endif %}
 {% if podman_service.env | length > 0 %}
@@ -40,6 +42,9 @@ Volume={{ volume.source }}:{{ volume.target }}{{ ':ro' if volume_read_only else 
 {% set tmpfs_options = tmpfs.options | default([]) %}
 Tmpfs={{ tmpfs.target }}{{ (':' ~ (tmpfs_options | join(','))) if (tmpfs_options | length > 0) else '' }}
 {% endfor %}
+{% for device in podman_service.container.devices | default([]) %}
+AddDevice={{ device }}
+{% endfor %}
 {% for cap in podman_service.container.cap_add | default([]) %}
 AddCapability={{ cap }}
 {% endfor %}
@@ -51,6 +56,9 @@ NoNewPrivileges=true
 {% endif %}
 {% if podman_service.container.read_only | default(false) %}
 ReadOnly=true
+{% endif %}
+{% if podman_service.container.shm_size is defined %}
+ShmSize={{ podman_service.container.shm_size }}
 {% endif %}
 {% if podman_service.container.healthcheck is defined %}
 HealthCmd={{ podman_service.container.healthcheck.command }}

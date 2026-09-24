@@ -247,7 +247,7 @@ Check mode creates nothing.
 | `named_networks.<key>.external` | Strict Boolean-like | No | Docker `true`; Podman `false` | Both | `docker_services` / `podman_services` | External resources are attached but not owned. Live Podman deploy/update/recreate/bootstrap first requires the exact network in the Podman network store. |
 | `named_networks.<key>.driver` | String | No | Runtime-native | Both | `docker_services` / `podman_services` | Docker passes it to Compose. Podman accepts `bridge`, `ipvlan`, or `macvlan` and rejects it on an external network. |
 | `networks` | List | No | Keys of `named_networks`, else `[docker_network]` | Docker | `docker_services` | Legacy direct Compose attachment list. Prefer `named_networks`. |
-| `network_mode` | Non-empty string | No | Omitted | Docker | `docker_services` | Compose network mode. When set, normal network attachments are omitted. |
+| `network_mode` | String | No | Omitted | Both | `docker_services` / `podman_services` | Docker Compose network mode. Rootful Podman accepts only `container:<managed-container-name>` and renders `Network=<name>.container`; it cannot be combined with `named_networks`. Rootless Podman rejects it. |
 | `depends_on` | String or list | No | `[]` | Docker | `docker_services` | Compose start ordering, not a health guarantee. |
 
 Docker named resources default to external. Non-external definitions are
@@ -363,14 +363,14 @@ application data. Bind source existence should be declared through `paths`.
 
 | Option | Type | Required | Default | Runtime | Owner | Description |
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
-| `devices` | List of non-empty strings | No | `[]` | Docker | `docker_services` | Compose device mappings. |
+| `devices` | List of device mappings | No | `[]` | Both | `docker_services` / `podman_services` | Docker Compose device mappings. Rootful Podman validates `/dev` paths in `HOST[:CONTAINER[:PERMISSIONS]]` form and renders one `AddDevice=` per entry; rootless Podman rejects devices. |
 | `cap_add` | List of non-empty strings | No | `[]` | Both | `docker_services` / `podman_services` | Adds Linux capabilities. |
 | `cap_drop` | List of non-empty strings | No | `[]` | Both | `docker_services` / `podman_services` | Drops Linux capabilities. |
 | `security_opt` | String or list | No | `[]` | Docker | `docker_services` | Compose security options. |
 | `no_new_privileges` | Strict Boolean-like | No | Docker omitted/false; Podman `true` | Both | `docker_services` / `podman_services` | Docker accepts true only for standalone; Podman defaults to `NoNewPrivileges=true`. |
 | `read_only` | Strict Boolean-like | No | `false` | Podman | `podman_services` | Read-only container root filesystem. |
 | `sysctls` | Mapping | No | `{}` | Docker | `docker_services` | Compose sysctl mapping. |
-| `shm_size` | String/size | No | Runtime-native | Docker | `docker_services` | Compose `/dev/shm` size. |
+| `shm_size` | Positive size | No | Runtime-native | Both | `docker_services` / `podman_services` | Docker Compose `/dev/shm` size. Rootful Podman renders `ShmSize=`; rootless Podman rejects it. |
 | `shm_tmpfs_size` | Positive integer bytes | No | Omitted | Docker | `docker_services` | Adds a sized `/dev/shm` tmpfs volume. |
 
 There are no options for a separate process group, device cgroup rules,
@@ -561,7 +561,7 @@ newer digest, and there is no service-level `drift` mapping.
 Podman rejects every top-level field outside its catalog, adapter, common, and
 application-preparation contracts. A runtime-only edit is therefore not a valid
 migration when Docker-only fields such as `command`, `entrypoint`, configs,
-devices, Swarm profiles, or constraints remain. Add behavior deliberately to
+Swarm profiles, or constraints remain. Add behavior deliberately to
 the adapter before migrating a service that needs it.
 
 | Section | Docker | Podman | Classification |
@@ -572,7 +572,7 @@ the adapter before migrating a service that needs it.
 | Ports | Swarm/standalone long syntax | `PublishPort=` | Portable except `mode`/`host_ip` split |
 | Named networks | Multiple; default external | Zero/one; managed by default, external preflight required | Supported with separate runtime stores |
 | Volumes | Bind, named, tmpfs | Bind, volume Quadlets, tmpfs | Portable core; ownership differs |
-| Devices/security | Devices/sysctls/standalone options plus capabilities | Capabilities, read-only root, no-new-privileges | Supported with limitations |
+| Devices/security | Devices/sysctls/standalone options plus capabilities | Rootful devices and shared-memory sizing; capabilities, read-only root, no-new-privileges | Supported with limitations; rootless rejects devices and `shm_size` |
 | Health | Compose defaults | Quadlet defaults | Portable with different defaults |
 | Traefik | Common dynamic file | Common dynamic file | Runtime-neutral preparation |
 | PostgreSQL | Common reconciliation | Common reconciliation | Runtime-neutral preparation |

@@ -122,6 +122,9 @@ def test_real_repository_dispatch_hosts_match_repository_host_definitions():
     effective = catalog_filters.service_catalog_effective(services, "mgt")
     repository_hosts = {path.stem for path in (REPO_ROOT / "ansible/host_vars").glob("*.yml")}
     repository_hosts.update(path.name for path in (REPO_ROOT / "terraform/proxmox/vms").iterdir() if path.is_dir())
+    netbox_locals = (REPO_ROOT / "terraform/netbox/locals.tf").read_text().split("base_hosts = {", 1)[1]
+    netbox_base_hosts = netbox_locals.split("\n  }\n", 1)[0]
+    repository_hosts.update(re.findall(r"^    ([a-z0-9_-]+) = \{$", netbox_base_hosts, re.MULTILINE))
 
     assert effective
     assert all(entry["dispatch_host"] in repository_hosts for entry in effective)
@@ -174,6 +177,40 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
             "host_port": 18080,
             "container_port": 8080,
             "execution": {"mode": "rootless", "host_user": "podman-adminer"},
+            "systemd": {
+                "after": ["network-online.target"],
+                "restart": "on-failure",
+                "restart_sec": "10s",
+            },
+        },
+        "gluetun": {
+            "network": "gluetun",
+            "host": "blacktop",
+            "host_ports": [5800, 3009],
+            "container_ports": [5800, 3001],
+            "execution": {"mode": "rootful"},
+            "systemd": {
+                "after": ["network-online.target"],
+                "restart": "on-failure",
+                "restart_sec": "10s",
+            },
+        },
+        "jdownloader2": {
+            "host": "blacktop",
+            "network_mode": "gluetun.container",
+            "execution": {"mode": "rootful"},
+            "systemd": {
+                "after": ["network-online.target"],
+                "restart": "on-failure",
+                "restart_sec": "10s",
+            },
+        },
+        "mullvad_browser": {
+            "host": "blacktop",
+            "name": "mullvad-browser",
+            "network_mode": "gluetun.container",
+            "shm_size": "1gb",
+            "execution": {"mode": "rootful"},
             "systemd": {
                 "after": ["network-online.target"],
                 "restart": "on-failure",
@@ -245,7 +282,14 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
                         "container_host_puid": 1000,
                         "container_host_pgid": 1000,
                         "local_ip": "192.0.2.10",
-                    }
+                    },
+                    "blacktop": {
+                        "container_host_appdata_root": "/opt/appdata",
+                        "container_host_data_root": "/opt/data",
+                        "container_host_puid": 1000,
+                        "container_host_pgid": 1000,
+                        "local_ip": "192.0.2.40",
+                    },
                 },
                 "local_ip": "192.0.2.10",
                 "services_controller_host": "manager",
@@ -257,18 +301,31 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
         )
         assert set(rendered_effective) <= podman_filters._SUPPORTED_TOP_LEVEL_FIELDS
         normalized = podman_filters.podman_service_normalize(rendered_effective, item.get("target", item["name"]))
-        assert normalized["name"] == item["name"]
-        assert normalized["unit_name"] == item["name"]
+        expected_name = expected[item["name"]].get("name", item["name"])
+        assert normalized["name"] == expected_name
+        assert normalized["unit_name"] == expected_name
         assert normalized["image"] == effective["image"]
         behavior = expected[item["name"]]
-        assert normalized["network"] == {
-            "name": behavior["network"],
-            "driver": "bridge",
-            "external": False,
-        }
+        if "network" in behavior:
+            assert normalized["network"] == {
+                "name": behavior["network"],
+                "driver": "bridge",
+                "external": False,
+            }
+        else:
+            assert normalized["network"] is None
         assert normalized["container"]["host"] == behavior["host"]
-        assert normalized["container"]["ports"][0]["host"] == behavior["host_port"]
-        assert normalized["container"]["ports"][0]["container"] == behavior["container_port"]
+        if "host_port" in behavior:
+            assert normalized["container"]["ports"][0]["host"] == behavior["host_port"]
+            assert normalized["container"]["ports"][0]["container"] == behavior["container_port"]
+        elif "host_ports" in behavior:
+            assert [port["host"] for port in normalized["container"]["ports"]] == behavior["host_ports"]
+            assert [port["container"] for port in normalized["container"]["ports"]] == behavior["container_ports"]
+        if "network_mode" in behavior:
+            assert normalized["container"]["network_mode"] == behavior["network_mode"]
+            assert "ports" not in normalized["container"]
+        if "shm_size" in behavior:
+            assert normalized["container"]["shm_size"] == behavior["shm_size"]
         assert normalized["container"]["systemd"] == behavior["systemd"]
         assert normalized["execution"] == behavior["execution"]
         if item["name"] == "thelounge":
@@ -284,7 +341,15 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
             ]
         checked.append((item["name"], item.get("target")))
 
-    assert checked == [("adminer", None), ("homepage", None), ("n8n", None), ("thelounge", None)]
+    assert checked == [
+        ("adminer", None),
+        ("gluetun", None),
+        ("homepage", None),
+        ("jdownloader2", None),
+        ("mullvad_browser", None),
+        ("n8n", None),
+        ("thelounge", None),
+    ]
 
 
 def test_repository_secret_policy_is_runtime_neutral_and_defaults_safely():

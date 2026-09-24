@@ -1,0 +1,85 @@
+---
+
+gluetun:
+  ################################
+  # IDENTITY
+  ################################
+  enabled: true
+  runtime: podman
+  tags: [vpn, gluetun]
+  name: gluetun
+  ################################
+  # IMAGE/PROCESS
+  ################################
+  image: docker.io/qmcgaw/gluetun:v3.41.3
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
+  environment:
+    FIREWALL_OUTBOUND_SUBNETS: 192.168.80.0/24
+    OPENVPN_PASSWORD:
+      value_from:
+        infisical: gluetun_pia_password
+    OPENVPN_USER:
+      value_from:
+        infisical: gluetun_pia_user
+    SERVER_REGIONS: Netherlands,DE Berlin,DE Frankfurt,Poland,Switzerland
+    TZ: "{{ timezone }}"
+    VPN_SERVICE_PROVIDER: private internet access
+    VPN_TYPE: openvpn
+  infisical:
+    secrets_map:
+      - var: gluetun_pia_user
+        path: "/Gluetun"
+        name: PIA_USER
+      - var: gluetun_pia_password
+        path: "/Gluetun"
+        name: PIA_PASSWORD
+  ################################
+  # CONNECTIVITY
+  ################################
+  named_networks:
+    gluetun:
+      driver: bridge
+      external: false
+  ports:
+    - host_ip: "{{ local_ip }}"
+      published: 5800
+      target: 5800
+      protocol: tcp
+    - host_ip: "{{ local_ip }}"
+      published: 3009
+      target: 3001
+      protocol: tcp
+  ################################
+  # FILESYSTEM
+  ################################
+  paths:
+    - path: "{{ hostvars['blacktop'].container_host_appdata_root }}/gluetun"
+      state: directory
+      mode: "0750"
+  volumes:
+    config:
+      type: bind
+      source: "{{ hostvars['blacktop'].container_host_appdata_root }}/gluetun"
+      target: /gluetun
+      read_only: false
+  ################################
+  # DEVICES/SECURITY
+  ################################
+  devices:
+    - "/dev/net/tun:/dev/net/tun"
+  cap_add:
+    - NET_ADMIN
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
+  deploy:
+    type: container
+    host: blacktop
+    execution:
+      mode: rootful
+  systemd:
+    after: [network-online.target]
+    restart: on-failure
+    restart_sec: 10s

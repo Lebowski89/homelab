@@ -19,6 +19,7 @@ from ansible.errors import AnsibleFilterError
 
 _ENV_KEY_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
 _RESOURCE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+_SHM_SIZE_RE = re.compile(r"^[1-9][0-9]*(?:b|[kmgtpe](?:i?b)?)?$", re.IGNORECASE)
 _USER_RE = re.compile(r"^[0-9]+:[0-9]+$")
 _HOST_USER_RE = re.compile(r"^podman-[a-z0-9](?:[a-z0-9_-]{0,23}[a-z0-9])?\Z")
 _VALID_NETWORK_DRIVERS = {"bridge", "ipvlan", "macvlan"}
@@ -36,15 +37,18 @@ _PODMAN_SERVICE_FIELDS = frozenset(
         "cap_drop",
         "deploy",
         "description",
+        "devices",
         "healthcheck",
         "image",
         "name",
         "named_networks",
+        "network_mode",
         "no_new_privileges",
         "ports",
         "read_only",
         "runtime_options",
         "secrets",
+        "shm_size",
         "systemd",
         "user",
         "volumes",
@@ -379,6 +383,56 @@ def _capabilities(value: Any, *, name: str) -> list[str]:
     for index, capability in enumerate(value):
         result.append(_nonempty_string(capability, name=f"{name}[{index}]"))
     return result
+
+
+def _device_path(value: Any, *, name: str) -> str:
+    path = _nonempty_string(value, name=name)
+    if path != value or not posixpath.isabs(path) or posixpath.normpath(path) != path or not path.startswith("/dev/"):
+        raise AnsibleFilterError(f"{name} must be a normalized absolute path below /dev; got {value!r}")
+    return path
+
+
+def _devices(value: Any, *, name: str) -> list[str]:
+    if isinstance(value, str) or not isinstance(value, Iterable):
+        raise AnsibleFilterError(f"{name} must be a list of Podman device mappings")
+    result: list[str] = []
+    for index, declaration in enumerate(value):
+        item_name = f"{name}[{index}]"
+        text = _nonempty_string(declaration, name=item_name)
+        if text != declaration:
+            raise AnsibleFilterError(f"{item_name} must not contain surrounding whitespace")
+        parts = text.split(":")
+        if len(parts) not in {1, 2, 3}:
+            raise AnsibleFilterError(f"{item_name} must use HOST_DEVICE[:CONTAINER_DEVICE[:PERMISSIONS]] syntax")
+        host_path = _device_path(parts[0], name=f"{item_name}.host")
+        rendered = [host_path]
+        if len(parts) >= 2:
+            rendered.append(_device_path(parts[1], name=f"{item_name}.container"))
+        if len(parts) == 3:
+            permissions = parts[2]
+            if not re.fullmatch(r"[rwm]+", permissions) or len(set(permissions)) != len(permissions):
+                raise AnsibleFilterError(f"{item_name}.permissions must contain each of r, w, and m at most once")
+            rendered.append(permissions)
+        result.append(":".join(rendered))
+    return result
+
+
+def _container_network_mode(value: Any, *, name: str) -> str:
+    text = _nonempty_string(value, name=name)
+    match = re.fullmatch(r"container:([A-Za-z0-9][A-Za-z0-9_.-]*)", text)
+    if match is None:
+        raise AnsibleFilterError(f'{name} must use the constrained "container:<managed-container-name>" form')
+    container_name = _resource_name(match.group(1), name=f"{name} container reference")
+    return f"{container_name}.container"
+
+
+def _shm_size(value: Any, *, name: str) -> str:
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise AnsibleFilterError(f"{name} must be a positive number with an optional byte-size unit")
+    text = str(value).strip()
+    if not _SHM_SIZE_RE.fullmatch(text):
+        raise AnsibleFilterError(f"{name} must be a positive number with an optional byte-size unit")
+    return text.lower()
 
 
 def _health_command(test: Any, *, name: str) -> str:
@@ -879,6 +933,12 @@ def _validate_rootless_subset(
         _validate_rootless_managed_files(cfg, name=name, bind_sources=bind_sources)
     if container.get("cap_add"):
         raise AnsibleFilterError(f"{name}.cap_add is not supported for rootless Podman in this phase")
+    if container.get("devices"):
+        raise AnsibleFilterError(f"{name}.devices is not supported for rootless Podman in this phase")
+    if container.get("network_mode"):
+        raise AnsibleFilterError(f"{name}.network_mode is not supported for rootless Podman in this phase")
+    if container.get("shm_size"):
+        raise AnsibleFilterError(f"{name}.shm_size is not supported for rootless Podman in this phase")
     if secret_attachments or _has_native_infisical_secret(cfg):
         raise AnsibleFilterError(f"{name}.secrets is not supported for rootless Podman in this phase")
     for field in ("application_prepare", "prep", "paths_vault"):
@@ -1039,6 +1099,15 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
     if "ports" in cfg:
         container["ports"] = _ports(cfg["ports"], name=f"{name}.ports")
 
+    if "devices" in cfg:
+        container["devices"] = _devices(cfg["devices"], name=f"{name}.devices")
+
+    if "network_mode" in cfg:
+        container["network_mode"] = _container_network_mode(cfg["network_mode"], name=f"{name}.network_mode")
+
+    if "shm_size" in cfg:
+        container["shm_size"] = _shm_size(cfg["shm_size"], name=f"{name}.shm_size")
+
     host_paths = _paths(cfg["paths"], name=f"{name}.paths") if "paths" in cfg else []
 
     volumes: list[dict[str, Any]] = []
@@ -1074,6 +1143,8 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
                 secret_attachments.append(attachment.strip())
 
     network = _named_networks(cfg["named_networks"], name=f"{name}.named_networks") if "named_networks" in cfg else None
+    if network is not None and "network_mode" in container:
+        raise AnsibleFilterError(f"{name}.named_networks cannot be combined with {name}.network_mode")
     postgres = _as_mapping(cfg["postgres"], name=f"{name}.postgres") if "postgres" in cfg else {}
     traefik = _as_mapping(cfg["traefik"], name=f"{name}.traefik") if "traefik" in cfg else {}
 
