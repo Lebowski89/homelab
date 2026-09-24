@@ -1,41 +1,64 @@
-# LMDE workstation setup
+# LMDE workstation management
 
-The workstation automation supports Linux Mint Debian Edition 7 on its Debian
-13 base with Cinnamon, systemd, APT, and NetworkManager. It runs locally and is
-separate from the NetBox inventory and Ubuntu server role.
+`blacktop` is managed as a normal remote Ansible target from the `mgt`
+controller:
 
-## Fresh installation
-
-Install Git, clone this repository, and run the thin bootstrap:
-
-```bash
-sudo apt update
-sudo apt install git ca-certificates
-git clone https://github.com/Lebowski89/homelab.git
-cd homelab
-sudo ./scripts/bootstrap-workstation.sh
+```text
+mgt / /opt/homelab -> NetBox dynamic inventory -> SSH/Tailscale -> blacktop
 ```
 
-The bootstrap installs only enough Debian packages to execute the real Ansible
-configuration. Apply the complete workstation role with:
+The repository, Ansible virtual environment, collections, and Skynet wrapper
+remain on `mgt`. The workstation does not clone or execute the homelab
+repository locally. NetBox supplies its connection identity, addressing,
+container-host defaults, and the `skynet`, `workstation`, `podman`, and
+`podman_install` tags.
+
+## Controller workflow
+
+From the repository on `mgt`, the normal workstation operation is:
 
 ```bash
-ansible-playbook -i localhost, ansible/workstation.yml --ask-become-pass --tags workstation
+skynet raw --tags workstation --limit blacktop
 ```
 
-The first complete run creates a pinned project Ansible virtual environment
-under `~/.local/share/homelab/ansible-venv` and installs the repository's
-declared collections beneath `~/.local/share/ansible/collections`. See the
-[role README](../ansible/roles/workstation/README.md) for the subsequent-run
-and Skynet commands, configurable variables, and granular tags.
+Podman installation remains independently selectable:
 
-## Scope and manual migration
+```bash
+skynet raw --tags podman_install --limit blacktop
+```
 
-NetworkManager retains full control of networking. The role does not install
-or configure Netplan and does not manage Wi-Fi networks or credentials. It
-also leaves SSH keys and client configuration, VS Code settings, Cinnamon
-customization, browser data, personal files, and secrets untouched.
+These commands use the main `ansible/playbook.yml` and NetBox dynamic
+inventory. The workstation role is selected through the generated
+`tags_workstation` group; the playbook contains no workstation hostname
+special case. See the
+[role README](../ansible/roles/workstation/README.md) for granular tags and
+configuration.
 
-Move existing SSH keys manually using a secure out-of-band method, preserve
-their restrictive permissions, and verify host keys before first use. Do not
-add private keys to this repository.
+## Initial connectivity boundary
+
+A fresh LMDE installation needs one-time preparation before configuration can
+be initiated from `mgt`:
+
+* an existing local interactive user with sudo capability;
+* Python required for normal Ansible module execution;
+* SSH reachability from `mgt`;
+* Tailscale enrolment and addressing when Tailscale is the management path;
+* matching NetBox device, primary LAN IP, connection custom fields, and tags.
+
+This connectivity bootstrap is deliberately external to the workstation role:
+the role cannot establish the network and credentials required to execute
+itself. Wi-Fi credentials, private SSH keys, Tailscale authentication secrets,
+and other personal or bootstrap secrets must stay outside this repository.
+
+## Managed scope
+
+The role manages the timezone, baseline APT and development packages, Visual
+Studio Code repository/package/extensions, optional Git identity, shell
+directories, and XDG desktop directories. Privileged machine changes run as
+root; user-owned changes run as the NetBox-derived Ansible connection user
+after the role resolves that account's UID, GID, and home with getent.
+
+NetworkManager retains full control of workstation networking. The role does
+not manage NetworkManager connections, Wi-Fi credentials, Netplan, SSH keys or
+client configuration, VS Code user settings, Cinnamon customization, browser
+data, personal files, or secrets.

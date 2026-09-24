@@ -24,7 +24,6 @@
       - workstation_desktop_packages is sequence
       - workstation_desktop_packages is not string
       - workstation_apt_update_cache is boolean
-      - workstation_ansible_venv_enabled is boolean
       - workstation_vscode_enabled is boolean
       - workstation_vscode_extensions is sequence
       - workstation_vscode_extensions is not string
@@ -68,14 +67,6 @@
 - name: Workstation | Validate user path variables
   ansible.builtin.assert:
     that:
-      - workstation_ansible_venv_path is string
-      - workstation_ansible_venv_path | trim | length > 1
-      - workstation_ansible_requirements_path is string
-      - workstation_ansible_requirements_path | trim | length > 1
-      - workstation_ansible_collections_requirements_path is string
-      - workstation_ansible_collections_requirements_path | trim | length > 1
-      - workstation_ansible_collections_path is string
-      - workstation_ansible_collections_path | trim | length > 1
       - workstation_shell_directories is sequence
       - workstation_shell_directories is not string
       - workstation_xdg_directories is sequence

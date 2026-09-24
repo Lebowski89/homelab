@@ -1,6 +1,6 @@
 ---
 
-workstation_user: "{{ ansible_user_id }}"
+workstation_user: "{{ ansible_user }}"
 workstation_timezone: Australia/Melbourne
 
 workstation_packages:
@@ -23,12 +23,6 @@ workstation_desktop_packages:
   - xdg-user-dirs
 
 workstation_apt_update_cache: true
-
-workstation_ansible_venv_enabled: true
-workstation_ansible_venv_path: "{{ workstation_user_home }}/.local/share/homelab/ansible-venv"
-workstation_ansible_requirements_path: "{{ playbook_dir }}/requirements.txt"
-workstation_ansible_collections_requirements_path: "{{ playbook_dir }}/requirements.yml"
-workstation_ansible_collections_path: "{{ workstation_user_home }}/.local/share/ansible/collections"
 
 workstation_vscode_enabled: true
 workstation_vscode_key_url: https://packages.microsoft.com/keys/microsoft.asc

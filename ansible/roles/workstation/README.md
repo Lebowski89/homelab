@@ -1,53 +1,48 @@
 # Workstation role
 
-This role provides the initial local workstation baseline for Linux Mint Debian
-Edition 7 (Debian 13, Cinnamon). It requires a Debian-family system using APT
-and systemd. NetworkManager remains the owner of workstation networking.
+This role manages the Linux Mint Debian Edition 7 workstation baseline from
+the repository and Ansible controller on `mgt`. The target must be a
+Debian-family system using APT and systemd. NetworkManager remains the owner of
+workstation networking.
 
-The role installs a small package baseline, the repository's Python and
-Ansible development environment in the interactive user's home directory,
-official Microsoft Visual Studio Code packages and selected extensions, an
-optional Git identity, and basic user directories. It also sets the configured
-timezone.
+The role installs baseline and general development packages, official
+Microsoft Visual Studio Code packages and selected extensions, an optional Git
+identity, and basic user directories. It also sets the configured timezone.
+It does not install a homelab Ansible virtual environment or collections on
+the workstation.
 
-## Run locally
+## Inventory and execution
 
-From the repository root, bootstrap Ansible and then run the dedicated local
-playbook:
-
-```bash
-sudo ./scripts/bootstrap-workstation.sh
-ansible-playbook -i localhost, ansible/workstation.yml --ask-become-pass --tags workstation
-```
-
-After the first complete run, use the role-managed virtual environment:
+The main `ansible/playbook.yml` dispatches this role to hosts in the
+NetBox-generated `tags_workstation` group. From `mgt`, the normal operation
+is:
 
 ```bash
-ANSIBLE_COLLECTIONS_PATH="$HOME/.local/share/ansible/collections" \
-  "$HOME/.local/share/homelab/ansible-venv/bin/ansible-playbook" \
-  -i localhost, ansible/workstation.yml --ask-become-pass --tags workstation
+skynet raw --tags workstation --limit blacktop
 ```
 
-If `skynet` is already installed, its existing path overrides provide an
-equivalent local path without changing the server-oriented defaults:
+Podman is a separate role and operation:
 
 ```bash
-PLAYBOOK="$PWD/ansible/workstation.yml" \
-INVENTORY="localhost," \
-ANSIBLE_CONFIG="$PWD/ansible/ansible.cfg" \
-ANSIBLE_VENV_PATH="$HOME/.local/share/homelab/ansible-venv" \
-skynet raw --ask-become-pass --tags workstation
+skynet raw --tags podman_install --limit blacktop
 ```
 
-Available tags are `workstation`, `workstation_apt`, `workstation_dev`,
-`workstation_vscode`, `workstation_shell`, and `workstation_desktop`. The broad
-`workstation` tag selects every section. Each granular tag also selects shared
-platform, variable, and user-account validation.
+The role defaults `workstation_user` from the existing `ansible_user`
+inventory connection identity. It validates that account with getent and
+derives its UID, GID, and home. Package, repository, and timezone changes use
+privilege escalation; user files and commands use that resolved workstation
+account.
+
+Available workstation tags are `workstation`, `workstation_apt`,
+`workstation_dev`, `workstation_vscode`, `workstation_shell`, and
+`workstation_desktop`. The broad tag selects the complete role. Each granular
+tag selects shared platform/user validation plus its relevant section.
 
 ## Configuration
 
-Override role defaults with `--extra-vars`, a local untracked vars file, or a
-future workstation-specific inventory. In particular:
+NetBox remains the source of truth for the connection user, SSH port,
+management address, LAN primary IP, tags, and container-host defaults.
+Role-specific behavior remains configurable through role defaults:
 
 * `workstation_vscode_extensions` controls extensions installed as the
   workstation user. The defaults cover Ansible, Python, and Remote SSH.
@@ -55,10 +50,15 @@ future workstation-specific inventory. In particular:
   provide non-empty `workstation_git_user_name` and
   `workstation_git_user_email` values to manage only an identity block in
   `~/.gitconfig`.
-* `workstation_ansible_venv_path` defaults beneath the user's home rather than
-  using the server manager's `/opt/ansible` layout.
 
-The role intentionally does not manage NetworkManager connections, Wi-Fi
-credentials, Netplan, SSH server state, SSH keys or client configuration,
-VS Code settings, Cinnamon preferences, personal files, or other secrets.
-Copy or create SSH private keys manually outside this repository.
+## Connectivity boundary and exclusions
+
+Before the role can run, a fresh workstation needs an existing sudo-capable
+local user, Python, SSH reachability, any required Tailscale enrolment, and
+corresponding NetBox inventory data. These one-time connectivity prerequisites
+are intentionally not bootstrapped by the role.
+
+The role does not manage NetworkManager connections, Wi-Fi credentials,
+Netplan, SSH server state, SSH keys or client configuration, Tailscale
+authentication secrets, VS Code user settings, Cinnamon preferences, browser
+data, personal files, or other secrets.

@@ -139,6 +139,25 @@
         - postgres_backup_run
 
     ################################
+    # WORKSTATION
+    ################################
+
+    - name: Include Workstation role
+      when: "'tags_workstation' in group_names"
+      ansible.builtin.include_role:
+        name: workstation
+        apply:
+          tags:
+            - workstation
+      tags:
+        - workstation
+        - workstation_apt
+        - workstation_dev
+        - workstation_vscode
+        - workstation_shell
+        - workstation_desktop
+
+    ################################
     # SYSTEMD-RESOLVED / NSS
     ################################
 

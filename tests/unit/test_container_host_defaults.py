@@ -124,6 +124,7 @@ def test_tracked_host_sample_defines_canonical_container_values_only_for_applica
     )
     expected = {
         "mgt": ("1000", "1000", "/opt", "/opt"),
+        "blacktop": ("1000", "1000", "/opt", "/opt"),
         "unraid": ("99", "100", "/mnt/user/appdata", "/mnt/user/data"),
         "plex": ("1000", "1000", "/opt", "/opt"),
         "n8n": ("1000", "1000", "/opt", "/opt"),

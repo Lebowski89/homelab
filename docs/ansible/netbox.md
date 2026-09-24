@@ -298,9 +298,10 @@ Tailscale IPv4 → custom_fields.tailscale_ip → ansible_host
 
 This keeps LAN-aware configuration anchored to a stable local address while
 the `mgt` controller uses Tailscale for SSH, including when the workstation is
-away from the home LAN. A workstation tagged with `skynet` and `workstation`
-therefore appears naturally in `tags_skynet`, `tags_workstation`, and its
-`device_roles_workstation` group without workstation-specific inventory code.
+away from the home LAN. `blacktop` is tagged with `skynet`, `workstation`,
+`podman`, and `podman_install`, so it appears naturally in the corresponding
+`tags_*` groups and its `device_roles_workstation` group without
+workstation-specific inventory code.
 
 ---
 

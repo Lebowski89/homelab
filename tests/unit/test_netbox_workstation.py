@@ -13,7 +13,7 @@ NETBOX_LOCALS_PATH = REPO_ROOT / "terraform/netbox/locals.tf"
 NETBOX_MAIN_PATH = REPO_ROOT / "terraform/netbox/main.tf"
 NETBOX_PRIVATE_SAMPLE_PATH = REPO_ROOT / "terraform/netbox/private.auto.tfvars.sample"
 NETBOX_INVENTORY_SAMPLE_PATH = REPO_ROOT / "ansible/netbox.yml.sample"
-WORKSTATION_HOST = "laptop_hostname"
+WORKSTATION_HOST = "blacktop"
 
 CONTAINER_HOST_FIELDS = {
     "container_host_puid",
@@ -72,18 +72,18 @@ def test_netbox_defines_workstation_role_tag_and_generic_laptop_type():
     assert hcl_scalar(device_type, "manufacturer_key") == "homelab"
 
 
-def test_netbox_workstation_host_uses_only_workstation_infrastructure_tags():
+def test_netbox_workstation_host_uses_workstation_and_podman_infrastructure_tags():
     base_hosts = hcl_block(NETBOX_LOCALS_PATH.read_text(), "base_hosts")
     workstation = hcl_block(base_hosts, WORKSTATION_HOST)
 
     assert hcl_scalar(workstation, "role_key") == "workstation"
     assert hcl_scalar(workstation, "device_type_key") == "generic_laptop"
-    assert hcl_list(workstation, "tags") == ["skynet", "workstation"]
+    assert hcl_list(workstation, "tags") == ["skynet", "workstation", "podman", "podman_install"]
     assert base_hosts.count('role_key        = "workstation"') == 1
     assert base_hosts.count('device_type_key = "generic_laptop"') == 1
 
 
-def test_workstation_private_sample_has_connection_fields_without_container_defaults():
+def test_workstation_private_sample_has_connection_and_container_host_fields():
     private_hosts = hcl_block(NETBOX_PRIVATE_SAMPLE_PATH.read_text(), "host_private_values")
     workstation = hcl_block(private_hosts, WORKSTATION_HOST)
     custom_fields = hcl_block(workstation, "custom_fields")
@@ -92,8 +92,13 @@ def test_workstation_private_sample_has_connection_fields_without_container_defa
     assert hcl_scalar(custom_fields, "ansible_user") == "user"
     assert hcl_scalar(custom_fields, "ssh_port") == "22"
     assert hcl_scalar(custom_fields, "tailscale_ip") == "100.xx.xx.xx"
-    for field_name in CONTAINER_HOST_FIELDS:
-        assert re.search(rf"(?m)^\s*{field_name}\s*=", custom_fields) is None
+    expected_container_values = {
+        "container_host_puid": "1000",
+        "container_host_pgid": "1000",
+        "container_host_appdata_root": "/opt",
+        "container_host_data_root": "/opt",
+    }
+    assert {field_name: hcl_scalar(custom_fields, field_name) for field_name in CONTAINER_HOST_FIELDS} == expected_container_values
 
 
 def test_netbox_inventory_keeps_lan_primary_ip_and_prefers_tailscale_for_ansible():
