@@ -25,6 +25,20 @@ host_private_values = {
     }
   }
 
+  blacktop = {
+    mgmt_ip = "192.168.xx.xx/24"
+
+    custom_fields = {
+      ansible_user                = "user"
+      ssh_port                    = "22"
+      tailscale_ip                = "100.xx.xx.xx"
+      container_host_puid         = "1000"
+      container_host_pgid         = "1000"
+      container_host_appdata_root = "/opt"
+      container_host_data_root    = "/opt"
+    }
+  }
+
   unraid = {
     mgmt_ip = "192.168.xx.xx/24"
 

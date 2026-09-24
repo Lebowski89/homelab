@@ -129,7 +129,7 @@ def test_tracked_host_sample_defines_canonical_container_values_only_for_applica
         "n8n": ("1000", "1000", "/opt", "/opt"),
     }
 
-    for host_name in ("router", "mgt", "unraid", "plex", "n8n", "pve1", "pg95", "pg96", "pg97"):
+    for host_name in ("router", "mgt", "blacktop", "unraid", "plex", "n8n", "pve1", "pg95", "pg96", "pg97"):
         custom_fields = hcl_block(hcl_block(hosts, host_name), "custom_fields")
         present_fields = [field_name for field_name in field_names if re.search(rf"(?m)^\s*{field_name}\s*=", custom_fields)]
         if host_name in expected:

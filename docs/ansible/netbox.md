@@ -114,6 +114,7 @@ unraid
 The replacement NetBox tags are:
 
 - `skynet`
+- `workstation`
 - `ansible_manager`
 - `docker`
 - `docker_install`
@@ -138,6 +139,7 @@ The NetBox inventory plugin creates Ansible groups from NetBox tags by prefixing
 | NetBox tag | Ansible group |
 |---|---|
 | `skynet` | `tags_skynet` |
+| `workstation` | `tags_workstation` |
 | `ansible_manager` | `tags_ansible_manager` |
 | `docker` | `tags_docker` |
 | `docker_install` | `tags_docker_install` |
@@ -276,6 +278,29 @@ compose:
 The OpenTofu module under `terraform/netbox` owns these custom-field definitions and their per-host values. NetBox is the source of truth, and the dynamic inventory is the consumer. The canonical fields preserve the former working Text representation under runtime-neutral names and may remain empty for devices where a default does not apply.
 
 The runtime-neutral migration is complete: inventory reads the four canonical custom fields directly, and the superseded Docker-named fields are no longer defined or exported. Runtime selection remains in service definitions, and service-specific storage remains application configuration.
+
+## Workstation addressing
+
+Workstations retain their static LAN IPv4 address as the NetBox management
+interface and primary IPv4. The inventory exposes that primary address as
+`local_ip` for LAN-aware configuration:
+
+```text
+Static LAN IPv4 → NetBox primary IPv4 → local_ip
+```
+
+The workstation's Tailscale IPv4 remains in the `tailscale_ip` device custom
+field. The existing inventory composition prefers it for `ansible_host`:
+
+```text
+Tailscale IPv4 → custom_fields.tailscale_ip → ansible_host
+```
+
+This keeps LAN-aware configuration anchored to a stable local address while
+the `mgt` controller uses Tailscale for SSH, including when the workstation is
+away from the home LAN. A workstation tagged with `skynet` and `workstation`
+therefore appears naturally in `tags_skynet`, `tags_workstation`, and its
+`device_roles_workstation` group without workstation-specific inventory code.
 
 ---
 
