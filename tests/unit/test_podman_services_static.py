@@ -14,6 +14,8 @@ DRIFT_TASKS = (TASKS_DIR / "sub_tasks" / "image_drift.yml").read_text()
 EXECUTION_PREPARE_TASKS = (TASKS_DIR / "sub_tasks" / "execution.yml").read_text()
 EXECUTION_TRANSITION_TASKS = (TASKS_DIR / "sub_tasks" / "switch_execution.yml").read_text()
 LIFECYCLE_TASKS = (TASKS_DIR / "sub_tasks" / "service_state.yml").read_text()
+QUIESCE_NAMESPACE_TASKS = (TASKS_DIR / "sub_tasks" / "quiesce_namespace_dependents.yml").read_text()
+RESTORE_NAMESPACE_TASKS = (TASKS_DIR / "sub_tasks" / "restore_namespace_dependents.yml").read_text()
 SUB_TASK_FILES = (
     "init.yml",
     "execution.yml",
@@ -24,7 +26,15 @@ SUB_TASK_FILES = (
     "remove.yml",
     "image_drift.yml",
 )
-TASKS = "\n".join((TASKS_DIR / "sub_tasks" / name).read_text() for name in SUB_TASK_FILES) + "\n" + SECRET_TASKS
+TASKS = (
+    "\n".join((TASKS_DIR / "sub_tasks" / name).read_text() for name in SUB_TASK_FILES)
+    + "\n"
+    + SECRET_TASKS
+    + "\n"
+    + QUIESCE_NAMESPACE_TASKS
+    + "\n"
+    + RESTORE_NAMESPACE_TASKS
+)
 N8N = (REPO_ROOT / "ansible/group_vars/all/services/n8n.yml").read_text()
 NETWORK_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/templates/network.network.j2").read_text()
 PODMAN_HANDLERS = (REPO_ROOT / "ansible/roles/podman_services/handlers/main.yml").read_text()
@@ -39,6 +49,8 @@ REMOVE_TASK_LIST = yaml.safe_load(REMOVE_TASKS)
 EXECUTION_PREPARE_TASK_LIST = yaml.safe_load(EXECUTION_PREPARE_TASKS)
 EXECUTION_TRANSITION_TASK_LIST = yaml.safe_load(EXECUTION_TRANSITION_TASKS)
 LIFECYCLE_TASK_LIST = yaml.safe_load(LIFECYCLE_TASKS)
+QUIESCE_NAMESPACE_TASK_LIST = yaml.safe_load(QUIESCE_NAMESPACE_TASKS)
+RESTORE_NAMESPACE_TASK_LIST = yaml.safe_load(RESTORE_NAMESPACE_TASKS)
 ALL_TASK_LIST = [task for name in SUB_TASK_FILES for task in yaml.safe_load((TASKS_DIR / "sub_tasks" / name).read_text())]
 MAIN_TASK_NAMES = [task["name"] for task in MAIN_TASK_LIST]
 PREPARE_TASK_NAMES = [task["name"] for task in PREPARE_TASK_LIST]
@@ -232,10 +244,11 @@ def test_absent_container_unit_is_checked_before_stop():
 
 def test_absent_container_unit_is_checked_before_recreate_preparation_stop():
     tasks = yaml.safe_load(MAIN_TASKS)
+    quiesce = next(task for task in tasks if task["name"] == "Podman services | Quiesce namespace dependents before recreate")
     load_state = next(task for task in tasks if task["name"] == "Podman services | Check service before recreate")
     stop = next(task for task in tasks if task["name"] == "Podman services | Stop service before recreate")
 
-    assert tasks.index(load_state) < tasks.index(stop)
+    assert tasks.index(quiesce) < tasks.index(load_state) < tasks.index(stop)
     assert load_state["ansible.builtin.command"]["argv"] == [
         "systemctl",
         "show",
@@ -246,6 +259,83 @@ def test_absent_container_unit_is_checked_before_recreate_preparation_stop():
     assert load_state["changed_when"] is False
     assert load_state["failed_when"] is False
     assert "podman_services_recreate_unit_load_state.stdout | trim != 'not-found'" in stop["when"]
+
+
+def test_namespace_provider_recreate_stops_loaded_dependents_before_provider_and_restores_after_verification():
+    main = yaml.safe_load(MAIN_TASKS)
+    lifecycle = yaml.safe_load(LIFECYCLE_TASKS)
+    quiesce_include = next(task for task in main if task["name"] == "Podman services | Quiesce namespace dependents before recreate")
+    provider_stop = next(task for task in main if task["name"] == "Podman services | Stop service before recreate")
+    provider_restart = next(task for task in lifecycle if task["name"] == "Service | Restart system service for recreate")
+    provider_verify = next(task for task in lifecycle if task["name"] == "Service | Verify system service is active")
+    restore_include = next(task for task in lifecycle if task["name"] == "Service | Restore previously active namespace dependents")
+
+    assert main.index(quiesce_include) < main.index(provider_stop)
+    assert lifecycle.index(provider_restart) < lifecycle.index(provider_verify) < lifecycle.index(restore_include)
+    assert quiesce_include["ansible.builtin.include_tasks"]["file"] == "sub_tasks/quiesce_namespace_dependents.yml"
+    assert "podman_services_namespace_dependents | length > 0" in quiesce_include["when"]
+    assert "not (podman_services_namespace_dependents_quiesced | bool)" in quiesce_include["when"]
+
+
+def test_namespace_quiesce_stops_loaded_units_and_restores_only_previously_active_dependents():
+    record = next(task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Namespace dependents | Record managed service states")
+    select = next(
+        task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Namespace dependents | Select previously active services"
+    )
+    select_loaded = next(
+        task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Namespace dependents | Select loaded services to quiesce"
+    )
+    stop = next(
+        task
+        for task in QUIESCE_NAMESPACE_TASK_LIST
+        if task["name"] == "Namespace dependents | Stop loaded services in reverse dependency order"
+    )
+    restore = next(
+        task
+        for task in RESTORE_NAMESPACE_TASK_LIST
+        if task["name"] == "Namespace dependents | Restore previously active services in dependency order"
+    )
+    verify = next(
+        task for task in RESTORE_NAMESPACE_TASK_LIST if task["name"] == "Namespace dependents | Verify restored services are active"
+    )
+
+    assert record["ansible.builtin.command"]["argv"] == [
+        "systemctl",
+        "is-active",
+        "{{ podman_services_namespace_dependent.unit_name }}",
+    ]
+    assert record["failed_when"] == "podman_services_namespace_dependent_states.rc not in [0, 3, 4]"
+    assert "selectattr('rc', 'equalto', 0)" in select["ansible.builtin.set_fact"]["podman_services_active_namespace_dependents"]
+    assert "rejectattr('rc', 'equalto', 4)" in select_loaded["ansible.builtin.set_fact"]["podman_services_loaded_namespace_dependents"]
+    assert stop["loop"] == "{{ podman_services_loaded_namespace_dependents | reverse | list }}"
+    assert restore["loop"] == "{{ podman_services_active_namespace_dependents }}"
+    assert verify["loop"] == "{{ podman_services_active_namespace_dependents }}"
+    assert "ignore_errors" not in QUIESCE_NAMESPACE_TASKS + RESTORE_NAMESPACE_TASKS
+    assert "podman rm" not in QUIESCE_NAMESPACE_TASKS + RESTORE_NAMESPACE_TASKS
+    assert "--force" not in QUIESCE_NAMESPACE_TASKS + RESTORE_NAMESPACE_TASKS
+    assert "sleep" not in (QUIESCE_NAMESPACE_TASKS + RESTORE_NAMESPACE_TASKS).lower()
+
+
+def test_update_quiesces_dependents_only_when_provider_restart_is_required():
+    lifecycle = yaml.safe_load(LIFECYCLE_TASKS)
+    quiesce = next(task for task in lifecycle if task["name"] == "Service | Quiesce namespace dependents before update restart")
+    restart = next(task for task in lifecycle if task["name"] == "Service | Restart system service when configuration changed")
+
+    assert lifecycle.index(quiesce) < lifecycle.index(restart)
+    assert "podman_services_state == 'update'" in quiesce["when"]
+    assert "podman_services_requires_restart | bool" in quiesce["when"]
+    assert "podman_services_namespace_dependents | length > 0" in quiesce["when"]
+    assert "podman_services_requires_restart | bool" in restart["when"]
+
+
+def test_execution_transition_quiesces_namespace_dependents_before_switch():
+    lifecycle = yaml.safe_load(LIFECYCLE_TASKS)
+    quiesce = next(task for task in lifecycle if task["name"] == "Service | Quiesce namespace dependents before execution transition")
+    switch = next(task for task in lifecycle if task["name"] == "Service | Switch execution settings when needed")
+
+    assert lifecycle.index(quiesce) < lifecycle.index(switch)
+    assert "podman_services_execution_transition | bool" in quiesce["when"]
+    assert "podman_services_namespace_dependents | length > 0" in quiesce["when"]
 
 
 def test_split_tasks_notify_the_existing_daemon_reload_handler():

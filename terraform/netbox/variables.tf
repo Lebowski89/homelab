@@ -44,6 +44,16 @@ variable "internal_zone" {
   default     = ""
 }
 
+variable "lan_cidr" {
+  type        = string
+  description = "Primary private LAN CIDR published through NetBox service topology."
+
+  validation {
+    condition     = can(cidrnetmask(trimspace(var.lan_cidr)))
+    error_message = "lan_cidr must be a valid IPv4 CIDR."
+  }
+}
+
 variable "private_https_port" {
   type        = number
   description = "Client-facing HTTPS port for private Traefik application routes."

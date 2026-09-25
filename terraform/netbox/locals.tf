@@ -1,6 +1,7 @@
 locals {
   internal_zone      = trimspace(var.internal_zone)
   cloudflare_zone    = trimspace(var.cloudflare_zone)
+  lan_cidr           = trimspace(var.lan_cidr)
   private_https_port = var.private_https_port
 
   sites = {
@@ -195,7 +196,7 @@ locals {
 
   prefixes = {
     lan = {
-      prefix      = "192.168.80.0/24"
+      prefix      = local.lan_cidr
       description = "Primary homelab LAN"
       status      = "active"
     }

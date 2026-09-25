@@ -1,5 +1,6 @@
 cloudflare_zone = "domain.com"
-internal_zone = "int.domain.com"
+internal_zone   = "int.domain.com"
+lan_cidr        = "192.168.##.0/24"
 
 host_private_values = {
   router = {

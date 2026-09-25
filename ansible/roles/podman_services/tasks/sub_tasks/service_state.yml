@@ -64,6 +64,19 @@
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
+- name: Service | Quiesce namespace dependents before execution transition
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_execution_transition | bool
+    - podman_services_namespace_dependents | length > 0
+    - not (podman_services_namespace_dependents_quiesced | bool)
+  ansible.builtin.include_tasks:
+    file: quiesce_namespace_dependents.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Service | Switch execution settings when needed
   when:
     - not ansible_check_mode
@@ -85,6 +98,21 @@
     name: "{{ podman_services_unit_name }}"
     state: started
   tags: [deploy, bootstrap]
+
+- name: Service | Quiesce namespace dependents before update restart
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'update'
+    - podman_services_requires_restart | bool
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
+    - podman_services_namespace_dependents | length > 0
+    - not (podman_services_namespace_dependents_quiesced | bool)
+  ansible.builtin.include_tasks:
+    file: quiesce_namespace_dependents.yml
+    apply:
+      tags: [update]
+  tags: [update]
 
 - name: Service | Restart system service when configuration changed
   when:
@@ -176,6 +204,16 @@
   ansible.builtin.command:
     argv: [systemctl, --user, is-active, "{{ podman_services_unit_name }}"]
   changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service | Restore previously active namespace dependents
+  when:
+    - not ansible_check_mode
+    - podman_services_namespace_dependents_quiesced | bool
+  ansible.builtin.include_tasks:
+    file: restore_namespace_dependents.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Service | Ensure execution state directory exists

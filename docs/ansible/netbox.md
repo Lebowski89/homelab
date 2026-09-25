@@ -242,6 +242,7 @@ The inventory enables Config Context retrieval and composes the global
 
 - `services_public_zone`
 - `services_internal_zone`
+- `services_lan_cidr`
 - `services_private_https_port`
 
 The public zone is retained for the externally hosted Hugo site. Homelab
@@ -249,6 +250,13 @@ application routes consume the internal zone and private HTTPS port. The raw
 `config_context` shape is an inventory-plugin detail and must not be used by
 roles or templates. The internal and public zones are independent values, and
 Infisical is reserved for secret material rather than DNS topology.
+
+The primary LAN CIDR follows the same global topology path. Its actual value is
+set only in the uncommitted `terraform/netbox/private.auto.tfvars`, published as
+`services.lan_cidr` by the NetBox `services` Config Context, and composed into
+Ansible inventory as `services_lan_cidr`. Service definitions and templates
+must consume this variable rather than hard-code the LAN CIDR. It is global
+topology and is not a device custom field.
 
 ---
 

@@ -390,6 +390,33 @@
         service_catalog_matched: "{{ service_catalog_selection.matched }}"
         service_catalog_selected: "{{ service_catalog_selection.selected }}"
         service_catalog_disabled_only_selection: "{{ service_catalog_selection.disabled_only }}"
+        service_catalog_action: >-
+          {{
+            'remove' if 'remove' in (ansible_run_tags | default([])) else
+            ('recreate' if 'recreate' in (ansible_run_tags | default([])) else
+            ('update' if 'update' in (ansible_run_tags | default([])) else
+            ('drift' if 'drift' in (ansible_run_tags | default([])) else
+            ('bootstrap' if 'bootstrap' in (ansible_run_tags | default([])) else 'deploy'))))
+          }}
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+    - name: Plan managed Podman namespace lifecycle
+      when: inventory_hostname == services_controller_host
+      ansible.builtin.set_fact:
+        service_catalog_lifecycle_plan: >-
+          {{
+            service_catalog_effective
+            | service_catalog_podman_lifecycle_plan(
+                service_catalog_selected,
+                service_catalog_action
+              )
+          }}
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+    - name: Apply managed Podman namespace lifecycle plan
+      when: inventory_hostname == services_controller_host
+      ansible.builtin.set_fact:
+        service_catalog_selected: "{{ service_catalog_lifecycle_plan.selected }}"
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Validate selected service dispatch hosts

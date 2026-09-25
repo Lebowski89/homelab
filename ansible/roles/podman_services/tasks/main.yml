@@ -110,6 +110,20 @@
 # RUNTIME CLEANUP
 ################################
 
+- name: Podman services | Quiesce namespace dependents before recreate
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'recreate'
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
+    - podman_services_namespace_dependents | length > 0
+    - not (podman_services_namespace_dependents_quiesced | bool)
+  ansible.builtin.include_tasks:
+    file: sub_tasks/quiesce_namespace_dependents.yml
+    apply:
+      tags: [recreate]
+  tags: [recreate]
+
 - name: Podman services | Check service before recreate
   when:
     - not ansible_check_mode

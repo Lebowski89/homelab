@@ -29,6 +29,11 @@ def test_explicit_podman_runtime():
     assert items[0]["dispatch_host"] == "n8n"
     assert "config" not in items[0]
     assert "automation" in items[0]["tags"]
+    assert items[0]["podman_lifecycle"] == {
+        "container_name": "n8n",
+        "namespace_provider": None,
+        "execution_mode": "rootful",
+    }
 
 
 def test_effective_target_entry_contains_only_selection_metadata():
@@ -56,6 +61,11 @@ def test_effective_target_entry_contains_only_selection_metadata():
             "tags": ["app", "base", "primary", "target"],
             "enabled": True,
             "dispatch_host": "app",
+            "podman_lifecycle": {
+                "container_name": "app-primary",
+                "namespace_provider": None,
+                "execution_mode": "rootful",
+            },
         }
     ]
 
@@ -515,3 +525,268 @@ def test_canonical_target_merge_preserves_explicit_name_without_inventing_defaul
     assert "name" not in base
     assert "name" not in defaulted
     assert renamed["name"] == "custom-target"
+
+
+def podman_namespace_fixture():
+    return {
+        "downloader": {
+            "runtime": "podman",
+            "network_mode": "container:vpn-runtime",
+            "deploy": {"host": "node-a", "execution": {"mode": "rootful"}},
+        },
+        "docker-app": {
+            "runtime": "docker",
+            "name": "vpn-runtime",
+            "deploy": {"type": "container", "host": "docker-node"},
+        },
+        "vpn": {
+            "runtime": "podman",
+            "name": "vpn-runtime",
+            "deploy": {"host": "node-a", "execution": {"mode": "rootful"}},
+        },
+        "browser": {
+            "runtime": "podman",
+            "network_mode": "container:vpn-runtime",
+            "deploy": {"host": "node-a", "execution": {"mode": "rootful"}},
+        },
+        "unrelated": {
+            "runtime": "podman",
+            "deploy": {"host": "node-b", "execution": {"mode": "rootful"}},
+        },
+    }
+
+
+def lifecycle_plan(services, *, selected_names=None, action="recreate"):
+    items = service_catalog.service_catalog_effective(services, "manager")
+    selected = items if selected_names is None else [item for item in items if item["name"] in selected_names]
+    return service_catalog.service_catalog_podman_lifecycle_plan(items, selected, action)
+
+
+def test_podman_namespace_planner_uses_only_lightweight_catalog_metadata(monkeypatch):
+    services = podman_namespace_fixture()
+    items = service_catalog.service_catalog_effective(services, "manager")
+    selected = service_catalog.service_catalog_select(items, ["vpn"])["selected"]
+
+    def reject_materialization(*_args, **_kwargs):
+        raise AssertionError("lifecycle planning must not materialize service configurations")
+
+    monkeypatch.setattr(service_catalog, "service_catalog_merge_target", reject_materialization)
+
+    plan = service_catalog.service_catalog_podman_lifecycle_plan(items, selected, "recreate")
+
+    assert [item["name"] for item in plan["selected"]] == ["vpn"]
+    assert [item["name"] for item in plan["selected"][0]["podman_lifecycle"]["namespace_dependents"]] == [
+        "downloader",
+        "browser",
+    ]
+
+
+def test_podman_namespace_plan_derives_edges_and_orders_provider_before_two_consumers():
+    plan = lifecycle_plan(podman_namespace_fixture())
+
+    assert plan["dependencies"] == [
+        {"consumer": "downloader", "provider": "vpn", "host": "node-a"},
+        {"consumer": "browser", "provider": "vpn", "host": "node-a"},
+    ]
+    assert [item["name"] for item in plan["selected"]] == [
+        "vpn",
+        "docker-app",
+        "downloader",
+        "browser",
+        "unrelated",
+    ]
+    assert plan["selected"][0]["podman_lifecycle"]["namespace_dependents"] == [
+        {
+            "name": "downloader",
+            "container_name": "downloader",
+            "unit_name": "downloader.service",
+            "dispatch_host": "node-a",
+        },
+        {
+            "name": "browser",
+            "container_name": "browser",
+            "unit_name": "browser.service",
+            "dispatch_host": "node-a",
+        },
+    ]
+    assert "podman_lifecycle" not in plan["selected"][1]
+
+
+def test_provider_only_recreate_quiesces_both_consumers_without_selecting_unrelated_services():
+    plan = lifecycle_plan(podman_namespace_fixture(), selected_names={"vpn"})
+    provider = plan["selected"][0]
+    dependents = provider["podman_lifecycle"]["namespace_dependents"]
+
+    assert [item["name"] for item in plan["selected"]] == ["vpn"]
+    assert [item["name"] for item in dependents] == ["downloader", "browser"]
+    operation_order = (
+        [f"stop {item['name']}" for item in reversed(dependents)] + ["restart vpn"] + [f"start {item['name']}" for item in dependents]
+    )
+    assert operation_order == [
+        "stop browser",
+        "stop downloader",
+        "restart vpn",
+        "start downloader",
+        "start browser",
+    ]
+
+
+def test_consumer_only_recreate_does_not_select_or_restart_provider():
+    plan = lifecycle_plan(podman_namespace_fixture(), selected_names={"browser"})
+
+    assert [item["name"] for item in plan["selected"]] == ["browser"]
+    assert plan["selected"][0]["podman_lifecycle"]["namespace_dependents"] == []
+
+
+def test_transitive_namespace_dependencies_use_reverse_stop_and_forward_restore_order():
+    services = {
+        "leaf": {
+            "runtime": "podman",
+            "network_mode": "container:middle-runtime",
+            "deploy": {"host": "node-a"},
+        },
+        "sibling": {
+            "runtime": "podman",
+            "network_mode": "container:root-runtime",
+            "deploy": {"host": "node-a"},
+        },
+        "middle": {
+            "runtime": "podman",
+            "name": "middle-runtime",
+            "network_mode": "container:root-runtime",
+            "deploy": {"host": "node-a"},
+        },
+        "root": {
+            "runtime": "podman",
+            "name": "root-runtime",
+            "deploy": {"host": "node-a"},
+        },
+    }
+    plan = lifecycle_plan(services, selected_names={"root"})
+    dependents = plan["selected"][0]["podman_lifecycle"]["namespace_dependents"]
+    forward = [item["name"] for item in dependents]
+    reverse = list(reversed(forward))
+
+    assert forward.index("middle") < forward.index("leaf")
+    assert forward.index("sibling") >= 0
+    assert reverse.index("leaf") < reverse.index("middle")
+
+
+def test_remove_requires_complete_dependent_closure_and_orders_consumers_first():
+    services = podman_namespace_fixture()
+
+    with pytest.raises(AnsibleFilterError, match=r"Cannot remove.*vpn.*downloader, browser"):
+        lifecycle_plan(services, selected_names={"vpn"}, action="remove")
+
+    plan = lifecycle_plan(services, selected_names={"vpn", "downloader", "browser"}, action="remove")
+    assert [item["name"] for item in plan["selected"]] == ["downloader", "browser", "vpn"]
+
+    full_plan = lifecycle_plan(services, action="remove")
+    assert [item["name"] for item in full_plan["selected"]] == [
+        "downloader",
+        "docker-app",
+        "browser",
+        "vpn",
+        "unrelated",
+    ]
+
+
+def test_unmanaged_container_namespace_reference_remains_external():
+    services = {
+        "consumer": {
+            "runtime": "podman",
+            "network_mode": "container:external-runtime",
+            "deploy": {"host": "node-a"},
+        }
+    }
+
+    plan = lifecycle_plan(services)
+
+    assert plan["dependencies"] == []
+    assert plan["selected"][0]["podman_lifecycle"]["namespace_dependents"] == []
+
+
+def test_docker_service_with_matching_name_is_not_a_podman_namespace_provider():
+    services = {
+        "docker-provider": {
+            "runtime": "docker",
+            "name": "shared-runtime",
+            "deploy": {"type": "container", "host": "docker-node"},
+        },
+        "consumer": {
+            "runtime": "podman",
+            "network_mode": "container:shared-runtime",
+            "deploy": {"host": "node-a"},
+        },
+    }
+
+    plan = lifecycle_plan(services)
+
+    assert plan["dependencies"] == []
+    assert [item["name"] for item in plan["selected"]] == ["docker-provider", "consumer"]
+    assert "podman_lifecycle" not in plan["selected"][0]
+
+
+def test_podman_namespace_self_dependency_is_rejected():
+    services = {
+        "loop": {
+            "runtime": "podman",
+            "name": "loop-runtime",
+            "network_mode": "container:loop-runtime",
+            "deploy": {"host": "node-a"},
+        }
+    }
+
+    with pytest.raises(AnsibleFilterError, match="must not depend on its own"):
+        lifecycle_plan(services)
+
+
+def test_podman_namespace_dependency_cycle_is_rejected():
+    services = {
+        "alpha": {
+            "runtime": "podman",
+            "name": "alpha-runtime",
+            "network_mode": "container:beta-runtime",
+            "deploy": {"host": "node-a"},
+        },
+        "beta": {
+            "runtime": "podman",
+            "name": "beta-runtime",
+            "network_mode": "container:alpha-runtime",
+            "deploy": {"host": "node-a"},
+        },
+    }
+
+    with pytest.raises(AnsibleFilterError, match="dependency cycle detected: alpha, beta"):
+        lifecycle_plan(services)
+
+
+def test_cross_host_managed_namespace_dependency_is_rejected():
+    services = {
+        "provider": {
+            "runtime": "podman",
+            "name": "provider-runtime",
+            "deploy": {"host": "node-a"},
+        },
+        "consumer": {
+            "runtime": "podman",
+            "network_mode": "container:provider-runtime",
+            "deploy": {"host": "node-b"},
+        },
+    }
+
+    with pytest.raises(AnsibleFilterError, match=r"host-local.*provider-runtime.*provider on node-a"):
+        lifecycle_plan(services)
+
+
+def test_rootless_container_namespace_restriction_is_preserved_by_planner():
+    services = {
+        "consumer": {
+            "runtime": "podman",
+            "network_mode": "container:external-runtime",
+            "deploy": {"host": "node-a", "execution": {"mode": "rootless"}},
+        }
+    }
+
+    with pytest.raises(AnsibleFilterError, match="requires rootful Podman.*rootless"):
+        lifecycle_plan(services)

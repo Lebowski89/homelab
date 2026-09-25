@@ -195,10 +195,36 @@ For shared network namespaces, the referenced `.container` suffix lets Quadlet
 derive the systemd dependency on the provider container unit. The provider must
 be deployed first; a child start fails if that unit or its network namespace is
 unavailable. Publish every host-facing port on the provider because namespace
-children cannot publish ports independently. A provider restart or recreation
-does not force an already-running child to join the provider's replacement
-namespace, so recreate or restart each child afterward. Stop or remove the
-children before removing the provider.
+children cannot publish ports independently.
+
+The service catalog also treats `network_mode: container:<provider>` as a
+lifecycle dependency when `<provider>` resolves to the effective container name
+of another managed rootful Podman service on the same host. It validates the
+whole managed graph before dispatch: self-dependencies, cycles, cross-host
+references to a managed provider, and rootless namespace sharing fail without
+runtime mutation. A reference with no managed Podman match remains an external
+container reference and keeps its previous behavior. Docker services are never
+considered Podman namespace providers.
+
+Deploy, bootstrap, update, recreate, and drift dispatch managed providers before
+their consumers. A provider recreate, execution transition, or update that
+actually requires a restart records the active state of every transitive managed
+consumer, stops every loaded consumer unit in reverse dependency order, replaces
+and verifies the provider, then restores only the consumers that were active in
+forward dependency order. Stopping loaded inactive or failed units also clears
+stale runtime ownership that could otherwise continue to block provider
+replacement; units that have not been deployed are skipped. Selecting only a
+provider uses this transaction transparently, and consumers that were inactive
+remain inactive. Selecting only a consumer does not stop or restart its provider.
+If the transaction fails after consumers are quiesced, the failure remains
+visible and those consumers remain stopped rather than being started against an
+unavailable provider.
+
+Remove is deliberately stricter. Selecting a managed provider for removal
+requires selecting its complete transitive dependent closure; otherwise catalog
+validation fails before dispatch with the missing dependents. A valid removal is
+ordered consumer-first. Unmanaged external namespace providers cannot receive
+this orchestration, so their replacement remains an operator responsibility.
 
 Podman systemd policy is also first-class at top level. The supported fields are
 `after`, `restart`, `restart_sec`, and `timeout_start_sec`, rendered as

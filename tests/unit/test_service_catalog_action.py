@@ -39,8 +39,17 @@ def test_selective_materialization_preserves_order_and_inputs_and_merges_once():
         "second": {"runtime": "podman", "environment": {"BASE": "second"}},
         "unselected": {"runtime": "docker", "environment": {"VALUE": "must-not-be-templated"}},
     }
+    lifecycle = {
+        "container_name": "second",
+        "namespace_dependents": [{"unit_name": "consumer.service", "dispatch_host": "host-a"}],
+    }
     selected = [
-        {"name": "second", "runtime": "podman", "dispatch_host": "host-a"},
+        {
+            "name": "second",
+            "runtime": "podman",
+            "dispatch_host": "host-a",
+            "podman_lifecycle": lifecycle,
+        },
         {"name": "first", "target": "primary", "runtime": "docker", "dispatch_host": "host-a"},
     ]
     original_services = deepcopy(services)
@@ -69,6 +78,8 @@ def test_selective_materialization_preserves_order_and_inputs_and_merges_once():
     assert len(template_calls) == len(selected)
     assert all(call is not services["unselected"] for call in template_calls)
     assert result[1]["config"]["environment"] == {"BASE": "first", "TARGET": "primary"}
+    assert result[0]["podman_lifecycle"] == lifecycle
+    assert result[0]["podman_lifecycle"] is not lifecycle
     assert "targets" not in result[1]["config"]
     assert services == original_services
     assert selected == original_selected
@@ -252,3 +263,74 @@ def test_action_reads_source_by_name_without_templating_the_whole_mapping():
     assert "task_vars[source_var]" in source
     assert "self._templar.template(config, fail_on_undefined=True)" in source
     assert "self._templar.template(task_vars[source_var]" not in source
+
+
+def test_lifecycle_planning_keeps_unselected_configurations_unmaterialized(tmp_path):
+    ansible_playbook = Path(sys.executable).with_name("ansible-playbook")
+    playbook = tmp_path / "lightweight-lifecycle-plan.yml"
+    playbook.write_text(
+        """---
+- name: Exercise lightweight namespace lifecycle planning
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    svcfiles:
+      consumer:
+        runtime: podman
+        tags: [bundle]
+        network_mode: container:provider-runtime
+        deploy:
+          host: localhost
+      provider:
+        runtime: podman
+        tags: [bundle]
+        name: provider-runtime
+        deploy:
+          host: localhost
+      unrelated:
+        runtime: docker
+        environment:
+          VALUE: "{{ deliberately_undefined }}"
+  tasks:
+    - name: Build lightweight catalog
+      ansible.builtin.set_fact:
+        catalog_items: "{{ svcfiles | service_catalog_effective('localhost') }}"
+
+    - name: Select synthetic bundle
+      ansible.builtin.set_fact:
+        selected_items: "{{ (catalog_items | service_catalog_select(['bundle'])).selected }}"
+
+    - name: Plan namespace lifecycle
+      ansible.builtin.set_fact:
+        lifecycle_plan: >-
+          {{ catalog_items | service_catalog_podman_lifecycle_plan(selected_items, 'recreate') }}
+
+    - name: Verify lightweight provider-first plan
+      ansible.builtin.assert:
+        that:
+          - lifecycle_plan.selected | map(attribute='name') | list == ['provider', 'consumer']
+          - lifecycle_plan.selected[0].podman_lifecycle.namespace_dependents[0].unit_name == 'consumer.service'
+          - lifecycle_plan.selected | selectattr('config', 'defined') | list | length == 0
+"""
+    )
+    environment = os.environ.copy()
+    environment.update(
+        {
+            "ANSIBLE_CONFIG": str(REPO_ROOT / "ansible/ansible.cfg"),
+            "ANSIBLE_FILTER_PLUGINS": str(REPO_ROOT / "ansible/filter_plugins"),
+            "ANSIBLE_LOCAL_TEMP": str(tmp_path / "ansible-local"),
+        }
+    )
+
+    result = subprocess.run(
+        [str(ansible_playbook), "-i", "localhost,", str(playbook), "--check"],
+        cwd=REPO_ROOT,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "deliberately_undefined" not in result.stdout + result.stderr

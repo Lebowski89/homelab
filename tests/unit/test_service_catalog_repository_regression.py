@@ -71,7 +71,9 @@ def test_real_repository_catalog_contains_only_lightweight_selection_metadata():
 
     assert effective
     assert all("config" not in item for item in effective)
-    assert all(set(item) <= {"name", "target", "runtime", "tags", "enabled", "dispatch_host"} for item in effective)
+    assert all(set(item) <= {"name", "target", "runtime", "tags", "enabled", "dispatch_host", "podman_lifecycle"} for item in effective)
+    assert all("podman_lifecycle" not in item for item in effective if item["runtime"] == "docker")
+    assert all("podman_lifecycle" in item for item in effective if item["runtime"] == "podman")
 
 
 def test_real_repository_dispatch_hosts_are_lightweight_and_runtime_specific():
@@ -295,6 +297,7 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
                 "services_controller_host": "manager",
                 "services_public_zone": "public.example",
                 "services_internal_zone": "private.example.internal",
+                "services_lan_cidr": "192.0.2.0/24",
                 "services_private_https_port": 9443,
                 "timezone": "Australia/Melbourne",
             },
@@ -629,6 +632,8 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     catalog_task = task_named(playbook, "Build service catalog processing list from service definitions")
     selection_task = task_named(playbook, "Build selected service catalog processing list")
     selection_extract_task = task_named(playbook, "Extract service catalog selection facts")
+    lifecycle_plan_task = task_named(playbook, "Plan managed Podman namespace lifecycle")
+    lifecycle_apply_task = task_named(playbook, "Apply managed Podman namespace lifecycle plan")
     dispatch_host_validation = task_named(playbook, "Validate selected service dispatch hosts")
     share_task = task_named(playbook, "Share lightweight service catalog selection with play hosts")
     global_dispatch_task = task_named(playbook, "Process globally ordered service catalog")
@@ -652,7 +657,9 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert "service_catalog_dispatch_item.target" in dispatch_failure
     assert "service_catalog_dispatch_item.dispatch_host" in dispatch_failure
     assert set(dispatch_host_validation["tags"]) == expected_tags
-    assert deploy_tasks.index(selection_extract_task) < deploy_tasks.index(dispatch_host_validation)
+    assert deploy_tasks.index(selection_extract_task) < deploy_tasks.index(lifecycle_plan_task)
+    assert deploy_tasks.index(lifecycle_plan_task) < deploy_tasks.index(lifecycle_apply_task)
+    assert deploy_tasks.index(lifecycle_apply_task) < deploy_tasks.index(dispatch_host_validation)
     assert deploy_tasks.index(dispatch_host_validation) < deploy_tasks.index(share_task)
     assert deploy_tasks.index(share_task) < deploy_tasks.index(global_dispatch_task)
     assert deploy_tasks.index(global_dispatch_task) < deploy_tasks.index(deploy_all_task)
@@ -672,6 +679,12 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert global_dispatch_task["ansible.builtin.include_tasks"]["file"] == "tasks/service_catalog_dispatch.yml"
     assert set(global_dispatch_task["tags"]) == expected_tags
     assert set(global_dispatch_task["ansible.builtin.include_tasks"]["apply"]["tags"]) == expected_tags
+    lifecycle_expression = lifecycle_plan_task["ansible.builtin.set_fact"]["service_catalog_lifecycle_plan"]
+    assert "svcfiles" not in lifecycle_expression
+    assert "service_catalog_podman_lifecycle_plan" in lifecycle_expression
+    assert "service_catalog_effective" in lifecycle_expression
+    assert "service_catalog_selected" in lifecycle_expression
+    assert lifecycle_apply_task["ansible.builtin.set_fact"]["service_catalog_selected"] == ("{{ service_catalog_lifecycle_plan.selected }}")
     assert "service_catalog_host_selected" not in PLAYBOOK_PATH.read_text()
     assert "docker_services_selected" not in PLAYBOOK_PATH.read_text()
     assert "podman_services_selected" not in PLAYBOOK_PATH.read_text()
@@ -770,6 +783,9 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
 
     assert docker_include["vars"]["docker_services_service_cfg"] == "{{ docker_services_dispatch_config }}"
     assert podman_include["vars"]["podman_services_service_cfg"] == "{{ podman_services_dispatch_config }}"
+    assert podman_include["vars"]["podman_services_managed_namespace_dependents"] == (
+        "{{ service_catalog_podman_service.podman_lifecycle.namespace_dependents | default([]) }}"
+    )
     assert podman_include["vars"]["ansible_pipelining"] is True
     assert "ansible_pipelining" not in docker_include["vars"]
     assert "service_catalog_merge_target" not in str(docker_include["vars"])
@@ -786,6 +802,29 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert "merge_target" not in adapter_tasks
     assert "docker_services_service_cfg.targets is not defined" in docker_assert["ansible.builtin.assert"]["that"]
     assert "podman_services_service_cfg.targets is not defined" in podman_assert["ansible.builtin.assert"]["that"]
+
+
+def test_real_vpn_namespace_stack_has_managed_provider_edges_and_safe_recreate_order():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_namespace_lifecycle_repository",
+    )
+    services = load_services()
+    effective = catalog_filters.service_catalog_effective(services, "manager")
+    selected = catalog_filters.service_catalog_select(effective, ["gluetun_stack"])["selected"]
+
+    plan = catalog_filters.service_catalog_podman_lifecycle_plan(effective, selected, "recreate")
+
+    assert plan["dependencies"] == [
+        {"consumer": "jdownloader2", "provider": "gluetun", "host": "blacktop"},
+        {"consumer": "mullvad_browser", "provider": "gluetun", "host": "blacktop"},
+    ]
+    assert [entry["name"] for entry in plan["selected"]] == ["gluetun", "jdownloader2", "mullvad_browser"]
+    dependents = plan["selected"][0]["podman_lifecycle"]["namespace_dependents"]
+    assert [dependent["unit_name"] for dependent in dependents] == [
+        "jdownloader2.service",
+        "mullvad-browser.service",
+    ]
 
 
 def test_runtime_partition_only_sends_podman_entries_to_strict_podman_normalization():

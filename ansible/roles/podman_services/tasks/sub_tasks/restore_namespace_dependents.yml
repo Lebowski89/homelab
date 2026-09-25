@@ -1,0 +1,25 @@
+---
+
+- name: Namespace dependents | Restore previously active services in dependency order
+  ansible.builtin.systemd_service:
+    name: "{{ podman_services_namespace_dependent.unit_name }}"
+    state: started
+  loop: "{{ podman_services_active_namespace_dependents }}"
+  loop_control:
+    loop_var: podman_services_namespace_dependent
+    label: "{{ podman_services_namespace_dependent.unit_name }}"
+
+- name: Namespace dependents | Verify restored services are active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ podman_services_namespace_dependent.unit_name }}"]
+  loop: "{{ podman_services_active_namespace_dependents }}"
+  loop_control:
+    loop_var: podman_services_namespace_dependent
+    label: "{{ podman_services_namespace_dependent.unit_name }}"
+  changed_when: false
+
+- name: Namespace dependents | Clear quiesced service state
+  ansible.builtin.set_fact:
+    podman_services_active_namespace_dependents: []
+    podman_services_loaded_namespace_dependents: []
+    podman_services_namespace_dependents_quiesced: false

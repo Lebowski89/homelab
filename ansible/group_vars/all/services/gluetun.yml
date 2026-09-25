@@ -16,7 +16,7 @@ gluetun:
   # ENVIRONMENT/SECRETS
   ################################
   environment:
-    FIREWALL_OUTBOUND_SUBNETS: 192.168.80.0/24
+    FIREWALL_OUTBOUND_SUBNETS: "{{ services_lan_cidr }}"
     OPENVPN_PASSWORD:
       value_from:
         infisical: gluetun_pia_password
@@ -30,11 +30,11 @@ gluetun:
   infisical:
     secrets_map:
       - var: gluetun_pia_user
-        path: "/Gluetun"
-        name: PIA_USER
+        path: "/PIA"
+        name: USER
       - var: gluetun_pia_password
-        path: "/Gluetun"
-        name: PIA_PASSWORD
+        path: "/PIA"
+        name: PASS
   ################################
   # CONNECTIVITY
   ################################

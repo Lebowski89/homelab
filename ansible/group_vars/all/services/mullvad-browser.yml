@@ -16,6 +16,9 @@ mullvad_browser:
   # ENVIRONMENT/SECRETS
   ################################
   environment:
+    AUTO_GPU: amdgpu
+    DRINODE: /dev/dri/renderD129
+    DRI_NODE: /dev/dri/renderD129
     PGID: "{{ hostvars['blacktop'].container_host_pgid }}"
     PUID: "{{ hostvars['blacktop'].container_host_puid }}"
     TZ: "{{ timezone }}"
@@ -39,6 +42,9 @@ mullvad_browser:
   ################################
   # DEVICES/SECURITY
   ################################
+  devices:
+    - "/dev/dri/card1:/dev/dri/card1"
+    - "/dev/dri/renderD129:/dev/dri/renderD129"
   shm_size: 1gb
   ################################
   # RUNTIME/LIFECYCLE

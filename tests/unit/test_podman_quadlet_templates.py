@@ -453,6 +453,11 @@ def test_real_adminer_catalog_contract_normalizes_and_renders_rootless_quadlets_
             "enabled": True,
             "runtime": "podman",
             "dispatch_host": "{{ services_controller_host }}",
+            "podman_lifecycle": {
+                "container_name": "adminer",
+                "namespace_provider": None,
+                "execution_mode": "rootless",
+            },
         }
     ]
     effective = catalog_filters.service_catalog_merge_target(service_cfg, catalog[0].get("target"))
@@ -507,6 +512,7 @@ def test_blacktop_vpn_namespace_services_normalize_and_render_as_one_privileged_
             }
         },
         "local_ip": "192.0.2.40",
+        "services_lan_cidr": "192.0.2.0/24",
         "timezone": "Etc/UTC",
     }
     configs = {}
@@ -546,11 +552,32 @@ def test_blacktop_vpn_namespace_services_normalize_and_render_as_one_privileged_
         assert child["container"]["network_mode"] == "gluetun.container"
         assert "ports" not in child["container"]
         assert "cap_add" not in child["container"]
-        assert "devices" not in child["container"]
         assert "Network=gluetun.container" in quadlets[child_name]
 
-    assert normalized["mullvad_browser"]["container"]["shm_size"] == "1gb"
-    assert "ShmSize=1gb" in quadlets["mullvad_browser"]
+    assert "devices" not in normalized["jdownloader2"]["container"]
+
+    mullvad = normalized["mullvad_browser"]
+    mullvad_quadlet = quadlets["mullvad_browser"]
+    mullvad_environment_file = render("env.env.j2", mullvad)
+    assert mullvad["container"]["devices"] == [
+        "/dev/dri/card1:/dev/dri/card1",
+        "/dev/dri/renderD129:/dev/dri/renderD129",
+    ]
+    assert "AddDevice=/dev/dri/card1:/dev/dri/card1" in mullvad_quadlet
+    assert "AddDevice=/dev/dri/renderD129:/dev/dri/renderD129" in mullvad_quadlet
+    assert "/dev/dri/card0" not in mullvad_quadlet
+    assert "/dev/dri/renderD128" not in mullvad_quadlet
+    assert mullvad["container"]["shm_size"] == "1gb"
+    assert "ShmSize=1gb" in mullvad_quadlet
+    assert "EnvironmentFile=/etc/containers/systemd/mullvad-browser.env" in mullvad_quadlet
+
+    mullvad_environment = configs["mullvad_browser"]["environment"]
+    assert mullvad_environment["AUTO_GPU"] == "amdgpu"
+    assert mullvad_environment["DRINODE"] == "/dev/dri/renderD129"
+    assert mullvad_environment["DRI_NODE"] == "/dev/dri/renderD129"
+    assert "AUTO_GPU=amdgpu" in mullvad_environment_file
+    assert "DRINODE=/dev/dri/renderD129" in mullvad_environment_file
+    assert "DRI_NODE=/dev/dri/renderD129" in mullvad_environment_file
 
     gluetun_environment = configs["gluetun"]["environment"]
     assert gluetun_environment["OPENVPN_USER"] == {"value_from": {"infisical": "gluetun_pia_user"}}
@@ -558,7 +585,7 @@ def test_blacktop_vpn_namespace_services_normalize_and_render_as_one_privileged_
     assert gluetun_environment["VPN_SERVICE_PROVIDER"] == "private internet access"
     assert gluetun_environment["VPN_TYPE"] == "openvpn"
     assert gluetun_environment["SERVER_REGIONS"] == "Netherlands,DE Berlin,DE Frankfurt,Poland,Switzerland"
-    assert gluetun_environment["FIREWALL_OUTBOUND_SUBNETS"] == "192.168.80.0/24"
+    assert gluetun_environment["FIREWALL_OUTBOUND_SUBNETS"] == "192.0.2.0/24"
     assert not (
         {
             "WIREGUARD_ADDRESSES",

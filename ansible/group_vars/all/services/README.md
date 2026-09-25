@@ -39,11 +39,12 @@ preferred key order. Ordering is for readability; it does not change behavior.
 
 ## Service topology
 
-NetBox global Config Context is exposed by dynamic-inventory compose as three
+NetBox global Config Context is exposed by dynamic-inventory compose as four
 canonical variables:
 
 - `services_public_zone`: public website DNS zone used by Hugo.
 - `services_internal_zone`: private application DNS zone.
+- `services_lan_cidr`: primary private LAN CIDR used by service networking.
 - `services_private_https_port`: client-facing private Traefik HTTPS port.
 
 Service definitions, templates, and preparation handlers consume these normal
@@ -52,6 +53,12 @@ from Infisical, or derive the internal zone as `int.` plus the public zone.
 Infisical remains the source for credentials and other secret material. Direct
 infrastructure, monitoring/control-plane, and self-healthcheck connections may
 continue to use runtime-local addressing.
+
+The actual LAN CIDR is supplied through the uncommitted
+`terraform/netbox/private.auto.tfvars`, published through NetBox's global
+`services` Config Context, and composed into inventory as `services_lan_cidr`.
+Service definitions and templates must consume that variable instead of
+hard-coding the LAN CIDR.
 
 ## Schema fundamentals
 
@@ -93,6 +100,9 @@ Catalog booleans accept booleans, `0`/`1`, and case-insensitive
 Selection uses lightweight metadata. The chosen configuration is materialized
 once on its dispatch host immediately before common preflight and adapter
 dispatch, so inventory-derived values resolve in the correct host context.
+Managed Podman namespace planning adds only compact container-name, provider,
+execution-mode, and host metadata to that selection; it never materializes the
+full catalog on the controller.
 
 ### Host roles
 
@@ -247,7 +257,7 @@ Check mode creates nothing.
 | `named_networks.<key>.external` | Strict Boolean-like | No | Docker `true`; Podman `false` | Both | `docker_services` / `podman_services` | External resources are attached but not owned. Live Podman deploy/update/recreate/bootstrap first requires the exact network in the Podman network store. |
 | `named_networks.<key>.driver` | String | No | Runtime-native | Both | `docker_services` / `podman_services` | Docker passes it to Compose. Podman accepts `bridge`, `ipvlan`, or `macvlan` and rejects it on an external network. |
 | `networks` | List | No | Keys of `named_networks`, else `[docker_network]` | Docker | `docker_services` | Legacy direct Compose attachment list. Prefer `named_networks`. |
-| `network_mode` | String | No | Omitted | Both | `docker_services` / `podman_services` | Docker Compose network mode. Rootful Podman accepts only `container:<managed-container-name>` and renders `Network=<name>.container`; it cannot be combined with `named_networks`. Rootless Podman rejects it. |
+| `network_mode` | String | No | Omitted | Both | `docker_services` / `podman_services` | Docker Compose network mode. Rootful Podman accepts only `container:<managed-container-name>` and renders `Network=<name>.container`; it cannot be combined with `named_networks`. A same-host managed Podman match creates a catalog lifecycle dependency. Rootless Podman rejects it. |
 | `depends_on` | String or list | No | `[]` | Docker | `docker_services` | Compose start ordering, not a health guarantee. |
 
 Docker named resources default to external. Non-external definitions are
@@ -259,6 +269,17 @@ a separate resource and does not satisfy the live preflight. Managed Podman
 networks remain the preferred default for isolated services. Cross-runtime
 communication requires published host endpoints or another deliberately designed
 network path.
+
+For managed rootful Podman container-namespace relationships, the catalog uses
+the effective container name rather than the YAML key. It rejects self, cyclic,
+and cross-host managed dependencies. Startup and ordinary processing are
+provider-first. A provider recreate or restart-required update temporarily stops
+active transitive consumers in reverse dependency order, verifies the provider,
+then restores only those consumers in forward order. A consumer-only operation
+does not bounce its provider. Removing a provider requires the complete managed
+dependent closure in the selection and processes that closure consumer-first.
+References without a managed Podman match remain external and are not
+orchestrated.
 
 There are no service keys for `expose`, DNS servers, or extra hosts.
 
@@ -546,10 +567,10 @@ never start in check mode, and are removed after success or failure.
 | Action | Common/preparation | Docker | Podman |
 | ------ | ------------------ | ------ | ------ |
 | deploy | Lookup/environment preflight; handler work; PostgreSQL, files, Traefik. | Build/deploy Compose or Swarm; create missing secrets/configs. | Render Quadlets/env; pull per role default; create missing secrets; start. |
-| update | Same common preparation. | Re-render/redeploy; reconcile secrets may rotate. | Re-render/restart as needed; reconcile secrets force-recreate. |
-| recreate | Lookup and validation finish before cleanup. | Remove existing stack/container once, then rebuild. | Stop existing unit, reconcile, render, start; preserve network. |
+| update | Same common preparation. | Re-render/redeploy; reconcile secrets may rotate. | Re-render/restart as needed; reconcile secrets force-recreate. Restarting a namespace provider quiesces and restores previously active managed consumers. |
+| recreate | Lookup and validation finish before cleanup. | Remove existing stack/container once, then rebuild. | Stop existing unit, reconcile, render, start; preserve network. Namespace providers quiesce consumers before replacement and restore previously active consumers after verification. |
 | bootstrap | Common preparation plus bootstrap-tagged handlers. | Normal deploy path; optional explicit Plex bootstrap. | Normal path; Plex is rejected. |
-| remove | No lookup/application mutation; remove common Traefik route. | Remove runtime artifacts when cleanup enabled. | Stop service; remove generated files and owned network; preserve data/secrets. |
+| remove | No lookup/application mutation; remove common Traefik route. | Remove runtime artifacts when cleanup enabled. | Process managed namespace consumers before providers; reject an incomplete provider closure. Stop service; remove generated files and owned network; preserve data/secrets. |
 | drift | Common declaration/environment preflight and non-mutating handler interface validation. | Compare declared image with live Swarm/Compose reference. | Compare exact desired image reference with Podman inspect. |
 | check mode | Validate catalog, graph, preparation contracts, database intent, files, route, and render plan. | “Changed” results are predictions; no lookup, connection, secret/config/image/runtime lifecycle, cleanup, or deploy. | Same boundary; no lookup, secret, image, systemd, network, or container mutation. |
 

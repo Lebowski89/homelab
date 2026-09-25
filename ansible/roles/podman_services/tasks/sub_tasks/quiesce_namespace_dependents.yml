@@ -1,0 +1,45 @@
+---
+
+- name: Namespace dependents | Record managed service states
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ podman_services_namespace_dependent.unit_name }}"]
+  loop: "{{ podman_services_namespace_dependents }}"
+  loop_control:
+    loop_var: podman_services_namespace_dependent
+    label: "{{ podman_services_namespace_dependent.unit_name }}"
+  register: podman_services_namespace_dependent_states
+  changed_when: false
+  failed_when: podman_services_namespace_dependent_states.rc not in [0, 3, 4]
+
+- name: Namespace dependents | Select previously active services
+  ansible.builtin.set_fact:
+    podman_services_active_namespace_dependents: >-
+      {{
+        podman_services_namespace_dependent_states.results
+        | selectattr('rc', 'equalto', 0)
+        | map(attribute='podman_services_namespace_dependent')
+        | list
+      }}
+
+- name: Namespace dependents | Select loaded services to quiesce
+  ansible.builtin.set_fact:
+    podman_services_loaded_namespace_dependents: >-
+      {{
+        podman_services_namespace_dependent_states.results
+        | rejectattr('rc', 'equalto', 4)
+        | map(attribute='podman_services_namespace_dependent')
+        | list
+      }}
+
+- name: Namespace dependents | Stop loaded services in reverse dependency order
+  ansible.builtin.systemd_service:
+    name: "{{ podman_services_namespace_dependent.unit_name }}"
+    state: stopped
+  loop: "{{ podman_services_loaded_namespace_dependents | reverse | list }}"
+  loop_control:
+    loop_var: podman_services_namespace_dependent
+    label: "{{ podman_services_namespace_dependent.unit_name }}"
+
+- name: Namespace dependents | Mark active services quiesced
+  ansible.builtin.set_fact:
+    podman_services_namespace_dependents_quiesced: true
