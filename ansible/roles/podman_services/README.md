@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/16 |
+| Readme update        | 2026/09/26 |
 
 
 
@@ -43,10 +43,11 @@
 | [podman_services_common_action](defaults/main.yml#L16)   | str | `<multiline value: folded_strip>` |    
 | [podman_services_state](defaults/main.yml#L24)   | str | `<multiline value: folded_strip>` |    
 | [podman_services_pull_images](defaults/main.yml#L33)   | bool | `True` |    
-| [podman_services_traefik_delegate](defaults/main.yml#L34)   | str | `{{ podman_services_controller_host }}` |    
-| [podman_services_traefik_dynamic_dir](defaults/main.yml#L35)   | str | `/opt/traefik/dynamic` |    
-| [podman_services_traefik_dynamic_owner](defaults/main.yml#L36)   | str | `1000` |    
-| [podman_services_traefik_dynamic_group](defaults/main.yml#L37)   | str | `1000` |    
+| [podman_services_managed_namespace_dependents](defaults/main.yml#L34)   | list | `[]` |    
+| [podman_services_traefik_delegate](defaults/main.yml#L35)   | str | `{{ podman_services_controller_host }}` |    
+| [podman_services_traefik_dynamic_dir](defaults/main.yml#L36)   | str | `/opt/traefik/dynamic` |    
+| [podman_services_traefik_dynamic_owner](defaults/main.yml#L37)   | str | `1000` |    
+| [podman_services_traefik_dynamic_group](defaults/main.yml#L38)   | str | `1000` |    
 
 
 
@@ -66,8 +67,10 @@
 | Podman services ¦ Build application preparation context | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Validate application settings | ansible.builtin.include_role | False |  |
 | Podman services ¦ Store validated application outputs | ansible.builtin.set_fact | False |  |
+| Podman services ¦ Stop shared-network services before recreate | ansible.builtin.include_tasks | True |  |
 | Podman services ¦ Check service before recreate | ansible.builtin.command | True |  |
 | Podman services ¦ Stop service before recreate | ansible.builtin.systemd_service | True |  |
+| Podman services ¦ Remove stopped container before recreate | ansible.builtin.include_tasks | True |  |
 | Podman services ¦ Generate application secrets | ansible.builtin.include_role | True |  |
 | Podman services ¦ Combine service secret values and definitions | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Validate secret attachments | ansible.builtin.assert | False |  |
@@ -104,6 +107,13 @@
 | Check mode ¦ Compare planned and existing generated files | ansible.builtin.set_fact | False |  |
 | Check mode ¦ Report planned file change | ansible.builtin.debug | True |  |
 | Check mode ¦ Clear secret values from preview state | ansible.builtin.set_fact | False |  |
+
+#### File: tasks/sub_tasks/cleanup_stopped_rootful_container.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Container cleanup ¦ Verify service is stopped | ansible.builtin.command | False |  |
+| Container cleanup ¦ Remove stopped container | ansible.builtin.command | False |  |
 
 #### File: tasks/sub_tasks/execution.yml
 
@@ -186,6 +196,7 @@
 | Init ¦ Validate selected service configuration | ansible.builtin.assert | False |  |
 | Init ¦ Build Podman service settings | ansible.builtin.set_fact | False |  |
 | Init ¦ Set systemd service name | ansible.builtin.set_fact | False |  |
+| Init ¦ Validate shared-network dependent services | ansible.builtin.assert | False |  |
 | Init ¦ Reset temporary service state | ansible.builtin.set_fact | False |  |
 | Init ¦ Validate shared service context | ansible.builtin.assert | False |  |
 | Init ¦ Store shared service context | ansible.builtin.set_fact | False |  |
@@ -233,6 +244,14 @@
 | Remove ¦ Remove saved generated files | ansible.builtin.file | True |  |
 | Remove ¦ Remove saved execution state | ansible.builtin.file | True |  |
 
+#### File: tasks/sub_tasks/restore_shared_network_services.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Shared network ¦ Restore previously running services | ansible.builtin.systemd_service | False |
+| Shared network ¦ Verify restored services | ansible.builtin.command | False |
+| Shared network ¦ Clear saved service state | ansible.builtin.set_fact | False |
+
 #### File: tasks/sub_tasks/secrets/manage.yml
 
 | Name | Module | Has Conditions | Tags |
@@ -248,18 +267,34 @@
 | Service ¦ Validate generated systemd service | ansible.builtin.command | True |  |
 | Service ¦ Validate user Quadlets with Podman generator | ansible.builtin.command | True |  |
 | Service ¦ Validate generated user systemd service | ansible.builtin.command | True |  |
+| Service ¦ Stop shared-network services before execution change | ansible.builtin.include_tasks | True |  |
 | Service ¦ Switch execution settings when needed | ansible.builtin.include_tasks | True |  |
 | Service ¦ Start system service | ansible.builtin.systemd_service | True |  |
-| Service ¦ Restart system service when configuration changed | ansible.builtin.systemd_service | True |  |
-| Service ¦ Restart system service for recreate | ansible.builtin.systemd_service | True |  |
+| Service ¦ Stop shared-network services before update | ansible.builtin.include_tasks | True |  |
+| Service ¦ Stop system service before update replacement | ansible.builtin.systemd_service | True |  |
+| Service ¦ Remove stopped container before update replacement | ansible.builtin.include_tasks | True |  |
+| Service ¦ Start system service after update replacement | ansible.builtin.systemd_service | True |  |
+| Service ¦ Start system service for recreate | ansible.builtin.systemd_service | True |  |
 | Service ¦ Start user service | ansible.builtin.systemd_service | True |  |
 | Service ¦ Restart user service when configuration changed | ansible.builtin.systemd_service | True |  |
 | Service ¦ Restart user service for recreate | ansible.builtin.systemd_service | True |  |
 | Service ¦ Verify system service is active | ansible.builtin.command | True |  |
 | Service ¦ Verify user service is active | ansible.builtin.command | True |  |
+| Service ¦ Restore previously running shared-network services | ansible.builtin.include_tasks | True |  |
 | Service ¦ Ensure execution state directory exists | ansible.builtin.file | True |  |
 | Service ¦ Record managed resources after successful start | ansible.builtin.set_fact | True |  |
 | Service ¦ Save successful execution state | ansible.builtin.copy | True |  |
+
+#### File: tasks/sub_tasks/stop_shared_network_services.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Shared network ¦ Record dependent service states | ansible.builtin.command | False |  |
+| Shared network ¦ Select previously running services | ansible.builtin.set_fact | False |  |
+| Shared network ¦ Select deployed services | ansible.builtin.set_fact | False |  |
+| Shared network ¦ Stop dependent services | ansible.builtin.systemd_service | False |  |
+| Shared network ¦ Remove stopped dependent containers | ansible.builtin.include_tasks | False |  |
+| Shared network ¦ Record dependent services as stopped | ansible.builtin.set_fact | False |  |
 
 #### File: tasks/sub_tasks/switch_execution.yml
 
@@ -281,6 +316,7 @@
 | Execution switch ¦ Verify previous service state check succeeded | ansible.builtin.assert | False |  |
 | Execution switch ¦ Stop previous system service | ansible.builtin.systemd_service | True |  |
 | Execution switch ¦ Stop previous user service | ansible.builtin.systemd_service | True |  |
+| Execution switch ¦ Remove stopped previous rootful container | ansible.builtin.include_tasks | True |  |
 | Execution switch ¦ Start service with new execution settings | block | False |  |
 | Execution switch ¦ Start new system service | ansible.builtin.command | True |  |
 | Execution switch ¦ Start new user service | ansible.builtin.command | True |  |

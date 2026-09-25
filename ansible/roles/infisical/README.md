@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/09/22 |
+| Readme update        | 2026/09/26 |
 
 
 
@@ -44,7 +44,7 @@
 | [infisical_stack](defaults/main.yml#L31)   | str | `infisical` |    
 | [infisical_compose_file](defaults/main.yml#L32)   | str | `infisical-compose.yml` |    
 | [infisical_compose_path](defaults/main.yml#L33)   | str | `{{ infisical_base_path }}/{{ infisical_compose_file }}` |    
-| [infisical_image](defaults/main.yml#L35)   | str | `docker.io/infisical/infisical:v0.165.9` |    
+| [infisical_image](defaults/main.yml#L35)   | str | `docker.io/infisical/infisical:v0.165.13` |    
 | [infisical_timezone](defaults/main.yml#L36)   | str | `{{ timezone ¦ default('Australia/Melbourne') }}` |    
 | [infisical_puid](defaults/main.yml#L37)   | str | `{{ container_host_puid ¦ default('1000') }}` |    
 | [infisical_pgid](defaults/main.yml#L38)   | str | `{{ container_host_pgid ¦ default('1000') }}` |    
@@ -65,7 +65,7 @@
 | [infisical_logging.options.**compress**](defaults/main.yml#L57)   | str | `true` |    
 | [infisical_restart_policy](defaults/main.yml#L59)   | str | `unless-stopped` |    
 | [infisical_redis_name](defaults/main.yml#L65)   | str | `infisical-redis` |    
-| [infisical_redis_image](defaults/main.yml#L66)   | str | `valkey/valkey:9.1-alpine` |    
+| [infisical_redis_image](defaults/main.yml#L66)   | str | `valkey/valkey:9.2-alpine` |    
 | [infisical_redis_puid](defaults/main.yml#L67)   | str | `{{ container_host_puid ¦ default('1000') }}` |    
 | [infisical_redis_pgid](defaults/main.yml#L68)   | str | `{{ container_host_pgid ¦ default('1000') }}` |    
 | [infisical_redis_path](defaults/main.yml#L69)   | str | `{{ infisical_base_path }}/redis` |    
