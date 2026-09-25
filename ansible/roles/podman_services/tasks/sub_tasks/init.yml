@@ -27,6 +27,8 @@
       - podman_services_managed_namespace_dependents is sequence
       - podman_services_managed_namespace_dependents is not string
       - podman_services_namespace_dependent is mapping
+      - podman_services_namespace_dependent.container_name is string
+      - podman_services_namespace_dependent.container_name is match('^[A-Za-z0-9][A-Za-z0-9_.-]*$')
       - podman_services_namespace_dependent.unit_name is string
       - podman_services_namespace_dependent.unit_name is match('^[A-Za-z0-9][A-Za-z0-9_.-]*\\.service$')
       - podman_services_namespace_dependent.dispatch_host == inventory_hostname

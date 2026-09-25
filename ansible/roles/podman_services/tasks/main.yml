@@ -154,6 +154,21 @@
     state: stopped
   tags: [recreate]
 
+- name: Podman services | Remove stopped container object before recreate
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'recreate'
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
+  ansible.builtin.include_tasks:
+    file: sub_tasks/cleanup_stopped_rootful_container.yml
+    apply:
+      tags: [recreate]
+  vars:
+    podman_services_cleanup_unit_name: "{{ podman_services_unit_name }}"
+    podman_services_cleanup_container_name: "{{ podman_services_service.unit_name }}"
+  tags: [recreate]
+
 ################################
 # APPLICATION SECRET GENERATION
 ################################

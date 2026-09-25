@@ -143,8 +143,8 @@ operator procedure.
 ## Lifecycle semantics
 
 - `deploy` and `bootstrap` fetch missing secrets, create missing Podman secrets, pull the declared image, render configuration, and start the service if it is not already running.
-- `update` reconciles secrets marked `update_policy: reconcile` and restarts the service when material inputs changed; because Podman cannot compare stored secret contents, a reconciled secret is recreated and triggers the existing restart path. An owned network remains in place through the restart. If its Quadlet definition changes, use an explicit remove followed by deploy when the network itself must be recreated.
-- `recreate` reconciles secrets marked `update_policy: reconcile` and always restarts the generated service after rendering current inputs. It retains the service network.
+- `update` reconciles secrets marked `update_policy: reconcile` and replaces the rootful container when material inputs changed; because Podman cannot compare stored secret contents, a reconciled secret triggers the same replacement path. An owned network remains in place through the replacement. If its Quadlet definition changes, use an explicit remove followed by deploy when the network itself must be recreated.
+- `recreate` reconciles secrets marked `update_policy: reconcile`, stops the rootful unit, removes its exact stale container object, and starts the generated service after rendering current inputs. It retains the service network. Rootless recreate keeps its existing user-service restart behavior.
 - `remove` uses the last successfully persisted execution owner even when the declaration now requests another mode. It stops that service first, then stops and removes only a network whose persisted metadata proves role ownership. It removes exact generated Quadlets, environment files, and host-backed Traefik routing, but preserves application data, Podman secrets, images, the dedicated rootless account, its linger configuration, home, and user storage. Externally owned and unproven legacy networks are retained.
 - `drift` inspects the current container image reference and reports a changed task when it differs from the declared exact image reference. It is reference drift, not registry digest drift.
 
@@ -210,15 +210,16 @@ Deploy, bootstrap, update, recreate, and drift dispatch managed providers before
 their consumers. A provider recreate, execution transition, or update that
 actually requires a restart records the active state of every transitive managed
 consumer, stops every loaded consumer unit in reverse dependency order, replaces
-and verifies the provider, then restores only the consumers that were active in
-forward dependency order. Stopping loaded inactive or failed units also clears
-stale runtime ownership that could otherwise continue to block provider
-replacement; units that have not been deployed are skipped. Selecting only a
-provider uses this transaction transparently, and consumers that were inactive
-remain inactive. Selecting only a consumer does not stop or restart its provider.
-If the transaction fails after consumers are quiesced, the failure remains
-visible and those consumers remain stopped rather than being started against an
-unavailable provider.
+each exact consumer container object with `podman rm --force --ignore`, stops
+and removes the exact provider object, then starts and verifies the provider.
+Only consumers that were active are restored, in forward dependency order.
+Loaded inactive or failed consumers are cleaned but remain inactive; units that
+have not been deployed are skipped. Cleanup never uses recursive `--depend`
+removal, so only planner-provided managed container names are touched. Selecting
+only a provider uses this transaction transparently. Selecting only a consumer
+does not stop or restart its provider. If the transaction fails after consumers
+are quiesced, the failure remains visible and those consumers remain stopped
+rather than being started against an unavailable provider.
 
 Remove is deliberately stricter. Selecting a managed provider for removal
 requires selecting its complete transitive dependent closure; otherwise catalog

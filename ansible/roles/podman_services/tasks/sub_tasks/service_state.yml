@@ -114,7 +114,7 @@
       tags: [update]
   tags: [update]
 
-- name: Service | Restart system service when configuration changed
+- name: Service | Stop system service before update replacement
   when:
     - not ansible_check_mode
     - podman_services_state == 'update'
@@ -123,10 +123,38 @@
     - not (podman_services_execution_transition | bool)
   ansible.builtin.systemd_service:
     name: "{{ podman_services_unit_name }}"
-    state: restarted
+    state: stopped
   tags: [update]
 
-- name: Service | Restart system service for recreate
+- name: Service | Remove stopped container object before update replacement
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'update'
+    - podman_services_requires_restart | bool
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
+  ansible.builtin.include_tasks:
+    file: cleanup_stopped_rootful_container.yml
+    apply:
+      tags: [update]
+  vars:
+    podman_services_cleanup_unit_name: "{{ podman_services_unit_name }}"
+    podman_services_cleanup_container_name: "{{ podman_services_service.unit_name }}"
+  tags: [update]
+
+- name: Service | Start system service after update replacement
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'update'
+    - podman_services_requires_restart | bool
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
+  ansible.builtin.systemd_service:
+    name: "{{ podman_services_unit_name }}"
+    state: started
+  tags: [update]
+
+- name: Service | Start system service for recreate
   when:
     - not ansible_check_mode
     - podman_services_state == 'recreate'
@@ -134,7 +162,7 @@
     - not (podman_services_execution_transition | bool)
   ansible.builtin.systemd_service:
     name: "{{ podman_services_unit_name }}"
-    state: restarted
+    state: started
   tags: [recreate]
 
 - name: Service | Start user service

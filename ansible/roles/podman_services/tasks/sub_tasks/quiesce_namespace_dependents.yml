@@ -40,6 +40,20 @@
     loop_var: podman_services_namespace_dependent
     label: "{{ podman_services_namespace_dependent.unit_name }}"
 
-- name: Namespace dependents | Mark active services quiesced
+- name: Namespace dependents | Remove stopped container objects in reverse dependency order
+  ansible.builtin.include_tasks:
+    file: cleanup_stopped_rootful_container.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    podman_services_cleanup_unit_name: "{{ podman_services_cleanup_dependent.unit_name }}"
+    podman_services_cleanup_container_name: "{{ podman_services_cleanup_dependent.container_name }}"
+  loop: "{{ podman_services_loaded_namespace_dependents | reverse | list }}"
+  loop_control:
+    loop_var: podman_services_cleanup_dependent
+    label: "{{ podman_services_cleanup_dependent.container_name }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Namespace dependents | Mark services quiesced
   ansible.builtin.set_fact:
     podman_services_namespace_dependents_quiesced: true
