@@ -13,6 +13,7 @@
 | <a name="input_cloudflare_zone"></a> [cloudflare\_zone](#input\_cloudflare\_zone) | Public Cloudflare DNS zone used by dependent OpenTofu roots. | `string` | n/a | yes |
 | <a name="input_host_private_values"></a> [host\_private\_values](#input\_host\_private\_values) | Private per-host values such as LAN IPs, DNS names, and custom fields. | <pre>map(object({<br/>    mgmt_ip       = string<br/>    custom_fields = optional(any, {})<br/>  }))</pre> | `{}` | no |
 | <a name="input_internal_zone"></a> [internal\_zone](#input\_internal\_zone) | Private DNS zone used to build NetBox device DNS names. Keep the real value in an uncommitted tfvars file. | `string` | `""` | no |
+| <a name="input_lan_cidr"></a> [lan\_cidr](#input\_lan\_cidr) | Primary private LAN CIDR published through NetBox service topology. | `string` | n/a | yes |
 | <a name="input_netbox_allow_insecure_https"></a> [netbox\_allow\_insecure\_https](#input\_netbox\_allow\_insecure\_https) | Allow self-signed HTTPS certificates. | `bool` | `false` | no |
 | <a name="input_netbox_api_token"></a> [netbox\_api\_token](#input\_netbox\_api\_token) | NetBox API token. | `string` | n/a | yes |
 | <a name="input_netbox_request_timeout"></a> [netbox\_request\_timeout](#input\_netbox\_request\_timeout) | NetBox API request timeout in seconds. | `number` | `30` | no |
