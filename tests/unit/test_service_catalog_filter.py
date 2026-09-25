@@ -612,23 +612,15 @@ def test_podman_namespace_plan_derives_edges_and_orders_provider_before_two_cons
     assert "podman_lifecycle" not in plan["selected"][1]
 
 
-def test_provider_only_recreate_quiesces_both_consumers_without_selecting_unrelated_services():
+def test_provider_only_recreate_exposes_consumer_order_without_selecting_unrelated_services():
     plan = lifecycle_plan(podman_namespace_fixture(), selected_names={"vpn"})
     provider = plan["selected"][0]
     dependents = provider["podman_lifecycle"]["namespace_dependents"]
 
     assert [item["name"] for item in plan["selected"]] == ["vpn"]
     assert [item["name"] for item in dependents] == ["downloader", "browser"]
-    operation_order = (
-        [f"stop {item['name']}" for item in reversed(dependents)] + ["restart vpn"] + [f"start {item['name']}" for item in dependents]
-    )
-    assert operation_order == [
-        "stop browser",
-        "stop downloader",
-        "restart vpn",
-        "start downloader",
-        "start browser",
-    ]
+    assert [item["name"] for item in reversed(dependents)] == ["browser", "downloader"]
+    assert "unrelated" not in {item["name"] for item in plan["selected"]}
 
 
 def test_consumer_only_recreate_does_not_select_or_restart_provider():

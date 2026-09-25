@@ -110,7 +110,7 @@
 # RUNTIME CLEANUP
 ################################
 
-- name: Podman services | Quiesce namespace dependents before recreate
+- name: Podman services | Stop shared-network services before recreate
   when:
     - not ansible_check_mode
     - podman_services_state == 'recreate'
@@ -154,7 +154,7 @@
     state: stopped
   tags: [recreate]
 
-- name: Podman services | Remove stopped container object before recreate
+- name: Podman services | Remove stopped container before recreate
   when:
     - not ansible_check_mode
     - podman_services_state == 'recreate'
@@ -380,12 +380,10 @@
 ################################
 
 - name: Podman services | Write Quadlet files
-  no_log: true
   ansible.builtin.include_tasks:
     file: sub_tasks/quadlets.yml
     apply:
       tags: [deploy, update, remove, recreate, drift, bootstrap]
-      no_log: true
       diff: false
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 

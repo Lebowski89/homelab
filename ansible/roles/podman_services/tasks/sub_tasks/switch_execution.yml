@@ -223,7 +223,7 @@
     state: stopped
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Execution switch | Remove stopped previous rootful container object
+- name: Execution switch | Remove stopped previous rootful container
   when: podman_services_previous_execution.mode == 'rootful'
   ansible.builtin.include_tasks:
     file: cleanup_stopped_rootful_container.yml

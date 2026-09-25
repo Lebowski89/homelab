@@ -79,7 +79,6 @@
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Quadlets | Write container Quadlet
-  no_log: true
   diff: false
   when:
     - podman_services_state != 'remove'

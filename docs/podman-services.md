@@ -207,7 +207,7 @@ container reference and keeps its previous behavior. Docker services are never
 considered Podman namespace providers.
 
 Deploy, bootstrap, update, recreate, and drift dispatch managed providers before
-their consumers. A provider recreate, execution transition, or update that
+their consumers. A provider recreate, execution-mode change, or update that
 actually requires a restart records the active state of every transitive managed
 consumer, stops every loaded consumer unit in reverse dependency order, replaces
 each exact consumer container object with `podman rm --force --ignore`, stops

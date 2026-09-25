@@ -69,6 +69,26 @@
     that:
       - workstation_shell_directories is sequence
       - workstation_shell_directories is not string
+      - >-
+        workstation_shell_directories | select('string') | list | length
+        == workstation_shell_directories | length
+      - >-
+        workstation_shell_directories | select('string') | map('trim')
+        | reject('equalto', '') | list | length
+        == workstation_shell_directories | length
+      - >-
+        workstation_shell_directories | select('string') | select('match', '^/')
+        | list | length == workstation_shell_directories | length
       - workstation_xdg_directories is sequence
       - workstation_xdg_directories is not string
-    fail_msg: Workstation user path variables have invalid types or empty values.
+      - >-
+        workstation_xdg_directories | select('string') | list | length
+        == workstation_xdg_directories | length
+      - >-
+        workstation_xdg_directories | select('string') | map('trim')
+        | reject('equalto', '') | list | length
+        == workstation_xdg_directories | length
+      - >-
+        workstation_xdg_directories | select('string') | select('match', '^/')
+        | list | length == workstation_xdg_directories | length
+    fail_msg: Workstation user paths must be lists of non-empty absolute path strings.

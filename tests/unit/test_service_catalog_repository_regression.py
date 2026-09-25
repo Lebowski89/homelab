@@ -632,8 +632,7 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     catalog_task = task_named(playbook, "Build service catalog processing list from service definitions")
     selection_task = task_named(playbook, "Build selected service catalog processing list")
     selection_extract_task = task_named(playbook, "Extract service catalog selection facts")
-    lifecycle_plan_task = task_named(playbook, "Plan managed Podman namespace lifecycle")
-    lifecycle_apply_task = task_named(playbook, "Apply managed Podman namespace lifecycle plan")
+    lifecycle_order_task = task_named(playbook, "Order selected Podman services by shared-network dependencies")
     dispatch_host_validation = task_named(playbook, "Validate selected service dispatch hosts")
     share_task = task_named(playbook, "Share lightweight service catalog selection with play hosts")
     global_dispatch_task = task_named(playbook, "Process globally ordered service catalog")
@@ -657,9 +656,8 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert "service_catalog_dispatch_item.target" in dispatch_failure
     assert "service_catalog_dispatch_item.dispatch_host" in dispatch_failure
     assert set(dispatch_host_validation["tags"]) == expected_tags
-    assert deploy_tasks.index(selection_extract_task) < deploy_tasks.index(lifecycle_plan_task)
-    assert deploy_tasks.index(lifecycle_plan_task) < deploy_tasks.index(lifecycle_apply_task)
-    assert deploy_tasks.index(lifecycle_apply_task) < deploy_tasks.index(dispatch_host_validation)
+    assert deploy_tasks.index(selection_extract_task) < deploy_tasks.index(lifecycle_order_task)
+    assert deploy_tasks.index(lifecycle_order_task) < deploy_tasks.index(dispatch_host_validation)
     assert deploy_tasks.index(dispatch_host_validation) < deploy_tasks.index(share_task)
     assert deploy_tasks.index(share_task) < deploy_tasks.index(global_dispatch_task)
     assert deploy_tasks.index(global_dispatch_task) < deploy_tasks.index(deploy_all_task)
@@ -679,12 +677,13 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert global_dispatch_task["ansible.builtin.include_tasks"]["file"] == "tasks/service_catalog_dispatch.yml"
     assert set(global_dispatch_task["tags"]) == expected_tags
     assert set(global_dispatch_task["ansible.builtin.include_tasks"]["apply"]["tags"]) == expected_tags
-    lifecycle_expression = lifecycle_plan_task["ansible.builtin.set_fact"]["service_catalog_lifecycle_plan"]
+    lifecycle_expression = lifecycle_order_task["ansible.builtin.set_fact"]["service_catalog_selected"]
     assert "svcfiles" not in lifecycle_expression
     assert "service_catalog_podman_lifecycle_plan" in lifecycle_expression
     assert "service_catalog_effective" in lifecycle_expression
     assert "service_catalog_selected" in lifecycle_expression
-    assert lifecycle_apply_task["ansible.builtin.set_fact"]["service_catalog_selected"] == ("{{ service_catalog_lifecycle_plan.selected }}")
+    assert ").selected" in lifecycle_expression
+    assert "service_catalog_lifecycle_plan" not in PLAYBOOK_PATH.read_text()
     assert "service_catalog_host_selected" not in PLAYBOOK_PATH.read_text()
     assert "docker_services_selected" not in PLAYBOOK_PATH.read_text()
     assert "podman_services_selected" not in PLAYBOOK_PATH.read_text()

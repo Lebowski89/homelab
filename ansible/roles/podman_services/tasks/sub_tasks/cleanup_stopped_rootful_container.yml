@@ -1,6 +1,6 @@
 ---
 
-- name: Stopped container cleanup | Verify system service is inactive
+- name: Container cleanup | Verify service is stopped
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ podman_services_cleanup_unit_name }}"]
   register: podman_services_cleanup_unit_state
@@ -8,7 +8,7 @@
   failed_when: podman_services_cleanup_unit_state.rc not in [3, 4]
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Stopped container cleanup | Remove exact Podman container object
+- name: Container cleanup | Remove stopped container
   ansible.builtin.command:
     argv:
       - podman

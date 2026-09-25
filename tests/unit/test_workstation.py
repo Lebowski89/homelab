@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -110,6 +111,75 @@ def test_workstation_user_is_resolved_from_remote_inventory_identity():
         "workstation_user_home",
     }
     assert all("getent_passwd[workstation_user]" in value for value in resolution["ansible.builtin.set_fact"].values())
+
+
+def run_workstation_path_validation(tmp_path: Path, shell_directories, xdg_directories):
+    playbook = tmp_path / "validate-paths.yml"
+    playbook.write_text(
+        yaml.safe_dump(
+            [
+                {
+                    "name": "Validate workstation paths",
+                    "hosts": "localhost",
+                    "connection": "local",
+                    "gather_facts": False,
+                    "vars": {
+                        "workstation_shell_directories": shell_directories,
+                        "workstation_xdg_directories": xdg_directories,
+                    },
+                    "tasks": [{"ansible.builtin.import_tasks": str(VALIDATE_TASKS_PATH)}],
+                }
+            ],
+            sort_keys=False,
+        )
+    )
+    environment = os.environ.copy()
+    environment["ANSIBLE_LOCAL_TEMP"] = str(tmp_path / "ansible-local")
+    environment["ANSIBLE_REMOTE_TEMP"] = str(tmp_path / "ansible-remote")
+    return subprocess.run(
+        [
+            ANSIBLE_PLAYBOOK,
+            "-i",
+            "localhost,",
+            str(playbook),
+            "--start-at-task",
+            "Workstation | Validate user path variables",
+        ],
+        cwd=REPO_ROOT,
+        env=environment,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+
+@pytest.mark.parametrize(
+    ("shell_directories", "xdg_directories"),
+    [
+        ([], []),
+        (["/home/operator/.ssh", "/home/operator/.local/bin"], ["/home/operator/Desktop"]),
+    ],
+)
+def test_workstation_user_path_validation_accepts_absolute_string_lists(tmp_path: Path, shell_directories, xdg_directories):
+    result = run_workstation_path_validation(tmp_path, shell_directories, xdg_directories)
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.parametrize("variable", ["shell", "xdg"])
+@pytest.mark.parametrize("invalid_entry", [1, "", "   ", "relative/path"])
+def test_workstation_user_path_validation_rejects_invalid_entries(tmp_path: Path, variable: str, invalid_entry):
+    shell_directories = ["/home/operator/.ssh"]
+    xdg_directories = ["/home/operator/Desktop"]
+    if variable == "shell":
+        shell_directories = [invalid_entry]
+    else:
+        xdg_directories = [invalid_entry]
+
+    result = run_workstation_path_validation(tmp_path, shell_directories, xdg_directories)
+
+    assert result.returncode != 0
+    assert "Workstation user paths must be lists of non-empty absolute path strings." in result.stdout + result.stderr
 
 
 def test_workstation_no_longer_provisions_a_local_ansible_controller():

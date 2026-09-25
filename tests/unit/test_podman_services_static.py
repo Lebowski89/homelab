@@ -40,6 +40,7 @@ TASKS = (
 )
 N8N = (REPO_ROOT / "ansible/group_vars/all/services/n8n.yml").read_text()
 NETWORK_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/templates/network.network.j2").read_text()
+CONTAINER_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/templates/container.container.j2").read_text()
 PODMAN_HANDLERS = (REPO_ROOT / "ansible/roles/podman_services/handlers/main.yml").read_text()
 PODMAN_SERVICES_DEFAULTS = (REPO_ROOT / "ansible/roles/podman_services/defaults/main.yml").read_text()
 ROOTLESS_NETWORK_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/templates/rootless-network.conf.j2").read_text()
@@ -96,6 +97,25 @@ def test_rootless_bind_ownership_is_live_only_and_precedes_quadlet_rendering():
     assert "podman_services_execution.host_user" in common["vars"]["service_common_default_owner"]
     assert "omit if ansible_check_mode" in common["vars"]["service_common_default_group"]
     assert "podman_services_execution.host_user" in common["vars"]["service_common_default_group"]
+
+
+def test_quadlet_logging_hides_only_resolved_environment_values():
+    include = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Write Quadlet files")
+    tasks = {task["name"]: task for task in PREPARE_TASK_LIST}
+    environment = tasks["Quadlets | Write protected environment file"]
+    container = tasks["Quadlets | Write container Quadlet"]
+
+    assert "no_log" not in include
+    assert "no_log" not in include["ansible.builtin.include_tasks"]["apply"]
+    assert include["ansible.builtin.include_tasks"]["apply"]["diff"] is False
+    assert environment["no_log"] is True
+    assert environment["diff"] is False
+    assert "no_log" not in tasks["Quadlets | Write network Quadlet"]
+    assert "no_log" not in tasks["Quadlets | Write volume Quadlets"]
+    assert "no_log" not in container
+    assert container["diff"] is False
+    assert "EnvironmentFile=" in CONTAINER_TEMPLATE
+    assert "Environment={{" not in CONTAINER_TEMPLATE
 
 
 def test_rootless_common_managed_files_inherit_the_dedicated_execution_owner():
@@ -248,10 +268,10 @@ def test_absent_container_unit_is_checked_before_stop():
 
 def test_absent_container_unit_is_checked_before_recreate_preparation_stop():
     tasks = yaml.safe_load(MAIN_TASKS)
-    quiesce = next(task for task in tasks if task["name"] == "Podman services | Quiesce namespace dependents before recreate")
+    quiesce = next(task for task in tasks if task["name"] == "Podman services | Stop shared-network services before recreate")
     load_state = next(task for task in tasks if task["name"] == "Podman services | Check service before recreate")
     stop = next(task for task in tasks if task["name"] == "Podman services | Stop service before recreate")
-    cleanup = next(task for task in tasks if task["name"] == "Podman services | Remove stopped container object before recreate")
+    cleanup = next(task for task in tasks if task["name"] == "Podman services | Remove stopped container before recreate")
 
     assert tasks.index(quiesce) < tasks.index(load_state) < tasks.index(stop) < tasks.index(cleanup)
     assert load_state["ansible.builtin.command"]["argv"] == [
@@ -271,12 +291,12 @@ def test_absent_container_unit_is_checked_before_recreate_preparation_stop():
 def test_namespace_provider_recreate_cleans_dependents_then_provider_before_clean_start_and_restore():
     main = yaml.safe_load(MAIN_TASKS)
     lifecycle = yaml.safe_load(LIFECYCLE_TASKS)
-    quiesce_include = next(task for task in main if task["name"] == "Podman services | Quiesce namespace dependents before recreate")
+    quiesce_include = next(task for task in main if task["name"] == "Podman services | Stop shared-network services before recreate")
     provider_stop = next(task for task in main if task["name"] == "Podman services | Stop service before recreate")
-    provider_cleanup = next(task for task in main if task["name"] == "Podman services | Remove stopped container object before recreate")
+    provider_cleanup = next(task for task in main if task["name"] == "Podman services | Remove stopped container before recreate")
     provider_start = next(task for task in lifecycle if task["name"] == "Service | Start system service for recreate")
     provider_verify = next(task for task in lifecycle if task["name"] == "Service | Verify system service is active")
-    restore_include = next(task for task in lifecycle if task["name"] == "Service | Restore previously active namespace dependents")
+    restore_include = next(task for task in lifecycle if task["name"] == "Service | Restore previously running shared-network services")
 
     assert main.index(quiesce_include) < main.index(provider_stop) < main.index(provider_cleanup)
     assert lifecycle.index(provider_start) < lifecycle.index(provider_verify) < lifecycle.index(restore_include)
@@ -287,41 +307,19 @@ def test_namespace_provider_recreate_cleans_dependents_then_provider_before_clea
 
 
 def test_namespace_quiesce_stops_and_removes_exact_loaded_consumers_but_restores_only_active_ones():
-    record = next(task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Namespace dependents | Record managed service states")
-    select = next(
-        task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Namespace dependents | Select previously active services"
-    )
-    select_loaded = next(
-        task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Namespace dependents | Select loaded services to quiesce"
-    )
-    stop = next(
-        task
-        for task in QUIESCE_NAMESPACE_TASK_LIST
-        if task["name"] == "Namespace dependents | Stop loaded services in reverse dependency order"
-    )
-    cleanup = next(
-        task
-        for task in QUIESCE_NAMESPACE_TASK_LIST
-        if task["name"] == "Namespace dependents | Remove stopped container objects in reverse dependency order"
-    )
+    record = next(task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Record dependent service states")
+    select = next(task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Select previously running services")
+    select_loaded = next(task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Select deployed services")
+    stop = next(task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Stop dependent services")
+    cleanup = next(task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Remove stopped dependent containers")
     verify_inactive = next(
-        task
-        for task in CLEANUP_STOPPED_CONTAINER_TASK_LIST
-        if task["name"] == "Stopped container cleanup | Verify system service is inactive"
+        task for task in CLEANUP_STOPPED_CONTAINER_TASK_LIST if task["name"] == "Container cleanup | Verify service is stopped"
     )
     remove_container = next(
-        task
-        for task in CLEANUP_STOPPED_CONTAINER_TASK_LIST
-        if task["name"] == "Stopped container cleanup | Remove exact Podman container object"
+        task for task in CLEANUP_STOPPED_CONTAINER_TASK_LIST if task["name"] == "Container cleanup | Remove stopped container"
     )
-    restore = next(
-        task
-        for task in RESTORE_NAMESPACE_TASK_LIST
-        if task["name"] == "Namespace dependents | Restore previously active services in dependency order"
-    )
-    verify = next(
-        task for task in RESTORE_NAMESPACE_TASK_LIST if task["name"] == "Namespace dependents | Verify restored services are active"
-    )
+    restore = next(task for task in RESTORE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Restore previously running services")
+    verify = next(task for task in RESTORE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Verify restored services")
 
     assert record["ansible.builtin.command"]["argv"] == [
         "systemctl",
@@ -362,9 +360,9 @@ def test_namespace_quiesce_stops_and_removes_exact_loaded_consumers_but_restores
 
 def test_update_quiesces_dependents_only_when_provider_restart_is_required():
     lifecycle = yaml.safe_load(LIFECYCLE_TASKS)
-    quiesce = next(task for task in lifecycle if task["name"] == "Service | Quiesce namespace dependents before update restart")
+    quiesce = next(task for task in lifecycle if task["name"] == "Service | Stop shared-network services before update")
     stop = next(task for task in lifecycle if task["name"] == "Service | Stop system service before update replacement")
-    cleanup = next(task for task in lifecycle if task["name"] == "Service | Remove stopped container object before update replacement")
+    cleanup = next(task for task in lifecycle if task["name"] == "Service | Remove stopped container before update replacement")
     start = next(task for task in lifecycle if task["name"] == "Service | Start system service after update replacement")
 
     assert lifecycle.index(quiesce) < lifecycle.index(stop) < lifecycle.index(cleanup) < lifecycle.index(start)
@@ -379,7 +377,7 @@ def test_update_quiesces_dependents_only_when_provider_restart_is_required():
 
 def test_execution_transition_quiesces_namespace_dependents_before_switch():
     lifecycle = yaml.safe_load(LIFECYCLE_TASKS)
-    quiesce = next(task for task in lifecycle if task["name"] == "Service | Quiesce namespace dependents before execution transition")
+    quiesce = next(task for task in lifecycle if task["name"] == "Service | Stop shared-network services before execution change")
     switch = next(task for task in lifecycle if task["name"] == "Service | Switch execution settings when needed")
 
     assert lifecycle.index(quiesce) < lifecycle.index(switch)
@@ -389,9 +387,7 @@ def test_execution_transition_quiesces_namespace_dependents_before_switch():
         task for task in EXECUTION_TRANSITION_TASK_LIST if task["name"] == "Execution switch | Stop previous system service"
     )
     transition_cleanup = next(
-        task
-        for task in EXECUTION_TRANSITION_TASK_LIST
-        if task["name"] == "Execution switch | Remove stopped previous rootful container object"
+        task for task in EXECUTION_TRANSITION_TASK_LIST if task["name"] == "Execution switch | Remove stopped previous rootful container"
     )
     transition_start = next(
         task for task in EXECUTION_TRANSITION_TASK_LIST if task["name"] == "Execution switch | Start service with new execution settings"

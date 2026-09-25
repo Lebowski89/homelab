@@ -400,23 +400,19 @@
           }}
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
-    - name: Plan managed Podman namespace lifecycle
+    - name: Order selected Podman services by shared-network dependencies
       when: inventory_hostname == services_controller_host
       ansible.builtin.set_fact:
-        service_catalog_lifecycle_plan: >-
+        service_catalog_selected: >-
           {{
-            service_catalog_effective
-            | service_catalog_podman_lifecycle_plan(
-                service_catalog_selected,
-                service_catalog_action
-              )
+            (
+              service_catalog_effective
+              | service_catalog_podman_lifecycle_plan(
+                  service_catalog_selected,
+                  service_catalog_action
+                )
+            ).selected
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
-
-    - name: Apply managed Podman namespace lifecycle plan
-      when: inventory_hostname == services_controller_host
-      ansible.builtin.set_fact:
-        service_catalog_selected: "{{ service_catalog_lifecycle_plan.selected }}"
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Validate selected service dispatch hosts

@@ -64,7 +64,7 @@
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Service | Quiesce namespace dependents before execution transition
+- name: Service | Stop shared-network services before execution change
   when:
     - not ansible_check_mode
     - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
@@ -99,7 +99,7 @@
     state: started
   tags: [deploy, bootstrap]
 
-- name: Service | Quiesce namespace dependents before update restart
+- name: Service | Stop shared-network services before update
   when:
     - not ansible_check_mode
     - podman_services_state == 'update'
@@ -126,7 +126,7 @@
     state: stopped
   tags: [update]
 
-- name: Service | Remove stopped container object before update replacement
+- name: Service | Remove stopped container before update replacement
   when:
     - not ansible_check_mode
     - podman_services_state == 'update'
@@ -234,7 +234,7 @@
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Service | Restore previously active namespace dependents
+- name: Service | Restore previously running shared-network services
   when:
     - not ansible_check_mode
     - podman_services_namespace_dependents_quiesced | bool

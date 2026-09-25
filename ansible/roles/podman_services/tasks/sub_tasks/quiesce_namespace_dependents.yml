@@ -1,6 +1,6 @@
 ---
 
-- name: Namespace dependents | Record managed service states
+- name: Shared network | Record dependent service states
   ansible.builtin.command:
     argv: [systemctl, is-active, "{{ podman_services_namespace_dependent.unit_name }}"]
   loop: "{{ podman_services_namespace_dependents }}"
@@ -11,7 +11,7 @@
   changed_when: false
   failed_when: podman_services_namespace_dependent_states.rc not in [0, 3, 4]
 
-- name: Namespace dependents | Select previously active services
+- name: Shared network | Select previously running services
   ansible.builtin.set_fact:
     podman_services_active_namespace_dependents: >-
       {{
@@ -21,7 +21,7 @@
         | list
       }}
 
-- name: Namespace dependents | Select loaded services to quiesce
+- name: Shared network | Select deployed services
   ansible.builtin.set_fact:
     podman_services_loaded_namespace_dependents: >-
       {{
@@ -31,7 +31,7 @@
         | list
       }}
 
-- name: Namespace dependents | Stop loaded services in reverse dependency order
+- name: Shared network | Stop dependent services
   ansible.builtin.systemd_service:
     name: "{{ podman_services_namespace_dependent.unit_name }}"
     state: stopped
@@ -40,7 +40,7 @@
     loop_var: podman_services_namespace_dependent
     label: "{{ podman_services_namespace_dependent.unit_name }}"
 
-- name: Namespace dependents | Remove stopped container objects in reverse dependency order
+- name: Shared network | Remove stopped dependent containers
   ansible.builtin.include_tasks:
     file: cleanup_stopped_rootful_container.yml
     apply:
@@ -54,6 +54,6 @@
     label: "{{ podman_services_cleanup_dependent.container_name }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Namespace dependents | Mark services quiesced
+- name: Shared network | Record dependent services as stopped
   ansible.builtin.set_fact:
     podman_services_namespace_dependents_quiesced: true
