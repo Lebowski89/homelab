@@ -167,7 +167,7 @@ def test_workstation_user_path_validation_accepts_absolute_string_lists(tmp_path
 
 
 @pytest.mark.parametrize("variable", ["shell", "xdg"])
-@pytest.mark.parametrize("invalid_entry", [1, "", "   ", "relative/path"])
+@pytest.mark.parametrize("invalid_entry", [1, "", "   ", "relative/path", "/home/operator/bin "])
 def test_workstation_user_path_validation_rejects_invalid_entries(tmp_path: Path, variable: str, invalid_entry):
     shell_directories = ["/home/operator/.ssh"]
     xdg_directories = ["/home/operator/Desktop"]

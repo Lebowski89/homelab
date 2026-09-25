@@ -72,7 +72,7 @@
     - podman_services_namespace_dependents | length > 0
     - not (podman_services_namespace_dependents_quiesced | bool)
   ansible.builtin.include_tasks:
-    file: quiesce_namespace_dependents.yml
+    file: stop_shared_network_services.yml
     apply:
       tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]
@@ -109,7 +109,7 @@
     - podman_services_namespace_dependents | length > 0
     - not (podman_services_namespace_dependents_quiesced | bool)
   ansible.builtin.include_tasks:
-    file: quiesce_namespace_dependents.yml
+    file: stop_shared_network_services.yml
     apply:
       tags: [update]
   tags: [update]
@@ -239,7 +239,7 @@
     - not ansible_check_mode
     - podman_services_namespace_dependents_quiesced | bool
   ansible.builtin.include_tasks:
-    file: restore_namespace_dependents.yml
+    file: restore_shared_network_services.yml
     apply:
       tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]

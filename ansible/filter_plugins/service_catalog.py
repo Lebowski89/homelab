@@ -529,8 +529,8 @@ def service_catalog_podman_lifecycle_plan(
     on the same-host managed Podman service whose effective container name is
     ``<name>``. The returned selection is provider-first for ordinary actions
     and consumer-first for remove. Each selected Podman record also carries its
-    transitively managed namespace dependents in recovery order so the runtime
-    adapter can quiesce them before replacing the provider and restore only
+    transitively managed dependent services in recovery order so the runtime
+    adapter can stop them before replacing the provider and restore only
     dependents that were active.
 
     References with no matching managed Podman service remain external and do
@@ -709,7 +709,7 @@ def service_catalog_podman_lifecycle_plan(
             if missing:
                 raise AnsibleFilterError(
                     f"Cannot remove managed Podman provider {_catalog_label(provider_id)} without also selecting "
-                    f"its namespace dependents: {', '.join(_catalog_label(identity) for identity in missing)}"
+                    f"its dependent shared-network services: {', '.join(_catalog_label(identity) for identity in missing)}"
                 )
 
     action_order = remove_ordered_ids if action == "remove" else ordered_ids

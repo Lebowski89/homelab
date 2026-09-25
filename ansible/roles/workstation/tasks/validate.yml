@@ -73,6 +73,9 @@
         workstation_shell_directories | select('string') | list | length
         == workstation_shell_directories | length
       - >-
+        workstation_shell_directories | select('string') | map('trim') | list
+        == workstation_shell_directories
+      - >-
         workstation_shell_directories | select('string') | map('trim')
         | reject('equalto', '') | list | length
         == workstation_shell_directories | length
@@ -84,6 +87,9 @@
       - >-
         workstation_xdg_directories | select('string') | list | length
         == workstation_xdg_directories | length
+      - >-
+        workstation_xdg_directories | select('string') | map('trim') | list
+        == workstation_xdg_directories
       - >-
         workstation_xdg_directories | select('string') | map('trim')
         | reject('equalto', '') | list | length

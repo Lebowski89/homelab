@@ -217,9 +217,10 @@ Loaded inactive or failed consumers are cleaned but remain inactive; units that
 have not been deployed are skipped. Cleanup never uses recursive `--depend`
 removal, so only planner-provided managed container names are touched. Selecting
 only a provider uses this transaction transparently. Selecting only a consumer
-does not stop or restart its provider. If the transaction fails after consumers
-are quiesced, the failure remains visible and those consumers remain stopped
-rather than being started against an unavailable provider.
+does not stop or restart its provider. If the transaction fails after
+dependent services are stopped, the failure remains visible and those
+consumers remain stopped rather than being started against an unavailable
+provider.
 
 Remove is deliberately stricter. Selecting a managed provider for removal
 requires selecting its complete transitive dependent closure; otherwise catalog

@@ -21,7 +21,7 @@
     podman_services_unit_name: "{{ podman_services_service.unit_name ~ '.service' }}"
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Init | Validate managed namespace dependents
+- name: Init | Validate shared-network dependent services
   ansible.builtin.assert:
     that:
       - podman_services_managed_namespace_dependents is sequence
@@ -33,7 +33,7 @@
       - podman_services_namespace_dependent.unit_name is match('^[A-Za-z0-9][A-Za-z0-9_.-]*\\.service$')
       - podman_services_namespace_dependent.dispatch_host == inventory_hostname
     fail_msg: >-
-      Managed Podman namespace dependent metadata must contain same-host system
+      Managed Podman shared-network dependency metadata must contain same-host system
       unit names derived by the service-catalog lifecycle planner.
   loop: "{{ podman_services_managed_namespace_dependents }}"
   loop_control:

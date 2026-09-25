@@ -119,7 +119,7 @@
     - podman_services_namespace_dependents | length > 0
     - not (podman_services_namespace_dependents_quiesced | bool)
   ansible.builtin.include_tasks:
-    file: sub_tasks/quiesce_namespace_dependents.yml
+    file: sub_tasks/stop_shared_network_services.yml
     apply:
       tags: [recreate]
   tags: [recreate]

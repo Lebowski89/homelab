@@ -14,8 +14,8 @@ DRIFT_TASKS = (TASKS_DIR / "sub_tasks" / "image_drift.yml").read_text()
 EXECUTION_PREPARE_TASKS = (TASKS_DIR / "sub_tasks" / "execution.yml").read_text()
 EXECUTION_TRANSITION_TASKS = (TASKS_DIR / "sub_tasks" / "switch_execution.yml").read_text()
 LIFECYCLE_TASKS = (TASKS_DIR / "sub_tasks" / "service_state.yml").read_text()
-QUIESCE_NAMESPACE_TASKS = (TASKS_DIR / "sub_tasks" / "quiesce_namespace_dependents.yml").read_text()
-RESTORE_NAMESPACE_TASKS = (TASKS_DIR / "sub_tasks" / "restore_namespace_dependents.yml").read_text()
+STOP_SHARED_NETWORK_TASKS = (TASKS_DIR / "sub_tasks" / "stop_shared_network_services.yml").read_text()
+RESTORE_SHARED_NETWORK_TASKS = (TASKS_DIR / "sub_tasks" / "restore_shared_network_services.yml").read_text()
 CLEANUP_STOPPED_CONTAINER_TASKS = (TASKS_DIR / "sub_tasks" / "cleanup_stopped_rootful_container.yml").read_text()
 SUB_TASK_FILES = (
     "init.yml",
@@ -32,9 +32,9 @@ TASKS = (
     + "\n"
     + SECRET_TASKS
     + "\n"
-    + QUIESCE_NAMESPACE_TASKS
+    + STOP_SHARED_NETWORK_TASKS
     + "\n"
-    + RESTORE_NAMESPACE_TASKS
+    + RESTORE_SHARED_NETWORK_TASKS
     + "\n"
     + CLEANUP_STOPPED_CONTAINER_TASKS
 )
@@ -53,8 +53,8 @@ REMOVE_TASK_LIST = yaml.safe_load(REMOVE_TASKS)
 EXECUTION_PREPARE_TASK_LIST = yaml.safe_load(EXECUTION_PREPARE_TASKS)
 EXECUTION_TRANSITION_TASK_LIST = yaml.safe_load(EXECUTION_TRANSITION_TASKS)
 LIFECYCLE_TASK_LIST = yaml.safe_load(LIFECYCLE_TASKS)
-QUIESCE_NAMESPACE_TASK_LIST = yaml.safe_load(QUIESCE_NAMESPACE_TASKS)
-RESTORE_NAMESPACE_TASK_LIST = yaml.safe_load(RESTORE_NAMESPACE_TASKS)
+STOP_SHARED_NETWORK_TASK_LIST = yaml.safe_load(STOP_SHARED_NETWORK_TASKS)
+RESTORE_SHARED_NETWORK_TASK_LIST = yaml.safe_load(RESTORE_SHARED_NETWORK_TASKS)
 CLEANUP_STOPPED_CONTAINER_TASK_LIST = yaml.safe_load(CLEANUP_STOPPED_CONTAINER_TASKS)
 ALL_TASK_LIST = [task for name in SUB_TASK_FILES for task in yaml.safe_load((TASKS_DIR / "sub_tasks" / name).read_text())]
 MAIN_TASK_NAMES = [task["name"] for task in MAIN_TASK_LIST]
@@ -268,12 +268,12 @@ def test_absent_container_unit_is_checked_before_stop():
 
 def test_absent_container_unit_is_checked_before_recreate_preparation_stop():
     tasks = yaml.safe_load(MAIN_TASKS)
-    quiesce = next(task for task in tasks if task["name"] == "Podman services | Stop shared-network services before recreate")
+    stop_dependents = next(task for task in tasks if task["name"] == "Podman services | Stop shared-network services before recreate")
     load_state = next(task for task in tasks if task["name"] == "Podman services | Check service before recreate")
     stop = next(task for task in tasks if task["name"] == "Podman services | Stop service before recreate")
     cleanup = next(task for task in tasks if task["name"] == "Podman services | Remove stopped container before recreate")
 
-    assert tasks.index(quiesce) < tasks.index(load_state) < tasks.index(stop) < tasks.index(cleanup)
+    assert tasks.index(stop_dependents) < tasks.index(load_state) < tasks.index(stop) < tasks.index(cleanup)
     assert load_state["ansible.builtin.command"]["argv"] == [
         "systemctl",
         "show",
@@ -291,35 +291,39 @@ def test_absent_container_unit_is_checked_before_recreate_preparation_stop():
 def test_namespace_provider_recreate_cleans_dependents_then_provider_before_clean_start_and_restore():
     main = yaml.safe_load(MAIN_TASKS)
     lifecycle = yaml.safe_load(LIFECYCLE_TASKS)
-    quiesce_include = next(task for task in main if task["name"] == "Podman services | Stop shared-network services before recreate")
+    stop_dependents_include = next(
+        task for task in main if task["name"] == "Podman services | Stop shared-network services before recreate"
+    )
     provider_stop = next(task for task in main if task["name"] == "Podman services | Stop service before recreate")
     provider_cleanup = next(task for task in main if task["name"] == "Podman services | Remove stopped container before recreate")
     provider_start = next(task for task in lifecycle if task["name"] == "Service | Start system service for recreate")
     provider_verify = next(task for task in lifecycle if task["name"] == "Service | Verify system service is active")
     restore_include = next(task for task in lifecycle if task["name"] == "Service | Restore previously running shared-network services")
 
-    assert main.index(quiesce_include) < main.index(provider_stop) < main.index(provider_cleanup)
+    assert main.index(stop_dependents_include) < main.index(provider_stop) < main.index(provider_cleanup)
     assert lifecycle.index(provider_start) < lifecycle.index(provider_verify) < lifecycle.index(restore_include)
     assert provider_start["ansible.builtin.systemd_service"]["state"] == "started"
-    assert quiesce_include["ansible.builtin.include_tasks"]["file"] == "sub_tasks/quiesce_namespace_dependents.yml"
-    assert "podman_services_namespace_dependents | length > 0" in quiesce_include["when"]
-    assert "not (podman_services_namespace_dependents_quiesced | bool)" in quiesce_include["when"]
+    assert stop_dependents_include["ansible.builtin.include_tasks"]["file"] == "sub_tasks/stop_shared_network_services.yml"
+    assert "podman_services_namespace_dependents | length > 0" in stop_dependents_include["when"]
+    assert "not (podman_services_namespace_dependents_quiesced | bool)" in stop_dependents_include["when"]
 
 
-def test_namespace_quiesce_stops_and_removes_exact_loaded_consumers_but_restores_only_active_ones():
-    record = next(task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Record dependent service states")
-    select = next(task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Select previously running services")
-    select_loaded = next(task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Select deployed services")
-    stop = next(task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Stop dependent services")
-    cleanup = next(task for task in QUIESCE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Remove stopped dependent containers")
+def test_shared_network_cleanup_stops_and_removes_loaded_consumers_but_restores_only_running_ones():
+    record = next(task for task in STOP_SHARED_NETWORK_TASK_LIST if task["name"] == "Shared network | Record dependent service states")
+    select = next(task for task in STOP_SHARED_NETWORK_TASK_LIST if task["name"] == "Shared network | Select previously running services")
+    select_loaded = next(task for task in STOP_SHARED_NETWORK_TASK_LIST if task["name"] == "Shared network | Select deployed services")
+    stop = next(task for task in STOP_SHARED_NETWORK_TASK_LIST if task["name"] == "Shared network | Stop dependent services")
+    cleanup = next(task for task in STOP_SHARED_NETWORK_TASK_LIST if task["name"] == "Shared network | Remove stopped dependent containers")
     verify_inactive = next(
         task for task in CLEANUP_STOPPED_CONTAINER_TASK_LIST if task["name"] == "Container cleanup | Verify service is stopped"
     )
     remove_container = next(
         task for task in CLEANUP_STOPPED_CONTAINER_TASK_LIST if task["name"] == "Container cleanup | Remove stopped container"
     )
-    restore = next(task for task in RESTORE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Restore previously running services")
-    verify = next(task for task in RESTORE_NAMESPACE_TASK_LIST if task["name"] == "Shared network | Verify restored services")
+    restore = next(
+        task for task in RESTORE_SHARED_NETWORK_TASK_LIST if task["name"] == "Shared network | Restore previously running services"
+    )
+    verify = next(task for task in RESTORE_SHARED_NETWORK_TASK_LIST if task["name"] == "Shared network | Verify restored services")
 
     assert record["ansible.builtin.command"]["argv"] == [
         "systemctl",
@@ -330,7 +334,7 @@ def test_namespace_quiesce_stops_and_removes_exact_loaded_consumers_but_restores
     assert "selectattr('rc', 'equalto', 0)" in select["ansible.builtin.set_fact"]["podman_services_active_namespace_dependents"]
     assert "rejectattr('rc', 'equalto', 4)" in select_loaded["ansible.builtin.set_fact"]["podman_services_loaded_namespace_dependents"]
     assert stop["loop"] == "{{ podman_services_loaded_namespace_dependents | reverse | list }}"
-    assert QUIESCE_NAMESPACE_TASK_LIST.index(stop) < QUIESCE_NAMESPACE_TASK_LIST.index(cleanup)
+    assert STOP_SHARED_NETWORK_TASK_LIST.index(stop) < STOP_SHARED_NETWORK_TASK_LIST.index(cleanup)
     assert cleanup["loop"] == "{{ podman_services_loaded_namespace_dependents | reverse | list }}"
     assert cleanup["vars"]["podman_services_cleanup_unit_name"] == "{{ podman_services_cleanup_dependent.unit_name }}"
     assert cleanup["vars"]["podman_services_cleanup_container_name"] == "{{ podman_services_cleanup_dependent.container_name }}"
@@ -350,39 +354,39 @@ def test_namespace_quiesce_stops_and_removes_exact_loaded_consumers_but_restores
     ]
     assert restore["loop"] == "{{ podman_services_active_namespace_dependents }}"
     assert verify["loop"] == "{{ podman_services_active_namespace_dependents }}"
-    namespace_lifecycle = QUIESCE_NAMESPACE_TASKS + RESTORE_NAMESPACE_TASKS + CLEANUP_STOPPED_CONTAINER_TASKS
-    assert "ignore_errors" not in namespace_lifecycle
-    assert "--depend" not in namespace_lifecycle
-    assert "sleep" not in namespace_lifecycle.lower()
+    shared_network_lifecycle = STOP_SHARED_NETWORK_TASKS + RESTORE_SHARED_NETWORK_TASKS + CLEANUP_STOPPED_CONTAINER_TASKS
+    assert "ignore_errors" not in shared_network_lifecycle
+    assert "--depend" not in shared_network_lifecycle
+    assert "sleep" not in shared_network_lifecycle.lower()
     for service_name in ("gluetun", "jdownloader2", "mullvad-browser"):
-        assert service_name not in namespace_lifecycle.lower()
+        assert service_name not in shared_network_lifecycle.lower()
 
 
-def test_update_quiesces_dependents_only_when_provider_restart_is_required():
+def test_update_stops_dependents_only_when_provider_replacement_is_required():
     lifecycle = yaml.safe_load(LIFECYCLE_TASKS)
-    quiesce = next(task for task in lifecycle if task["name"] == "Service | Stop shared-network services before update")
+    stop_dependents = next(task for task in lifecycle if task["name"] == "Service | Stop shared-network services before update")
     stop = next(task for task in lifecycle if task["name"] == "Service | Stop system service before update replacement")
     cleanup = next(task for task in lifecycle if task["name"] == "Service | Remove stopped container before update replacement")
     start = next(task for task in lifecycle if task["name"] == "Service | Start system service after update replacement")
 
-    assert lifecycle.index(quiesce) < lifecycle.index(stop) < lifecycle.index(cleanup) < lifecycle.index(start)
-    assert "podman_services_state == 'update'" in quiesce["when"]
-    assert "podman_services_requires_restart | bool" in quiesce["when"]
-    assert "podman_services_namespace_dependents | length > 0" in quiesce["when"]
+    assert lifecycle.index(stop_dependents) < lifecycle.index(stop) < lifecycle.index(cleanup) < lifecycle.index(start)
+    assert "podman_services_state == 'update'" in stop_dependents["when"]
+    assert "podman_services_requires_restart | bool" in stop_dependents["when"]
+    assert "podman_services_namespace_dependents | length > 0" in stop_dependents["when"]
     for task in (stop, cleanup, start):
         assert "podman_services_state == 'update'" in task["when"]
         assert "podman_services_requires_restart | bool" in task["when"]
     assert start["ansible.builtin.systemd_service"]["state"] == "started"
 
 
-def test_execution_transition_quiesces_namespace_dependents_before_switch():
+def test_execution_change_stops_dependents_before_switch():
     lifecycle = yaml.safe_load(LIFECYCLE_TASKS)
-    quiesce = next(task for task in lifecycle if task["name"] == "Service | Stop shared-network services before execution change")
+    stop_dependents = next(task for task in lifecycle if task["name"] == "Service | Stop shared-network services before execution change")
     switch = next(task for task in lifecycle if task["name"] == "Service | Switch execution settings when needed")
 
-    assert lifecycle.index(quiesce) < lifecycle.index(switch)
-    assert "podman_services_execution_transition | bool" in quiesce["when"]
-    assert "podman_services_namespace_dependents | length > 0" in quiesce["when"]
+    assert lifecycle.index(stop_dependents) < lifecycle.index(switch)
+    assert "podman_services_execution_transition | bool" in stop_dependents["when"]
+    assert "podman_services_namespace_dependents | length > 0" in stop_dependents["when"]
     transition_stop = next(
         task for task in EXECUTION_TRANSITION_TASK_LIST if task["name"] == "Execution switch | Stop previous system service"
     )
