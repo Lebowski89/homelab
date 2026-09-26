@@ -9,7 +9,7 @@ The shared service catalogue in `ansible/group_vars/all/services/*.yml` is runti
 
 ## Runtime layers
 
-1. `podman_services` intentionally renders Quadlets using Podman 5.7 syntax and is not compatible with Ubuntu 24.04 LTS (Noble), whose packaged Podman 4.9 lacks the required directives.
+1. The `podman` role supports Ubuntu 26.04+ and Linux Mint Debian Edition 7 (based on Debian 13), requires Podman 5.4.2 or newer, and verifies cgroup v2 plus the system Quadlet generator. The current `podman_services` templates use directives available in Podman 5.4.2 for both system and rootless Quadlets. Ubuntu 24.04 LTS (Noble) remains unsupported because its packaged Podman 4.9 is below this baseline.
 2. The linear, globally ordered dispatcher materializes one selected service on its dispatch host before invoking common preparation and its runtime adapter.
 3. `service_prepare` owns application validation, generated values, template derivation, and bootstrap requests. Its temporary preparation containers use the selected runtime and are removed before deployed-service lifecycle work.
 4. `service_common` prepares runtime-neutral Infisical values, environment, host paths, files, Traefik routes, and PostgreSQL databases from explicit adapter inputs.
@@ -23,6 +23,11 @@ and run through its user manager. The dispatcher enables Ansible SSH pipelining
 for Podman role tasks so privilege switching does not require a temporary module
 file shared with the locked service account. This controller transport setting
 is not placed in the application environment.
+
+The runtime package set explicitly includes `passt` for the rootless `pasta`
+network backend and `dbus-user-session` for the per-user systemd manager, in
+addition to the existing Podman, network-plugin, subordinate-ID, slirp4netns,
+and fuse-overlayfs packages.
 
 `deploy.execution.host_user` is the host account that owns a rootless Podman
 instance. It must use the reserved `podman-` prefix and is separate from
@@ -43,7 +48,7 @@ only catalog metadata, fields it renders or validates itself, runtime-neutral
 `service_common` fields, and real `service_prepare` inputs. Any Docker-only or
 unknown top-level field fails with every unsupported key listed in sorted order.
 Changing only `runtime` is therefore unsafe and rejected when behavior such as a
-custom command, entrypoint, config, device, host network, Swarm profile, or
+custom command, entrypoint, config, privileged mode, host network, Swarm profile, or
 constraint still lacks a Podman implementation.
 
 An explicit canonical `name` controls the Podman container name, generated
@@ -53,6 +58,16 @@ base-target role prefix. If `deploy.type` is present it must be exactly
 `container`; `swarm`, `profile`, and `constraints` are invalid. Portable
 `mode: replicated` and `replicas: 1` remain accepted single-instance no-ops.
 
+Rootful execution additionally supports three constrained native Quadlet
+features. Canonical `devices` entries use
+`HOST_DEVICE[:CONTAINER_DEVICE[:PERMISSIONS]]` syntax with normalized paths
+below `/dev` and render as `AddDevice=`. Canonical `shm_size` accepts a
+positive byte-size value such as `1gb` and renders as `ShmSize=`.
+`network_mode` accepts only `container:<managed-container-name>`, cannot be
+combined with `named_networks`, and renders as
+`Network=<managed-container-name>.container`. No arbitrary `PodmanArgs` or
+generic pod support is implied by these fields.
+
 Rootless execution is intentionally narrower than the general Podman schema.
 It requires `deploy.type: container`, a fully qualified exact image, one
 role-managed bridge, and unprivileged published TCP ports. A rootless bind mount
@@ -61,8 +76,9 @@ in `paths`, omit explicit path ownership, and provide a validated
 `deploy.execution.userns: {mode: keep-id, uid: ..., gid: ...}` mapping. After
 the common path exists, the adapter recursively assigns that source to the
 dedicated execution account without changing descendant modes. Named volumes,
-tmpfs mounts, native secrets, added capabilities, devices, privileged mode,
-host networking, and application preparation remain unsupported for rootless
+tmpfs mounts, native secrets, added capabilities, devices, shared container
+network namespaces, `shm_size`, privileged mode, host networking, and
+application preparation remain unsupported for rootless
 execution. Rootless `copies` and `templates` are supported only when every
 destination is a normalized absolute proper descendant of a declared bind
 source; explicit file owner/group overrides are rejected so `service_common`
@@ -127,8 +143,8 @@ operator procedure.
 ## Lifecycle semantics
 
 - `deploy` and `bootstrap` fetch missing secrets, create missing Podman secrets, pull the declared image, render configuration, and start the service if it is not already running.
-- `update` reconciles secrets marked `update_policy: reconcile` and restarts the service when material inputs changed; because Podman cannot compare stored secret contents, a reconciled secret is recreated and triggers the existing restart path. An owned network remains in place through the restart. If its Quadlet definition changes, use an explicit remove followed by deploy when the network itself must be recreated.
-- `recreate` reconciles secrets marked `update_policy: reconcile` and always restarts the generated service after rendering current inputs. It retains the service network.
+- `update` reconciles secrets marked `update_policy: reconcile` and replaces the rootful container when material inputs changed; because Podman cannot compare stored secret contents, a reconciled secret triggers the same replacement path. An owned network remains in place through the replacement. If its Quadlet definition changes, use an explicit remove followed by deploy when the network itself must be recreated.
+- `recreate` reconciles secrets marked `update_policy: reconcile`, stops the rootful unit, removes its exact stale container object, and starts the generated service after rendering current inputs. It retains the service network. Rootless recreate keeps its existing user-service restart behavior.
 - `remove` uses the last successfully persisted execution owner even when the declaration now requests another mode. It stops that service first, then stops and removes only a network whose persisted metadata proves role ownership. It removes exact generated Quadlets, environment files, and host-backed Traefik routing, but preserves application data, Podman secrets, images, the dedicated rootless account, its linger configuration, home, and user storage. Externally owned and unproven legacy networks are retained.
 - `drift` inspects the current container image reference and reports a changed task when it differs from the declared exact image reference. It is reference drift, not registry digest drift.
 
@@ -174,6 +190,43 @@ Docker and Podman keep separate network stores; a Docker network with a matching
 name does not satisfy this Podman preflight. Prefer a managed Podman network for
 an isolated service. Cross-runtime communication must use published host
 endpoints or another deliberately designed network path.
+
+For shared network namespaces, the referenced `.container` suffix lets Quadlet
+derive the systemd dependency on the provider container unit. The provider must
+be deployed first; a child start fails if that unit or its network namespace is
+unavailable. Publish every host-facing port on the provider because namespace
+children cannot publish ports independently.
+
+The service catalog also treats `network_mode: container:<provider>` as a
+lifecycle dependency when `<provider>` resolves to the effective container name
+of another managed rootful Podman service on the same host. It validates the
+whole managed graph before dispatch: self-dependencies, cycles, cross-host
+references to a managed provider, and rootless namespace sharing fail without
+runtime mutation. A reference with no managed Podman match remains an external
+container reference and keeps its previous behavior. Docker services are never
+considered Podman namespace providers.
+
+Deploy, bootstrap, update, recreate, and drift dispatch managed providers before
+their consumers. A provider recreate, execution-mode change, or update that
+actually requires a restart records the active state of every transitive managed
+consumer, stops every loaded consumer unit in reverse dependency order, replaces
+each exact consumer container object with `podman rm --force --ignore`, stops
+and removes the exact provider object, then starts and verifies the provider.
+Only consumers that were active are restored, in forward dependency order.
+Loaded inactive or failed consumers are cleaned but remain inactive; units that
+have not been deployed are skipped. Cleanup never uses recursive `--depend`
+removal, so only planner-provided managed container names are touched. Selecting
+only a provider uses this transaction transparently. Selecting only a consumer
+does not stop or restart its provider. If the transaction fails after
+dependent services are stopped, the failure remains visible and those
+consumers remain stopped rather than being started against an unavailable
+provider.
+
+Remove is deliberately stricter. Selecting a managed provider for removal
+requires selecting its complete transitive dependent closure; otherwise catalog
+validation fails before dispatch with the missing dependents. A valid removal is
+ordered consumer-first. Unmanaged external namespace providers cannot receive
+this orchestration, so their replacement remains an operator responsibility.
 
 Podman systemd policy is also first-class at top level. The supported fields are
 `after`, `restart`, `restart_sec`, and `timeout_start_sec`, rendered as

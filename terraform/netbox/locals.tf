@@ -1,6 +1,7 @@
 locals {
   internal_zone      = trimspace(var.internal_zone)
   cloudflare_zone    = trimspace(var.cloudflare_zone)
+  lan_cidr           = trimspace(var.lan_cidr)
   private_https_port = var.private_https_port
 
   sites = {
@@ -58,6 +59,12 @@ locals {
       slug      = "gateway"
       color_hex = "9c27b0"
     }
+
+    workstation = {
+      name      = "Workstation"
+      slug      = "workstation"
+      color_hex = "03a9f4"
+    }
   }
 
   device_types = {
@@ -76,6 +83,12 @@ locals {
     generic_lxc = {
       model            = "Generic LXC Container"
       slug             = "generic-lxc-container"
+      manufacturer_key = "homelab"
+    }
+
+    generic_laptop = {
+      model            = "Generic Laptop"
+      slug             = "generic-laptop"
       manufacturer_key = "homelab"
     }
 
@@ -183,7 +196,7 @@ locals {
 
   prefixes = {
     lan = {
-      prefix      = "192.168.80.0/24"
+      prefix      = local.lan_cidr
       description = "Primary homelab LAN"
       status      = "active"
     }
@@ -195,6 +208,13 @@ locals {
       slug        = "skynet"
       color_hex   = "607d8b"
       description = "Main Ansible inventory group."
+    }
+
+    workstation = {
+      name        = "workstation"
+      slug        = "workstation"
+      color_hex   = "0288d1"
+      description = "Interactive workstation hosts managed by Ansible."
     }
 
     ansible_manager = {
@@ -484,6 +504,18 @@ locals {
         "dns",
         "technitium",
         "keepalived",
+      ]
+    }
+
+    blacktop = {
+      description     = "Primary LMDE workstation laptop"
+      role_key        = "workstation"
+      device_type_key = "generic_laptop"
+      tags = [
+        "skynet",
+        "workstation",
+        "podman",
+        "podman_install",
       ]
     }
 

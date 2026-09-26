@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/09/05 |
+| Readme update        | 2026/09/26 |
 
 
 
@@ -66,7 +66,7 @@
 | [netbox_restart_policy.**max_attempts**](defaults/main.yml#L58)   | int | `5` |    
 | [netbox_restart_policy.**window**](defaults/main.yml#L59)   | str | `2m` |    
 | [netbox_redis_name](defaults/main.yml#L65)   | str | `netbox-redis` |    
-| [netbox_redis_image](defaults/main.yml#L66)   | str | `valkey/valkey:9.1-alpine` |    
+| [netbox_redis_image](defaults/main.yml#L66)   | str | `valkey/valkey:9.2-alpine` |    
 | [netbox_redis_puid](defaults/main.yml#L67)   | str | `{{ container_host_puid ¦ default('1000') }}` |    
 | [netbox_redis_pgid](defaults/main.yml#L68)   | str | `{{ container_host_pgid ¦ default('1000') }}` |    
 | [netbox_redis_path](defaults/main.yml#L69)   | str | `{{ netbox_base_path }}/redis` |    

@@ -1,0 +1,21 @@
+---
+
+- name: Workstation Desktop | Install desktop packages
+  when: workstation_desktop_packages | length > 0
+  become: true
+  ansible.builtin.apt:
+    name: "{{ workstation_desktop_packages }}"
+    state: present
+    update_cache: "{{ workstation_apt_update_cache }}"
+    cache_valid_time: 3600
+
+# Omitting mode preserves permissions on existing private directories.
+- name: Workstation Desktop | Ensure XDG user directories exist # noqa risky-file-permissions
+  become: true
+  become_user: "{{ workstation_user }}"
+  ansible.builtin.file:
+    path: "{{ _workstation_xdg_directory }}"
+    state: directory
+  loop: "{{ workstation_xdg_directories }}"
+  loop_control:
+    loop_var: _workstation_xdg_directory

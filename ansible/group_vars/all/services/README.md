@@ -39,11 +39,12 @@ preferred key order. Ordering is for readability; it does not change behavior.
 
 ## Service topology
 
-NetBox global Config Context is exposed by dynamic-inventory compose as three
+NetBox global Config Context is exposed by dynamic-inventory compose as four
 canonical variables:
 
 - `services_public_zone`: public website DNS zone used by Hugo.
 - `services_internal_zone`: private application DNS zone.
+- `services_lan_cidr`: primary private LAN CIDR used by service networking.
 - `services_private_https_port`: client-facing private Traefik HTTPS port.
 
 Service definitions, templates, and preparation handlers consume these normal
@@ -52,6 +53,12 @@ from Infisical, or derive the internal zone as `int.` plus the public zone.
 Infisical remains the source for credentials and other secret material. Direct
 infrastructure, monitoring/control-plane, and self-healthcheck connections may
 continue to use runtime-local addressing.
+
+The actual LAN CIDR is supplied through the uncommitted
+`terraform/netbox/private.auto.tfvars`, published through NetBox's global
+`services` Config Context, and composed into inventory as `services_lan_cidr`.
+Service definitions and templates must consume that variable instead of
+hard-coding the LAN CIDR.
 
 ## Schema fundamentals
 
@@ -93,6 +100,9 @@ Catalog booleans accept booleans, `0`/`1`, and case-insensitive
 Selection uses lightweight metadata. The chosen configuration is materialized
 once on its dispatch host immediately before common preflight and adapter
 dispatch, so inventory-derived values resolve in the correct host context.
+Managed Podman namespace planning adds only compact container-name, provider,
+execution-mode, and host metadata to that selection; it never materializes the
+full catalog on the controller.
 
 ### Host roles
 
@@ -247,7 +257,7 @@ Check mode creates nothing.
 | `named_networks.<key>.external` | Strict Boolean-like | No | Docker `true`; Podman `false` | Both | `docker_services` / `podman_services` | External resources are attached but not owned. Live Podman deploy/update/recreate/bootstrap first requires the exact network in the Podman network store. |
 | `named_networks.<key>.driver` | String | No | Runtime-native | Both | `docker_services` / `podman_services` | Docker passes it to Compose. Podman accepts `bridge`, `ipvlan`, or `macvlan` and rejects it on an external network. |
 | `networks` | List | No | Keys of `named_networks`, else `[docker_network]` | Docker | `docker_services` | Legacy direct Compose attachment list. Prefer `named_networks`. |
-| `network_mode` | Non-empty string | No | Omitted | Docker | `docker_services` | Compose network mode. When set, normal network attachments are omitted. |
+| `network_mode` | String | No | Omitted | Both | `docker_services` / `podman_services` | Docker Compose network mode. Rootful Podman accepts only `container:<managed-container-name>` and renders `Network=<name>.container`; it cannot be combined with `named_networks`. A same-host managed Podman match creates a catalog lifecycle dependency. Rootless Podman rejects it. |
 | `depends_on` | String or list | No | `[]` | Docker | `docker_services` | Compose start ordering, not a health guarantee. |
 
 Docker named resources default to external. Non-external definitions are
@@ -259,6 +269,17 @@ a separate resource and does not satisfy the live preflight. Managed Podman
 networks remain the preferred default for isolated services. Cross-runtime
 communication requires published host endpoints or another deliberately designed
 network path.
+
+For managed rootful Podman container-namespace relationships, the catalog uses
+the effective container name rather than the YAML key. It rejects self, cyclic,
+and cross-host managed dependencies. Startup and ordinary processing are
+provider-first. A provider recreate or restart-required update temporarily stops
+active transitive consumers in reverse dependency order, verifies the provider,
+then restores only those consumers in forward order. A consumer-only operation
+does not bounce its provider. Removing a provider requires the complete managed
+dependent closure in the selection and processes that closure consumer-first.
+References without a managed Podman match remain external and are not
+orchestrated.
 
 There are no service keys for `expose`, DNS servers, or extra hosts.
 
@@ -363,14 +384,14 @@ application data. Bind source existence should be declared through `paths`.
 
 | Option | Type | Required | Default | Runtime | Owner | Description |
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
-| `devices` | List of non-empty strings | No | `[]` | Docker | `docker_services` | Compose device mappings. |
+| `devices` | List of device mappings | No | `[]` | Both | `docker_services` / `podman_services` | Docker Compose device mappings. Rootful Podman validates `/dev` paths in `HOST[:CONTAINER[:PERMISSIONS]]` form and renders one `AddDevice=` per entry; rootless Podman rejects devices. |
 | `cap_add` | List of non-empty strings | No | `[]` | Both | `docker_services` / `podman_services` | Adds Linux capabilities. |
 | `cap_drop` | List of non-empty strings | No | `[]` | Both | `docker_services` / `podman_services` | Drops Linux capabilities. |
 | `security_opt` | String or list | No | `[]` | Docker | `docker_services` | Compose security options. |
 | `no_new_privileges` | Strict Boolean-like | No | Docker omitted/false; Podman `true` | Both | `docker_services` / `podman_services` | Docker accepts true only for standalone; Podman defaults to `NoNewPrivileges=true`. |
 | `read_only` | Strict Boolean-like | No | `false` | Podman | `podman_services` | Read-only container root filesystem. |
 | `sysctls` | Mapping | No | `{}` | Docker | `docker_services` | Compose sysctl mapping. |
-| `shm_size` | String/size | No | Runtime-native | Docker | `docker_services` | Compose `/dev/shm` size. |
+| `shm_size` | Positive size | No | Runtime-native | Both | `docker_services` / `podman_services` | Docker Compose `/dev/shm` size. Rootful Podman renders `ShmSize=`; rootless Podman rejects it. |
 | `shm_tmpfs_size` | Positive integer bytes | No | Omitted | Docker | `docker_services` | Adds a sized `/dev/shm` tmpfs volume. |
 
 There are no options for a separate process group, device cgroup rules,
@@ -546,10 +567,10 @@ never start in check mode, and are removed after success or failure.
 | Action | Common/preparation | Docker | Podman |
 | ------ | ------------------ | ------ | ------ |
 | deploy | Lookup/environment preflight; handler work; PostgreSQL, files, Traefik. | Build/deploy Compose or Swarm; create missing secrets/configs. | Render Quadlets/env; pull per role default; create missing secrets; start. |
-| update | Same common preparation. | Re-render/redeploy; reconcile secrets may rotate. | Re-render/restart as needed; reconcile secrets force-recreate. |
-| recreate | Lookup and validation finish before cleanup. | Remove existing stack/container once, then rebuild. | Stop existing unit, reconcile, render, start; preserve network. |
+| update | Same common preparation. | Re-render/redeploy; reconcile secrets may rotate. | Re-render and replace as needed; reconcile secrets force-recreate. Replacing a namespace provider stops managed consumers, removes their exact stale container objects, and restores only those previously active. |
+| recreate | Lookup and validation finish before cleanup. | Remove existing stack/container once, then rebuild. | Stop unit, remove its exact stale container object, reconcile, render, start; preserve network. Namespace providers clean consumers before replacement and restore previously active consumers after verification. |
 | bootstrap | Common preparation plus bootstrap-tagged handlers. | Normal deploy path; optional explicit Plex bootstrap. | Normal path; Plex is rejected. |
-| remove | No lookup/application mutation; remove common Traefik route. | Remove runtime artifacts when cleanup enabled. | Stop service; remove generated files and owned network; preserve data/secrets. |
+| remove | No lookup/application mutation; remove common Traefik route. | Remove runtime artifacts when cleanup enabled. | Process managed namespace consumers before providers; reject an incomplete provider closure. Stop service; remove generated files and owned network; preserve data/secrets. |
 | drift | Common declaration/environment preflight and non-mutating handler interface validation. | Compare declared image with live Swarm/Compose reference. | Compare exact desired image reference with Podman inspect. |
 | check mode | Validate catalog, graph, preparation contracts, database intent, files, route, and render plan. | “Changed” results are predictions; no lookup, connection, secret/config/image/runtime lifecycle, cleanup, or deploy. | Same boundary; no lookup, secret, image, systemd, network, or container mutation. |
 
@@ -561,7 +582,7 @@ newer digest, and there is no service-level `drift` mapping.
 Podman rejects every top-level field outside its catalog, adapter, common, and
 application-preparation contracts. A runtime-only edit is therefore not a valid
 migration when Docker-only fields such as `command`, `entrypoint`, configs,
-devices, Swarm profiles, or constraints remain. Add behavior deliberately to
+Swarm profiles, or constraints remain. Add behavior deliberately to
 the adapter before migrating a service that needs it.
 
 | Section | Docker | Podman | Classification |
@@ -572,7 +593,7 @@ the adapter before migrating a service that needs it.
 | Ports | Swarm/standalone long syntax | `PublishPort=` | Portable except `mode`/`host_ip` split |
 | Named networks | Multiple; default external | Zero/one; managed by default, external preflight required | Supported with separate runtime stores |
 | Volumes | Bind, named, tmpfs | Bind, volume Quadlets, tmpfs | Portable core; ownership differs |
-| Devices/security | Devices/sysctls/standalone options plus capabilities | Capabilities, read-only root, no-new-privileges | Supported with limitations |
+| Devices/security | Devices/sysctls/standalone options plus capabilities | Rootful devices and shared-memory sizing; capabilities, read-only root, no-new-privileges | Supported with limitations; rootless rejects devices and `shm_size` |
 | Health | Compose defaults | Quadlet defaults | Portable with different defaults |
 | Traefik | Common dynamic file | Common dynamic file | Runtime-neutral preparation |
 | PostgreSQL | Common reconciliation | Common reconciliation | Runtime-neutral preparation |

@@ -114,6 +114,7 @@ unraid
 The replacement NetBox tags are:
 
 - `skynet`
+- `workstation`
 - `ansible_manager`
 - `docker`
 - `docker_install`
@@ -138,6 +139,7 @@ The NetBox inventory plugin creates Ansible groups from NetBox tags by prefixing
 | NetBox tag | Ansible group |
 |---|---|
 | `skynet` | `tags_skynet` |
+| `workstation` | `tags_workstation` |
 | `ansible_manager` | `tags_ansible_manager` |
 | `docker` | `tags_docker` |
 | `docker_install` | `tags_docker_install` |
@@ -240,6 +242,7 @@ The inventory enables Config Context retrieval and composes the global
 
 - `services_public_zone`
 - `services_internal_zone`
+- `services_lan_cidr`
 - `services_private_https_port`
 
 The public zone is retained for the externally hosted Hugo site. Homelab
@@ -247,6 +250,13 @@ application routes consume the internal zone and private HTTPS port. The raw
 `config_context` shape is an inventory-plugin detail and must not be used by
 roles or templates. The internal and public zones are independent values, and
 Infisical is reserved for secret material rather than DNS topology.
+
+The primary LAN CIDR follows the same global topology path. Its actual value is
+set only in the uncommitted `terraform/netbox/private.auto.tfvars`, published as
+`services.lan_cidr` by the NetBox `services` Config Context, and composed into
+Ansible inventory as `services_lan_cidr`. Service definitions and templates
+must consume this variable rather than hard-code the LAN CIDR. It is global
+topology and is not a device custom field.
 
 ---
 
@@ -276,6 +286,30 @@ compose:
 The OpenTofu module under `terraform/netbox` owns these custom-field definitions and their per-host values. NetBox is the source of truth, and the dynamic inventory is the consumer. The canonical fields preserve the former working Text representation under runtime-neutral names and may remain empty for devices where a default does not apply.
 
 The runtime-neutral migration is complete: inventory reads the four canonical custom fields directly, and the superseded Docker-named fields are no longer defined or exported. Runtime selection remains in service definitions, and service-specific storage remains application configuration.
+
+## Workstation addressing
+
+Workstations retain their static LAN IPv4 address as the NetBox management
+interface and primary IPv4. The inventory exposes that primary address as
+`local_ip` for LAN-aware configuration:
+
+```text
+Static LAN IPv4 → NetBox primary IPv4 → local_ip
+```
+
+The workstation's Tailscale IPv4 remains in the `tailscale_ip` device custom
+field. The existing inventory composition prefers it for `ansible_host`:
+
+```text
+Tailscale IPv4 → custom_fields.tailscale_ip → ansible_host
+```
+
+This keeps LAN-aware configuration anchored to a stable local address while
+the `mgt` controller uses Tailscale for SSH, including when the workstation is
+away from the home LAN. `blacktop` is tagged with `skynet`, `workstation`,
+`podman`, and `podman_install`, so it appears naturally in the corresponding
+`tags_*` groups and its `device_roles_workstation` group without
+workstation-specific inventory code.
 
 ---
 

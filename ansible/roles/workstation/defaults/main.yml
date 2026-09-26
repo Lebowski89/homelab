@@ -1,0 +1,51 @@
+---
+
+workstation_user: "{{ ansible_user }}"
+workstation_timezone: Australia/Melbourne
+
+workstation_packages:
+  - ca-certificates
+  - curl
+  - gnupg
+  - jq
+  - openssh-client
+  - ripgrep
+  - rsync
+  - wget
+
+workstation_dev_packages:
+  - git
+  - python3
+  - python3-pip
+  - python3-venv
+
+workstation_desktop_packages:
+  - xdg-user-dirs
+
+workstation_apt_update_cache: true
+
+workstation_vscode_enabled: true
+workstation_vscode_key_url: https://packages.microsoft.com/keys/microsoft.asc
+workstation_vscode_key_path: /usr/share/keyrings/microsoft-vscode.asc
+workstation_vscode_repository_path: /etc/apt/sources.list.d/vscode.sources
+workstation_vscode_extensions:
+  - redhat.ansible
+  - ms-python.python
+  - ms-vscode-remote.remote-ssh
+
+workstation_git_manage_config: false
+workstation_git_user_name: ""
+workstation_git_user_email: ""
+
+workstation_shell_directories:
+  - "{{ workstation_user_home }}/.local/bin"
+
+workstation_xdg_directories:
+  - "{{ workstation_user_home }}/Desktop"
+  - "{{ workstation_user_home }}/Documents"
+  - "{{ workstation_user_home }}/Downloads"
+  - "{{ workstation_user_home }}/Music"
+  - "{{ workstation_user_home }}/Pictures"
+  - "{{ workstation_user_home }}/Public"
+  - "{{ workstation_user_home }}/Templates"
+  - "{{ workstation_user_home }}/Videos"

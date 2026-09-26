@@ -1,0 +1,30 @@
+---
+
+- name: Workstation | Check timezone data file
+  ansible.builtin.stat:
+    path: "/usr/share/zoneinfo/{{ workstation_timezone }}"
+  register: workstation_timezone_file
+
+- name: Workstation | Validate timezone data file
+  ansible.builtin.assert:
+    that:
+      - workstation_timezone_file.stat.exists
+      - workstation_timezone_file.stat.isreg
+    fail_msg: "Unknown workstation_timezone: {{ workstation_timezone }}"
+
+- name: Workstation | Set local timezone link
+  become: true
+  ansible.builtin.file:
+    src: "/usr/share/zoneinfo/{{ workstation_timezone }}"
+    dest: /etc/localtime
+    state: link
+    force: true
+
+- name: Workstation | Record local timezone
+  become: true
+  ansible.builtin.copy:
+    content: "{{ workstation_timezone }}\n"
+    dest: /etc/timezone
+    owner: root
+    group: root
+    mode: "0644"

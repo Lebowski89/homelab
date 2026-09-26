@@ -1,0 +1,84 @@
+---
+
+- name: Workstation VS Code | Install repository prerequisites
+  become: true
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - gnupg
+    state: present
+    update_cache: "{{ workstation_apt_update_cache }}"
+    cache_valid_time: 3600
+
+- name: Workstation VS Code | Install Microsoft signing key
+  become: true
+  ansible.builtin.get_url:
+    url: "{{ workstation_vscode_key_url }}"
+    dest: "{{ workstation_vscode_key_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Workstation VS Code | Configure Microsoft repository
+  become: true
+  ansible.builtin.copy:
+    dest: "{{ workstation_vscode_repository_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Types: deb
+      URIs: https://packages.microsoft.com/repos/code
+      Suites: stable
+      Components: main
+      Architectures: amd64 arm64 armhf
+      Signed-By: {{ workstation_vscode_key_path }}
+  register: workstation_vscode_repository
+
+- name: Workstation VS Code | Install Visual Studio Code
+  become: true
+  ansible.builtin.apt:
+    name: code
+    state: present
+    update_cache: "{{ workstation_vscode_repository.changed or workstation_apt_update_cache }}"
+    cache_valid_time: "{{ 0 if workstation_vscode_repository.changed else 3600 }}"
+
+- name: Workstation VS Code | Check for Visual Studio Code command
+  ansible.builtin.stat:
+    path: /usr/bin/code
+  register: workstation_vscode_command
+
+- name: Workstation VS Code | List installed extensions
+  when: workstation_vscode_command.stat.exists
+  become: true
+  become_user: "{{ workstation_user }}"
+  ansible.builtin.command:
+    argv:
+      - code
+      - --list-extensions
+  register: workstation_vscode_installed_extensions
+  changed_when: false
+  check_mode: false
+  environment:
+    HOME: "{{ workstation_user_home }}"
+
+- name: Workstation VS Code | Install configured extensions
+  when:
+    - not ansible_check_mode
+    - workstation_vscode_command.stat.exists
+    - >-
+      _workstation_vscode_extension | lower not in
+      (workstation_vscode_installed_extensions.stdout_lines | default([]) | map('lower') | list)
+  become: true
+  become_user: "{{ workstation_user }}"
+  ansible.builtin.command:
+    argv:
+      - code
+      - --install-extension
+      - "{{ _workstation_vscode_extension }}"
+  loop: "{{ workstation_vscode_extensions }}"
+  loop_control:
+    loop_var: _workstation_vscode_extension
+  changed_when: true
+  environment:
+    HOME: "{{ workstation_user_home }}"

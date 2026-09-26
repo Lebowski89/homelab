@@ -1,0 +1,10 @@
+---
+
+- name: Workstation APT | Install baseline packages
+  when: workstation_packages | length > 0
+  become: true
+  ansible.builtin.apt:
+    name: "{{ workstation_packages }}"
+    state: present
+    update_cache: "{{ workstation_apt_update_cache }}"
+    cache_valid_time: 3600

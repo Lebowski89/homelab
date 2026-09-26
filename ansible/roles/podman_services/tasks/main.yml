@@ -110,6 +110,20 @@
 # RUNTIME CLEANUP
 ################################
 
+- name: Podman services | Stop shared-network services before recreate
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'recreate'
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
+    - podman_services_namespace_dependents | length > 0
+    - not (podman_services_namespace_dependents_quiesced | bool)
+  ansible.builtin.include_tasks:
+    file: sub_tasks/stop_shared_network_services.yml
+    apply:
+      tags: [recreate]
+  tags: [recreate]
+
 - name: Podman services | Check service before recreate
   when:
     - not ansible_check_mode
@@ -138,6 +152,21 @@
   ansible.builtin.systemd_service:
     name: "{{ podman_services_unit_name }}"
     state: stopped
+  tags: [recreate]
+
+- name: Podman services | Remove stopped container before recreate
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'recreate'
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
+  ansible.builtin.include_tasks:
+    file: sub_tasks/cleanup_stopped_rootful_container.yml
+    apply:
+      tags: [recreate]
+  vars:
+    podman_services_cleanup_unit_name: "{{ podman_services_unit_name }}"
+    podman_services_cleanup_container_name: "{{ podman_services_service.unit_name }}"
   tags: [recreate]
 
 ################################
@@ -351,12 +380,10 @@
 ################################
 
 - name: Podman services | Write Quadlet files
-  no_log: true
   ansible.builtin.include_tasks:
     file: sub_tasks/quadlets.yml
     apply:
       tags: [deploy, update, remove, recreate, drift, bootstrap]
-      no_log: true
       diff: false
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 

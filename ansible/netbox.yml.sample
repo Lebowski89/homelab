@@ -38,4 +38,5 @@ compose:
 
   services_public_zone: config_context['services']['public_zone']
   services_internal_zone: config_context['services']['internal_zone']
+  services_lan_cidr: config_context['services']['lan_cidr']
   services_private_https_port: config_context['services']['private_https_port']

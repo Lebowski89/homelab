@@ -1,0 +1,100 @@
+---
+
+- name: Workstation | Validate supported platform
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family | default("") == "Debian"
+      - ansible_facts.pkg_mgr | default("") == "apt"
+      - ansible_facts.service_mgr | default("") == "systemd"
+    fail_msg: >-
+      The workstation role supports Debian-family systems using APT and systemd.
+      Its initial supported target is LMDE 7 (Debian 13).
+
+- name: Workstation | Validate primary role variables
+  ansible.builtin.assert:
+    that:
+      - workstation_user is string
+      - workstation_user | trim | length > 0
+      - workstation_timezone is string
+      - workstation_timezone | trim | length > 0
+      - workstation_packages is sequence
+      - workstation_packages is not string
+      - workstation_dev_packages is sequence
+      - workstation_dev_packages is not string
+      - workstation_desktop_packages is sequence
+      - workstation_desktop_packages is not string
+      - workstation_apt_update_cache is boolean
+      - workstation_vscode_enabled is boolean
+      - workstation_vscode_extensions is sequence
+      - workstation_vscode_extensions is not string
+      - workstation_git_manage_config is boolean
+    fail_msg: Workstation variables have invalid types or required values are empty.
+
+- name: Workstation | Validate optional Git identity
+  when: workstation_git_manage_config
+  ansible.builtin.assert:
+    that:
+      - workstation_git_user_name is string
+      - workstation_git_user_name | trim | length > 0
+      - workstation_git_user_email is string
+      - workstation_git_user_email | trim | length > 0
+    fail_msg: >-
+      workstation_git_user_name and workstation_git_user_email must be set when
+      workstation_git_manage_config is enabled.
+
+- name: Workstation | Read workstation user account
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ workstation_user }}"
+
+- name: Workstation | Validate workstation user account
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.getent_passwd[workstation_user] is defined
+      - ansible_facts.getent_passwd[workstation_user][1] | int > 0
+      - ansible_facts.getent_passwd[workstation_user][2] | int >= 0
+      - ansible_facts.getent_passwd[workstation_user][4] | trim | length > 1
+    fail_msg: >-
+      Unable to resolve a valid non-root local account for
+      {{ workstation_user }}.
+
+- name: Workstation | Resolve workstation user facts
+  ansible.builtin.set_fact:
+    workstation_user_uid: "{{ ansible_facts.getent_passwd[workstation_user][1] | int }}"
+    workstation_user_gid: "{{ ansible_facts.getent_passwd[workstation_user][2] | int }}"
+    workstation_user_home: "{{ ansible_facts.getent_passwd[workstation_user][4] }}"
+
+- name: Workstation | Validate user path variables
+  ansible.builtin.assert:
+    that:
+      - workstation_shell_directories is sequence
+      - workstation_shell_directories is not string
+      - >-
+        workstation_shell_directories | select('string') | list | length
+        == workstation_shell_directories | length
+      - >-
+        workstation_shell_directories | select('string') | map('trim') | list
+        == workstation_shell_directories
+      - >-
+        workstation_shell_directories | select('string') | map('trim')
+        | reject('equalto', '') | list | length
+        == workstation_shell_directories | length
+      - >-
+        workstation_shell_directories | select('string') | select('match', '^/')
+        | list | length == workstation_shell_directories | length
+      - workstation_xdg_directories is sequence
+      - workstation_xdg_directories is not string
+      - >-
+        workstation_xdg_directories | select('string') | list | length
+        == workstation_xdg_directories | length
+      - >-
+        workstation_xdg_directories | select('string') | map('trim') | list
+        == workstation_xdg_directories
+      - >-
+        workstation_xdg_directories | select('string') | map('trim')
+        | reject('equalto', '') | list | length
+        == workstation_xdg_directories | length
+      - >-
+        workstation_xdg_directories | select('string') | select('match', '^/')
+        | list | length == workstation_xdg_directories | length
+    fail_msg: Workstation user paths must be lists of non-empty absolute path strings.

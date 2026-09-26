@@ -42,6 +42,7 @@
 - name: Deploy homelab services
   hosts: tags_skynet
   become: true
+  gather_facts: false
   any_errors_fatal: true
   strategy: linear
 
@@ -60,11 +61,21 @@
           tags: always
       tags: always
 
-    - name: Gather packages
+    - name: Gather service controller facts
       when: inventory_hostname == services_controller_host
-      ansible.builtin.package_facts:
-        manager: auto
-      tags: always
+      ansible.builtin.setup:
+      tags:
+        - infisical_deploy
+        - infisical_recreate
+        - infisical_podman_deploy
+        - infisical_podman_recreate
+        - deploy
+        - update
+        - remove
+        - recreate
+        - bootstrap
+        - drift
+        - reconcile
 
     - name: Resolve host timezone variable
       tags:
@@ -117,6 +128,28 @@
     # OS (CONFIG/SETTINGS)
     ################################
 
+    - name: Gather facts for Ubuntu role
+      ansible.builtin.setup:
+      tags:
+        - ubuntu
+        - ubuntu_apt
+        - ubuntu_repo
+        - ubuntu_venv
+        - ubuntu_requirements
+        - ubuntu_skynet
+        - ubuntu_sysctl
+        - ubuntu_pam
+        - ubuntu_network
+        - ubuntu_netplan
+
+    - name: Gather facts for PostgreSQL backup prerequisites
+      when: "'tags_postgres' in group_names"
+      ansible.builtin.setup:
+      tags:
+        - postgres_backup
+        - postgres_backup_setup
+        - postgres_backup_run
+
     - name: Include Ubuntu role
       when:
         - ansible_facts.os_family | default("") == "Debian"
@@ -139,8 +172,42 @@
         - postgres_backup_run
 
     ################################
+    # WORKSTATION
+    ################################
+
+    - name: Gather facts for Workstation role
+      when: "'tags_workstation' in group_names"
+      ansible.builtin.setup:
+      tags:
+        - workstation
+        - workstation_apt
+        - workstation_dev
+        - workstation_vscode
+        - workstation_shell
+        - workstation_desktop
+
+    - name: Include Workstation role
+      when: "'tags_workstation' in group_names"
+      ansible.builtin.include_role:
+        name: workstation
+        apply:
+          tags:
+            - workstation
+      tags:
+        - workstation
+        - workstation_apt
+        - workstation_dev
+        - workstation_vscode
+        - workstation_shell
+        - workstation_desktop
+
+    ################################
     # SYSTEMD-RESOLVED / NSS
     ################################
+
+    - name: Gather facts for systemd-resolved role
+      ansible.builtin.setup:
+      tags: [resolved]
 
     - name: Include systemd-resolved role
       when:
@@ -155,6 +222,15 @@
     ################################
     # DOCKER
     ################################
+
+    - name: Gather facts for Docker role
+      when: "'tags_docker' in group_names"
+      ansible.builtin.setup:
+      tags:
+        - docker
+        - docker_install
+        - docker_prune_timer
+        - docker_prune_unraid_user_script
 
     - name: Include Docker role
       when: "'tags_docker' in group_names"
@@ -178,6 +254,13 @@
     ################################
     # PODMAN
     ################################
+
+    - name: Gather facts for Podman role
+      when: "'tags_podman' in group_names or 'tags_podman_install' in group_names"
+      ansible.builtin.setup:
+      tags:
+        - podman
+        - podman_install
 
     - name: Include Podman role
       when: "'tags_podman' in group_names or 'tags_podman_install' in group_names"
@@ -217,6 +300,13 @@
     # TERRAFORM
     ################################
 
+    - name: Gather facts for OpenTofu installation
+      when: "'tags_opentofu_install' in group_names"
+      ansible.builtin.setup:
+      tags:
+        - opentofu
+        - opentofu_install
+
     - name: Include OpenTofu role
       when: "'tags_opentofu' in group_names"
       ansible.builtin.include_role:
@@ -229,6 +319,19 @@
     ################################
     # POSTGRES (CLUSTER)
     ################################
+
+    - name: Gather facts for PostgreSQL host management
+      when: "'tags_postgres' in group_names"
+      ansible.builtin.setup:
+      tags:
+        - postgres
+        - postgres_apt
+        - postgres_backup_remote_setup
+        - postgres_backup_remote_init
+        - postgres_backup_remote_run
+        - postgres_backup_remote_maintenance
+        - postgres_backup_restore_validation_setup
+        - postgres_backup_restore_validation_run
 
     - name: Include Postgres role
       ansible.builtin.include_role:
@@ -272,6 +375,11 @@
     # KEEPALIVED (DNS VIPS)
     ################################
 
+    - name: Gather facts for Keepalived role
+      when: "'tags_keepalived' in group_names"
+      ansible.builtin.setup:
+      tags: [keepalived]
+
     - name: Include Keepalived role
       when: "'tags_keepalived' in group_names"
       ansible.builtin.include_role:
@@ -283,6 +391,11 @@
     ################################
     # TECHNITIUM NATIVE (DNS)
     ################################
+
+    - name: Gather facts for Technitium native role
+      when: "'tags_technitium_native' in group_names"
+      ansible.builtin.setup:
+      tags: [technitium_native]
 
     - name: Include Technitium native role
       when: "'tags_technitium_native' in group_names"
@@ -371,6 +484,29 @@
         service_catalog_matched: "{{ service_catalog_selection.matched }}"
         service_catalog_selected: "{{ service_catalog_selection.selected }}"
         service_catalog_disabled_only_selection: "{{ service_catalog_selection.disabled_only }}"
+        service_catalog_action: >-
+          {{
+            'remove' if 'remove' in (ansible_run_tags | default([])) else
+            ('recreate' if 'recreate' in (ansible_run_tags | default([])) else
+            ('update' if 'update' in (ansible_run_tags | default([])) else
+            ('drift' if 'drift' in (ansible_run_tags | default([])) else
+            ('bootstrap' if 'bootstrap' in (ansible_run_tags | default([])) else 'deploy'))))
+          }}
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+    - name: Order selected Podman services by shared-network dependencies
+      when: inventory_hostname == services_controller_host
+      ansible.builtin.set_fact:
+        service_catalog_selected: >-
+          {{
+            (
+              service_catalog_effective
+              | service_catalog_podman_lifecycle_plan(
+                  service_catalog_selected,
+                  service_catalog_action
+                )
+            ).selected
+          }}
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Validate selected service dispatch hosts
@@ -444,6 +580,20 @@
             else
             'No matching service or target definitions were found.'
           }}
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+    - name: Gather facts on selected service dispatch hosts
+      when:
+        - inventory_hostname != services_controller_host
+        - >-
+          inventory_hostname in
+          (
+            service_catalog_selected
+            | map(attribute='dispatch_host')
+            | unique
+            | list
+          )
+      ansible.builtin.setup:
       tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Process globally ordered service catalog

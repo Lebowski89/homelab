@@ -1,0 +1,26 @@
+---
+
+- name: Workstation Development | Install development packages
+  when: workstation_dev_packages | length > 0
+  become: true
+  ansible.builtin.apt:
+    name: "{{ workstation_dev_packages }}"
+    state: present
+    update_cache: "{{ workstation_apt_update_cache }}"
+    cache_valid_time: 3600
+
+- name: Workstation Development | Manage Git identity block
+  when: workstation_git_manage_config
+  become: true
+  become_user: "{{ workstation_user }}"
+  ansible.builtin.blockinfile:
+    path: "{{ workstation_user_home }}/.gitconfig"
+    create: true
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user_gid }}"
+    mode: "0600"
+    marker: "# {mark} ANSIBLE MANAGED WORKSTATION IDENTITY"
+    block: |
+      [user]
+        name = {{ workstation_git_user_name }}
+        email = {{ workstation_git_user_email }}

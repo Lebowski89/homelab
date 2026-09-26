@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
 SERVICE_HOST_VARS = REPO_ROOT / "ansible/group_vars/all/services.yml"
 HOST_CONTRACT_TASKS = REPO_ROOT / "ansible/tasks/services_host_contract.yml"
+FILTER_PLUGINS_PATH = REPO_ROOT / "ansible/filter_plugins"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
 DOCKER_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_docker.yml"
 PODMAN_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_podman.yml"
@@ -88,6 +89,7 @@ def write_inventory(
         topology = {
             "services_public_zone": "public.example",
             "services_internal_zone": "private.example.internal",
+            "services_lan_cidr": "192.0.2.0/24",
             "services_private_https_port": 9443,
         }
     inventory = {
@@ -143,6 +145,7 @@ def run_host_contract(
     environment.update(
         {
             "ANSIBLE_CONFIG": str(REPO_ROOT / "ansible/ansible.cfg"),
+            "ANSIBLE_FILTER_PLUGINS": str(FILTER_PLUGINS_PATH),
             "ANSIBLE_LOCAL_TEMP": str(tmp_path / "ansible-local"),
         }
     )
@@ -179,6 +182,7 @@ def test_repository_service_host_contract_uses_real_netbox_groups_and_explicit_p
         | {
             "services_public_zone": "config_context['services']['public_zone']",
             "services_internal_zone": "config_context['services']['internal_zone']",
+            "services_lan_cidr": "config_context['services']['lan_cidr']",
             "services_private_https_port": "config_context['services']['private_https_port']",
         }
         == inventory["compose"]
@@ -187,15 +191,48 @@ def test_repository_service_host_contract_uses_real_netbox_groups_and_explicit_p
 
 def test_netbox_terraform_config_context_matches_inventory_topology_contract():
     main = (REPO_ROOT / "terraform/netbox/main.tf").read_text()
+    locals_source = (REPO_ROOT / "terraform/netbox/locals.tf").read_text()
+    private_sample = (REPO_ROOT / "terraform/netbox/private.auto.tfvars.sample").read_text()
     variables = (REPO_ROOT / "terraform/netbox/variables.tf").read_text()
     outputs = (REPO_ROOT / "terraform/netbox/outputs.tf").read_text()
 
     assert 'resource "netbox_config_context" "services"' in main
-    for key in ("public_zone", "internal_zone", "private_https_port"):
+    for key in ("public_zone", "internal_zone", "lan_cidr", "private_https_port"):
         assert f"{key}" in main
+    assert re.search(r"lan_cidr\s+=\s+local\.lan_cidr", main)
     assert "private_https_port = local.private_https_port" in main
+    assert 'variable "lan_cidr"' in variables
+    lan_cidr_block = variables.split('variable "lan_cidr"', 1)[1].split('variable "private_https_port"', 1)[0]
+    assert "default" not in lan_cidr_block
+    assert "can(cidrnetmask(trimspace(var.lan_cidr)))" in lan_cidr_block
+    assert re.search(r"lan_cidr\s+=\s+trimspace\(var\.lan_cidr\)", locals_source)
+    assert "prefix      = local.lan_cidr" in locals_source
+    assert re.search(r'^lan_cidr\s*=\s*"[^"]+"$', private_sample, re.MULTILINE)
+    assert "192.168." + "80.0/24" not in private_sample
     assert 'variable "private_https_port"' in variables
     assert 'output "private_https_port"' in outputs
+
+
+def test_lan_cidr_consumers_use_the_inventory_topology_variable():
+    gluetun = (SERVICES_DIR / "gluetun.yml").read_text()
+    qbittorrent_environment = (REPO_ROOT / "ansible/roles/service_common/templates/configs/qbittorrent/qBittorrent.env.j2").read_text()
+
+    assert 'FIREWALL_OUTBOUND_SUBNETS: "{{ services_lan_cidr }}"' in gluetun
+    assert "VPN_LAN_NETWORK={{ services_lan_cidr }}" in qbittorrent_environment
+
+
+def test_tracked_repository_does_not_contain_private_lan_cidr():
+    private_lan_cidr = "192.168." + "80.0/24"
+    result = subprocess.run(
+        ["git", "grep", "-n", "-F", private_lan_cidr],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1, result.stdout
+    assert result.stdout == ""
 
 
 def test_existing_netbox_state_consumers_prefer_explicit_private_port_then_canonical_output():
@@ -430,17 +467,26 @@ def test_service_topology_validation_rejects_missing_or_malformed_values(tmp_pat
         {
             "services_public_zone": "https://public.example",
             "services_internal_zone": "private.example.internal",
+            "services_lan_cidr": "192.0.2.0/24",
             "services_private_https_port": 9443,
         },
         {
             "services_public_zone": "public.example",
             "services_internal_zone": "private.example.internal/",
+            "services_lan_cidr": "192.0.2.0/24",
             "services_private_https_port": 9443,
         },
         {
             "services_public_zone": "public.example",
             "services_internal_zone": "private.example.internal",
+            "services_lan_cidr": "192.0.2.0/24",
             "services_private_https_port": 65536,
+        },
+        {
+            "services_public_zone": "public.example",
+            "services_internal_zone": "private.example.internal",
+            "services_lan_cidr": " ",
+            "services_private_https_port": 9443,
         },
     ]
 
@@ -457,3 +503,54 @@ def test_service_topology_validation_rejects_missing_or_malformed_values(tmp_pat
         assert result.returncode != 0
         assert "Validate canonical service topology" in output
         assert "Publish Docker adapter compatibility alias" not in output
+
+
+@pytest.mark.parametrize("cidr", ["192.168." + "80.0/24", "10.0.0.0/8"])
+def test_service_topology_validation_accepts_ipv4_cidrs(tmp_path: Path, cidr: str):
+    topology = {
+        "services_public_zone": "public.example",
+        "services_internal_zone": "private.example.internal",
+        "services_lan_cidr": cidr,
+        "services_private_https_port": 9443,
+    }
+
+    result = run_host_contract(
+        tmp_path,
+        controllers=["controller"],
+        storage_hosts=["storage"],
+        topology=topology,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "cidr",
+    [
+        "not-a-cidr",
+        "192.168.1.0",
+        "192.168.1.31/24",
+        "999.1.1.1/24",
+        "192.168.1.0/33",
+        "2001:db8::/32",
+    ],
+)
+def test_service_topology_validation_rejects_invalid_or_non_ipv4_cidrs(tmp_path: Path, cidr: str):
+    topology = {
+        "services_public_zone": "public.example",
+        "services_internal_zone": "private.example.internal",
+        "services_lan_cidr": cidr,
+        "services_private_https_port": 9443,
+    }
+
+    result = run_host_contract(
+        tmp_path,
+        controllers=["controller"],
+        storage_hosts=["storage"],
+        topology=topology,
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0
+    assert "Validate canonical service topology" in output
+    assert "Publish Docker adapter compatibility alias" not in output

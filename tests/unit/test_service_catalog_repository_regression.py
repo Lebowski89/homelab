@@ -71,7 +71,9 @@ def test_real_repository_catalog_contains_only_lightweight_selection_metadata():
 
     assert effective
     assert all("config" not in item for item in effective)
-    assert all(set(item) <= {"name", "target", "runtime", "tags", "enabled", "dispatch_host"} for item in effective)
+    assert all(set(item) <= {"name", "target", "runtime", "tags", "enabled", "dispatch_host", "podman_lifecycle"} for item in effective)
+    assert all("podman_lifecycle" not in item for item in effective if item["runtime"] == "docker")
+    assert all("podman_lifecycle" in item for item in effective if item["runtime"] == "podman")
 
 
 def test_real_repository_dispatch_hosts_are_lightweight_and_runtime_specific():
@@ -122,6 +124,9 @@ def test_real_repository_dispatch_hosts_match_repository_host_definitions():
     effective = catalog_filters.service_catalog_effective(services, "mgt")
     repository_hosts = {path.stem for path in (REPO_ROOT / "ansible/host_vars").glob("*.yml")}
     repository_hosts.update(path.name for path in (REPO_ROOT / "terraform/proxmox/vms").iterdir() if path.is_dir())
+    netbox_locals = (REPO_ROOT / "terraform/netbox/locals.tf").read_text().split("base_hosts = {", 1)[1]
+    netbox_base_hosts = netbox_locals.split("\n  }\n", 1)[0]
+    repository_hosts.update(re.findall(r"^    ([a-z0-9_-]+) = \{$", netbox_base_hosts, re.MULTILINE))
 
     assert effective
     assert all(entry["dispatch_host"] in repository_hosts for entry in effective)
@@ -174,6 +179,40 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
             "host_port": 18080,
             "container_port": 8080,
             "execution": {"mode": "rootless", "host_user": "podman-adminer"},
+            "systemd": {
+                "after": ["network-online.target"],
+                "restart": "on-failure",
+                "restart_sec": "10s",
+            },
+        },
+        "gluetun": {
+            "network": "gluetun",
+            "host": "blacktop",
+            "host_ports": [5800, 3009],
+            "container_ports": [5800, 3001],
+            "execution": {"mode": "rootful"},
+            "systemd": {
+                "after": ["network-online.target"],
+                "restart": "on-failure",
+                "restart_sec": "10s",
+            },
+        },
+        "jdownloader2": {
+            "host": "blacktop",
+            "network_mode": "gluetun.container",
+            "execution": {"mode": "rootful"},
+            "systemd": {
+                "after": ["network-online.target"],
+                "restart": "on-failure",
+                "restart_sec": "10s",
+            },
+        },
+        "mullvad_browser": {
+            "host": "blacktop",
+            "name": "mullvad-browser",
+            "network_mode": "gluetun.container",
+            "shm_size": "1gb",
+            "execution": {"mode": "rootful"},
             "systemd": {
                 "after": ["network-online.target"],
                 "restart": "on-failure",
@@ -245,30 +284,51 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
                         "container_host_puid": 1000,
                         "container_host_pgid": 1000,
                         "local_ip": "192.0.2.10",
-                    }
+                    },
+                    "blacktop": {
+                        "container_host_appdata_root": "/opt/appdata",
+                        "container_host_data_root": "/opt/data",
+                        "container_host_puid": 1000,
+                        "container_host_pgid": 1000,
+                        "local_ip": "192.0.2.40",
+                    },
                 },
                 "local_ip": "192.0.2.10",
                 "services_controller_host": "manager",
                 "services_public_zone": "public.example",
                 "services_internal_zone": "private.example.internal",
+                "services_lan_cidr": "192.0.2.0/24",
                 "services_private_https_port": 9443,
                 "timezone": "Australia/Melbourne",
             },
         )
         assert set(rendered_effective) <= podman_filters._SUPPORTED_TOP_LEVEL_FIELDS
         normalized = podman_filters.podman_service_normalize(rendered_effective, item.get("target", item["name"]))
-        assert normalized["name"] == item["name"]
-        assert normalized["unit_name"] == item["name"]
+        expected_name = expected[item["name"]].get("name", item["name"])
+        assert normalized["name"] == expected_name
+        assert normalized["unit_name"] == expected_name
         assert normalized["image"] == effective["image"]
         behavior = expected[item["name"]]
-        assert normalized["network"] == {
-            "name": behavior["network"],
-            "driver": "bridge",
-            "external": False,
-        }
+        if "network" in behavior:
+            assert normalized["network"] == {
+                "name": behavior["network"],
+                "driver": "bridge",
+                "external": False,
+            }
+        else:
+            assert normalized["network"] is None
         assert normalized["container"]["host"] == behavior["host"]
-        assert normalized["container"]["ports"][0]["host"] == behavior["host_port"]
-        assert normalized["container"]["ports"][0]["container"] == behavior["container_port"]
+        if "host_port" in behavior:
+            assert normalized["container"]["ports"][0]["host"] == behavior["host_port"]
+            assert normalized["container"]["ports"][0]["container"] == behavior["container_port"]
+        elif "host_ports" in behavior:
+            assert [port["host"] for port in normalized["container"]["ports"]] == behavior["host_ports"]
+            assert [port["container"] for port in normalized["container"]["ports"]] == behavior["container_ports"]
+        if "network_mode" in behavior:
+            assert normalized["container"]["network_mode"] == behavior["network_mode"]
+            assert "ports" not in normalized["container"]
+        if "shm_size" in behavior:
+            assert normalized["container"]["shm_size"] == behavior["shm_size"]
         assert normalized["container"]["systemd"] == behavior["systemd"]
         assert normalized["execution"] == behavior["execution"]
         if item["name"] == "thelounge":
@@ -284,7 +344,15 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
             ]
         checked.append((item["name"], item.get("target")))
 
-    assert checked == [("adminer", None), ("homepage", None), ("n8n", None), ("thelounge", None)]
+    assert checked == [
+        ("adminer", None),
+        ("gluetun", None),
+        ("homepage", None),
+        ("jdownloader2", None),
+        ("mullvad_browser", None),
+        ("n8n", None),
+        ("thelounge", None),
+    ]
 
 
 def test_repository_secret_policy_is_runtime_neutral_and_defaults_safely():
@@ -556,6 +624,69 @@ def test_cross_host_standalone_services_retain_global_catalog_order():
     ]
 
 
+def test_service_play_gathers_facts_only_for_selected_operations_and_hosts():
+    playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
+    deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")
+    pre_tasks = deploy_play["pre_tasks"]
+    deploy_tasks = deploy_play["tasks"]
+    service_tags = {"deploy", "update", "remove", "recreate", "bootstrap", "drift"}
+
+    controller_facts = task_named(pre_tasks, "Gather service controller facts")
+    dispatch_facts = task_named(deploy_tasks, "Gather facts on selected service dispatch hosts")
+    ubuntu_facts = task_named(deploy_tasks, "Gather facts for Ubuntu role")
+    postgres_backup_facts = task_named(
+        deploy_tasks,
+        "Gather facts for PostgreSQL backup prerequisites",
+    )
+    postgres_host_facts = task_named(
+        deploy_tasks,
+        "Gather facts for PostgreSQL host management",
+    )
+    selection_assertion = task_named(deploy_tasks, "Assert selected service processing list was built")
+    global_dispatch = task_named(deploy_tasks, "Process globally ordered service catalog")
+    all_setup_tasks = [task for task in [*pre_tasks, *deploy_tasks] if "ansible.builtin.setup" in task]
+    host_management_setup_tasks = [task for task in all_setup_tasks if task not in (controller_facts, dispatch_facts)]
+
+    assert deploy_play["gather_facts"] is False
+    assert deploy_play["any_errors_fatal"] is True
+    assert "ignore_unreachable" not in str(deploy_play)
+    assert "blacktop" not in str(deploy_play)
+    assert controller_facts["when"] == "inventory_hostname == services_controller_host"
+    assert service_tags <= set(controller_facts["tags"])
+    assert dispatch_facts["when"][0] == "inventory_hostname != services_controller_host"
+    assert "service_catalog_selected" in dispatch_facts["when"][1]
+    assert "map(attribute='dispatch_host')" in dispatch_facts["when"][1]
+    assert set(dispatch_facts["tags"]) == service_tags
+    assert deploy_tasks.index(selection_assertion) < deploy_tasks.index(dispatch_facts)
+    assert deploy_tasks.index(dispatch_facts) < deploy_tasks.index(global_dispatch)
+    assert all(task.get("tags") != "always" for task in all_setup_tasks)
+    assert all(service_tags.isdisjoint(set(task["tags"])) for task in host_management_setup_tasks)
+    postgres_backup_tags = {
+        "postgres_backup",
+        "postgres_backup_setup",
+        "postgres_backup_run",
+    }
+    assert set(ubuntu_facts["tags"]).isdisjoint(postgres_backup_tags)
+    assert postgres_backup_facts["when"] == "'tags_postgres' in group_names"
+    assert set(postgres_backup_facts["tags"]) == postgres_backup_tags
+    assert postgres_host_facts["when"] == "'tags_postgres' in group_names"
+    assert set(postgres_host_facts["tags"]).isdisjoint(postgres_backup_tags)
+
+    setup_names = {task["name"] for task in host_management_setup_tasks}
+    assert setup_names == {
+        "Gather facts for Ubuntu role",
+        "Gather facts for Workstation role",
+        "Gather facts for systemd-resolved role",
+        "Gather facts for Docker role",
+        "Gather facts for Podman role",
+        "Gather facts for OpenTofu installation",
+        "Gather facts for PostgreSQL backup prerequisites",
+        "Gather facts for PostgreSQL host management",
+        "Gather facts for Keepalived role",
+        "Gather facts for Technitium native role",
+    }
+
+
 def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
     deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")
@@ -564,6 +695,7 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     catalog_task = task_named(playbook, "Build service catalog processing list from service definitions")
     selection_task = task_named(playbook, "Build selected service catalog processing list")
     selection_extract_task = task_named(playbook, "Extract service catalog selection facts")
+    lifecycle_order_task = task_named(playbook, "Order selected Podman services by shared-network dependencies")
     dispatch_host_validation = task_named(playbook, "Validate selected service dispatch hosts")
     share_task = task_named(playbook, "Share lightweight service catalog selection with play hosts")
     global_dispatch_task = task_named(playbook, "Process globally ordered service catalog")
@@ -587,7 +719,8 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert "service_catalog_dispatch_item.target" in dispatch_failure
     assert "service_catalog_dispatch_item.dispatch_host" in dispatch_failure
     assert set(dispatch_host_validation["tags"]) == expected_tags
-    assert deploy_tasks.index(selection_extract_task) < deploy_tasks.index(dispatch_host_validation)
+    assert deploy_tasks.index(selection_extract_task) < deploy_tasks.index(lifecycle_order_task)
+    assert deploy_tasks.index(lifecycle_order_task) < deploy_tasks.index(dispatch_host_validation)
     assert deploy_tasks.index(dispatch_host_validation) < deploy_tasks.index(share_task)
     assert deploy_tasks.index(share_task) < deploy_tasks.index(global_dispatch_task)
     assert deploy_tasks.index(global_dispatch_task) < deploy_tasks.index(deploy_all_task)
@@ -607,6 +740,13 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert global_dispatch_task["ansible.builtin.include_tasks"]["file"] == "tasks/service_catalog_dispatch.yml"
     assert set(global_dispatch_task["tags"]) == expected_tags
     assert set(global_dispatch_task["ansible.builtin.include_tasks"]["apply"]["tags"]) == expected_tags
+    lifecycle_expression = lifecycle_order_task["ansible.builtin.set_fact"]["service_catalog_selected"]
+    assert "svcfiles" not in lifecycle_expression
+    assert "service_catalog_podman_lifecycle_plan" in lifecycle_expression
+    assert "service_catalog_effective" in lifecycle_expression
+    assert "service_catalog_selected" in lifecycle_expression
+    assert ").selected" in lifecycle_expression
+    assert "service_catalog_lifecycle_plan" not in PLAYBOOK_PATH.read_text()
     assert "service_catalog_host_selected" not in PLAYBOOK_PATH.read_text()
     assert "docker_services_selected" not in PLAYBOOK_PATH.read_text()
     assert "podman_services_selected" not in PLAYBOOK_PATH.read_text()
@@ -705,6 +845,9 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
 
     assert docker_include["vars"]["docker_services_service_cfg"] == "{{ docker_services_dispatch_config }}"
     assert podman_include["vars"]["podman_services_service_cfg"] == "{{ podman_services_dispatch_config }}"
+    assert podman_include["vars"]["podman_services_managed_namespace_dependents"] == (
+        "{{ service_catalog_podman_service.podman_lifecycle.namespace_dependents | default([]) }}"
+    )
     assert podman_include["vars"]["ansible_pipelining"] is True
     assert "ansible_pipelining" not in docker_include["vars"]
     assert "service_catalog_merge_target" not in str(docker_include["vars"])
@@ -721,6 +864,29 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert "merge_target" not in adapter_tasks
     assert "docker_services_service_cfg.targets is not defined" in docker_assert["ansible.builtin.assert"]["that"]
     assert "podman_services_service_cfg.targets is not defined" in podman_assert["ansible.builtin.assert"]["that"]
+
+
+def test_real_vpn_namespace_stack_has_managed_provider_edges_and_safe_recreate_order():
+    catalog_filters = load_module(
+        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
+        "service_catalog_namespace_lifecycle_repository",
+    )
+    services = load_services()
+    effective = catalog_filters.service_catalog_effective(services, "manager")
+    selected = catalog_filters.service_catalog_select(effective, ["gluetun_stack"])["selected"]
+
+    plan = catalog_filters.service_catalog_podman_lifecycle_plan(effective, selected, "recreate")
+
+    assert plan["dependencies"] == [
+        {"consumer": "jdownloader2", "provider": "gluetun", "host": "blacktop"},
+        {"consumer": "mullvad_browser", "provider": "gluetun", "host": "blacktop"},
+    ]
+    assert [entry["name"] for entry in plan["selected"]] == ["gluetun", "jdownloader2", "mullvad_browser"]
+    dependents = plan["selected"][0]["podman_lifecycle"]["namespace_dependents"]
+    assert [dependent["unit_name"] for dependent in dependents] == [
+        "jdownloader2.service",
+        "mullvad-browser.service",
+    ]
 
 
 def test_runtime_partition_only_sends_podman_entries_to_strict_podman_normalization():

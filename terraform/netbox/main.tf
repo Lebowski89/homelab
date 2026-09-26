@@ -19,6 +19,7 @@ resource "netbox_config_context" "services" {
     services = {
       public_zone        = local.cloudflare_zone
       internal_zone      = local.internal_zone
+      lan_cidr           = local.lan_cidr
       private_https_port = local.private_https_port
     }
   })

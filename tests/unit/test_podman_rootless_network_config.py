@@ -74,8 +74,8 @@ def test_rootless_pasta_configuration_rejects_incoherent_values(subnet, gateway,
 
 def test_rootless_pasta_route_overlap_ignores_default_and_accepts_unrelated_routes():
     routes = [
-        {"dst": "default", "gateway": "192.168.80.1"},
-        {"dst": "192.168.80.0/24", "dev": "ens18"},
+        {"dst": "default", "gateway": "192.0.2.1"},
+        {"dst": "192.0.2.0/24", "dev": "ens18"},
         {"dst": "172.98.0.0/24", "dev": "docker_gwbridge"},
     ]
 

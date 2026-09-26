@@ -21,6 +21,26 @@
     podman_services_unit_name: "{{ podman_services_service.unit_name ~ '.service' }}"
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
+- name: Init | Validate shared-network dependent services
+  ansible.builtin.assert:
+    that:
+      - podman_services_managed_namespace_dependents is sequence
+      - podman_services_managed_namespace_dependents is not string
+      - podman_services_namespace_dependent is mapping
+      - podman_services_namespace_dependent.container_name is string
+      - podman_services_namespace_dependent.container_name is match('^[A-Za-z0-9][A-Za-z0-9_.-]*$')
+      - podman_services_namespace_dependent.unit_name is string
+      - podman_services_namespace_dependent.unit_name is match('^[A-Za-z0-9][A-Za-z0-9_.-]*\\.service$')
+      - podman_services_namespace_dependent.dispatch_host == inventory_hostname
+    fail_msg: >-
+      Managed Podman shared-network dependency metadata must contain same-host system
+      unit names derived by the service-catalog lifecycle planner.
+  loop: "{{ podman_services_managed_namespace_dependents }}"
+  loop_control:
+    loop_var: podman_services_namespace_dependent
+    label: "{{ podman_services_namespace_dependent.unit_name | default('invalid') }}"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
 - name: Init | Reset temporary service state
   ansible.builtin.set_fact:
     podman_services_secret_values: {}
@@ -57,6 +77,10 @@
     podman_services_account_marker: {}
     podman_services_account_marker_path: ""
     podman_services_remove_generated_paths: []
+    podman_services_namespace_dependents: "{{ podman_services_managed_namespace_dependents }}"
+    podman_services_active_namespace_dependents: []
+    podman_services_loaded_namespace_dependents: []
+    podman_services_namespace_dependents_quiesced: false
   no_log: true
   diff: false
   tags: [deploy, update, remove, recreate, drift, bootstrap]

@@ -1,0 +1,61 @@
+---
+
+mullvad_browser:
+  ################################
+  # IDENTITY
+  ################################
+  enabled: true
+  runtime: podman
+  tags: [mullvad-browser, gluetun_stack]
+  name: mullvad-browser
+  ################################
+  # IMAGE/PROCESS
+  ################################
+  image: lscr.io/linuxserver/mullvad-browser:15.0.21-ls201
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
+  environment:
+    AUTO_GPU: "false"
+    DRINODE: /dev/dri/renderD129
+    DRI_NODE: /dev/dri/renderD129
+    PIXELFLUX_WAYLAND: "true"
+    PGID: "{{ hostvars['blacktop'].container_host_pgid }}"
+    PUID: "{{ hostvars['blacktop'].container_host_puid }}"
+    TZ: "{{ timezone }}"
+  ################################
+  # CONNECTIVITY
+  ################################
+  network_mode: "container:gluetun"
+  ################################
+  # FILESYSTEM
+  ################################
+  paths:
+    - path: "{{ hostvars['blacktop'].container_host_appdata_root }}/mullvad-browser"
+      state: directory
+      mode: "0750"
+  volumes:
+    config:
+      type: bind
+      source: "{{ hostvars['blacktop'].container_host_appdata_root }}/mullvad-browser"
+      target: /config
+      read_only: false
+  ################################
+  # DEVICES/SECURITY
+  ################################
+  devices:
+    - "/dev/dri/card1:/dev/dri/card1"
+    - "/dev/dri/renderD129:/dev/dri/renderD129"
+  shm_size: 1gb
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
+  deploy:
+    type: container
+    host: blacktop
+    execution:
+      mode: rootful
+  systemd:
+    after: [network-online.target]
+    restart: on-failure
+    restart_sec: 10s

@@ -64,6 +64,19 @@
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
+- name: Service | Stop shared-network services before execution change
+  when:
+    - not ansible_check_mode
+    - podman_services_state in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_execution_transition | bool
+    - podman_services_namespace_dependents | length > 0
+    - not (podman_services_namespace_dependents_quiesced | bool)
+  ansible.builtin.include_tasks:
+    file: stop_shared_network_services.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Service | Switch execution settings when needed
   when:
     - not ansible_check_mode
@@ -86,7 +99,22 @@
     state: started
   tags: [deploy, bootstrap]
 
-- name: Service | Restart system service when configuration changed
+- name: Service | Stop shared-network services before update
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'update'
+    - podman_services_requires_restart | bool
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
+    - podman_services_namespace_dependents | length > 0
+    - not (podman_services_namespace_dependents_quiesced | bool)
+  ansible.builtin.include_tasks:
+    file: stop_shared_network_services.yml
+    apply:
+      tags: [update]
+  tags: [update]
+
+- name: Service | Stop system service before update replacement
   when:
     - not ansible_check_mode
     - podman_services_state == 'update'
@@ -95,10 +123,38 @@
     - not (podman_services_execution_transition | bool)
   ansible.builtin.systemd_service:
     name: "{{ podman_services_unit_name }}"
-    state: restarted
+    state: stopped
   tags: [update]
 
-- name: Service | Restart system service for recreate
+- name: Service | Remove stopped container before update replacement
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'update'
+    - podman_services_requires_restart | bool
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
+  ansible.builtin.include_tasks:
+    file: cleanup_stopped_rootful_container.yml
+    apply:
+      tags: [update]
+  vars:
+    podman_services_cleanup_unit_name: "{{ podman_services_unit_name }}"
+    podman_services_cleanup_container_name: "{{ podman_services_service.unit_name }}"
+  tags: [update]
+
+- name: Service | Start system service after update replacement
+  when:
+    - not ansible_check_mode
+    - podman_services_state == 'update'
+    - podman_services_requires_restart | bool
+    - podman_services_execution.mode == 'rootful'
+    - not (podman_services_execution_transition | bool)
+  ansible.builtin.systemd_service:
+    name: "{{ podman_services_unit_name }}"
+    state: started
+  tags: [update]
+
+- name: Service | Start system service for recreate
   when:
     - not ansible_check_mode
     - podman_services_state == 'recreate'
@@ -106,7 +162,7 @@
     - not (podman_services_execution_transition | bool)
   ansible.builtin.systemd_service:
     name: "{{ podman_services_unit_name }}"
-    state: restarted
+    state: started
   tags: [recreate]
 
 - name: Service | Start user service
@@ -176,6 +232,16 @@
   ansible.builtin.command:
     argv: [systemctl, --user, is-active, "{{ podman_services_unit_name }}"]
   changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service | Restore previously running shared-network services
+  when:
+    - not ansible_check_mode
+    - podman_services_namespace_dependents_quiesced | bool
+  ansible.builtin.include_tasks:
+    file: restore_shared_network_services.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Service | Ensure execution state directory exists

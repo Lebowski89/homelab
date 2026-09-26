@@ -1,13 +1,15 @@
 """Provide runtime-neutral service catalog filters to Ansible.
 
 These filters build lightweight Docker and Podman selection metadata, select
-and partition that metadata, and materialize a canonical base-plus-target
-configuration only when dispatch needs it. This keeps shared catalog facts
-small while giving both runtime adapters identical target merge semantics.
+and partition that metadata, plan managed Podman namespace dependencies, and
+materialize a canonical base-plus-target configuration only when dispatch needs
+it. This keeps shared catalog facts small while giving both runtime adapters
+identical target merge semantics.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterable, Mapping
 from copy import deepcopy
 from typing import Any
@@ -16,6 +18,8 @@ from ansible.errors import AnsibleFilterError
 
 VALID_RUNTIMES = {"docker", "podman"}
 _REPLACE_LIST_KEYS = {"command", "entrypoint"}
+_PODMAN_RESOURCE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
+_SERVICE_ACTIONS = {"deploy", "update", "remove", "recreate", "bootstrap", "drift"}
 
 
 def _as_list(value: Any, *, name: str = "value") -> list[Any]:
@@ -244,6 +248,53 @@ def _dispatch_host(
     return raw_host.strip()
 
 
+def _effective_value(
+    service_cfg: Mapping[str, Any],
+    target_cfg: Mapping[str, Any] | None,
+    key: str,
+    default: Any = None,
+) -> Any:
+    if target_cfg is not None and key in target_cfg:
+        return target_cfg[key]
+    return service_cfg.get(key, default)
+
+
+def _podman_lifecycle_metadata(
+    service_name: str,
+    target_name: str | None,
+    service_cfg: Mapping[str, Any],
+    target_cfg: Mapping[str, Any] | None,
+    *,
+    name: str,
+) -> dict[str, Any]:
+    default_name = service_name if target_name is None else f"{service_name}-{target_name}"
+    container_name = _podman_resource_name(
+        _effective_value(service_cfg, target_cfg, "name", default_name),
+        name=f"{name}.name",
+    )
+    raw_network_mode = _effective_value(service_cfg, target_cfg, "network_mode")
+    namespace_provider = None
+    if raw_network_mode is not None:
+        if not isinstance(raw_network_mode, str):
+            raise AnsibleFilterError(f'{name}.network_mode must use the constrained "container:<managed-container-name>" form')
+        match = re.fullmatch(r"container:([A-Za-z0-9][A-Za-z0-9_.-]*)", raw_network_mode.strip())
+        if match is None:
+            raise AnsibleFilterError(f'{name}.network_mode must use the constrained "container:<managed-container-name>" form')
+        namespace_provider = _podman_resource_name(
+            match.group(1),
+            name=f"{name}.network_mode container reference",
+        )
+
+    deploy = _effective_section(service_cfg, target_cfg, "deploy", name=name)
+    execution = deploy.get("execution", {})
+    execution_mode = execution.get("mode", "rootful") if isinstance(execution, Mapping) else "invalid"
+    return {
+        "container_name": container_name,
+        "namespace_provider": namespace_provider,
+        "execution_mode": execution_mode,
+    }
+
+
 def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) -> list[dict[str, Any]]:
     """Expand service definitions into lightweight dispatch metadata.
 
@@ -263,6 +314,9 @@ def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) 
     Returns:
         Ordered metadata records containing ``name``, ``tags``, ``enabled``,
         ``runtime``, and ``dispatch_host``, plus ``target`` where applicable.
+        Podman records also contain compact ``podman_lifecycle`` identity and
+        namespace-reference metadata; complete configurations are never
+        embedded.
 
     Raises:
         AnsibleFilterError: If the catalog or one of its service/target sections
@@ -294,22 +348,29 @@ def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) 
 
         if targets is None:
             _validate_runtime_fields(runtime=service_runtime, has_systemd="systemd" in service_cfg, name=f"Service {service_name!r}")
-            out.append(
-                {
-                    "name": service_name,
-                    "tags": service_tags,
-                    "enabled": service_enabled,
-                    "runtime": service_runtime,
-                    "dispatch_host": _dispatch_host(
-                        service_name,
-                        service_runtime,
-                        service_cfg,
-                        None,
-                        normalized_docker_manager,
-                        name=service_name,
-                    ),
-                }
-            )
+            item = {
+                "name": service_name,
+                "tags": service_tags,
+                "enabled": service_enabled,
+                "runtime": service_runtime,
+                "dispatch_host": _dispatch_host(
+                    service_name,
+                    service_runtime,
+                    service_cfg,
+                    None,
+                    normalized_docker_manager,
+                    name=service_name,
+                ),
+            }
+            if service_runtime == "podman":
+                item["podman_lifecycle"] = _podman_lifecycle_metadata(
+                    service_name,
+                    None,
+                    service_cfg,
+                    None,
+                    name=service_name,
+                )
+            out.append(item)
             continue
 
         if not isinstance(targets, Mapping):
@@ -339,23 +400,30 @@ def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) 
                 service_tags + [target_name] + _as_list(target_cfg.get("tags", []), name=f"{service_name}.targets.{target_name}.tags")
             )
             target_path = f"{service_name}.targets.{target_name}"
-            out.append(
-                {
-                    "name": service_name,
-                    "target": target_name,
-                    "tags": target_tags,
-                    "enabled": service_enabled and target_enabled,
-                    "runtime": target_runtime,
-                    "dispatch_host": _dispatch_host(
-                        service_name,
-                        target_runtime,
-                        service_cfg,
-                        target_cfg,
-                        normalized_docker_manager,
-                        name=target_path,
-                    ),
-                }
-            )
+            item = {
+                "name": service_name,
+                "target": target_name,
+                "tags": target_tags,
+                "enabled": service_enabled and target_enabled,
+                "runtime": target_runtime,
+                "dispatch_host": _dispatch_host(
+                    service_name,
+                    target_runtime,
+                    service_cfg,
+                    target_cfg,
+                    normalized_docker_manager,
+                    name=target_path,
+                ),
+            }
+            if target_runtime == "podman":
+                item["podman_lifecycle"] = _podman_lifecycle_metadata(
+                    service_name,
+                    str(target_name),
+                    service_cfg,
+                    target_cfg,
+                    name=target_path,
+                )
+            out.append(item)
     return out
 
 
@@ -429,6 +497,253 @@ def service_catalog_by_runtime(items: list[Mapping[str, Any]], runtime: str) -> 
     return [item for item in items if _runtime(item.get("runtime"), name=f"{item.get('name', 'item')}.runtime") == wanted]
 
 
+def _catalog_identity(item: Mapping[str, Any]) -> tuple[str, str | None]:
+    """Return the stable catalog identity for one lightweight record."""
+    name = item.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise AnsibleFilterError(f"Catalog item name must be a non-empty string, got {name!r}")
+    target = item.get("target")
+    if target is not None and (not isinstance(target, str) or not target.strip()):
+        raise AnsibleFilterError(f"Catalog item {name!r} target must be a non-empty string, got {target!r}")
+    return name.strip(), target.strip() if isinstance(target, str) else None
+
+
+def _catalog_label(identity: tuple[str, str | None]) -> str:
+    return f"{identity[0]}:{identity[1]}" if identity[1] is not None else identity[0]
+
+
+def _podman_resource_name(value: Any, *, name: str) -> str:
+    if not isinstance(value, str) or not value.strip() or not _PODMAN_RESOURCE_NAME_RE.fullmatch(value.strip()):
+        raise AnsibleFilterError(f"{name} must be a valid Quadlet resource name matching {_PODMAN_RESOURCE_NAME_RE.pattern}; got {value!r}")
+    return value.strip()
+
+
+def service_catalog_podman_lifecycle_plan(
+    items: list[Mapping[str, Any]],
+    selected: list[Mapping[str, Any]],
+    action: str,
+) -> dict[str, Any]:
+    """Plan managed Podman container-namespace lifecycle dependencies.
+
+    A rootful Podman service using ``network_mode: container:<name>`` depends
+    on the same-host managed Podman service whose effective container name is
+    ``<name>``. The returned selection is provider-first for ordinary actions
+    and consumer-first for remove. Each selected Podman record also carries its
+    transitively managed dependent services in recovery order so the runtime
+    adapter can stop them before replacing the provider and restore only
+    dependents that were active.
+
+    References with no matching managed Podman service remain external and do
+    not gain lifecycle edges. Docker records are never namespace providers.
+    """
+    if not isinstance(items, list):
+        raise AnsibleFilterError(f"items must be a list, got {type(items).__name__}")
+    if not isinstance(selected, list):
+        raise AnsibleFilterError(f"selected must be a list, got {type(selected).__name__}")
+    if action not in _SERVICE_ACTIONS:
+        raise AnsibleFilterError(f"action must be one of: {', '.join(sorted(_SERVICE_ACTIONS))}; got {action!r}")
+
+    records: dict[tuple[str, str | None], dict[str, Any]] = {}
+    podman_ids: list[tuple[str, str | None]] = []
+    providers_by_host_name: dict[tuple[str, str], list[tuple[str, str | None]]] = {}
+    providers_by_name: dict[str, list[tuple[str, str | None]]] = {}
+
+    for position, item in enumerate(items):
+        if not isinstance(item, Mapping):
+            raise AnsibleFilterError(f"Catalog item {position} must be a mapping, got {type(item).__name__}")
+        identity = _catalog_identity(item)
+        if identity in records:
+            raise AnsibleFilterError(f"Duplicate catalog identity {_catalog_label(identity)!r}")
+        runtime = _runtime(item.get("runtime"), name=f"{_catalog_label(identity)}.runtime")
+        record = {
+            "item": item,
+            "position": position,
+            "runtime": runtime,
+        }
+        records[identity] = record
+        if runtime != "podman":
+            continue
+
+        lifecycle = item.get("podman_lifecycle")
+        if not isinstance(lifecycle, Mapping):
+            raise AnsibleFilterError(f"{_catalog_label(identity)} is missing lightweight Podman lifecycle metadata")
+        container_name = _podman_resource_name(lifecycle.get("container_name"), name=f"{_catalog_label(identity)}.name")
+        namespace_provider = lifecycle.get("namespace_provider")
+        if namespace_provider is not None:
+            namespace_provider = _podman_resource_name(
+                namespace_provider,
+                name=f"{_catalog_label(identity)}.network_mode container reference",
+            )
+        host = item.get("dispatch_host")
+        if not isinstance(host, str) or not host.strip():
+            raise AnsibleFilterError(f"{_catalog_label(identity)} dispatch host must be a non-empty string, got {host!r}")
+        record.update(
+            {
+                "container_name": container_name,
+                "host": host.strip(),
+                "namespace_provider": namespace_provider,
+                "execution_mode": lifecycle.get("execution_mode", "rootful"),
+            }
+        )
+        podman_ids.append(identity)
+        providers_by_host_name.setdefault((host.strip(), container_name), []).append(identity)
+        providers_by_name.setdefault(container_name, []).append(identity)
+
+    selected_ids: list[tuple[str, str | None]] = []
+    for position, item in enumerate(selected):
+        if not isinstance(item, Mapping):
+            raise AnsibleFilterError(f"Selected item {position} must be a mapping, got {type(item).__name__}")
+        identity = _catalog_identity(item)
+        if identity not in records:
+            raise AnsibleFilterError(f"Selected item {_catalog_label(identity)!r} is not present in the effective catalog")
+        selected_ids.append(identity)
+
+    provider_for: dict[tuple[str, str | None], tuple[str, str | None]] = {}
+    consumers_for: dict[tuple[str, str | None], list[tuple[str, str | None]]] = {identity: [] for identity in podman_ids}
+    dependencies: list[dict[str, str]] = []
+    for consumer_id in podman_ids:
+        consumer = records[consumer_id]
+        provider_name = consumer["namespace_provider"]
+        if provider_name is None:
+            continue
+        if consumer["execution_mode"] != "rootful":
+            raise AnsibleFilterError(
+                f"{_catalog_label(consumer_id)} container namespace sharing requires rootful Podman; "
+                f"got execution mode {consumer['execution_mode']!r}"
+            )
+
+        same_host = providers_by_host_name.get((consumer["host"], provider_name), [])
+        if len(same_host) > 1:
+            labels = ", ".join(_catalog_label(identity) for identity in same_host)
+            raise AnsibleFilterError(
+                f"{_catalog_label(consumer_id)} container namespace provider {provider_name!r} is ambiguous on "
+                f"host {consumer['host']}: {labels}"
+            )
+        if not same_host:
+            remote = providers_by_name.get(provider_name, [])
+            if remote:
+                locations = ", ".join(f"{_catalog_label(identity)} on {records[identity]['host']}" for identity in remote)
+                raise AnsibleFilterError(
+                    f"{_catalog_label(consumer_id)} on {consumer['host']} cannot share the host-local network namespace "
+                    f"of managed Podman provider {provider_name!r}; it is declared as {locations}"
+                )
+            continue
+
+        provider_id = same_host[0]
+        if provider_id == consumer_id:
+            raise AnsibleFilterError(f"{_catalog_label(consumer_id)} must not depend on its own container network namespace")
+        provider = records[provider_id]
+        if provider["execution_mode"] != "rootful":
+            raise AnsibleFilterError(
+                f"{_catalog_label(consumer_id)} cannot share managed provider {_catalog_label(provider_id)} because "
+                "container namespace sharing requires both services to use rootful Podman"
+            )
+        provider_for[consumer_id] = provider_id
+        consumers_for[provider_id].append(consumer_id)
+        dependencies.append(
+            {
+                "consumer": _catalog_label(consumer_id),
+                "provider": _catalog_label(provider_id),
+                "host": consumer["host"],
+            }
+        )
+
+    indegree = {identity: 0 for identity in podman_ids}
+    for consumer_id in provider_for:
+        indegree[consumer_id] += 1
+    ready = [identity for identity in podman_ids if indegree[identity] == 0]
+    ordered_ids: list[tuple[str, str | None]] = []
+    while ready:
+        identity = ready.pop(0)
+        ordered_ids.append(identity)
+        for consumer_id in consumers_for[identity]:
+            indegree[consumer_id] -= 1
+            if indegree[consumer_id] == 0:
+                insert_at = len(ready)
+                for index, candidate in enumerate(ready):
+                    if records[consumer_id]["position"] < records[candidate]["position"]:
+                        insert_at = index
+                        break
+                ready.insert(insert_at, consumer_id)
+    if len(ordered_ids) != len(podman_ids):
+        cyclic = [_catalog_label(identity) for identity in podman_ids if indegree[identity] > 0]
+        raise AnsibleFilterError(f"Managed Podman container namespace dependency cycle detected: {', '.join(cyclic)}")
+
+    topology_position = {identity: index for index, identity in enumerate(ordered_ids)}
+
+    remove_indegree = {identity: len(consumers_for[identity]) for identity in podman_ids}
+    remove_ready = [identity for identity in podman_ids if remove_indegree[identity] == 0]
+    remove_ordered_ids: list[tuple[str, str | None]] = []
+    while remove_ready:
+        identity = remove_ready.pop(0)
+        remove_ordered_ids.append(identity)
+        provider_id = provider_for.get(identity)
+        if provider_id is None:
+            continue
+        remove_indegree[provider_id] -= 1
+        if remove_indegree[provider_id] == 0:
+            insert_at = len(remove_ready)
+            for index, candidate in enumerate(remove_ready):
+                if records[provider_id]["position"] < records[candidate]["position"]:
+                    insert_at = index
+                    break
+            remove_ready.insert(insert_at, provider_id)
+
+    def transitive_dependents(provider_id: tuple[str, str | None]) -> list[tuple[str, str | None]]:
+        pending = list(consumers_for[provider_id])
+        found: set[tuple[str, str | None]] = set()
+        while pending:
+            consumer_id = pending.pop(0)
+            if consumer_id in found:
+                continue
+            found.add(consumer_id)
+            pending.extend(consumers_for[consumer_id])
+        return sorted(found, key=topology_position.__getitem__)
+
+    selected_set = set(selected_ids)
+    if action == "remove":
+        for provider_id in selected_ids:
+            if records[provider_id]["runtime"] != "podman":
+                continue
+            missing = [identity for identity in transitive_dependents(provider_id) if identity not in selected_set]
+            if missing:
+                raise AnsibleFilterError(
+                    f"Cannot remove managed Podman provider {_catalog_label(provider_id)} without also selecting "
+                    f"its dependent shared-network services: {', '.join(_catalog_label(identity) for identity in missing)}"
+                )
+
+    action_order = remove_ordered_ids if action == "remove" else ordered_ids
+    ordered_selected_podman = [identity for identity in action_order if identity in selected_set]
+    ordered_selected_iter = iter(ordered_selected_podman)
+    planned_selected: list[dict[str, Any]] = []
+    for original in selected:
+        original_id = _catalog_identity(original)
+        if records[original_id]["runtime"] == "podman":
+            identity = next(ordered_selected_iter)
+            item = deepcopy(dict(records[identity]["item"]))
+            dependents = []
+            for dependent_id in transitive_dependents(identity):
+                dependent = records[dependent_id]
+                descriptor = {
+                    "name": dependent_id[0],
+                    "container_name": dependent["container_name"],
+                    "unit_name": f"{dependent['container_name']}.service",
+                    "dispatch_host": dependent["host"],
+                }
+                if dependent_id[1] is not None:
+                    descriptor["target"] = dependent_id[1]
+                dependents.append(descriptor)
+            item["podman_lifecycle"] = {
+                "container_name": records[identity]["container_name"],
+                "namespace_dependents": dependents,
+            }
+            planned_selected.append(item)
+        else:
+            planned_selected.append(deepcopy(dict(original)))
+
+    return {"selected": planned_selected, "dependencies": dependencies}
+
+
 class FilterModule:
     """Register runtime-neutral service catalog filters with Ansible."""
 
@@ -437,12 +752,14 @@ class FilterModule:
 
         Returns:
             A mapping exposing ``service_catalog_effective``,
-            ``service_catalog_merge_target``, ``service_catalog_select``, and
-            ``service_catalog_by_runtime``.
+            ``service_catalog_merge_target``, ``service_catalog_select``,
+            ``service_catalog_by_runtime``, and
+            ``service_catalog_podman_lifecycle_plan``.
         """
         return {
             "service_catalog_effective": service_catalog_effective,
             "service_catalog_merge_target": service_catalog_merge_target,
             "service_catalog_select": service_catalog_select,
             "service_catalog_by_runtime": service_catalog_by_runtime,
+            "service_catalog_podman_lifecycle_plan": service_catalog_podman_lifecycle_plan,
         }

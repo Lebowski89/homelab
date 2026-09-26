@@ -214,6 +214,25 @@ def test_canonical_normalization_reaches_container_quadlet():
     assert expected_lines <= set(rendered.splitlines())
 
 
+def test_rootful_native_device_container_namespace_and_shm_size_reach_quadlet():
+    cfg = {
+        "runtime": "podman",
+        "image": "ghcr.io/example/portable:1.2.3",
+        "devices": ["/dev/net/tun:/dev/net/tun"],
+        "network_mode": "container:gluetun",
+        "shm_size": "1gb",
+        "deploy": {"type": "container", "host": "podman01", "execution": {"mode": "rootful"}},
+    }
+
+    normalized = podman_services_filters.podman_service_normalize(cfg, "portable")
+    rendered = render("container.container.j2", normalized)
+
+    assert "AddDevice=/dev/net/tun:/dev/net/tun" in rendered
+    assert "Network=gluetun.container" in rendered
+    assert "ShmSize=1gb" in rendered
+    assert "PodmanArgs=" not in rendered
+
+
 def test_no_new_privileges_false_is_not_rendered():
     svc = service()
     svc["container"]["no_new_privileges"] = False
@@ -434,6 +453,11 @@ def test_real_adminer_catalog_contract_normalizes_and_renders_rootless_quadlets_
             "enabled": True,
             "runtime": "podman",
             "dispatch_host": "{{ services_controller_host }}",
+            "podman_lifecycle": {
+                "container_name": "adminer",
+                "namespace_provider": None,
+                "execution_mode": "rootless",
+            },
         }
     ]
     effective = catalog_filters.service_catalog_merge_target(service_cfg, catalog[0].get("target"))
@@ -469,3 +493,117 @@ def test_real_adminer_catalog_contract_normalizes_and_renders_rootless_quadlets_
     assert "WantedBy=multi-user.target" not in container
     assert "EnvironmentFile=" not in container
     assert source == original
+
+
+def test_blacktop_vpn_namespace_services_normalize_and_render_as_one_privileged_gateway():
+    service_names = ("gluetun", "jdownloader2", "mullvad_browser")
+    image_pins = {
+        "gluetun": "docker.io/qmcgaw/gluetun:v3.41.3",
+        "jdownloader2": "docker.io/jlesage/jdownloader-2:v26.09.1",
+        "mullvad_browser": "lscr.io/linuxserver/mullvad-browser:15.0.21-ls201",
+    }
+    variables = {
+        "hostvars": {
+            "blacktop": {
+                "container_host_appdata_root": "/opt/appdata",
+                "container_host_data_root": "/opt/data",
+                "container_host_puid": 1000,
+                "container_host_pgid": 1000,
+            }
+        },
+        "local_ip": "192.0.2.40",
+        "services_lan_cidr": "192.0.2.0/24",
+        "timezone": "Etc/UTC",
+    }
+    configs = {}
+    normalized = {}
+    quadlets = {}
+
+    for service_name in service_names:
+        service_path = REPO_ROOT / "ansible" / "group_vars" / "all" / "services" / f"{service_name.replace('_', '-')}.yml"
+        source = yaml.safe_load(service_path.read_text())
+        config = render_structure(source[service_name], variables)
+        configs[service_name] = config
+        normalized[service_name] = podman_services_filters.podman_service_normalize(config, service_name)
+        quadlets[service_name] = render("container.container.j2", normalized[service_name])
+
+        assert config["runtime"] == "podman"
+        assert config["deploy"] == {
+            "type": "container",
+            "host": "blacktop",
+            "execution": {"mode": "rootful"},
+        }
+        assert normalized[service_name]["image"] == image_pins[service_name]
+        assert ":latest" not in image_pins[service_name]
+
+    gluetun = normalized["gluetun"]
+    assert gluetun["container"]["cap_add"] == ["NET_ADMIN"]
+    assert gluetun["container"]["devices"] == ["/dev/net/tun:/dev/net/tun"]
+    assert gluetun["container"]["ports"] == [
+        {"host_ip": "192.0.2.40", "host": 5800, "container": 5800, "protocol": "tcp"},
+        {"host_ip": "192.0.2.40", "host": 3009, "container": 3001, "protocol": "tcp"},
+    ]
+    assert "AddDevice=/dev/net/tun:/dev/net/tun" in quadlets["gluetun"]
+    assert "AddCapability=NET_ADMIN" in quadlets["gluetun"]
+
+    for child_name in ("jdownloader2", "mullvad_browser"):
+        child = normalized[child_name]
+        assert child["network"] is None
+        assert child["container"]["network_mode"] == "gluetun.container"
+        assert "ports" not in child["container"]
+        assert "cap_add" not in child["container"]
+        assert "Network=gluetun.container" in quadlets[child_name]
+
+    assert "devices" not in normalized["jdownloader2"]["container"]
+
+    mullvad = normalized["mullvad_browser"]
+    mullvad_quadlet = quadlets["mullvad_browser"]
+    mullvad_environment_file = render("env.env.j2", mullvad)
+    assert mullvad["container"]["devices"] == [
+        "/dev/dri/card1:/dev/dri/card1",
+        "/dev/dri/renderD129:/dev/dri/renderD129",
+    ]
+    assert "AddDevice=/dev/dri/card1:/dev/dri/card1" in mullvad_quadlet
+    assert "AddDevice=/dev/dri/renderD129:/dev/dri/renderD129" in mullvad_quadlet
+    assert "/dev/dri/card0" not in mullvad_quadlet
+    assert "/dev/dri/renderD128" not in mullvad_quadlet
+    assert mullvad["container"]["shm_size"] == "1gb"
+    assert "ShmSize=1gb" in mullvad_quadlet
+    assert "EnvironmentFile=/etc/containers/systemd/mullvad-browser.env" in mullvad_quadlet
+
+    mullvad_environment = configs["mullvad_browser"]["environment"]
+    assert mullvad_environment["AUTO_GPU"] == "false"
+    assert mullvad_environment["DRINODE"] == "/dev/dri/renderD129"
+    assert mullvad_environment["DRI_NODE"] == "/dev/dri/renderD129"
+    assert mullvad_environment["PIXELFLUX_WAYLAND"] == "true"
+    assert "AUTO_GPU=false" in mullvad_environment_file
+    assert "DRINODE=/dev/dri/renderD129" in mullvad_environment_file
+    assert "DRI_NODE=/dev/dri/renderD129" in mullvad_environment_file
+    assert "PIXELFLUX_WAYLAND=true" in mullvad_environment_file
+
+    gluetun_environment = configs["gluetun"]["environment"]
+    assert gluetun_environment["OPENVPN_USER"] == {"value_from": {"infisical": "gluetun_pia_user"}}
+    assert gluetun_environment["OPENVPN_PASSWORD"] == {"value_from": {"infisical": "gluetun_pia_password"}}
+    assert gluetun_environment["VPN_SERVICE_PROVIDER"] == "private internet access"
+    assert gluetun_environment["VPN_TYPE"] == "openvpn"
+    assert gluetun_environment["SERVER_REGIONS"] == "New Zealand"
+    assert gluetun_environment["FIREWALL_OUTBOUND_SUBNETS"] == "192.0.2.0/24"
+    assert not (
+        {
+            "WIREGUARD_ADDRESSES",
+            "WIREGUARD_PRIVATE_KEY",
+            "PORT_FORWARD_ONLY",
+            "VPN_PORT_FORWARDING",
+            "FIREWALL_INPUT_PORTS",
+        }
+        & set(gluetun_environment)
+    )
+
+    combined_source = "\n".join(
+        (REPO_ROOT / "ansible" / "group_vars" / "all" / "services" / f"{name.replace('_', '-')}.yml").read_text() for name in service_names
+    )
+    assert "6881" not in combined_source
+    assert "docker_host_" not in combined_source
+    assert "docker_services_unraid_host" not in combined_source
+    assert "seccomp:unconfined" not in combined_source
+    assert "LOCAL_NET" not in combined_source

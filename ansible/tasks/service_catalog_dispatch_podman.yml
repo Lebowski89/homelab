@@ -19,6 +19,8 @@
     podman_services_service_cfg_found: true
     podman_services_common_context: "{{ service_catalog_podman_common_context }}"
     podman_services_controller_host: "{{ services_controller_host }}"
+    podman_services_managed_namespace_dependents: >-
+      {{ service_catalog_podman_service.podman_lifecycle.namespace_dependents | default([]) }}
     podman_services_service_target: "{{ service_catalog_podman_service.target | default(omit) }}"
     podman_services_role_prefix: >-
       {{ service_catalog_podman_service.name }}{{
