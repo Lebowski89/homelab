@@ -17,6 +17,8 @@ DEFAULTS_PATH = ROLE_PATH / "defaults/main.yml"
 MAIN_TASKS_PATH = ROLE_PATH / "tasks/main.yml"
 VALIDATE_TASKS_PATH = ROLE_PATH / "tasks/validate.yml"
 DEVELOPMENT_TASKS_PATH = ROLE_PATH / "tasks/development.yml"
+SHELL_TASKS_PATH = ROLE_PATH / "tasks/shell.yml"
+DESKTOP_TASKS_PATH = ROLE_PATH / "tasks/desktop.yml"
 VSCODE_TASKS_PATH = ROLE_PATH / "tasks/vscode.yml"
 STANDALONE_PLAYBOOK_PATH = REPO_ROOT / "ansible/workstation.yml"
 BOOTSTRAP_SCRIPT_PATH = REPO_ROOT / "scripts/bootstrap-workstation.sh"
@@ -220,14 +222,28 @@ def test_workstation_does_not_manage_server_networking_or_ssh_state():
 def test_vscode_uses_microsoft_apt_repository_and_user_extensions():
     tasks = load_yaml(VSCODE_TASKS_PATH)
     source_task = next(task for task in tasks if task["name"].endswith("Configure Microsoft repository"))
+    install_task = next(task for task in tasks if task["name"].endswith("Install Visual Studio Code"))
     extension_task = next(task for task in tasks if task["name"].endswith("Install configured extensions"))
 
     source = source_task["ansible.builtin.copy"]["content"]
     assert "https://packages.microsoft.com/repos/code" in source
     assert "Signed-By: {{ workstation_vscode_key_path }}" in source
+    cache_valid_time = install_task["ansible.builtin.apt"]["cache_valid_time"]
+    assert NativeEnvironment().from_string(cache_valid_time).render(workstation_vscode_repository={"changed": True}) == 0
+    assert NativeEnvironment().from_string(cache_valid_time).render(workstation_vscode_repository={"changed": False}) == 3600
     assert extension_task["become_user"] == "{{ workstation_user }}"
     assert extension_task["ansible.builtin.command"]["argv"][:2] == ["code", "--install-extension"]
     assert extension_task["loop"] == "{{ workstation_vscode_extensions }}"
+
+
+def test_workstation_directory_tasks_preserve_existing_permissions():
+    shell_task = next(task for task in load_yaml(SHELL_TASKS_PATH) if task["name"].endswith("Ensure user shell directories exist"))
+    desktop_task = next(task for task in load_yaml(DESKTOP_TASKS_PATH) if task["name"].endswith("Ensure XDG user directories exist"))
+
+    for task in (shell_task, desktop_task):
+        directory = task["ansible.builtin.file"]
+        assert directory["state"] == "directory"
+        assert "mode" not in directory
 
 
 @pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")

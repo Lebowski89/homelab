@@ -1,12 +1,12 @@
 ---
 
-- name: Workstation Shell | Ensure user shell directories exist
+# Omitting mode preserves permissions on existing private directories.
+- name: Workstation Shell | Ensure user shell directories exist # noqa risky-file-permissions
   become: true
   become_user: "{{ workstation_user }}"
   ansible.builtin.file:
     path: "{{ _workstation_shell_directory }}"
     state: directory
-    mode: "0755"
   loop: "{{ workstation_shell_directories }}"
   loop_control:
     loop_var: _workstation_shell_directory

@@ -10,12 +10,12 @@
         )
         or
         (
-          ansible_facts.distribution | default('') == 'Linux Mint Debian Edition'
+          ansible_facts.distribution | default('') == 'LMDE'
           and ansible_facts.distribution_major_version | default('') == '7'
         )
     fail_msg: >-
       The production podman role targets Ubuntu 26.04 LTS (Resolute) or newer,
-      or Linux Mint Debian Edition 7, with Podman {{ podman_min_version }} or newer.
+      or LMDE 7, with Podman {{ podman_min_version }} or newer.
   tags: [podman, podman_install]
 
 - name: Podman | Install runtime packages

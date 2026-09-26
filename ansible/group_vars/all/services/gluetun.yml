@@ -23,7 +23,7 @@ gluetun:
     OPENVPN_USER:
       value_from:
         infisical: gluetun_pia_user
-    SERVER_REGIONS: Netherlands,DE Berlin,DE Frankfurt,Poland,Switzerland
+    SERVER_REGIONS: "New Zealand"
     TZ: "{{ timezone }}"
     VPN_SERVICE_PROVIDER: private internet access
     VPN_TYPE: openvpn

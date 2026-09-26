@@ -624,6 +624,49 @@ def test_cross_host_standalone_services_retain_global_catalog_order():
     ]
 
 
+def test_service_play_gathers_facts_only_for_selected_operations_and_hosts():
+    playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
+    deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")
+    pre_tasks = deploy_play["pre_tasks"]
+    deploy_tasks = deploy_play["tasks"]
+    service_tags = {"deploy", "update", "remove", "recreate", "bootstrap", "drift"}
+
+    controller_facts = task_named(pre_tasks, "Gather service controller facts")
+    dispatch_facts = task_named(deploy_tasks, "Gather facts on selected service dispatch hosts")
+    selection_assertion = task_named(deploy_tasks, "Assert selected service processing list was built")
+    global_dispatch = task_named(deploy_tasks, "Process globally ordered service catalog")
+    all_setup_tasks = [task for task in [*pre_tasks, *deploy_tasks] if "ansible.builtin.setup" in task]
+    host_management_setup_tasks = [task for task in all_setup_tasks if task not in (controller_facts, dispatch_facts)]
+
+    assert deploy_play["gather_facts"] is False
+    assert deploy_play["any_errors_fatal"] is True
+    assert "ignore_unreachable" not in str(deploy_play)
+    assert "blacktop" not in str(deploy_play)
+    assert controller_facts["when"] == "inventory_hostname == services_controller_host"
+    assert service_tags <= set(controller_facts["tags"])
+    assert dispatch_facts["when"][0] == "inventory_hostname != services_controller_host"
+    assert "service_catalog_selected" in dispatch_facts["when"][1]
+    assert "map(attribute='dispatch_host')" in dispatch_facts["when"][1]
+    assert set(dispatch_facts["tags"]) == service_tags
+    assert deploy_tasks.index(selection_assertion) < deploy_tasks.index(dispatch_facts)
+    assert deploy_tasks.index(dispatch_facts) < deploy_tasks.index(global_dispatch)
+    assert all(task.get("tags") != "always" for task in all_setup_tasks)
+    assert all(service_tags.isdisjoint(set(task["tags"])) for task in host_management_setup_tasks)
+
+    setup_names = {task["name"] for task in host_management_setup_tasks}
+    assert setup_names == {
+        "Gather facts for Ubuntu role",
+        "Gather facts for Workstation role",
+        "Gather facts for systemd-resolved role",
+        "Gather facts for Docker role",
+        "Gather facts for Podman role",
+        "Gather facts for OpenTofu installation",
+        "Gather facts for PostgreSQL host management",
+        "Gather facts for Keepalived role",
+        "Gather facts for Technitium native role",
+    }
+
+
 def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
     deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")

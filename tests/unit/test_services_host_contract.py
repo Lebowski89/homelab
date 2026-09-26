@@ -16,6 +16,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
 SERVICE_HOST_VARS = REPO_ROOT / "ansible/group_vars/all/services.yml"
 HOST_CONTRACT_TASKS = REPO_ROOT / "ansible/tasks/services_host_contract.yml"
+FILTER_PLUGINS_PATH = REPO_ROOT / "ansible/filter_plugins"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
 DOCKER_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_docker.yml"
 PODMAN_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_podman.yml"
@@ -144,6 +145,7 @@ def run_host_contract(
     environment.update(
         {
             "ANSIBLE_CONFIG": str(REPO_ROOT / "ansible/ansible.cfg"),
+            "ANSIBLE_FILTER_PLUGINS": str(FILTER_PLUGINS_PATH),
             "ANSIBLE_LOCAL_TEMP": str(tmp_path / "ansible-local"),
         }
     )
@@ -501,3 +503,53 @@ def test_service_topology_validation_rejects_missing_or_malformed_values(tmp_pat
         assert result.returncode != 0
         assert "Validate canonical service topology" in output
         assert "Publish Docker adapter compatibility alias" not in output
+
+
+@pytest.mark.parametrize("cidr", ["192.168." + "80.0/24", "10.0.0.0/8"])
+def test_service_topology_validation_accepts_ipv4_cidrs(tmp_path: Path, cidr: str):
+    topology = {
+        "services_public_zone": "public.example",
+        "services_internal_zone": "private.example.internal",
+        "services_lan_cidr": cidr,
+        "services_private_https_port": 9443,
+    }
+
+    result = run_host_contract(
+        tmp_path,
+        controllers=["controller"],
+        storage_hosts=["storage"],
+        topology=topology,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+@pytest.mark.parametrize(
+    "cidr",
+    [
+        "not-a-cidr",
+        "192.168.1.0",
+        "999.1.1.1/24",
+        "192.168.1.0/33",
+        "2001:db8::/32",
+    ],
+)
+def test_service_topology_validation_rejects_invalid_or_non_ipv4_cidrs(tmp_path: Path, cidr: str):
+    topology = {
+        "services_public_zone": "public.example",
+        "services_internal_zone": "private.example.internal",
+        "services_lan_cidr": cidr,
+        "services_private_https_port": 9443,
+    }
+
+    result = run_host_contract(
+        tmp_path,
+        controllers=["controller"],
+        storage_hosts=["storage"],
+        topology=topology,
+    )
+    output = result.stdout + result.stderr
+
+    assert result.returncode != 0
+    assert "Validate canonical service topology" in output
+    assert "Publish Docker adapter compatibility alias" not in output

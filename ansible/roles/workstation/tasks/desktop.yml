@@ -9,13 +9,13 @@
     update_cache: "{{ workstation_apt_update_cache }}"
     cache_valid_time: 3600
 
-- name: Workstation Desktop | Ensure XDG user directories exist
+# Omitting mode preserves permissions on existing private directories.
+- name: Workstation Desktop | Ensure XDG user directories exist # noqa risky-file-permissions
   become: true
   become_user: "{{ workstation_user }}"
   ansible.builtin.file:
     path: "{{ _workstation_xdg_directory }}"
     state: directory
-    mode: "0755"
   loop: "{{ workstation_xdg_directories }}"
   loop_control:
     loop_var: _workstation_xdg_directory

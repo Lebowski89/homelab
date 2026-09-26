@@ -71,7 +71,7 @@ def run_assertion_task(tmp_path: Path, task_name: str, variables: dict) -> subpr
         },
         {
             "os_family": "Debian",
-            "distribution": "Linux Mint Debian Edition",
+            "distribution": "LMDE",
             "distribution_version": "7",
             "distribution_major_version": "7",
         },
@@ -99,7 +99,7 @@ def test_supported_podman_platforms_pass_the_role_contract(tmp_path: Path, facts
         },
         {
             "os_family": "Debian",
-            "distribution": "Linux Mint Debian Edition",
+            "distribution": "LMDE",
             "distribution_version": "6",
             "distribution_major_version": "6",
         },
@@ -132,7 +132,7 @@ def test_unsupported_podman_platforms_fail_the_role_contract(tmp_path: Path, fac
     )
 
     assert result.returncode != 0
-    assert "Linux Mint Debian Edition 7" in result.stdout + result.stderr
+    assert "LMDE 7" in result.stdout + result.stderr
 
 
 @pytest.mark.parametrize("version", ["5.4.2", "5.7.0", "6.0.0"])

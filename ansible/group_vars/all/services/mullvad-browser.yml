@@ -16,9 +16,10 @@ mullvad_browser:
   # ENVIRONMENT/SECRETS
   ################################
   environment:
-    AUTO_GPU: amdgpu
+    AUTO_GPU: "false"
     DRINODE: /dev/dri/renderD129
     DRI_NODE: /dev/dri/renderD129
+    PIXELFLUX_WAYLAND: "true"
     PGID: "{{ hostvars['blacktop'].container_host_pgid }}"
     PUID: "{{ hostvars['blacktop'].container_host_puid }}"
     TZ: "{{ timezone }}"

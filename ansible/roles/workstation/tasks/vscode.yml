@@ -41,7 +41,7 @@
     name: code
     state: present
     update_cache: "{{ workstation_vscode_repository.changed or workstation_apt_update_cache }}"
-    cache_valid_time: 3600
+    cache_valid_time: "{{ 0 if workstation_vscode_repository.changed else 3600 }}"
 
 - name: Workstation VS Code | Check for Visual Studio Code command
   ansible.builtin.stat:

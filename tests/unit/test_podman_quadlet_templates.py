@@ -572,19 +572,21 @@ def test_blacktop_vpn_namespace_services_normalize_and_render_as_one_privileged_
     assert "EnvironmentFile=/etc/containers/systemd/mullvad-browser.env" in mullvad_quadlet
 
     mullvad_environment = configs["mullvad_browser"]["environment"]
-    assert mullvad_environment["AUTO_GPU"] == "amdgpu"
+    assert mullvad_environment["AUTO_GPU"] == "false"
     assert mullvad_environment["DRINODE"] == "/dev/dri/renderD129"
     assert mullvad_environment["DRI_NODE"] == "/dev/dri/renderD129"
-    assert "AUTO_GPU=amdgpu" in mullvad_environment_file
+    assert mullvad_environment["PIXELFLUX_WAYLAND"] == "true"
+    assert "AUTO_GPU=false" in mullvad_environment_file
     assert "DRINODE=/dev/dri/renderD129" in mullvad_environment_file
     assert "DRI_NODE=/dev/dri/renderD129" in mullvad_environment_file
+    assert "PIXELFLUX_WAYLAND=true" in mullvad_environment_file
 
     gluetun_environment = configs["gluetun"]["environment"]
     assert gluetun_environment["OPENVPN_USER"] == {"value_from": {"infisical": "gluetun_pia_user"}}
     assert gluetun_environment["OPENVPN_PASSWORD"] == {"value_from": {"infisical": "gluetun_pia_password"}}
     assert gluetun_environment["VPN_SERVICE_PROVIDER"] == "private internet access"
     assert gluetun_environment["VPN_TYPE"] == "openvpn"
-    assert gluetun_environment["SERVER_REGIONS"] == "Netherlands,DE Berlin,DE Frankfurt,Poland,Switzerland"
+    assert gluetun_environment["SERVER_REGIONS"] == "New Zealand"
     assert gluetun_environment["FIREWALL_OUTBOUND_SUBNETS"] == "192.0.2.0/24"
     assert not (
         {
