@@ -529,6 +529,7 @@ def test_service_topology_validation_accepts_ipv4_cidrs(tmp_path: Path, cidr: st
     [
         "not-a-cidr",
         "192.168.1.0",
+        "192.168.1.31/24",
         "999.1.1.1/24",
         "192.168.1.0/33",
         "2001:db8::/32",

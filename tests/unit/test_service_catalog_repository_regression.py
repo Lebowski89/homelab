@@ -633,6 +633,15 @@ def test_service_play_gathers_facts_only_for_selected_operations_and_hosts():
 
     controller_facts = task_named(pre_tasks, "Gather service controller facts")
     dispatch_facts = task_named(deploy_tasks, "Gather facts on selected service dispatch hosts")
+    ubuntu_facts = task_named(deploy_tasks, "Gather facts for Ubuntu role")
+    postgres_backup_facts = task_named(
+        deploy_tasks,
+        "Gather facts for PostgreSQL backup prerequisites",
+    )
+    postgres_host_facts = task_named(
+        deploy_tasks,
+        "Gather facts for PostgreSQL host management",
+    )
     selection_assertion = task_named(deploy_tasks, "Assert selected service processing list was built")
     global_dispatch = task_named(deploy_tasks, "Process globally ordered service catalog")
     all_setup_tasks = [task for task in [*pre_tasks, *deploy_tasks] if "ansible.builtin.setup" in task]
@@ -652,6 +661,16 @@ def test_service_play_gathers_facts_only_for_selected_operations_and_hosts():
     assert deploy_tasks.index(dispatch_facts) < deploy_tasks.index(global_dispatch)
     assert all(task.get("tags") != "always" for task in all_setup_tasks)
     assert all(service_tags.isdisjoint(set(task["tags"])) for task in host_management_setup_tasks)
+    postgres_backup_tags = {
+        "postgres_backup",
+        "postgres_backup_setup",
+        "postgres_backup_run",
+    }
+    assert set(ubuntu_facts["tags"]).isdisjoint(postgres_backup_tags)
+    assert postgres_backup_facts["when"] == "'tags_postgres' in group_names"
+    assert set(postgres_backup_facts["tags"]) == postgres_backup_tags
+    assert postgres_host_facts["when"] == "'tags_postgres' in group_names"
+    assert set(postgres_host_facts["tags"]).isdisjoint(postgres_backup_tags)
 
     setup_names = {task["name"] for task in host_management_setup_tasks}
     assert setup_names == {
@@ -661,6 +680,7 @@ def test_service_play_gathers_facts_only_for_selected_operations_and_hosts():
         "Gather facts for Docker role",
         "Gather facts for Podman role",
         "Gather facts for OpenTofu installation",
+        "Gather facts for PostgreSQL backup prerequisites",
         "Gather facts for PostgreSQL host management",
         "Gather facts for Keepalived role",
         "Gather facts for Technitium native role",

@@ -22,7 +22,7 @@ DESKTOP_TASKS_PATH = ROLE_PATH / "tasks/desktop.yml"
 VSCODE_TASKS_PATH = ROLE_PATH / "tasks/vscode.yml"
 STANDALONE_PLAYBOOK_PATH = REPO_ROOT / "ansible/workstation.yml"
 BOOTSTRAP_SCRIPT_PATH = REPO_ROOT / "scripts/bootstrap-workstation.sh"
-ANSIBLE_PLAYBOOK = shutil.which("ansible-playbook") or str(Path(sys.executable).with_name("ansible-playbook"))
+ANSIBLE_PLAYBOOK = shutil.which("ansible-playbook") or shutil.which(str(Path(sys.executable).with_name("ansible-playbook")))
 
 WORKSTATION_TAGS = {
     "workstation",
@@ -155,6 +155,7 @@ def run_workstation_path_validation(tmp_path: Path, shell_directories, xdg_direc
     )
 
 
+@pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
 @pytest.mark.parametrize(
     ("shell_directories", "xdg_directories"),
     [
@@ -168,6 +169,7 @@ def test_workstation_user_path_validation_accepts_absolute_string_lists(tmp_path
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
 @pytest.mark.parametrize("variable", ["shell", "xdg"])
 @pytest.mark.parametrize("invalid_entry", [1, "", "   ", "relative/path", "/home/operator/bin "])
 def test_workstation_user_path_validation_rejects_invalid_entries(tmp_path: Path, variable: str, invalid_entry):

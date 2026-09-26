@@ -141,6 +141,11 @@
         - ubuntu_pam
         - ubuntu_network
         - ubuntu_netplan
+
+    - name: Gather facts for PostgreSQL backup prerequisites
+      when: "'tags_postgres' in group_names"
+      ansible.builtin.setup:
+      tags:
         - postgres_backup
         - postgres_backup_setup
         - postgres_backup_run
@@ -321,9 +326,6 @@
       tags:
         - postgres
         - postgres_apt
-        - postgres_backup
-        - postgres_backup_setup
-        - postgres_backup_run
         - postgres_backup_remote_setup
         - postgres_backup_remote_init
         - postgres_backup_remote_run

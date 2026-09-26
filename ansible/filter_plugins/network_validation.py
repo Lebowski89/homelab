@@ -11,7 +11,7 @@ def valid_ipv4_cidr(value: Any) -> bool:
     if not isinstance(value, str) or value.count("/") != 1:
         return False
     try:
-        return isinstance(ip_network(value, strict=False), IPv4Network)
+        return isinstance(ip_network(value, strict=True), IPv4Network)
     except ValueError:
         return False
 
