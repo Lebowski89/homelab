@@ -84,10 +84,10 @@
 
 #### File: tasks/desktop.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Workstation Desktop ¦ Install desktop packages | ansible.builtin.apt | True |
-| Workstation Desktop ¦ Ensure XDG user directories exist | ansible.builtin.file | False |
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Workstation Desktop ¦ Install desktop packages | ansible.builtin.apt | True |  |
+| Workstation Desktop ¦ Ensure XDG user directories exist | ansible.builtin.file | False | Omitting mode preserves permissions on existing private directories. |
 
 #### File: tasks/development.yml
 
@@ -110,9 +110,9 @@
 
 #### File: tasks/shell.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Workstation Shell ¦ Ensure user shell directories exist | ansible.builtin.file | False |
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Workstation Shell ¦ Ensure user shell directories exist | ansible.builtin.file | False | Omitting mode preserves permissions on existing private directories. |
 
 #### File: tasks/timezone.yml
 
