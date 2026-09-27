@@ -106,7 +106,6 @@ locals {
         "http.autobrr-private",
         "http.gitea-private",
         "http.obsidian-private",
-        "http.ombi-private",
         "http.opencloud-private",
         "http.seerr-private",
         "http.stash-private",

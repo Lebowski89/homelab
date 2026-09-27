@@ -122,15 +122,6 @@
         icon: obsidian.svg
         href: https://obsidian.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Browser-based knowledge base
-    - Ombi:
-        icon: ombi.svg
-        href: https://ombi.{{ services_internal_zone }}:{{ services_private_https_port }}
-        description: Content Requests for Plex/Emby
-        widget:
-          type: ombi
-          url: https://ombi.{{ services_internal_zone }}:{{ services_private_https_port }}
-          key: {{ secrets.ombi_api }}
-          fields: ["pending", "approved", "available"]
     - OpenCloud:
         icon: open-cloud.svg
         href: https://opencloud.{{ services_internal_zone }}:{{ services_private_https_port }}

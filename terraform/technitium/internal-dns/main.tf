@@ -55,7 +55,6 @@ locals {
     "notifiarr",
     "nzbhydra2",
     "obsidian",
-    "ombi",
     "opencloud",
     "postgres",
     "prometheus",

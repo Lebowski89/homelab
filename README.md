@@ -63,7 +63,6 @@ I’m not able to provide general support for Proxmox, Terraform/OpenTofu provid
   <tr>
     <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/png/nzbhydra.png" alt="NZBHydra" width="36"><br>NZBHydra-2</td>
     <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/obsidian.svg" alt="Obsidian" width="36"><br>Obsidian</td>
-    <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/ombi.svg" alt="Ombi" width="36"><br>Ombi</td>
     <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/opencloud.svg" alt="OpenCloud" width="36"><br>OpenCloud</td>
     <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/plex.svg" alt="Plex" width="36"><br>Plex</td>
   </tr>

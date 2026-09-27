@@ -48,9 +48,6 @@ homepage:
       - var: lidarr_api
         path: "/Lidarr"
         name: API
-      - var: ombi_api
-        path: "/Ombi"
-        name: API
       - var: plex_token
         path: "/Plex"
         name: TOKEN

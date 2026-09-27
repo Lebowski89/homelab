@@ -64,7 +64,6 @@ locals {
     autobrr   = { group = "media", tag_keys = ["media"] }
     gitea     = { group = "media", tag_keys = ["media"] }
     obsidian  = { group = "media", tag_keys = ["media"] }
-    ombi      = { group = "media", tag_keys = ["media"] }
     opencloud = { group = "media", tag_keys = ["media"] }
     seerr     = { group = "media", tag_keys = ["media"] }
     stash     = { group = "media", tag_keys = ["media"] }
