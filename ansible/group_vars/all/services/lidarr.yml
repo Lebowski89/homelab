@@ -12,7 +12,7 @@ lidarr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/lidarr:release-3.1.0.4875
+  image: ghcr.io/hotio/lidarr:nightly-3.1.6.5078
   ################################
   # ENVIRONMENT/SECRETS
   ################################
