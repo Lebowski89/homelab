@@ -71,7 +71,6 @@ locals {
     znc       = { group = "media", tag_keys = ["media"] }
 
     # Monitoring
-    dozzle      = { group = "monitoring", tag_keys = ["monitoring"] }
     gotify      = { group = "monitoring", tag_keys = ["monitoring"] }
     grafana     = { group = "monitoring", tag_keys = ["monitoring"] }
     homepage    = { group = "monitoring", tag_keys = ["monitoring"] }

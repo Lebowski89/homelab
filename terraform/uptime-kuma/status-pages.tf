@@ -44,7 +44,6 @@ locals {
       weight   = 3
       send_url = true
       monitors = [
-        "http.dozzle-private",
         "http.gotify-private",
         "http.grafana-private",
         "http.homepage-private",

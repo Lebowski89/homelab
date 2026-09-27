@@ -375,7 +375,7 @@ def test_runtime_only_apps_do_not_gain_duplicate_file_logging():
     assert "unpackerr" not in alloy_config
 
 
-def test_native_rotation_is_bounded_and_dozzle_remains_available():
+def test_native_application_rotation_is_bounded():
     qbittorrent = (REPO_ROOT / "ansible/roles/service_common/templates/configs/qbittorrent/qBittorrent.conf.j2").read_text()
     sabnzbd = (REPO_ROOT / "ansible/roles/service_common/templates/configs/sabnzbd.ini.j2").read_text()
 
@@ -386,4 +386,3 @@ def test_native_rotation_is_bounded_and_dozzle_remains_available():
     assert r"FileLogger\AgeType=1" in qbittorrent
     assert "max_log_size = 5242880" in sabnzbd
     assert "log_backups = 5" in sabnzbd
-    assert (SERVICES_DIR / "dozzle.yml").exists()

@@ -8,9 +8,6 @@ Loki router uses only the private HTTPS entrypoint and the normal security,
 no-index, HSTS, and compression middleware; it has no public route or Authelia
 middleware.
 
-Dozzle remains available as a fallback while this path is validated in normal
-operation.
-
 ## Collection topology
 
 Docker Swarm runs Alloy as a global Linux service. Each task reads only its
@@ -44,7 +41,8 @@ and Mullvad Browser continue writing their normal container output to the local
 system journal, and native Alloy continues reading that journal. Before Loki,
 Alloy drops container payloads for those two workloads; systemd unit lifecycle
 records remain available for startup, shutdown, restart, and crash diagnosis.
-Gluetun journal output remains available only for VPN-connectivity diagnosis.
+Gluetun operational journal output remains available in Loki for VPN and
+connectivity troubleshooting.
 No application file sources, per-container metrics, request/traffic telemetry,
 or activity-specific labels are configured for the stack.
 
@@ -162,7 +160,7 @@ avoid duplicate events.
 Run these checks only after an operator-approved deployment:
 
 1. In Grafana Explore, run the queries above and confirm the expected physical
-   `host` label. Compare one Docker service with Dozzle during the migration.
+   `host` label.
 2. Inspect the global task placement with `docker service ps alloy_alloy` and
    confirm one running task on each intended Linux Swarm node.
 3. On a Podman host, confirm native Alloy runs as its package account and has no
@@ -186,4 +184,4 @@ Run these checks only after an operator-approved deployment:
    file contents. Observe a normal native log rotation and verify Alloy follows
    the new active file without ingesting compressed archives.
 8. After seven days, inspect Loki storage growth and confirm expected data ages
-   out before considering removal of Dozzle.
+   out.

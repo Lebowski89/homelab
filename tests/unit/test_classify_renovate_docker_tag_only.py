@@ -8,7 +8,7 @@ import pytest
 from scripts.ci.classify_renovate_docker_tag_only import RENOVATE_AUTHOR, classify, main
 
 QUI_PATH = "ansible/group_vars/all/services/qui.yml"
-DOZZLE_PATH = "ansible/group_vars/all/services/dozzle.yml"
+GOTIFY_PATH = "ansible/group_vars/all/services/gotify.yml"
 
 SERVICE_YAML = """---
 service:
@@ -81,21 +81,21 @@ def test_single_service_tag_change_uses_fast_path(git_repository: tuple[Path, st
 
 def test_multiple_service_tag_changes_use_fast_path(git_repository: tuple[Path, str]) -> None:
     repository, base_sha = git_repository
-    dozzle_base = SERVICE_YAML.replace("ghcr.io/autobrr/qui:v1.20.0", "amir20/dozzle:v10.6.15")
-    base_sha = _commit(repository, "add dozzle", {DOZZLE_PATH: dozzle_base})
+    gotify_base = SERVICE_YAML.replace("ghcr.io/autobrr/qui:v1.20.0", "gotify/server:2.6.1")
+    base_sha = _commit(repository, "add gotify", {GOTIFY_PATH: gotify_base})
     head_sha = _commit(
         repository,
         "update service images",
         {
             QUI_PATH: SERVICE_YAML.replace("v1.20.0", "v1.25.0"),
-            DOZZLE_PATH: dozzle_base.replace("v10.6.15", "v10.7.1"),
+            GOTIFY_PATH: gotify_base.replace("2.6.1", "2.6.2"),
         },
     )
 
     classification = _classify(repository, base_sha, head_sha)
 
     assert classification.renovate_docker_tag_only is True
-    assert set(classification.changed_files) == {QUI_PATH, DOZZLE_PATH}
+    assert set(classification.changed_files) == {QUI_PATH, GOTIFY_PATH}
 
 
 def test_digest_only_change_uses_fast_path(git_repository: tuple[Path, str]) -> None:
