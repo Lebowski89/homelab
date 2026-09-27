@@ -22,7 +22,6 @@ locals {
         "ping.pg95",
         "ping.pg96",
         "ping.pg97",
-        "ping.n8n",
         "tcp.postgres_pg95_tcp",
         "tcp.postgres_pg96_tcp",
         "tcp.postgres_pg97_tcp",
@@ -152,15 +151,6 @@ locals {
         "http.infisical-private",
         "http.syncthing-private",
         "http.vaultwarden-private",
-      ]
-    },
-    {
-      name     = "Automation"
-      weight   = 13
-      send_url = true
-      monitors = [
-        "http.n8n-direct",
-        "http.n8n-private",
       ]
     },
   ]

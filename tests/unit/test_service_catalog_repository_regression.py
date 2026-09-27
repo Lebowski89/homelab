@@ -253,18 +253,6 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
                 "timeout_start_sec": "900s",
             },
         },
-        "n8n": {
-            "network": "n8n",
-            "host": "n8n",
-            "host_port": 5678,
-            "container_port": 5678,
-            "execution": {"mode": "rootful"},
-            "systemd": {
-                "after": ["network-online.target"],
-                "restart": "on-failure",
-                "restart_sec": "15s",
-            },
-        },
     }
 
     for item in catalog_filters.service_catalog_effective(services, "manager"):
@@ -350,7 +338,6 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
         ("homepage", None),
         ("jdownloader2", None),
         ("mullvad_browser", None),
-        ("n8n", None),
         ("thelounge", None),
     ]
 
@@ -421,11 +408,6 @@ def test_every_effective_service_uses_the_canonical_secret_contract_and_default_
             assert all({"immutable", "replace"}.isdisjoint(declaration) for declaration in podman_declarations), identity
         checked.append(identity)
 
-    n8n = catalog_filters.service_catalog_merge_target(services["n8n"])
-    n8n_normalized = common_filters.service_common_infisical_normalize(n8n["infisical"]["secrets_map"])
-    n8n_policies = {entry["name"]: entry["update_policy"] for entry in n8n_normalized["secret_declarations"]}
-    assert n8n_policies["n8n_encryption_key_secret"] == "preserve"
-    assert n8n_policies["postgres_pass_secret"] == "reconcile"
     assert checked
 
 

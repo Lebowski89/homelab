@@ -51,7 +51,7 @@ The focused Infisical entry point accepts `service_common_infisical_secrets_map`
 
 The ordered dispatcher stores these outputs in `service_catalog_common_context` with the service name, optional target, runtime, dispatch host, normalized lookup configuration, resolved environment, complete lookup values, and value-free native-secret declarations. It resets and validates that context before every adapter invocation. The lookup may execute on the configured controller, but the resulting facts and context remain owned by the original dispatch host. A failed declaration, lookup, empty-value policy, or environment resolution stops routing before Docker cleanup, Podman rendering, or native-secret mutation.
 
-Shared Traefik files use `<service-name>-dynamic.yml`. A successful render removes the distinct legacy Podman `<service-name>.yml`; removal deletes both names idempotently. Explicit `backend_host` is resolved before any inventory lookup, while `backend_host_inventory` resolves `local_ip` only when needed. Thus n8n resolves to its VM on port 5678 and Adminer resolves to the controller host on port 18080 without runtime-specific Traefik definitions.
+Shared Traefik files use `<service-name>-dynamic.yml`. A successful render removes the distinct legacy Podman `<service-name>.yml`; removal deletes both names idempotently. Explicit `backend_host` is resolved before any inventory lookup, while `backend_host_inventory` resolves `local_ip` only when needed. Adminer therefore resolves to the controller host on port 18080 without a runtime-specific Traefik definition.
 
 ## Deliberately retained runtime responsibilities
 
@@ -92,7 +92,7 @@ Check mode runs declaration, handler, credential-reference, and bootstrap-contra
 
 ## Canonical portable service and secret schema
 
-The Docker-shaped top-level service fields are the canonical portable schema. The Podman adapter maps them to its internal Quadlet structure. Every base service declares its runtime explicitly: existing Docker services use `runtime: docker`, while n8n, Adminer, The Lounge, and Homepage select Podman with `runtime: podman`. A missing or unsupported base runtime fails catalog validation; there is no implicit Docker default. Portable fields include `image`, numeric `user: UID:GID`, `environment`, `deploy.host`, canonical ports and volumes, `paths`, security fields, `healthcheck`, `infisical`, `postgres`, and `traefik`.
+The Docker-shaped top-level service fields are the canonical portable schema. The Podman adapter maps them to its internal Quadlet structure. Every base service declares its runtime explicitly: existing Docker services use `runtime: docker`, while Adminer, The Lounge, and Homepage select Podman with `runtime: podman`. A missing or unsupported base runtime fails catalog validation; there is no implicit Docker default. Portable fields include `image`, numeric `user: UID:GID`, `environment`, `deploy.host`, canonical ports and volumes, `paths`, security fields, `healthcheck`, `infisical`, `postgres`, and `traefik`.
 
 Podman additionally owns `deploy.execution`. Omission preserves rootful system
 Quadlets. `mode: rootless` requires a dedicated `host_user` and selects that
@@ -198,7 +198,7 @@ communication uses published host endpoints or another deliberate network path.
 Changing `runtime` is a schema-level choice, not installation: the destination
 host must already have the selected runtime and supported version installed.
 
-Static tests prove normalized portable-field equivalence and render structure; they do not prove live Docker/Podman behavioral parity. The n8n proof renders its trusted-address `host_ip` bind through both adapters; the Adminer proof covers its managed Podman network and controller-host Traefik endpoint; Docker Swarm rejects `host_ip` explicitly. Swarm-only networks, configs, placement, replicas, application-specific preparation, and runtime installation remain adapter or operator concerns.
+Static tests prove normalized portable-field equivalence and render structure; they do not prove live Docker/Podman behavioral parity. The Adminer proof covers its managed Podman network and controller-host Traefik endpoint; Docker Swarm rejects `host_ip` explicitly. Swarm-only networks, configs, placement, replicas, application-specific preparation, and runtime installation remain adapter or operator concerns.
 
 Inventory topology and host identity remain unchanged. NetBox remains authoritative, services continue to resolve existing `local_ip`, hostnames, `deploy.host`, and Traefik inventory references, and no canonical address is hard-coded.
 

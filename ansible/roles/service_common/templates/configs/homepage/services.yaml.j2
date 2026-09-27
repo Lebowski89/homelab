@@ -319,10 +319,6 @@
           url: https://gitea.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.gitea_homepage_api }}
           fields: ["repositories", "notifications", "issues", "pulls"]
-    - n8n:
-        icon: n8n.svg
-        href: https://n8n.{{ services_internal_zone }}:{{ services_private_https_port }}
-        description: Workflow automation
     - Syncthing:
         icon: syncthing.svg
         href: https://syncthing.{{ services_internal_zone }}:{{ services_private_https_port }}
