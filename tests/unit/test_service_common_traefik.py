@@ -50,7 +50,6 @@ def test_default_route_renders_private_middleware_and_tls_behaviour():
     assert document["http"]["middlewares"]["sonarr-private-ui-chain"]["chain"]["middlewares"][0] == "authelia@file"
     assert router["tls"] == {"options": "securetls@file", "certResolver": "dns-cloudflare"}
     assert document["http"]["services"]["sonarr-svc"]["loadBalancer"]["servers"] == [{"url": "http://sonarr:8080"}]
-    assert "crowdsec@file" not in text
     assert "authelia@file" in text
     assert "secure-headers@file" in text
     assert "robots-noindex@file" in text
@@ -59,14 +58,13 @@ def test_default_route_renders_private_middleware_and_tls_behaviour():
     assert "themepark-sonarr@file" in text
 
 
-def test_private_route_uses_private_entrypoint_and_excludes_crowdsec():
-    text, document = render({"traefik": {"enable": True, "exposure": "private", "port": 3000}}, name="grafana")
+def test_private_route_uses_private_entrypoint():
+    _, document = render({"traefik": {"enable": True, "exposure": "private", "port": 3000}}, name="grafana")
 
     router = document["http"]["routers"]["grafana"]
     assert router["entryPoints"] == ["https_private"]
     assert router["rule"] == "Host(`grafana.private.example.internal`)"
     assert router["middlewares"] == ["grafana-private-ui-chain"]
-    assert "crowdsec@file" not in text
 
 
 def test_explicit_backend_host_does_not_evaluate_missing_inventory_host():

@@ -86,7 +86,6 @@ infisical_traefik_enable: true
 infisical_traefik_dynamic_dir: /opt/traefik/dynamic
 infisical_traefik_entrypoint: https_private
 infisical_traefik_authelia_enable: false
-infisical_traefik_crowdsec_enable: false
 infisical_traefik_headers_middleware: secure-headers@file
 infisical_traefik_middleware_chain: "{{ infisical_name }}-ui-chain"
 infisical_traefik_certresolver: dns-cloudflare

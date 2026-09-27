@@ -87,7 +87,6 @@ netbox_traefik_enable: true
 netbox_traefik_dynamic_dir: /opt/traefik/dynamic
 netbox_traefik_entrypoint: https_private
 netbox_traefik_authelia_enable: false
-netbox_traefik_crowdsec_enable: false
 netbox_traefik_headers_middleware: netbox-headers@file
 netbox_traefik_middleware_chain: "{{ netbox_name }}-ui-chain"
 netbox_traefik_certresolver: dns-cloudflare

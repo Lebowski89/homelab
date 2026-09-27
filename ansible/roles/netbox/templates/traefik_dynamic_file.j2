@@ -7,9 +7,6 @@ http:
     {{ netbox_name }}-ui-chain:
       chain:
         middlewares:
-{% if netbox_traefik_crowdsec_enable | bool %}
-          - "crowdsec@file"
-{% endif %}
 {% if netbox_traefik_authelia_enable | bool %}
           - "authelia@file"
 {% endif %}
