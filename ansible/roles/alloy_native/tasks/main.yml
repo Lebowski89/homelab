@@ -70,46 +70,6 @@
     mode: "0640"
   notify: Restart Alloy
 
-- name: Alloy native | Inspect local JDownloader application data
-  ansible.builtin.stat:
-    path: "{{ alloy_native_jdownloader_root }}"
-  register: alloy_native_jdownloader_root_stat
-
-- name: Alloy native | Ensure local JDownloader log directory exists
-  when: alloy_native_jdownloader_root_stat.stat.isdir | default(false)
-  ansible.builtin.file:
-    path: "{{ alloy_native_jdownloader_logs_dir }}"
-    state: directory
-    owner: "{{ container_host_puid }}"
-    group: "{{ container_host_pgid }}"
-    mode: "0750"
-
-- name: Alloy native | Inspect local JDownloader log directory
-  when: alloy_native_jdownloader_root_stat.stat.isdir | default(false)
-  ansible.builtin.stat:
-    path: "{{ alloy_native_jdownloader_logs_dir }}"
-  register: alloy_native_jdownloader_logs_stat
-
-- name: Alloy native | Grant Alloy access to existing JDownloader logs
-  when: alloy_native_jdownloader_logs_stat.stat.isdir | default(false)
-  ansible.posix.acl:
-    path: "{{ alloy_native_jdownloader_logs_dir }}"
-    entity: "{{ alloy_native_user }}"
-    etype: user
-    permissions: rX
-    state: present
-    recursive: true
-
-- name: Alloy native | Preserve Alloy access on new JDownloader logs
-  when: alloy_native_jdownloader_logs_stat.stat.isdir | default(false)
-  ansible.posix.acl:
-    path: "{{ alloy_native_jdownloader_logs_dir }}"
-    entity: "{{ alloy_native_user }}"
-    etype: user
-    permissions: rX
-    default: true
-    state: present
-
 - name: Alloy native | Enable and start service
   ansible.builtin.systemd_service:
     name: "{{ alloy_native_service_name }}"

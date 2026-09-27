@@ -101,10 +101,9 @@ plex:
         }}/plex/Library/Application Support/Plex Media Server/Plug-ins
       state: directory
       mode: "0755"
-    - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library/Logs"
-      state: directory
-      mode: "0755"
-    - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library/Logs/Plex Media Server"
+    - path: >-
+        {{ hostvars[services_plex_host].container_host_appdata_root
+        }}/plex/Library/Application Support/Plex Media Server/Logs
       state: directory
       mode: "0755"
   named_volumes:

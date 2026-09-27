@@ -151,7 +151,7 @@ local.file_match "applications" {
       source    = "file",
     },
     {
-      __path__ = "/host/rootfs{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library/Logs/Plex Media Server/Plex Media Server.log",
+      __path__ = "/host/rootfs{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "plex",
@@ -216,9 +216,17 @@ local.file_match "applications" {
 
 loki.source.file "applications" {
   targets                 = local.file_match.applications.targets
-  forward_to              = [loki.write.default.receiver]
+  forward_to              = [loki.process.application_files.receiver]
   tail_from_end           = true
   on_positions_file_error = "restart_from_end"
+}
+
+loki.process "application_files" {
+  stage.label_drop {
+    values = ["filename"]
+  }
+
+  forward_to = [loki.write.default.receiver]
 }
 
 local.file_match "traefik_access" {
@@ -244,6 +252,10 @@ loki.source.file "traefik_access" {
 }
 
 loki.process "traefik_access" {
+  stage.label_drop {
+    values = ["filename"]
+  }
+
   stage.json {
     expressions = {
       entrypoint       = "entryPointName",

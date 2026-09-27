@@ -36,6 +36,14 @@ discovery.relabel "journal" {
     source_labels = ["__journal_container_name"]
     target_label  = "container"
   }
+
+  // Privacy-sensitive application output remains in the local journal. Entries
+  // without these container names, including systemd lifecycle records, remain.
+  rule {
+    source_labels = ["__journal_container_name"]
+    regex         = "jdownloader2|mullvad-browser"
+    action        = "drop"
+  }
 }
 
 loki.source.journal "system" {
@@ -46,26 +54,4 @@ loki.source.journal "system" {
   }
   relabel_rules = discovery.relabel.journal.rules
   forward_to    = [loki.write.default.receiver]
-}
-
-local.file_match "jdownloader" {
-  path_targets = [
-    {
-      __path__ = "{{ alloy_native_jdownloader_log_path }}",
-      host      = constants.hostname,
-      log_type  = "application",
-      service   = "jdownloader2",
-      source    = "file",
-    },
-  ]
-
-  ignore_older_than = "24h"
-  sync_period       = "10s"
-}
-
-loki.source.file "jdownloader" {
-  targets                 = local.file_match.jdownloader.targets
-  forward_to              = [loki.write.default.receiver]
-  tail_from_end           = true
-  on_positions_file_error = "restart_from_end"
 }

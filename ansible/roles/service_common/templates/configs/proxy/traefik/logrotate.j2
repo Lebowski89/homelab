@@ -1,0 +1,15 @@
+{{ service_common_service.volumes.logs.source }}/access.log {
+  daily
+  maxsize 25M
+  rotate 7
+  maxage 7
+  missingok
+  notifempty
+  compress
+  delaycompress
+  create 0640 root root
+  sharedscripts
+  postrotate
+    /usr/local/sbin/skynet-traefik-reopen-logs
+  endscript
+}
