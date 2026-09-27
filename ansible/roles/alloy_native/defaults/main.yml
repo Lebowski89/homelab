@@ -1,0 +1,23 @@
+---
+
+alloy_native_keyring_dir: /etc/apt/keyrings
+alloy_native_keyring_file: /etc/apt/keyrings/grafana.asc
+alloy_native_repo_url: https://apt.grafana.com
+alloy_native_repo_suite: stable
+alloy_native_repo_filename: grafana
+alloy_native_packages:
+  - acl
+  - alloy
+alloy_native_service_name: alloy
+alloy_native_user: alloy
+alloy_native_group: alloy
+alloy_native_config_dir: /etc/alloy
+alloy_native_config_path: /etc/alloy/config.alloy
+alloy_native_journal_groups:
+  - adm
+  - systemd-journal
+alloy_native_loki_url: >-
+  https://loki.{{ services_internal_zone }}:{{ services_private_https_port }}/loki/api/v1/push
+alloy_native_jdownloader_root: "{{ container_host_appdata_root }}/jdownloader-2"
+alloy_native_jdownloader_logs_dir: "{{ alloy_native_jdownloader_root }}/logs"
+alloy_native_jdownloader_log_path: "{{ alloy_native_jdownloader_logs_dir }}/output.log"

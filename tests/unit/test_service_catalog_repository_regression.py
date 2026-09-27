@@ -666,6 +666,7 @@ def test_service_play_gathers_facts_only_for_selected_operations_and_hosts():
         "Gather facts for PostgreSQL host management",
         "Gather facts for Keepalived role",
         "Gather facts for Technitium native role",
+        "Gather facts for native Alloy role",
     }
 
 

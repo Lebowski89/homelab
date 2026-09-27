@@ -51,6 +51,7 @@ locals {
     "homepage",
     "infisical",
     "lidarr",
+    "loki",
     "netbox",
     "notifiarr",
     "nzbhydra2",

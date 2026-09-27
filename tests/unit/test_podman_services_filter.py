@@ -31,6 +31,30 @@ def test_normalize_accepts_demo_like_service():
     assert svc["secrets"] == []
 
 
+def test_log_driver_defaults_to_journald():
+    svc = podman_services.podman_service_normalize(valid_cfg(), "demo")
+
+    assert svc["container"]["log_driver"] == "journald"
+
+
+def test_explicit_journald_log_driver_is_accepted():
+    cfg = valid_cfg()
+    cfg["log_driver"] = "journald"
+
+    svc = podman_services.podman_service_normalize(cfg, "demo")
+
+    assert svc["container"]["log_driver"] == "journald"
+
+
+@pytest.mark.parametrize("driver", ["json-file", "k8s-file", "none"])
+def test_unsupported_log_driver_is_rejected(driver):
+    cfg = valid_cfg()
+    cfg["log_driver"] = driver
+
+    with pytest.raises(AnsibleFilterError, match="log_driver must be one of"):
+        podman_services.podman_service_normalize(cfg, "demo")
+
+
 @pytest.mark.parametrize("image", ["registry.example.invalid/demo:latest", "registry.example.invalid/demo", ""])
 def test_image_must_be_exact_non_latest(image):
     cfg = valid_cfg()

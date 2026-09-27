@@ -26,6 +26,7 @@ _VALID_NETWORK_DRIVERS = {"bridge", "ipvlan", "macvlan"}
 _VALID_PROTOCOLS = {"tcp", "udp"}
 _VALID_SECRET_UPDATE_POLICIES = {"preserve", "reconcile"}
 _VALID_VOLUME_TYPES = {"bind", "tmpfs", "volume"}
+_VALID_LOG_DRIVERS = {"journald"}
 
 # Effective service fields accepted by the Podman adapter are grouped by the
 # component that owns their behavior. Keep this boundary explicit: accepting a
@@ -40,6 +41,7 @@ _PODMAN_SERVICE_FIELDS = frozenset(
         "devices",
         "healthcheck",
         "image",
+        "log_driver",
         "name",
         "named_networks",
         "network_mode",
@@ -309,6 +311,13 @@ def _image(value: Any, *, name: str) -> str:
     if not repository or not tag or tag == "latest":
         raise AnsibleFilterError(f"{name} must be an exact, non-latest image tag")
     return image
+
+
+def _log_driver(value: Any, *, name: str) -> str:
+    driver = _nonempty_string(value, name=name).lower()
+    if driver not in _VALID_LOG_DRIVERS:
+        raise AnsibleFilterError(f"{name} must be one of {sorted(_VALID_LOG_DRIVERS)}")
+    return driver
 
 
 def _environment(value: Any, *, name: str) -> dict[str, Any]:
@@ -1086,6 +1095,7 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         raise AnsibleFilterError(f"{name}.image must be an exact, non-latest image tag")
     image = _image(cfg["image"], name=f"{name}.image")
     container["image"] = image
+    container["log_driver"] = _log_driver(cfg.get("log_driver", "journald"), name=f"{name}.log_driver")
 
     if "user" in cfg:
         container["uid"], container["gid"] = _canonical_user(cfg["user"], name=f"{name}.user")

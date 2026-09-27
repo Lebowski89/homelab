@@ -1,0 +1,321 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+loki.write "default" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
+
+discovery.docker "docker" {
+  host = "unix:///var/run/docker.sock"
+}
+
+discovery.relabel "docker_logs" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_swarm_service_name"]
+    regex         = "^[^_]+_(.+)"
+    replacement   = "$1"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = ["__meta_docker_container_label_com_docker_swarm_service_name"]
+    regex         = "^[^_]+_(.+)"
+    replacement   = "$1"
+    target_label  = "service"
+  }
+}
+
+loki.source.docker "docker" {
+  host          = "unix:///var/run/docker.sock"
+  targets       = discovery.docker.docker.targets
+  labels        = {
+    host    = sys.env("ALLOY_HOST"),
+    job     = "docker",
+    runtime = "docker",
+    source  = "docker",
+  }
+  relabel_rules = discovery.relabel.docker_logs.rules
+  forward_to    = [loki.write.default.receiver]
+}
+
+local.file_match "applications" {
+  path_targets = [
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha/log/qbittorrent.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "qbittorrent-alpha",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo/log/qbittorrent.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "qbittorrent-bravo",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/sabnzbd/logs/sabnzbd.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "sabnzbd",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr/logs/radarr.txt",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "radarr",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr-4k/logs/radarr.txt",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "radarr-4k",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr/logs/sonarr.txt",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "sonarr",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr-4k/logs/sonarr.txt",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "sonarr-4k",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/lidarr/logs/lidarr.txt",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "lidarr",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/prowlarr/logs/prowlarr.txt",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "prowlarr",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/whisparr/logs/whisparr.txt",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "whisparr",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/bazarr/log/bazarr.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "bazarr",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/recyclarr/logs/debug.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "debug",
+      service   = "recyclarr",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/nzbhydra2/app/logs/nzbhydra2.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "nzbhydra2",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/nzbhydra2/app/logs/wrapper.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "wrapper",
+      service   = "nzbhydra2",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library/Logs/Plex Media Server/Plex Media Server.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "plex",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_plex_host].container_host_appdata_root }}/tautulli/logs/tautulli.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "tautulli",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_plex_host].container_host_appdata_root }}/kometa/logs/meta.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "kometa",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_plex_host].container_host_appdata_root }}/imagemaid/logs/imagemaid.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "imagemaid",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_controller_host].container_host_appdata_root }}/seerr/logs/seerr.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "seerr",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_controller_host].container_host_appdata_root }}/unifi-os/var-log/unifi/server.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "unifi",
+      source    = "file",
+    },
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_controller_host].container_host_appdata_root }}/technitium/logs/*.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "technitium",
+      source    = "file",
+    },
+{% if hostvars[services_plex_host].container_host_appdata_root != hostvars[services_controller_host].container_host_appdata_root %}
+    {
+      __path__ = "/host/rootfs{{ hostvars[services_plex_host].container_host_appdata_root }}/technitium/logs/*.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "application",
+      service   = "technitium",
+      source    = "file",
+    },
+{% endif %}
+  ]
+
+  ignore_older_than = "24h"
+  sync_period       = "10s"
+}
+
+loki.source.file "applications" {
+  targets                 = local.file_match.applications.targets
+  forward_to              = [loki.write.default.receiver]
+  tail_from_end           = true
+  on_positions_file_error = "restart_from_end"
+}
+
+local.file_match "traefik_access" {
+  path_targets = [
+    {
+      __path__ = "/host/rootfs{{ services_log_root }}/traefik/access.log",
+      host      = sys.env("ALLOY_HOST"),
+      log_type  = "access",
+      service   = "traefik",
+      source    = "file",
+    },
+  ]
+
+  ignore_older_than = "24h"
+  sync_period       = "10s"
+}
+
+loki.source.file "traefik_access" {
+  targets                 = local.file_match.traefik_access.targets
+  forward_to              = [loki.process.traefik_access.receiver]
+  tail_from_end           = true
+  on_positions_file_error = "restart_from_end"
+}
+
+loki.process "traefik_access" {
+  stage.json {
+    expressions = {
+      entrypoint       = "entryPointName",
+      router           = "RouterName",
+      upstream_service = "ServiceName",
+    }
+  }
+
+  stage.labels {
+    values = {
+      entrypoint       = "",
+      router           = "",
+      upstream_service = "",
+    }
+  }
+
+  forward_to = [loki.write.default.receiver]
+}
+
+prometheus.remote_write "prometheus" {
+  endpoint {
+    url = "http://prometheus:9090/api/v1/write"
+  }
+}
+
+prometheus.exporter.unix "host" {
+  rootfs_path = "/host/rootfs"
+  procfs_path = "/host/proc"
+  sysfs_path  = "/host/sys"
+}
+
+prometheus.scrape "host" {
+  targets         = prometheus.exporter.unix.host.targets
+  scrape_interval = "15s"
+  forward_to      = [prometheus.relabel.host.receiver]
+}
+
+prometheus.relabel "host" {
+  forward_to = [prometheus.remote_write.prometheus.receiver]
+
+  rule {
+    replacement  = sys.env("ALLOY_HOST")
+    target_label = "instance"
+  }
+
+  rule {
+    replacement  = "alloy-unix"
+    target_label = "job"
+  }
+}
+
+prometheus.exporter.cadvisor "docker" {
+  docker_host      = "unix:///var/run/docker.sock"
+  storage_duration = "5m"
+}
+
+prometheus.scrape "docker" {
+  targets         = prometheus.exporter.cadvisor.docker.targets
+  scrape_interval = "15s"
+  forward_to      = [prometheus.relabel.docker.receiver]
+}
+
+prometheus.relabel "docker" {
+  forward_to = [prometheus.remote_write.prometheus.receiver]
+
+  rule {
+    replacement  = sys.env("ALLOY_HOST")
+    target_label = "instance"
+  }
+
+  rule {
+    replacement  = "alloy-cadvisor"
+    target_label = "job"
+  }
+}

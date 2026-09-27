@@ -160,16 +160,6 @@ authelia:
         - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia"
           state: directory
           mode: "0755"
-        - path: "{{ services_log_root }}"
-          state: directory
-          owner: "0"
-          group: "0"
-          mode: "0755"
-        - path: "{{ services_log_root }}/authelia"
-          state: directory
-          owner: "0"
-          group: "0"
-          mode: "0755"
       templates:
         - src: configs/proxy/authelia/config.yml.j2
           dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/configuration.yml"
@@ -191,11 +181,6 @@ authelia:
           type: bind
           source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia"
           target: /config
-          read_only: false
-        logs:
-          type: bind
-          source: "{{ services_log_root }}/authelia"
-          target: /config/logs
           read_only: false
       ################################
       # INTEGRATIONS

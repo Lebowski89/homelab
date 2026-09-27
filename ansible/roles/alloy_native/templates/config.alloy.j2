@@ -1,0 +1,71 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+loki.write "default" {
+  endpoint {
+    url = "{{ alloy_native_loki_url }}"
+  }
+}
+
+discovery.relabel "journal" {
+  targets = []
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+
+  rule {
+    source_labels = ["__journal__systemd_user_unit"]
+    target_label  = "user_unit"
+  }
+
+  rule {
+    source_labels = ["__journal_syslog_identifier"]
+    target_label  = "syslog_identifier"
+  }
+
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "priority"
+  }
+
+  rule {
+    source_labels = ["__journal_container_name"]
+    target_label  = "container"
+  }
+}
+
+loki.source.journal "system" {
+  max_age       = "24h"
+  labels        = {
+    host   = constants.hostname,
+    source = "journal",
+  }
+  relabel_rules = discovery.relabel.journal.rules
+  forward_to    = [loki.write.default.receiver]
+}
+
+local.file_match "jdownloader" {
+  path_targets = [
+    {
+      __path__ = "{{ alloy_native_jdownloader_log_path }}",
+      host      = constants.hostname,
+      log_type  = "application",
+      service   = "jdownloader2",
+      source    = "file",
+    },
+  ]
+
+  ignore_older_than = "24h"
+  sync_period       = "10s"
+}
+
+loki.source.file "jdownloader" {
+  targets                 = local.file_match.jdownloader.targets
+  forward_to              = [loki.write.default.receiver]
+  tail_from_end           = true
+  on_positions_file_error = "restart_from_end"
+}

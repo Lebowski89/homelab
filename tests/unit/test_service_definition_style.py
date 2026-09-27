@@ -30,7 +30,7 @@ CANONICAL_SECTIONS = (
     ),
     ("healthcheck",),
     ("traefik", "themepark", "postgres"),
-    ("labels", "cleanup", "deploy", "container", "systemd", "runtime_options", "drift"),
+    ("log_driver", "labels", "cleanup", "deploy", "container", "systemd", "runtime_options", "drift"),
     ("targets",),
 )
 CANONICAL_KEYS = tuple(key for section in CANONICAL_SECTIONS for key in section)

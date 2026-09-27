@@ -55,6 +55,13 @@ loki:
       target: /loki
       read_only: false
   ################################
+  # INTEGRATIONS
+  ################################
+  traefik:
+    enable: true
+    exposure: private
+    port: 3100
+  ################################
   # RUNTIME/LIFECYCLE
   ################################
   deploy:

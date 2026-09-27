@@ -20,6 +20,7 @@ homepage:
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
     PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
     UMASK: "022"
+    LOG_TARGETS: stdout
     HOMEPAGE_ALLOWED_HOSTS: >-
       homepage.{{ services_internal_zone }}:{{ services_private_https_port }}
   infisical:

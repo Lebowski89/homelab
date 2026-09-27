@@ -41,6 +41,23 @@ UIDs and GIDs, and systemd linger. The user manager receives explicit `HOME`,
 `XDG_RUNTIME_DIR`, and `DBUS_SESSION_BUS_ADDRESS` values without relying on an
 interactive login.
 
+## Logging
+
+Every normalized Podman service carries `log_driver`. It defaults to the only
+currently supported value, `journald`, and the container Quadlet renders
+`LogDriver=journald` through the native Quadlet field. Arbitrary drivers and
+`PodmanArgs` are rejected. This contract is identical for rootful system units,
+rootless user units, and containers sharing another managed container network
+namespace.
+
+A package-managed native Alloy agent on hosts in the `tags_podman` inventory
+group reads the system journal as its dedicated `alloy` account. Membership in
+the locally available `adm` and `systemd-journal` groups supplies journal access;
+the agent does not run as root and does not connect to system or per-user Podman
+sockets. Rootless service logs are therefore collected through their systemd
+user units without sharing `/run/user/<uid>` runtime directories. See
+[Central logging](central-logging.md) for labels, topology, and queries.
+
 ## Migration guardrails
 
 The Podman adapter validates the complete effective service mapping. It accepts

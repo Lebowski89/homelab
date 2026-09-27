@@ -23,11 +23,12 @@ alloy:
   # ENVIRONMENT/SECRETS
   ################################
   environment:
+    ALLOY_HOST: "{{ '{{.Node.Hostname}}' }}"
     TZ: "{{ timezone }}"
   swarm_configs:
     - name: alloy_config
-      src: files/alloy_config.alloy
-      data_is_template: false
+      src: alloy_config.alloy.j2
+      data_is_template: true
   configs:
     - source: alloy_config
       target: /etc/alloy/config.alloy
@@ -41,17 +42,15 @@ alloy:
   ################################
   # FILESYSTEM
   ################################
-  paths:
-    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/alloy"
-      state: directory
-      mode: "0755"
-    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/alloy/data"
-      state: directory
-      mode: "0755"
+  named_volumes:
+    state:
+      external: false
+      name: alloy-state
+      driver: local
   volumes:
     data:
-      type: bind
-      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/alloy/data"
+      type: volume
+      source: state
       target: /etc/alloy/data
       read_only: false
     docker_sock:
@@ -91,9 +90,8 @@ alloy:
   ################################
   deploy:
     type: swarm
-    mode: replicated
-    replicas: 1
+    mode: global
     profile: careful
     host: "{{ services_controller_host }}"
     constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+      - node.platform.os == linux
