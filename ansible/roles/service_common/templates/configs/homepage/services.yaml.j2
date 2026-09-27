@@ -194,16 +194,6 @@
           username: {{ secrets.grafana_user }}
           password: {{ secrets.grafana_pass }}
           fields: ["dashboards", "datasources", "totalalerts", "alertstriggered"]
-    - Portainer:
-        icon: portainer.svg
-        href: https://portainer.{{ services_internal_zone }}:{{ services_private_https_port }}
-        description: Docker Manager
-        widget:
-          type: portainer
-          url: https://portainer.{{ services_internal_zone }}:{{ services_private_https_port }}
-          env: 1
-          key: {{ secrets.portainer_token }}
-          fields: ["running", "stopped", "total"]
     - Prometheus:
         icon: prometheus.svg
         href: https://prometheus.{{ services_internal_zone }}:{{ services_private_https_port }}

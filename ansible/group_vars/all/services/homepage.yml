@@ -54,9 +54,6 @@ homepage:
       - var: plex_token
         path: "/Plex"
         name: TOKEN
-      - var: portainer_token
-        path: "/Portainer"
-        name: HOMEPAGE_TOKEN
       - var: prowlarr_api
         path: "/Prowlarr"
         name: API

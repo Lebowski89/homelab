@@ -235,8 +235,7 @@
                 "!grafana/alloy",
                 "!haproxy",
                 "!docker.io/library/haproxy",
-                "!crowdsecurity/crowdsec",
-                "!portainer/portainer-ce"
+                "!crowdsecurity/crowdsec"
             ]
         },
         {
@@ -262,8 +261,7 @@
                 "grafana/alloy",
                 "haproxy",
                 "docker.io/library/haproxy",
-                "crowdsecurity/crowdsec",
-                "portainer/portainer-ce"
+                "crowdsecurity/crowdsec"
             ],
             "groupName": null,
             "addLabels": [

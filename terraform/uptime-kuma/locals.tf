@@ -76,7 +76,6 @@ locals {
     gotify      = { group = "monitoring", tag_keys = ["monitoring"] }
     grafana     = { group = "monitoring", tag_keys = ["monitoring"] }
     homepage    = { group = "monitoring", tag_keys = ["monitoring"] }
-    portainer   = { group = "monitoring", tag_keys = ["monitoring"] }
     prometheus  = { group = "monitoring", tag_keys = ["monitoring"] }
     uptime-kuma = { group = "monitoring", tag_keys = ["monitoring"] }
 

@@ -48,7 +48,6 @@ locals {
         "http.gotify-private",
         "http.grafana-private",
         "http.homepage-private",
-        "http.portainer-private",
         "http.prometheus-private",
         "http.uptime-kuma-private",
       ]
