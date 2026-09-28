@@ -1,0 +1,155 @@
+{% raw %}
+{
+  "uid": "homelab-availability",
+  "title": "Homelab Availability",
+  "description": "Blackbox and PostgreSQL queryability replacement for the internal Uptime Kuma status view.",
+  "tags": ["homelab", "availability"],
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-24h", "to": "now"},
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "label": "Datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "refresh": 1,
+        "current": {"selected": true, "text": "Prometheus", "value": "PBFA97CFB590B2093"}
+      },
+      {
+        "name": "category",
+        "label": "Status group",
+        "type": "custom",
+        "query": "Infrastructure,Networking,Monitoring,ARRs,Torrents,Usenet,Plex,Media,Gaming,Finance,Network,Utilities",
+        "multi": true,
+        "includeAll": true,
+        "allValue": ".*",
+        "current": {"selected": true, "text": ["All"], "value": ["$__all"]}
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total checks",
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [{"expr": "count(probe_success) + count(pg_up{job=\"postgres-exporter\"})", "refId": "A"}],
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short"}, "overrides": []},
+      "options": {"colorMode": "value", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}}
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "UP",
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [{"expr": "sum(probe_success) + sum(pg_up{job=\"postgres-exporter\"})", "refId": "A"}],
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}}
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "DOWN",
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [{"expr": "(count(probe_success) - sum(probe_success)) + (count(pg_up{job=\"postgres-exporter\"}) - sum(pg_up{job=\"postgres-exporter\"}))", "refId": "A"}],
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "red", "value": 1}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}}
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Range availability",
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [{"expr": "100 * (sum(avg_over_time(probe_success[$__range])) + sum(avg_over_time(pg_up{job=\"postgres-exporter\"}[$__range]))) / (count(avg_over_time(probe_success[$__range])) + count(avg_over_time(pg_up{job=\"postgres-exporter\"}[$__range])))", "refId": "A"}],
+      "fieldConfig": {"defaults": {"decimals": 2, "unit": "percent", "min": 0, "max": 100, "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "orange", "value": 99}, {"color": "green", "value": 99.9}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "area", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}}
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Firing availability alerts",
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [{"expr": "sum(ALERTS{alertstate=\"firing\",alertname=~\"Blackbox.*|Postgres.*\"}) or vector(0)", "refId": "A"}],
+      "fieldConfig": {"defaults": {"decimals": 0, "unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "red", "value": 1}]}}, "overrides": []},
+      "options": {"colorMode": "background", "graphMode": "none", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}}
+    },
+    {
+      "id": 6,
+      "type": "row",
+      "title": "$category",
+      "repeat": "category",
+      "repeatDirection": "v",
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 4},
+      "panels": []
+    },
+    {
+      "id": 7,
+      "type": "table",
+      "title": "$category current state",
+      "gridPos": {"h": 9, "w": 24, "x": 0, "y": 5},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {"expr": "probe_success{category=~\"$category\"} or label_replace(pg_up{job=\"postgres-exporter\",category=~\"$category\"}, \"probe_type\", \"postgres\", \"\", \"\")", "format": "table", "instant": true, "legendFormat": "state", "refId": "A"},
+        {"expr": "probe_http_status_code{category=~\"$category\"}", "format": "table", "instant": true, "legendFormat": "HTTP code", "refId": "B"},
+        {"expr": "probe_duration_seconds{category=~\"$category\"}", "format": "table", "instant": true, "legendFormat": "latency", "refId": "C"},
+        {"expr": "100 * avg_over_time(probe_success{category=~\"$category\"}[$__range])", "format": "table", "instant": true, "legendFormat": "availability", "refId": "D"},
+        {"expr": "(probe_ssl_earliest_cert_expiry{category=~\"$category\"} - time()) / 86400", "format": "table", "instant": true, "legendFormat": "TLS days", "refId": "E"}
+      ],
+      "transformations": [{"id": "labelsToFields", "options": {"mode": "columns"}}, {"id": "merge", "options": {}}],
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "Value"}, "properties": [{"id": "mappings", "value": [{"options": {"0": {"color": "red", "index": 0, "text": "DOWN"}, "1": {"color": "green", "index": 1, "text": "UP"}}, "type": "value"}]}]}
+        ]
+      },
+      "options": {"showHeader": true, "cellHeight": "sm", "sortBy": [{"desc": false, "displayName": "service"}]}
+    },
+    {
+      "id": 8,
+      "type": "state-timeline",
+      "title": "Availability history",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 14},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [{"expr": "probe_success{category=~\"$category\"} or label_replace(pg_up{job=\"postgres-exporter\",category=~\"$category\"}, \"probe_type\", \"postgres\", \"\", \"\")", "legendFormat": "{{category}} / {{service}} / {{probe_type}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"mappings": [{"options": {"0": {"color": "red", "index": 0, "text": "DOWN"}, "1": {"color": "green", "index": 1, "text": "UP"}}, "type": "value"}], "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "green", "value": 1}]}}, "overrides": []},
+      "options": {"alignValue": "left", "mergeValues": true, "rowHeight": 0.8, "showValue": "auto", "tooltip": {"mode": "single", "sort": "none"}}
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Probe latency",
+      "gridPos": {"h": 9, "w": 16, "x": 0, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [{"expr": "probe_duration_seconds{category=~\"$category\"}", "legendFormat": "{{category}} / {{service}} / {{probe_type}}", "refId": "A"}],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0, "custom": {"drawStyle": "line", "fillOpacity": 5, "lineWidth": 1, "showPoints": "never"}}, "overrides": []},
+      "options": {"legend": {"displayMode": "table", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}}
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "HTTP status and TLS expiry",
+      "gridPos": {"h": 9, "w": 8, "x": 16, "y": 24},
+      "datasource": {"type": "prometheus", "uid": "$datasource"},
+      "targets": [
+        {"expr": "probe_http_status_code{category=~\"$category\"}", "format": "table", "instant": true, "legendFormat": "HTTP", "refId": "A"},
+        {"expr": "(probe_ssl_earliest_cert_expiry{category=~\"$category\"} - time()) / 86400", "format": "table", "instant": true, "legendFormat": "TLS days", "refId": "B"}
+      ],
+      "transformations": [{"id": "labelsToFields", "options": {"mode": "columns"}}, {"id": "merge", "options": {}}],
+      "fieldConfig": {"defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}}, "overrides": []},
+      "options": {"showHeader": true, "cellHeight": "sm"}
+    }
+  ]
+}
+{% endraw %}

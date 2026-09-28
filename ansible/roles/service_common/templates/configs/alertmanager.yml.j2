@@ -11,17 +11,17 @@ global:
   smtp_require_tls: true
 
 route:
-  receiver: email
+  receiver: email-gotify
   group_by: [alertname, cluster, service, job, instance, severity]
   group_wait: 30s
   group_interval: 5m
   repeat_interval: 4h
   routes:
-    - receiver: email
+    - receiver: email-gotify
       matchers:
         - severity="critical"
       repeat_interval: 1h
-    - receiver: email
+    - receiver: email-gotify
       matchers:
         - severity="warning"
       repeat_interval: 6h
@@ -37,9 +37,30 @@ inhibit_rules:
     target_matchers:
       - severity=~"warning|critical"
     equal: [job, instance]
+  - source_matchers:
+      - alertname="BlackboxExporterScrapeFailure"
+    target_matchers:
+      - alertname="BlackboxProbeFailed"
+    equal: [job]
+  - source_matchers:
+      - alertname="PostgresExporterDown"
+    target_matchers:
+      - alertname="PostgresQueryUnavailable"
+    equal: [instance]
 
 receivers:
-  - name: email
+  - name: email-gotify
     email_configs:
       - to: "{{ smtp_email }}"
         send_resolved: true
+    webhook_configs:
+      - url: http://gotify/message
+        send_resolved: true
+        http_config:
+          authorization:
+            type: Bearer
+            credentials_file: /run/secrets/alertmanager_gotify_token_secret
+        payload:
+          title: '{% raw %}{{ if eq .Status "firing" }}FIRING{{ else }}RESOLVED{{ end }}: {{ .CommonLabels.alertname }}{% endraw %}'
+          message: '{% raw %}{{ range .Alerts }}{{ .Annotations.summary }}{{ if .Annotations.description }} - {{ .Annotations.description }}{{ end }}{{ "\n" }}{{ end }}{% endraw %}'
+          priority: 8

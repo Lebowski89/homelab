@@ -32,6 +32,8 @@ blackbox_exporter:
   named_networks:
     overlay:
       external: true
+  cap_add:
+    - NET_RAW
   ################################
   # RUNTIME/LIFECYCLE
   ################################

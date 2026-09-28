@@ -63,6 +63,16 @@ postgres_uptime_kuma_monitor_role_pass: ""
 postgres_uptime_kuma_monitor_database: postgres
 
 ################################
+# NEUTRAL MONITOR ROLE
+################################
+
+# Phase 1 keeps the existing Kuma credential while creating a neutral,
+# least-privilege pg_monitor member for postgres_exporter.
+postgres_monitor_role_name: postgres_monitor
+postgres_monitor_role_pass: "{{ postgres_uptime_kuma_monitor_role_pass }}"
+postgres_monitor_database: "{{ postgres_uptime_kuma_monitor_database }}"
+
+################################
 # LOGICAL BACKUPS
 ################################
 

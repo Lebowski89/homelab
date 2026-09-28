@@ -393,9 +393,17 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 | `skynet run postgres restore`             | `postgres_restore`             |
 | `skynet run postgres admin`               | `postgres_admin`               |
 | `skynet run postgres admin-uptime-kuma`   | `postgres_admin_uptime_kuma`   |
+| `skynet run postgres admin-monitor`       | `postgres_admin_monitor`       |
 | `skynet run postgres admin-nuke-node`     | `postgres_admin_nuke_node`     |
 | `skynet run postgres admin-fix-owner`     | `postgres_admin_fix_owner`     |
 | `skynet run postgres admin-update-pg-hba` | `postgres_admin_update_pg_hba` |
+
+### PostgreSQL exporter
+
+| Command                                | Raw tag             |
+| -------------------------------------- | ------------------- |
+| `skynet run postgres-exporter`         | `postgres_exporter` |
+| `skynet check postgres-exporter`       | `postgres_exporter` |
 
 ### Podman
 

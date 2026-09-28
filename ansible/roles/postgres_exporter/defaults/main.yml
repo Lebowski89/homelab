@@ -1,0 +1,26 @@
+---
+
+postgres_exporter_version: "0.20.1"
+postgres_exporter_arch: amd64
+postgres_exporter_checksum: >-
+  sha256:89d4f7e7920cad48fdc3133f789556ef5253c330a9f5fdace3bdb6344c0a8b5a
+postgres_exporter_archive_name: "postgres_exporter-{{ postgres_exporter_version }}.linux-{{ postgres_exporter_arch }}.tar.gz"
+postgres_exporter_release_base_url: >-
+  https://github.com/prometheus-community/postgres_exporter/releases/download/v{{ postgres_exporter_version }}
+postgres_exporter_download_url: "{{ postgres_exporter_release_base_url }}/{{ postgres_exporter_archive_name }}"
+postgres_exporter_archive_path: "/tmp/{{ postgres_exporter_archive_name }}"
+postgres_exporter_extract_dir: "/tmp/postgres_exporter-{{ postgres_exporter_version }}.linux-{{ postgres_exporter_arch }}"
+postgres_exporter_install_dir: /usr/local/bin
+
+postgres_exporter_user: postgres_exporter
+postgres_exporter_group: postgres_exporter
+postgres_exporter_config_dir: /etc/postgres_exporter
+postgres_exporter_environment_file: "{{ postgres_exporter_config_dir }}/environment"
+postgres_exporter_password_file: "{{ postgres_exporter_config_dir }}/password"
+postgres_exporter_listen_address: "{{ local_ip }}:9187"
+
+postgres_exporter_database_host: 127.0.0.1
+postgres_exporter_database_port: 5432
+postgres_exporter_database_name: "{{ postgres_monitor_database }}"
+postgres_exporter_database_user: "{{ postgres_monitor_role_name }}"
+postgres_exporter_database_password: "{{ postgres_monitor_role_pass }}"

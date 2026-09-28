@@ -61,6 +61,64 @@ scrape_configs:
 {% endif %}
 {% endfor %}
 
+  - job_name: "blackbox-http"
+    scrape_interval: 1m
+    scrape_timeout: 30s
+    metrics_path: /probe
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/file_sd/blackbox-http.json
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [module]
+        target_label: __param_module
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "{{ prometheus_blackbox_exporter_address }}"
+
+  - job_name: "blackbox-icmp"
+    scrape_interval: 1m
+    scrape_timeout: 30s
+    metrics_path: /probe
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/file_sd/blackbox-icmp.json
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [module]
+        target_label: __param_module
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "{{ prometheus_blackbox_exporter_address }}"
+
+  - job_name: "blackbox-tcp"
+    scrape_interval: 1m
+    scrape_timeout: 30s
+    metrics_path: /probe
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/file_sd/blackbox-tcp.json
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [module]
+        target_label: __param_module
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: "{{ prometheus_blackbox_exporter_address }}"
+
+  - job_name: "postgres-exporter"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/file_sd/postgres.json
+
 {% if prometheus_blackbox_dns_targets | default({}) | length > 0 %}
   - job_name: "blackbox-dns-udp"
     scrape_interval: 30s
@@ -73,6 +131,10 @@ scrape_configs:
 {% for target_name, target_ip in prometheus_blackbox_dns_targets | dictsort %}
       - targets: ["{{ target_ip }}"]
         labels:
+          service: technitium
+          category: Networking
+          probe_type: dns
+          criticality: critical
           dns_target: "{{ target_name }}"
           dns_target_ip: "{{ target_ip }}"
           probe: dns_udp_internal_a
@@ -96,6 +158,10 @@ scrape_configs:
 {% for target_name, target_ip in prometheus_blackbox_dns_targets | dictsort %}
       - targets: ["{{ target_ip }}"]
         labels:
+          service: technitium
+          category: Networking
+          probe_type: dns
+          criticality: critical
           dns_target: "{{ target_name }}"
           dns_target_ip: "{{ target_ip }}"
           probe: dns_tcp_internal_a

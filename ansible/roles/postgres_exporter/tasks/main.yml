@@ -1,0 +1,107 @@
+---
+
+- name: Postgres_Exporter | Validate database credential contract
+  ansible.builtin.assert:
+    that:
+      - postgres_exporter_database_user | string | trim | length > 0
+      - postgres_exporter_database_password | string | length > 0
+      - postgres_exporter_database_name | string | trim | length > 0
+    fail_msg: PostgreSQL exporter database credentials must be configured.
+  no_log: true
+  diff: false
+
+- name: Postgres_Exporter | Create postgres_exporter group
+  ansible.builtin.group:
+    name: "{{ postgres_exporter_group }}"
+    system: true
+
+- name: Postgres_Exporter | Create postgres_exporter user
+  ansible.builtin.user:
+    name: "{{ postgres_exporter_user }}"
+    group: "{{ postgres_exporter_group }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Postgres_Exporter | Create configuration directory
+  ansible.builtin.file:
+    path: "{{ postgres_exporter_config_dir }}"
+    state: directory
+    owner: root
+    group: "{{ postgres_exporter_group }}"
+    mode: "0750"
+
+- name: Postgres_Exporter | Install protected password file
+  ansible.builtin.template:
+    src: password.j2
+    dest: "{{ postgres_exporter_password_file }}"
+    owner: root
+    group: "{{ postgres_exporter_group }}"
+    mode: "0640"
+  no_log: true
+  diff: false
+  notify: Restart postgres_exporter
+
+- name: Postgres_Exporter | Install protected environment file
+  ansible.builtin.template:
+    src: environment.j2
+    dest: "{{ postgres_exporter_environment_file }}"
+    owner: root
+    group: "{{ postgres_exporter_group }}"
+    mode: "0640"
+  no_log: true
+  diff: false
+  notify: Restart postgres_exporter
+
+- name: Postgres_Exporter | Skip binary install in check mode
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Skipping postgres_exporter archive download/extract/install in check mode because
+      get_url does not materialize the archive for the following unarchive task.
+
+- name: Postgres_Exporter | Download checksum-pinned archive
+  when: not ansible_check_mode
+  ansible.builtin.get_url:
+    url: "{{ postgres_exporter_download_url }}"
+    dest: "{{ postgres_exporter_archive_path }}"
+    mode: "0644"
+    checksum: "{{ postgres_exporter_checksum }}"
+
+- name: Postgres_Exporter | Extract archive
+  when: not ansible_check_mode
+  ansible.builtin.unarchive:
+    src: "{{ postgres_exporter_archive_path }}"
+    dest: /tmp
+    remote_src: true
+    creates: "{{ postgres_exporter_extract_dir }}/postgres_exporter"
+
+- name: Postgres_Exporter | Install binary
+  when: not ansible_check_mode
+  ansible.builtin.copy:
+    src: "{{ postgres_exporter_extract_dir }}/postgres_exporter"
+    dest: "{{ postgres_exporter_install_dir }}/postgres_exporter"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  notify: Restart postgres_exporter
+
+- name: Postgres_Exporter | Install systemd unit
+  ansible.builtin.template:
+    src: postgres_exporter.service.j2
+    dest: /etc/systemd/system/postgres_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart postgres_exporter
+
+- name: Postgres_Exporter | Enable and start service
+  when: not ansible_check_mode
+  ansible.builtin.systemd:
+    name: postgres_exporter
+    enabled: true
+    state: started
+    daemon_reload: true

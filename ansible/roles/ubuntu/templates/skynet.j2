@@ -381,6 +381,7 @@ role_tag() {
     postgres:restore)               echo "postgres_restore" ;;
     postgres:admin)                 echo "postgres_admin" ;;
     postgres:admin-uptime-kuma)     echo "postgres_admin_uptime_kuma" ;;
+    postgres:admin-monitor)         echo "postgres_admin_monitor" ;;
     postgres:admin-nuke-node)       echo "postgres_admin_nuke_node" ;;
     postgres:admin-fix-owner)       echo "postgres_admin_fix_owner" ;;
     postgres:admin-update-pg-hba)   echo "postgres_admin_update_pg_hba" ;;
@@ -407,6 +408,10 @@ role_tag() {
     node-exporter:deploy)           echo "node_exporter" ;;
     node-exporter:install)          echo "node_exporter" ;;
     node-exporter:run)              echo "node_exporter" ;;
+
+    postgres-exporter:deploy)       echo "postgres_exporter" ;;
+    postgres-exporter:install)      echo "postgres_exporter" ;;
+    postgres-exporter:run)          echo "postgres_exporter" ;;
 
     *)
       return 1
@@ -557,6 +562,7 @@ Role/action targets:
     restore             -> postgres_restore
     admin               -> postgres_admin
     admin-uptime-kuma   -> postgres_admin_uptime_kuma
+    admin-monitor       -> postgres_admin_monitor
     admin-nuke-node     -> postgres_admin_nuke_node
     admin-fix-owner     -> postgres_admin_fix_owner
     admin-update-pg-hba -> postgres_admin_update_pg_hba
@@ -589,6 +595,11 @@ Role/action targets:
     deploy  -> node_exporter
     install -> node_exporter
     run     -> node_exporter
+
+  postgres-exporter:
+    deploy  -> postgres_exporter
+    install -> postgres_exporter
+    run     -> postgres_exporter
 
 Examples:
   skynet check resolved

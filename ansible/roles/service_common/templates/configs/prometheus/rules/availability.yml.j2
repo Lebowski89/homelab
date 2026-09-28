@@ -1,0 +1,65 @@
+groups:
+  - name: availability.rules
+    rules:
+      - alert: BlackboxExporterScrapeFailure
+        expr: max by (job) (up{job=~"blackbox-.*"}) == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Blackbox exporter cannot serve {{ '{{' }} $labels.job {{ '}}' }} probes"
+          description: "Prometheus has been unable to scrape any target in {{ '{{' }} $labels.job {{ '}}' }} for 2 minutes; this indicates an exporter or probe-job failure rather than a confirmed target outage."
+          priority: "9"
+
+      - alert: BlackboxProbeFailed
+        expr: probe_success{job=~"blackbox-.*"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Availability probe failed: {{ '{{' }} $labels.service {{ '}}' }}"
+          description: "The {{ '{{' }} $labels.probe_type {{ '}}' }} probe for {{ '{{' }} $labels.instance {{ '}}' }} in {{ '{{' }} $labels.category {{ '}}' }} has failed for 3 minutes."
+          priority: "8"
+
+      - alert: BlackboxTLSCertificateExpiring
+        expr: >-
+          (probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time() < 21 * 86400)
+          and
+          (probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time() >= 7 * 86400)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "TLS certificate expiring soon: {{ '{{' }} $labels.service {{ '}}' }}"
+          description: "The earliest TLS certificate for {{ '{{' }} $labels.instance {{ '}}' }} expires in less than 21 days."
+          priority: "6"
+
+      - alert: BlackboxTLSCertificateCritical
+        expr: probe_ssl_earliest_cert_expiry{job="blackbox-http"} - time() < 7 * 86400
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "TLS certificate near expiry: {{ '{{' }} $labels.service {{ '}}' }}"
+          description: "The earliest TLS certificate for {{ '{{' }} $labels.instance {{ '}}' }} expires in less than 7 days or has expired."
+          priority: "9"
+
+      - alert: PostgresExporterDown
+        expr: up{job="postgres-exporter"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL exporter down: {{ '{{' }} $labels.host {{ '}}' }}"
+          description: "Prometheus has been unable to scrape postgres_exporter on {{ '{{' }} $labels.instance {{ '}}' }} for 3 minutes."
+          priority: "8"
+
+      - alert: PostgresQueryUnavailable
+        expr: pg_up{job="postgres-exporter"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL queryability failed: {{ '{{' }} $labels.host {{ '}}' }}"
+          description: "postgres_exporter on {{ '{{' }} $labels.instance {{ '}}' }} has been unable to query PostgreSQL for 3 minutes."
+          priority: "9"
