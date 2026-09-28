@@ -385,6 +385,7 @@ role_tag() {
     postgres:admin-nuke-node)       echo "postgres_admin_nuke_node" ;;
     postgres:admin-fix-owner)       echo "postgres_admin_fix_owner" ;;
     postgres:admin-update-pg-hba)   echo "postgres_admin_update_pg_hba" ;;
+    postgres:admin-update-replication-safety) echo "postgres_admin_update_replication_safety" ;;
 
     podman:deploy)                  echo "podman" ;;
     podman:install)                 echo "podman_install" ;;
@@ -566,6 +567,7 @@ Role/action targets:
     admin-nuke-node     -> postgres_admin_nuke_node
     admin-fix-owner     -> postgres_admin_fix_owner
     admin-update-pg-hba -> postgres_admin_update_pg_hba
+    admin-update-replication-safety -> postgres_admin_update_replication_safety
 
   podman:
     deploy  -> podman

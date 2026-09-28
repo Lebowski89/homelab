@@ -11,6 +11,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
 PROMETHEUS_VARS_PATH = REPO_ROOT / "ansible/group_vars/all/prometheus.yml"
 KUMA_LOCALS_PATH = REPO_ROOT / "terraform/uptime-kuma/locals.tf"
+ALERTING_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/alerting-config-validation.yml"
 
 
 def load_module(path: Path, name: str):
@@ -90,7 +91,8 @@ def availability_model():
     icmp = availability.availability_icmp_file_sd(hostvars, prometheus_vars["prometheus_availability_icmp_hosts"])
     tcp = availability.availability_tcp_file_sd(hostvars, prometheus_vars["prometheus_availability_tcp_targets"])
     postgres = availability.availability_postgres_file_sd(hostvars, ["pg95", "pg96", "pg97"])
-    return {"http": http, "icmp": icmp, "tcp": tcp, "postgres": postgres, "vars": prometheus_vars}
+    patroni = availability.availability_patroni_file_sd(hostvars, ["pg95", "pg96", "pg97"])
+    return {"http": http, "icmp": icmp, "tcp": tcp, "postgres": postgres, "patroni": patroni, "vars": prometheus_vars}
 
 
 def by_monitor_id(targets):
@@ -135,12 +137,14 @@ def test_host_and_tcp_targets_match_kuma_and_postgres_comes_from_inventory_group
     assert set(by_monitor_id(model["tcp"])) == {f"tcp.{name}" for name in hcl_map_keys("tcp_monitors")}
     assert {target["labels"]["host"] for target in model["postgres"]} == hcl_map_keys("postgres_monitors")
     assert all(target["targets"][0].endswith(":9187") for target in model["postgres"])
+    assert {target["labels"]["host"] for target in model["patroni"]} == hcl_map_keys("postgres_monitors")
+    assert all(target["targets"][0].endswith(":8008") for target in model["patroni"])
 
 
 def test_labels_are_bounded_and_privacy_services_are_not_activity_targets():
     model = availability_model()
     allowed = {"service", "category", "probe_type", "host", "criticality", "module", "monitor_id"}
-    all_targets = model["http"] + model["icmp"] + model["tcp"] + model["postgres"]
+    all_targets = model["http"] + model["icmp"] + model["tcp"] + model["postgres"] + model["patroni"]
     assert all(set(target["labels"]) <= allowed for target in all_targets)
     serialized = json.dumps(all_targets).lower()
     assert "jdownloader" not in serialized
@@ -169,9 +173,9 @@ def test_blackbox_modules_capability_and_prometheus_file_sd_wiring():
     assert modules["http_2xx_no_redirects"]["http"]["follow_redirects"] is False
 
     prometheus_template = (REPO_ROOT / "ansible/roles/service_common/templates/configs/prometheus/prometheus.yml.j2").read_text()
-    for job in ("blackbox-http", "blackbox-icmp", "blackbox-tcp", "postgres-exporter"):
+    for job in ("blackbox-http", "blackbox-icmp", "blackbox-tcp", "postgres-exporter", "patroni"):
         assert f'job_name: "{job}"' in prometheus_template
-    for target_file in ("blackbox-http.json", "blackbox-icmp.json", "blackbox-tcp.json", "postgres.json"):
+    for target_file in ("blackbox-http.json", "blackbox-icmp.json", "blackbox-tcp.json", "postgres.json", "patroni.json"):
         assert f"/etc/prometheus/file_sd/{target_file}" in prometheus_template
 
 
@@ -211,6 +215,21 @@ def test_postgres_exporter_role_is_checksum_pinned_unprivileged_and_secret_safe(
     assert 'postgres-exporter:deploy)       echo "postgres_exporter"' in skynet
 
 
+def test_alerting_validator_workflow_uses_repository_ansible_core_constraint():
+    workflow_text = ALERTING_WORKFLOW_PATH.read_text()
+    requirements = (REPO_ROOT / "ansible/requirements.txt").read_text().splitlines()
+    ansible_core_pin = next(line for line in requirements if line.startswith("ansible-core=="))
+
+    assert ansible_core_pin == "ansible-core==2.21.4"
+    assert yaml.safe_load(workflow_text)
+    assert "--constraint ansible/requirements.txt" in workflow_text
+    assert "ansible-core jinja2 pyyaml" in workflow_text
+    assert "ansible-core==2.21.4" not in workflow_text
+    assert workflow_text.count("      - ansible/requirements.txt") == 2
+    assert workflow_text.count("      - ansible/filter_plugins/availability.py") == 2
+    assert workflow_text.count("      - ansible/filter_plugins/service_catalog.py") == 2
+
+
 def test_alertmanager_keeps_email_adds_secret_file_gotify_and_valid_payload_shape():
     service = yaml.safe_load((SERVICES_DIR / "alertmanager.yml").read_text())["alertmanager"]
     declaration = next(item for item in service["infisical"]["secrets_map"] if item["var"] == "gotify_alertmanager_token")
@@ -229,6 +248,7 @@ def test_alertmanager_keeps_email_adds_secret_file_gotify_and_valid_payload_shap
         )
     )
     config = yaml.safe_load(rendered)
+    assert config["inhibit_rules"][0]["equal"] == ["alertname", "instance", "application_name", "slot_name"]
     receiver = config["receivers"][0]
     webhook = receiver["webhook_configs"][0]
     assert receiver["email_configs"][0]["send_resolved"] is True

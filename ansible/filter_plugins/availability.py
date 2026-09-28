@@ -246,6 +246,30 @@ def availability_postgres_file_sd(hostvars: Mapping[str, Any], hosts: Sequence[A
     return sorted(result, key=lambda item: item["labels"]["host"])
 
 
+def availability_patroni_file_sd(hostvars: Mapping[str, Any], hosts: Sequence[Any], port: Any = 8008) -> list[dict[str, Any]]:
+    """Return Patroni REST metrics targets from the tags_postgres inventory group."""
+    result = []
+    hostvars = _mapping(hostvars, "hostvars")
+    for raw_host in _sequence(hosts, "hosts"):
+        host = str(raw_host)
+        address = str(_mapping(hostvars.get(host, {}), f"hostvars.{host}").get("local_ip", "")).strip()
+        if not address:
+            raise AnsibleFilterError(f"Patroni metrics host {host!r} has no local_ip")
+        result.append(
+            _file_sd(
+                f"{address}:{int(port)}",
+                {
+                    "service": host,
+                    "host": host,
+                    "category": "Infrastructure",
+                    "probe_type": "patroni",
+                    "criticality": "critical",
+                },
+            )
+        )
+    return sorted(result, key=lambda item: item["labels"]["host"])
+
+
 class FilterModule:
     """Expose availability target generation filters to Ansible."""
 
@@ -256,4 +280,5 @@ class FilterModule:
             "availability_icmp_file_sd": availability_icmp_file_sd,
             "availability_tcp_file_sd": availability_tcp_file_sd,
             "availability_postgres_file_sd": availability_postgres_file_sd,
+            "availability_patroni_file_sd": availability_patroni_file_sd,
         }

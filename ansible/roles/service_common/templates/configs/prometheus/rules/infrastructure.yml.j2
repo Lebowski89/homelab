@@ -2,7 +2,7 @@ groups:
   - name: infrastructure.rules
     rules:
       - alert: PrometheusTargetDown
-        expr: up{job!~"alertmanager|blackbox-.*|postgres-exporter"} == 0
+        expr: up{job!~"alertmanager|blackbox-.*|patroni|postgres-exporter"} == 0
         for: 5m
         labels:
           severity: critical

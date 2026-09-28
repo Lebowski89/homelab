@@ -1,0 +1,218 @@
+---
+
+- name: Patroni replication safety | Assert PostgreSQL inventory is non-empty
+  ansible.builtin.assert:
+    that:
+      - groups['tags_postgres'] | default([]) | length > 0
+      - postgres_patroni_permanent_slots | length > 0
+    fail_msg: Replication-safety reconciliation requires at least one tags_postgres member.
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Patroni replication safety | Initialize usable cluster states
+  ansible.builtin.set_fact:
+    postgres_patroni_replication_safety_usable_clusters: []
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Patroni replication safety | Query cluster state from sorted PostgreSQL members
+  # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
+  ansible.builtin.uri:
+    url: >-
+      http://{{ hostvars[postgres_patroni_replication_safety_candidate].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster
+    method: GET
+    return_content: true
+    status_code: 200
+    timeout: 5
+  loop: "{{ groups[\"tags_postgres\"] | sort }}"
+  loop_control:
+    loop_var: postgres_patroni_replication_safety_candidate
+    label: "{{ postgres_patroni_replication_safety_candidate }}"
+  register: postgres_patroni_replication_safety_cluster_candidates
+  failed_when: false
+  changed_when: false
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Patroni replication safety | Retain usable cluster states
+  ansible.builtin.set_fact:
+    postgres_patroni_replication_safety_usable_clusters: >-
+      {{
+        postgres_patroni_replication_safety_usable_clusters
+        + [postgres_patroni_replication_safety_candidate_result.json]
+      }}
+  loop: "{{ postgres_patroni_replication_safety_cluster_candidates.results | default([]) }}"
+  loop_control:
+    loop_var: postgres_patroni_replication_safety_candidate_result
+    label: >-
+      {{
+        postgres_patroni_replication_safety_candidate_result
+        .postgres_patroni_replication_safety_candidate
+        | default("unknown")
+      }}
+  when:
+    - postgres_patroni_replication_safety_candidate_result.status | default(0) == 200
+    - postgres_patroni_replication_safety_candidate_result.json is mapping
+    - postgres_patroni_replication_safety_candidate_result.json.members is defined
+    - >-
+      (
+        postgres_patroni_replication_safety_candidate_result.json.members
+        | selectattr("role", "equalto", "leader")
+        | list
+        | length
+      ) == 1
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Patroni replication safety | Collect reported leader names
+  ansible.builtin.set_fact:
+    postgres_patroni_replication_safety_reported_leaders: >-
+      {{
+        postgres_patroni_replication_safety_usable_clusters
+        | map(attribute="members")
+        | flatten
+        | selectattr("role", "equalto", "leader")
+        | map(attribute="name")
+        | unique
+        | sort
+        | list
+      }}
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Patroni replication safety | Assert cluster discovery is consistent
+  ansible.builtin.assert:
+    that:
+      - postgres_patroni_replication_safety_usable_clusters | length > 0
+      - postgres_patroni_replication_safety_reported_leaders | length == 1
+    fail_msg: >-
+      Could not discover one consistent Patroni leader from any sorted
+      tags_postgres member. Usable responses={{
+        postgres_patroni_replication_safety_usable_clusters | length
+      }}; reported leaders={{
+        postgres_patroni_replication_safety_reported_leaders | join(", ") | default("none", true)
+      }}.
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Patroni replication safety | Determine current leader
+  ansible.builtin.set_fact:
+    postgres_patroni_replication_safety_leader: >-
+      {{
+        (postgres_patroni_replication_safety_usable_clusters | first).members
+        | selectattr("role", "equalto", "leader")
+        | list
+        | first
+      }}
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Patroni replication safety | Assert current leader is usable
+  ansible.builtin.assert:
+    that:
+      - postgres_patroni_replication_safety_leader.host is defined
+      - postgres_patroni_replication_safety_leader.name is defined
+    fail_msg: Could not determine a usable Patroni leader from the cluster REST response.
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Patroni replication safety | Read current dynamic configuration
+  # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
+  ansible.builtin.uri:
+    url: >-
+      http://{{ postgres_patroni_replication_safety_leader.host }}:{{ postgres_patroni_restapi_port }}/config
+    method: GET
+    return_content: true
+    status_code: 200
+  register: postgres_patroni_replication_safety_config
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Patroni replication safety | Build minimal dynamic configuration patch
+  ansible.builtin.set_fact:
+    postgres_patroni_replication_safety_patch: >-
+      {{
+        postgres_patroni_replication_safety_config.json
+        | postgres_patroni_replication_safety_patch(
+            postgres_patroni_permanent_slots,
+            postgres_patroni_wal_keep_size,
+            postgres_patroni_max_slot_wal_keep_size
+          )
+      }}
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Patroni replication safety | Patch dynamic configuration when drifted
+  # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
+  ansible.builtin.uri:
+    url: >-
+      http://{{ postgres_patroni_replication_safety_leader.host }}:{{ postgres_patroni_restapi_port }}/config
+    method: PATCH
+    body_format: json
+    body: "{{ postgres_patroni_replication_safety_patch }}"
+    status_code: 200
+    return_content: true
+  register: postgres_patroni_replication_safety_patch_result
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+  changed_when: postgres_patroni_replication_safety_patch | length > 0
+  when: postgres_patroni_replication_safety_patch | length > 0
+
+- name: Patroni replication safety | Verify effective dynamic configuration
+  # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
+  ansible.builtin.uri:
+    url: >-
+      http://{{ postgres_patroni_replication_safety_leader.host }}:{{ postgres_patroni_restapi_port }}/config
+    method: GET
+    return_content: true
+    status_code: 200
+  register: postgres_patroni_replication_safety_effective
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+  retries: 6
+  delay: 2
+  until: >-
+    (
+      postgres_patroni_replication_safety_effective.json
+      | postgres_patroni_replication_safety_patch(
+          postgres_patroni_permanent_slots,
+          postgres_patroni_wal_keep_size,
+          postgres_patroni_max_slot_wal_keep_size
+        )
+      | length
+    ) == 0
+
+- name: Patroni replication safety | Read post-reconciliation cluster state
+  # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
+  ansible.builtin.uri:
+    url: >-
+      http://{{ postgres_patroni_replication_safety_leader.host }}:{{ postgres_patroni_restapi_port }}/cluster
+    method: GET
+    return_content: true
+    status_code: 200
+  register: postgres_patroni_replication_safety_post_cluster
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"
+
+- name: Patroni replication safety | Report members requiring a rolling restart
+  ansible.builtin.debug:
+    msg: >-
+      Patroni reports pending_restart for: {{
+        postgres_patroni_replication_safety_post_cluster.json.members
+        | default([])
+        | selectattr('pending_restart', 'defined')
+        | selectattr('pending_restart', 'equalto', true)
+        | map(attribute='name')
+        | sort
+        | join(', ')
+      }}. Do not restart all members together; inspect the pending parameters
+      and perform a controlled rolling restart only if still required.
+  when: >-
+    postgres_patroni_replication_safety_post_cluster.json.members
+    | default([])
+    | selectattr('pending_restart', 'defined')
+    | selectattr('pending_restart', 'equalto', true)
+    | list
+    | length > 0
+  run_once: true
+  delegate_to: "{{ services_controller_host }}"

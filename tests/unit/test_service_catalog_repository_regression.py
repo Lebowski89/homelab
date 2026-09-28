@@ -566,6 +566,7 @@ def test_real_common_templates_consume_declared_infisical_values_through_common_
         "availability_icmp_file_sd",
         "availability_tcp_file_sd",
         "availability_postgres_file_sd",
+        "availability_patroni_file_sd",
         "to_nice_json",
     ):
         environment.filters[filter_name] = lambda value, *args, **kwargs: value

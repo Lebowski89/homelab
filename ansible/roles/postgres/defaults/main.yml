@@ -34,6 +34,14 @@ postgres_patroni_data_dir: "/var/lib/postgresql/{{ postgres_version }}/main"
 postgres_patroni_bin_dir: "/usr/lib/postgresql/{{ postgres_version }}/bin"
 postgres_patroni_restapi_port: 8008
 postgres_patroni_postgres_port: 5432
+postgres_patroni_wal_keep_size: 1GB
+postgres_patroni_max_slot_wal_keep_size: 16GB
+# Automation owns the complete top-level dynamic slots subtree. Declare any
+# non-member permanent slots here so reconciliation preserves them.
+postgres_patroni_extra_slots: {}
+postgres_patroni_permanent_slots: >-
+  {{ groups['tags_postgres'] | default([])
+     | postgres_patroni_permanent_slots(postgres_patroni_extra_slots) }}
 
 ################################
 # PG-ADMIN

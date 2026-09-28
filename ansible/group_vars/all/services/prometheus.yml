@@ -67,6 +67,10 @@ prometheus:
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/file_sd/postgres.json"
       mode: "0644"
       force: true
+    - src: configs/prometheus/file_sd/patroni.json.j2
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/file_sd/patroni.json"
+      mode: "0644"
+      force: true
     - src: configs/prometheus/rules/infrastructure.yml.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/rules/infrastructure.yml"
       mode: "0644"

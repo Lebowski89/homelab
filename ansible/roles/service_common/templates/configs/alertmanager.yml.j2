@@ -31,7 +31,7 @@ inhibit_rules:
       - severity="critical"
     target_matchers:
       - severity="warning"
-    equal: [alertname, instance]
+    equal: [alertname, instance, application_name, slot_name]
   - source_matchers:
       - alertname="PrometheusTargetDown"
     target_matchers:

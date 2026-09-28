@@ -119,6 +119,14 @@ scrape_configs:
       - files:
           - /etc/prometheus/file_sd/postgres.json
 
+  - job_name: "patroni"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /metrics
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/file_sd/patroni.json
+
 {% if prometheus_blackbox_dns_targets | default({}) | length > 0 %}
   - job_name: "blackbox-dns-udp"
     scrape_interval: 30s

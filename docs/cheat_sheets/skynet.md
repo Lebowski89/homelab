@@ -397,6 +397,7 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 | `skynet run postgres admin-nuke-node`     | `postgres_admin_nuke_node`     |
 | `skynet run postgres admin-fix-owner`     | `postgres_admin_fix_owner`     |
 | `skynet run postgres admin-update-pg-hba` | `postgres_admin_update_pg_hba` |
+| `skynet run postgres admin-update-replication-safety` | `postgres_admin_update_replication_safety` |
 
 ### PostgreSQL exporter
 

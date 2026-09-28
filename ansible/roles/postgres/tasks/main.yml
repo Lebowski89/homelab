@@ -357,3 +357,32 @@
   changed_when: false
   tags:
     - postgres_admin_update_pg_hba
+
+- name: Reconcile Patroni replication-safety dynamic configuration
+  when:
+    - not ansible_check_mode
+    - "'tags_postgres' in group_names"
+    - "'postgres_admin_update_replication_safety' in ansible_run_tags"
+  ansible.builtin.include_tasks:
+    file: sub_tasks/admin/replication_safety.yml
+    apply:
+      tags:
+        - postgres_admin_update_replication_safety
+  tags:
+    - postgres_admin_update_replication_safety
+
+- name: Report Patroni replication-safety check-mode plan
+  when:
+    - ansible_check_mode
+    - "'tags_postgres' in group_names"
+    - "'postgres_admin_update_replication_safety' in ansible_run_tags"
+  ansible.builtin.debug:
+    msg: >-
+      Check mode: would discover the current Patroni leader, compare permanent
+      member slots and bounded WAL-retention parameters with dynamic DCS state,
+      PATCH only detected drift, verify the effective configuration, and report
+      pending rolling restarts. No reset, reinit, or automatic restart is part
+      of this action.
+  changed_when: false
+  tags:
+    - postgres_admin_update_replication_safety

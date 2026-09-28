@@ -94,6 +94,7 @@ prometheus_availability_tcp_targets:
     category: Infrastructure
 
 prometheus_postgres_exporter_port: 9187
+prometheus_patroni_metrics_port: 8008
 
 prometheus_blackbox_dns_query_name: "adminer.{{ services_internal_zone }}"
 prometheus_blackbox_dns_expected_a: "{{ hostvars[services_controller_host].local_ip }}"

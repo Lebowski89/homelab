@@ -12,6 +12,8 @@ before removing Kuma in a separate change.
 - ICMP and TCP host addresses come from NetBox-backed inventory `local_ip`
   values.
 - PostgreSQL exporter targets come from the `tags_postgres` inventory group.
+- Patroni REST metrics targets come from the same `tags_postgres` inventory
+  group and expose role, member state, streaming state, and WAL position.
 - Existing Technitium probes continue to cover five DNS endpoints over UDP and
   TCP.
 
@@ -32,6 +34,19 @@ target. Target alerts wait three minutes to approximate Kuma's retry intent.
 TLS warnings begin below 21 days and become critical below seven days.
 PostgreSQL exporter scrape failures and database query failures are separate
 alerts.
+
+Replication-safety alerts join postgres_exporter slot metrics to Patroni's
+current-primary metric by the stable inventory `host` label. This prevents the
+inactive synchronized slot copies on standbys from producing false alerts.
+Alerts cover sustained unhealthy member state, leader-reported replica lag,
+missing/inactive expected physical slots, bounded WAL headroom, and
+`unreserved`/`lost` slot WAL state. Existing Node Exporter filesystem alerts
+remain the single disk-capacity signal.
+
+WAL-headroom alerts and the dashboard use PostgreSQL's directly exported
+`safe_wal_size` value for physical slots. When PostgreSQL reports that value as
+NULL, postgres_exporter omits the series; collector-failure monitoring remains
+the separate signal for an unhealthy scrape.
 
 Alertmanager keeps email delivery and also posts directly to Gotify. The
 Gotify application token is read from the Docker secret

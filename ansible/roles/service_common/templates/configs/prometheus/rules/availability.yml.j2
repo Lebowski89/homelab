@@ -63,3 +63,176 @@ groups:
           summary: "PostgreSQL queryability failed: {{ '{{' }} $labels.host {{ '}}' }}"
           description: "postgres_exporter on {{ '{{' }} $labels.instance {{ '}}' }} has been unable to query PostgreSQL for 3 minutes."
           priority: "9"
+
+      - alert: PostgresReplicationCollectorFailed
+        expr: >-
+          pg_scrape_collector_success{
+            job="postgres-exporter",
+            collector=~"replication_slots|stat_replication"
+          } == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL replication collector failed: {{ '{{' }} $labels.host {{ '}}' }}"
+          description: "postgres_exporter collector {{ '{{' }} $labels.collector {{ '}}' }} has failed on {{ '{{' }} $labels.host {{ '}}' }} for 5 minutes; slot or replica metrics may be incomplete."
+          priority: "7"
+
+      - alert: PatroniMetricsDown
+        expr: up{job="patroni"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Patroni metrics unavailable: {{ '{{' }} $labels.host {{ '}}' }}"
+          description: "Prometheus has been unable to scrape the Patroni API on {{ '{{' }} $labels.host {{ '}}' }} for 5 minutes."
+          priority: "9"
+
+      - alert: PatroniMemberUnhealthy
+        expr: >-
+          (patroni_postgres_running{job="patroni"} == 0)
+          or
+          (patroni_postgres_state{job="patroni"} != 5)
+          or
+          (
+            (patroni_replica{job="patroni"} == 1)
+            and on(host)
+            (patroni_postgres_streaming{job="patroni"} == 0)
+          )
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Patroni member unhealthy: {{ '{{' }} $labels.host {{ '}}' }}"
+          description: "Patroni reports that {{ '{{' }} $labels.host {{ '}}' }} is not steadily running, or that a replica is not streaming, for 5 minutes."
+          priority: "7"
+
+      - alert: PatroniMemberUnhealthy
+        expr: >-
+          (patroni_postgres_running{job="patroni"} == 0)
+          or
+          (patroni_postgres_state{job="patroni"} != 5)
+          or
+          (
+            (patroni_replica{job="patroni"} == 1)
+            and on(host)
+            (patroni_postgres_streaming{job="patroni"} == 0)
+          )
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Patroni member remains unhealthy: {{ '{{' }} $labels.host {{ '}}' }}"
+          description: "Patroni reports that {{ '{{' }} $labels.host {{ '}}' }} has not been steadily running/streaming for 15 minutes."
+          priority: "9"
+
+      # One GiB sustained lag is operationally significant at the measured
+      # ~1.2 GiB/day baseline. Eight GiB consumes half of the bounded 16 GiB
+      # slot-retention window while leaving intervention headroom.
+      - alert: PostgresReplicationLagHigh
+        expr: pg_stat_replication_pg_wal_lsn_diff{job="postgres-exporter", state="streaming"} > 1073741824
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL replica lag high: {{ '{{' }} $labels.application_name {{ '}}' }}"
+          description: "Replica {{ '{{' }} $labels.application_name {{ '}}' }} has remained more than 1 GiB behind the current leader for 10 minutes."
+          priority: "7"
+
+      - alert: PostgresReplicationLagHigh
+        expr: pg_stat_replication_pg_wal_lsn_diff{job="postgres-exporter", state="streaming"} > 8589934592
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL replica lag critical: {{ '{{' }} $labels.application_name {{ '}}' }}"
+          description: "Replica {{ '{{' }} $labels.application_name {{ '}}' }} has remained more than 8 GiB behind the current leader, consuming half of the 16 GiB slot-retention window."
+          priority: "9"
+
+{% for postgres_member in groups['tags_postgres'] | default([]) | sort %}
+      - alert: PostgresRequiredPhysicalSlotInactive
+        expr: >-
+          (
+            (patroni_primary{job="patroni", name!="{{ postgres_member }}"} == 1)
+            and on(host)
+            (up{job="postgres-exporter"} == 1)
+            and on(host)
+            (
+              pg_scrape_collector_success{
+                job="postgres-exporter",
+                collector="replication_slots"
+              } == 1
+            )
+          )
+          unless on(host)
+          (
+            pg_replication_slots_slot_is_active{
+              job="postgres-exporter",
+              slot_type="physical",
+              slot_name="{{ postgres_member }}"
+            } == 1
+          )
+        for: 10m
+        labels:
+          severity: warning
+          slot_name: "{{ postgres_member }}"
+        annotations:
+          summary: "Required PostgreSQL slot inactive: {{ postgres_member }}"
+          description: "The current leader has lacked an active physical slot for expected replica {{ postgres_member }} for 10 minutes."
+          priority: "7"
+
+{% endfor %}
+      - alert: PostgresSlotWalHeadroomLow
+        expr: >-
+          (
+            pg_replication_slots_safe_wal_size_bytes{
+              job="postgres-exporter",
+              slot_type="physical"
+            } < 4294967296
+          )
+          and on(host)
+          (patroni_primary{job="patroni"} == 1)
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "PostgreSQL slot WAL headroom low: {{ '{{' }} $labels.slot_name {{ '}}' }}"
+          description: "Physical slot {{ '{{' }} $labels.slot_name {{ '}}' }} has less than 4 GiB of safe WAL retention remaining on the current leader."
+          priority: "7"
+
+      - alert: PostgresSlotWalHeadroomLow
+        expr: >-
+          (
+            pg_replication_slots_safe_wal_size_bytes{
+              job="postgres-exporter",
+              slot_type="physical"
+            } < 1073741824
+          )
+          and on(host)
+          (patroni_primary{job="patroni"} == 1)
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL slot WAL headroom critical: {{ '{{' }} $labels.slot_name {{ '}}' }}"
+          description: "Physical slot {{ '{{' }} $labels.slot_name {{ '}}' }} has less than 1 GiB of safe WAL retention remaining on the current leader."
+          priority: "9"
+
+      - alert: PostgresPhysicalSlotWalUnavailable
+        expr: >-
+          (
+            pg_replication_slots_wal_status{
+              job="postgres-exporter",
+              slot_type="physical",
+              wal_status=~"unreserved|lost"
+            } == 1
+          )
+          and on(host)
+          (patroni_primary{job="patroni"} == 1)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL slot WAL unavailable: {{ '{{' }} $labels.slot_name {{ '}}' }}"
+          description: "Physical slot {{ '{{' }} $labels.slot_name {{ '}}' }} on the current leader is {{ '{{' }} $labels.wal_status {{ '}}' }}; required WAL is unreserved or already lost."
+          priority: "10"

@@ -1050,6 +1050,11 @@ def test_explicit_reset_tags_reach_real_role_path_safely_in_check_mode(
             "Report Patroni dynamic pg_hba check-mode plan",
             "Patroni dynamic pg_hba | Query Patroni cluster state",
         ),
+        (
+            "postgres_admin_update_replication_safety",
+            "Report Patroni replication-safety check-mode plan",
+            "Patroni replication safety | Query cluster state from first sorted PostgreSQL node",
+        ),
     ],
 )
 def test_postgres_admin_check_mode_executes_static_plan_only(
