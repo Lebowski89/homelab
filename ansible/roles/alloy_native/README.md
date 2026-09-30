@@ -60,12 +60,16 @@
 | Alloy native ¦ Download Grafana package signing key | ansible.builtin.get_url | False |
 | Alloy native ¦ Configure Grafana apt repository | ansible.builtin.apt_repository | False |
 | Alloy native ¦ Install Alloy and ACL support | ansible.builtin.apt | False |
+| Alloy native ¦ Read local system accounts | ansible.builtin.getent | False |
 | Alloy native ¦ Read local system groups | ansible.builtin.getent | False |
+| Alloy native ¦ Resolve package service account availability | ansible.builtin.set_fact | False |
+| Alloy native ¦ Require package service account after installation | ansible.builtin.assert | True |
+| Alloy native ¦ Report account-dependent work deferred in check mode | ansible.builtin.debug | True |
 | Alloy native ¦ Resolve available journal reader groups | ansible.builtin.set_fact | False |
 | Alloy native ¦ Grant journal access to package service account | ansible.builtin.user | True |
-| Alloy native ¦ Ensure configuration directory exists | ansible.builtin.file | False |
-| Alloy native ¦ Render collector configuration | ansible.builtin.template | False |
-| Alloy native ¦ Enable and start service | ansible.builtin.systemd_service | False |
+| Alloy native ¦ Ensure configuration directory exists | ansible.builtin.file | True |
+| Alloy native ¦ Render collector configuration | ansible.builtin.template | True |
+| Alloy native ¦ Enable and start service | ansible.builtin.systemd_service | True |
 
 
 
