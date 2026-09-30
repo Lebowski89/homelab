@@ -1,0 +1,17 @@
+#!/bin/sh
+set -eu
+
+service_name="{{ service_common_service.stack }}_{{ service_common_service.name }}"
+container_ids="$(/usr/bin/docker ps --quiet \
+  --filter "label=com.docker.swarm.service.name=${service_name}" \
+  --filter "status=running")"
+
+# The service is constrained to this host with one replica. Refuse to signal
+# anything unless exactly one local running task has the exact service label.
+set -- ${container_ids}
+if [ "$#" -ne 1 ]; then
+  echo "Expected exactly one running ${service_name} task; found $#" >&2
+  exit 1
+fi
+
+/usr/bin/docker kill --signal USR1 "$1" >/dev/null

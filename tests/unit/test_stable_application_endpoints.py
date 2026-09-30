@@ -284,12 +284,26 @@ def test_kometa_and_imagemaid_use_stable_application_interfaces_without_overwrit
         assert template["force"] is False
 
 
-def test_grafana_query_datasources_use_private_application_endpoints():
+def test_grafana_query_datasources_use_expected_application_endpoints():
     config = yaml.safe_load(render_template("grafana", "grafana/provisioning/datasources/prometheus.yml.j2"))
-    for datasource in config["datasources"]:
-        parsed = urlparse(datasource["url"])
+    datasources = {datasource["name"]: datasource for datasource in config["datasources"]}
+
+    assert datasources["Loki"] == {
+        "name": "Loki",
+        "uid": "loki",
+        "type": "loki",
+        "access": "proxy",
+        "url": "http://loki:3100",
+        "editable": True,
+    }
+    assert datasources["Prometheus"]["isDefault"] is True
+    assert "isDefault" not in datasources["Loki"]
+    assert "isDefault" not in datasources["Alertmanager"]
+
+    for name in ("Prometheus", "Alertmanager"):
+        parsed = urlparse(datasources[name]["url"])
         assert parsed.scheme == "https"
-        assert parsed.hostname == f"{datasource['name'].lower()}.private.example.internal"
+        assert parsed.hostname == f"{name.lower()}.private.example.internal"
         assert parsed.port == 9443
 
 
@@ -321,7 +335,7 @@ def test_nzbhydra2_preparation_persists_private_sabnzbd_endpoint():
 
 def test_observability_control_plane_links_remain_direct():
     prometheus = (TEMPLATE_DIR / "prometheus/prometheus.yml.j2").read_text()
-    alloy = (REPO_ROOT / "ansible/roles/docker_services/files/alloy_config.alloy").read_text()
+    alloy = (REPO_ROOT / "ansible/roles/docker_services/templates/alloy_config.alloy.j2").read_text()
     loki = yaml.safe_load(render_template("loki", "loki-config.yaml.j2"))
 
     assert 'targets: ["alertmanager:9093"]' in prometheus

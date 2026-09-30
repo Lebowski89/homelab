@@ -10,7 +10,6 @@ SENSITIVE_COMMON_TEMPLATES = {
     "configs/homepage/services.yaml.j2",
     "configs/imagemaid.j2",
     "configs/kometa.yml.j2",
-    "configs/ombi.json.j2",
     "configs/opencloud/opencloud.env.j2",
     "configs/qui.env.j2",
     "configs/recyclarr/secrets.yml.j2",

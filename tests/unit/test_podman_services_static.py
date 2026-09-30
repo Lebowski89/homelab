@@ -38,7 +38,6 @@ TASKS = (
     + "\n"
     + CLEANUP_STOPPED_CONTAINER_TASKS
 )
-N8N = (REPO_ROOT / "ansible/group_vars/all/services/n8n.yml").read_text()
 NETWORK_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/templates/network.network.j2").read_text()
 CONTAINER_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/templates/container.container.j2").read_text()
 PODMAN_HANDLERS = (REPO_ROOT / "ansible/roles/podman_services/handlers/main.yml").read_text()
@@ -140,14 +139,6 @@ def test_quadlet_directory_prerequisite_exists_before_templates():
     assert PREPARE_TASK_LIST.index(directory) < PREPARE_TASK_LIST.index(first_template)
     assert directory["ansible.builtin.file"]["path"] == "{{ podman_services_quadlet_dir }}"
     assert directory["ansible.builtin.file"]["mode"] == ("{{ '0700' if podman_services_execution.mode == 'rootless' else '0755' }}")
-
-
-def test_n8n_declares_a_managed_network_without_delete_on_stop():
-    n8n = yaml.safe_load(N8N)["n8n"]
-
-    assert n8n["named_networks"] == {"n8n": {"driver": "bridge", "external": False}}
-    assert "delete_on_stop" not in N8N
-    assert "NetworkDeleteOnStop" not in NETWORK_TEMPLATE
 
 
 def test_remove_stops_container_before_network_then_removes_files():

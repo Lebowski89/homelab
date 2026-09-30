@@ -792,7 +792,7 @@ example_quadlet:
     timeout_start_sec: 900s
 ```
 
-For complete Podman examples, see `adminer.yml` and `n8n.yml`. For
+For complete Podman examples, see `adminer.yml` and `homepage.yml`. For
 base-plus-target inheritance, see `radarr.yml` and `sonarr.yml`. Their values are
 environment-specific; this reference defines the schema.
 

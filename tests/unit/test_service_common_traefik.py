@@ -50,7 +50,6 @@ def test_default_route_renders_private_middleware_and_tls_behaviour():
     assert document["http"]["middlewares"]["sonarr-private-ui-chain"]["chain"]["middlewares"][0] == "authelia@file"
     assert router["tls"] == {"options": "securetls@file", "certResolver": "dns-cloudflare"}
     assert document["http"]["services"]["sonarr-svc"]["loadBalancer"]["servers"] == [{"url": "http://sonarr:8080"}]
-    assert "crowdsec@file" not in text
     assert "authelia@file" in text
     assert "secure-headers@file" in text
     assert "robots-noindex@file" in text
@@ -59,14 +58,13 @@ def test_default_route_renders_private_middleware_and_tls_behaviour():
     assert "themepark-sonarr@file" in text
 
 
-def test_private_route_uses_private_entrypoint_and_excludes_crowdsec():
-    text, document = render({"traefik": {"enable": True, "exposure": "private", "port": 3000}}, name="grafana")
+def test_private_route_uses_private_entrypoint():
+    _, document = render({"traefik": {"enable": True, "exposure": "private", "port": 3000}}, name="grafana")
 
     router = document["http"]["routers"]["grafana"]
     assert router["entryPoints"] == ["https_private"]
     assert router["rule"] == "Host(`grafana.private.example.internal`)"
     assert router["middlewares"] == ["grafana-private-ui-chain"]
-    assert "crowdsec@file" not in text
 
 
 def test_explicit_backend_host_does_not_evaluate_missing_inventory_host():
@@ -81,25 +79,25 @@ def test_explicit_backend_host_does_not_evaluate_missing_inventory_host():
         }
     }
 
-    _, document = render(service, name="n8n", hostvars={})
+    _, document = render(service, name="app", hostvars={})
 
-    assert document["http"]["services"]["n8n-svc"]["loadBalancer"]["servers"][0]["url"] == "http://192.0.2.55:5678"
+    assert document["http"]["services"]["app-svc"]["loadBalancer"]["servers"][0]["url"] == "http://192.0.2.55:5678"
 
 
-def test_inventory_host_backend_resolves_n8n_vm_address_and_port():
+def test_inventory_host_backend_resolves_app_vm_address_and_port():
     service = {
         "traefik": {
             "enable": True,
             "exposure": "private",
             "port": 5678,
             "backend_mode": "host",
-            "backend_host_inventory": "n8n",
+            "backend_host_inventory": "app",
         }
     }
 
-    _, document = render(service, name="n8n", target_hosts=["n8n"], hostvars={"n8n": {"local_ip": "192.0.2.98"}})
+    _, document = render(service, name="app", target_hosts=["app"], hostvars={"app": {"local_ip": "192.0.2.98"}})
 
-    assert document["http"]["services"]["n8n-svc"]["loadBalancer"]["servers"][0]["url"] == "http://192.0.2.98:5678"
+    assert document["http"]["services"]["app-svc"]["loadBalancer"]["servers"][0]["url"] == "http://192.0.2.98:5678"
 
 
 def test_backend_url_scheme_and_middleware_overrides_are_preserved():
@@ -161,10 +159,10 @@ def test_equivalent_docker_and_podman_inputs_render_identically():
         "exposure": "private",
         "port": 5678,
         "backend_mode": "host",
-        "backend_host_inventory": "n8n",
+        "backend_host_inventory": "app",
     }
-    docker_input = {"image": "example/n8n:1", "environment": {}, "traefik": traefik}
-    podman_input = {"container": {"image": "example/n8n:1"}, "env": {}, "traefik": traefik}
-    kwargs = {"name": "n8n", "target_hosts": ["n8n"], "hostvars": {"n8n": {"local_ip": "192.0.2.98"}}}
+    docker_input = {"image": "example/app:1", "environment": {}, "traefik": traefik}
+    podman_input = {"container": {"image": "example/app:1"}, "env": {}, "traefik": traefik}
+    kwargs = {"name": "app", "target_hosts": ["app"], "hostvars": {"app": {"local_ip": "192.0.2.98"}}}
 
     assert render(docker_input, **kwargs)[0] == render(podman_input, **kwargs)[0]

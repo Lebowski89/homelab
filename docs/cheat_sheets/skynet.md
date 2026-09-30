@@ -267,6 +267,8 @@ Examples:
 skynet run infisical-podman deploy
 skynet run infisical-podman recreate
 skynet run infisical-podman remove
+skynet check alloy-native
+skynet run alloy-native
 skynet run ubuntu sysctl
 skynet run docker swarm
 skynet run opentofu pve-user
@@ -410,6 +412,17 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 | `skynet run infisical-podman deploy`    | `infisical_podman_deploy`    |
 | `skynet run infisical-podman recreate`  | `infisical_podman_recreate`  |
 | `skynet run infisical-podman remove`    | `infisical_podman_remove`    |
+
+### Alloy Native
+
+| Command                           | Raw tag        |
+| --------------------------------- | -------------- |
+| `skynet run alloy-native`         | `alloy_native` |
+| `skynet run alloy-native deploy`  | `alloy_native` |
+| `skynet run alloy-native install` | `alloy_native` |
+| `skynet run alloy-native run`     | `alloy_native` |
+
+The friendly target is intentionally explicit: native Alloy is not added to the global catalog-service `deploy`, `update`, or `check all` tag sets.
 
 ## Service targets
 

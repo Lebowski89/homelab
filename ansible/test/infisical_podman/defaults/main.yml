@@ -64,7 +64,6 @@ infisical_podman_traefik_enable: true
 infisical_podman_traefik_dynamic_dir: /opt/traefik/dynamic
 infisical_podman_traefik_entrypoint: https_private
 infisical_podman_traefik_authelia_enable: false
-infisical_podman_traefik_crowdsec_enable: false
 infisical_podman_traefik_headers_middleware: secure-headers@file
 infisical_podman_traefik_middleware_chain: "{{ infisical_podman_name }}-ui-chain"
 infisical_podman_traefik_certresolver: dns-cloudflare

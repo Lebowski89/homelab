@@ -64,28 +64,16 @@ locals {
     autobrr   = { group = "media", tag_keys = ["media"] }
     gitea     = { group = "media", tag_keys = ["media"] }
     obsidian  = { group = "media", tag_keys = ["media"] }
-    ombi      = { group = "media", tag_keys = ["media"] }
     opencloud = { group = "media", tag_keys = ["media"] }
     seerr     = { group = "media", tag_keys = ["media"] }
     stash     = { group = "media", tag_keys = ["media"] }
     thelounge = { group = "media", tag_keys = ["media"] }
     znc       = { group = "media", tag_keys = ["media"] }
 
-    # Automation
-    n8n = {
-      group                 = "automation"
-      tag_keys              = ["automation", "private"]
-      url                   = "https://n8n.${local.internal_zone}:${local.private_https_port}/healthz/readiness"
-      accepted_status_codes = ["200-299"]
-      max_redirects         = 0
-    }
-
     # Monitoring
-    dozzle      = { group = "monitoring", tag_keys = ["monitoring"] }
     gotify      = { group = "monitoring", tag_keys = ["monitoring"] }
     grafana     = { group = "monitoring", tag_keys = ["monitoring"] }
     homepage    = { group = "monitoring", tag_keys = ["monitoring"] }
-    portainer   = { group = "monitoring", tag_keys = ["monitoring"] }
     prometheus  = { group = "monitoring", tag_keys = ["monitoring"] }
     uptime-kuma = { group = "monitoring", tag_keys = ["monitoring"] }
 
@@ -145,19 +133,6 @@ locals {
 
   # Stable host endpoints that intentionally bypass Traefik.
   extra_http_monitors = {
-    n8n-direct = {
-      name                  = "n8n [Direct]"
-      url                   = "http://${local.host_ips["n8n"]}:5678/healthz/readiness"
-      description           = "Direct n8n VM readiness endpoint"
-      group                 = "automation"
-      tag_keys              = ["automation", "direct"]
-      accepted_status_codes = ["200-299"]
-      method                = "GET"
-      ignore_tls            = true
-      expiry_notification   = false
-      max_redirects         = 0
-    }
-
     plex-direct = {
       name                  = "Plex [Direct]"
       url                   = "http://${local.host_ips["plex"]}:32400/identity"
@@ -191,14 +166,6 @@ locals {
   )
 
   ping_monitors = {
-    n8n = {
-      name        = "n8n (Host Ping)"
-      hostname    = local.host_ips["n8n"]
-      description = "Dedicated n8n automation VM"
-      group       = "infrastructure"
-      tag_keys    = ["automation", "infrastructure"]
-    }
-
     dns03 = {
       name        = "dns03 (Host Ping)"
       hostname    = local.host_ips["dns03"]

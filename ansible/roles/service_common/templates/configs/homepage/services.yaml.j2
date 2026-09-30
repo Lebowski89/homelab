@@ -122,15 +122,6 @@
         icon: obsidian.svg
         href: https://obsidian.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Browser-based knowledge base
-    - Ombi:
-        icon: ombi.svg
-        href: https://ombi.{{ services_internal_zone }}:{{ services_private_https_port }}
-        description: Content Requests for Plex/Emby
-        widget:
-          type: ombi
-          url: https://ombi.{{ services_internal_zone }}:{{ services_private_https_port }}
-          key: {{ secrets.ombi_api }}
-          fields: ["pending", "approved", "available"]
     - OpenCloud:
         icon: open-cloud.svg
         href: https://opencloud.{{ services_internal_zone }}:{{ services_private_https_port }}
@@ -171,10 +162,6 @@
         icon: https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/grafana-alloy.svg
         href: https://alloy.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Telemetry collector and forwarder
-    - Dozzle:
-        icon: dozzle.svg
-        href: https://dozzle.{{ services_internal_zone }}:{{ services_private_https_port }}
-        description: Real-time container log viewer
     - Gotify:
         icon: gotify.svg
         href: https://gotify.{{ services_internal_zone }}:{{ services_private_https_port }}
@@ -194,16 +181,6 @@
           username: {{ secrets.grafana_user }}
           password: {{ secrets.grafana_pass }}
           fields: ["dashboards", "datasources", "totalalerts", "alertstriggered"]
-    - Portainer:
-        icon: portainer.svg
-        href: https://portainer.{{ services_internal_zone }}:{{ services_private_https_port }}
-        description: Docker Manager
-        widget:
-          type: portainer
-          url: https://portainer.{{ services_internal_zone }}:{{ services_private_https_port }}
-          env: 1
-          key: {{ secrets.portainer_token }}
-          fields: ["running", "stopped", "total"]
     - Prometheus:
         icon: prometheus.svg
         href: https://prometheus.{{ services_internal_zone }}:{{ services_private_https_port }}
@@ -319,10 +296,6 @@
           url: https://gitea.{{ services_internal_zone }}:{{ services_private_https_port }}
           key: {{ secrets.gitea_homepage_api }}
           fields: ["repositories", "notifications", "issues", "pulls"]
-    - n8n:
-        icon: n8n.svg
-        href: https://n8n.{{ services_internal_zone }}:{{ services_private_https_port }}
-        description: Workflow automation
     - Syncthing:
         icon: syncthing.svg
         href: https://syncthing.{{ services_internal_zone }}:{{ services_private_https_port }}

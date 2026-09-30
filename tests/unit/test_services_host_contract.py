@@ -286,14 +286,12 @@ def test_real_service_hosts_paths_and_base_target_inheritance_are_preserved():
 
     grafana = SERVICE_CATALOG.service_catalog_merge_target(services["grafana"])
     plex = SERVICE_CATALOG.service_catalog_merge_target(services["plex"])
-    crowdsec = SERVICE_CATALOG.service_catalog_merge_target(services["crowdsec"])
 
     assert render(grafana["deploy"]["host"], **variables) == "mgt"
     assert render(grafana["paths"][0]["path"], **variables) == "/opt/appdata/grafana"
     assert render(plex["deploy"]["host"], **variables) == "plex"
     assert render(plex["paths"][0]["path"], **variables) == "/opt/plex-appdata/plex"
     assert render(plex["named_volumes"]["media_nfs"]["driver_opts"]["o"], **variables).startswith("addr=192.0.2.30,")
-    assert render(crowdsec["paths"][4]["path"], **variables) == "/var/log/skynet"
 
     for service_name, target_name, api_var, path_suffix in (
         ("radarr", "radarr", "radarr_api", "/radarr"),

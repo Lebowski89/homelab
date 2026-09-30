@@ -41,6 +41,23 @@ UIDs and GIDs, and systemd linger. The user manager receives explicit `HOME`,
 `XDG_RUNTIME_DIR`, and `DBUS_SESSION_BUS_ADDRESS` values without relying on an
 interactive login.
 
+## Logging
+
+Every normalized Podman service carries `log_driver`. It defaults to the only
+currently supported value, `journald`, and the container Quadlet renders
+`LogDriver=journald` through the native Quadlet field. Arbitrary drivers and
+`PodmanArgs` are rejected. This contract is identical for rootful system units,
+rootless user units, and containers sharing another managed container network
+namespace.
+
+A package-managed native Alloy agent on hosts in the `tags_podman` inventory
+group reads the system journal as its dedicated `alloy` account. Membership in
+the locally available `adm` and `systemd-journal` groups supplies journal access;
+the agent does not run as root and does not connect to system or per-user Podman
+sockets. Rootless service logs are therefore collected through their systemd
+user units without sharing `/run/user/<uid>` runtime directories. See
+[Central logging](central-logging.md) for labels, topology, and queries.
+
 ## Migration guardrails
 
 The Podman adapter validates the complete effective service mapping. It accepts
@@ -87,9 +104,8 @@ uses the dedicated execution account. Additional `paths` entries are limited to
 overrides. This intentionally provides managed-file parity inside an existing
 bind tree, not general rootless filesystem parity. Unsupported combinations
 fail during normalization before account or runtime mutation. Adminer fits the
-mount-free subset, The Lounge exercises the bind-backed subset, Homepage uses
-confined templates, a static copy, and stale Docker-file cleanup, and n8n
-remains rootful.
+mount-free subset, The Lounge exercises the bind-backed subset, and Homepage
+uses confined templates, a static copy, and stale Docker-file cleanup.
 
 Every dedicated rootless account receives one role-owned Podman configuration
 drop-in at
@@ -270,7 +286,7 @@ The canonical PostgreSQL declaration is shared by Docker and Podman:
 ```yaml
 postgres:
   enable: true
-  databases: [n8n]
+  databases: [app]
   port: 5432
   user_var: postgres_user
   password_var: postgres_pass
@@ -284,29 +300,6 @@ When neither address field is supplied, `host_inventory` defaults to `service_co
 Portable services may use ordinary scalar environment values, direct `value_from.infisical` references, or `value_template` strings containing one or more `${identifier}` references. Every reference must match a `var` declared by that service. Substitution is deliberately single-pass and does not evaluate Jinja or shell expressions; `$$` represents a literal dollar sign. `service_common` produces the final scalar mapping consumed by the Podman adapter.
 
 Docker and Podman now consume the same common-resolved environment. The former exact `__INFISICAL__:var` Docker placeholder has been removed after repository services migrated to typed references. Existing Docker `env_file` behaviour is unchanged. Runtime-native secrets remain separate: only an Infisical entry with `secret` metadata creates and attaches a Podman secret.
-
-## n8n
-
-n8n was the first service migrated to the portable Docker-shaped schema. Its declaration uses top-level `image`, `user`, `environment`, `named_networks`, canonical ports/volumes/paths, `deploy`, `systemd`, health/security fields, canonical Infisical secrets, PostgreSQL, and Traefik. `runtime: podman` selects this adapter. Adminer, The Lounge, and Homepage are the next deliberately migrated services; further adoption remains incremental, one validated service at a time.
-
-n8n runs on the dedicated `n8n` VM after it is rebuilt or upgraded to Ubuntu 26.04. The selected host must already have the runtime required by the declaration. A runtime-only edit is valid only when the complete effective declaration passes the destination adapter; it does not install a runtime or establish live parity. The proof covers the trusted-address `host_ip` bind in both generated Docker standalone Compose and Podman Quadlet output. Static tests do not replace a live migration test.
-
-
-The service uses pinned image `docker.io/n8nio/n8n:2.31.4`, UID/GID 1000:1000, application data in `/opt/n8n`, PostgreSQL database `n8n` through the shared HAProxy endpoint, and private routing at `https://n8n.<services_internal_zone>:<services_private_https_port>/`. The direct backend binds port 5678 to the VM management/LAN address; that direct port remains reachable on that network and bypasses Traefik TLS and middleware.
-
-Its three canonical secrets preserve their lifecycle intent: the PostgreSQL username and n8n encryption key use the default `preserve` policy, while the PostgreSQL password uses `reconcile` during update/recreate. Shared preparation ensures the `n8n` database exists before the Podman service starts.
-
-
-Required private values before deployment:
-
-- Add `n8n` to `terraform/netbox/private.auto.tfvars` with `192.168.80.98/24` and the real Tailscale IP.
-- Create and back up a strong, stable `/N8N/ENCRYPTION_KEY` Infisical value before first launch.
-
-During the first live start, verify `N8N_ENCRYPTION_KEY_FILE` with the selected n8n image without printing the secret. Check that `/run/secrets/n8n_encryption_key_secret` exists and is non-empty inside the container, inspect startup logs for missing-key or encryption-key errors, restart n8n, and confirm it starts successfully again. Never display the secret contents.
-
-Back up the encryption key, PostgreSQL data, and `/opt/n8n`. n8n deliberately does not mount Docker/Podman sockets, host root, SSH keys, or unrelated directories.
-
-Future hardening: add network-level egress policy and evaluate a separate task-runner sidecar when it can be introduced without broadening the initial service.
 
 ## Adminer
 

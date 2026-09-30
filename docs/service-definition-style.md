@@ -41,7 +41,7 @@ between populated sections.
 9. Integrations: `traefik`, `themepark`, `postgres`. New Theme Park
    configuration belongs under `traefik.themepark`; the top-level key remains in
    the layout only for existing definitions and has no runtime consumer.
-10. Runtime and lifecycle: `labels`, `cleanup`, `deploy`, `systemd`.
+10. Runtime and lifecycle: `log_driver`, `labels`, `cleanup`, `deploy`, `systemd`.
 11. Target overrides: `targets`.
 
 The repository-specific keys added to the original proposed order have explicit
@@ -58,6 +58,8 @@ homes:
   Podman currently accepts one entry and uses `external` to distinguish a
   role-managed network from one managed elsewhere.
 - `systemd` contains Podman-native unit dependencies and restart policy.
+- `log_driver` is Podman-native, defaults to `journald`, and currently accepts
+  only that validated value so all managed Quadlets use the system journal.
 
 Unknown immediate keys are not placed heuristically. Add any new portable or
 runtime-specific key deliberately to this guide and the ordering test.

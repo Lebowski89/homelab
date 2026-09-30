@@ -22,7 +22,6 @@ locals {
         "ping.pg95",
         "ping.pg96",
         "ping.pg97",
-        "ping.n8n",
         "tcp.postgres_pg95_tcp",
         "tcp.postgres_pg96_tcp",
         "tcp.postgres_pg97_tcp",
@@ -45,11 +44,9 @@ locals {
       weight   = 3
       send_url = true
       monitors = [
-        "http.dozzle-private",
         "http.gotify-private",
         "http.grafana-private",
         "http.homepage-private",
-        "http.portainer-private",
         "http.prometheus-private",
         "http.uptime-kuma-private",
       ]
@@ -108,7 +105,6 @@ locals {
         "http.autobrr-private",
         "http.gitea-private",
         "http.obsidian-private",
-        "http.ombi-private",
         "http.opencloud-private",
         "http.seerr-private",
         "http.stash-private",
@@ -152,15 +148,6 @@ locals {
         "http.infisical-private",
         "http.syncthing-private",
         "http.vaultwarden-private",
-      ]
-    },
-    {
-      name     = "Automation"
-      weight   = 13
-      send_url = true
-      monitors = [
-        "http.n8n-direct",
-        "http.n8n-private",
       ]
     },
   ]

@@ -17,33 +17,57 @@ spec.loader.exec_module(podman_services)
 def valid_cfg():
     return {
         "runtime": "podman",
-        "image": "registry.example.invalid/n8n:1.2.3",
+        "image": "registry.example.invalid/demo:1.2.3",
         "ports": [{"published": 5678, "target": 5678}],
-        "paths": [{"path": "/opt/n8n"}],
+        "paths": [{"path": "/opt/demo"}],
     }
 
 
-def test_normalize_accepts_n8n_like_service():
+def test_normalize_accepts_demo_like_service():
     cfg = valid_cfg()
-    svc = podman_services.podman_service_normalize(cfg, "n8n")
+    svc = podman_services.podman_service_normalize(cfg, "demo")
 
     assert svc["image"] == cfg["image"]
     assert svc["secrets"] == []
 
 
-@pytest.mark.parametrize("image", ["registry.example.invalid/n8n:latest", "registry.example.invalid/n8n", ""])
+def test_log_driver_defaults_to_journald():
+    svc = podman_services.podman_service_normalize(valid_cfg(), "demo")
+
+    assert svc["container"]["log_driver"] == "journald"
+
+
+def test_explicit_journald_log_driver_is_accepted():
+    cfg = valid_cfg()
+    cfg["log_driver"] = "journald"
+
+    svc = podman_services.podman_service_normalize(cfg, "demo")
+
+    assert svc["container"]["log_driver"] == "journald"
+
+
+@pytest.mark.parametrize("driver", ["json-file", "k8s-file", "none"])
+def test_unsupported_log_driver_is_rejected(driver):
+    cfg = valid_cfg()
+    cfg["log_driver"] = driver
+
+    with pytest.raises(AnsibleFilterError, match="log_driver must be one of"):
+        podman_services.podman_service_normalize(cfg, "demo")
+
+
+@pytest.mark.parametrize("image", ["registry.example.invalid/demo:latest", "registry.example.invalid/demo", ""])
 def test_image_must_be_exact_non_latest(image):
     cfg = valid_cfg()
     cfg["image"] = image
     with pytest.raises(AnsibleFilterError, match="exact, non-latest"):
-        podman_services.podman_service_normalize(cfg, "n8n")
+        podman_services.podman_service_normalize(cfg, "demo")
 
 
 def test_unsafe_path_fails():
     cfg = valid_cfg()
     cfg["paths"] = [{"path": "/root/.ssh"}]
     with pytest.raises(AnsibleFilterError, match="/opt"):
-        podman_services.podman_service_normalize(cfg, "n8n")
+        podman_services.podman_service_normalize(cfg, "demo")
 
 
 def test_opt_root_remains_valid_for_rootful_nonrecursive_path_preparation():
@@ -51,7 +75,7 @@ def test_opt_root_remains_valid_for_rootful_nonrecursive_path_preparation():
     cfg["paths"] = [{"path": "/opt"}]
     original = deepcopy(cfg)
 
-    svc = podman_services.podman_service_normalize(cfg, "n8n")
+    svc = podman_services.podman_service_normalize(cfg, "demo")
 
     assert svc["execution"] == {"mode": "rootful"}
     assert svc["host_paths"] == [{"path": "/opt"}]
@@ -62,7 +86,7 @@ def test_bad_secret_fails():
     cfg = valid_cfg()
     cfg["secrets"] = [{"name": "x"}]
     with pytest.raises(AnsibleFilterError, match="not supported by Podman"):
-        podman_services.podman_service_normalize(cfg, "n8n")
+        podman_services.podman_service_normalize(cfg, "demo")
 
 
 def test_canonical_value_free_secret_attachments_are_adapter_metadata():
@@ -70,7 +94,7 @@ def test_canonical_value_free_secret_attachments_are_adapter_metadata():
     cfg["secrets"] = ["generated_secret", "canonical_secret"]
     original = deepcopy(cfg)
 
-    svc = podman_services.podman_service_normalize(cfg, "n8n")
+    svc = podman_services.podman_service_normalize(cfg, "demo")
 
     assert svc["secrets"] == []
     assert svc["secret_attachments"] == ["generated_secret", "canonical_secret"]
@@ -80,9 +104,9 @@ def test_canonical_value_free_secret_attachments_are_adapter_metadata():
 def test_deprecated_secret_runtime_options_are_rejected():
     declarations = [
         {
-            "name": "n8n_encryption_key_secret",
-            "var": "n8n_encryption_key",
-            "target": "/run/secrets/n8n_encryption_key_secret",
+            "name": "demo_encryption_key_secret",
+            "var": "demo_encryption_key",
+            "target": "/run/secrets/demo_encryption_key_secret",
             "runtime_options": {"podman": {"immutable": True, "replace": True}},
         }
     ]
@@ -105,9 +129,9 @@ def test_podman_declaration_rejects_invalid_update_policy(value):
 
 def test_volume_requires_target():
     cfg = valid_cfg()
-    cfg["volumes"] = [{"name": "n8n-data"}]
+    cfg["volumes"] = [{"name": "demo-data"}]
     with pytest.raises(AnsibleFilterError, match=r"volumes\[0\]\.target"):
-        podman_services.podman_service_normalize(cfg, "n8n")
+        podman_services.podman_service_normalize(cfg, "demo")
 
 
 def test_managed_named_network_is_accepted():
@@ -130,7 +154,7 @@ def test_external_named_network_is_accepted_without_managed_driver():
 
 def test_image_reference_drift_matching():
     result = podman_services.podman_image_reference_drift(
-        {"rc": 0, "stdout": "registry.example.invalid/n8n:1.2.3"}, "registry.example.invalid/n8n:1.2.3"
+        {"rc": 0, "stdout": "registry.example.invalid/demo:1.2.3"}, "registry.example.invalid/demo:1.2.3"
     )
     assert result["drift"] is False
     assert "No Podman image reference drift" in result["message"]
@@ -138,14 +162,14 @@ def test_image_reference_drift_matching():
 
 def test_image_reference_drift_mismatching():
     result = podman_services.podman_image_reference_drift(
-        {"rc": 0, "stdout": "registry.example.invalid/n8n:1.2.2"}, "registry.example.invalid/n8n:1.2.3"
+        {"rc": 0, "stdout": "registry.example.invalid/demo:1.2.2"}, "registry.example.invalid/demo:1.2.3"
     )
     assert result["drift"] is True
     assert result["missing"] is False
 
 
 def test_image_reference_drift_missing_container():
-    result = podman_services.podman_image_reference_drift({"rc": 125, "stdout": ""}, "registry.example.invalid/n8n:1.2.3")
+    result = podman_services.podman_image_reference_drift({"rc": 125, "stdout": ""}, "registry.example.invalid/demo:1.2.3")
     assert result["drift"] is True
     assert result["missing"] is True
 
@@ -535,15 +559,15 @@ def test_systemd_after_must_be_list_of_nonempty_unit_names(after):
     cfg = valid_cfg()
     cfg["systemd"] = {"after": after}
 
-    with pytest.raises(AnsibleFilterError, match=r"n8n\.systemd\.after"):
-        podman_services.podman_service_normalize(cfg, "n8n")
+    with pytest.raises(AnsibleFilterError, match=r"demo\.systemd\.after"):
+        podman_services.podman_service_normalize(cfg, "demo")
 
 
 def test_systemd_after_is_normalized_when_valid():
     cfg = valid_cfg()
     cfg["systemd"] = {"after": [" postgresql.service ", "custom.target"]}
 
-    svc = podman_services.podman_service_normalize(cfg, "n8n")
+    svc = podman_services.podman_service_normalize(cfg, "demo")
 
     assert svc["container"]["systemd"]["after"] == ["postgresql.service", "custom.target"]
 

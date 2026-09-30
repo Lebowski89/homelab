@@ -18,6 +18,7 @@ uptime_kuma:
   ################################
   environment:
     TZ: "{{ timezone }}"
+    UPTIME_KUMA_LOG_FORMAT: json
   ################################
   # CONNECTIVITY
   ################################

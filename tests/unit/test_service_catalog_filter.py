@@ -23,14 +23,14 @@ def test_empty_null_and_non_string_base_runtimes_are_rejected(runtime):
 
 
 def test_explicit_podman_runtime():
-    items = service_catalog.service_catalog_effective({"n8n": {"runtime": "podman", "tags": ["automation"]}}, "manager")
+    items = service_catalog.service_catalog_effective({"podman_app": {"runtime": "podman", "tags": ["automation"]}}, "manager")
 
     assert items[0]["runtime"] == "podman"
-    assert items[0]["dispatch_host"] == "n8n"
+    assert items[0]["dispatch_host"] == "podman_app"
     assert "config" not in items[0]
     assert "automation" in items[0]["tags"]
     assert items[0]["podman_lifecycle"] == {
-        "container_name": "n8n",
+        "container_name": "podman_app",
         "namespace_provider": None,
         "execution_mode": "rootful",
     }
@@ -78,13 +78,13 @@ def test_invalid_runtime_fails():
 
 def test_mixed_runtime_selection_splits():
     items = service_catalog.service_catalog_effective(
-        {"app": {"runtime": "docker"}, "n8n": {"runtime": "podman"}},
+        {"app": {"runtime": "docker"}, "podman_app": {"runtime": "podman"}},
         "manager",
     )
     selected = service_catalog.service_catalog_select(items, ["all"], run_all=True)["selected"]
 
     assert [item["name"] for item in service_catalog.service_catalog_by_runtime(selected, "docker")] == ["app"]
-    assert [item["name"] for item in service_catalog.service_catalog_by_runtime(selected, "podman")] == ["n8n"]
+    assert [item["name"] for item in service_catalog.service_catalog_by_runtime(selected, "podman")] == ["podman_app"]
 
 
 def test_selection_and_runtime_partition_do_not_default_missing_metadata_runtime():
@@ -376,10 +376,10 @@ def test_invalid_target_runtime_override_is_rejected(runtime):
 
 
 def test_disabled_podman_and_remove_selection():
-    items = service_catalog.service_catalog_effective({"n8n": {"runtime": "podman", "enabled": False}}, "manager")
+    items = service_catalog.service_catalog_effective({"podman_app": {"runtime": "podman", "enabled": False}}, "manager")
 
-    assert service_catalog.service_catalog_select(items, ["n8n"])["disabled_only"] is True
-    assert service_catalog.service_catalog_select(items, ["n8n"], allow_disabled=True)["selected"][0]["name"] == "n8n"
+    assert service_catalog.service_catalog_select(items, ["podman_app"])["disabled_only"] is True
+    assert service_catalog.service_catalog_select(items, ["podman_app"], allow_disabled=True)["selected"][0]["name"] == "podman_app"
 
 
 def test_all_selection_selects_enabled_mixed_services():

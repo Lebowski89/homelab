@@ -33,11 +33,11 @@ def normalize(postgres, *, controller="manager", hostvars=None, values=None, che
 
 
 def test_default_inventory_host_resolves_local_ip_and_defaults():
-    result = normalize({"enable": True, "databases": " n8n "})
+    result = normalize({"enable": True, "databases": " app "})
 
     assert result == {
         "enable": True,
-        "databases": ["n8n"],
+        "databases": ["app"],
         "port": 5432,
         "user_var": "postgres_user",
         "password_var": "postgres_pass",

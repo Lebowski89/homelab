@@ -1,0 +1,57 @@
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+loki.write "default" {
+  endpoint {
+    url = "{{ alloy_native_loki_url }}"
+  }
+}
+
+discovery.relabel "journal" {
+  targets = []
+
+  rule {
+    source_labels = ["__journal__systemd_unit"]
+    target_label  = "unit"
+  }
+
+  rule {
+    source_labels = ["__journal__systemd_user_unit"]
+    target_label  = "user_unit"
+  }
+
+  rule {
+    source_labels = ["__journal_syslog_identifier"]
+    target_label  = "syslog_identifier"
+  }
+
+  rule {
+    source_labels = ["__journal_priority_keyword"]
+    target_label  = "priority"
+  }
+
+  rule {
+    source_labels = ["__journal_container_name"]
+    target_label  = "container"
+  }
+
+  // Privacy-sensitive application output remains in the local journal. Entries
+  // without these container names, including systemd lifecycle records, remain.
+  rule {
+    source_labels = ["__journal_container_name"]
+    regex         = "jdownloader2|mullvad-browser"
+    action        = "drop"
+  }
+}
+
+loki.source.journal "system" {
+  max_age       = "24h"
+  labels        = {
+    host   = constants.hostname,
+    source = "journal",
+  }
+  relabel_rules = discovery.relabel.journal.rules
+  forward_to    = [loki.write.default.receiver]
+}

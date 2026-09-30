@@ -1,0 +1,114 @@
+---
+
+- name: Alloy native | Assert supported OS
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family == "Debian"
+    fail_msg: "alloy_native currently supports Debian-family systemd hosts only."
+
+- name: Alloy native | Ensure apt keyring directory exists
+  ansible.builtin.file:
+    path: "{{ alloy_native_keyring_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Alloy native | Download Grafana package signing key
+  ansible.builtin.get_url:
+    url: "{{ alloy_native_repo_url }}/gpg-full.key"
+    dest: "{{ alloy_native_keyring_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Alloy native | Configure Grafana apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by={{ alloy_native_keyring_file }}]
+      {{ alloy_native_repo_url }} {{ alloy_native_repo_suite }} main
+    filename: "{{ alloy_native_repo_filename }}"
+    state: present
+    update_cache: true
+
+- name: Alloy native | Install Alloy and ACL support
+  ansible.builtin.apt:
+    name: "{{ alloy_native_packages }}"
+    state: present
+
+- name: Alloy native | Read local system accounts
+  ansible.builtin.getent:
+    database: passwd
+
+- name: Alloy native | Read local system groups
+  ansible.builtin.getent:
+    database: group
+
+- name: Alloy native | Resolve package service account availability
+  ansible.builtin.set_fact:
+    alloy_native_service_account_available: >-
+      {{
+        alloy_native_user in (ansible_facts.getent_passwd | default({}))
+        and alloy_native_group in (ansible_facts.getent_group | default({}))
+      }}
+
+- name: Alloy native | Require package service account after installation
+  when: not ansible_check_mode
+  ansible.builtin.assert:
+    that:
+      - alloy_native_service_account_available
+    fail_msg: >-
+      The Alloy package did not create the expected {{ alloy_native_user }} user
+      and {{ alloy_native_group }} group.
+
+- name: Alloy native | Report account-dependent work deferred in check mode
+  when:
+    - ansible_check_mode
+    - not alloy_native_service_account_available
+  ansible.builtin.debug:
+    msg: >-
+      Alloy account-dependent configuration and service validation are deferred
+      because the package-created {{ alloy_native_user }} user or
+      {{ alloy_native_group }} group does not exist yet.
+  changed_when: false
+
+- name: Alloy native | Resolve available journal reader groups
+  ansible.builtin.set_fact:
+    alloy_native_journal_groups_effective: >-
+      {{ alloy_native_journal_groups | select("in", ansible_facts.getent_group) | list }}
+
+- name: Alloy native | Grant journal access to package service account
+  when:
+    - alloy_native_service_account_available
+    - alloy_native_journal_groups_effective | length > 0
+  ansible.builtin.user:
+    name: "{{ alloy_native_user }}"
+    groups: "{{ alloy_native_journal_groups_effective }}"
+    append: true
+  notify: Restart Alloy
+
+- name: Alloy native | Ensure configuration directory exists
+  when: alloy_native_service_account_available
+  ansible.builtin.file:
+    path: "{{ alloy_native_config_dir }}"
+    state: directory
+    owner: root
+    group: "{{ alloy_native_group }}"
+    mode: "0750"
+
+- name: Alloy native | Render collector configuration
+  when: alloy_native_service_account_available
+  ansible.builtin.template:
+    src: config.alloy.j2
+    dest: "{{ alloy_native_config_path }}"
+    owner: root
+    group: "{{ alloy_native_group }}"
+    mode: "0640"
+  notify: Restart Alloy
+
+- name: Alloy native | Enable and start service
+  when: alloy_native_service_account_available
+  ansible.builtin.systemd_service:
+    name: "{{ alloy_native_service_name }}"
+    enabled: true
+    state: started

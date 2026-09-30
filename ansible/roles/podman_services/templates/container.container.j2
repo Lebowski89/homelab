@@ -9,6 +9,7 @@ After={{ after }}
 [Container]
 ContainerName={{ podman_service.unit_name }}
 Image={{ podman_service.image }}
+LogDriver={{ podman_service.container.log_driver | default("journald") }}
 {% if podman_service.container.network_mode is defined %}
 Network={{ podman_service.container.network_mode }}
 {% elif podman_service.network %}

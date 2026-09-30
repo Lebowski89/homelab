@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/09/26 |
+| Readme update        | 2026/10/01 |
 
 
 
@@ -44,7 +44,7 @@
 | [infisical_stack](defaults/main.yml#L31)   | str | `infisical` |    
 | [infisical_compose_file](defaults/main.yml#L32)   | str | `infisical-compose.yml` |    
 | [infisical_compose_path](defaults/main.yml#L33)   | str | `{{ infisical_base_path }}/{{ infisical_compose_file }}` |    
-| [infisical_image](defaults/main.yml#L35)   | str | `docker.io/infisical/infisical:v0.165.13` |    
+| [infisical_image](defaults/main.yml#L35)   | str | `docker.io/infisical/infisical:v0.165.15` |    
 | [infisical_timezone](defaults/main.yml#L36)   | str | `{{ timezone ¦ default('Australia/Melbourne') }}` |    
 | [infisical_puid](defaults/main.yml#L37)   | str | `{{ container_host_puid ¦ default('1000') }}` |    
 | [infisical_pgid](defaults/main.yml#L38)   | str | `{{ container_host_pgid ¦ default('1000') }}` |    
@@ -76,13 +76,12 @@
 | [infisical_traefik_dynamic_dir](defaults/main.yml#L86)   | str | `/opt/traefik/dynamic` |    
 | [infisical_traefik_entrypoint](defaults/main.yml#L87)   | str | `https_private` |    
 | [infisical_traefik_authelia_enable](defaults/main.yml#L88)   | bool | `False` |    
-| [infisical_traefik_crowdsec_enable](defaults/main.yml#L89)   | bool | `False` |    
-| [infisical_traefik_headers_middleware](defaults/main.yml#L90)   | str | `secure-headers@file` |    
-| [infisical_traefik_middleware_chain](defaults/main.yml#L91)   | str | `{{ infisical_name }}-ui-chain` |    
-| [infisical_traefik_certresolver](defaults/main.yml#L92)   | str | `dns-cloudflare` |    
-| [infisical_traefik_tls_options](defaults/main.yml#L93)   | str | `securetls@file` |    
-| [infisical_traefik_dynamic_owner](defaults/main.yml#L94)   | int | `1000` |    
-| [infisical_traefik_dynamic_group](defaults/main.yml#L95)   | int | `1000` |    
+| [infisical_traefik_headers_middleware](defaults/main.yml#L89)   | str | `secure-headers@file` |    
+| [infisical_traefik_middleware_chain](defaults/main.yml#L90)   | str | `{{ infisical_name }}-ui-chain` |    
+| [infisical_traefik_certresolver](defaults/main.yml#L91)   | str | `dns-cloudflare` |    
+| [infisical_traefik_tls_options](defaults/main.yml#L92)   | str | `securetls@file` |    
+| [infisical_traefik_dynamic_owner](defaults/main.yml#L93)   | int | `1000` |    
+| [infisical_traefik_dynamic_group](defaults/main.yml#L94)   | int | `1000` |    
 
 
 

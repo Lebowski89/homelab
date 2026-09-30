@@ -669,3 +669,20 @@
           no_log: true
           diff: false
       tags: [deploy, update, recreate]
+
+    ################################
+    # ALLOY NATIVE (JOURNAL/PODMAN LOGGING)
+    ################################
+
+    - name: Gather facts for native Alloy role
+      when: "'tags_podman' in group_names"
+      ansible.builtin.setup:
+      tags: [alloy_native]
+
+    - name: Include native Alloy role
+      when: "'tags_podman' in group_names"
+      ansible.builtin.include_role:
+        name: alloy_native
+        apply:
+          tags: [alloy_native]
+      tags: [alloy_native]
