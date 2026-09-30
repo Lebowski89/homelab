@@ -50,10 +50,11 @@ loki.source.docker "docker" {
   forward_to    = [loki.write.default.receiver]
 }
 
-local.file_match "applications" {
-  path_targets = [
+discovery.relabel "application_paths_owned" {
+  targets = [
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha/log/qbittorrent.log",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "qbittorrent-alpha",
@@ -61,6 +62,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo/log/qbittorrent.log",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "qbittorrent-bravo",
@@ -68,6 +70,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/sabnzbd/logs/sabnzbd.log",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "sabnzbd",
@@ -75,6 +78,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr/logs/radarr.txt",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "radarr",
@@ -82,6 +86,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr-4k/logs/radarr.txt",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "radarr-4k",
@@ -89,6 +94,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr/logs/sonarr.txt",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "sonarr",
@@ -96,6 +102,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr-4k/logs/sonarr.txt",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "sonarr-4k",
@@ -103,6 +110,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/lidarr/logs/lidarr.txt",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "lidarr",
@@ -110,6 +118,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/prowlarr/logs/prowlarr.txt",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "prowlarr",
@@ -117,6 +126,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/whisparr/logs/whisparr.txt",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "whisparr",
@@ -124,6 +134,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/bazarr/log/bazarr.log",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "bazarr",
@@ -131,6 +142,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/recyclarr/logs/debug.log",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "debug",
       service   = "recyclarr",
@@ -138,6 +150,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/nzbhydra2/app/logs/nzbhydra2.log",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "nzbhydra2",
@@ -145,6 +158,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/nzbhydra2/app/logs/wrapper.log",
+      __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "wrapper",
       service   = "nzbhydra2",
@@ -152,6 +166,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_plex_host].container_host_appdata_root }}/plex/Library/Application Support/Plex Media Server/Logs/Plex Media Server.log",
+      __tmp_owner_host = "{{ services_plex_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "plex",
@@ -159,6 +174,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_plex_host].container_host_appdata_root }}/tautulli/logs/tautulli.log",
+      __tmp_owner_host = "{{ services_plex_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "tautulli",
@@ -166,6 +182,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_plex_host].container_host_appdata_root }}/kometa/logs/meta.log",
+      __tmp_owner_host = "{{ services_plex_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "kometa",
@@ -173,6 +190,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_plex_host].container_host_appdata_root }}/imagemaid/logs/imagemaid.log",
+      __tmp_owner_host = "{{ services_plex_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "imagemaid",
@@ -180,6 +198,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_controller_host].container_host_appdata_root }}/seerr/logs/seerr.log",
+      __tmp_owner_host = "{{ services_controller_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "seerr",
@@ -187,6 +206,7 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_controller_host].container_host_appdata_root }}/unifi-os/var-log/unifi/server.log",
+      __tmp_owner_host = "{{ services_controller_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "unifi",
@@ -194,21 +214,41 @@ local.file_match "applications" {
     },
     {
       __path__ = "/host/rootfs{{ hostvars[services_controller_host].container_host_appdata_root }}/technitium/logs/*.log",
+      __tmp_owner_host = "{{ services_controller_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "technitium",
       source    = "file",
     },
-{% if hostvars[services_plex_host].container_host_appdata_root != hostvars[services_controller_host].container_host_appdata_root %}
     {
       __path__ = "/host/rootfs{{ hostvars[services_plex_host].container_host_appdata_root }}/technitium/logs/*.log",
+      __tmp_owner_host = "{{ services_plex_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
       service   = "technitium",
       source    = "file",
     },
-{% endif %}
   ]
+
+  rule {
+    replacement  = sys.env("ALLOY_HOST")
+    target_label = "__tmp_alloy_host"
+  }
+
+  rule {
+    action        = "keepequal"
+    source_labels = ["__tmp_owner_host"]
+    target_label  = "__tmp_alloy_host"
+  }
+
+  rule {
+    action = "labeldrop"
+    regex  = "__tmp_(owner_host|alloy_host)"
+  }
+}
+
+local.file_match "applications" {
+  path_targets = discovery.relabel.application_paths_owned.output
 
   ignore_older_than = "24h"
   sync_period       = "10s"
@@ -229,16 +269,37 @@ loki.process "application_files" {
   forward_to = [loki.write.default.receiver]
 }
 
-local.file_match "traefik_access" {
-  path_targets = [
+discovery.relabel "traefik_access_path_owned" {
+  targets = [
     {
       __path__ = "/host/rootfs{{ services_log_root }}/traefik/access.log",
+      __tmp_owner_host = "{{ services_controller_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "access",
       service   = "traefik",
       source    = "file",
     },
   ]
+
+  rule {
+    replacement  = sys.env("ALLOY_HOST")
+    target_label = "__tmp_alloy_host"
+  }
+
+  rule {
+    action        = "keepequal"
+    source_labels = ["__tmp_owner_host"]
+    target_label  = "__tmp_alloy_host"
+  }
+
+  rule {
+    action = "labeldrop"
+    regex  = "__tmp_(owner_host|alloy_host)"
+  }
+}
+
+local.file_match "traefik_access" {
+  path_targets = discovery.relabel.traefik_access_path_owned.output
 
   ignore_older_than = "24h"
   sync_period       = "10s"

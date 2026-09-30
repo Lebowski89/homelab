@@ -82,6 +82,7 @@ Role/action examples:
   skynet bootstrap tailscale
   skynet check keepalived
   skynet check technitium-native
+  skynet check alloy-native
   skynet check node-exporter
   skynet check podman
 
@@ -399,6 +400,10 @@ role_tag() {
     technitium-native:install)      echo "technitium_native" ;;
     technitium-native:run)          echo "technitium_native" ;;
 
+    alloy-native:deploy)            echo "alloy_native" ;;
+    alloy-native:install)           echo "alloy_native" ;;
+    alloy-native:run)               echo "alloy_native" ;;
+
     node-exporter:deploy)           echo "node_exporter" ;;
     node-exporter:install)          echo "node_exporter" ;;
     node-exporter:run)              echo "node_exporter" ;;
@@ -575,6 +580,11 @@ Role/action targets:
     install -> technitium_native
     run     -> technitium_native
 
+  alloy-native:
+    deploy  -> alloy_native
+    install -> alloy_native
+    run     -> alloy_native
+
   node-exporter:
     deploy  -> node_exporter
     install -> node_exporter
@@ -593,6 +603,7 @@ Examples:
   skynet bootstrap tailscale
   skynet check keepalived
   skynet check technitium-native
+  skynet check alloy-native
   skynet check node-exporter
   skynet check podman
 

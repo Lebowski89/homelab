@@ -5,6 +5,8 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROLE_DIR = REPO_ROOT / "ansible/roles/alloy_native"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
+SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
+SKYNET_DOC_PATH = REPO_ROOT / "docs/cheat_sheets/skynet.md"
 
 
 def task_named(tasks, name: str):
@@ -147,3 +149,67 @@ def test_native_alloy_playbook_targeting_preserves_lazy_fact_gathering():
     assert include["tags"] == ["alloy_native"]
     assert include["ansible.builtin.include_role"]["name"] == "alloy_native"
     assert include["ansible.builtin.include_role"]["apply"]["tags"] == ["alloy_native"]
+
+
+def test_native_alloy_existing_account_keeps_full_configuration_path():
+    tasks = yaml.safe_load((ROLE_DIR / "tasks/main.yml").read_text())
+    guarded_tasks = (
+        "Alloy native | Ensure configuration directory exists",
+        "Alloy native | Render collector configuration",
+        "Alloy native | Enable and start service",
+    )
+
+    for name in guarded_tasks:
+        assert task_named(tasks, name)["when"] == "alloy_native_service_account_available"
+
+    journal_access = task_named(tasks, "Alloy native | Grant journal access to package service account")
+    assert journal_access["when"] == [
+        "alloy_native_service_account_available",
+        "alloy_native_journal_groups_effective | length > 0",
+    ]
+
+
+def test_native_alloy_fresh_host_check_mode_reports_deferred_account_work():
+    tasks = yaml.safe_load((ROLE_DIR / "tasks/main.yml").read_text())
+    names = [task["name"] for task in tasks]
+    resolve = task_named(tasks, "Alloy native | Resolve package service account availability")
+    deferred = task_named(tasks, "Alloy native | Report account-dependent work deferred in check mode")
+    expression = resolve["ansible.builtin.set_fact"]["alloy_native_service_account_available"]
+
+    assert "ansible_facts.getent_passwd" in expression
+    assert "ansible_facts.getent_group" in expression
+    assert deferred["when"] == [
+        "ansible_check_mode",
+        "not alloy_native_service_account_available",
+    ]
+    assert deferred["changed_when"] is False
+    assert names.index("Alloy native | Install Alloy and ACL support") < names.index("Alloy native | Read local system accounts")
+    assert names.index("Alloy native | Read local system groups") < names.index(
+        "Alloy native | Report account-dependent work deferred in check mode"
+    )
+
+
+def test_native_alloy_real_deploy_requires_package_created_account():
+    tasks = yaml.safe_load((ROLE_DIR / "tasks/main.yml").read_text())
+    names = [task["name"] for task in tasks]
+    require_account = task_named(tasks, "Alloy native | Require package service account after installation")
+
+    assert require_account["when"] == "not ansible_check_mode"
+    assert require_account["ansible.builtin.assert"]["that"] == ["alloy_native_service_account_available"]
+    assert names.index("Alloy native | Install Alloy and ACL support") < names.index(
+        "Alloy native | Require package service account after installation"
+    )
+    assert not any("ansible.builtin.group" in task for task in tasks)
+
+
+def test_skynet_exposes_explicit_alloy_native_target_without_global_rollout():
+    wrapper = SKYNET_TEMPLATE_PATH.read_text()
+    docs = SKYNET_DOC_PATH.read_text()
+
+    for action in ("deploy", "install", "run"):
+        assert f"alloy-native:{action})" in wrapper
+        assert f"skynet run alloy-native {action}" in docs
+    assert wrapper.count('echo "alloy_native" ;;') >= 3
+    assert "  alloy-native:" in wrapper
+    assert "skynet check alloy-native" in wrapper
+    assert "native Alloy is not added to the global catalog-service" in docs

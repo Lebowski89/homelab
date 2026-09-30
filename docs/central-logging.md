@@ -17,11 +17,14 @@ existing daemon-wide `json-file` policy. The collector also reads an explicit
 allowlist of useful local application files through the read-only host-root
 mount. Its positions and other state use a local Docker volume on each node.
 
-Every global task receives the same application target list. This is
-intentional: `local.file_match` returns no target for an absent local path, so a
-storage-host path on a controller or Plex node is a harmless non-match rather
-than a persistent collector error. Keeping one config also avoids encoding
-physical hostnames into the source list.
+Every global task receives the same declared file-target list, but Alloy filters
+it before `local.file_match` by comparing each target’s inventory-derived owner
+with `sys.env("ALLOY_HOST")`. Storage application paths are owned by
+`services_storage_host`, Plex-side paths by `services_plex_host`, and controller
+application and Traefik paths by `services_controller_host`. Primary and
+secondary Technitium paths retain their respective controller and Plex owners.
+A task therefore scans only paths owned by its physical node, while one rendered
+configuration remains usable by the global service.
 
 The existing Alloy Unix and cAdvisor metric exporters remain enabled on every
 collector. Their `instance` label is replaced with the same stable node

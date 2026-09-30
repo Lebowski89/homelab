@@ -154,7 +154,7 @@ def test_docker_alloy_labels_are_stable_and_metrics_keep_node_identity():
 
 def test_docker_file_collection_is_an_explicit_active_file_allowlist():
     config = render_docker_alloy()
-    paths = set(re.findall(r'__path__ = "([^"]+)"', config))
+    paths = set(re.findall(r'__path__\s*=\s*"([^"]+)"', config))
 
     # Each application path is derived from its real persisted container bind,
     # then combined with an independently stated in-container log contract.
@@ -201,9 +201,14 @@ def test_docker_file_collection_is_an_explicit_active_file_allowlist():
     assert config.count('on_positions_file_error = "restart_from_end"') == 2
 
 
-def test_technitium_source_is_not_duplicated_when_nodes_share_appdata_root():
+def test_technitium_sources_keep_distinct_owners_when_nodes_share_appdata_root():
     config = render_docker_alloy(shared_appdata_root=True)
-    assert config.count("/host/rootfs/opt/technitium/logs/*.log") == 1
+    technitium_targets = [(path, owner) for path, owner, service in owned_file_targets(config) if service == "technitium"]
+
+    assert technitium_targets == [
+        ("/host/rootfs/opt/technitium/logs/*.log", "mgt"),
+        ("/host/rootfs/opt/technitium/logs/*.log", "plex"),
+    ]
 
 
 def test_traefik_access_stream_remains_json_and_uses_only_bounded_labels():
@@ -386,3 +391,49 @@ def test_native_application_rotation_is_bounded():
     assert r"FileLogger\AgeType=1" in qbittorrent
     assert "max_log_size = 5242880" in sabnzbd
     assert "log_backups = 5" in sabnzbd
+
+
+def owned_file_targets(config: str) -> list[tuple[str, str, str]]:
+    return re.findall(
+        r"""\{\s+__path__\s*=\s*"([^"]+)",\s+
+        __tmp_owner_host\s*=\s*"([^"]+)",[^}]*?\bservice\s+=\s+"([^"]+)",[^}]*?\}""",
+        config,
+        flags=re.VERBOSE,
+    )
+
+
+def test_docker_file_targets_are_filtered_to_their_inventory_owner_before_discovery():
+    config = render_docker_alloy()
+    targets = owned_file_targets(config)
+
+    storage_services = {
+        "qbittorrent-alpha",
+        "qbittorrent-bravo",
+        "sabnzbd",
+        "radarr",
+        "radarr-4k",
+        "sonarr",
+        "sonarr-4k",
+        "lidarr",
+        "prowlarr",
+        "whisparr",
+        "bazarr",
+        "recyclarr",
+        "nzbhydra2",
+    }
+    plex_services = {"plex", "tautulli", "kometa", "imagemaid", "technitium"}
+    controller_services = {"seerr", "unifi", "technitium", "traefik"}
+
+    assert len(targets) == 23
+    assert {service for _, owner, service in targets if owner == "unraid"} == storage_services
+    assert {service for _, owner, service in targets if owner == "plex"} == plex_services
+    assert {service for _, owner, service in targets if owner == "mgt"} == controller_services
+    application_gate = config.split('discovery.relabel "application_paths_owned" {', 1)[1].split('local.file_match "applications" {', 1)[0]
+    traefik_gate = config.split('discovery.relabel "traefik_access_path_owned" {', 1)[1].split('local.file_match "traefik_access" {', 1)[0]
+    for gate in (application_gate, traefik_gate):
+        assert gate.count('action        = "keepequal"') == 1
+        assert gate.count('source_labels = ["__tmp_owner_host"]') == 1
+        assert gate.count('replacement  = sys.env("ALLOY_HOST")') == 1
+    assert "constants.hostname" not in config
+    assert "path_targets = discovery.relabel.application_paths_owned.output" in config
+    assert "path_targets = discovery.relabel.traefik_access_path_owned.output" in config
