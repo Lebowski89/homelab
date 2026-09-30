@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/09/26 |
+| Readme update        | 2026/10/01 |
 
 
 
@@ -80,13 +80,12 @@
 | [netbox_traefik_dynamic_dir](defaults/main.yml#L87)   | str | `/opt/traefik/dynamic` |    
 | [netbox_traefik_entrypoint](defaults/main.yml#L88)   | str | `https_private` |    
 | [netbox_traefik_authelia_enable](defaults/main.yml#L89)   | bool | `False` |    
-| [netbox_traefik_crowdsec_enable](defaults/main.yml#L90)   | bool | `False` |    
-| [netbox_traefik_headers_middleware](defaults/main.yml#L91)   | str | `netbox-headers@file` |    
-| [netbox_traefik_middleware_chain](defaults/main.yml#L92)   | str | `{{ netbox_name }}-ui-chain` |    
-| [netbox_traefik_certresolver](defaults/main.yml#L93)   | str | `dns-cloudflare` |    
-| [netbox_traefik_tls_options](defaults/main.yml#L94)   | str | `securetls@file` |    
-| [netbox_traefik_dynamic_owner](defaults/main.yml#L95)   | str | `1000` |    
-| [netbox_traefik_dynamic_group](defaults/main.yml#L96)   | str | `1000` |    
+| [netbox_traefik_headers_middleware](defaults/main.yml#L90)   | str | `netbox-headers@file` |    
+| [netbox_traefik_middleware_chain](defaults/main.yml#L91)   | str | `{{ netbox_name }}-ui-chain` |    
+| [netbox_traefik_certresolver](defaults/main.yml#L92)   | str | `dns-cloudflare` |    
+| [netbox_traefik_tls_options](defaults/main.yml#L93)   | str | `securetls@file` |    
+| [netbox_traefik_dynamic_owner](defaults/main.yml#L94)   | str | `1000` |    
+| [netbox_traefik_dynamic_group](defaults/main.yml#L95)   | str | `1000` |    
 
 
 
