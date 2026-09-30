@@ -78,7 +78,6 @@ locals {
     "thelounge",
     "traefik",
     "upbrr",
-    "uptime-kuma",
     "vaultwarden",
     "wallos",
     "whisparr",

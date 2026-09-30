@@ -46,7 +46,6 @@ jobs:
           - terraform/proxmox/vms/unraid
           - terraform/seerr
           - terraform/technitium/internal-dns
-          - terraform/uptime-kuma
 
     defaults:
       run:

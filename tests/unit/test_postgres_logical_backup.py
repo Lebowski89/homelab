@@ -554,13 +554,13 @@ def test_postgres_reset_tasks_require_explicit_reset_intent(path: Path, reset_ta
 def test_postgres_admin_check_mode_reports_without_live_patroni_discovery():
     tasks = yaml.safe_load(MAIN_TASKS_PATH.read_text())
     admin = task_named(tasks, "Ensure dedicated PostgreSQL admin role exists")
-    uptime = task_named(tasks, "Ensure dedicated PostgreSQL Uptime Kuma role exists")
+    monitor = task_named(tasks, "Ensure neutral PostgreSQL monitoring role exists")
     admin_plan = task_named(tasks, "Report PostgreSQL admin role check-mode plan")
     pg_hba = task_named(tasks, "Update Patroni dynamic pg_hba in DCS")
     pg_hba_plan = task_named(tasks, "Report Patroni dynamic pg_hba check-mode plan")
 
     assert "not ansible_check_mode" in admin["when"]
-    assert "not ansible_check_mode" in uptime["when"]
+    assert "not ansible_check_mode" in monitor["when"]
     assert "not ansible_check_mode" in pg_hba["when"]
     assert "ansible_check_mode" in admin_plan["when"]
     assert "ansible_check_mode" in pg_hba_plan["when"]

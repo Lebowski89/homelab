@@ -189,15 +189,6 @@
           type: prometheus
           url: https://prometheus.{{ services_internal_zone }}:{{ services_private_https_port }}
           fields: ["targets_up", "targets_down", "targets_total"]
-    - Uptime Kuma:
-        icon: uptime-kuma.svg
-        href: https://uptime-kuma.{{ services_internal_zone }}:{{ services_private_https_port }}
-        description: Service availability monitoring
-        widget:
-          type: uptimekuma
-          url: https://uptime-kuma.{{ services_internal_zone }}:{{ services_private_https_port }}
-          slug: homelab
-          fields: ["up", "down", "uptime", "incident"]
 
 - network:
     - Traefik:

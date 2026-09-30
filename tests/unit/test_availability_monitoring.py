@@ -10,7 +10,6 @@ from jinja2.nativetypes import NativeEnvironment
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
 PROMETHEUS_VARS_PATH = REPO_ROOT / "ansible/group_vars/all/prometheus.yml"
-KUMA_LOCALS_PATH = REPO_ROOT / "terraform/uptime-kuma/locals.tf"
 ALERTING_WORKFLOW_PATH = REPO_ROOT / ".github/workflows/alerting-config-validation.yml"
 
 
@@ -37,25 +36,6 @@ def render_structure(value, variables):
     if isinstance(value, str) and ("{{" in value or "{%" in value):
         return NativeEnvironment(undefined=StrictUndefined).from_string(value).render(**variables)
     return value
-
-
-def hcl_map_keys(name: str) -> set[str]:
-    text = KUMA_LOCALS_PATH.read_text()
-    match = re.search(rf"^  {re.escape(name)}\s*=\s*\{{", text, re.MULTILINE)
-    assert match, name
-    start = text.index("{", match.start())
-    depth = 0
-    end = None
-    for index in range(start, len(text)):
-        if text[index] == "{":
-            depth += 1
-        elif text[index] == "}":
-            depth -= 1
-            if depth == 0:
-                end = index
-                break
-    assert end is not None, name
-    return set(re.findall(r"^    ([a-z0-9_-]+)\s*=\s*\{", text[start : end + 1], re.MULTILINE))
 
 
 def availability_model():
@@ -99,14 +79,14 @@ def by_monitor_id(targets):
     return {target["labels"]["monitor_id"]: target for target in targets}
 
 
-def test_generated_http_targets_match_authoritative_kuma_inventory():
+def test_generated_http_targets_cover_catalogue_and_direct_sources():
     model = availability_model()
-    actual = set(by_monitor_id(model["http"]))
-    expected = {f"http.{name}-private" for name in hcl_map_keys("private_http_services")}
-    expected |= {f"http.{name}" for name in hcl_map_keys("extra_http_monitors")}
+    targets = by_monitor_id(model["http"])
 
-    assert len(expected) == 42
-    assert actual == expected
+    assert len(targets) == len(model["http"])
+    assert {"http.homepage-private", "http.plex-direct", "http.proxmox"} <= set(targets)
+    for excluded in model["vars"]["prometheus_availability_private_exclusions"]:
+        assert f"http.{excluded}-private" not in targets
 
 
 def test_catalogue_variants_special_urls_and_categories_are_preserved():
@@ -131,13 +111,17 @@ def test_catalogue_variants_special_urls_and_categories_are_preserved():
     assert targets["http.wallos-private"]["labels"]["category"] == "Finance"
 
 
-def test_host_and_tcp_targets_match_kuma_and_postgres_comes_from_inventory_group():
+def test_host_and_tcp_targets_come_from_inventory_and_prometheus_configuration():
     model = availability_model()
-    assert set(by_monitor_id(model["icmp"])) == {f"ping.{name}" for name in hcl_map_keys("ping_monitors")}
-    assert set(by_monitor_id(model["tcp"])) == {f"tcp.{name}" for name in hcl_map_keys("tcp_monitors")}
-    assert {target["labels"]["host"] for target in model["postgres"]} == hcl_map_keys("postgres_monitors")
+    expected_icmp = {f"ping.{name}" for name in model["vars"]["prometheus_availability_icmp_hosts"]}
+    expected_tcp = {f"tcp.{name}" for name in model["vars"]["prometheus_availability_tcp_targets"]}
+    expected_postgres_hosts = {"pg95", "pg96", "pg97"}
+
+    assert set(by_monitor_id(model["icmp"])) == expected_icmp
+    assert set(by_monitor_id(model["tcp"])) == expected_tcp
+    assert {target["labels"]["host"] for target in model["postgres"]} == expected_postgres_hosts
     assert all(target["targets"][0].endswith(":9187") for target in model["postgres"])
-    assert {target["labels"]["host"] for target in model["patroni"]} == hcl_map_keys("postgres_monitors")
+    assert {target["labels"]["host"] for target in model["patroni"]} == expected_postgres_hosts
     assert all(target["targets"][0].endswith(":8008") for target in model["patroni"])
 
 
@@ -179,9 +163,8 @@ def test_blackbox_modules_capability_and_prometheus_file_sd_wiring():
         assert f"/etc/prometheus/file_sd/{target_file}" in prometheus_template
 
 
-def test_dns_coverage_is_strictly_broader_than_kuma():
+def test_dns_coverage_includes_all_configured_endpoints():
     prometheus_vars = yaml.safe_load(PROMETHEUS_VARS_PATH.read_text())
-    assert hcl_map_keys("dns_monitors") == {"technitium_internal"}
     assert set(prometheus_vars["prometheus_blackbox_dns_targets"]) == {"dns_vip_a", "dns_vip_b", "dns01", "dns02", "dns03"}
     prometheus_template = (REPO_ROOT / "ansible/roles/service_common/templates/configs/prometheus/prometheus.yml.j2").read_text()
     assert 'job_name: "blackbox-dns-udp"' in prometheus_template
@@ -208,6 +191,15 @@ def test_postgres_exporter_role_is_checksum_pinned_unprivileged_and_secret_safe(
     assert "postgres_exporter_database_password" not in environment
     assert any("postgres_exporter" in str(task) and "tags_postgres" in str(task) for play in playbook for task in play.get("tasks", []))
     monitor_tasks = (REPO_ROOT / "ansible/roles/postgres/tasks/sub_tasks/admin/pg_monitor.yml").read_text()
+    postgres_defaults = yaml.safe_load((REPO_ROOT / "ansible/roles/postgres/defaults/main.yml").read_text())
+    postgres_group_vars = yaml.safe_load((REPO_ROOT / "ansible/group_vars/tags_postgres.yml").read_text())
+    postgres_vault_sample = yaml.safe_load((REPO_ROOT / "ansible/group_vars/all/vault.sample/postgres.yml").read_text())
+    assert postgres_defaults["postgres_monitor_role_name"] == "postgres_monitor"
+    assert postgres_defaults["postgres_monitor_role_pass"] == ""
+    assert postgres_defaults["postgres_monitor_database"] == "postgres"
+    assert postgres_group_vars["postgres_monitor_role_name"] == "postgres_monitor"
+    assert postgres_group_vars["postgres_monitor_database"] == "postgres"
+    assert postgres_vault_sample["postgres_monitor_role_pass"] == "replace-me"
     assert "INHERIT" in monitor_tasks
     assert "NOINHERIT" not in monitor_tasks
     skynet = (REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2").read_text()
@@ -291,10 +283,3 @@ def test_availability_dashboard_renders_valid_json_and_queries_generated_labels(
     assert "probe_ssl_earliest_cert_expiry" in expressions
     assert "pg_up" in expressions
     assert 'category=~"$category"' in expressions
-
-
-def test_uptime_kuma_remains_enabled_for_phase_one():
-    service_path = SERVICES_DIR / "uptime-kuma.yml"
-    assert service_path.exists()
-    assert yaml.safe_load(service_path.read_text())["uptime_kuma"]["enabled"] is True
-    assert (REPO_ROOT / "terraform/uptime-kuma").is_dir()

@@ -1,8 +1,11 @@
 # Availability monitoring
 
-Prometheus is the long-term source of availability state. During the Phase 1
-migration, Uptime Kuma remains deployed so operators can compare both systems
-before removing Kuma in a separate change.
+Prometheus is the source of truth for availability state. Blackbox Exporter
+provides active HTTP, ICMP, TCP, and DNS probes; postgres_exporter provides
+PostgreSQL queryability and replication metrics; Patroni metrics provide HA,
+member-role, and streaming state; and Node Exporter provides host metrics.
+Alertmanager routes alerts to email and Gotify, while the Grafana Homelab
+Availability dashboard provides the operational view.
 
 ## Sources of truth
 
@@ -19,7 +22,7 @@ before removing Kuma in a separate change.
 
 Prometheus reads deterministic, secret-free files from
 `/etc/prometheus/file_sd/`. Labels are limited to stable service, category,
-probe, host, criticality, module, and migration monitor identifiers.
+probe, host, criticality, module, and probe identifiers.
 
 ## Probe and alert behaviour
 
@@ -30,7 +33,8 @@ Proxmox retain their direct host probes. ICMP uses IPv4 and the blackbox
 exporter receives only `NET_RAW` for that purpose.
 
 Dedicated alerts distinguish a blackbox exporter/job failure from a failed
-target. Target alerts wait three minutes to approximate Kuma's retry intent.
+target. Target alerts wait three minutes so transient failures do not page
+immediately.
 TLS warnings begin below 21 days and become critical below seven days.
 PostgreSQL exporter scrape failures and database query failures are separate
 alerts.
@@ -61,15 +65,9 @@ filenames, download names, or equivalent activity labels for the privacy
 stack. The existing minimal systemd/journald lifecycle and VPN-connectivity
 visibility remains the supported diagnostic boundary.
 
-## Phase 1 deployment order
+## PostgreSQL monitoring identity
 
-Before deploying, create a dedicated Gotify application token in Infisical at
-`/Gotify` as `ALERTMANAGER_APP_TOKEN`. The PostgreSQL exporter temporarily
-reuses the existing Kuma database-monitor password while authenticating as the
-neutral `postgres_monitor` role; no additional database secret is needed in
-Phase 1.
-
-Deploy the neutral database role, the native exporters, blackbox exporter,
-Alertmanager, Prometheus, and Grafana in that order. Keep Kuma running until
-the target sets, state transitions, email, Gotify firing/resolved delivery,
-and the Homelab Availability dashboard have all been compared live.
+The least-privilege `postgres_monitor` login is the sole application-neutral
+PostgreSQL monitoring role. It inherits the built-in `pg_monitor` role and is
+used by postgres_exporter against the `postgres` database. Its password is
+stored only in the encrypted Ansible vault as `postgres_monitor_role_pass`.

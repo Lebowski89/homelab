@@ -236,7 +236,7 @@ def test_tracked_repository_does_not_contain_private_lan_cidr():
 
 
 def test_existing_netbox_state_consumers_prefer_explicit_private_port_then_canonical_output():
-    for root in ("uptime-kuma", "seerr"):
+    for root in ("seerr",):
         locals_source = (REPO_ROOT / f"terraform/{root}/locals.tf").read_text()
         variables_source = (REPO_ROOT / f"terraform/{root}/variables.tf").read_text()
 

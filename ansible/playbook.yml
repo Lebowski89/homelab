@@ -354,7 +354,6 @@
         - postgres_backup_restore_validation_run
         - postgres_restore
         - postgres_admin
-        - postgres_admin_uptime_kuma
         - postgres_admin_monitor
         - postgres_admin_nuke_node
         - postgres_admin_fix_owner

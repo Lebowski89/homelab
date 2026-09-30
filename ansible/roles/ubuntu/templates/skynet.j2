@@ -380,7 +380,6 @@ role_tag() {
     postgres:backup-restore-validation-run) echo "postgres_backup_restore_validation_run" ;;
     postgres:restore)               echo "postgres_restore" ;;
     postgres:admin)                 echo "postgres_admin" ;;
-    postgres:admin-uptime-kuma)     echo "postgres_admin_uptime_kuma" ;;
     postgres:admin-monitor)         echo "postgres_admin_monitor" ;;
     postgres:admin-nuke-node)       echo "postgres_admin_nuke_node" ;;
     postgres:admin-fix-owner)       echo "postgres_admin_fix_owner" ;;
@@ -562,7 +561,6 @@ Role/action targets:
     backup-restore-validation-run -> postgres_backup_restore_validation_run
     restore             -> postgres_restore
     admin               -> postgres_admin
-    admin-uptime-kuma   -> postgres_admin_uptime_kuma
     admin-monitor       -> postgres_admin_monitor
     admin-nuke-node     -> postgres_admin_nuke_node
     admin-fix-owner     -> postgres_admin_fix_owner

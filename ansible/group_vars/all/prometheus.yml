@@ -19,8 +19,8 @@ prometheus_availability_category_tags:
   usenet: Usenet
   utilities: Utilities
 
-# These new monitoring-stack routes were never part of the Uptime Kuma status
-# page. Keep Phase 1 parity exact; they can be opted in deliberately later.
+# These monitoring control-plane routes are excluded from ordinary availability
+# probing and can be opted in deliberately if their probe semantics are defined.
 prometheus_availability_private_exclusions:
   - alertmanager
   - alloy

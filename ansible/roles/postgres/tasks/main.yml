@@ -41,18 +41,15 @@
     - ansible_run_tags is not defined
       or 'all' in ansible_run_tags
       or 'postgres_admin' in ansible_run_tags
-      or 'postgres_admin_uptime_kuma' in ansible_run_tags
       or 'postgres_admin_monitor' in ansible_run_tags
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/pg_admin.yml
     apply:
       tags:
         - postgres_admin
-        - postgres_admin_uptime_kuma
         - postgres_admin_monitor
   tags:
     - postgres_admin
-    - postgres_admin_uptime_kuma
     - postgres_admin_monitor
 
 - name: Report PostgreSQL admin role check-mode plan
@@ -62,7 +59,6 @@
     - ansible_run_tags is not defined
       or 'all' in ansible_run_tags
       or 'postgres_admin' in ansible_run_tags
-      or 'postgres_admin_uptime_kuma' in ansible_run_tags
       or 'postgres_admin_monitor' in ansible_run_tags
   ansible.builtin.debug:
     msg: >-
@@ -71,25 +67,11 @@
   changed_when: false
   tags:
     - postgres_admin
-    - postgres_admin_uptime_kuma
     - postgres_admin_monitor
 
 ################################
 # ADMIN TASKS
 ################################
-
-- name: Ensure dedicated PostgreSQL Uptime Kuma role exists
-  when:
-    - not ansible_check_mode
-    - inventory_hostname == services_controller_host
-    - ansible_run_tags is not defined
-      or 'all' in ansible_run_tags
-      or 'postgres_admin_uptime_kuma' in ansible_run_tags
-  ansible.builtin.include_tasks:
-    file: sub_tasks/admin/pg_uptime_kuma.yml
-    apply:
-      tags: postgres_admin_uptime_kuma
-  tags: postgres_admin_uptime_kuma
 
 - name: Ensure neutral PostgreSQL monitoring role exists
   when:

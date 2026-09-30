@@ -140,8 +140,8 @@ removes backups older than one month.
 
 Authelia is stdout-only because the repository has no remaining consumer of its
 former duplicate file and no CrowdSec service; its Docker stream is collected
-once. Homepage is stdout-only, Uptime Kuma emits JSON on stdout, and Unpackerr,
-Autobrr, Syncthing, Vaultwarden, Grafana, Gitea, OpenCloud, Qui, Stash, and the
+once. Homepage is stdout-only, and Unpackerr, Autobrr, Syncthing, Vaultwarden,
+Grafana, Gitea, OpenCloud, Qui, Stash, and the
 other ordinary services remain on their runtime stdout or journal paths to
 avoid duplicate events.
 

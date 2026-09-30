@@ -12,4 +12,4 @@ postgres_patroni_admin_role_name: "replace-me"
 
 postgres_patroni_admin_role_pass: "replace-me"
 
-postgres_uptime_kuma_monitor_role_pass: "replace-me"
+postgres_monitor_role_pass: "replace-me"

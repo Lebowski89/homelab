@@ -359,7 +359,6 @@ def test_runtime_only_apps_do_not_gain_duplicate_file_logging():
     authelia_service = load_service("authelia")
     authelia_config = (REPO_ROOT / "ansible/roles/service_common/templates/configs/proxy/authelia/config.yml.j2").read_text()
     homepage = load_service("homepage")
-    uptime_kuma = yaml.safe_load((SERVICES_DIR / "uptime-kuma.yml").read_text())["uptime_kuma"]
     unpackerr = load_service("unpackerr")
     alloy_config = render_docker_alloy()
 
@@ -375,7 +374,6 @@ def test_runtime_only_apps_do_not_gain_duplicate_file_logging():
             assert old_log_name not in text
             assert old_log_path not in text
     assert homepage["environment"]["LOG_TARGETS"] == "stdout"
-    assert uptime_kuma["environment"]["UPTIME_KUMA_LOG_FORMAT"] == "json"
     assert "UN_LOG_FILE" not in unpackerr["environment"]
     assert "unpackerr" not in alloy_config
 
