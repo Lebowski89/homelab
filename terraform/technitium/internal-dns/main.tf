@@ -43,7 +43,6 @@ locals {
     "authelia",
     "autobrr",
     "bazarr",
-    "czkawka",
     "gitea",
     "gotify",
     "grafana",
