@@ -1,0 +1,48 @@
+---
+
+- name: Ensure neutral PostgreSQL monitor role exists on leader
+  community.postgresql.postgresql_user:
+    login_host: "127.0.0.1"
+    login_port: "{{ postgres_patroni_postgres_port }}"
+    login_user: "{{ postgres_patroni_superuser_name }}"
+    login_password: "{{ postgres_patroni_superuser_pass }}"
+    name: "{{ postgres_monitor_role_name }}"
+    password: "{{ postgres_monitor_role_pass }}"
+    role_attr_flags: LOGIN,NOSUPERUSER,NOCREATEDB,NOCREATEROLE,INHERIT,NOREPLICATION
+    state: present
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+  diff: false
+
+- name: Grant built-in pg_monitor membership to neutral monitor role
+  community.postgresql.postgresql_membership:
+    login_host: "127.0.0.1"
+    login_port: "{{ postgres_patroni_postgres_port }}"
+    login_user: "{{ postgres_patroni_superuser_name }}"
+    login_password: "{{ postgres_patroni_superuser_pass }}"
+    groups:
+      - pg_monitor
+    target_roles:
+      - "{{ postgres_monitor_role_name }}"
+    state: present
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+  diff: false
+
+- name: Grant neutral monitor role CONNECT on monitor database
+  community.postgresql.postgresql_privs:
+    login_host: "127.0.0.1"
+    login_port: "{{ postgres_patroni_postgres_port }}"
+    login_user: "{{ postgres_patroni_superuser_name }}"
+    login_password: "{{ postgres_patroni_superuser_pass }}"
+    login_db: "{{ postgres_monitor_database }}"
+    type: database
+    privs: CONNECT
+    roles: "{{ postgres_monitor_role_name }}"
+    state: present
+  run_once: true
+  delegate_to: "{{ postgres_patroni_leader_member.name }}"
+  no_log: true
+  diff: false

@@ -7,6 +7,95 @@ prometheus_node_exporter_port: 9100
 
 prometheus_blackbox_exporter_address: blackbox-exporter:9115
 
+prometheus_availability_category_tags:
+  arrs: ARRs
+  finance: Finance
+  gaming: Gaming
+  media: Media
+  monitoring: Monitoring
+  network: Network
+  plex: Plex
+  torrents: Torrents
+  usenet: Usenet
+  utilities: Utilities
+
+# These monitoring control-plane routes are excluded from ordinary availability
+# probing and can be opted in deliberately if their probe semantics are defined.
+prometheus_availability_private_exclusions:
+  - alertmanager
+  - alloy
+  - loki
+
+# Services whose routes are owned outside the ordinary catalogue Traefik block.
+prometheus_availability_external_private_services:
+  authelia:
+    category: Network
+  infisical:
+    category: Utilities
+    catalog_required: false
+  netbox:
+    category: Network
+    catalog_required: false
+  traefik:
+    category: Network
+
+prometheus_availability_http_overrides:
+  gitea:
+    category: Media
+  opencloud:
+    category: Media
+  tautulli:
+    category: Plex
+    path: /status
+    module: http_2xx_no_redirects
+  wallos:
+    category: Finance
+
+prometheus_availability_direct_http_targets:
+  plex-direct:
+    service: plex
+    category: Plex
+    module: http_2xx
+    url: "http://{{ hostvars[services_plex_host].local_ip }}:32400/identity"
+  proxmox:
+    service: proxmox
+    category: Infrastructure
+    criticality: critical
+    module: http_private
+    url: "https://{{ hostvars['pve1'].local_ip }}:8006"
+
+prometheus_availability_icmp_hosts:
+  - dns03
+  - mgt
+  - unraid
+  - plex
+  - pve1
+  - pg95
+  - pg96
+  - pg97
+
+prometheus_availability_tcp_targets:
+  traefik_private_tcp:
+    service: traefik
+    host: "{{ services_controller_host }}"
+    port: "{{ services_private_https_port }}"
+    category: Networking
+  postgres_pg95_tcp:
+    host: pg95
+    port: 5432
+    category: Infrastructure
+  postgres_pg96_tcp:
+    host: pg96
+    port: 5432
+    category: Infrastructure
+  postgres_pg97_tcp:
+    host: pg97
+    port: 5432
+    category: Infrastructure
+
+prometheus_postgres_exporter_port: 9187
+prometheus_patroni_metrics_port: 8008
+
 prometheus_blackbox_dns_query_name: "adminer.{{ services_internal_zone }}"
 prometheus_blackbox_dns_expected_a: "{{ hostvars[services_controller_host].local_ip }}"
 

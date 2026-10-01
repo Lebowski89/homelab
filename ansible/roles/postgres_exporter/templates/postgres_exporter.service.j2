@@ -1,0 +1,25 @@
+[Unit]
+Description=Prometheus PostgreSQL Exporter
+Documentation=https://github.com/prometheus-community/postgres_exporter
+After=network-online.target patroni.service
+Wants=network-online.target
+
+[Service]
+User={{ postgres_exporter_user }}
+Group={{ postgres_exporter_group }}
+Type=simple
+EnvironmentFile={{ postgres_exporter_environment_file }}
+ExecStart={{ postgres_exporter_install_dir }}/postgres_exporter --web.listen-address={{ postgres_exporter_listen_address }}
+Restart=on-failure
+RestartSec=5s
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ProtectControlGroups=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+
+[Install]
+WantedBy=multi-user.target

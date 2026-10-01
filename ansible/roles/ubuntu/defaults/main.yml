@@ -121,6 +121,10 @@ ubuntu_sysctl_settings:
   vm.dirty_ratio: 15
   vm.swappiness: 10
 
+ubuntu_postgres_emergency_swap_enabled: false
+ubuntu_postgres_emergency_swap_path: /swapfile
+ubuntu_postgres_emergency_swap_size_mb: 2048
+
 ubuntu_pam_limits:
   - domain: "*"
     limit_type: "-"

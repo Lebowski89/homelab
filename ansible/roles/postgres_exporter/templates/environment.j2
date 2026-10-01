@@ -1,0 +1,3 @@
+DATA_SOURCE_URI={{ postgres_exporter_database_host }}:{{ postgres_exporter_database_port }}/{{ postgres_exporter_database_name }}?sslmode=disable
+DATA_SOURCE_USER={{ postgres_exporter_database_user }}
+DATA_SOURCE_PASS_FILE={{ postgres_exporter_password_file }}

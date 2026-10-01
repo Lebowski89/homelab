@@ -5,19 +5,27 @@ name: Alerting config validation
 on:
   pull_request:
     paths:
-      - ansible/group_vars/all/services/alertmanager.yml
-      - ansible/group_vars/all/services/prometheus.yml
+      - ansible/group_vars/all/prometheus.yml
+      - ansible/group_vars/all/services/**
       - ansible/roles/service_common/templates/configs/alertmanager.yml.j2
       - ansible/roles/service_common/templates/configs/prometheus/**
+      - ansible/roles/docker_services/templates/configs/prometheus/blackbox.yml.j2
       - ansible/roles/docker_services/scripts/validate-alerting-configs.sh
+      - ansible/filter_plugins/availability.py
+      - ansible/filter_plugins/service_catalog.py
+      - ansible/requirements.txt
       - .github/workflows/alerting-config-validation.yml
   push:
     paths:
-      - ansible/group_vars/all/services/alertmanager.yml
-      - ansible/group_vars/all/services/prometheus.yml
+      - ansible/group_vars/all/prometheus.yml
+      - ansible/group_vars/all/services/**
       - ansible/roles/service_common/templates/configs/alertmanager.yml.j2
       - ansible/roles/service_common/templates/configs/prometheus/**
+      - ansible/roles/docker_services/templates/configs/prometheus/blackbox.yml.j2
       - ansible/roles/docker_services/scripts/validate-alerting-configs.sh
+      - ansible/filter_plugins/availability.py
+      - ansible/filter_plugins/service_catalog.py
+      - ansible/requirements.txt
       - .github/workflows/alerting-config-validation.yml
 
 permissions:
@@ -32,7 +40,10 @@ jobs:
         uses: actions/checkout@v7.0.1
 
       - name: Install Python render dependencies
-        run: python3 -m pip install jinja2 pyyaml
+        run: >-
+          python3 -m pip install
+          --constraint ansible/requirements.txt
+          ansible-core jinja2 pyyaml
 
       - name: Validate rendered Prometheus and Alertmanager configs
         run: ansible/roles/docker_services/scripts/validate-alerting-configs.sh

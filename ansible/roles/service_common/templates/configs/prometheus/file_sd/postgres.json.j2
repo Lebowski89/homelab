@@ -1,0 +1,4 @@
+{{ hostvars | availability_postgres_file_sd(
+  groups['tags_postgres'] | default([]),
+  prometheus_postgres_exporter_port
+) | to_nice_json }}

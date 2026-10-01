@@ -42,6 +42,11 @@ alertmanager:
       - var: smtp_username
         path: "/Porkbun"
         name: SMTP_USER
+      - var: gotify_alertmanager_token
+        path: "/Gotify"
+        name: ALERTMANAGER_TOKEN
+        secret:
+          name: alertmanager_gotify_token_secret
   ################################
   # CONNECTIVITY
   ################################

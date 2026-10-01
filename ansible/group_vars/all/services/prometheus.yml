@@ -43,9 +43,32 @@ prometheus:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/rules"
       state: directory
       mode: "0755"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/file_sd"
+      state: directory
+      mode: "0755"
   templates:
     - src: configs/prometheus/prometheus.yml.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/prometheus.yml"
+      mode: "0644"
+      force: true
+    - src: configs/prometheus/file_sd/blackbox-http.json.j2
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/file_sd/blackbox-http.json"
+      mode: "0644"
+      force: true
+    - src: configs/prometheus/file_sd/blackbox-icmp.json.j2
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/file_sd/blackbox-icmp.json"
+      mode: "0644"
+      force: true
+    - src: configs/prometheus/file_sd/blackbox-tcp.json.j2
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/file_sd/blackbox-tcp.json"
+      mode: "0644"
+      force: true
+    - src: configs/prometheus/file_sd/postgres.json.j2
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/file_sd/postgres.json"
+      mode: "0644"
+      force: true
+    - src: configs/prometheus/file_sd/patroni.json.j2
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/file_sd/patroni.json"
       mode: "0644"
       force: true
     - src: configs/prometheus/rules/infrastructure.yml.j2
@@ -62,6 +85,10 @@ prometheus:
       force: true
     - src: configs/prometheus/rules/dns.yml.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/rules/dns.yml"
+      mode: "0644"
+      force: true
+    - src: configs/prometheus/rules/availability.yml.j2
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/prometheus/rules/availability.yml"
       mode: "0644"
       force: true
   volumes:

@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/13 |
+| Readme update        | 2026/10/01 |
 
 
 
@@ -133,35 +133,38 @@
 | [ubuntu_sysctl_settings.vm.**dirty_background_ratio**](defaults/main.yml#L120)   | int | `10` |    
 | [ubuntu_sysctl_settings.vm.**dirty_ratio**](defaults/main.yml#L121)   | int | `15` |    
 | [ubuntu_sysctl_settings.vm.**swappiness**](defaults/main.yml#L122)   | int | `10` |    
-| [ubuntu_pam_limits](defaults/main.yml#L124)   | list | `[]` |    
-| [ubuntu_pam_limits.**0**](defaults/main.yml#L125)   | dict | `{}` |    
-| [ubuntu_pam_limits.0.**domain**](defaults/main.yml#L125)   | str | `*` |    
-| [ubuntu_pam_limits.0.**limit_type**](defaults/main.yml#L126)   | str | `-` |    
-| [ubuntu_pam_limits.0.**limit_item**](defaults/main.yml#L127)   | str | `nofile` |    
-| [ubuntu_pam_limits.0.**value**](defaults/main.yml#L128)   | str | `100000` |    
-| [ubuntu_pam_limits.**1**](defaults/main.yml#L129)   | dict | `{}` |    
-| [ubuntu_pam_limits.1.**domain**](defaults/main.yml#L129)   | str | `*` |    
-| [ubuntu_pam_limits.1.**limit_type**](defaults/main.yml#L130)   | str | `soft` |    
-| [ubuntu_pam_limits.1.**limit_item**](defaults/main.yml#L131)   | str | `memlock` |    
-| [ubuntu_pam_limits.1.**value**](defaults/main.yml#L132)   | str | `unlimited` |    
-| [ubuntu_pam_limits.**2**](defaults/main.yml#L133)   | dict | `{}` |    
-| [ubuntu_pam_limits.2.**domain**](defaults/main.yml#L133)   | str | `*` |    
-| [ubuntu_pam_limits.2.**limit_type**](defaults/main.yml#L134)   | str | `hard` |    
-| [ubuntu_pam_limits.2.**limit_item**](defaults/main.yml#L135)   | str | `memlock` |    
-| [ubuntu_pam_limits.2.**value**](defaults/main.yml#L136)   | str | `unlimited` |    
-| [ubuntu_netplan_enabled](defaults/main.yml#L138)   | bool | `True` |    
-| [ubuntu_netplan_disable_cloud_init_networking](defaults/main.yml#L139)   | bool | `True` |    
-| [ubuntu_netplan_verify_address](defaults/main.yml#L140)   | bool | `True` |    
-| [ubuntu_netplan_interface](defaults/main.yml#L141)   | str |  |    
-| [ubuntu_defaults_netplan_config](defaults/main.yml#L143)   | str | `netplan-config.yaml` |    
-| [ubuntu_netplan_config_path](defaults/main.yml#L144)   | str | `/etc/netplan/{{ ubuntu_defaults_netplan_config }}` |    
-| [ubuntu_defaults_netplan_gateway](defaults/main.yml#L146)   | str | `<multiline value: folded_strip>` |    
-| [ubuntu_defaults_netplan_nameservers](defaults/main.yml#L153)   | str | `<multiline value: folded_strip>` |    
-| [ubuntu_netplan_nameservers](defaults/main.yml#L163)   | str | `{{ ubuntu_defaults_netplan_nameservers }}` |    
-| [ubuntu_netplan_search_domains](defaults/main.yml#L164)   | list | `[]` |    
-| [ubuntu_netplan_prefix](defaults/main.yml#L165)   | int | `24` |    
-| [ubuntu_nic_tuning_enabled](defaults/main.yml#L167)   | bool | `True` |    
-| [ubuntu_vnstat_enabled](defaults/main.yml#L168)   | bool | `True` |    
+| [ubuntu_postgres_emergency_swap_enabled](defaults/main.yml#L124)   | bool | `False` |    
+| [ubuntu_postgres_emergency_swap_path](defaults/main.yml#L125)   | str | `/swapfile` |    
+| [ubuntu_postgres_emergency_swap_size_mb](defaults/main.yml#L126)   | int | `2048` |    
+| [ubuntu_pam_limits](defaults/main.yml#L128)   | list | `[]` |    
+| [ubuntu_pam_limits.**0**](defaults/main.yml#L129)   | dict | `{}` |    
+| [ubuntu_pam_limits.0.**domain**](defaults/main.yml#L129)   | str | `*` |    
+| [ubuntu_pam_limits.0.**limit_type**](defaults/main.yml#L130)   | str | `-` |    
+| [ubuntu_pam_limits.0.**limit_item**](defaults/main.yml#L131)   | str | `nofile` |    
+| [ubuntu_pam_limits.0.**value**](defaults/main.yml#L132)   | str | `100000` |    
+| [ubuntu_pam_limits.**1**](defaults/main.yml#L133)   | dict | `{}` |    
+| [ubuntu_pam_limits.1.**domain**](defaults/main.yml#L133)   | str | `*` |    
+| [ubuntu_pam_limits.1.**limit_type**](defaults/main.yml#L134)   | str | `soft` |    
+| [ubuntu_pam_limits.1.**limit_item**](defaults/main.yml#L135)   | str | `memlock` |    
+| [ubuntu_pam_limits.1.**value**](defaults/main.yml#L136)   | str | `unlimited` |    
+| [ubuntu_pam_limits.**2**](defaults/main.yml#L137)   | dict | `{}` |    
+| [ubuntu_pam_limits.2.**domain**](defaults/main.yml#L137)   | str | `*` |    
+| [ubuntu_pam_limits.2.**limit_type**](defaults/main.yml#L138)   | str | `hard` |    
+| [ubuntu_pam_limits.2.**limit_item**](defaults/main.yml#L139)   | str | `memlock` |    
+| [ubuntu_pam_limits.2.**value**](defaults/main.yml#L140)   | str | `unlimited` |    
+| [ubuntu_netplan_enabled](defaults/main.yml#L142)   | bool | `True` |    
+| [ubuntu_netplan_disable_cloud_init_networking](defaults/main.yml#L143)   | bool | `True` |    
+| [ubuntu_netplan_verify_address](defaults/main.yml#L144)   | bool | `True` |    
+| [ubuntu_netplan_interface](defaults/main.yml#L145)   | str |  |    
+| [ubuntu_defaults_netplan_config](defaults/main.yml#L147)   | str | `netplan-config.yaml` |    
+| [ubuntu_netplan_config_path](defaults/main.yml#L148)   | str | `/etc/netplan/{{ ubuntu_defaults_netplan_config }}` |    
+| [ubuntu_defaults_netplan_gateway](defaults/main.yml#L150)   | str | `<multiline value: folded_strip>` |    
+| [ubuntu_defaults_netplan_nameservers](defaults/main.yml#L157)   | str | `<multiline value: folded_strip>` |    
+| [ubuntu_netplan_nameservers](defaults/main.yml#L167)   | str | `{{ ubuntu_defaults_netplan_nameservers }}` |    
+| [ubuntu_netplan_search_domains](defaults/main.yml#L168)   | list | `[]` |    
+| [ubuntu_netplan_prefix](defaults/main.yml#L169)   | int | `24` |    
+| [ubuntu_nic_tuning_enabled](defaults/main.yml#L171)   | bool | `True` |    
+| [ubuntu_vnstat_enabled](defaults/main.yml#L172)   | bool | `True` |    
 
 
 
@@ -181,6 +184,7 @@
 | Ubuntu ¦ Install required collections | ansible.builtin.include_tasks | True |  |
 | Ubuntu ¦ Install Skynet wrapper | ansible.builtin.include_tasks | True |  |
 | Ubuntu ¦ Tune sysctl settings | ansible.builtin.include_tasks | True |  |
+| Ubuntu ¦ Configure PostgreSQL emergency swap | ansible.builtin.include_tasks | True |  |
 | Ubuntu ¦ Set PAM limits | ansible.builtin.include_tasks | False |  |
 | Ubuntu ¦ Configure network tuning | ansible.builtin.include_tasks | False |  |
 | Ubuntu ¦ Configure Netplan | ansible.builtin.include_tasks | True |  |
@@ -240,6 +244,26 @@
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Ubuntu PostgreSQL backup prerequisites ¦ Install package profile | ansible.builtin.apt | False |
+
+#### File: tasks/sub_tasks/postgres_emergency_swap.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| PostgreSQL emergency swap ¦ Discover active swap sources | ansible.builtin.command | False |
+| PostgreSQL emergency swap ¦ Discover persistent swap sources | ansible.builtin.command | False |
+| PostgreSQL emergency swap ¦ Normalize discovered swap sources | ansible.builtin.set_fact | False |
+| PostgreSQL emergency swap ¦ Identify administrator-provided swap | ansible.builtin.set_fact | False |
+| PostgreSQL emergency swap ¦ Inspect managed path | ansible.builtin.stat | False |
+| PostgreSQL emergency swap ¦ Inspect existing managed path signature | ansible.builtin.command | True |
+| PostgreSQL emergency swap ¦ Refuse to overwrite an unrelated managed path | ansible.builtin.assert | True |
+| PostgreSQL emergency swap ¦ Preserve administrator-provided swap | ansible.builtin.debug | True |
+| PostgreSQL emergency swap ¦ Reconcile managed swap file | block | True |
+| PostgreSQL emergency swap ¦ Allocate managed file | ansible.builtin.command | False |
+| PostgreSQL emergency swap ¦ Protect managed file | ansible.builtin.file | True |
+| PostgreSQL emergency swap ¦ Format newly allocated file | ansible.builtin.command | True |
+| PostgreSQL emergency swap ¦ Persist managed file | ansible.builtin.lineinfile | False |
+| PostgreSQL emergency swap ¦ Activate managed file | ansible.builtin.command | True |
+| PostgreSQL emergency swap ¦ Report safe check-mode plan | ansible.builtin.debug | True |
 
 #### File: tasks/sub_tasks/repo.yml
 

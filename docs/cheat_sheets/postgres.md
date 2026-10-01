@@ -12,6 +12,10 @@ Assumptions:
   - `pg95`
   - `pg96`
   - `pg97`
+- Each PostgreSQL VM is sized at 4 GiB RAM.
+- Each PostgreSQL node has a 2 GiB emergency swap file with
+  `vm.swappiness=10`. Swap is an OOM safety net, not a substitute for adequate
+  RAM.
 
 ---
 
@@ -126,6 +130,131 @@ sudo -u postgres psql -h 127.0.0.1 -d postgres -c "select application_name, clie
 ```bash
 sudo -u postgres psql -h 127.0.0.1 -d postgres -c "select status, sender_host, receive_start_lsn, written_lsn, flushed_lsn, latest_end_lsn from pg_stat_wal_receiver;"
 ```
+
+---
+
+## Replication-slot safety and WAL retention
+
+The fixed Patroni membership is read from the sorted `tags_postgres` inventory
+group. Automation owns the complete top-level dynamic `slots` subtree and
+creates one permanent physical slot per member. Additional permanent slots must
+be declared in `postgres_patroni_extra_slots`; an undeclared live permanent
+slot is treated as drift and removed from the dynamic configuration.
+
+Permanent member slots prevent Patroni from dropping a temporarily absent
+member's slot after its DCS member key expires. `wal_keep_size` remains `1GB`
+and `max_slot_wal_keep_size` is bounded at `16GB`. The cap was selected when
+measured WAL generation averaged approximately 1.2 GB/day, providing roughly
+13 days at that average while limiting the disk-growth risk from an abandoned
+slot. WAL generation is workload-dependent, so revisit the cap and alert
+thresholds when the measured rate or free-space budget changes.
+
+Permanent slots plus bounded retention substantially extend outage tolerance;
+they do not provide infinite recoverability. The cap is enforced around
+checkpoints, and a sufficiently stale replica can still lose required WAL.
+Logical Restic backups are not physical WAL archival and cannot make a stale
+replica resume streaming. Continuous WAL archiving with physical base backups
+and point-in-time recovery remains a possible future enhancement.
+
+Preview and reconcile the dynamic DCS settings without selecting any reset or
+node-nuke path:
+
+```bash
+skynet check postgres admin-update-replication-safety
+skynet run postgres admin-update-replication-safety
+```
+
+The action discovers the current leader, reads `/config`, PATCHes only drifted
+slot/retention/startup-timeout state, verifies the effective DCS configuration,
+and reports members for which Patroni sets `pending_restart`. The 60-second
+`primary_start_timeout` gives a failed primary a reasonable local-recovery
+window without retaining a dead leader for Patroni's default multi-minute
+period. It never automatically restarts the cluster.
+
+HAProxy PostgreSQL servers start `fully-down` and
+become eligible only after the configured Patroni `/primary` checks succeed, so
+a freshly started proxy cannot briefly send write traffic to an unchecked
+replica. If a restart is ever required, inspect why and perform a
+controlled rolling restart one member at a time.
+
+### Inspect dynamic Patroni configuration
+
+```bash
+sudo -u postgres patronictl -c /etc/patroni/config.yml show-config
+```
+
+Expected essentials:
+
+```yaml
+primary_start_timeout: 60
+postgresql:
+  use_slots: true
+  parameters:
+    wal_keep_size: 1GB
+    max_slot_wal_keep_size: 16GB
+slots:
+  pg95: {type: physical}
+  pg96: {type: physical}
+  pg97: {type: physical}
+```
+
+### Inspect physical slots on the current leader
+
+```bash
+sudo -u postgres psql -d postgres -x -c "
+select slot_name, slot_type, active, restart_lsn, wal_status, safe_wal_size,
+       pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) as retained_wal
+from pg_replication_slots
+where slot_type = 'physical'
+order by slot_name;"
+```
+
+`reserved` and `extended` are recoverable states. `unreserved` means required
+WAL is no longer protected and may be removed at the next checkpoint; `lost`
+means the slot is unusable.
+
+### Inspect replication connections and lag on the leader
+
+```bash
+sudo -u postgres psql -d postgres -x -c "
+select application_name, client_addr, state, sync_state,
+       pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn)) as replay_lag,
+       write_lag, flush_lag, replay_lag as replay_time_lag
+from pg_stat_replication
+order by application_name;"
+```
+
+### Inspect WAL generation baseline
+
+```bash
+sudo -u postgres psql -d postgres -x -c "
+select stats_reset, wal_bytes, pg_size_pretty(wal_bytes) as wal_generated,
+       round(wal_bytes / greatest(extract(epoch from now() - stats_reset), 1)) as bytes_per_second
+from pg_stat_wal;"
+```
+
+### Recognize and recover a stale replica
+
+This log sequence means the replica requested WAL that the leader no longer
+retains and ordinary streaming recovery cannot continue:
+
+```text
+ERROR: requested WAL segment ... has already been removed
+waiting for WAL to become available at ...
+```
+
+Confirm the member is stale with `patronictl list`, the replica journal, slot
+state, and `pg_stat_replication`. When the required WAL is genuinely gone, a
+targeted Patroni reinitialization of only that stale replica is the normal
+recovery:
+
+```bash
+sudo -u postgres patronictl -c /etc/patroni/config.yml reinit pg-cluster <stale-member>
+```
+
+Do not use `postgres_admin_nuke_node`, `postgres_patroni_reset`, or an etcd
+reset for an ordinary stale replica. Those broader destructive workflows solve
+different failure modes.
 
 ---
 

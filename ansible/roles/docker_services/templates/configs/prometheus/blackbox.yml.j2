@@ -4,6 +4,60 @@
 {% set dns_expected_a_re = prometheus_blackbox_dns_expected_a | regex_escape %}
 
 modules:
+  http_private:
+    prober: http
+    timeout: 30s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      follow_redirects: true
+      valid_status_codes:
+{% for status_code in range(200, 400) %}
+        - {{ status_code }}
+{% endfor %}
+        - 401
+        - 403
+      tls_config:
+        insecure_skip_verify: true
+
+  http_2xx:
+    prober: http
+    timeout: 30s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      follow_redirects: true
+      valid_status_codes:
+{% for status_code in range(200, 300) %}
+        - {{ status_code }}
+{% endfor %}
+
+  http_2xx_no_redirects:
+    prober: http
+    timeout: 30s
+    http:
+      method: GET
+      preferred_ip_protocol: ip4
+      follow_redirects: false
+      valid_status_codes:
+{% for status_code in range(200, 300) %}
+        - {{ status_code }}
+{% endfor %}
+      tls_config:
+        insecure_skip_verify: true
+
+  icmp_ipv4:
+    prober: icmp
+    timeout: 30s
+    icmp:
+      preferred_ip_protocol: ip4
+
+  tcp_connect:
+    prober: tcp
+    timeout: 30s
+    tcp:
+      preferred_ip_protocol: ip4
+
   dns_udp_internal_a:
     prober: dns
     timeout: 5s

@@ -1,0 +1,1 @@
+{{ hostvars | availability_icmp_file_sd(prometheus_availability_icmp_hosts) | to_nice_json }}

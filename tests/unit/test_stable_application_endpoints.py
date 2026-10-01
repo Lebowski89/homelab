@@ -224,6 +224,9 @@ def test_cloudflare_homelab_root_owns_mail_dns_without_application_a_records():
     workflow = (REPO_ROOT / ".github/workflows/tofu-check.yml").read_text()
     assert "terraform/cloudflare/homelab" in workflow
     assert "terraform/cloudflare/domain" not in workflow
+    matrix_roots = re.findall(r"^          - (terraform/\S+)", workflow, flags=re.MULTILINE)
+    assert matrix_roots
+    assert all((REPO_ROOT / root).is_dir() for root in matrix_roots)
 
 
 def test_traefik_exposes_only_private_https_and_operational_entrypoints():
@@ -343,35 +346,6 @@ def test_observability_control_plane_links_remain_direct():
     assert 'url = "http://loki:3100/loki/api/v1/push"' in alloy
     assert 'url = "http://prometheus:9090/api/v1/write"' in alloy
     assert loki["ruler"]["alertmanager_url"] == "http://alertmanager:9093"
-
-
-def test_uptime_kuma_uses_only_internal_homelab_routes_and_dns():
-    locals_source = (REPO_ROOT / "terraform/uptime-kuma/locals.tf").read_text()
-    dns_monitor_source = (REPO_ROOT / "terraform/uptime-kuma/monitors-dns.tf").read_text()
-    tags_source = (REPO_ROOT / "terraform/uptime-kuma/tags.tf").read_text()
-    private_services = locals_source.split("private_http_services = {", 1)[1].split("private_http_monitors = {", 1)[0]
-    status_pages = (REPO_ROOT / "terraform/uptime-kuma/status-pages.tf").read_text()
-
-    declared_tag_keys = set(re.findall(r"^    ([a-z0-9_-]+)\s+=\s+\{ name =", tags_source, flags=re.MULTILINE))
-    used_tag_keys = {
-        tag_key for tag_list in re.findall(r"tag_keys\s+=\s+\[([^]]+)]", locals_source) for tag_key in re.findall(r'"([^"]+)"', tag_list)
-    }
-
-    assert re.search(r"^\s*traefik\s*=", private_services, flags=re.MULTILINE)
-    assert all(f"{service} " in private_services for service in ("authelia", "opencloud", "vaultwarden"))
-    assert "public_http_services" not in locals_source
-    assert "cloudflare_zone" not in locals_source
-    assert "http.traefik-private" in status_pages
-    assert "http.traefik-public" not in status_pages
-    assert "traefik_private_tcp = {" in locals_source
-    assert "traefik_public_tcp = {" not in locals_source
-    assert 'hostname           = "opencloud.${local.internal_zone}"' in locals_source
-    assert 'dns_vip_a = trimspace(lookup(local.dns_ips, "dns_vip_a", ""))' in locals_source
-    assert "dns_resolve_server = local.dns_vip_a" in locals_source
-    assert 'can(cidrhost("${each.value.dns_resolve_server}/32", 0))' in dns_monitor_source
-    assert "Set dns_ips.dns_vip_a explicitly" in dns_monitor_source
-    assert "dns.technitium_internal" in status_pages
-    assert used_tag_keys <= declared_tag_keys
 
 
 def test_orphaned_endpoint_templates_are_removed():

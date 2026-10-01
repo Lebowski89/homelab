@@ -1,0 +1,1 @@
+{{ hostvars | availability_tcp_file_sd(prometheus_availability_tcp_targets) | to_nice_json }}

@@ -560,6 +560,16 @@ def test_real_common_templates_consume_declared_infisical_values_through_common_
     )
     services = load_services()
     environment = Environment()
+    for filter_name in (
+        "availability_http_file_sd",
+        "availability_direct_http_file_sd",
+        "availability_icmp_file_sd",
+        "availability_tcp_file_sd",
+        "availability_postgres_file_sd",
+        "availability_patroni_file_sd",
+        "to_nice_json",
+    ):
+        environment.filters[filter_name] = lambda value, *args, **kwargs: value
     checked = []
 
     for item in catalog_filters.service_catalog_effective(services, "manager"):

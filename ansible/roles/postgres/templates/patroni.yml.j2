@@ -20,6 +20,7 @@ bootstrap:
     loop_wait: 10
     retry_timeout: 10
     maximum_lag_on_failover: 1048576
+    primary_start_timeout: {{ postgres_patroni_primary_start_timeout }}
     postgresql:
       use_pg_rewind: true
       use_slots: true
@@ -51,12 +52,20 @@ bootstrap:
         hot_standby: on
         max_wal_senders: 10
         max_replication_slots: 10
-        wal_keep_size: 1GB
+        wal_keep_size: {{ postgres_patroni_wal_keep_size }}
+        max_slot_wal_keep_size: {{ postgres_patroni_max_slot_wal_keep_size }}
         max_worker_processes: 8
         max_locks_per_transaction: 64
         max_prepared_transactions: 0
         track_commit_timestamp: off
         password_encryption: scram-sha-256
+    slots:
+{% for slot_name, slot_config in postgres_patroni_permanent_slots | dictsort %}
+      {{ slot_name }}:
+{% for slot_key, slot_value in slot_config | dictsort %}
+        {{ slot_key }}: {{ slot_value }}
+{% endfor %}
+{% endfor %}
   initdb:
     - encoding: UTF8
     - data-checksums
@@ -80,7 +89,8 @@ postgresql:
     hot_standby: on
     max_wal_senders: 10
     max_replication_slots: 10
-    wal_keep_size: 1GB
+    wal_keep_size: {{ postgres_patroni_wal_keep_size }}
+    max_slot_wal_keep_size: {{ postgres_patroni_max_slot_wal_keep_size }}
     max_worker_processes: 8
     max_locks_per_transaction: 64
     max_prepared_transactions: 0

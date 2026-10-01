@@ -138,6 +138,7 @@
         - ubuntu_requirements
         - ubuntu_skynet
         - ubuntu_sysctl
+        - ubuntu_postgres_swap
         - ubuntu_pam
         - ubuntu_network
         - ubuntu_netplan
@@ -164,6 +165,7 @@
         - ubuntu_requirements
         - ubuntu_skynet
         - ubuntu_sysctl
+        - ubuntu_postgres_swap
         - ubuntu_pam
         - ubuntu_network
         - ubuntu_netplan
@@ -354,10 +356,23 @@
         - postgres_backup_restore_validation_run
         - postgres_restore
         - postgres_admin
-        - postgres_admin_uptime_kuma
+        - postgres_admin_monitor
         - postgres_admin_nuke_node
         - postgres_admin_fix_owner
         - postgres_admin_update_pg_hba
+        - postgres_admin_update_replication_safety
+
+    ################################
+    # POSTGRES EXPORTER (MONITORING)
+    ################################
+
+    - name: Include PostgreSQL Exporter role
+      when: "'tags_postgres' in group_names"
+      ansible.builtin.include_role:
+        name: postgres_exporter
+        apply:
+          tags: [postgres_exporter]
+      tags: [postgres_exporter]
 
     ################################
     # NODE EXPORTER (MONITORING)

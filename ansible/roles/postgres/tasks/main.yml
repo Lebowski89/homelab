@@ -41,16 +41,16 @@
     - ansible_run_tags is not defined
       or 'all' in ansible_run_tags
       or 'postgres_admin' in ansible_run_tags
-      or 'postgres_admin_uptime_kuma' in ansible_run_tags
+      or 'postgres_admin_monitor' in ansible_run_tags
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/pg_admin.yml
     apply:
       tags:
         - postgres_admin
-        - postgres_admin_uptime_kuma
+        - postgres_admin_monitor
   tags:
     - postgres_admin
-    - postgres_admin_uptime_kuma
+    - postgres_admin_monitor
 
 - name: Report PostgreSQL admin role check-mode plan
   when:
@@ -59,7 +59,7 @@
     - ansible_run_tags is not defined
       or 'all' in ansible_run_tags
       or 'postgres_admin' in ansible_run_tags
-      or 'postgres_admin_uptime_kuma' in ansible_run_tags
+      or 'postgres_admin_monitor' in ansible_run_tags
   ansible.builtin.debug:
     msg: >-
       Check mode: would discover the current Patroni leader and reconcile the
@@ -67,24 +67,26 @@
   changed_when: false
   tags:
     - postgres_admin
-    - postgres_admin_uptime_kuma
+    - postgres_admin_monitor
 
 ################################
 # ADMIN TASKS
 ################################
 
-- name: Ensure dedicated PostgreSQL Uptime Kuma role exists
+- name: Ensure neutral PostgreSQL monitoring role exists
   when:
     - not ansible_check_mode
     - inventory_hostname == services_controller_host
     - ansible_run_tags is not defined
       or 'all' in ansible_run_tags
-      or 'postgres_admin_uptime_kuma' in ansible_run_tags
+      or 'postgres_admin_monitor' in ansible_run_tags
   ansible.builtin.include_tasks:
-    file: sub_tasks/admin/pg_uptime_kuma.yml
+    file: sub_tasks/admin/pg_monitor.yml
     apply:
-      tags: postgres_admin_uptime_kuma
-  tags: postgres_admin_uptime_kuma
+      tags:
+        - postgres_admin_monitor
+  tags:
+    - postgres_admin_monitor
 
 - name: Configure PostgreSQL logical backups
   when:
@@ -339,3 +341,32 @@
   changed_when: false
   tags:
     - postgres_admin_update_pg_hba
+
+- name: Reconcile Patroni replication-safety dynamic configuration
+  when:
+    - not ansible_check_mode
+    - "'tags_postgres' in group_names"
+    - "'postgres_admin_update_replication_safety' in ansible_run_tags"
+  ansible.builtin.include_tasks:
+    file: sub_tasks/admin/replication_safety.yml
+    apply:
+      tags:
+        - postgres_admin_update_replication_safety
+  tags:
+    - postgres_admin_update_replication_safety
+
+- name: Report Patroni replication-safety check-mode plan
+  when:
+    - ansible_check_mode
+    - "'tags_postgres' in group_names"
+    - "'postgres_admin_update_replication_safety' in ansible_run_tags"
+  ansible.builtin.debug:
+    msg: >-
+      Check mode: would discover the current Patroni leader, compare permanent
+      member slots, bounded WAL-retention parameters, and the primary startup
+      timeout with dynamic DCS state, PATCH only detected drift, verify the
+      effective configuration, and report pending rolling restarts. No reset,
+      reinit, or automatic restart is part of this action.
+  changed_when: false
+  tags:
+    - postgres_admin_update_replication_safety

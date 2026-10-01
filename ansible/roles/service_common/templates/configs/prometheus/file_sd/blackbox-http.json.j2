@@ -1,0 +1,11 @@
+{% set private_targets = svcfiles | availability_http_file_sd(
+  service_catalog_effective,
+  services_internal_zone,
+  services_private_https_port,
+  prometheus_availability_category_tags,
+  prometheus_availability_private_exclusions,
+  prometheus_availability_external_private_services,
+  prometheus_availability_http_overrides
+) %}
+{% set direct_targets = prometheus_availability_direct_http_targets | availability_direct_http_file_sd %}
+{{ (private_targets + direct_targets) | to_nice_json }}

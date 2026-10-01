@@ -83,6 +83,10 @@ grafana:
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards/homelab-overview.json"
       mode: "0644"
       force: true
+    - src: configs/grafana/dashboards/homelab-availability.json.j2
+      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards/homelab-availability.json"
+      mode: "0644"
+      force: true
     - src: configs/grafana/dashboards/traefik-official-standalone-dashboard.json.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards/traefik-official-standalone-dashboard.json"
       mode: "0644"

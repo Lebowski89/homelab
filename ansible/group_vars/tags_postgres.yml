@@ -1,5 +1,11 @@
 ---
 
+# Emergency OOM safety net; ordinary PostgreSQL capacity still comes from RAM.
+# vm.swappiness=10 is persisted by the Ubuntu role's shared sysctl settings.
+ubuntu_postgres_emergency_swap_enabled: true
+ubuntu_postgres_emergency_swap_path: /swapfile
+ubuntu_postgres_emergency_swap_size_mb: 2048
+
 # Required sensitive variables are defined in:
 # ansible/group_vars/all/vault.yml
 #
@@ -29,6 +35,9 @@ postgres_patroni_etcd_hosts: >-
 
 postgres_patroni_superuser_name: postgres
 postgres_patroni_replication_name: replicator
+
+postgres_monitor_role_name: postgres_monitor
+postgres_monitor_database: postgres
 
 postgres_patroni_pg_hba_extra: []
 
