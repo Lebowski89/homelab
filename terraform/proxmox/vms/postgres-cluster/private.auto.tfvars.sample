@@ -22,7 +22,7 @@ postgres_vms = {
     ip                  = "192.168.xx.xx"
     cores               = 2
     sockets             = 1
-    memory              = 2048
+    memory              = 4096
     disk_size_gb        = 60
     clone_template_vmid = 9003
   }
@@ -32,7 +32,7 @@ postgres_vms = {
     ip                  = "192.168.xx.xx"
     cores               = 2
     sockets             = 1
-    memory              = 2048
+    memory              = 4096
     disk_size_gb        = 60
     clone_template_vmid = 9003
   }
@@ -42,7 +42,7 @@ postgres_vms = {
     ip                  = "192.168.80.97"
     cores               = 2
     sockets             = 1
-    memory              = 2048
+    memory              = 4096
     disk_size_gb        = 60
     clone_template_vmid = 9003
   }

@@ -90,6 +90,20 @@
     - ubuntu
     - ubuntu_sysctl
 
+- name: Ubuntu | Configure PostgreSQL emergency swap
+  when:
+    - "'tags_postgres' in group_names"
+    - ubuntu_postgres_emergency_swap_enabled | bool
+  ansible.builtin.include_tasks:
+    file: sub_tasks/postgres_emergency_swap.yml
+    apply:
+      tags:
+        - ubuntu
+        - ubuntu_postgres_swap
+  tags:
+    - ubuntu
+    - ubuntu_postgres_swap
+
 - name: Ubuntu | Set PAM limits
   ansible.builtin.include_tasks:
     file: sub_tasks/pam.yml

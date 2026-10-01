@@ -12,6 +12,10 @@ Assumptions:
   - `pg95`
   - `pg96`
   - `pg97`
+- Each PostgreSQL VM is sized at 4 GiB RAM.
+- Each PostgreSQL node has a 2 GiB emergency swap file with
+  `vm.swappiness=10`. Swap is an OOM safety net, not a substitute for adequate
+  RAM.
 
 ---
 
@@ -161,9 +165,16 @@ skynet run postgres admin-update-replication-safety
 ```
 
 The action discovers the current leader, reads `/config`, PATCHes only drifted
-slot/retention state, verifies the effective DCS configuration, and reports
-members for which Patroni sets `pending_restart`. It never automatically
-restarts the cluster. If a restart is ever required, inspect why and perform a
+slot/retention/startup-timeout state, verifies the effective DCS configuration,
+and reports members for which Patroni sets `pending_restart`. The 60-second
+`primary_start_timeout` gives a failed primary a reasonable local-recovery
+window without retaining a dead leader for Patroni's default multi-minute
+period. It never automatically restarts the cluster.
+
+HAProxy PostgreSQL servers start `fully-down` and
+become eligible only after the configured Patroni `/primary` checks succeed, so
+a freshly started proxy cannot briefly send write traffic to an unchecked
+replica. If a restart is ever required, inspect why and perform a
 controlled rolling restart one member at a time.
 
 ### Inspect dynamic Patroni configuration
@@ -175,6 +186,7 @@ sudo -u postgres patronictl -c /etc/patroni/config.yml show-config
 Expected essentials:
 
 ```yaml
+primary_start_timeout: 60
 postgresql:
   use_slots: true
   parameters:

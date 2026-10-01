@@ -132,20 +132,41 @@ groups:
       - alert: HostMemoryHigh
         expr: |
           (
-            1 -
-            (
-              node_memory_MemAvailable_bytes{job="node-exporter"}
-              /
-              node_memory_MemTotal_bytes{job="node-exporter"}
-            )
-          ) * 100 > 90
+            node_memory_MemAvailable_bytes{job="node-exporter"}
+            /
+            node_memory_MemTotal_bytes{job="node-exporter"}
+          ) * 100 < 20
         for: 15m
         labels:
           severity: warning
         annotations:
-          summary: "Memory usage high on {{ '{{' }} $labels.instance {{ '}}' }}"
-          description: "Memory usage on {{ '{{' }} $labels.instance {{ '}}' }} is {{ '{{' }} humanize $value {{ '}}' }}%."
+          summary: "Available memory low on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Available memory on {{ '{{' }} $labels.instance {{ '}}' }} has remained below 20% for 15 minutes; sustained memory pressure may lead to an OOM kill."
           priority: "6"
+
+      - alert: HostMemoryCritical
+        expr: |
+          (
+            node_memory_MemAvailable_bytes{job="node-exporter"}
+            /
+            node_memory_MemTotal_bytes{job="node-exporter"}
+          ) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Available memory critically low on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "Available memory on {{ '{{' }} $labels.instance {{ '}}' }} has remained below 10% for 5 minutes; service or database failure from an OOM kill is imminent."
+          priority: "9"
+
+      - alert: HostKernelOomKill
+        expr: increase(node_vmstat_oom_kill{job="node-exporter"}[5m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Kernel OOM kill detected on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "The kernel OOM killer has killed one or more processes on {{ '{{' }} $labels.instance {{ '}}' }} in the last 5 minutes; this may cause service or database failure."
+          priority: "10"
 
       - alert: HostSwapHigh
         expr: |

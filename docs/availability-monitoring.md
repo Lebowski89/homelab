@@ -45,7 +45,11 @@ inactive synchronized slot copies on standbys from producing false alerts.
 Alerts cover sustained unhealthy member state, leader-reported replica lag,
 missing/inactive expected physical slots, bounded WAL headroom, and
 `unreserved`/`lost` slot WAL state. Existing Node Exporter filesystem alerts
-remain the single disk-capacity signal.
+remain the single disk-capacity signal. Host memory pressure uses
+`MemAvailable` rather than free memory: warning fires below 20% available for 15
+minutes and critical below 10% for 5 minutes. A critical
+`increase(node_vmstat_oom_kill[5m]) > 0` alert reports actual kernel OOM kills on
+any node-exporter host.
 
 WAL-headroom alerts and the dashboard use PostgreSQL's directly exported
 `safe_wal_size` value for physical slots. When PostgreSQL reports that value as

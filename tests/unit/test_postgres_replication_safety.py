@@ -67,6 +67,7 @@ def test_replication_safety_patch_is_idempotent_minimal_and_uses_top_level_slots
     slots = PATRONI.postgres_patroni_permanent_slots(["pg95", "pg96", "pg97"])
     current = {
         "ttl": 30,
+        "primary_start_timeout": 60,
         "loop_wait": 10,
         "slots": slots,
         "postgresql": {
@@ -79,14 +80,16 @@ def test_replication_safety_patch_is_idempotent_minimal_and_uses_top_level_slots
         },
     }
 
-    assert PATRONI.postgres_patroni_replication_safety_patch(current, slots, "1GB", "16GB") == {}
+    assert PATRONI.postgres_patroni_replication_safety_patch(current, slots, 60, "1GB", "16GB") == {}
 
     drifted = yaml.safe_load(yaml.safe_dump(current))
     drifted["slots"].pop("pg97")
+    drifted["primary_start_timeout"] = 300
     drifted["postgresql"]["parameters"]["max_slot_wal_keep_size"] = "-1"
-    patch = PATRONI.postgres_patroni_replication_safety_patch(drifted, slots, "1GB", "16GB")
+    patch = PATRONI.postgres_patroni_replication_safety_patch(drifted, slots, 60, "1GB", "16GB")
 
     assert patch == {
+        "primary_start_timeout": 60,
         "postgresql": {"parameters": {"max_slot_wal_keep_size": "16GB"}},
         "slots": {"pg97": {"type": "physical"}},
     }
@@ -106,9 +109,10 @@ def test_replication_safety_patch_adds_complete_top_level_shape_and_removes_stal
         },
     }
 
-    patch = PATRONI.postgres_patroni_replication_safety_patch(current, slots, "1GB", "16GB")
+    patch = PATRONI.postgres_patroni_replication_safety_patch(current, slots, 60, "1GB", "16GB")
 
     assert patch == {
+        "primary_start_timeout": 60,
         "postgresql": {
             "use_slots": True,
             "parameters": {
@@ -128,6 +132,14 @@ def test_replication_safety_patch_adds_complete_top_level_shape_and_removes_stal
     assert "shared_buffers" not in json.dumps(patch)
 
 
+@pytest.mark.parametrize("invalid_timeout", [0, -1, False, "60"])
+def test_primary_start_timeout_must_be_a_positive_integer(invalid_timeout):
+    slots = PATRONI.postgres_patroni_permanent_slots(["pg95"])
+
+    with pytest.raises(AnsibleFilterError, match="positive integer"):
+        PATRONI.postgres_patroni_replication_safety_patch({}, slots, invalid_timeout, "1GB", "16GB")
+
+
 def test_nested_postgresql_slots_do_not_satisfy_top_level_slots_comparison():
     slots = PATRONI.postgres_patroni_permanent_slots(["pg95", "pg96", "pg97"])
     wrongly_nested = {
@@ -141,9 +153,9 @@ def test_nested_postgresql_slots_do_not_satisfy_top_level_slots_comparison():
         }
     }
 
-    patch = PATRONI.postgres_patroni_replication_safety_patch(wrongly_nested, slots, "1GB", "16GB")
+    patch = PATRONI.postgres_patroni_replication_safety_patch(wrongly_nested, slots, 60, "1GB", "16GB")
 
-    assert patch == {"slots": slots}
+    assert patch == {"primary_start_timeout": 60, "slots": slots}
     assert "postgresql" not in patch
 
 
@@ -162,6 +174,7 @@ def test_new_cluster_template_contains_same_slots_and_retention_as_dynamic_desir
         postgres_patroni_superuser_name="postgres",
         postgres_patroni_admin_role_name="admin",
         postgres_patroni_pg_hba_extra=[],
+        postgres_patroni_primary_start_timeout=60,
         postgres_patroni_wal_keep_size="1GB",
         postgres_patroni_max_slot_wal_keep_size="16GB",
         postgres_patroni_postgres_port=5432,
@@ -181,6 +194,8 @@ def test_new_cluster_template_contains_same_slots_and_retention_as_dynamic_desir
     bootstrap_postgresql = bootstrap_dcs["postgresql"]
 
     assert bootstrap_dcs["slots"] == slots
+    assert bootstrap_dcs["primary_start_timeout"] == 60
+    assert "primary_start_timeout" not in bootstrap_postgresql
     assert "slots" not in bootstrap_postgresql
     assert bootstrap_postgresql["use_slots"] is True
     assert bootstrap_postgresql["parameters"]["wal_keep_size"] == "1GB"

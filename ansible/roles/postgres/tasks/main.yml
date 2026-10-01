@@ -361,10 +361,10 @@
   ansible.builtin.debug:
     msg: >-
       Check mode: would discover the current Patroni leader, compare permanent
-      member slots and bounded WAL-retention parameters with dynamic DCS state,
-      PATCH only detected drift, verify the effective configuration, and report
-      pending rolling restarts. No reset, reinit, or automatic restart is part
-      of this action.
+      member slots, bounded WAL-retention parameters, and the primary startup
+      timeout with dynamic DCS state, PATCH only detected drift, verify the
+      effective configuration, and report pending rolling restarts. No reset,
+      reinit, or automatic restart is part of this action.
   changed_when: false
   tags:
     - postgres_admin_update_replication_safety

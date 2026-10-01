@@ -138,6 +138,7 @@
         - ubuntu_requirements
         - ubuntu_skynet
         - ubuntu_sysctl
+        - ubuntu_postgres_swap
         - ubuntu_pam
         - ubuntu_network
         - ubuntu_netplan
@@ -164,6 +165,7 @@
         - ubuntu_requirements
         - ubuntu_skynet
         - ubuntu_sysctl
+        - ubuntu_postgres_swap
         - ubuntu_pam
         - ubuntu_network
         - ubuntu_netplan

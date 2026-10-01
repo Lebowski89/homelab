@@ -1,0 +1,149 @@
+---
+
+- name: PostgreSQL emergency swap | Discover active swap sources
+  ansible.builtin.command:
+    argv:
+      - swapon
+      - --noheadings
+      - --show=NAME
+  register: ubuntu_postgres_emergency_swap_active
+  changed_when: false
+  check_mode: false
+
+- name: PostgreSQL emergency swap | Discover persistent swap sources
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - --fstab
+      - --noheadings
+      - --types
+      - swap
+      - --output
+      - SOURCE
+  register: ubuntu_postgres_emergency_swap_persistent
+  failed_when: ubuntu_postgres_emergency_swap_persistent.rc not in [0, 1]
+  changed_when: false
+  check_mode: false
+
+- name: PostgreSQL emergency swap | Normalize discovered swap sources
+  ansible.builtin.set_fact:
+    ubuntu_postgres_emergency_swap_active_sources: >-
+      {{ ubuntu_postgres_emergency_swap_active.stdout_lines
+         | default([]) | map('trim') | reject('equalto', '') | list }}
+    ubuntu_postgres_emergency_swap_persistent_sources: >-
+      {{ ubuntu_postgres_emergency_swap_persistent.stdout_lines
+         | default([]) | map('trim') | reject('equalto', '') | list }}
+
+- name: PostgreSQL emergency swap | Identify administrator-provided swap
+  ansible.builtin.set_fact:
+    ubuntu_postgres_emergency_swap_alternate_sources: >-
+      {{ (ubuntu_postgres_emergency_swap_active_sources
+          + ubuntu_postgres_emergency_swap_persistent_sources)
+         | unique | difference([ubuntu_postgres_emergency_swap_path]) | list }}
+
+- name: PostgreSQL emergency swap | Inspect managed path
+  ansible.builtin.stat:
+    path: "{{ ubuntu_postgres_emergency_swap_path }}"
+  register: ubuntu_postgres_emergency_swap_stat
+
+- name: PostgreSQL emergency swap | Inspect existing managed path signature
+  when:
+    - ubuntu_postgres_emergency_swap_alternate_sources | length == 0
+    - ubuntu_postgres_emergency_swap_stat.stat.exists
+  ansible.builtin.command:
+    argv:
+      - blkid
+      - --probe
+      - --output
+      - value
+      - --match-tag
+      - TYPE
+      - "{{ ubuntu_postgres_emergency_swap_path }}"
+  register: ubuntu_postgres_emergency_swap_signature
+  failed_when: ubuntu_postgres_emergency_swap_signature.rc not in [0, 2]
+  changed_when: false
+  check_mode: false
+
+- name: PostgreSQL emergency swap | Refuse to overwrite an unrelated managed path
+  when:
+    - ubuntu_postgres_emergency_swap_alternate_sources | length == 0
+    - ubuntu_postgres_emergency_swap_stat.stat.exists
+  ansible.builtin.assert:
+    that:
+      - ubuntu_postgres_emergency_swap_stat.stat.isreg
+      - ubuntu_postgres_emergency_swap_stat.stat.size == ubuntu_postgres_emergency_swap_size_mb * 1024 * 1024
+      - ubuntu_postgres_emergency_swap_signature.stdout | trim == 'swap'
+    fail_msg: >-
+      {{ ubuntu_postgres_emergency_swap_path }} already exists but is not the
+      expected {{ ubuntu_postgres_emergency_swap_size_mb }} MiB swap file.
+      Refusing to resize, reformat, or overwrite it automatically.
+
+- name: PostgreSQL emergency swap | Preserve administrator-provided swap
+  when: ubuntu_postgres_emergency_swap_alternate_sources | length > 0
+  ansible.builtin.debug:
+    msg: >-
+      Existing swap is already active or configured; preserving it and not
+      adding {{ ubuntu_postgres_emergency_swap_path }} as a duplicate.
+  changed_when: false
+
+- name: PostgreSQL emergency swap | Reconcile managed swap file
+  when: ubuntu_postgres_emergency_swap_alternate_sources | length == 0
+  block:
+    - name: PostgreSQL emergency swap | Allocate managed file
+      ansible.builtin.command:
+        argv:
+          - fallocate
+          - --length
+          - "{{ ubuntu_postgres_emergency_swap_size_mb }}M"
+          - "{{ ubuntu_postgres_emergency_swap_path }}"
+        creates: "{{ ubuntu_postgres_emergency_swap_path }}"
+      register: ubuntu_postgres_emergency_swap_allocate
+
+    - name: PostgreSQL emergency swap | Protect managed file
+      when:
+        - not ansible_check_mode
+          or ubuntu_postgres_emergency_swap_stat.stat.exists
+      ansible.builtin.file:
+        path: "{{ ubuntu_postgres_emergency_swap_path }}"
+        owner: root
+        group: root
+        mode: "0600"
+        state: file
+
+    - name: PostgreSQL emergency swap | Format newly allocated file
+      when:
+        - not ansible_check_mode
+        - ubuntu_postgres_emergency_swap_allocate.changed
+      ansible.builtin.command:
+        argv:
+          - mkswap
+          - "{{ ubuntu_postgres_emergency_swap_path }}"
+      changed_when: true
+
+    - name: PostgreSQL emergency swap | Persist managed file
+      ansible.builtin.lineinfile:
+        path: /etc/fstab
+        regexp: "^\\s*{{ ubuntu_postgres_emergency_swap_path | regex_escape }}\\s+"
+        line: "{{ ubuntu_postgres_emergency_swap_path }} none swap sw 0 0"
+        state: present
+
+    - name: PostgreSQL emergency swap | Activate managed file
+      when:
+        - not ansible_check_mode
+        - ubuntu_postgres_emergency_swap_path not in ubuntu_postgres_emergency_swap_active_sources
+      ansible.builtin.command:
+        argv:
+          - swapon
+          - "{{ ubuntu_postgres_emergency_swap_path }}"
+      changed_when: true
+
+    - name: PostgreSQL emergency swap | Report safe check-mode plan
+      when:
+        - ansible_check_mode
+        - not ubuntu_postgres_emergency_swap_stat.stat.exists
+      ansible.builtin.debug:
+        msg: >-
+          Check mode: would allocate, protect, format, persist, and activate a
+          {{ ubuntu_postgres_emergency_swap_size_mb }} MiB emergency swap file
+          at {{ ubuntu_postgres_emergency_swap_path }}; no swap mutation was run.
+      changed_when: false

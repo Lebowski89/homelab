@@ -20,6 +20,7 @@ bootstrap:
     loop_wait: 10
     retry_timeout: 10
     maximum_lag_on_failover: 1048576
+    primary_start_timeout: {{ postgres_patroni_primary_start_timeout }}
     postgresql:
       use_pg_rewind: true
       use_slots: true

@@ -135,6 +135,7 @@
         postgres_patroni_replication_safety_config.json
         | postgres_patroni_replication_safety_patch(
             postgres_patroni_permanent_slots,
+            postgres_patroni_primary_start_timeout,
             postgres_patroni_wal_keep_size,
             postgres_patroni_max_slot_wal_keep_size
           )
@@ -176,6 +177,7 @@
       postgres_patroni_replication_safety_effective.json
       | postgres_patroni_replication_safety_patch(
           postgres_patroni_permanent_slots,
+          postgres_patroni_primary_start_timeout,
           postgres_patroni_wal_keep_size,
           postgres_patroni_max_slot_wal_keep_size
         )

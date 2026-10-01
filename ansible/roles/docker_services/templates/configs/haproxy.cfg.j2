@@ -34,7 +34,7 @@ backend pg_primary
   tcp-check send "GET /primary HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
   tcp-check expect rstring ^HTTP/1\.[01][[:space:]]+200
 
-  default-server inter 2s fall 3 rise 2 on-marked-down shutdown-sessions
+  default-server inter 2s fall 3 rise 2 init-state fully-down on-marked-down shutdown-sessions
 
 {% for host in groups['tags_postgres'] | default([]) %}
   server {{ host }} {{ hostvars[host].local_ip }}:{{ postgres_patroni_postgres_port | default(5432) }} check port {{ postgres_patroni_restapi_port | default(8008) }}

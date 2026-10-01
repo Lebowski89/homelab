@@ -60,6 +60,7 @@ def postgres_patroni_permanent_slots(hosts: Any, extra_slots: Any | None = None)
 def postgres_patroni_replication_safety_patch(
     current_config: Any,
     desired_slots: Any,
+    primary_start_timeout: Any,
     wal_keep_size: Any,
     max_slot_wal_keep_size: Any,
 ) -> dict[str, Any]:
@@ -69,6 +70,10 @@ def postgres_patroni_replication_safety_patch(
     current_parameters = _mapping(postgresql.get("parameters", {}) or {}, "Patroni dynamic PostgreSQL parameters")
     current_slots = _mapping(current.get("slots", {}) or {}, "Patroni dynamic permanent slots")
     desired_slots = _mapping(desired_slots, "postgres_patroni_permanent_slots")
+    if isinstance(primary_start_timeout, bool) or not isinstance(primary_start_timeout, int):
+        raise AnsibleFilterError("Patroni primary_start_timeout must be a positive integer")
+    if primary_start_timeout <= 0:
+        raise AnsibleFilterError("Patroni primary_start_timeout must be a positive integer")
     wal_keep_size = str(wal_keep_size).strip()
     max_slot_wal_keep_size = str(max_slot_wal_keep_size).strip()
     if not wal_keep_size or not max_slot_wal_keep_size:
@@ -90,6 +95,8 @@ def postgres_patroni_replication_safety_patch(
         postgresql_patch["parameters"] = parameter_patch
 
     patch: dict[str, Any] = {}
+    if current.get("primary_start_timeout") != primary_start_timeout:
+        patch["primary_start_timeout"] = primary_start_timeout
     if postgresql_patch:
         patch["postgresql"] = postgresql_patch
 
