@@ -16,8 +16,7 @@
   delegate_to: "{{ services_controller_host }}"
 
 - name: Patroni replication safety | Query cluster state from sorted PostgreSQL members
-  # yamllint disable-line rule:comments
-  #checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
+  # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
   ansible.builtin.uri:
     url: >-
       http://{{ hostvars[postgres_patroni_replication_safety_candidate].local_ip }}:{{ postgres_patroni_restapi_port }}/cluster
@@ -118,8 +117,7 @@
   delegate_to: "{{ services_controller_host }}"
 
 - name: Patroni replication safety | Read current dynamic configuration
-  # yamllint disable-line rule:comments
-  #checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
+  # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
   ansible.builtin.uri:
     url: >-
       http://{{ postgres_patroni_replication_safety_leader.host }}:{{ postgres_patroni_restapi_port }}/config
@@ -146,8 +144,7 @@
   delegate_to: "{{ services_controller_host }}"
 
 - name: Patroni replication safety | Patch dynamic configuration when drifted
-  # yamllint disable-line rule:comments
-  #checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
+  # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
   ansible.builtin.uri:
     url: >-
       http://{{ postgres_patroni_replication_safety_leader.host }}:{{ postgres_patroni_restapi_port }}/config
@@ -163,8 +160,7 @@
   when: postgres_patroni_replication_safety_patch | length > 0
 
 - name: Patroni replication safety | Verify effective dynamic configuration
-  # yamllint disable-line rule:comments
-  #checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
+  # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
   ansible.builtin.uri:
     url: >-
       http://{{ postgres_patroni_replication_safety_leader.host }}:{{ postgres_patroni_restapi_port }}/config
@@ -189,8 +185,7 @@
     ) == 0
 
 - name: Patroni replication safety | Read post-reconciliation cluster state
-  # yamllint disable-line rule:comments
-  #checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
+  # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network
   ansible.builtin.uri:
     url: >-
       http://{{ postgres_patroni_replication_safety_leader.host }}:{{ postgres_patroni_restapi_port }}/cluster

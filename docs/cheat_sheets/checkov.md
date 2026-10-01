@@ -244,13 +244,13 @@ resource "github_repository" "blog" {
 }
 ```
 
-Important formatting:
+Important Terraform formatting:
 
 ```text
 #checkov:skip=CHECK_ID:Reason
 ```
 
-Do not use:
+For Terraform, do not use:
 
 ```text
 # checkov:skip=CHECK_ID: Reason
@@ -277,10 +277,20 @@ Put the skip directly on the affected task.
 
 ```yaml
 - name: Patroni dynamic pg_hba | Query Patroni cluster state
-  #checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network.
+  # checkov:skip=CKV2_ANSIBLE_1:Internal homelab service endpoint over trusted management network.
   ansible.builtin.uri:
     url: "http://{{ inventory_hostname }}:8008/cluster"
 ```
+
+The repository convention for Ansible is:
+
+```text
+# checkov:skip=CHECK_ID:Reason
+```
+
+The space after `#` keeps the annotation compatible with the repository's
+YAML and Ansible linting. Support for suppressing CKV2 Ansible graph checks is
+relevant to [Checkov issue #4573](https://github.com/bridgecrewio/checkov/issues/4573).
 
 Use this for real accepted risks, not for things that are easy to fix cleanly.
 
