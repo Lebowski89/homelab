@@ -190,6 +190,11 @@ def test_postgres_exporter_role_is_checksum_pinned_unprivileged_and_secret_safe(
     assert "DATA_SOURCE_PASS_FILE=" in environment
     assert "postgres_exporter_database_password" not in environment
     assert any("postgres_exporter" in str(task) and "tags_postgres" in str(task) for play in playbook for task in play.get("tasks", []))
+    play_tasks = [task for play in playbook for task in play.get("tasks", [])]
+    postgres_role_index = next(index for index, task in enumerate(play_tasks) if task.get("name") == "Include Postgres role")
+    exporter_role_index = next(index for index, task in enumerate(play_tasks) if task.get("name") == "Include PostgreSQL Exporter role")
+    assert postgres_role_index < exporter_role_index
+    assert "postgres_admin_monitor" in play_tasks[postgres_role_index]["tags"]
     monitor_tasks = (REPO_ROOT / "ansible/roles/postgres/tasks/sub_tasks/admin/pg_monitor.yml").read_text()
     postgres_defaults = yaml.safe_load((REPO_ROOT / "ansible/roles/postgres/defaults/main.yml").read_text())
     postgres_group_vars = yaml.safe_load((REPO_ROOT / "ansible/group_vars/tags_postgres.yml").read_text())
@@ -204,7 +209,15 @@ def test_postgres_exporter_role_is_checksum_pinned_unprivileged_and_secret_safe(
     assert "NOINHERIT" not in monitor_tasks
     skynet = (REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2").read_text()
     assert 'postgres:admin-monitor)         echo "postgres_admin_monitor"' in skynet
-    assert 'postgres-exporter:deploy)       echo "postgres_exporter"' in skynet
+    exporter_tags = "postgres_admin_monitor,postgres_exporter"
+    for action in ("deploy", "install", "run"):
+        assert f"postgres-exporter:{action})" in skynet
+        assert f'echo "{exporter_tags}"' in next(line for line in skynet.splitlines() if f"postgres-exporter:{action})" in line)
+        assert f"{action:<7} -> {exporter_tags}" in skynet
+    skynet_docs = (REPO_ROOT / "docs/cheat_sheets/skynet.md").read_text()
+    assert f"`skynet run postgres-exporter`         | `{exporter_tags}`" in skynet_docs
+    assert f"`skynet check postgres-exporter`       | `{exporter_tags}`" in skynet_docs
+    assert "uptime_kuma_monitor" not in skynet
 
 
 def test_alerting_validator_workflow_uses_repository_ansible_core_constraint():
@@ -220,6 +233,11 @@ def test_alerting_validator_workflow_uses_repository_ansible_core_constraint():
     assert workflow_text.count("      - ansible/requirements.txt") == 2
     assert workflow_text.count("      - ansible/filter_plugins/availability.py") == 2
     assert workflow_text.count("      - ansible/filter_plugins/service_catalog.py") == 2
+    assert workflow_text.count("      - ansible/group_vars/all/prometheus.yml") == 2
+    assert workflow_text.count("      - ansible/group_vars/all/services/**") == 2
+    assert workflow_text.count("      - ansible/roles/docker_services/templates/configs/prometheus/blackbox.yml.j2") == 2
+    assert "ansible/group_vars/all/services/alertmanager.yml" not in workflow_text
+    assert "ansible/group_vars/all/services/prometheus.yml" not in workflow_text
 
 
 def test_alertmanager_keeps_email_adds_secret_file_gotify_and_valid_payload_shape():

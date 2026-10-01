@@ -147,3 +147,11 @@
           {{ ubuntu_postgres_emergency_swap_size_mb }} MiB emergency swap file
           at {{ ubuntu_postgres_emergency_swap_path }}; no swap mutation was run.
       changed_when: false
+  rescue:
+    - name: PostgreSQL emergency swap | Stop after reconciliation failure
+      ansible.builtin.fail:
+        msg: >-
+          Emergency swap reconciliation failed during {{
+            ansible_failed_task.name | default('an unknown task')
+          }}. Partial state is retained for safe inspection and idempotent
+          reconciliation on the next run.

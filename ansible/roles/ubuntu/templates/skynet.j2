@@ -328,6 +328,7 @@ role_tag() {
     ubuntu:pam)                     echo "ubuntu_pam" ;;
     ubuntu:network)                 echo "ubuntu_network" ;;
     ubuntu:netplan)                 echo "ubuntu_netplan" ;;
+    ubuntu:postgres-swap)           echo "ubuntu_postgres_swap" ;;
 
     resolved:deploy)                echo "resolved" ;;
     resolved:run)                   echo "resolved" ;;
@@ -409,9 +410,9 @@ role_tag() {
     node-exporter:install)          echo "node_exporter" ;;
     node-exporter:run)              echo "node_exporter" ;;
 
-    postgres-exporter:deploy)       echo "postgres_exporter" ;;
-    postgres-exporter:install)      echo "postgres_exporter" ;;
-    postgres-exporter:run)          echo "postgres_exporter" ;;
+    postgres-exporter:deploy)       echo "postgres_admin_monitor,postgres_exporter" ;;
+    postgres-exporter:install)      echo "postgres_admin_monitor,postgres_exporter" ;;
+    postgres-exporter:run)          echo "postgres_admin_monitor,postgres_exporter" ;;
 
     *)
       return 1
@@ -504,6 +505,7 @@ Role/action targets:
     pam          -> ubuntu_pam
     network      -> ubuntu_network
     netplan      -> ubuntu_netplan
+    postgres-swap -> ubuntu_postgres_swap
 
   resolved:
     deploy -> resolved
@@ -597,9 +599,9 @@ Role/action targets:
     run     -> node_exporter
 
   postgres-exporter:
-    deploy  -> postgres_exporter
-    install -> postgres_exporter
-    run     -> postgres_exporter
+    deploy  -> postgres_admin_monitor,postgres_exporter
+    install -> postgres_admin_monitor,postgres_exporter
+    run     -> postgres_admin_monitor,postgres_exporter
 
 Examples:
   skynet check resolved

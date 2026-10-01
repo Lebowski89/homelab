@@ -327,6 +327,8 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 | `skynet run ubuntu pam`          | `ubuntu_pam`          |
 | `skynet run ubuntu network`      | `ubuntu_network`      |
 | `skynet run ubuntu netplan`      | `ubuntu_netplan`      |
+| `skynet run ubuntu postgres-swap` | `ubuntu_postgres_swap` |
+| `skynet check ubuntu postgres-swap` | `ubuntu_postgres_swap` |
 
 ### Docker
 
@@ -400,10 +402,10 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 
 ### PostgreSQL exporter
 
-| Command                                | Raw tag             |
-| -------------------------------------- | ------------------- |
-| `skynet run postgres-exporter`         | `postgres_exporter` |
-| `skynet check postgres-exporter`       | `postgres_exporter` |
+| Command                                | Raw tags                                     |
+| -------------------------------------- | -------------------------------------------- |
+| `skynet run postgres-exporter`         | `postgres_admin_monitor,postgres_exporter`   |
+| `skynet check postgres-exporter`       | `postgres_admin_monitor,postgres_exporter`   |
 
 ### Podman
 

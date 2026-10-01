@@ -138,7 +138,7 @@
 | Configure Patroni | ansible.builtin.include_tasks | True | postgres,postgres_patroni,postgres_patroni_reset |
 | Ensure dedicated PostgreSQL admin role exists | ansible.builtin.include_tasks | True | postgres_admin,postgres_admin_monitor |
 | Report PostgreSQL admin role check-mode plan | ansible.builtin.debug | True | postgres_admin,postgres_admin_monitor |
-| Ensure neutral PostgreSQL monitoring role exists | ansible.builtin.include_tasks | True | p,o,s,t,g,r,e,s,_,a,d,m,i,n,_,m,o,n,i,t,o,r |
+| Ensure neutral PostgreSQL monitoring role exists | ansible.builtin.include_tasks | True | postgres_admin_monitor |
 | Configure PostgreSQL logical backups | ansible.builtin.include_tasks | True | postgres,postgres_backup,postgres_backup_setup,postgres_backup_run |
 | Run PostgreSQL logical backup manually | ansible.builtin.include_tasks | True | postgres_backup,postgres_backup_run |
 | Report PostgreSQL logical backup manual check-mode plan | ansible.builtin.debug | True | postgres_backup,postgres_backup_run |

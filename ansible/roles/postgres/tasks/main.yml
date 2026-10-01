@@ -83,8 +83,10 @@
   ansible.builtin.include_tasks:
     file: sub_tasks/admin/pg_monitor.yml
     apply:
-      tags: postgres_admin_monitor
-  tags: postgres_admin_monitor
+      tags:
+        - postgres_admin_monitor
+  tags:
+    - postgres_admin_monitor
 
 - name: Configure PostgreSQL logical backups
   when:

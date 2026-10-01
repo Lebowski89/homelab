@@ -12,6 +12,8 @@ UBUNTU_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/main.yml"
 SWAP_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/sub_tasks/postgres_emergency_swap.yml"
 POSTGRES_VARS_PATH = REPO_ROOT / "ansible/group_vars/tags_postgres.yml"
 POSTGRES_TFVARS_SAMPLE_PATH = REPO_ROOT / "terraform/proxmox/vms/postgres-cluster/private.auto.tfvars.sample"
+SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
+SKYNET_DOCS_PATH = REPO_ROOT / "docs/cheat_sheets/skynet.md"
 
 
 def task_named(tasks, name):
@@ -79,6 +81,7 @@ def test_postgres_emergency_swap_is_scoped_idempotent_and_check_mode_safe():
     preserve = task_named(swap_tasks, "PostgreSQL emergency swap | Preserve administrator-provided swap")
     reconcile = task_named(swap_tasks, "PostgreSQL emergency swap | Reconcile managed swap file")
     nested = {task["name"]: task for task in reconcile["block"]}
+    rescue = task_named(reconcile["rescue"], "PostgreSQL emergency swap | Stop after reconciliation failure")
 
     assert defaults["ubuntu_postgres_emergency_swap_enabled"] is False
     assert postgres_vars["ubuntu_postgres_emergency_swap_enabled"] is True
@@ -95,6 +98,17 @@ def test_postgres_emergency_swap_is_scoped_idempotent_and_check_mode_safe():
     assert "not ansible_check_mode" in nested["PostgreSQL emergency swap | Format newly allocated file"]["when"]
     assert nested["PostgreSQL emergency swap | Persist managed file"]["ansible.builtin.lineinfile"]["path"] == "/etc/fstab"
     assert "not ansible_check_mode" in nested["PostgreSQL emergency swap | Activate managed file"]["when"]
+    assert "ansible.builtin.fail" in rescue
+
+
+def test_postgres_emergency_swap_has_friendly_skynet_mapping():
+    skynet = SKYNET_TEMPLATE_PATH.read_text()
+    docs = SKYNET_DOCS_PATH.read_text()
+
+    assert 'ubuntu:postgres-swap)           echo "ubuntu_postgres_swap"' in skynet
+    assert "postgres-swap -> ubuntu_postgres_swap" in skynet
+    assert "`skynet run ubuntu postgres-swap` | `ubuntu_postgres_swap`" in docs
+    assert "`skynet check ubuntu postgres-swap` | `ubuntu_postgres_swap`" in docs
 
 
 def test_postgres_proxmox_vm_definitions_use_four_gib_each():
