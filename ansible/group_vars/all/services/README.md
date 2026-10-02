@@ -532,7 +532,7 @@ catalog validation rejects it.
 | Option | Type | Required | Default | Runtime | Owner | Description |
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
 | `application_prepare` | Mapping | No | `{}` | Both | `service_prepare` | Selects one registered handler. |
-| `application_prepare.handler` | String enum | No | Empty/no handler | Both | `service_prepare` | `authelia`, `qbittorrent`, `plex`, `bazarr`, `nzbhydra2`, or `vaultwarden`. |
+| `application_prepare.handler` | String enum | No | Empty/no handler | Both | `service_prepare` | `authelia`, `qbittorrent`, `plex`, `bazarr`, `nzbhydra2`, `vaultwarden`, or `romm`. |
 | `application_prepare.bootstrap` | Mapping | Conditional | `{}` | Docker | `service_prepare` | Plex bootstrap settings only. |
 | `application_prepare.bootstrap.enabled` | Strict YAML Boolean | Conditional | None | Docker | `service_prepare` | Allows Plex API/token/claim work only with explicit bootstrap action. |
 | `prep` | Mapping | Conditional | `{}` | Both | `service_prepare` | Handler-specific non-secret preparation input. Bazarr uses it for its PostgreSQL connection. |
@@ -556,11 +556,24 @@ catalog validation rejects it.
 | Plex | Runs only under explicit bootstrap, never check mode. | Docker-only; requires strict bootstrap flag and managed `named_volumes.media_nfs` with Docker local-driver options. |
 | Bazarr | Creates initial config only when absent, then updates it on deploy/update/recreate. | Derives private Radarr/Sonarr endpoints from the canonical inventory topology; requires PostgreSQL `prep` fields and declared API values; optional subtitle credentials must be paired. |
 | NZBHydra2 | Creates initial YAML only when absent, then manages auth/downloader/indexers on deploy/update/recreate. | Derives the private SABnzbd endpoint from the canonical inventory topology; required values and every optional provider user/API pair must be complete. |
+| RomM | Merges required filesystem structure on deploy/update/recreate/bootstrap; skips edits in check mode. | Requires filesystem hosts and one `files/romm/config.yml` seed copy. Preserves unrelated YAML settings and file permissions. |
 | Conditional | Reads or creates a persistent Argon2 token on deploy/update/recreate/bootstrap. | Requires all `paths_vault` fields; partial files are removed after failure. |
 
 Validation occurs before destructive runtime cleanup. Outputs reset per service.
 Preparation containers use the selected runtime, never enter deployed state,
 never start in check mode, and are removed after success or failure.
+
+RomM 5.3 requires explicit `filesystem.structure`. The existing library mount at
+`/romm/library` uses structure A: `default: "roms/{platform}/{game}"` and
+`firmware: "bios/{platform}"`. The `force: false` copy seeds fresh installations;
+the RomM handler updates those two leaves in the existing `/romm/config/config.yml`
+before deployment and removes obsolete `filesystem.roms_folder` and
+`filesystem.firmware_folder` keys if present. Other settings, including platform
+structure overrides, remain intact. Repeated runs do not rewrite converged YAML.
+No manual config replacement is needed: include this migration with the 5.3.1
+image update and use the normal RomM deployment/update flow. Repository validation
+does not confirm live startup or database migrations. Emulator streaming is not
+configured by this service and is not migrated here.
 
 ## Actions and lifecycle
 

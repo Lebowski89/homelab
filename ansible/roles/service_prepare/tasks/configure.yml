@@ -13,6 +13,25 @@
       diff: false
   tags: [deploy, update, recreate]
 
+- name: Application configuration | Include RomM configuration
+  when:
+    - not ansible_check_mode
+    - service_prepare_handler == 'romm'
+  ansible.builtin.include_tasks:
+    file: applications/romm/configure.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  vars:
+    service_prepare_romm_config_path: >-
+      {{ service_prepare_context.service.copies
+         | selectattr('src', 'equalto', 'files/romm/config.yml') | map(attribute='dest') | first }}
+  loop: "{{ service_prepare_context.filesystem_hosts }}"
+  loop_control:
+    loop_var: service_prepare_romm_fs_host
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Application configuration | Include NZBHydra2 configuration
   when:
     - not ansible_check_mode

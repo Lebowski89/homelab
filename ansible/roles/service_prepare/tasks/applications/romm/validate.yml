@@ -1,0 +1,11 @@
+---
+
+- name: RomM prepare | Validate configuration destination
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context.filesystem_hosts | length > 0
+      - >-
+        service_prepare_context.service.copies | default([])
+        | selectattr('src', 'equalto', 'files/romm/config.yml') | list | length == 1
+    fail_msg: "RomM requires filesystem hosts and exactly one config.yml seed copy."
+  tags: [deploy, update, recreate, bootstrap]
