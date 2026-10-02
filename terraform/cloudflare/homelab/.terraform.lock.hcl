@@ -21,5 +21,6 @@ provider "registry.opentofu.org/cloudflare/cloudflare" {
     "zh:9012426308af3a651c2a1f612cb884774cab4009a29fef67b3e056fbf16e4c87",
     "zh:c6cad449e522ccd4bad73d41671ab2c4461097d8506f44026a056320daf4a462",
     "zh:f199deaba10e25a5d4ebd76bc1c5688ae35a38dab4162fbc7cdef20599e6b562",
+    "zh:f809ab383cca0a5f83072981c64208cbd7fa67e986a86ee02dd2c82333221e32",
   ]
 }
