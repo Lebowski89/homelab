@@ -12,7 +12,7 @@ bazarr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/bazarr:release-v1.6.0
+  image: ghcr.io/hotio/bazarr:release-v1.6.2
   ################################
   # ENVIRONMENT/SECRETS
   ################################

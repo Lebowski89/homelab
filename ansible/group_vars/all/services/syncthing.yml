@@ -12,7 +12,7 @@ syncthing:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: lscr.io/linuxserver/syncthing:v2.1.5-ls229
+  image: lscr.io/linuxserver/syncthing:v2.1.5-ls230
   ################################
   # ENVIRONMENT/SECRETS
   ################################

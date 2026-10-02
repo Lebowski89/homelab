@@ -12,7 +12,7 @@ seerr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/seerr:release-v3.4.1
+  image: ghcr.io/hotio/seerr:release-v3.5.0
   ################################
   # ENVIRONMENT/SECRETS
   ################################

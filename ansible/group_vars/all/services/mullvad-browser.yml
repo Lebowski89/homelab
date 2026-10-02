@@ -11,7 +11,7 @@ mullvad_browser:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: lscr.io/linuxserver/mullvad-browser:15.0.21-ls201
+  image: lscr.io/linuxserver/mullvad-browser:15.0.20251116
   ################################
   # ENVIRONMENT/SECRETS
   ################################
