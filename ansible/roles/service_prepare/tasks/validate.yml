@@ -44,7 +44,7 @@
   ansible.builtin.assert:
     that:
       - service_prepare_context.service.application_prepare | default({}) is mapping
-      - service_prepare_handler in ['', 'authelia', 'qbittorrent', 'plex', 'bazarr', 'nzbhydra2', 'vaultwarden']
+      - service_prepare_handler in ['', 'authelia', 'qbittorrent', 'plex', 'bazarr', 'nzbhydra2', 'vaultwarden', 'romm']
     fail_msg: >-
       application_prepare must be a mapping with a supported handler for
       {{ service_prepare_context.service_name }}.

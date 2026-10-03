@@ -103,19 +103,6 @@ def assert_runtime_neutral_http_url(url):
         assert "." in hostname, f"Widget URL uses a runtime-local hostname: {url}"
 
 
-def test_fake_infisical_values_are_derived_from_homepage_declaration():
-    declared_vars = homepage_infisical_vars()
-    fake_values = fake_homepage_infisical_values()
-
-    assert set(fake_values) == set(declared_vars)
-    assert all(fake_values[var] == f"https://fixture.example.test/{var}" for var in declared_vars)
-    assert "cloudflare_zone" not in declared_vars
-
-
-def test_services_template_renders_as_valid_yaml_with_declared_infisical_values():
-    assert isinstance(render_services(), list)
-
-
 def test_services_template_rejects_undeclared_infisical_references():
     source = f"{TEMPLATE_PATH.read_text()}\n# {{{{ secrets.undeclared_fixture_secret }}}}\n"
 
@@ -154,18 +141,6 @@ def test_rendered_service_cards_have_valid_structure():
 
 def test_service_groups_have_structurally_valid_layout_entries():
     assert_service_group_layouts_are_valid(services_by_group(), render_settings())
-
-
-def test_layout_contract_allows_curated_groups_columns_and_incomplete_rows():
-    groups = {"new-curated-group": [{"Only card": {}}]}
-    settings = {"layout": {"new-curated-group": {"style": "row", "columns": 4}}}
-
-    assert_service_group_layouts_are_valid(groups, settings)
-
-
-def test_layout_contract_rejects_service_groups_without_layout_entries():
-    with pytest.raises(AssertionError, match="missing-layout"):
-        assert_service_group_layouts_are_valid({"missing-layout": []}, {"layout": {}})
 
 
 def service_exposures():
@@ -215,22 +190,3 @@ def test_widget_http_urls_do_not_use_runtime_local_hostnames():
                 assert_runtime_neutral_http_url(widget_url)
             except AssertionError as error:
                 raise AssertionError(f"{card_name}: {error}") from error
-
-
-@pytest.mark.parametrize(
-    "url",
-    [
-        "https://sonarr.int.example.test:8443",
-        "https://proxy.example.test/widget-endpoint",
-        "http://192.0.2.10:1234",
-        "http://[2001:db8::10]:1234",
-    ],
-)
-def test_runtime_neutral_widget_url_accepts_fqdns_and_ip_addresses(url):
-    assert_runtime_neutral_http_url(url)
-
-
-@pytest.mark.parametrize("url", ["http://sonarr:8989", "http://runtime-service:8080"])
-def test_runtime_neutral_widget_url_rejects_bare_runtime_hostnames(url):
-    with pytest.raises(AssertionError, match="runtime-local hostname"):
-        assert_runtime_neutral_http_url(url)

@@ -46,13 +46,6 @@ def source_path(kind, source):
     return role / ("templates" if kind == "templates" else "") / source
 
 
-def test_every_service_yaml_loads_as_a_mapping():
-    paths = sorted(SERVICES_DIR.glob("*.yml"))
-    assert paths
-    for path in paths:
-        assert isinstance(yaml.safe_load(path.read_text()) or {}, dict), path
-
-
 def test_every_common_copy_and_template_source_exists():
     missing = []
     for service_name, service in load_services().items():

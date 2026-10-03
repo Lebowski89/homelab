@@ -12,7 +12,7 @@ romm:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/rommapp/romm:5.2.0
+  image: ghcr.io/rommapp/romm:5.3.1
   ################################
   # ENVIRONMENT/SECRETS
   ################################
@@ -56,6 +56,8 @@ romm:
         name: PASS
         secret:
           name: postgres_pass_secret
+  application_prepare:
+    handler: romm
   ################################
   # CONNECTIVITY
   ################################
@@ -78,7 +80,7 @@ romm:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/romm/redis-data"
       state: directory
       mode: "0755"
-    # Optional RomM config files mounted into /romm/config.
+    # Required RomM filesystem config mounted into /romm/config.
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/romm/config"
       state: directory
       mode: "0755"
@@ -125,6 +127,7 @@ romm:
       state: directory
       mode: "0755"
   copies:
+    # Seed only; service_prepare merges required filesystem settings on every update.
     - src: files/romm/config.yml
       dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/romm/config/config.yml"
       mode: "0644"

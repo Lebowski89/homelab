@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/29 |
+| Readme update        | 2026/10/03 |
 
 
 
@@ -232,6 +232,34 @@
 | QBittorrent prepare ¦ Resolve instance contract | ansible.builtin.set_fact | False |  |
 | QBittorrent prepare ¦ Validate instance and password | ansible.builtin.assert | False |  |
 
+#### File: tasks/applications/romm/configure.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| RomM prepare ¦ Read config file ownership | ansible.builtin.stat | False |  |
+| RomM prepare ¦ Migrate filesystem configuration | block | False | Edit leaves, not the whole filesystem mapping, to retain platform overrides. |
+| RomM prepare ¦ Set explicit library structure | yedit | False |  |
+| RomM prepare ¦ Remove obsolete folder options | yedit | False |  |
+
+#### File: tasks/applications/romm/validate.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| RomM prepare ¦ Validate configuration destination | ansible.builtin.assert | False |  |
+| RomM prepare ¦ Validate existing configuration before cleanup | ansible.builtin.include_tasks | False |  |
+
+#### File: tasks/applications/romm/validate_existing.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| RomM prepare ¦ Inspect existing configuration | ansible.builtin.stat | False |  |
+| RomM prepare ¦ Read existing configuration safely | block | True |  |
+| RomM prepare ¦ Read existing configuration content | ansible.builtin.slurp | False |  |
+| RomM prepare ¦ Parse existing configuration | ansible.builtin.set_fact | False |  |
+| RomM prepare ¦ Derive value-free compatibility checks | ansible.builtin.set_fact | False | The old seed was empty/comment-only YAML; yedit treats it as an empty map. |
+| RomM prepare ¦ Require migration-compatible mappings | ansible.builtin.assert | True |  |
+| RomM prepare ¦ Require canonical legacy library folders | ansible.builtin.assert | True |  |
+
 #### File: tasks/applications/vaultwarden/generate_secrets.yml
 
 | Name | Module | Has Conditions |
@@ -267,6 +295,7 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Application configuration ¦ Include Bazarr configuration | ansible.builtin.include_tasks | True |  |
+| Application configuration ¦ Include RomM configuration | ansible.builtin.include_tasks | True |  |
 | Application configuration ¦ Include NZBHydra2 configuration | ansible.builtin.include_tasks | True |  |
 
 #### File: tasks/derive_templates.yml

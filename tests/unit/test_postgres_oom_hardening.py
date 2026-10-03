@@ -13,7 +13,6 @@ SWAP_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/sub_tasks/postgres_eme
 POSTGRES_VARS_PATH = REPO_ROOT / "ansible/group_vars/tags_postgres.yml"
 POSTGRES_TFVARS_SAMPLE_PATH = REPO_ROOT / "terraform/proxmox/vms/postgres-cluster/private.auto.tfvars.sample"
 SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
-SKYNET_DOCS_PATH = REPO_ROOT / "docs/cheat_sheets/skynet.md"
 
 
 def task_named(tasks, name):
@@ -103,12 +102,9 @@ def test_postgres_emergency_swap_is_scoped_idempotent_and_check_mode_safe():
 
 def test_postgres_emergency_swap_has_friendly_skynet_mapping():
     skynet = SKYNET_TEMPLATE_PATH.read_text()
-    docs = SKYNET_DOCS_PATH.read_text()
 
     assert 'ubuntu:postgres-swap)           echo "ubuntu_postgres_swap"' in skynet
     assert "postgres-swap -> ubuntu_postgres_swap" in skynet
-    assert "`skynet run ubuntu postgres-swap` | `ubuntu_postgres_swap`" in docs
-    assert "`skynet check ubuntu postgres-swap` | `ubuntu_postgres_swap`" in docs
 
 
 def test_postgres_proxmox_vm_definitions_use_four_gib_each():

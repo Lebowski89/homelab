@@ -825,6 +825,9 @@ class Yedit:
 
         if params["src"]:
             rval = yamlfile.load()
+            # An empty/comment-only document loads as None, including seed files.
+            if yamlfile.yaml_dict is None and state == "present":
+                yamlfile.yaml_dict = {}
             if yamlfile.yaml_dict is None and state != "present":
                 return {
                     "failed": True,

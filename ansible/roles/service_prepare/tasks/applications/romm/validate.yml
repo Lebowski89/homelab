@@ -1,0 +1,34 @@
+---
+
+- name: RomM prepare | Validate configuration destination
+  no_log: false
+  ansible.builtin.assert:
+    quiet: true
+    that:
+      - service_prepare_context.filesystem_hosts | length > 0
+      - service_prepare_romm_seed_copies | length == 1
+      - service_prepare_romm_seed_copies[0].dest is defined
+      - service_prepare_romm_seed_copies[0].dest is string
+      - service_prepare_romm_seed_copies[0].dest | trim | length > 0
+    fail_msg: >-
+      RomM requires filesystem hosts and exactly one config.yml seed copy
+      with a defined, non-empty destination string.
+  vars:
+    service_prepare_romm_seed_copies: >-
+      {{ service_prepare_context.service.copies | default([])
+         | selectattr('src', 'equalto', 'files/romm/config.yml') | list }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: RomM prepare | Validate existing configuration before cleanup
+  ansible.builtin.include_tasks:
+    file: applications/romm/validate_existing.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    service_prepare_romm_config_path: >-
+      {{ (service_prepare_context.service.copies
+          | selectattr('src', 'equalto', 'files/romm/config.yml') | list)[0].dest | trim }}
+  loop: "{{ service_prepare_context.filesystem_hosts }}"
+  loop_control:
+    loop_var: service_prepare_romm_fs_host
+  tags: [deploy, update, recreate, bootstrap]

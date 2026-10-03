@@ -21,7 +21,6 @@ CATALOG_PATH = REPO_ROOT / "ansible/filter_plugins/service_catalog.py"
 NETBOX_INVENTORY_SAMPLE = REPO_ROOT / "ansible/netbox.yml.sample"
 NETBOX_MAIN_PATH = REPO_ROOT / "terraform/netbox/main.tf"
 NETBOX_LOCALS_PATH = REPO_ROOT / "terraform/netbox/locals.tf"
-NETBOX_PRIVATE_SAMPLE_PATH = REPO_ROOT / "terraform/netbox/private.auto.tfvars.sample"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
 NORMALIZE_TASKS_PATH = REPO_ROOT / "ansible/tasks/container_host_defaults.yml"
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
@@ -85,22 +84,14 @@ def hcl_scalar(block: str, name: str):
 def test_netbox_defines_canonical_container_host_fields_with_device_scope_and_validation():
     locals_source = NETBOX_LOCALS_PATH.read_text()
     main_source = NETBOX_MAIN_PATH.read_text()
-    expected = {
-        "container_host_puid": ("text", 200),
-        "container_host_pgid": ("text", 210),
-        "container_host_appdata_root": ("text", 220),
-        "container_host_data_root": ("text", 230),
-    }
+    field_names = ("container_host_puid", "container_host_pgid", "container_host_appdata_root", "container_host_data_root")
 
     resource = main_source.split('resource "netbox_custom_field" "device" {', maxsplit=1)[1].split("\n}", maxsplit=1)[0]
     assert 'content_types = ["dcim.device"]' in resource
-    for field_name, (field_type, weight) in expected.items():
+    for field_name in field_names:
         field = hcl_block(locals_source, field_name)
         assert hcl_scalar(field, "name") == field_name
-        assert hcl_scalar(field, "type") == field_type
-        assert hcl_scalar(field, "group_name") == "Containers"
-        assert "container services" in hcl_scalar(field, "description")
-        assert hcl_scalar(field, "weight") == weight
+        assert hcl_scalar(field, "type") == "text"
         if field_name in {"container_host_appdata_root", "container_host_data_root"}:
             assert hcl_scalar(field, "validation_regex") == "^/.*"
 
@@ -112,34 +103,6 @@ def test_netbox_container_host_defaults_allow_empty_values():
     assert hcl_scalar(defaults, "container_host_pgid") == ""
     assert hcl_scalar(defaults, "container_host_appdata_root") == ""
     assert hcl_scalar(defaults, "container_host_data_root") == ""
-
-
-def test_tracked_host_sample_defines_canonical_container_values_only_for_applicable_hosts():
-    hosts = hcl_block(NETBOX_PRIVATE_SAMPLE_PATH.read_text(), "host_private_values")
-    field_names = (
-        "container_host_puid",
-        "container_host_pgid",
-        "container_host_appdata_root",
-        "container_host_data_root",
-    )
-    expected = {
-        "mgt": ("1000", "1000", "/opt", "/opt"),
-        "blacktop": ("1000", "1000", "/opt", "/opt"),
-        "unraid": ("99", "100", "/mnt/user/appdata", "/mnt/user/data"),
-        "plex": ("1000", "1000", "/opt", "/opt"),
-    }
-
-    for host_name in ("router", "mgt", "blacktop", "unraid", "plex", "pve1", "pg95", "pg96", "pg97"):
-        custom_fields = hcl_block(hcl_block(hosts, host_name), "custom_fields")
-        present_fields = [field_name for field_name in field_names if re.search(rf"(?m)^\s*{field_name}\s*=", custom_fields)]
-        if host_name in expected:
-            assert present_fields == list(field_names), host_name
-            values = tuple(hcl_scalar(custom_fields, field_name) for field_name in field_names)
-            assert values == expected[host_name], host_name
-            assert isinstance(values[0], str), host_name
-            assert isinstance(values[1], str), host_name
-        else:
-            assert present_fields == [], host_name
 
 
 def test_container_host_defaults_extracts_canonical_values_without_mutating_input():

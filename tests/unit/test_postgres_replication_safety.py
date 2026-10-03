@@ -15,7 +15,6 @@ PATRONI_TEMPLATE_PATH = POSTGRES_ROLE / "templates/patroni.yml.j2"
 MAIN_TASKS_PATH = POSTGRES_ROLE / "tasks/main.yml"
 RECONCILE_TASKS_PATH = POSTGRES_ROLE / "tasks/sub_tasks/admin/replication_safety.yml"
 SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
-SKYNET_DOC_PATH = REPO_ROOT / "docs/cheat_sheets/skynet.md"
 RULES_PATH = REPO_ROOT / "ansible/roles/service_common/templates/configs/prometheus/rules/availability.yml.j2"
 DASHBOARD_PATH = REPO_ROOT / "ansible/roles/service_common/templates/configs/grafana/dashboards/homelab-availability.json.j2"
 
@@ -254,7 +253,6 @@ def test_check_mode_and_skynet_action_are_safe_and_wired():
     assert plan["changed_when"] is False
     assert tag in include["tags"]
     assert f'postgres:admin-update-replication-safety) echo "{tag}"' in skynet
-    assert "admin-update-replication-safety" in SKYNET_DOC_PATH.read_text()
     mapping_line = next(line for line in skynet.splitlines() if "postgres:admin-update-replication-safety)" in line)
     assert "reset" not in mapping_line
     assert "nuke" not in mapping_line

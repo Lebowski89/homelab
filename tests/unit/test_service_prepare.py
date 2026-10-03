@@ -180,7 +180,7 @@ def test_standalone_swarm_and_podman_use_the_same_generic_controller_contract():
     assert "podman_services_" not in COMMON_PREFLIGHT_PATH.read_text()
 
 
-def test_real_migrated_services_declare_only_the_six_application_handlers():
+def test_real_migrated_services_declare_registered_application_handlers():
     expected = {
         "authelia": "authelia",
         "qbittorrent": "qbittorrent",
@@ -188,6 +188,7 @@ def test_real_migrated_services_declare_only_the_six_application_handlers():
         "bazarr": "bazarr",
         "nzbhydra2": "nzbhydra2",
         "vaultwarden": "vaultwarden",
+        "romm": "romm",
     }
     actual = {}
 
@@ -207,7 +208,7 @@ def test_real_migrated_services_declare_only_the_six_application_handlers():
 
 def test_real_migrated_docker_workflows_materialize_through_the_canonical_catalog():
     catalog = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog_prepare_real")
-    services = {name: load_service(name) for name in ("authelia", "qbittorrent", "plex", "bazarr", "nzbhydra2", "vaultwarden")}
+    services = {name: load_service(name) for name in ("authelia", "qbittorrent", "plex", "bazarr", "nzbhydra2", "vaultwarden", "romm")}
     expected = {
         ("authelia", "main", "authelia"),
         ("qbittorrent", "alpha", "qbittorrent"),
@@ -216,6 +217,7 @@ def test_real_migrated_docker_workflows_materialize_through_the_canonical_catalo
         ("bazarr", None, "bazarr"),
         ("nzbhydra2", None, "nzbhydra2"),
         ("vaultwarden", None, "vaultwarden"),
+        ("romm", None, "romm"),
     }
     actual = set()
 

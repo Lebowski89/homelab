@@ -245,3 +245,28 @@ def test_write_round_trips_existing_yaml_file(tmp_path: Path):
     reloaded = module.Yedit(filename=str(target))
 
     assert reloaded.get("service.image") == "new"
+
+
+@pytest.mark.parametrize("initial", ["", "---\n# Empty seed config.\n", "null\n"])
+def test_run_ansible_updates_empty_yaml_files_idempotently(tmp_path: Path, initial: str):
+    module = load_module()
+    target = tmp_path / "config.yml"
+    target.write_text(initial)
+    params = {
+        "src": str(target),
+        "content": None,
+        "content_type": "yaml",
+        "state": "present",
+        "key": "",
+        "value": None,
+        "backup": False,
+        "backup_ext": ".bak",
+        "separator": ".",
+        "edits": [{"key": "app.enabled", "value": True}],
+    }
+
+    assert module.Yedit.run_ansible(params)["changed"] is True
+    assert module.Yedit(filename=str(target)).get("app.enabled") is True
+    converged = target.read_bytes()
+    assert module.Yedit.run_ansible(params)["changed"] is False
+    assert target.read_bytes() == converged

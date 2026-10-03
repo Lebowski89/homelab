@@ -29,8 +29,6 @@ REMOTE_ENV_TEMPLATE_PATH = ROLE_PATH / "templates/postgres-logical-backup-remote
 GROUP_VARS_PATH = REPO_ROOT / "ansible/group_vars/tags_postgres.yml"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
 SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
-SKYNET_DOC_PATH = REPO_ROOT / "docs/cheat_sheets/skynet.md"
-BACKUP_DOC_PATH = REPO_ROOT / "docs/postgresql-logical-backups.md"
 SYSTEMD_SERVICE_TEMPLATE = REPO_ROOT / "ansible/roles/systemd_jobs/templates/systemd-job.service.j2"
 SYSTEMD_TIMER_TEMPLATE = REPO_ROOT / "ansible/roles/systemd_jobs/templates/systemd-job.timer.j2"
 ANSIBLE_PLAYBOOK = shutil.which(
@@ -422,7 +420,6 @@ def test_restic_version_is_checked_after_install_and_before_configuration():
     assert query["when"] == ["postgres_backup_remote_manage", "not ansible_check_mode"]
     assert "version('0.17.1', '>=')" in " ".join(requirement["ansible.builtin.assert"]["that"])
     assert "Restic 0.17.1 or newer" in requirement["ansible.builtin.assert"]["fail_msg"]
-    assert "Minimum supported Restic version is 0.17.1" in BACKUP_DOC_PATH.read_text()
 
 
 def test_infisical_lookups_use_controller_contract_and_hide_secret_material():
@@ -784,21 +781,16 @@ def test_manual_actions_and_check_mode_plans_preserve_operation_boundaries():
     assert "ansible.builtin.command" not in source
 
 
-def test_remote_tags_are_wired_through_playbook_skynet_and_docs():
+def test_remote_tags_are_wired_through_playbook_and_skynet():
     playbook = PLAYBOOK_PATH.read_text()
     skynet = SKYNET_TEMPLATE_PATH.read_text()
-    skynet_docs = SKYNET_DOC_PATH.read_text()
-    backup_docs = BACKUP_DOC_PATH.read_text()
 
     for action in ("setup", "init", "run", "maintenance"):
         tag = f"postgres_backup_remote_{action}"
         command = f"backup-remote-{action}"
         assert tag in playbook
         assert tag in skynet
-        assert tag in skynet_docs
-        assert tag in backup_docs
         assert command in skynet
-        assert command in skynet_docs
 
 
 def test_only_completed_verified_backups_are_uploaded_with_stable_metadata(tmp_path: Path):

@@ -1,0 +1,55 @@
+---
+
+- name: RomM prepare | Read config file ownership
+  ansible.builtin.stat:
+    path: "{{ service_prepare_romm_config_path }}"
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  delegate_to: "{{ service_prepare_romm_fs_host }}"
+  register: service_prepare_romm_config_stat
+
+# Edit leaves, not the whole filesystem mapping, to retain platform overrides.
+- name: RomM prepare | Migrate filesystem configuration
+  block:
+    - name: RomM prepare | Set explicit library structure
+      yedit:
+        src: "{{ service_prepare_romm_config_path }}"
+        edits:
+          - key: filesystem.structure.default
+            value: "roms/{platform}/{game}"
+          - key: filesystem.structure.firmware
+            value: "bios/{platform}"
+      delegate_to: "{{ service_prepare_romm_fs_host }}"
+      no_log: true
+      diff: false
+
+    - name: RomM prepare | Remove obsolete folder options
+      yedit:
+        src: "{{ service_prepare_romm_config_path }}"
+        state: absent
+        key: filesystem
+        update: true
+        value: "{{ service_prepare_romm_removed_key }}"
+      loop: [roms_folder, firmware_folder]
+      loop_control:
+        loop_var: service_prepare_romm_removed_key
+      delegate_to: "{{ service_prepare_romm_fs_host }}"
+      no_log: true
+      diff: false
+  rescue:
+    - name: RomM prepare | Fail filesystem migration safely
+      ansible.builtin.fail:
+        msg: >-
+          RomM filesystem migration failed during
+          '{{ ansible_failed_task.name | default('an unknown task') }}';
+          file permission restoration will still be attempted.
+  always:
+    # yedit uses an atomic rename; retain the ownership of the seeded/existing file.
+    - name: RomM prepare | Preserve config file permissions
+      ansible.builtin.file:
+        path: "{{ service_prepare_romm_config_path }}"
+        owner: "{{ service_prepare_romm_config_stat.stat.uid }}"
+        group: "{{ service_prepare_romm_config_stat.stat.gid }}"
+        mode: "{{ service_prepare_romm_config_stat.stat.mode }}"
+      delegate_to: "{{ service_prepare_romm_fs_host }}"

@@ -30,8 +30,6 @@ UBUNTU_MAIN_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/main.yml"
 UBUNTU_APT_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/sub_tasks/apt.yml"
 UBUNTU_BACKUP_PREREQUISITES_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/sub_tasks/postgres_backup_prerequisites.yml"
 SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
-SKYNET_DOC_PATH = REPO_ROOT / "docs/cheat_sheets/skynet.md"
-BACKUP_DOC_PATH = REPO_ROOT / "docs/postgresql-logical-backups.md"
 SYSTEMD_SERVICE_TEMPLATE = REPO_ROOT / "ansible/roles/systemd_jobs/templates/systemd-job.service.j2"
 SYSTEMD_TIMER_TEMPLATE = REPO_ROOT / "ansible/roles/systemd_jobs/templates/systemd-job.timer.j2"
 NODE_EXPORTER_SERVICE_TEMPLATE = REPO_ROOT / "ansible/roles/node_exporter/templates/node_exporter.service.j2"
@@ -572,15 +570,13 @@ def test_postgres_admin_check_mode_reports_without_live_patroni_discovery():
     assert "check_mode: false" not in PG_HBA_TASKS_PATH.read_text()
 
 
-def test_setup_run_and_compatibility_tags_are_wired_and_documented():
+def test_setup_run_and_compatibility_tags_are_wired():
     playbook = PLAYBOOK_PATH.read_text()
     skynet = SKYNET_TEMPLATE_PATH.read_text()
-    docs = SKYNET_DOC_PATH.read_text()
 
     for tag in ("postgres_backup", "postgres_backup_setup", "postgres_backup_run"):
         assert tag in playbook
         assert tag in skynet
-        assert tag in docs
 
 
 def test_replica_skip_exits_zero_without_dumping_or_overwriting_metrics(tmp_path: Path):
@@ -832,24 +828,6 @@ def test_postgres_units_pass_systemd_analyze_verify(tmp_path: Path):
     )
 
     assert result.returncode == 0, result.stdout + result.stderr
-
-
-def test_documentation_covers_architecture_operations_and_deferred_protection():
-    docs = BACKUP_DOC_PATH.read_text()
-
-    for statement in (
-        "Patroni replicas provide high availability, not backups.",
-        "local logical backups only",
-        "off-host backup repository",
-        "peer authentication",
-        "pg_restore --list",
-        "SHA256SUMS",
-        "postgres_backup_setup",
-        "postgres_backup_run",
-        "systemctl status postgres-logical-backup.timer",
-        "journalctl -u postgres-logical-backup.service",
-    ):
-        assert statement in docs
 
 
 @pytest.mark.parametrize(

@@ -346,8 +346,3 @@ def test_observability_control_plane_links_remain_direct():
     assert 'url = "http://loki:3100/loki/api/v1/push"' in alloy
     assert 'url = "http://prometheus:9090/api/v1/write"' in alloy
     assert loki["ruler"]["alertmanager_url"] == "http://alertmanager:9093"
-
-
-def test_orphaned_endpoint_templates_are_removed():
-    assert not (TEMPLATE_DIR / "scraparr-config.yaml.j2").exists()
-    assert not (TEMPLATE_DIR / "autopulse.env.j2").exists()

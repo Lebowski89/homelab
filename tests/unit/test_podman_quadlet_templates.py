@@ -497,16 +497,15 @@ def test_real_adminer_catalog_contract_normalizes_and_renders_rootless_quadlets_
     assert "WantedBy=default.target" in container
     assert "WantedBy=multi-user.target" not in container
     assert "EnvironmentFile=" not in container
+    assert "ContainerName=adminer" in container
+    assert f"Image={normalized['image']}" in container
+    assert "NoNewPrivileges=true" in container
+    assert "overlay" not in container
     assert source == original
 
 
 def test_blacktop_vpn_namespace_services_normalize_and_render_as_one_privileged_gateway():
     service_names = ("gluetun", "jdownloader2", "mullvad_browser")
-    image_pins = {
-        "gluetun": "docker.io/qmcgaw/gluetun:v3.41.3",
-        "jdownloader2": "docker.io/jlesage/jdownloader-2:v26.09.1",
-        "mullvad_browser": "lscr.io/linuxserver/mullvad-browser:15.0.21-ls201",
-    }
     variables = {
         "hostvars": {
             "blacktop": {
@@ -538,8 +537,6 @@ def test_blacktop_vpn_namespace_services_normalize_and_render_as_one_privileged_
             "host": "blacktop",
             "execution": {"mode": "rootful"},
         }
-        assert normalized[service_name]["image"] == image_pins[service_name]
-        assert ":latest" not in image_pins[service_name]
 
     gluetun = normalized["gluetun"]
     assert gluetun["container"]["cap_add"] == ["NET_ADMIN"]

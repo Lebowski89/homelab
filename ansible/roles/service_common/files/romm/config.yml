@@ -1,3 +1,7 @@
 ---
 # RomM configuration.
 # Keep sections omitted unless explicitly needed; RomM uses defaults for omitted/empty sections.
+filesystem:
+  structure:
+    default: "roms/{platform}/{game}"
+    firmware: "bios/{platform}"

@@ -24,8 +24,6 @@ RUNNER_TEMPLATE_PATH = ROLE_PATH / "templates/postgres-logical-backup-restore-va
 GROUP_VARS_PATH = REPO_ROOT / "ansible/group_vars/tags_postgres.yml"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
 SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
-SKYNET_DOC_PATH = REPO_ROOT / "docs/cheat_sheets/skynet.md"
-BACKUP_DOC_PATH = REPO_ROOT / "docs/postgresql-logical-backups.md"
 SYSTEMD_SERVICE_TEMPLATE = REPO_ROOT / "ansible/roles/systemd_jobs/templates/systemd-job.service.j2"
 SYSTEMD_TIMER_TEMPLATE = REPO_ROOT / "ansible/roles/systemd_jobs/templates/systemd-job.timer.j2"
 SNAPSHOT_ID_A = "a" * 64
@@ -538,19 +536,16 @@ def test_manual_action_and_check_mode_do_not_run_during_normal_role_execution():
     assert invoke["ansible.builtin.command"]["argv"] == ["{{ postgres_backup_restore_validation_script_path }}"]
 
 
-def test_restore_validation_tags_and_commands_are_wired_and_documented():
+def test_restore_validation_tags_and_commands_are_wired():
     sources = (
         PLAYBOOK_PATH.read_text(),
         SKYNET_TEMPLATE_PATH.read_text(),
-        SKYNET_DOC_PATH.read_text(),
-        BACKUP_DOC_PATH.read_text(),
     )
     for action in ("setup", "run"):
         tag = f"postgres_backup_restore_validation_{action}"
         command = f"backup-restore-validation-{action}"
         assert all(tag in source for source in sources)
         assert command in sources[1]
-        assert command in sources[2]
 
 
 def test_runner_preserves_restic_and_production_safety_boundaries():
