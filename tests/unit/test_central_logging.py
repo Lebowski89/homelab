@@ -196,6 +196,7 @@ def test_docker_file_collection_is_an_explicit_active_file_allowlist():
     assert all("**" not in path for path in paths)
     assert all("*" not in path or path.endswith("/technitium/logs/*.log") for path in paths)
     assert all(not path.endswith((".gz", ".zip", ".bak")) for path in paths)
+    assert not any("QUERY" in key.upper() and "LOG" in key.upper() for key in load_service("technitium")["environment"])
     assert 'ignore_older_than = "24h"' in config
     assert config.count("tail_from_end") == 2
     assert config.count('on_positions_file_error = "restart_from_end"') == 2
@@ -285,25 +286,6 @@ def test_file_sources_deliberately_drop_the_automatic_filename_label():
     assert "forward_to              = [loki.process.application_files.receiver]" in docker_config
     assert "forward_to              = [loki.process.traefik_access.receiver]" in docker_config
     assert docker_config.count('values = ["filename"]') == 2
-
-
-def test_verified_application_log_layouts_remain_narrow_and_version_pinned():
-    alloy_config = render_docker_alloy()
-    technitium = load_service("technitium")
-
-    assert load_service("nzbhydra2")["image"] == "ghcr.io/hotio/nzbhydra2:release-v8.9.0"
-    assert load_service("imagemaid")["image"] == "kometateam/imagemaid:v1.2.0"
-    assert load_service("seerr")["image"] == "ghcr.io/hotio/seerr:release-v3.4.1"
-    assert load_service("unifi-os")["image"] == "ghcr.io/lemker/unifi-os-server:v1.7.0"
-    assert technitium["image"] == "technitium/dns-server:15.5.0"
-    assert "/nzbhydra2/app/logs/nzbhydra2.log" in alloy_config
-    assert "/nzbhydra2/app/logs/wrapper.log" in alloy_config
-    assert "/imagemaid/logs/imagemaid.log" in alloy_config
-    assert "/seerr/logs/seerr.log" in alloy_config
-    assert "/unifi-os/var-log/unifi/server.log" in alloy_config
-    assert alloy_config.count("/technitium/logs/*.log") == 2
-    assert not any("QUERY" in key.upper() and "LOG" in key.upper() for key in technitium["environment"])
-    assert all("*.gz" not in path for path in re.findall(r'__path__ = "([^"]+)"', alloy_config))
 
 
 def test_loki_private_ingest_route_and_clients_render_end_to_end():

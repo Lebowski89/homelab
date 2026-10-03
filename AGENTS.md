@@ -384,6 +384,17 @@ Anything that contacts providers, refreshes remote state, changes state, or perf
 
 Tests must prove behaviour rather than merely duplicate implementation strings.
 
+Add or modify tests for non-trivial logic, safety boundaries, persistent-data or
+configuration migrations, and regressions worth preserving. Prefer a small
+number of behavioural tests with distinct failure modes over exhaustive
+assertions of static configuration.
+
+Do not add tests solely to mirror declarative YAML values, exact container image
+tags, documentation wording, or generated output. Routine dependency and image
+bumps normally require no test changes unless an upstream version boundary
+changes behaviour this repository relies on. Document that boundary when a
+compatibility test is necessary; exact patch pins are not generic review gates.
+
 ### Service definition test policy
 
 Adding or changing an ordinary declarative service definition does not by

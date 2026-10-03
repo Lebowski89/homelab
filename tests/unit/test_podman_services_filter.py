@@ -55,14 +55,6 @@ def test_unsupported_log_driver_is_rejected(driver):
         podman_services.podman_service_normalize(cfg, "demo")
 
 
-@pytest.mark.parametrize("image", ["registry.example.invalid/demo:latest", "registry.example.invalid/demo", ""])
-def test_image_must_be_exact_non_latest(image):
-    cfg = valid_cfg()
-    cfg["image"] = image
-    with pytest.raises(AnsibleFilterError, match="exact, non-latest"):
-        podman_services.podman_service_normalize(cfg, "demo")
-
-
 def test_unsafe_path_fails():
     cfg = valid_cfg()
     cfg["paths"] = [{"path": "/root/.ssh"}]

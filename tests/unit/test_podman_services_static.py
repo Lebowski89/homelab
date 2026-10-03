@@ -907,12 +907,6 @@ def test_execution_transitions_clean_only_previous_store_and_network_metadata():
     assert "podman_services_runtime_environment" not in str(runtime_tasks)
 
 
-def test_protocol_normalization_is_not_duplicated():
-    source = (REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py").read_text()
-
-    assert source.count('protocol = str(port.get("protocol", "tcp")).strip().lower()') == 1
-
-
 def test_transition_failure_reports_start_stop_and_rollback_diagnostics_without_journal_output():
     tasks = yaml.safe_load(EXECUTION_TRANSITION_TASKS)
     transition = next(task for task in tasks if task["name"] == "Execution switch | Start service with new execution settings")

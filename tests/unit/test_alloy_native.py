@@ -6,7 +6,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROLE_DIR = REPO_ROOT / "ansible/roles/alloy_native"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
 SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
-SKYNET_DOC_PATH = REPO_ROOT / "docs/cheat_sheets/skynet.md"
 
 
 def task_named(tasks, name: str):
@@ -204,12 +203,9 @@ def test_native_alloy_real_deploy_requires_package_created_account():
 
 def test_skynet_exposes_explicit_alloy_native_target_without_global_rollout():
     wrapper = SKYNET_TEMPLATE_PATH.read_text()
-    docs = SKYNET_DOC_PATH.read_text()
 
     for action in ("deploy", "install", "run"):
         assert f"alloy-native:{action})" in wrapper
-        assert f"skynet run alloy-native {action}" in docs
     assert wrapper.count('echo "alloy_native" ;;') >= 3
     assert "  alloy-native:" in wrapper
     assert "skynet check alloy-native" in wrapper
-    assert "native Alloy is not added to the global catalog-service" in docs

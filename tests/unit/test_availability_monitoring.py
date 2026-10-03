@@ -178,7 +178,6 @@ def test_postgres_exporter_role_is_checksum_pinned_unprivileged_and_secret_safe(
     environment = (REPO_ROOT / "ansible/roles/postgres_exporter/templates/environment.j2").read_text()
     playbook = yaml.safe_load((REPO_ROOT / "ansible/playbook.yml").read_text())
 
-    assert defaults["postgres_exporter_version"] == "0.20.1"
     assert re.fullmatch(r"sha256:[0-9a-f]{64}", defaults["postgres_exporter_checksum"])
     password_task = next(task for task in tasks if task["name"].endswith("Install protected password file"))
     assert password_task["ansible.builtin.template"]["mode"] == "0640"
@@ -214,22 +213,16 @@ def test_postgres_exporter_role_is_checksum_pinned_unprivileged_and_secret_safe(
         assert f"postgres-exporter:{action})" in skynet
         assert f'echo "{exporter_tags}"' in next(line for line in skynet.splitlines() if f"postgres-exporter:{action})" in line)
         assert f"{action:<7} -> {exporter_tags}" in skynet
-    skynet_docs = (REPO_ROOT / "docs/cheat_sheets/skynet.md").read_text()
-    assert f"`skynet run postgres-exporter`         | `{exporter_tags}`" in skynet_docs
-    assert f"`skynet check postgres-exporter`       | `{exporter_tags}`" in skynet_docs
     assert "uptime_kuma_monitor" not in skynet
 
 
 def test_alerting_validator_workflow_uses_repository_ansible_core_constraint():
     workflow_text = ALERTING_WORKFLOW_PATH.read_text()
-    requirements = (REPO_ROOT / "ansible/requirements.txt").read_text().splitlines()
-    ansible_core_pin = next(line for line in requirements if line.startswith("ansible-core=="))
 
-    assert ansible_core_pin == "ansible-core==2.21.4"
     assert yaml.safe_load(workflow_text)
     assert "--constraint ansible/requirements.txt" in workflow_text
     assert "ansible-core jinja2 pyyaml" in workflow_text
-    assert "ansible-core==2.21.4" not in workflow_text
+    assert not re.search(r"\bansible-core\s*(?:==|>=|<=|~=|!=)", workflow_text)
     assert workflow_text.count("      - ansible/requirements.txt") == 2
     assert workflow_text.count("      - ansible/filter_plugins/availability.py") == 2
     assert workflow_text.count("      - ansible/filter_plugins/service_catalog.py") == 2
