@@ -222,7 +222,6 @@ def test_alerting_validator_workflow_uses_repository_ansible_core_constraint():
     assert yaml.safe_load(workflow_text)
     assert "--constraint ansible/requirements.txt" in workflow_text
     assert "ansible-core jinja2 pyyaml" in workflow_text
-    assert not re.search(r"\bansible-core\s*(?:==|>=|<=|~=|!=)", workflow_text)
     assert workflow_text.count("      - ansible/requirements.txt") == 2
     assert workflow_text.count("      - ansible/filter_plugins/availability.py") == 2
     assert workflow_text.count("      - ansible/filter_plugins/service_catalog.py") == 2

@@ -1,0 +1,72 @@
+---
+
+- name: RomM prepare | Inspect existing configuration
+  ansible.builtin.stat:
+    path: "{{ service_prepare_romm_config_path }}"
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  delegate_to: "{{ service_prepare_romm_fs_host }}"
+  register: service_prepare_romm_existing_stat
+
+- name: RomM prepare | Read existing configuration safely
+  when: service_prepare_romm_existing_stat.stat.exists
+  block:
+    - name: RomM prepare | Read existing configuration content
+      ansible.builtin.slurp:
+        src: "{{ service_prepare_romm_config_path }}"
+      delegate_to: "{{ service_prepare_romm_fs_host }}"
+      register: service_prepare_romm_existing_raw
+      no_log: true
+      diff: false
+
+    - name: RomM prepare | Parse existing configuration
+      ansible.builtin.set_fact:
+        service_prepare_romm_existing_config: "{{ service_prepare_romm_existing_raw.content | b64decode | from_yaml }}"
+      no_log: true
+      diff: false
+
+    # The old seed was empty/comment-only YAML; yedit treats it as an empty map.
+    - name: RomM prepare | Derive value-free compatibility checks
+      ansible.builtin.set_fact:
+        service_prepare_romm_mapping_compatible: >-
+          {{ service_prepare_romm_existing_config is none or
+             (service_prepare_romm_existing_config is mapping and
+              service_prepare_romm_existing_config.get('filesystem', {}) is mapping and
+              service_prepare_romm_existing_config.get('filesystem', {}).get('structure', {}) is mapping) }}
+        service_prepare_romm_legacy_compatible: >-
+          {{ service_prepare_romm_existing_config is none or
+             (service_prepare_romm_existing_config is mapping and
+              service_prepare_romm_existing_config.get('filesystem', {}) is mapping and
+              service_prepare_romm_existing_config.get('filesystem', {}).get('roms_folder') in [none, 'roms'] and
+              service_prepare_romm_existing_config.get('filesystem', {}).get('firmware_folder') in [none, 'bios']) }}
+      no_log: true
+      diff: false
+  rescue:
+    - name: RomM prepare | Reject unreadable existing configuration
+      no_log: false
+      ansible.builtin.fail:
+        msg: >-
+          Existing RomM config.yml cannot be read or parsed as YAML.
+          Review the file before the automated RomM 5.3 migration; deployment cleanup has not run.
+
+- name: RomM prepare | Require migration-compatible mappings
+  when: service_prepare_romm_existing_stat.stat.exists
+  no_log: false
+  ansible.builtin.assert:
+    quiet: true
+    that: service_prepare_romm_mapping_compatible
+    fail_msg: >-
+      Existing RomM config.yml must be a YAML mapping with mapping-valued filesystem and structure settings
+      (or the old empty seed). Review the file before migration; deployment cleanup has not run.
+
+- name: RomM prepare | Require canonical legacy library folders
+  when: service_prepare_romm_existing_stat.stat.exists
+  no_log: false
+  ansible.builtin.assert:
+    quiet: true
+    that: service_prepare_romm_legacy_compatible
+    fail_msg: >-
+      Existing RomM config.yml uses non-canonical legacy roms_folder or firmware_folder settings.
+      Manual review/migration to the repository's roms and bios layout is required before the automated
+      RomM 5.3 migration; deployment cleanup has not run.

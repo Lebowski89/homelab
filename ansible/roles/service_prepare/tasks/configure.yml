@@ -26,7 +26,7 @@
   vars:
     service_prepare_romm_config_path: >-
       {{ service_prepare_context.service.copies
-         | selectattr('src', 'equalto', 'files/romm/config.yml') | map(attribute='dest') | first }}
+         | selectattr('src', 'equalto', 'files/romm/config.yml') | map(attribute='dest') | first | trim }}
   loop: "{{ service_prepare_context.filesystem_hosts }}"
   loop_control:
     loop_var: service_prepare_romm_fs_host
