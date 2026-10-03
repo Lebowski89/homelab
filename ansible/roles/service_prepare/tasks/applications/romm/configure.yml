@@ -37,6 +37,13 @@
       delegate_to: "{{ service_prepare_romm_fs_host }}"
       no_log: true
       diff: false
+  rescue:
+    - name: RomM prepare | Fail filesystem migration safely
+      ansible.builtin.fail:
+        msg: >-
+          RomM filesystem migration failed during
+          '{{ ansible_failed_task.name | default('an unknown task') }}';
+          file permission restoration will still be attempted.
   always:
     # yedit uses an atomic rename; retain the ownership of the seeded/existing file.
     - name: RomM prepare | Preserve config file permissions

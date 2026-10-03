@@ -93,6 +93,10 @@ def local_deployment(tmp_path):
             },
         },
         {"ansible.builtin.include_role": {"name": "service_prepare", "tasks_from": "configure"}},
+        {
+            "name": "RomM fixture | Deployment boundary",
+            "ansible.builtin.debug": {"msg": "SYNTHETIC_DEPLOYMENT_REACHED"},
+        },
     ]
     for task in tasks:
         task["tags"] = ["deploy", "update", "recreate", "bootstrap"]
@@ -160,6 +164,7 @@ def test_actual_deployment_migrates_existing_configs_and_converges(local_deploym
         config.write_text(initial)
     rc, output = run("--tags", tags)
     assert rc == 0, output
+    assert "SYNTHETIC_DEPLOYMENT_REACHED" in output
     deployed = yaml.safe_load(config.read_text())
     assert deployed["filesystem"]["structure"]["default"] == STRUCTURE["default"]
     assert deployed["filesystem"]["structure"]["firmware"] == STRUCTURE["firmware"]
@@ -202,6 +207,12 @@ def test_invalid_yaml_fails_without_replacing_user_config(local_deployment):
     config, run = local_deployment
     original = "filesystem: [invalid\n"
     config.write_text(original)
+    permissions = config.stat()
     rc, output = run("--tags", "update")
     assert rc != 0, output
     assert config.read_text() == original
+    assert "RomM prepare | Fail filesystem migration safely" in output
+    assert "RomM prepare | Preserve config file permissions" in output
+    assert "SYNTHETIC_DEPLOYMENT_REACHED" not in output
+    restored = config.stat()
+    assert (restored.st_uid, restored.st_gid, restored.st_mode) == (permissions.st_uid, permissions.st_gid, permissions.st_mode)
