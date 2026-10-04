@@ -92,21 +92,18 @@ def assert_service_document_style(document, *, filename):
 def test_all_repository_service_definitions_follow_canonical_layout():
     paths = sorted(SERVICES_DIR.glob("*.yml"))
     assert paths
-    enabled_states = set()
 
     for path in paths:
         document = yaml.safe_load(path.read_text())
-        enabled_states.update(service_cfg.get("enabled") for service_cfg in document.values())
         assert_service_document_style(document, filename=path.name)
 
-    assert enabled_states >= {True, False}
 
-
+@pytest.mark.parametrize("enabled", [True, False])
 @pytest.mark.parametrize("runtime", ["docker", "podman"])
-def test_correctly_ordered_runtime_service_is_accepted(runtime):
+def test_correctly_ordered_runtime_service_is_accepted(runtime, enabled):
     document = {
         "example": {
-            "enabled": True,
+            "enabled": enabled,
             "runtime": runtime,
             "tags": ["example"],
             "name": "example",
