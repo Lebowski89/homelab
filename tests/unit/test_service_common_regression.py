@@ -5,7 +5,6 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
 SENSITIVE_COMMON_TEMPLATES = {
-    "configs/gitea.env.j2",
     "configs/gotify.env.j2",
     "configs/homepage/services.yaml.j2",
     "configs/imagemaid.j2",

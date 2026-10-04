@@ -254,11 +254,18 @@ def test_every_postgres_password_secret_consumer_declares_materialization():
     for path in sorted(SERVICES_DIR.glob("*.yml")):
         services = yaml.safe_load(path.read_text()) or {}
         for name, service in services.items():
-            if "postgres_pass_secret" not in repr(service):
+            referenced_names = {
+                value.rsplit("/", 1)[-1]
+                for mapping in walk_mappings(service)
+                for value in mapping.values()
+                if isinstance(value, str)
+                and value.startswith(("/run/secrets/", "file:/run/secrets/"))
+                and value.endswith("postgres_pass_secret")
+            }
+            if not referenced_names:
                 continue
             consumers.append(name)
-            if "postgres_pass_secret" not in materialized_secret_names(service):
-                missing.append(name)
+            missing.extend(f"{name}:{secret}" for secret in referenced_names - materialized_secret_names(service))
 
     assert consumers
     assert missing == []

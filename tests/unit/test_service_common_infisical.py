@@ -370,15 +370,15 @@ def test_real_common_template_renders_from_explicit_common_value_mapping():
         trim_blocks=True,
         lstrip_blocks=True,
     )
-    rendered = environment.get_template("configs/gitea.env.j2").render(
+    rendered = environment.get_template("configs/gotify.env.j2").render(
         service_common_infisical_values={
             "postgres_user": "synthetic-user",
             "postgres_pass": "SYNTHETIC_PASSWORD_DO_NOT_LOG",
         }
     )
 
-    assert "GITEA__database__USER=synthetic-user" in rendered
-    assert "GITEA__database__PASSWD=SYNTHETIC_PASSWORD_DO_NOT_LOG" in rendered
+    assert "user=synthetic-user" in rendered
+    assert "password=SYNTHETIC_PASSWORD_DO_NOT_LOG" in rendered
 
 
 def test_unsupported_lookup_and_secret_fields_are_rejected():

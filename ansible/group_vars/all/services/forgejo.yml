@@ -1,0 +1,137 @@
+---
+
+forgejo:
+  ################################
+  # IDENTITY
+  ################################
+  enabled: true
+  runtime: podman
+  tags: [utilities, pgsql, forgejo]
+  name: forgejo
+  ################################
+  # IMAGE/PROCESS
+  ################################
+  image: codeberg.org/forgejo/forgejo:15.0.9-rootless
+  user: "1000:1000"
+  ################################
+  # ENVIRONMENT/SECRETS
+  ################################
+  environment:
+    TZ: "{{ timezone }}"
+    FORGEJO__database__DB_TYPE: postgres
+    FORGEJO__database__HOST: "{{ hostvars[services_controller_host].local_ip }}:5432"
+    FORGEJO__database__NAME: forgejo
+    FORGEJO__database__USER__FILE: /run/secrets/forgejo_postgres_user_secret
+    # Clear retained plaintext settings before enabling URI-backed configuration.
+    FORGEJO__database__PASSWD: ""
+    FORGEJO__database__PASSWD_URI: file:/run/secrets/forgejo_postgres_pass_secret
+    FORGEJO__server__DOMAIN: "forgejo.{{ services_internal_zone }}"
+    FORGEJO__server__ROOT_URL: "https://forgejo.{{ services_internal_zone }}:{{ services_private_https_port }}/"
+    FORGEJO__server__HTTP_PORT: "3000"
+    FORGEJO__server__SSH_DOMAIN: "forgejo.{{ services_internal_zone }}"
+    FORGEJO__server__SSH_PORT: "2222"
+    FORGEJO__server__START_SSH_SERVER: "true"
+    FORGEJO__server__SSH_LISTEN_PORT: "2222"
+    FORGEJO__security__INSTALL_LOCK: "true"
+    FORGEJO__security__SECRET_KEY: ""
+    FORGEJO__security__SECRET_KEY_URI: file:/run/secrets/forgejo_secret_key_secret
+    FORGEJO__security__INTERNAL_TOKEN: ""
+    FORGEJO__security__INTERNAL_TOKEN_URI: file:/run/secrets/forgejo_internal_token_secret
+    # The first managed bridge in the dedicated account's fresh Podman store.
+    # Rootless bridge port forwarding rewrites the proxy's source address.
+    FORGEJO__security__REVERSE_PROXY_TRUSTED_PROXIES: "10.89.0.0/24"
+    FORGEJO__service__DISABLE_REGISTRATION: "true"
+    FORGEJO__service__REQUIRE_SIGNIN_VIEW: "true"
+    FORGEJO__service__ENABLE_REVERSE_PROXY_AUTHENTICATION: "false"
+    FORGEJO__session__COOKIE_SECURE: "true"
+    FORGEJO__log__MODE: console
+    FORGEJO__log__LEVEL: Info
+    FORGEJO__actions__ENABLED: "false"
+  infisical:
+    secrets_map:
+      - var: postgres_user
+        path: /Postgres
+        name: USER
+        secret:
+          name: forgejo_postgres_user_secret
+          update_policy: reconcile
+      - var: postgres_pass
+        path: /Postgres
+        name: PASS
+        secret:
+          name: forgejo_postgres_pass_secret
+          update_policy: reconcile
+      - var: forgejo_secret_key
+        path: /Forgejo
+        name: SECRET_KEY
+        secret:
+          name: forgejo_secret_key_secret
+      - var: forgejo_internal_token
+        path: /Forgejo
+        name: INTERNAL_TOKEN
+        secret:
+          name: forgejo_internal_token_secret
+  ################################
+  # CONNECTIVITY
+  ################################
+  named_networks:
+    forgejo:
+      driver: bridge
+      external: false
+  ports:
+    - host_ip: "{{ local_ip }}"
+      published: 13001
+      target: 3000
+      protocol: tcp
+    - host_ip: "{{ local_ip }}"
+      published: 2222
+      target: 2222
+      protocol: tcp
+  ################################
+  # FILESYSTEM
+  ################################
+  paths:
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/forgejo"
+      state: directory
+      mode: "0750"
+  volumes:
+    data:
+      type: bind
+      source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/forgejo"
+      target: /var/lib/gitea
+      read_only: false
+  ################################
+  # HEALTH
+  ################################
+  healthcheck:
+    test: [CMD, curl, --fail, --silent, --show-error, http://127.0.0.1:3000/api/healthz]
+  ################################
+  # INTEGRATIONS
+  ################################
+  traefik:
+    enable: true
+    exposure: private
+    port: 13001
+    backend_mode: host
+    backend_host_inventory: "{{ services_controller_host }}"
+  postgres:
+    enable: true
+    databases: [forgejo]
+  ################################
+  # RUNTIME/LIFECYCLE
+  ################################
+  deploy:
+    type: container
+    host: "{{ services_controller_host }}"
+    execution:
+      mode: rootless
+      host_user: podman-forgejo
+      # These are the official image's container IDs, mapped to the service account.
+      userns:
+        mode: keep-id
+        uid: "1000"
+        gid: "1000"
+  systemd:
+    after: [network-online.target]
+    restart: on-failure
+    restart_sec: 10s

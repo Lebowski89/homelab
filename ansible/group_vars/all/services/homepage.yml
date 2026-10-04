@@ -31,9 +31,6 @@ homepage:
       - var: bazarr_api
         path: "/Bazarr"
         name: API
-      - var: gitea_homepage_api
-        path: "/Gitea"
-        name: HOMEPAGE_API
       - var: gotify_homepage_token
         path: "/Gotify"
         name: HOMEPAGE_TOKEN

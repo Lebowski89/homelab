@@ -43,7 +43,7 @@ locals {
     "authelia",
     "autobrr",
     "bazarr",
-    "gitea",
+    "forgejo",
     "gotify",
     "grafana",
     "homepage",
