@@ -14,21 +14,6 @@
 - Automate deployment of apps and services, primarily via Docker and Podman
 - Automate app settings, configs, databases and other needs in a single Ansible or OpenTofu run
 
-## Disclaimer
-
-1. This repo is built by me, for me. It is what I use to run my homelab.
-2. It is subject to frequent changes, and I do sometimes break things.
-3. I keep it public because one of the best ways to learn is by seeing how others approach things.
-4. This is not a plug-and-play repo. Anyone using parts of it should expect to adapt it heavily for their own environment.
-
-## [AI Disclosure](AI_DISCLOSURE.md)
-
-## Support
-
-This is a personal homelab repository and is shared for reference only.
-
-For issues with upstream tools or applications, please open an issue with the relevant project.
-
 ## Apps in Use
 
 (Logos sourced from selfh.st <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/selfh-st.svg" alt="selfh-st" width="24" />)
@@ -104,6 +89,21 @@ For issues with upstream tools or applications, please open an issue with the re
     <td align="center"><img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/webp/znc.webp" alt="ZNC" width="36"><br>Znc</td>
   </tr>
 </table>
+
+## Disclaimer
+
+1. This repo is built by me, for me. It is what I use to run my homelab.
+2. It is subject to frequent changes, and I do sometimes break things.
+3. I keep it public because one of the best ways to learn is by seeing how others approach things.
+4. This is not a plug-and-play repo. Anyone using parts of it should expect to adapt it heavily for their own environment.
+
+## [AI Disclosure](AI_DISCLOSURE.md)
+
+## Support
+
+This is a personal homelab repository and is shared for reference only.
+
+For issues with upstream tools or applications, please open an issue with the relevant project.
 
 ## Coffee
 
