@@ -811,20 +811,6 @@ def _deploy(value: Any, *, name: str) -> dict[str, Any]:
     return deploy
 
 
-def _has_native_infisical_secret(cfg: Mapping[str, Any]) -> bool:
-    infisical = cfg.get("infisical")
-    if not isinstance(infisical, Mapping):
-        return False
-    secrets_map = infisical.get("secrets_map", [])
-    if isinstance(secrets_map, Mapping):
-        entries = secrets_map.values()
-    elif isinstance(secrets_map, Iterable) and not isinstance(secrets_map, str):
-        entries = secrets_map
-    else:
-        return False
-    return any(isinstance(entry, Mapping) and "secret" in entry for entry in entries)
-
-
 def _proper_descendant(value: Any, roots: Iterable[str], *, name: str, root_description: str) -> str:
     if not isinstance(value, str) or not value or not posixpath.isabs(value) or posixpath.normpath(value) != value:
         raise AnsibleFilterError(f"{name} must be a normalized absolute proper descendant of {root_description}; got {value!r}")
@@ -868,7 +854,6 @@ def _validate_rootless_subset(
     network: Mapping[str, Any] | None,
     volumes: list[dict[str, Any]],
     host_paths: list[dict[str, Any]],
-    secret_attachments: list[str],
 ) -> None:
     if deploy["execution"]["mode"] != "rootless":
         return
@@ -948,8 +933,6 @@ def _validate_rootless_subset(
         raise AnsibleFilterError(f"{name}.network_mode is not supported for rootless Podman in this phase")
     if container.get("shm_size"):
         raise AnsibleFilterError(f"{name}.shm_size is not supported for rootless Podman in this phase")
-    if secret_attachments or _has_native_infisical_secret(cfg):
-        raise AnsibleFilterError(f"{name}.secrets is not supported for rootless Podman in this phase")
     for field in ("application_prepare", "prep", "paths_vault"):
         if cfg.get(field):
             raise AnsibleFilterError(
@@ -1167,7 +1150,6 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         network=network,
         volumes=volumes,
         host_paths=host_paths,
-        secret_attachments=secret_attachments,
     )
 
     return {

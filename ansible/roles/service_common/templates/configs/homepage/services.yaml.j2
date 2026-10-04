@@ -274,15 +274,10 @@
         icon: adminer.svg
         href: https://adminer.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Database administration
-    - Gitea:
-        icon: gitea.svg
-        href: https://gitea.{{ services_internal_zone }}:{{ services_private_https_port }}
+    - Forgejo:
+        icon: forgejo.svg
+        href: https://forgejo.{{ services_internal_zone }}:{{ services_private_https_port }}
         description: Self-hosted Git service
-        widget:
-          type: gitea
-          url: https://gitea.{{ services_internal_zone }}:{{ services_private_https_port }}
-          key: {{ secrets.gitea_homepage_api }}
-          fields: ["repositories", "notifications", "issues", "pulls"]
     - Syncthing:
         icon: syncthing.svg
         href: https://syncthing.{{ services_internal_zone }}:{{ services_private_https_port }}

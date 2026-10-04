@@ -107,7 +107,6 @@ def test_catalogue_variants_special_urls_and_categories_are_preserved():
     assert targets["http.plex-direct"]["labels"]["module"] == "http_2xx"
     assert targets["http.proxmox"]["targets"][0].endswith(":8006")
     assert targets["http.proxmox"]["labels"]["module"] == "http_private"
-    assert targets["http.gitea-private"]["labels"]["category"] == "Media"
     assert targets["http.wallos-private"]["labels"]["category"] == "Finance"
 
 

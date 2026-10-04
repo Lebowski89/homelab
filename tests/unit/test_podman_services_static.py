@@ -409,6 +409,11 @@ def test_podman_secret_loop_uses_a_role_prefixed_variable_without_item_reference
 
     assert task["loop_control"]["loop_var"] == "podman_services_secret"
     assert re.search(r"(?<![A-Za-z0-9_])item(?![A-Za-z0-9_])", str(task)) is None
+    assert task["become"] is True
+    assert task["become_user"] == "{{ podman_services_execution.host_user | default('root') }}"
+    assert task["environment"] == "{{ podman_services_runtime_environment }}"
+    assert task["no_log"] is True
+    assert task["diff"] is False
 
 
 def test_podman_generated_path_loop_uses_a_role_prefixed_variable_without_item_references():

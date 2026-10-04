@@ -93,7 +93,7 @@ in `paths`, omit explicit path ownership, and provide a validated
 `deploy.execution.userns: {mode: keep-id, uid: ..., gid: ...}` mapping. After
 the common path exists, the adapter recursively assigns that source to the
 dedicated execution account without changing descendant modes. Named volumes,
-tmpfs mounts, native secrets, added capabilities, devices, shared container
+tmpfs mounts, added capabilities, devices, shared container
 network namespaces, `shm_size`, privileged mode, host networking, and
 application preparation remain unsupported for rootless
 execution. Rootless `copies` and `templates` are supported only when every
@@ -159,7 +159,7 @@ operator procedure.
 ## Lifecycle semantics
 
 - `deploy` and `bootstrap` fetch missing secrets, create missing Podman secrets, pull the declared image, render configuration, and start the service if it is not already running.
-- `update` reconciles secrets marked `update_policy: reconcile` and replaces the rootful container when material inputs changed; because Podman cannot compare stored secret contents, a reconciled secret triggers the same replacement path. An owned network remains in place through the replacement. If its Quadlet definition changes, use an explicit remove followed by deploy when the network itself must be recreated.
+- `update` compares secrets marked `update_policy: reconcile` and replaces the rootful container or restarts the rootless user service when material inputs changed, including a changed secret. An unchanged reconciled secret alone does not trigger a restart. An owned network remains in place through the replacement. If its Quadlet definition changes, use an explicit remove followed by deploy when the network itself must be recreated.
 - `recreate` reconciles secrets marked `update_policy: reconcile`, stops the rootful unit, removes its exact stale container object, and starts the generated service after rendering current inputs. It retains the service network. Rootless recreate keeps its existing user-service restart behavior.
 - `remove` uses the last successfully persisted execution owner even when the declaration now requests another mode. It stops that service first, then stops and removes only a network whose persisted metadata proves role ownership. It removes exact generated Quadlets, environment files, and host-backed Traefik routing, but preserves application data, Podman secrets, images, the dedicated rootless account, its linger configuration, home, and user storage. Externally owned and unproven legacy networks are retained.
 - `drift` inspects the current container image reference and reports a changed task when it differs from the declared exact image reference. It is reference drift, not registry digest drift.
@@ -255,9 +255,12 @@ Published ports accept an optional `host_ip` per port. When set, the generated `
 
 ## Secrets and PostgreSQL
 
-Canonical materialized secrets are nested in an Infisical map entry:
+Canonical materialized secrets use the same nested Infisical declaration for
+rootful and rootless execution:
 
 ```yaml
+environment:
+  APP_PASSWORD_FILE: /run/secrets/app_password_secret
 infisical:
   secrets_map:
     - var: app_password
@@ -277,9 +280,9 @@ infisical:
 
 `service_common` validates the lookup and value-free declaration metadata, resets all outputs per service, and retrieves lookup-only and secret-backed values into `service_common_infisical_values`, keyed by `var`. `fail_on_empty` defaults to true; setting it to false is an exceptional opt-out for declarations that intentionally permit empty values. Entries without `secret` remain lookup-only. It also resolves the canonical environment before Podman renders its protected environment file or Quadlets. Check mode validates declarations and references without contacting Infisical or creating a native secret, using an optional declaration-owned `check_mode_value` when present and deterministic redacted stand-ins otherwise.
 
-`podman_services` remains responsible for `containers.podman.podman_secret` and Quadlet attachment. It reads the value through the declaration's `var`, creates the declared native Podman secret name, and preserves target, UID, GID, and mode in `Secret=`. Value-carrying tasks use `no_log: true` and `diff: false`; values never enter generated Quadlets. Native Podman secrets keep values out of repository files and generated unit arguments, but the default file-backed secret driver is not encrypted storage and root on the host can access it.
+`podman_services` remains responsible for `containers.podman.podman_secret` and Quadlet attachment. It reads the value through the declaration's `var`, creates the declared native Podman secret name in the selected execution account's store, and preserves target, UID, GID, and mode in `Secret=`. The module sends the value over stdin, not the command line. Value-carrying tasks use `no_log: true` and `diff: false`; values never enter generated Quadlets. The mount defaults to mode `0400` and the configured container UID/GID. Native Podman secrets keep values out of container environment metadata when the application consumes the file directly. The default file-backed secret driver is not encrypted storage; the execution account and host root can retrieve its contents. Ordinary removal deliberately preserves these resources with user storage; secret retirement requires an operator's explicit cleanup after checking consumers.
 
-`secret.update_policy` accepts exactly `preserve` or `reconcile` and defaults to `preserve`. Both policies create a missing native secret and preserve an existing one during deploy/bootstrap. Podman translates reconcile during update/recreate to `force: true` and `skip_existing: false`; preserve always uses `force: false` and `skip_existing: true`. Podman cannot compare stored secret contents, so reconcile recreates the secret and follows the existing restart path. Legacy runtime-specific secret policy blocks are rejected.
+`secret.update_policy` accepts exactly `preserve` or `reconcile` and defaults to `preserve`. Both policies create a missing native secret and preserve an existing one during deploy/bootstrap. Podman translates reconcile during update/recreate to `force: true` and `skip_existing: false`; preserve always uses `force: false` and `skip_existing: true`. At the repository's Podman 5.4.2+ baseline, the installed collection compares existing content and replaces only changed secrets. A changed result follows the selected service's replacement/restart path, because mounts are populated when its container is created. Explicit recreate still restarts regardless of changes. Legacy runtime-specific secret policy blocks are rejected.
 
 The canonical PostgreSQL declaration is shared by Docker and Podman:
 
@@ -300,6 +303,15 @@ When neither address field is supplied, `host_inventory` defaults to `service_co
 Portable services may use ordinary scalar environment values, direct `value_from.infisical` references, or `value_template` strings containing one or more `${identifier}` references. Every reference must match a `var` declared by that service. Substitution is deliberately single-pass and does not evaluate Jinja or shell expressions; `$$` represents a literal dollar sign. `service_common` produces the final scalar mapping consumed by the Podman adapter.
 
 Docker and Podman now consume the same common-resolved environment. The former exact `__INFISICAL__:var` Docker placeholder has been removed after repository services migrated to typed references. Existing Docker `env_file` behaviour is unchanged. Runtime-native secrets remain separate: only an Infisical entry with `secret` metadata creates and attaches a Podman secret.
+
+`value_from.infisical` means plaintext environment injection, not a runtime
+secret mount. Podman stores that value in the execution-account-owned `0600`
+environment file and container environment metadata; `podman inspect` can
+retrieve it. Quadlet's `[Container] EnvironmentFile=` becomes Podman's
+`--env-file` argument, so values do not enter the generated unit command line
+or systemd manager environment. Environment-only applications remain supported.
+See [Service secret delivery audit](service-secret-delivery.md) for the
+Docker comparison and disk/runtime exposure boundaries.
 
 ## Adminer
 

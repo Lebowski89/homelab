@@ -88,6 +88,13 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
       environment:
         HOME: /application/home
         CHECK_SECRET: declaration-placeholder
+      infisical:
+        secrets_map:
+          - var: file_value
+            path: /Synthetic
+            name: FILE_VALUE
+            secret:
+              name: check_file_secret
       named_networks:
         check-mode:
           driver: bridge
@@ -136,11 +143,15 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
       runtime: podman
       dispatch_host: localhost
       controller_host: localhost
-      lookup_values: {{}}
+      lookup_values:
+        file_value: {secret_sentinel}
       resolved_environment:
         HOME: /application/home
         CHECK_SECRET: {secret_sentinel}
-      secret_declarations: []
+      secret_declarations:
+        - name: check_file_secret
+          var: file_value
+          target: /run/secrets/check_file_secret
   tasks:
     - name: Include complete Podman role
       ansible.builtin.include_role:
@@ -210,6 +221,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         "Execution | Reject conflicting host IPv4 routes",
         "Execution | Manage rootless pasta network drop-in",
         "Podman services | Set rootless bind mount ownership",
+        "Podman services | Manage Podman secrets",
         "Quadlets | Write network Quadlet",
         "Quadlets | Write protected environment file",
         "Quadlets | Write container Quadlet",
@@ -264,6 +276,49 @@ def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, ex
         capture_output=True,
         check=False,
     )
+
+
+def test_reconciled_secret_restart_depends_on_material_change(tmp_path):
+    case_tasks = tmp_path / "restart-case.yml"
+    case_tasks.write_text(
+        yaml.safe_dump(
+            [
+                {"ansible.builtin.include_role": {"name": "podman_services", "tasks_from": "sub_tasks/image"}},
+                {"ansible.builtin.assert": {"that": ["podman_services_requires_restart == restart_case.expected"]}},
+            ]
+        )
+    )
+    result = run_local_playbook(
+        tmp_path,
+        [
+            {
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "vars": {
+                    "podman_services_state": "{{ restart_case.operation }}",
+                    "podman_services_service": {"secrets": [{"update_policy": "reconcile"}]},
+                    "podman_services_container_quadlet": {"changed": False},
+                    "podman_services_env_file": {"changed": False},
+                    "podman_services_network_quadlet": {"changed": False},
+                    "podman_services_volume_quadlets": {"changed": False},
+                    "podman_services_secret_results": {"results": [{"changed": "{{ restart_case.changed }}"}]},
+                },
+                "tasks": [
+                    {
+                        "ansible.builtin.include_tasks": str(case_tasks),
+                        "loop": [
+                            {"operation": "update", "changed": False, "expected": False},
+                            {"operation": "update", "changed": True, "expected": True},
+                            {"operation": "recreate", "changed": False, "expected": True},
+                        ],
+                        "loop_control": {"loop_var": "restart_case"},
+                    }
+                ],
+            }
+        ],
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(

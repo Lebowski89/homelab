@@ -226,11 +226,14 @@ names, never values.
 | ------------- | ------- | -------- |
 | `preserve`, all materializing actions | Create | Keep unchanged. |
 | `reconcile`, deploy/bootstrap | Create | Keep unchanged. |
-| `reconcile`, update/recreate | Create | Docker content-aware replacement or protected-file overwrite; Podman force-recreates because stored content cannot be compared. |
+| `reconcile`, update/recreate | Create | Docker content-aware replacement or protected-file overwrite; Podman compares content and replaces changed secrets. |
 | remove | Adapter-owned | Docker removes service attachments; Podman intentionally preserves native secrets. |
 
 Docker Swarm objects are immutable, so in-use replacement can fail safely.
 Standalone Docker uses protected files. Podman renders `Secret=` metadata.
+The same Podman declaration supports rootful and rootless accounts, using each
+account's own secret store. Changed secrets trigger replacement/restart of the
+selected service; unchanged reconciled secrets alone do not.
 Check mode creates nothing.
 
 ## Connectivity
@@ -580,7 +583,7 @@ configured by this service and is not migrated here.
 | Action | Common/preparation | Docker | Podman |
 | ------ | ------------------ | ------ | ------ |
 | deploy | Lookup/environment preflight; handler work; PostgreSQL, files, Traefik. | Build/deploy Compose or Swarm; create missing secrets/configs. | Render Quadlets/env; pull per role default; create missing secrets; start. |
-| update | Same common preparation. | Re-render/redeploy; reconcile secrets may rotate. | Re-render and replace as needed; reconcile secrets force-recreate. Replacing a namespace provider stops managed consumers, removes their exact stale container objects, and restores only those previously active. |
+| update | Same common preparation. | Re-render/redeploy; reconcile secrets may rotate. | Re-render and replace/restart as needed, including changed reconciled secrets. Replacing a namespace provider stops managed consumers, removes their exact stale container objects, and restores only those previously active. |
 | recreate | Lookup and validation finish before cleanup. | Remove existing stack/container once, then rebuild. | Stop unit, remove its exact stale container object, reconcile, render, start; preserve network. Namespace providers clean consumers before replacement and restore previously active consumers after verification. |
 | bootstrap | Common preparation plus bootstrap-tagged handlers. | Normal deploy path; optional explicit Plex bootstrap. | Normal path; Plex is rejected. |
 | remove | No lookup/application mutation; remove common Traefik route. | Remove runtime artifacts when cleanup enabled. | Process managed namespace consumers before providers; reject an incomplete provider closure. Stop service; remove generated files and owned network; preserve data/secrets. |

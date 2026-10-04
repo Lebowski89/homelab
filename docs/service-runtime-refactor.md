@@ -107,10 +107,12 @@ descendants of a declared bind source, explicit owner/group overrides are
 forbidden, and extra `paths` entries may only remove descendants of that bind
 tree. The common role therefore creates those files as the dedicated execution
 account before the adapter's final recursive ownership reconciliation; the
-adapter does not recursively change modes. Named volumes, tmpfs, native
-secrets, and application-preparation fields remain unsupported for rootless
+adapter does not recursively change modes. Named volumes, tmpfs,
+and application-preparation fields remain unsupported for rootless
 execution and fail before host mutation. This is deliberately not general
 rootless filesystem parity outside declared bind trees.
+Native secrets use the existing account-aware materialization and Quadlet
+`Secret=` path for both rootful and rootless execution.
 
 The runtime adapter also owns one account-specific pasta configuration drop-in
 at
@@ -180,7 +182,7 @@ Repository service definitions now use only canonical Infisical lookup declarati
 
 For Docker Swarm, canonical targets must be directly beneath `/run/secrets`; the adapter translates the absolute path to Swarm's filename target and uses long syntax when target or UID/GID/mode metadata requires it. `preserve` inspects the exact secret and creates it only when missing. `reconcile` does the same during deploy/bootstrap, while update/recreate invokes the module's content-aware replacement path for Ansible-managed secrets; unmanaged existing secrets are rejected rather than silently reported as reconciled. Swarm secret objects are replaced rather than mutated in place, and an in-use replacement failure is surfaced without logging the value. Standalone Docker creates missing protected files without overwriting them under `preserve`; `reconcile` overwrites only on update/recreate, while owner, group, mode, and file-type verification remain enforced. Legacy Docker string attachments keep their previous render form.
 
-Podman maps `preserve` to `force: false` and `skip_existing: true` for every action. It maps `reconcile` to `force: true` and `skip_existing: false` only during update/recreate. Because Podman cannot compare stored secret contents, this reconciliation recreates the native secret and relies on the existing failure-aware service restart path. Both adapters leave runtime-native secret removal under their existing adapter-owned remove behavior.
+Podman maps `preserve` to `force: false` and `skip_existing: true` for every action. It maps `reconcile` to `force: true` and `skip_existing: false` only during update/recreate. At the supported Podman baseline, the installed module compares contents and replaces changed native secrets; only a changed result triggers replacement/restart through the existing service lifecycle. Explicit recreate still restarts. Both adapters leave runtime-native secret removal under their existing adapter-owned remove behavior.
 
 `named_networks` is the canonical network location for both adapters. Podman
 currently accepts one entry: `external: false` is role-managed and

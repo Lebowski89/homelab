@@ -40,8 +40,6 @@ prometheus_availability_external_private_services:
     category: Network
 
 prometheus_availability_http_overrides:
-  gitea:
-    category: Media
   opencloud:
     category: Media
   tautulli:

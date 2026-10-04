@@ -62,6 +62,16 @@
     ],
     "packageRules": [
         {
+            "description": "Keep Forgejo on the 15.x LTS line",
+            "matchDatasources": [
+                "docker"
+            ],
+            "matchPackageNames": [
+                "codeberg.org/forgejo/forgejo"
+            ],
+            "allowedVersions": "/^15\\.0\\.\\d+-rootless$/"
+        },
+        {
             "description": "Group Terraform/OpenTofu providers and modules",
             "matchManagers": [
                 "terraform"

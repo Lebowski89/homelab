@@ -363,9 +363,6 @@ def test_runtime_adapters_apply_canonical_secret_policy_without_logging_values()
     assert podman_materialize["diff"] is False
     assert "podman_secret_policy" in podman_materialize["containers.podman.podman_secret"]["force"]
     assert "not ansible_check_mode" in PODMAN_MAIN
-    assert (
-        "selectattr('update_policy', 'equalto', 'reconcile')" in Path("ansible/roles/podman_services/tasks/sub_tasks/image.yml").read_text()
-    )
 
 
 def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():

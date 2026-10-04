@@ -141,9 +141,14 @@ removes backups older than one month.
 Authelia is stdout-only because the repository has no remaining consumer of its
 former duplicate file and no CrowdSec service; its Docker stream is collected
 once. Homepage is stdout-only, and Unpackerr, Autobrr, Syncthing, Vaultwarden,
-Grafana, Gitea, OpenCloud, Qui, Stash, and the
+Grafana, OpenCloud, Qui, Stash, and the
 other ordinary services remain on their runtime stdout or journal paths to
 avoid duplicate events.
+
+Forgejo is stdout-only inside its rootless Podman container. Its managed user
+Quadlet uses journald, and native Alloy collects it under
+`{source="journal", user_unit="forgejo.service"}` without a dedicated file
+target or Docker collector integration.
 
 ## LogQL examples
 

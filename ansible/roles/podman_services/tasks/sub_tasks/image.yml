@@ -26,10 +26,6 @@
         or (podman_services_volume_quadlets is changed)
         or (podman_services_image_pull is changed)
         or (
-          podman_services_state == 'update'
-          and (podman_services_service.secrets | selectattr('update_policy', 'equalto', 'reconcile') | list | length) > 0
-        )
-        or (
           podman_services_secret_results is defined
           and (
             podman_services_secret_results.results | default([])
