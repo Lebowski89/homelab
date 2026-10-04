@@ -90,7 +90,9 @@
   </tr>
 </table>
 
-## [Retired Apps/Services](RETIRED.md)
+## Retired Apps
+
+See: [RETIRED.md](RETIRED.md)
 
 ## Disclaimer
 
@@ -105,7 +107,9 @@ This is a personal homelab repository and is shared for reference only.
 
 For issues with upstream tools or applications, please open an issue with the relevant project.
 
-## [AI Disclosure](AI_DISCLOSURE.md)
+## AI Disclosure
+
+See: [AI_DISCLOSURE.md](AI_DISCLOSURE.md)
 
 ## Coffee
 
