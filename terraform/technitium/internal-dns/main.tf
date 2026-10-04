@@ -53,7 +53,6 @@ locals {
     "netbox",
     "notifiarr",
     "nzbhydra2",
-    "obsidian",
     "opencloud",
     "postgres",
     "prometheus",
