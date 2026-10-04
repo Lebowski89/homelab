@@ -5,7 +5,7 @@ models-used:
 providers:
   - OpenAI
 scope: |
-  This Homelab repo contains a mix of human-written and AI-generated code. AI-generated code is focussed largely around Python files, including Ansible action_plugins and filter_plugins and Python tests (in tests/unit folder). AI is also used as a general sounding board for ideas, as a troubleshooter, and to tackle repetitive tasks and other helpful jobs.
+  This repo contains a mix of human-written, AI-assisted and AI-generated code. AI-generated code is focussed largely around Python files, including Ansible action_plugins and filter_plugins and Python tests (in tests/unit folder). AI is also used as a sounding board for ideas, as a troubleshooter and to tackle repetitive tasks.
 
 last-updated: 05/10/2026
 ---
