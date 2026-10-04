@@ -367,8 +367,16 @@ def test_container_quadlet_renders_explicit_custom_after_dependencies():
     assert "After=custom-online.target" in rendered
 
 
-def test_canonical_secret_normalization_reaches_quadlet_without_value():
+@pytest.mark.parametrize("execution_mode", ["rootful", "rootless"])
+def test_canonical_secret_normalization_reaches_quadlet_without_value(execution_mode):
     cfg = canonical_service()
+    if execution_mode == "rootless":
+        cfg["deploy"] = {"type": "container", "execution": {"mode": "rootless", "host_user": "podman-portable"}}
+        cfg.pop("volumes")
+        cfg.pop("paths")
+        cfg.pop("cap_add")
+    cfg["environment"]["ENV_VALUE"] = {"value_from": {"infisical": "env_value"}}
+    cfg["environment"]["FILE_VALUE_URI"] = "file:/run/secrets/app_secret"
     cfg["infisical"] = {
         "secrets_map": [
             {
@@ -383,18 +391,28 @@ def test_canonical_secret_normalization_reaches_quadlet_without_value():
                     "mode": "0400",
                     "update_policy": "preserve",
                 },
-            }
+            },
+            {"var": "env_value", "path": "/Portable", "name": "ENV_VALUE"},
         ]
     }
 
     normalized = podman_services_filters.podman_service_normalize(cfg, "portable")
     common = service_common_filters.service_common_infisical_normalize(cfg["infisical"]["secrets_map"])
     normalized["secrets"] = podman_services_filters.podman_secret_declarations(common["secret_declarations"])
+    normalized["env"] = service_common_filters.service_common_environment_resolve(
+        service_common_filters.service_common_environment_normalize(cfg["environment"], common),
+        {"app_secret_value": "NONPRODUCTION_FILE_SENTINEL", "env_value": "NONPRODUCTION_ENV_SENTINEL"},
+        common,
+    )
     rendered = render("container.container.j2", normalized)
+    environment = render("env.env.j2", normalized)
 
     assert "Secret=app_secret,target=/run/secrets/app_secret,uid=1001,gid=1002,mode=0400" in rendered
     assert "app_secret_value" not in rendered
-    assert "VALUE" not in rendered
+    assert "NONPRODUCTION_FILE_SENTINEL" not in rendered + environment
+    assert "NONPRODUCTION_ENV_SENTINEL" not in rendered
+    assert "ENV_VALUE=NONPRODUCTION_ENV_SENTINEL" in environment
+    assert "FILE_VALUE_URI=file:/run/secrets/app_secret" in environment
 
 
 def test_explicit_canonical_name_controls_container_and_environment_artifacts():

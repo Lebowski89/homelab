@@ -1647,7 +1647,6 @@ def test_rootful_execution_rejects_rootless_user_namespace_mapping():
     [
         ("volumes", [{"type": "volume", "source": "adminer", "target": "/data"}]),
         ("cap_add", ["NET_ADMIN"]),
-        ("secrets", ["adminer_secret"]),
         ("application_prepare", {"handler": "synthetic"}),
         ("prep", {"synthetic": True}),
     ],
@@ -1683,12 +1682,14 @@ def test_rootless_execution_requires_managed_bridge_network():
         podman_services.podman_service_normalize(cfg, "adminer")
 
 
-def test_rootless_execution_rejects_native_infisical_secret_metadata():
+def test_rootless_execution_accepts_value_free_native_secret_metadata():
     cfg = rootless_cfg()
     cfg["infisical"] = {"secrets_map": [{"var": "key", "path": "/Synthetic", "name": "KEY", "secret": {"name": "key"}}]}
+    cfg["secrets"] = ["key"]
 
-    with pytest.raises(AnsibleFilterError, match=r"secrets"):
-        podman_services.podman_service_normalize(cfg, "adminer")
+    normalized = podman_services.podman_service_normalize(cfg, "adminer")
+    assert normalized["secret_attachments"] == ["key"]
+    assert normalized["secrets"] == []
 
 
 def test_rootless_execution_requires_fully_qualified_exact_image():
