@@ -29,4 +29,4 @@ Services and apps no longer used, with links to their removal PRs or commits.
 | Redis | [`b39a1a2b`](https://github.com/Lebowski89/homelab/commit/b39a1a2b5dd1e087d4e1e65e3e370ac762af7b00) | Migrated to Valkey |
 | Spilo | [`216d6d48`](https://github.com/Lebowski89/homelab/commit/216d6d48e59934f30c0ee270225adc81f3cedb1a) | Migrated to native Patroni/Postges suite |
 | UniFi Network Application | [`cd99080e`](https://github.com/Lebowski89/homelab/commit/cd99080ebe7663369c89169e00b57da38e39e920) | Migrated to Unifi-OS |
-| Uptime Kuma | [#655](https://github.com/Lebowski89/homelab/pull/655) · [`32e90a4c`](https://github.com/Lebowski89/homelab/commit/32e90a4c489a1821be7ade863ffe9fe26a6c8bd1) | Migrated to native Patroni/Postges suite |
+| Uptime Kuma | [#655](https://github.com/Lebowski89/homelab/pull/655) · [`32e90a4c`](https://github.com/Lebowski89/homelab/commit/32e90a4c489a1821be7ade863ffe9fe26a6c8bd1) | Replaced with Prometheus/Blackbox monitoring and Grafana dashboards |
