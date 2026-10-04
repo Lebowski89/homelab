@@ -72,7 +72,7 @@ jobs:
         if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         uses: actions/setup-python@v7.0.0
         with:
-          python-version: "3.14.7"
+          python-version: "3.14.8"
 
       - name: Install Checkov
         if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
