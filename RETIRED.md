@@ -6,7 +6,7 @@ Services and apps no longer used, with links to their removal PRs or commits.
 | Service / app | Removal PR / commit | Why I no longer use it |
 | --- | --- | --- |
 | AutoPulse | [`b622f96b`](https://github.com/Lebowski89/homelab/commit/b622f96b7291b2cca489caac6339f03ea362d183) | Never finished setting up (may revisit) |
-| Beszel | [`5c6e0cce`](https://github.com/Lebowski89/homelab/commit/5c6e0cce978ad5d1fc5e2e762f0d6d77747ec1d6) | Opted for Prometheus/Grafana suite |
+| Beszel | [`5c6e0cce`](https://github.com/Lebowski89/homelab/commit/5c6e0cce978ad5d1fc5e2e762f0d6d77747ec1d6) | Replaced with Node Exporter, Prometheus and Grafana dashboards |
 | Checkrr | [`28cd93b7`](https://github.com/Lebowski89/homelab/commit/28cd93b76db79d6fd7a631b8ccb0c655c2cd5cc0) | Redundant |
 | cross-seed | [`fb4aa1b1`](https://github.com/Lebowski89/homelab/commit/fb4aa1b123edc104f15e7d0a1448a04c25153631) | Migrated to qui |
 | CrowdSec | [#654](https://github.com/Lebowski89/homelab/pull/654) · [`a0eee8a3`](https://github.com/Lebowski89/homelab/commit/a0eee8a3663fa44bc85b37ed9cd269ce95189b0d) | Redundant (no longer publicly exposing services) |
