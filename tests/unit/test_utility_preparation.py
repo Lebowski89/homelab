@@ -227,6 +227,15 @@ def test_published_route_producers_preserve_dns_failure_and_redacted_receiver(mo
         for node in ast.parse(source).body
         if isinstance(node, ast.Assign) and isinstance(node.targets[0], ast.Name) and node.targets[0].id in {"api", "native"}
     }
+    producers = {name: body.replace("/opt/homelab", str(ROOT)) for name, body in producers.items()}
+    original_spec = importlib.util.spec_from_file_location
+
+    def checkout_spec(name, location, *args, **kwargs):
+        # An installed /opt/homelab copy must not hide a CI portability failure.
+        assert Path(location).resolve().is_relative_to(ROOT)
+        return original_spec(name, location, *args, **kwargs)
+
+    monkeypatch.setattr(importlib.util, "spec_from_file_location", checkout_spec)
     monkeypatch.setattr(UTILITY.os, "getuid", lambda: 1234)
     monkeypatch.setattr(
         UTILITY.socket, "getaddrinfo", lambda *args: (_ for _ in ()).throw(socket.gaierror(socket.EAI_NONAME, "FAKE-SECRET"))
@@ -240,7 +249,6 @@ def test_published_route_producers_preserve_dns_failure_and_redacted_receiver(mo
     assert result["result"] == "DNS lookup failed" and result["sql_proved"] is False
     assert "FAKE-SECRET" not in output.getvalue()
 
-    producers = {name: body.replace("/opt/homelab", str(ROOT)) for name, body in producers.items()}
     body = json.dumps({"config": {"original": "receivers:\n- name: fixture\n  webhook_configs:\n  - url: <secret>\n"}}).encode()
     monkeypatch.setattr(urllib.request, "build_opener", lambda *args: SimpleNamespace(open=lambda *args, **kw: io.BytesIO(body)))
     monkeypatch.setattr(sys, "argv", ["fixture", "alertmanager", "9093"])
