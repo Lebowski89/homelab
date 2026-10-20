@@ -156,6 +156,7 @@ env.filters.update(
         "availability_tcp_file_sd": availability.availability_tcp_file_sd,
         "availability_postgres_file_sd": availability.availability_postgres_file_sd,
         "availability_patroni_file_sd": availability.availability_patroni_file_sd,
+        "availability_etcd_file_sd": availability.availability_etcd_file_sd,
         "regex_escape": re.escape,
         "to_nice_json": lambda value: json.dumps(value, indent=2, sort_keys=True),
     }
