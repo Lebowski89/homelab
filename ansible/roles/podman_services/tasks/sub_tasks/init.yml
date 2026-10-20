@@ -6,6 +6,10 @@
       - podman_services_service_cfg is defined
       - podman_services_service_cfg is mapping
       - podman_services_service_cfg.targets is not defined
+      - podman_services_prepare_execution_only | default(false) is boolean
+      - >-
+        not (podman_services_prepare_execution_only | default(false))
+        or podman_services_common_action in ['deploy', 'update', 'bootstrap']
     fail_msg: >-
       podman_services requires a catalog-resolved podman_services_service_cfg mapping
       without a targets key.
@@ -20,6 +24,20 @@
   ansible.builtin.set_fact:
     podman_services_unit_name: "{{ podman_services_service.unit_name ~ '.service' }}"
   tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Init | Enforce effective operational requirements
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: operational_requirements
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+  vars:
+    service_common_service: >-
+      {{ {'operational_requirements': podman_services_service_cfg.operational_requirements | default({})} }}
+    service_common_name: "{{ podman_services_service.name }}"
+    service_common_action: "{{ podman_services_common_action }}"
+    service_common_execution_only: "{{ podman_services_prepare_execution_only | default(false) }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
 
 - name: Init | Validate shared-network dependent services
   ansible.builtin.assert:
@@ -50,6 +68,8 @@
     podman_services_secret_results: {}
     podman_services_image_pull: {}
     podman_services_requires_restart: false
+    podman_services_config_changed: false
+    podman_services_env_file_inputs: {}
     podman_services_common_host_defaults: {}
     podman_services_controller_host: ""
     podman_services_application_template_vars: {}
@@ -70,6 +90,7 @@
     podman_services_rootless_network_conf_dir: ""
     podman_services_rootless_network_conf_path: ""
     podman_services_rootless_host_route_overlaps: []
+    podman_services_rootless_host_ipv6_route_overlaps: []
     podman_services_previous_execution: {mode: none}
     podman_services_execution_transition: false
     podman_services_execution_state: {}

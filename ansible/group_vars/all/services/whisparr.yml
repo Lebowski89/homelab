@@ -31,10 +31,6 @@ whisparr:
     FILE__WHISPARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
     WHISPARR__POSTGRES__MAINDB: "whisparr-main-v3"
     WHISPARR__POSTGRES__LOGDB: "whisparr-log-v3"
-    TP_SCHEME: "http"
-    TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
-    TP_HOTIO: "true"
-    TP_THEME: "hotline"
   infisical:
     secrets_map:
       - var: whisparr_api
@@ -61,6 +57,14 @@ whisparr:
   ################################
   # FILESYSTEM
   ################################
+  ports:
+    web_backend:
+      published: 22621
+      target: 6969
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/whisparr"
       state: directory
@@ -68,13 +72,6 @@ whisparr:
     - path: "{{ hostvars[services_storage_host].container_host_data_root }}/media/adult"
       state: directory
       mode: "0755"
-  copies:
-    - src: files/themepark/98-themepark-whisparr
-      dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/whisparr/98-themepark-whisparr"
-      mode: "0755"
-      force: false
-      wait: true
-      wait_timeout: 30
   volumes:
     config:
       type: bind
@@ -85,11 +82,6 @@ whisparr:
       type: bind
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
-      read_only: false
-    themepark:
-      type: bind
-      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/whisparr/98-themepark-whisparr"
-      target: /etc/cont-init.d/98-themepark
       read_only: false
   ################################
   # HEALTH
@@ -104,7 +96,9 @@ whisparr:
   traefik:
     enable: true
     exposure: private
-    port: 6969
+    port: 22621
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
   themepark:
     app: whisparr
     theme: hotline
@@ -116,6 +110,9 @@ whisparr:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

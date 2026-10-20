@@ -5,7 +5,8 @@ from pathlib import Path
 import pytest
 import yaml
 from ansible.errors import AnsibleFilterError
-from jinja2 import Environment, FileSystemLoader
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
+from jinja2.nativetypes import NativeEnvironment
 
 FILTER_PATH = Path("ansible/roles/service_common/filter_plugins/service_common.py")
 spec = importlib.util.spec_from_file_location("service_common", FILTER_PATH)
@@ -146,13 +147,28 @@ def iter_infisical_declarations(value):
             yield from iter_infisical_declarations(child)
 
 
+def render_declaration_ids(declarations):
+    result = deepcopy(declarations)
+    environment = NativeEnvironment(undefined=StrictUndefined)
+    variables = {
+        "services_controller_host": "synthetic-controller",
+        "hostvars": {"synthetic-controller": {"container_host_puid": 1000, "container_host_pgid": 1000}},
+    }
+    for entry in result:
+        for field in ("uid", "gid"):
+            value = entry.get("secret", {}).get(field)
+            if isinstance(value, str) and "{{" in value:
+                entry["secret"][field] = environment.from_string(value).render(**variables)
+    return result
+
+
 def test_real_docker_service_declarations_are_accepted_without_yaml_changes():
     declaration_count = 0
     for path in sorted(Path("ansible/group_vars/all/services").glob("*.yml")):
         services = yaml.safe_load(path.read_text()) or {}
         for infisical in iter_infisical_declarations(services):
             service_common.service_common_infisical_normalize(
-                infisical["secrets_map"],
+                render_declaration_ids(infisical["secrets_map"]),
                 infisical.get("fail_on_empty", True),
             )
             declaration_count += 1
@@ -270,7 +286,9 @@ def test_canonical_target_defaults_to_runtime_secret_path():
         ("name", "", "non-empty string"),
         ("name", "bad/name", "resource name"),
         ("target", "relative", "absolute path"),
-        ("uid", 1000, "numeric string"),
+        ("uid", True, "numeric string"),
+        ("uid", -1, "numeric string"),
+        ("gid", 1000.0, "numeric string"),
         ("uid", "-1", "numeric string"),
         ("gid", "user", "numeric string"),
         ("mode", 0o400, "quoted four-digit octal"),
@@ -284,6 +302,17 @@ def test_canonical_secret_scalar_validation_is_strict(field, value, match):
 
     with pytest.raises(AnsibleFilterError, match=match):
         service_common.service_common_infisical_normalize([entry])
+
+
+@pytest.mark.parametrize("value", [0, 1000, "1000"])
+def test_canonical_secret_native_inventory_ids_normalize_to_strings(value):
+    entry = canonical_map()[0]
+    entry["secret"].update(uid=value, gid=value)
+
+    normalized = service_common.service_common_infisical_normalize([entry])
+
+    assert normalized["secret_declarations"][0]["uid"] == str(value)
+    assert normalized["secret_declarations"][0]["gid"] == str(value)
 
 
 @pytest.mark.parametrize(
@@ -354,7 +383,7 @@ def test_real_repository_uses_only_canonical_secret_declarations():
                 if isinstance(entry, dict) and entry.get("secret")
             ]
             normalized = service_common.service_common_infisical_normalize(
-                infisical["secrets_map"],
+                render_declaration_ids(infisical["secrets_map"]),
                 infisical.get("fail_on_empty", True),
             )
             actual = [(entry["name"], entry["var"]) for entry in normalized["secret_declarations"]]

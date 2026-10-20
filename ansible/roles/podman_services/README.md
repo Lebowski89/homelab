@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/09/26 |
+| Readme update        | 2026/10/06 |
 
 
 
@@ -43,11 +43,12 @@
 | [podman_services_common_action](defaults/main.yml#L16)   | str | `<multiline value: folded_strip>` |    
 | [podman_services_state](defaults/main.yml#L24)   | str | `<multiline value: folded_strip>` |    
 | [podman_services_pull_images](defaults/main.yml#L33)   | bool | `True` |    
-| [podman_services_managed_namespace_dependents](defaults/main.yml#L34)   | list | `[]` |    
-| [podman_services_traefik_delegate](defaults/main.yml#L35)   | str | `{{ podman_services_controller_host }}` |    
-| [podman_services_traefik_dynamic_dir](defaults/main.yml#L36)   | str | `/opt/traefik/dynamic` |    
-| [podman_services_traefik_dynamic_owner](defaults/main.yml#L37)   | str | `1000` |    
-| [podman_services_traefik_dynamic_group](defaults/main.yml#L38)   | str | `1000` |    
+| [podman_services_prepare_execution_only](defaults/main.yml#L34)   | bool | `False` |    
+| [podman_services_managed_namespace_dependents](defaults/main.yml#L35)   | list | `[]` |    
+| [podman_services_traefik_delegate](defaults/main.yml#L36)   | str | `{{ podman_services_controller_host }}` |    
+| [podman_services_traefik_dynamic_dir](defaults/main.yml#L37)   | str | `/opt/traefik/dynamic` |    
+| [podman_services_traefik_dynamic_owner](defaults/main.yml#L38)   | str | `1000` |    
+| [podman_services_traefik_dynamic_group](defaults/main.yml#L39)   | str | `1000` |    
 
 
 
@@ -61,12 +62,15 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Podman services ¦ Initialize service | ansible.builtin.include_tasks | False |  |
-| Podman services ¦ Prepare execution environment | ansible.builtin.include_tasks | False |  |
-| Podman services ¦ Check configured external network | ansible.builtin.command | True |  |
-| Podman services ¦ Verify configured external network exists | ansible.builtin.assert | True |  |
+| Podman services ¦ Validate managed file policy before mutation | ansible.builtin.include_role | False |  |
 | Podman services ¦ Build application preparation context | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Validate application settings | ansible.builtin.include_role | False |  |
 | Podman services ¦ Store validated application outputs | ansible.builtin.set_fact | False |  |
+| Podman services ¦ Prepare execution environment | ansible.builtin.include_tasks | False |  |
+| Podman services ¦ Bind preparation to the selected execution store | ansible.builtin.set_fact | False |  |
+| Podman services ¦ Finish explicit account preparation | ansible.builtin.meta | True |  |
+| Podman services ¦ Check configured external network | ansible.builtin.command | True |  |
+| Podman services ¦ Verify configured external network exists | ansible.builtin.assert | True |  |
 | Podman services ¦ Stop shared-network services before recreate | ansible.builtin.include_tasks | True |  |
 | Podman services ¦ Check service before recreate | ansible.builtin.command | True |  |
 | Podman services ¦ Stop service before recreate | ansible.builtin.systemd_service | True |  |
@@ -79,7 +83,10 @@
 | Podman services ¦ Build application template values | ansible.builtin.include_role | True |  |
 | Podman services ¦ Store application template values | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Prepare service files and directories | ansible.builtin.include_role | False |  |
-| Podman services ¦ Set rootless bind mount ownership | ansible.builtin.file | True |  |
+| Podman services ¦ Snapshot managed configuration changes | ansible.builtin.set_fact | False |  |
+| Podman services ¦ Read declared environment files | ansible.builtin.slurp | True |  |
+| Podman services ¦ Parse ordered literal environment files | ansible.builtin.set_fact | True |  |
+| Podman services ¦ Apply explicit environment overrides | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Configure application | ansible.builtin.include_role | True |  |
 | Podman services ¦ Write Quadlet files | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Prepare container image | ansible.builtin.include_tasks | False |  |
@@ -90,6 +97,16 @@
 | Podman services ¦ Remove service integrations | ansible.builtin.include_role | True |  |
 | Podman services ¦ Check image drift | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Finish service removal | ansible.builtin.include_tasks | True |  |
+
+#### File: tasks/stop_bootstrap.yml
+
+| Name | Module | Has Conditions | Tags | Comments |
+| ---- | ------ | -------------- | -----| -------- |
+| Bootstrap stop ¦ Initialize exact service | ansible.builtin.include_tasks | False |  | Resolve persisted ownership through the adapter before stopping a bootstrap
+batch. A changed desired account must not hide the old writer's manager. |
+| Bootstrap stop ¦ Resolve persisted execution owner | ansible.builtin.include_tasks | False |  |  |
+| Bootstrap stop ¦ Inspect exact owned unit | ansible.builtin.command | True |  |  |
+| Bootstrap stop ¦ Stop exact owned unit | ansible.builtin.systemd_service | True |  |  |
 
 #### File: tasks/sub_tasks/check_quadlets.yml
 
@@ -106,6 +123,7 @@
 | Check mode ¦ Read existing generated files | ansible.builtin.slurp | True |  |
 | Check mode ¦ Compare planned and existing generated files | ansible.builtin.set_fact | False |  |
 | Check mode ¦ Report planned file change | ansible.builtin.debug | True |  |
+| Check mode ¦ Report deferred environment content comparison | ansible.builtin.debug | True |  |
 | Check mode ¦ Clear secret values from preview state | ansible.builtin.set_fact | False |  |
 
 #### File: tasks/sub_tasks/cleanup_stopped_rootful_container.yml
@@ -196,6 +214,7 @@
 | Init ¦ Validate selected service configuration | ansible.builtin.assert | False |  |
 | Init ¦ Build Podman service settings | ansible.builtin.set_fact | False |  |
 | Init ¦ Set systemd service name | ansible.builtin.set_fact | False |  |
+| Init ¦ Enforce effective operational requirements | ansible.builtin.include_role | False |  |
 | Init ¦ Validate shared-network dependent services | ansible.builtin.assert | False |  |
 | Init ¦ Reset temporary service state | ansible.builtin.set_fact | False |  |
 | Init ¦ Validate shared service context | ansible.builtin.assert | False |  |
@@ -339,6 +358,12 @@
 | Execution switch ¦ Remove old Ansible-managed generated files | ansible.builtin.file | True |  |
 | Execution switch ¦ Reload previous systemd manager | ansible.builtin.systemd_service | True |  |
 | Execution switch ¦ Reload previous user systemd manager | ansible.builtin.command | True |  |
+
+#### File: tasks/validate_definitions.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Podman services ¦ Validate explicit bootstrap definitions | ansible.builtin.set_fact | False | Loading this role also registers its filters for independent bootstrap calls. |
 
 
 

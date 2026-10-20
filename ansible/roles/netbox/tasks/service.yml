@@ -1,0 +1,81 @@
+---
+
+- name: Netbox | Reset current bootstrap inputs
+  ansible.builtin.set_fact:
+    netbox_podman_values: {}
+    netbox_podman_declarations: []
+  no_log: true
+  diff: false
+  tags:
+    - netbox_bootstrap
+    - netbox_deploy
+    - netbox_recreate
+    - netbox_remove
+- name: Netbox | Select only current-service Vault declarations
+  ansible.builtin.set_fact:
+    netbox_podman_values: >-
+      {{ netbox_podman_values | combine({netbox_podman_secret_name: ('NONPRODUCTION-check-only' if ansible_check_mode else
+      netbox_required_docker_secrets[netbox_podman_secret_name])}) }}
+    netbox_podman_declarations: >-
+      {{ netbox_podman_declarations + [{
+        'name': netbox_podman_secret_name, 'var': netbox_podman_secret_name,
+        'target': netbox_podman_secret_targets.get(netbox_podman_secret_name, '/run/secrets/' ~ netbox_podman_secret_name),
+        'update_policy': 'preserve'}] }}
+  loop: '{{ netbox_podman_definition.secrets }}'
+  loop_control:
+    loop_var: netbox_podman_secret_name
+  no_log: true
+  diff: false
+  tags:
+    - netbox_bootstrap
+    - netbox_deploy
+    - netbox_recreate
+    - netbox_remove
+  when:
+    - netbox_podman_action != "remove"
+    - not (podman_services_prepare_execution_only | default(false))
+- name: Netbox | Require nonempty current-service credentials
+  when: not (podman_services_prepare_execution_only | default(false))
+  ansible.builtin.assert:
+    that:
+      - netbox_podman_values.values() | select("equalto", "") | list | length == 0
+    fail_msg: A required bootstrap credential is empty.
+  no_log: true
+  diff: false
+  tags:
+    - netbox_bootstrap
+    - netbox_deploy
+    - netbox_recreate
+    - netbox_remove
+- name: Netbox | Deploy through the Podman adapter
+  ansible.builtin.include_role:
+    name: podman_services
+    apply:
+      tags:
+        - netbox_bootstrap
+        - netbox_deploy
+        - netbox_recreate
+        - netbox_remove
+      no_log: true
+      diff: false
+  vars:
+    podman_services_service_cfg: '{{ netbox_podman_definition }}'
+    podman_services_role_prefix: '{{ netbox_podman_definition.name }}'
+    podman_services_action_remove: '{{ netbox_podman_action == "remove" }}'
+    podman_services_action_recreate: '{{ netbox_podman_action == "recreate" }}'
+    podman_services_common_context:
+      runtime: podman
+      dispatch_host: '{{ inventory_hostname }}'
+      controller_host: '{{ inventory_hostname }}'
+      lookup_values: '{{ netbox_podman_values }}'
+      resolved_environment: >-
+        {{ {} if (ansible_check_mode or (podman_services_prepare_execution_only | default(false)))
+           else netbox_podman_definition.environment }}
+      secret_declarations: '{{ netbox_podman_declarations }}'
+    ansible_pipelining: true
+  no_log: true
+  tags:
+    - netbox_bootstrap
+    - netbox_deploy
+    - netbox_recreate
+    - netbox_remove

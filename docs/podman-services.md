@@ -7,6 +7,32 @@ Podman adapter behavior and operational limits.
 
 The shared service catalogue in `ansible/group_vars/all/services/*.yml` is runtime-aware. Every base service must explicitly declare `runtime: docker` or `runtime: podman`; a missing or unsupported runtime fails catalog validation. Targets inherit the validated base runtime and may explicitly override it with another supported runtime. Podman entries are selected by the same `skynet install|update|check|recreate|remove|drift <service>` interface and dispatched to `podman_services`.
 
+## Operating selectors and recovery
+
+Use an exact service/target for routine changes. `haproxy` and `alloy` select
+both worker and mgt targets; `mgt-haproxy` / `mgt-collector` and
+`haproxy-workers` / `alloy-workers` select one side. Keep worker placement
+exclusions. Authelia's base selector includes its cache; inspect effective target
+selection before changing a member. Bootstrap NetBox/Infisical recovery remains
+independent through `ansible/bootstrap.yml` and explicit private Vault inputs.
+
+The existing wrapper supports scoped check/drift/install/update/recreate actions.
+Raw calls require Ansible arguments, for example
+`skynet raw --tags update,mgt-haproxy -e @/secure/accepted-inputs.yml`, using the
+operator's actual private file. ACL/data requirements remain strict regardless
+of selectors; installing rules is not acceptance and ownership readiness uses
+the actual service name. Preserve the current installed firewall union and
+unrelated caller bindings.
+
+Future migrations start in [migrator/](../migrator/README.md), with the
+[ownership procedure](../migrator/guides/ownership.md), private paired backups,
+proved numeric mappings and one reviewed cutover/rollback plan. Completed
+migration handoffs and per-run acceptance records belong outside the repository
+under `/opt/ansible/migration/`. Do not replay them as current operating commands.
+Restoring an old baseline needs a new scoped decision and stopped replacement
+writers because it removes post-backup changes. Keep rollback material until an
+explicit retention decision.
+
 ## Runtime layers
 
 1. The `podman` role supports Ubuntu 26.04+ and Linux Mint Debian Edition 7 (based on Debian 13), requires Podman 5.4.2 or newer, and verifies cgroup v2 plus the system Quadlet generator. The current `podman_services` templates use directives available in Podman 5.4.2 for both system and rootless Quadlets. Ubuntu 24.04 LTS (Noble) remains unsupported because its packaged Podman 4.9 is below this baseline.
@@ -64,9 +90,9 @@ The Podman adapter validates the complete effective service mapping. It accepts
 only catalog metadata, fields it renders or validates itself, runtime-neutral
 `service_common` fields, and real `service_prepare` inputs. Any Docker-only or
 unknown top-level field fails with every unsupported key listed in sorted order.
-Changing only `runtime` is therefore unsafe and rejected when behavior such as a
-custom command, entrypoint, config, privileged mode, host network, Swarm profile, or
-constraint still lacks a Podman implementation.
+Changing only `runtime` is therefore unsafe and rejected when behavior such as an
+entrypoint, Swarm config, privileged mode, profile, or constraint still lacks a
+Podman implementation. Supported fields must preserve their real behavior.
 
 An explicit canonical `name` controls the Podman container name, generated
 `.container` and protected `.env` filenames, and derived `.service` lifecycle
@@ -80,32 +106,51 @@ features. Canonical `devices` entries use
 `HOST_DEVICE[:CONTAINER_DEVICE[:PERMISSIONS]]` syntax with normalized paths
 below `/dev` and render as `AddDevice=`. Canonical `shm_size` accepts a
 positive byte-size value such as `1gb` and renders as `ShmSize=`.
-`network_mode` accepts only `container:<managed-container-name>`, cannot be
-combined with `named_networks`, and renders as
-`Network=<managed-container-name>.container`. No arbitrary `PodmanArgs` or
+`network_mode` accepts `host` or `container:<managed-container-name>`, cannot be
+combined with `named_networks`, and renders the corresponding native `Network=`
+field. Host networking cannot declare published ports. No arbitrary `PodmanArgs` or
 generic pod support is implied by these fields.
 
-Rootless execution is intentionally narrower than the general Podman schema.
-It requires `deploy.type: container`, a fully qualified exact image, one
-role-managed bridge, and unprivileged published TCP ports. A rootless bind mount
-must use an exact normalized proper descendant of `/opt` that is also declared
-in `paths`, omit explicit path ownership, and provide a validated
-`deploy.execution.userns: {mode: keep-id, uid: ..., gid: ...}` mapping. After
-the common path exists, the adapter recursively assigns that source to the
-dedicated execution account without changing descendant modes. Named volumes,
-tmpfs mounts, added capabilities, devices, shared container
-network namespaces, `shm_size`, privileged mode, host networking, and
-application preparation remain unsupported for rootless
-execution. Rootless `copies` and `templates` are supported only when every
-destination is a normalized absolute proper descendant of a declared bind
-source; explicit file owner/group overrides are rejected so `service_common`
-uses the dedicated execution account. Additional `paths` entries are limited to
-`state: absent` descendants of a declared bind source, also without ownership
-overrides. This intentionally provides managed-file parity inside an existing
-bind tree, not general rootless filesystem parity. Unsupported combinations
-fail during normalization before account or runtime mutation. Adminer fits the
-mount-free subset, The Lounge exercises the bind-backed subset, and Homepage
-uses confined templates, a static copy, and stale Docker-file cleanup.
+Rootless execution requires a dedicated account, fully qualified exact images
+and unprivileged published TCP ports. It uses one owned bridge by default.
+Explicit `network_mode: pasta` selects direct pasta for source-preserving ingress;
+it cannot be combined with a named network or arbitrary network options. This
+mode is rootless-only and introduces no managed namespace dependency. Bind sources must
+be declared directory roots under `/opt`; their managed subdirectories/files
+and minimal parent layout are supported without arbitrary host-path access.
+A validated `keep-id` UID/GID mapping preserves the application identity;
+explicit `user` also preserves container-root initialization when needed.
+Generated files omit owner/group and use the dedicated account. The adapter
+never recursively changes a bind tree's ownership. Existing-data transitions
+require the documented per-image mapping, backups and per-service
+`services_rootless_data_ready` acknowledgment when the effective service declares
+`operational_requirements.ownership_transition: true`. Its key is the actual
+service name, and it is required for each live deployment/update/recreate/bootstrap
+while declared. ACL scope declarations similarly require their existing strict
+boolean inputs. Both checks run before mutation independently of service tags;
+check mode reports a plan and drift/removal remain available without deployment
+acknowledgements. Explicit account-only deploy/update/bootstrap preparation is
+exempt and returns before application file/image/secret/container work. See the
+[operational requirement reference](../ansible/group_vars/all/services/README.md#operational-requirements).
+
+Rootless standalone tmpfs uses the same constrained options as rootful tmpfs.
+Added capabilities, devices, host/container network modes, named volumes and
+shm_size remain unsupported here. HAProxy validation-only preparation,
+Authelia's short-lived generators, and Vaultwarden's persistent token preparation
+are supported; other preparation contracts still fail explicitly. Podman
+preparation start/inspect/logs/cleanup all use the adapter's explicit execution
+account and runtime environment, retain guaranteed cleanup and never run in
+check mode. Mounted configurations use directories so atomic file replacement
+is visible; single-file bind sources are not accepted as directory roots.
+
+Traefik additionally confines its declared log tree to `/var/log/skynet` and
+allowlists exactly its root-owned host logrotate policy and reopen helper.
+ACME touch preserves timestamps. Logrotate creates logs for the dedicated
+account; the helper invokes Podman through `runuser` without a login shell.
+`podman_services_prepare_execution_only: true` is an explicit strict-boolean
+account-preparation option for deploy/update/bootstrap. It returns after
+execution setup, before data/file/image/secret/container work. It does not permit
+remove/recreate/drift and does not make a catalog call independent of inventory.
 
 Every dedicated rootless account receives one role-owned Podman configuration
 drop-in at
@@ -135,7 +180,7 @@ pasta_options = [
 ]
 ```
 
-This deliberately disables IPv6 in the account's rootless pasta namespace so
+For ordinary bridge services, this deliberately disables IPv6 in the account's rootless pasta namespace so
 neither address family copies a host-interface address. Podman still owns
 interface setup and port forwarding; the role does not override pasta's MTU or
 TCP/UDP forwarding behavior. Before live account or file mutation, the role
@@ -146,6 +191,26 @@ rootless network namespace. Internal DNS remains unchanged, applications keep
 using canonical internal FQDNs, and `host.containers.internal` remains available
 as a diagnostic address rather than an application configuration convention.
 Rootful Podman is unaffected.
+
+Explicit direct-pasta ingress uses a private dual-stack profile in that same
+account-owned drop-in. The existing IPv4 tuple is retained; IPv6 defaults to
+`fd00:2::2/64` with gateway `fd00:2::1`. These are private namespace addresses,
+not additional host publications or host interface configuration. The profile
+omits `--ipv4-only` and `--no-ndp`, adds the IPv6 address/gateway and `--no-ra`,
+and retains `--no-dhcpv6`/`--no-dhcp`. Neighbour discovery must remain enabled
+for replies through the private IPv6 gateway. Before mutation, both families'
+non-default host routes must not overlap the selected private subnets. Missing
+or malformed route observations fail validation; check mode performs no route
+query. Other accounts retain the existing IPv4-only profile.
+
+Direct pasta is necessary for Traefik's observed Podman 5.7.0 ingress behavior:
+the managed bridge rewrites incoming source addresses, while direct pasta
+preserved the original IPv4/IPv6 peers in isolated tests. Wildcard publication
+retains its current address-family coverage; private metrics remains bound to
+the inventory LAN IPv4 address. Source-preservation and host publication are
+separate from firewall caller authorization, which still requires live proof.
+See the [ingress authorization runbook](mgt-firewall.md). This does not claim execution on the
+stated minimum Podman 5.4.2.
 
 The drop-in is managed only during deploy, update, recreate, and bootstrap.
 Check mode validates and reports its exact intended path without creating an
@@ -159,7 +224,7 @@ operator procedure.
 ## Lifecycle semantics
 
 - `deploy` and `bootstrap` fetch missing secrets, create missing Podman secrets, pull the declared image, render configuration, and start the service if it is not already running.
-- `update` compares secrets marked `update_policy: reconcile` and replaces the rootful container or restarts the rootless user service when material inputs changed, including a changed secret. An unchanged reconciled secret alone does not trigger a restart. An owned network remains in place through the replacement. If its Quadlet definition changes, use an explicit remove followed by deploy when the network itself must be recreated.
+- `update` compares secrets marked `update_policy: reconcile` and replaces the rootful container or restarts the rootless user service when material inputs changed, including a changed secret or restart-requiring managed application file. An unchanged reconciled secret alone does not trigger a restart. An owned network remains in place through the replacement. If its Quadlet definition changes, use an explicit remove followed by deploy when the network itself must be recreated.
 - `recreate` reconciles secrets marked `update_policy: reconcile`, stops the rootful unit, removes its exact stale container object, and starts the generated service after rendering current inputs. It retains the service network. Rootless recreate keeps its existing user-service restart behavior.
 - `remove` uses the last successfully persisted execution owner even when the declaration now requests another mode. It stops that service first, then stops and removes only a network whose persisted metadata proves role ownership. It removes exact generated Quadlets, environment files, and host-backed Traefik routing, but preserves application data, Podman secrets, images, the dedicated rootless account, its linger configuration, home, and user storage. Externally owned and unproven legacy networks are retained.
 - `drift` inspects the current container image reference and reports a changed task when it differs from the declared exact image reference. It is reference drift, not registry digest drift.
@@ -250,6 +315,10 @@ Podman systemd policy is also first-class at top level. The supported fields are
 startup timeout bounds how long systemd waits; it does not delay a service that
 starts successfully. Service-level `runtime_options.podman.network` and
 `runtime_options.podman.systemd` are retired and fail with migration guidance. Secret update intent is runtime-neutral under `secret.update_policy`; secret-level `runtime_options` is retired and fails with guidance to use that canonical field.
+
+Named publication aliases with identical normalized host address, host port,
+container port and protocol render one `PublishPort=` binding. Every alias is
+validated before deduplication; distinct publications retain their order.
 
 Published ports accept an optional `host_ip` per port. When set, the generated `PublishPort=` entry binds only that address. When omitted, Podman binds the published port on every host interface; this can expose the service on management, LAN, Tailscale, or other reachable networks and can bypass the intended reverse proxy and its middleware. Prefer an explicit trusted bind address and enforce host/network firewall policy whenever direct access is not intended.
 
@@ -351,11 +420,11 @@ maps to an unprivileged subordinate host ID, not host root. s6 can therefore
 apply `PUID`, `PGID`, and `UMASK` before dropping The Lounge to container
 UID/GID 1000, which maps back to `podman-thelounge`.
 
-Before Quadlet rendering, the adapter changes the existing bind root to mode
-`0750` and recursively assigns that exact source to `podman-thelounge` without
-changing descendant modes or replacing content. This ownership transition is
-necessary so the rootless application process can retain and update the
-existing configuration. Its `systemd.timeout_start_sec: 900s` setting allows a
+Before Quadlet rendering, the adapter manages the bind root's declared mode
+and account ownership without recursively changing descendants. Preserve an
+already transitioned tree; any new ownership transition must use the operator
+procedure and the effective container UID/GID mapping. Its
+`systemd.timeout_start_sec: 900s` setting allows a
 slow first container creation to complete; it only bounds systemd's wait and does
 not delay later successful starts.
 
@@ -368,3 +437,106 @@ LinuxServer container or an explicit operator correction.
 The managed `thelounge.network` bridge is private to this account's Podman
 store. The host-backed Traefik route and direct TCP/19000 exposure have the same
 firewall consideration as Adminer's direct backend.
+
+## mgt shared bridge and bootstrap
+
+The `podman` role owns `/etc/containers/systemd/mgt-services.network` centrally.
+Its explicit `NetworkName=mgt-services` matches catalog attachments. Run
+`skynet install podman-network` (or `skynet raw --tags podman_network`) after
+installing the supported runtime. It has no application remove action. Rootful
+bridge consumers declare it external and require `mgt-services-network.service`;
+application stop/update/recreate/remove retains it. No fixed subnet is assigned.
+All migrated ordinary services and five bootstrap containers use separate
+rootless accounts/bridges. Rootless services never attach to the root bridge.
+The four pre-existing accounts/networks retain their ownership.
+
+Production NetBox and Infisical bootstrap reuse `podman_services` with explicit
+Vault-backed context and no catalog, dynamic inventory, or Infisical lookup.
+`ansible/bootstrap.yml` is the localhost recovery entry point. NetBox retains
+its local PostgreSQL major, database tree, `/var/lib/postgresql` mount, cache,
+and LSIO configuration. Infisical retains its external HAProxy/PostgreSQL path,
+keys and direct port 8066. NetBox adds an inventory-bound recovery port 18000.
+Both roles require `services_bootstrap_acl_ready: true` before live deployment.
+The experimental Infisical owner is retired; old wrapper aliases resolve to the
+production role. See the [migrator workspace](../migrator/README.md).
+
+## Process, environment and dependencies
+
+`command` is a nonempty list of nonempty literal argv strings. String shell
+commands and control characters are rejected. Use `[sh, -c, '...']` explicitly
+for shell operations. Quadlet `Exec=` quoting preserves spaces, quotes,
+backslashes, dollars and systemd percent specifiers through generation.
+Credentials belong in native files or protected environments, not resolved argv.
+The Valkey services derive a mode-0600 configuration in their private `/tmp`
+tmpfs from a native secret, then exec the server with only that file path.
+
+Podman `env_file` is an ordered list of normalized absolute paths. The adapter
+reads the files after common templates, parses a literal single-line dotenv
+subset, merges later files over earlier ones, then applies explicit resolved
+`environment` last. Single/double delimiter quotes are removed; quoted escaped
+quotes/backslashes/dollars are decoded. Comments, blank lines and empty values
+are supported. Export/unset, multiline values and unsupported escapes fail
+without logging input values. Shell substitution/interpolation is never
+performed. The final raw Podman environment file is mode 0600; its values are
+not shell-quoted and are not doubled for Compose or systemd. Check mode does
+not read these files or overwrite secret-bearing generated environments and
+reports content comparison as deferred.
+
+Rootful and rootless standalone `tmpfs` accept normalized absolute paths with optional allowlisted
+`exec`, `noexec`, `nosuid`, `nodev`, `rw`, `ro`, numeric `size` and octal `mode`
+options. Rootful `cgroup: host` is the narrow systemd-container contract: fixed
+`--cgroupns=host --systemd=always` and `Delegate=yes`. It does not enable arbitrary
+Podman arguments or privileged mode. UniFi uses this contract with its pinned
+upstream mounts, capabilities and tmpfs; live compatibility requires its
+controlled smoke test.
+
+`systemd.requires` and `systemd.wants` take valid service/target unit names and
+render both the dependency and `After=`. `notify_healthy: true` requires a
+healthcheck and renders `Notify=healthy`, so successful start waits for health.
+Shell health checks use a JSON argument array containing `/bin/sh`, `-c` and the
+complete normalized command. This preserves closing quotes, substitutions and
+literal percent signs through Quadlet and systemd; disabled checks remain
+`HealthCmd=none`. Generation alone does not establish a healthy running service.
+Managed service dependencies must share the host and system manager or the
+same rootless account/user manager. Cross-account dependencies are not rendered;
+use application retries, readiness verification and explicit deployment sequencing. Required shared-network units use Requires. Restart=always,
+a delay and disabled start-rate limiting provide retries for late database/cache
+availability; After alone is ordering, not readiness. The catalog orders selected
+same-manager managed Requires/Wants/After providers before consumers (consumer-first
+for removal) and rejects cycles
+or dependencies crossing execution stores. Namespace-sharing transactions retain
+their stricter existing stop/restart semantics. Bootstrap recreate stops its
+consumer units first and starts providers first.
+
+Common copies/templates default to `restart: true`; the common role reports
+material changes and each adapter immediately snapshots its own flag. Podman
+update includes that flag in restart decisions. Set `restart: false` for watched
+Traefik dynamic files; route-only changes do not restart the routed app. Existing
+Docker lifecycle remains unchanged. Invalid restart policy and application
+settings are validated before Podman execution preparation.
+
+## Ubuntu pasta/AppArmor prerequisite
+
+The mgt migration required a separately approved permission in the package's
+`/etc/apparmor.d/usr.bin.pasta` profile:
+
+```apparmor
+signal (receive) set=(term) peer=podman,
+```
+
+It permits Podman to terminate its pasta helper. It grants no broader signal or
+peer access. This is a retained host-profile prerequisite; this repository does
+not assert that a later package now supplies it. A clean rebuild must inspect the
+installed profile/package and qualify helper cleanup before any application stop.
+The native journal collector and the rootful `alloy-mgt` file/exporter collector
+remain separate consumers; neither applies this host-security permission.
+
+The existing approved repair is reproducible through `ansible/operations.yml`
+with the explicit `podman_pasta_signal` tag. Its task requires root-owned mode
+`0644`, exact reviewed before/after SHA256 hashes, parser validation without kernel
+loading, a pasta-only reload after a change and guarded restoration on failure.
+Check mode is read-only. It is not included in default Podman installation,
+application deployment or `--tags all`, and running it requires separate host-
+security authorization. Do not reuse migration-era profile hashes after a
+package/profile change or infer permission from this source change. Historical
+execution/cleanup receipts remain in the private migration handoff.

@@ -1,0 +1,11 @@
+# Managed by skynet mgt operator contexts
+[Unit]
+Description=Skynet mgt native PostgreSQL preparation only
+StopWhenUnneeded=no
+Before=skynet-mgt-firewall.service
+
+[Slice]
+TasksAccounting=yes
+
+[Install]
+WantedBy=slices.target

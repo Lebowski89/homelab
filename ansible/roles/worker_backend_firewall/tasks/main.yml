@@ -1,0 +1,104 @@
+---
+
+- name: Worker backend firewall | Validate operation and explicit source confirmation
+  ansible.builtin.assert:
+    that:
+      - worker_backend_firewall_operation in ['install', 'check', 'remove']
+      - worker_backend_firewall_sources_verified is boolean
+      - >-
+        worker_backend_firewall_operation != 'install' or ansible_check_mode or worker_backend_firewall_sources_verified
+      - worker_backend_firewall_source_addresses is sequence
+      - worker_backend_firewall_source_addresses is not string
+      - worker_backend_firewall_source_addresses is not mapping
+      - worker_backend_firewall_source_addresses | length > 0
+      - worker_backend_firewall_source_addresses | unique | length == worker_backend_firewall_source_addresses | length
+    fail_msg: >-
+      Observe the actual mgt container source first; set exact source addresses and boolean
+      worker_backend_firewall_sources_verified in private worker inputs. This does not set any application ACL acknowledgement.
+  when: worker_backend_firewall_operation != 'remove'
+
+- name: Worker backend firewall | Load value-free catalog declarations
+  ansible.builtin.include_vars:
+    dir: "{{ playbook_dir }}/group_vars/all/services"
+    extensions: [yml]
+    ignore_unknown_extensions: true
+    name: worker_backend_firewall_catalog
+  when: worker_backend_firewall_operation != 'remove'
+
+- name: Worker backend firewall | Derive effective worker publications
+  worker_backend_firewall_plan:
+    source_var: worker_backend_firewall_catalog
+    workers: ["{{ services_storage_host }}", "{{ services_plex_host }}"]
+    controller_address: "{{ hostvars[services_controller_host].local_ip }}"
+  when: worker_backend_firewall_operation != 'remove'
+
+- name: Worker backend firewall | Require a nonempty policy and inventory identity
+  ansible.builtin.assert:
+    that:
+      - worker_backend_firewall_plan[inventory_hostname].ports | length > 0
+      - local_ip is defined
+  when: worker_backend_firewall_operation != 'remove'
+
+- name: Worker backend firewall | Gather minimal platform facts
+  ansible.builtin.setup:
+    gather_subset: ['!all', '!min', distribution, service_mgr, python]
+
+- name: Worker backend firewall | Detect the supported Unraid platform
+  ansible.builtin.stat:
+    path: /etc/unraid-version
+  register: worker_backend_firewall_unraid
+
+- name: Worker backend firewall | Validate supported platform and existing Python
+  ansible.builtin.assert:
+    that:
+      - >-
+        worker_backend_firewall_unraid.stat.exists or
+        (ansible_facts.distribution == 'Ubuntu' and ansible_facts.distribution_version == '24.04'
+         and ansible_facts.service_mgr == 'systemd')
+      - >-
+        (inventory_hostname == services_storage_host and worker_backend_firewall_unraid.stat.exists) or
+        (inventory_hostname == services_plex_host and not worker_backend_firewall_unraid.stat.exists)
+      - ansible_facts.python.version.major == 3
+      - ansible_facts.python.version.minor >= 10
+    fail_msg: This temporary policy supports the current Unraid and Ubuntu 24.04 workers with existing Python 3.10+ only.
+
+- name: Worker backend firewall | Resolve platform-owned paths and backend
+  ansible.builtin.set_fact:
+    worker_backend_firewall_root: >-
+      {{ '/boot/config/skynet-worker-backend-firewall' if worker_backend_firewall_unraid.stat.exists
+         else '/etc/skynet-worker-backend-firewall' }}
+    worker_backend_firewall_backend: "{{ 'legacy' if worker_backend_firewall_unraid.stat.exists else 'nf_tables' }}"
+    worker_backend_firewall_python: "{{ ansible_facts.python.executable }}"
+
+- name: Worker backend firewall | Validate exact addresses on the controller
+  ansible.builtin.set_fact:
+    worker_backend_firewall_policy:
+      schema: 1
+      inventory_host: "{{ inventory_hostname }}"
+      inventory_address: "{{ local_ip }}"
+      backend: "{{ worker_backend_firewall_backend }}"
+      ports: "{{ worker_backend_firewall_plan[inventory_hostname].ports }}"
+      sources: "{{ worker_backend_firewall_source_addresses }}"
+      sources_verified: "{{ worker_backend_firewall_sources_verified }}"
+  when: worker_backend_firewall_operation != 'remove'
+
+- name: Worker backend firewall | Validate policy inputs without host writes
+  worker_backend_firewall_validate:
+    policy: "{{ worker_backend_firewall_policy }}"
+    require_verified: "{{ worker_backend_firewall_operation == 'install' and not ansible_check_mode }}"
+  when: worker_backend_firewall_operation != 'remove'
+
+- name: Worker backend firewall | Explain the read-only plan
+  ansible.builtin.debug:
+    msg: >-
+      {{ worker_backend_firewall_operation }} on {{ inventory_hostname }} using {{ worker_backend_firewall_backend }}:
+      {{ worker_backend_firewall_policy | default({}) }}. Check mode changes no policy files, firewall rules,
+      applications or persistence; it does not prove live enforcement or container source identity.
+  when: ansible_check_mode
+
+- name: Worker backend firewall | Perform the selected policy operation
+  ansible.builtin.include_tasks:
+    file: "{{ worker_backend_firewall_operation }}.yml"
+    apply:
+      tags: [worker_backend_firewall_install, worker_backend_firewall_check, worker_backend_firewall_remove]
+  when: not ansible_check_mode

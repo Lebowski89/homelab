@@ -1,5 +1,22 @@
 ---
 
+- name: Service catalog preflight | Enforce operational requirements before secret preflight
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: operational_requirements
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+  vars:
+    service_common_service: >-
+      {{ {'operational_requirements': service_catalog_materialized_service.config.operational_requirements | default({})} }}
+    service_common_name: >-
+      {{ service_catalog_materialized_service.config.name
+         | default((service_catalog_materialized_service.podman_lifecycle | default({})).container_name
+         | default(service_catalog_materialized_service.name)) }}
+    service_common_action: "{{ service_catalog_action }}"
+    service_common_execution_only: "{{ service_catalog_execution_only | default(false) }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
 - name: Service catalog preflight | Reset current-service common context
   no_log: true
   diff: false

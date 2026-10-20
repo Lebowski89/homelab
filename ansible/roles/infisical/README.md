@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/03 |
+| Readme update        | 2026/10/06 |
 
 
 
@@ -55,7 +55,7 @@
 | [infisical_smtp_port](defaults/main.yml#L44)   | int | `587` |    
 | [infisical_frontend_fqdn](defaults/main.yml#L46)   | str | `{{ infisical_name }}.{{ services_internal_zone }}` |    
 | [infisical_frontend_address](defaults/main.yml#L47)   | str | `https://{{ infisical_frontend_fqdn }}:{{ services_private_https_port }}` |    
-| [infisical_backend_address](defaults/main.yml#L48)   | str | `http://{{ infisical_name }}:8080` |    
+| [infisical_backend_address](defaults/main.yml#L48)   | str | `http://{{ local_ip }}:{{ infisical_port }}` |    
 | [infisical_docker_network](defaults/main.yml#L50)   | str | `overlay` |    
 | [infisical_logging](defaults/main.yml#L52)   | dict | `{}` |    
 | [infisical_logging.**driver**](defaults/main.yml#L53)   | str | `json-file` |    
@@ -65,7 +65,7 @@
 | [infisical_logging.options.**compress**](defaults/main.yml#L57)   | str | `true` |    
 | [infisical_restart_policy](defaults/main.yml#L59)   | str | `unless-stopped` |    
 | [infisical_redis_name](defaults/main.yml#L65)   | str | `infisical-redis` |    
-| [infisical_redis_image](defaults/main.yml#L66)   | str | `valkey/valkey:9.2-alpine` |    
+| [infisical_redis_image](defaults/main.yml#L66)   | str | `docker.io/valkey/valkey:9.2-alpine` |    
 | [infisical_redis_puid](defaults/main.yml#L67)   | str | `{{ container_host_puid ¦ default('1000') }}` |    
 | [infisical_redis_pgid](defaults/main.yml#L68)   | str | `{{ container_host_pgid ¦ default('1000') }}` |    
 | [infisical_redis_path](defaults/main.yml#L69)   | str | `{{ infisical_base_path }}/redis` |    
@@ -82,6 +82,145 @@
 | [infisical_traefik_tls_options](defaults/main.yml#L92)   | str | `securetls@file` |    
 | [infisical_traefik_dynamic_owner](defaults/main.yml#L93)   | int | `1000` |    
 | [infisical_traefik_dynamic_group](defaults/main.yml#L94)   | int | `1000` |    
+| [infisical_podman_services](defaults/main.yml#L97)   | list | `[]` |    
+| [infisical_podman_services.**0**](defaults/main.yml#L98)   | dict | `{}` |    
+| [infisical_podman_services.0.**name**](defaults/main.yml#L98)   | str | `{{ infisical_redis_name }}` |    
+| [infisical_podman_services.0.**runtime**](defaults/main.yml#L99)   | str | `podman` |    
+| [infisical_podman_services.0.**image**](defaults/main.yml#L100)   | str | `{{ infisical_redis_image }}` |    
+| [infisical_podman_services.0.**user**](defaults/main.yml#L101)   | str | `0:0` |    
+| [infisical_podman_services.0.**environment**](defaults/main.yml#L102)   | dict | `{}` |    
+| [infisical_podman_services.0.environment.**TZ**](defaults/main.yml#L103)   | str | `{{ infisical_timezone }}` |    
+| [infisical_podman_services.0.environment.**PUID**](defaults/main.yml#L104)   | str | `{{ infisical_redis_puid }}` |    
+| [infisical_podman_services.0.environment.**PGID**](defaults/main.yml#L105)   | str | `{{ infisical_redis_pgid }}` |    
+| [infisical_podman_services.0.environment.**REDIS_PASSWORD_FILE**](defaults/main.yml#L106)   | str | `/run/secrets/infisical_redis_password_secret` |    
+| [infisical_podman_services.0.**secrets**](defaults/main.yml#L107)   | list | `[]` |    
+| [infisical_podman_services.0.secrets.**0**](defaults/main.yml#L108)   | str | `infisical_redis_password_secret` |    
+| [infisical_podman_services.0.**named_networks**](defaults/main.yml#L109)   | dict | `{}` |    
+| [infisical_podman_services.0.named_networks.**infisical-redis**](defaults/main.yml#L110)   | dict | `{}` |    
+| [infisical_podman_services.0.named_networks.infisical-redis.**driver**](defaults/main.yml#L111)   | str | `bridge` |    
+| [infisical_podman_services.0.named_networks.infisical-redis.**external**](defaults/main.yml#L112)   | bool | `False` |    
+| [infisical_podman_services.0.**ports**](defaults/main.yml#L113)   | dict | `{}` |    
+| [infisical_podman_services.0.ports.**cache**](defaults/main.yml#L114)   | dict | `{}` |    
+| [infisical_podman_services.0.ports.cache.**host_ip**](defaults/main.yml#L115)   | str | `{{ local_ip }}` |    
+| [infisical_podman_services.0.ports.cache.**published**](defaults/main.yml#L116)   | str | `{{ infisical_redis_backend_port }}` |    
+| [infisical_podman_services.0.ports.cache.**target**](defaults/main.yml#L117)   | int | `6379` |    
+| [infisical_podman_services.0.ports.cache.**protocol**](defaults/main.yml#L118)   | str | `tcp` |    
+| [infisical_podman_services.0.**paths**](defaults/main.yml#L119)   | list | `[]` |    
+| [infisical_podman_services.0.paths.**0**](defaults/main.yml#L120)   | dict | `{}` |    
+| [infisical_podman_services.0.paths.0.**path**](defaults/main.yml#L120)   | str | `{{ infisical_base_path }}` |    
+| [infisical_podman_services.0.paths.0.**state**](defaults/main.yml#L121)   | str | `directory` |    
+| [infisical_podman_services.0.paths.0.**mode**](defaults/main.yml#L122)   | str | `0755` |    
+| [infisical_podman_services.0.paths.**1**](defaults/main.yml#L123)   | dict | `{}` |    
+| [infisical_podman_services.0.paths.1.**path**](defaults/main.yml#L123)   | str | `{{ infisical_redis_path }}` |    
+| [infisical_podman_services.0.paths.1.**state**](defaults/main.yml#L124)   | str | `directory` |    
+| [infisical_podman_services.0.paths.1.**mode**](defaults/main.yml#L125)   | str | `0755` |    
+| [infisical_podman_services.0.**volumes**](defaults/main.yml#L126)   | dict | `{}` |    
+| [infisical_podman_services.0.volumes.**data**](defaults/main.yml#L127)   | dict | `{}` |    
+| [infisical_podman_services.0.volumes.data.**type**](defaults/main.yml#L128)   | str | `bind` |    
+| [infisical_podman_services.0.volumes.data.**source**](defaults/main.yml#L129)   | str | `{{ infisical_redis_path }}` |    
+| [infisical_podman_services.0.volumes.data.**target**](defaults/main.yml#L130)   | str | `/data` |    
+| [infisical_podman_services.0.volumes.data.**read_only**](defaults/main.yml#L131)   | bool | `False` |    
+| [infisical_podman_services.0.**no_new_privileges**](defaults/main.yml#L132)   | bool | `False` |    
+| [infisical_podman_services.0.**operational_requirements**](defaults/main.yml#L133)   | dict | `{}` |    
+| [infisical_podman_services.0.operational_requirements.**acl**](defaults/main.yml#L134)   | list | `[]` |    
+| [infisical_podman_services.0.operational_requirements.acl.**0**](defaults/main.yml#L134)   | str | `bootstrap` |    
+| [infisical_podman_services.0.operational_requirements.**ownership_transition**](defaults/main.yml#L135)   | bool | `True` |    
+| [infisical_podman_services.0.**deploy**](defaults/main.yml#L136)   | dict | `{}` |    
+| [infisical_podman_services.0.deploy.**type**](defaults/main.yml#L137)   | str | `container` |    
+| [infisical_podman_services.0.deploy.**host**](defaults/main.yml#L138)   | str | `{{ inventory_hostname }}` |    
+| [infisical_podman_services.0.deploy.**execution**](defaults/main.yml#L139)   | dict | `{}` |    
+| [infisical_podman_services.0.deploy.execution.**mode**](defaults/main.yml#L140)   | str | `rootless` |    
+| [infisical_podman_services.0.deploy.execution.**host_user**](defaults/main.yml#L141)   | str | `podman-infisical-redis` |    
+| [infisical_podman_services.0.deploy.execution.**userns**](defaults/main.yml#L142)   | dict | `{}` |    
+| [infisical_podman_services.0.deploy.execution.userns.**mode**](defaults/main.yml#L143)   | str | `keep-id` |    
+| [infisical_podman_services.0.deploy.execution.userns.**uid**](defaults/main.yml#L144)   | str | `0` |    
+| [infisical_podman_services.0.deploy.execution.userns.**gid**](defaults/main.yml#L145)   | str | `0` |    
+| [infisical_podman_services.0.**systemd**](defaults/main.yml#L146)   | dict | `{}` |    
+| [infisical_podman_services.0.systemd.**restart**](defaults/main.yml#L147)   | str | `always` |    
+| [infisical_podman_services.0.systemd.**restart_sec**](defaults/main.yml#L148)   | str | `15s` |    
+| [infisical_podman_services.0.systemd.**timeout_start_sec**](defaults/main.yml#L149)   | str | `600s` |    
+| [infisical_podman_services.0.systemd.**after**](defaults/main.yml#L150)   | list | `[]` |    
+| [infisical_podman_services.0.systemd.after.**0**](defaults/main.yml#L151)   | str | `network-online.target` |    
+| [infisical_podman_services.0.**command**](defaults/main.yml#L152)   | list | `[]` |    
+| [infisical_podman_services.0.command.**0**](defaults/main.yml#L153)   | str | `sh` |    
+| [infisical_podman_services.0.command.**1**](defaults/main.yml#L154)   | str | `-c` |    
+| [infisical_podman_services.0.command.**2**](defaults/main.yml#L154)   | str | `umask 077; printf 'requirepass "%s"\n' "$(sed 's/[\\"]/\\&/g' /run/secrets/infisical_redis_password_secret)" > /tmp/skynet-valkey.conf; exec valkey-server /tmp/skynet-valkey.conf` |    
+| [infisical_podman_services.0.**healthcheck**](defaults/main.yml#L159)   | dict | `{}` |    
+| [infisical_podman_services.0.healthcheck.**test**](defaults/main.yml#L160)   | list | `[]` |    
+| [infisical_podman_services.0.healthcheck.test.**0**](defaults/main.yml#L161)   | str | `CMD-SHELL` |    
+| [infisical_podman_services.0.healthcheck.test.**1**](defaults/main.yml#L162)   | str | `REDISCLI_AUTH="$(cat /run/secrets/infisical_redis_password_secret)" valkey-cli ping ¦ grep -q PONG` |    
+| [infisical_podman_services.0.healthcheck.**interval**](defaults/main.yml#L163)   | str | `10s` |    
+| [infisical_podman_services.0.healthcheck.**timeout**](defaults/main.yml#L164)   | str | `5s` |    
+| [infisical_podman_services.0.healthcheck.**retries**](defaults/main.yml#L165)   | int | `5` |    
+| [infisical_podman_services.0.healthcheck.**start_period**](defaults/main.yml#L166)   | str | `30s` |    
+| [infisical_podman_services.0.**notify_healthy**](defaults/main.yml#L167)   | bool | `True` |    
+| [infisical_podman_services.0.**tmpfs**](defaults/main.yml#L168)   | list | `[]` |    
+| [infisical_podman_services.0.tmpfs.**0**](defaults/main.yml#L169)   | str | `/tmp:mode=1777` |    
+| [infisical_podman_services.**1**](defaults/main.yml#L170)   | dict | `{}` |    
+| [infisical_podman_services.1.**name**](defaults/main.yml#L170)   | str | `{{ infisical_name }}` |    
+| [infisical_podman_services.1.**runtime**](defaults/main.yml#L171)   | str | `podman` |    
+| [infisical_podman_services.1.**image**](defaults/main.yml#L172)   | str | `{{ infisical_image }}` |    
+| [infisical_podman_services.1.**user**](defaults/main.yml#L173)   | str | `1001:1001` |    
+| [infisical_podman_services.1.**environment**](defaults/main.yml#L174)   | dict | `{}` |    
+| [infisical_podman_services.1.environment.**TZ**](defaults/main.yml#L175)   | str | `{{ infisical_timezone }}` |    
+| [infisical_podman_services.1.environment.**PUID**](defaults/main.yml#L176)   | str | `{{ infisical_puid }}` |    
+| [infisical_podman_services.1.environment.**PGID**](defaults/main.yml#L177)   | str | `{{ infisical_pgid }}` |    
+| [infisical_podman_services.1.environment.**NODE_ENV**](defaults/main.yml#L178)   | str | `production` |    
+| [infisical_podman_services.1.environment.**ENCRYPTION_KEY**](defaults/main.yml#L179)   | str | `{{ infisical_enc_key }}` |    
+| [infisical_podman_services.1.environment.**AUTH_SECRET**](defaults/main.yml#L180)   | str | `{{ infisical_jwt_key }}` |    
+| [infisical_podman_services.1.environment.**DB_CONNECTION_URI**](defaults/main.yml#L181)   | str | `<multiline value: folded_strip>` |    
+| [infisical_podman_services.1.environment.**REDIS_URL**](defaults/main.yml#L184)   | str | `redis://:{{ infisical_redis_password ¦ urlencode }}@{{ local_ip }}:{{ infisical_redis_backend_port }}` |    
+| [infisical_podman_services.1.environment.**SITE_URL**](defaults/main.yml#L185)   | str | `{{ infisical_frontend_address }}` |    
+| [infisical_podman_services.1.environment.**SMTP_HOST**](defaults/main.yml#L186)   | str | `{{ infisical_smtp_host }}` |    
+| [infisical_podman_services.1.environment.**SMTP_PORT**](defaults/main.yml#L187)   | str | `{{ infisical_smtp_port }}` |    
+| [infisical_podman_services.1.environment.**SMTP_FROM_ADDRESS**](defaults/main.yml#L188)   | str | `{{ infisical_smtp_email }}` |    
+| [infisical_podman_services.1.environment.**SMTP_FROM_NAME**](defaults/main.yml#L189)   | str | `{{ infisical_smtp_sender }}` |    
+| [infisical_podman_services.1.environment.**SMTP_USERNAME**](defaults/main.yml#L190)   | str | `{{ infisical_smtp_user }}` |    
+| [infisical_podman_services.1.environment.**SMTP_PASSWORD**](defaults/main.yml#L191)   | str | `{{ infisical_smtp_pass }}` |    
+| [infisical_podman_services.1.**secrets**](defaults/main.yml#L192)   | list | `[]` |    
+| [infisical_podman_services.1.**named_networks**](defaults/main.yml#L193)   | dict | `{}` |    
+| [infisical_podman_services.1.named_networks.**infisical**](defaults/main.yml#L194)   | dict | `{}` |    
+| [infisical_podman_services.1.named_networks.infisical.**driver**](defaults/main.yml#L195)   | str | `bridge` |    
+| [infisical_podman_services.1.named_networks.infisical.**external**](defaults/main.yml#L196)   | bool | `False` |    
+| [infisical_podman_services.1.**paths**](defaults/main.yml#L197)   | list | `[]` |    
+| [infisical_podman_services.1.**volumes**](defaults/main.yml#L198)   | dict | `{}` |    
+| [infisical_podman_services.1.**no_new_privileges**](defaults/main.yml#L199)   | bool | `False` |    
+| [infisical_podman_services.1.**operational_requirements**](defaults/main.yml#L200)   | dict | `{}` |    
+| [infisical_podman_services.1.operational_requirements.**acl**](defaults/main.yml#L201)   | list | `[]` |    
+| [infisical_podman_services.1.operational_requirements.acl.**0**](defaults/main.yml#L201)   | str | `bootstrap` |    
+| [infisical_podman_services.1.**deploy**](defaults/main.yml#L202)   | dict | `{}` |    
+| [infisical_podman_services.1.deploy.**type**](defaults/main.yml#L203)   | str | `container` |    
+| [infisical_podman_services.1.deploy.**host**](defaults/main.yml#L204)   | str | `{{ inventory_hostname }}` |    
+| [infisical_podman_services.1.deploy.**execution**](defaults/main.yml#L205)   | dict | `{}` |    
+| [infisical_podman_services.1.deploy.execution.**mode**](defaults/main.yml#L206)   | str | `rootless` |    
+| [infisical_podman_services.1.deploy.execution.**host_user**](defaults/main.yml#L207)   | str | `podman-infisical` |    
+| [infisical_podman_services.1.deploy.execution.**userns**](defaults/main.yml#L208)   | dict | `{}` |    
+| [infisical_podman_services.1.deploy.execution.userns.**mode**](defaults/main.yml#L209)   | str | `keep-id` |    
+| [infisical_podman_services.1.deploy.execution.userns.**uid**](defaults/main.yml#L210)   | str | `1001` |    
+| [infisical_podman_services.1.deploy.execution.userns.**gid**](defaults/main.yml#L211)   | str | `1001` |    
+| [infisical_podman_services.1.**systemd**](defaults/main.yml#L212)   | dict | `{}` |    
+| [infisical_podman_services.1.systemd.**restart**](defaults/main.yml#L213)   | str | `always` |    
+| [infisical_podman_services.1.systemd.**restart_sec**](defaults/main.yml#L214)   | str | `15s` |    
+| [infisical_podman_services.1.systemd.**timeout_start_sec**](defaults/main.yml#L215)   | str | `600s` |    
+| [infisical_podman_services.1.systemd.**after**](defaults/main.yml#L216)   | list | `[]` |    
+| [infisical_podman_services.1.systemd.after.**0**](defaults/main.yml#L217)   | str | `network-online.target` |    
+| [infisical_podman_services.1.**healthcheck**](defaults/main.yml#L218)   | dict | `{}` |    
+| [infisical_podman_services.1.healthcheck.**test**](defaults/main.yml#L219)   | list | `[]` |    
+| [infisical_podman_services.1.healthcheck.test.**0**](defaults/main.yml#L220)   | str | `CMD-SHELL` |    
+| [infisical_podman_services.1.healthcheck.test.**1**](defaults/main.yml#L221)   | str | `node -e "fetch('http://127.0.0.1:8080/api/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"` |    
+| [infisical_podman_services.1.healthcheck.**interval**](defaults/main.yml#L222)   | str | `10s` |    
+| [infisical_podman_services.1.healthcheck.**timeout**](defaults/main.yml#L223)   | str | `5s` |    
+| [infisical_podman_services.1.healthcheck.**retries**](defaults/main.yml#L224)   | int | `5` |    
+| [infisical_podman_services.1.healthcheck.**start_period**](defaults/main.yml#L225)   | str | `30s` |    
+| [infisical_podman_services.1.**notify_healthy**](defaults/main.yml#L226)   | bool | `True` |    
+| [infisical_podman_services.1.**ports**](defaults/main.yml#L227)   | dict | `{}` |    
+| [infisical_podman_services.1.ports.**lookup**](defaults/main.yml#L228)   | dict | `{}` |    
+| [infisical_podman_services.1.ports.lookup.**host_ip**](defaults/main.yml#L229)   | str | `{{ local_ip }}` |    
+| [infisical_podman_services.1.ports.lookup.**published**](defaults/main.yml#L230)   | str | `{{ infisical_port }}` |    
+| [infisical_podman_services.1.ports.lookup.**target**](defaults/main.yml#L231)   | int | `8080` |    
+| [infisical_podman_secret_targets](defaults/main.yml#L232)   | dict | `{}` |    
+| [infisical_redis_backend_port](defaults/main.yml#L233)   | int | `16381` |    
+| [infisical_postgres_host](defaults/main.yml#L234)   | str | `{{ local_ip }}` |    
 
 
 
@@ -94,18 +233,24 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
-| Infisical ¦ Assert required non-secret values are defined | ansible.builtin.assert | False |  |
-| Infisical ¦ Check if compose file exists | ansible.builtin.stat | False |  |
-| Infisical ¦ Compose down | community.docker.docker_compose_v2 | True |  |
-| Infisical ¦ Remove compose file | ansible.builtin.file | False |  |
-| Infisical ¦ Create directories | ansible.builtin.file | False |  |
-| Infisical ¦ Template env file | ansible.builtin.template | False |  |
-| Infisical ¦ Assert Docker secrets values are defined | ansible.builtin.assert | False |  |
-| Infisical ¦ Create Docker secrets directory | ansible.builtin.file | False |  |
-| Infisical ¦ Create Docker secrets files | ansible.builtin.copy | False |  |
+| Infisical ¦ Validate bootstrap inputs | ansible.builtin.assert | False |  |
+| Infisical ¦ Select explicit bootstrap operation | ansible.builtin.set_fact | False |  |
+| Infisical ¦ Validate required Vault inputs before mutation | ansible.builtin.assert | True |  |
+| Infisical ¦ Validate all Quadlet definitions before mutation | ansible.builtin.include_role | False |  |
+| Infisical ¦ Enforce every bootstrap requirement before stopping or preparing services | ansible.builtin.include_role | False |  |
+| Infisical ¦ Stop consumers before providers in their persisted managers | ansible.builtin.include_role | True |  |
+| Infisical ¦ Process bootstrap providers and consumers | ansible.builtin.include_tasks | False |  |
 | Infisical ¦ Render Traefik dynamic file | ansible.builtin.template | True |  |
-| Infisical ¦ Import compose file | ansible.builtin.template | False |  |
-| Infisical ¦ Compose stack up | community.docker.docker_compose_v2 | False |  |
+| Infisical ¦ Retire Traefik route | ansible.builtin.file | True |  |
+
+#### File: tasks/service.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Infisical ¦ Reset current bootstrap inputs | ansible.builtin.set_fact | False |  |
+| Infisical ¦ Select only current-service Vault declarations | ansible.builtin.set_fact | True |  |
+| Infisical ¦ Require nonempty current-service credentials | ansible.builtin.assert | False |  |
+| Infisical ¦ Deploy through the Podman adapter | ansible.builtin.include_role | False |  |
 
 
 

@@ -269,3 +269,15 @@ def test_empty_stack_name_fails():
         assert "docker_services_stack_name must be a non-empty string" in str(exc)
     else:
         raise AssertionError("Expected empty stack name to fail")
+
+
+def test_podman_only_ipv6_option_is_rejected_instead_of_discarded_by_docker():
+    from ansible.errors import AnsibleFilterError
+
+    plugin = load_plugin()
+    try:
+        plugin.docker_services_normalize_stack_resources({"managed": {"external": False, "enable_ipv6": True}})
+    except AnsibleFilterError as error:
+        assert "cannot silently discard" in str(error)
+    else:
+        raise AssertionError("unsupported IPv6 declaration was silently accepted")

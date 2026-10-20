@@ -1,0 +1,5 @@
+  - job_name: "alertmanager"
+    scheme: https
+    scrape_interval: 30s
+    static_configs:
+      - targets: ["alertmanager.{{ services_internal_zone }}:{{ services_private_https_port }}"]

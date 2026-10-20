@@ -8,6 +8,7 @@ replacement, and produce the internal structure consumed by Quadlet templates.
 from __future__ import annotations
 
 import ipaddress
+import json
 import posixpath
 import re
 import shlex
@@ -36,9 +37,12 @@ _PODMAN_SERVICE_FIELDS = frozenset(
     {
         "cap_add",
         "cap_drop",
+        "command",
+        "cgroup",
         "deploy",
         "description",
         "devices",
+        "env_file",
         "healthcheck",
         "image",
         "log_driver",
@@ -52,12 +56,16 @@ _PODMAN_SERVICE_FIELDS = frozenset(
         "secrets",
         "shm_size",
         "systemd",
+        "tmpfs",
+        "notify_healthy",
         "user",
         "volumes",
     }
 )
-_SERVICE_COMMON_FIELDS = frozenset({"copies", "environment", "infisical", "paths", "postgres", "templates", "traefik"})
-_SERVICE_PREPARE_FIELDS = frozenset({"application_prepare", "paths_vault", "prep"})
+_SERVICE_COMMON_FIELDS = frozenset(
+    {"copies", "environment", "infisical", "operational_requirements", "paths", "postgres", "templates", "traefik"}
+)
+_SERVICE_PREPARE_FIELDS = frozenset({"application_prepare", "paths_vault", "prep", "settings"})
 _SUPPORTED_TOP_LEVEL_FIELDS = _CATALOG_METADATA_FIELDS | _PODMAN_SERVICE_FIELDS | _SERVICE_COMMON_FIELDS | _SERVICE_PREPARE_FIELDS
 
 
@@ -78,6 +86,94 @@ def podman_env_file_key(value: Any) -> str:
     if not isinstance(value, str) or not _ENV_KEY_RE.fullmatch(value):
         raise AnsibleFilterError(f"Podman env-file key must match {_ENV_KEY_RE.pattern}; got {value!r}")
     return value
+
+
+def podman_quadlet_argv(value: Any) -> str:
+    """Serialize literal argv through Quadlet parsing and systemd ExecStart.
+
+    Quadlet unquotes C escapes then re-quotes the generated ExecStart; systemd
+    still expands dollars and specifiers there. Escape those exactly once.
+    Shell evaluation is possible only through an explicitly declared shell.
+    """
+    if not isinstance(value, list) or not value or any(not isinstance(arg, str) for arg in value):
+        raise AnsibleFilterError("command must be a non-empty argv list of strings; declare sh, -c explicitly for shell execution")
+    if any(not arg or any(ord(char) < 32 or ord(char) == 127 for char in arg) for arg in value):
+        raise AnsibleFilterError("command argv must have a non-empty executable and no control characters")
+    return " ".join(json.dumps(arg.replace("$", "$$").replace("%", "%%"), ensure_ascii=False) for arg in value)
+
+
+def podman_dotenv(value: Any) -> dict[str, str]:
+    """Parse the repository's single-line dotenv subset without evaluation.
+
+    Values are literal: dollars, percent signs and shell substitutions are never
+    expanded. Delimiter quotes are removed, escaped quotes/backslashes are
+    decoded in quoted values, and whitespace-delimited inline comments are
+    stripped. Unsupported export, unset, multiline and escape forms fail closed.
+    Error messages contain line numbers only, never the input or its values.
+    """
+    if not isinstance(value, str) or "\0" in value:
+        raise AnsibleFilterError("dotenv must be NUL-free text")
+    result = {}
+    for number, raw in enumerate(value.splitlines(), 1):
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        match = re.fullmatch(r"([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)", line)
+        if match is None:
+            raise AnsibleFilterError(f"Unsupported dotenv assignment on line {number}")
+        key, text = match.groups()
+        if text.startswith(("'", '"')):
+            quote = text[0]
+            chars = []
+            index = 1
+            while index < len(text) and text[index] != quote:
+                char = text[index]
+                if char == "\\":
+                    index += 1
+                    if index >= len(text) or text[index] not in (quote, "\\", "$"):
+                        raise AnsibleFilterError(f"Unsupported dotenv escape on line {number}")
+                    char = text[index]
+                chars.append(char)
+                index += 1
+            if index >= len(text) or (text[index + 1 :].strip() and not text[index + 1 :].lstrip().startswith("#")):
+                raise AnsibleFilterError(f"Unsupported dotenv quoting on line {number}")
+            text = "".join(chars)
+        else:
+            text = re.split(r"\s+#", text, maxsplit=1)[0].rstrip()
+            if text.endswith("\\"):
+                raise AnsibleFilterError(f"Unsupported dotenv continuation on line {number}")
+        result[key] = podman_env_file_value(text)
+    return result
+
+
+def _env_files(value: Any, *, name: str) -> list[str]:
+    if not isinstance(value, list):
+        raise AnsibleFilterError(f"{name} must be an ordered list of absolute file paths")
+    for path in value:
+        if not isinstance(path, str) or not path.startswith("/") or posixpath.normpath(path) != path or any(c in path for c in "\r\n\0"):
+            raise AnsibleFilterError(f"{name} must contain normalized absolute file paths")
+    return list(value)
+
+
+def _standalone_tmpfs(value: Any, *, name: str) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        raise AnsibleFilterError(f"{name} must be a list")
+    result = []
+    for declaration in value:
+        if not isinstance(declaration, str):
+            raise AnsibleFilterError(f"{name} declarations must be strings")
+        target, _, options = declaration.partition(":")
+        if not re.fullmatch(r"/[A-Za-z0-9_./-]+", target) or posixpath.normpath(target) != target:
+            raise AnsibleFilterError(f"{name} targets must be normalized absolute paths")
+        option_list = options.split(",") if options else []
+        for option in option_list:
+            if option in {"exec", "noexec", "nosuid", "nodev", "rw", "ro"}:
+                continue
+            if re.fullmatch(r"size=[1-9][0-9]*[kKmMgG]?", option) or re.fullmatch(r"mode=0?[0-7]{3,4}", option):
+                continue
+            raise AnsibleFilterError(f"{name} contains an unsupported tmpfs option")
+        result.append({"target": target, "options": option_list})
+    return result
 
 
 def podman_env_file_value(value: Any) -> str:
@@ -363,7 +459,9 @@ def _ports(value: Any, *, name: str) -> list[dict[str, Any]]:
             if address.version != 4:
                 raise AnsibleFilterError(f"{item_name}.host_ip must be IPv4 for this compatibility phase")
             result["host_ip"] = str(address)
-        normalized.append(result)
+        # Semantic aliases (for example receiver/backend) share one binding.
+        if result not in normalized:
+            normalized.append(result)
     return normalized
 
 
@@ -378,8 +476,8 @@ def _paths(value: Any, *, name: str) -> list[dict[str, Any]]:
         result = deepcopy(dict(path))
         raw_path = _nonempty_string(result.get("path"), name=f"{item_name}.path")
         host_path = posixpath.normpath(raw_path)
-        if host_path != "/opt" and not host_path.startswith("/opt/"):
-            raise AnsibleFilterError(f"{item_name}.path must normalize to an absolute path within /opt; got {raw_path!r}")
+        if host_path != "/opt" and not host_path.startswith(("/opt/", "/var/log/")):
+            raise AnsibleFilterError(f"{item_name}.path must normalize to an absolute path within /opt or /var/log; got {raw_path!r}")
         result["path"] = host_path
         normalized.append(result)
     return normalized
@@ -428,6 +526,8 @@ def _devices(value: Any, *, name: str) -> list[str]:
 
 def _container_network_mode(value: Any, *, name: str) -> str:
     text = _nonempty_string(value, name=name)
+    if text in {"host", "pasta"}:
+        return text
     match = re.fullmatch(r"container:([A-Za-z0-9][A-Za-z0-9_.-]*)", text)
     if match is None:
         raise AnsibleFilterError(f'{name} must use the constrained "container:<managed-container-name>" form')
@@ -478,6 +578,8 @@ def _healthcheck(value: Any, *, name: str) -> dict[str, Any]:
 
 def _tmpfs_options(value: Any, *, name: str) -> list[str]:
     options = _as_mapping(value or {}, name=name)
+    if set(options) - {"size", "mode"}:
+        raise AnsibleFilterError(f"{name} contains unsupported fields")
     rendered: list[str] = []
     if "size" in options:
         size = _integer(options["size"], name=f"{name}.size")
@@ -485,6 +587,8 @@ def _tmpfs_options(value: Any, *, name: str) -> list[str]:
             raise AnsibleFilterError(f"{name}.size must be >= 0")
         rendered.append(f"size={size}")
     if "mode" in options:
+        if not re.fullmatch(r"0?[0-7]{3,4}", str(options["mode"])):
+            raise AnsibleFilterError(f"{name}.mode must be an octal mode")
         rendered.append(f"mode={options['mode']}")
     return rendered
 
@@ -614,8 +718,10 @@ def podman_subid_range(value: Any, account: Any, minimum_count: Any = 65536) -> 
     return {"start": start, "count": range_count}
 
 
-def podman_rootless_pasta_config(subnet: Any, gateway: Any, dns_forward: Any) -> dict[str, Any]:
-    """Validate and render the role-wide rootless pasta IPv4 configuration."""
+def podman_rootless_pasta_config(
+    subnet: Any, gateway: Any, dns_forward: Any, ipv6_address: Any = None, ipv6_gateway: Any = None
+) -> dict[str, Any]:
+    """Render private IPv4 defaults, or explicit dual-stack direct-pasta ingress."""
     if not all(isinstance(value, str) and value == value.strip() and value for value in (subnet, gateway, dns_forward)):
         raise AnsibleFilterError("Rootless pasta subnet, gateway, and DNS forwarder must be non-empty trimmed strings")
     try:
@@ -653,7 +759,7 @@ def podman_rootless_pasta_config(subnet: Any, gateway: Any, dns_forward: Any) ->
         "--no-dhcpv6",
         "--no-dhcp",
     ]
-    return {
+    result = {
         "subnet": str(network),
         "address": str(network.network_address),
         "prefix_length": network.prefixlen,
@@ -661,33 +767,63 @@ def podman_rootless_pasta_config(subnet: Any, gateway: Any, dns_forward: Any) ->
         "dns_forward": str(dns_address),
         "options": options,
     }
+    if ipv6_address is not None or ipv6_gateway is not None:
+        if not all(isinstance(value, str) and value and value == value.strip() for value in (ipv6_address, ipv6_gateway)):
+            raise AnsibleFilterError("Direct pasta IPv6 address and gateway must both be non-empty trimmed strings")
+        try:
+            interface = ipaddress.ip_interface(ipv6_address)
+            gateway6 = ipaddress.ip_address(ipv6_gateway)
+        except ValueError as error:
+            raise AnsibleFilterError("Invalid direct pasta IPv6 address/gateway") from error
+        if (
+            not isinstance(interface, ipaddress.IPv6Interface)
+            or interface.network.prefixlen != 64
+            or not interface.network.subnet_of(ipaddress.ip_network("fd00::/8"))
+        ):
+            raise AnsibleFilterError("Direct pasta IPv6 address must use a private ULA /64")
+        if (
+            not isinstance(gateway6, ipaddress.IPv6Address)
+            or gateway6 not in interface.network
+            or gateway6 in {interface.ip, interface.network.network_address}
+            or interface.ip == interface.network.network_address
+        ):
+            raise AnsibleFilterError("Direct pasta IPv6 address/gateway must be distinct usable addresses in the same subnet")
+        # Neighbour discovery is needed for guest replies via the private IPv6
+        # gateway. Suppress RA/DHCP instead of disabling NDP as IPv4-only does.
+        result["options"] = [option for option in options if option not in {"--ipv4-only", "--no-ndp"}] + [
+            "-a",
+            str(interface.ip),
+            "-g",
+            str(gateway6),
+            "--no-ra",
+        ]
+        result.update(ipv6_subnet=str(interface.network), ipv6_address=str(interface.ip), ipv6_gateway=str(gateway6))
+    return result
 
 
 def podman_rootless_pasta_route_overlaps(value: Any, subnet: Any) -> list[str]:
-    """Return non-default host IPv4 routes that overlap the pasta subnet."""
+    """Return non-default same-family host routes that overlap the pasta subnet."""
     if isinstance(value, (str, Mapping)) or not isinstance(value, Iterable):
-        raise AnsibleFilterError("Host IPv4 routes must be a list of mappings")
+        raise AnsibleFilterError("Host routes must be a list of mappings")
     try:
         network = ipaddress.ip_network(subnet, strict=True)
     except ValueError as error:
         raise AnsibleFilterError(f"Invalid rootless pasta subnet for route comparison: {error}") from error
-    if not isinstance(network, ipaddress.IPv4Network):
-        raise AnsibleFilterError("Rootless pasta route comparison requires an IPv4 subnet")
 
     overlaps: set[str] = set()
     for index, route in enumerate(value):
         if not isinstance(route, Mapping):
-            raise AnsibleFilterError(f"Host IPv4 route[{index}] must be a mapping")
+            raise AnsibleFilterError(f"Host route[{index}] must be a mapping")
         destination = route.get("dst")
-        if destination in (None, "default", "0.0.0.0/0"):
+        if destination in (None, "default", "0.0.0.0/0", "::/0"):
             continue
         if not isinstance(destination, str):
-            raise AnsibleFilterError(f"Host IPv4 route[{index}].dst must be a string")
+            raise AnsibleFilterError(f"Host route[{index}].dst must be a string")
         try:
             route_network = ipaddress.ip_network(destination, strict=False)
         except ValueError as error:
-            raise AnsibleFilterError(f"Host IPv4 route[{index}].dst is invalid: {destination!r}") from error
-        if isinstance(route_network, ipaddress.IPv4Network) and network.overlaps(route_network):
+            raise AnsibleFilterError(f"Host route[{index}].dst is invalid: {destination!r}") from error
+        if route_network.version == network.version and network.overlaps(route_network):
             overlaps.add(str(route_network))
     return sorted(overlaps)
 
@@ -834,6 +970,13 @@ def _validate_rootless_managed_files(cfg: Mapping[str, Any], *, name: str, bind_
             item_name = f"{name}.{field}[{index}]"
             if not isinstance(declaration, Mapping):
                 raise AnsibleFilterError(f"{item_name} must be a mapping")
+            if cfg.get("name") == "traefik" and declaration.get("dest") in {
+                "/etc/logrotate.d/skynet-traefik",
+                "/usr/local/sbin/skynet-traefik-reopen-logs",
+            }:
+                if str(declaration.get("owner")) != "0" or str(declaration.get("group")) != "0":
+                    raise AnsibleFilterError(f"{item_name} host logrotate integration must remain root-owned")
+                continue
             _proper_descendant(
                 declaration.get("dest"),
                 bind_sources,
@@ -862,7 +1005,11 @@ def _validate_rootless_subset(
         raise AnsibleFilterError(f"{name}.image must be fully qualified for rootless Podman; got {image!r}")
     if deploy.get("type") != "container":
         raise AnsibleFilterError(f"{name}.deploy.type must be exactly container for rootless Podman")
-    if network is None or network.get("external") or network.get("driver", "bridge") != "bridge":
+    if container.get("network_mode") not in {None, "pasta"}:
+        raise AnsibleFilterError(f"{name}.network_mode is not supported for rootless Podman in this phase")
+    if container.get("network_mode") != "pasta" and (
+        network is None or network.get("external") or network.get("driver", "bridge") != "bridge"
+    ):
         raise AnsibleFilterError(f"{name}.named_networks must declare one managed bridge for rootless Podman")
     for index, port in enumerate(container.get("ports", [])):
         if port["host"] < 1024:
@@ -872,7 +1019,7 @@ def _validate_rootless_subset(
         if port["protocol"] != "tcp":
             raise AnsibleFilterError(f"{name}.ports[{index}].protocol must be tcp for rootless Podman in this phase")
     mounts = container.get("mounts", [])
-    if volumes or container.get("tmpfs"):
+    if volumes:
         raise AnsibleFilterError(f"{name}.volumes supports only bind mounts for rootless Podman in this phase")
     bind_sources: list[str] = []
     if host_paths or mounts or cfg.get("copies") or cfg.get("templates"):
@@ -882,7 +1029,7 @@ def _validate_rootless_subset(
             bind_sources.append(
                 _proper_descendant(
                     mount["source"],
-                    ("/opt",),
+                    ("/opt", "/var/log/skynet") if cfg.get("name") == "traefik" else ("/opt",),
                     name=f"{name}.volumes[{index}].source",
                     root_description="/opt for rootless Podman",
                 )
@@ -891,9 +1038,13 @@ def _validate_rootless_subset(
         bind_path_counts = dict.fromkeys(bind_sources, 0)
         raw_paths = cfg.get("paths", [])
         for index, path in enumerate(host_paths):
+            if cfg.get("name") == "traefik" and path["path"] == "/var/log/skynet":
+                if str(path.get("owner")) != "0" or str(path.get("group")) != "0" or path.get("state") != "directory":
+                    raise AnsibleFilterError("Traefik's shared log parent must remain a root-owned directory")
+                continue
             candidate = _proper_descendant(
                 raw_paths[index].get("path") if isinstance(raw_paths[index], Mapping) else None,
-                ("/opt",),
+                ("/opt", "/var/log/skynet") if cfg.get("name") == "traefik" else ("/opt",),
                 name=f"{name}.paths[{index}].path",
                 root_description="/opt for rootless Podman",
             )
@@ -907,15 +1058,19 @@ def _validate_rootless_subset(
                         "the dedicated execution account owns it"
                     )
                 continue
-            if path.get("state", "directory") != "absent":
-                raise AnsibleFilterError(
-                    f"{name}.paths[{index}] is not a declared rootless bind source and must use state absent for confined cleanup"
-                )
+            # Permit managed subdirectories/files and the minimal parent layout,
+            # without allowing unrelated host paths or a file as a bind source.
+            if path.get("state", "directory") == "directory" and any(source.startswith(candidate + "/") for source in bind_sources):
+                if "owner" in path or "group" in path:
+                    raise AnsibleFilterError(f"{name}.paths[{index}] must omit owner and group")
+                continue
+            if path.get("state", "directory") not in {"directory", "file", "touch", "absent"}:
+                raise AnsibleFilterError(f"{name}.paths[{index}] has an unsupported rootless filesystem state")
             _proper_descendant(
                 candidate,
                 bind_sources,
                 name=f"{name}.paths[{index}].path",
-                root_description="a declared rootless bind source for state absent cleanup",
+                root_description="a declared rootless bind source",
             )
             if "owner" in path or "group" in path:
                 raise AnsibleFilterError(f"{name}.paths[{index}] state absent cleanup must omit owner and group")
@@ -929,30 +1084,43 @@ def _validate_rootless_subset(
         raise AnsibleFilterError(f"{name}.cap_add is not supported for rootless Podman in this phase")
     if container.get("devices"):
         raise AnsibleFilterError(f"{name}.devices is not supported for rootless Podman in this phase")
-    if container.get("network_mode"):
-        raise AnsibleFilterError(f"{name}.network_mode is not supported for rootless Podman in this phase")
     if container.get("shm_size"):
         raise AnsibleFilterError(f"{name}.shm_size is not supported for rootless Podman in this phase")
-    for field in ("application_prepare", "prep", "paths_vault"):
-        if cfg.get(field):
-            raise AnsibleFilterError(
-                f"{name}.{field} is not supported for rootless Podman until application preparation is execution-user aware"
-            )
+    handler = _as_mapping(cfg.get("application_prepare", {}), name=f"{name}.application_prepare").get("handler", "")
+    if handler not in {"", "haproxy", "authelia", "vaultwarden"}:
+        raise AnsibleFilterError(f"{name}.application_prepare has no supported rootless handler")
+    if cfg.get("prep"):
+        raise AnsibleFilterError(f"{name}.prep has no supported rootless preparation contract")
+    if cfg.get("paths_vault"):
+        if handler != "vaultwarden":
+            raise AnsibleFilterError(f"{name}.paths_vault requires the vaultwarden handler")
+        for field in ("vault_dir", "vault_token_file", "vault_pass_file"):
+            path = cfg["paths_vault"].get(field)
+            if field == "vault_dir" and path in bind_sources:
+                continue
+            _proper_descendant(path, bind_sources, name=f"{name}.paths_vault.{field}", root_description="a declared rootless bind source")
 
 
 def _systemd(value: Any, *, name: str) -> dict[str, Any]:
     systemd = _as_mapping(value, name=name)
-    unsupported = set(systemd) - {"after", "restart", "restart_sec", "timeout_start_sec"}
+    unsupported = set(systemd) - {"after", "requires", "wants", "restart", "restart_sec", "timeout_start_sec"}
     if unsupported:
         raise AnsibleFilterError(f"{name} contains unsupported fields: {', '.join(sorted(unsupported))}")
-    if "after" in systemd:
-        after = systemd["after"]
+    for dependency in ("after", "requires", "wants"):
+        if dependency not in systemd:
+            continue
+        after = systemd[dependency]
         if not isinstance(after, list):
             raise AnsibleFilterError(f"{name}.after must be a list of non-empty unit names")
-        systemd["after"] = [_nonempty_string(unit, name=f"{name}.after[{index}]") for index, unit in enumerate(after)]
+        after = [_nonempty_string(unit, name=f"{name}.{dependency}") for unit in after]
+        if any(not isinstance(unit, str) or not re.fullmatch(r"[A-Za-z0-9_.@-]+\.(service|target)", unit) for unit in after):
+            raise AnsibleFilterError(f"{name}.{dependency} must contain valid service or target unit names")
+        systemd[dependency] = list(after)
     for field in ("restart", "restart_sec", "timeout_start_sec"):
         if field in systemd:
             systemd[field] = _nonempty_string(systemd[field], name=f"{name}.{field}")
+            if any(ord(char) < 32 or ord(char) == 127 for char in systemd[field]):
+                raise AnsibleFilterError(f"{name}.{field} must be a single-line unit value")
     return systemd
 
 
@@ -1006,7 +1174,7 @@ def _named_networks(value: Any, *, name: str) -> dict[str, Any] | None:
     item_name = f"{name}.{declared_name}"
     logical_name = _resource_name(declared_name, name=f"{name} key")
     options = _as_mapping(raw_options, name=item_name)
-    unsupported = set(options) - {"driver", "external", "name"}
+    unsupported = set(options) - {"driver", "external", "name", "enable_ipv6"}
     if unsupported:
         raise AnsibleFilterError(f"{item_name} contains unsupported fields: {', '.join(sorted(unsupported))}")
 
@@ -1020,6 +1188,12 @@ def _named_networks(value: Any, *, name: str) -> dict[str, Any] | None:
         if external:
             raise AnsibleFilterError(f"{item_name}.driver cannot be set when external is true; the external owner controls its driver")
         result["driver"] = driver
+    if "enable_ipv6" in options:
+        if type(options["enable_ipv6"]) is not bool:
+            raise AnsibleFilterError(f"{item_name}.enable_ipv6 must be a strict boolean")
+        if external or result.get("driver", "bridge") != "bridge":
+            raise AnsibleFilterError(f"{item_name}.enable_ipv6 requires a managed bridge network")
+        result["enable_ipv6"] = options["enable_ipv6"]
     return result
 
 
@@ -1068,6 +1242,7 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         has_systemd="systemd" in cfg,
     )
 
+    deploy = _deploy(cfg["deploy"], name=f"{name}.deploy") if "deploy" in cfg else {"execution": {"mode": "rootful"}}
     container: dict[str, Any] = {}
     unit_name = service_name
     description = (
@@ -1079,13 +1254,23 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
     image = _image(cfg["image"], name=f"{name}.image")
     container["image"] = image
     container["log_driver"] = _log_driver(cfg.get("log_driver", "journald"), name=f"{name}.log_driver")
+    if "command" in cfg:
+        container["exec"] = podman_quadlet_argv(cfg["command"])
+    env_files = _env_files(cfg.get("env_file", []), name=f"{name}.env_file")
+    if "cgroup" in cfg:
+        if cfg["cgroup"] != "host" or deploy["execution"]["mode"] != "rootful":
+            raise AnsibleFilterError(f"{name}.cgroup supports only host with rootful execution")
+        container["cgroup"] = "host"
+    if "notify_healthy" in cfg:
+        if not isinstance(cfg["notify_healthy"], bool) or (cfg["notify_healthy"] and not cfg.get("healthcheck")):
+            raise AnsibleFilterError(f"{name}.notify_healthy requires a boolean and a healthcheck when true")
+        container["notify_healthy"] = cfg["notify_healthy"]
 
     if "user" in cfg:
         container["uid"], container["gid"] = _canonical_user(cfg["user"], name=f"{name}.user")
 
     environment = _environment(cfg["environment"], name=f"{name}.environment") if "environment" in cfg else {}
 
-    deploy = _deploy(cfg["deploy"], name=f"{name}.deploy") if "deploy" in cfg else {"execution": {"mode": "rootful"}}
     if "host" in deploy:
         container["host"] = deploy["host"]
 
@@ -1097,6 +1282,10 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
 
     if "network_mode" in cfg:
         container["network_mode"] = _container_network_mode(cfg["network_mode"], name=f"{name}.network_mode")
+        if container["network_mode"] == "pasta" and deploy["execution"]["mode"] != "rootless":
+            raise AnsibleFilterError(f"{name}.network_mode pasta requires rootless execution")
+        if container["network_mode"] == "host" and cfg.get("ports"):
+            raise AnsibleFilterError(f"{name}.host networking cannot publish ports")
 
     if "shm_size" in cfg:
         container["shm_size"] = _shm_size(cfg["shm_size"], name=f"{name}.shm_size")
@@ -1108,6 +1297,8 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         mounts, volumes, tmpfs_mounts = _canonical_volumes(cfg["volumes"], name=f"{name}.volumes")
         container["mounts"] = mounts
         container["tmpfs"] = tmpfs_mounts
+    if "tmpfs" in cfg:
+        container["tmpfs"] = container.get("tmpfs", []) + _standalone_tmpfs(cfg["tmpfs"], name=f"{name}.tmpfs")
 
     for field, converter in (
         ("cap_add", _capabilities),
@@ -1120,9 +1311,16 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
 
     if "healthcheck" in cfg:
         container["healthcheck"] = _healthcheck(cfg["healthcheck"], name=f"{name}.healthcheck")
+        if container.get("notify_healthy") and container["healthcheck"]["command"] == "none":
+            raise AnsibleFilterError(f"{name}.notify_healthy cannot use a disabled healthcheck")
 
     if "systemd" in cfg:
         container["systemd"] = _systemd(cfg["systemd"], name=f"{name}.systemd")
+    if "settings" in cfg:
+        _as_mapping(cfg["settings"], name=f"{name}.settings")
+        prepare = _as_mapping(cfg.get("application_prepare", {}), name=f"{name}.application_prepare")
+        if prepare.get("handler") != "haproxy":
+            raise AnsibleFilterError(f"{name}.settings requires the haproxy application preparation handler")
 
     secret_attachments: list[str] = []
     if cfg.get("secrets"):
@@ -1160,6 +1358,7 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
         "execution": deploy["execution"],
         "container": container,
         "env": environment,
+        "env_files": env_files,
         "secrets": [],
         "secret_attachments": secret_attachments,
         "host_paths": host_paths,
@@ -1189,6 +1388,8 @@ class FilterModule:
             "podman_service_normalize": podman_service_normalize,
             "podman_env_file_key": podman_env_file_key,
             "podman_env_file_value": podman_env_file_value,
+            "podman_quadlet_argv": podman_quadlet_argv,
+            "podman_dotenv": podman_dotenv,
             "podman_image_reference_drift": podman_image_reference_drift,
             "podman_secret_policy": podman_secret_policy,
             "podman_secret_declarations": podman_secret_declarations,

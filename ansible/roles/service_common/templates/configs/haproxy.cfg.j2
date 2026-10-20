@@ -1,0 +1,71 @@
+global
+  log stdout format raw local0
+  maxconn {{ service_common_service.settings.haproxy_maxconn | default(4096) }}
+
+defaults
+  log global
+  mode tcp
+  option tcplog
+  option clitcpka
+  option srvtcpka
+  timeout connect {{ service_common_service.settings.haproxy_timeout_connect | default('5s') }}
+  timeout client {{ service_common_service.settings.haproxy_timeout_client | default('4h') }}
+  timeout server {{ service_common_service.settings.haproxy_timeout_server | default('4h') }}
+  timeout check {{ service_common_service.settings.haproxy_timeout_check | default('5s') }}
+  retries {{ service_common_service.settings.haproxy_retries | default('3') }}
+
+frontend prometheus
+  bind *:{{ service_common_service.settings.haproxy_prometheus_port | default(8405) }}
+  mode http
+{% if service_common_service.settings.haproxy_overlay_metrics_proxy | default(false) %}
+  http-request deny unless { method GET }
+  http-request deny deny_status 404 unless { path /metrics /authelia/metrics /traefik/metrics }
+{% endif %}
+  http-request use-service prometheus-exporter if { path /metrics }
+{% if service_common_service.settings.haproxy_overlay_metrics_proxy | default(false) %}
+  use_backend metrics_authelia if { path /authelia/metrics }
+  use_backend metrics_traefik if { path /traefik/metrics }
+{% endif %}
+  no log
+
+frontend pg_write
+  bind *:5432
+  mode tcp
+  default_backend pg_primary
+
+backend pg_primary
+  mode tcp
+  balance first
+
+  option tcp-check
+  tcp-check connect port {{ postgres_patroni_restapi_port | default(8008) }}
+  tcp-check send "GET /primary HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n"
+  tcp-check expect rstring ^HTTP/1\.[01][[:space:]]+200
+
+  default-server inter 2s fall 3 rise 2 init-state fully-down on-marked-down shutdown-sessions
+
+{% for host in groups['tags_postgres'] | default([]) %}
+  server {{ host }} {{ hostvars[host].local_ip }}:{{ postgres_patroni_postgres_port | default(5432) }} check port {{ postgres_patroni_restapi_port | default(8008) }}
+{% endfor %}
+{% if service_common_service.settings.haproxy_overlay_metrics_proxy | default(false) %}
+
+# Docker's embedded resolver; no captured service VIP or task IP is pinned.
+resolvers docker_overlay
+  nameserver docker 127.0.0.11:53
+  resolve_retries 3
+  timeout resolve 1s
+  timeout retry 1s
+  hold valid 10s
+
+backend metrics_authelia
+  mode http
+  http-request set-path /metrics
+  http-request set-header Host authelia:9959
+  server authelia authelia:9959 check resolvers docker_overlay resolve-prefer ipv4 init-addr last,libc,none
+
+backend metrics_traefik
+  mode http
+  http-request set-path /metrics
+  http-request set-header Host traefik:8082
+  server traefik traefik:8082 check resolvers docker_overlay resolve-prefer ipv4 init-addr last,libc,none
+{% endif %}

@@ -169,6 +169,7 @@ def test_repository_service_host_contract_uses_real_netbox_groups_and_explicit_p
         "services_storage_inventory_group": "device_roles_storage",
         "services_plex_host": "plex",
         "services_log_root": "/var/log/skynet",
+        "podman_shared_network_name": "mgt-services",
     }
     assert set(inventory["group_by"]) >= {"device_roles", "tags"}
     assert 'slug        = "ansible_manager"' in netbox_locals

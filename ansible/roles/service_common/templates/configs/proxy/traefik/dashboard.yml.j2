@@ -17,6 +17,7 @@ http:
       priority: 10
       tls:
         options: "securetls@file"
+        certResolver: "dns-cloudflare"
       middlewares:
         - "traefik-dashboard-chain"
       service: "api@internal"

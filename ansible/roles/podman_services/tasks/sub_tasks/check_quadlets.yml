@@ -146,6 +146,8 @@
 - name: Check mode | Check existing generated files
   ansible.builtin.stat:
     path: "{{ podman_services_check_artifact_metadata.path }}"
+    get_checksum: false
+    get_mime: false
   loop: "{{ podman_services_check_artifacts }}"
   loop_control:
     loop_var: podman_services_check_artifact_metadata
@@ -154,7 +156,9 @@
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Check mode | Read existing generated files
-  when: podman_services_check_artifact_stat.stat.exists | bool
+  when:
+    - podman_services_check_artifact_stat.stat.exists | bool
+    - podman_services_check_artifact_stat.podman_services_check_artifact_metadata.kind != 'environment'
   no_log: true
   diff: false
   ansible.builtin.slurp:
@@ -187,11 +191,16 @@
         + [{
             'kind': podman_services_check_artifact.kind,
             'path': podman_services_check_artifact.path,
+            'comparison_available': podman_services_check_artifact.kind != 'environment',
             'changed': (
+              not podman_services_check_existing_artifact.podman_services_check_artifact_stat.stat.exists
+              if podman_services_check_artifact.kind == 'environment'
+              else (
               podman_services_check_existing_artifact.content is not defined
               or (
                 podman_services_check_existing_artifact.content | b64decode
                 != podman_services_check_artifact.content
+              )
               )
             )
           }]
@@ -213,6 +222,18 @@
     loop_var: podman_services_check_planned_artifact
     label: "{{ podman_services_check_planned_artifact.path }}"
   changed_when: true
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Check mode | Report deferred environment content comparison
+  when: not podman_services_check_planned_artifact.comparison_available
+  ansible.builtin.debug:
+    msg: >-
+      Environment content comparison for {{ podman_services_check_planned_artifact.path }}
+      is deferred because check mode does not read secret-bearing files.
+  loop: "{{ podman_services_check_artifact_plan }}"
+  loop_control:
+    loop_var: podman_services_check_planned_artifact
+    label: "{{ podman_services_check_planned_artifact.path }}"
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Check mode | Clear secret values from preview state

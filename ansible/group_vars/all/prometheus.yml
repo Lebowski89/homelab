@@ -5,7 +5,16 @@ prometheus_node_exporter_inventory_groups:
 
 prometheus_node_exporter_port: 9100
 
-prometheus_blackbox_exporter_address: blackbox-exporter:9115
+prometheus_blackbox_exporter_address: "{{ hostvars[services_storage_host].local_ip }}:22622"
+
+# Transitional protected worker relay; keep the existing scrape instance labels.
+prometheus_worker_metrics_address: "{{ hostvars[services_storage_host].local_ip }}:{{ haproxy.targets.workers.ports.metrics.published }}"
+
+# Prepared Authelia cutover: change only its scrape path; retain job/instance labels.
+prometheus_authelia_metrics_address: "{{ hostvars[services_controller_host].local_ip }}:{{ authelia.targets.main.ports.metrics.published }}"
+
+# Rootless ingress metrics; activate with the protected Traefik endpoint.
+prometheus_traefik_metrics_address: "{{ hostvars[services_controller_host].local_ip }}:{{ traefik.ports.metrics.published }}"
 
 prometheus_availability_category_tags:
   arrs: ARRs

@@ -5,9 +5,11 @@ authelia:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
-  tags: [proxy, pgsql, authelia]
-  stack: authelia
+  runtime: podman
+  tags:
+    - proxy
+    - pgsql
+    - authelia
   ################################
   # ENVIRONMENT/SECRETS
   ################################
@@ -16,30 +18,13 @@ authelia:
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
     PGID: "{{ hostvars[services_controller_host].container_host_pgid }}"
     UMASK: "022"
-  infisical:
-    secrets_map:
-      - var: authelia_redis_key
-        path: "/Authelia"
-        name: REDIS_KEY
-        secret:
-          name: authelia_redis_secret
-  ################################
-  # CONNECTIVITY
-  ################################
-  named_networks:
-    overlay:
-      external: true
+  named_networks: {}
   ################################
   # RUNTIME/LIFECYCLE
   ################################
   deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    profile: careful
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
   ################################
   # TARGETS (INSTANCES)
   ################################
@@ -51,16 +36,40 @@ authelia:
       ################################
       # IDENTITY
       ################################
+      tags:
       name: authelia-redis
       ################################
       # IMAGE/PROCESS
       ################################
-      image: valkey/valkey:9.2-alpine
+      image: "docker.io/valkey/valkey:9.2-alpine@sha256:cdcb7b1c7b6f1c9cb9442c71ac6275e78184657448407b2c1fdde7ee8024f4fb"
+      user: "0:0"
       command:
-        - sh -c 'valkey-server --requirepass "$$(cat /run/secrets/authelia_redis_secret)"'
-      ################################
-      # FILESYSTEM
-      ################################
+        - sh
+        - -c
+        - >-
+          umask 077; printf 'requirepass "%s"\n' "$(sed 's/[\\"]/\\&/g' /run/secrets/authelia_redis_secret)" > /tmp/skynet-valkey.conf;
+          exec valkey-server
+          /tmp/skynet-valkey.conf
+      infisical:
+        secrets_map:
+          - var: authelia_redis_key
+            path: "/Authelia"
+            name: REDIS_KEY
+            secret:
+              name: authelia_redis_secret
+  ################################
+  # CONNECTIVITY
+  ################################
+      named_networks:
+        authelia-redis:
+          driver: bridge
+          external: false
+      ports:
+        cache:
+          host_ip: "{{ local_ip }}"
+          published: 16379
+          target: 6379
+          protocol: tcp
       paths:
         - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/redis"
           state: directory
@@ -74,18 +83,52 @@ authelia:
     ################################
     # AUTHELIA SERVICE
     ################################
+      tmpfs:
+        - /tmp:mode=1777
+      no_new_privileges: false
+      healthcheck:
+        test:
+          - CMD-SHELL
+          - REDISCLI_AUTH="$(cat /run/secrets/authelia_redis_secret)" valkey-cli ping | grep -q PONG
+        interval: 10s
+        timeout: 5s
+        retries: 5
+        start_period: 30s
+      notify_healthy: true
+      operational_requirements:
+        acl: [mgt_backends]
+        ownership_transition: true
+
+      deploy:
+        type: container
+        host: "{{ services_controller_host }}"
+        execution:
+          mode: rootless
+          host_user: podman-authelia-redis
+          userns:
+            mode: keep-id
+            uid: "0"
+            gid: "0"
+      systemd:
+        after:
+          - network-online.target
+        restart: always
+        restart_sec: 15s
+        timeout_start_sec: 300s
     main:
       ################################
       # IDENTITY
       ################################
+      tags:
       name: authelia
       ################################
       # IMAGE/PROCESS
       ################################
-      image: authelia/authelia:4.39.28
+      image: "docker.io/authelia/authelia:4.39.28@sha256:bd97cff4fcbf715b5ff1f9ae286afbe6033afce385302520b0368122d43a6f54"
       ################################
       # ENVIRONMENT/SECRETS
       ################################
+      user: "0:0"
       environment:
         AUTHELIA_SESSION_SECRET_FILE: /run/secrets/authelia_session_key_secret
         AUTHELIA_SESSION_REDIS_PASSWORD_FILE: /run/secrets/authelia_redis_secret
@@ -97,6 +140,13 @@ authelia:
         - "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/.env"
       infisical:
         secrets_map:
+          - var: authelia_redis_key
+            path: /Authelia
+            name: REDIS_KEY
+            secret:
+              name: authelia_redis_secret
+              uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+              gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
           - var: postgres_user
             path: "/Postgres"
             name: USER
@@ -105,6 +155,8 @@ authelia:
             name: PASS
             secret:
               name: postgres_pass_secret
+              uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+              gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
           - var: authelia_user
             path: "/Authelia"
             name: USER
@@ -119,11 +171,15 @@ authelia:
             name: STORAGE_KEY
             secret:
               name: authelia_storage_key_secret
+              uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+              gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
           - var: authelia_oidc_hmac_secret
             path: "/Authelia"
             name: OIDC_HMAC_SECRET
             secret:
               name: authelia_oidc_hmac_secret
+              uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+              gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
           - var: authelia_oidc_jwks_rsa_private_key
             path: "/Authelia"
             name: OIDC_JWKS_RSA_PRIVATE_KEY
@@ -153,6 +209,25 @@ authelia:
         - authelia_jwt_key_secret
       application_prepare:
         handler: authelia
+        preserve_users_database: true
+      ################################
+      # FILESYSTEM
+      ################################
+      named_networks:
+        authelia:
+          driver: bridge
+          external: false
+      ports:
+        backend:
+          host_ip: "{{ local_ip }}"
+          published: 19091
+          target: 9091
+          protocol: tcp
+        metrics:
+          host_ip: "{{ local_ip }}"
+          published: 19959
+          target: 9959
+          protocol: tcp
       ################################
       # FILESYSTEM
       ################################
@@ -163,17 +238,12 @@ authelia:
       templates:
         - src: configs/proxy/authelia/config.yml.j2
           dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/configuration.yml"
-          mode: "0660"
-          force: true
-          no_log: true
-        - src: configs/proxy/authelia/users_database.yml.j2
-          dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/users_database.yml"
-          mode: "0664"
+          mode: "0600"
           force: true
           no_log: true
         - src: configs/proxy/authelia/authelia.env.j2
           dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/authelia/.env"
-          mode: "0664"
+          mode: "0600"
           force: true
           no_log: true
       volumes:
@@ -185,7 +255,28 @@ authelia:
       ################################
       # INTEGRATIONS
       ################################
+      no_new_privileges: false
       postgres:
         enable: true
         databases:
           - authelia
+      operational_requirements:
+        acl: [mgt_backends]
+        ownership_transition: true
+
+      deploy:
+        type: container
+        host: "{{ services_controller_host }}"
+        execution:
+          mode: rootless
+          host_user: podman-authelia
+          userns:
+            mode: keep-id
+            uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+            gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
+      systemd:
+        after:
+          - network-online.target
+        restart: always
+        restart_sec: 15s
+        timeout_start_sec: 300s

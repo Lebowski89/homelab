@@ -1,0 +1,7 @@
+[Unit]
+Requires=skynet-worker-backend-firewall.service
+After=skynet-worker-backend-firewall.service
+
+[Service]
+ExecStartPre={{ worker_backend_firewall_python }} {{ worker_backend_firewall_root }}/policy.py apply --config {{ worker_backend_firewall_root }}/policy.json
+ExecStartPost={{ worker_backend_firewall_python }} {{ worker_backend_firewall_root }}/policy.py apply --config {{ worker_backend_firewall_root }}/policy.json

@@ -5,14 +5,15 @@ alertmanager:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
-  tags: [monitoring, alertmanager]
+  runtime: podman
+  tags:
+    - monitoring
+    - alertmanager
   name: alertmanager
-  stack: alertmanager
   ################################
   # IMAGE/PROCESS
   ################################
-  image: prom/alertmanager:v0.34.1
+  image: "docker.io/prom/alertmanager:v0.34.1@sha256:e9733bafb1bdef9b00e25a21f8f99dc26a22224bf16641ad754d1649f4c3357a"
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
   command:
@@ -51,8 +52,15 @@ alertmanager:
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    alertmanager:
+      driver: bridge
+      external: false
+  ports:
+    backend:
+      host_ip: "{{ local_ip }}"
+      published: 19093
+      target: 9093
+      protocol: tcp
   ################################
   # FILESYSTEM
   ################################
@@ -66,7 +74,7 @@ alertmanager:
   templates:
     - src: configs/alertmanager.yml.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/alertmanager/alertmanager.yml"
-      mode: "0644"
+      mode: "0600"
       force: true
       no_log: true
   volumes:
@@ -83,18 +91,33 @@ alertmanager:
   ################################
   # INTEGRATIONS
   ################################
+  no_new_privileges: false
   traefik:
     enable: true
     exposure: private
-    port: 9093
+    port: 19093
+    backend_mode: host
+    backend_host_inventory: "{{ services_controller_host }}"
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [mgt_backends]
+    ownership_transition: true
+
   deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    profile: careful
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-alertmanager
+      userns:
+        mode: keep-id
+        uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+        gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
+  systemd:
+    restart: always
+    restart_sec: 15s
+    timeout_start_sec: 300s
+    after:
+      - network-online.target

@@ -45,6 +45,13 @@ syncthing:
   ################################
   # FILESYSTEM
   ################################
+    web_backend:
+      published: 22618
+      target: 8384
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/syncthing"
       state: directory
@@ -66,10 +73,15 @@ syncthing:
   traefik:
     enable: true
     exposure: private
-    port: 8384
+    port: 22618
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

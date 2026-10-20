@@ -85,6 +85,11 @@ Role/action examples:
   skynet check alloy-native
   skynet check node-exporter
   skynet check podman
+  skynet install podman-network
+  skynet install worker-backend-firewall
+  skynet check worker-backend-firewall
+  skynet run worker-backend-firewall check
+  skynet remove worker-backend-firewall
 
 Service examples:
   skynet check homepage
@@ -96,6 +101,10 @@ Service examples:
 
 Optional env vars:
   PLAYBOOK                    Override playbook path
+  WORKER_BACKEND_FIREWALL_PLAYBOOK Override the policy-only playbook path
+  WORKER_BACKEND_FIREWALL_VARS_FILE Private worker source confirmation/override inputs
+  MGT_FIREWALL_PLAYBOOK        Override the mgt policy-only playbook path
+  MGT_FIREWALL_VARS_FILE       Private active endpoints and verified caller identities
   INVENTORY                   Override inventory path
   ANSIBLE_CONFIG              Override ansible.cfg path
   BECOME_PASS_FILE            Override become password file path
@@ -389,11 +398,22 @@ role_tag() {
 
     podman:deploy)                  echo "podman" ;;
     podman:install)                 echo "podman_install" ;;
+    worker-backend-firewall:deploy) echo "worker_backend_firewall_install" ;;
+    worker-backend-firewall:install) echo "worker_backend_firewall_install" ;;
+    worker-backend-firewall:check)  echo "worker_backend_firewall_check" ;;
+    worker-backend-firewall:remove) echo "worker_backend_firewall_remove" ;;
+    mgt-firewall:deploy)            echo "mgt_firewall_install" ;;
+    mgt-firewall:install)           echo "mgt_firewall_install" ;;
+    mgt-firewall:check)             echo "mgt_firewall_check" ;;
+    mgt-firewall:observe)           echo "mgt_firewall_observe" ;;
+    mgt-firewall:remove)            echo "mgt_firewall_remove" ;;
 
-    infisical-podman:bootstrap)     echo "infisical_podman_bootstrap" ;;
-    infisical-podman:deploy)        echo "infisical_podman_deploy" ;;
-    infisical-podman:recreate)      echo "infisical_podman_recreate" ;;
-    infisical-podman:remove)        echo "infisical_podman_remove" ;;
+    podman-network:deploy)          echo "podman_network" ;;
+
+    infisical-podman:bootstrap)     echo "infisical_bootstrap" ;;
+    infisical-podman:deploy)        echo "infisical_deploy" ;;
+    infisical-podman:recreate)      echo "infisical_recreate" ;;
+    infisical-podman:remove)        echo "infisical_remove" ;;
 
     keepalived:deploy)              echo "keepalived" ;;
     keepalived:run)                 echo "keepalived" ;;
@@ -426,6 +446,30 @@ is_role_target() {
   role_tag "$target" deploy >/dev/null 2>&1
 }
 
+run_role_playbook() {
+  local target="$1"
+  shift
+  target="${target,,}"
+  target="${target//_/-}"
+  if [[ "$target" == "worker-backend-firewall" ]]; then
+    local -a policy_vars=()
+    if [[ -n "${WORKER_BACKEND_FIREWALL_VARS_FILE:-}" ]]; then
+      [[ -r "$WORKER_BACKEND_FIREWALL_VARS_FILE" ]] || die "Worker firewall inputs are not readable: $WORKER_BACKEND_FIREWALL_VARS_FILE"
+      policy_vars=(-e "@$WORKER_BACKEND_FIREWALL_VARS_FILE")
+    fi
+    PLAYBOOK="${WORKER_BACKEND_FIREWALL_PLAYBOOK:-$(dirname "$PLAYBOOK")/operations.yml}" run_playbook "$@" "${policy_vars[@]}"
+  elif [[ "$target" == "mgt-firewall" ]]; then
+    local -a mgt_policy_vars=()
+    if [[ -n "${MGT_FIREWALL_VARS_FILE:-}" ]]; then
+      [[ -r "$MGT_FIREWALL_VARS_FILE" ]] || die "Mgt firewall inputs are not readable: $MGT_FIREWALL_VARS_FILE"
+      mgt_policy_vars=(-e "@$MGT_FIREWALL_VARS_FILE")
+    fi
+    PLAYBOOK="${MGT_FIREWALL_PLAYBOOK:-$(dirname "$PLAYBOOK")/operations.yml}" run_playbook "$@" "${mgt_policy_vars[@]}"
+  else
+    run_playbook "$@"
+  fi
+}
+
 run_role_or_docker_action() {
   local command="$1"
   local default_role_action="$2"
@@ -439,7 +483,7 @@ run_role_or_docker_action() {
     local tags
 
     if tags="$(role_tag "$1" "${2:-$default_role_action}")"; then
-      run_playbook "${LIMIT_ARGS[@]}" --tags "$tags"
+      run_role_playbook "$1" "${LIMIT_ARGS[@]}" --tags "$tags"
     elif is_role_target "$1"; then
       die "Unknown role target/action: $1 ${2:-$default_role_action}. Run: skynet targets"
     else
@@ -459,7 +503,7 @@ run_check_action() {
   elif [[ $# -le 2 ]]; then
     local tags
     if tags="$(role_tag "$1" "${2:-deploy}")"; then
-      run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$tags"
+      run_role_playbook "$1" "${LIMIT_ARGS[@]}" --check --diff --tags "$tags"
     else
       tags="deploy,$(join_csv "$@")"
       run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$tags"
@@ -573,11 +617,29 @@ Role/action targets:
     deploy  -> podman
     install -> podman_install
 
-  infisical-podman:
-    bootstrap -> infisical_podman_bootstrap
-    deploy    -> infisical_podman_deploy
-    recreate  -> infisical_podman_recreate
-    remove    -> infisical_podman_remove
+  worker-backend-firewall:
+    Uses a separate policy-only playbook; check action audits kernel rules read-only.
+    deploy  -> worker_backend_firewall_install
+    install -> worker_backend_firewall_install
+    check   -> worker_backend_firewall_check
+    remove  -> worker_backend_firewall_remove
+
+  mgt-firewall:
+    Separate policy-only playbook. Check mode plans; the check action audits installed policy read-only.
+    deploy  -> mgt_firewall_install
+    install -> mgt_firewall_install
+    check   -> mgt_firewall_check
+    observe -> mgt_firewall_observe (read-only caller metadata preflight)
+    remove  -> mgt_firewall_remove
+
+  podman-network:
+    deploy -> podman_network
+
+  infisical-podman (compatibility alias for production infisical):
+    bootstrap -> infisical_bootstrap
+    deploy    -> infisical_deploy
+    recreate  -> infisical_recreate
+    remove    -> infisical_remove
 
   keepalived:
     deploy -> keepalived
@@ -619,6 +681,11 @@ Examples:
   skynet check alloy-native
   skynet check node-exporter
   skynet check podman
+  skynet install podman-network
+  skynet install worker-backend-firewall
+  skynet check worker-backend-firewall
+  skynet run worker-backend-firewall check
+  skynet remove worker-backend-firewall
 
 Service targets:
   Use service names/tags from: skynet tags
@@ -935,7 +1002,7 @@ case "$CMD" in
     role_action="${2:-deploy}"
 
     if tags="$(role_tag "$role_target" "$role_action")"; then
-      run_playbook "${LIMIT_ARGS[@]}" --tags "$tags"
+      run_role_playbook "$role_target" "${LIMIT_ARGS[@]}" --tags "$tags"
     else
       die "Unknown role target/action: $role_target $role_action. Run: skynet targets"
     fi

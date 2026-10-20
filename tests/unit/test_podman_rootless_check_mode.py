@@ -55,7 +55,8 @@ def path_snapshot(path: Path) -> tuple[bool, int | None, int | None, int | None]
     return (True, stat.st_uid, stat.st_gid, stat.st_mode)
 
 
-def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tmp_path, absent_rootless_bind_source):
+@pytest.mark.parametrize("direct_pasta", [False, True])
+def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tmp_path, absent_rootless_bind_source, direct_pasta):
     host_user = f"podman-check-{os.getpid()}"
     runtime_root = tmp_path / "runtime"
     home = runtime_root / host_user
@@ -181,6 +182,12 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         }
     )
 
+    if direct_pasta:
+        plays = yaml.safe_load(playbook.read_text())
+        service = plays[0]["vars"]["podman_services_service_cfg"]
+        del service["named_networks"]
+        service["network_mode"] = "pasta"
+        playbook.write_text(yaml.safe_dump(plays, sort_keys=False))
     result = subprocess.run(
         [
             str(Path(sys.executable).with_name("ansible-playbook")),
@@ -219,8 +226,10 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         "Execution | Read host IPv4 routes for pasta conflict detection",
         "Execution | Detect conflicting host IPv4 routes",
         "Execution | Reject conflicting host IPv4 routes",
+        "Execution | Read host IPv6 routes for direct pasta conflict detection",
+        "Execution | Detect conflicting host IPv6 routes",
+        "Execution | Require a private IPv6 subnet separate from host routes",
         "Execution | Manage rootless pasta network drop-in",
-        "Podman services | Set rootless bind mount ownership",
         "Podman services | Manage Podman secrets",
         "Quadlets | Write network Quadlet",
         "Quadlets | Write protected environment file",
@@ -239,15 +248,19 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
         "Check mode | Build container Quadlet preview",
         "Check mode | Validate generated Quadlet previews",
     ):
-        assert task_results[task_name].get("skipped", False) is False
+        if direct_pasta and task_name == "Check mode | Build network Quadlet preview":
+            assert task_results[task_name]["skipped"] is True
+        else:
+            assert task_results[task_name].get("skipped", False) is False
         assert task_results[task_name].get("failed", False) is False
     assert task_results["Check mode | Report planned file change"]["changed"] is True
     sanitized_plan = task_results["Publish sanitized check artifact plan"]["msg"]
-    assert all(set(artifact) == {"kind", "path", "changed"} for artifact in sanitized_plan)
+    assert all(set(artifact) == {"kind", "path", "changed", "comparison_available"} for artifact in sanitized_plan)
     assert {
         "kind": "environment",
         "path": str(quadlet_dir / "rootless-check.env"),
         "changed": True,
+        "comparison_available": False,
     } in sanitized_plan
 
 
@@ -278,6 +291,61 @@ def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, ex
     )
 
 
+def test_execution_only_preparation_returns_before_service_work(tmp_path):
+    account = f"podman-check-{os.getpid()}"
+    before = account_snapshot(account)
+    runtime_marker = tmp_path / "runtime-command-called"
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    for command in ("podman", "systemctl", "loginctl"):
+        executable = fake_bin / command
+        executable.write_text(f"#!/bin/sh\ntouch {runtime_marker}\nexit 99\n")
+        executable.chmod(0o755)
+    play = {
+        "hosts": "localhost",
+        "connection": "local",
+        "gather_facts": False,
+        "vars": {
+            "podman_services_prepare_execution_only": True,
+            "podman_services_rootless_home_root": str(tmp_path / "homes"),
+            "podman_services_execution_state_dir": str(tmp_path / "state"),
+            "podman_services_system_quadlet_dir": str(tmp_path / "system"),
+            "podman_services_common_context": {
+                "runtime": "podman",
+                "dispatch_host": "localhost",
+                "controller_host": "localhost",
+                "lookup_values": {},
+                "resolved_environment": {},
+                "secret_declarations": [],
+            },
+            "podman_services_service_cfg": {
+                "runtime": "podman",
+                "operational_requirements": {"acl": ["mgt_backends"], "ownership_transition": True},
+                "image": "registry.example.invalid/test:1",
+                "deploy": {"type": "container", "execution": {"mode": "rootless", "host_user": account}},
+                "named_networks": {"account-check": {"external": False}},
+            },
+            "podman_services_role_prefix": "account-check",
+        },
+        "tasks": [
+            {"ansible.builtin.include_role": {"name": "podman_services"}},
+            {"name": "Continue after execution-only role", "ansible.builtin.debug": {"msg": "account-plan-finished"}},
+        ],
+    }
+    result = run_local_playbook(tmp_path, [play], structured=True, extra_env={"PATH": f"{fake_bin}:{os.environ.get('PATH', '')}"})
+    assert result.returncode == 0, result.stdout + result.stderr
+    callback = json.loads(result.stdout)
+    names = [task["task"]["name"].split(" : ")[-1] for entry in callback["plays"] for task in entry["tasks"]]
+    assert "Execution | Report planned rootless pasta configuration" in names
+    assert "Continue after execution-only role" in names
+    assert "Service common | Enforce explicit operational requirements before mutation" in names
+    assert not any(name.startswith(("Quadlets |", "Service |", "Check mode |")) for name in names)
+    assert account_snapshot(account) == before
+    assert not runtime_marker.exists()
+    assert not (tmp_path / "homes").exists()
+    assert not (tmp_path / "state").exists()
+
+
 def test_reconciled_secret_restart_depends_on_material_change(tmp_path):
     case_tasks = tmp_path / "restart-case.yml"
     case_tasks.write_text(
@@ -303,6 +371,7 @@ def test_reconciled_secret_restart_depends_on_material_change(tmp_path):
                     "podman_services_network_quadlet": {"changed": False},
                     "podman_services_volume_quadlets": {"changed": False},
                     "podman_services_secret_results": {"results": [{"changed": "{{ restart_case.changed }}"}]},
+                    "podman_services_config_changed": "{{ restart_case.config_changed | default(false) }}",
                 },
                 "tasks": [
                     {
@@ -311,6 +380,7 @@ def test_reconciled_secret_restart_depends_on_material_change(tmp_path):
                             {"operation": "update", "changed": False, "expected": False},
                             {"operation": "update", "changed": True, "expected": True},
                             {"operation": "recreate", "changed": False, "expected": True},
+                            {"operation": "update", "changed": False, "config_changed": True, "expected": True},
                         ],
                         "loop_control": {"loop_var": "restart_case"},
                     }
@@ -966,3 +1036,76 @@ def test_drift_uses_the_persisted_rootless_owner_runtime_environment(tmp_path):
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert observed.read_text().splitlines() == expected
+
+
+@pytest.mark.parametrize("check_mode", [True, False])
+def test_netbox_account_only_preparation_never_resolves_bootstrap_credentials(tmp_path, check_mode):
+    """Exercise the real bootstrap tasks with deliberately unavailable values."""
+    play = {
+        "hosts": "localhost",
+        "connection": "local",
+        "gather_facts": False,
+        "vars": {
+            "netbox_domain": "example.test",
+            "local_ip": "192.0.2.48",
+            "podman_services_prepare_execution_only": True,
+            "podman_services_rootless_home_root": str(tmp_path / "homes"),
+            "podman_services_execution_state_dir": str(tmp_path / "state"),
+            "netbox_required_docker_secrets": "{{ credential_source_must_not_be_resolved }}",
+            "netbox_podman_services": [
+                {
+                    "runtime": "podman",
+                    "name": "netbox-fixture",
+                    "image": "fixture.invalid/netbox:1",
+                    "user": "0:0",
+                    "environment": {},
+                    "secrets": ["unavailable_secret"],
+                    "named_networks": {"netbox-fixture": {"external": False}},
+                    "operational_requirements": {"acl": ["bootstrap"], "ownership_transition": True},
+                    "deploy": {
+                        "type": "container",
+                        "host": "localhost",
+                        "execution": {"mode": "rootless", "host_user": "podman-check-netbox"},
+                    },
+                }
+            ],
+        },
+        "tasks": [
+            {"ansible.builtin.include_role": {"name": "netbox"}, "tags": ["netbox_deploy"]},
+            {"ansible.builtin.debug": {"msg": "credential-free-account-plan-finished"}},
+        ],
+    }
+    extra_env = {}
+    if not check_mode:
+        # Execute real bootstrap orchestration in live mode, but replace only
+        # the mutating runtime adapter with a local assertion-only role.
+        roles = tmp_path / "roles"
+        tasks = roles / "podman_services/tasks"
+        tasks.mkdir(parents=True)
+        (tasks / "validate_definitions.yml").write_text("[]\n")
+        (tasks / "main.yml").write_text(
+            yaml.safe_dump(
+                [
+                    {
+                        "ansible.builtin.assert": {
+                            "that": [
+                                "podman_services_prepare_execution_only is sameas true",
+                                "podman_services_common_context.lookup_values == {}",
+                                "podman_services_common_context.secret_declarations == []",
+                                "podman_services_common_context.resolved_environment == {}",
+                            ]
+                        }
+                    },
+                    {"ansible.builtin.debug": {"msg": "credential-free-account-adapter-reached"}},
+                ]
+            )
+        )
+        extra_env["ANSIBLE_ROLES_PATH"] = str(roles) + ":" + str(REPO_ROOT / "ansible/roles")
+    result = run_local_playbook(tmp_path, [play], structured=True, check_mode=check_mode, extra_env=extra_env)
+    assert result.returncode == 0, result.stdout + result.stderr
+    callback = json.loads(result.stdout)
+    names = [task["task"]["name"].split(" : ")[-1] for entry in callback["plays"] for task in entry["tasks"]]
+    if check_mode:
+        assert "Podman services | Finish explicit account preparation" in names
+    assert not any(name.startswith(("Quadlets |", "Service |", "Secrets |")) for name in names)
+    assert not (tmp_path / "homes").exists() and not (tmp_path / "state").exists()

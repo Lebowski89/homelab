@@ -31,10 +31,6 @@ prowlarr:
     FILE__PROWLARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
     PROWLARR__POSTGRES__MAINDB: "prowlarr-main"
     PROWLARR__POSTGRES__LOGDB: "prowlarr-log"
-    TP_SCHEME: "http"
-    TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
-    TP_HOTIO: "true"
-    TP_THEME: "hotline"
   infisical:
     secrets_map:
       - var: prowlarr_api
@@ -61,17 +57,18 @@ prowlarr:
   ################################
   # FILESYSTEM
   ################################
+  ports:
+    web_backend:
+      published: 22605
+      target: 9696
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/prowlarr"
       state: directory
       mode: "0755"
-  copies:
-    - src: files/themepark/98-themepark-prowlarr
-      dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/prowlarr/98-themepark-prowlarr"
-      mode: "0755"
-      force: false
-      wait: true
-      wait_timeout: 30
   volumes:
     config:
       type: bind
@@ -83,18 +80,15 @@ prowlarr:
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
-    themepark:
-      type: bind
-      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/prowlarr/98-themepark-prowlarr"
-      target: /etc/cont-init.d/98-themepark
-      read_only: false
   ################################
   # INTEGRATIONS
   ################################
   traefik:
     enable: true
     exposure: private
-    port: 9696
+    port: 22605
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
   themepark:
     app: prowlarr
     theme: hotline
@@ -106,6 +100,9 @@ prowlarr:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

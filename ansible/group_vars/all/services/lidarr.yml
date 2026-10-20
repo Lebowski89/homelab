@@ -31,10 +31,6 @@ lidarr:
     FILE__LIDARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
     LIDARR__POSTGRES__MAINDB: "lidarr-main"
     LIDARR__POSTGRES__LOGDB: "lidarr-log"
-    TP_SCHEME: "http"
-    TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
-    TP_HOTIO: "true"
-    TP_THEME: "hotline"
   infisical:
     secrets_map:
       - var: lidarr_api
@@ -61,6 +57,14 @@ lidarr:
   ################################
   # FILESYSTEM
   ################################
+  ports:
+    web_backend:
+      published: 22602
+      target: 8686
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/lidarr"
       state: directory
@@ -68,13 +72,6 @@ lidarr:
     - path: "{{ hostvars[services_storage_host].container_host_data_root }}/media/music"
       state: directory
       mode: "0755"
-  copies:
-    - src: files/themepark/98-themepark-lidarr
-      dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/lidarr/98-themepark-lidarr"
-      mode: "0755"
-      force: false
-      wait: true
-      wait_timeout: 30
   volumes:
     config:
       type: bind
@@ -85,11 +82,6 @@ lidarr:
       type: bind
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
-      read_only: false
-    themepark:
-      type: bind
-      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/lidarr/98-themepark-lidarr"
-      target: /etc/cont-init.d/98-themepark
       read_only: false
   ################################
   # HEALTH
@@ -104,7 +96,9 @@ lidarr:
   traefik:
     enable: true
     exposure: private
-    port: 8686
+    port: 22602
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
   themepark:
     app: lidarr
     theme: hotline
@@ -116,6 +110,9 @@ lidarr:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

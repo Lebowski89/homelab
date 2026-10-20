@@ -22,10 +22,6 @@ bazarr:
     PGID: "{{ hostvars[services_storage_host].container_host_pgid }}"
     UMASK: "022"
     WEBUI_PORTS: "6767/tcp,6767/udp"
-    TP_SCHEME: "http"
-    TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
-    TP_HOTIO: "true"
-    TP_THEME: "hotline"
   infisical:
     secrets_map:
       - var: bazarr_api
@@ -64,6 +60,14 @@ bazarr:
   ################################
   # FILESYSTEM
   ################################
+  ports:
+    web_backend:
+      published: 22601
+      target: 6767
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/bazarr"
       state: directory
@@ -71,13 +75,6 @@ bazarr:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/bazarr/config"
       state: directory
       mode: "0755"
-  copies:
-    - src: files/themepark/98-themepark-bazarr
-      dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/bazarr/98-themepark-bazarr"
-      mode: "0755"
-      force: false
-      wait: true
-      wait_timeout: 30
   volumes:
     config:
       type: bind
@@ -89,18 +86,15 @@ bazarr:
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
-    themepark:
-      type: bind
-      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/bazarr/98-themepark-bazarr"
-      target: /etc/cont-init.d/98-themepark
-      read_only: false
   ################################
   # INTEGRATIONS
   ################################
   traefik:
     enable: true
     exposure: private
-    port: 6767
+    port: 22601
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
   themepark:
     app: bazarr
     theme: hotline
@@ -111,6 +105,9 @@ bazarr:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

@@ -5,7 +5,7 @@ logging {
 
 loki.write "default" {
   endpoint {
-    url = "http://loki:3100/loki/api/v1/push"
+    url = "https://loki.{{ services_internal_zone }}:{{ services_private_https_port }}/loki/api/v1/push"
   }
 }
 
@@ -338,7 +338,7 @@ loki.process "traefik_access" {
 
 prometheus.remote_write "prometheus" {
   endpoint {
-    url = "http://prometheus:9090/api/v1/write"
+    url = "https://prometheus.{{ services_internal_zone }}:{{ services_private_https_port }}/api/v1/write"
   }
 }
 

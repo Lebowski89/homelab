@@ -274,7 +274,7 @@ def _podman_lifecycle_metadata(
     )
     raw_network_mode = _effective_value(service_cfg, target_cfg, "network_mode")
     namespace_provider = None
-    if raw_network_mode is not None:
+    if raw_network_mode is not None and raw_network_mode not in ("host", "pasta"):
         if not isinstance(raw_network_mode, str):
             raise AnsibleFilterError(f'{name}.network_mode must use the constrained "container:<managed-container-name>" form')
         match = re.fullmatch(r"container:([A-Za-z0-9][A-Za-z0-9_.-]*)", raw_network_mode.strip())
@@ -288,11 +288,25 @@ def _podman_lifecycle_metadata(
     deploy = _effective_section(service_cfg, target_cfg, "deploy", name=name)
     execution = deploy.get("execution", {})
     execution_mode = execution.get("mode", "rootful") if isinstance(execution, Mapping) else "invalid"
-    return {
+    if raw_network_mode == "pasta" and execution_mode != "rootless":
+        raise AnsibleFilterError(f"{name}.network_mode pasta requires rootless execution")
+    metadata = {
         "container_name": container_name,
         "namespace_provider": namespace_provider,
         "execution_mode": execution_mode,
     }
+    if execution_mode == "rootless":
+        metadata["execution_account"] = execution.get("host_user")
+    systemd = _effective_section(service_cfg, target_cfg, "systemd", name=name)
+    start_dependencies = []
+    for field in ("requires", "wants", "after"):
+        units = systemd.get(field, [])
+        if not isinstance(units, list) or any(not isinstance(unit, str) or not unit.strip() for unit in units):
+            raise AnsibleFilterError(f"{name}.systemd.{field} must be a list of non-empty unit names")
+        start_dependencies.extend(unit.strip() for unit in units)
+    if start_dependencies:
+        metadata["start_dependencies"] = start_dependencies
+    return metadata
 
 
 def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) -> list[dict[str, Any]]:
@@ -533,6 +547,9 @@ def service_catalog_podman_lifecycle_plan(
     adapter can stop them before replacing the provider and restore only
     dependents that were active.
 
+    Ordinary same-host Requires/Wants dependencies also order selected starts
+    and removals, but never enter the namespace replacement transaction.
+
     References with no matching managed Podman service remain external and do
     not gain lifecycle edges. Docker records are never namespace providers.
     """
@@ -583,6 +600,8 @@ def service_catalog_podman_lifecycle_plan(
                 "host": host.strip(),
                 "namespace_provider": namespace_provider,
                 "execution_mode": lifecycle.get("execution_mode", "rootful"),
+                "execution_account": lifecycle.get("execution_account"),
+                "start_dependencies": lifecycle.get("start_dependencies", []),
             }
         )
         podman_ids.append(identity)
@@ -648,15 +667,36 @@ def service_catalog_podman_lifecycle_plan(
             }
         )
 
+    # Ordinary service dependencies order catalog calls, but do not share a
+    # network namespace or require the provider's destructive replacement
+    # transaction. Wants+After keeps consumers retrying across provider updates.
+    ordering_consumers = {identity: list(consumers_for[identity]) for identity in podman_ids}
+    for consumer_id in podman_ids:
+        consumer = records[consumer_id]
+        for unit in consumer["start_dependencies"]:
+            if not isinstance(unit, str) or not unit.endswith(".service"):
+                continue
+            matches = providers_by_host_name.get((consumer["host"], unit.removesuffix(".service")), [])
+            if not matches and providers_by_name.get(unit.removesuffix(".service")):
+                raise AnsibleFilterError("Managed systemd dependencies must use the same host and manager")
+            for provider_id in matches:
+                provider = records[provider_id]
+                if provider["execution_mode"] != consumer["execution_mode"] or (
+                    consumer["execution_mode"] == "rootless" and provider["execution_account"] != consumer["execution_account"]
+                ):
+                    raise AnsibleFilterError("Systemd service dependencies cannot cross Podman execution stores or accounts")
+                if consumer_id not in ordering_consumers[provider_id]:
+                    ordering_consumers[provider_id].append(consumer_id)
     indegree = {identity: 0 for identity in podman_ids}
-    for consumer_id in provider_for:
-        indegree[consumer_id] += 1
+    for consumers in ordering_consumers.values():
+        for consumer_id in consumers:
+            indegree[consumer_id] += 1
     ready = [identity for identity in podman_ids if indegree[identity] == 0]
     ordered_ids: list[tuple[str, str | None]] = []
     while ready:
         identity = ready.pop(0)
         ordered_ids.append(identity)
-        for consumer_id in consumers_for[identity]:
+        for consumer_id in ordering_consumers[identity]:
             indegree[consumer_id] -= 1
             if indegree[consumer_id] == 0:
                 insert_at = len(ready)
@@ -667,27 +707,29 @@ def service_catalog_podman_lifecycle_plan(
                 ready.insert(insert_at, consumer_id)
     if len(ordered_ids) != len(podman_ids):
         cyclic = [_catalog_label(identity) for identity in podman_ids if indegree[identity] > 0]
-        raise AnsibleFilterError(f"Managed Podman container namespace dependency cycle detected: {', '.join(cyclic)}")
+        raise AnsibleFilterError(f"Managed Podman dependency cycle detected: {', '.join(cyclic)}")
 
     topology_position = {identity: index for index, identity in enumerate(ordered_ids)}
 
-    remove_indegree = {identity: len(consumers_for[identity]) for identity in podman_ids}
+    ordering_providers = {identity: [] for identity in podman_ids}
+    for provider_id, consumers in ordering_consumers.items():
+        for consumer_id in consumers:
+            ordering_providers[consumer_id].append(provider_id)
+    remove_indegree = {identity: len(ordering_consumers[identity]) for identity in podman_ids}
     remove_ready = [identity for identity in podman_ids if remove_indegree[identity] == 0]
     remove_ordered_ids: list[tuple[str, str | None]] = []
     while remove_ready:
         identity = remove_ready.pop(0)
         remove_ordered_ids.append(identity)
-        provider_id = provider_for.get(identity)
-        if provider_id is None:
-            continue
-        remove_indegree[provider_id] -= 1
-        if remove_indegree[provider_id] == 0:
-            insert_at = len(remove_ready)
-            for index, candidate in enumerate(remove_ready):
-                if records[provider_id]["position"] < records[candidate]["position"]:
-                    insert_at = index
-                    break
-            remove_ready.insert(insert_at, provider_id)
+        for provider_id in ordering_providers[identity]:
+            remove_indegree[provider_id] -= 1
+            if remove_indegree[provider_id] == 0:
+                insert_at = len(remove_ready)
+                for index, candidate in enumerate(remove_ready):
+                    if records[provider_id]["position"] < records[candidate]["position"]:
+                        insert_at = index
+                        break
+                remove_ready.insert(insert_at, provider_id)
 
     def transitive_dependents(provider_id: tuple[str, str | None]) -> list[tuple[str, str | None]]:
         pending = list(consumers_for[provider_id])

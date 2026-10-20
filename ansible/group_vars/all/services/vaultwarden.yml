@@ -5,14 +5,16 @@ vaultwarden:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
-  tags: [utilities, pgsql, vaultwarden]
+  runtime: podman
+  tags:
+    - utilities
+    - pgsql
+    - vaultwarden
   name: vaultwarden
-  stack: vaultwarden
   ################################
   # IMAGE/PROCESS
   ################################
-  image: vaultwarden/server:1.37.3
+  image: "docker.io/vaultwarden/server:1.37.3@sha256:1587c45feaa479f1f5e8af3b00eded36bff77bcf1880cf8dbf0541706dd470e0"
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
   ################################
@@ -20,6 +22,7 @@ vaultwarden:
   ################################
   environment:
     TZ: "{{ timezone }}"
+    ROCKET_PORT: "8080"
     ADMIN_TOKEN_FILE: /run/secrets/vaultwarden_admin_secret
   env_file:
     - "{{ hostvars[services_controller_host].container_host_appdata_root }}/vaultwarden/.env"
@@ -62,8 +65,15 @@ vaultwarden:
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    vaultwarden:
+      driver: bridge
+      external: false
+  ports:
+    backend:
+      host_ip: "{{ local_ip }}"
+      published: 18082
+      target: 8080
+      protocol: tcp
   ################################
   # FILESYSTEM
   ################################
@@ -86,11 +96,14 @@ vaultwarden:
   ################################
   # INTEGRATIONS
   ################################
+  no_new_privileges: false
   traefik:
     enable: true
     exposure: private
-    port: 80
+    port: 18082
     sso: authelia
+    backend_mode: host
+    backend_host_inventory: "{{ services_controller_host }}"
   postgres:
     enable: true
     databases:
@@ -98,11 +111,23 @@ vaultwarden:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [mgt_backends]
+    ownership_transition: true
+
   deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    profile: careful
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-vaultwarden
+      userns:
+        mode: keep-id
+        uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+        gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
+  systemd:
+    restart: always
+    restart_sec: 15s
+    timeout_start_sec: 300s
+    after:
+      - network-online.target

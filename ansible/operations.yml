@@ -1,0 +1,156 @@
+---
+
+# Each operation requires its explicit tag; no operation runs by default.
+- name: Manage mgt private endpoint policy independently of applications
+  hosts: '{{ services_controller_inventory_group }}'
+  vars_files:
+    - group_vars/all/services.yml
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Run the scoped mgt-firewall operation
+      ansible.builtin.include_tasks:
+        file: tasks/mgt-firewall.yml
+        apply:
+          tags:
+            - mgt_firewall_install
+            - mgt_firewall_observe
+            - mgt_firewall_check
+            - mgt_firewall_remove
+      tags:
+        - never
+        - mgt_firewall_install
+        - mgt_firewall_observe
+        - mgt_firewall_check
+        - mgt_firewall_remove
+- name: Manage the temporary worker backend firewall independently of applications
+  hosts: '{{ services_storage_inventory_group }}:{{ services_plex_host }}'
+  vars_files:
+    - group_vars/all/services.yml
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tasks:
+    - name: Run the scoped worker-backend-firewall operation
+      ansible.builtin.include_tasks:
+        file: tasks/worker-backend-firewall.yml
+        apply:
+          tags:
+            - worker_backend_firewall_install
+            - worker_backend_firewall_check
+            - worker_backend_firewall_remove
+      tags:
+        - never
+        - worker_backend_firewall_install
+        - worker_backend_firewall_check
+        - worker_backend_firewall_remove
+- name: Collect HAProxy caller metadata and prepare unverified policy inputs
+  hosts: '{{ services_controller_inventory_group }}'
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  vars_files:
+    - group_vars/all/services.yml
+  vars:
+    haproxy_preflight_recovery_hosts: []
+    haproxy_preflight_running_rootless_accounts:
+      - podman-forgejo
+    haproxy_preflight_window_seconds: 0
+    haproxy_preflight_sample_interval: 1
+    haproxy_preflight_names:
+      infisical: infisical-infisical-1
+  tasks:
+    - name: Run the scoped haproxy-firewall-preflight operation
+      ansible.builtin.include_tasks:
+        file: tasks/haproxy-firewall-preflight.yml
+        apply:
+          tags:
+            - haproxy_preflight
+      tags:
+        - never
+        - haproxy_preflight
+- name: Update only the existing Swarm Loki ruler route with a named stop-first rollout
+  hosts: '{{ services_controller_inventory_group }}'
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  vars_files:
+    - group_vars/all/services.yml
+  tasks:
+    - name: Run the scoped loki-alertmanager-route operation
+      ansible.builtin.include_tasks:
+        file: tasks/loki-alertmanager-route.yml
+        apply:
+          tags:
+            - loki_alertmanager_route
+      tags:
+        - never
+        - loki_alertmanager_route
+- name: Update current Swarm Prometheus Alertmanager routes without migrating monitoring
+  hosts: '{{ services_controller_inventory_group }}'
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  vars_files:
+    - group_vars/all/services.yml
+  tasks:
+    - name: Run the scoped prometheus-alertmanager-routes operation
+      ansible.builtin.include_tasks:
+        file: tasks/prometheus-alertmanager-routes.yml
+        apply:
+          tags:
+            - prometheus_alertmanager_routes
+      tags:
+        - never
+        - prometheus_alertmanager_routes
+- name: Add the mgt HAProxy scrape to the existing Swarm Prometheus without migrating it
+  hosts: '{{ services_controller_inventory_group }}'
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  vars_files:
+    - group_vars/all/services.yml
+  tasks:
+    - name: Run the scoped prometheus-haproxy-scrape operation
+      ansible.builtin.include_tasks:
+        file: tasks/prometheus-haproxy-scrape.yml
+        apply:
+          tags:
+            - prometheus_haproxy_scrape
+      tags:
+        - never
+        - prometheus_haproxy_scrape
+- name: Configure only the current Swarm Prometheus Scraparr job
+  hosts: '{{ services_controller_inventory_group }}'
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  vars_files:
+    - group_vars/all/services.yml
+  tasks:
+    - name: Run the scoped prometheus-scraparr-scrape operation
+      ansible.builtin.include_tasks:
+        file: tasks/prometheus-scraparr-scrape.yml
+        apply:
+          tags:
+            - prometheus_scraparr_scrape
+      tags:
+        - never
+        - prometheus_scraparr_scrape
+- name: Permit the observed Podman SIGTERM to its pasta network helper
+  hosts: '{{ services_controller_inventory_group }}'
+  vars_files:
+    - group_vars/all/services.yml
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Run only the reviewed pasta signal prerequisite
+      ansible.builtin.include_tasks:
+        file: tasks/podman-pasta-signal.yml
+        apply:
+          tags:
+            - podman_pasta_signal
+      tags:
+        - never
+        - podman_pasta_signal

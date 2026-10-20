@@ -440,6 +440,7 @@ def test_empty_infisical_map_skips_live_lookup_and_keeps_empty_dispatch_owned_ou
   gather_facts: false
   vars:
     service_catalog_controller_host: manager
+    service_catalog_action: deploy
     infisical_lookup_default_params: must-not-be-used
   tasks:
     - name: Seed deliberately stale manager outputs

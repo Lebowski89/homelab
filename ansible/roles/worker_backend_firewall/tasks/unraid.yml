@@ -1,0 +1,36 @@
+---
+
+- name: Worker backend firewall | Install persistent Unraid launcher
+  ansible.builtin.template:
+    src: unraid-start.sh.j2
+    dest: "{{ worker_backend_firewall_root }}/start.sh"
+    # VFAT flash ownership/modes are mount-defined; do not repeatedly chmod it.
+    mode: "{{ worker_backend_firewall_go_stat.stat.mode }}"
+
+- name: Worker backend firewall | Insert only the owned early Unraid boot block
+  ansible.builtin.blockinfile:
+    path: /boot/config/go
+    insertafter: '(?m)\A#![^\n]*$'
+    marker: '# {mark} SKYNET WORKER BACKENDS'
+    block: >-
+      /bin/bash /boot/config/skynet-worker-backend-firewall/start.sh ||
+      logger -t skynet-worker-backends 'Policy startup failed; backend cutover must remain blocked'
+
+# This ordered stop must finish before the subsequent start, rather than run at play end.
+- name: Worker backend firewall | Stop old Unraid reconciler before code restart # noqa no-handler
+  ansible.builtin.command:
+    argv: ["{{ worker_backend_firewall_python }}", "{{ worker_backend_firewall_root }}/policy.py", stop-watch]
+  when: worker_backend_firewall_helper_copy.changed
+  register: worker_backend_firewall_stop_watch
+  changed_when: (worker_backend_firewall_stop_watch.stdout | from_json).changed
+
+- name: Worker backend firewall | Start the singleton restart-aware reconciler
+  ansible.builtin.command:
+    argv:
+      - "{{ worker_backend_firewall_python }}"
+      - "{{ worker_backend_firewall_root }}/policy.py"
+      - start
+      - --config
+      - "{{ worker_backend_firewall_root }}/policy.json"
+  register: worker_backend_firewall_start
+  changed_when: (worker_backend_firewall_start.stdout | from_json).changed

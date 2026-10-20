@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/09/26 |
+| Readme update        | 2026/10/06 |
 
 
 
@@ -44,6 +44,7 @@
 | [podman_packages.**5**](defaults/main.yml#L16)   | str | `fuse-overlayfs` |    
 | [podman_packages.**6**](defaults/main.yml#L17)   | str | `dbus-user-session` |    
 | [podman_install_extra_packages](defaults/main.yml#L18)   | list | `[]` |    
+| [podman_shared_network_name](defaults/main.yml#L19)   | str | `mgt-services` |    
 
 
 
@@ -66,6 +67,16 @@
 | Podman ¦ Check system Quadlet generator | ansible.builtin.stat | True |  |
 | Podman ¦ Record system Quadlet generator path | ansible.builtin.set_fact | True |  |
 | Podman ¦ Assert system Quadlet generator exists | ansible.builtin.assert | True |  |
+
+#### File: tasks/shared_network.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Podman shared network ¦ Validate central network name | ansible.builtin.assert | False |
+| Podman shared network ¦ Ensure system Quadlet directory | ansible.builtin.file | False |
+| Podman shared network ¦ Write persistent central bridge | ansible.builtin.template | False |
+| Podman shared network ¦ Reload system manager | ansible.builtin.systemd_service | True |
+| Podman shared network ¦ Start central bridge | ansible.builtin.systemd_service | True |
 
 
 

@@ -4,7 +4,7 @@ http:
   middlewares:
     authelia:
       forwardAuth:
-        address: "http://authelia:9091/api/authz/forward-auth"
+        address: "http://{{ hostvars[services_controller_host].local_ip }}:19091/api/authz/forward-auth"
         trustForwardHeader: true
         authResponseHeaders:
           - "Remote-User"

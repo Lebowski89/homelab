@@ -4,6 +4,7 @@ service_common_name: ""
 service_common_runtime: ""
 service_common_action: ""
 service_common_service: {}
+service_common_execution_only: false
 service_common_target_hosts: []
 service_common_controller_host: ""
 service_common_default_owner: "1000"

@@ -1,6 +1,20 @@
 #!/bin/sh
 set -eu
 
+{% if service_common_runtime == "podman" %}
+{% set execution = (service_common_template_vars | default({})).runtime_execution | default((service_common_service.deploy | default({})).execution | default({'mode': 'rootful'})) %}
+{% if execution.mode == "rootless" %}
+runtime_uid="$(/usr/bin/id -u {{ execution.host_user | quote }})"
+/usr/sbin/runuser -u {{ execution.host_user | quote }} -- /usr/bin/env \
+  HOME={{ (service_common_template_vars | default({})).runtime_home | default('/var/lib/' ~ execution.host_user) | quote }} \
+  XDG_RUNTIME_DIR="/run/user/${runtime_uid}" \
+  DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${runtime_uid}/bus" \
+  /bin/sh -c 'cd "$HOME" || exit; exec "$@"' skynet-traefik \
+  /usr/bin/podman kill --signal USR1 {{ service_common_service.name | quote }} >/dev/null
+{% else %}
+/usr/bin/podman kill --signal USR1 {{ service_common_service.name }} >/dev/null
+{% endif %}
+{% else %}
 service_name="{{ service_common_service.stack }}_{{ service_common_service.name }}"
 container_ids="$(/usr/bin/docker ps --quiet \
   --filter "label=com.docker.swarm.service.name=${service_name}" \
@@ -15,3 +29,4 @@ if [ "$#" -ne 1 ]; then
 fi
 
 /usr/bin/docker kill --signal USR1 "$1" >/dev/null
+{% endif %}

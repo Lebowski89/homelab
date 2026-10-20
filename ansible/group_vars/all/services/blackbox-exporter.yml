@@ -32,11 +32,19 @@ blackbox_exporter:
   named_networks:
     overlay:
       external: true
+  ports:
+    probe:
+      published: 22622
+      target: 9115
+      mode: host
   cap_add:
     - NET_RAW
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

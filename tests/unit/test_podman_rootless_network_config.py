@@ -53,6 +53,47 @@ def test_rootless_pasta_dropin_renders_valid_toml_with_exact_options():
     assert tomllib.loads(rendered)["network"]["pasta_options"] == config["options"]
 
 
+def test_direct_pasta_dual_stack_renders_private_addresses_without_disabling_ndp():
+    config = podman_services.podman_rootless_pasta_config("10.0.2.0/24", "10.0.2.2", "10.0.2.3", "fd00:2::2/64", "fd00:2::1")
+    rendered = (
+        Environment(loader=FileSystemLoader(ROLE_ROOT / "templates"), undefined=StrictUndefined)
+        .get_template("rootless-network.conf.j2")
+        .render(podman_services_rootless_pasta_config=config)
+    )
+    options = tomllib.loads(rendered)["network"]["pasta_options"]
+    addresses = [options[i + 1] for i, value in enumerate(options) if value == "-a"]
+    assert addresses == [config["address"], config["ipv6_address"]]
+    assert config["ipv6_subnet"] == "fd00:2::/64"
+    assert "--no-ra" in options and "--no-dhcpv6" in options
+    assert "--no-ndp" not in options and "--ipv4-only" not in options
+    # Rendering a later ordinary service cannot inherit the ingress profile.
+    ordinary = podman_services.podman_rootless_pasta_config("10.0.2.0/24", "10.0.2.2", "10.0.2.3")
+    assert "ipv6_subnet" not in ordinary and "--ipv4-only" in ordinary["options"]
+
+
+@pytest.mark.parametrize(
+    ("address", "gateway"),
+    [
+        ("fd00:2::2/64", None),
+        (False, "fd00:2::1"),
+        ("2001:db8::2/64", "2001:db8::1"),
+        ("fd00:2::2/128", "fd00:2::1"),
+        ("fd00:2::2/64", "fd00:3::1"),
+        ("fd00:2::/64", "fd00:2::1"),
+        ("fd00:2::2/64", "fd00:2::2"),
+    ],
+)
+def test_direct_pasta_rejects_incomplete_public_or_incoherent_ipv6(address, gateway):
+    with pytest.raises(AnsibleFilterError, match="IPv6"):
+        podman_services.podman_rootless_pasta_config("10.0.2.0/24", "10.0.2.2", "10.0.2.3", address, gateway)
+
+
+def test_pasta_ipv6_route_overlap_rejects_real_conflicts_and_ignores_defaults():
+    routes = [{"dst": "::/0"}, {"dst": "fd7a:115c:a1e0::/48"}, {"dst": "fe80::/64"}, {"dst": "192.0.2.0/24"}]
+    assert podman_services.podman_rootless_pasta_route_overlaps(routes, "fd00:2::/64") == []
+    assert podman_services.podman_rootless_pasta_route_overlaps([*routes, {"dst": "fd00::/8"}], "fd00:2::/64") == ["fd00::/8"]
+
+
 @pytest.mark.parametrize(
     ("subnet", "gateway", "dns_forward", "message"),
     [
@@ -96,5 +137,5 @@ def test_rootless_pasta_route_overlap_rejects_direct_or_reachable_conflicts(dest
 
 @pytest.mark.parametrize("routes", ["invalid", {}, [{"dst": "not-a-route"}], ["not-a-mapping"]])
 def test_rootless_pasta_route_overlap_fails_closed_on_invalid_route_data(routes):
-    with pytest.raises(AnsibleFilterError, match="Host IPv4 route"):
+    with pytest.raises(AnsibleFilterError, match="Host route"):
         podman_services.podman_rootless_pasta_route_overlaps(routes, "10.0.2.0/24")

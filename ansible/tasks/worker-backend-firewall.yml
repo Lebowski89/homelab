@@ -1,0 +1,35 @@
+---
+
+- name: Worker backend firewall | Validate canonical inventory groups
+  ansible.builtin.assert:
+    that:
+      - groups[services_controller_inventory_group] | default([]) | length == 1
+      - groups[services_storage_inventory_group] | default([]) | length == 1
+      - services_plex_host in hostvars
+      - groups[services_storage_inventory_group][0] != services_plex_host
+      - groups[services_controller_inventory_group][0] not in [groups[services_storage_inventory_group][0], services_plex_host]
+  tags: [always]
+
+- name: Worker backend firewall | Resolve existing service host contracts
+  ansible.builtin.set_fact:
+    services_controller_host: "{{ groups[services_controller_inventory_group][0] }}"
+    services_storage_host: "{{ groups[services_storage_inventory_group][0] }}"
+    worker_backend_firewall_operation: >-
+      {{ 'remove' if 'worker_backend_firewall_remove' in ansible_run_tags else
+         'check' if 'worker_backend_firewall_check' in ansible_run_tags else 'install' }}
+  tags: [always]
+
+- name: Worker backend firewall | Reject conflicting operations
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_run_tags | intersect(['worker_backend_firewall_install', 'worker_backend_firewall_check',
+        'worker_backend_firewall_remove']) | length <= 1
+  tags: [always]
+
+- name: Worker backend firewall | Manage only the two migration workers
+  ansible.builtin.include_role:
+    name: worker_backend_firewall
+    apply:
+      tags: [worker_backend_firewall_install, worker_backend_firewall_check, worker_backend_firewall_remove]
+  when: inventory_hostname in [services_storage_host, services_plex_host]

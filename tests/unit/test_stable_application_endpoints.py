@@ -48,9 +48,11 @@ def render_template(service_name: str, relative_path: str):
         .from_string((TEMPLATE_DIR / relative_path).read_text())
         .render(
             service_common_infisical_values=fake_lookup_values(service),
+            services_controller_host="mgt",
             services_plex_host="plex-host",
             services_storage_host="storage-host",
             hostvars={
+                "mgt": {"local_ip": "192.0.2.58"},
                 "plex-host": {"local_ip": "192.0.2.59"},
                 "storage-host": {"local_ip": "192.0.2.60"},
             },
@@ -173,6 +175,21 @@ def test_former_public_application_urls_use_private_inventory_topology():
     assert router["rule"] == "Host(`authelia.private.example.internal`)"
 
 
+def test_authelia_explicit_tls_keeps_a_configured_acme_resolver():
+    """Traefik replaces entrypoint TLS defaults when the router declares TLS."""
+    config = yaml.safe_load(render_template("traefik", "proxy/traefik/config.yml.j2"))
+    route_document = yaml.safe_load(render_template("traefik", "proxy/authelia/router.yml.j2"))
+    router = route_document["http"]["routers"]["authelia"]
+    for entrypoint in router["entryPoints"]:
+        # This is selection, not a merge: options-only TLS loses the default
+        # resolver and can fall back to TRAEFIK DEFAULT CERT.
+        effective_tls = router.get("tls", config["entryPoints"][entrypoint]["http"]["tls"])
+        resolver = config["certificatesResolvers"].get(effective_tls.get("certResolver"))
+        assert resolver is not None, "Authelia's explicit TLS must retain an existing certificate resolver"
+        assert resolver["acme"]["dnsChallenge"]["provider"]
+        assert resolver["acme"]["storage"]
+
+
 def test_every_catalog_traefik_route_is_private_and_published_by_technitium():
     route_names = {"authelia"}
     for path in sorted(SERVICES_DIR.glob("*.yml")):
@@ -239,7 +256,9 @@ def test_traefik_exposes_only_private_https_and_operational_entrypoints():
     assert "dns-cloudflare" in config["certificatesResolvers"]
 
     ports = load_service("traefik")["ports"]
-    assert set(ports) == {"web_secure_private"}
+    assert set(ports) == {"web_secure_private", "metrics"}
+    assert ports["metrics"]["host_ip"] == "{{ local_ip }}"
+    assert ports["metrics"]["target"] == 8082
     assert ports["web_secure_private"]["published"] == "{{ services_private_https_port }}"
 
 
@@ -296,7 +315,7 @@ def test_grafana_query_datasources_use_expected_application_endpoints():
         "uid": "loki",
         "type": "loki",
         "access": "proxy",
-        "url": "http://loki:3100",
+        "url": "https://loki.private.example.internal:9443",
         "editable": True,
     }
     assert datasources["Prometheus"]["isDefault"] is True
@@ -336,13 +355,22 @@ def test_nzbhydra2_preparation_persists_private_sabnzbd_endpoint():
     assert render_expression(facts["service_prepare_nzbhydra2_sabnzbd_url"]) == "https://sabnzbd.private.example.internal:9443"
 
 
-def test_observability_control_plane_links_remain_direct():
+def test_observability_clients_use_private_https_while_self_scrapes_stay_local():
     prometheus = (TEMPLATE_DIR / "prometheus/prometheus.yml.j2").read_text()
     alloy = (REPO_ROOT / "ansible/roles/docker_services/templates/alloy_config.alloy.j2").read_text()
     loki = yaml.safe_load(render_template("loki", "loki-config.yaml.j2"))
 
-    assert 'targets: ["alertmanager:9093"]' in prometheus
-    assert 'targets: ["prometheus:9090"]' in prometheus
-    assert 'url = "http://loki:3100/loki/api/v1/push"' in alloy
-    assert 'url = "http://prometheus:9090/api/v1/write"' in alloy
-    assert loki["ruler"]["alertmanager_url"] == "http://alertmanager:9093"
+    assert "{% include 'configs/prometheus/alertmanager-discovery.yml.j2' %}" in prometheus
+    discovery = yaml.safe_load(
+        Environment(undefined=StrictUndefined)
+        .from_string((TEMPLATE_DIR / "prometheus/alertmanager-discovery.yml.j2").read_text())
+        .render(**TOPOLOGY)
+    )["alertmanagers"]
+    assert discovery == [{"scheme": "https", "static_configs": [{"targets": ["alertmanager.private.example.internal:9443"]}]}]
+    assert 'targets: ["127.0.0.1:9090"]' in prometheus
+    assert "https://loki.{{ services_internal_zone }}:{{ services_private_https_port }}/loki/api/v1/push" in alloy
+    assert "https://prometheus.{{ services_internal_zone }}:{{ services_private_https_port }}/api/v1/write" in alloy
+    mgt_alloy = (REPO_ROOT / "ansible/roles/service_common/templates/configs/alloy-mgt.alloy.j2").read_text()
+    assert 'url = "https://loki.{{ services_internal_zone }}:{{ services_private_https_port }}/loki/api/v1/push"' in mgt_alloy
+    assert 'url = "https://prometheus.{{ services_internal_zone }}:{{ services_private_https_port }}/api/v1/write"' in mgt_alloy
+    assert loki["ruler"]["alertmanager_url"] == "https://alertmanager.private.example.internal:9443"

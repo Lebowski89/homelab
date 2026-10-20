@@ -3,9 +3,7 @@ global:
   scrape_timeout: 10s
 
 alerting:
-  alertmanagers:
-    - static_configs:
-        - targets: ["alertmanager:9093"]
+{% include 'configs/prometheus/alertmanager-discovery.yml.j2' %}
 
 rule_files:
   - /etc/prometheus/rules/*.yml
@@ -14,30 +12,57 @@ scrape_configs:
   - job_name: "prometheus"
     scrape_interval: 5s
     static_configs:
-      - targets: ["prometheus:9090"]
+      - targets: ["127.0.0.1:9090"]
+        labels:
+          instance: "prometheus:9090"
 
   - job_name: "authelia"
     scrape_interval: 1m
     scrape_timeout: 10s
+{% if service_common_service.runtime == 'docker' %}
     static_configs:
       - targets: ["authelia:9959"]
-
-  - job_name: "haproxy"
-    scrape_interval: 15s
+{% elif prometheus_authelia_metrics_address | default('') %}
     metrics_path: /metrics
     static_configs:
-      - targets: ["haproxy:8405"]
+      - targets: ["{{ prometheus_authelia_metrics_address }}"]
+        labels:
+          instance: "authelia:9959"
+{% else %}
+    metrics_path: /authelia/metrics
+    static_configs:
+      - targets: ["{{ prometheus_worker_metrics_address }}"]
+        labels:
+          instance: "authelia:9959"
+{% endif %}
+
+{% include 'configs/prometheus/haproxy-scrape.yml.j2' %}
 
   - job_name: "traefik"
     scrape_interval: 30s
     scrape_timeout: 10s
+{% if service_common_service.runtime == 'docker' %}
     static_configs:
       - targets: ["traefik:8082"]
-
-  - job_name: "alertmanager"
-    scrape_interval: 30s
+{% else %}
+{% if prometheus_traefik_metrics_address | default('') %}
+    metrics_path: /metrics
     static_configs:
-      - targets: ["alertmanager:9093"]
+      - targets: ["{{ prometheus_traefik_metrics_address }}"]
+        labels:
+          instance: "traefik:8082"
+{% else %}
+    metrics_path: /traefik/metrics
+    static_configs:
+      - targets: ["{{ prometheus_worker_metrics_address }}"]
+        labels:
+          instance: "traefik:8082"
+{% endif %}
+{% endif %}
+
+{% include 'configs/prometheus/alertmanager-scrape.yml.j2' %}
+
+{% include 'configs/prometheus/scraparr-scrape.yml.j2' %}
 
   - job_name: "node-exporter"
     scrape_interval: 30s

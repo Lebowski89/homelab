@@ -2,7 +2,7 @@
 
 Grafana is the user-facing log search interface and Loki is the private,
 single-node log store. Loki uses TSDB v13 with filesystem storage and retains
-seven days. Grafana reaches Loki directly at `http://loki:3100`; native agents
+seven days. Grafana reaches Loki at its verified-TLS internal HTTPS route; native agents
 write through the private `loki.<internal-zone>` Traefik endpoint. The rendered
 Loki router uses only the private HTTPS entrypoint and the normal security,
 no-index, HSTS, and compression middleware; it has no public route or Authelia
@@ -12,7 +12,9 @@ middleware.
 
 Docker Swarm runs Alloy as a global Linux service. Each task reads only its
 local read-only Docker socket, labels events with the Swarm node hostname from
-`{{.Node.Hostname}}`, and sends them over the overlay to Loki. Docker keeps its
+`{{.Node.Hostname}}`, and sends them to `https://loki.{{ services_internal_zone }}:{{ services_private_https_port }}/loki/api/v1/push`.
+Remote write uses the corresponding Prometheus internal HTTPS route and `/api/v1/write`. The global service explicitly
+excludes the mgt node and retains its `alloy` stack name. Docker keeps its
 existing daemon-wide `json-file` policy. The collector also reads an explicit
 allowlist of useful local application files through the read-only host-root
 mount. Its positions and other state use a local Docker volume on each node.
@@ -26,8 +28,8 @@ secondary Technitium paths retain their respective controller and Plex owners.
 A task therefore scans only paths owned by its physical node, while one rendered
 configuration remains usable by the global service.
 
-The existing Alloy Unix and cAdvisor metric exporters remain enabled on every
-collector. Their `instance` label is replaced with the same stable node
+The existing Alloy Unix and cAdvisor metric exporters remain enabled on worker
+Docker collectors. Their `instance` label is replaced with the same stable node
 hostname and their jobs are separated as `alloy-unix` and `alloy-cadvisor`, so
 globalizing the service does not create ambiguous node series.
 
@@ -38,6 +40,14 @@ the journal as the unprivileged `alloy` account through `adm` and
 runtime directories. This journal also includes useful non-container host
 services, so journal streams deliberately do not receive a blanket
 `runtime="podman"` label.
+
+On mgt, these journal duties belong to the native package-managed Alloy agent.
+The separate rootful `alloy-mgt` Quadlet reads the declared application files and
+runs its selected host/container exporters using `alloy-mgt.alloy.j2`; it does
+not replace the native journal collector. Worker Docker Alloy retains its local
+Docker stdout/file/exporter responsibilities and excludes mgt. Keep both mgt
+collectors and their separate state/configuration; their names alone do not make
+either redundant.
 
 Services in the Gluetun stack are treated as privacy-sensitive. JDownloader2
 and Mullvad Browser continue writing their normal container output to the local
@@ -71,12 +81,12 @@ File streams use `host`, `service`, `source="file"`, and `log_type`. Traefik
 access JSON additionally promotes only the bounded router, upstream service,
 and entrypoint fields. URLs, client addresses, headers, IDs, PIDs, and message
 contents remain in the payload rather than the Loki index. Alloy automatically
-adds a path-derived `filename` label to file targets; Docker file pipelines
+adds a path-derived `filename` label to file targets; Worker Docker and mgt file pipelines
 deliberately drop it before Loki. The service label already identifies fixed
 files, while dropping it prevents daily Technitium filenames from creating an
 avoidable label series.
 
-## Docker application file allowlist
+## Application file allowlist
 
 Container paths below are resolved to their current host-backed service paths
 and viewed inside Alloy beneath `/host/rootfs`. Exact active filenames avoid
@@ -118,13 +128,16 @@ files older than 24 hours when first discovered. Existing persisted Technitium
 settings should still be confirmed after deployment because image environment
 defaults do not override an already-created DNS configuration.
 
-Traefik uses normal rename/create rotation rather than `copytruncate`. The
-policy recreates the active file as root-owned mode `0640`, keeps at most seven
-rotations/seven days, compresses older rotations, and then invokes a dedicated
-reopen helper. That helper selects a running task only by the exact
-`com.docker.swarm.service.name=traefik_traefik` label, refuses zero or multiple
-matches, and sends Traefik its supported `SIGUSR1` reopen signal. The service is
-constrained to one replica on the controller, and Alloy matches only
+Traefik uses rename/create rotation rather than `copytruncate`. The policy
+recreates the active file as mode `0640`, keeps at most seven rotations/seven
+days and compresses older rotations. File ownership follows the selected runtime:
+the dedicated execution account owns rootless Traefik logs; rootful/Docker
+execution retains root ownership. The reopen helper uses the same resolved
+account, home and runtime directory for rootless Podman and signals only the
+managed Traefik container with `SIGUSR1`. Rootful Podman uses its system runtime.
+The retained Docker path selects exactly one local running container by
+`com.docker.swarm.service.name=traefik_traefik` and rejects zero/multiple matches.
+The signal reopens logs; it does not restart Traefik. Alloy matches only
 `access.log`, never rotated or compressed names.
 
 All file discovery starts at the current end and ignores files older than 24
@@ -139,8 +152,9 @@ backup logging and old-file deletion remain enabled, and month-based age `1`
 removes backups older than one month.
 
 Authelia is stdout-only because the repository has no remaining consumer of its
-former duplicate file and no CrowdSec service; its Docker stream is collected
-once. Homepage is stdout-only, and Unpackerr, Autobrr, Syncthing, Vaultwarden,
+former duplicate file and no CrowdSec service. Rootless Authelia stdout is
+collected once through journald; retained Docker instances use their Docker
+stdout collector. Homepage is stdout-only, and Unpackerr, Autobrr, Syncthing, Vaultwarden,
 Grafana, OpenCloud, Qui, Stash, and the
 other ordinary services remain on their runtime stdout or journal paths to
 avoid duplicate events.
@@ -193,3 +207,21 @@ Run these checks only after an operator-approved deployment:
    the new active file without ingesting compressed archives.
 8. After seven days, inspect Loki storage growth and confirm expected data ages
    out.
+
+## mgt file and host collector
+
+The rootful `alloy-mgt.service` Quadlet has a bind-backed checkpoint tree at
+`<controller-appdata>/alloy/data`. It preserves owner-filtered file collection,
+redaction, labels and Unix metrics. It has no Docker socket/storage, Docker
+discovery, cAdvisor or journal source. The distinct native `alloy.service` keeps
+journal ownership and filtering; node-exporter monitoring is unchanged.
+The collector's private UI route remains `alloy.<internal-zone>` while its
+container/unit name is `alloy-mgt`. Its clients use the same internal HTTPS URLs as worker/native agents.
+The existing private machine routes have no interactive SSO middleware;
+certificate verification and the ingress access policy remain enabled. For a checkpoint transfer, stop the selected collector first and use its
+observed mountpoint and a consistent preserved copy, following the
+[ownership procedure](../migrator/guides/ownership.md). Keep component names and
+storage paths stable where supported; verify ingestion because runtime changes
+can replay files or introduce a metric discontinuity.
+Traefik logrotate addresses only the exact `traefik` Podman container; the
+legacy Docker helper still selects one exact Swarm service task.

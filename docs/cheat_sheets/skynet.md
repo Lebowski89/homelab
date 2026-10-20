@@ -418,10 +418,10 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 
 | Command                                 | Raw tag                      |
 | --------------------------------------- | ---------------------------- |
-| `skynet run infisical-podman bootstrap` | `infisical_podman_bootstrap` |
-| `skynet run infisical-podman deploy`    | `infisical_podman_deploy`    |
-| `skynet run infisical-podman recreate`  | `infisical_podman_recreate`  |
-| `skynet run infisical-podman remove`    | `infisical_podman_remove`    |
+| `skynet run infisical-podman bootstrap` | `infisical_bootstrap` |
+| `skynet run infisical-podman deploy`    | `infisical_deploy`    |
+| `skynet run infisical-podman recreate`  | `infisical_recreate`  |
+| `skynet run infisical-podman remove`    | `infisical_remove`    |
 
 ### Alloy Native
 
@@ -566,7 +566,7 @@ Use `raw` when the wrapper does not expose the exact operation you need:
 ```bash
 skynet raw --list-tags
 skynet raw --syntax-check
-skynet raw --tags infisical_podman_deploy
+skynet raw --tags infisical_deploy
 skynet raw --check --diff --tags postgres_backup
 ```
 
@@ -727,7 +727,7 @@ Good examples:
 ubuntu_sysctl
 docker_swarm
 opentofu_pve_user
-infisical_podman_recreate
+infisical_recreate
 postgres_backup
 postgres_backup_remote_run
 ```
@@ -898,7 +898,7 @@ infisical-podman
 Ansible tag:
 
 ```text
-infisical_podman_deploy
+infisical_deploy
 ```
 
 Command:

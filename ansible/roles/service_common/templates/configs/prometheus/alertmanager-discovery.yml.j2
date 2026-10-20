@@ -1,0 +1,4 @@
+  alertmanagers:
+    - scheme: https
+      static_configs:
+        - targets: ["alertmanager.{{ services_internal_zone }}:{{ services_private_https_port }}"]

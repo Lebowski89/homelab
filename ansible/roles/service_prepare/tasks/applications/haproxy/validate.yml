@@ -1,0 +1,36 @@
+---
+
+- name: HAProxy prepare | Validate settings
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context.service.settings.haproxy_overlay_metrics_proxy | default(false) is boolean
+      - service_prepare_context.service.settings is mapping
+      - >-
+        service_prepare_context.service.settings.keys()
+        | difference(service_prepare_haproxy_integer_fields + service_prepare_haproxy_duration_fields + ['haproxy_overlay_metrics_proxy'])
+        | length == 0
+      - service_prepare_context.service.settings.haproxy_maxconn is integer
+      - service_prepare_context.service.settings.haproxy_maxconn > 0
+      - service_prepare_context.service.settings.haproxy_retries is integer
+      - service_prepare_context.service.settings.haproxy_retries >= 0
+      - service_prepare_context.service.settings.haproxy_prometheus_port is integer
+      - service_prepare_context.service.settings.haproxy_prometheus_port > 0
+      - service_prepare_context.service.settings.haproxy_prometheus_port <= 65535
+    fail_msg: "HAProxy requires typed maxconn, retries, port and allowlisted timeout settings."
+  vars:
+    service_prepare_haproxy_integer_fields: [haproxy_maxconn, haproxy_retries, haproxy_prometheus_port]
+    service_prepare_haproxy_duration_fields:
+      - haproxy_timeout_connect
+      - haproxy_timeout_client
+      - haproxy_timeout_server
+      - haproxy_timeout_check
+
+- name: HAProxy prepare | Validate timeouts
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context.service.settings[service_prepare_haproxy_timeout] is string
+      - service_prepare_context.service.settings[service_prepare_haproxy_timeout] is match('^[1-9][0-9]*(ms|s|m|h|d)$')
+    fail_msg: "HAProxy timeouts must be positive durations."
+  loop: [haproxy_timeout_connect, haproxy_timeout_client, haproxy_timeout_server, haproxy_timeout_check]
+  loop_control:
+    loop_var: service_prepare_haproxy_timeout

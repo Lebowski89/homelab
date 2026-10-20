@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/03 |
+| Readme update        | 2026/10/06 |
 
 
 
@@ -104,6 +104,13 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Bazarr prepare ¦ Validate configuration contract | ansible.builtin.assert | False |  |
+
+#### File: tasks/applications/haproxy/validate.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| HAProxy prepare ¦ Validate settings | ansible.builtin.assert | False |
+| HAProxy prepare ¦ Validate timeouts | ansible.builtin.assert | False |
 
 #### File: tasks/applications/nzbhydra2/bootstrap.yml
 
@@ -352,6 +359,7 @@
 | ---- | ------ | -------------- | -----|
 | Temporary preparation container ¦ Validate request | ansible.builtin.assert | False |  |
 | Temporary preparation container ¦ Reset execution output | ansible.builtin.set_fact | False |  |
+| Temporary preparation container ¦ Require the rootless execution context | ansible.builtin.assert | True |  |
 | Temporary preparation container ¦ Execute with guaranteed cleanup | block | True |  |
 | Temporary preparation container ¦ Start selected runtime executor | ansible.builtin.include_tasks | False |  |
 | Temporary preparation container ¦ Wait for generated file | ansible.builtin.wait_for | True |  |

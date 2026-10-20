@@ -1,0 +1,22 @@
+---
+# Explicit recovery entry point. Use INVENTORY=localhost, PLAYBOOK=... with skynet.
+# This play never loads dynamic inventory, the catalog, or Infisical lookup.
+- name: Recover local inventory and secret-store bootstrap
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: /opt/ansible/ansible-venv/bin/python
+  tasks:
+    - name: Include NetBox recovery owner
+      ansible.builtin.include_role:
+        name: netbox
+        apply:
+          tags: [never]
+      tags: [never, netbox_bootstrap, netbox_deploy, netbox_recreate, netbox_remove]
+
+    - name: Include Infisical recovery owner
+      ansible.builtin.include_role:
+        name: infisical
+      tags: [never, infisical_bootstrap, infisical_deploy, infisical_recreate, infisical_remove]

@@ -11,6 +11,63 @@
       tags: [deploy, update, remove, recreate, drift, bootstrap]
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
+- name: Podman services | Validate managed file policy before mutation
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: file_policy
+    apply:
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
+  vars:
+    service_common_service: "{{ podman_services_service_cfg }}"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+################################
+# APPLICATION VALIDATION
+################################
+
+- name: Podman services | Build application preparation context
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_application_context:
+      service_name: "{{ podman_services_service.name }}"
+      target: "{{ podman_services_service_target | default('') }}"
+      runtime: podman
+      execution: "{{ podman_services_service.execution }}"
+      operation: "{{ podman_services_common_action }}"
+      service: >-
+        {{ podman_services_service_cfg | combine({'environment': podman_services_resolved_environment}, recursive=false) }}
+      resolved_environment: "{{ podman_services_resolved_environment }}"
+      lookup_values: "{{ podman_services_common_values }}"
+      secret_declarations: "{{ podman_services_secret_declarations }}"
+      controller_host: "{{ podman_services_controller_host }}"
+      filesystem_hosts: ["{{ inventory_hostname }}"]
+      host_defaults: "{{ podman_services_common_host_defaults }}"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Podman services | Validate application settings
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_prepare
+    tasks_from: validate
+    apply:
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
+      no_log: true
+      diff: false
+  vars:
+    service_prepare_context: "{{ podman_services_application_context }}"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Podman services | Store validated application outputs
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_application_template_vars: "{{ service_prepare_template_vars }}"
+    podman_services_application_secret_values: "{{ service_prepare_generated_secret_values }}"
+    podman_services_application_secret_declarations: "{{ service_prepare_generated_secret_declarations }}"
+    podman_services_application_bootstrap_requests: "{{ service_prepare_bootstrap_requests }}"
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
 ################################
 # EXECUTION PREPARATION
 ################################
@@ -20,6 +77,22 @@
     file: sub_tasks/execution.yml
     apply:
       tags: [deploy, update, remove, recreate, drift, bootstrap]
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Podman services | Bind preparation to the selected execution store
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_application_context: >-
+      {{ podman_services_application_context | combine({
+        'execution': podman_services_execution,
+        'runtime_environment': podman_services_runtime_environment
+      }) }}
+  tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+- name: Podman services | Finish explicit account preparation
+  when: podman_services_prepare_execution_only
+  ansible.builtin.meta: end_role
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
 ################################
@@ -59,52 +132,6 @@
       External Podman network {{ podman_services_service.network.name }} does not exist
       in this host's Podman network store; create it deliberately before running this service.
   tags: [deploy, update, recreate, bootstrap]
-
-################################
-# APPLICATION VALIDATION
-################################
-
-- name: Podman services | Build application preparation context
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    podman_services_application_context:
-      service_name: "{{ podman_services_service.name }}"
-      target: "{{ podman_services_service_target | default('') }}"
-      runtime: podman
-      operation: "{{ podman_services_common_action }}"
-      service: >-
-        {{ podman_services_service_cfg | combine({'environment': podman_services_resolved_environment}, recursive=false) }}
-      resolved_environment: "{{ podman_services_resolved_environment }}"
-      lookup_values: "{{ podman_services_common_values }}"
-      secret_declarations: "{{ podman_services_secret_declarations }}"
-      controller_host: "{{ podman_services_controller_host }}"
-      filesystem_hosts: ["{{ inventory_hostname }}"]
-      host_defaults: "{{ podman_services_common_host_defaults }}"
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
-
-- name: Podman services | Validate application settings
-  no_log: true
-  ansible.builtin.include_role:
-    name: service_prepare
-    tasks_from: validate
-    apply:
-      tags: [deploy, update, remove, recreate, drift, bootstrap]
-      no_log: true
-      diff: false
-  vars:
-    service_prepare_context: "{{ podman_services_application_context }}"
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
-
-- name: Podman services | Store validated application outputs
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    podman_services_application_template_vars: "{{ service_prepare_template_vars }}"
-    podman_services_application_secret_values: "{{ service_prepare_generated_secret_values }}"
-    podman_services_application_secret_declarations: "{{ service_prepare_generated_secret_declarations }}"
-    podman_services_application_bootstrap_requests: "{{ service_prepare_bootstrap_requests }}"
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
 
 ################################
 # RUNTIME CLEANUP
@@ -264,7 +291,11 @@
   no_log: true
   diff: false
   ansible.builtin.set_fact:
-    podman_services_application_template_vars: "{{ service_prepare_template_vars }}"
+    podman_services_application_template_vars: >-
+      {{ service_prepare_template_vars | combine({
+        'runtime_execution': podman_services_execution,
+        'runtime_home': podman_services_execution_home
+      }) }}
   tags: [deploy, update, recreate, bootstrap]
 
 ################################
@@ -332,29 +363,45 @@
     service_common_template_vars: "{{ podman_services_application_template_vars }}"
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Podman services | Set rootless bind mount ownership
+- name: Podman services | Snapshot managed configuration changes
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_config_changed: "{{ service_common_config_changed | default(false) }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Podman services | Read declared environment files
   when:
     - not ansible_check_mode
     - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
-    - podman_services_execution.mode == 'rootless'
-    - podman_services_service.container.mounts | default([]) | length > 0
-  become: true
-  ansible.builtin.file:
-    path: "{{ podman_services_rootless_bind_source }}"
-    state: directory
-    owner: "{{ podman_services_execution.host_user }}"
-    group: "{{ podman_services_execution.host_user }}"
-    recurse: true
-  loop: >-
-    {{
-      podman_services_service.container.mounts
-      | map(attribute='source')
-      | unique
-      | list
-    }}
+  no_log: true
+  diff: false
+  ansible.builtin.slurp:
+    src: "{{ podman_services_env_path }}"
+  loop: "{{ podman_services_service.env_files }}"
   loop_control:
-    loop_var: podman_services_rootless_bind_source
-    label: "{{ podman_services_rootless_bind_source }}"
+    loop_var: podman_services_env_path
+  register: podman_services_env_file_contents
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Podman services | Parse ordered literal environment files
+  when: not ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_env_file_inputs: >-
+      {{ podman_services_env_file_inputs | combine(podman_services_env_input.content | b64decode | podman_dotenv) }}
+  loop: "{{ podman_services_env_file_contents.results | default([]) }}"
+  loop_control:
+    loop_var: podman_services_env_input
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Podman services | Apply explicit environment overrides
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_service: >-
+      {{ podman_services_service | combine({'env': podman_services_env_file_inputs | combine(podman_services_resolved_environment)}) }}
   tags: [deploy, update, recreate, bootstrap]
 
 ################################

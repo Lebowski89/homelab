@@ -46,8 +46,10 @@ def availability_model():
     host_names = ["dns01", "dns02", "dns03", "mgt", "unraid", "plex", "pve1", "pg95", "pg96", "pg97"]
     hostvars = {host: {"local_ip": f"192.0.2.{index}"} for index, host in enumerate(host_names, start=1)}
     variables = {
+        **services,
         "hostvars": hostvars,
         "services_controller_host": "mgt",
+        "services_storage_host": "unraid",
         "services_plex_host": "plex",
         "services_private_https_port": 8443,
         "services_internal_zone": "internal.example",
@@ -245,7 +247,9 @@ def test_alertmanager_keeps_email_adds_secret_file_gotify_and_valid_payload_shap
                 "smtp_host": "smtp.example.com",
                 "smtp_port": "587",
                 "smtp_username": "alertmanager@example.com",
-            }
+            },
+            services_internal_zone="internal.example",
+            services_private_https_port=8443,
         )
     )
     config = yaml.safe_load(rendered)
@@ -254,13 +258,14 @@ def test_alertmanager_keeps_email_adds_secret_file_gotify_and_valid_payload_shap
     webhook = receiver["webhook_configs"][0]
     assert receiver["email_configs"][0]["send_resolved"] is True
     assert webhook["send_resolved"] is True
-    assert webhook["url"] == "http://gotify/message"
+    assert webhook["url"] == "https://gotify.internal.example:8443/message"
     assert webhook["http_config"]["authorization"] == {
         "type": "Bearer",
         "credentials_file": "/run/secrets/alertmanager_gotify_token_secret",
     }
-    assert webhook["payload"]["priority"] == 8
-    assert set(webhook["payload"]) == {"title", "message", "priority"}
+    # Real Go rendering and the pinned scalar-promotion boundary are exercised
+    # in test_alertmanager_gotify_delivery.py; a mapping shape alone is unsafe.
+    assert isinstance(webhook["payload"], str)
     assert "gotify_alertmanager_token" not in rendered
     assert "ALERTMANAGER_APP_TOKEN" not in rendered
 

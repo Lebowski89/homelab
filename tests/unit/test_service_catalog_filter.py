@@ -527,6 +527,25 @@ def test_canonical_target_merge_preserves_explicit_name_without_inventing_defaul
     assert renamed["name"] == "custom-target"
 
 
+def test_direct_pasta_has_no_shared_namespace_dependency_and_requires_rootless_execution():
+    services = {
+        "ingress": {
+            "runtime": "podman",
+            "network_mode": "pasta",
+            "deploy": {"host": "node-a", "execution": {"mode": "rootless", "host_user": "podman-ingress"}},
+        },
+    }
+    effective = service_catalog.service_catalog_effective(services, "manager")
+    assert effective[0]["podman_lifecycle"]["namespace_provider"] is None
+    assert effective[0]["podman_lifecycle"]["execution_account"] == "podman-ingress"
+    services["ingress"]["deploy"]["execution"]["mode"] = "rootful"
+    with pytest.raises(AnsibleFilterError, match="pasta requires rootless"):
+        service_catalog.service_catalog_effective(services, "manager")
+    services["ingress"]["network_mode"] = "pasta:--netns,/unowned"
+    with pytest.raises(AnsibleFilterError, match="constrained"):
+        service_catalog.service_catalog_effective(services, "manager")
+
+
 def podman_namespace_fixture():
     return {
         "downloader": {

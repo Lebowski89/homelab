@@ -88,6 +88,7 @@ def test_live_lookup_loop_accumulates_all_values_on_dispatch_host_and_resets_nex
   strategy: linear
   vars:
     service_catalog_controller_host: manager
+    service_catalog_action: deploy
     infisical_lookup_default_params: {{}}
   tasks:
     - name: Seed stale manager facts
@@ -200,6 +201,7 @@ def test_failed_infisical_preflight_stops_before_destructive_cleanup(tmp_path):
   strategy: linear
   vars:
     service_catalog_controller_host: manager
+    service_catalog_action: deploy
     infisical_lookup_default_params: {{}}
   tasks:
     - name: Publish failing synthetic service

@@ -46,6 +46,7 @@
   diff: false
   ansible.builtin.set_fact:
     docker_services_common_values: {}
+    docker_services_config_changed: false
     docker_services_secret_declarations: []
     docker_services_resolved_environment: {}
     docker_services_controller_host: ""
@@ -128,6 +129,20 @@
         ('bootstrap' if 'bootstrap' in (ansible_run_tags | default([])) else 'deploy'))))
       }}
   tags: [remove, drift]
+
+- name: Initialize | Enforce effective operational requirements
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: operational_requirements
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+  vars:
+    service_common_service: >-
+      {{ {'operational_requirements': docker_services_svc.operational_requirements | default({})} }}
+    service_common_name: "{{ docker_services_service_name }}"
+    service_common_action: "{{ docker_services_common_action }}"
+    service_common_execution_only: "{{ false }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
 
 - name: Initialize | Set stack name
   ansible.builtin.set_fact:

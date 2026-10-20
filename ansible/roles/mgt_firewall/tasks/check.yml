@@ -1,0 +1,17 @@
+---
+
+- name: Mgt firewall | Audit installed guards without writes or controller dependencies
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, "{{ mgt_firewall_root }}/policy.py", check]
+  changed_when: false
+
+- name: Mgt firewall | Audit enabled boot guard and active reconciliation timer
+  ansible.builtin.command:
+    argv: [systemctl, "{{ mgt_firewall_audit.command }}", "{{ mgt_firewall_audit.unit }}"]
+  loop:
+    - {command: is-enabled, unit: skynet-mgt-firewall.service}
+    - {command: is-enabled, unit: skynet-mgt-firewall-reconcile.timer}
+    - {command: is-active, unit: skynet-mgt-firewall-reconcile.timer}
+  loop_control:
+    loop_var: mgt_firewall_audit
+  changed_when: false

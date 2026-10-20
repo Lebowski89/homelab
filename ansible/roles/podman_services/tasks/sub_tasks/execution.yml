@@ -223,7 +223,17 @@
         podman_services_rootless_pasta_subnet
         | podman_rootless_pasta_config(
             podman_services_rootless_pasta_gateway,
-            podman_services_rootless_pasta_dns_forward
+            podman_services_rootless_pasta_dns_forward,
+            (
+              podman_services_rootless_pasta_ipv6_address
+              if ((podman_services_service.container | default({})).network_mode | default('')) == 'pasta'
+              else none
+            ),
+            (
+              podman_services_rootless_pasta_ipv6_gateway
+              if ((podman_services_service.container | default({})).network_mode | default('')) == 'pasta'
+              else none
+            )
           )
       }}
   tags: [deploy, update, recreate, bootstrap]
@@ -280,6 +290,40 @@
       {{ podman_services_rootless_host_route_overlaps | join(', ') }};
       choose a non-overlapping role-level subnet before managing the account.
   tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Read host IPv6 routes for direct pasta conflict detection
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_rootless_pasta_config.ipv6_subnet is defined
+  ansible.builtin.command:
+    argv: [ip, -j, "-6", route, show, table, all]
+  register: podman_services_rootless_host_ipv6_routes
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Reject conflicting host IPv6 routes before account mutation
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_rootless_pasta_config.ipv6_subnet is defined
+  tags: [deploy, update, recreate, bootstrap]
+  block:
+    - name: Execution | Detect conflicting host IPv6 routes
+      ansible.builtin.set_fact:
+        podman_services_rootless_host_ipv6_route_overlaps: >-
+          {{ podman_services_rootless_host_ipv6_routes.stdout | from_json |
+             podman_rootless_pasta_route_overlaps(podman_services_rootless_pasta_config.ipv6_subnet) }}
+
+    - name: Execution | Require a private IPv6 subnet separate from host routes
+      ansible.builtin.assert:
+        that:
+          - podman_services_rootless_host_ipv6_route_overlaps | length == 0
+        fail_msg: >-
+          Direct pasta subnet {{ podman_services_rootless_pasta_config.ipv6_subnet }}
+          overlaps host IPv6 routes {{ podman_services_rootless_host_ipv6_route_overlaps | join(', ') }}.
 
 - name: Execution | Check selected rootless account
   when:

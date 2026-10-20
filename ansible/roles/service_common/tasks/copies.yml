@@ -1,6 +1,10 @@
 ---
 
 - name: Service common copies | Copy static files
+  when: not (ansible_check_mode and service_common_copy_item.no_log | default(false) | bool)
+  register: service_common_copy_changes
+  no_log: "{{ service_common_copy_item.no_log | default(false) | bool }}"
+  diff: "{{ not (service_common_copy_item.no_log | default(false) | bool) }}"
   ansible.builtin.copy:
     src: "{{ role_path }}/{{ service_common_copy_item.src | string | trim }}"
     dest: "{{ service_common_copy_item.dest | string | trim }}"
@@ -19,6 +23,16 @@
   loop_control:
     loop_var: service_common_copy_item
     label: "{{ service_common_copy_item.dest | string | trim }}"
+
+- name: Service common copies | Track application configuration changes
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_common_config_changed: >-
+      {{
+        service_common_config_changed | default(false)
+        or (service_common_copy_changes | service_common_files_changed('service_common_copy_item'))
+      }}
 
 - name: Service common copies | Wait for copied files
   when: service_common_copy_item.wait | default(false) | bool

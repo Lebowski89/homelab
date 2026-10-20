@@ -1,0 +1,876 @@
+---
+
+- name: Loki routes | Resolve the canonical file and desired URL
+  ansible.builtin.set_fact:
+    docker_services_loki_routes_file: '{{ (docker_services_loki_catalog.loki.templates | selectattr(''src'', ''equalto'', ''configs/loki-config.yaml.j2'')
+      | first).dest }}'
+    docker_services_loki_routes_canonical: '{{ lookup(''ansible.builtin.template'', playbook_dir ~ ''/roles/service_common/templates/configs/loki-config.yaml.j2'')
+      }}'
+  no_log: true
+  diff: false
+- name: Loki routes | Project only the named current Swarm service
+  ansible.builtin.command:
+    argv:
+      - docker
+      - --host
+      - unix:///var/run/docker.sock
+      - service
+      - inspect
+      - --format
+      - '{{ ''{"id":{{json .ID}},"name":{{json .Spec.Name}},"image":{{json .Spec.TaskTemplate.ContainerSpec.Image}},"mode":{{json .Spec.Mode}},"update":{{json
+        .Spec.UpdateConfig}},"mounts":{{json .Spec.TaskTemplate.ContainerSpec.Mounts}},"configs":{{json .Spec.TaskTemplate.ContainerSpec.Configs}},"networks":{{json
+        .Spec.TaskTemplate.Networks}},"placement":{{json .Spec.TaskTemplate.Placement}},"ports":{{json .Endpoint.Spec.Ports}},"force":{{json
+        .Spec.TaskTemplate.ForceUpdate}}}'' }}'
+      - loki_loki
+  register: docker_services_loki_routes_service
+  changed_when: false
+  check_mode: false
+- name: Loki routes | Normalize the observed service projection
+  ansible.builtin.set_fact:
+    docker_services_loki_routes_original: '{{ docker_services_loki_routes_service.stdout | from_json }}'
+- name: Loki routes | Require one stop-first writer without changing rollout settings
+  ansible.builtin.assert:
+    that:
+      - docker_services_loki_routes_original.name == 'loki_loki'
+      - docker_services_loki_routes_original.id is match('^[a-z0-9]{25}$')
+      - docker_services_loki_routes_original.mode.Replicated.Replicas == 1
+      - (docker_services_loki_routes_original.update | default({}, true)).Order | default('stop-first') == 'stop-first'
+      - (docker_services_loki_routes_original.update | default({}, true)).Parallelism | default(1) == 1
+      - docker_services_loki_routes_original.force is integer
+- name: Loki routes | Verify only one globally running task on the inventory controller
+  ansible.builtin.command:
+    argv:
+      - docker
+      - --host
+      - unix:///var/run/docker.sock
+      - service
+      - ps
+      - --no-trunc
+      - --format
+      - '{{ ''{"node":{{json .Node}},"desired":{{json .DesiredState}},"state":{{json .CurrentState}}}'' }}'
+      - '{{ docker_services_loki_routes_original.id }}'
+  register: docker_services_loki_routes_placement
+  changed_when: false
+  check_mode: false
+- name: Loki routes | Require the single retained controller placement
+  ansible.builtin.assert:
+    that:
+      - docker_services_loki_routes_running_tasks | length == 1
+      - docker_services_loki_routes_running_tasks[0].node == services_controller_host
+      - docker_services_loki_routes_running_tasks[0].desired == 'Running'
+  vars:
+    docker_services_loki_routes_running_tasks: '{{ docker_services_loki_routes_placement.stdout_lines | map(''from_json'') | selectattr(''state'',
+      ''match'', ''^Running'') | list }}'
+- name: Loki routes | Resolve the exact local running task
+  ansible.builtin.command:
+    argv:
+      - docker
+      - --host
+      - unix:///var/run/docker.sock
+      - ps
+      - --no-trunc
+      - --filter
+      - label=com.docker.swarm.service.name=loki_loki
+      - --format
+      - '{{ "{{.ID}}" }}'
+  register: docker_services_loki_routes_ids
+  changed_when: false
+  check_mode: false
+- name: Loki routes | Require one local running writer
+  ansible.builtin.assert:
+    that:
+      - docker_services_loki_routes_ids.stdout_lines | length == 1
+      - docker_services_loki_routes_ids.stdout is match('^[a-f0-9]{64}$')
+- name: Loki routes | Inspect only the selected task
+  ansible.builtin.command:
+    argv:
+      - docker
+      - --host
+      - unix:///var/run/docker.sock
+      - container
+      - inspect
+      - --format
+      - '{{ ''{{ $managed := false }}{{ range .Args }}{{ if eq . "-config.file=/etc/loki/loki-config.yaml" }}{{ $managed = true }}{{
+        end }}{{ end }}{"id":{{json .Id}},"pid":{{.State.Pid}},"running":{{json .State.Running}},"image_id":{{json .Image}},"binary":{{json
+        .Path}},"managed":{{json $managed}},"service":{{json (index .Config.Labels "com.docker.swarm.service.name")}},"mounts":{{json
+        .Mounts}}}'' }}'
+      - '{{ docker_services_loki_routes_ids.stdout }}'
+  register: docker_services_loki_routes_container
+  changed_when: false
+  check_mode: false
+- name: Loki routes | Normalize the existing writer
+  ansible.builtin.set_fact:
+    docker_services_loki_routes_current: '{{ docker_services_loki_routes_container.stdout | from_json }}'
+- name: Loki routes | Require the current binary and canonical read-only configuration mount
+  ansible.builtin.assert:
+    that:
+      - docker_services_loki_routes_current.id == docker_services_loki_routes_ids.stdout
+      - docker_services_loki_routes_current.service == 'loki_loki'
+      - docker_services_loki_routes_current.running is sameas true
+      - docker_services_loki_routes_current.pid is integer
+      - docker_services_loki_routes_current.pid > 0
+      - docker_services_loki_routes_current.managed is sameas true
+      - docker_services_loki_routes_current.binary is match('^/[a-zA-Z0-9_/-]+/loki$')
+      - docker_services_loki_routes_config_mounts | length == 1
+      - docker_services_loki_routes_config_mounts[0].Type == 'bind'
+      - docker_services_loki_routes_config_mounts[0].Source == docker_services_loki_routes_file | dirname
+      - docker_services_loki_routes_config_mounts[0].RW is sameas false
+  vars:
+    docker_services_loki_routes_config_mounts: '{{ docker_services_loki_routes_current.mounts | selectattr(''Destination'', ''equalto'',
+      ''/etc/loki'') | list }}'
+- name: Loki routes | Require the retained writable data bind
+  ansible.builtin.assert:
+    that:
+      - docker_services_loki_routes_data_mounts | length == 1
+      - docker_services_loki_routes_data_mounts[0].Type == 'bind'
+      - docker_services_loki_routes_data_mounts[0].RW is sameas true
+      - docker_services_loki_routes_data_mounts[0].Source == docker_services_loki_catalog.loki.volumes.data.source
+  vars:
+    docker_services_loki_routes_data_mounts: '{{ docker_services_loki_routes_current.mounts | selectattr(''Destination'', ''equalto'',
+      ''/loki'') | list }}'
+- name: Loki routes | Capture original PID birth and namespace
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - import json,sys; from pathlib import Path; p=int(sys.argv[1]); text=Path(f'/proc/{p}/stat').read_text(); print(json.dumps({'birth':text[text.rindex(')')+2:].split()[19],
+        'netns':str(Path(f'/proc/{p}/ns/net').readlink())}))
+      - '{{ docker_services_loki_routes_current.pid | string }}'
+  register: docker_services_loki_routes_identity
+  changed_when: false
+  check_mode: false
+- name: Loki routes | Inspect configuration ownership
+  ansible.builtin.stat:
+    path: '{{ docker_services_loki_routes_file }}'
+    follow: false
+  register: docker_services_loki_routes_stat
+- name: Loki routes | Require an existing regular managed file
+  ansible.builtin.assert:
+    that:
+      - docker_services_loki_routes_stat.stat.isreg | default(false)
+      - not docker_services_loki_routes_stat.stat.islnk | default(false)
+- name: Loki routes | Read the managed configuration privately
+  ansible.builtin.slurp:
+    src: '{{ docker_services_loki_routes_file }}'
+  register: docker_services_loki_routes_source
+  no_log: true
+  diff: false
+- name: Loki routes | Change only the ruler URL using the canonical declaration
+  ansible.builtin.set_fact:
+    docker_services_loki_routes_candidate: '{{ docker_services_loki_routes_source.content | b64decode | docker_services_loki_alertmanager_route(docker_services_loki_routes_canonical)
+      }}'
+    docker_services_loki_routes_desired_url: '{{ (docker_services_loki_routes_canonical | from_yaml).ruler.alertmanager_url }}'
+    docker_services_loki_routes_old_url: '{{ (docker_services_loki_routes_source.content | b64decode | from_yaml).ruler.alertmanager_url
+      }}'
+  no_log: true
+  diff: false
+- name: Loki routes | Check original readiness and loaded URL
+  ansible.builtin.command:
+    argv:
+      - nsenter
+      - --target
+      - '{{ docker_services_loki_routes_current.pid | string }}'
+      - --net
+      - '{{ ansible_playbook_python }}'
+      - -c
+      - "import json, sys, urllib.request, urllib.error\nreport = {'ready': False, 'url': None, 'failures': []}\nallowed = sys.argv[1:]\n\
+        opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))\nbase = 'http://127.0.0.1:3100'\ndef failure(phase, error):\n\
+        \    if isinstance(error, urllib.error.HTTPError):\n        reason = 'HTTP ' + str(error.code)\n    elif isinstance(error, urllib.error.URLError):\n\
+        \        reason = 'transport ' + type(error.reason).__name__\n    elif isinstance(error, ModuleNotFoundError):\n        reason\
+        \ = 'PyYAML unavailable in selected query interpreter'\n    else:\n        reason = type(error).__name__\n    report['failures'].append(phase\
+        \ + ': ' + reason)\ntry:\n    import yaml\nexcept ImportError as error:\n    yaml = None\n    failure('dependencies', error)\n\
+        try:\n    with opener.open(base + '/ready', timeout=5) as response:\n        report['ready'] = response.status == 200\n    \
+        \    if not report['ready']:\n            report['failures'].append('readiness: HTTP ' + str(response.status))\nexcept Exception\
+        \ as error:\n    failure('readiness', error)\n# Preserve the independent configuration observation even if readiness fails.\n\
+        if yaml is not None:\n    try:\n        with opener.open(base + '/config', timeout=5) as response:\n            body = response.read(4194305)\n\
+        \        if len(body) > 4194304:\n            report['failures'].append('configuration: response exceeds 4 MiB bound')\n   \
+        \     else:\n            cfg = yaml.safe_load(body)\n            ruler = cfg.get('ruler') if isinstance(cfg, dict) else None\n\
+        \            value = ruler.get('alertmanager_url') if isinstance(ruler, dict) else None\n            if isinstance(value, str)\
+        \ and value in allowed:\n                report['url'] = value\n            else:\n                report['failures'].append('configuration:\
+        \ missing or unexpected ruler destination (value withheld)')\n    except Exception as error:\n        failure('configuration',\
+        \ error)\nprint(json.dumps(report))\nsys.exit(0 if report['ready'] and report['url'] is not None and not report['failures']\
+        \ else 1)\n"
+      - '{{ docker_services_loki_routes_old_url }}'
+      - '{{ docker_services_loki_routes_desired_url }}'
+  register: docker_services_loki_routes_loaded
+  changed_when: false
+  check_mode: false
+  no_log: true
+  diff: false
+  failed_when: false
+- name: Loki routes | Report sanitized original readiness/configuration errors
+  ansible.builtin.assert:
+    that:
+      - docker_services_loki_routes_loaded.rc == 0
+      - docker_services_loki_routes_query_report.ready is sameas true
+      - docker_services_loki_routes_query_report.failures | length == 0
+    fail_msg: 'Loki host={{ inventory_hostname }} original readiness/configuration failed: rc={{ docker_services_loki_routes_loaded.rc
+      | default(-1) }}, ready={{ docker_services_loki_routes_query_report.ready }}, loaded_destination={{ docker_services_loki_routes_query_report.url
+      }}, expected={{ docker_services_loki_routes_old_url }}, failures={{ docker_services_loki_routes_query_report.failures | join('';
+      '') }}. No configuration source or response body is emitted.'
+  vars:
+    docker_services_loki_routes_query_report: '{{ (docker_services_loki_routes_loaded.stdout | from_json) if (docker_services_loki_routes_loaded.stdout
+      | default('''') is match(''^\{.*\}\s*$'')) else {''ready'': false, ''url'': none, ''failures'': [''query-launch: no sanitized
+      report; check selected interpreter and namespace execution'']} }}'
+- name: Loki routes | Reject file and loaded ruler drift
+  ansible.builtin.assert:
+    that:
+      - (docker_services_loki_routes_loaded.stdout | from_json).url == docker_services_loki_routes_old_url
+  no_log: true
+  diff: false
+- name: Loki routes | Show the named interruption plan
+  ansible.builtin.debug:
+    msg: Update only the ruler URL in {{ docker_services_loki_routes_file }} and force a stop-first rollout of existing loki_loki. Keep
+      its exact image, native configs, mounts, placement and data. This briefly interrupts ingestion; no Loki migration, ownership change
+      or firewall write.
+- name: Loki routes | Apply the reviewed named rollout with scoped recovery
+  when: not ansible_check_mode and docker_services_loki_routes_candidate != (docker_services_loki_routes_source.content | b64decode)
+  block:
+    - name: Loki routes | Create only this private temporary validation file
+      ansible.builtin.tempfile:
+        state: file
+        path: '{{ docker_services_loki_routes_file | dirname }}'
+        prefix: .skynet-ruler-route-
+        suffix: .yaml
+      register: docker_services_loki_routes_temporary
+    - name: Loki routes | Populate the validation candidate
+      ansible.builtin.copy:
+        content: '{{ docker_services_loki_routes_candidate }}'
+        dest: '{{ docker_services_loki_routes_temporary.path }}'
+        owner: '{{ docker_services_loki_routes_stat.stat.uid }}'
+        group: '{{ docker_services_loki_routes_stat.stat.gid }}'
+        mode: '{{ docker_services_loki_routes_stat.stat.mode }}'
+      no_log: true
+      diff: false
+    - name: Loki routes | Verify with the existing binary without pulling an image
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - exec
+          - '{{ docker_services_loki_routes_ids.stdout }}'
+          - '{{ docker_services_loki_routes_current.binary }}'
+          - -verify-config
+          - -config.file=/etc/loki/{{ docker_services_loki_routes_temporary.path | basename }}
+      changed_when: false
+      check_mode: false
+      no_log: true
+      diff: false
+    - name: Loki routes | Recheck only the named service
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - service
+          - inspect
+          - --format
+          - '{{ ''{"id":{{json .ID}},"name":{{json .Spec.Name}},"image":{{json .Spec.TaskTemplate.ContainerSpec.Image}},"mode":{{json
+            .Spec.Mode}},"update":{{json .Spec.UpdateConfig}},"mounts":{{json .Spec.TaskTemplate.ContainerSpec.Mounts}},"configs":{{json
+            .Spec.TaskTemplate.ContainerSpec.Configs}},"networks":{{json .Spec.TaskTemplate.Networks}},"placement":{{json .Spec.TaskTemplate.Placement}},"ports":{{json
+            .Endpoint.Spec.Ports}},"force":{{json .Spec.TaskTemplate.ForceUpdate}}}'' }}'
+          - loki_loki
+      register: docker_services_loki_routes_before_service
+      changed_when: false
+      check_mode: false
+    - name: Loki routes | Re-resolve the current task
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - ps
+          - --no-trunc
+          - --filter
+          - label=com.docker.swarm.service.name=loki_loki
+          - --format
+          - '{{ "{{.ID}}" }}'
+      register: docker_services_loki_routes_before_ids
+      changed_when: false
+      check_mode: false
+    - name: Loki routes | Recheck exact PID birth and namespace
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - import json,sys; from pathlib import Path; p=int(sys.argv[1]); text=Path(f'/proc/{p}/stat').read_text(); print(json.dumps({'birth':text[text.rindex(')')+2:].split()[19],
+            'netns':str(Path(f'/proc/{p}/ns/net').readlink())}))
+          - '{{ docker_services_loki_routes_current.pid | string }}'
+      register: docker_services_loki_routes_before_identity
+      changed_when: false
+      check_mode: false
+    - name: Loki routes | Recheck configuration continuity
+      ansible.builtin.stat:
+        path: '{{ docker_services_loki_routes_file }}'
+        follow: false
+      register: docker_services_loki_routes_before_file
+    - name: Loki routes | Reject concurrent service, task, namespace or configuration changes
+      ansible.builtin.assert:
+        that:
+          - docker_services_loki_routes_before_service.stdout | from_json == docker_services_loki_routes_original
+          - docker_services_loki_routes_before_ids.stdout == docker_services_loki_routes_ids.stdout
+          - docker_services_loki_routes_before_identity.stdout == docker_services_loki_routes_identity.stdout
+          - docker_services_loki_routes_before_file.stat.checksum == docker_services_loki_routes_stat.stat.checksum
+          - docker_services_loki_routes_before_file.stat.uid == docker_services_loki_routes_stat.stat.uid
+          - docker_services_loki_routes_before_file.stat.gid == docker_services_loki_routes_stat.stat.gid
+          - docker_services_loki_routes_before_file.stat.mode == docker_services_loki_routes_stat.stat.mode
+    - name: Loki routes | Back up and atomically apply only the candidate
+      ansible.builtin.copy:
+        content: '{{ docker_services_loki_routes_candidate }}'
+        dest: '{{ docker_services_loki_routes_file }}'
+        owner: '{{ docker_services_loki_routes_stat.stat.uid }}'
+        group: '{{ docker_services_loki_routes_stat.stat.gid }}'
+        mode: '{{ docker_services_loki_routes_stat.stat.mode }}'
+        backup: true
+      register: docker_services_loki_routes_applied
+      no_log: true
+      diff: false
+    - name: Loki routes | Report the exact file backup
+      ansible.builtin.debug:
+        msg: 'Loki configuration backup: {{ docker_services_loki_routes_applied.backup_file }}'
+    - name: Loki routes | Record the exact named rollout attempt
+      ansible.builtin.set_fact:
+        docker_services_loki_routes_rollout_attempted: true
+    - name: Loki routes | Replace only loki_loki using its retained stop-first policy
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - service
+          - update
+          - --force
+          - --detach=true
+          - '{{ docker_services_loki_routes_original.id }}'
+      changed_when: true
+    - name: Loki routes | Require new service convergence
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - service
+          - inspect
+          - --format
+          - '{{ ''{"id":{{json .ID}},"name":{{json .Spec.Name}},"image":{{json .Spec.TaskTemplate.ContainerSpec.Image}},"mode":{{json
+            .Spec.Mode}},"update":{{json .Spec.UpdateConfig}},"mounts":{{json .Spec.TaskTemplate.ContainerSpec.Mounts}},"configs":{{json
+            .Spec.TaskTemplate.ContainerSpec.Configs}},"networks":{{json .Spec.TaskTemplate.Networks}},"placement":{{json .Spec.TaskTemplate.Placement}},"ports":{{json
+            .Endpoint.Spec.Ports}},"force":{{json .Spec.TaskTemplate.ForceUpdate}}}'' }}'
+          - loki_loki
+      register: docker_services_loki_routes_settled
+      changed_when: false
+      check_mode: false
+      until: 'docker_services_loki_routes_settled.rc == 0 and (docker_services_loki_routes_settled.stdout | from_json) == (docker_services_loki_routes_original
+        | combine({''force'': docker_services_loki_routes_original.force + 1}))'
+      retries: 20
+      delay: 3
+    - name: Loki routes | Require new unique task convergence
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - ps
+          - --no-trunc
+          - --filter
+          - label=com.docker.swarm.service.name=loki_loki
+          - --format
+          - '{{ "{{.ID}}" }}'
+      register: docker_services_loki_routes_new_ids
+      changed_when: false
+      check_mode: false
+      until: docker_services_loki_routes_new_ids.rc == 0 and docker_services_loki_routes_new_ids.stdout_lines | length == 1 and docker_services_loki_routes_new_ids.stdout
+        != docker_services_loki_routes_ids.stdout
+      retries: 30
+      delay: 3
+    - name: Loki routes | Verify only one globally running task on the inventory controller
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - service
+          - ps
+          - --no-trunc
+          - --format
+          - '{{ ''{"node":{{json .Node}},"desired":{{json .DesiredState}},"state":{{json .CurrentState}}}'' }}'
+          - '{{ docker_services_loki_routes_original.id }}'
+      register: docker_services_loki_routes_placement
+      changed_when: false
+      check_mode: false
+      until: docker_services_loki_routes_placement.rc == 0 and (docker_services_loki_routes_placement.stdout_lines | map('from_json')
+        | selectattr('state', 'match', '^Running') | list | length) == 1
+      retries: 30
+      delay: 3
+    - name: Loki routes | Require the single retained controller placement
+      ansible.builtin.assert:
+        that:
+          - docker_services_loki_routes_running_tasks | length == 1
+          - docker_services_loki_routes_running_tasks[0].node == services_controller_host
+          - docker_services_loki_routes_running_tasks[0].desired == 'Running'
+      vars:
+        docker_services_loki_routes_running_tasks: '{{ docker_services_loki_routes_placement.stdout_lines | map(''from_json'') | selectattr(''state'',
+          ''match'', ''^Running'') | list }}'
+    - name: Loki routes | Require new task inspection
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - container
+          - inspect
+          - --format
+          - '{{ ''{{ $managed := false }}{{ range .Args }}{{ if eq . "-config.file=/etc/loki/loki-config.yaml" }}{{ $managed = true
+            }}{{ end }}{{ end }}{"id":{{json .Id}},"pid":{{.State.Pid}},"running":{{json .State.Running}},"image_id":{{json .Image}},"binary":{{json
+            .Path}},"managed":{{json $managed}},"service":{{json (index .Config.Labels "com.docker.swarm.service.name")}},"mounts":{{json
+            .Mounts}}}'' }}'
+          - '{{ docker_services_loki_routes_new_ids.stdout }}'
+      register: docker_services_loki_routes_new_container
+      changed_when: false
+      check_mode: false
+    - name: Loki routes | Require new image and configuration continuity
+      ansible.builtin.assert:
+        that:
+          - (docker_services_loki_routes_new_container.stdout | from_json).running is sameas true
+          - (docker_services_loki_routes_new_container.stdout | from_json).service == 'loki_loki'
+          - (docker_services_loki_routes_new_container.stdout | from_json).image_id == docker_services_loki_routes_current.image_id
+          - (docker_services_loki_routes_new_container.stdout | from_json).mounts == docker_services_loki_routes_current.mounts
+          - (docker_services_loki_routes_new_container.stdout | from_json).managed is sameas true
+    - name: Loki routes | Capture the replacement PID birth and namespace
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - import json,sys; from pathlib import Path; p=int(sys.argv[1]); text=Path(f'/proc/{p}/stat').read_text(); print(json.dumps({'birth':text[text.rindex(')')+2:].split()[19],
+            'netns':str(Path(f'/proc/{p}/ns/net').readlink())}))
+          - '{{ (docker_services_loki_routes_new_container.stdout | from_json).pid | string }}'
+      register: docker_services_loki_routes_new_identity
+      changed_when: false
+      check_mode: false
+    - name: Loki routes | Require new readiness and loaded destination
+      block:
+        - name: Loki routes | Require new readiness and loaded destination
+          ansible.builtin.command:
+            argv:
+              - nsenter
+              - --target
+              - '{{ (docker_services_loki_routes_new_container.stdout | from_json).pid | string }}'
+              - --net
+              - '{{ ansible_playbook_python }}'
+              - -c
+              - "import json, sys, urllib.request, urllib.error\nreport = {'ready': False, 'url': None, 'failures': []}\nallowed = sys.argv[1:]\n\
+                opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))\nbase = 'http://127.0.0.1:3100'\ndef failure(phase,\
+                \ error):\n    if isinstance(error, urllib.error.HTTPError):\n        reason = 'HTTP ' + str(error.code)\n    elif isinstance(error,\
+                \ urllib.error.URLError):\n        reason = 'transport ' + type(error.reason).__name__\n    elif isinstance(error, ModuleNotFoundError):\n\
+                \        reason = 'PyYAML unavailable in selected query interpreter'\n    else:\n        reason = type(error).__name__\n\
+                \    report['failures'].append(phase + ': ' + reason)\ntry:\n    import yaml\nexcept ImportError as error:\n    yaml\
+                \ = None\n    failure('dependencies', error)\ntry:\n    with opener.open(base + '/ready', timeout=5) as response:\n\
+                \        report['ready'] = response.status == 200\n        if not report['ready']:\n            report['failures'].append('readiness:\
+                \ HTTP ' + str(response.status))\nexcept Exception as error:\n    failure('readiness', error)\n# Preserve the independent\
+                \ configuration observation even if readiness fails.\nif yaml is not None:\n    try:\n        with opener.open(base\
+                \ + '/config', timeout=5) as response:\n            body = response.read(4194305)\n        if len(body) > 4194304:\n\
+                \            report['failures'].append('configuration: response exceeds 4 MiB bound')\n        else:\n            cfg\
+                \ = yaml.safe_load(body)\n            ruler = cfg.get('ruler') if isinstance(cfg, dict) else None\n            value\
+                \ = ruler.get('alertmanager_url') if isinstance(ruler, dict) else None\n            if isinstance(value, str) and value\
+                \ in allowed:\n                report['url'] = value\n            else:\n                report['failures'].append('configuration:\
+                \ missing or unexpected ruler destination (value withheld)')\n    except Exception as error:\n        failure('configuration',\
+                \ error)\nprint(json.dumps(report))\nsys.exit(0 if report['ready'] and report['url'] is not None and not report['failures']\
+                \ else 1)\n"
+              - '{{ docker_services_loki_routes_old_url }}'
+              - '{{ docker_services_loki_routes_desired_url }}'
+          register: docker_services_loki_routes_accepted
+          changed_when: false
+          check_mode: false
+          until: docker_services_loki_routes_accepted.rc == 0 and (docker_services_loki_routes_accepted.stdout | from_json).ready is
+            sameas true and (docker_services_loki_routes_accepted.stdout | from_json).url == docker_services_loki_routes_desired_url
+          retries: 30
+          delay: 3
+          no_log: true
+          diff: false
+      rescue:
+        - name: Loki routes | Report sanitized replacement readiness/configuration errors
+          ansible.builtin.fail:
+            msg: 'Loki host={{ inventory_hostname }} replacement readiness/configuration failed: rc={{ docker_services_loki_routes_accepted.rc
+              | default(-1) }}, ready={{ docker_services_loki_routes_query_report.ready }}, loaded_destination={{ docker_services_loki_routes_query_report.url
+              }}, expected={{ docker_services_loki_routes_desired_url }}, failures={{ docker_services_loki_routes_query_report.failures
+              | join(''; '') }}. No configuration source or response body is emitted.'
+          vars:
+            docker_services_loki_routes_query_report: '{{ (docker_services_loki_routes_accepted.stdout | from_json) if (docker_services_loki_routes_accepted.stdout
+              | default('''') is match(''^\{.*\}\s*$'')) else {''ready'': false, ''url'': none, ''failures'': [''query-launch: no sanitized
+              report; check selected interpreter and namespace execution'']} }}'
+    - name: Loki routes | Require new final task continuity
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - ps
+          - --no-trunc
+          - --filter
+          - label=com.docker.swarm.service.name=loki_loki
+          - --format
+          - '{{ "{{.ID}}" }}'
+      register: docker_services_loki_routes_final_ids
+      changed_when: false
+      check_mode: false
+    - name: Loki routes | Require new final container continuity
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --host
+          - unix:///var/run/docker.sock
+          - container
+          - inspect
+          - --format
+          - '{{ ''{{ $managed := false }}{{ range .Args }}{{ if eq . "-config.file=/etc/loki/loki-config.yaml" }}{{ $managed = true
+            }}{{ end }}{{ end }}{"id":{{json .Id}},"pid":{{.State.Pid}},"running":{{json .State.Running}},"image_id":{{json .Image}},"binary":{{json
+            .Path}},"managed":{{json $managed}},"service":{{json (index .Config.Labels "com.docker.swarm.service.name")}},"mounts":{{json
+            .Mounts}}}'' }}'
+          - '{{ docker_services_loki_routes_new_ids.stdout }}'
+      register: docker_services_loki_routes_final_container
+      changed_when: false
+      check_mode: false
+    - name: Loki routes | Require new stable task
+      ansible.builtin.assert:
+        that:
+          - docker_services_loki_routes_final_ids.stdout == docker_services_loki_routes_new_ids.stdout
+          - docker_services_loki_routes_final_container.stdout == docker_services_loki_routes_new_container.stdout
+    - name: Loki routes | Recheck replacement PID birth and namespace
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - import json,sys; from pathlib import Path; p=int(sys.argv[1]); text=Path(f'/proc/{p}/stat').read_text(); print(json.dumps({'birth':text[text.rindex(')')+2:].split()[19],
+            'netns':str(Path(f'/proc/{p}/ns/net').readlink())}))
+          - '{{ (docker_services_loki_routes_new_container.stdout | from_json).pid | string }}'
+      register: docker_services_loki_routes_final_identity
+      changed_when: false
+      check_mode: false
+    - name: Loki routes | Require stable replacement identity
+      ansible.builtin.assert:
+        that:
+          - docker_services_loki_routes_final_identity.stdout == docker_services_loki_routes_new_identity.stdout
+    - name: Loki routes | Preserve exact before and after task provenance in the private log
+      ansible.builtin.debug:
+        msg:
+          service: loki_loki
+          before: '{{ docker_services_loki_routes_current }}'
+          before_context: '{{ docker_services_loki_routes_identity.stdout | from_json }}'
+          after: '{{ docker_services_loki_routes_new_container.stdout | from_json }}'
+          after_context: '{{ docker_services_loki_routes_final_identity.stdout | from_json }}'
+          preserved_service: '{{ docker_services_loki_routes_original }}'
+          observed_loaded_url: '{{ docker_services_loki_routes_desired_url }}'
+          notification_delivery_proved: false
+    - name: Loki routes | Report the bounded outcome
+      ansible.builtin.debug:
+        msg: Existing Docker Loki is ready with the canonical HTTPS ruler URL; exact image, mounts, native configs and placement are
+          preserved. Notification delivery and future rootless Alertmanager acceptance remain pending.
+  rescue:
+    - name: Loki routes | Recover only after this invocation wrote the file
+      when: docker_services_loki_routes_applied.changed | default(false) # noqa no-handler
+    # Immediate scoped recovery is required before leaving this operation.
+      block:
+        - name: Loki routes | Inspect the named service before rollback
+          ansible.builtin.command:
+            argv:
+              - docker
+              - --host
+              - unix:///var/run/docker.sock
+              - service
+              - inspect
+              - --format
+              - '{{ ''{"id":{{json .ID}},"name":{{json .Spec.Name}},"image":{{json .Spec.TaskTemplate.ContainerSpec.Image}},"mode":{{json
+                .Spec.Mode}},"update":{{json .Spec.UpdateConfig}},"mounts":{{json .Spec.TaskTemplate.ContainerSpec.Mounts}},"configs":{{json
+                .Spec.TaskTemplate.ContainerSpec.Configs}},"networks":{{json .Spec.TaskTemplate.Networks}},"placement":{{json .Spec.TaskTemplate.Placement}},"ports":{{json
+                .Endpoint.Spec.Ports}},"force":{{json .Spec.TaskTemplate.ForceUpdate}}}'' }}'
+              - loki_loki
+          register: docker_services_loki_routes_rollback_service
+          changed_when: false
+          check_mode: false
+        - name: Loki routes | Inspect file before rollback
+          ansible.builtin.stat:
+            path: '{{ docker_services_loki_routes_file }}'
+            follow: false
+          register: docker_services_loki_routes_rollback_file
+        - name: Loki routes | Reject foreign changes before restoring only this file
+          ansible.builtin.assert:
+            that:
+              - '(docker_services_loki_routes_rollback_service.stdout | from_json | combine({''force'': docker_services_loki_routes_original.force}))
+                == docker_services_loki_routes_original'
+              - (docker_services_loki_routes_rollback_service.stdout | from_json).force in [docker_services_loki_routes_original.force,
+                docker_services_loki_routes_original.force + 1]
+              - docker_services_loki_routes_rollback_file.stat.checksum == (docker_services_loki_routes_candidate | hash('sha1'))
+        - name: Loki routes | Preserve an unchanged writer without another rollout
+          when: (docker_services_loki_routes_rollback_service.stdout | from_json).force == docker_services_loki_routes_original.force
+          block:
+            - name: Loki routes | Resolve the original writer after an unapplied rollout
+              ansible.builtin.command:
+                argv:
+                  - docker
+                  - --host
+                  - unix:///var/run/docker.sock
+                  - ps
+                  - --no-trunc
+                  - --filter
+                  - label=com.docker.swarm.service.name=loki_loki
+                  - --format
+                  - '{{ "{{.ID}}" }}'
+              register: docker_services_loki_routes_unapplied_ids
+              changed_when: false
+              check_mode: false
+            - name: Loki routes | Verify an unapplied rollout left the original identity intact
+              ansible.builtin.command:
+                argv:
+                  - python3
+                  - -c
+                  - import json,sys; from pathlib import Path; p=int(sys.argv[1]); text=Path(f'/proc/{p}/stat').read_text(); print(json.dumps({'birth':text[text.rindex(')')+2:].split()[19],
+                    'netns':str(Path(f'/proc/{p}/ns/net').readlink())}))
+                  - '{{ docker_services_loki_routes_current.pid | string }}'
+              register: docker_services_loki_routes_unapplied_identity
+              changed_when: false
+              check_mode: false
+            - name: Loki routes | Reject replacement after a failed unapplied update
+              ansible.builtin.assert:
+                that:
+                  - docker_services_loki_routes_unapplied_ids.stdout == docker_services_loki_routes_ids.stdout
+                  - docker_services_loki_routes_unapplied_identity.stdout == docker_services_loki_routes_identity.stdout
+        - name: Loki routes | Restore only the captured file with its original numeric ownership
+          ansible.builtin.copy:
+            content: '{{ docker_services_loki_routes_source.content | b64decode }}'
+            dest: '{{ docker_services_loki_routes_file }}'
+            owner: '{{ docker_services_loki_routes_stat.stat.uid }}'
+            group: '{{ docker_services_loki_routes_stat.stat.gid }}'
+            mode: '{{ docker_services_loki_routes_stat.stat.mode }}'
+          no_log: true
+          diff: false
+        - name: Loki routes | Roll back only the named writer using the retained stop-first settings
+          ansible.builtin.command:
+            argv:
+              - docker
+              - --host
+              - unix:///var/run/docker.sock
+              - service
+              - update
+              - --force
+              - --detach=true
+              - '{{ docker_services_loki_routes_original.id }}'
+          changed_when: true
+          when: (docker_services_loki_routes_rollback_service.stdout | from_json).force > docker_services_loki_routes_original.force
+        - name: Loki routes | Require restored service convergence
+          ansible.builtin.command:
+            argv:
+              - docker
+              - --host
+              - unix:///var/run/docker.sock
+              - service
+              - inspect
+              - --format
+              - '{{ ''{"id":{{json .ID}},"name":{{json .Spec.Name}},"image":{{json .Spec.TaskTemplate.ContainerSpec.Image}},"mode":{{json
+                .Spec.Mode}},"update":{{json .Spec.UpdateConfig}},"mounts":{{json .Spec.TaskTemplate.ContainerSpec.Mounts}},"configs":{{json
+                .Spec.TaskTemplate.ContainerSpec.Configs}},"networks":{{json .Spec.TaskTemplate.Networks}},"placement":{{json .Spec.TaskTemplate.Placement}},"ports":{{json
+                .Endpoint.Spec.Ports}},"force":{{json .Spec.TaskTemplate.ForceUpdate}}}'' }}'
+              - loki_loki
+          register: docker_services_loki_routes_settled
+          changed_when: false
+          check_mode: false
+          until: 'docker_services_loki_routes_settled.rc == 0 and (docker_services_loki_routes_settled.stdout | from_json) == (docker_services_loki_routes_original
+            | combine({''force'': (docker_services_loki_routes_rollback_service.stdout | from_json).force + (1 if (docker_services_loki_routes_rollback_service.stdout
+            | from_json).force > docker_services_loki_routes_original.force else 0)}))'
+          retries: 20
+          delay: 3
+        - name: Loki routes | Require restored unique task convergence
+          ansible.builtin.command:
+            argv:
+              - docker
+              - --host
+              - unix:///var/run/docker.sock
+              - ps
+              - --no-trunc
+              - --filter
+              - label=com.docker.swarm.service.name=loki_loki
+              - --format
+              - '{{ "{{.ID}}" }}'
+          register: docker_services_loki_routes_new_ids
+          changed_when: false
+          check_mode: false
+          until: docker_services_loki_routes_new_ids.rc == 0 and docker_services_loki_routes_new_ids.stdout_lines | length == 1
+          retries: 30
+          delay: 3
+        - name: Loki routes | Verify only one globally running task on the inventory controller
+          ansible.builtin.command:
+            argv:
+              - docker
+              - --host
+              - unix:///var/run/docker.sock
+              - service
+              - ps
+              - --no-trunc
+              - --format
+              - '{{ ''{"node":{{json .Node}},"desired":{{json .DesiredState}},"state":{{json .CurrentState}}}'' }}'
+              - '{{ docker_services_loki_routes_original.id }}'
+          register: docker_services_loki_routes_placement
+          changed_when: false
+          check_mode: false
+          until: docker_services_loki_routes_placement.rc == 0 and (docker_services_loki_routes_placement.stdout_lines | map('from_json')
+            | selectattr('state', 'match', '^Running') | list | length) == 1
+          retries: 30
+          delay: 3
+        - name: Loki routes | Require the single retained controller placement
+          ansible.builtin.assert:
+            that:
+              - docker_services_loki_routes_running_tasks | length == 1
+              - docker_services_loki_routes_running_tasks[0].node == services_controller_host
+              - docker_services_loki_routes_running_tasks[0].desired == 'Running'
+          vars:
+            docker_services_loki_routes_running_tasks: '{{ docker_services_loki_routes_placement.stdout_lines | map(''from_json'') |
+              selectattr(''state'', ''match'', ''^Running'') | list }}'
+        - name: Loki routes | Require restored task inspection
+          ansible.builtin.command:
+            argv:
+              - docker
+              - --host
+              - unix:///var/run/docker.sock
+              - container
+              - inspect
+              - --format
+              - '{{ ''{{ $managed := false }}{{ range .Args }}{{ if eq . "-config.file=/etc/loki/loki-config.yaml" }}{{ $managed = true
+                }}{{ end }}{{ end }}{"id":{{json .Id}},"pid":{{.State.Pid}},"running":{{json .State.Running}},"image_id":{{json .Image}},"binary":{{json
+                .Path}},"managed":{{json $managed}},"service":{{json (index .Config.Labels "com.docker.swarm.service.name")}},"mounts":{{json
+                .Mounts}}}'' }}'
+              - '{{ docker_services_loki_routes_new_ids.stdout }}'
+          register: docker_services_loki_routes_new_container
+          changed_when: false
+          check_mode: false
+        - name: Loki routes | Require restored image and configuration continuity
+          ansible.builtin.assert:
+            that:
+              - (docker_services_loki_routes_new_container.stdout | from_json).running is sameas true
+              - (docker_services_loki_routes_new_container.stdout | from_json).service == 'loki_loki'
+              - (docker_services_loki_routes_new_container.stdout | from_json).image_id == docker_services_loki_routes_current.image_id
+              - (docker_services_loki_routes_new_container.stdout | from_json).mounts == docker_services_loki_routes_current.mounts
+              - (docker_services_loki_routes_new_container.stdout | from_json).managed is sameas true
+        - name: Loki routes | Capture the replacement PID birth and namespace
+          ansible.builtin.command:
+            argv:
+              - python3
+              - -c
+              - import json,sys; from pathlib import Path; p=int(sys.argv[1]); text=Path(f'/proc/{p}/stat').read_text(); print(json.dumps({'birth':text[text.rindex(')')+2:].split()[19],
+                'netns':str(Path(f'/proc/{p}/ns/net').readlink())}))
+              - '{{ (docker_services_loki_routes_new_container.stdout | from_json).pid | string }}'
+          register: docker_services_loki_routes_new_identity
+          changed_when: false
+          check_mode: false
+        - name: Loki routes | Require restored readiness and loaded destination
+          block:
+            - name: Loki routes | Require restored readiness and loaded destination
+              ansible.builtin.command:
+                argv:
+                  - nsenter
+                  - --target
+                  - '{{ (docker_services_loki_routes_new_container.stdout | from_json).pid | string }}'
+                  - --net
+                  - '{{ ansible_playbook_python }}'
+                  - -c
+                  - "import json, sys, urllib.request, urllib.error\nreport = {'ready': False, 'url': None, 'failures': []}\nallowed\
+                    \ = sys.argv[1:]\nopener = urllib.request.build_opener(urllib.request.ProxyHandler({}))\nbase = 'http://127.0.0.1:3100'\n\
+                    def failure(phase, error):\n    if isinstance(error, urllib.error.HTTPError):\n        reason = 'HTTP ' + str(error.code)\n\
+                    \    elif isinstance(error, urllib.error.URLError):\n        reason = 'transport ' + type(error.reason).__name__\n\
+                    \    elif isinstance(error, ModuleNotFoundError):\n        reason = 'PyYAML unavailable in selected query interpreter'\n\
+                    \    else:\n        reason = type(error).__name__\n    report['failures'].append(phase + ': ' + reason)\ntry:\n\
+                    \    import yaml\nexcept ImportError as error:\n    yaml = None\n    failure('dependencies', error)\ntry:\n    with\
+                    \ opener.open(base + '/ready', timeout=5) as response:\n        report['ready'] = response.status == 200\n     \
+                    \   if not report['ready']:\n            report['failures'].append('readiness: HTTP ' + str(response.status))\n\
+                    except Exception as error:\n    failure('readiness', error)\n# Preserve the independent configuration observation\
+                    \ even if readiness fails.\nif yaml is not None:\n    try:\n        with opener.open(base + '/config', timeout=5)\
+                    \ as response:\n            body = response.read(4194305)\n        if len(body) > 4194304:\n            report['failures'].append('configuration:\
+                    \ response exceeds 4 MiB bound')\n        else:\n            cfg = yaml.safe_load(body)\n            ruler = cfg.get('ruler')\
+                    \ if isinstance(cfg, dict) else None\n            value = ruler.get('alertmanager_url') if isinstance(ruler, dict)\
+                    \ else None\n            if isinstance(value, str) and value in allowed:\n                report['url'] = value\n\
+                    \            else:\n                report['failures'].append('configuration: missing or unexpected ruler destination\
+                    \ (value withheld)')\n    except Exception as error:\n        failure('configuration', error)\nprint(json.dumps(report))\n\
+                    sys.exit(0 if report['ready'] and report['url'] is not None and not report['failures'] else 1)\n"
+                  - '{{ docker_services_loki_routes_old_url }}'
+                  - '{{ docker_services_loki_routes_desired_url }}'
+              register: docker_services_loki_routes_accepted
+              changed_when: false
+              check_mode: false
+              until: docker_services_loki_routes_accepted.rc == 0 and (docker_services_loki_routes_accepted.stdout | from_json).ready
+                is sameas true and (docker_services_loki_routes_accepted.stdout | from_json).url == docker_services_loki_routes_old_url
+              retries: 30
+              delay: 3
+              no_log: true
+              diff: false
+          rescue:
+            - name: Loki routes | Report sanitized replacement readiness/configuration errors
+              ansible.builtin.fail:
+                msg: 'Loki host={{ inventory_hostname }} replacement readiness/configuration failed: rc={{ docker_services_loki_routes_accepted.rc
+                  | default(-1) }}, ready={{ docker_services_loki_routes_query_report.ready }}, loaded_destination={{ docker_services_loki_routes_query_report.url
+                  }}, expected={{ docker_services_loki_routes_desired_url }}, failures={{ docker_services_loki_routes_query_report.failures
+                  | join(''; '') }}. No configuration source or response body is emitted.'
+              vars:
+                docker_services_loki_routes_query_report: '{{ (docker_services_loki_routes_accepted.stdout | from_json) if (docker_services_loki_routes_accepted.stdout
+                  | default('''') is match(''^\{.*\}\s*$'')) else {''ready'': false, ''url'': none, ''failures'': [''query-launch: no
+                  sanitized report; check selected interpreter and namespace execution'']} }}'
+        - name: Loki routes | Require restored final task continuity
+          ansible.builtin.command:
+            argv:
+              - docker
+              - --host
+              - unix:///var/run/docker.sock
+              - ps
+              - --no-trunc
+              - --filter
+              - label=com.docker.swarm.service.name=loki_loki
+              - --format
+              - '{{ "{{.ID}}" }}'
+          register: docker_services_loki_routes_final_ids
+          changed_when: false
+          check_mode: false
+        - name: Loki routes | Require restored final container continuity
+          ansible.builtin.command:
+            argv:
+              - docker
+              - --host
+              - unix:///var/run/docker.sock
+              - container
+              - inspect
+              - --format
+              - '{{ ''{{ $managed := false }}{{ range .Args }}{{ if eq . "-config.file=/etc/loki/loki-config.yaml" }}{{ $managed = true
+                }}{{ end }}{{ end }}{"id":{{json .Id}},"pid":{{.State.Pid}},"running":{{json .State.Running}},"image_id":{{json .Image}},"binary":{{json
+                .Path}},"managed":{{json $managed}},"service":{{json (index .Config.Labels "com.docker.swarm.service.name")}},"mounts":{{json
+                .Mounts}}}'' }}'
+              - '{{ docker_services_loki_routes_new_ids.stdout }}'
+          register: docker_services_loki_routes_final_container
+          changed_when: false
+          check_mode: false
+        - name: Loki routes | Require restored stable task
+          ansible.builtin.assert:
+            that:
+              - docker_services_loki_routes_final_ids.stdout == docker_services_loki_routes_new_ids.stdout
+              - docker_services_loki_routes_final_container.stdout == docker_services_loki_routes_new_container.stdout
+        - name: Loki routes | Recheck replacement PID birth and namespace
+          ansible.builtin.command:
+            argv:
+              - python3
+              - -c
+              - import json,sys; from pathlib import Path; p=int(sys.argv[1]); text=Path(f'/proc/{p}/stat').read_text(); print(json.dumps({'birth':text[text.rindex(')')+2:].split()[19],
+                'netns':str(Path(f'/proc/{p}/ns/net').readlink())}))
+              - '{{ (docker_services_loki_routes_new_container.stdout | from_json).pid | string }}'
+          register: docker_services_loki_routes_final_identity
+          changed_when: false
+          check_mode: false
+        - name: Loki routes | Require stable replacement identity
+          ansible.builtin.assert:
+            that:
+              - docker_services_loki_routes_final_identity.stdout == docker_services_loki_routes_new_identity.stdout
+    - name: Loki routes | Preserve failure after rollback
+      ansible.builtin.fail:
+        msg: Named Loki ruler transition failed. Recovery restored only its captured configuration and rolled only loki_loki when service/file
+          continuity allowed; inspect the backup and log. Gotify/Alertmanager remain untouched.
+  always:
+    - name: Loki routes | Remove only this temporary candidate
+      ansible.builtin.file:
+        path: '{{ docker_services_loki_routes_temporary.path }}'
+        state: absent
+      when: docker_services_loki_routes_temporary.path is defined

@@ -55,6 +55,7 @@ def render_repository_value(value):
         "services_plex_host": "podman01",
         "services_storage_host": "podman01",
         "services_log_root": "/opt/logs",
+        "podman_shared_network_name": "mgt-services",
         "hostvars": {
             "podman01": {
                 "container_host_appdata_root": "/opt/appdata",
@@ -189,6 +190,7 @@ def test_real_migrated_services_declare_registered_application_handlers():
         "nzbhydra2": "nzbhydra2",
         "vaultwarden": "vaultwarden",
         "romm": "romm",
+        "haproxy": "haproxy",
     }
     actual = {}
 
@@ -206,7 +208,7 @@ def test_real_migrated_services_declare_registered_application_handlers():
     assert actual == {name: {handler} for name, handler in expected.items()}
 
 
-def test_real_migrated_docker_workflows_materialize_through_the_canonical_catalog():
+def test_real_preparation_workflows_materialize_through_the_canonical_catalog():
     catalog = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog_prepare_real")
     services = {name: load_service(name) for name in ("authelia", "qbittorrent", "plex", "bazarr", "nzbhydra2", "vaultwarden", "romm")}
     expected = {
@@ -225,7 +227,7 @@ def test_real_migrated_docker_workflows_materialize_through_the_canonical_catalo
         effective = catalog.service_catalog_merge_target(services[entry["name"]], entry.get("target"))
         handler = (effective.get("application_prepare") or {}).get("handler")
         if handler:
-            assert entry["runtime"] == "docker"
+            assert entry["runtime"] == ("podman" if entry["name"] in {"authelia", "vaultwarden"} else "docker")
             assert effective["image"]
             assert "targets" not in effective
             actual.add((entry["name"], entry.get("target"), handler))
@@ -233,14 +235,13 @@ def test_real_migrated_docker_workflows_materialize_through_the_canonical_catalo
     assert actual == expected
 
 
-def test_real_temporary_container_services_require_explicit_podman_migration():
+def test_remaining_docker_preparation_services_require_explicit_podman_migration():
     catalog = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog_prepare_runtime_real")
     podman = load_module(
         REPO_ROOT / "ansible/roles/podman_services/filter_plugins/podman_services.py",
         "podman_prepare_runtime_real",
     )
     cases = {
-        ("authelia", "main"): ["env_file", "stack"],
         ("bazarr", None): ["stack", "themepark"],
         ("nzbhydra2", None): ["stack"],
     }
@@ -813,3 +814,75 @@ def test_generated_application_secret_declarations_normalize_through_both_adapte
     assert marker not in repr(standalone)
     assert all("docker" not in repr(item).lower() for item in generated)
     assert all("podman" not in repr(item).lower() for item in generated)
+
+
+@pytest.mark.parametrize("case", ["existing", "missing", "symlink", "wrong_type", "also_rendered"])
+def test_authelia_existing_users_preservation_uses_actual_tasks_without_generation(tmp_path: Path, case: str):
+    source = tmp_path / "users_database.yml"
+    body = "users:\n  fixture-one: {password: SYNTHETIC_HASH_ONE}\n  fixture-two: {password: SYNTHETIC_HASH_TWO}\n"
+    if case == "symlink":
+        target = tmp_path / "elsewhere.yml"
+        target.write_text(body)
+        source.symlink_to(target)
+    elif case != "missing":
+        source.write_text(body)
+    context = {
+        "service_name": "fixture-authelia",
+        "target": "main",
+        "runtime": "forbidden-if-generator-selected",
+        "service": {
+            "image": "example.invalid/never-run",
+            "volumes": {"config": {"source": str(tmp_path)}},
+            "application_prepare": {"handler": "authelia", "preserve_users_database": "true" if case == "wrong_type" else True},
+            "templates": [{"dest": str(source)}] if case == "also_rendered" else [],
+        },
+        "filesystem_hosts": ["localhost"],
+        "lookup_values": {"authelia_pass": "SYNTHETIC_PASSWORD", "authelia_storage_key": "SYNTHETIC_KEY"},
+    }
+    playbook = tmp_path / "preserve.yml"
+    playbook.write_text(
+        yaml.safe_dump(
+            [
+                {
+                    "name": "Exercise preservation without credentials or runtime access",
+                    "hosts": "localhost",
+                    "connection": "local",
+                    "gather_facts": False,
+                    "vars": {"ansible_become": False, "service_prepare_handler": "authelia", "service_prepare_context": context},
+                    "tasks": [
+                        {
+                            "name": "Validate preserved data",
+                            "ansible.builtin.include_role": {"name": "service_prepare", "tasks_from": "applications/authelia/validate"},
+                        },
+                        {
+                            "name": "Exercise actual derivation gate",
+                            "ansible.builtin.include_role": {"name": "service_prepare", "tasks_from": "derive_templates"},
+                        },
+                    ],
+                }
+            ],
+            sort_keys=False,
+        )
+    )
+    env = os.environ.copy()
+    env.update(
+        ANSIBLE_CONFIG=str(REPO_ROOT / "ansible/ansible.cfg"),
+        ANSIBLE_ROLES_PATH=str(REPO_ROOT / "ansible/roles"),
+        ANSIBLE_LOCAL_TEMP=str(tmp_path / "ansible-local"),
+        ANSIBLE_LOG_PATH=str(tmp_path / "ansible.log"),
+    )
+    result = subprocess.run(
+        [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", str(playbook)],
+        env=env,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=40,
+        check=False,
+    )
+    output = result.stdout + result.stderr
+    assert (result.returncode == 0) == (case == "existing"), output
+    assert "SYNTHETIC_" not in output
+    if case == "existing":
+        assert source.read_text() == body
+        assert "Build selected-runtime password-hash request" not in output

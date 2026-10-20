@@ -1,0 +1,12 @@
+---
+# Loading this role also registers its filters for independent bootstrap calls.
+- name: Podman services | Validate explicit bootstrap definitions
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    podman_services_bootstrap_validated: >-
+      {{ podman_services_bootstrap_definition
+         | podman_service_normalize(podman_services_bootstrap_definition.name) }}
+  loop: "{{ podman_services_bootstrap_definitions }}"
+  loop_control:
+    loop_var: podman_services_bootstrap_definition

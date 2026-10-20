@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/06 |
+| Readme update        | 2026/10/06 |
 
 
 
@@ -346,6 +346,7 @@
 | Initialize ¦ Decide whether service schema validation is needed | ansible.builtin.set_fact | False |  |
 | Initialize ¦ Validate service schema | ansible.builtin.include_tasks | True |  |
 | Initialize ¦ Set service name, deploy type, deploy host, and action | ansible.builtin.set_fact | False |  |
+| Initialize ¦ Enforce effective operational requirements | ansible.builtin.include_role | False |  |
 | Initialize ¦ Set stack name | ansible.builtin.set_fact | False |  |
 | Initialize ¦ Choose deploy host | ansible.builtin.set_fact | False |  |
 | Initialize ¦ Choose stack key | ansible.builtin.set_fact | False |  |
@@ -378,6 +379,7 @@
 | Prepare ¦ Build application template values | ansible.builtin.include_role | True |  |
 | Prepare ¦ Save application template values | ansible.builtin.set_fact | False |  |
 | Prepare ¦ Prepare shared files and integrations | ansible.builtin.include_role | False |  |
+| Prepare ¦ Snapshot managed configuration changes | ansible.builtin.set_fact | False |  |
 | Prepare ¦ Render Swarm environment templates | ansible.builtin.include_role | True |  |
 | Prepare ¦ Apply application configuration | ansible.builtin.include_role | True |  |
 | Prepare ¦ Run Plex bootstrap | ansible.builtin.include_role | True |  |

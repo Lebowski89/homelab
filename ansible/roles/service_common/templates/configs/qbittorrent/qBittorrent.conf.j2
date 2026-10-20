@@ -78,9 +78,9 @@ WebUI\CustomHTTPHeadersEnabled=false
 WebUI\HostHeaderValidation=false
 WebUI\LocalHostAuth=false
 WebUI\Password_PBKDF2={{ service_common_template_vars.qbittorrent_pass_pbkdf2 }}
-WebUI\Port={{ service_common_service.traefik.port }}
+WebUI\Port={{ (service_common_service.ports | default({})).get('web_backend', {}).get('target', service_common_service.traefik.port) }}
 WebUI\ReverseProxySupportEnabled=true
-WebUI\TrustedReverseProxiesList=172.98.0.0/24
+WebUI\TrustedReverseProxiesList="172.98.0.0/24;{{ hostvars[services_controller_host].local_ip }}"
 WebUI\UseUPnP=false
 WebUI\Username={{ qbittorrent_user }}
 

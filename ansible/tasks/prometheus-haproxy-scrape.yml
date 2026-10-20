@@ -1,0 +1,25 @@
+---
+
+- name: Prometheus scrape | Require exactly one inventory controller
+  ansible.builtin.assert:
+    that:
+      - groups[services_controller_inventory_group] | length == 1
+      - local_ip is defined
+      - container_host_appdata_root is defined
+
+- name: Prometheus scrape | Resolve inventory controller
+  ansible.builtin.set_fact:
+    services_controller_host: "{{ groups[services_controller_inventory_group][0] }}"
+
+- name: Prometheus scrape | Load only the canonical Prometheus and HAProxy declarations
+  ansible.builtin.include_vars:
+    file: "group_vars/all/services/{{ docker_services_prometheus_definition }}.yml"
+    name: "docker_services_{{ docker_services_prometheus_definition }}_catalog"
+  loop: [prometheus, haproxy]
+  loop_control:
+    loop_var: docker_services_prometheus_definition
+
+- name: Prometheus scrape | Update and reload only the existing Swarm configuration
+  ansible.builtin.include_role:
+    name: docker_services
+    tasks_from: sub_tasks/prometheus_haproxy_scrape

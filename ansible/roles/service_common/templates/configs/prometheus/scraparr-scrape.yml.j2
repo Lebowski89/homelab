@@ -1,0 +1,5 @@
+  - job_name: "scraparr"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    static_configs:
+      - targets: ["{{ hostvars[services_controller_host].local_ip }}:17100"]

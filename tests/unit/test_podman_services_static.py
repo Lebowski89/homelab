@@ -72,25 +72,22 @@ def test_main_orchestrates_sub_tasks_in_order():
     assert "Podman services | Finish service removal" in MAIN_TASKS
 
 
-def test_rootless_bind_ownership_is_live_only_and_precedes_quadlet_rendering():
+def test_rootless_data_transition_is_gated_without_recursive_chown():
     execution = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Prepare execution environment")
     common = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Prepare service files and directories")
-    ownership = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Set rootless bind mount ownership")
+    init = yaml.safe_load((TASKS_DIR / "sub_tasks/init.yml").read_text())
+    ownership = next(task for task in init if task["name"] == "Init | Enforce effective operational requirements")
     prepare = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Write Quadlet files")
 
-    assert MAIN_TASK_LIST.index(execution) < MAIN_TASK_LIST.index(common) < MAIN_TASK_LIST.index(ownership) < MAIN_TASK_LIST.index(prepare)
-    assert "not ansible_check_mode" in ownership["when"]
-    assert "podman_services_execution.mode == 'rootless'" in ownership["when"]
-    assert "podman_services_service.container.mounts | default([]) | length > 0" in ownership["when"]
-    assert ownership["ansible.builtin.file"]["path"] == "{{ podman_services_rootless_bind_source }}"
-    assert ownership["ansible.builtin.file"]["state"] == "directory"
-    assert ownership["ansible.builtin.file"]["owner"] == "{{ podman_services_execution.host_user }}"
-    assert ownership["ansible.builtin.file"]["group"] == "{{ podman_services_execution.host_user }}"
-    assert ownership["ansible.builtin.file"]["recurse"] is True
-    assert "mode" not in ownership["ansible.builtin.file"]
-    assert ownership["loop_control"]["loop_var"] == "podman_services_rootless_bind_source"
-    assert "map(attribute='source')" in ownership["loop"]
-    assert "unique" in ownership["loop"]
+    generation = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Generate application secrets")
+    assert (
+        MAIN_TASK_NAMES.index("Podman services | Initialize service") < MAIN_TASK_LIST.index(execution) < MAIN_TASK_LIST.index(generation)
+    )
+    assert MAIN_TASK_LIST.index(generation) < MAIN_TASK_LIST.index(common) < MAIN_TASK_LIST.index(prepare)
+    assert ownership["ansible.builtin.include_role"]["tasks_from"] == "operational_requirements"
+    assert set(ownership["tags"]) <= set(ownership["ansible.builtin.include_role"]["apply"]["tags"])
+    assert "podman_services_service.name" in ownership["vars"]["service_common_name"]
+    assert not any(task.get("ansible.builtin.file", {}).get("recurse") for task in MAIN_TASK_LIST)
     assert "podman_services_service.container.mounts" in common["vars"]["service_common_host_defaults"]
     assert "omit if ansible_check_mode" in common["vars"]["service_common_default_owner"]
     assert "podman_services_execution.host_user" in common["vars"]["service_common_default_owner"]

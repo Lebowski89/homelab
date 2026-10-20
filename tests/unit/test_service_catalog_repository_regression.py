@@ -189,6 +189,9 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
                     },
                 },
                 "local_ip": "192.0.2.10",
+                "inventory_hostname": "manager",
+                "services_log_root": "/var/log/skynet",
+                "podman_shared_network_name": "mgt-services",
                 "services_controller_host": "manager",
                 "services_public_zone": "public.example",
                 "services_internal_zone": "private.example.internal",
@@ -251,7 +254,13 @@ def test_every_effective_service_uses_the_canonical_secret_contract_and_default_
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
         infisical = effective.get("infisical", {})
         normalized = common_filters.service_common_infisical_normalize(
-            infisical.get("secrets_map", []),
+            render_structure(
+                infisical.get("secrets_map", []),
+                {
+                    "services_controller_host": "synthetic-controller",
+                    "hostvars": {"synthetic-controller": {"container_host_puid": 2301, "container_host_pgid": 2402}},
+                },
+            ),
             infisical.get("fail_on_empty", True),
         )
         check_values = common_filters.service_common_infisical_check_values(normalized)
@@ -281,7 +290,6 @@ def test_real_docker_swarm_constraints_match_configured_node_label_values():
     )
     services = load_services()
     expected_by_host = {
-        "{{ services_controller_host }}": "node.labels.docker_services_host == docker_services_primary_manager",
         "{{ services_plex_host }}": "node.labels.docker_services_host == docker_services_plex_host",
         "{{ services_storage_host }}": "node.labels.docker_services_host == docker_services_unraid_host",
     }
@@ -339,7 +347,12 @@ def test_real_sonarr_catalog_target_keeps_effective_configuration():
         "postgres_pass_secret",
         "sonarr_api_secret",
     ]
-    assert effective["traefik"] == {"enable": True, "exposure": "private", "port": 8989}
+    assert effective["traefik"]["enable"] is True
+    assert effective["traefik"]["exposure"] == "private"
+    assert effective["traefik"]["backend_mode"] == "host"
+    assert effective["traefik"]["backend_host_inventory"] == effective["deploy"]["host"]
+    assert effective["traefik"]["port"] == effective["ports"]["web_backend"]["published"]
+    assert effective["ports"]["web_backend"]["target"] == 8989
 
 
 @pytest.mark.parametrize(
@@ -582,12 +595,14 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
 
     shared_facts = share_task["ansible.builtin.set_fact"]
     assert set(shared_facts) == {
+        "service_catalog_action",
         "service_catalog_matched",
         "service_catalog_selected",
         "service_catalog_disabled_only_selection",
     }
     assert "config" not in str(shared_facts)
     assert "materialized" not in str(shared_facts)
+    assert shared_facts["service_catalog_action"] == "{{ hostvars[services_controller_host].service_catalog_action }}"
 
     assert global_dispatch_task["loop"] == "{{ service_catalog_selected }}"
     assert global_dispatch_task["loop_control"]["loop_var"] == "service_catalog_dispatch_entry"

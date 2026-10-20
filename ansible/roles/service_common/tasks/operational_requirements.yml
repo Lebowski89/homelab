@@ -1,0 +1,24 @@
+---
+
+- name: Service common | Enforce explicit operational requirements before mutation
+  ansible.builtin.assert:
+    that:
+      - >-
+        service_common_service | service_common_requirements_validate(
+          service_common_name, service_common_action,
+          {
+            'services_mgt_receiver_acl_ready': services_mgt_receiver_acl_ready | default(none),
+            'services_mgt_backend_acl_ready': services_mgt_backend_acl_ready | default(none),
+            'services_worker_backend_acl_ready': services_worker_backend_acl_ready | default(none),
+            'services_bootstrap_acl_ready': services_bootstrap_acl_ready | default(none),
+            'services_rootless_data_ready': services_rootless_data_ready | default({})
+          }, ansible_check_mode, service_common_execution_only)
+    fail_msg: Required operational acknowledgements must precede live mutation.
+
+- name: Service common | Report required operational acknowledgements in check mode
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      {{ service_common_name }} requires
+      {{ service_common_service.operational_requirements | default({}) | service_common_requirements_normalize }}.
+      This is a plan; ACLs and ownership transitions are not verified.

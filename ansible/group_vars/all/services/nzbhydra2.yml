@@ -73,6 +73,14 @@ nzbhydra2:
   ################################
   # FILESYSTEM
   ################################
+  ports:
+    web_backend:
+      published: 22603
+      target: 5076
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/nzbhydra2"
       state: directory
@@ -89,10 +97,15 @@ nzbhydra2:
   traefik:
     enable: true
     exposure: private
-    port: 5076
+    port: 22603
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

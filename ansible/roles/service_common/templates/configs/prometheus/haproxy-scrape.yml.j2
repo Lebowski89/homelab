@@ -1,0 +1,12 @@
+  - job_name: "haproxy"
+    scrape_interval: 15s
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["{{ hostvars[services_controller_host].local_ip }}:18405"]
+{% if service_common_service.runtime == 'docker' %}
+      - targets: ["haproxy:8405"]
+{% else %}
+      - targets: ["{{ prometheus_worker_metrics_address }}"]
+        labels:
+          instance: "haproxy:8405"
+{% endif %}

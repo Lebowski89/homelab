@@ -151,9 +151,9 @@ full catalog on the controller.
 | `hostname` | String | No | Runtime-native | Docker | `docker_services` | Compose hostname; empty values are omitted. |
 | `container_name` | String | No | Compose-generated name | Docker | `docker_services` | Forces a literal name only for `deploy.type: container`. Usually unnecessary because Compose derives project/service/index names. |
 | `pid` | Non-empty string | No | Runtime-native | Docker | `docker_services` | Compose PID namespace value; no repository enum is enforced. |
-| `cgroup` | String enum | No | Runtime-native | Docker | `docker_services` | Only `host` or `private` is rendered. |
+| `cgroup` | String enum | No | Runtime-native | Both | Runtime adapter | Docker accepts `host`/`private`; rootful Podman accepts only `host`, rendering fixed cgroup/systemd arguments and `Delegate=yes`. |
 | `entrypoint` | Non-empty string or list | No | Image default | Docker | `docker_services` | Replaces the image entrypoint and is replace-only during target merge. |
-| `command` | Non-empty string or list of non-empty strings | No | Image default | Docker | `docker_services` | Replaces the Compose command and is replace-only during target merge. |
+| `command` | Non-empty string (Docker) or argv list | No | Image default | Both | Runtime adapter | Replace-only target merge. Podman requires nonempty literal argv strings without control characters; shell execution requires explicit `sh`, `-c`. |
 
 No service fields currently exist for working directory, init, stop signal,
 stop timeout, or pull policy. Podman pulling is controlled by the role default
@@ -168,7 +168,7 @@ stop timeout, or pull policy. Podman pulling is controlled by the role default
 | `environment.<NAME>.value_from` | Mapping | Conditional | None | Both | `service_common` | Must be the only key in the value. |
 | `environment.<NAME>.value_from.infisical` | Identifier string | Conditional | None | Both | `service_common` | References a `var` declared by this service. The resolved scalar retains its type. |
 | `environment.<NAME>.value_template` | String | Conditional | None | Both | `service_common` | Must be the only key and contain at least one `${var}` reference. |
-| `env_file` | Non-empty string or list of strings | No | Omitted | Docker | `docker_services` | Attaches existing Compose environment files. Podman writes a protected generated file from resolved `environment`. |
+| `env_file` | String (Docker) or ordered list of absolute paths | No | Omitted | Both | Runtime adapter | Podman parses literal single-line dotenv after common templates; later files override earlier ones and explicit resolved environment wins last. Check mode skips reads. See [Podman semantics](../../../../docs/podman-services.md#process-environment-and-dependencies). |
 
 Template substitution is single-pass. `${var}` inserts a fetched scalar; null
 becomes empty text, booleans become lowercase text, and `$$` produces one
@@ -214,8 +214,8 @@ names, never values.
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
 | `infisical.secrets_map[].secret.name` | Resource-name string | Yes | None | Both | `service_common` | Matches `[A-Za-z0-9][A-Za-z0-9_.-]*`. |
 | `infisical.secrets_map[].secret.target` | Absolute path | No | `/run/secrets/<name>` | Both | `service_common` | Docker Swarm requires a path directly beneath `/run/secrets`. |
-| `infisical.secrets_map[].secret.uid` | Numeric string | No | Runtime/container user | Both | `docker_services` / `podman_services` | Owner ID inside the container. |
-| `infisical.secrets_map[].secret.gid` | Numeric string | No | Runtime/container group | Both | `docker_services` / `podman_services` | Group ID inside the container. |
+| `infisical.secrets_map[].secret.uid` | Numeric string or non-negative integer | No | Runtime/container user | Both | `docker_services` / `podman_services` | Owner ID inside the container; native inventory integers normalize to strings. |
+| `infisical.secrets_map[].secret.gid` | Numeric string or non-negative integer | No | Runtime/container group | Both | `docker_services` / `podman_services` | Group ID inside the container; booleans and floats are rejected. |
 | `infisical.secrets_map[].secret.mode` | Quoted octal string | No | Podman `0400`; runtime-specific otherwise | Both | `docker_services` / `podman_services` | Exactly four digits beginning with `0`. |
 | `infisical.secrets_map[].secret.update_policy` | String enum | No | `preserve` | Both | `docker_services` / `podman_services` | Exactly `preserve` or `reconcile`. |
 | `secrets` | Docker: string/list of strings or mappings; Podman: list of names | No | `[]` | Both | `docker_services` / `podman_services` | Attaches declared, generated, or externally managed native secrets. Podman accepts value-free names only. |
@@ -259,8 +259,9 @@ Check mode creates nothing.
 | `named_networks.<key>.name` | Resource-name string | No | Mapping key | Both | `docker_services` / `podman_services` | Runtime-visible name. |
 | `named_networks.<key>.external` | Strict Boolean-like | No | Docker `true`; Podman `false` | Both | `docker_services` / `podman_services` | External resources are attached but not owned. Live Podman deploy/update/recreate/bootstrap first requires the exact network in the Podman network store. |
 | `named_networks.<key>.driver` | String | No | Runtime-native | Both | `docker_services` / `podman_services` | Docker passes it to Compose. Podman accepts `bridge`, `ipvlan`, or `macvlan` and rejects it on an external network. |
+| `named_networks.<key>.enable_ipv6` | Strict Boolean | No | Runtime default | Podman | `podman_services` | Renders Quadlet `IPv6=true/false` only for a managed bridge. External networks/non-bridge drivers are rejected. Docker rejects this currently Podman-only option instead of silently dropping it. |
 | `networks` | List | No | Keys of `named_networks`, else `[docker_network]` | Docker | `docker_services` | Legacy direct Compose attachment list. Prefer `named_networks`. |
-| `network_mode` | String | No | Omitted | Both | `docker_services` / `podman_services` | Docker Compose network mode. Rootful Podman accepts only `container:<managed-container-name>` and renders `Network=<name>.container`; it cannot be combined with `named_networks`. A same-host managed Podman match creates a catalog lifecycle dependency. Rootless Podman rejects it. |
+| `network_mode` | String | No | Omitted | Both | `docker_services` / `podman_services` | Docker Compose network mode. Rootful Podman accepts `host` (without published ports) or `container:<managed-container-name>` and renders `Network=<name>.container`; it cannot be combined with `named_networks`. A same-host managed Podman match creates a catalog lifecycle dependency. Rootless Podman also accepts explicit direct `pasta`; it rejects `host` and `container:<name>`. Explicit `network_mode` cannot be combined with `named_networks`. |
 | `depends_on` | String or list | No | `[]` | Docker | `docker_services` | Compose start ordering, not a health guarantee. |
 
 Docker named resources default to external. Non-external definitions are
@@ -295,25 +296,24 @@ deploy/update/recreate/bootstrap, not drift or remove.
 
 | Option | Type | Required | Default | Runtime | Owner | Description |
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
-| `paths` | List of mappings | No | `[]` | Both | `service_common` | Ensures host filesystem objects. Podman paths must normalize within `/opt`; rootless entries beyond bind roots are cleanup-only. |
+| `paths` | List of mappings | No | `[]` | Both | `service_common` | Ensures host filesystem objects. Podman paths must normalize within `/opt`; rootless directories/files are confined to bind trees and minimal parents. Traefik has a narrow log-tree/host-helper allowlist. |
 | `paths[].path` | Non-empty path string | Yes | None | Both | `service_common` | Destination on every filesystem host. |
 | `paths[].state` | String enum | No | `directory` | Both | `service_common` | `absent`, `directory`, `file`, `hard`, `link`, or `touch`. |
 | `paths[].src` | Non-empty string | Conditional | None | Both | `service_common` | Required for `hard` and `link`. |
-| `paths[].owner` | User/ID | No | Host PUID, then `1000` | Both | `service_common` | Filesystem owner. Omit it for a rootless Podman bind source; the adapter assigns its dedicated execution account. |
-| `paths[].group` | Group/ID | No | Host PGID, then `1000` | Both | `service_common` | Filesystem group. Omit it for a rootless Podman bind source; the adapter assigns its dedicated execution account. |
+| `paths[].owner` | User/ID or null | No | Host PUID, then `1000` | Both | `service_common` | Filesystem owner. Explicit `null` preserves an existing owner for a rootful path. Omit it for a rootless Podman bind source; the adapter assigns its dedicated execution account. |
+| `paths[].group` | Group/ID or null | No | Host PGID, then `1000` | Both | `service_common` | Filesystem group. Explicit `null` preserves an existing group for a rootful path. Omit it for a rootless Podman bind source; the adapter assigns its dedicated execution account. |
 | `paths[].mode` | Octal-looking string | No | Docker `0755`; Podman `0750` | Both | `service_common` | Docker validation accepts three or four octal digits. |
 | `paths[].force` | Boolean-like | No | `false` | Both | `service_common` | Passed to `ansible.builtin.file`, mainly for link replacement. |
+| `paths[].access_time` / `modification_time` | File-module timestamp option | No | Module default | Both | `service_common` | `preserve` keeps ACME touch idempotent without replacing its content. |
 
 There is no author-facing recursive option. List parents before children;
-ordinary directory trees are not recursively re-owned or re-moded. As a narrow
-exception, the Podman adapter recursively assigns each validated rootless bind
-source—which must be a normalized proper descendant of `/opt`—to its dedicated
-execution account before rendering the Quadlet. It does
-not recursively change file modes. Every rootless bind source must have exactly
-one matching directory `paths` entry without explicit owner/group. Additional
-rootless `paths` entries may only use `state: absent` for normalized absolute
-proper descendants of a declared bind source, also without ownership
-overrides.
+ordinary directory trees are not recursively re-owned or re-moded. Every
+rootless bind source must have exactly one matching directory `paths` entry
+without explicit owner/group. Confined subdirectories and files and minimal
+parent layouts are supported, also without ownership overrides. Rootless
+states are `directory`, `file`, `touch`, or `absent`; links remain unsupported.
+Existing descendant ownership requires a deliberate operator transition using
+the image's actual UID/GID mapping. See [the ownership procedure](../../../../migrator/guides/ownership.md).
 
 ### Copies and templates
 
@@ -356,13 +356,13 @@ not permit arbitrary rootless host-file management.
 | `volumes[].read_only` | Boolean-like | No | `false` | Both | `docker_services` / `podman_services` | Mounts read-only. |
 | `volumes[].tmpfs` | Mapping | No | `{}` | Both | `docker_services` / `podman_services` | Tmpfs options. |
 | `volumes[].tmpfs.size` | Non-negative integer | No | Runtime-native | Both | `docker_services` / `podman_services` | Passed to Compose or rendered as Quadlet `size=`. |
-| `volumes[].tmpfs.mode` | Passed-through value | No | Runtime-native | Podman | `podman_services` | Rendered as Quadlet `mode=`; no octal-format validation is currently imposed. |
+| `volumes[].tmpfs.mode` | Octal string or integer mode | No | Runtime-native | Podman | `podman_services` | Validates an octal mode before rendering `mode=`. |
 | `named_volumes` | Mapping | No | `{}` | Docker | `docker_services` | Stack-level Compose volumes, defaulting to external. Podman creates Quadlets from `volumes[].type: volume`. |
 | `named_volumes.<key>.name` | String | No | Compose default | Docker | `docker_services` | Explicit runtime name. |
 | `named_volumes.<key>.external` | Boolean-like | No | `true` | Docker | `docker_services` | Expects a volume owned outside the stack. |
 | `named_volumes.<key>.driver` | String | No | Runtime-native | Docker | `docker_services` | Compose volume driver. |
 | `named_volumes.<key>.driver_opts` | Mapping | No | `{}` | Docker | `docker_services` | Compose driver options. |
-| `tmpfs` | String or list | No | `[]` | Docker | `docker_services` | Compose tmpfs shorthand. Prefer `volumes[].type: tmpfs` for portability. |
+| `tmpfs` | String (Docker) or list | No | `[]` | Both | Runtime adapter | Standalone Podman, rootful or rootless, accepts normalized absolute paths with allowlisted exec/noexec/nosuid/nodev/rw/ro, numeric size and octal mode options. |
 
 Podman removes generated volume Quadlet files on explicit remove but preserves
 application data. Bind source existence should be declared through `paths`.
@@ -414,6 +414,9 @@ runtime security keys through.
 
 `NONE` is the supported disable form; there is no
 `healthcheck.disable` option.
+
+`notify_healthy` is a strict boolean Podman option, default false. True requires
+a healthcheck and waits for container health during systemd startup.
 
 ## Traefik
 
@@ -515,7 +518,7 @@ drop-in with the retained account/home until deliberate account retirement.
 | `cleanup` | Mapping | No | `{enable: true, force: false}` | Docker | `docker_services` | Controls stack/container cleanup for remove/recreate. |
 | `cleanup.enable` | Boolean-like | No | `true` | Docker | `docker_services` | Allows cleanup. |
 | `cleanup.force` | Boolean-like | No | `false` | Docker | `docker_services` | Allows repeated cleanup of the same stack in one run. |
-| `settings` | Mapping | No | Template-specific | Docker | `docker_services` | Application template input currently consumed by HAProxy; not automatically passed to the container. |
+| `settings` | Mapping | No | Template-specific | Both | `service_prepare` | HAProxy handler validates maxconn/retries/Prometheus port integers and positive typed timeout durations; one common template serves both adapters. Not container environment. |
 
 ## Podman systemd
 
@@ -526,6 +529,8 @@ catalog validation rejects it.
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
 | `systemd` | Mapping | No | `{}` | Podman | `podman_services` | Quadlet dependency/restart settings; unknown fields are rejected. |
 | `systemd.after` | List of non-empty unit names | No | `[]` | Podman | `podman_services` | Renders one `After=` line per entry. |
+| `systemd.requires` | List of valid service/target units | No | `[]` | Podman | `podman_services` | Renders Requires and After. Use for the central shared bridge. |
+| `systemd.wants` | List of valid service/target units | No | `[]` | Podman | `podman_services` | Renders Wants and After; selected managed providers are dispatched first. Consumers can retry through provider updates. |
 | `systemd.restart` | Non-empty string | No | `on-failure` | Podman | `podman_services` | Passed to `Restart=`; no repository enum is maintained. |
 | `systemd.restart_sec` | Non-empty string | No | `15s` | Podman | `podman_services` | Passed to `RestartSec=`. |
 | `systemd.timeout_start_sec` | Non-empty string | No | Omitted | Podman | `podman_services` | Passed to `TimeoutStartSec=`; bounds how long systemd waits for startup and does not delay a successful start. |
@@ -597,7 +602,7 @@ newer digest, and there is no service-level `drift` mapping.
 
 Podman rejects every top-level field outside its catalog, adapter, common, and
 application-preparation contracts. A runtime-only edit is therefore not a valid
-migration when Docker-only fields such as `command`, `entrypoint`, configs,
+migration when Docker-only fields such as `entrypoint`, Swarm configs,
 Swarm profiles, or constraints remain. Add behavior deliberately to
 the adapter before migrating a service that needs it.
 
@@ -847,3 +852,82 @@ and the ordering guide.
   identity/storage facts.
 - Check runtime limitations before changing `runtime`.
 - Run repository validation and a safe check-mode plan before live deployment.
+
+### Private endpoint policies
+
+The [Podman operations guide](../../../../docs/podman-services.md) describes protected
+host backend/receiver ports and explicit bootstrap recovery. The shared rootful
+bridge is owned by the `podman` role and declared external by its consumers;
+a service may instead own a dedicated bridge. Rootless apps keep separate stores. Common `copies[].restart` and `templates[].restart` are strict
+booleans, default true; false opts watched route files out of config-only Podman
+restarts. Docker does not gain new lifecycle behavior from this flag.
+
+### Operational requirements
+
+Selection tags never activate safeguards. Both adapters check the effective
+`operational_requirements` mapping before live deploy/update/recreate/bootstrap
+mutation; catalog dispatch checks it before common secret lookup. Independent
+NetBox/Infisical roles check every definition before stopping the first consumer.
+
+```yaml
+operational_requirements:
+  acl: [mgt_backends]
+  ownership_transition: true
+```
+
+Only `acl` (a list of supported scope names) and `ownership_transition` (a strict
+boolean, default false) are accepted. Requirements inherit through the ordinary
+recursive base-plus-target merge: ACL lists append without exact duplicates;
+an empty target list does not clear inherited scopes. Put requirements on the
+effective mgt/worker target when their callers differ. Acknowledgements are
+operator inputs, never service defaults or secret values.
+
+| ACL scope | Required strict boolean input | Covered callers/endpoints |
+| --- | --- | --- |
+| `mgt_receivers` | `services_mgt_receiver_acl_ready` | Loki/Prometheus receivers and their allowed ingress/write paths |
+| `mgt_backends` | `services_mgt_backend_acl_ready` | Changed mgt HTTP, metrics, cache and PostgreSQL publications; includes Traefik metrics 18084→8082 |
+| `worker_backends` | `services_worker_backend_acl_ready` | Worker 22601–22622 publications and Alloy worker reachability/write paths |
+| `bootstrap` | `services_bootstrap_acl_ready` | NetBox/Infisical application, database and cache publications |
+
+`ownership_transition: true` requires
+`services_rootless_data_ready[<actual effective service name>]: true` after
+backups, old-writer shutdown and verified per-path UID/GID/ACL translation. It is
+required for every live deployment operation while the declaration remains,
+including empty/new paths and subsequent updates. The four existing rootless
+services retain their already transitioned stores. Mount-free Scraparr and the
+Infisical application have no data-transition requirement; their ACL requirement
+remains. Removing a batch tag never retires this requirement.
+
+Missing, false, numeric or string acknowledgements fail before affected files,
+secrets, containers or listeners change. Check mode validates declarations and
+reports a plan without requiring acknowledgements. `drift` and `remove` retain
+their read-only/recovery behavior. Explicit
+`podman_services_prepare_execution_only: true` allows only
+deploy/update/bootstrap account preparation and returns before application
+file generation, images, native secrets, containers and port publication. It
+still validates configuration; it is invalid with recreate/remove/drift.
+Acknowledgements neither configure ACLs nor prove their existence.
+
+### Selection tags and cutover batches
+
+- Ordinary service selectors (`traefik`, `loki`, `prometheus`, `haproxy`, `alloy`,
+  etc.) and established category selectors remain. A base name selects its
+  targets; use a target selector when splitting workers from mgt.
+- `haproxy-workers`, `alloy-workers`, `docker-workers`, `mgt-haproxy` and
+  `mgt-collector` distinguish the permanent worker/mgt targets. The first two
+  worker stacks retain their identities and placement exclusions. These
+  selectors remain useful after migration.
+- The completed mgt migration retired `mgt-migration`, `mgt-apps`,
+  `mgt-monitoring`, `mgt-auth`, `mgt-ingress`, `mgt-dns`, `mgt-unifi`,
+  `mgt-receivers`, `mgt-web-utilities` and `worker-backends`. They no longer
+  select services. Use ordinary service/target selectors for future changes;
+  historical cutover commands are not current deployment instructions.
+  Explicit ACL/data requirements and the installed worker policy remain in
+  force. The Traefik Theme Park plugin remains independent of its retired
+  self-hosted asset server.
+- Bootstrap uses independent `netbox_*` / `infisical_*` operation tags, without
+  catalog or dynamic inventory dependencies. Retain those recovery interfaces.
+
+The former safeguard-only `mgt-backends` and `mgt-rootless-data` tags are removed.
+No safety check reads service tags. Removing or renaming any selector leaves
+explicit operational requirements in effect for individual service deployments.

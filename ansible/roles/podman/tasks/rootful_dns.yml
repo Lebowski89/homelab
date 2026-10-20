@@ -1,0 +1,26 @@
+---
+
+- name: Podman rootful DNS | Validate forwarding port
+  ansible.builtin.assert:
+    that:
+      - podman_shared_network_dns_bind_port is integer
+      - podman_shared_network_dns_bind_port is not boolean
+      - podman_shared_network_dns_bind_port >= 1024
+      - podman_shared_network_dns_bind_port <= 65535
+    fail_msg: "Rootful bridge DNS requires an explicit integer port from 1024 through 65535."
+
+- name: Podman rootful DNS | Ensure configuration drop-in directory
+  ansible.builtin.file:
+    path: /etc/containers/containers.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Podman rootful DNS | Configure only the netavark DNS bind port
+  ansible.builtin.template:
+    src: rootful-dns.conf.j2
+    dest: /etc/containers/containers.conf.d/50-skynet-rootful-dns.conf
+    owner: root
+    group: root
+    mode: "0644"

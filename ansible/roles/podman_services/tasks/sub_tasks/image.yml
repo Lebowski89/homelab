@@ -25,6 +25,7 @@
         or (podman_services_network_quadlet is changed)
         or (podman_services_volume_quadlets is changed)
         or (podman_services_image_pull is changed)
+        or (podman_services_config_changed | default(false) | bool)
         or (
           podman_services_secret_results is defined
           and (

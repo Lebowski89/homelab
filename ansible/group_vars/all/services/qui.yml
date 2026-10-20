@@ -91,6 +91,11 @@ qui:
       ################################
       # FILESYSTEM
       ################################
+      ports:
+        web_backend:
+          published: 22608
+          target: 7476
+          mode: host
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui-alpha"
           state: directory
@@ -104,9 +109,18 @@ qui:
       ################################
       # INTEGRATIONS
       ################################
+      traefik:
+        enable: true
+        exposure: private
+        port: 22608
+        backend_mode: host
+        backend_host_inventory: "{{ services_storage_host }}"
       postgres:
         databases:
           - qui-alpha
+      operational_requirements:
+        acl: [worker_backends]
+
     bravo:
       ################################
       # IDENTITY
@@ -132,6 +146,11 @@ qui:
       ################################
       # FILESYSTEM
       ################################
+      ports:
+        web_backend:
+          published: 22609
+          target: 7476
+          mode: host
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui-bravo"
           state: directory
@@ -145,6 +164,14 @@ qui:
       ################################
       # INTEGRATIONS
       ################################
+      traefik:
+        enable: true
+        exposure: private
+        port: 22609
+        backend_mode: host
+        backend_host_inventory: "{{ services_storage_host }}"
       postgres:
         databases:
           - qui-bravo
+      operational_requirements:
+        acl: [worker_backends]

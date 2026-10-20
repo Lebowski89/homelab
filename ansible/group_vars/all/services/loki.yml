@@ -5,14 +5,15 @@ loki:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
-  tags: [monitoring, loki]
+  runtime: podman
+  tags:
+    - monitoring
+    - loki
   name: loki
-  stack: loki
   ################################
   # IMAGE/PROCESS
   ################################
-  image: grafana/loki:3.7.8
+  image: "docker.io/grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193"
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
   command:
@@ -26,11 +27,23 @@ loki:
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    loki:
+      driver: bridge
+      external: false
+  ports:
+    receiver:
+      host_ip: "{{ local_ip }}"
+      published: 3100
+      target: 3100
+      protocol: tcp
   ################################
   # FILESYSTEM
   ################################
+    backend:
+      host_ip: "{{ local_ip }}"
+      published: 3100
+      target: 3100
+      protocol: tcp
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/loki"
       state: directory
@@ -57,6 +70,7 @@ loki:
   ################################
   # INTEGRATIONS
   ################################
+  no_new_privileges: false
   traefik:
     enable: true
     exposure: private
@@ -64,11 +78,25 @@ loki:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+    backend_mode: host
+    backend_host_inventory: "{{ services_controller_host }}"
+  operational_requirements:
+    acl: [mgt_receivers, mgt_backends]
+    ownership_transition: true
+
   deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    profile: careful
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-loki
+      userns:
+        mode: keep-id
+        uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+        gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
+  systemd:
+    restart: always
+    restart_sec: 15s
+    timeout_start_sec: 300s
+    after:
+      - network-online.target

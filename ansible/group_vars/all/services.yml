@@ -4,3 +4,4 @@ services_controller_inventory_group: tags_ansible_manager
 services_storage_inventory_group: device_roles_storage
 services_plex_host: plex
 services_log_root: /var/log/skynet
+podman_shared_network_name: mgt-services

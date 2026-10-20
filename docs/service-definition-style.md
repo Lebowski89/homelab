@@ -25,7 +25,7 @@ between populated sections.
 1. Identity and selection: `enabled`, `runtime`, `tags`, `name`, `description`,
    `stack`.
 2. Image and process: `image`, `hostname`, `container_name`, `user`, `pid`,
-   `cgroup`, `entrypoint`, `command`.
+   `entrypoint`, `command`.
 3. Environment, secrets, and configuration inputs: `environment`, `env_file`,
    `infisical`, `secrets`, `swarm_configs`, `configs`,
    `swarm_env_templates`, `settings`.
@@ -34,14 +34,15 @@ between populated sections.
    `ports`.
 6. Filesystem and storage: `paths`, `copies`, `templates`, `named_volumes`,
    `volumes`, `tmpfs`.
-7. Devices, security, and resources: `devices`, `cap_add`, `cap_drop`,
+7. Devices, security, and resources: `devices`, `cgroup`, `cap_add`, `cap_drop`,
    `security_opt`, `no_new_privileges`, `read_only`, `sysctls`, `shm_size`,
    `shm_tmpfs_size`.
-8. Health: `healthcheck`.
+8. Health: `healthcheck`, `notify_healthy`.
 9. Integrations: `traefik`, `themepark`, `postgres`. New Theme Park
    configuration belongs under `traefik.themepark`; the top-level key remains in
    the layout only for existing definitions and has no runtime consumer.
-10. Runtime and lifecycle: `log_driver`, `labels`, `cleanup`, `deploy`, `systemd`.
+10. Runtime and lifecycle: `operational_requirements`, `log_driver`, `labels`,
+    `cleanup`, `deploy`, `systemd`.
 11. Target overrides: `targets`.
 
 The repository-specific keys added to the original proposed order have explicit
@@ -52,12 +53,15 @@ homes:
   them; `settings` contains application configuration inputs.
 - `paths_vault` supplies filesystem inputs to application preparation and
   therefore precedes `application_prepare`.
-- `pid` and `cgroup` are standalone Docker process/runtime controls;
+- `pid` is a standalone Docker process control; rootful Podman also implements
+  the typed `cgroup: host` systemd-container contract;
   `shm_tmpfs_size` is a Swarm resource control.
 - `named_networks` is the canonical network declaration for both adapters.
   Podman currently accepts one entry and uses `external` to distinguish a
   role-managed network from one managed elsewhere.
 - `systemd` contains Podman-native unit dependencies and restart policy.
+- `operational_requirements` declares acknowledgement requirements independently
+  of selection tags and inherits through the usual base-plus-target merge.
 - `log_driver` is Podman-native, defaults to `journald`, and currently accepts
   only that validated value so all managed Quadlets use the system journal.
 

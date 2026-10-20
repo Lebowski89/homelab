@@ -6,7 +6,7 @@ from jinja2 import Environment, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NODE_RULES_PATH = REPO_ROOT / "ansible/roles/service_common/templates/configs/prometheus/rules/node-exporter.yml.j2"
-HAPROXY_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/docker_services/templates/configs/haproxy.cfg.j2"
+HAPROXY_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/service_common/templates/configs/haproxy.cfg.j2"
 UBUNTU_DEFAULTS_PATH = REPO_ROOT / "ansible/roles/ubuntu/defaults/main.yml"
 UBUNTU_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/main.yml"
 SWAP_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/sub_tasks/postgres_emergency_swap.yml"
@@ -49,7 +49,7 @@ def test_haproxy_postgres_backends_start_fully_down_until_primary_checks_pass():
         Environment(undefined=StrictUndefined)
         .from_string(HAPROXY_TEMPLATE_PATH.read_text())
         .render(
-            docker_services_svc={"settings": {}},
+            service_common_service={"settings": {}},
             postgres_patroni_restapi_port=8008,
             postgres_patroni_postgres_port=5432,
             groups={"tags_postgres": ["pg95", "pg96", "pg97"]},

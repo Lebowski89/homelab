@@ -40,6 +40,9 @@
       tags: [deploy, update, remove, recreate, bootstrap, drift]
   vars:
     service_catalog_materialized_service: "{{ service_catalog_host_materialized[0] }}"
+    service_catalog_execution_only: >-
+      {{ (podman_services_prepare_execution_only | default(false))
+         if service_catalog_dispatch_entry.runtime == 'podman' else false }}
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
 - name: Service catalog dispatch | Process Docker entry

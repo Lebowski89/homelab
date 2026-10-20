@@ -32,12 +32,12 @@ import os
 import re
 from pathlib import Path
 
-from jinja2 import Environment
+from jinja2 import Environment, FileSystemLoader
 import yaml
 
 root = Path(os.environ["ROOT_DIR"])
 out = Path(os.environ["OUT_DIR"])
-env = Environment()
+env = Environment(loader=FileSystemLoader(root / "ansible/roles/service_common/templates"))
 
 
 def read_yaml(path: Path) -> dict:
@@ -139,6 +139,7 @@ context = {
     "services_controller_host": "mgt",
     "services_plex_host": "plex",
     "docker_services_svc": prometheus_service_vars.get("prometheus", {}),
+    "service_common_service": prometheus_service_vars.get("prometheus", {}),
     "service_common_infisical_values": {
         "smtp_email": "alerts@example.com",
         "smtp_host": "smtp.example.com",

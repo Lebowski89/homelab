@@ -4,6 +4,7 @@
   when:
     - not ansible_check_mode
     - service_prepare_handler == 'authelia'
+    - not (service_prepare_context.service.application_prepare.preserve_users_database | default(false))
   no_log: true
   ansible.builtin.include_tasks:
     file: applications/authelia/derive_templates.yml
