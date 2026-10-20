@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/06 |
+| Readme update        | 2026/10/20 |
 
 
 
@@ -71,6 +71,9 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Authelia prepare ¦ Validate hash and key contract | ansible.builtin.assert | False |  |
+| Authelia prepare ¦ Validate explicit users database preservation | ansible.builtin.assert | False |  |
+| Authelia prepare ¦ Inspect the retained users database without reading credentials | ansible.builtin.stat | True |  |
+| Authelia prepare ¦ Require existing regular users database before preservation | ansible.builtin.assert | True |  |
 | Authelia prepare ¦ Publish temporary generation request | ansible.builtin.set_fact | False |  |
 
 #### File: tasks/applications/bazarr/bootstrap.yml

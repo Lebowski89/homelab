@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/06 |
+| Readme update        | 2026/10/20 |
 
 
 
@@ -359,6 +359,61 @@
 | Initialize ¦ Require one host for standalone Docker | ansible.builtin.assert | True |  |
 | Initialize ¦ Check whether this host builds Compose | ansible.builtin.set_fact | False |  |
 
+#### File: tasks/sub_tasks/loki_alertmanager_route.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Loki routes ¦ Resolve the canonical file and desired URL | ansible.builtin.set_fact | False |
+| Loki routes ¦ Project only the named current Swarm service | ansible.builtin.command | False |
+| Loki routes ¦ Normalize the observed service projection | ansible.builtin.set_fact | False |
+| Loki routes ¦ Require one stop-first writer without changing rollout settings | ansible.builtin.assert | False |
+| Loki routes ¦ Verify only one globally running task on the inventory controller | ansible.builtin.command | False |
+| Loki routes ¦ Require the single retained controller placement | ansible.builtin.assert | False |
+| Loki routes ¦ Resolve the exact local running task | ansible.builtin.command | False |
+| Loki routes ¦ Require one local running writer | ansible.builtin.assert | False |
+| Loki routes ¦ Inspect only the selected task | ansible.builtin.command | False |
+| Loki routes ¦ Normalize the existing writer | ansible.builtin.set_fact | False |
+| Loki routes ¦ Require the current binary and canonical read-only configuration mount | ansible.builtin.assert | False |
+| Loki routes ¦ Require the retained writable data bind | ansible.builtin.assert | False |
+| Loki routes ¦ Capture original PID birth and namespace | ansible.builtin.command | False |
+| Loki routes ¦ Inspect configuration ownership | ansible.builtin.stat | False |
+| Loki routes ¦ Require an existing regular managed file | ansible.builtin.assert | False |
+| Loki routes ¦ Read the managed configuration privately | ansible.builtin.slurp | False |
+| Loki routes ¦ Change only the ruler URL using the canonical declaration | ansible.builtin.set_fact | False |
+| Loki routes ¦ Check original readiness and loaded URL | ansible.builtin.command | False |
+| Loki routes ¦ Report sanitized original readiness/configuration errors | ansible.builtin.assert | False |
+| Loki routes ¦ Reject file and loaded ruler drift | ansible.builtin.assert | False |
+| Loki routes ¦ Show the named interruption plan | ansible.builtin.debug | False |
+| Loki routes ¦ Apply the reviewed named rollout with scoped recovery | block | True |
+| Loki routes ¦ Create only this private temporary validation file | ansible.builtin.tempfile | False |
+| Loki routes ¦ Populate the validation candidate | ansible.builtin.copy | False |
+| Loki routes ¦ Verify with the existing binary without pulling an image | ansible.builtin.command | False |
+| Loki routes ¦ Recheck only the named service | ansible.builtin.command | False |
+| Loki routes ¦ Re-resolve the current task | ansible.builtin.command | False |
+| Loki routes ¦ Recheck exact PID birth and namespace | ansible.builtin.command | False |
+| Loki routes ¦ Recheck configuration continuity | ansible.builtin.stat | False |
+| Loki routes ¦ Reject concurrent service, task, namespace or configuration changes | ansible.builtin.assert | False |
+| Loki routes ¦ Back up and atomically apply only the candidate | ansible.builtin.copy | False |
+| Loki routes ¦ Report the exact file backup | ansible.builtin.debug | False |
+| Loki routes ¦ Record the exact named rollout attempt | ansible.builtin.set_fact | False |
+| Loki routes ¦ Replace only loki_loki using its retained stop-first policy | ansible.builtin.command | False |
+| Loki routes ¦ Require new service convergence | ansible.builtin.command | False |
+| Loki routes ¦ Require new unique task convergence | ansible.builtin.command | False |
+| Loki routes ¦ Verify only one globally running task on the inventory controller | ansible.builtin.command | False |
+| Loki routes ¦ Require the single retained controller placement | ansible.builtin.assert | False |
+| Loki routes ¦ Require new task inspection | ansible.builtin.command | False |
+| Loki routes ¦ Require new image and configuration continuity | ansible.builtin.assert | False |
+| Loki routes ¦ Capture the replacement PID birth and namespace | ansible.builtin.command | False |
+| Loki routes ¦ Require new readiness and loaded destination | block | False |
+| Loki routes ¦ Require new readiness and loaded destination | ansible.builtin.command | False |
+| Loki routes ¦ Require new final task continuity | ansible.builtin.command | False |
+| Loki routes ¦ Require new final container continuity | ansible.builtin.command | False |
+| Loki routes ¦ Require new stable task | ansible.builtin.assert | False |
+| Loki routes ¦ Recheck replacement PID birth and namespace | ansible.builtin.command | False |
+| Loki routes ¦ Require stable replacement identity | ansible.builtin.assert | False |
+| Loki routes ¦ Preserve exact before and after task provenance in the private log | ansible.builtin.debug | False |
+| Loki routes ¦ Report the bounded outcome | ansible.builtin.debug | False |
+
 #### File: tasks/sub_tasks/prepare.yml
 
 | Name | Module | Has Conditions | Tags |
@@ -384,6 +439,84 @@
 | Prepare ¦ Apply application configuration | ansible.builtin.include_role | True |  |
 | Prepare ¦ Run Plex bootstrap | ansible.builtin.include_role | True |  |
 | Swarm configs ¦ Manage service configs | ansible.builtin.include_tasks | True |  |
+
+#### File: tasks/sub_tasks/prometheus_alertmanager_routes.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prometheus routes ¦ Validate the bounded configuration operation | ansible.builtin.assert | False |
+| Prometheus routes ¦ Resolve only the canonical file and selected fragments | ansible.builtin.set_fact | False |
+| Prometheus routes ¦ Resolve exactly the running Swarm caller | ansible.builtin.command | False |
+| Prometheus routes ¦ Reject absent or ambiguous live callers | ansible.builtin.assert | False |
+| Prometheus routes ¦ Project the exact caller and configuration mount without environments | ansible.builtin.command | False |
+| Prometheus routes ¦ Require the inventory-owned configuration bind | ansible.builtin.assert | False |
+| Prometheus routes ¦ Resolve the exact identity query | ansible.builtin.set_fact | False |
+| Prometheus routes ¦ Capture exact PID birth and network namespace | ansible.builtin.command | False |
+| Prometheus routes ¦ Inspect existing configuration ownership | ansible.builtin.stat | False |
+| Prometheus routes ¦ Require the existing regular managed file | ansible.builtin.assert | False |
+| Prometheus routes ¦ Read the managed configuration privately | ansible.builtin.slurp | False |
+| Prometheus routes ¦ Build only the bounded configuration candidate | ansible.builtin.set_fact | False |
+| Prometheus routes ¦ Show the scoped plan | ansible.builtin.debug | False |
+| Prometheus routes ¦ Resolve the read-only live configuration query | ansible.builtin.set_fact | False |
+| Prometheus routes ¦ Validate apply and reload without replacement | block | True |
+| Prometheus routes ¦ Inspect loaded configuration without exposing it | ansible.builtin.command | False |
+| Prometheus routes ¦ Reject pre-existing file and loaded route drift before writes | ansible.builtin.assert | True |
+| Prometheus routes ¦ Reject Scraparr file and loaded job drift before writes | ansible.builtin.assert | True |
+| Prometheus routes ¦ Create an exact temporary candidate in the existing configuration mount | ansible.builtin.tempfile | False |
+| Prometheus routes ¦ Populate the private candidate for the current promtool | ansible.builtin.copy | False |
+| Prometheus routes ¦ Validate using the existing image without pulls or new containers | ansible.builtin.command | False |
+| Prometheus routes ¦ Reject a concurrent configuration edit | ansible.builtin.stat | False |
+| Prometheus routes ¦ Require the original file before applying | ansible.builtin.assert | False |
+| Prometheus routes ¦ Re-resolve the caller before applying configuration | ansible.builtin.command | False |
+| Prometheus routes ¦ Reject replacement before applying configuration | ansible.builtin.assert | False |
+| Prometheus routes ¦ Recheck the exact caller PID and namespace before writes | ansible.builtin.command | False |
+| Prometheus routes ¦ Reject changed PID before writes | ansible.builtin.assert | False |
+| Prometheus routes ¦ Recheck PID birth and namespace before writes | ansible.builtin.command | False |
+| Prometheus routes ¦ Reject identity change before writes | ansible.builtin.assert | False |
+| Prometheus routes ¦ Apply only the validated configuration and save its backup | ansible.builtin.copy | False |
+| Prometheus routes ¦ Report the scoped configuration backup | ansible.builtin.debug | False |
+| Prometheus routes ¦ Reload only the exact current Docker caller | ansible.builtin.command | True |
+| Prometheus routes ¦ Require fresh HTTPS discovery and successful scraping | ansible.builtin.command | True |
+| Prometheus routes ¦ Require the freshly loaded Scraparr target and successful scrape | ansible.builtin.command | True |
+| Prometheus routes ¦ Confirm no caller replacement after reload | ansible.builtin.command | False |
+| Prometheus routes ¦ Require the retained caller | ansible.builtin.assert | False |
+| Prometheus routes ¦ Recheck exact caller after reload | ansible.builtin.command | False |
+| Prometheus routes ¦ Require unchanged birth and namespace | ansible.builtin.assert | False |
+
+#### File: tasks/sub_tasks/prometheus_haproxy_scrape.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Prometheus scrape ¦ Resolve canonical configuration path and HAProxy target | ansible.builtin.set_fact | False |
+| Prometheus scrape ¦ Validate the target against the mgt HAProxy publication | ansible.builtin.assert | False |
+| Prometheus scrape ¦ Resolve exactly the running Swarm caller | ansible.builtin.command | False |
+| Prometheus scrape ¦ Reject absent or ambiguous live callers | ansible.builtin.assert | False |
+| Prometheus scrape ¦ Project the exact caller and configuration mount without environments | ansible.builtin.command | False |
+| Prometheus scrape ¦ Require the inventory-owned configuration bind | ansible.builtin.assert | False |
+| Prometheus scrape ¦ Inspect existing configuration ownership | ansible.builtin.stat | False |
+| Prometheus scrape ¦ Require the existing regular managed file | ansible.builtin.assert | False |
+| Prometheus scrape ¦ Read the managed configuration privately | ansible.builtin.slurp | False |
+| Prometheus scrape ¦ Resolve only the existing HAProxy job | ansible.builtin.set_fact | False |
+| Prometheus scrape ¦ Reject ambiguous or custom target relabelling before writes | ansible.builtin.assert | False |
+| Prometheus scrape ¦ Append only the canonical mgt target and retain every existing job option | ansible.builtin.set_fact | False |
+| Prometheus scrape ¦ Require the exact default instance label for the mgt target | ansible.builtin.assert | False |
+| Prometheus scrape ¦ Build a candidate changing only the HAProxy job block | ansible.builtin.set_fact | False |
+| Prometheus scrape ¦ Show the configuration-only plan | ansible.builtin.debug | False |
+| Prometheus scrape ¦ Resolve the read-only live configuration query | ansible.builtin.set_fact | False |
+| Prometheus scrape ¦ Validate apply and reload without replacement | block | True |
+| Prometheus scrape ¦ Inspect loaded configuration without exposing it | ansible.builtin.command | False |
+| Prometheus scrape ¦ Create an exact temporary candidate in the existing configuration mount | ansible.builtin.tempfile | False |
+| Prometheus scrape ¦ Populate the private candidate for the current promtool | ansible.builtin.copy | False |
+| Prometheus scrape ¦ Validate using the existing image without pulls or new containers | ansible.builtin.command | False |
+| Prometheus scrape ¦ Reject a concurrent configuration edit | ansible.builtin.stat | False |
+| Prometheus scrape ¦ Require the original file before applying | ansible.builtin.assert | False |
+| Prometheus scrape ¦ Re-resolve the caller before applying configuration | ansible.builtin.command | False |
+| Prometheus scrape ¦ Reject replacement before applying configuration | ansible.builtin.assert | False |
+| Prometheus scrape ¦ Apply only the validated configuration and save its backup | ansible.builtin.copy | False |
+| Prometheus scrape ¦ Report the scoped configuration backup | ansible.builtin.debug | False |
+| Prometheus scrape ¦ Reload a previously written but not yet loaded target | ansible.builtin.debug | False |
+| Prometheus scrape ¦ Flush only the pending Prometheus reload | ansible.builtin.meta | False |
+| Prometheus scrape ¦ Require both targets in the freshly loaded configuration | ansible.builtin.command | False |
 
 #### File: tasks/sub_tasks/save_stack.yml
 

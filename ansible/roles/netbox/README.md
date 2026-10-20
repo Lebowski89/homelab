@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/06 |
+| Readme update        | 2026/10/20 |
 
 
 
@@ -293,22 +293,22 @@
 | [netbox_podman_services.2.**healthcheck**](defaults/main.yml#L295)   | dict | `{}` |    
 | [netbox_podman_services.2.healthcheck.**test**](defaults/main.yml#L296)   | list | `[]` |    
 | [netbox_podman_services.2.healthcheck.test.**0**](defaults/main.yml#L297)   | str | `CMD-SHELL` |    
-| [netbox_podman_services.2.healthcheck.test.**1**](defaults/main.yml#L298)   | str | `curl --fail --silent http://127.0.0.1:8000/login/ > /dev/null` |    
-| [netbox_podman_services.2.healthcheck.**interval**](defaults/main.yml#L299)   | str | `10s` |    
-| [netbox_podman_services.2.healthcheck.**timeout**](defaults/main.yml#L300)   | str | `5s` |    
-| [netbox_podman_services.2.healthcheck.**retries**](defaults/main.yml#L301)   | int | `5` |    
-| [netbox_podman_services.2.healthcheck.**start_period**](defaults/main.yml#L302)   | str | `30s` |    
-| [netbox_podman_services.2.**notify_healthy**](defaults/main.yml#L303)   | bool | `True` |    
-| [netbox_podman_services.2.**ports**](defaults/main.yml#L304)   | dict | `{}` |    
-| [netbox_podman_services.2.ports.**recovery**](defaults/main.yml#L305)   | dict | `{}` |    
-| [netbox_podman_services.2.ports.recovery.**host_ip**](defaults/main.yml#L306)   | str | `{{ local_ip }}` |    
-| [netbox_podman_services.2.ports.recovery.**published**](defaults/main.yml#L307)   | str | `{{ netbox_port }}` |    
-| [netbox_podman_services.2.ports.recovery.**target**](defaults/main.yml#L308)   | int | `8000` |    
-| [netbox_podman_secret_targets](defaults/main.yml#L309)   | dict | `{}` |    
-| [netbox_podman_secret_targets.**netbox_db_user_secret**](defaults/main.yml#L310)   | str | `/run/secrets/postgres_user_secret` |    
-| [netbox_podman_secret_targets.**netbox_db_password_secret**](defaults/main.yml#L311)   | str | `/run/secrets/postgres_pass_secret` |    
-| [netbox_postgres_backend_port](defaults/main.yml#L312)   | int | `15432` |    
-| [netbox_redis_backend_port](defaults/main.yml#L313)   | int | `16380` |    
+| [netbox_podman_services.2.healthcheck.test.**1**](defaults/main.yml#L300)   | str | `curl --fail --silent -H "Host: {{ netbox_frontend_fqdn }}" http://127.0.0.1:8000/login/ > /dev/null` |    
+| [netbox_podman_services.2.healthcheck.**interval**](defaults/main.yml#L301)   | str | `10s` |    
+| [netbox_podman_services.2.healthcheck.**timeout**](defaults/main.yml#L302)   | str | `5s` |    
+| [netbox_podman_services.2.healthcheck.**retries**](defaults/main.yml#L303)   | int | `5` |    
+| [netbox_podman_services.2.healthcheck.**start_period**](defaults/main.yml#L304)   | str | `30s` |    
+| [netbox_podman_services.2.**notify_healthy**](defaults/main.yml#L305)   | bool | `True` |    
+| [netbox_podman_services.2.**ports**](defaults/main.yml#L306)   | dict | `{}` |    
+| [netbox_podman_services.2.ports.**recovery**](defaults/main.yml#L307)   | dict | `{}` |    
+| [netbox_podman_services.2.ports.recovery.**host_ip**](defaults/main.yml#L308)   | str | `{{ local_ip }}` |    
+| [netbox_podman_services.2.ports.recovery.**published**](defaults/main.yml#L309)   | str | `{{ netbox_port }}` |    
+| [netbox_podman_services.2.ports.recovery.**target**](defaults/main.yml#L310)   | int | `8000` |    
+| [netbox_podman_secret_targets](defaults/main.yml#L311)   | dict | `{}` |    
+| [netbox_podman_secret_targets.**netbox_db_user_secret**](defaults/main.yml#L312)   | str | `/run/secrets/postgres_user_secret` |    
+| [netbox_podman_secret_targets.**netbox_db_password_secret**](defaults/main.yml#L313)   | str | `/run/secrets/postgres_pass_secret` |    
+| [netbox_postgres_backend_port](defaults/main.yml#L314)   | int | `15432` |    
+| [netbox_redis_backend_port](defaults/main.yml#L315)   | int | `16380` |    
 
 
 
@@ -325,11 +325,19 @@
 | Netbox ¦ Select explicit bootstrap operation | ansible.builtin.set_fact | False |  |
 | Netbox ¦ Validate required Vault inputs before mutation | ansible.builtin.assert | True |  |
 | Netbox ¦ Validate all Quadlet definitions before mutation | ansible.builtin.include_role | False |  |
-| Netbox ¦ Enforce every bootstrap requirement before stopping or preparing services | ansible.builtin.include_role | False |  |
+| Netbox ¦ Reset this operation's bootstrap prerequisite proofs | ansible.builtin.set_fact | False |  |
+| Netbox ¦ Enforce every bootstrap requirement before stopping or preparing services | ansible.builtin.include_tasks | False |  |
 | Netbox ¦ Stop consumers before providers in their persisted managers | ansible.builtin.include_role | True |  |
 | Netbox ¦ Process bootstrap providers and consumers | ansible.builtin.include_tasks | False |  |
 | Netbox ¦ Render Traefik dynamic file | ansible.builtin.template | True |  |
 | Netbox ¦ Retire Traefik route | ansible.builtin.file | True |  |
+
+#### File: tasks/requirements.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Netbox ¦ Check the selected bootstrap runtime and protection before stops | ansible.builtin.include_role | False |
+| Netbox ¦ Bind the pre-stop proof to its bootstrap service | ansible.builtin.set_fact | False |
 
 #### File: tasks/service.yml
 
@@ -337,7 +345,7 @@
 | ---- | ------ | -------------- | -----|
 | Netbox ¦ Reset current bootstrap inputs | ansible.builtin.set_fact | False |  |
 | Netbox ¦ Select only current-service Vault declarations | ansible.builtin.set_fact | True |  |
-| Netbox ¦ Require nonempty current-service credentials | ansible.builtin.assert | False |  |
+| Netbox ¦ Require nonempty current-service credentials | ansible.builtin.assert | True |  |
 | Netbox ¦ Deploy through the Podman adapter | ansible.builtin.include_role | False |  |
 
 
