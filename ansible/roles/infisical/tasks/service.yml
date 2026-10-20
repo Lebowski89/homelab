@@ -60,6 +60,7 @@
     podman_services_action_remove: '{{ infisical_podman_action == "remove" }}'
     podman_services_action_recreate: '{{ infisical_podman_action == "recreate" }}'
     podman_services_common_context:
+      requirements_proof: "{{ infisical_podman_prerequisite_proofs[infisical_podman_definition.name] }}"
       runtime: podman
       dispatch_host: '{{ inventory_hostname }}'
       controller_host: '{{ inventory_hostname }}'

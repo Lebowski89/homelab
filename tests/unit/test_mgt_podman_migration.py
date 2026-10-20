@@ -476,7 +476,9 @@ def test_bootstrap_registers_adapter_filters_without_catalog_preconditions(tmp_p
     path = tmp_path / "bootstrap-validation.yml"
     path.write_text(yaml.safe_dump(play))
     config = tmp_path / "ansible.cfg"
-    config.write_text(f"[defaults]\nroles_path={ROOT}/ansible/roles\ninventory=localhost,\nstdout_callback=default\n")
+    config.write_text(
+        f"[defaults]\nroles_path={ROOT}/ansible/roles\naction_plugins={ROOT}/ansible/action_plugins\nlibrary={ROOT}/ansible/library\ninventory=localhost,\nstdout_callback=default\n"
+    )
     result = subprocess.run(
         [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", str(path), "--check"],
         env=dict(
@@ -498,9 +500,11 @@ def test_bootstrap_and_shared_network_lifecycle_guards_and_tag_propagation():
         requirements = next(i for i, name in enumerate(names) if "Enforce every bootstrap requirement" in name)
         assert validate < requirements < first_mutation
         gate = tasks[requirements]
-        assert set(gate["tags"]) <= set(gate["ansible.builtin.include_role"]["apply"]["tags"])
-        assert "map(attribute='operational_requirements'" in gate["loop"]
-        assert "_podman_requirement[1]" in gate["vars"]["service_common_service"]
+        assert set(gate["tags"]) <= set(gate["ansible.builtin.include_tasks"]["apply"]["tags"])
+        prerequisite = yaml.safe_load((ROOT / f"ansible/roles/{role}/tasks/requirements.yml").read_text())[0]
+        assert set(gate["tags"]) <= set(prerequisite["ansible.builtin.include_role"]["apply"]["tags"])
+        assert f"{role}_podman_services" in gate["loop"]
+        assert "service_common_requirements_metadata" in prerequisite["vars"]["service_common_service"]
         stop = next(task for task in tasks if "Stop consumers before providers" in task["name"])
         assert "not ansible_check_mode" in stop["when"]
         assert stop["ansible.builtin.include_role"]["tasks_from"] == "stop_bootstrap"
@@ -1013,8 +1017,19 @@ def test_real_preflight_blocks_before_secret_resolution_files_or_bootstrap_recre
     ]
     path = tmp_path / "requirements.yml"
     path.write_text(yaml.safe_dump(play))
+    actions = tmp_path / "actions"
+    actions.mkdir()
+    (actions / "service_operational_check.py").write_text(
+        "from ansible.plugins.action import ActionBase\n"
+        "class ActionModule(ActionBase):\n"
+        "    def run(self, tmp=None, task_vars=None):\n"
+        "        assert self._task.args['phase'] == 'runtime'\n"
+        "        return {'changed': False, 'managed': False}\n"
+    )
     config = tmp_path / "ansible.cfg"
-    config.write_text(f"[defaults]\nroles_path={ROOT}/ansible/roles\ninventory=localhost,\nstdout_callback=default\n")
+    config.write_text(
+        f"[defaults]\nroles_path={ROOT}/ansible/roles\naction_plugins={actions}\nlibrary={ROOT}/ansible/library\ninventory=localhost,\nstdout_callback=default\n"
+    )
     args = [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", str(path)]
     if entry_point != "catalog":
         args += ["--tags", f"{entry_point}_recreate"]
@@ -1027,7 +1042,7 @@ def test_real_preflight_blocks_before_secret_resolution_files_or_bootstrap_recre
         text=True,
     )
     assert result.returncode != 0
-    assert "services_rootless_data_ready" in result.stdout + result.stderr
+    assert "services_rootless_data_ready" in result.stdout + result.stderr, result.stdout + result.stderr
     assert "Stop consumers" not in result.stdout
     assert "Resolve common Infisical" not in result.stdout
     assert not marker.exists()
@@ -1046,8 +1061,10 @@ def test_requirement_handoffs_pass_only_value_free_metadata():
     ]:
         tasks = yaml.safe_load((ROOT / path).read_text())
         gate = next(task for task in tasks if task.get("ansible.builtin.include_role", {}).get("tasks_from") == "operational_requirements")
-        passed = resolve(gate["vars"]["service_common_service"], variables)
-        assert passed == {"operational_requirements": cfg["operational_requirements"]}
+        environment = NativeEnvironment(undefined=StrictUndefined)
+        environment.filters.update(COMMON.FilterModule().filters())
+        passed = environment.from_string(gate["vars"]["service_common_service"]).render(**variables, service_common_name="fake")
+        assert passed == COMMON.service_common_requirements_metadata(cfg, "fake")
         assert "NONPRODUCTION" not in repr(passed)
 
 

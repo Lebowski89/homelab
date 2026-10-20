@@ -58,24 +58,21 @@
     - infisical_deploy
     - infisical_recreate
     - infisical_remove
+- name: Infisical | Reset this operation's bootstrap prerequisite proofs
+  ansible.builtin.set_fact:
+    infisical_podman_prerequisite_proofs: {}
+  tags: [infisical_bootstrap, infisical_deploy, infisical_recreate, infisical_remove]
+
 - name: Infisical | Enforce every bootstrap requirement before stopping or preparing services
-  ansible.builtin.include_role:
-    name: service_common
-    tasks_from: operational_requirements
+  ansible.builtin.include_tasks:
+    file: requirements.yml
     apply:
       tags: [infisical_bootstrap, infisical_deploy, infisical_recreate, infisical_remove]
-  vars:
-    service_common_service: "{{ {'operational_requirements': infisical_podman_requirement[1]} }}"
-    service_common_name: "{{ infisical_podman_requirement[0] }}"
-    service_common_action: "{{ infisical_podman_action }}"
-    service_common_execution_only: "{{ podman_services_prepare_execution_only | default(false) }}"
-  tags: [infisical_bootstrap, infisical_deploy, infisical_recreate, infisical_remove]
-  loop: >-
-    {{ infisical_podman_services | map(attribute='name')
-       | zip(infisical_podman_services | map(attribute='operational_requirements', default={})) | list }}
+  loop: "{{ infisical_podman_services }}"
   loop_control:
     loop_var: infisical_podman_requirement
-    label: "{{ infisical_podman_requirement[0] }}"
+    label: "{{ infisical_podman_requirement.name }}"
+  tags: [infisical_bootstrap, infisical_deploy, infisical_recreate, infisical_remove]
 
 - name: Infisical | Stop consumers before providers in their persisted managers
   when:
@@ -94,6 +91,7 @@
     podman_services_role_prefix: '{{ infisical_podman_definition.name }}'
     podman_services_action_remove: true
     podman_services_common_context:
+      requirements_proof: "{{ infisical_podman_prerequisite_proofs[infisical_podman_definition.name] }}"
       runtime: podman
       dispatch_host: '{{ inventory_hostname }}'
       controller_host: '{{ inventory_hostname }}'

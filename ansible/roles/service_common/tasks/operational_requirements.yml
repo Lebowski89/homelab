@@ -1,5 +1,35 @@
 ---
 
+- name: Service common | Validate requirement declarations and operation before inspection
+  ansible.builtin.assert:
+    that:
+      - >-
+        service_common_service | service_common_requirements_validate(
+          service_common_name, service_common_action, {}, true, service_common_execution_only)
+
+- name: Service common | Reset this invocation's prerequisite proof
+  ansible.builtin.set_fact:
+    service_common_prerequisite_proof: {}
+
+- name: Service common | Inspect live prerequisites only for a mutating service operation
+  when:
+    - not ansible_check_mode
+    - not service_common_execution_only
+    - service_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - not (service_common_service | service_common_requirements_proof(service_common_name, service_common_preflight_proof | default({})))
+    - >-
+      (service_common_service.operational_requirements | default({}) | service_common_requirements_normalize).acl | length > 0
+      or (service_common_service.operational_requirements | default({}) | service_common_requirements_normalize).ownership_transition
+  ansible.builtin.include_tasks:
+    file: operational_inspection.yml
+    apply:
+      tags: "{{ ansible_run_tags }}"
+
+- name: Service common | Reuse this operation's bound pre-stop proof across recreate
+  when: service_common_service | service_common_requirements_proof(service_common_name, service_common_preflight_proof | default({}))
+  ansible.builtin.set_fact:
+    service_common_prerequisite_proof: "{{ service_common_preflight_proof }}"
+
 - name: Service common | Enforce explicit operational requirements before mutation
   ansible.builtin.assert:
     that:
@@ -12,8 +42,8 @@
             'services_worker_backend_acl_ready': services_worker_backend_acl_ready | default(none),
             'services_bootstrap_acl_ready': services_bootstrap_acl_ready | default(none),
             'services_rootless_data_ready': services_rootless_data_ready | default({})
-          }, ansible_check_mode, service_common_execution_only)
-    fail_msg: Required operational acknowledgements must precede live mutation.
+          }, ansible_check_mode, service_common_execution_only, service_common_prerequisite_proof)
+    fail_msg: First cutover or unproved ownership transition needs explicit acknowledgements; maintenance requires a compliant installed policy.
 
 - name: Service common | Report required operational acknowledgements in check mode
   when: ansible_check_mode
@@ -21,4 +51,4 @@
     msg: >-
       {{ service_common_name }} requires
       {{ service_common_service.operational_requirements | default({}) | service_common_requirements_normalize }}.
-      This is a plan; ACLs and ownership transitions are not verified.
+      This is a plan; installed protection and ownership are not inspected in check mode.
