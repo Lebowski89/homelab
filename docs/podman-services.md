@@ -144,14 +144,14 @@ cannot override a failed maintenance audit. No ordinary application operation
 installs or extends policy. This verifies mechanical prerequisites, not completed
 application acceptance.
 
-The pre-stop result is bound to the exact service/target metadata and retained
-only in that operation's common context. Recreate checks before stopping the old
-runtime, then reuses that bound result while starting the replacement; existing
-runtime ownership, caller reconciliation and post-start checks remain. Bootstrap
-checks every provider/consumer before stopping any and retains each result by
-service name. Static local bootstrap uses the trusted installed policy identity
-and verifies its local address, without depending on NetBox, the catalog or
-Infisical lookup.
+A **prerequisite proof** is the result of checks for one service operation, matched to
+its exact service/target metadata. It stays in that operation's common context and is
+not saved as application acceptance. Recreate checks before stopping the old runtime,
+then reuses those checks while starting the replacement; existing runtime ownership,
+caller reconciliation and post-start checks remain. Bootstrap checks every
+provider/consumer before stopping any and retains each result by service name. Static
+local bootstrap uses the trusted installed policy identity and verifies its local
+address, without depending on NetBox, the catalog or Infisical lookup.
 
 Requirements remain independent of tags. Check mode validates and reports a
 plan without inspecting live protection. Drift/removal remain available without

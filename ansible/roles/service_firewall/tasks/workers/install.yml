@@ -1,6 +1,6 @@
 ---
 
-- name: Worker backend firewall | Check existing firewall tools and selected backend # noqa var-naming[no-role-prefix]
+- name: Service firewall | Workers | Check existing firewall tools and selected backend # noqa var-naming[no-role-prefix]
   ansible.builtin.command:
     argv: ["{{ worker_backend_firewall_tool }}", --version]
   loop: [iptables, ip6tables, iptables-restore, ip6tables-restore]
@@ -12,26 +12,26 @@
     worker_backend_firewall_tool_result.rc != 0 or
     '(' ~ worker_backend_firewall_backend ~ ')' not in worker_backend_firewall_tool_result.stdout
 
-- name: Worker backend firewall | Validate Unraid boot entry before writing policy
+- name: Service firewall | Workers | Validate Unraid boot entry before writing policy
   when: worker_backend_firewall_unraid.stat.exists
   block:
-    - name: Worker backend firewall | Observe flash mount-defined file permissions # noqa var-naming[no-role-prefix]
+    - name: Service firewall | Workers | Read Unraid flash permissions from the boot script # noqa var-naming[no-role-prefix]
       ansible.builtin.stat:
         path: /boot/config/go
       register: worker_backend_firewall_go_stat
 
-    - name: Worker backend firewall | Read existing supported boot script # noqa var-naming[no-role-prefix]
+    - name: Service firewall | Workers | Read existing supported boot script # noqa var-naming[no-role-prefix]
       ansible.builtin.slurp:
         src: /boot/config/go
       register: worker_backend_firewall_go
 
-    - name: Worker backend firewall | Require a shell boot script
+    - name: Service firewall | Workers | Require a shell boot script
       ansible.builtin.assert:
         that:
           - (worker_backend_firewall_go.content | b64decode).splitlines()[0] in ['#!/bin/bash', '#!/bin/sh']
         fail_msg: Preserve and inspect the existing Unraid go script; this role inserts only its marked block after the shebang.
 
-- name: Worker backend firewall | Create only the managed policy directory
+- name: Service firewall | Workers | Create only the managed policy directory
   ansible.builtin.file:
     path: "{{ worker_backend_firewall_root }}"
     state: directory
@@ -39,7 +39,7 @@
     group: "{{ omit if worker_backend_firewall_unraid.stat.exists else 'root' }}"
     mode: "{{ omit if worker_backend_firewall_unraid.stat.exists else '0755' }}"
 
-- name: Worker backend firewall | Install the standard-library helper # noqa var-naming[no-role-prefix]
+- name: Service firewall | Workers | Install the managed firewall helper # noqa var-naming[no-role-prefix]
   ansible.builtin.copy:
     content: "{{ 'workers' | service_firewall_helper_source }}"
     dest: "{{ worker_backend_firewall_root }}/policy.py"
@@ -48,7 +48,7 @@
     mode: "{{ omit if worker_backend_firewall_unraid.stat.exists else '0644' }}"
   register: worker_backend_firewall_helper_copy
 
-- name: Worker backend firewall | Install only the managed policy declarations
+- name: Service firewall | Workers | Install only the managed policy declarations
   ansible.builtin.copy:
     content: "{{ worker_backend_firewall_policy | to_nice_json }}\n"
     dest: "{{ worker_backend_firewall_root }}/policy.json"
@@ -56,7 +56,7 @@
     group: "{{ omit if worker_backend_firewall_unraid.stat.exists else 'root' }}"
     mode: "{{ omit if worker_backend_firewall_unraid.stat.exists else '0644' }}"
 
-- name: Worker backend firewall | Apply the policy before installing startup hooks # noqa var-naming[no-role-prefix]
+- name: Service firewall | Workers | Apply the policy before installing startup hooks # noqa var-naming[no-role-prefix]
   ansible.builtin.command:
     argv:
       - "{{ worker_backend_firewall_python }}"
@@ -67,7 +67,7 @@
   register: worker_backend_firewall_apply
   changed_when: (worker_backend_firewall_apply.stdout | from_json).changed
 
-- name: Worker backend firewall | Install platform persistence
+- name: Service firewall | Workers | Configure policy startup and reconciliation for this platform
   ansible.builtin.include_tasks:
     file: "{{ 'unraid.yml' if worker_backend_firewall_unraid.stat.exists else 'systemd.yml' }}"
     apply:

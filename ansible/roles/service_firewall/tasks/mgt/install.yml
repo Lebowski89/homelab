@@ -1,10 +1,10 @@
 ---
 
-- name: Mgt firewall | Gather minimal platform facts
+- name: Service firewall | Mgt | Gather minimal platform facts
   ansible.builtin.setup:
     gather_subset: ['!all', '!min', distribution, service_mgr, python]
 
-- name: Mgt firewall | Require the current supported platform
+- name: Service firewall | Mgt | Validate the supported Ubuntu version and Python
   ansible.builtin.assert:
     that:
       - ansible_facts.distribution == 'Ubuntu'
@@ -15,7 +15,7 @@
       - mgt_firewall_root == '/etc/skynet-mgt-firewall'
     fail_msg: This phase supports the current Ubuntu 26.04 mgt with existing Python 3.10+ only. Rocky support is deferred.
 
-- name: Mgt firewall | Resolve live identities and dry-test both families before persistent writes # noqa var-naming[no-role-prefix]
+- name: Service firewall | Mgt | Verify caller identities and test IPv4 and IPv6 rules before writing files # noqa var-naming[no-role-prefix]
   ansible.builtin.command:
     argv: ["{{ ansible_facts.python.executable }}", -c, "{{ mgt_firewall_helper_source }}", validate, --stdin]
     expand_argument_vars: false
@@ -23,11 +23,11 @@
   register: mgt_firewall_preflight
   changed_when: false
 
-- name: Mgt firewall | Carry the validated dedicated manager dependencies # noqa var-naming[no-role-prefix]
+- name: Service firewall | Mgt | Save the verified service-manager dependencies # noqa var-naming[no-role-prefix]
   ansible.builtin.set_fact:
     mgt_firewall_policy: "{{ mgt_firewall_policy | combine({'guard_units': (mgt_firewall_preflight.stdout | from_json).guard_units}) }}"
 
-- name: Mgt firewall | Create the owned policy directory
+- name: Service firewall | Mgt | Create the owned policy directory
   ansible.builtin.file:
     path: "{{ mgt_firewall_root }}"
     state: directory
@@ -35,7 +35,7 @@
     group: root
     mode: "0700"
 
-- name: Mgt firewall | Install the self-contained scoped policy helper
+- name: Service firewall | Mgt | Install the managed firewall helper
   ansible.builtin.copy:
     content: "{{ mgt_firewall_helper_source }}"
     dest: "{{ mgt_firewall_root }}/policy.py"
@@ -43,7 +43,7 @@
     group: root
     mode: "0600"
 
-- name: Mgt firewall | Install the owned guard and periodic reconciler units
+- name: Service firewall | Mgt | Install firewall protection and rule-reconciliation units
   ansible.builtin.template:
     src: "mgt/{{ mgt_firewall_unit }}.j2"
     dest: "/etc/systemd/system/{{ mgt_firewall_unit }}"
@@ -54,7 +54,7 @@
   loop_control:
     loop_var: mgt_firewall_unit
 
-- name: Mgt firewall | Create only the Docker drop-in directory
+- name: Service firewall | Mgt | Create only the Docker drop-in directory
   ansible.builtin.file:
     path: /etc/systemd/system/docker.service.d
     state: directory
@@ -62,7 +62,7 @@
     group: root
     mode: "0755"
 
-- name: Mgt firewall | Order Docker around the managed guards without restarting it
+- name: Service firewall | Mgt | Install Docker startup ordering without restarting Docker
   ansible.builtin.template:
     src: mgt/docker-ordering.conf.j2
     dest: /etc/systemd/system/docker.service.d/45-skynet-mgt-firewall.conf
@@ -70,7 +70,7 @@
     group: root
     mode: "0644"
 
-- name: Mgt firewall | Create only the dedicated manager drop-in directories
+- name: Service firewall | Mgt | Create startup-ordering directories for protected services
   ansible.builtin.file:
     path: "/etc/systemd/system/{{ mgt_firewall_guard_unit }}.d"
     state: directory
@@ -81,7 +81,7 @@
   loop_control:
     loop_var: mgt_firewall_guard_unit
 
-- name: Mgt firewall | Require the guard for dedicated rootless managers and rootful endpoints
+- name: Service firewall | Mgt | Make protected services depend on firewall protection
   ansible.builtin.template:
     src: mgt/caller-ordering.conf.j2
     dest: "/etc/systemd/system/{{ mgt_firewall_guard_unit }}.d/45-skynet-mgt-firewall.conf"
@@ -92,7 +92,7 @@
   loop_control:
     loop_var: mgt_firewall_guard_unit
 
-- name: Mgt firewall | Resolve only the managed persistence paths # noqa var-naming[no-role-prefix]
+- name: Service firewall | Mgt | List managed startup and reconciliation files # noqa var-naming[no-role-prefix]
   ansible.builtin.set_fact:
     mgt_firewall_persistence_paths: >-
       {{ ['/etc/systemd/system/skynet-mgt-firewall.service',
@@ -101,7 +101,7 @@
           '/etc/systemd/system/docker.service.d/45-skynet-mgt-firewall.conf'] +
           mgt_firewall_policy.guard_units | map('regex_replace', '^(.*)$', '/etc/systemd/system/\1.d/45-skynet-mgt-firewall.conf') | list }}
 
-- name: Mgt firewall | Record checksums of only the owned persistence files # noqa var-naming[no-role-prefix]
+- name: Service firewall | Mgt | Read checksums of managed startup and reconciliation files # noqa var-naming[no-role-prefix]
   ansible.builtin.stat:
     path: "{{ mgt_firewall_persistence_path }}"
     checksum_algorithm: sha256
@@ -110,14 +110,14 @@
     loop_var: mgt_firewall_persistence_path
   register: mgt_firewall_persistence_files
 
-- name: Mgt firewall | Store the offline persistence audit manifest # noqa var-naming[no-role-prefix]
+- name: Service firewall | Mgt | Prepare the startup-file checksum manifest # noqa var-naming[no-role-prefix]
   ansible.builtin.set_fact:
     mgt_firewall_policy: >-
       {{ mgt_firewall_policy | combine({'persistence': dict(
          mgt_firewall_persistence_files.results | map(attribute='mgt_firewall_persistence_path') |
          zip(mgt_firewall_persistence_files.results | map(attribute='stat.checksum')) )}) }}
 
-- name: Mgt firewall | Persist the completed offline audit manifest
+- name: Service firewall | Mgt | Save the startup-file checksum manifest
   ansible.builtin.copy:
     content: "{{ mgt_firewall_policy | to_nice_json }}\n"
     dest: "{{ mgt_firewall_root }}/policy.json"
@@ -125,19 +125,19 @@
     group: root
     mode: "0600"
 
-- name: Mgt firewall | Apply the active policy before enabling persistence # noqa var-naming[no-role-prefix]
+- name: Service firewall | Mgt | Apply the policy before enabling startup protection # noqa var-naming[no-role-prefix]
   ansible.builtin.command:
     argv: ["{{ ansible_facts.python.executable }}", "{{ mgt_firewall_root }}/policy.py", apply]
   register: mgt_firewall_apply
   changed_when: (mgt_firewall_apply.stdout | from_json).changed
 
-- name: Mgt firewall | Enable boot guards without restarting application services
+- name: Service firewall | Mgt | Enable startup protection without restarting applications
   ansible.builtin.systemd_service:
     name: skynet-mgt-firewall.service
     enabled: true
     daemon_reload: true
 
-- name: Mgt firewall | Enable and start only the managed reconciler timer
+- name: Service firewall | Mgt | Enable and start periodic rule reconciliation
   ansible.builtin.systemd_service:
     name: skynet-mgt-firewall-reconcile.timer
     enabled: true

@@ -1,22 +1,26 @@
 ---
 
-- name: Service common | Validate requirement declarations and operation before inspection
+- name: Service common | Validate service requirements before inspection
   ansible.builtin.assert:
     that:
       - >-
         service_common_service | service_common_requirements_validate(
           service_common_name, service_common_action, {}, true, service_common_execution_only)
 
-- name: Service common | Reset this invocation's prerequisite proof
+# A prerequisite proof is an in-memory result for one exact service contract.
+# It is not persisted acceptance and must not carry over to another operation.
+- name: Service common | Clear prerequisite results from the previous service operation
   ansible.builtin.set_fact:
     service_common_prerequisite_proof: {}
 
-- name: Service common | Inspect live prerequisites only for a mutating service operation
+- name: Service common | Check prerequisites before changing the service
   when:
     - not ansible_check_mode
     - not service_common_execution_only
     - service_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
-    - not (service_common_service | service_common_requirements_proof(service_common_name, service_common_preflight_proof | default({})))
+    - >-
+      not (service_common_service | service_common_requirements_proof(
+        service_common_name, service_common_preflight_proof | default({})))
     - >-
       (service_common_service.operational_requirements | default({}) | service_common_requirements_normalize).acl | length > 0
       or (service_common_service.operational_requirements | default({}) | service_common_requirements_normalize).ownership_transition
@@ -25,12 +29,16 @@
     apply:
       tags: "{{ ansible_run_tags }}"
 
-- name: Service common | Reuse this operation's bound pre-stop proof across recreate
-  when: service_common_service | service_common_requirements_proof(service_common_name, service_common_preflight_proof | default({}))
+# Recreate must reuse successful checks after its old runtime has stopped;
+# rechecking stopped runtime identities could block their replacements.
+- name: Service common | Reuse prerequisite checks completed before stopping the service
+  when: >-
+    service_common_service | service_common_requirements_proof(
+      service_common_name, service_common_preflight_proof | default({}))
   ansible.builtin.set_fact:
     service_common_prerequisite_proof: "{{ service_common_preflight_proof }}"
 
-- name: Service common | Enforce explicit operational requirements before mutation
+- name: Service common | Require verified prerequisites before changing the service
   ansible.builtin.assert:
     that:
       - >-
@@ -45,7 +53,7 @@
           }, ansible_check_mode, service_common_execution_only, service_common_prerequisite_proof)
     fail_msg: First cutover or unproved ownership transition needs explicit acknowledgements; maintenance requires a compliant installed policy.
 
-- name: Service common | Report required operational acknowledgements in check mode
+- name: Service common | Show required acknowledgements in the check-mode plan
   when: ansible_check_mode
   ansible.builtin.debug:
     msg: >-

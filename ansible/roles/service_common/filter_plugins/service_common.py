@@ -797,7 +797,12 @@ def service_common_requirements_metadata(service: Any, name: str) -> dict[str, A
 
 
 def service_common_requirements_proof(service: Any, name: str, proof: Any) -> bool:
-    """Match an ephemeral pre-stop proof to this exact selected contract."""
+    """Match this operation's saved prerequisite checks to the selected service.
+
+    The proof is an in-memory result, not a durable acceptance record. Matching
+    value-free service metadata allows recreate to reuse it after the old
+    runtime stops, while rejecting reuse for another service or changed target.
+    """
     return (
         isinstance(proof, Mapping)
         and isinstance(proof.get("acl"), list)

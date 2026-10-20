@@ -1,6 +1,6 @@
 ---
 
-- name: Worker backend firewall | Validate canonical inventory groups
+- name: Service firewall | Workers | Validate the controller and worker inventory groups
   ansible.builtin.assert:
     that:
       - groups[services_controller_inventory_group] | default([]) | length == 1
@@ -10,7 +10,7 @@
       - groups[services_controller_inventory_group][0] not in [groups[services_storage_inventory_group][0], services_plex_host]
   tags: [always]
 
-- name: Worker backend firewall | Resolve existing service host contracts # noqa var-naming[no-role-prefix]
+- name: Service firewall | Workers | Select the inventory hosts and requested operation # noqa var-naming[no-role-prefix]
   ansible.builtin.set_fact:
     services_controller_host: "{{ groups[services_controller_inventory_group][0] }}"
     services_storage_host: "{{ groups[services_storage_inventory_group][0] }}"
@@ -19,7 +19,7 @@
          'check' if 'worker_backend_firewall_check' in ansible_run_tags else 'install' }}
   tags: [always]
 
-- name: Worker backend firewall | Reject conflicting operations
+- name: Service firewall | Workers | Reject conflicting operations
   ansible.builtin.assert:
     that:
       - >-
@@ -27,7 +27,7 @@
         'worker_backend_firewall_remove']) | length <= 1
   tags: [always]
 
-- name: Worker backend firewall | Manage only the two migration workers
+- name: Service firewall | Workers | Run the workers profile on the selected worker hosts
   ansible.builtin.include_tasks:
     file: "{{ role_path }}/tasks/main.yml"
     apply:

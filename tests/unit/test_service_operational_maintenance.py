@@ -216,30 +216,57 @@ def test_actual_role_precedes_stop_and_caches_only_this_service_operation(tmp_pa
     (actions / "service_operational_check.py").write_text(f"""
 import base64, importlib.util, json
 from pathlib import Path
-spec=importlib.util.spec_from_file_location('actual_check', {str(ROOT / "ansible/action_plugins/service_operational_check.py")!r})
-m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
-fixture=json.loads(Path({str(fixture)!r}).read_text())
+
+spec = importlib.util.spec_from_file_location("actual_check", {str(ROOT / "ansible/action_plugins/service_operational_check.py")!r})
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+fixture = json.loads(Path({str(fixture)!r}).read_text())
+
+
 class ActionModule(m.ActionModule):
     def _execute_module(self, module_name=None, module_args=None, **kwargs):
-        args=module_args
-        if module_name=='ansible.builtin.stat':
-            exists=fixture['mode']!='missing-policy'
-            path=args['path']
-            return {{'stat':{{'exists':exists,'isreg':True,'isdir':True,'isblk':True,'islnk':False,
-                             'uid':0,'gid':0,'mode':'0644','dev':2049,'device_type':2049}}}}
-        if module_name=='ansible.builtin.slurp':
-            value='21 1 8:1 / /boot rw - vfat /dev/fixture rw,uid=0,gid=0' if args['src']=='/proc/self/mountinfo' else json.dumps(fixture['policy'])
-            return {{'content':base64.b64encode(value.encode()).decode()}}
-        if module_name=='ansible.builtin.command':
-            argv=args['argv']
-            assert not Path({str(stopped)!r}).exists(), 'late audit/runtime probe after stop'
-            with Path({str(events)!r}).open('a') as out:out.write(json.dumps(argv)+chr(10))
-            if argv[0]=='docker':
-                if fixture['mode'].startswith('initial'):return {{'rc':1,'stderr':'no such service: NONPRODUCTION'}}
-                return {{'rc':0,'stdout':json.dumps(fixture['observed'])}}
-            if argv[0]=='ip':return {{'rc':0,'stdout':json.dumps([{{'addr_info':[{{'local':'192.0.2.11'}}]}}])}}
-            if 'check' in argv:return {{'rc':0,'stdout':json.dumps({{'compliant':fixture['mode']!='noncompliant','families':[4,6],'watch_running':True}})}}
-        raise AssertionError('Unexpected remote operation: '+module_name)
+        args = module_args
+        if module_name == "ansible.builtin.stat":
+            exists = fixture["mode"] != "missing-policy"
+            path = args["path"]
+            return {{
+                "stat": {{
+                    "exists": exists,
+                    "isreg": True,
+                    "isdir": True,
+                    "isblk": True,
+                    "islnk": False,
+                    "uid": 0,
+                    "gid": 0,
+                    "mode": "0644",
+                    "dev": 2049,
+                    "device_type": 2049,
+                }}
+            }}
+        if module_name == "ansible.builtin.slurp":
+            value = (
+                "21 1 8:1 / /boot rw - vfat /dev/fixture rw,uid=0,gid=0"
+                if args["src"] == "/proc/self/mountinfo"
+                else json.dumps(fixture["policy"])
+            )
+            return {{"content": base64.b64encode(value.encode()).decode()}}
+        if module_name == "ansible.builtin.command":
+            argv = args["argv"]
+            assert not Path({str(stopped)!r}).exists(), "late audit/runtime probe after stop"
+            with Path({str(events)!r}).open("a") as out:
+                out.write(json.dumps(argv) + chr(10))
+            if argv[0] == "docker":
+                if fixture["mode"].startswith("initial"):
+                    return {{"rc": 1, "stderr": "no such service: NONPRODUCTION"}}
+                return {{"rc": 0, "stdout": json.dumps(fixture["observed"])}}
+            if argv[0] == "ip":
+                return {{"rc": 0, "stdout": json.dumps([{{"addr_info": [{{"local": "192.0.2.11"}}]}}])}}
+            if "check" in argv:
+                return {{
+                    "rc": 0,
+                    "stdout": json.dumps({{"compliant": fixture["mode"] != "noncompliant", "families": [4, 6], "watch_running": True}}),
+                }}
+        raise AssertionError("Unexpected remote operation: " + module_name)
 """)
     variables = {k: variables[k] for k in ["services_controller_host", "services_storage_host", "services_plex_host"]}
     variables.update(
@@ -383,25 +410,45 @@ def test_actual_mgt_audit_and_static_bootstrap_need_no_provider_or_replacement(t
     actions = tmp_path / "actions"
     actions.mkdir()
     (actions / "service_operational_check.py").write_text(f"""
-import base64,importlib.util,json
+import base64, importlib.util, json
 from pathlib import Path
-spec=importlib.util.spec_from_file_location('actual_check',{str(ROOT / "ansible/action_plugins/service_operational_check.py")!r})
-m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
-files=json.loads(Path({str(fixture)!r}).read_text())
+
+spec = importlib.util.spec_from_file_location("actual_check", {str(ROOT / "ansible/action_plugins/service_operational_check.py")!r})
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+files = json.loads(Path({str(fixture)!r}).read_text())
+
+
 class ActionModule(m.ActionModule):
-    def _execute_module(self,module_name=None,module_args=None,**kwargs):
-        a=module_args
-        if module_name=='ansible.builtin.stat':
-            p=a['path'];v=files.get(p)
-            return {{'stat':{{'exists':v is not None,'uid':v[0] if v else 0,'isreg':v is not None and v[1] is not None,'isdir':v is not None and v[1] is None,'islnk':False,'mode':'0644'}}}}
-        if module_name=='ansible.builtin.slurp':return {{'content':base64.b64encode(files[a['src']][1].encode()).decode()}}
-        argv=a['argv']
-        with Path({str(events)!r}).open('a') as f:f.write(json.dumps(argv)+chr(10))
-        if argv[0]=='getent':return {{'rc':0,'stdout':{(account + ":x:2019:2019::/var/lib/" + account + ":/usr/sbin/nologin")!r}}}
-        if argv[0]=='ip':return {{'rc':0,'stdout':'[{{"addr_info":[{{"local":"192.0.2.10"}}]}}]'}}
-        if 'check' in argv:return {{'rc':0,'stdout':'{{"compliant":true,"pending":[],"families":[4,6]}}'}}
-        if argv[0]=='systemctl':return {{'rc':0,'stdout':'active'}}
-        raise AssertionError('Unexpected runtime I/O')
+    def _execute_module(self, module_name=None, module_args=None, **kwargs):
+        a = module_args
+        if module_name == "ansible.builtin.stat":
+            p = a["path"]
+            v = files.get(p)
+            return {{
+                "stat": {{
+                    "exists": v is not None,
+                    "uid": v[0] if v else 0,
+                    "isreg": v is not None and v[1] is not None,
+                    "isdir": v is not None and v[1] is None,
+                    "islnk": False,
+                    "mode": "0644",
+                }}
+            }}
+        if module_name == "ansible.builtin.slurp":
+            return {{"content": base64.b64encode(files[a["src"]][1].encode()).decode()}}
+        argv = a["argv"]
+        with Path({str(events)!r}).open("a") as f:
+            f.write(json.dumps(argv) + chr(10))
+        if argv[0] == "getent":
+            return {{"rc": 0, "stdout": {account + ":x:2019:2019::/var/lib/" + account + ":/usr/sbin/nologin"!r}}}
+        if argv[0] == "ip":
+            return {{"rc": 0, "stdout": '[{{"addr_info":[{{"local":"192.0.2.10"}}]}}]'}}
+        if "check" in argv:
+            return {{"rc": 0, "stdout": '{{"compliant":true,"pending":[],"families":[4,6]}}'}}
+        if argv[0] == "systemctl":
+            return {{"rc": 0, "stdout": "active"}}
+        raise AssertionError("Unexpected runtime I/O")
 """)
     variables = {
         "service_common_service": cfg,

@@ -1,13 +1,13 @@
 ---
 
-- name: Worker backend firewall | Install persistent Unraid launcher
+- name: Service firewall | Workers | Install persistent Unraid launcher
   ansible.builtin.template:
     src: workers/unraid-start.sh.j2
     dest: "{{ worker_backend_firewall_root }}/start.sh"
     # VFAT flash ownership/modes are mount-defined; do not repeatedly chmod it.
     mode: "{{ worker_backend_firewall_go_stat.stat.mode }}"
 
-- name: Worker backend firewall | Insert only the owned early Unraid boot block
+- name: Service firewall | Workers | Add the managed policy-startup block to the Unraid boot script
   ansible.builtin.blockinfile:
     path: /boot/config/go
     insertafter: '(?m)\A#![^\n]*$'
@@ -16,15 +16,16 @@
       /bin/bash /boot/config/skynet-worker-backend-firewall/start.sh ||
       logger -t skynet-worker-backends 'Policy startup failed; backend cutover must remain blocked'
 
-# This ordered stop must finish before the subsequent start, rather than run at play end.
-- name: Worker backend firewall | Stop old Unraid reconciler before code restart # noqa no-handler var-naming[no-role-prefix]
+# Run this stop here, not as a deferred handler: the old reconciler must exit
+# before the replacement process starts.
+- name: Service firewall | Workers | Stop the old Unraid rule-reconciliation process before starting its replacement # noqa no-handler var-naming[no-role-prefix]
   ansible.builtin.command:
     argv: ["{{ worker_backend_firewall_python }}", "{{ worker_backend_firewall_root }}/policy.py", stop-watch]
   when: worker_backend_firewall_helper_copy.changed
   register: worker_backend_firewall_stop_watch
   changed_when: (worker_backend_firewall_stop_watch.stdout | from_json).changed
 
-- name: Worker backend firewall | Start the singleton restart-aware reconciler # noqa var-naming[no-role-prefix]
+- name: Service firewall | Workers | Start one Unraid rule-reconciliation process # noqa var-naming[no-role-prefix]
   ansible.builtin.command:
     argv:
       - "{{ worker_backend_firewall_python }}"
