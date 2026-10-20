@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/06 |
+| Readme update        | 2026/10/20 |
 
 
 
@@ -33,22 +33,24 @@
 | [podman_services_rootless_pasta_subnet](defaults/main.yml#L6)   | str | `10.0.2.0/24` |    
 | [podman_services_rootless_pasta_gateway](defaults/main.yml#L7)   | str | `10.0.2.2` |    
 | [podman_services_rootless_pasta_dns_forward](defaults/main.yml#L8)   | str | `10.0.2.3` |    
-| [podman_services_execution_state_dir](defaults/main.yml#L9)   | str | `/var/lib/podman-services` |    
-| [podman_services_nologin_shell](defaults/main.yml#L10)   | str | `/usr/sbin/nologin` |    
-| [podman_services_action_remove](defaults/main.yml#L11)   | str | `{{ 'remove' in (ansible_run_tags ¦ default([])) }}` |    
-| [podman_services_action_recreate](defaults/main.yml#L12)   | str | `{{ 'recreate' in (ansible_run_tags ¦ default([])) }}` |    
-| [podman_services_action_update](defaults/main.yml#L13)   | str | `{{ 'update' in (ansible_run_tags ¦ default([])) }}` |    
-| [podman_services_action_drift](defaults/main.yml#L14)   | str | `{{ 'drift' in (ansible_run_tags ¦ default([])) }}` |    
-| [podman_services_action_bootstrap](defaults/main.yml#L15)   | str | `{{ 'bootstrap' in (ansible_run_tags ¦ default([])) }}` |    
-| [podman_services_common_action](defaults/main.yml#L16)   | str | `<multiline value: folded_strip>` |    
-| [podman_services_state](defaults/main.yml#L24)   | str | `<multiline value: folded_strip>` |    
-| [podman_services_pull_images](defaults/main.yml#L33)   | bool | `True` |    
-| [podman_services_prepare_execution_only](defaults/main.yml#L34)   | bool | `False` |    
-| [podman_services_managed_namespace_dependents](defaults/main.yml#L35)   | list | `[]` |    
-| [podman_services_traefik_delegate](defaults/main.yml#L36)   | str | `{{ podman_services_controller_host }}` |    
-| [podman_services_traefik_dynamic_dir](defaults/main.yml#L37)   | str | `/opt/traefik/dynamic` |    
-| [podman_services_traefik_dynamic_owner](defaults/main.yml#L38)   | str | `1000` |    
-| [podman_services_traefik_dynamic_group](defaults/main.yml#L39)   | str | `1000` |    
+| [podman_services_rootless_pasta_ipv6_address](defaults/main.yml#L9)   | str | `fd00:2::2/64` |    
+| [podman_services_rootless_pasta_ipv6_gateway](defaults/main.yml#L10)   | str | `fd00:2::1` |    
+| [podman_services_execution_state_dir](defaults/main.yml#L11)   | str | `/var/lib/podman-services` |    
+| [podman_services_nologin_shell](defaults/main.yml#L12)   | str | `/usr/sbin/nologin` |    
+| [podman_services_action_remove](defaults/main.yml#L13)   | str | `{{ 'remove' in (ansible_run_tags ¦ default([])) }}` |    
+| [podman_services_action_recreate](defaults/main.yml#L14)   | str | `{{ 'recreate' in (ansible_run_tags ¦ default([])) }}` |    
+| [podman_services_action_update](defaults/main.yml#L15)   | str | `{{ 'update' in (ansible_run_tags ¦ default([])) }}` |    
+| [podman_services_action_drift](defaults/main.yml#L16)   | str | `{{ 'drift' in (ansible_run_tags ¦ default([])) }}` |    
+| [podman_services_action_bootstrap](defaults/main.yml#L17)   | str | `{{ 'bootstrap' in (ansible_run_tags ¦ default([])) }}` |    
+| [podman_services_common_action](defaults/main.yml#L18)   | str | `<multiline value: folded_strip>` |    
+| [podman_services_state](defaults/main.yml#L26)   | str | `<multiline value: folded_strip>` |    
+| [podman_services_pull_images](defaults/main.yml#L35)   | bool | `True` |    
+| [podman_services_prepare_execution_only](defaults/main.yml#L36)   | bool | `False` |    
+| [podman_services_managed_namespace_dependents](defaults/main.yml#L37)   | list | `[]` |    
+| [podman_services_traefik_delegate](defaults/main.yml#L38)   | str | `{{ podman_services_controller_host }}` |    
+| [podman_services_traefik_dynamic_dir](defaults/main.yml#L39)   | str | `/opt/traefik/dynamic` |    
+| [podman_services_traefik_dynamic_owner](defaults/main.yml#L40)   | str | `1000` |    
+| [podman_services_traefik_dynamic_group](defaults/main.yml#L41)   | str | `1000` |    
 
 
 
@@ -152,6 +154,10 @@ batch. A changed desired account must not hide the old writer's manager. |
 | Execution ¦ Read host IPv4 routes for pasta conflict detection | ansible.builtin.command | True |  |
 | Execution ¦ Detect conflicting host IPv4 routes | ansible.builtin.set_fact | True |  |
 | Execution ¦ Reject conflicting host IPv4 routes | ansible.builtin.assert | True |  |
+| Execution ¦ Read host IPv6 routes for direct pasta conflict detection | ansible.builtin.command | True |  |
+| Execution ¦ Reject conflicting host IPv6 routes before account mutation | block | True |  |
+| Execution ¦ Detect conflicting host IPv6 routes | ansible.builtin.set_fact | False |  |
+| Execution ¦ Require a private IPv6 subnet separate from host routes | ansible.builtin.assert | False |  |
 | Execution ¦ Check selected rootless account | ansible.builtin.getent | True |  |
 | Execution ¦ Check selected rootless primary group | ansible.builtin.getent | True |  |
 | Execution ¦ Check selected rootless home | ansible.builtin.stat | True |  |
