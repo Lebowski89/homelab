@@ -1,9 +1,3 @@
 ---
 
-# Select generated endpoint IDs after completing the private caller preflight.
-# Empty defaults plan safely and cannot install an active policy.
-mgt_firewall_active_endpoints: []
-mgt_firewall_callers: {}
-mgt_firewall_inputs_verified: false
-mgt_firewall_operation: install
-mgt_firewall_root: /etc/skynet-mgt-firewall
+# Compatibility role only; all profile defaults belong to service_firewall.

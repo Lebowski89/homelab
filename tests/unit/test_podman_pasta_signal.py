@@ -33,7 +33,7 @@ def test_exact_profile_edit_idempotence_read_only_guards_and_rollback(tmp_path, 
         f"sys.exit(1 if {scenario == 'reload_failure'!r} and n==1 else 0)\n"
     )
     play = [entry for entry in yaml.safe_load(PLAY.read_text()) if "podman_pasta_signal" in entry["tasks"][0]["tags"]]
-    play[0]["tasks"] = yaml.safe_load((ROOT / "ansible/tasks/podman-pasta-signal.yml").read_text())
+    play[0]["tasks"] = yaml.safe_load((ROOT / "ansible/operations/podman-pasta-signal.yml").read_text())
     play[0].update(hosts="localhost", connection="local", become=False)
     play[0].pop("vars_files")
 

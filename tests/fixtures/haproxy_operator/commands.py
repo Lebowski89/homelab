@@ -409,7 +409,7 @@ elif command == "skynet":
         policy = stage["policy"]
         policy["callers"] = inputs["mgt_firewall_callers"]
         policy["inputs_verified"] = inputs["mgt_firewall_inputs_verified"]
-        load("ansible/roles/mgt_firewall/files/mgt-firewall.py", "fixture_policy").validate_policy(policy)
+        load("ansible/roles/service_firewall/files/mgt-firewall.py", "fixture_policy").validate_policy(policy)
         event("policy_check")
     elif a[:2] == ["update", "mgt-firewall"]:
         event("policy_apply")
@@ -500,7 +500,7 @@ elif command == "skynet":
             for report in reports:
                 if report["host"] == "manager":
                     report["providers"][0]["image"] = "docker.io/library/haproxy:INVALID@sha256:" + 64 * "0"
-        preflight = load("ansible/roles/mgt_firewall/files/haproxy-preflight.py", "fixture_preflight")
+        preflight = load("ansible/roles/service_firewall/files/haproxy-preflight.py", "fixture_preflight")
         accepted = json.loads((root / "accepted.json").read_text())
         result = preflight.candidates(
             {

@@ -1,0 +1,7 @@
+[Unit]
+Description=Reconcile Skynet worker backend chains and jumps
+After=local-fs.target
+
+[Service]
+Type=oneshot
+ExecStart={{ worker_backend_firewall_python }} {{ worker_backend_firewall_root }}/policy.py apply --config {{ worker_backend_firewall_root }}/policy.json

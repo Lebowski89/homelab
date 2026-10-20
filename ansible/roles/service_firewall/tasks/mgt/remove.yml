@@ -1,0 +1,59 @@
+---
+
+- name: Mgt firewall | Validate installed chain ownership before disabling persistence
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, "{{ mgt_firewall_root }}/policy.py", remove, --dry-run]
+  changed_when: false
+
+- name: Mgt firewall | Locate the owned persistence units for repeatable removal # noqa var-naming[no-role-prefix]
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ mgt_firewall_stop_unit }}"
+  loop: [skynet-mgt-firewall-reconcile.timer, skynet-mgt-firewall-reconcile.service]
+  loop_control:
+    loop_var: mgt_firewall_stop_unit
+  register: mgt_firewall_stop_units
+
+- name: Mgt firewall | Disable and stop only the managed persistence units
+  ansible.builtin.systemd_service:
+    name: "{{ mgt_firewall_stop_result.mgt_firewall_stop_unit }}"
+    enabled: false
+    state: stopped
+  loop: "{{ mgt_firewall_stop_units.results }}"
+  loop_control:
+    loop_var: mgt_firewall_stop_result
+  when: mgt_firewall_stop_result.stat.exists
+
+- name: Mgt firewall | Locate only the boot guard unit # noqa var-naming[no-role-prefix]
+  ansible.builtin.stat:
+    path: /etc/systemd/system/skynet-mgt-firewall.service
+  register: mgt_firewall_boot_unit
+
+- name: Mgt firewall | Disable the boot guard without stopping dependent applications
+  ansible.builtin.systemd_service:
+    name: skynet-mgt-firewall.service
+    enabled: false
+  when: mgt_firewall_boot_unit.stat.exists
+
+- name: Mgt firewall | Remove only marked guards and jumps without a policy file # noqa var-naming[no-role-prefix]
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, "{{ mgt_firewall_root }}/policy.py", remove, --remove-dropins]
+  register: mgt_firewall_remove
+  changed_when: (mgt_firewall_remove.stdout | from_json).changed
+
+- name: Mgt firewall | Remove only owned persistence files
+  ansible.builtin.file:
+    path: "{{ mgt_firewall_owned_file }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/docker.service.d/45-skynet-mgt-firewall.conf
+    - /etc/systemd/system/skynet-mgt-firewall.service
+    - /etc/systemd/system/skynet-mgt-firewall-reconcile.service
+    - /etc/systemd/system/skynet-mgt-firewall-reconcile.timer
+  loop_control:
+    loop_var: mgt_firewall_owned_file
+
+- name: Mgt firewall | Reload systemd definitions without restarting applications
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+# Keep the helper and JSON for repeatable offline audit/recovery/reinstallation.

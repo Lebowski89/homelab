@@ -27,6 +27,7 @@ def load(relative, name):
 
 MGT = load("action_plugins/mgt_firewall_plan.py", "maintenance_mgt_plan")
 WORKER = load("action_plugins/worker_backend_firewall_plan.py", "maintenance_worker_plan")
+WORKER_INPUTS = load("action_plugins/worker_backend_firewall_validate.py", "maintenance_worker_inputs")
 PODMAN = load("roles/podman_services/filter_plugins/podman_services.py", "maintenance_podman")
 
 
@@ -129,7 +130,7 @@ def mgt_contract(metadata, policy, plan, host, address):
 
 
 def worker_contract(policy, plan, host, address, sources):
-    MGT.HELPER.OWNED.validate_policy(policy)
+    WORKER_INPUTS.validate(policy, True)
     require(
         policy.get("inventory_host") == host and policy.get("inventory_address") == address,
         "installed worker policy inventory identity differs",

@@ -1,0 +1,28 @@
+---
+
+- name: Mgt firewall | Require the canonical single controller
+  ansible.builtin.assert:
+    that:
+      - groups[services_controller_inventory_group] | default([]) | length == 1
+      - >-
+        ansible_run_tags | intersect(['mgt_firewall_install', 'mgt_firewall_observe', 'mgt_firewall_check', 'mgt_firewall_remove']) | length <= 1
+  tags: [always]
+
+- name: Mgt firewall | Resolve existing inventory contracts and operation # noqa var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    services_controller_host: "{{ groups[services_controller_inventory_group][0] }}"
+    services_storage_host: "{{ groups[services_storage_inventory_group] | default([]) | first | default('unresolved-storage') }}"
+    mgt_firewall_operation: >-
+      {{ 'remove' if 'mgt_firewall_remove' in ansible_run_tags else
+         'check' if 'mgt_firewall_check' in ansible_run_tags else
+         'observe' if 'mgt_firewall_observe' in ansible_run_tags else 'install' }}
+  tags: [always]
+
+- name: Mgt firewall | Manage only the canonical mgt controller
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/main.yml"
+    apply:
+      tags: [mgt_firewall_install, mgt_firewall_observe, mgt_firewall_check, mgt_firewall_remove]
+  vars:
+    service_firewall_profile: mgt
+    service_firewall_operation: "{{ mgt_firewall_operation }}"

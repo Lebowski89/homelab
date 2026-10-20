@@ -1,7 +1,10 @@
-# Staged mgt private endpoint firewall
+# Mgt service firewall profile
 
-This role owns narrowly scoped protection for declared mgt host publications,
-alongside the independent [worker policy](worker-backend-firewall.md). Current
+Canonical implementation ownership: [service_firewall](service-firewall.md).
+Installed paths and operator inputs remain compatible; no reinstall is needed for the source reorganisation.
+
+The mgt profile owns narrowly scoped protection for declared mgt host publications,
+alongside the distinct [workers profile](worker-backend-firewall.md). Current
 service/target definitions and explicit operational requirements select the
 applicable ports and callers. Installation is not evidence of live enforcement
 and never sets application ACL/data acknowledgements.

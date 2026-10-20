@@ -1,0 +1,98 @@
+---
+
+- name: Pasta signal | Require one controller and reviewed profile hashes
+  ansible.builtin.assert:
+    that:
+      - groups[services_controller_inventory_group] | length == 1
+      - inventory_hostname == groups[services_controller_inventory_group][0]
+      - podman_pasta_signal_before_sha256 is match('^[0-9a-f]{64}$')
+      - podman_pasta_signal_after_sha256 is match('^[0-9a-f]{64}$')
+      - podman_pasta_signal_before_sha256 != podman_pasta_signal_after_sha256
+    fail_msg: Supply the reviewed before/after hashes; no application or profile operation has run.
+
+- name: Pasta signal | Inspect only the package profile
+  ansible.builtin.stat:
+    path: /etc/apparmor.d/usr.bin.pasta
+    follow: false
+    checksum_algorithm: sha256
+  register: podman_pasta_signal_before
+
+- name: Pasta signal | Reject ownership drift or an unreviewed policy
+  ansible.builtin.assert:
+    that:
+      - podman_pasta_signal_before.stat.isreg | default(false)
+      - not podman_pasta_signal_before.stat.islnk | default(false)
+      - podman_pasta_signal_before.stat.uid == 0
+      - podman_pasta_signal_before.stat.gid == 0
+      - podman_pasta_signal_before.stat.mode == '0644'
+      - >-
+        podman_pasta_signal_before.stat.checksum in
+        [podman_pasta_signal_before_sha256, podman_pasta_signal_after_sha256]
+    fail_msg: The package profile differs from the reviewed snapshot; stop and reprepare.
+
+- name: Pasta signal | Apply only the reviewed peer and signal permission
+  block:
+    - name: Pasta signal | Validate and update the exact managed block
+      ansible.builtin.blockinfile:
+        path: /etc/apparmor.d/usr.bin.pasta
+        insertafter: '^profile pasta .*flags=\(attach_disconnected\) \{$'
+        marker: '# {mark} SKYNET PODMAN PASTA TERM'
+        block: '  signal (receive) set=(term) peer=podman,'
+        backup: true
+        validate: /usr/sbin/apparmor_parser --skip-kernel-load --skip-cache %s
+      register: podman_pasta_signal_edit
+
+    - name: Pasta signal | Inspect the proposed profile checksum
+      ansible.builtin.stat:
+        path: /etc/apparmor.d/usr.bin.pasta
+        checksum_algorithm: sha256
+      register: podman_pasta_signal_after
+      when: not ansible_check_mode
+
+    - name: Pasta signal | Require the exact reviewed result before loading
+      ansible.builtin.assert:
+        that: podman_pasta_signal_after.stat.checksum == podman_pasta_signal_after_sha256
+        fail_msg: Unexpected profile output; restore its backup before proceeding.
+      when: not ansible_check_mode
+
+    - name: Pasta signal | Reload only pasta after a change
+      ansible.builtin.command:
+        argv: [/usr/sbin/apparmor_parser, --replace, /etc/apparmor.d/usr.bin.pasta]
+      changed_when: true
+      when:
+        - not ansible_check_mode
+        - podman_pasta_signal_edit.changed
+
+  rescue:
+    - name: Pasta signal | Inspect current bytes before restoring a backup
+      ansible.builtin.stat:
+        path: /etc/apparmor.d/usr.bin.pasta
+        checksum_algorithm: sha256
+      register: podman_pasta_signal_failed
+      when: podman_pasta_signal_edit.backup_file | default('') | length > 0
+
+    - name: Pasta signal | Reject an intervening change during rollback
+      ansible.builtin.assert:
+        that: podman_pasta_signal_failed.stat.checksum == podman_pasta_signal_after_sha256
+        fail_msg: Profile changed after this edit; do not overwrite it with a stale backup.
+      when: podman_pasta_signal_edit.backup_file | default('') | length > 0
+
+    - name: Pasta signal | Restore only this edit's original file on failure
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ podman_pasta_signal_edit.backup_file }}"
+        dest: /etc/apparmor.d/usr.bin.pasta
+        owner: root
+        group: root
+        mode: "0644"
+      when: podman_pasta_signal_edit.backup_file | default('') | length > 0
+
+    - name: Pasta signal | Reload only the restored profile
+      ansible.builtin.command:
+        argv: [/usr/sbin/apparmor_parser, --replace, /etc/apparmor.d/usr.bin.pasta]
+      changed_when: true
+      when: podman_pasta_signal_edit.backup_file | default('') | length > 0
+
+    - name: Pasta signal | Preserve failure status without touching applications
+      ansible.builtin.fail:
+        msg: Pasta profile preparation failed; no application operation was performed. Review any restore/reload failure before continuing.

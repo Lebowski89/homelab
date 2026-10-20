@@ -18,7 +18,7 @@ from test_mgt_firewall import FW, PREFLIGHT, PreflightHost
 def test_embedded_collector_preserves_account_shell_variables_through_actual_ansible(tmp_path, operation, default_expansion):
     """command's default argument expansion must not substitute the become HOME."""
     root = Path(__file__).resolve().parents[2]
-    playbook = {"tasks": yaml.safe_load((root / "ansible/tasks/haproxy-firewall-preflight.yml").read_text())}
+    playbook = {"tasks": yaml.safe_load((root / "ansible/operations/haproxy-firewall-preflight.yml").read_text())}
     name = "Collect projected" if operation == "collect" else "Generate unverified additions"
     command = deepcopy(next(task["ansible.builtin.command"] for task in playbook["tasks"] if name in task["name"]))
     if default_expansion:
@@ -35,7 +35,7 @@ def test_embedded_collector_preserves_account_shell_variables_through_actual_ans
     )
     arguments = ["space in argument", "$HOME stays literal", "quote'and\"double", "$(must-not-execute)"]
     # Embed the actual collector source, including its literal $HOME/$@ shell.
-    source = (root / "ansible/roles/mgt_firewall/files/haproxy-preflight.py").read_text().split('if __name__ == "__main__":')[0]
+    source = (root / "ansible/roles/service_firewall/files/haproxy-preflight.py").read_text().split('if __name__ == "__main__":')[0]
     source += (
         "\nimport subprocess\n"
         f"account=SimpleNamespace(pw_dir={str(account_home)!r},pw_uid=12345)\n"
@@ -372,7 +372,7 @@ def test_actual_ansible_async_collection_polling_aggregation_and_read_only_check
     import yaml
 
     root = Path(__file__).resolve().parents[2]
-    source_play = {"tasks": yaml.safe_load((root / "ansible/tasks/haproxy-firewall-preflight.yml").read_text())}
+    source_play = {"tasks": yaml.safe_load((root / "ansible/operations/haproxy-firewall-preflight.yml").read_text())}
     tasks = source_play["tasks"]
     first = next(i for i, t in enumerate(tasks) if "Collect projected" in t["name"])
     last = next(i for i, t in enumerate(tasks) if "Prepare optional" in t["name"])

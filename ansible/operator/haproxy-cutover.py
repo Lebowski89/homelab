@@ -38,8 +38,8 @@ def load(relative, name):
     return module
 
 
-FW = load("ansible/roles/mgt_firewall/files/mgt-firewall.py", "cutover_firewall")
-PREFLIGHT = load("ansible/roles/mgt_firewall/files/haproxy-preflight.py", "cutover_preflight")
+FW = load("ansible/roles/service_firewall/files/mgt-firewall.py", "cutover_firewall")
+PREFLIGHT = load("ansible/roles/service_firewall/files/haproxy-preflight.py", "cutover_preflight")
 
 
 def read(path):

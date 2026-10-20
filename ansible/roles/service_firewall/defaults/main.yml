@@ -1,0 +1,21 @@
+---
+
+# Profile and operation must be explicit at canonical role entry.
+service_firewall_profile: ""
+service_firewall_operation: ""
+
+# Retained public input namespaces for existing operator/rollback files.
+
+# Select generated endpoint IDs after completing the private caller preflight.
+# Empty defaults plan safely and cannot install an active policy.
+mgt_firewall_active_endpoints: [] # noqa var-naming[no-role-prefix]
+mgt_firewall_callers: {} # noqa var-naming[no-role-prefix]
+mgt_firewall_inputs_verified: false # noqa var-naming[no-role-prefix]
+mgt_firewall_operation: install # noqa var-naming[no-role-prefix]
+mgt_firewall_root: /etc/skynet-mgt-firewall # noqa var-naming[no-role-prefix]
+
+# Exact source overrides belong to worker inventory/context or private operator inputs.
+# The default candidate is mgt's NetBox local_ip, not proof of its container egress.
+worker_backend_firewall_source_addresses: ["{{ hostvars[services_controller_host].local_ip }}"] # noqa var-naming[no-role-prefix]
+worker_backend_firewall_sources_verified: false # noqa var-naming[no-role-prefix]
+worker_backend_firewall_operation: install # noqa var-naming[no-role-prefix]

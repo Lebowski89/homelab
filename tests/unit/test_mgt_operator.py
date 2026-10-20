@@ -26,7 +26,7 @@ def load(path, name):
 
 OP = load("ansible/operator/mgt-operator.py", "native_operator_test")
 COMMON = load("ansible/roles/service_common/filter_plugins/service_common.py", "native_operator_common")
-FW = load("ansible/roles/mgt_firewall/files/mgt-firewall.py", "native_operator_firewall")
+FW = load("ansible/roles/service_firewall/files/mgt-firewall.py", "native_operator_firewall")
 
 
 @pytest.mark.parametrize("enabled", [None, "true", "false", 0, 1, [], {}])

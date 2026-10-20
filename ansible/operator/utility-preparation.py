@@ -869,8 +869,8 @@ def collect_alerting_callers(directory, projection, policy, service_names):
     """
     from copy import deepcopy
 
-    preflight = load("ansible/roles/mgt_firewall/files/haproxy-preflight.py", "utility_socket_projection")
-    fw = load("ansible/roles/mgt_firewall/files/mgt-firewall.py", "utility_caller_resolution")
+    preflight = load("ansible/roles/service_firewall/files/haproxy-preflight.py", "utility_socket_projection")
+    fw = load("ansible/roles/service_firewall/files/mgt-firewall.py", "utility_caller_resolution")
     observations = {}
     zone, https_port = projection["integrations"]["zone"], projection["integrations"]["private_https_port"]
     roots = {Path(volume["source"]) for cfg in projection["services"].values() for volume in cfg["volumes"].values()}
@@ -1000,8 +1000,8 @@ def collect_media_callers(directory, projection, policy, service_names):
     """Read only exact current identities/routes; prospective accounts stay false."""
     from copy import deepcopy
 
-    preflight = load("ansible/roles/mgt_firewall/files/haproxy-preflight.py", "media_socket_projection")
-    fw = load("ansible/roles/mgt_firewall/files/mgt-firewall.py", "media_caller_resolution")
+    preflight = load("ansible/roles/service_firewall/files/haproxy-preflight.py", "media_socket_projection")
+    fw = load("ansible/roles/service_firewall/files/mgt-firewall.py", "media_caller_resolution")
 
     def run(argv):
         return command(["sudo", "-n", *argv], "media process-owned socket/caller projection")

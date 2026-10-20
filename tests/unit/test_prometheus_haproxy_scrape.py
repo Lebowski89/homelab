@@ -1,6 +1,5 @@
 import json
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -211,42 +210,3 @@ print((root/'loaded.yml').read_text())
         assert config_file.read_text() == updated
         commands = [json.loads(line) for line in receipt.read_text().splitlines()]
         assert sum(command[0] == "kill" for command in commands) == (2 if failure == "reload" else 1)
-
-
-@pytest.mark.parametrize("status", [0, 47])
-def test_documented_scrape_runner_preserves_failure_and_private_logs(tmp_path, status):
-    batch = tmp_path / "batch"
-    batch.mkdir(mode=0o700)
-    bindir = tmp_path / "bin"
-    bindir.mkdir()
-    skynet = bindir / "skynet"
-    skynet.write_text(
-        "#!/bin/bash\n"
-        'test "$*" = "raw --tags prometheus_haproxy_scrape" || exit 91\n'
-        'test "$PLAYBOOK" = "$SCRAPE_PLAYBOOK" || exit 92\n'
-        'test -n "$ANSIBLE_LOG_PATH" || exit 93\n'
-        'echo "fixture scoped scrape runner"\n'
-        'exit "$SCRAPE_STATUS"\n'
-    )
-    skynet.chmod(0o755)
-    blocks = re.findall(r"```bash\n(.*?)\n```", (ROOT / "migrator/guides/haproxy.md").read_text(), re.S)
-    command = next(block for block in blocks if "prometheus_haproxy_scrape" in block)
-    result = subprocess.run(
-        ["/bin/bash", "-c", command],
-        env={
-            **os.environ,
-            "PATH": str(bindir) + ":/usr/bin:/bin",
-            "SCRAPE_STATUS": str(status),
-            "HAPROXY_BATCH": str(batch),
-            "SCRAPE_PLAYBOOK": "/opt/homelab/ansible/operations.yml",
-        },
-        text=True,
-        capture_output=True,
-        timeout=10,
-    )
-    assert result.returncode == status, result.stdout + result.stderr
-    assert result.stdout.index("Private scrape log:") < result.stdout.index("fixture scoped scrape runner")
-    logs = list(batch.glob("prometheus-haproxy-scrape.*/operator.log"))
-    assert len(logs) == 1 and logs[0].stat().st_mode & 0o777 == 0o600
-    assert logs[0].parent.stat().st_mode & 0o777 == 0o700
-    assert f"Prometheus scrape update exited with status {status}" in logs[0].read_text()

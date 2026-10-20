@@ -18,7 +18,9 @@
 
 The [migrator workspace](migrator/README.md) provides private batch scaffolding,
 reviewed plan/recipe checksums and the existing Docker-to-Podman toolkit. See [Podman operations](docs/podman-services.md) for ongoing selectors and
-recovery boundaries. Completed migration records stay outside the repository.
+recovery boundaries. [Service firewall and manual operations](docs/service-firewall.md)
+explains the two profiles, supported commands and compatibility paths. Completed
+migration records stay outside the repository.
 
 ## Apps in Use
 

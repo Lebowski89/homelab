@@ -1,0 +1,47 @@
+---
+
+- name: Worker backend firewall | Install owned systemd units # noqa var-naming[no-role-prefix]
+  ansible.builtin.template:
+    src: "workers/{{ worker_backend_firewall_unit }}.j2"
+    dest: "/etc/systemd/system/{{ worker_backend_firewall_unit }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - skynet-worker-backend-firewall.service
+    - skynet-worker-backend-firewall-reconcile.service
+    - skynet-worker-backend-firewall.timer
+  loop_control:
+    loop_var: worker_backend_firewall_unit
+  register: worker_backend_firewall_units
+
+- name: Worker backend firewall | Ensure Docker drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/docker.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Worker backend firewall | Install only the owned Docker ordering drop-in # noqa var-naming[no-role-prefix]
+  ansible.builtin.template:
+    src: workers/docker-ordering.conf.j2
+    dest: /etc/systemd/system/docker.service.d/30-skynet-worker-backends.conf
+    owner: root
+    group: root
+    mode: '0644'
+  register: worker_backend_firewall_dropin
+
+- name: Worker backend firewall | Reload unit definitions when changed
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: worker_backend_firewall_units.changed or worker_backend_firewall_dropin.changed
+
+- name: Worker backend firewall | Enable and start owned policy and reconciliation timer
+  ansible.builtin.systemd_service:
+    name: "{{ worker_backend_firewall_unit }}"
+    enabled: true
+    state: started
+  loop: [skynet-worker-backend-firewall.service, skynet-worker-backend-firewall.timer]
+  loop_control:
+    loop_var: worker_backend_firewall_unit
