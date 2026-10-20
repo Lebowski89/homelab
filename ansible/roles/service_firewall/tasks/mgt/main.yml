@@ -1,22 +1,22 @@
 ---
 
-- name: Mgt firewall | Validate the selected operation
+- name: Service firewall | Mgt | Validate the selected operation
   ansible.builtin.assert:
     that:
       - mgt_firewall_operation in ['install', 'observe', 'check', 'remove']
       - mgt_firewall_root == '/etc/skynet-mgt-firewall'
 
-- name: Mgt firewall | Prepare the value-free plan and strict active inputs
+- name: Service firewall | Mgt | Prepare endpoint declarations and caller inputs
   when: mgt_firewall_operation in ['install', 'observe']
   block:
-    - name: Mgt firewall | Load namespaced catalog declarations
+    - name: Service firewall | Mgt | Load service declarations without secret values
       ansible.builtin.include_vars:
         dir: "{{ playbook_dir }}/group_vars/all/services"
         extensions: [yml]
         ignore_unknown_extensions: true
         name: mgt_firewall_catalog
 
-    - name: Mgt firewall | Resolve effective catalog and production bootstrap endpoints
+    - name: Service firewall | Mgt | Build endpoints from service and bootstrap declarations
       mgt_firewall_plan:
         source_var: mgt_firewall_catalog
         controller: "{{ services_controller_host }}"
@@ -26,7 +26,7 @@
         verified: "{{ mgt_firewall_inputs_verified }}"
         require_verified: "{{ mgt_firewall_operation == 'install' and not ansible_check_mode }}"
 
-    - name: Mgt firewall | Show endpoint coverage and pending caller identities
+    - name: Service firewall | Mgt | Show endpoint coverage and pending caller identities
       ansible.builtin.debug:
         msg:
           coverage: "{{ mgt_firewall_plan }}"
@@ -38,12 +38,12 @@
             No application ACL or ownership acknowledgement is set by this operation.
       when: ansible_check_mode
 
-- name: Mgt firewall | Explain read-only recovery planning
+- name: Service firewall | Mgt | Show the check-mode recovery plan
   ansible.builtin.debug:
     msg: "{{ mgt_firewall_operation }} uses the installed helper and policy; no catalog, secret or application operation is needed."
   when: ansible_check_mode and mgt_firewall_operation != 'install'
 
-- name: Mgt firewall | Perform only the selected policy operation
+- name: Service firewall | Mgt | Run the selected policy operation
   ansible.builtin.include_tasks:
     file: "{{ mgt_firewall_operation }}.yml"
     apply:

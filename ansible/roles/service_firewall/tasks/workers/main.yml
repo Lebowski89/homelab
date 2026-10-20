@@ -1,6 +1,6 @@
 ---
 
-- name: Worker backend firewall | Validate operation and explicit source confirmation
+- name: Service firewall | Workers | Validate the operation and source-address confirmation
   ansible.builtin.assert:
     that:
       - worker_backend_firewall_operation in ['install', 'check', 'remove']
@@ -17,7 +17,7 @@
       worker_backend_firewall_sources_verified in private worker inputs. This does not set any application ACL acknowledgement.
   when: worker_backend_firewall_operation != 'remove'
 
-- name: Worker backend firewall | Load value-free catalog declarations
+- name: Service firewall | Workers | Load service declarations without secret values
   ansible.builtin.include_vars:
     dir: "{{ playbook_dir }}/group_vars/all/services"
     extensions: [yml]
@@ -25,30 +25,30 @@
     name: worker_backend_firewall_catalog
   when: worker_backend_firewall_operation != 'remove'
 
-- name: Worker backend firewall | Derive effective worker publications
+- name: Service firewall | Workers | Build published worker ports from service declarations
   worker_backend_firewall_plan:
     source_var: worker_backend_firewall_catalog
     workers: ["{{ services_storage_host }}", "{{ services_plex_host }}"]
     controller_address: "{{ hostvars[services_controller_host].local_ip }}"
   when: worker_backend_firewall_operation != 'remove'
 
-- name: Worker backend firewall | Require a nonempty policy and inventory identity
+- name: Service firewall | Workers | Require published ports and the worker inventory address
   ansible.builtin.assert:
     that:
       - worker_backend_firewall_plan[inventory_hostname].ports | length > 0
       - local_ip is defined
   when: worker_backend_firewall_operation != 'remove'
 
-- name: Worker backend firewall | Gather minimal platform facts
+- name: Service firewall | Workers | Gather minimal platform facts
   ansible.builtin.setup:
     gather_subset: ['!all', '!min', distribution, service_mgr, python]
 
-- name: Worker backend firewall | Detect the supported Unraid platform # noqa var-naming[no-role-prefix]
+- name: Service firewall | Workers | Detect the supported Unraid platform # noqa var-naming[no-role-prefix]
   ansible.builtin.stat:
     path: /etc/unraid-version
   register: worker_backend_firewall_unraid
 
-- name: Worker backend firewall | Validate supported platform and existing Python
+- name: Service firewall | Workers | Validate supported platform and existing Python
   ansible.builtin.assert:
     that:
       - >-
@@ -62,7 +62,7 @@
       - ansible_facts.python.version.minor >= 10
     fail_msg: This temporary policy supports the current Unraid and Ubuntu 24.04 workers with existing Python 3.10+ only.
 
-- name: Worker backend firewall | Resolve platform-owned paths and backend # noqa var-naming[no-role-prefix]
+- name: Service firewall | Workers | Select policy paths and the firewall backend for this platform # noqa var-naming[no-role-prefix]
   ansible.builtin.set_fact:
     worker_backend_firewall_root: >-
       {{ '/boot/config/skynet-worker-backend-firewall' if worker_backend_firewall_unraid.stat.exists
@@ -70,7 +70,7 @@
     worker_backend_firewall_backend: "{{ 'legacy' if worker_backend_firewall_unraid.stat.exists else 'nf_tables' }}"
     worker_backend_firewall_python: "{{ ansible_facts.python.executable }}"
 
-- name: Worker backend firewall | Validate exact addresses on the controller # noqa var-naming[no-role-prefix]
+- name: Service firewall | Workers | Prepare the worker policy with exact source and endpoint addresses # noqa var-naming[no-role-prefix]
   ansible.builtin.set_fact:
     worker_backend_firewall_policy:
       schema: 1
@@ -82,13 +82,13 @@
       sources_verified: "{{ worker_backend_firewall_sources_verified }}"
   when: worker_backend_firewall_operation != 'remove'
 
-- name: Worker backend firewall | Validate policy inputs without host writes
+- name: Service firewall | Workers | Validate policy inputs without host writes
   worker_backend_firewall_validate:
     policy: "{{ worker_backend_firewall_policy }}"
     require_verified: "{{ worker_backend_firewall_operation == 'install' and not ansible_check_mode }}"
   when: worker_backend_firewall_operation != 'remove'
 
-- name: Worker backend firewall | Explain the read-only plan
+- name: Service firewall | Workers | Show the check-mode policy plan
   ansible.builtin.debug:
     msg: >-
       {{ worker_backend_firewall_operation }} on {{ inventory_hostname }} using {{ worker_backend_firewall_backend }}:
@@ -96,7 +96,7 @@
       applications or persistence; it does not prove live enforcement or container source identity.
   when: ansible_check_mode
 
-- name: Worker backend firewall | Perform the selected policy operation
+- name: Service firewall | Workers | Perform the selected policy operation
   ansible.builtin.include_tasks:
     file: "{{ worker_backend_firewall_operation }}.yml"
     apply:

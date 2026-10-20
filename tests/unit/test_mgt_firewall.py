@@ -2375,9 +2375,7 @@ def test_actual_install_preflight_preserves_dedicated_account_shell_home(tmp_pat
     home = tmp_path / "dedicated-home"
     home.mkdir()
     task = next(
-        task
-        for task in yaml.safe_load((ROLE / "tasks/mgt/install.yml").read_text())
-        if task["name"] == "Mgt firewall | Resolve live identities and dry-test both families before persistent writes"
+        task for task in yaml.safe_load((ROLE / "tasks/mgt/install.yml").read_text()) if task.get("register") == "mgt_firewall_preflight"
     )
     source = (
         "import json, subprocess\n"

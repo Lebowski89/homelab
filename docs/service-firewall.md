@@ -1,11 +1,12 @@
 # Service firewall and manual operations
 
-Normal application maintenance uses the canonical catalog and existing runtime
-adapters: `skynet deploy <service>`, `skynet update <service>` and
-`skynet recreate <service>`. Managed prerequisites are audited before secrets,
-files or runtime stops. First cutovers and unproved ownership changes retain
-explicit acknowledgements; no command infers application acceptance or installs
-firewall policy automatically. See [Podman lifecycle](podman-services.md).
+Normal application maintenance uses the canonical catalog and existing runtime adapters:
+`skynet deploy <service>`, `skynet update <service>` and `skynet recreate <service>`.
+Prerequisite checks run before secrets, file changes or runtime stops. Installed
+firewall protection is audited without changing it. First cutovers and unproved
+ownership changes retain explicit acknowledgements; no command infers application
+acceptance or installs firewall policy automatically. See [Podman
+lifecycle](podman-services.md).
 
 `ansible/roles/service_firewall` is the only firewall implementation owner. It
 has two explicit profiles, not interchangeable identity models:
@@ -21,6 +22,11 @@ cross-profile tags fail before mutation. Existing `mgt_firewall_*` and
 `worker_backend_firewall_*` inputs remain the public compatibility API. Profile
 facts retain those namespaces deliberately, including their narrow naming-lint
 annotations. Do not set readiness/verification inputs simply because a plan ran.
+
+Task output uses `Service firewall | Mgt | …` or `Service firewall | Workers | …` to
+identify the profile. A **reconciler** periodically checks and reapplies managed rules;
+the mgt profile also resolves current caller identities. A read-only **audit** reports
+compliance without repairing anything.
 
 The role layout is:
 

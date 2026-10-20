@@ -118,7 +118,8 @@ def mgt_contract(metadata, policy, plan, host, address):
             len(matches) == 1 and matches[0] == endpoint,
             "selected endpoint port or authorised callers differ; extend/reconcile the current policy union explicitly",
         )
-    # Catch changed caller runtime/account/placement without authorising stale bindings.
+    # A caller binding records the allowed runtime identity. Compare its current
+    # account and placement declarations so old bindings cannot authorise a move.
     names = {metadata["name"]} | {n for e in desired for n in e["callers"]}
     for name in names:
         principal = plan["principals"].get(name, policy.get("principals", {}).get(name, {}))
@@ -195,6 +196,8 @@ class ActionModule(ActionBase):
     def unraid_flash_device(self):
         """Trust only the root-owned Unraid VFAT flash, with no shadow mounts.
 
+        A shadow mount hides a path inside /boot behind another mount. Reject
+        those mounts so device checks describe the policy files actually read.
         VFAT modes are synthetic. Device identity, mount ownership and every
         fixed path component replace the POSIX write-bit test on these two files.
         """

@@ -1,11 +1,11 @@
 ---
 
-- name: Worker backend firewall | Read installed policy without changing it # noqa var-naming[no-role-prefix]
+- name: Service firewall | Workers | Read installed policy without changing it # noqa var-naming[no-role-prefix]
   ansible.builtin.slurp:
     src: "{{ worker_backend_firewall_root }}/policy.json"
   register: worker_backend_firewall_installed
 
-- name: Worker backend firewall | Compare installed policy to effective inventory and service plan
+- name: Service firewall | Workers | Compare installed policy to effective inventory and service plan
   ansible.builtin.assert:
     that:
       - >-
@@ -13,7 +13,7 @@
         == worker_backend_firewall_policy | combine({'sources_verified': true})
     fail_msg: The installed worker policy differs from the current catalog/source inputs; audit does not update it.
 
-- name: Worker backend firewall | Audit both kernel families read-only # noqa var-naming[no-role-prefix]
+- name: Service firewall | Workers | Audit IPv4 and IPv6 firewall rules without changing them # noqa var-naming[no-role-prefix]
   ansible.builtin.command:
     argv:
       - "{{ worker_backend_firewall_python }}"
@@ -24,13 +24,13 @@
   changed_when: false
   register: worker_backend_firewall_audit
 
-- name: Worker backend firewall | Require Unraid's running reconciler
+- name: Service firewall | Workers | Require the Unraid rule-reconciliation process to be running
   ansible.builtin.assert:
     that:
       - (worker_backend_firewall_audit.stdout | from_json).watch_running
   when: worker_backend_firewall_unraid.stat.exists
 
-- name: Worker backend firewall | Read Plex persistence status
+- name: Service firewall | Workers | Check the Plex rule-reconciliation timer
   ansible.builtin.command:
     argv: [systemctl, "{{ worker_backend_firewall_status }}", skynet-worker-backend-firewall.timer]
   loop: [is-enabled, is-active]

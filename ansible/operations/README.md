@@ -19,8 +19,14 @@ PLAYBOOK=/opt/homelab/ansible/operations.yml \
     -e haproxy_preflight_output=/private/fresh-candidate.json
 ```
 
-Use the existing `skynet check/install/remove` firewall commands and
-`skynet run mgt-firewall observe`. All original overrides remain supported.
+For routine application maintenance, use `skynet deploy <service>`,
+`skynet update <service>` or `skynet recreate <service>`.
+Firewall work is separate: `skynet check <firewall-role>` plans installation in
+Ansible check mode; `skynet run <firewall-role> check` audits installed protection
+without changing it. Use `skynet run mgt-firewall observe` to inspect caller
+identities, and the existing install/remove commands only for approved policy
+changes. See the [supported firewall commands](../../docs/service-firewall.md#supported-operator-commands)
+for private vars-file overrides.
 Completed Swarm-only Loki/Prometheus route/scrape tags fail explicitly; their
 sources/tests are archived. Do not replay them against migrated services.
 
