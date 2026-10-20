@@ -769,6 +769,44 @@ def service_common_requirements_normalize(value: Any) -> dict[str, Any]:
     return {"acl": list(dict.fromkeys(acl)), "ownership_transition": ownership}
 
 
+def service_common_requirements_metadata(service: Any, name: str) -> dict[str, Any]:
+    """Project only value-free runtime/endpoint and ownership declarations."""
+    service = _mapping(service, name="service_common_service")
+    result = {
+        key: service[key]
+        for key in ("runtime", "image", "stack", "user", "ports", "volumes", "named_networks", "network_mode")
+        if key in service
+    }
+    if "paths" in service:
+        result["paths"] = [
+            {key: path[key] for key in ("path", "state", "owner", "group", "mode") if key in path} for path in service["paths"]
+        ]
+    if "runtime" not in result and service.get("deploy", {}).get("execution"):
+        result["runtime"] = "podman"
+    result["name"] = service.get("name", name)
+    result["operational_requirements"] = service_common_requirements_normalize(service.get("operational_requirements", {}))
+    for section, keys in {
+        "deploy": ("type", "mode", "host", "constraints", "execution"),
+        "traefik": ("port", "backend_mode", "backend_host_inventory"),
+        "postgres": ("enable",),
+        "application_prepare": ("handler",),
+    }.items():
+        value = _mapping(service.get(section, {}), name=section)
+        result[section] = {key: value[key] for key in keys if key in value}
+    return result
+
+
+def service_common_requirements_proof(service: Any, name: str, proof: Any) -> bool:
+    """Match an ephemeral pre-stop proof to this exact selected contract."""
+    return (
+        isinstance(proof, Mapping)
+        and isinstance(proof.get("acl"), list)
+        and all(scope in _OPERATIONAL_ACL_INPUTS for scope in proof["acl"])
+        and isinstance(proof.get("ownership_transition"), bool)
+        and proof.get("metadata") == service_common_requirements_metadata(service, name)
+    )
+
+
 def service_common_requirements_validate(
     service: Any,
     name: str,
@@ -776,6 +814,7 @@ def service_common_requirements_validate(
     acknowledgements: Any,
     check_mode: bool = False,
     execution_only: bool = False,
+    proof: Any = None,
 ) -> bool:
     """Fail before mutation when an effective service's required inputs are absent.
 
@@ -796,11 +835,20 @@ def service_common_requirements_validate(
     if check_mode or execution_only or action in {"remove", "drift"}:
         return True
     inputs = _mapping(acknowledgements, name="operational acknowledgements")
+    evidence = proof if service_common_requirements_proof(service, name, proof) else {}
     for scope in requirements["acl"]:
         variable = _OPERATIONAL_ACL_INPUTS[scope]
+        if inputs.get(variable) is not None and not isinstance(inputs[variable], bool):
+            raise AnsibleFilterError(f"{variable} must be a strict boolean when supplied")
+        if scope in evidence.get("acl", []):
+            continue
         if inputs.get(variable) is not True:
             raise AnsibleFilterError(f"{name} requires {variable}: true (a strict boolean) before live mutation")
-    if requirements["ownership_transition"]:
+    if requirements["ownership_transition"] and "services_rootless_data_ready" in inputs:
+        readiness = inputs["services_rootless_data_ready"]
+        if not isinstance(readiness, Mapping) or (name in readiness and not isinstance(readiness[name], bool)):
+            raise AnsibleFilterError("services_rootless_data_ready must map actual service names to strict booleans")
+    if requirements["ownership_transition"] and evidence.get("ownership_transition") is not True:
         readiness = inputs.get("services_rootless_data_ready", {})
         if not isinstance(readiness, Mapping) or readiness.get(name) is not True:
             raise AnsibleFilterError(
@@ -827,6 +875,8 @@ class FilterModule:
         return {
             "service_common_requirements_normalize": service_common_requirements_normalize,
             "service_common_requirements_validate": service_common_requirements_validate,
+            "service_common_requirements_metadata": service_common_requirements_metadata,
+            "service_common_requirements_proof": service_common_requirements_proof,
             "service_common_files_changed": service_common_files_changed,
             "service_common_file_policy": service_common_file_policy,
             "service_common_environment_normalize": service_common_environment_normalize,

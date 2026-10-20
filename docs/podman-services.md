@@ -121,17 +121,58 @@ and minimal parent layout are supported without arbitrary host-path access.
 A validated `keep-id` UID/GID mapping preserves the application identity;
 explicit `user` also preserves container-root initialization when needed.
 Generated files omit owner/group and use the dedicated account. The adapter
-never recursively changes a bind tree's ownership. Existing-data transitions
-require the documented per-image mapping, backups and per-service
-`services_rootless_data_ready` acknowledgment when the effective service declares
-`operational_requirements.ownership_transition: true`. Its key is the actual
-service name, and it is required for each live deployment/update/recreate/bootstrap
-while declared. ACL scope declarations similarly require their existing strict
-boolean inputs. Both checks run before mutation independently of service tags;
-check mode reports a plan and drift/removal remain available without deployment
-acknowledgements. Explicit account-only deploy/update/bootstrap preparation is
-exempt and returns before application file/image/secret/container work. See the
+never recursively changes a bind tree's ownership. Initial existing-data transitions
+require the documented per-image mapping, consistent backups and per-service
+`services_rootless_data_ready[<actual effective service name>]: true` when
+`operational_requirements.ownership_transition: true` is declared.
+
+For ordinary deploy/update/recreate, the preflight reuses owned execution state,
+the dedicated account marker/current NSS identity and the generated Quadlet's
+publication, user, keep-id mapping and bind contract. An unchanged managed store
+needs no repeated ownership acknowledgement. Missing or replaced managed data
+bind roots stop maintenance for consistent restoration. New/changed mappings or binds,
+unmanaged stores and legacy state without sufficient ownership evidence retain
+the explicit per-service transition gate; do not set it until the transition is
+actually proved. A running unit or a path's existence alone grants no exemption.
+
+Managed endpoints are compared with the current installed firewall policy and
+its expected callers before secret preflight, file preparation or runtime stops.
+The existing helper then audits both kernel families, current caller identities
+and persistence. Changed ports, placement or caller contracts, missing policy,
+and noncompliant audits stop maintenance with a reconciliation error. Flags
+cannot override a failed maintenance audit. No ordinary application operation
+installs or extends policy. This verifies mechanical prerequisites, not completed
+application acceptance.
+
+The pre-stop result is bound to the exact service/target metadata and retained
+only in that operation's common context. Recreate checks before stopping the old
+runtime, then reuses that bound result while starting the replacement; existing
+runtime ownership, caller reconciliation and post-start checks remain. Bootstrap
+checks every provider/consumer before stopping any and retains each result by
+service name. Static local bootstrap uses the trusted installed policy identity
+and verifies its local address, without depending on NetBox, the catalog or
+Infisical lookup.
+
+Requirements remain independent of tags. Check mode validates and reports a
+plan without inspecting live protection. Drift/removal remain available without
+deployment acknowledgements. Explicit account-only deploy/update/bootstrap
+preparation returns before application file/image/secret/container work. Supplied
+acknowledgements retain strict boolean typing. See the
 [operational requirement reference](../ansible/group_vars/all/services/README.md#operational-requirements).
+
+Select the worktree explicitly when using its implementation; launching from a
+worktree does not change the installed skynet default:
+
+```bash
+worktree=/opt/ansible/migration/merge-preparation-wdsnkwea/worktrees/mgt-podman
+PLAYBOOK="$worktree/ansible/playbook.yml" \
+ANSIBLE_CONFIG="$worktree/ansible/ansible.cfg" \
+skynet recreate whisparr
+```
+
+This is an operator maintenance command, not an offline validation command. For
+offline syntax checks use an isolated localhost inventory/config with vars
+plugins disabled; never load the NetBox inventory merely to check syntax.
 
 Rootless standalone tmpfs uses the same constrained options as rootful tmpfs.
 Added capabilities, devices, host/container network modes, named volumes and

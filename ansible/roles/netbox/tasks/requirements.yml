@@ -1,0 +1,19 @@
+---
+
+- name: Netbox | Check the selected bootstrap runtime and protection before stops
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: operational_requirements
+    apply:
+      tags: [netbox_bootstrap, netbox_deploy, netbox_recreate, netbox_remove]
+  vars:
+    service_common_service: "{{ netbox_podman_requirement | combine({'runtime': 'podman'}) | service_common_requirements_metadata(netbox_podman_requirement.name) }}"
+    service_common_name: "{{ netbox_podman_requirement.name }}"
+    service_common_action: "{{ netbox_podman_action }}"
+    service_common_execution_only: "{{ podman_services_prepare_execution_only | default(false) }}"
+    service_common_preflight_proof: {}
+
+- name: Netbox | Bind the pre-stop proof to its bootstrap service
+  ansible.builtin.set_fact:
+    netbox_podman_prerequisite_proofs: >-
+      {{ netbox_podman_prerequisite_proofs | combine({netbox_podman_requirement.name: service_common_prerequisite_proof}) }}

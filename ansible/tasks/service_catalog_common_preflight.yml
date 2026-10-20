@@ -8,11 +8,12 @@
       tags: [deploy, update, remove, recreate, bootstrap, drift]
   vars:
     service_common_service: >-
-      {{ {'operational_requirements': service_catalog_materialized_service.config.operational_requirements | default({})} }}
+      {{ service_catalog_materialized_service.config | service_common_requirements_metadata(service_common_name) }}
     service_common_name: >-
       {{ service_catalog_materialized_service.config.name
          | default((service_catalog_materialized_service.podman_lifecycle | default({})).container_name
          | default(service_catalog_materialized_service.name)) }}
+    service_common_preflight_proof: {}
     service_common_action: "{{ service_catalog_action }}"
     service_common_execution_only: "{{ service_catalog_execution_only | default(false) }}"
   tags: [deploy, update, remove, recreate, bootstrap, drift]
@@ -27,6 +28,7 @@
       runtime: "{{ service_catalog_materialized_service.runtime }}"
       dispatch_host: "{{ inventory_hostname }}"
       controller_host: "{{ service_catalog_controller_host }}"
+      requirements_proof: "{{ service_common_prerequisite_proof }}"
       preflight_performed: false
       infisical_config: {}
       resolved_environment: >-
@@ -72,6 +74,7 @@
       runtime: "{{ service_catalog_materialized_service.runtime }}"
       dispatch_host: "{{ inventory_hostname }}"
       controller_host: "{{ service_catalog_controller_host }}"
+      requirements_proof: "{{ service_catalog_common_context.requirements_proof }}"
       preflight_performed: true
       infisical_config: "{{ service_common_infisical_config }}"
       resolved_environment: "{{ service_common_resolved_environment }}"

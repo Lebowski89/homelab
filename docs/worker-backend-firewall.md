@@ -324,7 +324,12 @@ checks and persistence checks, the operator may explicitly set
 `services_worker_backend_acl_ready: true` for the first staged deployment.
 Retain the distinction between that procedure acknowledgement and completed
 application/live forwarding acceptance.
-Installation never sets it. That acknowledgement still applies independently
-of batch tags and remains necessary for individual services and worker Alloy.
-**mgt backend, receiver and independent bootstrap ACL requirements remain
-pending**; this worker policy does not satisfy those gates.
+Installation never sets it. First-cutover acknowledgements remain independent
+of batch tags. Managed service maintenance reuses the installed exact-source
+policy and audits its selected publication and both kernel families, plus the
+Unraid watcher or Plex timer, before mutation. A missing/stale policy or failed
+audit blocks maintenance even with an old acknowledgement; reconcile policy
+explicitly. It is never automatically installed by a service operation. Worker
+Alloy operations follow the same scope rule.
+**mgt backend, receiver and independent bootstrap ACL requirements are separate**;
+this worker policy does not satisfy those gates.

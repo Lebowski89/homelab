@@ -886,27 +886,34 @@ operator inputs, never service defaults or secret values.
 | --- | --- | --- |
 | `mgt_receivers` | `services_mgt_receiver_acl_ready` | Loki/Prometheus receivers and their allowed ingress/write paths |
 | `mgt_backends` | `services_mgt_backend_acl_ready` | Changed mgt HTTP, metrics, cache and PostgreSQL publications; includes Traefik metrics 18084→8082 |
-| `worker_backends` | `services_worker_backend_acl_ready` | Worker 22601–22622 publications and Alloy worker reachability/write paths |
+| `worker_backends` | `services_worker_backend_acl_ready` | Worker 22601–22623 publications and Alloy worker reachability/write paths |
 | `bootstrap` | `services_bootstrap_acl_ready` | NetBox/Infisical application, database and cache publications |
 
 `ownership_transition: true` requires
-`services_rootless_data_ready[<actual effective service name>]: true` after
-backups, old-writer shutdown and verified per-path UID/GID/ACL translation. It is
-required for every live deployment operation while the declaration remains,
-including empty/new paths and subsequent updates. The four existing rootless
-services retain their already transitioned stores. Mount-free Scraparr and the
-Infisical application have no data-transition requirement; their ACL requirement
-remains. Removing a batch tag never retires this requirement.
+`services_rootless_data_ready[<actual effective service name>]: true` for a
+first cutover or an unproved/changed ownership mapping or bind contract, after
+consistent backups, old-writer shutdown and verified per-path UID/GID/ACL
+translation. Managed, unchanged stores reuse the adapter's owned execution and
+account metadata plus the matching generated Quadlet contract.
 
-Missing, false, numeric or string acknowledgements fail before affected files,
-secrets, containers or listeners change. Check mode validates declarations and
-reports a plan without requiring acknowledgements. `drift` and `remove` retain
-their read-only/recovery behavior. Explicit
-`podman_services_prepare_execution_only: true` allows only
-deploy/update/bootstrap account preparation and returns before application
-file generation, images, native secrets, containers and port publication. It
-still validates configuration; it is invalid with recreate/remove/drift.
-Acknowledgements neither configure ACLs nor prove their existence.
+Routine operations on managed services audit the selected endpoint against the
+current installed policy, declared placement/ports/callers, both kernel families
+and persistence. Successful audits replace repeated historical ACL inputs for
+that operation only. Missing/stale policy and failed audits stop before mutation,
+even if an old acknowledgement is supplied. Reconcile the current policy union
+explicitly; application maintenance never installs or extends it. A boolean,
+running unit or existing path alone does not establish these prerequisites, and
+these checks do not infer completed application acceptance.
+
+First-cutover acknowledgements remain strict booleans. Missing, false, numeric
+or string values fail when explicit prerequisites are needed; supplied malformed
+values are never coerced. A changed ownership contract still requires the actual
+service-name key. Check mode validates declarations and reports a plan without
+live audits. `drift`/`remove` retain recovery behavior. Explicit
+`podman_services_prepare_execution_only: true` allows deploy/update/bootstrap
+account preparation and returns before application files, images, secrets and
+listeners; it is invalid with recreate/remove/drift. Acknowledgements never
+configure policy or prove its existence. See [maintenance lifecycle details](../../../../docs/podman-services.md).
 
 ### Selection tags and cutover batches
 

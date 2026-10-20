@@ -83,9 +83,15 @@ false or incorrectly typed live confirmations fail before persistent writes.
 The live install then resolves accounts/runtime identities and dry-tests both
 families, including ownership collisions, before policy files or rules change.
 Check mode accepts incomplete plans while preserving strict input types.
-Application gate booleans acknowledge the selected operation's coverage.
-Use them with a narrowly scoped service selector; do not acknowledge a batch
-until every required endpoint and caller in that batch has passed acceptance.
+Application gate booleans acknowledge first-cutover prerequisites. For an
+already managed service, routine operations instead compare its effective
+endpoints and authorised callers with the installed policy and run the existing
+strict read-only audit before any runtime stop or application mutation. Missing,
+stale or noncompliant protection requires explicit reconciliation of the current
+policy union; a historical boolean cannot override it. Pre-stop proofs are scoped
+to one operation and exact service metadata so recreate does not depend on a
+replacement already running. Application acceptance remains a separate process;
+no readiness input or acceptance record is automatically promoted.
 
 * `local`: exact NSS account and observed numeric socket UID. Future Podman
   accounts must match the effective declaration. Dedicated `podman-*` accounts
