@@ -1,7 +1,3 @@
 ---
 
-# Exact source overrides belong to worker inventory/context or private operator inputs.
-# The default candidate is mgt's NetBox local_ip, not proof of its container egress.
-worker_backend_firewall_source_addresses: ["{{ hostvars[services_controller_host].local_ip }}"]
-worker_backend_firewall_sources_verified: false
-worker_backend_firewall_operation: install
+# Compatibility role only; all profile defaults belong to service_firewall.

@@ -1,5 +1,8 @@
 # Worker backend policy
 
+Canonical implementation ownership: [service_firewall](service-firewall.md).
+Installed paths and operator inputs remain compatible; no reinstall is needed for the source reorganisation.
+
 This policy protects inventory worker host publications for mgt callers. It is
 independent of the [mgt policy](mgt-firewall.md); neither installation promotes
 application acknowledgements or proves live enforcement. Per-batch migration and

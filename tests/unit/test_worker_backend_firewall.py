@@ -16,7 +16,7 @@ from jinja2 import Environment, StrictUndefined
 from jinja2.nativetypes import NativeEnvironment
 
 ROOT = Path(__file__).resolve().parents[2]
-ROLE = ROOT / "ansible/roles/worker_backend_firewall"
+ROLE = ROOT / "ansible/roles/service_firewall"
 
 
 def load(path, name):
@@ -28,7 +28,7 @@ def load(path, name):
 
 PLAN = load("ansible/action_plugins/worker_backend_firewall_plan.py", "worker_firewall_plan_test")
 VALIDATE = load("ansible/action_plugins/worker_backend_firewall_validate.py", "worker_firewall_validate_test")
-FW = load("ansible/roles/worker_backend_firewall/files/worker-backend-firewall.py", "worker_firewall_test")
+FW = load("ansible/roles/service_firewall/files/worker-backend-firewall.py", "worker_firewall_test")
 
 
 def resolve(value):
@@ -504,7 +504,7 @@ def test_actual_ansible_guards_planning_and_recovery_are_local_and_do_not_deploy
     # Execute the real role task flow with deterministic platform probes. The
     # operation includes are replaced by harmless sentinels, so a broken guard
     # can never execute a live firewall command even outside --check.
-    tasks = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
+    tasks = yaml.safe_load((ROLE / "tasks/workers/main.yml").read_text())
     tasks = [task for task in tasks if "ansible.builtin.setup" not in task and "ansible.builtin.stat" not in task]
     (tmp_path / "install.yml").write_text(
         yaml.safe_dump(
@@ -646,7 +646,7 @@ def test_unraid_singleton_start_stop_and_recovery_do_not_signal_other_processes(
 
 
 def test_persistence_hooks_and_operation_includes_preserve_boundaries():
-    main = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
+    main = yaml.safe_load((ROLE / "tasks/workers/main.yml").read_text())
     operation = next(task for task in main if task.get("ansible.builtin.include_tasks"))
     assert operation["when"] == "not ansible_check_mode"
     assert set(operation["ansible.builtin.include_tasks"]["apply"]["tags"]) == {
@@ -654,18 +654,18 @@ def test_persistence_hooks_and_operation_includes_preserve_boundaries():
         "worker_backend_firewall_check",
         "worker_backend_firewall_remove",
     }
-    install = yaml.safe_load((ROLE / "tasks/install.yml").read_text())
+    install = yaml.safe_load((ROLE / "tasks/workers/install.yml").read_text())
     apply_idx = next(idx for idx, task in enumerate(install) if task.get("register") == "worker_backend_firewall_apply")
     persistence_idx = next(idx for idx, task in enumerate(install) if task.get("ansible.builtin.include_tasks"))
     assert apply_idx < persistence_idx
-    dropin = (ROLE / "templates/docker-ordering.conf.j2").read_text()
+    dropin = (ROLE / "templates/workers/docker-ordering.conf.j2").read_text()
     assert "Before=" not in dropin
     assert "After=skynet-worker-backend-firewall.service" in dropin
     assert "ExecStartPre=" in dropin and "ExecStartPost=" in dropin
-    service = (ROLE / "templates/skynet-worker-backend-firewall.service.j2").read_text()
+    service = (ROLE / "templates/workers/skynet-worker-backend-firewall.service.j2").read_text()
     assert "Before=docker.service" in service
     assert "ExecStop=" not in service  # stopping a unit does not reopen backends
-    unraid = yaml.safe_load((ROLE / "tasks/unraid.yml").read_text())
+    unraid = yaml.safe_load((ROLE / "tasks/workers/unraid.yml").read_text())
     boot = next(task["ansible.builtin.blockinfile"] for task in unraid if "ansible.builtin.blockinfile" in task)
     assert boot["marker"] == "# {mark} SKYNET WORKER BACKENDS"
     assert "user.scripts" not in str(unraid)
@@ -696,7 +696,7 @@ def test_native_unraid_boot_block_is_early_idempotent_and_removable(tmp_path):
     go = tmp_path / "go"
     original = "#!/bin/bash\n# Keep existing admin startup\n/usr/local/sbin/emhttp &\ncat <<'EOF'\n#!/bin/sh\nEOF\n"
     go.write_text(original)
-    task = next(task for task in yaml.safe_load((ROLE / "tasks/unraid.yml").read_text()) if "ansible.builtin.blockinfile" in task)
+    task = next(task for task in yaml.safe_load((ROLE / "tasks/workers/unraid.yml").read_text()) if "ansible.builtin.blockinfile" in task)
     task["ansible.builtin.blockinfile"]["path"] = str(go)
     path = tmp_path / "playbook.yml"
     cfg = tmp_path / "ansible.cfg"
@@ -810,3 +810,23 @@ def test_named_worker_metrics_cannot_escape_allocation_validation(port):
     service["targets"]["workers"]["ports"]["metrics"]["published"] = port
     with pytest.raises(ValueError, match="published port"):
         plan({"haproxy": service})
+
+
+def test_self_contained_worker_bundle_and_legacy_import_preserve_transactions(tmp_path):
+    source = load("ansible/roles/service_firewall/files/bundle.py", "firewall_bundler").bundled_helper("workers")
+    bundled = {"__name__": "offline_worker", "__file__": str(tmp_path / "policy.py")}
+    exec(compile(source, "isolated_worker_bundle", "exec"), bundled)
+    kernel = Kernel()
+    original = deepcopy(kernel.state)
+    assert bundled["reconcile"](policy(), run=kernel.run)["changed"]
+    kernel.calls.clear()
+    assert bundled["reconcile"](policy(), "check", run=kernel.run)["compliant"]
+    assert not any(argv[0].endswith("-restore") for argv, _ in kernel.calls)
+    assert bundled["reconcile"](operation="remove", backend="legacy", run=kernel.run)["changed"]
+    assert kernel.state == original
+    legacy = load("ansible/roles/worker_backend_firewall/files/worker-backend-firewall.py", "legacy_worker_alias")
+    assert legacy.desired_rules(policy(), 4, set(kernel.addresses)) == FW.desired_rules(policy(), 4, set(kernel.addresses))
+    # Profiles get separate primitive namespaces, so importing mgt cannot switch worker ownership.
+    mgt = load("ansible/roles/mgt_firewall/files/mgt-firewall.py", "legacy_mgt_alias")
+    assert mgt.OWNED.MARK == "skynet-mgt-endpoints"
+    assert FW.MARK == legacy.MARK == bundled["MARK"] == "skynet-worker-backends"

@@ -114,38 +114,14 @@ validator. Application sockets alone do not prove successful SQL operations.
 )
 ```
 
-## Add a scrape to an existing Docker Prometheus
+## Maintain the Prometheus scrape
 
-This optional configuration-only play is for a verified **Docker Swarm**
-Prometheus instance. It is not the normal update path for already rootless mgt
-Prometheus. Use the canonical Podman adapter for that runtime instead. Set
-`HAPROXY_BATCH` to the reviewed private log directory/batch before an authorized
-Docker configuration update. Preserve the existing scrape and job/instance labels.
-
-```bash
-(
-  set -euo pipefail
-  umask 077
-  batch="${HAPROXY_BATCH:?Set HAPROXY_BATCH to the reviewed private batch directory}"
-  out="$(mktemp -d "$batch/prometheus-haproxy-scrape.XXXXXX")"
-  log="$out/operator.log"
-  printf 'Private scrape log: %s\nPrivate Ansible log: %s\n' "$log" "$out/ansible.log"
-  (set -o noclobber; : >"$log")
-  set +e
-  PLAYBOOK=/opt/homelab/ansible/operations.yml \
-  VIRTUAL_ENV=/opt/ansible/ansible-venv \
-  ANSIBLE_LOG_PATH="$out/ansible.log" \
-  skynet raw --tags prometheus_haproxy_scrape 2>&1 | tee -a "$log"
-  statuses=("${PIPESTATUS[@]}")
-  status=${statuses[0]}
-  if [[ "$status" = 0 ]]; then status=${statuses[1]}; fi
-  printf 'Prometheus scrape update exited with status %s\n' "$status" | tee -a "$log"
-  finish=("${PIPESTATUS[@]}")
-  if [[ "$status" = 0 ]]; then status=${finish[0]}; fi
-  if [[ "$status" = 0 ]]; then status=${finish[1]}; fi
-  exit "$status"
-)
-```
+The completed Docker-only HAProxy scrape workflow is archived and its old tag
+is rejected. Preserve the working Swarm HAProxy scrape and the rootless mgt job/
+instance labels in the canonical Prometheus configuration; apply a reviewed
+change through `skynet update prometheus`. Do not replay the former Swarm-specific
+file edit/reload against migrated Prometheus. See
+[manual operations and compatibility](../../docs/service-firewall.md).
 
 ## Policy transitions and scoped rollback
 

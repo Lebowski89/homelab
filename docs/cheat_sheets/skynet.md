@@ -6,6 +6,10 @@ It standardises how the homelab playbook is executed by wrapping `ansible-playbo
 
 The wrapper is installed on the Ansible manager host and is mainly intended to be run from the management VM.
 
+For firewall profiles, explicit manual operations and retained compatibility
+paths, see [service firewall operations](../service-firewall.md). Ordinary
+service maintenance uses `deploy`, `update` and `recreate` below.
+
 ## What it does
 
 `skynet` provides a consistent entrypoint for:

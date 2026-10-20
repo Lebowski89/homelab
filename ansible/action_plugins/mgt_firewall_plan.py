@@ -21,7 +21,7 @@ def load(path, name):
 
 
 CATALOG = load(ANSIBLE / "filter_plugins/service_catalog.py", "mgt_firewall_catalog")
-HELPER = load(ANSIBLE / "roles/mgt_firewall/files/mgt-firewall.py", "mgt_firewall_validation")
+HELPER = load(ANSIBLE / "roles/service_firewall/files/mgt-firewall.py", "mgt_firewall_validation")
 
 
 def bootstrap_metadata(role, defaults, template):
@@ -256,11 +256,7 @@ def installed_policy_inputs(policy, additions):
 
 
 def bundled_helper():
-    source = (ANSIBLE / "roles/worker_backend_firewall/files/worker-backend-firewall.py").read_text()
-    helper = (ANSIBLE / "roles/mgt_firewall/files/mgt-firewall.py").read_text()
-    return helper.replace(
-        "from __future__ import annotations", "from __future__ import annotations\n\nWORKER_ENGINE_SOURCE = " + repr(source), 1
-    )
+    return load(ANSIBLE / "roles/service_firewall/files/bundle.py", "service_firewall_bundle").bundled_helper("mgt")
 
 
 class ActionModule(ActionBase):

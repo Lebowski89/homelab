@@ -10,7 +10,7 @@ from ansible.errors import AnsibleActionFail
 from ansible.plugins.action import ActionBase
 
 _SPEC = importlib.util.spec_from_file_location(
-    "worker_firewall_validation", Path(__file__).resolve().parents[1] / "roles/worker_backend_firewall/files/worker-backend-firewall.py"
+    "worker_firewall_validation", Path(__file__).resolve().parents[1] / "roles/service_firewall/files/worker-backend-firewall.py"
 )
 _HELPER = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_HELPER)

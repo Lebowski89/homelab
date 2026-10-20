@@ -993,7 +993,7 @@ def test_alerting_collection_retains_exact_callers_and_never_promotes(tmp_path, 
     )
     monkeypatch.setattr(UTILITY.socket, "gethostname", lambda: "fixture")
     identity = {"pid": 123, "birth": "same", "netns": "net:[456]"}
-    preflight = UTILITY.load("ansible/roles/mgt_firewall/files/haproxy-preflight.py", "alerting_real_socket_parser")
+    preflight = UTILITY.load("ansible/roles/service_firewall/files/haproxy-preflight.py", "alerting_real_socket_parser")
     fw = SimpleNamespace(container_identities=lambda binding, run: [{"address": "172.20.0.5", "veth": "fixture-veth"}])
     monkeypatch.setattr(UTILITY, "load", lambda path, name: preflight if "preflight.py" in path else fw)
     monkeypatch.setattr(UTILITY, "context", lambda pid: {**identity, "birth": "changed"} if failure == "replacement" else identity)
@@ -1341,7 +1341,7 @@ def test_media_callers_preserve_union_project_owned_routes_and_reject_changed_id
         )
     projection = {"address": "192.0.2.48", "integrations": {"zone": "int.example.test", "znc": {"port": 16502}}}
     numeric = UTILITY.load("ansible/operator/znc-mapping-proof.py", "media_real_maps")
-    preflight = UTILITY.load("ansible/roles/mgt_firewall/files/haproxy-preflight.py", "media_real_ss")
+    preflight = UTILITY.load("ansible/roles/service_firewall/files/haproxy-preflight.py", "media_real_ss")
     fw = SimpleNamespace(container_identities=lambda binding, run: [{"veth": "fixture-veth", "address": "172.20.0.5"}])
     monkeypatch.setattr(
         UTILITY, "load", lambda path, name: preflight if "preflight.py" in path else numeric if "mapping-proof" in path else fw

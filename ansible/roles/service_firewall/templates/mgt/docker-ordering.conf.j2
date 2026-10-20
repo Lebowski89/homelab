@@ -1,0 +1,8 @@
+# Managed by skynet mgt endpoints
+[Unit]
+Requires=skynet-mgt-firewall.service
+After=skynet-mgt-firewall.service
+
+[Service]
+ExecStartPre=/usr/bin/python3 {{ mgt_firewall_root }}/policy.py apply --allow-pending --deny-runtime
+ExecStartPost=/usr/bin/python3 {{ mgt_firewall_root }}/policy.py apply --allow-pending

@@ -22,7 +22,7 @@ from jinja2 import Environment, StrictUndefined
 from jinja2.nativetypes import NativeEnvironment
 
 ROOT = Path(__file__).resolve().parents[2]
-ROLE = ROOT / "ansible/roles/mgt_firewall"
+ROLE = ROOT / "ansible/roles/service_firewall"
 
 
 def execute_account_probe(argv, read):
@@ -51,8 +51,8 @@ def load(path, name):
 
 
 PLAN = load("ansible/action_plugins/mgt_firewall_plan.py", "mgt_plan_test")
-FW = load("ansible/roles/mgt_firewall/files/mgt-firewall.py", "mgt_firewall_test")
-PREFLIGHT = load("ansible/roles/mgt_firewall/files/haproxy-preflight.py", "haproxy_preflight_test")
+FW = load("ansible/roles/service_firewall/files/mgt-firewall.py", "mgt_firewall_test")
+PREFLIGHT = load("ansible/roles/service_firewall/files/haproxy-preflight.py", "haproxy_preflight_test")
 
 
 def test_account_probe_shares_one_invocation_budget_and_stops_before_more_queries():
@@ -1761,7 +1761,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
     )
     plays = yaml.safe_load((ROOT / "ansible/operations.yml").read_text())
     plays = [next(play for play in plays if "haproxy_preflight" in play["tasks"][0]["tags"])]
-    plays[0]["tasks"] = yaml.safe_load((ROOT / "ansible/tasks/haproxy-firewall-preflight.yml").read_text())
+    plays[0]["tasks"] = yaml.safe_load((ROOT / "ansible/operations/haproxy-firewall-preflight.yml").read_text())
     play = plays[0]
     play["become"] = False
     play["vars_files"] = [str(ROOT / "ansible/group_vars/all/services.yml")]
@@ -1779,7 +1779,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
         if "ansible.builtin.set_fact" in task and "haproxy_preflight_source" in task["ansible.builtin.set_fact"]:
             facts = task["ansible.builtin.set_fact"]
             facts["haproxy_preflight_source"] = facts["haproxy_preflight_source"].replace(
-                "roles/mgt_firewall/files/haproxy-preflight.py", str(ROLE / "files/haproxy-preflight.py")
+                "roles/service_firewall/files/haproxy-preflight.py", str(ROLE / "files/haproxy-preflight.py")
             )
         if "Collect projected" in task["name"]:
             task["fixture_collect"] = task.pop("ansible.builtin.command")
@@ -1834,7 +1834,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
                 assert f"host={host} operation=collect" in result.stdout
             assert "docker network inspect: permission denied" in result.stdout
         assert "FIREWALL_SOURCE" not in result.stdout + result.stderr
-        assert "WORKER_ENGINE_SOURCE" not in result.stdout + result.stderr
+        assert "TRANSACTION_SOURCE" not in result.stdout + result.stderr
         assert "Traceback (most recent call last)" not in result.stdout + result.stderr
         return
     reports = json.loads(Path(str(output) + ".metadata.json").read_text())
@@ -2237,8 +2237,8 @@ def test_actual_ansible_loader_guards_readme_and_offline_recovery(tmp_path, oper
     (tmp_path / "remove.yml").write_text("---\n- name: Recovery sentinel\n  ansible.builtin.debug:\n    msg: recovery reached\n")
     # Empty caller input executes the real streamed helper but cannot invoke
     # any runtime/network/NSS observation; it reports pending metadata only.
-    (tmp_path / "observe.yml").write_text((ROLE / "tasks/observe.yml").read_text())
-    tasks = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
+    (tmp_path / "observe.yml").write_text((ROLE / "tasks/mgt/observe.yml").read_text())
+    tasks = yaml.safe_load((ROLE / "tasks/mgt/main.yml").read_text())
     variables = {
         "services_controller_host": "manager",
         "services_storage_host": "storage",
@@ -2285,23 +2285,23 @@ def test_actual_ansible_loader_guards_readme_and_offline_recovery(tmp_path, oper
 
 
 def test_persistence_ordering_and_dynamic_tags_do_not_deploy_applications():
-    service = (ROLE / "templates/skynet-mgt-firewall.service.j2").read_text()
+    service = (ROLE / "templates/mgt/skynet-mgt-firewall.service.j2").read_text()
     assert "systemd-logind.service" in service and "Before=docker.service" in service
     assert "ExecStop=" not in service
     assert "apply --allow-pending --deny-runtime" in service
-    timer = (ROLE / "templates/skynet-mgt-firewall-reconcile.timer.j2").read_text()
+    timer = (ROLE / "templates/mgt/skynet-mgt-firewall-reconcile.timer.j2").read_text()
     assert "OnUnitInactiveSec=5s" in timer
-    dropin = (ROLE / "templates/docker-ordering.conf.j2").read_text()
+    dropin = (ROLE / "templates/mgt/docker-ordering.conf.j2").read_text()
     assert "ExecStartPre=" in dropin and "ExecStartPost=" in dropin
     assert "apply --allow-pending --deny-runtime" in next(line for line in dropin.splitlines() if line.startswith("ExecStartPre="))
     assert "--deny-runtime" not in next(line for line in dropin.splitlines() if line.startswith("ExecStartPost="))
-    tasks = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
+    tasks = yaml.safe_load((ROLE / "tasks/mgt/main.yml").read_text())
     include = tasks[-1]["ansible.builtin.include_tasks"]
     assert set(include["apply"]["tags"]) == {"mgt_firewall_install", "mgt_firewall_observe", "mgt_firewall_check", "mgt_firewall_remove"}
-    install = yaml.safe_load((ROLE / "tasks/install.yml").read_text())
+    install = yaml.safe_load((ROLE / "tasks/mgt/install.yml").read_text())
     first_write = next(index for index, task in enumerate(install) if "ansible.builtin.file" in task)
     assert any("command" in key and "validate" in str(value) for task in install[:first_write] for key, value in task.items())
-    for path in (ROLE / "tasks").glob("*.yml"):
+    for path in (ROLE / "tasks/mgt").glob("*.yml"):
         for task in yaml.safe_load(path.read_text()):
             unit = task.get("ansible.builtin.systemd_service", {})
             assert unit.get("state") != "restarted"
@@ -2377,7 +2377,7 @@ def test_actual_install_preflight_preserves_dedicated_account_shell_home(tmp_pat
     home.mkdir()
     task = next(
         task
-        for task in yaml.safe_load((ROLE / "tasks/install.yml").read_text())
+        for task in yaml.safe_load((ROLE / "tasks/mgt/install.yml").read_text())
         if task["name"] == "Mgt firewall | Resolve live identities and dry-test both families before persistent writes"
     )
     source = (

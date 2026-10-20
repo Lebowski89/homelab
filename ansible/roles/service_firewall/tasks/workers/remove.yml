@@ -1,0 +1,57 @@
+---
+
+- name: Worker backend firewall | Detect owned Plex units # noqa var-naming[no-role-prefix]
+  ansible.builtin.stat:
+    path: "/etc/systemd/system/{{ worker_backend_firewall_unit }}"
+  loop: [skynet-worker-backend-firewall.timer, skynet-worker-backend-firewall.service, skynet-worker-backend-firewall-reconcile.service]
+  loop_control:
+    loop_var: worker_backend_firewall_unit
+  register: worker_backend_firewall_remove_units
+  when: not worker_backend_firewall_unraid.stat.exists
+
+- name: Worker backend firewall | Stop and disable only installed owned Plex units
+  ansible.builtin.systemd_service:
+    name: "{{ worker_backend_firewall_unit_stat.worker_backend_firewall_unit }}"
+    state: stopped
+    enabled: false
+  loop: "{{ worker_backend_firewall_remove_units.results | default([]) }}"
+  loop_control:
+    loop_var: worker_backend_firewall_unit_stat
+  when:
+    - not worker_backend_firewall_unraid.stat.exists
+    - worker_backend_firewall_unit_stat.stat.exists
+
+- name: Worker backend firewall | Remove the owned Unraid boot block
+  ansible.builtin.blockinfile:
+    path: /boot/config/go
+    marker: '# {mark} SKYNET WORKER BACKENDS'
+    state: absent
+  when: worker_backend_firewall_unraid.stat.exists
+
+- name: Worker backend firewall | Stop Unraid reconciliation and remove only owned rules # noqa var-naming[no-role-prefix]
+  ansible.builtin.command:
+    argv: ["{{ worker_backend_firewall_python }}", -c, "{{ 'workers' | service_firewall_helper_source }}", remove, --backend, "{{ worker_backend_firewall_backend }}"]
+    expand_argument_vars: false
+  register: worker_backend_firewall_removed
+  changed_when: (worker_backend_firewall_removed.stdout | from_json).changed
+
+- name: Worker backend firewall | Remove only owned persistence files # noqa var-naming[no-role-prefix]
+  ansible.builtin.file:
+    path: "{{ worker_backend_firewall_owned_file }}"
+    state: absent
+  loop: >-
+    {{ [worker_backend_firewall_root ~ '/policy.py', worker_backend_firewall_root ~ '/policy.json',
+        worker_backend_firewall_root ~ '/start.sh'] +
+       ([] if worker_backend_firewall_unraid.stat.exists else
+        ['/etc/systemd/system/skynet-worker-backend-firewall.service',
+         '/etc/systemd/system/skynet-worker-backend-firewall-reconcile.service',
+         '/etc/systemd/system/skynet-worker-backend-firewall.timer',
+         '/etc/systemd/system/docker.service.d/30-skynet-worker-backends.conf']) }}
+  loop_control:
+    loop_var: worker_backend_firewall_owned_file
+  register: worker_backend_firewall_removed_files
+
+- name: Worker backend firewall | Reload Plex unit definitions after removal
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: not worker_backend_firewall_unraid.stat.exists and worker_backend_firewall_removed_files.changed

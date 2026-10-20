@@ -1,3 +1,1 @@
-#!/bin/bash
-# Flash is commonly mounted noexec; both this script and Python are explicitly interpreted.
-exec {{ worker_backend_firewall_python | quote }} {{ (worker_backend_firewall_root ~ '/policy.py') | quote }} start --config {{ (worker_backend_firewall_root ~ '/policy.json') | quote }}
+../../service_firewall/templates/workers/unraid-start.sh.j2

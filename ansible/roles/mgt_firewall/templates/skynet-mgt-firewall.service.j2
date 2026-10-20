@@ -1,13 +1,1 @@
-[Unit]
-Description=Skynet mgt private endpoint boot guard
-Before=docker.service podman.service systemd-logind.service{% for endpoint in mgt_firewall_plan.endpoints %} {{ endpoint.service }}.service{% endfor %}
-After=local-fs.target
-RequiresMountsFor={{ mgt_firewall_root }}
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/python3 {{ mgt_firewall_root }}/policy.py apply --allow-pending --deny-runtime
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
+../../service_firewall/templates/mgt/skynet-mgt-firewall.service.j2

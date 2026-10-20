@@ -1,0 +1,12 @@
+[Unit]
+Description=Skynet temporary worker backend restriction
+After=local-fs.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart={{ worker_backend_firewall_python }} {{ worker_backend_firewall_root }}/policy.py apply --config {{ worker_backend_firewall_root }}/policy.json
+
+[Install]
+WantedBy=multi-user.target

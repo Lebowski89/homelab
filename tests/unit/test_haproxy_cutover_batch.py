@@ -484,7 +484,7 @@ def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path,
     catalog = {}
     for path in (ROOT / "ansible/group_vars/all/services").glob("*.yml"):
         catalog.update(yaml.safe_load(path.read_text()))
-    play = {"tasks": yaml.safe_load((ROOT / "ansible/tasks/haproxy-firewall-preflight.yml").read_text())}
+    play = {"tasks": yaml.safe_load((ROOT / "ansible/operations/haproxy-firewall-preflight.yml").read_text())}
     task = deepcopy(play["tasks"][-1])
     for entry in task["block"]:
         if "ansible.builtin.include_vars" in entry:

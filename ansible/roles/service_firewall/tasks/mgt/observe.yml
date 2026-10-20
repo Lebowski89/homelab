@@ -1,0 +1,12 @@
+---
+
+- name: Mgt firewall | Observe current caller metadata without writes or setting confirmations # noqa var-naming[no-role-prefix]
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, -c, "{{ mgt_firewall_helper_source }}", observe, --stdin]
+    stdin: "{{ mgt_firewall_policy | to_json }}"
+  register: mgt_firewall_observation
+  changed_when: false
+
+- name: Mgt firewall | Report available identities and unresolved callers
+  ansible.builtin.debug:
+    msg: "{{ mgt_firewall_observation.stdout | from_json }}"

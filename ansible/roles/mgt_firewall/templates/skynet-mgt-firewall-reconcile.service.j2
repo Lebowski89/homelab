@@ -1,7 +1,1 @@
-[Unit]
-Description=Reconcile only Skynet mgt endpoint guards and current caller bindings
-After=skynet-mgt-firewall.service
-
-[Service]
-Type=oneshot
-ExecStart=/usr/bin/python3 {{ mgt_firewall_root }}/policy.py apply --allow-pending
+../../service_firewall/templates/mgt/skynet-mgt-firewall-reconcile.service.j2

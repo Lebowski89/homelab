@@ -9,10 +9,11 @@
   become: true
   any_errors_fatal: true
   tags:
+    - never
     - mgt_firewall_install
     - mgt_firewall_observe
     - mgt_firewall_check
     - mgt_firewall_remove
   tasks:
-    - name: Compatibility entry point for installed skynet; shared tasks live in tasks/
-      ansible.builtin.import_tasks: tasks/mgt-firewall.yml
+    - name: Compatibility entry point for installed skynet; manual workflow lives in operations/
+      ansible.builtin.import_tasks: operations/mgt-firewall.yml

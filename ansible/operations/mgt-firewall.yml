@@ -1,0 +1,8 @@
+---
+
+- name: Service firewall | Run the explicit mgt profile operation
+  ansible.builtin.include_role:
+    name: service_firewall
+    tasks_from: operations/mgt
+    apply:
+      tags: "{{ ansible_run_tags }}"
