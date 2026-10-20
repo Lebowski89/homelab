@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
@@ -42,11 +43,11 @@ def test_embedded_collector_preserves_account_shell_variables_through_actual_ans
         "argv=podman_command(account,'fixture-account')\n"
         # Run the exact env/shell/exec portion without runuser or a real Podman.
         # The child observes actual cwd and environment; no runtime is contacted.
-        f"argv=argv[4:-2]+[{str(Path('/opt/ansible/ansible-venv/bin/python'))!r},'-c',{child!r}]+{arguments!r}\n"
+        f"argv=argv[4:-2]+[{sys.executable!r},'-c',{child!r}]+{arguments!r}\n"
         "result=subprocess.run(argv,check=True,text=True,capture_output=True)\n"
         f"Path({str(result_path)!r}).write_text(result.stdout)\n"
     )
-    command["argv"][0] = "/opt/ansible/ansible-venv/bin/python"
+    command["argv"][0] = sys.executable
     command["stdin"] = "{}"
     source_file = tmp_path / "collector.py"
     source_file.write_text(source)
@@ -73,7 +74,7 @@ def test_embedded_collector_preserves_account_shell_variables_through_actual_ans
                     "hosts": {
                         "fixture": {
                             "ansible_connection": "local",
-                            "ansible_python_interpreter": "/opt/ansible/ansible-venv/bin/python",
+                            "ansible_python_interpreter": sys.executable,
                         }
                     }
                 }
@@ -83,7 +84,7 @@ def test_embedded_collector_preserves_account_shell_variables_through_actual_ans
     cfg = tmp_path / "ansible.cfg"
     cfg.write_text("[defaults]\nstdout_callback=default\n[inventory]\nenable_plugins=yaml\n")
     result = subprocess.run(
-        ["/opt/ansible/ansible-venv/bin/ansible-playbook", "-i", str(inventory), str(play)],
+        [str(Path(sys.executable).with_name("ansible-playbook")), "-i", str(inventory), str(play)],
         cwd=operator,
         env={**os.environ, "HOME": str(operator), "ANSIBLE_CONFIG": str(cfg), "ANSIBLE_LOCAL_TEMP": str(tmp_path / "local")},
         capture_output=True,
@@ -377,10 +378,10 @@ def test_actual_ansible_async_collection_polling_aggregation_and_read_only_check
     first = next(i for i, t in enumerate(tasks) if "Collect projected" in t["name"])
     last = next(i for i, t in enumerate(tasks) if "Prepare optional" in t["name"])
     selected = deepcopy(tasks[first:last])
-    executable = "/opt/ansible/ansible-venv/bin/ansible-playbook"
+    executable = str(Path(sys.executable).with_name("ansible-playbook"))
     for task in selected:
         if "ansible.builtin.command" in task:
-            task["ansible.builtin.command"]["argv"][0] = "/opt/ansible/ansible-venv/bin/python"
+            task["ansible.builtin.command"]["argv"][0] = sys.executable
     collector = (
         "import json,sys\n"
         f"sys.path.insert(0,{str(Path(__file__).parent)!r})\n"
@@ -447,7 +448,7 @@ def test_actual_ansible_async_collection_polling_aggregation_and_read_only_check
         yaml.safe_dump(
             {
                 "all": {
-                    "vars": {"ansible_connection": "local", "ansible_python_interpreter": "/opt/ansible/ansible-venv/bin/python"},
+                    "vars": {"ansible_connection": "local", "ansible_python_interpreter": sys.executable},
                     "hosts": {h: {"local_ip": a} for h, a in hosts.items()},
                 }
             }

@@ -240,6 +240,7 @@ def test_published_route_producers_preserve_dns_failure_and_redacted_receiver(mo
     assert result["result"] == "DNS lookup failed" and result["sql_proved"] is False
     assert "FAKE-SECRET" not in output.getvalue()
 
+    producers = {name: body.replace("/opt/homelab", str(ROOT)) for name, body in producers.items()}
     body = json.dumps({"config": {"original": "receivers:\n- name: fixture\n  webhook_configs:\n  - url: <secret>\n"}}).encode()
     monkeypatch.setattr(urllib.request, "build_opener", lambda *args: SimpleNamespace(open=lambda *args, **kw: io.BytesIO(body)))
     monkeypatch.setattr(sys, "argv", ["fixture", "alertmanager", "9093"])

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -213,7 +214,7 @@ def test_actual_subprocess_image_status_and_explicit_staging(tmp_path, monkeypat
         "if [ \"$1\" = awk ]; then printf 'podman-znc:1410720:65536\\n'; exit; fi\n"
         '[ "$1" = runuser ] || exit 97\nshift 4\n'
         # Replace only the Podman executable and inaccessible fixture HOME.
-        f"exec '{Path('/opt/ansible/ansible-venv/bin/python')}' '{tmp_path / 'account.py'}' \"$@\"\n"
+        f"exec '{sys.executable}' '{tmp_path / 'account.py'}' \"$@\"\n"
     )
     home = tmp_path / "account-home"
     home.mkdir()

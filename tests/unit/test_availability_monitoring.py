@@ -297,3 +297,45 @@ def test_availability_dashboard_renders_valid_json_and_queries_generated_labels(
     assert "probe_ssl_earliest_cert_expiry" in expressions
     assert "pg_up" in expressions
     assert 'category=~"$category"' in expressions
+
+
+def test_ci_renderer_resolves_inventory_destinations_before_offline_tool_dispatch(tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    calls = tmp_path / "calls"
+    for name in ["promtool", "amtool", "blackbox_exporter"]:
+        binary = tools / name
+        binary.write_text('#!/bin/sh\nprintf "%s\\n" "$0 $*" >> "$RECORDER"\n')
+        binary.chmod(0o755)
+    rendered = tmp_path / "rendered"
+    result = subprocess.run(
+        ["bash", str(REPO_ROOT / "ansible/roles/docker_services/scripts/validate-alerting-configs.sh")],
+        env={
+            **os.environ,
+            "PATH": str(tools) + ":" + os.defpath,
+            "ROOT_DIR": str(REPO_ROOT),
+            "OUT_DIR": str(rendered),
+            "KEEP_RENDERED": "1",
+            "PYTHON_BIN": sys.executable,
+            "RECORDER": str(calls),
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    config = yaml.safe_load((rendered / "prometheus.yml").read_text())
+    assert "{{" not in (rendered / "prometheus.yml").read_text()
+    jobs = {job["job_name"]: job for job in config["scrape_configs"]}
+    assert len(jobs) == len(config["scrape_configs"])
+    for name in ["authelia", "traefik", "haproxy"]:
+        for entry in jobs[name]["static_configs"]:
+            assert all(target.rsplit(":", 1)[-1].isdigit() for target in entry["targets"])
+    assert "promtool check config" in calls.read_text()
+    assert "amtool check-config" in calls.read_text()
+    # The recorders prove dispatch/rendering only; this is not promtool execution.

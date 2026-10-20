@@ -49,21 +49,38 @@ commands and `MGT_FIREWALL_PLAYBOOK`/`WORKER_BACKEND_FIREWALL_PLAYBOOK`, `PLAYBO
 `WORKER_BACKEND_FIREWALL_VARS_FILE` and tooling overrides are preserved.
 
 ```bash
-skynet check mgt-firewall
-skynet run mgt-firewall observe -e @/private/reviewed-policy-inputs.json
-skynet install mgt-firewall -e @/private/reviewed-policy-inputs.json
+MGT_FIREWALL_VARS_FILE=/private/reviewed-policy-inputs.json skynet check mgt-firewall
+MGT_FIREWALL_VARS_FILE=/private/reviewed-policy-inputs.json skynet run mgt-firewall observe
+MGT_FIREWALL_VARS_FILE=/private/reviewed-policy-inputs.json skynet install mgt-firewall
+MGT_FIREWALL_VARS_FILE=/private/reviewed-policy-inputs.json skynet run mgt-firewall check
 skynet remove mgt-firewall
-skynet check worker-backend-firewall -e @/private/reviewed-worker-inputs.json
-skynet install worker-backend-firewall -e @/private/reviewed-worker-inputs.json
+WORKER_BACKEND_FIREWALL_VARS_FILE=/private/reviewed-worker-inputs.json skynet check worker-backend-firewall
+WORKER_BACKEND_FIREWALL_VARS_FILE=/private/reviewed-worker-inputs.json skynet install worker-backend-firewall
+WORKER_BACKEND_FIREWALL_VARS_FILE=/private/reviewed-worker-inputs.json skynet run worker-backend-firewall check
 skynet remove worker-backend-firewall
 ```
 
-These are live operator operations, not offline validation commands. Use
-`--check` on an authorised install to plan without writes or runtime discovery.
-Mgt observe resolves identity metadata without promoting confirmations. Check
-uses existing policy/audit mechanisms and does not repair it. Install requires
-review of the complete current union and all applicable confirmations; remove
-touches owned chains/jumps/hooks only. Keep consistent private rollback inputs.
+These are live operator operations, not offline validation commands. Normal role
+commands accept private inputs through the environment overrides above, not
+arbitrary `-e` arguments. `skynet check mgt-firewall` and
+`skynet check worker-backend-firewall` select **Ansible check-mode installation
+planning**, without policy writes or runtime discovery; they do not audit the
+installed protection. `skynet run mgt-firewall check` and
+`skynet run worker-backend-firewall check` perform the **read-only installed
+policy/kernel/persistence audit**, without Ansible check mode or repairs.
+Mgt observe resolves identity metadata without promoting confirmations.
+Install requires review of the complete current union and all applicable
+confirmations; remove touches owned chains/jumps/hooks only. Keep consistent
+private rollback inputs.
+
+Routine worker maintenance retains strict root ownership and POSIX permissions
+on Ubuntu/Plex. Unraid's two fixed policy/helper files instead require the
+root-owned VFAT block-device filesystem mounted at `/boot`, matching device
+identities and non-symlink directories, with no shadow mounts on those paths.
+Its synthetic mount-defined write bits are not independently configurable file
+permissions. Other paths and files retain strict POSIX checks; no mount or file
+permissions are changed by validation.
+
 Detailed boundaries: [mgt](mgt-firewall.md), [workers](worker-backend-firewall.md).
 
 ## Manual workflows and compatibility

@@ -830,3 +830,61 @@ def test_self_contained_worker_bundle_and_legacy_import_preserve_transactions(tm
     mgt = load("ansible/roles/mgt_firewall/files/mgt-firewall.py", "legacy_mgt_alias")
     assert mgt.OWNED.MARK == "skynet-mgt-endpoints"
     assert FW.MARK == legacy.MARK == bundled["MARK"] == "skynet-worker-backends"
+
+
+def test_documented_firewall_commands_forward_private_inputs_and_distinguish_audit_from_planning(tmp_path):
+    """Run the actual guide's commands through the real wrapper, with inert Ansible."""
+    import shlex
+
+    defaults = yaml.safe_load((ROOT / "ansible/roles/ubuntu/defaults/main.yml").read_text())
+    variables = {key: str(tmp_path / key) for key in defaults}
+    variables["ubuntu_ansible_path"] = str(tmp_path / "ansible")
+    wrapper = tmp_path / "skynet"
+    wrapper.write_text(
+        Environment(undefined=StrictUndefined)
+        .from_string((ROOT / "ansible/roles/ubuntu/templates/skynet.j2").read_text())
+        .render(**variables)
+    )
+    recorder = tmp_path / "ansible-recorder"
+    recorder.write_text('#!/bin/bash\nprintf "%s\\n" "$@" > "$RECORD"\n')
+    recorder.chmod(0o755)
+    output = tmp_path / "args"
+    env = {
+        **os.environ,
+        "PLAYBOOK": str(tmp_path / "ansible/playbook.yml"),
+        "ANSIBLE_PLAYBOOK_BIN": str(recorder),
+        "RECORD": str(output),
+        "ANSIBLE_LOG_PATH": str(tmp_path / "log"),
+        "REPO_ROOT": str(tmp_path),
+        "BECOME_PASS_FILE": str(tmp_path / "absent"),
+        "VAULT_PASS_FILE": str(tmp_path / "absent"),
+    }
+    for key in ["MGT_FIREWALL_PLAYBOOK", "WORKER_BACKEND_FIREWALL_PLAYBOOK", "MGT_FIREWALL_VARS_FILE", "WORKER_BACKEND_FIREWALL_VARS_FILE"]:
+        env.pop(key, None)
+    guide = (ROOT / "docs/service-firewall.md").read_text().split("```bash\n", 1)[1].split("```", 1)[0]
+    for line in guide.splitlines():
+        command = shlex.split(line)
+        selected_env = env.copy()
+        private = None
+        if "=" in command[0]:
+            key, value = command.pop(0).split("=", 1)
+            private = tmp_path / Path(value).name
+            private.write_text("{}")
+            private.chmod(0o600)
+            selected_env[key] = str(private)
+        assert command.pop(0) == "skynet"
+        result = subprocess.run(["bash", str(wrapper), *command], env=selected_env, capture_output=True, text=True)
+        assert result.returncode == 0, line + "\n" + result.stderr
+        args = output.read_text().splitlines()
+        worker = "worker-backend-firewall" in command
+        operation = command[-1] if command[0] == "run" else "install" if command[0] in {"install", "check"} else "remove"
+        prefix = "worker_backend_firewall" if worker else "mgt_firewall"
+        assert str(tmp_path / "ansible/operations.yml") in args
+        assert str(tmp_path / "ansible/playbook.yml") not in args
+        assert args[args.index("--tags") + 1] == prefix + "_" + operation
+        assert ("--check" in args) == (command[0] == "check")
+        if private:
+            assert any(args[i : i + 2] == ["-e", "@" + str(private)] for i in range(len(args) - 1))
+            assert private.stat().st_mode & 0o777 == 0o600
+        else:
+            assert not any(arg.startswith("@") for arg in args)

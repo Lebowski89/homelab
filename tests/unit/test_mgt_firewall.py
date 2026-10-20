@@ -10,6 +10,7 @@ import re
 import shlex
 import shutil
 import subprocess
+import sys
 from contextlib import redirect_stdout
 from copy import deepcopy
 from pathlib import Path
@@ -1449,9 +1450,7 @@ collect = fake_collect
 sys.excepthook = lambda *args: print("CRASH_REPORTER_SENTINEL", file=sys.stderr)
 sys.exit(main())
 """
-    result = subprocess.run(
-        ["/opt/ansible/ansible-venv/bin/python", "-c", source, "collect"], input=json.dumps({"host": host}), capture_output=True, text=True
-    )
+    result = subprocess.run([sys.executable, "-c", source, "collect"], input=json.dumps({"host": host}), capture_output=True, text=True)
     assert result.returncode == 1 and result.stdout == ""
     assert f"host={host} operation=collect: docker network inspect:" in result.stderr
     assert "permission denied on local Docker socket" in result.stderr
@@ -1686,7 +1685,7 @@ def test_exact_overlay_routes_distinguish_vips_tasks_and_host_publications():
 )
 @pytest.mark.parametrize("window", [0, 1])
 def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path, failure, window):
-    executable = Path("/opt/ansible/ansible-venv/bin/ansible-playbook")
+    executable = Path(str(Path(sys.executable).with_name("ansible-playbook")))
     if not executable.exists():
         pytest.skip("configured Ansible environment unavailable")
     # The fixture action uses the resolved connection to choose a simulated
@@ -2219,7 +2218,7 @@ def test_executable_skynet_dispatch_is_policy_only_and_preserves_private_input_p
     ],
 )
 def test_actual_ansible_loader_guards_readme_and_offline_recovery(tmp_path, operation, verified, check_mode, malformed, success):
-    binary = Path("/opt/ansible/ansible-venv/bin/ansible-playbook")
+    binary = Path(str(Path(sys.executable).with_name("ansible-playbook")))
     if not binary.exists():
         pytest.skip("repository Ansible environment unavailable")
     service_dir = tmp_path / "group_vars/all/services"
@@ -2370,7 +2369,7 @@ def test_remote_recovery_is_an_explicit_exclusive_inventory_identity():
 
 def test_actual_install_preflight_preserves_dedicated_account_shell_home(tmp_path):
     """Command argument expansion must not rewrite HOME inside streamed Python."""
-    binary = Path("/opt/ansible/ansible-venv/bin/ansible-playbook")
+    binary = Path(str(Path(sys.executable).with_name("ansible-playbook")))
     if not binary.exists():
         pytest.skip("repository Ansible environment unavailable")
     home = tmp_path / "dedicated-home"
@@ -2395,7 +2394,7 @@ def test_actual_install_preflight_preserves_dedicated_account_shell_home(tmp_pat
             "hosts": "localhost",
             "gather_facts": False,
             "vars": {
-                "ansible_facts": {"python": {"executable": "/opt/ansible/ansible-venv/bin/python"}},
+                "ansible_facts": {"python": {"executable": sys.executable}},
                 "mgt_firewall_helper_source": source,
                 "mgt_firewall_policy": {},
             },
