@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import importlib.util
 import json
+import os
 from pathlib import Path
 
 import yaml
@@ -29,6 +30,8 @@ MGT = load("action_plugins/mgt_firewall_plan.py", "maintenance_mgt_plan")
 WORKER = load("action_plugins/worker_backend_firewall_plan.py", "maintenance_worker_plan")
 WORKER_INPUTS = load("action_plugins/worker_backend_firewall_validate.py", "maintenance_worker_inputs")
 PODMAN = load("roles/podman_services/filter_plugins/podman_services.py", "maintenance_podman")
+UNRAID_ROOT = "/boot/config/skynet-worker-backend-firewall"
+UNRAID_FILES = {UNRAID_ROOT + "/policy.json", UNRAID_ROOT + "/policy.py"}
 
 
 def require(condition, message):
@@ -189,19 +192,68 @@ class ActionModule(ActionBase):
             raise ValueError("read-only audit failed: " + " ".join(argv[:3]) + "; reconcile installed policy/runtime before retrying")
         return result.get("stdout", "")
 
-    def owned(self, path, owner=0, optional=False):
+    def unraid_flash_device(self):
+        """Trust only the root-owned Unraid VFAT flash, with no shadow mounts.
+
+        VFAT modes are synthetic. Device identity, mount ownership and every
+        fixed path component replace the POSIX write-bit test on these two files.
+        """
+        self.owned("/etc/unraid-version")
+        snapshot = base64.b64decode(self.module("ansible.builtin.slurp", {"src": "/proc/self/mountinfo"})["content"]).decode()
+        flash = []
+        for line in snapshot.splitlines():
+            before, after = line.split(" - ", 1)
+            fields, backing = before.split(), after.split()
+            require(len(fields) >= 6 and len(backing) >= 3, "incomplete Unraid mount metadata")
+            mountpoint = fields[4]
+            if mountpoint == "/boot":
+                flash.append((fields, backing))
+            elif mountpoint.startswith("/boot/"):
+                require(
+                    not any(path == mountpoint or path.startswith(mountpoint + "/") for path in UNRAID_FILES),
+                    "unexpected mount shadows the Unraid policy path",
+                )
+        require(len(flash) == 1, "expected exactly one Unraid /boot flash mount")
+        fields, backing = flash[0]
+        require(
+            fields[3] == "/" and backing[0] == "vfat" and backing[1].startswith("/dev/"),
+            "Unraid policy requires a whole VFAT filesystem mounted at /boot from a block device",
+        )
+        options = dict(option.split("=", 1) for option in (fields[5] + "," + backing[2]).split(",") if "=" in option)
+        require(
+            int(options.get("uid", "0")) == 0 and int(options.get("gid", "0")) == 0,
+            "Unraid flash mount must assign ownership to root",
+        )
+        major, minor = map(int, fields[2].split(":"))
+        device = os.makedev(major, minor)
+        block = self.module("ansible.builtin.stat", {"path": backing[1], "follow": True})["stat"]
+        require(block.get("isblk") and block.get("device_type") == device, "Unraid flash backing device differs from its mount")
+        for path in ["/boot", "/boot/config", UNRAID_ROOT]:
+            info = self.module("ansible.builtin.stat", {"path": path, "follow": False})["stat"]
+            require(
+                info.get("isdir") and not info.get("islnk") and info.get("uid") == 0 and info.get("gid") == 0 and info.get("dev") == device,
+                "Unraid flash directory identity differs: " + path,
+            )
+        return device
+
+    def owned(self, path, owner=0, optional=False, flash_device=None):
         info = self.module("ansible.builtin.stat", {"path": path, "follow": False})["stat"]
         if not info.get("exists"):
             require(optional, "required installed metadata is absent: " + path)
             return None
+        flash = flash_device is not None
+        require(not flash or (path in UNRAID_FILES and owner == 0), "unexpected Unraid flash metadata path: " + path)
         require(
-            info.get("isreg") and not info.get("islnk") and info.get("uid") == owner and int(info["mode"], 8) & 0o022 == 0,
+            info.get("isreg")
+            and not info.get("islnk")
+            and info.get("uid") == owner
+            and (int(info["mode"], 8) & 0o022 == 0 if not flash else info.get("dev") == flash_device and info.get("gid") == 0),
             "installed metadata ownership/mode differs: " + path,
         )
         return info
 
-    def read(self, path, owner=0, optional=False):
-        if self.owned(path, owner, optional) is None:
+    def read(self, path, owner=0, optional=False, flash_device=None):
+        if self.owned(path, owner, optional, flash_device) is None:
             return None
         return base64.b64decode(self.module("ansible.builtin.slurp", {"src": path})["content"]).decode()
 
@@ -334,13 +386,14 @@ class ActionModule(ActionBase):
             plan = WORKER.build_plan({metadata["name"]: metadata}, workers, hosts[controller]["local_ip"], lambda value: value)
             unraid = host == self.variables["services_storage_host"]
             root = "/boot/config/skynet-worker-backend-firewall" if unraid else "/etc/skynet-worker-backend-firewall"
-            policy = json.loads(self.read(root + "/policy.json"))
+            flash_device = self.unraid_flash_device() if unraid else None
+            policy = json.loads(self.read(root + "/policy.json", flash_device=flash_device))
             require(
                 policy.get("backend") == ("legacy" if unraid else "nf_tables"), "worker firewall backend differs from its declared platform"
             )
             sources = self.variables.get("worker_backend_firewall_source_addresses", [hosts[controller]["local_ip"]])
             worker_contract(policy, plan, host, address, sources)
-            self.owned(root + "/policy.py")
+            self.owned(root + "/policy.py", flash_device=flash_device)
             audit = json.loads(
                 self.command(
                     [

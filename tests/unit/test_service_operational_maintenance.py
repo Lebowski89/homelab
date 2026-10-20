@@ -224,9 +224,12 @@ class ActionModule(m.ActionModule):
         args=module_args
         if module_name=='ansible.builtin.stat':
             exists=fixture['mode']!='missing-policy'
-            return {{'stat':{{'exists':exists,'isreg':True,'islnk':False,'uid':0,'mode':'0644'}}}}
+            path=args['path']
+            return {{'stat':{{'exists':exists,'isreg':True,'isdir':True,'isblk':True,'islnk':False,
+                             'uid':0,'gid':0,'mode':'0644','dev':2049,'device_type':2049}}}}
         if module_name=='ansible.builtin.slurp':
-            return {{'content':base64.b64encode(json.dumps(fixture['policy']).encode()).decode()}}
+            value='21 1 8:1 / /boot rw - vfat /dev/fixture rw,uid=0,gid=0' if args['src']=='/proc/self/mountinfo' else json.dumps(fixture['policy'])
+            return {{'content':base64.b64encode(value.encode()).decode()}}
         if module_name=='ansible.builtin.command':
             argv=args['argv']
             assert not Path({str(stopped)!r}).exists(), 'late audit/runtime probe after stop'
@@ -444,3 +447,57 @@ class ActionModule(m.ActionModule):
     rows = [json.loads(row) for row in events.read_text().splitlines()]
     assert sum("check" in row for row in rows) == 1
     assert not any(row[0] in {"docker", "podman"} for row in rows)
+
+
+@pytest.mark.parametrize("case", ["vfat", "posix", "nested", "bind", "owner", "device", "symlink", "path", "ubuntu", "mgt"])
+def test_installed_metadata_trust_is_scoped_to_the_unraid_flash_mount(case):
+    import base64
+
+    action = object.__new__(CHECK.ActionModule)
+    mount = "21 1 8:1 / /boot rw - vfat /dev/fixture rw,uid=0,gid=0"
+    if case == "posix":
+        mount = mount.replace("vfat", "ext4")
+    elif case == "nested":
+        mount += "\n22 21 8:2 / /boot/config rw - ext4 /dev/other rw"
+    elif case == "bind":
+        mount = mount.replace("8:1 / /boot", "8:1 /elsewhere /boot")
+    elif case == "owner":
+        mount = mount.replace("uid=0", "uid=1000")
+
+    def module(name, args):
+        if name.endswith("slurp"):
+            assert args["src"] == "/proc/self/mountinfo"
+            return {"content": base64.b64encode(mount.encode()).decode()}
+        path = args["path"]
+        flash = path.startswith("/boot")
+        return {
+            "stat": {
+                "exists": True,
+                "isreg": True,
+                "isdir": True,
+                "isblk": True,
+                "islnk": case == "symlink" and path == "/boot/config",
+                "uid": 0,
+                "gid": 0,
+                "mode": "0777" if flash or case in {"ubuntu", "mgt"} else "0644",
+                "dev": 2050 if case == "device" else 2049,
+                "device_type": 2049,
+            }
+        }
+
+    action.module = module
+    if case in {"ubuntu", "mgt"}:
+        path = "/etc/skynet-worker-backend-firewall/policy.json" if case == "ubuntu" else "/etc/skynet-mgt-firewall/policy.json"
+        with pytest.raises(ValueError, match="ownership/mode"):
+            action.owned(path)
+    elif case == "vfat":
+        device = action.unraid_flash_device()
+        for path in CHECK.UNRAID_FILES:
+            assert action.owned(path, flash_device=device)["mode"] == "0777"
+        # A regular POSIX metadata check is still strict, even on Unraid.
+        with pytest.raises(ValueError, match="ownership/mode"):
+            action.owned(next(iter(CHECK.UNRAID_FILES)))
+    else:
+        with pytest.raises(ValueError):
+            device = action.unraid_flash_device()
+            action.owned("/boot/config/unexpected/policy.json" if case == "path" else next(iter(CHECK.UNRAID_FILES)), flash_device=device)
