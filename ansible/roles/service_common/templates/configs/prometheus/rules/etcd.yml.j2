@@ -1,0 +1,89 @@
+# Backend allocation is compared with quota; in-use bytes are separate evidence.
+# A positive short-window slope can escalate sooner than the longer history.
+# Forecasts are estimates, never an authorization for maintenance.
+groups:
+  - name: etcd-quota-health
+    interval: 30s
+    rules:
+      - record: etcd:backend_growth_bytes_per_second
+        expr: clamp_min(deriv(etcd_mvcc_db_total_size_in_bytes{job="etcd"}[15m]), 0) and (count_over_time(etcd_mvcc_db_total_size_in_bytes{job="etcd"}[15m]) >= 24)
+        labels:
+          window: 15m
+      - record: etcd:backend_growth_bytes_per_second
+        expr: clamp_min(deriv(etcd_mvcc_db_total_size_in_bytes{job="etcd"}[1h]), 0) and (count_over_time(etcd_mvcc_db_total_size_in_bytes{job="etcd"}[1h]) >= 96)
+        labels:
+          window: 1h
+      - record: etcd:backend_growth_bytes_per_second
+        expr: clamp_min(deriv(etcd_mvcc_db_total_size_in_bytes{job="etcd"}[6h]), 0) and (count_over_time(etcd_mvcc_db_total_size_in_bytes{job="etcd"}[6h]) >= 576)
+        labels:
+          window: 6h
+      - record: etcd:backend_growth_conservative_bytes_per_second
+        expr: max without (window) (etcd:backend_growth_bytes_per_second)
+      - alert: EtcdQuotaSameDayReview
+        expr: etcd_mvcc_db_total_size_in_bytes{job="etcd"} / etcd_server_quota_backend_bytes{job="etcd"} >= 0.95
+        labels:
+          severity: warning
+        annotations:
+          summary: "etcd quota at least 95%: same-day review"
+      - alert: EtcdQuotaImmediateReview
+        expr: etcd_mvcc_db_total_size_in_bytes{job="etcd"} / etcd_server_quota_backend_bytes{job="etcd"} >= 0.97
+        labels:
+          severity: critical
+        annotations:
+          summary: "etcd quota at least 97%: immediate review"
+      - alert: EtcdQuotaForecastSameDayReview
+        expr: ((0.95 * etcd_server_quota_backend_bytes{job="etcd"} - etcd_mvcc_db_total_size_in_bytes{job="etcd"}) / etcd:backend_growth_conservative_bytes_per_second < 72 * 3600) and (etcd:backend_growth_conservative_bytes_per_second > 0)
+        labels:
+          severity: warning
+        annotations:
+          summary: "Estimated time to 95% below 72h: same-day review"
+          description: "Uncertain forecast using the largest positive 15m/1h/6h backend slope. Inspect acceleration and missing samples; do not wait if growth accelerates."
+      - alert: EtcdQuotaForecastImmediateReview
+        expr: ((etcd_server_quota_backend_bytes{job="etcd"} - etcd_mvcc_db_total_size_in_bytes{job="etcd"}) / etcd:backend_growth_conservative_bytes_per_second < 24 * 3600) and (etcd:backend_growth_conservative_bytes_per_second > 0)
+        labels:
+          severity: critical
+        annotations:
+          summary: "Estimated quota exhaustion below 24h: immediate review"
+          description: "Uncertain forecast, not remaining SSD lifetime. Review immediately and sooner if growth accelerates."
+      - alert: EtcdDCSFailure
+        expr: (probe_success{job="etcd-health"} == 0) or (up{job="etcd-health"} == 0) or (etcd_server_has_leader{job="etcd"} == 0)
+        labels:
+          severity: critical
+        annotations:
+          summary: "etcd health/leader failure: immediate review"
+          description: "Default /health fails on NOSPACE, CORRUPT, missing leader or failed linearizable read. Inspect its reason and alarm list without excluding alarms."
+      - alert: EtcdMonitoringIncomplete
+        expr: (up{job="etcd"} == 0) or (up{job="etcd"} unless etcd_mvcc_db_total_size_in_bytes{job="etcd"}) or (up{job="etcd"} unless etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd"}) or (up{job="etcd"} unless (etcd_server_quota_backend_bytes{job="etcd"} > 0)) or (up{job="etcd"} unless etcd_server_has_leader{job="etcd"}) or (up{job="etcd-health"} unless probe_success{job="etcd-health"}) or absent(up{job="etcd"}) or absent(up{job="etcd-health"}) or (count(up{job="etcd"}) != 3) or (count(up{job="etcd-health"}) != 3)
+        # 30s scrape + 10s timeout + 30s next evaluation <= 70s;
+        # 90s allows initialization while retaining sustained-gap detection.
+        for: 90s
+        labels:
+          severity: critical
+        annotations:
+          summary: "etcd monitoring incomplete: immediate review; quota unknown"
+      - alert: EtcdQuotaForecastUnavailable
+        expr: etcd_mvcc_db_total_size_in_bytes{job="etcd"} unless etcd:backend_growth_conservative_bytes_per_second
+        for: 20m
+        labels:
+          severity: warning
+        annotations:
+          summary: "etcd forecast unavailable after warm-up: same-day review"
+      - alert: PatroniDCSStale
+        expr: timestamp(patroni_dcs_last_seen{job="patroni"}) - patroni_dcs_last_seen{job="patroni"} > 30
+        labels:
+          severity: critical
+        annotations:
+          summary: "Patroni DCS observation stale beyond installed 30s TTL: immediate review"
+      - alert: PatroniRoleChanged
+        expr: changes(patroni_primary{job="patroni"}[15m]) > 0
+        labels:
+          severity: critical
+        annotations:
+          summary: "Patroni primary role changed: immediate review (possible demotion)"
+          description: "Includes promotions and demotions visible at 30s scrape cadence. Inspect Patroni logs; a transition wholly between scrapes can be missed."
+      - alert: PatroniImmediateHealthFailure
+        expr: (up{job="patroni"} == 0) or (patroni_postgres_running{job="patroni"} == 0) or (patroni_cluster_unlocked{job="patroni"} == 1) or (up{job="patroni"} unless on(job, instance) patroni_dcs_last_seen{job="patroni"}) or (up{job="patroni"} unless on(job, instance) patroni_primary{job="patroni"}) or absent(up{job="patroni"}) or (count(up{job="patroni"}) != 3)
+        labels:
+          severity: critical
+        annotations:
+          summary: "Patroni health/telemetry failure: immediate review"
