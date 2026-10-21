@@ -1066,7 +1066,7 @@ def test_provider_access_rejects_changed_or_missing_provider_and_preserves_rollb
     ENGINE.access_transact(store, client, "access_stage", "x", lambda _: None)
     ENGINE.access_transact(store, client, "access_remove", "remove", lambda _: None)
     assert baseline in store.current["callers"]["newapp"]
-    assert "newapp" in store.current["endpoints"][0]["callers"]
+    assert "newapp" not in store.current["endpoints"][0]["callers"]
 
 
 def test_inverse_provider_planner_selects_only_declared_client_access():
@@ -1346,3 +1346,86 @@ def test_docker_containment_action_check_mode_and_transport_errors_are_safe(monk
     assert result["failed"] and "NONPRODUCTION containment failed" in result["msg"]
     assert "invocation" not in result and "cmd" not in result
     assert len(calls) == 1
+
+
+@pytest.mark.parametrize("phase", ["access_finish", "access_remove"])
+@pytest.mark.parametrize("failure", ["test", "apply", "audit", "finalize"])
+def test_permission_withdrawal_retains_identity_other_grants_and_retry_ownership(tmp_path, monkeypatch, failure, phase):
+    store = Store(tmp_path / "policy.json", monkeypatch)
+    client = provider_request(store)
+    baseline = {"kind": "local", "phase": "podman", "account": "podman-newapp", "uid": 2222, "verified": True, "restart_verified": True}
+    store.current["callers"]["newapp"] = [baseline]
+    provider_a = {
+        "ids": ["existing/api"],
+        "service": "existing",
+        "port": 18030,
+        "destination": 8080,
+        "callers": ["newapp"],
+        "purpose": "retained provider-owned permission",
+    }
+    store.current["endpoints"].append(provider_a)
+    store.apply(store.current, client, "stage")
+    ENGINE.access_transact(store, client, "access_stage", "first", lambda _: None)
+    ENGINE.access_transact(store, client, "access_finish", "first", lambda _: None)
+    original_a = deepcopy(provider_a)
+    if phase == "access_finish":
+        client = deepcopy(client)
+        client["providers"] = []
+        ENGINE.access_transact(store, client, "access_stage", "remove", lambda _: None)
+    audit, write = store.audit, store.write
+    if failure in {"test", "apply"}:
+        store.fail = failure
+    elif failure == "audit":
+
+        def fail_audit(policy, recovering=False):
+            if policy["managed_services"]["newapp"].get("access", {}).get("withdrawing"):
+                raise RuntimeError("audit failure")
+            audit(policy, recovering)
+
+        monkeypatch.setattr(store, "audit", fail_audit)
+    else:
+
+        def fail_finalize(policy):
+            receipt = policy.get("managed_services", {}).get("newapp", {}).get("access", {})
+            if not receipt.get("ports") and not receipt.get("withdrawing"):
+                raise RuntimeError("finalize failure")
+            write(policy)
+
+        monkeypatch.setattr(store, "write", fail_finalize)
+    with pytest.raises(RuntimeError, match=failure + " failure"):
+        ENGINE.access_transact(store, client, phase, "remove", lambda _: None)
+    assert store.current["managed_services"]["newapp"]["access"]["ports"] == [5432]
+    assert original_a in store.current["endpoints"] and baseline in store.current["callers"]["newapp"]
+    store.fail = None
+    monkeypatch.setattr(store, "audit", audit)
+    monkeypatch.setattr(store, "write", write)
+    retry_token = "remove" if phase == "access_finish" else "retry"
+    ENGINE.access_transact(store, client, phase, retry_token, lambda _: None)
+    assert "newapp" not in next(e for e in store.current["endpoints"] if e["port"] == 5432)["callers"]
+    assert original_a in store.current["endpoints"] and baseline in store.current["callers"]["newapp"]
+    saved, events = deepcopy(store.current), list(store.events)
+    assert not ENGINE.access_transact(store, client, phase, retry_token, lambda _: None)["changed"]
+    assert store.current == saved and store.events.count("write") == events.count("write")
+
+
+def test_cancel_releases_only_its_token_without_testing_or_stopping_providers(tmp_path, monkeypatch):
+    store = Store(tmp_path / "policy.json", monkeypatch)
+    client = provider_request(store)
+    ENGINE.access_transact(store, client, "access_stage", "owner", lambda _: None)
+    current = deepcopy(store.current)
+    with pytest.raises(ValueError, match="no longer belongs"):
+        ENGINE.access_transact(store, client, "access_cancel", "competitor", lambda _: None)
+    assert store.current == current
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("cancellation must not audit/stop/change running applications or protection")
+
+    monkeypatch.setattr(store, "audit", forbidden)
+    monkeypatch.setattr(store, "test", forbidden)
+    monkeypatch.setattr(store, "prepare", forbidden)
+    monkeypatch.setattr(store, "apply", forbidden)
+    assert ENGINE.access_transact(store, client, "access_cancel", "owner", forbidden)["changed"]
+    assert store.current["endpoints"] == current["endpoints"] and store.current["callers"] == current["callers"]
+    events = list(store.events)
+    assert not ENGINE.access_transact(store, client, "access_cancel", "owner", forbidden)["changed"]
+    assert store.events == events

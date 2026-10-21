@@ -4,6 +4,8 @@
   ansible.builtin.set_fact:
     podman_services_firewall_staged: false
     podman_services_start_attempted: false
+    # From this first task the adapter owns cancellation, including init failures.
+    service_catalog_firewall_handoff: "{{ (podman_services_common_context.firewall_plan | default({})).token | default('') }}"  # noqa var-naming[no-role-prefix]
   tags: [deploy, update, recreate, bootstrap, remove, drift]
 
 - name: Podman services | Prepare and run the scoped service operation
@@ -643,6 +645,21 @@
       vars:
         service_firewall_adapter_plan: "{{ podman_services_common_context.firewall_plan }}"
         service_firewall_lifecycle_phase: cancel
+
+    - name: Podman services | Cancel provider reservations if preparation never staged publications
+      tags: [always]
+      when:
+        - not podman_services_firewall_staged
+        - not podman_services_start_attempted
+        - (podman_services_common_context.firewall_access_hosts | default([])) | length > 0
+      ansible.builtin.include_role:
+        name: service_firewall
+        tasks_from: access_cancel
+        apply:
+          tags: [always]
+      vars:
+        service_firewall_access_cancel_plan: "{{ podman_services_common_context.firewall_plan }}"
+        service_firewall_access_cancel_hosts: "{{ podman_services_common_context.firewall_access_hosts }}"
 
     - name: Podman services | Keep the original operation failure
       tags: [always]

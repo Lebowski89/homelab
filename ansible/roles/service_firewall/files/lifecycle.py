@@ -345,6 +345,20 @@ def access_transact(store, request, phase, token, runtime):
         if not request["providers"] and not current.get("managed_services", {}).get(request["service"], {}).get("access"):
             return {"changed": False, "families": [4, 6]}
         saved_access = current.get("managed_services", {}).get(request["service"], {}).get("access", {})
+        if phase == "access_cancel":
+            # Preflight cancellation releases only its token. It neither needs
+            # a healthy provider nor repairs rules: writers and protection stay.
+            if not saved_access:
+                return {"changed": False, "families": [4, 6]}
+            require(
+                saved_access.get("token") == token and saved_access.get("declaration") == fingerprint(request["providers"]),
+                "client access no longer belongs to this operation",
+            )
+            changed = saved_access.get("pending") is not False or saved_access.get("failed") is not True
+            if changed:
+                saved_access.update(pending=False, failed=True)
+                store.write(current)
+            return {"changed": changed, "families": [4, 6], "protection_retained": True}
         store.audit(
             current,
             recovering=bool(
@@ -352,6 +366,7 @@ def access_transact(store, request, phase, token, runtime):
                 and (
                     saved_access.get("token") == token
                     or (phase == "access_stage" and saved_access.get("declaration") == fingerprint(request["providers"]))
+                    or (phase == "access_remove" and saved_access.get("withdrawing"))
                 )
             ),
         )
@@ -428,21 +443,21 @@ def access_transact(store, request, phase, token, runtime):
                     if caller not in installed["callers"]:
                         installed["callers"].append(caller)
                         installed["callers"].sort()
-                        access["ports"].append(endpoint["port"])
+                        access["ports"] = sorted(set(access["ports"]) | {endpoint["port"]})
             caller = request["runtime"]["service"]
             bindings = candidate["callers"].setdefault(caller, [])
             binding = request["runtime"]["binding"]
             if binding not in bindings:
                 bindings.append(deepcopy(binding))
-                access["bindings"].append(deepcopy(binding))
-        elif phase in {"access_activate", "access_cancel", "access_abort"}:
+                if binding not in access["bindings"]:
+                    access["bindings"].append(deepcopy(binding))
+        elif phase in {"access_activate", "access_abort"}:
             require(
                 access.get("token") == token and access.get("declaration") == declaration,
                 "client access no longer belongs to this operation",
             )
-            if phase in {"access_cancel", "access_abort"}:
-                if phase == "access_abort":
-                    runtime("absent")
+            if phase == "access_abort":
+                runtime("absent")
                 access.update(pending=False, failed=True)
                 # Retained permission has no fabricated bridge identity. Keep
                 # existing rollback bindings and deny absent dynamic clients.
@@ -456,18 +471,19 @@ def access_transact(store, request, phase, token, runtime):
                 access.update(pending=False, failed=False)
             else:
                 runtime("absent")
+                access["token"] = token
             desired_ports = {e["port"] for p in request["providers"] for e in p["endpoints"]} if phase == "access_finish" else set()
             obsolete = set(access.get("ports", [])) - desired_ports
             caller = request["runtime"]["service"]
             owned = access.get("bindings", [])
             retained = [b for b in candidate["callers"].get(caller, []) if b not in owned]
-            if not retained:
-                for endpoint in candidate["endpoints"]:
-                    if endpoint["port"] in obsolete:
-                        endpoint["callers"] = [c for c in endpoint["callers"] if c != caller]
-                        require(
-                            endpoint["callers"], "removing this caller would leave an invalid provider ACL; update its declaration first"
-                        )
+            # Identity retention does not confer permission ownership. Only
+            # contributed ports are withdrawn; baseline/provider-owned grants
+            # have never been added to this list (or were explicitly adopted).
+            for endpoint in candidate["endpoints"]:
+                if endpoint["port"] in obsolete:
+                    endpoint["callers"] = [c for c in endpoint["callers"] if c != caller]
+                    require(endpoint["callers"], "removing this caller would leave an invalid provider ACL; update its declaration first")
             # A baseline/shared reference keeps its mechanical identity too.
             referenced = any(caller in e["callers"] for e in candidate["endpoints"])
             if not referenced:
@@ -475,18 +491,29 @@ def access_transact(store, request, phase, token, runtime):
                     candidate["callers"][caller] = retained
                 else:
                     candidate["callers"].pop(caller, None)
-            access["ports"] = sorted(set(access.get("ports", [])) - obsolete)
-            if phase == "access_remove":
-                record.pop("access", None)
-                if not record.get("ports") and not record.get("staged_ports") and not referenced:
-                    records.pop(request["service"], None)
+            # Keep ownership through kernel application and audit. A partial
+            # write/apply failure must leave enough evidence for a later retry.
+            if obsolete:
+                access["withdrawing"] = sorted(obsolete)
+            else:
+                access.pop("withdrawing", None)
         store.validate(candidate)
         test_phase = "finish" if phase == "access_finish" else "activate"
         store.test(candidate, request, test_phase)
+        if candidate == current and phase not in {"access_stage", "access_activate", "access_remove"} and not access.get("withdrawing"):
+            return {"changed": False, "families": [4, 6]}
         try:
             store.prepare(candidate)
             store.write(candidate)
             applied = store.apply(candidate, request, "finish" if phase == "access_finish" else "stage") or {}
+            store.audit(candidate)
+            if phase in {"access_finish", "access_remove"}:
+                access["ports"] = sorted(set(access.get("ports", [])) - set(access.pop("withdrawing", [])))
+                if phase == "access_remove":
+                    record.pop("access", None)
+                    if not record.get("ports") and not record.get("staged_ports") and not referenced:
+                        records.pop(request["service"], None)
+                store.write(candidate)
         except (OSError, ValueError, RuntimeError):
             retained = store.read()
             saved = retained.get("managed_services", {}).get(request["service"], {}).get("access", {})
@@ -494,7 +521,6 @@ def access_transact(store, request, phase, token, runtime):
                 saved.update(pending=False, failed=True)
                 store.write(retained)
             raise
-        store.audit(candidate)
         return {
             "changed": candidate != current or applied.get("changed", False),
             "families": [4, 6],

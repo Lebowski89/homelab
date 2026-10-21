@@ -146,10 +146,34 @@ record, alongside its publication ownership. Each affected host commits under
 its own policy lock. Partial failures retain protection/contributions, report the
 failed host, and record the completed contribution as failed for a guarded retry;
 there is no cross-host snapshot rollback. Ordinary retries read the current union.
+Dispatch owns provider-access cancellation from staging through the first runtime
+adapter task, including secret lookup, environment resolution and context
+validation. It records attempted and successfully staged hosts for the selected
+token. A handled failure cancels only that token's reservations under each policy
+lock; existing writers, staged protection and concurrent updates remain intact.
+Cancellation is a metadata operation and does not require a provider to be
+healthy. The adapter accepts cleanup responsibility in its first task, including
+initialization failures before its own publication transaction. Only one boundary
+owns cleanup at a time. Fixing a transient preflight error permits an ordinary
+retry with a new token without removing the healthy application.
+
+A cleanup failure is reported separately from the original error, naming the
+host, service and retained token. Repair that host/write failure and retry the
+existing `service_firewall_lifecycle` action with `phase: access_cancel`, the same
+value-free operation plan/token and exact inventory host, then rerun skynet.
+Cancellation rejects another token or changed provider declaration. Process kills
+and other unhandled interruptions may still require this guarded recovery;
+pending reservations are never presumed abandoned or replaced automatically.
+
 On client removal, stopped-writer proof permits removal of only its contributed
 caller entries and mechanical bindings. Pre-existing/shared permissions, accepted
-operator and rollback bindings survive. Provider maintenance preserves active
-client contributions. A worker endpoint retains its verified remote-source model;
+operator and rollback bindings survive. A retained identity does not own every
+endpoint permission: an obsolete client-contributed grant is withdrawn even when
+that identity remains necessary for another provider. Explicit provider adoption
+can transfer permission ownership. Withdrawal keeps its owned-port receipt until
+rule application and audit succeed; a partial failure retains that receipt for a
+scoped retry. Repeated completed withdrawals/removals make no further changes.
+Provider maintenance preserves active client contributions. A worker endpoint retains its verified remote-source model;
 a local account UID is never exported as a worker identity. Established
 worker-local PostgreSQL/elsewhere contracts are left intact.
 

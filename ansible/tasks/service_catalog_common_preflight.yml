@@ -109,6 +109,7 @@
   vars:
     service_firewall_access_plan: "{{ service_firewall_lifecycle_plan }}"
     service_firewall_access_phase: access_stage
+    service_firewall_access_preflight_owned: true
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Service catalog preflight | Reset current-service common context
@@ -123,6 +124,7 @@
       controller_host: "{{ service_catalog_controller_host }}"
       requirements_proof: "{{ service_catalog_selected_requirements_proof }}"
       firewall_plan: "{{ service_firewall_lifecycle_plan }}"
+      firewall_access_hosts: "{{ service_firewall_access_stage_progress.attempted_hosts | default([]) }}"
       preflight_performed: false
       infisical_config: {}
       resolved_environment: >-
@@ -172,6 +174,7 @@
       controller_host: "{{ service_catalog_controller_host }}"
       requirements_proof: "{{ service_catalog_common_context.requirements_proof }}"
       firewall_plan: "{{ service_catalog_common_context.firewall_plan }}"
+      firewall_access_hosts: "{{ service_catalog_common_context.firewall_access_hosts }}"
       preflight_performed: true
       infisical_config: "{{ service_common_infisical_config }}"
       resolved_environment: "{{ service_common_resolved_environment }}"

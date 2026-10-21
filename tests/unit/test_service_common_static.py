@@ -532,7 +532,7 @@ def test_empty_infisical_map_skips_live_lookup_and_keeps_empty_dispatch_owned_ou
 
 
 def test_check_mode_preflight_is_common_owned_and_native_materialization_is_skipped():
-    dispatch = yaml.safe_load(GLOBAL_DISPATCH)
+    dispatch = operation_tasks(GLOBAL_DISPATCH)
     common = next(task for task in dispatch if task["name"] == "Service catalog dispatch | Run common service preflight")
     assert common["ansible.builtin.include_tasks"]["file"] == "service_catalog_common_preflight.yml"
     assert "service_catalog_common_context" in GLOBAL_DISPATCH
@@ -557,7 +557,7 @@ def test_docker_validates_attachment_metadata_before_materialization():
 
 
 def test_dispatch_snapshots_common_context_before_adapter_owned_materialization():
-    dispatch_tasks = yaml.safe_load(GLOBAL_DISPATCH)
+    dispatch_tasks = operation_tasks(GLOBAL_DISPATCH)
     common_preflight = next(task for task in dispatch_tasks if task["name"] == "Service catalog dispatch | Run common service preflight")
     docker_route = next(task for task in dispatch_tasks if task["name"] == "Service catalog dispatch | Process Docker entry")
     podman_route = next(task for task in dispatch_tasks if task["name"] == "Service catalog dispatch | Process Podman entry")
@@ -595,7 +595,7 @@ def test_podman_dispatch_is_routed_from_the_single_global_iteration():
     playbook = yaml.safe_load(PLAYBOOK)
     deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")
     dispatch = next(task for task in deploy_play["tasks"] if task.get("name") == "Process globally ordered service catalog")
-    dispatcher_tasks = yaml.safe_load(GLOBAL_DISPATCH)
+    dispatcher_tasks = operation_tasks(GLOBAL_DISPATCH)
     materialization = next(
         task for task in dispatcher_tasks if task.get("name") == "Service catalog dispatch | Materialize selected entry on dispatch host"
     )
@@ -639,7 +639,7 @@ def test_manager_owned_compose_and_drift_state_have_single_ordered_writers():
     assert drift_append["run_once"] is True
     assert drift_include["when"] == "docker_services_is_deploy_host | bool"
 
-    global_dispatch = yaml.safe_load(GLOBAL_DISPATCH)
+    global_dispatch = operation_tasks(GLOBAL_DISPATCH)
     materialize = next(
         task for task in global_dispatch if task["name"] == "Service catalog dispatch | Materialize selected entry on dispatch host"
     )
