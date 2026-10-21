@@ -46,26 +46,45 @@
 ### Tasks
 
 
+#### File: tasks/access.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Service firewall ¦ Reconcile this client's declared provider access | block | True | A provider transaction changes only this client's owned contribution. Earlier
+hosts retain their fail-closed contributions if a later host cannot commit. |
+| Service firewall ¦ Apply the scoped provider-access transaction | service_firewall_lifecycle | False |  |
+
+#### File: tasks/access_probes.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Service firewall ¦ Select only this client's provider endpoints for access checks | ansible.builtin.set_fact | False |  |
+| Service firewall ¦ Verify provider handshakes with owned counters | ansible.builtin.include_tasks | False |  |
+
 #### File: tasks/lifecycle.yml
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Service firewall ¦ Activate provider access before application health checks | ansible.builtin.include_tasks | True |  |
 | Service firewall ¦ Reconcile new caller identities before waiting for application health | service_firewall_lifecycle | True |  |
 | Service firewall ¦ Apply this service's scoped protection transaction | service_firewall_lifecycle | True |  |
 | Service firewall ¦ Verify declared callers against the running publication | ansible.builtin.include_tasks | True |  |
+| Service firewall ¦ Complete or retain only this client's provider contributions | ansible.builtin.include_tasks | True |  |
+| Service firewall ¦ Check this client's access to its current providers | ansible.builtin.include_tasks | True |  |
 
 #### File: tasks/lifecycle_inspect.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Service firewall ¦ Clear previous ownership evidence | ansible.builtin.set_fact | False |
-| Service firewall ¦ Use each endpoint host's configured connection | ansible.builtin.set_fact | False |
-| Service firewall ¦ Validate existing Docker placement before policy changes | service_operational_check | True |
-| Service firewall ¦ Read current mgt addresses for the worker source boundary | service_firewall_lifecycle | True |
-| Service firewall ¦ Retain current controller addresses for this operation | ansible.builtin.set_fact | False |
-| Service firewall ¦ Audit current protection before service preparation | service_firewall_lifecycle | False |
-| Service firewall ¦ Inspect existing mapping or empty application storage | service_operational_check | True |
-| Service firewall ¦ Save this operation's ownership evidence | ansible.builtin.set_fact | False |
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Service firewall ¦ Clear previous ownership evidence | ansible.builtin.set_fact | False |  |
+| Service firewall ¦ Use each endpoint host's configured connection | ansible.builtin.set_fact | False |  |
+| Service firewall ¦ Validate existing Docker placement before policy changes | service_operational_check | True |  |
+| Service firewall ¦ Read current mgt addresses for the worker source boundary | service_firewall_lifecycle | True |  |
+| Service firewall ¦ Retain current controller addresses for this operation | ansible.builtin.set_fact | False |  |
+| Service firewall ¦ Audit current protection before service preparation | service_firewall_lifecycle | False |  |
+| Service firewall ¦ Inspect existing providers without changing their applications | ansible.builtin.include_tasks | False |  |
+| Service firewall ¦ Inspect existing mapping or empty application storage | service_operational_check | True |  |
+| Service firewall ¦ Save this operation's ownership evidence | ansible.builtin.set_fact | False |  |
 
 #### File: tasks/lifecycle_probes.yml
 
