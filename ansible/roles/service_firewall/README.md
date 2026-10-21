@@ -54,6 +54,13 @@
 hosts retain their fail-closed contributions if a later host cannot commit. |
 | Service firewall ¦ Apply the scoped provider-access transaction | service_firewall_lifecycle | False |  |
 
+#### File: tasks/access_cancel.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Service firewall ¦ Cancel only this operation's recorded provider reservations | service_firewall_lifecycle | True |
+| Service firewall ¦ Report retained reservations separately from the original failure | ansible.builtin.debug | True |
+
 #### File: tasks/access_probes.yml
 
 | Name | Module | Has Conditions | Tags |
