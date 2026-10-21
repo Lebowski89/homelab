@@ -44,6 +44,16 @@ DOCKER_ENV_FILE_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/comp
 AUTOBRR = Path("ansible/group_vars/all/services/autobrr.yml").read_text()
 
 
+def operation_tasks(content):
+    def walk(tasks):
+        for task in tasks:
+            yield task
+            for branch in ["block", "rescue", "always"]:
+                yield from walk(task.get(branch, []))
+
+    return list(walk(yaml.safe_load(content)))
+
+
 def test_proxmox_api_token_handoff_is_transactional_and_recoverable():
     tasks = yaml.safe_load(OPENTOFU_PVE_USER_TASKS)
     initialize = next(task for task in tasks if task.get("name") == "Initialize OpenTofu API token handoff state")
@@ -522,7 +532,7 @@ def test_empty_infisical_map_skips_live_lookup_and_keeps_empty_dispatch_owned_ou
 
 
 def test_check_mode_preflight_is_common_owned_and_native_materialization_is_skipped():
-    dispatch = yaml.safe_load(GLOBAL_DISPATCH)
+    dispatch = operation_tasks(GLOBAL_DISPATCH)
     common = next(task for task in dispatch if task["name"] == "Service catalog dispatch | Run common service preflight")
     assert common["ansible.builtin.include_tasks"]["file"] == "service_catalog_common_preflight.yml"
     assert "service_catalog_common_context" in GLOBAL_DISPATCH
@@ -547,7 +557,7 @@ def test_docker_validates_attachment_metadata_before_materialization():
 
 
 def test_dispatch_snapshots_common_context_before_adapter_owned_materialization():
-    dispatch_tasks = yaml.safe_load(GLOBAL_DISPATCH)
+    dispatch_tasks = operation_tasks(GLOBAL_DISPATCH)
     common_preflight = next(task for task in dispatch_tasks if task["name"] == "Service catalog dispatch | Run common service preflight")
     docker_route = next(task for task in dispatch_tasks if task["name"] == "Service catalog dispatch | Process Docker entry")
     podman_route = next(task for task in dispatch_tasks if task["name"] == "Service catalog dispatch | Process Podman entry")
@@ -585,7 +595,7 @@ def test_podman_dispatch_is_routed_from_the_single_global_iteration():
     playbook = yaml.safe_load(PLAYBOOK)
     deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")
     dispatch = next(task for task in deploy_play["tasks"] if task.get("name") == "Process globally ordered service catalog")
-    dispatcher_tasks = yaml.safe_load(GLOBAL_DISPATCH)
+    dispatcher_tasks = operation_tasks(GLOBAL_DISPATCH)
     materialization = next(
         task for task in dispatcher_tasks if task.get("name") == "Service catalog dispatch | Materialize selected entry on dispatch host"
     )
@@ -610,7 +620,7 @@ def test_manager_owned_compose_and_drift_state_have_single_ordered_writers():
     persist = next(task for task in save_stack_tasks if task["name"] == "Save stack | Store completed Compose configuration")
     drift_tasks = yaml.safe_load(DOCKER_DRIFT_TASKS)
     drift_append = next(task for task in drift_tasks if task["name"] == "Image drift | Add result to summary")
-    docker_main = yaml.safe_load(DOCKER_MAIN_TASKS)
+    docker_main = operation_tasks(DOCKER_MAIN_TASKS)
     drift_include = next(task for task in docker_main if task["name"] == "Docker services | Check image drift")
 
     for task in (compose_init, persist, drift_append):
@@ -629,7 +639,7 @@ def test_manager_owned_compose_and_drift_state_have_single_ordered_writers():
     assert drift_append["run_once"] is True
     assert drift_include["when"] == "docker_services_is_deploy_host | bool"
 
-    global_dispatch = yaml.safe_load(GLOBAL_DISPATCH)
+    global_dispatch = operation_tasks(GLOBAL_DISPATCH)
     materialize = next(
         task for task in global_dispatch if task["name"] == "Service catalog dispatch | Materialize selected entry on dispatch host"
     )
@@ -690,7 +700,7 @@ def test_autobrr_uses_canonical_environment_references_and_env_file_behavior_is_
 
 
 def test_value_bearing_runtime_render_paths_are_no_log_and_diff_safe():
-    docker_main = yaml.safe_load(DOCKER_MAIN_TASKS)
+    docker_main = operation_tasks(DOCKER_MAIN_TASKS)
     for task_name in {"Docker services | Build Compose configuration", "Docker services | Save stack configuration"}:
         task = next(task for task in docker_main if task["name"] == task_name)
         assert task["no_log"] is True
@@ -709,8 +719,8 @@ def test_value_bearing_runtime_render_paths_are_no_log_and_diff_safe():
     assert snapshot["no_log"] is True
     assert snapshot["diff"] is False
 
-    podman_main = yaml.safe_load(PODMAN_MAIN)
-    traefik = next(task for task in podman_main if task["name"] == "Podman services | Configure Traefik integration")
+    podman_main = operation_tasks(PODMAN_MAIN)
+    traefik = next(task for task in podman_main if task.get("ansible.builtin.include_role", {}).get("tasks_from") == "traefik")
     for task in (traefik,):
         assert task["no_log"] is True
         assert "diff" not in task
@@ -732,7 +742,7 @@ def test_required_docker_dynamic_includes_propagate_selection_tags():
     ]
 
     for content, task_name, required in expectations:
-        task = next(task for task in yaml.safe_load(content) if task["name"] == task_name)
+        task = next(task for task in operation_tasks(content) if task["name"] == task_name)
         include = task["ansible.builtin.include_tasks"]
         assert required.issubset(set(task.get("tags", [])))
         assert required.issubset(set(include.get("apply", {}).get("tags", [])))

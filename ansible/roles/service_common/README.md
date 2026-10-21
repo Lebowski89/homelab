@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/06 |
+| Readme update        | 2026/10/21 |
 
 
 
@@ -104,12 +104,29 @@
 | Service common ¦ Include shared Traefik integration | ansible.builtin.include_tasks | True |  |
 | Service common ¦ Include shared integration removal | ansible.builtin.include_tasks | True |  |
 
+#### File: tasks/operational_inspection.yml
+
+| Name | Module | Has Conditions | Tags | Comments |
+| ---- | ------ | -------------- | -----| -------- |
+| Service common ¦ Use the standalone runtime host connection | ansible.builtin.set_fact | True |  |  |
+| Service common ¦ Inspect the managed service before making changes | service_operational_check | True |  |  |
+| Service common ¦ Use the endpoint host's configured connection | ansible.builtin.set_fact | True |  | The controller can use a local connection. Set the delegated host connection
+explicitly so endpoint audits use that host's inventory transport instead. |
+| Service common ¦ Audit installed protection on each endpoint host | service_operational_check | True |  |  |
+| Service common ¦ Save verified prerequisites for this service operation | ansible.builtin.set_fact | True |  |  |
+
 #### File: tasks/operational_requirements.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Service common ¦ Enforce explicit operational requirements before mutation | ansible.builtin.assert | False |
-| Service common ¦ Report required operational acknowledgements in check mode | ansible.builtin.debug | True |
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Service common ¦ Validate service requirements before inspection | ansible.builtin.assert | False |  |
+| Service common ¦ Clear prerequisite results from the previous service operation | ansible.builtin.set_fact | False | A prerequisite proof is an in-memory result for one exact service contract.
+It is not persisted acceptance and must not carry over to another operation. |
+| Service common ¦ Check prerequisites before changing the service | ansible.builtin.include_tasks | True |  |
+| Service common ¦ Reuse prerequisite checks completed before stopping the service | ansible.builtin.set_fact | True | Recreate must reuse successful checks after its old runtime has stopped;
+rechecking stopped runtime identities could block their replacements. |
+| Service common ¦ Require verified prerequisites before changing the service | ansible.builtin.assert | False |  |
+| Service common ¦ Show required acknowledgements in the check-mode plan | ansible.builtin.debug | True |  |
 
 #### File: tasks/paths.yml
 

@@ -95,7 +95,7 @@ def test_docker_preparation_declares_the_required_lifecycle_order():
     native = task_named(tasks, "Secrets | Manage Docker secrets")
     assert "not ansible_check_mode" in native["when"]
 
-    podman_tasks = yaml.safe_load(PODMAN_MAIN_PATH.read_text())
+    podman_tasks = list(iter_tasks(yaml.safe_load(PODMAN_MAIN_PATH.read_text())))
     podman_names = [task["name"] for task in podman_tasks]
     podman_expected = [
         "Podman services | Validate application settings",
@@ -555,7 +555,7 @@ def test_service_prepare_dynamic_includes_do_not_use_invalid_task_diff_attribute
 
 def test_check_mode_guards_external_and_mutating_application_phases():
     docker_tasks = yaml.safe_load(DOCKER_PREP_PATH.read_text())
-    podman_tasks = yaml.safe_load(PODMAN_MAIN_PATH.read_text())
+    podman_tasks = list(iter_tasks(yaml.safe_load(PODMAN_MAIN_PATH.read_text())))
     playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
     deploy = next(play for play in playbook if play.get("name") == "Deploy homelab services")
 

@@ -1,0 +1,56 @@
+---
+
+# A provider transaction changes only this client's owned contribution. Earlier
+# hosts retain their fail-closed contributions if a later host cannot commit.
+- name: Service firewall | Reconcile this client's declared provider access
+  when: not ansible_check_mode
+  block:
+    - name: Service firewall | Apply the scoped provider-access transaction
+      service_firewall_lifecycle:
+        plan: "{{ service_firewall_access_plan }}"
+        phase: "{{ service_firewall_access_phase }}"
+        inventory_host: "{{ service_firewall_access_host }}"
+      delegate_to: "{{ service_firewall_access_host }}"
+      loop: "{{ service_firewall_access_plan.access_hosts | default([]) }}"
+      loop_control:
+        loop_var: service_firewall_access_host
+      register: service_firewall_access_result
+      until: service_firewall_access_result is succeeded
+      retries: "{{ 30 if service_firewall_access_phase in ['access_finish', 'access_remove'] else 0 }}"
+      delay: 2
+  rescue:
+    - name: Service firewall | Cancel partial staging owned by this role invocation
+      when:
+        - service_firewall_access_phase == 'access_stage'
+        - not (service_firewall_access_preflight_owned | default(false))
+      ansible.builtin.include_tasks:
+        file: access_cancel.yml
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+      vars:
+        service_firewall_access_cancel_plan: "{{ service_firewall_access_plan }}"
+        service_firewall_access_cancel_hosts: >-
+          {{ service_firewall_access_result.results | default([])
+             | map(attribute='service_firewall_access_host') | list }}
+      tags: [deploy, update, recreate, bootstrap]
+
+    - name: Service firewall | Report the provider-access failure with protection retained
+      ansible.builtin.fail:
+        msg: >-
+          Provider access failed during {{ service_firewall_access_phase }}.
+          See the host-specific failure above. Partial contributions and unrelated
+          protection were retained; no provider application was changed.
+  always:
+    - name: Service firewall | Save provider staging progress for scoped preflight cleanup
+      when: service_firewall_access_phase == 'access_stage'
+      ansible.builtin.set_fact:
+        service_firewall_access_stage_progress:
+          token: "{{ service_firewall_access_plan.token }}"
+          plan: "{{ service_firewall_access_plan }}"
+          attempted_hosts: >-
+            {{ service_firewall_access_result.results | default([])
+               | map(attribute='service_firewall_access_host') | list }}
+          staged_hosts: >-
+            {{ service_firewall_access_result.results | default([])
+               | selectattr('pending_activation', 'defined') | selectattr('pending_activation', 'equalto', true)
+               | map(attribute='service_firewall_access_host') | list }}

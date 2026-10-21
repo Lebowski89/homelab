@@ -44,7 +44,7 @@ def publications(metadata):
     return list(ports.values()) if isinstance(ports, dict) else ports
 
 
-def docker_contract(metadata, observed):
+def docker_contract(metadata, observed, check_ports=True):
     """A manager-owned service is managed even with no running task."""
     spec = observed["Spec"]
     stack = metadata.get("stack", metadata["name"])
@@ -57,7 +57,10 @@ def docker_contract(metadata, observed):
         (p["PublishedPort"], p["TargetPort"], p.get("Protocol", "tcp"), p.get("PublishMode", "ingress"))
         for p in observed.get("ports") or []
     )
-    require(desired == actual, "protected publication changed; reconcile the declared endpoint and installed firewall before deployment")
+    require(
+        not check_ports or desired == actual,
+        "protected publication changed; reconcile the declared endpoint and installed firewall before deployment",
+    )
     require(
         sorted(spec.get("TaskTemplate", {}).get("Placement", {}).get("Constraints") or [])
         == sorted(metadata.get("deploy", {}).get("constraints", [])),
@@ -66,7 +69,7 @@ def docker_contract(metadata, observed):
     return {"managed": True, "ownership_transition": False}
 
 
-def quadlet_contract(normalized, body):
+def quadlet_contract(normalized, body, check_ports=True):
     """Compare mapping and data bindings, never environment/secret values."""
     section = None
     values = {}
@@ -84,7 +87,7 @@ def quadlet_contract(normalized, body):
             (str(port["host_ip"]) + ":" if "host_ip" in port else "") + f"{port['host']}:{port['container']}/{port.get('protocol', 'tcp')}"
         )
     require(
-        sorted(values.get("PublishPort", [])) == sorted(ports),
+        not check_ports or sorted(values.get("PublishPort", [])) == sorted(ports),
         "protected publication changed; reconcile the installed endpoint before deployment",
     )
     execution = normalized["execution"]
@@ -160,8 +163,60 @@ class ActionModule(ActionBase):
             if self._task.check_mode:
                 return dict(result, changed=False, skipped=True)
             metadata = self._task.args["metadata"]
-            if self._task.args["phase"] == "runtime":
-                evidence = self.runtime(metadata)
+            if self._task.args["phase"] in {"runtime", "ownership", "placement"}:
+                if self._task.args["phase"] == "placement" and metadata.get("runtime", "docker") == "docker":
+                    # Cleanup operates on a Docker project/stack. Check its real
+                    # membership as well as the catalog before any such action.
+                    docker = ["docker", "--host", "unix:///var/run/docker.sock"]
+                    stack = metadata.get("stack", metadata["name"])
+                    if metadata.get("deploy", {}).get("type", "swarm") == "swarm":
+                        rows = self.command(
+                            docker + ["service", "ls", "--filter", "label=com.docker.stack.namespace=" + stack, "--format", "{{.Name}}"]
+                        )
+                        require(
+                            all(name == stack + "_" + metadata["name"] for name in rows.splitlines()),
+                            "Docker stack has other services; split it or use scoped recovery before this operation",
+                        )
+                    else:
+                        host = metadata["deploy"]["host"]
+                        host = host if isinstance(host, str) else host[0]
+                        project = stack + "-" + host
+                        rows = self.command(
+                            docker
+                            + [
+                                "ps",
+                                "--all",
+                                "--filter",
+                                "label=com.docker.compose.project=" + project,
+                                "--format",
+                                '{{.ID}}\t{{.Label "com.docker.compose.service"}}',
+                            ]
+                        )
+                        require(
+                            all(row.partition("\t")[2] == metadata["name"] for row in rows.splitlines()),
+                            "Compose project has other containers; split it or use scoped recovery before this operation",
+                        )
+                evidence = self.runtime(metadata, self._task.args["phase"] == "runtime")
+                if self._task.args["phase"] == "ownership" and not evidence.get("ownership_transition"):
+                    sources = [
+                        v["source"]
+                        for v in metadata.get("volumes", {}).values()
+                        if v.get("type", "bind") == "bind" and not v.get("read_only", False)
+                    ]
+                    # A different runtime's named volume is not an inspected
+                    # empty bind directory. Keep its explicit transition gate.
+                    empty = all(v.get("type", "bind") == "bind" or v.get("read_only", False) for v in metadata.get("volumes", {}).values())
+                    for source in sources:
+                        info = self.module("ansible.builtin.stat", {"path": source, "follow": False})["stat"]
+                        if not info.get("exists"):
+                            continue
+                        require(info.get("isdir") and not info.get("islnk"), "fresh data root is not a directory")
+                        rows = self.module(
+                            "ansible.builtin.find", {"paths": [source], "hidden": True, "recurse": False, "file_type": "any"}
+                        )
+                        require(not rows.get("skipped_paths"), "fresh storage inspection was incomplete")
+                        empty = empty and rows.get("matched") == 0
+                    evidence["ownership_transition"] = empty
             elif self._task.args["phase"] == "protection":
                 self.protection(metadata, self._task.args["inventory_host"])
                 evidence = {}
@@ -260,13 +315,13 @@ class ActionModule(ActionBase):
             return None
         return base64.b64decode(self.module("ansible.builtin.slurp", {"src": path})["content"]).decode()
 
-    def runtime(self, metadata):
+    def runtime(self, metadata, check_ports=True):
         if not metadata.get("deploy", {}).get("host"):
             return {"managed": False}
         if metadata.get("runtime") == "docker":
             if metadata["deploy"].get("type", "swarm") != "swarm":
                 # Existing standalone services need exact Compose ownership too.
-                stack = metadata.get("stack", metadata["name"])
+                stack = metadata.get("stack", metadata["name"]) + "-" + metadata["deploy"]["host"]
                 docker = ["docker", "--host", "unix:///var/run/docker.sock"]
                 ids = self.command(
                     docker
@@ -295,7 +350,10 @@ class ActionModule(ActionBase):
                     for v in values or []
                 )
                 desired = sorted((v["published"], v["target"], v.get("protocol", "tcp")) for v in publications(metadata))
-                require(actual == desired, "protected Compose publications changed; reconcile installed endpoint policy before deployment")
+                require(
+                    not check_ports or actual == desired,
+                    "protected Compose publications changed; reconcile installed endpoint policy before deployment",
+                )
                 return {"managed": True, "ownership_transition": False}
             name = metadata.get("stack", metadata["name"]) + "_" + metadata["name"]
             # Project only required public fields: never environments, secrets or full inspect.
@@ -303,7 +361,7 @@ class ActionModule(ActionBase):
             body = self.command(
                 ["docker", "--host", "unix:///var/run/docker.sock", "service", "inspect", "--format", fmt, name], "no such service"
             )
-            return {"managed": False} if body is None else docker_contract(metadata, json.loads(body))
+            return {"managed": False} if body is None else docker_contract(metadata, json.loads(body), check_ports)
         require(metadata.get("runtime") == "podman", "unsupported managed runtime")
         normalized = PODMAN.podman_service_normalize(metadata, metadata["name"])
         unit = normalized["unit_name"]
@@ -355,7 +413,7 @@ class ActionModule(ActionBase):
             owner = 0
         require(state.get("quadlet_dir", directory) == directory, "managed Quadlet location changed")
         quadlet = self.read(f"{directory}/{unit}.container", owner)
-        unchanged = state.get("version") == 2 and same and quadlet_contract(normalized, quadlet)
+        unchanged = state.get("version") == 2 and same and quadlet_contract(normalized, quadlet, check_ports)
         if unchanged and metadata["operational_requirements"]["ownership_transition"]:
             for mount in normalized["container"].get("mounts", []):
                 info = self.module("ansible.builtin.stat", {"path": mount["source"], "follow": False})["stat"]

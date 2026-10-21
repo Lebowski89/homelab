@@ -16,7 +16,7 @@ exclusions. Authelia's base selector includes its cache; inspect effective targe
 selection before changing a member. Bootstrap NetBox/Infisical recovery remains
 independent through `ansible/bootstrap.yml` and explicit private Vault inputs.
 
-The existing wrapper supports scoped check/drift/install/update/recreate actions.
+The existing wrapper supports scoped check/drift/install/update/recreate actions. New publications declare exposure and logical callers; [automatic service firewall management](service-firewall.md) stages their protection through the runtime adapter before starting a listener.
 Raw calls require Ansible arguments, for example
 `skynet raw --tags update,mgt-haproxy -e @/secure/accepted-inputs.yml`, using the
 operator's actual private file. ACL/data requirements remain strict regardless

@@ -113,8 +113,12 @@ def guard_units(policy, account_lookup):
         binding["account"]
         for name in required
         for binding in policy["callers"][name]
-        if binding.get("kind") == "local" and binding.get("account", "").startswith("podman-")
+        if binding.get("kind") in {"local", "service"} and binding.get("account", "").startswith("podman-")
     }
+    for name in required:
+        for binding in policy["callers"][name]:
+            if binding.get("kind") == "service" and binding.get("runtime") == "podman" and binding.get("mode") == "rootful":
+                units.add(binding["selector"] + ".service")
     for endpoint in policy["endpoints"]:
         service = endpoint.get("service")
         principal = policy.get("principals", {}).get(service, {})
@@ -156,10 +160,12 @@ def validate_policy(policy, require_verified=True):
     if not integer(policy.get("schema")) or policy["schema"] != 1 or policy.get("backend") != "nf_tables":
         raise ValueError("only schema 1 and the existing mgt nf_tables backend are supported")
     exact_address(policy.get("inventory_address"))
-    if type(policy.get("inputs_verified")) is not bool or (require_verified and not policy["inputs_verified"]):
+    if type(policy.get("inputs_verified")) is not bool or (
+        require_verified and not policy["inputs_verified"] and policy.get("lifecycle") is not True
+    ):
         raise ValueError("inputs_verified must be boolean true after observing all active callers")
     endpoints = policy.get("endpoints")
-    if not isinstance(endpoints, list) or (require_verified and not endpoints):
+    if not isinstance(endpoints, list) or (require_verified and not endpoints and policy.get("lifecycle") is not True):
         raise ValueError("at least one explicitly active endpoint is required for installation")
     bindings = policy.get("callers")
     if not isinstance(bindings, dict):
@@ -185,8 +191,40 @@ def validate_policy(policy, require_verified=True):
             if not isinstance(binding, dict):
                 raise ValueError(f"{name}: identity must be a mapping")
             kind = binding.get("kind")
-            if kind not in {"local", "container", "remote", "disabled", "elsewhere"}:
+            if kind not in {"local", "container", "remote", "disabled", "elsewhere", "service"}:
                 raise ValueError(f"{name}: unsupported caller identity")
+            if kind == "service":
+                if policy.get("lifecycle") is not True:
+                    raise ValueError("automatic identities require a lifecycle-managed policy")
+                runtime, mode = binding.get("runtime"), binding.get("mode")
+                if binding.get("phase") != runtime or runtime not in {"docker", "podman"}:
+                    raise ValueError("automatic identity runtime differs")
+                if runtime == "podman" and mode == "rootless":
+                    account = binding.get("account", "")
+                    if not isinstance(account, str) or not account.startswith("podman-") or not NAME.fullmatch(account):
+                        raise ValueError("automatic rootless identities require a dedicated account")
+                elif runtime == "podman" and mode != "rootful":
+                    raise ValueError("unsupported automatic execution mode")
+                if runtime == "docker" and ("mode" in binding or "account" in binding):
+                    raise ValueError("Docker caller cannot use a Podman account/mode")
+                if runtime == "podman" and mode == "rootful" and "account" in binding:
+                    raise ValueError("rootful caller cannot use a rootless account")
+                if "compose" in binding and "selector" in binding:
+                    raise ValueError("choose one exact Compose or container selector")
+                if "compose" in binding:
+                    compose = binding["compose"]
+                    if (
+                        runtime != "docker"
+                        or not isinstance(compose, dict)
+                        or set(compose) != {"project", "service"}
+                        or any(not isinstance(v, str) or not NAME.fullmatch(v) for v in compose.values())
+                    ):
+                        raise ValueError("automatic Compose identity requires exact project and service")
+                elif not isinstance(binding.get("selector"), str) or not NAME.fullmatch(binding["selector"]):
+                    raise ValueError("automatic identity requires an exact runtime selector")
+                if set(binding) - {"kind", "runtime", "phase", "mode", "account", "selector", "compose"}:
+                    raise ValueError("unsupported automatic identity fields")
+                continue
             for flag in ["verified", "restart_verified"]:
                 if type(binding.get(flag)) is not bool or (require_verified and not binding[flag]):
                     raise ValueError(f"{name}: {flag} must be boolean true")
@@ -295,8 +333,25 @@ def validate_policy(policy, require_verified=True):
     return policy
 
 
-class MissingSwarmCaller(ValueError):
+class MissingRuntimeCaller(ValueError):
+    """An exact selector has no running container; command failures are separate."""
+
+
+class MissingSwarmCaller(MissingRuntimeCaller):
     """An exact Docker selector needs guarded retirement resolution."""
+
+
+def removed_service_caller(policy, name):
+    """A runtime adapter proved logical-client removal under the policy lock.
+
+    Its retained bindings remain available for rollback. Only a missing exact
+    selector is tolerated; replacement identities and inspection errors still
+    take the normal path. Absence never creates an allow rule.
+    """
+    return any(
+        value.get("runtime", {}).get("service") == name and (value.get("removing") or value.get("removed"))
+        for value in policy.get("managed_services", {}).values()
+    )
 
 
 def retired_swarm_caller(policy, name, binding, run, account_lookup):
@@ -490,10 +545,12 @@ def container_identities(binding, run):
             else ["--filter", f"label=com.docker.swarm.service.name={selector}"]
         )
         ids = sorted(set(run(command + ["ps", *filters, "--format", "{{.ID}}"]).split()))
+    elif binding.get("kind") == "service":
+        ids = sorted(set(run(command + ["ps", "--filter", "name=^" + re.escape(selector) + "$", "--format", "{{.ID}}"]).split()))
     else:
         ids = [selector]
     if not ids:
-        error = MissingSwarmCaller if runtime == "docker" and (not compose or binding.get("retirement")) else ValueError
+        error = MissingSwarmCaller if runtime == "docker" and (not compose or binding.get("retirement")) else MissingRuntimeCaller
         raise error(f"no local running caller for {runtime}:{selector}")
     host_links = {link["ifindex"]: link for link in json.loads(run(["ip", "-j", "link", "show"]))}
     identities = []
@@ -552,7 +609,21 @@ def resolve_callers(policy, run=OWNED.execute, allow_pending=False, account_look
             try:
                 if binding["kind"] in {"disabled", "elsewhere"}:
                     continue
-                if binding["kind"] == "local":
+                if binding["kind"] == "service":
+                    if binding["runtime"] == "podman" and binding["mode"] == "rootless":
+                        uid = account_lookup(binding["account"]).pw_uid
+                        if uid <= 0:
+                            raise ValueError("automatic rootless identity resolved to root")
+                        resolved[name].append({"kind": "local", "uid": uid})
+                    elif deny_runtime:
+                        pending.append(f"{name}: runtime discovery deferred until after startup")
+                    else:
+                        try:
+                            resolved[name].extend(container_identities(binding, run))
+                        except MissingRuntimeCaller:
+                            if not removed_service_caller(policy, name):
+                                raise
+                elif binding["kind"] == "local":
                     if account_lookup(binding["account"]).pw_uid != binding["uid"]:
                         raise ValueError(f"{name}: account UID changed; reverify the input")
                     if binding.get("cgroup") and not Path("/sys/fs/cgroup", binding["cgroup"]).is_dir():
@@ -564,8 +635,10 @@ def resolve_callers(policy, run=OWNED.execute, allow_pending=False, account_look
                         continue
                     try:
                         resolved[name].extend(container_identities(binding, run))
-                    except MissingSwarmCaller:
-                        if not retired_swarm_caller(policy, name, binding, run, account_lookup):
+                    except MissingRuntimeCaller as error:
+                        if not removed_service_caller(policy, name) and not (
+                            isinstance(error, MissingSwarmCaller) and retired_swarm_caller(policy, name, binding, run, account_lookup)
+                        ):
                             raise
                 else:
                     resolved[name].append(binding)
@@ -701,7 +774,13 @@ def reconcile(
         if payload:
             transactions.append((f"{tool}-restore", payload))
     if operation == "check":
-        return {"changed": False, "compliant": not transactions and not pending, "pending": pending, "families": [4, 6]}
+        return {
+            "changed": False,
+            "compliant": not transactions and not pending,
+            "rules_compliant": not transactions,
+            "pending": pending,
+            "families": [4, 6],
+        }
     for tool, payload in transactions:
         run([tool, "--test", "--noflush", "--wait", "10"], payload)
     if operation != "validate" and not dry_run:

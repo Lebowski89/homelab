@@ -59,8 +59,12 @@ def validate_policy(policy):
     ports = policy.get("ports")
     if (
         not isinstance(ports, list)
-        or not ports
-        or any((not isinstance(port, int) or isinstance(port, bool)) or not 22601 <= port <= 22623 for port in ports)
+        or (not ports and policy.get("lifecycle") is not True)
+        or any(
+            (not isinstance(port, int) or isinstance(port, bool))
+            or not (1 <= port <= 65535 if policy.get("lifecycle") is True else 22601 <= port <= 22623)
+            for port in ports
+        )
     ):
         raise ValueError("ports must be a non-empty list from the temporary 22601..22623 allocation")
     if len(set(ports)) != len(ports) or len(set(sources)) != len(sources):
@@ -110,7 +114,7 @@ def desired_rules(policy, family, locals_):
 
 def reconcile(policy=None, operation="apply", backend=None, run=execute):
     """Apply/remove managed rules, or audit without any writes or restore calls."""
-    if operation not in {"apply", "check", "remove"}:
+    if operation not in {"apply", "validate", "check", "remove"}:
         raise ValueError("unsupported reconciliation operation")
     if operation != "remove":
         validate_policy(policy)
@@ -137,8 +141,10 @@ def reconcile(policy=None, operation="apply", backend=None, run=execute):
     for tool, payload in transactions:
         run([tool, "--test", "--noflush", "--wait", "10"], payload)
     for tool, payload in transactions:
+        if operation == "validate":
+            continue
         run([tool, "--noflush", "--wait", "10"], payload)
-    return {"changed": bool(transactions), "families": [4, 6]}
+    return {"changed": bool(transactions) and operation != "validate", "families": [4, 6]}
 
 
 def load_policy(path):

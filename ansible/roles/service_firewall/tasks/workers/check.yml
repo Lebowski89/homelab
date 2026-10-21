@@ -8,10 +8,16 @@
 - name: Service firewall | Workers | Compare installed policy to effective inventory and service plan
   ansible.builtin.assert:
     that:
-      - >-
-        (worker_backend_firewall_installed.content | b64decode | from_json)
-        == worker_backend_firewall_policy | combine({'sources_verified': true})
-    fail_msg: The installed worker policy differs from the current catalog/source inputs; audit does not update it.
+      - worker_backend_firewall_current.schema == worker_backend_firewall_policy.schema
+      - worker_backend_firewall_current.backend == worker_backend_firewall_policy.backend
+      - worker_backend_firewall_current.inventory_host == worker_backend_firewall_policy.inventory_host
+      - worker_backend_firewall_current.inventory_address == worker_backend_firewall_policy.inventory_address
+      - worker_backend_firewall_current.sources | sort == worker_backend_firewall_policy.sources | sort
+      - worker_backend_firewall_current.sources_verified is sameas true
+      - worker_backend_firewall_policy.ports | difference(worker_backend_firewall_current.ports) | length == 0
+    fail_msg: The declared worker protection is missing or differs from current inventory/source inputs; audit does not update it.
+  vars:
+    worker_backend_firewall_current: "{{ worker_backend_firewall_installed.content | b64decode | from_json }}"
 
 - name: Service firewall | Workers | Audit IPv4 and IPv6 firewall rules without changing them # noqa var-naming[no-role-prefix]
   ansible.builtin.command:

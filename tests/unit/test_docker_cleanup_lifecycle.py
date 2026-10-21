@@ -36,7 +36,12 @@ def test_inherited_operation_tags_do_not_authorize_docker_cleanup(tmp_path, oper
     cleanup["ansible.builtin.copy"] = {"dest": str(marker), "content": "SYNTHETIC_CLEANUP", "mode": "0600"}
     (tmp_path / "cleanup.yml").write_text(yaml.safe_dump(tasks))
     main = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
-    include = next(task for task in main if task["name"] == "Docker services | Prepare service")
+    include = next(
+        task
+        for group in main
+        for task in [group, *group.get("block", [])]
+        if task.get("ansible.builtin.include_tasks", {}).get("file") == "sub_tasks/prepare.yml"
+    )
     playbook = tmp_path / "play.yml"
     playbook.write_text(
         yaml.safe_dump(

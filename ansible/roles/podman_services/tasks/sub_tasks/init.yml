@@ -25,6 +25,15 @@
     podman_services_unit_name: "{{ podman_services_service.unit_name ~ '.service' }}"
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
+- name: Podman services | Require the firewall plan to belong to this service
+  when: ((podman_services_common_context | default({})).firewall_plan | default({})).managed | default(false)
+  ansible.builtin.assert:
+    that:
+      - podman_services_common_context.firewall_plan.metadata == (podman_services_service_cfg | service_common_requirements_metadata(podman_services_service.name))
+      - podman_services_common_context.firewall_plan.runtime.service == podman_services_service.name
+    fail_msg: The firewall plan belongs to another service or an earlier declaration; resolve it through the catalog before mutation.
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
 - name: Init | Enforce effective operational requirements
   ansible.builtin.include_role:
     name: service_common
@@ -33,7 +42,12 @@
       tags: [deploy, update, remove, recreate, bootstrap, drift]
   vars:
     service_common_service: >-
-      {{ podman_services_service_cfg | service_common_requirements_metadata(service_common_name) }}
+      {{ (podman_services_service_cfg | service_common_requirements_metadata(service_common_name))
+         | combine({'operational_requirements': {
+           'acl': [],
+           'ownership_transition': (podman_services_service_cfg.operational_requirements | default({})).ownership_transition | default(false)
+         }}) if ((podman_services_common_context | default({})).firewall_plan | default({})).managed | default(false)
+         else podman_services_service_cfg | service_common_requirements_metadata(service_common_name) }}
     service_common_name: "{{ podman_services_service.name }}"
     service_common_preflight_proof: "{{ podman_services_common_context.requirements_proof | default({}) }}"
     service_common_action: "{{ podman_services_common_action }}"

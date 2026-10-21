@@ -624,7 +624,7 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert any("service_catalog_selected" in condition for condition in deploy_all_task["when"])
     assert any("service_catalog_by_runtime('docker')" in condition for condition in deploy_all_task["when"])
 
-    global_dispatch = yaml.safe_load(GLOBAL_DISPATCH_PATH.read_text())
+    global_dispatch = list(walk_mappings(yaml.safe_load(GLOBAL_DISPATCH_PATH.read_text())))
     reset = task_named(global_dispatch, "Service catalog dispatch | Reset host-local materialized result")
     materialize = task_named(global_dispatch, "Service catalog dispatch | Materialize selected entry on dispatch host")
     copy_result = task_named(global_dispatch, "Service catalog dispatch | Copy returned materialized entry")

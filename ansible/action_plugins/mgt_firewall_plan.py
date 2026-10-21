@@ -53,6 +53,7 @@ def build_plan(services, controller, template, bootstrap):
     if not isinstance(services, Mapping):
         raise ValueError("service catalog must be a mapping")
     records, principals = [], {}
+    logical_names = {}
     database_callers = set()
     for key, base in services.items():
         if not isinstance(base, Mapping) or type(base.get("enabled", True)) is not bool:
@@ -82,6 +83,7 @@ def build_plan(services, controller, template, bootstrap):
                 {},
             )
             name = metadata["name"]
+            logical_names[key + (":" + target if target else "")] = name
             principals[name] = {
                 "inventory_hosts": metadata["host"],
                 "future_account": metadata["account"],
@@ -114,11 +116,18 @@ def build_plan(services, controller, template, bootstrap):
         if not isinstance(ports, Mapping):
             raise ValueError(f"{name}: policy planning requires normalized named publications")
         for publication, port in ports.items():
+            if "exposure" in port:
+                if port["exposure"] == "public":
+                    excluded.append({"service": name, "publication": publication, "port": port.get("published")})
+                    continue
+                if port["exposure"] != "private" or not isinstance(port.get("callers"), list) or not port["callers"]:
+                    raise ValueError("private publication requires logical callers")
             # ZNC's declared Autobrr IRC path is a protected protocol endpoint;
             # other protocol listeners and private HTTPS retain their policy.
             znc_irc = name == "znc" and publication == "irc"
             if (
-                publication not in {"backend", "web", "metrics", "receiver", "postgres", "database", "cache", "recovery", "lookup"}
+                "exposure" not in port
+                and publication not in {"backend", "web", "metrics", "receiver", "postgres", "database", "cache", "recovery", "lookup"}
                 and not znc_irc
             ):
                 if record.get("private_required") and publication != "web_secure_private":
@@ -131,7 +140,12 @@ def build_plan(services, controller, template, bootstrap):
                 or port.get("protocol", "tcp") != "tcp"
             ):
                 raise ValueError(f"{name}.{publication}: only explicit TCP publications are supported")
-            if znc_irc:
+            if port.get("exposure") == "private":
+                callers = {logical_names.get(caller, caller) for caller in port["callers"]}
+                if any(":" in caller and caller not in logical_names for caller in port["callers"]):
+                    raise ValueError("unknown logical target caller in private publication")
+                purpose = "declared private publication"
+            elif znc_irc:
                 if "autobrr" not in principals:
                     raise ValueError("znc.irc: Autobrr caller is not declared")
                 callers = {"autobrr"}

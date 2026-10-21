@@ -1,545 +1,670 @@
 ---
 
-################################
-# INIT
-################################
-
-- name: Podman services | Initialize service
-  ansible.builtin.include_tasks:
-    file: sub_tasks/init.yml
-    apply:
-      tags: [deploy, update, remove, recreate, drift, bootstrap]
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
-
-- name: Podman services | Validate managed file policy before mutation
-  ansible.builtin.include_role:
-    name: service_common
-    tasks_from: file_policy
-    apply:
-      tags: [deploy, update, remove, recreate, drift, bootstrap]
-  vars:
-    service_common_service: "{{ podman_services_service_cfg }}"
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
-
-################################
-# APPLICATION VALIDATION
-################################
-
-- name: Podman services | Build application preparation context
-  no_log: true
-  diff: false
+- name: Podman services | Reset this operation's firewall progress
   ansible.builtin.set_fact:
-    podman_services_application_context:
-      service_name: "{{ podman_services_service.name }}"
-      target: "{{ podman_services_service_target | default('') }}"
-      runtime: podman
-      execution: "{{ podman_services_service.execution }}"
-      operation: "{{ podman_services_common_action }}"
-      service: >-
-        {{ podman_services_service_cfg | combine({'environment': podman_services_resolved_environment}, recursive=false) }}
-      resolved_environment: "{{ podman_services_resolved_environment }}"
-      lookup_values: "{{ podman_services_common_values }}"
-      secret_declarations: "{{ podman_services_secret_declarations }}"
-      controller_host: "{{ podman_services_controller_host }}"
-      filesystem_hosts: ["{{ inventory_hostname }}"]
-      host_defaults: "{{ podman_services_common_host_defaults }}"
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
+    podman_services_firewall_staged: false
+    podman_services_start_attempted: false
+    # From this first task the adapter owns cancellation, including init failures.
+    service_catalog_firewall_handoff: "{{ (podman_services_common_context.firewall_plan | default({})).token | default('') }}"  # noqa var-naming[no-role-prefix]
+  tags: [deploy, update, recreate, bootstrap, remove, drift]
 
-- name: Podman services | Validate application settings
-  no_log: true
-  ansible.builtin.include_role:
-    name: service_prepare
-    tasks_from: validate
-    apply:
+- name: Podman services | Prepare and run the scoped service operation
+  block:
+    ################################
+    # INIT
+    ################################
+
+    - name: Podman services | Initialize service
+      ansible.builtin.include_tasks:
+        file: sub_tasks/init.yml
+        apply:
+          tags: [deploy, update, remove, recreate, drift, bootstrap]
       tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+    - name: Podman services | Validate managed file policy before mutation
+      ansible.builtin.include_role:
+        name: service_common
+        tasks_from: file_policy
+        apply:
+          tags: [deploy, update, remove, recreate, drift, bootstrap]
+      vars:
+        service_common_service: "{{ podman_services_service_cfg }}"
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+    ################################
+    # APPLICATION VALIDATION
+    ################################
+
+    - name: Podman services | Build application preparation context
       no_log: true
       diff: false
-  vars:
-    service_prepare_context: "{{ podman_services_application_context }}"
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
-
-- name: Podman services | Store validated application outputs
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    podman_services_application_template_vars: "{{ service_prepare_template_vars }}"
-    podman_services_application_secret_values: "{{ service_prepare_generated_secret_values }}"
-    podman_services_application_secret_declarations: "{{ service_prepare_generated_secret_declarations }}"
-    podman_services_application_bootstrap_requests: "{{ service_prepare_bootstrap_requests }}"
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
-
-################################
-# EXECUTION PREPARATION
-################################
-
-- name: Podman services | Prepare execution environment
-  ansible.builtin.include_tasks:
-    file: sub_tasks/execution.yml
-    apply:
+      ansible.builtin.set_fact:
+        podman_services_application_context:
+          service_name: "{{ podman_services_service.name }}"
+          target: "{{ podman_services_service_target | default('') }}"
+          runtime: podman
+          execution: "{{ podman_services_service.execution }}"
+          operation: "{{ podman_services_common_action }}"
+          service: >-
+            {{ podman_services_service_cfg | combine({'environment': podman_services_resolved_environment}, recursive=false) }}
+          resolved_environment: "{{ podman_services_resolved_environment }}"
+          lookup_values: "{{ podman_services_common_values }}"
+          secret_declarations: "{{ podman_services_secret_declarations }}"
+          controller_host: "{{ podman_services_controller_host }}"
+          filesystem_hosts: ["{{ inventory_hostname }}"]
+          host_defaults: "{{ podman_services_common_host_defaults }}"
       tags: [deploy, update, remove, recreate, drift, bootstrap]
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Podman services | Bind preparation to the selected execution store
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    podman_services_application_context: >-
-      {{ podman_services_application_context | combine({
-        'execution': podman_services_execution,
-        'runtime_environment': podman_services_runtime_environment
-      }) }}
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
+    - name: Podman services | Validate application settings
+      no_log: true
+      ansible.builtin.include_role:
+        name: service_prepare
+        tasks_from: validate
+        apply:
+          tags: [deploy, update, remove, recreate, drift, bootstrap]
+          no_log: true
+          diff: false
+      vars:
+        service_prepare_context: "{{ podman_services_application_context }}"
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Podman services | Finish explicit account preparation
-  when: podman_services_prepare_execution_only
-  ansible.builtin.meta: end_role
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
+    - name: Podman services | Store validated application outputs
+      no_log: true
+      diff: false
+      ansible.builtin.set_fact:
+        podman_services_application_template_vars: "{{ service_prepare_template_vars }}"
+        podman_services_application_secret_values: "{{ service_prepare_generated_secret_values }}"
+        podman_services_application_secret_declarations: "{{ service_prepare_generated_secret_declarations }}"
+        podman_services_application_bootstrap_requests: "{{ service_prepare_bootstrap_requests }}"
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-################################
-# EXTERNAL NETWORK PREFLIGHT
-################################
+    ################################
+    # EXECUTION PREPARATION
+    ################################
 
-- name: Podman services | Check configured external network
-  when:
-    - not ansible_check_mode
-    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
-    - podman_services_service.network is mapping
-    - podman_services_service.network.external | bool
-  become: true
-  become_user: "{{ podman_services_execution.host_user | default('root') }}"
-  environment: "{{ podman_services_runtime_environment }}"
-  ansible.builtin.command:
-    argv:
-      - podman
-      - network
-      - exists
-      - "{{ podman_services_service.network.name }}"
-  register: podman_services_external_network_check
-  changed_when: false
-  failed_when: false
-  tags: [deploy, update, recreate, bootstrap]
+    - name: Podman services | Prepare execution environment
+      ansible.builtin.include_tasks:
+        file: sub_tasks/execution.yml
+        apply:
+          tags: [deploy, update, remove, recreate, drift, bootstrap]
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Podman services | Verify configured external network exists
-  when:
-    - not ansible_check_mode
-    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
-    - podman_services_service.network is mapping
-    - podman_services_service.network.external | bool
-  ansible.builtin.assert:
-    that:
-      - podman_services_external_network_check.rc == 0
-    fail_msg: >-
-      External Podman network {{ podman_services_service.network.name }} does not exist
-      in this host's Podman network store; create it deliberately before running this service.
-  tags: [deploy, update, recreate, bootstrap]
+    - name: Podman services | Bind preparation to the selected execution store
+      no_log: true
+      diff: false
+      ansible.builtin.set_fact:
+        podman_services_application_context: >-
+          {{ podman_services_application_context | combine({
+            'execution': podman_services_execution,
+            'runtime_environment': podman_services_runtime_environment
+          }) }}
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-################################
-# RUNTIME CLEANUP
-################################
+    - name: Podman services | Finish explicit account preparation
+      when: podman_services_prepare_execution_only
+      ansible.builtin.meta: end_role
+      tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-- name: Podman services | Stop shared-network services before recreate
-  when:
-    - not ansible_check_mode
-    - podman_services_state == 'recreate'
-    - podman_services_execution.mode == 'rootful'
-    - not (podman_services_execution_transition | bool)
-    - podman_services_namespace_dependents | length > 0
-    - not (podman_services_namespace_dependents_quiesced | bool)
-  ansible.builtin.include_tasks:
-    file: sub_tasks/stop_shared_network_services.yml
-    apply:
+    ################################
+    # EXTERNAL NETWORK PREFLIGHT
+    ################################
+
+    - name: Podman services | Check configured external network
+      when:
+        - not ansible_check_mode
+        - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+        - podman_services_service.network is mapping
+        - podman_services_service.network.external | bool
+      become: true
+      become_user: "{{ podman_services_execution.host_user | default('root') }}"
+      environment: "{{ podman_services_runtime_environment }}"
+      ansible.builtin.command:
+        argv:
+          - podman
+          - network
+          - exists
+          - "{{ podman_services_service.network.name }}"
+      register: podman_services_external_network_check
+      changed_when: false
+      failed_when: false
+      tags: [deploy, update, recreate, bootstrap]
+
+    - name: Podman services | Verify configured external network exists
+      when:
+        - not ansible_check_mode
+        - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+        - podman_services_service.network is mapping
+        - podman_services_service.network.external | bool
+      ansible.builtin.assert:
+        that:
+          - podman_services_external_network_check.rc == 0
+        fail_msg: >-
+          External Podman network {{ podman_services_service.network.name }} does not exist
+          in this host's Podman network store; create it deliberately before running this service.
+      tags: [deploy, update, recreate, bootstrap]
+
+    ################################
+    # RUNTIME CLEANUP
+    ################################
+
+    - name: Podman services | Stop shared-network services before recreate
+      when:
+        - not ansible_check_mode
+        - podman_services_state == 'recreate'
+        - podman_services_execution.mode == 'rootful'
+        - not (podman_services_execution_transition | bool)
+        - podman_services_namespace_dependents | length > 0
+        - not (podman_services_namespace_dependents_quiesced | bool)
+      ansible.builtin.include_tasks:
+        file: sub_tasks/stop_shared_network_services.yml
+        apply:
+          tags: [recreate]
       tags: [recreate]
-  tags: [recreate]
 
-- name: Podman services | Check service before recreate
-  when:
-    - not ansible_check_mode
-    - podman_services_state == 'recreate'
-    - podman_services_execution.mode == 'rootful'
-    - not (podman_services_execution_transition | bool)
-  ansible.builtin.command:
-    argv:
-      - systemctl
-      - show
-      - "{{ podman_services_unit_name }}"
-      - --property=LoadState
-      - --value
-  register: podman_services_recreate_unit_load_state
-  changed_when: false
-  failed_when: false
-  tags: [recreate]
-
-- name: Podman services | Stop service before recreate
-  when:
-    - not ansible_check_mode
-    - podman_services_state == 'recreate'
-    - podman_services_execution.mode == 'rootful'
-    - not (podman_services_execution_transition | bool)
-    - podman_services_recreate_unit_load_state.stdout | trim != 'not-found'
-  ansible.builtin.systemd_service:
-    name: "{{ podman_services_unit_name }}"
-    state: stopped
-  tags: [recreate]
-
-- name: Podman services | Remove stopped container before recreate
-  when:
-    - not ansible_check_mode
-    - podman_services_state == 'recreate'
-    - podman_services_execution.mode == 'rootful'
-    - not (podman_services_execution_transition | bool)
-  ansible.builtin.include_tasks:
-    file: sub_tasks/cleanup_stopped_rootful_container.yml
-    apply:
+    - name: Podman services | Check service before recreate
+      when:
+        - not ansible_check_mode
+        - podman_services_state == 'recreate'
+        - podman_services_execution.mode == 'rootful'
+        - not (podman_services_execution_transition | bool)
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - "{{ podman_services_unit_name }}"
+          - --property=LoadState
+          - --value
+      register: podman_services_recreate_unit_load_state
+      changed_when: false
+      failed_when: false
       tags: [recreate]
-  vars:
-    podman_services_cleanup_unit_name: "{{ podman_services_unit_name }}"
-    podman_services_cleanup_container_name: "{{ podman_services_service.unit_name }}"
-  tags: [recreate]
 
-################################
-# APPLICATION SECRET GENERATION
-################################
+    - name: Podman services | Stop service before recreate
+      when:
+        - not ansible_check_mode
+        - podman_services_state == 'recreate'
+        - podman_services_execution.mode == 'rootful'
+        - not (podman_services_execution_transition | bool)
+        - podman_services_recreate_unit_load_state.stdout | trim != 'not-found'
+      ansible.builtin.systemd_service:
+        name: "{{ podman_services_unit_name }}"
+        state: stopped
+      tags: [recreate]
 
-- name: Podman services | Generate application secrets
-  when: podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
-  no_log: true
-  ansible.builtin.include_role:
-    name: service_prepare
-    tasks_from: generate_secrets
-    apply:
+    - name: Podman services | Remove stopped container before recreate
+      when:
+        - not ansible_check_mode
+        - podman_services_state == 'recreate'
+        - podman_services_execution.mode == 'rootful'
+        - not (podman_services_execution_transition | bool)
+      ansible.builtin.include_tasks:
+        file: sub_tasks/cleanup_stopped_rootful_container.yml
+        apply:
+          tags: [recreate]
+      vars:
+        podman_services_cleanup_unit_name: "{{ podman_services_unit_name }}"
+        podman_services_cleanup_container_name: "{{ podman_services_service.unit_name }}"
+      tags: [recreate]
+
+    ################################
+    # APPLICATION SECRET GENERATION
+    ################################
+
+    - name: Podman services | Generate application secrets
+      when: podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+      no_log: true
+      ansible.builtin.include_role:
+        name: service_prepare
+        tasks_from: generate_secrets
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+          no_log: true
+          diff: false
+      vars:
+        service_prepare_context: "{{ podman_services_application_context }}"
       tags: [deploy, update, recreate, bootstrap]
+
+    - name: Podman services | Combine service secret values and definitions
       no_log: true
       diff: false
-  vars:
-    service_prepare_context: "{{ podman_services_application_context }}"
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Combine service secret values and definitions
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    podman_services_application_secret_values: "{{ service_prepare_generated_secret_values }}"
-    podman_services_application_secret_declarations: >-
-      {{ service_prepare_generated_secret_declarations | podman_secret_declarations }}
-    podman_services_effective_secret_values: >-
-      {{ podman_services_common_values | combine(service_prepare_generated_secret_values) }}
-    podman_services_effective_secret_declarations: >-
-      {{
-        podman_services_secret_declarations
-        + (service_prepare_generated_secret_declarations | podman_secret_declarations)
-      }}
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Validate secret attachments
-  no_log: true
-  diff: false
-  ansible.builtin.assert:
-    that:
-      - >-
-        podman_services_service.secret_attachments
-        | difference(podman_services_effective_secret_declarations | map(attribute='name') | list)
-        | length == 0
-    fail_msg: >-
-      A canonical secret attachment has no current-service declaration; Podman
-      native-secret materialization was stopped.
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Add Podman secret definitions
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    podman_services_service: >-
-      {{
-        podman_services_service
-        | combine({'secrets': podman_services_effective_secret_declarations}, recursive=false)
-      }}
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Manage Podman secrets
-  when:
-    - not ansible_check_mode
-    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
-    - podman_services_effective_secret_declarations | length > 0
-  no_log: true
-  ansible.builtin.include_tasks:
-    file: sub_tasks/secrets/manage.yml
-    apply:
+      ansible.builtin.set_fact:
+        podman_services_application_secret_values: "{{ service_prepare_generated_secret_values }}"
+        podman_services_application_secret_declarations: >-
+          {{ service_prepare_generated_secret_declarations | podman_secret_declarations }}
+        podman_services_effective_secret_values: >-
+          {{ podman_services_common_values | combine(service_prepare_generated_secret_values) }}
+        podman_services_effective_secret_declarations: >-
+          {{
+            podman_services_secret_declarations
+            + (service_prepare_generated_secret_declarations | podman_secret_declarations)
+          }}
       tags: [deploy, update, recreate, bootstrap]
+
+    - name: Podman services | Validate secret attachments
       no_log: true
       diff: false
-  tags: [deploy, update, recreate, bootstrap]
-
-################################
-# APPLICATION TEMPLATE VALUES
-################################
-
-- name: Podman services | Build application template values
-  when: podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
-  no_log: true
-  ansible.builtin.include_role:
-    name: service_prepare
-    tasks_from: derive_templates
-    apply:
+      ansible.builtin.assert:
+        that:
+          - >-
+            podman_services_service.secret_attachments
+            | difference(podman_services_effective_secret_declarations | map(attribute='name') | list)
+            | length == 0
+        fail_msg: >-
+          A canonical secret attachment has no current-service declaration; Podman
+          native-secret materialization was stopped.
       tags: [deploy, update, recreate, bootstrap]
+
+    - name: Podman services | Add Podman secret definitions
       no_log: true
       diff: false
-  vars:
-    service_prepare_context: "{{ podman_services_application_context }}"
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Store application template values
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    podman_services_application_template_vars: >-
-      {{ service_prepare_template_vars | combine({
-        'runtime_execution': podman_services_execution,
-        'runtime_home': podman_services_execution_home
-      }) }}
-  tags: [deploy, update, recreate, bootstrap]
-
-################################
-# SHARED PREPARATION
-################################
-
-- name: Podman services | Prepare service files and directories
-  no_log: true
-  ansible.builtin.include_role:
-    name: service_common
-    tasks_from: prepare
-    apply:
+      ansible.builtin.set_fact:
+        podman_services_service: >-
+          {{
+            podman_services_service
+            | combine({'secrets': podman_services_effective_secret_declarations}, recursive=false)
+          }}
       tags: [deploy, update, recreate, bootstrap]
+
+    - name: Podman services | Manage Podman secrets
+      when:
+        - not ansible_check_mode
+        - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+        - podman_services_effective_secret_declarations | length > 0
+      no_log: true
+      ansible.builtin.include_tasks:
+        file: sub_tasks/secrets/manage.yml
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+          no_log: true
+          diff: false
+      tags: [deploy, update, recreate, bootstrap]
+
+    ################################
+    # APPLICATION TEMPLATE VALUES
+    ################################
+
+    - name: Podman services | Build application template values
+      when: podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+      no_log: true
+      ansible.builtin.include_role:
+        name: service_prepare
+        tasks_from: derive_templates
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+          no_log: true
+          diff: false
+      vars:
+        service_prepare_context: "{{ podman_services_application_context }}"
+      tags: [deploy, update, recreate, bootstrap]
+
+    - name: Podman services | Store application template values
       no_log: true
       diff: false
-  vars:
-    service_common_name: "{{ podman_services_service.name }}"
-    service_common_runtime: podman
-    service_common_action: "{{ podman_services_common_action }}"
-    service_common_service: >-
-      {{
-        podman_services_service_cfg
-        | combine({
-            'environment': podman_services_resolved_environment,
-            'paths': podman_services_service.host_paths
-          }, recursive=false)
-      }}
-    service_common_target_hosts: ["{{ inventory_hostname }}"]
-    service_common_controller_host: "{{ podman_services_controller_host }}"
-    service_common_infisical_values: "{{ podman_services_common_values }}"
-    service_common_host_defaults: >-
-      {{
-        {}
-        if (
-          podman_services_execution.mode == 'rootless'
-          and podman_services_service.container.mounts | default([]) | length > 0
-        )
-        else podman_services_common_host_defaults
-      }}
-    service_common_default_owner: >-
-      {{
-        (omit if ansible_check_mode else podman_services_execution.host_user)
-        if (
-          podman_services_execution.mode == 'rootless'
-          and podman_services_service.container.mounts | default([]) | length > 0
-        )
-        else (
-          podman_services_service.container.uid
-          | default(podman_services_common_host_defaults[inventory_hostname].get('puid', '1000'))
-        )
-      }}
-    service_common_default_group: >-
-      {{
-        (omit if ansible_check_mode else podman_services_execution.host_user)
-        if (
-          podman_services_execution.mode == 'rootless'
-          and podman_services_service.container.mounts | default([]) | length > 0
-        )
-        else (
-          podman_services_service.container.gid
-          | default(podman_services_common_host_defaults[inventory_hostname].get('pgid', '1000'))
-        )
-      }}
-    service_common_default_mode: "0750"
-    service_common_template_vars: "{{ podman_services_application_template_vars }}"
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Snapshot managed configuration changes
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    podman_services_config_changed: "{{ service_common_config_changed | default(false) }}"
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Read declared environment files
-  when:
-    - not ansible_check_mode
-    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
-  no_log: true
-  diff: false
-  ansible.builtin.slurp:
-    src: "{{ podman_services_env_path }}"
-  loop: "{{ podman_services_service.env_files }}"
-  loop_control:
-    loop_var: podman_services_env_path
-  register: podman_services_env_file_contents
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Parse ordered literal environment files
-  when: not ansible_check_mode
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    podman_services_env_file_inputs: >-
-      {{ podman_services_env_file_inputs | combine(podman_services_env_input.content | b64decode | podman_dotenv) }}
-  loop: "{{ podman_services_env_file_contents.results | default([]) }}"
-  loop_control:
-    loop_var: podman_services_env_input
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Podman services | Apply explicit environment overrides
-  no_log: true
-  diff: false
-  ansible.builtin.set_fact:
-    podman_services_service: >-
-      {{ podman_services_service | combine({'env': podman_services_env_file_inputs | combine(podman_services_resolved_environment)}) }}
-  tags: [deploy, update, recreate, bootstrap]
-
-################################
-# APPLICATION CONFIGURATION
-################################
-
-- name: Podman services | Configure application
-  when: podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
-  no_log: true
-  ansible.builtin.include_role:
-    name: service_prepare
-    tasks_from: configure
-    apply:
+      ansible.builtin.set_fact:
+        podman_services_application_template_vars: >-
+          {{ service_prepare_template_vars | combine({
+            'runtime_execution': podman_services_execution,
+            'runtime_home': podman_services_execution_home
+          }) }}
       tags: [deploy, update, recreate, bootstrap]
+
+    ################################
+    # SHARED PREPARATION
+    ################################
+
+    - name: Podman services | Prepare service files and directories
+      no_log: true
+      ansible.builtin.include_role:
+        name: service_common
+        tasks_from: prepare
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+          no_log: true
+          diff: false
+      vars:
+        service_common_name: "{{ podman_services_service.name }}"
+        service_common_runtime: podman
+        service_common_action: "{{ podman_services_common_action }}"
+        service_common_service: >-
+          {{
+            podman_services_service_cfg
+            | combine({
+                'environment': podman_services_resolved_environment,
+                'paths': podman_services_service.host_paths
+              }, recursive=false)
+          }}
+        service_common_target_hosts: ["{{ inventory_hostname }}"]
+        service_common_controller_host: "{{ podman_services_controller_host }}"
+        service_common_infisical_values: "{{ podman_services_common_values }}"
+        service_common_host_defaults: >-
+          {{
+            {}
+            if (
+              podman_services_execution.mode == 'rootless'
+              and podman_services_service.container.mounts | default([]) | length > 0
+            )
+            else podman_services_common_host_defaults
+          }}
+        service_common_default_owner: >-
+          {{
+            (omit if ansible_check_mode else podman_services_execution.host_user)
+            if (
+              podman_services_execution.mode == 'rootless'
+              and podman_services_service.container.mounts | default([]) | length > 0
+            )
+            else (
+              podman_services_service.container.uid
+              | default(podman_services_common_host_defaults[inventory_hostname].get('puid', '1000'))
+            )
+          }}
+        service_common_default_group: >-
+          {{
+            (omit if ansible_check_mode else podman_services_execution.host_user)
+            if (
+              podman_services_execution.mode == 'rootless'
+              and podman_services_service.container.mounts | default([]) | length > 0
+            )
+            else (
+              podman_services_service.container.gid
+              | default(podman_services_common_host_defaults[inventory_hostname].get('pgid', '1000'))
+            )
+          }}
+        service_common_default_mode: "0750"
+        service_common_template_vars: "{{ podman_services_application_template_vars }}"
+      tags: [deploy, update, recreate, bootstrap]
+
+    - name: Podman services | Snapshot managed configuration changes
       no_log: true
       diff: false
-  vars:
-    service_prepare_context: "{{ podman_services_application_context }}"
-  tags: [deploy, update, recreate, bootstrap]
+      ansible.builtin.set_fact:
+        podman_services_config_changed: "{{ service_common_config_changed | default(false) }}"
+      tags: [deploy, update, recreate, bootstrap]
 
-################################
-# PREPARE
-################################
+    - name: Podman services | Read declared environment files
+      when:
+        - not ansible_check_mode
+        - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+      no_log: true
+      diff: false
+      ansible.builtin.slurp:
+        src: "{{ podman_services_env_path }}"
+      loop: "{{ podman_services_service.env_files }}"
+      loop_control:
+        loop_var: podman_services_env_path
+      register: podman_services_env_file_contents
+      tags: [deploy, update, recreate, bootstrap]
 
-- name: Podman services | Write Quadlet files
-  ansible.builtin.include_tasks:
-    file: sub_tasks/quadlets.yml
-    apply:
+    - name: Podman services | Parse ordered literal environment files
+      when: not ansible_check_mode
+      no_log: true
+      diff: false
+      ansible.builtin.set_fact:
+        podman_services_env_file_inputs: >-
+          {{ podman_services_env_file_inputs | combine(podman_services_env_input.content | b64decode | podman_dotenv) }}
+      loop: "{{ podman_services_env_file_contents.results | default([]) }}"
+      loop_control:
+        loop_var: podman_services_env_input
+      tags: [deploy, update, recreate, bootstrap]
+
+    - name: Podman services | Apply explicit environment overrides
+      no_log: true
+      diff: false
+      ansible.builtin.set_fact:
+        podman_services_service: >-
+          {{ podman_services_service | combine({'env': podman_services_env_file_inputs | combine(podman_services_resolved_environment)}) }}
+      tags: [deploy, update, recreate, bootstrap]
+
+    ################################
+    # APPLICATION CONFIGURATION
+    ################################
+
+    - name: Podman services | Configure application
+      when: podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+      no_log: true
+      ansible.builtin.include_role:
+        name: service_prepare
+        tasks_from: configure
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+          no_log: true
+          diff: false
+      vars:
+        service_prepare_context: "{{ podman_services_application_context }}"
+      tags: [deploy, update, recreate, bootstrap]
+
+    ################################
+    # PREPARE
+    ################################
+
+    - name: Podman services | Write Quadlet files
+      ansible.builtin.include_tasks:
+        file: sub_tasks/quadlets.yml
+        apply:
+          tags: [deploy, update, remove, recreate, drift, bootstrap]
+          diff: false
       tags: [deploy, update, remove, recreate, drift, bootstrap]
-      diff: false
-  tags: [deploy, update, remove, recreate, drift, bootstrap]
 
-################################
-# IMAGE
-################################
+    ################################
+    # IMAGE
+    ################################
 
-- name: Podman services | Prepare container image
-  ansible.builtin.include_tasks:
-    file: sub_tasks/image.yml
-    apply:
+    - name: Podman services | Prepare container image
+      ansible.builtin.include_tasks:
+        file: sub_tasks/image.yml
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
       tags: [deploy, update, recreate, bootstrap]
-  tags: [deploy, update, recreate, bootstrap]
 
-################################
-# CHANGED NETWORK
-################################
+    ################################
+    # CHANGED NETWORK
+    ################################
 
-- name: Podman services | Check managed network changes
-  ansible.builtin.include_tasks:
-    file: sub_tasks/network_changes.yml
-    apply:
+    - name: Podman services | Check managed network changes
+      ansible.builtin.include_tasks:
+        file: sub_tasks/network_changes.yml
+        apply:
+          tags: [update, recreate]
       tags: [update, recreate]
-  tags: [update, recreate]
 
-################################
-# SERVICE LIFECYCLE
-################################
+    ################################
+    # SERVICE LIFECYCLE
+    ################################
 
-- name: Podman services | Manage service state
-  ansible.builtin.include_tasks:
-    file: sub_tasks/service_state.yml
-    apply:
-      tags: [deploy, update, remove, recreate, bootstrap]
-  tags: [deploy, update, remove, recreate, bootstrap]
+    - name: Podman services | Start and verify the protected service operation
+      block:
+        - name: Podman services | Record the start or removal attempt
+          ansible.builtin.set_fact:
+            podman_services_start_attempted: true
+          tags: [deploy, update, recreate, bootstrap, remove]
 
-################################
-# TRAEFIK
-################################
+        - name: Podman services | Manage service state
+          ansible.builtin.include_tasks:
+            file: sub_tasks/service_state.yml
+            apply:
+              tags: [deploy, update, remove, recreate, bootstrap]
+          tags: [deploy, update, remove, recreate, bootstrap]
 
-- name: Podman services | Configure Traefik integration
-  when: podman_services_service.traefik.enable | default(false) | bool
-  no_log: true
-  ansible.builtin.include_role:
-    name: service_common
-    tasks_from: traefik
-    apply:
-      tags: [deploy, update, recreate, bootstrap]
+        ################################
+        # TRAEFIK
+        ################################
+
+        - name: Podman services | Configure Traefik integration
+          when: podman_services_service.traefik.enable | default(false) | bool
+          no_log: true
+          ansible.builtin.include_role:
+            name: service_common
+            tasks_from: traefik
+            apply:
+              tags: [deploy, update, recreate, bootstrap]
+              no_log: true
+              diff: false
+          vars:
+            service_common_name: "{{ podman_services_service.name }}"
+            service_common_runtime: podman
+            service_common_action: "{{ podman_services_common_action }}"
+            service_common_service: "{{ podman_services_service }}"
+            service_common_target_hosts: ["{{ inventory_hostname }}"]
+            service_common_controller_host: "{{ podman_services_traefik_delegate }}"
+            service_common_traefik_internal_zone: "{{ services_internal_zone }}"
+            service_common_traefik_dynamic_dir: "{{ podman_services_traefik_dynamic_dir }}"
+            service_common_traefik_owner: "{{ podman_services_traefik_dynamic_owner }}"
+            service_common_traefik_group: "{{ podman_services_traefik_dynamic_group }}"
+          tags: [deploy, update, recreate, bootstrap]
+
+        ################################
+        # REMOVE
+        ################################
+
+        - name: Podman services | Remove Podman service
+          when: podman_services_common_action == 'remove'
+          ansible.builtin.include_tasks:
+            file: sub_tasks/remove.yml
+            apply:
+              tags: [remove]
+          tags: [remove]
+
+        - name: Podman services | Remove service integrations
+          when:
+            - podman_services_common_action == 'remove'
+            - podman_services_service.traefik.enable | default(false) | bool
+          ansible.builtin.include_role:
+            name: service_common
+            tasks_from: remove_integrations
+            apply:
+              tags: [remove]
+          vars:
+            service_common_name: "{{ podman_services_service.name }}"
+            service_common_runtime: podman
+            service_common_action: "{{ podman_services_common_action }}"
+            service_common_service: "{{ podman_services_service }}"
+            service_common_target_hosts: ["{{ inventory_hostname }}"]
+            service_common_controller_host: "{{ podman_services_traefik_delegate }}"
+            service_common_traefik_dynamic_dir: "{{ podman_services_traefik_dynamic_dir }}"
+          tags: [remove]
+
+        ################################
+        # DRIFT
+        ################################
+
+        - name: Podman services | Check image drift
+          ansible.builtin.include_tasks:
+            file: sub_tasks/image_drift.yml
+            apply:
+              tags: [drift]
+          tags: [drift]
+
+        - name: Podman services | Finish service removal
+          when: podman_services_common_action == 'remove'
+          ansible.builtin.include_tasks:
+            file: sub_tasks/finish_remove.yml
+            apply:
+              tags: [remove]
+          tags: [remove]
+
+        - name: Podman services | Reconcile protection after runtime completion
+          when:
+            - (podman_services_common_context.firewall_plan | default({})).managed | default(false)
+            - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap', 'remove']
+          ansible.builtin.include_role:
+            name: service_firewall
+            tasks_from: lifecycle
+            apply:
+              tags: [deploy, update, recreate, bootstrap, remove]
+          vars:
+            service_firewall_adapter_plan: "{{ podman_services_common_context.firewall_plan }}"
+            service_firewall_lifecycle_phase: "{{ 'remove' if podman_services_common_action == 'remove' else 'finish' }}"
+          tags: [deploy, update, recreate, bootstrap, remove]
+      rescue:
+        - name: Podman services | Save the original operation failure
+          tags: [always]
+          ansible.builtin.set_fact:
+            podman_services_lifecycle_failure:
+              task: "{{ ansible_failed_task.name }}"
+              rc: "{{ ansible_failed_result.rc | default(1) }}"
+          no_log: true
+          diff: false
+
+        - name: Podman services | Stop only the selected replacement after a failed start
+          tags: [always]
+          when:
+            - (podman_services_common_context.firewall_plan | default({})).managed | default(false)
+            - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+          become: true
+          become_user: "{{ podman_services_execution.host_user | default('root') }}"
+          environment: "{{ podman_services_runtime_environment }}"
+          ansible.builtin.systemd_service:
+            name: "{{ podman_services_unit_name }}"
+            scope: "{{ 'user' if podman_services_execution.mode == 'rootless' else 'system' }}"
+            state: stopped
+          register: podman_services_lifecycle_containment
+          ignore_errors: true
+
+        - name: Podman services | Retain protection and release only the stopped operation
+          tags: [always]
+          when:
+            - (podman_services_common_context.firewall_plan | default({})).managed | default(false)
+            - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+            - not (podman_services_lifecycle_containment.failed | default(true))
+          ansible.builtin.include_role:
+            name: service_firewall
+            tasks_from: lifecycle
+            apply:
+              tags: [deploy, update, recreate, bootstrap]
+              ignore_errors: true
+          vars:
+            service_firewall_adapter_plan: "{{ podman_services_common_context.firewall_plan }}"
+            service_firewall_lifecycle_phase: abort
+
+        - name: Podman services | Report the failed operation with protection retained
+          tags: [always]
+          ansible.builtin.fail:
+            msg: >-
+              {{ podman_services_service.name }} did not complete runtime/protection verification.
+              Its staged firewall union and data were retained. Replacement stop result:
+              {{ podman_services_lifecycle_containment.failed | default(false) }}.
+              Original failure: {{ podman_services_lifecycle_failure.task }} (status {{ podman_services_lifecycle_failure.rc }}), as reported above.
+  rescue:
+    - name: Podman services | Save the preparation failure without sensitive output
+      tags: [always]
+      ansible.builtin.set_fact:
+        podman_services_preparation_failure_task: "{{ ansible_failed_task.name }}"
       no_log: true
       diff: false
-  vars:
-    service_common_name: "{{ podman_services_service.name }}"
-    service_common_runtime: podman
-    service_common_action: "{{ podman_services_common_action }}"
-    service_common_service: "{{ podman_services_service }}"
-    service_common_target_hosts: ["{{ inventory_hostname }}"]
-    service_common_controller_host: "{{ podman_services_traefik_delegate }}"
-    service_common_traefik_internal_zone: "{{ services_internal_zone }}"
-    service_common_traefik_dynamic_dir: "{{ podman_services_traefik_dynamic_dir }}"
-    service_common_traefik_owner: "{{ podman_services_traefik_dynamic_owner }}"
-    service_common_traefik_group: "{{ podman_services_traefik_dynamic_group }}"
-  tags: [deploy, update, recreate, bootstrap]
 
-################################
-# REMOVE
-################################
+    - name: Podman services | Release only a failed preparation's reservation
+      tags: [always]
+      when:
+        - podman_services_firewall_staged
+        - not podman_services_start_attempted
+      ansible.builtin.include_role:
+        name: service_firewall
+        tasks_from: lifecycle
+        apply:
+          tags: [deploy, update, recreate, bootstrap, remove]
+          ignore_errors: true
+      vars:
+        service_firewall_adapter_plan: "{{ podman_services_common_context.firewall_plan }}"
+        service_firewall_lifecycle_phase: cancel
 
-- name: Podman services | Remove Podman service
-  when: podman_services_common_action == 'remove'
-  ansible.builtin.include_tasks:
-    file: sub_tasks/remove.yml
-    apply:
-      tags: [remove]
-  tags: [remove]
+    - name: Podman services | Cancel provider reservations if preparation never staged publications
+      tags: [always]
+      when:
+        - not podman_services_firewall_staged
+        - not podman_services_start_attempted
+        - (podman_services_common_context.firewall_access_hosts | default([])) | length > 0
+      ansible.builtin.include_role:
+        name: service_firewall
+        tasks_from: access_cancel
+        apply:
+          tags: [always]
+      vars:
+        service_firewall_access_cancel_plan: "{{ podman_services_common_context.firewall_plan }}"
+        service_firewall_access_cancel_hosts: "{{ podman_services_common_context.firewall_access_hosts }}"
 
-- name: Podman services | Remove service integrations
-  when:
-    - podman_services_common_action == 'remove'
-    - podman_services_service.traefik.enable | default(false) | bool
-  ansible.builtin.include_role:
-    name: service_common
-    tasks_from: remove_integrations
-    apply:
-      tags: [remove]
-  vars:
-    service_common_name: "{{ podman_services_service.name }}"
-    service_common_runtime: podman
-    service_common_action: "{{ podman_services_common_action }}"
-    service_common_service: "{{ podman_services_service }}"
-    service_common_target_hosts: ["{{ inventory_hostname }}"]
-    service_common_controller_host: "{{ podman_services_traefik_delegate }}"
-    service_common_traefik_dynamic_dir: "{{ podman_services_traefik_dynamic_dir }}"
-  tags: [remove]
-
-################################
-# DRIFT
-################################
-
-- name: Podman services | Check image drift
-  ansible.builtin.include_tasks:
-    file: sub_tasks/image_drift.yml
-    apply:
-      tags: [drift]
-  tags: [drift]
-
-- name: Podman services | Finish service removal
-  when: podman_services_common_action == 'remove'
-  ansible.builtin.include_tasks:
-    file: sub_tasks/finish_remove.yml
-    apply:
-      tags: [remove]
-  tags: [remove]
+    - name: Podman services | Keep the original operation failure
+      tags: [always]
+      ansible.builtin.fail:
+        msg: >-
+          Service operation failed at {{ podman_services_preparation_failure_task }}.
+          Staged protection and application data were retained. Preparation failures
+          do not stop an old writer; runtime failure containment is reported above.

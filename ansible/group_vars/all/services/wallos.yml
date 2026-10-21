@@ -29,6 +29,8 @@ wallos:
       external: false
   ports:
     backend:
+      exposure: private
+      callers: [traefik]
       host_ip: "{{ local_ip }}"
       published: 18083
       target: 80

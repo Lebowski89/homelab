@@ -21,7 +21,7 @@
 - name: Service firewall | Workers | Stop the old Unraid rule-reconciliation process before starting its replacement # noqa no-handler var-naming[no-role-prefix]
   ansible.builtin.command:
     argv: ["{{ worker_backend_firewall_python }}", "{{ worker_backend_firewall_root }}/policy.py", stop-watch]
-  when: worker_backend_firewall_helper_copy.changed
+  when: worker_backend_firewall_helper_copy.helper_changed
   register: worker_backend_firewall_stop_watch
   changed_when: (worker_backend_firewall_stop_watch.stdout | from_json).changed
 
