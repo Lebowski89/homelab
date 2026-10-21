@@ -16,6 +16,8 @@ does not default to Docker. Targets inherit the validated base runtime and add
 Catalog selection remains lightweight; linear, globally ordered dispatch then
 materializes only the current selected service on its dispatch host.
 
+Publication mappings explicitly declare `exposure: public` or `exposure: private`; private ports list logical `callers`. See [automatic protection and lifecycle](service-firewall.md). These fields are consumed by `service_firewall`, not rendered as runtime port options.
+
 ## Canonical order
 
 Within the immediate mapping for a service or target, use the following

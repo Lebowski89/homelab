@@ -46,7 +46,18 @@ ROOTLESS_NETWORK_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/template
 COMMON_COPIES = yaml.safe_load((REPO_ROOT / "ansible/roles/service_common/tasks/copies.yml").read_text())
 COMMON_TEMPLATES = yaml.safe_load((REPO_ROOT / "ansible/roles/service_common/tasks/templates.yml").read_text())
 
-MAIN_TASK_LIST = yaml.safe_load(MAIN_TASKS)
+
+def grouped_tasks(source):
+    def walk(tasks):
+        for task in tasks:
+            yield task
+            for branch in ["block", "rescue", "always"]:
+                yield from walk(task.get(branch, []))
+
+    return list(walk(yaml.safe_load(source)))
+
+
+MAIN_TASK_LIST = grouped_tasks(MAIN_TASKS)
 PREPARE_TASK_LIST = yaml.safe_load(PREPARE_TASKS)
 REMOVE_TASK_LIST = yaml.safe_load(REMOVE_TASKS)
 EXECUTION_PREPARE_TASK_LIST = yaml.safe_load(EXECUTION_PREPARE_TASKS)
@@ -155,7 +166,7 @@ def test_remove_stops_container_before_network_then_removes_files():
 
 
 def test_remove_only_orchestration_is_guarded_by_normalized_action():
-    tasks = yaml.safe_load(MAIN_TASKS)
+    tasks = grouped_tasks(MAIN_TASKS)
     remove_only_tasks = {
         "Podman services | Remove Podman service",
         "Podman services | Remove service integrations",
@@ -255,7 +266,7 @@ def test_absent_container_unit_is_checked_before_stop():
 
 
 def test_absent_container_unit_is_checked_before_recreate_preparation_stop():
-    tasks = yaml.safe_load(MAIN_TASKS)
+    tasks = grouped_tasks(MAIN_TASKS)
     stop_dependents = next(task for task in tasks if task["name"] == "Podman services | Stop shared-network services before recreate")
     load_state = next(task for task in tasks if task["name"] == "Podman services | Check service before recreate")
     stop = next(task for task in tasks if task["name"] == "Podman services | Stop service before recreate")
@@ -277,7 +288,7 @@ def test_absent_container_unit_is_checked_before_recreate_preparation_stop():
 
 
 def test_namespace_provider_recreate_cleans_dependents_then_provider_before_clean_start_and_restore():
-    main = yaml.safe_load(MAIN_TASKS)
+    main = grouped_tasks(MAIN_TASKS)
     lifecycle = yaml.safe_load(LIFECYCLE_TASKS)
     stop_dependents_include = next(
         task for task in main if task["name"] == "Podman services | Stop shared-network services before recreate"
@@ -462,7 +473,7 @@ def test_podman_dynamic_includes_propagate_required_tags():
     }
     checked = set()
 
-    for task in yaml.safe_load(MAIN_TASKS):
+    for task in grouped_tasks(MAIN_TASKS):
         include = task.get("ansible.builtin.include_tasks")
         if not isinstance(include, dict) or include.get("file") not in required_tags:
             continue
@@ -476,7 +487,7 @@ def test_podman_dynamic_includes_propagate_required_tags():
 
 
 def test_remove_handler_flush_is_gated_by_a_conditional_dynamic_include():
-    main_tasks = yaml.safe_load(MAIN_TASKS)
+    main_tasks = grouped_tasks(MAIN_TASKS)
     include = next(task for task in main_tasks if task["name"] == "Podman services | Finish service removal")
     flush_tasks = yaml.safe_load((TASKS_DIR / "sub_tasks" / "finish_remove.yml").read_text())
 
@@ -498,7 +509,7 @@ def test_remove_handler_flush_is_gated_by_a_conditional_dynamic_include():
 
 
 def test_external_network_preflight_uses_exact_read_only_podman_argv():
-    tasks = yaml.safe_load(MAIN_TASKS)
+    tasks = grouped_tasks(MAIN_TASKS)
     check = next(task for task in tasks if task["name"] == "Podman services | Check configured external network")
     require = next(task for task in tasks if task["name"] == "Podman services | Verify configured external network exists")
 
@@ -512,7 +523,7 @@ def test_external_network_preflight_uses_exact_read_only_podman_argv():
 
 
 def test_external_network_preflight_is_live_only_and_excludes_remove_and_managed_networks():
-    tasks = yaml.safe_load(MAIN_TASKS)
+    tasks = grouped_tasks(MAIN_TASKS)
     preflight = [
         task
         for task in tasks
@@ -534,7 +545,7 @@ def test_external_network_preflight_is_live_only_and_excludes_remove_and_managed
 
 
 def test_external_network_failure_is_fatal_before_any_mutating_service_work():
-    tasks = yaml.safe_load(MAIN_TASKS)
+    tasks = grouped_tasks(MAIN_TASKS)
     names = [task["name"] for task in tasks]
     require = names.index("Podman services | Verify configured external network exists")
     later_mutating_boundaries = [
@@ -933,7 +944,7 @@ def test_transition_generated_file_contents_are_not_logged():
 
 
 def test_execution_preparation_is_included_with_all_service_action_tags():
-    include = next(task for task in yaml.safe_load(MAIN_TASKS) if task["name"] == "Podman services | Prepare execution environment")
+    include = next(task for task in grouped_tasks(MAIN_TASKS) if task["name"] == "Podman services | Prepare execution environment")
     expected = {"deploy", "update", "remove", "recreate", "drift", "bootstrap"}
 
     assert set(include["tags"]) == expected

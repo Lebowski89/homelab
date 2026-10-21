@@ -44,6 +44,16 @@ DOCKER_ENV_FILE_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/comp
 AUTOBRR = Path("ansible/group_vars/all/services/autobrr.yml").read_text()
 
 
+def operation_tasks(content):
+    def walk(tasks):
+        for task in tasks:
+            yield task
+            for branch in ["block", "rescue", "always"]:
+                yield from walk(task.get(branch, []))
+
+    return list(walk(yaml.safe_load(content)))
+
+
 def test_proxmox_api_token_handoff_is_transactional_and_recoverable():
     tasks = yaml.safe_load(OPENTOFU_PVE_USER_TASKS)
     initialize = next(task for task in tasks if task.get("name") == "Initialize OpenTofu API token handoff state")
@@ -610,7 +620,7 @@ def test_manager_owned_compose_and_drift_state_have_single_ordered_writers():
     persist = next(task for task in save_stack_tasks if task["name"] == "Save stack | Store completed Compose configuration")
     drift_tasks = yaml.safe_load(DOCKER_DRIFT_TASKS)
     drift_append = next(task for task in drift_tasks if task["name"] == "Image drift | Add result to summary")
-    docker_main = yaml.safe_load(DOCKER_MAIN_TASKS)
+    docker_main = operation_tasks(DOCKER_MAIN_TASKS)
     drift_include = next(task for task in docker_main if task["name"] == "Docker services | Check image drift")
 
     for task in (compose_init, persist, drift_append):
@@ -690,7 +700,7 @@ def test_autobrr_uses_canonical_environment_references_and_env_file_behavior_is_
 
 
 def test_value_bearing_runtime_render_paths_are_no_log_and_diff_safe():
-    docker_main = yaml.safe_load(DOCKER_MAIN_TASKS)
+    docker_main = operation_tasks(DOCKER_MAIN_TASKS)
     for task_name in {"Docker services | Build Compose configuration", "Docker services | Save stack configuration"}:
         task = next(task for task in docker_main if task["name"] == task_name)
         assert task["no_log"] is True
@@ -709,8 +719,8 @@ def test_value_bearing_runtime_render_paths_are_no_log_and_diff_safe():
     assert snapshot["no_log"] is True
     assert snapshot["diff"] is False
 
-    podman_main = yaml.safe_load(PODMAN_MAIN)
-    traefik = next(task for task in podman_main if task["name"] == "Podman services | Configure Traefik integration")
+    podman_main = operation_tasks(PODMAN_MAIN)
+    traefik = next(task for task in podman_main if task.get("ansible.builtin.include_role", {}).get("tasks_from") == "traefik")
     for task in (traefik,):
         assert task["no_log"] is True
         assert "diff" not in task
@@ -732,7 +742,7 @@ def test_required_docker_dynamic_includes_propagate_selection_tags():
     ]
 
     for content, task_name, required in expectations:
-        task = next(task for task in yaml.safe_load(content) if task["name"] == task_name)
+        task = next(task for task in operation_tasks(content) if task["name"] == task_name)
         include = task["ansible.builtin.include_tasks"]
         assert required.issubset(set(task.get("tags", [])))
         assert required.issubset(set(include.get("apply", {}).get("tags", [])))

@@ -245,6 +245,8 @@ Check mode creates nothing.
 | Option | Type | Required | Default | Runtime | Owner | Description |
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
 | `ports` | Mapping or list of mappings | No | `[]` | Both | `docker_services` / `podman_services` | Publishes container ports. |
+| `ports[].exposure` | String enum | New publications | None | Both | `service_firewall` | `public` leaves existing host policy; `private` stages protected TCP access before startup. |
+| `ports[].callers` | List of logical service/target names | Private publications | `[]` | Both | `service_firewall` | Exact authorised callers; targets use `service:target`. No caller list on public ports. |
 | `ports[].published` | Integer-like | Yes | None | Both | `docker_services` / `podman_services` | Host port. Podman enforces `1..65535`; Docker requires integer conversion. |
 | `ports[].target` | Integer-like | Yes | None | Both | `docker_services` / `podman_services` | Container port. Podman enforces `1..65535`. |
 | `ports[].protocol` | String enum | No | `tcp` | Both | `docker_services` / `podman_services` | Exactly `tcp` or `udp`. |
@@ -900,8 +902,7 @@ Routine operations on managed services audit the selected endpoint against the
 current installed policy, declared placement/ports/callers, both kernel families
 and persistence. Successful audits replace repeated historical ACL inputs for
 that operation only. Missing/stale policy and failed audits stop before mutation,
-even if an old acknowledgement is supplied. Reconcile the current policy union
-explicitly; application maintenance never installs or extends it. A boolean,
+even if an old acknowledgement is supplied. Existing managed declarations are adopted through their established planners and runtime checks. Explicit publications use the automatic locked policy-union lifecycle in [service firewall](../../../../docs/service-firewall.md); no historical ACL flag is required. New unclassified publications fail before mutation. A boolean,
 running unit or existing path alone does not establish these prerequisites, and
 these checks do not infer completed application acceptance.
 

@@ -434,7 +434,7 @@ def _ports(value: Any, *, name: str) -> list[dict[str, Any]]:
         item_name = f"{name}[{index}]"
         if not isinstance(port, Mapping):
             raise AnsibleFilterError(f"{item_name} must be a mapping")
-        supported_fields = {"published", "target", "protocol", "host_ip"}
+        supported_fields = {"published", "target", "protocol", "host_ip", "exposure", "callers"}
         for field in port:
             if field not in supported_fields:
                 raise AnsibleFilterError(f"{item_name}.{field} is not supported by Podman Quadlets in this phase")

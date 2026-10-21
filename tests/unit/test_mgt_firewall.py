@@ -2298,7 +2298,7 @@ def test_persistence_ordering_and_dynamic_tags_do_not_deploy_applications():
     include = tasks[-1]["ansible.builtin.include_tasks"]
     assert set(include["apply"]["tags"]) == {"mgt_firewall_install", "mgt_firewall_observe", "mgt_firewall_check", "mgt_firewall_remove"}
     install = yaml.safe_load((ROLE / "tasks/mgt/install.yml").read_text())
-    first_write = next(index for index, task in enumerate(install) if "ansible.builtin.file" in task)
+    first_write = next(index for index, task in enumerate(install) if "service_firewall_lifecycle" in task)
     assert any("command" in key and "validate" in str(value) for task in install[:first_write] for key, value in task.items())
     for path in (ROLE / "tasks/mgt").glob("*.yml"):
         for task in yaml.safe_load(path.read_text()):

@@ -1,0 +1,26 @@
+---
+
+- name: Service firewall | Prepare dedicated caller accounts without starting applications
+  when:
+    - (service_firewall_caller.value.binding | default({}, true)).runtime | default('') == 'podman'
+    - (service_firewall_caller.value.binding | default({}, true)).mode | default('') == 'rootless'
+  ansible.builtin.include_role:
+    name: podman_services
+    tasks_from: prepare_identity
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    podman_services_prepare_execution_only: true
+    podman_services_common_action: deploy
+    podman_services_service_cfg: "{{ service_firewall_caller.value.metadata }}"
+    podman_services_role_prefix: "{{ service_firewall_caller.value.service }}"
+    podman_services_common_context:
+      runtime: podman
+      dispatch_host: "{{ inventory_hostname }}"
+      controller_host: "{{ service_firewall_lifecycle_plan.controller }}"
+      lookup_values: {}
+      resolved_environment: {}
+      secret_declarations: []
+  loop: "{{ service_firewall_lifecycle_plan.callers | dict2items }}"
+  loop_control:
+    loop_var: service_firewall_caller

@@ -16,8 +16,18 @@ STACK_DEPLOY_TASK_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_ta
 PERSIST_TASK_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/save_stack.yml"
 
 
+def grouped_tasks(source):
+    def walk(tasks):
+        for task in tasks:
+            yield task
+            for branch in ["block", "rescue", "always"]:
+                yield from walk(task.get(branch, []))
+
+    return list(walk(yaml.safe_load(source)))
+
+
 def test_generated_stack_files_use_restrictive_permissions():
-    tasks = yaml.safe_load(STACK_DEPLOY_TASK_PATH.read_text())
+    tasks = grouped_tasks(STACK_DEPLOY_TASK_PATH.read_text())
     directory = next(task for task in tasks if task["name"] == "Deploy stack | Ensure stack directory exists")
     render = next(task for task in tasks if task["name"] == "Deploy stack | Render stack file")
 

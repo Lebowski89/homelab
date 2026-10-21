@@ -1028,7 +1028,7 @@ def test_real_preflight_blocks_before_secret_resolution_files_or_bootstrap_recre
     )
     config = tmp_path / "ansible.cfg"
     config.write_text(
-        f"[defaults]\nroles_path={ROOT}/ansible/roles\naction_plugins={actions}\nlibrary={ROOT}/ansible/library\ninventory=localhost,\nstdout_callback=default\n"
+        f"[defaults]\nroles_path={ROOT}/ansible/roles\naction_plugins={actions}:{ROOT}/ansible/action_plugins\nlibrary={ROOT}/ansible/library\ninventory=localhost,\nstdout_callback=default\n"
     )
     args = [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", str(path)]
     if entry_point != "catalog":
@@ -1077,7 +1077,11 @@ def test_catalog_ownership_acknowledgement_uses_adapter_default_name_for_unnamed
     }
     entry = CATALOG.service_catalog_effective({"fake": base}, "mgt")[0]
     cfg = CATALOG.service_catalog_merge_target(base, "blue")
-    gate = yaml.safe_load((ROOT / "ansible/tasks/service_catalog_common_preflight.yml").read_text())[0]
+    gate = next(
+        task
+        for task in yaml.safe_load((ROOT / "ansible/tasks/service_catalog_common_preflight.yml").read_text())
+        if task.get("ansible.builtin.include_role", {}).get("tasks_from") == "operational_requirements"
+    )
     name = resolve(gate["vars"]["service_common_name"], {"service_catalog_materialized_service": entry | {"config": cfg}})
     normalized = PODMAN.podman_service_normalize(cfg, "fake-blue")
     assert name == normalized["name"]

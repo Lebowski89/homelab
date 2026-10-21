@@ -45,7 +45,8 @@ def test_romm_migration_is_tagged_and_runs_after_copies_before_deployment():
     names = [task["name"] for task in docker]
     assert names.index("Prepare | Validate application settings") < names.index("Cleanup | Remove existing deployment")
     assert names.index("Prepare | Prepare shared files and integrations") < names.index("Prepare | Apply application configuration")
-    main = yaml.safe_load((REPO_ROOT / "ansible/roles/docker_services/tasks/main.yml").read_text())
+    grouped = yaml.safe_load((REPO_ROOT / "ansible/roles/docker_services/tasks/main.yml").read_text())
+    main = [task for parent in grouped for task in parent.get("block", [parent])]
     names = [task["name"] for task in main]
     assert names.index("Docker services | Prepare service") < names.index("Docker services | Build Compose configuration")
 

@@ -655,7 +655,7 @@ def test_persistence_hooks_and_operation_includes_preserve_boundaries():
         "worker_backend_firewall_remove",
     }
     install = yaml.safe_load((ROLE / "tasks/workers/install.yml").read_text())
-    apply_idx = next(idx for idx, task in enumerate(install) if task.get("register") == "worker_backend_firewall_apply")
+    apply_idx = next(idx for idx, task in enumerate(install) if task.get("service_firewall_lifecycle", {}).get("phase") == "install")
     persistence_idx = next(idx for idx, task in enumerate(install) if task.get("ansible.builtin.include_tasks"))
     assert apply_idx < persistence_idx
     dropin = (ROLE / "templates/workers/docker-ordering.conf.j2").read_text()

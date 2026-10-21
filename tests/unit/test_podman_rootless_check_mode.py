@@ -338,7 +338,11 @@ def test_execution_only_preparation_returns_before_service_work(tmp_path):
     names = [task["task"]["name"].split(" : ")[-1] for entry in callback["plays"] for task in entry["tasks"]]
     assert "Execution | Report planned rootless pasta configuration" in names
     assert "Continue after execution-only role" in names
-    assert "Service common | Enforce explicit operational requirements before mutation" in names
+    assert any(
+        "/service_common/tasks/operational_requirements.yml:" in task["task"].get("path", "")
+        for entry in callback["plays"]
+        for task in entry["tasks"]
+    )
     assert not any(name.startswith(("Quadlets |", "Service |", "Check mode |")) for name in names)
     assert account_snapshot(account) == before
     assert not runtime_marker.exists()

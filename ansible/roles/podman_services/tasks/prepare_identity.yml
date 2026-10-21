@@ -1,0 +1,23 @@
+---
+
+# Used before a provider starts: allocate/validate its callers' stable accounts,
+# without preparing application files, images, secrets or user managers.
+- name: Podman services | Validate identity-only preparation
+  ansible.builtin.assert:
+    that:
+      - podman_services_prepare_execution_only is sameas true
+      - podman_services_common_action == 'deploy'
+
+- name: Podman services | Initialize only the declared caller identity
+  ansible.builtin.include_tasks:
+    file: sub_tasks/init.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+
+- name: Podman services | Prepare only the declared caller account
+  ansible.builtin.include_tasks:
+    file: sub_tasks/execution.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    podman_services_identity_only: true

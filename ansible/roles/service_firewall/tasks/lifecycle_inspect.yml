@@ -1,0 +1,72 @@
+---
+
+- name: Service firewall | Clear previous ownership evidence
+  ansible.builtin.set_fact:
+    service_firewall_ownership_proof: {}
+
+- name: Service firewall | Use each endpoint host's configured connection
+  ansible.builtin.set_fact:
+    ansible_connection: "{{ hostvars[service_firewall_host].ansible_connection | default('ssh') }}"
+  delegate_to: "{{ service_firewall_host }}"
+  delegate_facts: true
+  loop: "{{ (service_firewall_lifecycle_plan.hosts + [service_firewall_lifecycle_plan.controller]) | unique }}"
+  loop_control:
+    loop_var: service_firewall_host
+
+- name: Service firewall | Validate existing Docker placement before policy changes
+  when:
+    - not ansible_check_mode
+    - service_firewall_lifecycle_plan.runtime.binding.runtime == 'docker'
+    - service_catalog_action in ['deploy', 'update', 'recreate', 'bootstrap', 'remove']
+  service_operational_check:
+    phase: placement
+    metadata: "{{ service_firewall_lifecycle_plan.metadata }}"
+  delegate_to: >-
+    {{ service_firewall_lifecycle_plan.hosts[0]
+       if 'compose' in service_firewall_lifecycle_plan.runtime.binding
+       else service_firewall_lifecycle_plan.controller }}
+
+- name: Service firewall | Read current mgt addresses for the worker source boundary
+  when: "'workers' in service_firewall_lifecycle_plan.profile.values()"
+  service_firewall_lifecycle:
+    plan: "{{ service_firewall_lifecycle_plan }}"
+    phase: addresses
+    inventory_host: "{{ service_firewall_lifecycle_plan.controller }}"
+  delegate_to: "{{ service_firewall_lifecycle_plan.controller }}"
+  register: service_firewall_controller_addresses
+
+- name: Service firewall | Retain current controller addresses for this operation
+  ansible.builtin.set_fact:
+    service_firewall_lifecycle_plan: >-
+      {{ service_firewall_lifecycle_plan | combine({'source_addresses': service_firewall_controller_addresses.addresses | default([])}) }}
+
+- name: Service firewall | Audit current protection before service preparation
+  service_firewall_lifecycle:
+    plan: "{{ service_firewall_lifecycle_plan }}"
+    phase: inspect
+    inventory_host: "{{ service_firewall_host }}"
+  delegate_to: "{{ service_firewall_host }}"
+  loop: "{{ service_firewall_lifecycle_plan.hosts }}"
+  loop_control:
+    loop_var: service_firewall_host
+
+- name: Service firewall | Inspect existing mapping or empty application storage
+  when:
+    - not ansible_check_mode
+    - service_catalog_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - (service_firewall_lifecycle_plan.metadata.operational_requirements | default({})).ownership_transition | default(false)
+  service_operational_check:
+    phase: ownership
+    metadata: "{{ service_firewall_lifecycle_plan.metadata }}"
+  register: service_firewall_storage
+
+- name: Service firewall | Save this operation's ownership evidence
+  ansible.builtin.set_fact:
+    service_firewall_ownership_proof:
+      metadata: >-
+        {{ service_firewall_lifecycle_plan.metadata | combine({'operational_requirements': {
+           'acl': [],
+           'ownership_transition': (service_firewall_lifecycle_plan.metadata.operational_requirements | default({})).ownership_transition | default(false)
+        }}) }}
+      acl: []
+      ownership_transition: "{{ service_firewall_storage.ownership_transition | default(false) }}"
