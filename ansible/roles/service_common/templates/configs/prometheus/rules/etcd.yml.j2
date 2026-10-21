@@ -82,7 +82,7 @@ groups:
           summary: "Patroni primary role changed: immediate review (possible demotion)"
           description: "Includes promotions and demotions visible at 30s scrape cadence. Inspect Patroni logs; a transition wholly between scrapes can be missed."
       - alert: PatroniImmediateHealthFailure
-        expr: (up{job="patroni"} == 0) or (patroni_postgres_running{job="patroni"} == 0) or (patroni_cluster_unlocked{job="patroni"} == 1) or (up{job="patroni"} unless on(job, instance) patroni_dcs_last_seen{job="patroni"}) or (up{job="patroni"} unless on(job, instance) patroni_primary{job="patroni"}) or absent(up{job="patroni"}) or (count(up{job="patroni"}) != 3)
+        expr: (up{job="patroni"} == 0) or (patroni_postgres_running{job="patroni"} == 0) or (patroni_cluster_unlocked{job="patroni"} == 1) or (up{job="patroni"} unless on(job, instance) patroni_dcs_last_seen{job="patroni"}) or (up{job="patroni"} unless on(job, instance) patroni_primary{job="patroni"}) or absent(up{job="patroni"}) or (count(up{job="patroni"}) != {{ hostvars | availability_patroni_file_sd(groups['tags_postgres'] | default([]), prometheus_patroni_metrics_port) | length }})
         labels:
           severity: critical
         annotations:
