@@ -292,11 +292,19 @@ class Store:
             return
         selected = policy.get("managed_services", {}).get(self.request["service"], {})
         recovering = (
-            recovering or selected.get("failed_stage", False) or (self.request["action"] == "remove" and selected.get("removing", False))
+            recovering
+            or selected.get("failed_stage", False)
+            or selected.get("access", {}).get("failed", False)
+            or (self.request["action"] == "remove" and selected.get("removing", False))
         )
         result = self.helper.reconcile(policy, "check")
         pending = {
-            name.split(":")[0] for name, value in policy.get("managed_services", {}).items() if value.get("pending") or value.get("failed")
+            name.split(":")[0]
+            for name, value in policy.get("managed_services", {}).items()
+            if value.get("pending")
+            or value.get("failed")
+            or value.get("access", {}).get("pending")
+            or value.get("access", {}).get("failed")
         }
         pending_ok = all(
             message.split(":", 1)[0] in pending or policy_engine.deferred_caller(policy, message) for message in result.get("pending", [])
@@ -359,7 +367,11 @@ class Store:
             result = self.helper.reconcile(policy, dry_run=True, allow_pending=True)
             allowed = {request["runtime"]["service"], request["service"]}
             # Other in-flight operations may have stopped their own old callers.
-            allowed.update(name.split(":")[0] for name, value in policy.get("managed_services", {}).items() if value.get("pending"))
+            allowed.update(
+                name.split(":")[0]
+                for name, value in policy.get("managed_services", {}).items()
+                if value.get("pending") or value.get("access", {}).get("pending")
+            )
             require(
                 all(message.split(":", 1)[0] in allowed or policy_engine.deferred_caller(policy, message) for message in result["pending"]),
                 "an unrelated required caller is unresolved; no policy change applied",
@@ -580,6 +592,20 @@ def run_lifecycle(engine, helper, data):
                 store.helper.reconcile(current)
                 store.audit(current)
         return {"changed": changed, "helper_changed": store.changed_files, "families": [4, 6]}
+    if phase.startswith("access_"):
+        # Access never creates a provider or firewall infrastructure. Removal
+        # can also clean a prior contribution whose declaration was withdrawn.
+        if not request["providers"] and not store.policy_path.exists():
+            return {"changed": False, "families": [4, 6]}
+        require(store.policy_path.exists(), "provider policy missing; deploy/protect the provider first")
+
+        def access_runtime(expected):
+            if isinstance(expected, tuple):
+                runtime_check(expected[1], "healthy")
+            else:
+                runtime_check(request["runtime"], expected)
+
+        return engine.access_transact(store, request, phase, data["token"], access_runtime)
     if not request["endpoints"] and not store.root.exists():
         if phase in {"finish", "remove"}:
             runtime_check(request["runtime"], "healthy" if phase == "finish" else "absent")

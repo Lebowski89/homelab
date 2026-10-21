@@ -1,0 +1,19 @@
+---
+
+- name: Service firewall | Select only this client's provider endpoints for access checks
+  ansible.builtin.set_fact:
+    service_firewall_access_probe_plan: >-
+      {{ service_firewall_adapter_plan | combine({
+         'endpoints': service_firewall_adapter_plan.providers | map(attribute='endpoints') | flatten,
+         'hosts': service_firewall_adapter_plan.providers | map(attribute='endpoints') | flatten | map(attribute='host') | unique | list,
+         'callers': {service_firewall_adapter_plan.runtime.service: service_firewall_adapter_plan.runtime}
+      }) }}
+
+- name: Service firewall | Verify provider handshakes with owned counters
+  ansible.builtin.include_tasks:
+    file: lifecycle_probes.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    service_firewall_adapter_plan: "{{ service_firewall_access_probe_plan }}"
+  tags: [deploy, update, recreate, bootstrap]

@@ -75,6 +75,7 @@ def identity(name, cfg, controller):
             for v in (cfg.get("ports", {}).values() if isinstance(cfg.get("ports", {}), dict) else cfg.get("ports", []))
         ],
         "network_mode": cfg.get("network_mode"),
+        "swarm_mode": cfg.get("deploy", {}).get("mode", "replicated"),
         "publications": [
             (v["published"], v["target"], v.get("protocol", "tcp"))
             for v in (cfg.get("ports", {}).values() if isinstance(cfg.get("ports", {}), dict) else cfg.get("ports", []))
@@ -83,7 +84,7 @@ def identity(name, cfg, controller):
     }
 
 
-def plan(selected, catalog, controller, workers, hostvars, legacy_endpoints=None):
+def plan(selected, catalog, controller, workers, hostvars, legacy_endpoints=None, provider_endpoints=None, include_providers=True):
     """Resolve logical callers, placement and collisions without secret fields."""
     require(selected in catalog, "selected service is absent from the effective catalog")
     records = {name: identity(name, cfg, controller) for name, cfg in catalog.items() if cfg.get("enabled", True)}
@@ -208,7 +209,66 @@ def plan(selected, catalog, controller, workers, hostvars, legacy_endpoints=None
             not peers,
             "automatic protected operations on shared Docker projects/stacks are unsupported; split the project or use the scoped recovery workflow",
         )
+    # Provider access is inverse publication ownership: only this selected
+    # logical client is contributed, never the provider's entire desired ACL.
+    providers = []
+    if include_providers:
+        for name, record in records.items():
+            if name == selected:
+                continue
+            entry = catalog[name]
+            values = entry.get("ports", {})
+            values = list(values.values()) if isinstance(values, dict) else values
+            explicit = any("exposure" in value or "callers" in value for value in values)
+            if explicit and not any(selected == resolve(caller) for value in values for caller in value.get("callers", [])):
+                continue
+            if explicit:
+                available = plan(name, catalog, controller, workers, hostvars, include_providers=False)["endpoints"]
+            else:
+                available = [e for e in (provider_endpoints or []) if e["service"] == record["service"] and e["host"] in record["hosts"]]
+            wanted = []
+            for endpoint in available:
+                if selected_record["service"] in endpoint["callers"]:
+                    if not explicit and any(value.endswith("/postgres") for value in endpoint["ids"]):
+                        pg = cfg.get("postgres", {})
+                        if selected_record["hosts"] != [controller] or not pg.get("enable", False):
+                            continue  # Retain verified worker-local/elsewhere contracts.
+                        destination_host = pg.get("host_inventory", controller)
+                        if endpoint["port"] != pg.get("port", 5432) or (
+                            pg.get("host") != hostvars[endpoint["host"]]["local_ip"]
+                            if "host" in pg
+                            else destination_host != endpoint["host"]
+                        ):
+                            continue
+                    require(selected_record["hosts"] == [controller], "automatic provider access requires a local mgt client identity")
+                    require(
+                        selected_record["network_mode"] != "host",
+                        "automatic provider access cannot authorise shared host-network identities",
+                    )
+                    wanted.append(deepcopy(endpoint) | {"callers": [selected_record["service"]]})
+            if wanted:
+                providers.append({"runtime": record, "endpoints": wanted})
+        pg = cfg.get("postgres", {})
+        if (
+            pg.get("enable", False)
+            and selected_record["hosts"] == [controller]
+            and (pg.get("host") == hostvars[controller]["local_ip"] if "host" in pg else pg.get("host_inventory", controller) == controller)
+        ):
+            require(
+                any(
+                    e["port"] == pg.get("port", 5432) and any(i.endswith("/postgres") for i in e["ids"])
+                    for p in providers
+                    for e in p["endpoints"]
+                ),
+                "no declared protected PostgreSQL provider matches this client's host/port; declare and deploy the provider first",
+            )
+        managed = managed or bool(providers)
+    access_hosts = {e["host"] for provider in providers for e in provider["endpoints"]}
+    if selected_record["hosts"] == [controller]:
+        access_hosts.add(controller)
     return {
+        "providers": providers,
+        "access_hosts": sorted(access_hosts),
         "managed": managed,
         "service": selected,
         "runtime": selected_record,
@@ -226,7 +286,7 @@ def plan(selected, catalog, controller, workers, hostvars, legacy_endpoints=None
         },
         "controller": controller,
         "hosts": selected_record["hosts"],
-        "inventory": {h: hostvars[h]["local_ip"] for h in set(selected_record["hosts"] + [controller])},
-        "profile": {h: "mgt" if h == controller else "workers" for h in selected_record["hosts"]},
+        "inventory": {h: hostvars[h]["local_ip"] for h in set(selected_record["hosts"] + [controller]) | access_hosts},
+        "profile": {h: "mgt" if h == controller else "workers" for h in set(selected_record["hosts"]) | access_hosts},
         "metadata": deepcopy(cfg),
     }

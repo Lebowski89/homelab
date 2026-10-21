@@ -9,7 +9,7 @@
     ansible_connection: "{{ hostvars[service_firewall_host].ansible_connection | default('ssh') }}"
   delegate_to: "{{ service_firewall_host }}"
   delegate_facts: true
-  loop: "{{ (service_firewall_lifecycle_plan.hosts + [service_firewall_lifecycle_plan.controller]) | unique }}"
+  loop: "{{ (service_firewall_lifecycle_plan.hosts + (service_firewall_lifecycle_plan.access_hosts | default([])) + [service_firewall_lifecycle_plan.controller]) | unique }}"
   loop_control:
     loop_var: service_firewall_host
 
@@ -49,6 +49,16 @@
   loop: "{{ service_firewall_lifecycle_plan.hosts }}"
   loop_control:
     loop_var: service_firewall_host
+
+- name: Service firewall | Inspect existing providers without changing their applications
+  ansible.builtin.include_tasks:
+    file: access.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap, remove]
+  vars:
+    service_firewall_access_plan: "{{ service_firewall_lifecycle_plan }}"
+    service_firewall_access_phase: access_inspect
+  tags: [deploy, update, recreate, bootstrap, remove]
 
 - name: Service firewall | Inspect existing mapping or empty application storage
   when:

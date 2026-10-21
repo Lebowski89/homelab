@@ -28,6 +28,8 @@ REMOTE.policy_engine = ENGINE
 MGT = load("tests/unit/test_mgt_firewall.py", "lifecycle_mgt_test")
 REAL = load("tests/unit/test_mgt_podman_migration.py", "lifecycle_real_test")
 ACTION = load("ansible/action_plugins/service_firewall_lifecycle.py", "lifecycle_action_test")
+CONTAIN = load("ansible/roles/docker_services/files/contain.py", "docker_containment_test")
+CONTAIN_ACTION = load("ansible/action_plugins/docker_services_contain.py", "docker_containment_action_test")
 
 
 def identity(name):
@@ -381,7 +383,21 @@ def test_qualified_probe_rejects_namespace_or_pid_replacement(monkeypatch):
         REMOTE.qualified_probes(req)
 
 
-@pytest.mark.parametrize("failure", [None, "test", "startup", "apply", "post-start-test", "check-mode", "remove-delayed"])
+@pytest.mark.parametrize(
+    "failure",
+    [
+        None,
+        "test",
+        "startup",
+        "apply",
+        "post-start-test",
+        "check-mode",
+        "remove-delayed",
+        "provider",
+        "provider-startup",
+        "provider-partial",
+    ],
+)
 def test_actual_role_lifecycle_uses_real_rule_transactions_and_keeps_failure_status(tmp_path, failure):
     """Execute the role's stage/probe/finish/abort tasks with isolated kernel I/O."""
     import os
@@ -444,6 +460,8 @@ class ActionModule(fixture.ACTION.ActionModule):
                         key = '4:' + str(endpoint['port'])
                         counts[key] = counts.get(key, 0) + 1
                 result = {{'changed': False, 'handshakes': [{{'connected': True, 'port': request['endpoints'][0]['port']}}]}}
+            elif phase.startswith('access_'):
+                result = fixture.ENGINE.access_transact(store, request, phase, data['token'], runtime)
             else:
                 selected_failure = task_vars.get('fixture_failure')
                 store.fail = ('test' if (selected_failure == 'test' and phase == 'stage') or (selected_failure == 'post-start-test' and phase == 'finish') else
@@ -471,6 +489,17 @@ class ActionModule(fixture.ACTION.ActionModule):
         "token": "isolated-operation",
     }
 
+    if failure in {"provider", "provider-startup", "provider-partial"}:
+        store = Store(tmp_path / "policy.json", SimpleNamespace(setattr=lambda obj, name, value: setattr(obj, name, value)))
+        client = provider_request(store, "utility")
+        (tmp_path / "kernel.json").write_text(json.dumps(store.kernel.state))
+        plan["providers"] = [p | {"endpoints": [e | {"host": "manager"} for e in p["endpoints"]]} for p in client["providers"]]
+        plan["access_hosts"] = ["manager"]
+        if failure == "provider-partial":
+            plan["access_hosts"].append("worker")
+            plan["profile"]["worker"] = "workers"
+            plan["inventory"]["worker"] = "192.0.2.20"
+
     def role(phase):
         selected_plan = plan | {"action": "remove", "token": "isolated-remove"} if phase in {"prepare_remove", "remove"} else plan
         return {
@@ -480,7 +509,15 @@ class ActionModule(fixture.ACTION.ActionModule):
 
     stop = {"ansible.builtin.file": {"path": str(tmp_path / "writer"), "state": "absent"}}
     tail = [role("stage"), {"ansible.builtin.copy": {"dest": str(tmp_path / "writer"), "content": "NONPRODUCTION writer", "mode": "0600"}}]
-    if failure == "startup":
+    if failure in {"provider", "provider-startup", "provider-partial"}:
+        tail.insert(
+            0,
+            {
+                "ansible.builtin.include_role": {"name": "service_firewall", "tasks_from": "access"},
+                "vars": {"service_firewall_access_plan": plan, "service_firewall_access_phase": "access_stage"},
+            },
+        )
+    if failure in {"startup", "provider-startup"}:
         tail.append({"ansible.builtin.fail": {"msg": "NONPRODUCTION startup failed"}})
     tail.append(role("finish"))
     if failure == "remove-delayed":
@@ -555,6 +592,26 @@ class ActionModule(fixture.ACTION.ActionModule):
         assert not (tmp_path / "writer").exists()
         policy = json.loads((tmp_path / "policy.json").read_text())
         assert not policy["endpoints"] and not policy["managed_services"]
+    elif failure == "provider-partial":
+        assert result.returncode != 0 and "original failure retained" in output, output
+        policy = json.loads((tmp_path / "policy.json").read_text())
+        assert "utility" in policy["endpoints"][0]["callers"]
+        assert policy["managed_services"]["utility"]["access"]["failed"]
+        assert not policy["managed_services"]["utility"]["access"]["pending"]
+        assert not (tmp_path / "writer").exists()
+    elif failure == "provider":
+        assert result.returncode == 0, output
+        policy = json.loads((tmp_path / "policy.json").read_text())
+        assert "utility" in next(e for e in policy["endpoints"] if e["port"] == 5432)["callers"]
+        assert not policy["managed_services"]["utility"]["access"]["pending"]
+        events = (tmp_path / "events").read_text().splitlines()
+        assert (
+            events.index("access_stage")
+            < events.index("stage")
+            < events.index("access_activate")
+            < events.index("finish")
+            < events.index("access_finish")
+        )
     elif failure:
         assert result.returncode != 0 and "original failure retained" in output, output
         assert not (tmp_path / "writer").exists()
@@ -578,6 +635,14 @@ def test_all_real_mgt_targets_plan_without_templating_environments(monkeypatch):
         if service.get("runtime") == "podman" and not any(t.get("runtime") == "docker" for t in service.get("targets", {}).values()):
             service.setdefault("systemd", {})["service_add"] = ["{{ lookup('must_not_run') }}"]
     monkeypatch.setattr(ActionBase, "run", lambda *args: {})
+    catalog["newapp"] = {
+        "enabled": True,
+        "runtime": "podman",
+        "image": "registry.invalid/nonproduction:1",
+        "named_networks": {"newapp": {"driver": "bridge", "external": False}},
+        "postgres": {"enable": True},
+        "deploy": {"type": "container", "host": "mgt", "execution": {"mode": "rootless", "host_user": "podman-newapp"}},
+    }
     planned = []
     entries = REAL.mgt_entries(catalog)
     for entry in entries:
@@ -616,6 +681,10 @@ def test_all_real_mgt_targets_plan_without_templating_environments(monkeypatch):
     pg = next(plan for plan in planned if plan["service"] == "haproxy:mgt")
     assert "infisical" in next(e for e in pg["endpoints"] if e["port"] == 5432)["callers"]
     assert any(plan.get("legacy_publications") and plan["managed"] for plan in planned)
+    fresh = next(plan for plan in planned if plan["service"] == "newapp")
+    assert not fresh["legacy_publications"]
+    assert fresh["managed"] and fresh["callers"]["newapp"]["binding"]["account"] == "podman-newapp"
+    assert any(p["runtime"]["name"] == "haproxy:mgt" and p["endpoints"][0]["port"] == 5432 for p in fresh["providers"])
 
 
 def test_future_clients_do_not_create_a_provider_startup_cycle():
@@ -907,3 +976,373 @@ def test_new_rootless_client_without_a_manager_does_not_block_its_provider(monke
     assert result["handshakes"][0]["pending_activation"] is True
     assert "connected" not in result["handshakes"][0]
     assert not ENGINE.future_caller({}, "unknown")
+
+
+def provider_request(store, name="newapp"):
+    provider = request("database", 5432)
+    provider["endpoints"][0]["ids"] = ["database/postgres"]
+    provider["endpoints"][0]["destination"] = 5432
+    provider["endpoints"][0]["callers"] = ["oldapp"]
+    provider["callers"] = {"oldapp": identity("oldapp")}
+    if not store.current["endpoints"]:
+        ENGINE.transact(store, provider, "stage", "provider", lambda _: None)
+        ENGINE.transact(store, provider, "finish", "provider", lambda _: None)
+    client = request(name)
+    client["endpoints"] = []
+    client["providers"] = [{"runtime": provider["runtime"], "endpoints": [provider["endpoints"][0] | {"callers": [name]}]}]
+    return client
+
+
+def test_client_access_uses_existing_provider_and_cleans_only_owned_contributions(tmp_path, monkeypatch):
+    store = Store(tmp_path / "policy.json", monkeypatch)
+    client = provider_request(store)
+    original = deepcopy(store.current)
+    events = []
+    ENGINE.access_transact(store, client, "access_stage", "new", events.append)
+    endpoint = store.current["endpoints"][0]
+    assert endpoint["callers"] == ["newapp", "oldapp"]
+    assert store.current["callers"]["newapp"] == [client["runtime"]["binding"]]
+    assert events == [("provider", client["providers"][0]["runtime"])]
+    assert store.current["managed_services"]["newapp"]["access"]["pending"]
+    with pytest.raises(ValueError, match="unfinished provider/service operation"):
+        ENGINE.access_transact(store, client, "access_stage", "competing-operation", lambda _: None)
+    assert store.current["managed_services"]["newapp"]["access"]["token"] == "new"
+    ENGINE.transact(store, client, "stage", "new", lambda _: None)
+    ENGINE.access_transact(store, client, "access_activate", "new", lambda _: None)
+    ENGINE.transact(store, client, "finish", "new", lambda _: None)
+    ENGINE.access_transact(store, client, "access_finish", "new", lambda _: None)
+    # Recreate reuses the same ownership rather than claiming the baseline ACL.
+    ENGINE.access_transact(store, client, "access_stage", "recreate", lambda _: None)
+    ENGINE.access_transact(store, client, "access_finish", "recreate", lambda _: None)
+    ENGINE.access_transact(store, client | {"providers": []}, "access_remove", "remove", events.append)
+    assert store.current["endpoints"] == original["endpoints"]
+    assert store.current["callers"] == original["callers"]
+    assert events[-1] == "absent"
+
+
+def test_failed_client_access_and_concurrent_provider_changes_retain_current_union(tmp_path, monkeypatch):
+    store = Store(tmp_path / "policy.json", monkeypatch)
+    a, b = provider_request(store), provider_request(store, "second")
+
+    def stage(client):
+        ENGINE.access_transact(store, client, "access_stage", client["service"], lambda _: None)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        list(pool.map(stage, [a, b]))
+    store.fail = "apply"
+    with pytest.raises(RuntimeError, match="apply failure"):
+        ENGINE.access_transact(store, a, "access_activate", a["service"], lambda _: None)
+    assert store.current["managed_services"][a["service"]]["access"]["failed"]
+    assert set(store.current["endpoints"][0]["callers"]) == {"oldapp", "newapp", "second"}
+    store.fail = None
+    # A concurrent provider deployment cannot erase a client's contribution.
+    provider = request("database", 5432)
+    provider["endpoints"][0].update(ids=["database/postgres"], destination=5432, callers=["oldapp"])
+    provider["callers"] = {"oldapp": identity("oldapp")}
+    ENGINE.transact(store, provider, "stage", "provider-update", lambda _: None)
+    ENGINE.transact(store, provider, "finish", "provider-update", lambda _: None)
+    assert set(store.current["endpoints"][0]["callers"]) == {"oldapp", "newapp", "second"}
+    ENGINE.access_transact(store, a, "access_abort", a["service"], lambda _: None)
+    ENGINE.access_transact(store, a, "access_stage", "retry", lambda _: None)
+    ENGINE.access_transact(store, a, "access_finish", "retry", lambda _: None)
+    ENGINE.access_transact(store, a, "access_remove", "remove", lambda _: None)
+    assert set(store.current["endpoints"][0]["callers"]) == {"oldapp", "second"}
+
+
+def test_provider_access_rejects_changed_or_missing_provider_and_preserves_rollback_bindings(tmp_path, monkeypatch):
+    store = Store(tmp_path / "policy.json", monkeypatch)
+    client = provider_request(store)
+    old = deepcopy(store.current)
+    changed = deepcopy(client)
+    changed["providers"][0]["endpoints"][0]["destination"] = 5433
+    with pytest.raises(ValueError, match="missing or changed"):
+        ENGINE.access_transact(store, changed, "access_stage", "x", lambda _: None)
+    with pytest.raises(RuntimeError, match="provider unavailable"):
+        ENGINE.access_transact(store, client, "access_stage", "x", lambda _: (_ for _ in ()).throw(RuntimeError("provider unavailable")))
+    assert store.current == old
+    # An accepted baseline binding must survive removal of a new contribution.
+    baseline = {"kind": "local", "phase": "podman", "account": "podman-newapp", "uid": 2222, "verified": True, "restart_verified": True}
+    store.current["callers"]["newapp"] = [baseline]
+    ENGINE.access_transact(store, client, "access_stage", "x", lambda _: None)
+    ENGINE.access_transact(store, client, "access_remove", "remove", lambda _: None)
+    assert baseline in store.current["callers"]["newapp"]
+    assert "newapp" in store.current["endpoints"][0]["callers"]
+
+
+def test_inverse_provider_planner_selects_only_declared_client_access():
+    catalog = {
+        name: {
+            "name": name,
+            "runtime": "podman",
+            "image": "nonproduction:1",
+            "deploy": {"host": "manager", "execution": {"mode": "rootless", "host_user": "podman-" + name}},
+        }
+        for name in ["database", "oldapp", "newapp", "irc"]
+    }
+    catalog["database"]["ports"] = {"postgres": {"published": 5432, "target": 5432}}
+    catalog["newapp"]["postgres"] = {"enable": True}
+    catalog["irc"]["ports"] = {"irc": {"published": 16502, "target": 6502, "exposure": "private", "callers": ["newapp"]}}
+    planner = load("ansible/action_plugins/mgt_firewall_plan.py", "provider_postgres_planner")
+    for cfg in catalog.values():
+        cfg["operational_requirements"] = {"acl": ["mgt_backends"]}
+    legacy = planner.build_plan(catalog, "manager", lambda value, _: value, [])
+    plan = DECL.plan(
+        "newapp",
+        catalog,
+        "manager",
+        [],
+        {"manager": {"local_ip": "192.0.2.48"}},
+        [],
+        [e | {"host": "manager"} for e in legacy["endpoints"]],
+    )
+    assert {p["runtime"]["service"] for p in plan["providers"]} == {"database", "irc"}
+    assert all(e["callers"] == ["newapp"] for p in plan["providers"] for e in p["endpoints"])
+
+
+@pytest.mark.parametrize("mode,failure", [("global", None), ("global", "stop"), ("global", "wait"), ("replicated", None)])
+def test_swarm_failure_containment_is_mode_aware_scoped_and_retryable(mode, failure):
+    record = identity("selected") | {"binding": {"runtime": "docker", "selector": "selected_selected"}, "swarm_mode": mode}
+    calls = []
+    attempts = 0
+
+    def run(argv):
+        nonlocal attempts
+        calls.append(argv)
+        cmd = argv[3:]
+        if cmd[:2] == ["service", "inspect"]:
+            return json.dumps(
+                {"id": "immutable-id", "name": "selected_selected", "mode": {"Global" if mode == "global" else "Replicated": {}}}
+            )
+        if cmd[:2] == ["service", "ps"]:
+            return "exact-task"
+        if cmd[:2] == ["node", "ls"]:
+            return "actual-node-id"
+        if cmd[:2] in [["service", "update"], ["service", "rm"], ["service", "scale"]]:
+            if failure == "stop":
+                raise RuntimeError("contained command failed")
+            return ""
+        if cmd[:3] == ["inspect", "--type", "task"]:
+            attempts += 1
+            return json.dumps("running" if failure == "wait" or attempts == 1 else "shutdown")
+        raise AssertionError(argv)
+
+    if failure:
+        with pytest.raises((ValueError, RuntimeError), match="did not stop|command failed"):
+            CONTAIN.contain_swarm(record, run, sleep=lambda _: None)
+        failure = None
+    result = CONTAIN.contain_swarm(record, run, sleep=lambda _: None)
+    assert result["contained"]
+    mutations = [a for a in calls if a[3:5] in [["service", "rm"], ["service", "scale"]]]
+    assert all(a[-1] == ("immutable-id" if mode == "global" else "immutable-id=0") for a in mutations)
+    assert all(a[4] == ("rm" if mode == "global" else "scale") for a in mutations)
+
+
+@pytest.mark.parametrize("mode,stop_fails", [("global", False), ("global", True), ("global", "after-stop"), ("replicated", False)])
+def test_production_stack_rescue_contains_exact_service_and_retains_original_failure(tmp_path, mode, stop_fails):
+    import os
+    import subprocess
+    import sys
+
+    import yaml
+
+    plugins = tmp_path / "actions"
+    plugins.mkdir()
+    # Resolve the unselected Compose module without installed collections. Any
+    # accidental execution fails instead of contacting a runtime.
+    module = tmp_path / "collections/ansible_collections/community/docker/plugins/modules/docker_compose_v2.py"
+    module.parent.mkdir(parents=True)
+    module.write_text("raise AssertionError('unselected Compose runtime is inaccessible')\n")
+    (plugins / "service_firewall_lifecycle.py").write_text(f"""
+import importlib.util, json
+from pathlib import Path
+from types import SimpleNamespace
+spec = importlib.util.spec_from_file_location('fixture', {str(Path(__file__).resolve())!r})
+f = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(f)
+class ActionModule(f.ACTION.ActionModule):
+    def _execute_module(self, module_name, module_args, task_vars):
+        data = json.loads(module_args['stdin'])
+        root = Path(task_vars['fixture_root'])
+        with (root / 'events').open('a') as log:
+            log.write(data['phase'] + '\\n')
+        try:
+            if data['phase'] == 'contain':
+                def run(argv):
+                    cmd = argv[3:]
+                    if cmd[:2] == ['service', 'inspect']:
+                        return json.dumps({{'id': 'exact-service-id', 'name': 'utility_utility', 'mode': {{task_vars['fixture_mode']: {{}}}}}})
+                    if cmd[:2] == ['service', 'ps']: return 'exact-task-id'
+                    if cmd[:2] == ['node', 'ls']: return 'inventory-node-id'
+                    if cmd[:2] in [['service', 'scale'], ['service', 'update'], ['service', 'rm']]:
+                        if task_vars['fixture_stop_fails']:
+                            if task_vars['fixture_stop_fails'] == 'after-stop': (root / 'writer').unlink(missing_ok=True)
+                            raise RuntimeError('NONPRODUCTION scoped stop failed')
+                        (root / 'writer').unlink(missing_ok=True)
+                        return ''
+                    if cmd[:3] == ['inspect', '--type', 'task']: return json.dumps('shutdown')
+                    raise AssertionError(argv)
+                result = f.CONTAIN.contain_swarm(data['request']['runtime'], run, sleep=lambda _: None)
+            else:
+                store = f.Store(root / 'policy.json', SimpleNamespace(setattr=lambda obj, name, value: setattr(obj, name, value)))
+                store.current = json.loads(store.path.read_text())
+                store.kernel.state = {{int(k): v for k, v in json.loads((root / 'kernel.json').read_text()).items()}}
+                def runtime(expected):
+                    if expected == 'absent' and (root / 'writer').exists(): raise RuntimeError('selected writer remains')
+                result = f.ENGINE.transact(store, data['request'], data['phase'], data['token'], runtime)
+                (root / 'kernel.json').write_text(json.dumps(store.kernel.state))
+            return {{'rc': 0, 'stdout': json.dumps(result)}}
+        except (RuntimeError, ValueError) as error:
+            return {{'rc': 1, 'stderr': str(error)}}
+""")
+    (plugins / "docker_services_contain.py").write_text(f"""
+import importlib.util, json
+from pathlib import Path
+spec = importlib.util.spec_from_file_location('transport', {str(plugins / "service_firewall_lifecycle.py")!r})
+transport = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(transport)
+class ActionModule(transport.f.CONTAIN_ACTION.ActionModule):
+    def _execute_module(self, module_name, module_args, task_vars):
+        data = json.loads(module_args['stdin'])
+        module_args = {{**module_args, 'stdin': json.dumps({{'phase': 'contain', 'request': data}})}}
+        return transport.ActionModule._execute_module(self, module_name, module_args, task_vars)
+""")
+    store = Store(tmp_path / "policy.json", SimpleNamespace(setattr=lambda obj, name, value: setattr(obj, name, value)))
+    desired = request()
+    # Keep caller rules independent of the selected writer's runtime.
+    desired["runtime"]["binding"] = {"kind": "service", "runtime": "docker", "phase": "docker", "selector": "utility_utility"}
+    desired["runtime"]["swarm_mode"] = mode
+    ENGINE.transact(store, desired, "stage", "failed-operation", lambda _: None)
+    (tmp_path / "kernel.json").write_text(json.dumps(store.kernel.state))
+    (tmp_path / "writer").touch()
+    plan = {
+        **desired,
+        "managed": True,
+        "controller": "manager",
+        "hosts": ["manager"],
+        "inventory": {"manager": "192.0.2.48"},
+        "profile": {"manager": "mgt"},
+        "token": "failed-operation",
+        "providers": [],
+        "access_hosts": [],
+    }
+    # Execute the production deploy/rescue block, replacing only the failing
+    # application deployment boundary. No file/stack/runtime socket is reachable.
+    task = yaml.safe_load((ROOT / "ansible/roles/docker_services/tasks/sub_tasks/deploy/stack.yml").read_text())[-1]
+    task["block"] = [{"name": "NONPRODUCTION deployment failure", "ansible.builtin.fail": {"msg": "original deployment failure"}}]
+    playbook = tmp_path / "rescue.yml"
+    variables = {
+        "fixture_root": str(tmp_path),
+        "fixture_mode": "Global" if mode == "global" else "Replicated",
+        "fixture_stop_fails": stop_fails,
+        "services_storage_host": "storage",
+        "docker_services_deploy_stack_type": "swarm",
+        "docker_services_deploy_stack_host_effective": "manager",
+        "docker_services_deploy_stack_name": "utility",
+        "_stack_def": {"firewall_plans": {"utility": plan}},
+    }
+    playbook.write_text(
+        yaml.safe_dump(
+            [{"hosts": "manager", "connection": "local", "gather_facts": False, "become": False, "vars": variables, "tasks": [task]}]
+        )
+    )
+    config = tmp_path / "ansible.cfg"
+    config.write_text(
+        f"[defaults]\ncollections_path={tmp_path / 'collections'}\nroles_path={ROOT / 'ansible/roles'}\naction_plugins={plugins}\nvars_plugins_enabled=\nstdout_callback=default\n[inventory]\nenable_plugins=host_list\n"
+    )
+    argv = [str(Path(sys.executable).parent / "ansible-playbook"), "-i", "manager,", str(playbook)]
+
+    def execute():
+        return subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=35,
+            env={**os.environ, "ANSIBLE_CONFIG": str(config), "ANSIBLE_LOCAL_TEMP": str(tmp_path / "local")},
+        )
+
+    result = execute()
+    assert result.returncode != 0 and "NONPRODUCTION deployment failure" in result.stdout, result.stdout + result.stderr
+    saved = json.loads(store.path.read_text())["managed_services"]["utility"]
+    assert saved["pending"] is bool(stop_fails)
+    assert (tmp_path / "writer").exists() is (stop_fails is True)
+    assert (tmp_path / "events").read_text().splitlines() == ["contain", "abort"]
+    if stop_fails:
+        assert saved["containment_failed"] and "scoped stop failed" in result.stdout
+        # The same supported containment path succeeds after a transient stop
+        # failure; no stale snapshot, node drain or daemon operation is needed.
+        variables["fixture_stop_fails"] = False
+        playbook.write_text(
+            yaml.safe_dump(
+                [{"hosts": "manager", "connection": "local", "gather_facts": False, "become": False, "vars": variables, "tasks": [task]}]
+            )
+        )
+        retry = execute()
+        assert retry.returncode != 0 and "original deployment failure" in retry.stdout
+        assert not json.loads(store.path.read_text())["managed_services"]["utility"]["pending"]
+        assert not (tmp_path / "writer").exists()
+
+
+def test_access_withdrawal_and_shared_provider_declarations_keep_their_ownership(tmp_path, monkeypatch):
+    store = Store(tmp_path / "policy.json", monkeypatch)
+    client = provider_request(store)
+    ENGINE.access_transact(store, client, "access_stage", "first", lambda _: None)
+    ENGINE.access_transact(store, client, "access_finish", "first", lambda _: None)
+    # Withdrawing the relationship reconciles only the owned contribution.
+    withdrawn = client | {"providers": []}
+    ENGINE.access_transact(store, withdrawn, "access_stage", "withdraw", lambda _: None)
+    ENGINE.access_transact(store, withdrawn, "access_finish", "withdraw", lambda _: None)
+    assert store.current["endpoints"][0]["callers"] == ["oldapp"]
+    ENGINE.access_transact(store, client, "access_stage", "second", lambda _: None)
+    changed = deepcopy(client)
+    changed["runtime"]["binding"]["account"] = "podman-other"
+    with pytest.raises(ValueError, match="identity/placement changed"):
+        ENGINE.access_transact(store, changed, "access_stage", "changed", lambda _: None)
+    # A later explicit provider deployment may adopt the shared permission.
+    provider = request("database", 5432)
+    provider["endpoints"][0].update(
+        ids=["database/postgres"], destination=5432, callers=["oldapp", "newapp"], purpose="declared private publication"
+    )
+    provider["callers"] = {name: identity(name) for name in ["oldapp", "newapp"]}
+    ENGINE.transact(store, provider, "stage", "shared", lambda _: None)
+    ENGINE.transact(store, provider, "finish", "shared", lambda _: None)
+    ENGINE.access_transact(store, client, "access_remove", "remove", lambda _: None)
+    assert store.current["endpoints"][0]["callers"] == ["newapp", "oldapp"]
+    assert store.current["callers"]["newapp"] == [client["runtime"]["binding"]]
+
+
+def test_explicit_provider_relationship_is_discovered_without_a_legacy_catalog():
+    catalog = {
+        name: {
+            "runtime": "podman",
+            "image": "registry.invalid/nonproduction:1",
+            "deploy": {"host": "manager", "execution": {"mode": "rootless", "host_user": "podman-" + name}},
+        }
+        for name in ["provider", "client", "unrelated"]
+    }
+    catalog["provider"]["ports"] = {"api": {"exposure": "private", "callers": ["client", "unrelated"], "published": 18030, "target": 8080}}
+    result = DECL.plan("client", catalog, "manager", [], {"manager": {"local_ip": "192.0.2.48"}})
+    assert result["managed"] and result["providers"][0]["endpoints"][0]["callers"] == ["client"]
+    assert not result["endpoints"]
+
+
+def test_docker_containment_action_check_mode_and_transport_errors_are_safe(monkeypatch):
+    from ansible.plugins.action import ActionBase
+
+    monkeypatch.setattr(ActionBase, "run", lambda *args: {})
+    action = object.__new__(CONTAIN_ACTION.ActionModule)
+    record = identity("utility") | {"binding": {"runtime": "docker", "selector": "utility_utility"}, "swarm_mode": "global"}
+    action._task = SimpleNamespace(args={"runtime": record, "inventory_host": "manager"}, check_mode=True)
+    calls = []
+
+    def execute(**kwargs):
+        calls.append(kwargs)
+        assert json.loads(kwargs["module_args"]["stdin"]) == {"runtime": record}
+        return {"rc": 1, "stderr": "NONPRODUCTION containment failed", "invocation": {"must_not_escape": True}}
+
+    action._execute_module = execute
+    assert action.run()["skipped"] and not calls
+    action._task.check_mode = False
+    result = action.run(task_vars={"hostvars": {"manager": {}}})
+    assert result["failed"] and "NONPRODUCTION containment failed" in result["msg"]
+    assert "invocation" not in result and "cmd" not in result
+    assert len(calls) == 1

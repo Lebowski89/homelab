@@ -1,5 +1,18 @@
 ---
 
+- name: Service firewall | Activate provider access before application health checks
+  when:
+    - service_firewall_adapter_plan.managed | default(false)
+    - service_firewall_lifecycle_phase == 'finish'
+  ansible.builtin.include_tasks:
+    file: access.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    service_firewall_access_plan: "{{ service_firewall_adapter_plan }}"
+    service_firewall_access_phase: access_activate
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Service firewall | Reconcile new caller identities before waiting for application health
   when:
     - service_firewall_adapter_plan.managed | default(false)
@@ -39,6 +52,31 @@
     - not ansible_check_mode
   ansible.builtin.include_tasks:
     file: lifecycle_probes.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service firewall | Complete or retain only this client's provider contributions
+  when:
+    - service_firewall_adapter_plan.managed | default(false)
+    - service_firewall_lifecycle_phase in ['finish', 'remove', 'abort', 'cancel']
+  ansible.builtin.include_tasks:
+    file: access.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap, remove]
+  vars:
+    service_firewall_access_plan: "{{ service_firewall_adapter_plan }}"
+    service_firewall_access_phase: "{{ 'access_' ~ service_firewall_lifecycle_phase }}"
+  tags: [deploy, update, recreate, bootstrap, remove]
+
+- name: Service firewall | Check this client's access to its current providers
+  when:
+    - service_firewall_adapter_plan.managed | default(false)
+    - service_firewall_lifecycle_phase == 'finish'
+    - service_firewall_adapter_plan.providers | default([]) | length > 0
+    - not ansible_check_mode
+  ansible.builtin.include_tasks:
+    file: access_probes.yml
     apply:
       tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]

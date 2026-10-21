@@ -100,6 +100,13 @@ class ActionModule(ActionBase):
                     "addresses",
                     "cancel",
                     "activate",
+                    "access_inspect",
+                    "access_stage",
+                    "access_activate",
+                    "access_finish",
+                    "access_remove",
+                    "access_cancel",
+                    "access_abort",
                 }
             ):
                 raise AnsibleActionFail("Choose one supported service lifecycle phase and plan")
@@ -121,6 +128,11 @@ class ActionModule(ActionBase):
                 "endpoints": [{k: v for k, v in e.items() if k != "host"} for e in plan["endpoints"] if e.get("host", host) == host],
                 "callers": plan["callers"],
                 "dependents": plan.get("dependents", []),
+                "providers": [
+                    {**p, "endpoints": [{k: v for k, v in e.items() if k != "host"} for e in p["endpoints"] if e["host"] == host]}
+                    for p in plan.get("providers", [])
+                    if any(e["host"] == host for e in p["endpoints"])
+                ],
                 "sources": plan.get("sources"),
                 "source_addresses": plan.get("source_addresses", []),
                 "root": (
@@ -131,6 +143,8 @@ class ActionModule(ActionBase):
                     else "/etc/skynet-worker-backend-firewall"
                 ),
             }
+            if phase == "abort" and "containment_verified" in plan:
+                request["containment_verified"] = plan["containment_verified"]
             if phase == "probe":
                 request["endpoints"] = [{**e, "address": plan["inventory"][e["host"]]} for e in plan["endpoints"]]
             helper, source = remote_source(profile)

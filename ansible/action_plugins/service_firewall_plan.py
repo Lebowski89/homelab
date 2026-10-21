@@ -48,7 +48,11 @@ class ActionModule(ActionBase):
                 if isinstance(port, dict) and isinstance(port.get("callers", []), list)
             )
             if self._task.args["action"] == "drift" or (
-                legacy and not ports and not declared_caller and entry["config"].get("network_mode") != "host"
+                legacy
+                and not ports
+                and not declared_caller
+                and not entry["config"].get("postgres", {}).get("enable", False)
+                and entry["config"].get("network_mode") != "host"
             ):
                 # Existing managed declarations keep their installed-policy
                 # validation contract. Fresh publications must classify exposure.
@@ -82,7 +86,9 @@ class ActionModule(ActionBase):
                     }
                     if "systemd" in cfg:
                         value["systemd"] = {key: cfg["systemd"][key] for key in ["requires", "wants"] if key in cfg["systemd"]}
-                    value["postgres"] = {"enable": cfg.get("postgres", {}).get("enable", False)}
+                    value["postgres"] = {
+                        k: v for k, v in cfg.get("postgres", {}).items() if k in {"enable", "host", "host_inventory", "port"}
+                    }
                     value["traefik"] = {
                         k: v for k, v in cfg.get("traefik", {}).items() if k in {"enable", "port", "backend_host_inventory"}
                     }
@@ -127,18 +133,20 @@ class ActionModule(ActionBase):
                     **selected_metadata.get("deploy", {}),
                     **{k: entry["config"].get("deploy", {})[k] for k in ["replicas"] if k in entry["config"].get("deploy", {})},
                 },
+                "postgres": {
+                    k: v for k, v in entry["config"].get("postgres", {}).items() if k in {"enable", "host", "host_inventory", "port"}
+                },
                 "enabled": True,
                 "_health_required": bool(entry["config"].get("healthcheck"))
                 and not entry["config"].get("healthcheck", {}).get("disable", False),
             }
             controller = variables["services_controller_host"]
             workers = [variables["services_storage_host"], variables["services_plex_host"]]
+            protected = MGT.build_plan({key: catalog[key] for key in catalog_keys}, controller, lambda value, defaults: value, bootstrap)
+            provider_endpoints = [e | {"host": controller} for e in protected["endpoints"]]
             legacy_endpoints = None
             if legacy:
                 legacy_endpoints = []
-                protected = MGT.build_plan(
-                    {key: catalog[key] for key in catalog_keys}, controller, lambda value, defaults: value, bootstrap
-                )
                 actual = selected_metadata["name"]
                 hosts = selected_metadata.get("deploy", {}).get("host", controller)
                 hosts = [hosts] if isinstance(hosts, str) else hosts
@@ -163,8 +171,8 @@ class ActionModule(ActionBase):
                                     "purpose": "legacy declared worker backend",
                                 }
                             )
-            plan = DECL.plan(selected, catalog, controller, workers, variables["hostvars"], legacy_endpoints)
-            plan["legacy_publications"] = legacy
+            plan = DECL.plan(selected, catalog, controller, workers, variables["hostvars"], legacy_endpoints, provider_endpoints)
+            plan["legacy_publications"] = legacy and (bool(ports) or selected_metadata.get("network_mode") == "host")
             # Only declared runtime dependencies block removal. An ACL caller
             # is allowed to contact a provider; it does not imply shared state.
             plan["dependents"] = []
@@ -183,6 +191,8 @@ class ActionModule(ActionBase):
                         or actual + ".service" in units
                     ):
                         plan["dependents"].append(DECL.identity(name, cfg, controller))
+            if plan["providers"]:
+                plan["callers"].setdefault(plan["runtime"]["service"], plan["runtime"].copy())
             for record in plan["callers"].values():
                 binding = record.get("binding") or {}
                 if binding.get("runtime") == "podman" and binding.get("mode") == "rootless":

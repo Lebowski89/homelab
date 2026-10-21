@@ -121,9 +121,73 @@ only adapter-owned replacement stops, retain staged protection and the original
 failure, and release their reservation only after proving writer absence. Inspect
 an interrupted operation before recovery; never replace the union with an old file.
 
+### Client access to protected providers
+
+The same operation also reconciles the selected client's access to existing
+providers. PostgreSQL clients use the existing `postgres.enable`, host/inventory
+and port contract; its default is the controller's protected PostgreSQL
+publication. Other integrations use the provider publication's logical `callers`
+list, including `service:target` for split targets. Only the selected client is
+added, even if the provider declares other clients. No permission is inferred
+from a successful connection or from application environment values.
+
+Before application preparation can connect, the role prepares the client's
+stable dedicated account, audits the existing provider policy and verifies the
+provider's current runtime/image/publications. It contributes the exact client
+binding under the existing writer lock. The provider is neither deployed nor
+restarted. A missing provider, changed publication/placement or incompatible
+installed identity fails before application mutation. A new Docker client stays
+pending and denied until its current container identity resolves; pending access
+is not successful access. Startup reconciliation precedes health checks, then
+qualified handshakes require owned RETURN-counter increases.
+
+Contribution ownership lives under the client's existing `managed_services`
+record, alongside its publication ownership. Each affected host commits under
+its own policy lock. Partial failures retain protection/contributions, report the
+failed host, and record the completed contribution as failed for a guarded retry;
+there is no cross-host snapshot rollback. Ordinary retries read the current union.
+On client removal, stopped-writer proof permits removal of only its contributed
+caller entries and mechanical bindings. Pre-existing/shared permissions, accepted
+operator and rollback bindings survive. Provider maintenance preserves active
+client contributions. A worker endpoint retains its verified remote-source model;
+a local account UID is never exported as a worker identity. Established
+worker-local PostgreSQL/elsewhere contracts are left intact.
+
+For example, add the usual PostgreSQL/Infisical declarations to a new application
+with `postgres: {enable: true, databases: [example]}`. With the declared provider
+already running and protected, `skynet deploy example` prepares its identity,
+adds its provider access, prepares the database through the normal credential
+contract, stages its own endpoints and starts/verifies the application.
+`skynet recreate example` follows the same checks before stopping its old runtime.
+`skynet remove example` proves writer/listener withdrawal and removes its owned
+publications and contributed access. No provider deployment or policy JSON step
+is required. Explicit destinations outside the protected controller boundary
+retain their existing database preparation contract.
+
+### Swarm failure containment
+
+Replicated services retain selected-service scale-to-zero containment. Global
+services cannot be scaled: the Docker adapter containment helper verifies the exact immutable service ID
+and declared mode, adds a service-only constraint against a verified nonexistent
+node ID, and polls both saved and newly observed tasks for terminal states.
+Only after that proof does it remove the selected global service. Native configs,
+networks, data and other services remain. The next ordinary deployment recreates
+it from the canonical declaration. No node is drained and no daemon is stopped.
+
+Containment failure is reported separately from the original deployment failure.
+The operation reservation is released only after per-host writer absence is also
+proved. A failed stop leaves protection and a failed-containment record. Once
+manager containment and local absence are proved, a matching ordinary deployment
+can retry. An inconclusive manager result requires scoped remove/recovery even
+when local containers have exited. If the writer is
+still present, use the supported scoped `skynet remove <service>` recovery before
+`skynet deploy <service>`; removal preserves persistent application data. Do not
+manually remove a reservation or restore an old policy snapshot. An unexpected
+mode/identity is a failed guard, not permission to affect another service.
+
 ### Supported boundaries
 
-- The mgt profile retains its Ubuntu 26.04/nf_tables contract. One-service Docker standalone projects
+- The mgt profile retains its Ubuntu 26.04/nf_tables contract. Workers support the established Ubuntu/Plex and Unraid profiles; Rocky Linux is not supported by this lifecycle. One-service Docker standalone projects
   (exact project AND service) and Swarm stacks with private host-mode TCP
   publications, and rootful/rootless Podman on mgt use their existing adapters. Swarm supports one replica or one global task per declared host.
 - Rootless caller rules use the dedicated account; bridged Docker/rootful Podman

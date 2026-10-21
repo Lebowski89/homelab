@@ -96,6 +96,21 @@
       tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]
 
+- name: Service catalog preflight | Reconcile provider access before application preparation
+  when:
+    - service_firewall_lifecycle_plan.managed
+    - not (service_catalog_execution_only | default(false))
+    - service_catalog_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.include_role:
+    name: service_firewall
+    tasks_from: access
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    service_firewall_access_plan: "{{ service_firewall_lifecycle_plan }}"
+    service_firewall_access_phase: access_stage
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Service catalog preflight | Reset current-service common context
   no_log: true
   diff: false
