@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/20 |
+| Readme update        | 2026/10/21 |
 
 
 
@@ -46,6 +46,37 @@
 ### Tasks
 
 
+#### File: tasks/lifecycle.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Service firewall ¦ Reconcile new caller identities before waiting for application health | service_firewall_lifecycle | True |  |
+| Service firewall ¦ Apply this service's scoped protection transaction | service_firewall_lifecycle | True |  |
+| Service firewall ¦ Verify declared callers against the running publication | ansible.builtin.include_tasks | True |  |
+
+#### File: tasks/lifecycle_inspect.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Service firewall ¦ Clear previous ownership evidence | ansible.builtin.set_fact | False |
+| Service firewall ¦ Use each endpoint host's configured connection | ansible.builtin.set_fact | False |
+| Service firewall ¦ Validate existing Docker placement before policy changes | service_operational_check | True |
+| Service firewall ¦ Read current mgt addresses for the worker source boundary | service_firewall_lifecycle | True |
+| Service firewall ¦ Retain current controller addresses for this operation | ansible.builtin.set_fact | False |
+| Service firewall ¦ Audit current protection before service preparation | service_firewall_lifecycle | False |
+| Service firewall ¦ Inspect existing mapping or empty application storage | service_operational_check | True |
+| Service firewall ¦ Save this operation's ownership evidence | ansible.builtin.set_fact | False |
+
+#### File: tasks/lifecycle_probes.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Service firewall ¦ Read starting owned allow counters | service_firewall_lifecycle | False |
+| Service firewall ¦ Check TCP access from each current caller namespace | service_firewall_lifecycle | False |
+| Service firewall ¦ Read ending owned allow counters | service_firewall_lifecycle | False |
+| Service firewall ¦ Require matching owned allow-counter increases | ansible.builtin.assert | True |
+| Service firewall ¦ Report pending client activation without claiming acceptance | ansible.builtin.debug | False |
+
 #### File: tasks/main.yml
 
 | Name | Module | Has Conditions | Comments |
@@ -70,20 +101,7 @@ those public names remain supported by saved rollback playbooks. |
 | Service firewall ¦ Mgt ¦ Validate the supported Ubuntu version and Python | ansible.builtin.assert | False |
 | Service firewall ¦ Mgt ¦ Verify caller identities and test IPv4 and IPv6 rules before writing files | ansible.builtin.command | False |
 | Service firewall ¦ Mgt ¦ Save the verified service-manager dependencies | ansible.builtin.set_fact | False |
-| Service firewall ¦ Mgt ¦ Create the owned policy directory | ansible.builtin.file | False |
-| Service firewall ¦ Mgt ¦ Install the managed firewall helper | ansible.builtin.copy | False |
-| Service firewall ¦ Mgt ¦ Install firewall protection and rule-reconciliation units | ansible.builtin.template | False |
-| Service firewall ¦ Mgt ¦ Create only the Docker drop-in directory | ansible.builtin.file | False |
-| Service firewall ¦ Mgt ¦ Install Docker startup ordering without restarting Docker | ansible.builtin.template | False |
-| Service firewall ¦ Mgt ¦ Create startup-ordering directories for protected services | ansible.builtin.file | False |
-| Service firewall ¦ Mgt ¦ Make protected services depend on firewall protection | ansible.builtin.template | False |
-| Service firewall ¦ Mgt ¦ List managed startup and reconciliation files | ansible.builtin.set_fact | False |
-| Service firewall ¦ Mgt ¦ Read checksums of managed startup and reconciliation files | ansible.builtin.stat | False |
-| Service firewall ¦ Mgt ¦ Prepare the startup-file checksum manifest | ansible.builtin.set_fact | False |
-| Service firewall ¦ Mgt ¦ Save the startup-file checksum manifest | ansible.builtin.copy | False |
-| Service firewall ¦ Mgt ¦ Apply the policy before enabling startup protection | ansible.builtin.command | False |
-| Service firewall ¦ Mgt ¦ Enable startup protection without restarting applications | ansible.builtin.systemd_service | False |
-| Service firewall ¦ Mgt ¦ Enable and start periodic rule reconciliation | ansible.builtin.systemd_service | False |
+| Service firewall ¦ Mgt ¦ Extend and reconcile the current policy under its writer lock | service_firewall_lifecycle | False |
 
 #### File: tasks/mgt/main.yml
 
@@ -134,6 +152,12 @@ those public names remain supported by saved rollback playbooks. |
 | Service firewall ¦ Workers ¦ Reject conflicting operations | ansible.builtin.assert | False |  |
 | Service firewall ¦ Workers ¦ Run the workers profile on the selected worker hosts | ansible.builtin.include_tasks | True |  |
 
+#### File: tasks/prepare_callers.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Service firewall ¦ Prepare dedicated caller accounts without starting applications | ansible.builtin.include_role | True |
+
 #### File: tasks/workers/check.yml
 
 | Name | Module | Has Conditions |
@@ -153,10 +177,7 @@ those public names remain supported by saved rollback playbooks. |
 | Service firewall ¦ Workers ¦ Read Unraid flash permissions from the boot script | ansible.builtin.stat | False |
 | Service firewall ¦ Workers ¦ Read existing supported boot script | ansible.builtin.slurp | False |
 | Service firewall ¦ Workers ¦ Require a shell boot script | ansible.builtin.assert | False |
-| Service firewall ¦ Workers ¦ Create only the managed policy directory | ansible.builtin.file | False |
-| Service firewall ¦ Workers ¦ Install the managed firewall helper | ansible.builtin.copy | False |
-| Service firewall ¦ Workers ¦ Install only the managed policy declarations | ansible.builtin.copy | False |
-| Service firewall ¦ Workers ¦ Apply the policy before installing startup hooks | ansible.builtin.command | False |
+| Service firewall ¦ Workers ¦ Extend and reconcile the current policy under its writer lock | service_firewall_lifecycle | False |
 | Service firewall ¦ Workers ¦ Configure policy startup and reconciliation for this platform | ansible.builtin.include_tasks | False |
 
 #### File: tasks/workers/main.yml

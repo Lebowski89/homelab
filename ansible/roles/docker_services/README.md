@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/20 |
+| Readme update        | 2026/10/21 |
 
 
 
@@ -87,11 +87,16 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Docker services ¦ Reset this operation's firewall progress | ansible.builtin.set_fact | False |  |
+| Docker services ¦ Prepare and run the scoped service operation | block | False |  |
 | Docker services ¦ Initialize service | ansible.builtin.include_tasks | False |  |
+| Docker services ¦ Protect declared publications before changing the service | ansible.builtin.include_role | True |  |
+| Docker services ¦ Record successful publication protection | ansible.builtin.set_fact | True |  |
 | Docker services ¦ Check image drift | ansible.builtin.include_tasks | True |  |
 | Docker services ¦ Prepare service | ansible.builtin.include_tasks | False |  |
 | Docker services ¦ Build Compose configuration | ansible.builtin.include_tasks | False |  |
 | Docker services ¦ Save stack configuration | ansible.builtin.include_tasks | False |  |
+| Docker services ¦ Reconcile protection after runtime removal | ansible.builtin.include_role | True |  |
 
 #### File: tasks/sub_tasks/cleanup.yml
 
@@ -300,10 +305,14 @@
 | ---- | ------ | -------------- |
 | Deploy stack ¦ Validate stack settings | ansible.builtin.assert | False |
 | Deploy stack ¦ Choose deploy host | ansible.builtin.set_fact | False |
+| Deploy stack ¦ Prepare the protected stack configuration | block | False |
 | Deploy stack ¦ Ensure stack directory exists | ansible.builtin.file | False |
 | Deploy stack ¦ Render stack file | ansible.builtin.template | False |
+| Deploy stack ¦ Deploy and verify protected services | block | False |
 | Deploy stack ¦ Deploy Swarm stack | community.docker.docker_stack | True |
 | Deploy stack ¦ Deploy Compose project | community.docker.docker_compose_v2 | True |
+| Deploy stack ¦ Verify current Swarm publications and placement | service_operational_check | True |
+| Deploy stack ¦ Reconcile protection after each service starts | ansible.builtin.include_role | False |
 
 #### File: tasks/sub_tasks/drift/image.yml
 
@@ -346,6 +355,7 @@
 | Initialize ¦ Decide whether service schema validation is needed | ansible.builtin.set_fact | False |  |
 | Initialize ¦ Validate service schema | ansible.builtin.include_tasks | True |  |
 | Initialize ¦ Set service name, deploy type, deploy host, and action | ansible.builtin.set_fact | False |  |
+| Docker services ¦ Require the firewall plan to belong to this service | ansible.builtin.assert | True |  |
 | Initialize ¦ Enforce effective operational requirements | ansible.builtin.include_role | False |  |
 | Initialize ¦ Set stack name | ansible.builtin.set_fact | False |  |
 | Initialize ¦ Choose deploy host | ansible.builtin.set_fact | False |  |

@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/20 |
+| Readme update        | 2026/10/21 |
 
 
 
@@ -63,6 +63,8 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Podman services ¦ Reset this operation's firewall progress | ansible.builtin.set_fact | False |  |
+| Podman services ¦ Prepare and run the scoped service operation | block | False |  |
 | Podman services ¦ Initialize service | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Validate managed file policy before mutation | ansible.builtin.include_role | False |  |
 | Podman services ¦ Build application preparation context | ansible.builtin.set_fact | False |  |
@@ -93,12 +95,24 @@
 | Podman services ¦ Write Quadlet files | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Prepare container image | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Check managed network changes | ansible.builtin.include_tasks | False |  |
+| Podman services ¦ Start and verify the protected service operation | block | False |  |
+| Podman services ¦ Record the start or removal attempt | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Manage service state | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Configure Traefik integration | ansible.builtin.include_role | True |  |
 | Podman services ¦ Remove Podman service | ansible.builtin.include_tasks | True |  |
 | Podman services ¦ Remove service integrations | ansible.builtin.include_role | True |  |
 | Podman services ¦ Check image drift | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Finish service removal | ansible.builtin.include_tasks | True |  |
+| Podman services ¦ Reconcile protection after runtime completion | ansible.builtin.include_role | True |  |
+
+#### File: tasks/prepare_identity.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Podman services ¦ Validate identity-only preparation | ansible.builtin.assert | False | Used before a provider starts: allocate/validate its callers' stable accounts,
+without preparing application files, images, secrets or user managers. |
+| Podman services ¦ Initialize only the declared caller identity | ansible.builtin.include_tasks | False |  |
+| Podman services ¦ Prepare only the declared caller account | ansible.builtin.include_tasks | False |  |
 
 #### File: tasks/stop_bootstrap.yml
 
@@ -181,6 +195,10 @@ batch. A changed desired account must not hide the old writer's manager. |
 | Execution ¦ Read subordinate UID ranges | ansible.builtin.slurp | True |  |
 | Execution ¦ Read subordinate GID ranges | ansible.builtin.slurp | True |  |
 | Execution ¦ Validate subordinate ID ranges | ansible.builtin.set_fact | True |  |
+| Execution ¦ Finish stable identity preparation before manager activation | ansible.builtin.meta | True |  |
+| Podman services ¦ Protect declared publications before changing the service | ansible.builtin.include_role | True |  |
+| Execution ¦ Record successful publication protection | ansible.builtin.set_fact | True |  |
+| Execution ¦ Check for an application Quadlet before account-only manager preparation | ansible.builtin.stat | True |  |
 | Execution ¦ Check rootless account linger state | ansible.builtin.stat | True |  |
 | Execution ¦ Enable rootless account linger | ansible.builtin.command | True |  |
 | Execution ¦ Start rootless user systemd manager | ansible.builtin.systemd_service | True |  |
@@ -220,6 +238,7 @@ batch. A changed desired account must not hide the old writer's manager. |
 | Init ¦ Validate selected service configuration | ansible.builtin.assert | False |  |
 | Init ¦ Build Podman service settings | ansible.builtin.set_fact | False |  |
 | Init ¦ Set systemd service name | ansible.builtin.set_fact | False |  |
+| Podman services ¦ Require the firewall plan to belong to this service | ansible.builtin.assert | True |  |
 | Init ¦ Enforce effective operational requirements | ansible.builtin.include_role | False |  |
 | Init ¦ Validate shared-network dependent services | ansible.builtin.assert | False |  |
 | Init ¦ Reset temporary service state | ansible.builtin.set_fact | False |  |

@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/20 |
+| Readme update        | 2026/10/21 |
 
 
 
@@ -106,13 +106,14 @@
 
 #### File: tasks/operational_inspection.yml
 
-| Name | Module | Has Conditions | Comments |
-| ---- | ------ | -------------- | -------- |
-| Service common ¦ Inspect the managed service before making changes | service_operational_check | True |  |
-| Service common ¦ Use the endpoint host's configured connection | ansible.builtin.set_fact | True | The controller can use a local connection. Set the delegated host connection
+| Name | Module | Has Conditions | Tags | Comments |
+| ---- | ------ | -------------- | -----| -------- |
+| Service common ¦ Use the standalone runtime host connection | ansible.builtin.set_fact | True |  |  |
+| Service common ¦ Inspect the managed service before making changes | service_operational_check | True |  |  |
+| Service common ¦ Use the endpoint host's configured connection | ansible.builtin.set_fact | True |  | The controller can use a local connection. Set the delegated host connection
 explicitly so endpoint audits use that host's inventory transport instead. |
-| Service common ¦ Audit installed protection on each endpoint host | service_operational_check | True |  |
-| Service common ¦ Save verified prerequisites for this service operation | ansible.builtin.set_fact | True |  |
+| Service common ¦ Audit installed protection on each endpoint host | service_operational_check | True |  |  |
+| Service common ¦ Save verified prerequisites for this service operation | ansible.builtin.set_fact | True |  |  |
 
 #### File: tasks/operational_requirements.yml
 
