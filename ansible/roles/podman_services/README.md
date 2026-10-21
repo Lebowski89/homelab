@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/21 |
+| Readme update        | 2026/10/22 |
 
 
 
@@ -257,14 +257,20 @@ batch. A changed desired account must not hide the old writer's manager. |
 
 #### File: tasks/sub_tasks/quadlets.yml
 
-| Name | Module | Has Conditions | Tags |
-| ---- | ------ | -------------- | -----|
-| Quadlets ¦ Preview rootless Quadlet changes | ansible.builtin.include_tasks | True |  |
-| Quadlets ¦ Ensure Quadlet directory exists | ansible.builtin.file | True |  |
-| Quadlets ¦ Write network Quadlet | ansible.builtin.template | True |  |
-| Quadlets ¦ Write volume Quadlets | ansible.builtin.template | True |  |
-| Quadlets ¦ Write protected environment file | ansible.builtin.template | True |  |
-| Quadlets ¦ Write container Quadlet | ansible.builtin.template | True |  |
+| Name | Module | Has Conditions | Tags | Comments |
+| ---- | ------ | -------------- | -----| -------- |
+| Quadlets ¦ Preview rootless Quadlet changes | ansible.builtin.include_tasks | True |  |  |
+| Quadlets ¦ Ensure Quadlet directory exists | ansible.builtin.file | True |  |  |
+| Quadlets ¦ Write network Quadlet | ansible.builtin.template | True |  |  |
+| Quadlets ¦ Write volume Quadlets | ansible.builtin.template | True |  |  |
+| Quadlets ¦ Write protected environment file | ansible.builtin.template | True |  |  |
+| Quadlets ¦ Retire the managed environment file when no values remain | block | True |  | Retire the old protected file before successful state can omit its ownership. |
+| Quadlets ¦ Inspect the obsolete environment path without following links | ansible.builtin.stat | False |  |  |
+| Quadlets ¦ Require scoped ownership before retiring an environment file | ansible.builtin.assert | True |  |  |
+| Quadlets ¦ Read the obsolete environment marker privately | ansible.builtin.slurp | True |  |  |
+| Quadlets ¦ Require the generated marker before retiring the environment file | ansible.builtin.assert | True |  |  |
+| Quadlets ¦ Remove only the proved obsolete environment file | ansible.builtin.file | True |  |  |
+| Quadlets ¦ Write container Quadlet | ansible.builtin.template | True |  |  |
 
 #### File: tasks/sub_tasks/remove.yml
 

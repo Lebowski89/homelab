@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/21 |
+| Readme update        | 2026/10/22 |
 
 
 
@@ -493,40 +493,51 @@
 | Prometheus routes ¦ Recheck exact caller after reload | ansible.builtin.command | False |
 | Prometheus routes ¦ Require unchanged birth and namespace | ansible.builtin.assert | False |
 
-#### File: tasks/sub_tasks/prometheus_haproxy_scrape.yml
+#### File: tasks/sub_tasks/prometheus_haproxy_identity.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Prometheus scrape ¦ Resolve canonical configuration path and HAProxy target | ansible.builtin.set_fact | False |
-| Prometheus scrape ¦ Validate the target against the mgt HAProxy publication | ansible.builtin.assert | False |
-| Prometheus scrape ¦ Resolve exactly the running Swarm caller | ansible.builtin.command | False |
-| Prometheus scrape ¦ Reject absent or ambiguous live callers | ansible.builtin.assert | False |
-| Prometheus scrape ¦ Project the exact caller and configuration mount without environments | ansible.builtin.command | False |
-| Prometheus scrape ¦ Require the inventory-owned configuration bind | ansible.builtin.assert | False |
-| Prometheus scrape ¦ Inspect existing configuration ownership | ansible.builtin.stat | False |
-| Prometheus scrape ¦ Require the existing regular managed file | ansible.builtin.assert | False |
-| Prometheus scrape ¦ Read the managed configuration privately | ansible.builtin.slurp | False |
-| Prometheus scrape ¦ Resolve only the existing HAProxy job | ansible.builtin.set_fact | False |
-| Prometheus scrape ¦ Reject ambiguous or custom target relabelling before writes | ansible.builtin.assert | False |
-| Prometheus scrape ¦ Append only the canonical mgt target and retain every existing job option | ansible.builtin.set_fact | False |
-| Prometheus scrape ¦ Require the exact default instance label for the mgt target | ansible.builtin.assert | False |
-| Prometheus scrape ¦ Build a candidate changing only the HAProxy job block | ansible.builtin.set_fact | False |
-| Prometheus scrape ¦ Show the configuration-only plan | ansible.builtin.debug | False |
-| Prometheus scrape ¦ Resolve the read-only live configuration query | ansible.builtin.set_fact | False |
-| Prometheus scrape ¦ Validate apply and reload without replacement | block | True |
-| Prometheus scrape ¦ Inspect loaded configuration without exposing it | ansible.builtin.command | False |
-| Prometheus scrape ¦ Create an exact temporary candidate in the existing configuration mount | ansible.builtin.tempfile | False |
-| Prometheus scrape ¦ Populate the private candidate for the current promtool | ansible.builtin.copy | False |
-| Prometheus scrape ¦ Validate using the existing image without pulls or new containers | ansible.builtin.command | False |
-| Prometheus scrape ¦ Reject a concurrent configuration edit | ansible.builtin.stat | False |
-| Prometheus scrape ¦ Require the original file before applying | ansible.builtin.assert | False |
-| Prometheus scrape ¦ Re-resolve the caller before applying configuration | ansible.builtin.command | False |
-| Prometheus scrape ¦ Reject replacement before applying configuration | ansible.builtin.assert | False |
-| Prometheus scrape ¦ Apply only the validated configuration and save its backup | ansible.builtin.copy | False |
-| Prometheus scrape ¦ Report the scoped configuration backup | ansible.builtin.debug | False |
-| Prometheus scrape ¦ Reload a previously written but not yet loaded target | ansible.builtin.debug | False |
-| Prometheus scrape ¦ Flush only the pending Prometheus reload | ansible.builtin.meta | False |
-| Prometheus scrape ¦ Require both targets in the freshly loaded configuration | ansible.builtin.command | False |
+| Prometheus scrape ¦ Re-resolve the original Swarm service membership | ansible.builtin.command | False |
+| Prometheus scrape ¦ Inspect the original container and process again | ansible.builtin.command | False |
+| Prometheus scrape ¦ Require the original running container process and mount | ansible.builtin.assert | False |
+
+#### File: tasks/sub_tasks/prometheus_haproxy_scrape.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Prometheus scrape ¦ Resolve canonical configuration path and HAProxy target | ansible.builtin.set_fact | False |  |
+| Prometheus scrape ¦ Validate the target against the mgt HAProxy publication | ansible.builtin.assert | False |  |
+| Prometheus scrape ¦ Resolve exactly the running Swarm caller | ansible.builtin.command | False |  |
+| Prometheus scrape ¦ Reject absent or ambiguous live callers | ansible.builtin.assert | False |  |
+| Prometheus scrape ¦ Project the exact caller and configuration mount without environments | ansible.builtin.command | False |  |
+| Prometheus scrape ¦ Require the inventory-owned configuration bind | ansible.builtin.assert | False |  |
+| Prometheus scrape ¦ Inspect existing configuration ownership | ansible.builtin.stat | False |  |
+| Prometheus scrape ¦ Require the existing regular managed file | ansible.builtin.assert | False |  |
+| Prometheus scrape ¦ Read the managed configuration privately | ansible.builtin.slurp | False |  |
+| Prometheus scrape ¦ Resolve only the existing HAProxy job | ansible.builtin.set_fact | False |  |
+| Prometheus scrape ¦ Reject ambiguous or custom target relabelling before writes | ansible.builtin.assert | False |  |
+| Prometheus scrape ¦ Append only the canonical mgt target and retain every existing job option | ansible.builtin.set_fact | False |  |
+| Prometheus scrape ¦ Require the exact default instance label for the mgt target | ansible.builtin.assert | False |  |
+| Prometheus scrape ¦ Build a candidate changing only the HAProxy job block | ansible.builtin.set_fact | False |  |
+| Prometheus scrape ¦ Show the configuration-only plan | ansible.builtin.debug | False |  |
+| Prometheus scrape ¦ Resolve the read-only live configuration query | ansible.builtin.set_fact | False |  |
+| Prometheus scrape ¦ Reset this invocation's recovery state | ansible.builtin.set_fact | False |  |
+| Prometheus scrape ¦ Validate apply and reload without replacement | block | True |  |
+| Prometheus scrape ¦ Inspect loaded configuration without exposing it | ansible.builtin.command | False |  |
+| Prometheus scrape ¦ Create an exact temporary candidate in the existing configuration mount | ansible.builtin.tempfile | False |  |
+| Prometheus scrape ¦ Populate the private candidate for the current promtool | ansible.builtin.copy | False |  |
+| Prometheus scrape ¦ Validate using the existing image without pulls or new containers | ansible.builtin.command | False |  |
+| Prometheus scrape ¦ Reject a concurrent configuration edit | ansible.builtin.stat | False |  |
+| Prometheus scrape ¦ Require the original file before applying | ansible.builtin.assert | False |  |
+| Prometheus scrape ¦ Verify original runtime identity before applying | ansible.builtin.import_tasks | False |  |
+| Prometheus scrape ¦ Apply only the validated configuration and save its backup | ansible.builtin.copy | False |  |
+| Prometheus scrape ¦ Report the scoped configuration backup | ansible.builtin.debug | False |  |
+| Prometheus scrape ¦ Record the file written by this invocation | ansible.builtin.stat | False |  |
+| Prometheus scrape ¦ Require the written candidate before reloading | ansible.builtin.assert | False |  |
+| Prometheus scrape ¦ Verify original runtime identity before reload | ansible.builtin.import_tasks | False |  |
+| Prometheus scrape ¦ Reload only the verified original container | ansible.builtin.command | True | A direct task failure enters this block's rescue; flush_handlers does not. |
+| Prometheus scrape ¦ Require both targets in the freshly loaded configuration | ansible.builtin.command | False |  |
+| Prometheus scrape ¦ Verify original runtime identity after loaded configuration | ansible.builtin.import_tasks | False |  |
 
 #### File: tasks/sub_tasks/save_stack.yml
 
