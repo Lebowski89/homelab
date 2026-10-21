@@ -310,3 +310,14 @@ untouched. Very old external scripts that build helpers by concatenating raw
 source instead of using the bundler may need review; path aliases preserve
 imports, not an undocumented source-concatenation interface. No live cleanup is
 implied. Docsible owns generated role READMEs; this guide is human-maintained.
+
+The retained Docker Prometheus HAProxy scrape task reloads directly inside its
+recovery block rather than using a handler flush. It verifies the original
+container/PID/mount before writes and signals, and retains the invocation's
+configuration backup. On failure it restores only a verified baseline when the
+current file still matches its written candidate, including file identity,
+ownership and mode. Concurrent edits or runtime replacement stop recovery;
+failed recovery retains the private candidate and backup paths for inspection.
+A restored baseline is reloaded and compared with the original loaded
+configuration, and the operation still returns failure. Check mode writes and
+signals nothing. This compatibility task does not authorise a new rollout.

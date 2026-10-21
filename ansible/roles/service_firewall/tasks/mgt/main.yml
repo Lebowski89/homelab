@@ -8,6 +8,7 @@
 
 - name: Service firewall | Mgt | Prepare endpoint declarations and caller inputs
   when: mgt_firewall_operation in ['install', 'observe']
+  # checkov:skip=CKV2_ANSIBLE_3:Declaration planning only; propagate validation errors without attempting policy repair.
   block:
     - name: Service firewall | Mgt | Load service declarations without secret values
       ansible.builtin.include_vars:

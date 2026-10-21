@@ -179,7 +179,7 @@ class ActionModule(ActionBase):
                         )
                     else:
                         host = metadata["deploy"]["host"]
-                        host = host if isinstance(host, str) else host[0]
+                        require(isinstance(host, str) and bool(host.strip()), "standalone deploy.host must be a non-empty string")
                         project = stack + "-" + host
                         rows = self.command(
                             docker
@@ -321,7 +321,9 @@ class ActionModule(ActionBase):
         if metadata.get("runtime") == "docker":
             if metadata["deploy"].get("type", "swarm") != "swarm":
                 # Existing standalone services need exact Compose ownership too.
-                stack = metadata.get("stack", metadata["name"]) + "-" + metadata["deploy"]["host"]
+                host = metadata["deploy"]["host"]
+                require(isinstance(host, str) and bool(host.strip()), "standalone deploy.host must be a non-empty string")
+                stack = metadata.get("stack", metadata["name"]) + "-" + host
                 docker = ["docker", "--host", "unix:///var/run/docker.sock"]
                 ids = self.command(
                     docker

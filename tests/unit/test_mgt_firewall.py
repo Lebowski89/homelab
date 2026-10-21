@@ -2367,16 +2367,16 @@ def test_remote_recovery_is_an_explicit_exclusive_inventory_identity():
         FW.validate_policy(candidate)
 
 
-def test_actual_install_preflight_preserves_dedicated_account_shell_home(tmp_path):
+@pytest.mark.parametrize("operation", ["install", "observe"])
+def test_actual_install_preflight_preserves_dedicated_account_shell_home(tmp_path, operation):
     """Command argument expansion must not rewrite HOME inside streamed Python."""
     binary = Path(str(Path(sys.executable).with_name("ansible-playbook")))
     if not binary.exists():
         pytest.skip("repository Ansible environment unavailable")
     home = tmp_path / "dedicated-home"
     home.mkdir()
-    task = next(
-        task for task in yaml.safe_load((ROLE / "tasks/mgt/install.yml").read_text()) if task.get("register") == "mgt_firewall_preflight"
-    )
+    result_var = "mgt_firewall_preflight" if operation == "install" else "mgt_firewall_observation"
+    task = next(task for task in yaml.safe_load((ROLE / f"tasks/mgt/{operation}.yml").read_text()) if task.get("register") == result_var)
     source = (
         "import json, subprocess\n"
         f"home = {str(home)!r}\n"
@@ -2400,7 +2400,7 @@ def test_actual_install_preflight_preserves_dedicated_account_shell_home(tmp_pat
                 task,
                 {
                     "name": "Require actual dedicated home result",
-                    "ansible.builtin.assert": {"that": "(mgt_firewall_preflight.stdout | from_json).account_home_preserved is sameas true"},
+                    "ansible.builtin.assert": {"that": f"({result_var}.stdout | from_json).account_home_preserved is sameas true"},
                 },
             ],
         }

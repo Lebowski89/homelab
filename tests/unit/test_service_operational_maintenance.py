@@ -548,3 +548,18 @@ def test_installed_metadata_trust_is_scoped_to_the_unraid_flash_mount(case):
         with pytest.raises(ValueError):
             device = action.unraid_flash_device()
             action.owned("/boot/config/unexpected/policy.json" if case == "path" else next(iter(CHECK.UNRAID_FILES)), flash_device=device)
+
+
+@pytest.mark.parametrize("host", [["manager"], ["manager", "other"]])
+def test_compose_maintenance_rejects_host_lists_before_runtime_io(host):
+    cfg = {"name": "utility", "runtime": "docker", "deploy": {"type": "container", "host": host}}
+    with pytest.raises(AnsibleFilterError, match="dispatch host must be a non-empty string"):
+        FIXTURE.CATALOG.service_catalog_effective({"utility": cfg}, "manager")
+    action = CHECK.ActionModule.__new__(CHECK.ActionModule)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("invalid Compose placement must not query a runtime")
+
+    action.command = forbidden
+    with pytest.raises(ValueError, match="standalone deploy.host must be a non-empty string"):
+        action.runtime(cfg)

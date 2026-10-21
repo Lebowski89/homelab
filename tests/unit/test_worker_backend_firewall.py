@@ -888,3 +888,81 @@ def test_documented_firewall_commands_forward_private_inputs_and_distinguish_aud
             assert private.stat().st_mode & 0o777 == 0o600
         else:
             assert not any(arg.startswith("@") for arg in args)
+
+
+@pytest.mark.parametrize("scenario", ["transient", "other-watcher", "repeated-start"])
+def test_watcher_start_uses_real_advisory_lock(tmp_path, monkeypatch, capsys, scenario):
+    import fcntl
+    import sys
+    import time
+    from types import SimpleNamespace
+
+    config = tmp_path / "policy.json"
+    config.write_text(json.dumps(policy()))
+    run = tmp_path / "run"
+    run.mkdir()
+    receipt = tmp_path / "reconciles"
+    source = f"""
+import importlib.util, os, time
+from pathlib import Path
+spec=importlib.util.spec_from_file_location('isolated_watcher', {str(ROLE / "files/worker-backend-firewall.py")!r})
+fw=importlib.util.module_from_spec(spec);spec.loader.exec_module(fw)
+fw.RUN=Path({str(run)!r})
+def reconcile(*args, **kwargs):
+    with Path({str(receipt)!r}).open('a') as out: out.write(str(os.getpid())+'\\n')
+    return {{'changed':False}}
+fw.reconcile=reconcile
+sleep=time.sleep
+fw.time.sleep=lambda seconds: sleep(min(seconds,0.02))
+fw.watch({str(config)!r})
+"""
+    children = []
+    popen = subprocess.Popen
+
+    def spawn(*args, **kwargs):
+        child = popen([sys.executable, "-c", source], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        children.append(child)
+        return child
+
+    def ready():
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            if receipt.exists() and receipt.read_text():
+                return
+            time.sleep(0.01)
+        raise AssertionError("isolated watcher never reconciled")
+
+    monkeypatch.setattr(FW, "RUN", run)
+    monkeypatch.setattr(FW, "reconcile", lambda *args, **kwargs: {"changed": False})
+    try:
+        if scenario == "transient":
+            with (run / "watch.lock").open("a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                child = spawn()
+                time.sleep(0.15)
+                assert child.poll() is None and not receipt.exists()
+            ready()
+        elif scenario == "other-watcher":
+            spawn()
+            ready()
+            second = spawn()
+            assert second.wait(timeout=3) == 0
+            assert set(receipt.read_text().splitlines()) == {str(children[0].pid)}
+        else:
+            monkeypatch.setattr(FW, "subprocess", SimpleNamespace(Popen=spawn, DEVNULL=subprocess.DEVNULL))
+            for expected in [True, False, False]:
+                monkeypatch.setattr(FW.sys, "argv", ["policy.py", "start", "--config", str(config)])
+                FW.main()
+                assert json.loads(capsys.readouterr().out)["changed"] is expected
+            ready()
+            assert len(children) == 1
+        assert FW.watching()
+    finally:
+        (run / "stop").touch()
+        for child in children:
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait(timeout=3)
+    assert not FW.watching()

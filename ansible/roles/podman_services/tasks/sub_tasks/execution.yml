@@ -310,6 +310,7 @@
     - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
     - podman_services_rootless_pasta_config.ipv6_subnet is defined
   tags: [deploy, update, recreate, bootstrap]
+  # checkov:skip=CKV2_ANSIBLE_3:Read-only route validation; propagate conflicts before account or application mutation.
   block:
     - name: Execution | Detect conflicting host IPv6 routes
       ansible.builtin.set_fact:

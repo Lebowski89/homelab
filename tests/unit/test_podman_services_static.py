@@ -406,7 +406,16 @@ def test_execution_change_stops_dependents_before_switch():
 def test_split_tasks_notify_the_existing_daemon_reload_handler():
     handler_name = "Podman services | daemon reload"
     assert f"listen: {handler_name}" in PODMAN_HANDLERS
-    assert TASKS.count(f"notify: {handler_name}") == 5
+    # Check the writes/deletions themselves, not a fixed number of tasks: retiring
+    # a protected environment file also requires a daemon reload.
+    mutations = [
+        task
+        for task in grouped_tasks(PREPARE_TASKS)
+        if "ansible.builtin.template" in task or task.get("ansible.builtin.file", {}).get("state") == "absent"
+    ]
+    mutations += [task for task in REMOVE_TASK_LIST if task.get("loop_control", {}).get("loop_var") == "podman_services_generated_path"]
+    assert mutations
+    assert all(task.get("notify") == handler_name for task in mutations)
     assert "notify: Prep | daemon reload" not in TASKS
     assert "notify: Remove | daemon reload" not in TASKS
 

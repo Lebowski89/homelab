@@ -14,6 +14,7 @@
 
 - name: Service firewall | Workers | Validate Unraid boot entry before writing policy
   when: worker_backend_firewall_unraid.stat.exists
+  # checkov:skip=CKV2_ANSIBLE_3:Read-only boot-script validation; failure must stop before any policy write.
   block:
     - name: Service firewall | Workers | Read Unraid flash permissions from the boot script # noqa var-naming[no-role-prefix]
       ansible.builtin.stat:

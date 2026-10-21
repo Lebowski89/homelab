@@ -172,6 +172,12 @@
         assert response['status']=='success';
         print(response['data']['yaml'])
 
+- name: Prometheus scrape | Reset this invocation's recovery state
+  ansible.builtin.set_fact:
+    docker_services_prometheus_scrape_applied: {}
+    docker_services_prometheus_scrape_recovery_failed: false
+    docker_services_prometheus_scrape_temporary: {}
+
 - name: Prometheus scrape | Validate apply and reload without replacement
   when: not ansible_check_mode
   block:
@@ -217,23 +223,18 @@
     - name: Prometheus scrape | Require the original file before applying
       ansible.builtin.assert:
         that:
+          - docker_services_prometheus_scrape_source.content | b64decode | hash('sha1') == docker_services_prometheus_scrape_stat.stat.checksum
+          - docker_services_prometheus_scrape_before_write.stat.isreg | default(false)
+          - not docker_services_prometheus_scrape_before_write.stat.islnk | default(false)
+          - docker_services_prometheus_scrape_before_write.stat.dev == docker_services_prometheus_scrape_stat.stat.dev
+          - docker_services_prometheus_scrape_before_write.stat.inode == docker_services_prometheus_scrape_stat.stat.inode
           - docker_services_prometheus_scrape_before_write.stat.checksum == docker_services_prometheus_scrape_stat.stat.checksum
           - docker_services_prometheus_scrape_before_write.stat.uid == docker_services_prometheus_scrape_stat.stat.uid
           - docker_services_prometheus_scrape_before_write.stat.gid == docker_services_prometheus_scrape_stat.stat.gid
           - docker_services_prometheus_scrape_before_write.stat.mode == docker_services_prometheus_scrape_stat.stat.mode
 
-    - name: Prometheus scrape | Re-resolve the caller before applying configuration
-      ansible.builtin.command:
-        argv: [docker, --host, 'unix:///var/run/docker.sock', ps, --no-trunc, --filter,
-               'label=com.docker.swarm.service.name=prometheus_prometheus', --format, '{{ "{{.ID}}" }}']
-      register: docker_services_prometheus_scrape_current_ids
-      changed_when: false
-
-    - name: Prometheus scrape | Reject replacement before applying configuration
-      ansible.builtin.assert:
-        that:
-          - docker_services_prometheus_scrape_current_ids.stdout == docker_services_prometheus_scrape_ids.stdout
-        fail_msg: The selected Swarm Prometheus caller changed; stop without applying or signalling another container.
+    - name: Prometheus scrape | Verify original runtime identity before applying
+      ansible.builtin.import_tasks: prometheus_haproxy_identity.yml
 
     - name: Prometheus scrape | Apply only the validated configuration and save its backup
       ansible.builtin.copy:
@@ -244,7 +245,6 @@
         mode: "{{ docker_services_prometheus_scrape_stat.stat.mode }}"
         backup: true
       register: docker_services_prometheus_scrape_applied
-      notify: Docker services | Reload the exact Swarm Prometheus caller
       no_log: true
       diff: false
 
@@ -252,18 +252,37 @@
       ansible.builtin.debug:
         msg: "Configuration backup: {{ docker_services_prometheus_scrape_applied.backup_file | default('unchanged file') }}"
 
-    - name: Prometheus scrape | Reload a previously written but not yet loaded target
-      ansible.builtin.debug:
-        msg: Reconcile the loaded HAProxy target without replacing Prometheus.
-      changed_when: >-
+    - name: Prometheus scrape | Record the file written by this invocation
+      ansible.builtin.stat:
+        path: "{{ docker_services_prometheus_scrape_file }}"
+        follow: false
+        checksum_algorithm: sha256
+      register: docker_services_prometheus_scrape_written
+
+    - name: Prometheus scrape | Require the written candidate before reloading
+      ansible.builtin.assert:
+        that:
+          - docker_services_prometheus_scrape_written.stat.isreg | default(false)
+          - not docker_services_prometheus_scrape_written.stat.islnk | default(false)
+          - docker_services_prometheus_scrape_written.stat.checksum == docker_services_prometheus_scrape_candidate | hash('sha256')
+          - docker_services_prometheus_scrape_written.stat.uid == docker_services_prometheus_scrape_stat.stat.uid
+          - docker_services_prometheus_scrape_written.stat.gid == docker_services_prometheus_scrape_stat.stat.gid
+          - docker_services_prometheus_scrape_written.stat.mode == docker_services_prometheus_scrape_stat.stat.mode
+
+    - name: Prometheus scrape | Verify original runtime identity before reload
+      ansible.builtin.import_tasks: prometheus_haproxy_identity.yml
+
+    # A direct task failure enters this block's rescue; flush_handlers does not.
+    - name: Prometheus scrape | Reload only the verified original container
+      when: >-
+        docker_services_prometheus_scrape_applied.changed or
         local_ip ~ ':18405' not in
         ((docker_services_prometheus_scrape_loaded.stdout | from_yaml).scrape_configs |
          selectattr('job_name', 'equalto', 'haproxy') | map(attribute='static_configs') |
          flatten | map(attribute='targets') | flatten)
-      notify: Docker services | Reload the exact Swarm Prometheus caller
-
-    - name: Prometheus scrape | Flush only the pending Prometheus reload
-      ansible.builtin.meta: flush_handlers
+      ansible.builtin.command:
+        argv: [docker, --host, 'unix:///var/run/docker.sock', kill, --signal, HUP, '{{ docker_services_prometheus_scrape_ids.stdout }}']
+      changed_when: true
 
     - name: Prometheus scrape | Require both targets in the freshly loaded configuration
       ansible.builtin.command:
@@ -285,9 +304,95 @@
       no_log: true
       diff: false
 
+    - name: Prometheus scrape | Verify original runtime identity after loaded configuration
+      ansible.builtin.import_tasks: prometheus_haproxy_identity.yml
+
+  rescue:
+    - name: Prometheus scrape | Save the original failed task without configuration values
+      ansible.builtin.set_fact:
+        docker_services_prometheus_scrape_failure_task: "{{ ansible_failed_task.name }}"
+      no_log: true
+      diff: false
+
+    # Recovery must remain inside rescue; a failed handler cannot be rescued here.
+    - name: Prometheus scrape | Recover only this invocation's configuration change
+      when: docker_services_prometheus_scrape_applied.changed | default(false)  # noqa: no-handler
+      block:
+        - name: Prometheus scrape | Verify original runtime identity before recovery
+          ansible.builtin.import_tasks: prometheus_haproxy_identity.yml
+
+        - name: Prometheus scrape | Restore the verified baseline unless a concurrent edit intervened
+          ansible.builtin.command:
+            argv: [/usr/bin/python3, -c, "{{ lookup('ansible.builtin.file', playbook_dir ~ '/roles/docker_services/files/prometheus_scrape_restore.py') }}"]
+            stdin: >-
+              {{ {'path': docker_services_prometheus_scrape_file,
+                  'backup': docker_services_prometheus_scrape_applied.backup_file,
+                  'baseline_sha256': (docker_services_prometheus_scrape_source.content | b64decode | hash('sha256')),
+                  'candidate_sha256': (docker_services_prometheus_scrape_candidate | hash('sha256')),
+                  'uid': docker_services_prometheus_scrape_stat.stat.uid,
+                  'gid': docker_services_prometheus_scrape_stat.stat.gid,
+                  'mode': docker_services_prometheus_scrape_stat.stat.mode,
+                  'dev': docker_services_prometheus_scrape_written.stat.dev,
+                  'inode': docker_services_prometheus_scrape_written.stat.inode,
+                  'mtime': docker_services_prometheus_scrape_written.stat.mtime} | to_json }}
+            expand_argument_vars: false
+          register: docker_services_prometheus_scrape_restored
+          changed_when: (docker_services_prometheus_scrape_restored.stdout | from_json).changed
+          no_log: true
+          diff: false
+
+        - name: Prometheus scrape | Verify original runtime identity before recovery reload
+          ansible.builtin.import_tasks: prometheus_haproxy_identity.yml
+
+        - name: Prometheus scrape | Reload the verified original container with its baseline
+          ansible.builtin.command:
+            argv: [docker, --host, 'unix:///var/run/docker.sock', kill, --signal, HUP, '{{ docker_services_prometheus_scrape_ids.stdout }}']
+          changed_when: true
+
+        - name: Prometheus scrape | Verify the original loaded baseline after recovery
+          ansible.builtin.command:
+            argv: "{{ docker_services_prometheus_scrape_query }}"
+          register: docker_services_prometheus_scrape_recovered
+          changed_when: false
+          until: >-
+            docker_services_prometheus_scrape_recovered.rc == 0 and
+            (docker_services_prometheus_scrape_recovered.stdout | from_yaml) ==
+            (docker_services_prometheus_scrape_loaded.stdout | from_yaml)
+          retries: 5
+          delay: 1
+          no_log: true
+          diff: false
+
+        - name: Prometheus scrape | Verify original runtime identity after recovery
+          ansible.builtin.import_tasks: prometheus_haproxy_identity.yml
+      rescue:
+        - name: Prometheus scrape | Record failed recovery without hiding the original failure
+          ansible.builtin.set_fact:
+            docker_services_prometheus_scrape_recovery_failed: true
+
+        - name: Prometheus scrape | Report retained recovery material
+          ansible.builtin.debug:
+            msg: >-
+              Recovery failed or was unsafe at {{ ansible_failed_task.name }}.
+              Retained baseline {{ docker_services_prometheus_scrape_applied.backup_file | default('unavailable') }}
+              and candidate {{ docker_services_prometheus_scrape_temporary.path | default('unavailable') }}.
+              Do not overwrite concurrent edits or signal a replacement container.
+              Inspect the original failure and these private files before scoped recovery.
+
+    - name: Prometheus scrape | Return failure after scoped recovery
+      ansible.builtin.fail:
+        msg: >-
+          Scrape update failed at {{ docker_services_prometheus_scrape_failure_task }}.
+          Invocation changed the file: {{ docker_services_prometheus_scrape_applied.changed | default(false) }}.
+          Recovery failed or was unsafe: {{ docker_services_prometheus_scrape_recovery_failed }}.
+          Baseline backup: {{ docker_services_prometheus_scrape_applied.backup_file | default('no file change') }}.
+          See the original failure above; no replacement runtime was signalled.
+
   always:
     - name: Prometheus scrape | Remove only this invocation's temporary candidate
-      when: docker_services_prometheus_scrape_temporary.path is defined
+      when:
+        - docker_services_prometheus_scrape_temporary.path is defined
+        - not docker_services_prometheus_scrape_recovery_failed
       ansible.builtin.file:
         path: "{{ docker_services_prometheus_scrape_temporary.path }}"
         state: absent

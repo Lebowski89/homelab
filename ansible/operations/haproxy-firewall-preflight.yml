@@ -302,6 +302,7 @@
   when:
     - haproxy_preflight_stage_output is defined
     - not ansible_check_mode
+  # checkov:skip=CKV2_ANSIBLE_3:Value-free projection grouping; retain partial evidence and propagate failures, with no runtime mutation.
   block:
     - name: HAProxy handoff | Require explicit private projection and Patroni inventory
       ansible.builtin.assert:
