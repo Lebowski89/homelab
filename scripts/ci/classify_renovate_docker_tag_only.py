@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Classify a pull request as a Renovate Docker image tag-only change."""
+"""Classify a pull request as a Renovate container image tag-only change."""
 
 from __future__ import annotations
 
@@ -180,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     _emit_github_outputs(classification)
     if not classification.renovate_docker_tag_only:
-        print(f"Renovate Docker fast path disabled: {classification.reason}", file=sys.stderr)
+        print(f"Renovate container image fast path disabled: {classification.reason}", file=sys.stderr)
     return 0
 
 

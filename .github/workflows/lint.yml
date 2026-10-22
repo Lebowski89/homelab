@@ -40,7 +40,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Classify Renovate Docker tag-only change
+      - name: Classify Renovate container image tag-only change
         id: classify
         env:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
@@ -113,7 +113,7 @@ jobs:
           fi
           yamllint $files
 
-      - name: Renovate Docker tag-only validation
+      - name: Renovate container image tag-only validation
         if: fromJSON(steps.classify.outputs.renovate_docker_tag_only)
         env:
           CHANGED_FILES: ${{ steps.classify.outputs.changed_files }}
@@ -197,7 +197,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Classify Renovate Docker tag-only change
+      - name: Classify Renovate container image tag-only change
         id: classify
         env:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
