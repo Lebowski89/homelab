@@ -92,7 +92,10 @@ def image_checks():
         sources[f"bootstrap/{role}"] = text
         bootstrap_images[role] = [value for key, value in yaml.safe_load(text).items() if key.endswith("_image")]
     result = subprocess.run(
-        [node, "-e", r"""
+        [
+            node,
+            "-e",
+            r"""
 const { config, selectors, sources } = JSON.parse(require('node:fs').readFileSync(0, 'utf8'));
 // Only the literal and regex selectors used here: not a replacement Renovate engine.
 function matches(name, patterns) {
@@ -114,7 +117,8 @@ const result = Object.fromEntries(Object.entries(sources).map(([key, text]) => [
     })))
 ]));
 process.stdout.write(JSON.stringify(result));
-"""],
+""",
+        ],
         input=json.dumps({"config": config, "selectors": selectors, "sources": sources}),
         capture_output=True,
         text=True,
