@@ -4,6 +4,7 @@ name: Lint (Ansible + YAML + Python)
 
 on:
   push:
+    branches: [main]
     paths:
       - "ansible/**"
       - "scripts/ci/**"
@@ -18,11 +19,15 @@ on:
       - "pyproject.toml"
       - ".github/workflows/lint.yml"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
 jobs:
-  lint:
+  quality:
     runs-on: ubuntu-latest
 
     env:
@@ -53,6 +58,8 @@ jobs:
         uses: actions/setup-python@v7.0.0
         with:
           python-version: "3.14.8"
+          cache: pip
+          cache-dependency-path: ansible/requirements.txt
 
       - name: Install fast-path tooling
         if: fromJSON(steps.classify.outputs.renovate_docker_tag_only)
@@ -130,7 +137,10 @@ jobs:
             ansible/roles/service_prepare/filter_plugins \
             ansible/roles/service_prepare/library \
             scripts/ci \
-            tests/unit
+            tests/unit \
+            tests/conftest.py \
+            tests/fixtures/haproxy_operator/commands.py \
+            tests/fixtures/ansible/retry_playbook.py
 
       - name: ruff format check
         if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
@@ -145,14 +155,124 @@ jobs:
             ansible/roles/service_prepare/filter_plugins \
             ansible/roles/service_prepare/library \
             scripts/ci \
-            tests/unit
-
-      - name: pytest
-        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
-        run: |
-          python -m pytest tests/unit
+            tests/unit \
+            tests/conftest.py \
+            tests/fixtures/haproxy_operator/commands.py \
+            tests/fixtures/ansible/retry_playbook.py
 
       - name: ansible-lint
         if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           ansible-lint --format=pep8 ansible
+
+  tests:
+    name: pytest (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: unit
+            path: tests/unit
+            selection: not integration
+            arguments: ""
+          - name: operator
+            path: tests/unit/test_haproxy_operator_workflow.py
+            selection: integration
+            arguments: ""
+          - name: integration-0
+            path: tests/unit
+            selection: integration
+            arguments: --ignore=tests/unit/test_haproxy_operator_workflow.py --integration-shard=0/2
+          - name: integration-1
+            path: tests/unit
+            selection: integration
+            arguments: --ignore=tests/unit/test_haproxy_operator_workflow.py --integration-shard=1/2
+    env:
+      ANSIBLE_CONFIG: ansible/ansible.cfg
+      ANSIBLE_COLLECTIONS_PATH: ${{ github.workspace }}/ansible/collections
+      ANSIBLE_LOG_PATH: ${{ github.workspace }}/.ansible/ansible.log
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Classify Renovate Docker tag-only change
+        id: classify
+        env:
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          python scripts/ci/classify_renovate_docker_tag_only.py \
+            --event-name "$GITHUB_EVENT_NAME" \
+            --pr-author "$PR_AUTHOR" \
+            --base-sha "$PR_BASE_SHA" \
+            --head-sha "$PR_HEAD_SHA" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Set up Python
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
+        uses: actions/setup-python@v7.0.0
+        with:
+          python-version: "3.14.8"
+          cache: pip
+          cache-dependency-path: ansible/requirements.txt
+
+      - name: Install Python tooling
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
+        run: |
+          python -m pip install --upgrade pip
+
+          if [ -f ansible/requirements.txt ]; then
+            python -m pip install -r ansible/requirements.txt
+          fi
+
+          python -m pip install ansible-core ansible-lint yamllint ruff pytest
+
+      - name: Prepare ansible log dir
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
+        run: mkdir -p .ansible
+
+      - name: Install Ansible collections
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
+        run: |
+          if [ -f ansible/requirements.yml ]; then
+            for attempt in 1 2 3; do
+              echo "Installing Ansible collections (attempt ${attempt}/3)..."
+
+              if ansible-galaxy collection install \
+                -r ansible/requirements.yml \
+                -p ansible/collections \
+                --force; then
+                exit 0
+              fi
+
+              if [ "$attempt" -eq 3 ]; then
+                echo "Ansible Galaxy install failed after 3 attempts."
+                exit 1
+              fi
+
+              sleep $((attempt * 10))
+            done
+          fi
+
+      - name: pytest
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
+        run: |
+          python -m pytest ${{ matrix.path }} -m '${{ matrix.selection }}' ${{ matrix.arguments }} --durations=30 --durations-min=1
+
+  # Keep the existing required check name. Neither a failed/cancelled test shard
+  # nor failed quality checks may disappear behind skipped dependent jobs.
+  lint:
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [quality, tests]
+    steps:
+      - name: Require all quality and test groups
+        env:
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          TEST_RESULT: ${{ needs.tests.result }}
+        run: |
+          test "$QUALITY_RESULT" = success
+          test "$TEST_RESULT" = success

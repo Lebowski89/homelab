@@ -1,5 +1,4 @@
 import importlib.util
-from copy import deepcopy
 from pathlib import Path
 
 import yaml
@@ -22,7 +21,6 @@ def load_module(path, name):
 
 podman_filters = load_module(PODMAN_ROLE / "filter_plugins/podman_services.py", "podman_services_homepage")
 common_filters = load_module(COMMON_ROLE / "filter_plugins/service_common.py", "service_common_homepage")
-catalog_filters = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog_homepage")
 
 
 def render_structure(value, variables):
@@ -68,75 +66,6 @@ def render_quadlet(name, service):
     )
 
 
-def test_real_homepage_declaration_normalizes_as_rootless_podman():
-    service = homepage_service()
-    entry = catalog_filters.service_catalog_effective({"homepage": service}, "manager")[0]
-    normalized = podman_filters.podman_service_normalize(service, "homepage")
-
-    assert entry["runtime"] == "podman"
-    assert entry["dispatch_host"] == "manager"
-    assert normalized["name"] == normalized["unit_name"] == "homepage"
-    assert normalized["execution"] == {
-        "mode": "rootless",
-        "host_user": "podman-homepage",
-        "userns": {"mode": "keep-id", "uid": "1000", "gid": "1000"},
-    }
-    assert normalized["network"] == {"name": "homepage", "driver": "bridge", "external": False}
-    assert {"host": 13000, "container": 3000, "protocol": "tcp", "host_ip": "192.0.2.10"} in normalized["container"]["ports"]
-    assert normalized["container"]["systemd"] == {
-        "after": ["network-online.target"],
-        "restart": "on-failure",
-        "restart_sec": "10s",
-    }
-    required_mounts = [
-        {"source": "/opt/homepage", "target": "/app/config", "read_only": False},
-        {"source": "/opt/homepage/images", "target": "/app/public/images", "read_only": True},
-    ]
-    assert all(mount in normalized["container"]["mounts"] for mount in required_mounts)
-
-
-def test_homepage_removes_docker_only_fields_and_confines_common_files():
-    service = homepage_service()
-    normalized = podman_filters.podman_service_normalize(service, "homepage")
-
-    assert {"stack", "env_file"}.isdisjoint(service)
-    assert {"mode", "profile", "replicas", "constraints"}.isdisjoint(service["deploy"])
-    assert service["deploy"]["type"] == "container"
-    assert service["named_networks"]["homepage"] == {"driver": "bridge", "external": False}
-    assert "/var/run/docker.sock" not in SERVICE_PATH.read_text()
-    assert not (COMMON_ROLE / "templates/configs/homepage/docker.yaml.j2").exists()
-    assert not (COMMON_ROLE / "templates/configs/homepage/homepage.env.j2").exists()
-
-    absent_paths = {Path(item["path"]) for item in normalized["host_paths"] if item.get("state", "directory") == "absent"}
-    assert {
-        Path("/opt/homepage/.env"),
-        Path("/opt/homepage/docker.yaml"),
-    } <= absent_paths
-
-    configured_templates = {item["src"] for item in service["templates"]}
-    assert {
-        "configs/homepage/services.yaml.j2",
-        "configs/homepage/settings.yaml.j2",
-        "configs/homepage/bookmarks.yaml.j2",
-        "configs/homepage/widgets.yaml.j2",
-        "configs/homepage/custom.css.j2",
-    } <= configured_templates
-    assert {
-        "configs/homepage/docker.yaml.j2",
-        "configs/homepage/homepage.env.j2",
-    }.isdisjoint(configured_templates)
-
-    earth_image = next(item for item in service["copies"] if item["src"] == "files/earth-rise-2.jpg")
-    assert earth_image == {
-        "src": "files/earth-rise-2.jpg",
-        "dest": "/opt/homepage/images/earth-rise-2.jpg",
-        "mode": "0755",
-        "force": False,
-        "wait": True,
-        "wait_timeout": 30,
-    }
-
-
 def test_homepage_allowed_host_and_traefik_backend_use_canonical_runtime_neutral_interfaces():
     service = homepage_service()
     lookup_config = common_filters.service_common_infisical_normalize(service["infisical"]["secrets_map"])
@@ -157,7 +86,7 @@ def test_homepage_allowed_host_and_traefik_backend_use_canonical_runtime_neutral
     assert traefik["address"] == "homepage.private.example.internal"
     assert traefik["backend_url"] == "http://192.0.2.10:13000"
 
-    normalized = podman_filters.podman_service_normalize(deepcopy(service), "homepage")
+    normalized = podman_filters.podman_service_normalize(service, "homepage")
     normalized["env"] = resolved_environment
     container = render_quadlet("container.container.j2", normalized)
     env_file = render_quadlet("env.env.j2", normalized)

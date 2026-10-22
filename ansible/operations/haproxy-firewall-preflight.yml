@@ -298,85 +298,104 @@
     loop_var: haproxy_preflight_file
   when: not ansible_check_mode
 
-- name: HAProxy preflight | Prepare optional value-free handoff projection
+- name: HAProxy handoff | Require explicit private projection and Patroni inventory
   when:
     - haproxy_preflight_stage_output is defined
     - not ansible_check_mode
-  block:
-    - name: HAProxy handoff | Require explicit private projection and Patroni inventory
-      ansible.builtin.assert:
-        that:
-          - haproxy_preflight_stage_output is string
-          - haproxy_preflight_stage_output.startswith('/')
-          - groups.tags_postgres | default([]) | length > 0
+  ansible.builtin.assert:
+    that:
+      - haproxy_preflight_stage_output is string
+      - haproxy_preflight_stage_output.startswith('/')
+      - groups.tags_postgres | default([]) | length > 0
 
-    - name: HAProxy handoff | Resolve effective mgt definition only
-      ansible.builtin.set_fact:
-        haproxy_preflight_haproxy_definition: "{{ haproxy_preflight_catalog.haproxy | service_catalog_merge_target('mgt') }}"
-        haproxy_preflight_patroni_addresses: {}
+- name: HAProxy handoff | Resolve effective mgt definition only
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.set_fact:
+    haproxy_preflight_haproxy_definition: "{{ haproxy_preflight_catalog.haproxy | service_catalog_merge_target('mgt') }}"
+    haproxy_preflight_patroni_addresses: {}
 
-    - name: HAProxy handoff | Load namespaced bootstrap defaults without resolving values
-      ansible.builtin.include_vars:
-        file: roles/infisical/defaults/main.yml
-        name: haproxy_preflight_infisical_defaults
+- name: HAProxy handoff | Load namespaced bootstrap defaults without resolving values
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.include_vars:
+    file: roles/infisical/defaults/main.yml
+    name: haproxy_preflight_infisical_defaults
 
-    - name: HAProxy handoff | Project effective PostgreSQL declarations without application values
-      ansible.builtin.set_fact:
-        haproxy_preflight_pg_declarations:
-          romm: "{{ haproxy_preflight_catalog.romm.postgres }}"
-          # Project before merging: templating the full Authelia target
-          # would resolve application/credential references unnecessarily.
-          authelia: >-
-            {{ ({'runtime': haproxy_preflight_catalog.authelia.runtime,
-                 'postgres': haproxy_preflight_catalog.authelia.postgres | default({}),
-                 'targets': {'main': {'postgres': haproxy_preflight_catalog.authelia.targets.main.postgres}}}
-                | service_catalog_merge_target('main')).postgres }}
-          seerr: "{{ haproxy_preflight_catalog.seerr.postgres }}"
-          infisical:
-            host: "{{ infisical_postgres_host | default(haproxy_preflight_infisical_defaults.infisical_postgres_host) }}"
-            port: "{{ infisical_postgres_port | default(haproxy_preflight_infisical_defaults.infisical_postgres_port) }}"
-            database: "{{ infisical_postgres_db_name | default(haproxy_preflight_infisical_defaults.infisical_postgres_db_name) }}"
+- name: HAProxy handoff | Project effective PostgreSQL declarations without application values
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.set_fact:
+    haproxy_preflight_pg_declarations:
+      romm: "{{ haproxy_preflight_catalog.romm.postgres }}"
+      # Project before merging: templating the full Authelia target
+      # would resolve application/credential references unnecessarily.
+      authelia: >-
+        {{ ({'runtime': haproxy_preflight_catalog.authelia.runtime,
+             'postgres': haproxy_preflight_catalog.authelia.postgres | default({}),
+             'targets': {'main': {'postgres': haproxy_preflight_catalog.authelia.targets.main.postgres}}}
+            | service_catalog_merge_target('main')).postgres }}
+      seerr: "{{ haproxy_preflight_catalog.seerr.postgres }}"
+      infisical:
+        host: "{{ infisical_postgres_host | default(haproxy_preflight_infisical_defaults.infisical_postgres_host) }}"
+        port: "{{ infisical_postgres_port | default(haproxy_preflight_infisical_defaults.infisical_postgres_port) }}"
+        database: "{{ infisical_postgres_db_name | default(haproxy_preflight_infisical_defaults.infisical_postgres_db_name) }}"
 
-    - name: HAProxy handoff | Project only Patroni inventory addresses
-      ansible.builtin.set_fact:
-        haproxy_preflight_patroni_addresses: >-
-          {{ haproxy_preflight_patroni_addresses | combine({haproxy_preflight_patroni_host:
-             {'local_ip': hostvars[haproxy_preflight_patroni_host].local_ip}}) }}
-      loop: "{{ groups.tags_postgres }}"
-      loop_control:
-        loop_var: haproxy_preflight_patroni_host
+- name: HAProxy handoff | Project only Patroni inventory addresses
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.set_fact:
+    haproxy_preflight_patroni_addresses: >-
+      {{ haproxy_preflight_patroni_addresses | combine({haproxy_preflight_patroni_host:
+         {'local_ip': hostvars[haproxy_preflight_patroni_host].local_ip}}) }}
+  loop: "{{ groups.tags_postgres }}"
+  loop_control:
+    loop_var: haproxy_preflight_patroni_host
 
-    - name: HAProxy handoff | Validate existing HAProxy settings contract
-      ansible.builtin.include_tasks: roles/service_prepare/tasks/applications/haproxy/validate.yml
-      vars:
-        service_prepare_context:
-          service: "{{ haproxy_preflight_haproxy_definition }}"
+- name: HAProxy handoff | Validate existing HAProxy settings contract
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.include_tasks: roles/service_prepare/tasks/applications/haproxy/validate.yml
+  vars:
+    service_prepare_context:
+      service: "{{ haproxy_preflight_haproxy_definition }}"
 
-    - name: HAProxy handoff | Resolve retained endpoints PostgreSQL and metrics using existing planner
-      mgt_firewall_plan:
-        source_var: haproxy_preflight_catalog
-        controller: "{{ services_controller_host }}"
-        inventory_address: "{{ local_ip }}"
-        active: "{{ ((mgt_firewall_active_endpoints | default([])) + ['haproxy/postgres', 'haproxy/metrics']) | unique | list }}"
-        callers: {}
-        verified: false
-        require_verified: false
+- name: HAProxy handoff | Resolve retained endpoints PostgreSQL and metrics using existing planner
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  mgt_firewall_plan:
+    source_var: haproxy_preflight_catalog
+    controller: "{{ services_controller_host }}"
+    inventory_address: "{{ local_ip }}"
+    active: "{{ ((mgt_firewall_active_endpoints | default([])) + ['haproxy/postgres', 'haproxy/metrics']) | unique | list }}"
+    callers: {}
+    verified: false
+    require_verified: false
 
-    - name: HAProxy handoff | Write only value-free configuration and policy projections
-      ansible.builtin.copy:
-        content: >-
-          {{ {'plan': mgt_firewall_plan, 'policy': mgt_firewall_policy,
-              'controller': services_controller_host,
-              'workers': [services_storage_host, services_plex_host],
-              'postgres_declarations': haproxy_preflight_pg_declarations,
-              'definition': haproxy_preflight_haproxy_definition,
-              'render': {'groups': {'tags_postgres': groups.tags_postgres},
-                         'hostvars': haproxy_preflight_patroni_addresses,
-                         'postgres_patroni_restapi_port': postgres_patroni_restapi_port | default(8008),
-                         'postgres_patroni_postgres_port': postgres_patroni_postgres_port | default(5432)}} | to_nice_json }}
-        dest: "{{ haproxy_preflight_stage_output }}"
-        mode: "0600"
-        force: false
-      diff: false
-      become: false
-      delegate_to: localhost
+- name: HAProxy handoff | Write only value-free configuration and policy projections
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.copy:
+    content: >-
+      {{ {'plan': mgt_firewall_plan, 'policy': mgt_firewall_policy,
+          'controller': services_controller_host,
+          'workers': [services_storage_host, services_plex_host],
+          'postgres_declarations': haproxy_preflight_pg_declarations,
+          'definition': haproxy_preflight_haproxy_definition,
+          'render': {'groups': {'tags_postgres': groups.tags_postgres},
+                     'hostvars': haproxy_preflight_patroni_addresses,
+                     'postgres_patroni_restapi_port': postgres_patroni_restapi_port | default(8008),
+                     'postgres_patroni_postgres_port': postgres_patroni_postgres_port | default(5432)}} | to_nice_json }}
+    dest: "{{ haproxy_preflight_stage_output }}"
+    mode: "0600"
+    force: false
+  diff: false
+  become: false
+  delegate_to: localhost

@@ -12,6 +12,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "tag,check",
     [
@@ -87,6 +88,7 @@ def test_only_explicit_operation_runs_and_inherits_tags(tmp_path, tag, check):
     assert actual == expected, result.stdout
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "profile,operation,entry,tags,success",
     [
@@ -208,6 +210,7 @@ def test_canonical_dispatch_and_legacy_role_forwarding_reject_invalid_combinatio
         assert "Select one firewall profile" in output
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("name,prefix", [("mgt-firewall", "mgt_firewall"), ("worker-backend-firewall", "worker_backend_firewall")])
 @pytest.mark.parametrize("selection", [None, "all", "check"])
 def test_installed_skynet_playbook_aliases_also_require_explicit_selection(tmp_path, name, prefix, selection):

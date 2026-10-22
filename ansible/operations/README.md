@@ -27,8 +27,13 @@ without changing it. Use `skynet run mgt-firewall observe` to inspect caller
 identities, and the existing install/remove commands only for approved policy
 changes. See the [supported firewall commands](../../docs/service-firewall.md#supported-operator-commands)
 for private vars-file overrides.
-Completed Swarm-only Loki/Prometheus route/scrape tags fail explicitly; their
-sources/tests are archived. Do not replay them against migrated services.
+The retired `loki_alertmanager_route`, `prometheus_alertmanager_routes`,
+`prometheus_haproxy_scrape` and `prometheus_scraparr_scrape` tags still fail
+explicitly. Their Docker patching tasks, filters and reload/recovery helpers have
+been removed; direct imports are unsupported. Existing private archives and
+rollback material are unchanged. Edit canonical service configuration and use
+`skynet update loki` or `skynet update prometheus` through the selected runtime;
+ordinary Docker/Swarm deployment and current rootless generation remain supported.
 
 See [ownership and compatibility](../../docs/service-firewall.md),
 [shared tasks](../tasks/README.md), and [executable tools](../operator/README.md).

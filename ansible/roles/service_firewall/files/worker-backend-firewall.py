@@ -167,10 +167,18 @@ def watching():
 def watch(config):
     RUN.mkdir(mode=0o700, parents=True, exist_ok=True)
     with (RUN / "watch.lock").open("a") as lock:
-        try:
-            fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            return
+        # watching() briefly takes this same lock to inspect it. A new child
+        # must tolerate that inspection without giving up its startup race.
+        for attempt in range(50):
+            if (RUN / "stop").exists():
+                return
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if attempt == 49:
+                    return  # Another watcher owns it; never run a duplicate.
+                time.sleep(0.02)
         while not (RUN / "stop").exists():
             try:
                 with writer_lock():

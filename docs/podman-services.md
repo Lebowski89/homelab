@@ -264,6 +264,13 @@ operator procedure.
 
 ## Lifecycle semantics
 
+When a managed service changes to an empty environment, its old protected `.env`
+file is retired before new successful resource metadata can omit it. Retirement
+requires the same execution owner/directory, saved ownership, protected mode and
+generated-file marker. A failed unlink or guard leaves the saved ownership intact
+for update or scoped removal to retry. Check mode plans deletion without changing
+files or saved metadata; unowned or unmarked files are never silently deleted.
+
 - `deploy` and `bootstrap` fetch missing secrets, create missing Podman secrets, pull the declared image, render configuration, and start the service if it is not already running.
 - `update` compares secrets marked `update_policy: reconcile` and replaces the rootful container or restarts the rootless user service when material inputs changed, including a changed secret or restart-requiring managed application file. An unchanged reconciled secret alone does not trigger a restart. An owned network remains in place through the replacement. If its Quadlet definition changes, use an explicit remove followed by deploy when the network itself must be recreated.
 - `recreate` reconciles secrets marked `update_policy: reconcile`, stops the rootful unit, removes its exact stale container object, and starts the generated service after rendering current inputs. It retains the service network. Rootless recreate keeps its existing user-service restart behavior.

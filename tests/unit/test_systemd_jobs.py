@@ -101,6 +101,7 @@ def render_template(path: Path, job: dict):
     return environment.from_string(path.read_text()).render(systemd_jobs_job=job)
 
 
+@pytest.mark.integration
 @requires_ansible_playbook
 def test_defaults_to_empty_job_list_and_empty_role_is_safe(tmp_path: Path):
     assert yaml.safe_load(DEFAULTS_PATH.read_text()) == {"systemd_jobs": []}
@@ -111,6 +112,7 @@ def test_defaults_to_empty_job_list_and_empty_role_is_safe(tmp_path: Path):
     assert "skipping: [localhost]" in result.stdout
 
 
+@pytest.mark.integration
 @requires_ansible_playbook
 def test_valid_job_check_mode_renders_units_without_systemd_lifecycle(tmp_path: Path):
     result = run_role_check(tmp_path, [valid_job()])
@@ -123,6 +125,7 @@ def test_valid_job_check_mode_renders_units_without_systemd_lifecycle(tmp_path: 
     assert "skipping: [localhost]" in output
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("jobs", "expected_message"),
     [
@@ -215,6 +218,7 @@ def test_unspecified_optional_directives_are_omitted_and_defaults_render():
     assert "RandomizedDelaySec=" not in timer
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(shutil.which("systemd-analyze") is None, reason="systemd-analyze is unavailable")
 def test_rendered_units_pass_systemd_analyze_verify(tmp_path: Path):
     service_path = tmp_path / "example-job.service"
@@ -281,6 +285,7 @@ def test_docker_prune_maps_existing_api_to_generic_role_and_preserves_tags():
     }
 
 
+@pytest.mark.integration
 @requires_ansible_playbook
 def test_docker_prune_timer_tag_reaches_generic_role_and_non_systemd_hosts_skip(tmp_path: Path):
     systemd_result = run_role_check(tmp_path, role_name="docker", tags="docker_prune_timer")

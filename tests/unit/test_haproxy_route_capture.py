@@ -11,17 +11,24 @@ from types import SimpleNamespace
 
 import pytest
 import yaml
+from ansible_task_cases import task_section, walk_tasks
 from test_mgt_firewall import FW, PREFLIGHT, PreflightHost
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("operation", ["collect", "candidates"])
 @pytest.mark.parametrize("default_expansion", [False, True])
 def test_embedded_collector_preserves_account_shell_variables_through_actual_ansible(tmp_path, operation, default_expansion):
     """command's default argument expansion must not substitute the become HOME."""
     root = Path(__file__).resolve().parents[2]
     playbook = {"tasks": yaml.safe_load((root / "ansible/operations/haproxy-firewall-preflight.yml").read_text())}
-    name = "Collect projected" if operation == "collect" else "Generate unverified additions"
-    command = deepcopy(next(task["ansible.builtin.command"] for task in playbook["tasks"] if name in task["name"]))
+    command = deepcopy(
+        next(
+            task["ansible.builtin.command"]
+            for task in walk_tasks(playbook["tasks"])
+            if task.get("ansible.builtin.command", {}).get("argv", [])[-1:] == [operation]
+        )
+    )
     if default_expansion:
         command.pop("expand_argument_vars", None)
     operator = tmp_path / "private-operator"
@@ -354,6 +361,7 @@ def test_capture_options_are_bounded_and_strict(key, value):
         window(machine, fw, config, report)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "mismatch,check,targeted,address_drift",
     [
@@ -375,11 +383,17 @@ def test_actual_ansible_async_collection_polling_aggregation_and_read_only_check
     root = Path(__file__).resolve().parents[2]
     source_play = {"tasks": yaml.safe_load((root / "ansible/operations/haproxy-firewall-preflight.yml").read_text())}
     tasks = source_play["tasks"]
-    first = next(i for i, t in enumerate(tasks) if "Collect projected" in t["name"])
-    last = next(i for i, t in enumerate(tasks) if "Prepare optional" in t["name"])
-    selected = deepcopy(tasks[first:last])
+    # The synthetic local workers cannot pass the production SSH-only host
+    # contract. Execute the real collection through evidence writes, retaining
+    # any parent conditions/tags rather than depending on task names or shape.
+    selected = task_section(
+        tasks,
+        lambda task: task.get("ansible.builtin.command", {}).get("argv", [])[-1:] == ["collect"],
+        lambda task: "haproxy_preflight_candidate" in task.get("ansible.builtin.copy", {}).get("content", ""),
+        purpose="HAProxy collection and aggregation",
+    )
     executable = str(Path(sys.executable).with_name("ansible-playbook"))
-    for task in selected:
+    for task in walk_tasks(selected):
         if "ansible.builtin.command" in task:
             task["ansible.builtin.command"]["argv"][0] = sys.executable
     collector = (

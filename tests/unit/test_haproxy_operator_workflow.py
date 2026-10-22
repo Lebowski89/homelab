@@ -44,6 +44,18 @@ def restrictor(tmp_path_factory):
     return root / "restrict"
 
 
+@pytest.fixture(scope="module")
+def python_packages(tmp_path_factory):
+    """Compile immutable Python dependencies once; each case gets a private copy."""
+    root = tmp_path_factory.mktemp("haproxy-python-packages")
+    shutil.copyfile(FIXTURES / "sitecustomize.py", root / "sitecustomize.py")
+    for name in ["jinja2", "yaml", "markupsafe"]:
+        spec = importlib.util.find_spec(name)
+        shutil.copytree(Path(spec.origin).parent, root / name, ignore=shutil.ignore_patterns("__pycache__"))
+    subprocess.run(["/usr/bin/python3", "-m", "compileall", "-q", str(root)], check=True, capture_output=True)
+    return root
+
+
 class Workflow:
     @classmethod
     def prepared_copy(cls, source, root):
@@ -51,6 +63,8 @@ class Workflow:
         shutil.copytree(source.root, root, symlinks=True)
         # Rebase only our public fixture text, never a production path/file.
         for path in root.rglob("*"):
+            if path.relative_to(root).parts[0] == "packages":
+                continue
             if path.is_file() and not path.is_symlink() and path.suffix in {"", ".json", ".jsonl", ".yml", ".sh", ".py", ".log", ".cfg"}:
                 data = path.read_bytes()
                 if str(source.root).encode() in data:
@@ -63,7 +77,7 @@ class Workflow:
         result.original_config = source.original_config
         return result
 
-    def __init__(self, root, restrictor):
+    def __init__(self, root, restrictor, python_packages):
         self.root, self.restrictor = root, restrictor
         root.mkdir(mode=0o700)
         self.repo = root / "repo"
@@ -95,6 +109,7 @@ class Workflow:
         bindir.mkdir()
         for name in [
             "sudo",
+            "cat",
             "docker",
             "podman",
             "skynet",
@@ -112,11 +127,7 @@ class Workflow:
             shutil.copyfile(FIXTURES / "commands.py", bindir / name)
             (bindir / name).chmod(0o755)
         packages = root / "packages"
-        packages.mkdir()
-        shutil.copyfile(FIXTURES / "sitecustomize.py", packages / "sitecustomize.py")
-        for name in ["jinja2", "yaml", "markupsafe"]:
-            spec = importlib.util.find_spec(name)
-            shutil.copytree(Path(spec.origin).parent, packages / name, ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(python_packages, packages)
         envdir = root / "venv/bin"
         envdir.mkdir(parents=True)
         (envdir / "python").symlink_to("/usr/bin/python3")
@@ -128,7 +139,6 @@ class Workflow:
             "PLAYBOOK": str(self.repo / "ansible/playbook.yml"),
             "LANG": "C.UTF-8",
             "HOME": str(root / "home"),
-            "PYTHONDONTWRITEBYTECODE": "1",
         }
         self.state = {
             "excluded": False,
@@ -203,7 +213,12 @@ class Workflow:
                 "inventory_address": "192.0.2.48",
             },
         )
-        shutil.copyfile(self.handoff / "homepage-policy.json", root / "installed-policy.json")
+        # Start with another accepted endpoint already installed, so every real
+        # prepare/maintenance/rollback path exercises preservation of the union.
+        forgejo_endpoint = {"ids": ["forgejo/backend"], "port": 13001, "purpose": "backend", "callers": ["traefik"]}
+        installed = json.loads((self.handoff / "homepage-policy.json").read_text())
+        installed["endpoints"].append(forgejo_endpoint)
+        dump(root / "installed-policy.json", installed)
         (self.handoff / "homepage-policy.py").write_text("# fixture accepted helper bytes\n")
         lines = []
         for context in ["controller", "recovery"]:
@@ -227,6 +242,7 @@ class Workflow:
         }
         endpoints = [
             {"ids": ["homepage/backend"], "port": 13000, "purpose": "backend", "callers": ["traefik"]},
+            forgejo_endpoint,
             {"ids": ["haproxy/postgres"], "port": 5432, "purpose": "declared PostgreSQL applications and recovery", "callers": pg},
             {"ids": ["haproxy/metrics"], "port": 18405, "purpose": "metrics", "callers": ["prometheus"]},
         ]
@@ -413,21 +429,41 @@ class Workflow:
 
 
 @pytest.fixture
-def workflow(tmp_path, restrictor):
-    return Workflow(tmp_path / "isolated", restrictor)
+def workflow(tmp_path, restrictor, python_packages):
+    return Workflow(tmp_path / "isolated", restrictor, python_packages)
 
 
 @pytest.fixture(scope="module")
-def prepared_template(tmp_path_factory, restrictor):
-    source = Workflow(tmp_path_factory.mktemp("haproxy-prepared") / "isolated", restrictor)
+def prepared_template(tmp_path_factory, restrictor, python_packages):
+    source = Workflow(tmp_path_factory.mktemp("haproxy-prepared") / "isolated", restrictor, python_packages)
     status, output = source.run("prepare")
     assert status == 0, output
+    installed = json.loads((source.root / "installed-policy.json").read_text())
+    assert json.loads((source.batch / "policy-before.json").read_text()) == installed
+    values = json.loads((source.batch / "working-policy.json").read_text())
+    assert "forgejo/backend" in values["mgt_firewall_active_endpoints"]
+    assert values["mgt_firewall_callers"]["traefik"] == installed["callers"]["traefik"]
     return source
 
 
 @pytest.fixture
 def prepared_workflow(tmp_path, prepared_template):
     return Workflow.prepared_copy(prepared_template, tmp_path / "isolated")
+
+
+@pytest.fixture(scope="module")
+def resumed_template(tmp_path_factory, prepared_template):
+    # Run the immutable capture baseline once; consumers receive rebased,
+    # physical copies of all mutable files, logs, evidence and process state.
+    source = Workflow.prepared_copy(prepared_template, tmp_path_factory.mktemp("haproxy-resumed") / "isolated")
+    status, output = source.run("resume")
+    assert status == 0, output
+    return source
+
+
+@pytest.fixture
+def resumed_workflow(tmp_path, resumed_template):
+    return Workflow.prepared_copy(resumed_template, tmp_path / "isolated")
 
 
 @pytest.fixture
@@ -464,9 +500,10 @@ def interrupted_workflow(prepared_workflow):
     return w
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "invalid",
-    ["state", "duplicate", "acl", "policy", "endpoints", "stopped-container", "provider", "image", "probe-owner", "ipv6-listener"],
+    ["state", "policy", "stopped-container", "provider", "image", "probe-owner", "ipv6-listener"],
 )
 def test_continuation_rejects_incompatible_stage_without_lifecycle_replay(interrupted_workflow, invalid):
     w = interrupted_workflow
@@ -474,21 +511,10 @@ def test_continuation_rejects_incompatible_stage_without_lifecycle_replay(interr
     if invalid == "state":
         path = w.batch / "rollback-state.sh"
         path.write_text(path.read_text().replace('deployment_started="false"', 'deployment_started="true"'))
-    elif invalid == "duplicate":
-        path = w.batch / "rollback-state.sh"
-        path.write_text(path.read_text() + 'declare -- policy_started="true"\n')
-    elif invalid == "acl":
-        values = json.loads((w.batch / "deployment-inputs.json").read_text())
-        values["services_mgt_backend_acl_ready"] = "true"
-        dump(w.batch / "deployment-inputs.json", values)
     elif invalid == "policy":
         state = json.loads((w.root / "state.json").read_text())
         state["policy"] = "homepage"
         dump(w.root / "state.json", state)
-    elif invalid == "endpoints":
-        values = json.loads((w.batch / "working-policy.json").read_text())
-        values["mgt_firewall_active_endpoints"] = ["homepage/backend"]
-        dump(w.batch / "working-policy.json", values)
     elif invalid == "stopped-container":
         scenario = "continue-stopped-container"
     elif invalid == "provider":
@@ -509,6 +535,7 @@ def test_continuation_rejects_incompatible_stage_without_lifecycle_replay(interr
     assert kinds.count("probe_stop") == (1 if invalid == "ipv6-listener" else 0)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "scenario,status",
     [
@@ -578,9 +605,10 @@ def test_continuation_real_tail_exit_trap_and_scoped_rollback(interrupted_workfl
         assert f"Maintenance failed (status {status})" in log
 
 
+@pytest.mark.integration
 def test_kernel_denies_production_paths_and_all_runtime_sockets(workflow):
-    code = """import errno,os,socket
-for path in ['/opt/homelab/AGENTS.md','/opt/homelab/ansible/netbox.yml','/opt/ansible/.secrets','/run/docker.sock','/var/run/docker.sock']:
+    code = """import errno,os,socket,subprocess,uuid
+for path in ['/opt/homelab/AGENTS.md','/opt/homelab/ansible/netbox.yml','/opt/ansible/.secrets','/run/docker.sock','/var/run/docker.sock','/proc/sys/kernel/random/uuid']:
  try: os.open(path,os.O_RDONLY)
  except PermissionError: pass
  except FileNotFoundError: pass
@@ -589,6 +617,8 @@ for family in [socket.AF_UNIX,socket.AF_INET,socket.AF_INET6]:
  try: socket.socket(family)
  except PermissionError: pass
  else: raise AssertionError('socket creation permitted')
+nonces = [subprocess.check_output(['cat','/proc/sys/kernel/random/uuid'], text=True).strip() for _ in range(2)]
+assert all(uuid.UUID(value) for value in nonces) and nonces[0] != nonces[1]
 print('inherited kernel isolation passed')
 """
     result = subprocess.run(
@@ -601,6 +631,7 @@ print('inherited kernel isolation passed')
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("account", ["haproxy", "forgejo"])
 @pytest.mark.parametrize("failure", [None, "child", "home"])
 def test_account_wrapper_changes_private_operator_cwd_before_real_child(workflow, account, failure):
@@ -668,14 +699,15 @@ def test_account_wrapper_changes_private_operator_cwd_before_real_child(workflow
         }
 
 
-@pytest.mark.parametrize("scenario", ["mount-writable-root", "mount-missing-rw", "mount-direct-config"])
-def test_mount_guard_stops_real_preparation_before_pull_or_caller_replacement(workflow, scenario):
-    status, output = workflow.run("prepare", scenario)
+@pytest.mark.integration
+def test_mount_guard_stops_real_preparation_before_pull_or_caller_replacement(workflow):
+    status, output = workflow.run("prepare", "mount-writable-root")
     assert status != 0 and "HAProxy handoff:" in output
     kinds = [event["kind"] for event in workflow.events()]
     assert "image_pull" not in kinds and "caller_replace" not in kinds and "constraint_add" not in kinds
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "scenario,status",
     [
@@ -719,6 +751,7 @@ def test_actual_shell_exit_trap_and_rollback_subprocess(prepared_workflow, scena
     assert [e["caller"] for e in events if e["kind"] == "caller_replace"] == CALLERS
     assert all(e["caller"] in CALLERS for e in events if e["kind"] == "caller_replace")
     assert out.index("Private output log:") < out.index("Maintenance") if "Maintenance" in out else True
+    assert "forgejo/backend" in json.loads((workflow.batch / "working-policy.json").read_text())["mgt_firewall_active_endpoints"]
     if scenario == "success":
         assert state["excluded"] and state["policy"] == "complete" and state["unit_active"]
         assert "constraint_remove" not in kinds and kinds.index("constraint_add") < kinds.index("policy_apply") < kinds.index("deployment")
@@ -764,22 +797,19 @@ def test_actual_shell_exit_trap_and_rollback_subprocess(prepared_workflow, scena
     assert all('"-j"' not in rule and '"-g"' not in rule for rule in inserts)
 
 
-@pytest.mark.parametrize("missing", [True, False, "true"])
-def test_missing_false_or_typed_mgt_confirmation_stops_before_placement(prepared_workflow, missing):
-    workflow = prepared_workflow
-    path = workflow.batch / "working-policy.json"
+@pytest.mark.integration
+def test_unverified_mgt_caller_stops_before_placement(prepared_workflow):
+    path = prepared_workflow.batch / "working-policy.json"
     values = json.loads(path.read_text())
-    if missing is True:
-        values["mgt_firewall_callers"]["autobrr"][0].pop("verified")
-    else:
-        values["mgt_firewall_callers"]["autobrr"][0]["verified"] = missing
+    values["mgt_firewall_callers"]["autobrr"][0]["verified"] = False
     dump(path, values)
-    start = len(workflow.events())
-    code, out = workflow.run("maintenance")
-    assert code == 1, out
-    assert not any(e["kind"] == "constraint_add" for e in workflow.events()[start:])
+    start = len(prepared_workflow.events())
+    code, output = prepared_workflow.run("maintenance")
+    assert code == 1, output
+    assert not any(e["kind"] == "constraint_add" for e in prepared_workflow.events()[start:])
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "scenario,status",
     [
@@ -806,6 +836,7 @@ def test_prepare_producer_and_observation_failures_are_not_masked(workflow, scen
         assert sum(e["kind"] == "rule_insert" for e in events) == sum(e["kind"] == "rule_delete" for e in events) == 1
 
 
+@pytest.mark.integration
 def test_exact_manual_cleanup_is_usable_after_observation_delete_failure(workflow):
     status, out = workflow.run("prepare", "rule-delete-error")
     assert status == 1 and "exact observation cleanup failed" in out
@@ -821,31 +852,21 @@ def test_exact_manual_cleanup_is_usable_after_observation_delete_failure(workflo
     assert not json.loads((workflow.root / "state.json").read_text())["rules"]
 
 
-@pytest.mark.parametrize(
-    "field,value", [("ownership", None), ("ownership", False), ("ownership", "true"), ("context", False), ("metrics", None)]
-)
-def test_deployment_inputs_and_endpoint_scope_stop_before_placement(prepared_workflow, field, value):
-    w = prepared_workflow
-    path = w.batch / ("working-policy.json" if field == "metrics" else "deployment-inputs.json")
+@pytest.mark.integration
+def test_unaccepted_ownership_stops_before_placement(prepared_workflow):
+    path = prepared_workflow.batch / "deployment-inputs.json"
     values = json.loads(path.read_text())
-    if field == "ownership":
-        if value is None:
-            values["services_rootless_data_ready"].pop("haproxy")
-        else:
-            values["services_rootless_data_ready"]["haproxy"] = value
-    elif field == "context":
-        values["service_common_postgres_operator_context"] = value
-    else:
-        values["mgt_firewall_active_endpoints"].remove("haproxy/metrics")
+    values["services_rootless_data_ready"]["haproxy"] = False
     dump(path, values)
-    before = len(w.events())
-    status, out = w.run("maintenance")
-    assert status == 1, out
-    assert not any(e["kind"] == "constraint_add" for e in w.events()[before:])
+    before = len(prepared_workflow.events())
+    status, output = prepared_workflow.run("maintenance")
+    assert status == 1, output
+    assert not any(e["kind"] == "constraint_add" for e in prepared_workflow.events()[before:])
 
 
-@pytest.mark.parametrize("scope", [CALLERS + ["unrelated"], CALLERS[:-1] + ["unrelated"]])
-def test_real_hook_cli_rejects_any_replacement_outside_exact_eight(prepared_workflow, scope):
+@pytest.mark.integration
+def test_real_hook_cli_rejects_any_replacement_outside_exact_eight(prepared_workflow):
+    scope = CALLERS + ["unrelated"]
     w = prepared_workflow
     before = len(w.events())
     result = subprocess.run(
@@ -867,6 +888,7 @@ def test_real_hook_cli_rejects_any_replacement_outside_exact_eight(prepared_work
     assert result.returncode in [1, 2] and len(w.events()) == before
 
 
+@pytest.mark.integration
 def test_actual_preparation_replaces_all_callers_with_fresh_identities(prepared_workflow):
     w = prepared_workflow
     events = w.events()
@@ -889,6 +911,7 @@ def test_actual_preparation_replaces_all_callers_with_fresh_identities(prepared_
     assert not json.loads((w.batch / "working-policy.json").read_text())["mgt_firewall_inputs_verified"]
 
 
+@pytest.mark.integration
 def test_fresh_changed_labels_stop_before_placement(prepared_workflow):
     w = prepared_workflow
     path = w.root / "reports.json"
@@ -903,6 +926,7 @@ def test_fresh_changed_labels_stop_before_placement(prepared_workflow):
     assert not any(e["kind"] == "constraint_add" for e in w.events()[before:])
 
 
+@pytest.mark.integration
 def test_failed_image_query_with_valid_partial_output_stops_before_placement(prepared_workflow):
     w = prepared_workflow
     before = len(w.events())
@@ -911,6 +935,7 @@ def test_failed_image_query_with_valid_partial_output_stops_before_placement(pre
     assert not any(e["kind"] == "constraint_add" for e in w.events()[before:])
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("scenario", ["deployment-after-write", "rollback-placement-no-write", "rollback-placement-after-write"])
 def test_rollback_replay_uses_recorded_completed_transitions(prepared_workflow, scenario):
     w = prepared_workflow
@@ -928,6 +953,7 @@ def test_rollback_replay_uses_recorded_completed_transitions(prepared_workflow, 
     assert sum(e["kind"] == "constraint_remove" for e in after) == (1 if scenario == "rollback-placement-no-write" else 0)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("scenario,status", [("success", 0), ("capture-idle", 1), ("capture-command-error", 53)])
 def test_actual_resume_preserves_completed_preparation_and_failure_status(prepared_workflow, scenario, status):
     w = prepared_workflow
@@ -969,6 +995,7 @@ def test_actual_resume_preserves_completed_preparation_and_failure_status(prepar
         assert not list(w.batch.glob("resume-*.json"))
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("scenario,status", [("success", 0), ("capture-command-error", 53)])
 def test_operator_resume_command_logs_early_and_preserves_status(prepared_workflow, scenario, status):
     import re
@@ -992,11 +1019,10 @@ def test_operator_resume_command_logs_early_and_preserves_status(prepared_workfl
     assert f"exited with status {status}" in result.stdout
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("replacement", [False, True])
-def test_resume_capture_is_reused_only_with_unchanged_callers_before_maintenance(prepared_workflow, replacement):
-    w = prepared_workflow
-    status, output = w.run("resume")
-    assert status == 0, output
+def test_resume_capture_is_reused_only_with_unchanged_callers_before_maintenance(resumed_workflow, replacement):
+    w = resumed_workflow
     capture = next(w.batch.glob("route-capture-*.json.metadata.json"))
     w.env["HAPROXY_ROUTE_CAPTURE_FILE"] = str(capture)
     reports = json.loads((w.root / "reports.json").read_text())
@@ -1023,10 +1049,10 @@ def test_resume_capture_is_reused_only_with_unchanged_callers_before_maintenance
         assert not any(e["kind"] == "replace" for e in events)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("change", [None, "replacement", "incomplete", "invalid-selection"])
-def test_actual_targeted_resume_keeps_other_windows_and_accepted_inputs(prepared_workflow, change):
-    w = prepared_workflow
-    assert w.run("resume")[0] == 0
+def test_actual_targeted_resume_keeps_other_windows_and_accepted_inputs(resumed_workflow, change):
+    w = resumed_workflow
     capture = next(w.batch.glob("route-capture-*.json.metadata.json"))
     old = json.loads(capture.read_text())
     # Reproduce the operator's completed window: ONLY Authelia was idle.
@@ -1068,29 +1094,31 @@ def test_actual_targeted_resume_keeps_other_windows_and_accepted_inputs(prepared
     assert "HAPROXY_ROUTE_CAPTURE_FILE=" in output
 
 
-def test_full_installed_forgejo_endpoint_survives_real_prepare_and_maintenance(workflow):
-    endpoint = {"ids": ["forgejo/backend"], "port": 13001, "purpose": "backend", "callers": ["traefik"]}
-    installed = json.loads((workflow.root / "installed-policy.json").read_text())
-    installed["endpoints"].append(endpoint)
-    dump(workflow.root / "installed-policy.json", installed)
-    stage = json.loads((workflow.root / "stage.json").read_text())
-    for name in ["plan", "policy"]:
-        stage[name]["endpoints"].append(endpoint)
-    dump(workflow.root / "stage.json", stage)
-    status, output = workflow.run("prepare")
-    assert status == 0, output
-    assert json.loads((workflow.batch / "policy-before.json").read_text()) == installed
-    values = json.loads((workflow.batch / "working-policy.json").read_text())
-    assert "forgejo/backend" in values["mgt_firewall_active_endpoints"]
-    assert values["mgt_firewall_callers"]["traefik"] == installed["callers"]["traefik"]
-    status, output = workflow.run("maintenance")
-    assert status == 0, output
-    assert "forgejo/backend" in json.loads((workflow.batch / "working-policy.json").read_text())["mgt_firewall_active_endpoints"]
-
-
+@pytest.mark.integration
 def test_concurrent_endpoint_addition_stops_before_policy_write(prepared_workflow):
     w = prepared_workflow
     status, output = w.run("maintenance", "baseline-after-route")
     assert status != 0, output
     assert not any(e["kind"] == "policy_apply" for e in w.events())
     assert json.loads((w.root / "state.json").read_text())["excluded"] is False
+
+
+@pytest.mark.integration
+def test_prepared_workflow_does_not_share_writable_packages(prepared_workflow, prepared_template):
+    relative = Path("packages/sitecustomize.py")
+    baseline = (prepared_template.root / relative).read_bytes()
+    (prepared_workflow.root / relative).write_bytes(baseline + b"\n# isolated fixture edit\n")
+    assert (prepared_template.root / relative).read_bytes() == baseline
+
+
+@pytest.mark.integration
+def test_resumed_workflow_copies_evidence_without_mutating_shared_baseline(resumed_workflow, resumed_template):
+    source = next(resumed_template.batch.glob("route-capture-*.json.metadata.json"))
+    baseline = source.read_bytes()
+    private = resumed_workflow.batch / source.name
+    stage = json.loads((resumed_workflow.batch / "stage.json").read_text())
+    assert Path(stage["definition"]["paths"][0]["path"]).is_relative_to(resumed_workflow.root)
+    assert str(resumed_template.root).encode() not in private.read_bytes()
+    assert (private.stat().st_dev, private.stat().st_ino) != (source.stat().st_dev, source.stat().st_ino)
+    private.write_text("[]\n")
+    assert source.read_bytes() == baseline

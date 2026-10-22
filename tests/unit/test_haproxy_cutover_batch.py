@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from ansible_task_cases import task_section, walk_tasks
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("cutover_test", ROOT / "ansible/operator/haproxy-cutover.py")
@@ -38,7 +39,7 @@ def mount_record(source="/", rw=False):
 
 
 @pytest.fixture(scope="module")
-def mount_projection(tmp_path_factory):
+def mount_projection(tmp_path_factory, go_cache):
     go = shutil.which("go")
     if not go:
         pytest.skip("Go unavailable for actual Docker mount projection regression")
@@ -62,7 +63,7 @@ func main() {
         "GOPROXY": "off",
         "GOSUMDB": "off",
         "GO111MODULE": "off",
-        "GOCACHE": str(root / "cache"),
+        "GOCACHE": str(go_cache),
     }
     result = subprocess.run([go, "build", "-o", str(binary), str(source)], capture_output=True, text=True, env=environment, timeout=120)
     assert result.returncode == 0, result.stderr
@@ -80,6 +81,7 @@ func main() {
     return project
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("rw", [False, True, "absent"])
 def test_actual_alloy_mount_projection_and_guard(tmp_path, mount_projection, rw):
     captured = {
@@ -479,14 +481,22 @@ def test_current_selector_resolves_again_and_requires_all_exact_labels(monkeypat
         )
 
 
-@pytest.mark.parametrize("check", [False, True])
-def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path, check):
+@pytest.mark.integration
+@pytest.mark.parametrize("mode", ["normal", "check", "no-output", "missing-patroni"])
+def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path, mode):
     catalog = {}
     for path in (ROOT / "ansible/group_vars/all/services").glob("*.yml"):
         catalog.update(yaml.safe_load(path.read_text()))
     play = {"tasks": yaml.safe_load((ROOT / "ansible/operations/haproxy-firewall-preflight.yml").read_text())}
-    task = deepcopy(play["tasks"][-1])
-    for entry in task["block"]:
+    # Full preflight would run real runtime discovery. Keep the value-free
+    # projection with its inherited guards, regardless of block regrouping.
+    projection_tasks = task_section(
+        play["tasks"],
+        lambda task: "haproxy_preflight_stage_output is string" in task.get("ansible.builtin.assert", {}).get("that", []),
+        lambda task: task.get("ansible.builtin.copy", {}).get("dest") == "{{ haproxy_preflight_stage_output }}",
+        purpose="HAProxy value-free projection",
+    )
+    for entry in walk_tasks(projection_tasks):
         if "ansible.builtin.include_vars" in entry:
             entry["ansible.builtin.include_vars"]["file"] = str(ROOT / "ansible" / entry["ansible.builtin.include_vars"]["file"])
         if "ansible.builtin.include_tasks" in entry:
@@ -517,8 +527,12 @@ def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path,
         "services_private_https_port": 10443,
         "infisical_postgres_port": 6543,
     }
+    if mode == "no-output":
+        variables.pop("haproxy_preflight_stage_output")
+    if mode == "missing-patroni":
+        inventory["all"]["children"] = {}
     tasks = [
-        task,
+        *projection_tasks,
         {
             "name": "Render the actual adapter template",
             "ansible.builtin.template": {
@@ -543,14 +557,20 @@ def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path,
     )
     result = subprocess.run(
         [str(Path(sys.executable).parent / "ansible-playbook"), "-i", str(tmp_path / "inventory.yml"), str(tmp_path / "play.yml")]
-        + (["--check"] if check else []),
+        + (["--check"] if mode == "check" else []),
         capture_output=True,
         text=True,
         env={**os.environ, "ANSIBLE_CONFIG": str(config)},
     )
-    assert result.returncode == 0, result.stdout + result.stderr
-    if check:
+    if mode == "missing-patroni":
+        assert result.returncode != 0 and "Assertion failed" in result.stdout, result.stdout + result.stderr
         assert not projection.exists() and not (tmp_path / "adapter.cfg").exists()
+        return
+    assert result.returncode == 0, result.stdout + result.stderr
+    if mode == "check":
+        assert not projection.exists() and not (tmp_path / "adapter.cfg").exists()
+    elif mode == "no-output":
+        assert not projection.exists() and (tmp_path / "adapter.cfg").exists()
     else:
         stage = BATCH.read(projection)
         assert {i for e in stage["policy"]["endpoints"] for i in e["ids"]} == {
@@ -584,6 +604,7 @@ def test_reviewed_policy_cannot_change_accepted_homepage(tmp_path, change):
         BATCH.homepage(current, source)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("state", ["before-write", "after-write", "outside-change", "new-paths"])
 def test_scoped_configuration_rollback_handles_partial_deployment(tmp_path, state):
     import re
@@ -741,3 +762,230 @@ def test_retained_policy_and_scoped_rollback_reject_stale_overwrites(tmp_path, m
         current.clear()
         current.update(deepcopy(baseline))
         BATCH.rollback_policy(tmp_path)  # Failed installation before writes is idempotent.
+
+
+@pytest.fixture
+def validation_batch(tmp_path):
+    """Synthetic accepted inputs for the real preflight validators, with no runtime I/O."""
+    callers = {
+        name: [
+            {
+                "kind": "container",
+                "runtime": "docker",
+                "phase": "docker",
+                "path": "bridge",
+                "selector": "app_" + name,
+                "verified": True,
+                "restart_verified": True,
+                "physdev_verified": True,
+            }
+        ]
+        for name in ["autobrr", "traefik", "prometheus"]
+    }
+    endpoints = [
+        {"ids": ["homepage/backend"], "port": 13000, "callers": ["traefik"]},
+        {"ids": ["haproxy/postgres"], "port": 5432, "callers": ["autobrr"]},
+        {"ids": ["haproxy/metrics"], "port": 18405, "callers": ["prometheus"]},
+    ]
+    policy = {
+        "schema": 1,
+        "backend": "nf_tables",
+        "inventory_host": "manager",
+        "inventory_address": "192.0.2.48",
+        "inputs_verified": True,
+        "callers": callers,
+        "endpoints": endpoints,
+        "principals": {name: {"inventory_hosts": "manager"} for name in callers},
+    }
+    values = {
+        "mgt_firewall_active_endpoints": [e["ids"][0] for e in endpoints],
+        "mgt_firewall_callers": callers,
+        "mgt_firewall_inputs_verified": True,
+    }
+    reports = [
+        {
+            "host": "manager",
+            "containers": [
+                {
+                    "swarm": "app_" + name,
+                    "binding": bindings[0],
+                    "destinations": [{"routes": [{"kind": "overlay_service", "provider": True}]}],
+                }
+                for name, bindings in callers.items()
+            ],
+        }
+    ]
+    stage = {"controller": "manager", "workers": ["worker"], "policy": policy, "plan": {"principals": policy["principals"]}}
+    dump(tmp_path / "working-policy.json", values)
+    dump(tmp_path / "stage.json", stage)
+    dump(tmp_path / "metadata.json", reports)
+    dump(
+        tmp_path / "deployment-inputs.json",
+        {
+            "service_common_postgres_operator_context": True,
+            "podman_services_pull_images": False,
+            "services_mgt_backend_acl_ready": True,
+            "services_rootless_data_ready": {"haproxy": True},
+        },
+    )
+    (tmp_path / "homepage-inputs.yml").write_text(yaml.safe_dump({"mgt_firewall_callers": {"traefik": callers["traefik"]}}))
+    return tmp_path
+
+
+@pytest.mark.parametrize("phase", ["pre", "live"])
+@pytest.mark.parametrize("change", [None, "ownership-missing", "ownership-false", "ownership-string", "context", "acl", "pull"])
+def test_deployment_validator_rejects_incomplete_or_typed_inputs_without_mutation(validation_batch, phase, change):
+    path = validation_batch / "deployment-inputs.json"
+    values = BATCH.read(path)
+    values["services_mgt_backend_acl_ready"] = phase == "live"
+    if change == "ownership-missing":
+        values["services_rootless_data_ready"].pop("haproxy")
+    elif change in {"ownership-false", "ownership-string"}:
+        values["services_rootless_data_ready"]["haproxy"] = False if change == "ownership-false" else "true"
+    elif change == "context":
+        values["service_common_postgres_operator_context"] = False
+    elif change == "acl":
+        values["services_mgt_backend_acl_ready"] = "true"
+    elif change == "pull":
+        values["podman_services_pull_images"] = True
+    dump(path, values)
+    before = path.read_bytes()
+    if change:
+        with pytest.raises(ValueError):
+            BATCH.deployment(path, phase)
+    else:
+        BATCH.deployment(path, phase)
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        None,
+        "verified-missing",
+        "verified-false",
+        "verified-string",
+        "restart-string",
+        "physdev-false",
+        "metrics-missing",
+        "duplicate-endpoint",
+    ],
+)
+def test_ready_validator_enforces_caller_confirmations_and_complete_endpoint_selection(validation_batch, change):
+    path = validation_batch / "working-policy.json"
+    values = BATCH.read(path)
+    binding = values["mgt_firewall_callers"]["autobrr"][0]
+    if change == "verified-missing":
+        binding.pop("verified")
+    elif change in {"verified-false", "verified-string"}:
+        binding["verified"] = False if change == "verified-false" else "true"
+    elif change == "restart-string":
+        binding["restart_verified"] = "true"
+    elif change == "physdev-false":
+        binding["physdev_verified"] = False
+    elif change == "metrics-missing":
+        values["mgt_firewall_active_endpoints"].remove("haproxy/metrics")
+    elif change == "duplicate-endpoint":
+        values["mgt_firewall_active_endpoints"].append("haproxy/metrics")
+    dump(path, values)
+    before = path.read_bytes()
+    args = [path, validation_batch / "metadata.json", validation_batch / "stage.json"]
+    if change:
+        with pytest.raises(ValueError):
+            BATCH.ready(*args)
+    else:
+        BATCH.ready(*args)
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("change", [None, "duplicate", "started", "missing", "extra", "foreign-unit"])
+def test_continuation_state_parser_rejects_ambiguous_assignments_without_execution(tmp_path, capsys, change):
+    assignments = [
+        'declare -- exclusion_started="true"',
+        'declare -- policy_started="true"',
+        'declare -- deployment_started="false"',
+        'declare -- probe_unit="skynet-haproxy-acceptance-fixture.service"',
+    ]
+    if change == "duplicate":
+        assignments.append(assignments[1])
+    elif change == "started":
+        assignments[2] = 'declare -- deployment_started="true"'
+    elif change == "missing":
+        assignments.pop(1)
+    elif change == "extra":
+        assignments.append("touch must-not-execute")
+    elif change == "foreign-unit":
+        assignments[3] = 'declare -- probe_unit="unrelated.service"'
+    path = tmp_path / "rollback-state.sh"
+    path.write_text("\n".join(assignments) + "\n")
+    before = path.read_bytes()
+    if change:
+        with pytest.raises(ValueError):
+            BATCH.continuation_state(tmp_path)
+        assert capsys.readouterr().out == ""
+    else:
+        BATCH.continuation_state(tmp_path)
+        assert capsys.readouterr().out.splitlines() == [
+            "exclusion_started=true",
+            "policy_started=true",
+            "deployment_started=false",
+            "probe_unit=skynet-haproxy-acceptance-fixture.service",
+        ]
+    assert path.read_bytes() == before and not (tmp_path / "must-not-execute").exists()
+
+
+@pytest.mark.parametrize("change", [None, "acl", "endpoints", "installed-policy"])
+def test_continuation_policy_validates_inputs_before_read_only_audit(validation_batch, monkeypatch, change):
+    installed = deepcopy(BATCH.read(validation_batch / "stage.json")["policy"])
+    if change == "acl":
+        path = validation_batch / "deployment-inputs.json"
+        values = BATCH.read(path)
+        values["services_mgt_backend_acl_ready"] = "true"
+        dump(path, values)
+    elif change == "endpoints":
+        path = validation_batch / "working-policy.json"
+        values = BATCH.read(path)
+        values["mgt_firewall_active_endpoints"].remove("haproxy/metrics")
+        dump(path, values)
+    elif change == "installed-policy":
+        installed["inventory_address"] = "192.0.2.99"
+    original_read = BATCH.read
+    monkeypatch.setattr(
+        BATCH, "read", lambda path: deepcopy(installed) if str(path) == "/etc/skynet-mgt-firewall/policy.json" else original_read(path)
+    )
+    calls = []
+
+    def audit(argv):
+        assert argv == ["/usr/bin/python3", "/etc/skynet-mgt-firewall/policy.py", "check"]
+        calls.append(argv)
+        return json.dumps({"compliant": True, "families": [4, 6], "pending": []})
+
+    monkeypatch.setattr(BATCH, "run", audit)
+    before = {path.name: path.read_bytes() for path in validation_batch.iterdir()}
+    if change:
+        with pytest.raises(ValueError):
+            BATCH.continuation_policy(validation_batch)
+    else:
+        BATCH.continuation_policy(validation_batch)
+    assert len(calls) == (0 if change else 1)
+    assert {path.name: path.read_bytes() for path in validation_batch.iterdir()} == before
+
+
+@pytest.mark.parametrize("change", ["extra", "substitution", "duplicate", "nonroot"])
+def test_hook_scope_validator_rejects_wrong_callers_before_any_io(monkeypatch, change):
+    scope = list(BATCH.MGT)
+    if change == "extra":
+        scope.append("unrelated")
+    elif change == "substitution":
+        scope[-1] = "unrelated"
+    elif change == "duplicate":
+        scope[-1] = scope[0]
+    monkeypatch.setattr(BATCH.os, "geteuid", lambda: 1000 if change == "nonroot" else 0)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("invalid replacement scope reached file or runtime I/O")
+
+    monkeypatch.setattr(BATCH, "read", forbidden)
+    monkeypatch.setattr(BATCH, "run", forbidden)
+    with pytest.raises(ValueError, match="exactly the eight caller replacements"):
+        BATCH.hooks("unused-policy", "unused-stage", scope)

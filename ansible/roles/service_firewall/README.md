@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/21 |
+| Readme update        | 2026/10/22 |
 
 
 
@@ -134,9 +134,8 @@ those public names remain supported by saved rollback playbooks. |
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Service firewall ¦ Mgt ¦ Validate the selected operation | ansible.builtin.assert | False |
-| Service firewall ¦ Mgt ¦ Prepare endpoint declarations and caller inputs | block | True |
-| Service firewall ¦ Mgt ¦ Load service declarations without secret values | ansible.builtin.include_vars | False |
-| Service firewall ¦ Mgt ¦ Build endpoints from service and bootstrap declarations | mgt_firewall_plan | False |
+| Service firewall ¦ Mgt ¦ Load service declarations without secret values | ansible.builtin.include_vars | True |
+| Service firewall ¦ Mgt ¦ Build endpoints from service and bootstrap declarations | mgt_firewall_plan | True |
 | Service firewall ¦ Mgt ¦ Show endpoint coverage and pending caller identities | ansible.builtin.debug | True |
 | Service firewall ¦ Mgt ¦ Show the check-mode recovery plan | ansible.builtin.debug | True |
 | Service firewall ¦ Mgt ¦ Run the selected policy operation | ansible.builtin.include_tasks | True |
@@ -199,10 +198,9 @@ those public names remain supported by saved rollback playbooks. |
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Service firewall ¦ Workers ¦ Check existing firewall tools and selected backend | ansible.builtin.command | False |
-| Service firewall ¦ Workers ¦ Validate Unraid boot entry before writing policy | block | True |
-| Service firewall ¦ Workers ¦ Read Unraid flash permissions from the boot script | ansible.builtin.stat | False |
-| Service firewall ¦ Workers ¦ Read existing supported boot script | ansible.builtin.slurp | False |
-| Service firewall ¦ Workers ¦ Require a shell boot script | ansible.builtin.assert | False |
+| Service firewall ¦ Workers ¦ Read Unraid flash permissions from the boot script | ansible.builtin.stat | True |
+| Service firewall ¦ Workers ¦ Read existing supported boot script | ansible.builtin.slurp | True |
+| Service firewall ¦ Workers ¦ Require a shell boot script | ansible.builtin.assert | True |
 | Service firewall ¦ Workers ¦ Extend and reconcile the current policy under its writer lock | service_firewall_lifecycle | False |
 | Service firewall ¦ Workers ¦ Configure policy startup and reconciliation for this platform | ansible.builtin.include_tasks | False |
 

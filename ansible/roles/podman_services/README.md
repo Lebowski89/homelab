@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/21 |
+| Readme update        | 2026/10/22 |
 
 
 
@@ -169,9 +169,8 @@ batch. A changed desired account must not hide the old writer's manager. |
 | Execution ¦ Detect conflicting host IPv4 routes | ansible.builtin.set_fact | True |  |
 | Execution ¦ Reject conflicting host IPv4 routes | ansible.builtin.assert | True |  |
 | Execution ¦ Read host IPv6 routes for direct pasta conflict detection | ansible.builtin.command | True |  |
-| Execution ¦ Reject conflicting host IPv6 routes before account mutation | block | True |  |
-| Execution ¦ Detect conflicting host IPv6 routes | ansible.builtin.set_fact | False |  |
-| Execution ¦ Require a private IPv6 subnet separate from host routes | ansible.builtin.assert | False |  |
+| Execution ¦ Detect conflicting host IPv6 routes | ansible.builtin.set_fact | True |  |
+| Execution ¦ Require a private IPv6 subnet separate from host routes | ansible.builtin.assert | True |  |
 | Execution ¦ Check selected rootless account | ansible.builtin.getent | True |  |
 | Execution ¦ Check selected rootless primary group | ansible.builtin.getent | True |  |
 | Execution ¦ Check selected rootless home | ansible.builtin.stat | True |  |
@@ -257,14 +256,20 @@ batch. A changed desired account must not hide the old writer's manager. |
 
 #### File: tasks/sub_tasks/quadlets.yml
 
-| Name | Module | Has Conditions | Tags |
-| ---- | ------ | -------------- | -----|
-| Quadlets ¦ Preview rootless Quadlet changes | ansible.builtin.include_tasks | True |  |
-| Quadlets ¦ Ensure Quadlet directory exists | ansible.builtin.file | True |  |
-| Quadlets ¦ Write network Quadlet | ansible.builtin.template | True |  |
-| Quadlets ¦ Write volume Quadlets | ansible.builtin.template | True |  |
-| Quadlets ¦ Write protected environment file | ansible.builtin.template | True |  |
-| Quadlets ¦ Write container Quadlet | ansible.builtin.template | True |  |
+| Name | Module | Has Conditions | Tags | Comments |
+| ---- | ------ | -------------- | -----| -------- |
+| Quadlets ¦ Preview rootless Quadlet changes | ansible.builtin.include_tasks | True |  |  |
+| Quadlets ¦ Ensure Quadlet directory exists | ansible.builtin.file | True |  |  |
+| Quadlets ¦ Write network Quadlet | ansible.builtin.template | True |  |  |
+| Quadlets ¦ Write volume Quadlets | ansible.builtin.template | True |  |  |
+| Quadlets ¦ Write protected environment file | ansible.builtin.template | True |  |  |
+| Quadlets ¦ Retire the managed environment file when no values remain | block | True |  | Retire the old protected file before successful state can omit its ownership. |
+| Quadlets ¦ Inspect the obsolete environment path without following links | ansible.builtin.stat | False |  |  |
+| Quadlets ¦ Require scoped ownership before retiring an environment file | ansible.builtin.assert | True |  |  |
+| Quadlets ¦ Read the obsolete environment marker privately | ansible.builtin.slurp | True |  |  |
+| Quadlets ¦ Require the generated marker before retiring the environment file | ansible.builtin.assert | True |  |  |
+| Quadlets ¦ Remove only the proved obsolete environment file | ansible.builtin.file | True |  |  |
+| Quadlets ¦ Write container Quadlet | ansible.builtin.template | True |  |  |
 
 #### File: tasks/sub_tasks/remove.yml
 

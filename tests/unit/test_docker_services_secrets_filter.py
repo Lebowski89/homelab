@@ -358,6 +358,7 @@ def _run_standalone_secret_fixture(
     return secret_path, output, existing_value, desired_value
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("initial_kind", "update_policy", "expected"),
     [
@@ -383,6 +384,7 @@ def test_standalone_secret_materialization_preserves_reconciles_and_repairs(
     assert secret_path.read_text() == (existing_value if expected == "existing" else desired_value)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("initial_kind", "update_policy", "predicted_changes"),
     [

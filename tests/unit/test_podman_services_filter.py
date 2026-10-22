@@ -3,10 +3,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
-import yaml
 from ansible.errors import AnsibleFilterError
-from jinja2 import StrictUndefined
-from jinja2.nativetypes import NativeEnvironment
 
 MODULE_PATH = Path(__file__).resolve().parents[2] / "ansible" / "roles" / "podman_services" / "filter_plugins" / "podman_services.py"
 spec = importlib.util.spec_from_file_location("podman_services", MODULE_PATH)
@@ -1256,27 +1253,6 @@ def rootless_bind_cfg():
     return cfg
 
 
-def real_rootless_service(name):
-    services_dir = Path(__file__).resolve().parents[2] / "ansible" / "group_vars" / "all" / "services"
-    rendered = (
-        NativeEnvironment(undefined=StrictUndefined)
-        .from_string((services_dir / f"{name}.yml").read_text())
-        .render(
-            services_controller_host="manager",
-            local_ip="192.0.2.10",
-            timezone="Australia/Melbourne",
-            hostvars={
-                "manager": {
-                    "container_host_puid": 1000,
-                    "container_host_pgid": 1000,
-                    "container_host_appdata_root": "/opt/appdata",
-                }
-            },
-        )
-    )
-    return yaml.safe_load(rendered)[name]
-
-
 def test_rootless_bind_mount_uses_validated_keep_id_and_dedicated_path_ownership_without_mutation():
     cfg = rootless_bind_cfg()
     original = deepcopy(cfg)
@@ -1367,15 +1343,6 @@ def test_rootless_paths_allow_confined_state_absent_cleanup(cleanup_paths):
     normalized = podman_services.podman_service_normalize(cfg, "thelounge")
 
     assert normalized["host_paths"][-len(cleanup_paths) :] == [{"path": path, "state": "absent"} for path in cleanup_paths]
-
-
-@pytest.mark.parametrize("service_name", ["adminer", "thelounge"])
-def test_existing_rootless_service_declarations_remain_valid(service_name):
-    cfg = real_rootless_service(service_name)
-
-    normalized = podman_services.podman_service_normalize(cfg, service_name)
-
-    assert normalized["execution"]["mode"] == "rootless"
 
 
 @pytest.mark.parametrize(

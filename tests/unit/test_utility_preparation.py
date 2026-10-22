@@ -801,6 +801,7 @@ def test_wallos_selected_map_is_explicit_scoped_and_retains_evidence(tmp_path, m
         assert any("rm" in argv for argv in calls) == (case not in {"unowned_collision", "ambiguous_cleanup", "expired_cleanup"})
 
 
+@pytest.mark.integration
 def test_probe_startup_does_not_wait_for_child_inherited_output(tmp_path):
     """Execute real subprocesses, without sudo, inventory or runtime access."""
     import os
@@ -826,6 +827,7 @@ print(pid, flush=True)
     assert (tmp_path / "probe-fixture.stdout").read_text().strip() == child
 
 
+@pytest.mark.integration
 def test_probe_timeout_preserves_partial_output_and_reports_phase(tmp_path):
     import sys
 
@@ -1576,6 +1578,7 @@ def test_ownership_hardlink_apply_rejects_changed_identity_before_chown(tmp_path
         UTILITY.ownership_apply(snapshot)
 
 
+@pytest.mark.integration
 def test_gnu_tar_backup_restore_retains_hardlinks_and_symlinks(tmp_path):
     import tarfile
 
@@ -1655,6 +1658,7 @@ def test_archive_topology_rejects_broken_or_outside_links(tmp_path, failure):
         UTILITY.ownership_archive_verify(archive, before)
 
 
+@pytest.mark.integration
 def test_tar_and_inode_translation_preserve_numeric_acl_entries(tmp_path):
     import shutil
 

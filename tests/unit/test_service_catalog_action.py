@@ -187,6 +187,7 @@ def test_real_arr_targets_retain_base_and_target_infisical_declarations(service_
     assert declarations.count(api_var) == 1
 
 
+@pytest.mark.integration
 def test_action_templates_selected_config_in_dispatch_host_context_only(tmp_path):
     ansible_playbook = Path(sys.executable).with_name("ansible-playbook")
     playbook = tmp_path / "selective-materialization.yml"
@@ -265,6 +266,7 @@ def test_action_reads_source_by_name_without_templating_the_whole_mapping():
     assert "self._templar.template(task_vars[source_var]" not in source
 
 
+@pytest.mark.integration
 def test_lifecycle_planning_keeps_unselected_configurations_unmaterialized(tmp_path):
     ansible_playbook = Path(sys.executable).with_name("ansible-playbook")
     playbook = tmp_path / "lightweight-lifecycle-plan.yml"

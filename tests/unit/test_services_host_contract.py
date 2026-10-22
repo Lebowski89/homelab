@@ -222,6 +222,7 @@ def test_lan_cidr_consumers_use_the_inventory_topology_variable():
     assert "VPN_LAN_NETWORK={{ services_lan_cidr }}" in qbittorrent_environment
 
 
+@pytest.mark.integration
 def test_tracked_repository_does_not_contain_private_lan_cidr():
     private_lan_cidr = "192.168." + "80.0/24"
     result = subprocess.run(
@@ -393,6 +394,7 @@ def test_filesystem_hosts_are_validated_before_adapter_or_common_mutation():
     assert "service_common_target_host in ansible_play_hosts_all" in common_validate["ansible.builtin.assert"]["that"]
 
 
+@pytest.mark.integration
 def test_singleton_group_resolution_and_aliases_succeed_with_one_host(tmp_path: Path):
     result = run_host_contract(
         tmp_path,
@@ -404,6 +406,7 @@ def test_singleton_group_resolution_and_aliases_succeed_with_one_host(tmp_path: 
     assert "Confirm canonical and compatibility values" in result.stdout
 
 
+@pytest.mark.integration
 def test_canonical_inventory_hosts_need_not_be_active_play_hosts(tmp_path: Path):
     contract = yaml.safe_load(HOST_CONTRACT_TASKS.read_text())
     validation = task_named(contract, "Service host contract | Validate canonical host values")
@@ -424,6 +427,7 @@ def test_canonical_inventory_hosts_need_not_be_active_play_hosts(tmp_path: Path)
     assert "Confirm canonical and compatibility values" in result.stdout
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("controllers", "storage_hosts"),
     [
@@ -446,6 +450,7 @@ def test_singleton_group_validation_rejects_zero_or_multiple_matches(
     assert "Publish Docker adapter compatibility alias" not in output
 
 
+@pytest.mark.integration
 def test_canonical_host_validation_rejects_unknown_explicit_plex_before_aliases(tmp_path: Path):
     result = run_host_contract(
         tmp_path,
@@ -460,6 +465,7 @@ def test_canonical_host_validation_rejects_unknown_explicit_plex_before_aliases(
     assert "Publish Docker adapter compatibility alias" not in output
 
 
+@pytest.mark.integration
 def test_service_topology_validation_rejects_missing_or_malformed_values(tmp_path: Path):
     invalid_topologies = [
         {},
@@ -504,6 +510,7 @@ def test_service_topology_validation_rejects_missing_or_malformed_values(tmp_pat
         assert "Publish Docker adapter compatibility alias" not in output
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("cidr", ["192.168." + "80.0/24", "10.0.0.0/8"])
 def test_service_topology_validation_accepts_ipv4_cidrs(tmp_path: Path, cidr: str):
     topology = {
@@ -523,6 +530,7 @@ def test_service_topology_validation_accepts_ipv4_cidrs(tmp_path: Path, cidr: st
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "cidr",
     [

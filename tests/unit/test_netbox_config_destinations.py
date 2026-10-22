@@ -75,6 +75,7 @@ def test_parser_does_not_expose_invalid_source_or_credentials():
     assert error.value.__suppress_context__
 
 
+@pytest.mark.integration
 def test_atomic_apply_preserves_metadata_acl_xattrs_and_supports_rollback(tmp_path):
     path = tmp_path / "configuration.py"
     path.write_bytes(SOURCE)

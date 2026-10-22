@@ -303,27 +303,31 @@
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Execution | Reject conflicting host IPv6 routes before account mutation
+- name: Execution | Detect conflicting host IPv6 routes
   when:
     - not ansible_check_mode
     - podman_services_execution.mode == 'rootless'
     - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
     - podman_services_rootless_pasta_config.ipv6_subnet is defined
   tags: [deploy, update, recreate, bootstrap]
-  block:
-    - name: Execution | Detect conflicting host IPv6 routes
-      ansible.builtin.set_fact:
-        podman_services_rootless_host_ipv6_route_overlaps: >-
-          {{ podman_services_rootless_host_ipv6_routes.stdout | from_json |
-             podman_rootless_pasta_route_overlaps(podman_services_rootless_pasta_config.ipv6_subnet) }}
+  ansible.builtin.set_fact:
+    podman_services_rootless_host_ipv6_route_overlaps: >-
+      {{ podman_services_rootless_host_ipv6_routes.stdout | from_json |
+         podman_rootless_pasta_route_overlaps(podman_services_rootless_pasta_config.ipv6_subnet) }}
 
-    - name: Execution | Require a private IPv6 subnet separate from host routes
-      ansible.builtin.assert:
-        that:
-          - podman_services_rootless_host_ipv6_route_overlaps | length == 0
-        fail_msg: >-
-          Direct pasta subnet {{ podman_services_rootless_pasta_config.ipv6_subnet }}
-          overlaps host IPv6 routes {{ podman_services_rootless_host_ipv6_route_overlaps | join(', ') }}.
+- name: Execution | Require a private IPv6 subnet separate from host routes
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_rootless_pasta_config.ipv6_subnet is defined
+  tags: [deploy, update, recreate, bootstrap]
+  ansible.builtin.assert:
+    that:
+      - podman_services_rootless_host_ipv6_route_overlaps | length == 0
+    fail_msg: >-
+      Direct pasta subnet {{ podman_services_rootless_pasta_config.ipv6_subnet }}
+      overlaps host IPv6 routes {{ podman_services_rootless_host_ipv6_route_overlaps | join(', ') }}.
 
 - name: Execution | Check selected rootless account
   when:

@@ -88,6 +88,7 @@ def test_nonroot_execution_is_rejected_before_any_manager_request(monkeypatch):
         OP.launch("controller", [OP.PYTHON])
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("context", ["controller", "recovery"])
 def test_launcher_preserves_pipe_output_and_exit_without_secret_environment(tmp_path, context):
     fake = tmp_path / "systemd-run"
@@ -208,6 +209,7 @@ def test_firewall_native_binding_remains_uid_and_exact_persistent_slice(context)
         FW.validate_policy(policy)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("opt_in,check_mode", [(False, False), (True, False), (True, True)])
 def test_actual_delegated_postgres_module_enters_only_opted_context(tmp_path, opt_in, check_mode):
     """Execute the real task/normalizer with a fake PG module and manager only."""
@@ -370,6 +372,7 @@ def shell_fixture(tmp_path):
     return adapt, {**os.environ, "PATH": str(executable_dir) + ":" + os.environ["PATH"]}, journal, systemd, install_dir
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("mode", ["check", "collision-check", "collision-apply", "apply-twice"])
 def test_operator_preparation_read_only_collisions_and_idempotent_state(tmp_path, mode):
     adapt, environment, journal, systemd, install_dir = shell_fixture(tmp_path)
@@ -402,6 +405,7 @@ def test_operator_preparation_read_only_collisions_and_idempotent_state(tmp_path
         assert "restart" not in journal.read_text()
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("failure", [None, "unrelated-root", "union", "validate", "apply"])
 def test_offline_policy_union_restore_is_scoped_and_preserves_failures(tmp_path, failure):
     adapt, environment, journal, _, _ = shell_fixture(tmp_path)

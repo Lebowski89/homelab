@@ -105,6 +105,7 @@ def test_real_service_wires_monitoring_files_and_preserves_immediate_escalation(
     assert alerts["EtcdQuotaSameDayReview"]["labels"]["severity"] == "warning"
 
 
+@pytest.mark.integration
 def test_promtool_behavior(tmp_path):
     (tmp_path / "etcd.yml").write_text(environment().get_template("configs/prometheus/rules/etcd.yml.j2").render(**inventory()))
     fixture = tmp_path / "etcd-monitoring.test.yml"
@@ -113,6 +114,7 @@ def test_promtool_behavior(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("missing_job", ["etcd", "etcd-health", "patroni"])
 def test_promtool_four_members_detects_one_missing_and_recovery(tmp_path, missing_job):
     env = environment()

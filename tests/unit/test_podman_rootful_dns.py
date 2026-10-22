@@ -61,6 +61,7 @@ def run_tasks(tmp_path, port, *, check=False):
     )
 
 
+@pytest.mark.integration
 def test_dns_dropin_is_narrow_idempotent_and_check_mode_does_not_write(tmp_path):
     unrelated = tmp_path / "configuration/containers.conf.d/10-existing.conf"
     unrelated.parent.mkdir(parents=True)
@@ -81,12 +82,14 @@ def test_dns_dropin_is_narrow_idempotent_and_check_mode_does_not_write(tmp_path)
     assert unrelated.read_bytes() == before
 
 
+@pytest.mark.integration
 def test_fresh_check_mode_plans_without_creating_configuration(tmp_path):
     result = run_tasks(tmp_path, 5533, check=True)
     assert result.returncode == 0, result.stdout + result.stderr
     assert not (tmp_path / "configuration").exists()
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("port", [True, False, "5533", 5533.0, 53, 65536, None])
 def test_invalid_dns_ports_fail_before_filesystem_mutation(tmp_path, port):
     result = run_tasks(tmp_path, port)

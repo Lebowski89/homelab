@@ -98,6 +98,7 @@ def test_haproxy_worker_relay_is_opted_in_without_changing_postgresql_or_mgt_con
         assert "resolvers docker_overlay" in candidate and "127.0.0.11:53" in candidate
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("value,valid", [(None, True), (False, True), (True, True), ("true", False), (1, False)])
 def test_actual_haproxy_settings_validation_retains_strict_boolean_contract(tmp_path, value, valid):
     import os

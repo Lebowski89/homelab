@@ -7,6 +7,7 @@ import json
 import os
 import shlex
 import subprocess
+import sys
 from copy import deepcopy
 from pathlib import Path
 
@@ -425,6 +426,7 @@ def test_verified_ipv6_override_and_reply_local_unrelated_paths_are_preserved():
     assert path_verdict(kernel, packet(destination="192.0.2.25", original_destination="192.0.2.25"), True) == "DROP"
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("argv", "tag", "check"),
     [
@@ -475,6 +477,7 @@ def test_skynet_routes_firewall_only_to_isolated_playbook(tmp_path, argv, tag, c
     assert str(tmp_path / "ansible/playbook.yml") in output.read_text().splitlines()
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("operation", "confirmation", "check_mode", "sources", "success", "malformed_catalog"),
     [
@@ -498,7 +501,7 @@ def test_actual_ansible_guards_planning_and_recovery_are_local_and_do_not_deploy
     success,
     malformed_catalog,
 ):
-    binary = Path("/opt/ansible/ansible-venv/bin/ansible-playbook")
+    binary = Path(sys.executable).with_name("ansible-playbook")
     if not binary.is_file():
         pytest.skip("repository Ansible environment unavailable")
     # Execute the real role task flow with deterministic platform probes. The
@@ -587,6 +590,79 @@ def test_actual_ansible_guards_planning_and_recovery_are_local_and_do_not_deploy
             assert "recovery reached" in result.stdout
     # No application role, runtime adapter or environment resolution is invoked.
     assert not (tmp_path / "mutated").exists()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("platform", ["unraid", "invalid-boot", "ubuntu"])
+def test_install_checks_boot_script_before_policy_writer(tmp_path, platform):
+    from ansible_task_cases import walk_tasks
+
+    tasks = yaml.safe_load((ROLE / "tasks/workers/install.yml").read_text())
+    go = tmp_path / "go"
+    if platform != "ubuntu":
+        go.write_text("#!/bin/bash\n# Keep existing startup\n" if platform == "unraid" else "not a shell boot script\n")
+    # Execute the complete install entry with only its external I/O replaced:
+    # version commands are inert binaries, boot reads use a private fixture,
+    # policy writes and platform persistence stop at local sentinels.
+    for task in walk_tasks(tasks):
+        if task.get("ansible.builtin.stat", {}).get("path") == "/boot/config/go":
+            task["ansible.builtin.stat"]["path"] = str(go)
+        if task.get("ansible.builtin.slurp", {}).get("src") == "/boot/config/go":
+            task["ansible.builtin.slurp"]["src"] = str(go)
+    backend = "nf_tables" if platform == "ubuntu" else "legacy"
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    for tool in ("iptables", "ip6tables", "iptables-restore", "ip6tables-restore"):
+        program = binaries / tool
+        program.write_text(f"#!/bin/sh\necho 'NONPRODUCTION ({backend})'\n")
+        program.chmod(0o700)
+    actions = tmp_path / "actions"
+    actions.mkdir()
+    (actions / "service_firewall_lifecycle.py").write_text(
+        "from pathlib import Path\nfrom ansible.plugins.action import ActionBase\n"
+        "class ActionModule(ActionBase):\n"
+        "    def run(self, tmp=None, task_vars=None):\n"
+        "        assert self._task.args['phase'] == 'install'\n"
+        "        assert self._task.args['profile'] == 'workers'\n"
+        "        Path(task_vars['fixture_writer']).touch()\n"
+        "        return {'changed': False}\n"
+    )
+    for name in ("systemd", "unraid"):
+        (tmp_path / f"{name}.yml").write_text("- ansible.builtin.debug:\n    msg: NONPRODUCTION persistence boundary\n")
+    writer = tmp_path / "writer-reached"
+    play = [
+        {
+            "name": "Isolated install preflight",
+            "hosts": "localhost",
+            "connection": "local",
+            "gather_facts": False,
+            "environment": {"PATH": str(binaries)},
+            "vars": {
+                "ansible_python_interpreter": sys.executable,
+                "worker_backend_firewall_backend": backend,
+                "worker_backend_firewall_unraid": {"stat": {"exists": platform != "ubuntu"}},
+                "worker_backend_firewall_policy": {},
+                "fixture_writer": str(writer),
+            },
+            "tasks": tasks,
+        }
+    ]
+    (tmp_path / "play.yml").write_text(yaml.safe_dump(play, sort_keys=False))
+    config = tmp_path / "ansible.cfg"
+    config.write_text(f"[defaults]\naction_plugins={actions}\nvars_plugins_enabled=\n[inventory]\nenable_plugins=host_list\n")
+    result = subprocess.run(
+        [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", str(tmp_path / "play.yml")],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ, "ANSIBLE_CONFIG": str(config), "ANSIBLE_LOCAL_TEMP": str(tmp_path / "local")},
+    )
+    assert (result.returncode == 0) is (platform != "invalid-boot"), result.stdout + result.stderr
+    assert writer.exists() is (platform != "invalid-boot")
+    if platform == "invalid-boot":
+        assert "Preserve and inspect the existing Unraid go script" in result.stdout
+    if platform == "ubuntu":
+        assert not go.exists()
 
 
 def test_check_cli_creates_no_state_directory_or_lock(tmp_path, monkeypatch, capsys):
@@ -689,8 +765,9 @@ def test_allowed_sources_are_narrowly_accepted_with_existing_default_deny():
         assert path_verdict(kernel, packet(source="192.0.2.48", port=22, original_port=22), forwarding) == "DROP"
 
 
+@pytest.mark.integration
 def test_native_unraid_boot_block_is_early_idempotent_and_removable(tmp_path):
-    binary = Path("/opt/ansible/ansible-venv/bin/ansible-playbook")
+    binary = Path(sys.executable).with_name("ansible-playbook")
     if not binary.is_file():
         pytest.skip("repository Ansible environment unavailable")
     go = tmp_path / "go"
@@ -832,6 +909,7 @@ def test_self_contained_worker_bundle_and_legacy_import_preserve_transactions(tm
     assert FW.MARK == legacy.MARK == bundled["MARK"] == "skynet-worker-backends"
 
 
+@pytest.mark.integration
 def test_documented_firewall_commands_forward_private_inputs_and_distinguish_audit_from_planning(tmp_path):
     """Run the actual guide's commands through the real wrapper, with inert Ansible."""
     import shlex
@@ -888,3 +966,82 @@ def test_documented_firewall_commands_forward_private_inputs_and_distinguish_aud
             assert private.stat().st_mode & 0o777 == 0o600
         else:
             assert not any(arg.startswith("@") for arg in args)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("scenario", ["transient", "other-watcher", "repeated-start"])
+def test_watcher_start_uses_real_advisory_lock(tmp_path, monkeypatch, capsys, scenario):
+    import fcntl
+    import sys
+    import time
+    from types import SimpleNamespace
+
+    config = tmp_path / "policy.json"
+    config.write_text(json.dumps(policy()))
+    run = tmp_path / "run"
+    run.mkdir()
+    receipt = tmp_path / "reconciles"
+    source = f"""
+import importlib.util, os, time
+from pathlib import Path
+spec=importlib.util.spec_from_file_location('isolated_watcher', {str(ROLE / "files/worker-backend-firewall.py")!r})
+fw=importlib.util.module_from_spec(spec);spec.loader.exec_module(fw)
+fw.RUN=Path({str(run)!r})
+def reconcile(*args, **kwargs):
+    with Path({str(receipt)!r}).open('a') as out: out.write(str(os.getpid())+'\\n')
+    return {{'changed':False}}
+fw.reconcile=reconcile
+sleep=time.sleep
+fw.time.sleep=lambda seconds: sleep(min(seconds,0.02))
+fw.watch({str(config)!r})
+"""
+    children = []
+    popen = subprocess.Popen
+
+    def spawn(*args, **kwargs):
+        child = popen([sys.executable, "-c", source], stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        children.append(child)
+        return child
+
+    def ready():
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            if receipt.exists() and receipt.read_text():
+                return
+            time.sleep(0.01)
+        raise AssertionError("isolated watcher never reconciled")
+
+    monkeypatch.setattr(FW, "RUN", run)
+    monkeypatch.setattr(FW, "reconcile", lambda *args, **kwargs: {"changed": False})
+    try:
+        if scenario == "transient":
+            with (run / "watch.lock").open("a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                child = spawn()
+                time.sleep(0.15)
+                assert child.poll() is None and not receipt.exists()
+            ready()
+        elif scenario == "other-watcher":
+            spawn()
+            ready()
+            second = spawn()
+            assert second.wait(timeout=3) == 0
+            assert set(receipt.read_text().splitlines()) == {str(children[0].pid)}
+        else:
+            monkeypatch.setattr(FW, "subprocess", SimpleNamespace(Popen=spawn, DEVNULL=subprocess.DEVNULL))
+            for expected in [True, False, False]:
+                monkeypatch.setattr(FW.sys, "argv", ["policy.py", "start", "--config", str(config)])
+                FW.main()
+                assert json.loads(capsys.readouterr().out)["changed"] is expected
+            ready()
+            assert len(children) == 1
+        assert FW.watching()
+    finally:
+        (run / "stop").touch()
+        for child in children:
+            try:
+                child.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait(timeout=3)
+    assert not FW.watching()
