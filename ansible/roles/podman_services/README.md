@@ -169,9 +169,8 @@ batch. A changed desired account must not hide the old writer's manager. |
 | Execution ¦ Detect conflicting host IPv4 routes | ansible.builtin.set_fact | True |  |
 | Execution ¦ Reject conflicting host IPv4 routes | ansible.builtin.assert | True |  |
 | Execution ¦ Read host IPv6 routes for direct pasta conflict detection | ansible.builtin.command | True |  |
-| Execution ¦ Reject conflicting host IPv6 routes before account mutation | block | True |  |
-| Execution ¦ Detect conflicting host IPv6 routes | ansible.builtin.set_fact | False |  |
-| Execution ¦ Require a private IPv6 subnet separate from host routes | ansible.builtin.assert | False |  |
+| Execution ¦ Detect conflicting host IPv6 routes | ansible.builtin.set_fact | True |  |
+| Execution ¦ Require a private IPv6 subnet separate from host routes | ansible.builtin.assert | True |  |
 | Execution ¦ Check selected rootless account | ansible.builtin.getent | True |  |
 | Execution ¦ Check selected rootless primary group | ansible.builtin.getent | True |  |
 | Execution ¦ Check selected rootless home | ansible.builtin.stat | True |  |
