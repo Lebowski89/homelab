@@ -7,6 +7,7 @@ import json
 import os
 import shlex
 import subprocess
+import sys
 from copy import deepcopy
 from pathlib import Path
 
@@ -500,7 +501,7 @@ def test_actual_ansible_guards_planning_and_recovery_are_local_and_do_not_deploy
     success,
     malformed_catalog,
 ):
-    binary = Path("/opt/ansible/ansible-venv/bin/ansible-playbook")
+    binary = Path(sys.executable).with_name("ansible-playbook")
     if not binary.is_file():
         pytest.skip("repository Ansible environment unavailable")
     # Execute the real role task flow with deterministic platform probes. The
@@ -589,6 +590,79 @@ def test_actual_ansible_guards_planning_and_recovery_are_local_and_do_not_deploy
             assert "recovery reached" in result.stdout
     # No application role, runtime adapter or environment resolution is invoked.
     assert not (tmp_path / "mutated").exists()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("platform", ["unraid", "invalid-boot", "ubuntu"])
+def test_install_checks_boot_script_before_policy_writer(tmp_path, platform):
+    from ansible_task_cases import walk_tasks
+
+    tasks = yaml.safe_load((ROLE / "tasks/workers/install.yml").read_text())
+    go = tmp_path / "go"
+    if platform != "ubuntu":
+        go.write_text("#!/bin/bash\n# Keep existing startup\n" if platform == "unraid" else "not a shell boot script\n")
+    # Execute the complete install entry with only its external I/O replaced:
+    # version commands are inert binaries, boot reads use a private fixture,
+    # policy writes and platform persistence stop at local sentinels.
+    for task in walk_tasks(tasks):
+        if task.get("ansible.builtin.stat", {}).get("path") == "/boot/config/go":
+            task["ansible.builtin.stat"]["path"] = str(go)
+        if task.get("ansible.builtin.slurp", {}).get("src") == "/boot/config/go":
+            task["ansible.builtin.slurp"]["src"] = str(go)
+    backend = "nf_tables" if platform == "ubuntu" else "legacy"
+    binaries = tmp_path / "bin"
+    binaries.mkdir()
+    for tool in ("iptables", "ip6tables", "iptables-restore", "ip6tables-restore"):
+        program = binaries / tool
+        program.write_text(f"#!/bin/sh\necho 'NONPRODUCTION ({backend})'\n")
+        program.chmod(0o700)
+    actions = tmp_path / "actions"
+    actions.mkdir()
+    (actions / "service_firewall_lifecycle.py").write_text(
+        "from pathlib import Path\nfrom ansible.plugins.action import ActionBase\n"
+        "class ActionModule(ActionBase):\n"
+        "    def run(self, tmp=None, task_vars=None):\n"
+        "        assert self._task.args['phase'] == 'install'\n"
+        "        assert self._task.args['profile'] == 'workers'\n"
+        "        Path(task_vars['fixture_writer']).touch()\n"
+        "        return {'changed': False}\n"
+    )
+    for name in ("systemd", "unraid"):
+        (tmp_path / f"{name}.yml").write_text("- ansible.builtin.debug:\n    msg: NONPRODUCTION persistence boundary\n")
+    writer = tmp_path / "writer-reached"
+    play = [
+        {
+            "name": "Isolated install preflight",
+            "hosts": "localhost",
+            "connection": "local",
+            "gather_facts": False,
+            "environment": {"PATH": str(binaries)},
+            "vars": {
+                "ansible_python_interpreter": sys.executable,
+                "worker_backend_firewall_backend": backend,
+                "worker_backend_firewall_unraid": {"stat": {"exists": platform != "ubuntu"}},
+                "worker_backend_firewall_policy": {},
+                "fixture_writer": str(writer),
+            },
+            "tasks": tasks,
+        }
+    ]
+    (tmp_path / "play.yml").write_text(yaml.safe_dump(play, sort_keys=False))
+    config = tmp_path / "ansible.cfg"
+    config.write_text(f"[defaults]\naction_plugins={actions}\nvars_plugins_enabled=\n[inventory]\nenable_plugins=host_list\n")
+    result = subprocess.run(
+        [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", str(tmp_path / "play.yml")],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ, "ANSIBLE_CONFIG": str(config), "ANSIBLE_LOCAL_TEMP": str(tmp_path / "local")},
+    )
+    assert (result.returncode == 0) is (platform != "invalid-boot"), result.stdout + result.stderr
+    assert writer.exists() is (platform != "invalid-boot")
+    if platform == "invalid-boot":
+        assert "Preserve and inspect the existing Unraid go script" in result.stdout
+    if platform == "ubuntu":
+        assert not go.exists()
 
 
 def test_check_cli_creates_no_state_directory_or_lock(tmp_path, monkeypatch, capsys):
@@ -693,7 +767,7 @@ def test_allowed_sources_are_narrowly_accepted_with_existing_default_deny():
 
 @pytest.mark.integration
 def test_native_unraid_boot_block_is_early_idempotent_and_removable(tmp_path):
-    binary = Path("/opt/ansible/ansible-venv/bin/ansible-playbook")
+    binary = Path(sys.executable).with_name("ansible-playbook")
     if not binary.is_file():
         pytest.skip("repository Ansible environment unavailable")
     go = tmp_path / "go"

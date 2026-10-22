@@ -12,25 +12,24 @@
     worker_backend_firewall_tool_result.rc != 0 or
     '(' ~ worker_backend_firewall_backend ~ ')' not in worker_backend_firewall_tool_result.stdout
 
-- name: Service firewall | Workers | Validate Unraid boot entry before writing policy
+- name: Service firewall | Workers | Read Unraid flash permissions from the boot script # noqa var-naming[no-role-prefix]
   when: worker_backend_firewall_unraid.stat.exists
-  # checkov:skip=CKV2_ANSIBLE_3:Read-only boot-script validation; failure must stop before any policy write.
-  block:
-    - name: Service firewall | Workers | Read Unraid flash permissions from the boot script # noqa var-naming[no-role-prefix]
-      ansible.builtin.stat:
-        path: /boot/config/go
-      register: worker_backend_firewall_go_stat
+  ansible.builtin.stat:
+    path: /boot/config/go
+  register: worker_backend_firewall_go_stat
 
-    - name: Service firewall | Workers | Read existing supported boot script # noqa var-naming[no-role-prefix]
-      ansible.builtin.slurp:
-        src: /boot/config/go
-      register: worker_backend_firewall_go
+- name: Service firewall | Workers | Read existing supported boot script # noqa var-naming[no-role-prefix]
+  when: worker_backend_firewall_unraid.stat.exists
+  ansible.builtin.slurp:
+    src: /boot/config/go
+  register: worker_backend_firewall_go
 
-    - name: Service firewall | Workers | Require a shell boot script
-      ansible.builtin.assert:
-        that:
-          - (worker_backend_firewall_go.content | b64decode).splitlines()[0] in ['#!/bin/bash', '#!/bin/sh']
-        fail_msg: Preserve and inspect the existing Unraid go script; this role inserts only its marked block after the shebang.
+- name: Service firewall | Workers | Require a shell boot script
+  when: worker_backend_firewall_unraid.stat.exists
+  ansible.builtin.assert:
+    that:
+      - (worker_backend_firewall_go.content | b64decode).splitlines()[0] in ['#!/bin/bash', '#!/bin/sh']
+    fail_msg: Preserve and inspect the existing Unraid go script; this role inserts only its marked block after the shebang.
 
 - name: Service firewall | Workers | Extend and reconcile the current policy under its writer lock
   service_firewall_lifecycle:
