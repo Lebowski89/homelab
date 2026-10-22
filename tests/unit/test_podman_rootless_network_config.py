@@ -1,8 +1,13 @@
 import importlib.util
+import json
+import os
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
 import pytest
+import yaml
 from ansible.errors import AnsibleFilterError
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
@@ -139,3 +144,55 @@ def test_rootless_pasta_route_overlap_rejects_direct_or_reachable_conflicts(dest
 def test_rootless_pasta_route_overlap_fails_closed_on_invalid_route_data(routes):
     with pytest.raises(AnsibleFilterError, match="Host route"):
         podman_services.podman_rootless_pasta_route_overlaps(routes, "10.0.2.0/24")
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("case", ["clear", "conflict", "invalid", "check", "no-ipv6"])
+def test_actual_ipv6_route_tasks_reject_conflicts_before_account_work(tmp_path, case):
+    tasks = yaml.safe_load((ROLE_ROOT / "tasks/sub_tasks/execution.yml").read_text())
+    route_tasks = [
+        task
+        for task in tasks
+        if "podman_services_rootless_host_ipv6_route_overlaps" in task.get("ansible.builtin.set_fact", {})
+        or "podman_services_rootless_host_ipv6_route_overlaps | length == 0" in task.get("ansible.builtin.assert", {}).get("that", [])
+    ]
+    # Invalid data in skipped cases proves that the original guards still avoid
+    # reading live route results during planning or without IPv6 configuration.
+    routes = json.dumps([{"dst": "fd00::/8" if case == "conflict" else "fd7a:115c:a1e0::/48"}])
+    if case in {"invalid", "check", "no-ipv6"}:
+        routes = "not JSON"
+    variables = {
+        "podman_services_execution": {"mode": "rootless"},
+        "podman_services_common_action": "deploy",
+        "podman_services_rootless_pasta_config": {} if case == "no-ipv6" else {"ipv6_subnet": "fd00:2::/64"},
+        "podman_services_rootless_host_ipv6_routes": {"stdout": routes},
+    }
+    play = [
+        {
+            "name": "Offline IPv6 prerequisite fixture",
+            "hosts": "localhost",
+            "gather_facts": False,
+            "vars": variables,
+            "tasks": [*route_tasks, {"name": "Account work boundary", "ansible.builtin.debug": {"msg": "ACCOUNT_BOUNDARY_REACHED"}}],
+        }
+    ]
+    (tmp_path / "play.yml").write_text(yaml.safe_dump(play))
+    config = tmp_path / "ansible.cfg"
+    config.write_text(
+        f"[defaults]\nfilter_plugins={ROLE_ROOT}/filter_plugins\nvars_plugins_enabled=\n[inventory]\nenable_plugins=host_list\n"
+    )
+    result = subprocess.run(
+        [str(Path(sys.executable).parent / "ansible-playbook"), "-i", "localhost,", "-c", "local", str(tmp_path / "play.yml")]
+        + (["--check"] if case == "check" else []),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ, "ANSIBLE_CONFIG": str(config)},
+    )
+    output = result.stdout + result.stderr
+    if case in {"conflict", "invalid"}:
+        assert result.returncode != 0, output
+        assert "ACCOUNT_BOUNDARY_REACHED" not in output
+        assert ("overlaps host IPv6 routes" if case == "conflict" else "from_json") in output
+    else:
+        assert result.returncode == 0 and "ACCOUNT_BOUNDARY_REACHED" in output, output

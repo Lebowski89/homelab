@@ -481,14 +481,14 @@ def test_current_selector_resolves_again_and_requires_all_exact_labels(monkeypat
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("check", [False, True])
-def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path, check):
+@pytest.mark.parametrize("mode", ["normal", "check", "no-output", "missing-patroni"])
+def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path, mode):
     catalog = {}
     for path in (ROOT / "ansible/group_vars/all/services").glob("*.yml"):
         catalog.update(yaml.safe_load(path.read_text()))
     play = {"tasks": yaml.safe_load((ROOT / "ansible/operations/haproxy-firewall-preflight.yml").read_text())}
-    task = deepcopy(play["tasks"][-1])
-    for entry in task["block"]:
+    projection_tasks = deepcopy([task for task in play["tasks"] if "haproxy_preflight_stage_output is defined" in task.get("when", [])])
+    for entry in projection_tasks:
         if "ansible.builtin.include_vars" in entry:
             entry["ansible.builtin.include_vars"]["file"] = str(ROOT / "ansible" / entry["ansible.builtin.include_vars"]["file"])
         if "ansible.builtin.include_tasks" in entry:
@@ -519,8 +519,12 @@ def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path,
         "services_private_https_port": 10443,
         "infisical_postgres_port": 6543,
     }
+    if mode == "no-output":
+        variables.pop("haproxy_preflight_stage_output")
+    if mode == "missing-patroni":
+        inventory["all"]["children"] = {}
     tasks = [
-        task,
+        *projection_tasks,
         {
             "name": "Render the actual adapter template",
             "ansible.builtin.template": {
@@ -545,14 +549,20 @@ def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path,
     )
     result = subprocess.run(
         [str(Path(sys.executable).parent / "ansible-playbook"), "-i", str(tmp_path / "inventory.yml"), str(tmp_path / "play.yml")]
-        + (["--check"] if check else []),
+        + (["--check"] if mode == "check" else []),
         capture_output=True,
         text=True,
         env={**os.environ, "ANSIBLE_CONFIG": str(config)},
     )
-    assert result.returncode == 0, result.stdout + result.stderr
-    if check:
+    if mode == "missing-patroni":
+        assert result.returncode != 0 and "Assertion failed" in result.stdout, result.stdout + result.stderr
         assert not projection.exists() and not (tmp_path / "adapter.cfg").exists()
+        return
+    assert result.returncode == 0, result.stdout + result.stderr
+    if mode == "check":
+        assert not projection.exists() and not (tmp_path / "adapter.cfg").exists()
+    elif mode == "no-output":
+        assert not projection.exists() and (tmp_path / "adapter.cfg").exists()
     else:
         stage = BATCH.read(projection)
         assert {i for e in stage["policy"]["endpoints"] for i in e["ids"]} == {
