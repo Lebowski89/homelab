@@ -1,0 +1,5 @@
+---
+
+# Compatibility for retained imports; no implementation lives in tasks/.
+- name: Forward the retained podman-pasta-signal operation
+  ansible.builtin.import_tasks: "../operations/podman-pasta-signal.yml"

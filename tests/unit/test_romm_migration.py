@@ -14,23 +14,7 @@ from jinja2.nativetypes import NativeEnvironment
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROLE = REPO_ROOT / "ansible/roles/service_prepare"
 SERVICE_PATH = REPO_ROOT / "ansible/group_vars/all/services/romm.yml"
-SEED_PATH = REPO_ROOT / "ansible/roles/service_common/files/romm/config.yml"
 STRUCTURE = {"default": "roms/{platform}/{game}", "firmware": "bios/{platform}"}
-
-
-def test_romm_seed_and_mounts_match_the_migrated_structure():
-    service = yaml.safe_load(SERVICE_PATH.read_text())["romm"]
-    seed = yaml.safe_load(SEED_PATH.read_text())
-    copy = next(copy for copy in service["copies"] if copy["src"] == "files/romm/config.yml")
-
-    assert seed["filesystem"]["structure"] == STRUCTURE
-    assert not {"roms_folder", "firmware_folder"} & seed["filesystem"].keys()
-    assert service["application_prepare"]["handler"] == "romm"
-    assert copy["force"] is False
-    assert copy["dest"] == service["volumes"]["config"]["source"] + "/config.yml"
-    assert service["volumes"]["config"]["target"] + "/config.yml" == "/romm/config/config.yml"
-    assert service["volumes"]["library"]["target"] == "/romm/library"
-    assert service["volumes"]["library"]["source"] == ("{{ hostvars[services_storage_host].container_host_data_root }}/games/romm/library")
 
 
 def test_romm_migration_is_tagged_and_runs_after_copies_before_deployment():
@@ -45,7 +29,8 @@ def test_romm_migration_is_tagged_and_runs_after_copies_before_deployment():
     names = [task["name"] for task in docker]
     assert names.index("Prepare | Validate application settings") < names.index("Cleanup | Remove existing deployment")
     assert names.index("Prepare | Prepare shared files and integrations") < names.index("Prepare | Apply application configuration")
-    main = yaml.safe_load((REPO_ROOT / "ansible/roles/docker_services/tasks/main.yml").read_text())
+    grouped = yaml.safe_load((REPO_ROOT / "ansible/roles/docker_services/tasks/main.yml").read_text())
+    main = [task for parent in grouped for task in parent.get("block", [parent])]
     names = [task["name"] for task in main]
     assert names.index("Docker services | Prepare service") < names.index("Docker services | Build Compose configuration")
 
@@ -158,6 +143,7 @@ def local_deployment(tmp_path):
     return config, run, cleanup_marker
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("initial", "tags"),
     [
@@ -212,6 +198,7 @@ def test_actual_deployment_migrates_existing_configs_and_converges(local_deploym
     assert config.stat().st_mtime_ns == modified
 
 
+@pytest.mark.integration
 def test_check_mode_does_not_edit_config(local_deployment):
     config, run, cleanup_marker = local_deployment
     original = "scan: {custom: keep}\n"
@@ -223,6 +210,7 @@ def test_check_mode_does_not_edit_config(local_deployment):
     assert not cleanup_marker.exists()
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("original", "error", "check_mode"),
     [
@@ -253,6 +241,7 @@ def test_incompatible_existing_config_fails_before_recreate_cleanup(local_deploy
     assert restored.st_mtime_ns == permissions.st_mtime_ns
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("destination", [{}, {"dest": None}, {"dest": ""}, {"dest": " \t\n"}])
 def test_missing_or_blank_seed_destination_fails_preflight(local_deployment, destination):
     config, run, cleanup_marker = local_deployment

@@ -3,6 +3,7 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 from jinja2 import Environment, StrictUndefined
 from jinja2.nativetypes import NativeEnvironment
@@ -46,8 +47,10 @@ def availability_model():
     host_names = ["dns01", "dns02", "dns03", "mgt", "unraid", "plex", "pve1", "pg95", "pg96", "pg97"]
     hostvars = {host: {"local_ip": f"192.0.2.{index}"} for index, host in enumerate(host_names, start=1)}
     variables = {
+        **services,
         "hostvars": hostvars,
         "services_controller_host": "mgt",
+        "services_storage_host": "unraid",
         "services_plex_host": "plex",
         "services_private_https_port": 8443,
         "services_internal_zone": "internal.example",
@@ -245,7 +248,9 @@ def test_alertmanager_keeps_email_adds_secret_file_gotify_and_valid_payload_shap
                 "smtp_host": "smtp.example.com",
                 "smtp_port": "587",
                 "smtp_username": "alertmanager@example.com",
-            }
+            },
+            services_internal_zone="internal.example",
+            services_private_https_port=8443,
         )
     )
     config = yaml.safe_load(rendered)
@@ -254,13 +259,14 @@ def test_alertmanager_keeps_email_adds_secret_file_gotify_and_valid_payload_shap
     webhook = receiver["webhook_configs"][0]
     assert receiver["email_configs"][0]["send_resolved"] is True
     assert webhook["send_resolved"] is True
-    assert webhook["url"] == "http://gotify/message"
+    assert webhook["url"] == "https://gotify.internal.example:8443/message"
     assert webhook["http_config"]["authorization"] == {
         "type": "Bearer",
         "credentials_file": "/run/secrets/alertmanager_gotify_token_secret",
     }
-    assert webhook["payload"]["priority"] == 8
-    assert set(webhook["payload"]) == {"title", "message", "priority"}
+    # Real Go rendering and the pinned scalar-promotion boundary are exercised
+    # in test_alertmanager_gotify_delivery.py; a mapping shape alone is unsafe.
+    assert isinstance(webhook["payload"], str)
     assert "gotify_alertmanager_token" not in rendered
     assert "ALERTMANAGER_APP_TOKEN" not in rendered
 
@@ -292,3 +298,46 @@ def test_availability_dashboard_renders_valid_json_and_queries_generated_labels(
     assert "probe_ssl_earliest_cert_expiry" in expressions
     assert "pg_up" in expressions
     assert 'category=~"$category"' in expressions
+
+
+@pytest.mark.integration
+def test_ci_renderer_resolves_inventory_destinations_before_offline_tool_dispatch(tmp_path):
+    import os
+    import subprocess
+    import sys
+
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    calls = tmp_path / "calls"
+    for name in ["promtool", "amtool", "blackbox_exporter"]:
+        binary = tools / name
+        binary.write_text('#!/bin/sh\nprintf "%s\\n" "$0 $*" >> "$RECORDER"\n')
+        binary.chmod(0o755)
+    rendered = tmp_path / "rendered"
+    result = subprocess.run(
+        ["bash", str(REPO_ROOT / "ansible/roles/docker_services/scripts/validate-alerting-configs.sh")],
+        env={
+            **os.environ,
+            "PATH": str(tools) + ":" + os.defpath,
+            "ROOT_DIR": str(REPO_ROOT),
+            "OUT_DIR": str(rendered),
+            "KEEP_RENDERED": "1",
+            "PYTHON_BIN": sys.executable,
+            "RECORDER": str(calls),
+        },
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    config = yaml.safe_load((rendered / "prometheus.yml").read_text())
+    assert "{{" not in (rendered / "prometheus.yml").read_text()
+    jobs = {job["job_name"]: job for job in config["scrape_configs"]}
+    assert len(jobs) == len(config["scrape_configs"])
+    for name in ["authelia", "traefik", "haproxy"]:
+        for entry in jobs[name]["static_configs"]:
+            assert all(target.rsplit(":", 1)[-1].isdigit() for target in entry["targets"])
+    assert "promtool check config" in calls.read_text()
+    assert "amtool check-config" in calls.read_text()
+    # The recorders prove dispatch/rendering only; this is not promtool execution.

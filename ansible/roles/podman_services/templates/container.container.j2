@@ -2,14 +2,33 @@
 {% set container_systemd = podman_service.container.systemd | default({}) %}
 [Unit]
 Description={{ podman_service.description }}
+StartLimitIntervalSec=0
 {% for after in container_systemd.after | default([]) %}
 After={{ after }}
+{% endfor %}
+{% for required in container_systemd.requires | default([]) %}
+Requires={{ required }}
+After={{ required }}
+{% endfor %}
+{% for wanted in container_systemd.wants | default([]) %}
+Wants={{ wanted }}
+After={{ wanted }}
 {% endfor %}
 
 [Container]
 ContainerName={{ podman_service.unit_name }}
 Image={{ podman_service.image }}
 LogDriver={{ podman_service.container.log_driver | default("journald") }}
+{% if podman_service.container.exec is defined %}
+Exec={{ podman_service.container.exec }}
+{% endif %}
+{% if podman_service.container.cgroup is defined %}
+# Typed rootful systemd-container contract; no user-supplied arguments.
+PodmanArgs=--cgroupns=host --systemd=always
+{% endif %}
+{% if podman_service.container.notify_healthy | default(false) %}
+Notify=healthy
+{% endif %}
 {% if podman_service.container.network_mode is defined %}
 Network={{ podman_service.container.network_mode }}
 {% elif podman_service.network %}
@@ -62,7 +81,11 @@ ReadOnly=true
 ShmSize={{ podman_service.container.shm_size }}
 {% endif %}
 {% if podman_service.container.healthcheck is defined %}
-HealthCmd={{ podman_service.container.healthcheck.command }}
+{% if podman_service.container.healthcheck.command == "none" %}
+HealthCmd=none
+{% else %}
+HealthCmd={{ ["/bin/sh", "-c", podman_service.container.healthcheck.command] | tojson | replace('$', '$$') | replace('%', '%%') }}
+{% endif %}
 HealthInterval={{ podman_service.container.healthcheck.interval | default('30s') }}
 HealthTimeout={{ podman_service.container.healthcheck.timeout | default('10s') }}
 HealthRetries={{ podman_service.container.healthcheck.retries | default(3) }}
@@ -72,6 +95,9 @@ HealthStartPeriod={{ podman_service.container.healthcheck.start_period | default
 [Service]
 Restart={{ container_systemd.restart | default('on-failure') }}
 RestartSec={{ container_systemd.restart_sec | default('15s') }}
+{% if podman_service.container.cgroup is defined %}
+Delegate=yes
+{% endif %}
 {% if container_systemd.timeout_start_sec is defined %}
 TimeoutStartSec={{ container_systemd.timeout_start_sec }}
 {% endif %}

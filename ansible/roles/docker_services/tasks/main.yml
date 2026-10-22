@@ -1,63 +1,155 @@
 ---
 
-################################
-# INITIALIZE
-################################
+- name: Docker services | Reset this operation's firewall progress
+  ansible.builtin.set_fact:
+    docker_services_firewall_staged: false
+    docker_services_start_attempted: false
+    # From this first task the adapter owns cancellation, including init failures.
+    service_catalog_firewall_handoff: "{{ (docker_services_common_context.firewall_plan | default({})).token | default('') }}"  # noqa var-naming[no-role-prefix]
+  tags: [deploy, update, recreate, bootstrap, remove, drift]
 
-- name: Docker services | Initialize service
-  ansible.builtin.include_tasks:
-    file: sub_tasks/init.yml
-    apply:
-      tags: [deploy, update, recreate, bootstrap]
-  tags: [deploy, update, remove, recreate, bootstrap, drift]
+- name: Docker services | Prepare and run the scoped service operation
+  block:
+    ################################
+    # INITIALIZE
+    ################################
 
-################################
-# IMAGE DRIFT
-################################
+    - name: Docker services | Initialize service
+      ansible.builtin.include_tasks:
+        file: sub_tasks/init.yml
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
 
-- name: Docker services | Check image drift
-  when: docker_services_is_deploy_host | bool
-  ansible.builtin.include_tasks:
-    file: sub_tasks/drift/image.yml
-    apply:
+    - name: Docker services | Protect declared publications before changing the service
+      when:
+        - (docker_services_common_context.firewall_plan | default({})).managed | default(false)
+        - docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap', 'remove']
+      ansible.builtin.include_role:
+        name: service_firewall
+        tasks_from: lifecycle
+        apply:
+          tags: [deploy, update, recreate, bootstrap, remove]
+      vars:
+        service_firewall_adapter_plan: "{{ docker_services_common_context.firewall_plan }}"
+        service_firewall_lifecycle_phase: "{{ 'prepare_remove' if docker_services_common_action == 'remove' else 'stage' }}"
+      tags: [deploy, update, recreate, bootstrap, remove]
+
+    - name: Docker services | Record successful publication protection
+      when:
+        - not ansible_check_mode
+        - (docker_services_common_context.firewall_plan | default({})).managed | default(false)
+        - docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap', 'remove']
+      ansible.builtin.set_fact:
+        docker_services_firewall_staged: true
+      tags: [deploy, update, recreate, bootstrap, remove]
+
+    ################################
+    # IMAGE DRIFT
+    ################################
+
+    - name: Docker services | Check image drift
+      when: docker_services_is_deploy_host | bool
+      ansible.builtin.include_tasks:
+        file: sub_tasks/drift/image.yml
+        apply:
+          tags: drift
       tags: drift
-  tags: drift
 
-################################
-# PREPARE
-################################
+    ################################
+    # PREPARE
+    ################################
 
-- name: Docker services | Prepare service
-  ansible.builtin.include_tasks:
-    file: sub_tasks/prepare.yml
-    apply:
+    - name: Docker services | Prepare service
+      ansible.builtin.include_tasks:
+        file: sub_tasks/prepare.yml
+        apply:
+          tags: [remove, deploy, update, recreate, bootstrap]
       tags: [remove, deploy, update, recreate, bootstrap]
-  tags: [remove, deploy, update, recreate, bootstrap]
 
-################################
-# BUILD COMPOSE CONFIGURATION
-################################
+    ################################
+    # BUILD COMPOSE CONFIGURATION
+    ################################
 
-- name: Docker services | Build Compose configuration
-  no_log: true
-  ansible.builtin.include_tasks:
-    file: sub_tasks/compose.yml
-    apply:
+    - name: Docker services | Build Compose configuration
+      no_log: true
+      ansible.builtin.include_tasks:
+        file: sub_tasks/compose.yml
+        apply:
+          tags: [deploy, update, recreate]
+          no_log: true
+          diff: false
       tags: [deploy, update, recreate]
+
+    ################################
+    # SAVE STACK CONFIGURATION
+    ################################
+
+    - name: Docker services | Save stack configuration
+      no_log: true
+      ansible.builtin.include_tasks:
+        file: sub_tasks/save_stack.yml
+        apply:
+          tags: [deploy, update, recreate]
+          no_log: true
+          diff: false
+      tags: [deploy, update, recreate]
+
+    - name: Docker services | Reconcile protection after runtime removal
+      when:
+        - (docker_services_common_context.firewall_plan | default({})).managed | default(false)
+        - docker_services_common_action == 'remove'
+      ansible.builtin.include_role:
+        name: service_firewall
+        tasks_from: lifecycle
+        apply:
+          tags: [remove]
+      vars:
+        service_firewall_adapter_plan: "{{ docker_services_common_context.firewall_plan }}"
+        service_firewall_lifecycle_phase: remove
+      tags: [remove]
+  rescue:
+    - name: Docker services | Save the preparation failure without sensitive output
+      tags: [always]
+      ansible.builtin.set_fact:
+        docker_services_preparation_failure_task: "{{ ansible_failed_task.name }}"
       no_log: true
       diff: false
-  tags: [deploy, update, recreate]
 
-################################
-# SAVE STACK CONFIGURATION
-################################
+    - name: Docker services | Release only a failed preparation's reservation
+      tags: [always]
+      when:
+        - docker_services_firewall_staged
+        - not docker_services_start_attempted
+      ansible.builtin.include_role:
+        name: service_firewall
+        tasks_from: lifecycle
+        apply:
+          tags: [deploy, update, recreate, bootstrap, remove]
+          ignore_errors: true
+      vars:
+        service_firewall_adapter_plan: "{{ docker_services_common_context.firewall_plan }}"
+        service_firewall_lifecycle_phase: cancel
 
-- name: Docker services | Save stack configuration
-  no_log: true
-  ansible.builtin.include_tasks:
-    file: sub_tasks/save_stack.yml
-    apply:
-      tags: [deploy, update, recreate]
-      no_log: true
-      diff: false
-  tags: [deploy, update, recreate]
+    - name: Docker services | Cancel provider reservations if preparation never staged publications
+      tags: [always]
+      when:
+        - not docker_services_firewall_staged
+        - not docker_services_start_attempted
+        - (docker_services_common_context.firewall_access_hosts | default([])) | length > 0
+      ansible.builtin.include_role:
+        name: service_firewall
+        tasks_from: access_cancel
+        apply:
+          tags: [always]
+      vars:
+        service_firewall_access_cancel_plan: "{{ docker_services_common_context.firewall_plan }}"
+        service_firewall_access_cancel_hosts: "{{ docker_services_common_context.firewall_access_hosts }}"
+
+    - name: Docker services | Keep the original operation failure
+      tags: [always]
+      ansible.builtin.fail:
+        msg: >-
+          Service operation failed at {{ docker_services_preparation_failure_task }}.
+          Staged protection and application data were retained. Preparation failures
+          do not stop an old writer; runtime failure containment is reported above.

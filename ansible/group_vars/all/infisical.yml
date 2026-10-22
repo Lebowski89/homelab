@@ -16,4 +16,4 @@ infisical_lookup_default_params:
   universal_auth_client_secret: "{{ infisical_auth_client_secret }}"
   project_id: "{{ infisical_project_id }}"
   env_slug: "prod"
-  url: "http://{{ local_ip }}:8066"
+  url: "https://infisical.{{ services_internal_zone }}:{{ services_private_https_port }}"

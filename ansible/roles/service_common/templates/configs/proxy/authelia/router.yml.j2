@@ -8,6 +8,7 @@ http:
       priority: 50
       tls:
         options: "securetls@file"
+        certResolver: "dns-cloudflare"
       middlewares:
         - "secure-headers@file"
         - "hsts@file"
@@ -18,4 +19,4 @@ http:
     authelia-svc:
       loadBalancer:
         servers:
-          - url: "http://authelia:9091"
+          - url: "http://{{ hostvars[services_controller_host].local_ip }}:19091"

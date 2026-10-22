@@ -30,6 +30,8 @@
     owner: "{{ service_common_path_item.owner | default(service_common_path_default_owner) }}"
     group: "{{ service_common_path_item.group | default(service_common_path_default_group) }}"
     mode: "{{ service_common_path_item.mode | default(service_common_default_mode) }}"
+    access_time: "{{ service_common_path_item.access_time | default(omit) }}"
+    modification_time: "{{ service_common_path_item.modification_time | default(omit) }}"
     force: "{{ service_common_path_item.force | default(false, true) }}"
   vars:
     service_common_path_host_defaults: "{{ service_common_host_defaults.get(service_common_target_host, {}) }}"

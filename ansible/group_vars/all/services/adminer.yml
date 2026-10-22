@@ -36,6 +36,8 @@ adminer:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [mgt_backends]
   deploy:
     type: container
     host: "{{ services_controller_host }}"

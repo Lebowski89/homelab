@@ -1,0 +1,401 @@
+---
+
+- name: HAProxy preflight | Require an explicit private output and single controller
+  ansible.builtin.assert:
+    that:
+      - groups[services_controller_inventory_group] | length == 1
+      - haproxy_preflight_output is defined
+      - haproxy_preflight_output is string
+      - haproxy_preflight_output.startswith('/')
+      - haproxy_preflight_recovery_hosts is sequence
+      - haproxy_preflight_recovery_hosts is not string
+      - mgt_firewall_active_endpoints | default([]) | length > 0
+      - mgt_firewall_callers | default({}) | length > 0
+      - haproxy_preflight_window_seconds is integer
+      - haproxy_preflight_window_seconds is not boolean
+      - haproxy_preflight_window_seconds >= 0
+      - haproxy_preflight_window_seconds <= 600
+      - haproxy_preflight_sample_interval is number
+      - haproxy_preflight_sample_interval is not boolean
+      - haproxy_preflight_sample_interval >= 0.1
+      - haproxy_preflight_sample_interval <= 5
+    fail_msg: Supply the retained accepted firewall variables so this candidate cannot silently withdraw the existing stage.
+
+- name: HAProxy preflight | Resolve the existing inventory contracts
+  ansible.builtin.set_fact:
+    services_controller_host: "{{ groups[services_controller_inventory_group][0] }}"
+    services_storage_host: "{{ groups[services_storage_inventory_group] | first }}"
+
+- name: HAProxy preflight | Load only namespaced service declarations
+  ansible.builtin.include_vars:
+    dir: "{{ playbook_dir }}/group_vars/all/services"
+    extensions: [yml]
+    ignore_unknown_extensions: true
+    name: haproxy_preflight_catalog
+
+- name: HAProxy preflight | Derive the effective endpoints and declared clients
+  mgt_firewall_plan:
+    source_var: haproxy_preflight_catalog
+    controller: "{{ services_controller_host }}"
+    inventory_address: "{{ local_ip }}"
+    active: [haproxy/postgres]
+    callers: {}
+    verified: false
+    require_verified: false
+
+- name: HAProxy preflight | Select only the PostgreSQL publication
+  ansible.builtin.set_fact:
+    haproxy_preflight_endpoint: "{{ mgt_firewall_plan.endpoints | selectattr('ids', 'contains', 'haproxy/postgres') | first }}"
+    haproxy_preflight_hosts: "{{ [services_controller_host] + [services_storage_host, services_plex_host] + haproxy_preflight_recovery_hosts }}"
+    haproxy_preflight_source: |
+      from __future__ import annotations
+      FIREWALL_SOURCE = {{ mgt_firewall_helper_source | to_json }}
+      {{ lookup('ansible.builtin.file', 'roles/service_firewall/files/haproxy-preflight.py') | replace('from __future__ import annotations', '') }}
+
+- name: HAProxy preflight | Validate the named collection hosts and rootless accounts
+  ansible.builtin.assert:
+    that:
+      - haproxy_preflight_host in hostvars
+      - hostvars[haproxy_preflight_host].local_ip is defined
+      - haproxy_preflight_capture_callers | default(haproxy_preflight_endpoint.callers) is sequence
+      - haproxy_preflight_capture_callers | default(haproxy_preflight_endpoint.callers) is not string
+      - haproxy_preflight_capture_callers | default(haproxy_preflight_endpoint.callers) is not mapping
+      - haproxy_preflight_capture_callers | default(haproxy_preflight_endpoint.callers) | length > 0
+      - >-
+        haproxy_preflight_capture_callers | default(haproxy_preflight_endpoint.callers) |
+        difference(haproxy_preflight_endpoint.callers) | length == 0
+      - >-
+        haproxy_preflight_host == services_controller_host or
+        hostvars[haproxy_preflight_host].ansible_connection | default('ssh') in
+        ['ssh', 'ansible.builtin.ssh', 'paramiko', 'paramiko_ssh', 'ansible.builtin.paramiko_ssh']
+      - >-
+        haproxy_preflight_running_rootless_accounts | difference(
+        mgt_firewall_plan.principals.values() | selectattr('future_account', 'defined') | map(attribute='future_account') | list) | length == 0
+  loop: "{{ haproxy_preflight_hosts | unique }}"
+  loop_control:
+    loop_var: haproxy_preflight_host
+
+- name: HAProxy preflight | Pin delegated transports without inheriting the controller connection
+  ansible.builtin.set_fact:
+    ansible_connection: "{{ hostvars[haproxy_preflight_host].ansible_connection | default('ssh') }}"
+  delegate_to: "{{ haproxy_preflight_host }}"
+  delegate_facts: true
+  loop: "{{ haproxy_preflight_hosts | unique }}"
+  loop_control:
+    loop_var: haproxy_preflight_host
+
+- name: HAProxy preflight | Bind expected identity to each NetBox primary address
+  ansible.builtin.set_fact:
+    haproxy_preflight_expected_hosts: >-
+      {{ haproxy_preflight_expected_hosts | default({}) | combine({haproxy_preflight_host:
+         {'inventory_address': hostvars[haproxy_preflight_host].local_ip}}) }}
+  loop: "{{ haproxy_preflight_hosts | unique }}"
+  loop_control:
+    loop_var: haproxy_preflight_host
+
+- name: HAProxy preflight | Limit account metadata to declared database callers and the provider
+  ansible.builtin.set_fact:
+    haproxy_preflight_accounts: >-
+      {{ (haproxy_preflight_endpoint.callers + ['haproxy']) | map('extract', mgt_firewall_plan.principals) |
+         selectattr('future_account', 'defined') | map(attribute='future_account') |
+         select('string') | select('match', '^podman-') | unique | list }}"
+
+- name: HAProxy preflight | Explain check-mode collection plan
+  ansible.builtin.debug:
+    msg:
+      endpoint: "{{ haproxy_preflight_endpoint }}"
+      principals: "{{ mgt_firewall_plan.principals }}"
+      hosts: "{{ haproxy_preflight_hosts | unique }}"
+      note: No runtime metadata collection or candidate file writes occur in check mode.
+  when: ansible_check_mode
+
+- name: HAProxy preflight | Collect projected labels, identities and numeric destinations in one batch
+  ansible.builtin.command:
+    # Embedded Python contains shell variables for the dedicated account;
+    # resolve them only inside that account's explicitly supplied environment.
+    expand_argument_vars: false
+    argv: [/usr/bin/python3, -c, "{{ haproxy_preflight_source }}", collect]
+    stdin: >-
+      {{ {'host': haproxy_preflight_host, 'controller': services_controller_host,
+          'expected': haproxy_preflight_expected_hosts[haproxy_preflight_host],
+          'connection': {'transport': hostvars[haproxy_preflight_host].ansible_connection | default('ssh'),
+                         'address': hostvars[haproxy_preflight_host].ansible_ssh_host | default(
+                                    hostvars[haproxy_preflight_host].ansible_host | default(haproxy_preflight_host)),
+                         'user': hostvars[haproxy_preflight_host].ansible_ssh_user | default(
+                                 hostvars[haproxy_preflight_host].ansible_user | default('')),
+                         'port': hostvars[haproxy_preflight_host].ansible_ssh_port | default(
+                                 hostvars[haproxy_preflight_host].ansible_port | default(22))},
+          'port': haproxy_preflight_endpoint.port,
+          'provider': haproxy_preflight_endpoint.service,
+          'window_seconds': haproxy_preflight_window_seconds,
+          'sample_interval': haproxy_preflight_sample_interval,
+          'identity_callers': haproxy_preflight_endpoint.callers,
+          'capture_callers': haproxy_preflight_capture_callers | default(haproxy_preflight_endpoint.callers),
+          'capture_accounts': (haproxy_preflight_capture_callers | map('extract', mgt_firewall_plan.principals) |
+                               selectattr('future_account', 'defined') | map(attribute='future_account') | list)
+                              if haproxy_preflight_capture_callers is defined else haproxy_preflight_running_rootless_accounts,
+          'accounts': haproxy_preflight_accounts if haproxy_preflight_host == services_controller_host else [],
+          'running_rootless_accounts': haproxy_preflight_running_rootless_accounts} | to_json }}
+  delegate_to: "{{ haproxy_preflight_host }}"
+  loop: "{{ haproxy_preflight_hosts | unique }}"
+  loop_control:
+    loop_var: haproxy_preflight_host
+  changed_when: false
+  register: haproxy_preflight_collection
+  # Source is embedded in argv; report only sanitized diagnostics below.
+  no_log: true
+  failed_when: false
+  async: "{{ haproxy_preflight_window_seconds + 120 if haproxy_preflight_window_seconds > 0 else 0 }}"
+  poll: 0
+  when: not ansible_check_mode
+
+- name: HAProxy preflight | Reject failed capture launches with concise host diagnostics
+  ansible.builtin.assert:
+    that:
+      - haproxy_preflight_collection.results[haproxy_preflight_result_index].ansible_job_id is defined
+    fail_msg: >-
+      {{ {'host': haproxy_preflight_collection.results[haproxy_preflight_result_index].haproxy_preflight_host,
+          'operation': 'collect',
+          'stderr': haproxy_preflight_collection.results[haproxy_preflight_result_index].stderr |
+                    default('Capture did not launch; check the delegated transport.')} | to_nice_json }}
+  loop: "{{ range(0, haproxy_preflight_collection.results | length) | list }}"
+  loop_control:
+    loop_var: haproxy_preflight_result_index
+    label: "{{ haproxy_preflight_collection.results[haproxy_preflight_result_index].haproxy_preflight_host }}"
+  when: not ansible_check_mode and haproxy_preflight_window_seconds > 0
+
+- name: HAProxy preflight | Wait for simultaneous bounded host capture windows
+  ansible.builtin.async_status:
+    jid: "{{ haproxy_preflight_collection.results[haproxy_preflight_result_index].ansible_job_id }}"
+  delegate_to: "{{ haproxy_preflight_collection.results[haproxy_preflight_result_index].haproxy_preflight_host }}"
+  loop: "{{ range(0, haproxy_preflight_collection.results | length) | list }}"
+  loop_control:
+    loop_var: haproxy_preflight_result_index
+    label: "{{ haproxy_preflight_collection.results[haproxy_preflight_result_index].haproxy_preflight_host }}"
+  register: haproxy_preflight_windows
+  until: haproxy_preflight_windows.finished | default(false)
+  retries: "{{ ((haproxy_preflight_window_seconds + 120) / 2) | int + 1 }}"
+  delay: 2
+  changed_when: false
+  failed_when: false
+  no_log: true
+  when: not ansible_check_mode and haproxy_preflight_window_seconds > 0
+
+- name: HAProxy preflight | Remove only completed capture job metadata
+  ansible.builtin.async_status:
+    jid: "{{ haproxy_preflight_collection.results[haproxy_preflight_result_index].ansible_job_id }}"
+    mode: cleanup
+  delegate_to: "{{ haproxy_preflight_collection.results[haproxy_preflight_result_index].haproxy_preflight_host }}"
+  loop: "{{ range(0, haproxy_preflight_collection.results | length) | list }}"
+  loop_control:
+    loop_var: haproxy_preflight_result_index
+    label: "{{ haproxy_preflight_collection.results[haproxy_preflight_result_index].haproxy_preflight_host }}"
+  no_log: true
+  when: not ansible_check_mode and haproxy_preflight_window_seconds > 0
+
+- name: HAProxy preflight | Rebind completed windows to their original delegated host
+  ansible.builtin.set_fact:
+    haproxy_preflight_window_results: >-
+      {{ haproxy_preflight_window_results | default([]) + [haproxy_preflight_window_result | combine(
+         {'haproxy_preflight_host': haproxy_preflight_collection.results[
+          haproxy_preflight_window_result.haproxy_preflight_result_index].haproxy_preflight_host})] }}
+  loop: "{{ haproxy_preflight_windows.results }}"
+  loop_control:
+    loop_var: haproxy_preflight_window_result
+    label: "{{ haproxy_preflight_window_result.haproxy_preflight_result_index }}"
+  no_log: true
+  when: not ansible_check_mode and haproxy_preflight_window_seconds > 0
+
+- name: HAProxy preflight | Use completed windows for unchanged aggregation
+  ansible.builtin.set_fact:
+    haproxy_preflight_collection: "{{ {'results': haproxy_preflight_window_results} }}"
+  no_log: true
+  when: not ansible_check_mode and haproxy_preflight_window_seconds > 0
+
+- name: HAProxy preflight | Reject collector failures with concise host diagnostics
+  ansible.builtin.assert:
+    that:
+      - haproxy_preflight_collection.results[haproxy_preflight_result_index].rc | default(1) == 0
+    fail_msg: >-
+      {{ {'host': haproxy_preflight_collection.results[haproxy_preflight_result_index].haproxy_preflight_host,
+          'operation': 'collect',
+          'rc': haproxy_preflight_collection.results[haproxy_preflight_result_index].rc | default(1),
+          'stderr': haproxy_preflight_collection.results[haproxy_preflight_result_index].stderr |
+                    default('Collector did not return an exit status; check the delegated connection.')} | to_nice_json }}
+  # Loop over indices so failure results cannot echo the original cmd/item.
+  loop: "{{ range(0, haproxy_preflight_collection.results | length) | list }}"
+  loop_control:
+    loop_var: haproxy_preflight_result_index
+    label: "{{ haproxy_preflight_collection.results[haproxy_preflight_result_index].haproxy_preflight_host }}"
+  when: not ansible_check_mode
+
+- name: HAProxy preflight | Preserve private collector reports before aggregation can fail
+  ansible.builtin.copy:
+    content: "{{ haproxy_preflight_collection.results | map(attribute='stdout') | map('from_json') | list | to_nice_json }}\n"
+    dest: "{{ haproxy_preflight_output }}.collection.json"
+    mode: "0600"
+    force: false
+  diff: false
+  no_log: true
+  become: false
+  delegate_to: localhost
+  when: not ansible_check_mode
+
+- name: HAProxy preflight | Load the exact retained evidence once on the operator controller
+  ansible.builtin.set_fact:
+    haproxy_preflight_capture_content: "{{ lookup('ansible.builtin.file', haproxy_preflight_capture_metadata, rstrip=false, lstrip=false) }}"
+  no_log: true
+  when: not ansible_check_mode and haproxy_preflight_capture_metadata is defined
+
+- name: HAProxy preflight | Generate unverified additions while retaining accepted Homepage bindings
+  ansible.builtin.command:
+    expand_argument_vars: false
+    argv: [/usr/bin/python3, -c, "{{ haproxy_preflight_source }}", candidates]
+    stdin: >-
+      {{ {'plan': mgt_firewall_plan, 'controller': services_controller_host,
+          'names': haproxy_preflight_names,
+          'workers': [services_storage_host, services_plex_host],
+          'expected_hosts': haproxy_preflight_expected_hosts,
+          'collection': haproxy_preflight_collection.results,
+          'capture_reports': (haproxy_preflight_capture_content | from_json)
+                             if haproxy_preflight_capture_metadata is defined else none,
+          'capture_source': {'path': haproxy_preflight_capture_metadata,
+                             'sha256': haproxy_preflight_capture_content | hash('sha256')}
+                            if haproxy_preflight_capture_metadata is defined else none,
+          'existing': {'mgt_firewall_active_endpoints': mgt_firewall_active_endpoints | default([]),
+                       'mgt_firewall_callers': mgt_firewall_callers | default({})}} | to_json }}
+  changed_when: false
+  register: haproxy_preflight_candidate
+  no_log: true
+  failed_when: false
+  when: not ansible_check_mode
+
+- name: HAProxy preflight | Reject candidate generation failures with concise diagnostics
+  ansible.builtin.assert:
+    that:
+      - haproxy_preflight_candidate.rc | default(1) == 0
+    fail_msg: >-
+      {{ {'host': services_controller_host, 'operation': 'candidates',
+          'rc': haproxy_preflight_candidate.rc | default(1),
+          'stderr': haproxy_preflight_candidate.stderr |
+                    default('Candidate generator did not return an exit status; check the controller connection.')} | to_nice_json }}
+  when: not ansible_check_mode
+
+- name: HAProxy preflight | Write only private candidate and metadata files on the operator controller
+  ansible.builtin.copy:
+    content: "{{ (haproxy_preflight_candidate.stdout | from_json)[haproxy_preflight_file.key] | to_nice_json }}\n"
+    dest: "{{ haproxy_preflight_output }}{{ haproxy_preflight_file.suffix }}"
+    mode: "0600"
+    force: false
+  diff: false
+  become: false
+  delegate_to: localhost
+  loop:
+    - {key: candidate, suffix: ''}
+    - {key: reports, suffix: .metadata.json}
+    - {key: pending, suffix: .pending.json}
+  loop_control:
+    loop_var: haproxy_preflight_file
+  when: not ansible_check_mode
+
+- name: HAProxy handoff | Require explicit private projection and Patroni inventory
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.assert:
+    that:
+      - haproxy_preflight_stage_output is string
+      - haproxy_preflight_stage_output.startswith('/')
+      - groups.tags_postgres | default([]) | length > 0
+
+- name: HAProxy handoff | Resolve effective mgt definition only
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.set_fact:
+    haproxy_preflight_haproxy_definition: "{{ haproxy_preflight_catalog.haproxy | service_catalog_merge_target('mgt') }}"
+    haproxy_preflight_patroni_addresses: {}
+
+- name: HAProxy handoff | Load namespaced bootstrap defaults without resolving values
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.include_vars:
+    file: roles/infisical/defaults/main.yml
+    name: haproxy_preflight_infisical_defaults
+
+- name: HAProxy handoff | Project effective PostgreSQL declarations without application values
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.set_fact:
+    haproxy_preflight_pg_declarations:
+      romm: "{{ haproxy_preflight_catalog.romm.postgres }}"
+      # Project before merging: templating the full Authelia target
+      # would resolve application/credential references unnecessarily.
+      authelia: >-
+        {{ ({'runtime': haproxy_preflight_catalog.authelia.runtime,
+             'postgres': haproxy_preflight_catalog.authelia.postgres | default({}),
+             'targets': {'main': {'postgres': haproxy_preflight_catalog.authelia.targets.main.postgres}}}
+            | service_catalog_merge_target('main')).postgres }}
+      seerr: "{{ haproxy_preflight_catalog.seerr.postgres }}"
+      infisical:
+        host: "{{ infisical_postgres_host | default(haproxy_preflight_infisical_defaults.infisical_postgres_host) }}"
+        port: "{{ infisical_postgres_port | default(haproxy_preflight_infisical_defaults.infisical_postgres_port) }}"
+        database: "{{ infisical_postgres_db_name | default(haproxy_preflight_infisical_defaults.infisical_postgres_db_name) }}"
+
+- name: HAProxy handoff | Project only Patroni inventory addresses
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.set_fact:
+    haproxy_preflight_patroni_addresses: >-
+      {{ haproxy_preflight_patroni_addresses | combine({haproxy_preflight_patroni_host:
+         {'local_ip': hostvars[haproxy_preflight_patroni_host].local_ip}}) }}
+  loop: "{{ groups.tags_postgres }}"
+  loop_control:
+    loop_var: haproxy_preflight_patroni_host
+
+- name: HAProxy handoff | Validate existing HAProxy settings contract
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.include_tasks: roles/service_prepare/tasks/applications/haproxy/validate.yml
+  vars:
+    service_prepare_context:
+      service: "{{ haproxy_preflight_haproxy_definition }}"
+
+- name: HAProxy handoff | Resolve retained endpoints PostgreSQL and metrics using existing planner
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  mgt_firewall_plan:
+    source_var: haproxy_preflight_catalog
+    controller: "{{ services_controller_host }}"
+    inventory_address: "{{ local_ip }}"
+    active: "{{ ((mgt_firewall_active_endpoints | default([])) + ['haproxy/postgres', 'haproxy/metrics']) | unique | list }}"
+    callers: {}
+    verified: false
+    require_verified: false
+
+- name: HAProxy handoff | Write only value-free configuration and policy projections
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.copy:
+    content: >-
+      {{ {'plan': mgt_firewall_plan, 'policy': mgt_firewall_policy,
+          'controller': services_controller_host,
+          'workers': [services_storage_host, services_plex_host],
+          'postgres_declarations': haproxy_preflight_pg_declarations,
+          'definition': haproxy_preflight_haproxy_definition,
+          'render': {'groups': {'tags_postgres': groups.tags_postgres},
+                     'hostvars': haproxy_preflight_patroni_addresses,
+                     'postgres_patroni_restapi_port': postgres_patroni_restapi_port | default(8008),
+                     'postgres_patroni_postgres_port': postgres_patroni_postgres_port | default(5432)}} | to_nice_json }}
+    dest: "{{ haproxy_preflight_stage_output }}"
+    mode: "0600"
+    force: false
+  diff: false
+  become: false
+  delegate_to: localhost

@@ -11,6 +11,46 @@
     fail_msg: "Authelia preparation requires its password, canonical storage key, and filesystem host."
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
+- name: Authelia prepare | Validate explicit users database preservation
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context.service.application_prepare.preserve_users_database | default(false) is boolean
+      - >-
+        not (service_prepare_context.service.application_prepare.preserve_users_database | default(false))
+        or (
+          service_prepare_context.service.templates | default([])
+          | selectattr('dest', 'equalto', service_prepare_context.service.volumes.config.source ~ '/users_database.yml')
+          | list | length == 0
+        )
+    fail_msg: "Users database preservation must be a boolean and must not also render that file."
+
+- name: Authelia prepare | Inspect the retained users database without reading credentials
+  when: service_prepare_context.service.application_prepare.preserve_users_database | default(false)
+  become: true
+  no_log: true
+  diff: false
+  delegate_to: "{{ service_prepare_context.filesystem_hosts | first }}"
+  ansible.builtin.stat:
+    path: "{{ service_prepare_context.service.volumes.config.source }}/users_database.yml"
+    follow: false
+    get_checksum: false
+    get_mime: false
+  register: service_prepare_authelia_users_database
+
+- name: Authelia prepare | Require existing regular users database before preservation
+  when: service_prepare_context.service.application_prepare.preserve_users_database | default(false)
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_prepare_authelia_users_database.stat.exists
+      - service_prepare_authelia_users_database.stat.isreg | default(false)
+      - not (service_prepare_authelia_users_database.stat.islnk | default(false))
+      - service_prepare_authelia_users_database.stat.size | default(0) > 0
+    fail_msg: "Users database preservation needs an existing nonempty regular file; initialization is not authorized."
+
 - name: Authelia prepare | Publish temporary generation request
   no_log: true
   diff: false

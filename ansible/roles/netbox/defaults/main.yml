@@ -1,6 +1,6 @@
 ---
 
-# Secret values should be defined in an encrypted group_vars/all/vault.yml file.
+# Load the existing encrypted bootstrap vars explicitly; do not depend on NetBox inventory.
 
 ################################
 # VAULT-BACKED SECRETS
@@ -38,9 +38,10 @@ netbox_puid: "{{ container_host_puid | default('1000') }}"
 netbox_pgid: "{{ container_host_pgid | default('1000') }}"
 netbox_base_path: "{{ container_host_appdata_root | default('/opt') }}/netbox"
 
-netbox_frontend_fqdn: "{{ netbox_name }}.int.{{ netbox_domain }}"
-netbox_frontend_address: "https://{{ netbox_frontend_fqdn }}:8443"
-netbox_backend_address: "http://{{ netbox_name }}:8000"
+netbox_frontend_fqdn: "{{ netbox_name }}.{{ services_internal_zone }}"
+netbox_frontend_address: "https://{{ netbox_frontend_fqdn }}:{{ services_private_https_port }}"
+netbox_port: 18000
+netbox_backend_address: "http://{{ local_ip }}:{{ netbox_port }}"
 
 netbox_swarm_node_hostname: "{{ inventory_hostname }}"
 netbox_docker_network: overlay
@@ -63,7 +64,7 @@ netbox_restart_policy:
 ################################
 
 netbox_redis_name: netbox-redis
-netbox_redis_image: valkey/valkey:9.2-alpine
+netbox_redis_image: docker.io/valkey/valkey:9.2-alpine
 netbox_redis_puid: "{{ container_host_puid | default('1000') }}"
 netbox_redis_pgid: "{{ container_host_pgid | default('1000') }}"
 netbox_redis_path: "{{ netbox_base_path }}/redis"
@@ -93,3 +94,222 @@ netbox_traefik_certresolver: dns-cloudflare
 netbox_traefik_tls_options: securetls@file
 netbox_traefik_dynamic_owner: "1000"
 netbox_traefik_dynamic_group: "1000"
+
+# Explicit Vault bootstrap; these definitions never use dynamic catalog or Infisical lookup.
+netbox_podman_services:
+  - name: '{{ netbox_postgres_name }}'
+    runtime: podman
+    image: '{{ netbox_postgres_image }}'
+    user: "0:0"
+    environment:
+      TZ: '{{ netbox_timezone }}'
+      POSTGRES_DB: '{{ netbox_postgres_db_name }}'
+      POSTGRES_USER_FILE: /run/secrets/postgres_user_secret
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_pass_secret
+    secrets:
+      - netbox_db_user_secret
+      - netbox_db_password_secret
+    named_networks:
+      netbox-postgres:
+        driver: bridge
+        external: false
+    ports:
+      database:
+        host_ip: "{{ local_ip }}"
+        published: "{{ netbox_postgres_backend_port }}"
+        target: 5432
+        protocol: tcp
+    paths:
+      - path: '{{ netbox_postgres_path }}'
+        state: directory
+        mode: '0700'
+    volumes:
+      data:
+        type: bind
+        source: '{{ netbox_postgres_path }}'
+        target: /var/lib/postgresql
+        read_only: false
+    no_new_privileges: false
+    operational_requirements:
+      acl: [bootstrap]
+      ownership_transition: true
+    deploy:
+      type: container
+      host: '{{ inventory_hostname }}'
+      execution:
+        mode: rootless
+        host_user: podman-netbox-postgres
+        userns:
+          mode: keep-id
+          uid: "999"
+          gid: "999"
+    systemd:
+      restart: always
+      restart_sec: 15s
+      timeout_start_sec: 600s
+      after:
+        - network-online.target
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - PGUSER="$(cat /run/secrets/postgres_user_secret)" pg_isready -d "$POSTGRES_DB"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    notify_healthy: true
+  - name: '{{ netbox_redis_name }}'
+    runtime: podman
+    image: '{{ netbox_redis_image }}'
+    user: "0:0"
+    environment:
+      TZ: '{{ netbox_timezone }}'
+      PUID: '{{ netbox_redis_puid }}'
+      PGID: '{{ netbox_redis_pgid }}'
+    secrets:
+      - netbox_redis_password_secret
+    named_networks:
+      netbox-redis:
+        driver: bridge
+        external: false
+    ports:
+      cache:
+        host_ip: "{{ local_ip }}"
+        published: "{{ netbox_redis_backend_port }}"
+        target: 6379
+        protocol: tcp
+    paths:
+      - path: '{{ netbox_redis_path }}'
+        state: directory
+        mode: '0755'
+    volumes:
+      data:
+        type: bind
+        source: '{{ netbox_redis_path }}'
+        target: /data
+        read_only: false
+    no_new_privileges: false
+    operational_requirements:
+      acl: [bootstrap]
+      ownership_transition: true
+    deploy:
+      type: container
+      host: '{{ inventory_hostname }}'
+      execution:
+        mode: rootless
+        host_user: podman-netbox-redis
+        userns:
+          mode: keep-id
+          uid: "0"
+          gid: "0"
+    systemd:
+      restart: always
+      restart_sec: 15s
+      timeout_start_sec: 600s
+      after:
+        - network-online.target
+    command:
+      - sh
+      - -c
+      - >-
+        umask 077; printf 'appendonly yes\nrequirepass "%s"\n' "$(sed 's/[\\"]/\\&/g' /run/secrets/netbox_redis_password_secret)"
+        > /tmp/skynet-valkey.conf;
+        exec valkey-server /tmp/skynet-valkey.conf
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH="$(cat /run/secrets/netbox_redis_password_secret)" valkey-cli ping | grep -q PONG
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    notify_healthy: true
+    tmpfs:
+      - /tmp:mode=1777
+  - name: '{{ netbox_name }}'
+    runtime: podman
+    image: '{{ netbox_image }}'
+    user: "0:0"
+    environment:
+      TZ: '{{ netbox_timezone }}'
+      PUID: '{{ netbox_puid }}'
+      PGID: '{{ netbox_pgid }}'
+      FILE__SUPERUSER_EMAIL: /run/secrets/netbox_superuser_email_secret
+      FILE__SUPERUSER_PASSWORD: /run/secrets/netbox_superuser_password_secret
+      ALLOWED_HOST: '{{ netbox_frontend_fqdn }}'
+      CSRF_TRUSTED_ORIGINS: "'{{ netbox_frontend_address }}'"
+      DB_NAME: '{{ netbox_postgres_db_name }}'
+      FILE__DB_USER: /run/secrets/postgres_user_secret
+      FILE__DB_PASSWORD: /run/secrets/postgres_pass_secret
+      DB_HOST: "{{ local_ip }}"
+      DB_PORT: "{{ netbox_postgres_backend_port }}"
+      REDIS_HOST: "{{ local_ip }}"
+      REDIS_PORT: "{{ netbox_redis_backend_port }}"
+      REDIS_USERNAME: ''
+      FILE__REDIS_PASSWORD: /run/secrets/netbox_redis_password_secret
+      REDIS_DB_TASK: '0'
+      REDIS_DB_CACHE: '1'
+    secrets:
+      - netbox_superuser_email_secret
+      - netbox_superuser_password_secret
+      - netbox_db_user_secret
+      - netbox_db_password_secret
+      - netbox_redis_password_secret
+    named_networks:
+      netbox:
+        driver: bridge
+        external: false
+    paths:
+      - path: '{{ netbox_base_path }}'
+        state: directory
+        mode: '0755'
+      - path: '{{ netbox_base_path }}/config'
+        state: directory
+        mode: '0755'
+    volumes:
+      config:
+        type: bind
+        source: '{{ netbox_base_path }}/config'
+        target: /config
+        read_only: false
+    no_new_privileges: false
+    operational_requirements:
+      acl: [bootstrap]
+      ownership_transition: true
+    deploy:
+      type: container
+      host: '{{ inventory_hostname }}'
+      execution:
+        mode: rootless
+        host_user: podman-netbox
+        userns:
+          mode: keep-id
+          uid: "{{ netbox_puid }}"
+          gid: "{{ netbox_pgid }}"
+    systemd:
+      restart: always
+      restart_sec: 15s
+      timeout_start_sec: 600s
+      after:
+        - network-online.target
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          curl --fail --silent -H "Host: {{ netbox_frontend_fqdn }}"
+          http://127.0.0.1:8000/login/ > /dev/null
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    notify_healthy: true
+    ports:
+      recovery:
+        host_ip: '{{ local_ip }}'
+        published: '{{ netbox_port }}'
+        target: 8000
+netbox_podman_secret_targets:
+  netbox_db_user_secret: /run/secrets/postgres_user_secret
+  netbox_db_password_secret: /run/secrets/postgres_pass_secret
+netbox_postgres_backend_port: 15432
+netbox_redis_backend_port: 16380

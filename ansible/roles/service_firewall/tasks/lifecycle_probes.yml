@@ -1,0 +1,58 @@
+---
+
+- name: Service firewall | Read starting owned allow counters
+  service_firewall_lifecycle:
+    plan: "{{ service_firewall_adapter_plan }}"
+    phase: counters
+    inventory_host: "{{ service_firewall_host }}"
+  delegate_to: "{{ service_firewall_host }}"
+  loop: "{{ service_firewall_adapter_plan.hosts }}"
+  loop_control:
+    loop_var: service_firewall_host
+  register: service_firewall_starting_counters
+
+- name: Service firewall | Check TCP access from each current caller namespace
+  service_firewall_lifecycle:
+    plan: "{{ service_firewall_adapter_plan }}"
+    phase: probe
+    inventory_host: "{{ service_firewall_adapter_plan.controller }}"
+  delegate_to: "{{ service_firewall_adapter_plan.controller }}"
+  register: service_firewall_qualified_access
+
+- name: Service firewall | Read ending owned allow counters
+  service_firewall_lifecycle:
+    plan: "{{ service_firewall_adapter_plan }}"
+    phase: counters
+    inventory_host: "{{ service_firewall_host }}"
+  delegate_to: "{{ service_firewall_host }}"
+  loop: "{{ service_firewall_adapter_plan.hosts }}"
+  loop_control:
+    loop_var: service_firewall_host
+  register: service_firewall_ending_counters
+
+- name: Service firewall | Require matching owned allow-counter increases
+  when: >-
+    service_firewall_qualified_access.handshakes
+    | selectattr('connected', 'defined') | selectattr('connected', 'equalto', true)
+    | selectattr('port', 'equalto', service_firewall_endpoint.port)
+    | list | length > 0
+  ansible.builtin.assert:
+    that:
+      - >-
+        service_firewall_ending_counters.results[service_firewall_counter_index | int].counters[
+          ('6' if ':' in service_firewall_adapter_plan.inventory[service_firewall_counter_start.service_firewall_host] else '4') ~ ':' ~ service_firewall_endpoint.port | string
+        ] | default(0) | int
+        > service_firewall_counter_start.counters[
+          ('6' if ':' in service_firewall_adapter_plan.inventory[service_firewall_counter_start.service_firewall_host] else '4') ~ ':' ~ service_firewall_endpoint.port | string
+        ] | default(0) | int
+    fail_msg: A qualified handshake has no matching owned allow-counter increase. Do not infer source verification or application acceptance.
+  loop: "{{ service_firewall_adapter_plan.endpoints }}"
+  loop_control:
+    loop_var: service_firewall_endpoint
+  vars:
+    service_firewall_counter_index: "{{ service_firewall_adapter_plan.hosts.index(service_firewall_endpoint.host) }}"
+    service_firewall_counter_start: "{{ service_firewall_starting_counters.results[service_firewall_counter_index | int] }}"
+
+- name: Service firewall | Report pending client activation without claiming acceptance
+  ansible.builtin.debug:
+    msg: "{{ service_firewall_qualified_access.handshakes | selectattr('not_probed', 'defined') | list }}"

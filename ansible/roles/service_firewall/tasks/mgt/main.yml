@@ -1,0 +1,52 @@
+---
+
+- name: Service firewall | Mgt | Validate the selected operation
+  ansible.builtin.assert:
+    that:
+      - mgt_firewall_operation in ['install', 'observe', 'check', 'remove']
+      - mgt_firewall_root == '/etc/skynet-mgt-firewall'
+
+- name: Service firewall | Mgt | Load service declarations without secret values
+  when: mgt_firewall_operation in ['install', 'observe']
+  ansible.builtin.include_vars:
+    dir: "{{ playbook_dir }}/group_vars/all/services"
+    extensions: [yml]
+    ignore_unknown_extensions: true
+    name: mgt_firewall_catalog
+
+- name: Service firewall | Mgt | Build endpoints from service and bootstrap declarations
+  when: mgt_firewall_operation in ['install', 'observe']
+  mgt_firewall_plan:
+    source_var: mgt_firewall_catalog
+    controller: "{{ services_controller_host }}"
+    inventory_address: "{{ local_ip }}"
+    active: "{{ mgt_firewall_active_endpoints }}"
+    callers: "{{ mgt_firewall_callers }}"
+    verified: "{{ mgt_firewall_inputs_verified }}"
+    require_verified: "{{ mgt_firewall_operation == 'install' and not ansible_check_mode }}"
+
+- name: Service firewall | Mgt | Show endpoint coverage and pending caller identities
+  ansible.builtin.debug:
+    msg:
+      coverage: "{{ mgt_firewall_plan }}"
+      active: "{{ mgt_firewall_policy.endpoints }}"
+      candidate_policy: "{{ mgt_firewall_policy }}"
+      inputs_verified: "{{ mgt_firewall_inputs_verified }}"
+      note: >-
+        This plan is read-only. Caller/restart/hook observations and live acceptance are still required.
+        No application ACL or ownership acknowledgement is set by this operation.
+  when:
+    - mgt_firewall_operation in ['install', 'observe']
+    - ansible_check_mode
+
+- name: Service firewall | Mgt | Show the check-mode recovery plan
+  ansible.builtin.debug:
+    msg: "{{ mgt_firewall_operation }} uses the installed helper and policy; no catalog, secret or application operation is needed."
+  when: ansible_check_mode and mgt_firewall_operation != 'install'
+
+- name: Service firewall | Mgt | Run the selected policy operation
+  ansible.builtin.include_tasks:
+    file: "{{ mgt_firewall_operation }}.yml"
+    apply:
+      tags: [mgt_firewall_install, mgt_firewall_observe, mgt_firewall_check, mgt_firewall_remove]
+  when: not ansible_check_mode

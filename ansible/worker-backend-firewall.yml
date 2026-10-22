@@ -1,0 +1,18 @@
+---
+
+# Keep the installed skynet interface until its template update is deployed.
+- name: Manage the temporary worker backend firewall independently of applications
+  hosts: '{{ services_storage_inventory_group }}:{{ services_plex_host }}'
+  vars_files:
+    - group_vars/all/services.yml
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tags:
+    - never
+    - worker_backend_firewall_install
+    - worker_backend_firewall_check
+    - worker_backend_firewall_remove
+  tasks:
+    - name: Compatibility entry point for installed skynet; manual workflow lives in operations/
+      ansible.builtin.import_tasks: operations/worker-backend-firewall.yml

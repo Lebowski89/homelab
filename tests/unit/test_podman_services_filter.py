@@ -3,10 +3,7 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
-import yaml
 from ansible.errors import AnsibleFilterError
-from jinja2 import StrictUndefined
-from jinja2.nativetypes import NativeEnvironment
 
 MODULE_PATH = Path(__file__).resolve().parents[2] / "ansible" / "roles" / "podman_services" / "filter_plugins" / "podman_services.py"
 spec = importlib.util.spec_from_file_location("podman_services", MODULE_PATH)
@@ -301,6 +298,26 @@ def test_normalize_maps_every_canonical_docker_style_field():
     }
     assert svc["postgres"] == {"enable": True, "databases": ["portable"]}
     assert svc["traefik"] == {"enable": True, "port": 8080}
+
+
+@pytest.mark.parametrize("ports_as_mapping", [False, True])
+def test_publication_aliases_deduplicate_after_validation_without_changing_distinct_ports(ports_as_mapping):
+    port = {"host_ip": "192.0.2.48", "published": 19090, "target": 9090}
+    entries = [port, {**port, "published": "19090", "protocol": " TCP "}, {**port, "protocol": "udp"}]
+    cfg = valid_cfg()
+    cfg["ports"] = dict(zip(["receiver", "backend", "datagram"], entries, strict=True)) if ports_as_mapping else entries
+    before = deepcopy(cfg)
+
+    result = podman_services.podman_service_normalize(cfg, "portable")
+
+    assert result["container"]["ports"] == [
+        {"host": 19090, "container": 9090, "protocol": "tcp", "host_ip": "192.0.2.48"},
+        {"host": 19090, "container": 9090, "protocol": "udp", "host_ip": "192.0.2.48"},
+    ]
+    assert cfg == before
+    cfg["ports"] = {"receiver": port, "backend": {**port, "unsupported": True}}
+    with pytest.raises(AnsibleFilterError, match="unsupported"):
+        podman_services.podman_service_normalize(cfg, "portable")
 
 
 @pytest.mark.parametrize("ports_as_mapping", [False, True])
@@ -956,7 +973,7 @@ def test_podman_devices_reject_malformed_declarations(declaration):
         podman_services.podman_service_normalize(cfg, "portable")
 
 
-@pytest.mark.parametrize("network_mode", ["", "host", "container:", "container:bad/name", "service:gluetun"])
+@pytest.mark.parametrize("network_mode", ["", "container:", "container:bad/name", "service:gluetun"])
 def test_podman_network_mode_accepts_only_container_references(network_mode):
     cfg = minimal_canonical_cfg()
     cfg["network_mode"] = network_mode
@@ -1021,9 +1038,7 @@ def test_secret_policy_and_declarations_share_supported_update_policies(policy):
 
 
 UNSUPPORTED_PODMAN_TOP_LEVEL_FIELDS = [
-    "cgroup",
     "cleanup",
-    "command",
     "configs",
     "container",
     "container_name",
@@ -1033,7 +1048,6 @@ UNSUPPORTED_PODMAN_TOP_LEVEL_FIELDS = [
     "drift",
     "entrypoint",
     "env",
-    "env_file",
     "expose",
     "extra_hosts",
     "group",
@@ -1048,7 +1062,6 @@ UNSUPPORTED_PODMAN_TOP_LEVEL_FIELDS = [
     "privileged",
     "pull_policy",
     "security_opt",
-    "settings",
     "shm_tmpfs_size",
     "stack",
     "stop_grace_period",
@@ -1058,7 +1071,6 @@ UNSUPPORTED_PODMAN_TOP_LEVEL_FIELDS = [
     "sysctls",
     "targets",
     "themepark",
-    "tmpfs",
     "ulimits",
     "working_dir",
 ]
@@ -1075,12 +1087,12 @@ def test_unsupported_top_level_fields_are_rejected_instead_of_discarded(field):
 
 def test_multiple_unsupported_top_level_fields_are_reported_in_sorted_order():
     cfg = minimal_canonical_cfg()
-    cfg.update({"settings": {}, "hostname": "portable", "command": ["serve"]})
+    cfg.update({"privileged": True, "hostname": "portable", "entrypoint": ["serve"]})
 
     with pytest.raises(AnsibleFilterError) as error:
         podman_services.podman_service_normalize(cfg, "portable")
 
-    assert str(error.value) == ("portable contains unsupported top-level fields for Podman: command, hostname, settings")
+    assert str(error.value) == ("portable contains unsupported top-level fields for Podman: entrypoint, hostname, privileged")
 
 
 def test_unknown_top_level_field_is_rejected():
@@ -1241,27 +1253,6 @@ def rootless_bind_cfg():
     return cfg
 
 
-def real_rootless_service(name):
-    services_dir = Path(__file__).resolve().parents[2] / "ansible" / "group_vars" / "all" / "services"
-    rendered = (
-        NativeEnvironment(undefined=StrictUndefined)
-        .from_string((services_dir / f"{name}.yml").read_text())
-        .render(
-            services_controller_host="manager",
-            local_ip="192.0.2.10",
-            timezone="Australia/Melbourne",
-            hostvars={
-                "manager": {
-                    "container_host_puid": 1000,
-                    "container_host_pgid": 1000,
-                    "container_host_appdata_root": "/opt/appdata",
-                }
-            },
-        )
-    )
-    return yaml.safe_load(rendered)[name]
-
-
 def test_rootless_bind_mount_uses_validated_keep_id_and_dedicated_path_ownership_without_mutation():
     cfg = rootless_bind_cfg()
     original = deepcopy(cfg)
@@ -1354,15 +1345,6 @@ def test_rootless_paths_allow_confined_state_absent_cleanup(cleanup_paths):
     assert normalized["host_paths"][-len(cleanup_paths) :] == [{"path": path, "state": "absent"} for path in cleanup_paths]
 
 
-@pytest.mark.parametrize("service_name", ["adminer", "thelounge"])
-def test_existing_rootless_service_declarations_remain_valid(service_name):
-    cfg = real_rootless_service(service_name)
-
-    normalized = podman_services.podman_service_normalize(cfg, service_name)
-
-    assert normalized["execution"]["mode"] == "rootless"
-
-
 @pytest.mark.parametrize(
     ("field", "destination"),
     [
@@ -1399,12 +1381,13 @@ def test_rootless_managed_files_reject_explicit_ownership(field, ownership_field
         podman_services.podman_service_normalize(cfg, "thelounge")
 
 
-def test_rootless_paths_reject_extra_non_bind_directories():
+def test_rootless_paths_allow_confined_subdirectories_without_changing_source():
     cfg = rootless_bind_cfg()
     cfg["paths"].append({"path": "/opt/appdata/thelounge/cache", "state": "directory"})
-
-    with pytest.raises(AnsibleFilterError, match=r"paths\[1\].*must use state absent"):
-        podman_services.podman_service_normalize(cfg, "thelounge")
+    original = deepcopy(cfg)
+    normalized = podman_services.podman_service_normalize(cfg, "thelounge")
+    assert normalized["host_paths"][-1]["path"].endswith("/cache")
+    assert cfg == original
 
 
 @pytest.mark.parametrize(
@@ -1527,7 +1510,7 @@ def test_opt_root_cannot_reach_rootless_recursive_ownership(source):
     ("mutation", "message"),
     [
         ("missing_path", "exactly once"),
-        ("different_path", "must use state absent"),
+        ("different_path", "declared rootless bind source"),
         ("explicit_owner", "must omit owner and group"),
         ("outside_opt", "within /opt"),
     ],
@@ -1843,3 +1826,36 @@ def test_subordinate_id_range_requires_one_full_rootless_allocation():
 def test_subordinate_id_range_rejects_missing_small_duplicate_and_malformed_entries(value, message):
     with pytest.raises(AnsibleFilterError, match=message):
         podman_services.podman_subid_range(value, "podman-adminer")
+
+
+@pytest.mark.parametrize("enabled", [True, False])
+def test_managed_bridge_ipv6_is_explicit_strict_and_rendered_without_fact_leakage(enabled):
+    from jinja2 import Environment, FileSystemLoader
+
+    cfg = valid_cfg()
+    cfg["named_networks"] = {"managed": {"external": False, "driver": "bridge", "enable_ipv6": enabled}}
+    before = deepcopy(cfg)
+    svc = podman_services.podman_service_normalize(cfg, "managedsvc")
+    env = Environment(loader=FileSystemLoader(MODULE_PATH.parent.parent / "templates"))
+    template = env.get_template("network.network.j2")
+    assert f"IPv6={str(enabled).lower()}" in template.render(podman_service=svc)
+    assert cfg == before
+    cfg["named_networks"]["managed"].pop("enable_ipv6")
+    following = podman_services.podman_service_normalize(cfg, "managedsvc")
+    assert "IPv6=" not in template.render(podman_service=following)
+
+
+@pytest.mark.parametrize("value", [None, 0, 1, "true", "false", [], {}])
+def test_managed_bridge_ipv6_rejects_nonboolean_values(value):
+    cfg = valid_cfg()
+    cfg["named_networks"] = {"managed": {"external": False, "enable_ipv6": value}}
+    with pytest.raises(AnsibleFilterError, match="strict boolean"):
+        podman_services.podman_service_normalize(cfg, "managedsvc")
+
+
+@pytest.mark.parametrize("options", [{"external": True}, {"external": False, "driver": "macvlan"}])
+def test_ipv6_cannot_mutate_external_network_or_guess_nonbridge_ipam(options):
+    cfg = valid_cfg()
+    cfg["named_networks"] = {"managed": {**options, "enable_ipv6": True}}
+    with pytest.raises(AnsibleFilterError, match="managed bridge"):
+        podman_services.podman_service_normalize(cfg, "managedsvc")

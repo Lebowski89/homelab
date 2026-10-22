@@ -5,17 +5,20 @@ seerr:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
-  tags: [media, pgsql, seerr]
+  runtime: podman
+  tags:
+    - media
+    - pgsql
+    - seerr
   name: seerr
-  stack: seerr
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/seerr:release-v3.5.0
+  image: ghcr.io/hotio/seerr:release-v3.5.0@sha256:05f42693cba6c2ad1717c625e367731a3018b5dc2bc7f9f0261d3326479e89e8
   ################################
   # ENVIRONMENT/SECRETS
   ################################
+  user: "0:0"
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
@@ -35,8 +38,15 @@ seerr:
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    seerr:
+      driver: bridge
+      external: false
+  ports:
+    backend:
+      host_ip: "{{ local_ip }}"
+      published: 15055
+      target: 5055
+      protocol: tcp
   ################################
   # FILESYSTEM
   ################################
@@ -59,10 +69,13 @@ seerr:
   ################################
   # INTEGRATIONS
   ################################
+  no_new_privileges: false
   traefik:
     enable: true
     exposure: private
-    port: 5055
+    port: 15055
+    backend_mode: host
+    backend_host_inventory: "{{ services_controller_host }}"
   postgres:
     enable: true
     databases:
@@ -70,11 +83,23 @@ seerr:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [mgt_backends]
+    ownership_transition: true
+
   deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    profile: standard
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-seerr
+      userns:
+        mode: keep-id
+        uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+        gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
+  systemd:
+    restart: always
+    restart_sec: 15s
+    timeout_start_sec: 300s
+    after:
+      - network-online.target

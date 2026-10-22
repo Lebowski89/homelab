@@ -1,0 +1,35 @@
+---
+
+- name: Service firewall | Mgt | Gather minimal platform facts
+  ansible.builtin.setup:
+    gather_subset: ['!all', '!min', distribution, service_mgr, python]
+
+- name: Service firewall | Mgt | Validate the supported Ubuntu version and Python
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == 'Ubuntu'
+      - ansible_facts.distribution_version.split('.')[0:2] | join('.') == '26.04'
+      - ansible_facts.service_mgr == 'systemd'
+      - ansible_facts.python.version.major == 3
+      - ansible_facts.python.version.minor >= 10
+      - mgt_firewall_root == '/etc/skynet-mgt-firewall'
+    fail_msg: This phase supports the current Ubuntu 26.04 mgt with existing Python 3.10+ only. Rocky support is deferred.
+
+- name: Service firewall | Mgt | Verify caller identities and test IPv4 and IPv6 rules before writing files # noqa var-naming[no-role-prefix]
+  ansible.builtin.command:
+    argv: ["{{ ansible_facts.python.executable }}", -c, "{{ mgt_firewall_helper_source }}", validate, --stdin]
+    expand_argument_vars: false
+    stdin: "{{ mgt_firewall_policy | to_json }}"
+  register: mgt_firewall_preflight
+  changed_when: false
+
+- name: Service firewall | Mgt | Save the verified service-manager dependencies # noqa var-naming[no-role-prefix]
+  ansible.builtin.set_fact:
+    mgt_firewall_policy: "{{ mgt_firewall_policy | combine({'guard_units': (mgt_firewall_preflight.stdout | from_json).guard_units}) }}"
+
+- name: Service firewall | Mgt | Extend and reconcile the current policy under its writer lock
+  service_firewall_lifecycle:
+    phase: install
+    profile: mgt
+    policy: "{{ mgt_firewall_policy }}"
+    inventory_host: "{{ services_controller_host }}"

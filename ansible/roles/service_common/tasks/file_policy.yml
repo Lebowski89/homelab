@@ -1,0 +1,5 @@
+---
+- name: Service common | Validate managed file restart policy
+  ansible.builtin.assert:
+    that:
+      - service_common_service | service_common_file_policy

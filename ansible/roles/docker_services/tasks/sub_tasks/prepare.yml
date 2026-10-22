@@ -76,6 +76,7 @@
 
 - name: Cleanup | Remove existing deployment
   when:
+    - docker_services_common_action in ['remove', 'recreate']
     - not ansible_check_mode
     - docker_services_is_deploy_host
     - docker_services_do_stack_cleanup | bool
@@ -87,6 +88,7 @@
 
 - name: Cleanup | Record cleaned stack
   when:
+    - docker_services_common_action in ['remove', 'recreate']
     - not ansible_check_mode
     - docker_services_is_deploy_host
     - docker_services_do_stack_cleanup | bool
@@ -222,6 +224,13 @@
     service_common_traefik_owner: "1000"
     service_common_traefik_group: "1000"
   tags: [deploy, update, remove, recreate, bootstrap]
+
+- name: Prepare | Snapshot managed configuration changes
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    docker_services_config_changed: "{{ service_common_config_changed | default(false) }}"
+  tags: [deploy, update, recreate, bootstrap]
 
 - name: Prepare | Render Swarm environment templates
   when:

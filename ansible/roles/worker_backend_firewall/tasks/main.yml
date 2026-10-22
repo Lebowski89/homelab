@@ -1,0 +1,11 @@
+---
+
+# Compatibility for retained role invocations; service_firewall is the only owner.
+- name: Worker backend firewall | Forward to the canonical profile
+  ansible.builtin.include_role:
+    name: service_firewall
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  vars:
+    service_firewall_profile: workers
+    service_firewall_operation: "{{ worker_backend_firewall_operation | default('install') }}"

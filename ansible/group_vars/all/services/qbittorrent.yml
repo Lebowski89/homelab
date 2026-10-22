@@ -109,6 +109,11 @@ qbittorrent:
       ################################
       # FILESYSTEM
       ################################
+      ports:
+        web_backend:
+          published: 22606
+          target: 8090
+          mode: host
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha"
           state: directory
@@ -164,10 +169,15 @@ qbittorrent:
       traefik:
         enable: true
         exposure: private
-        port: 8090
+        port: 22606
     ################################
     # BRAVO
     ################################
+        backend_mode: host
+        backend_host_inventory: "{{ services_storage_host }}"
+      operational_requirements:
+        acl: [worker_backends]
+
     bravo:
       ################################
       # IDENTITY
@@ -202,6 +212,11 @@ qbittorrent:
       ################################
       # FILESYSTEM
       ################################
+      ports:
+        web_backend:
+          published: 22607
+          target: 8091
+          mode: host
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo"
           state: directory
@@ -257,4 +272,8 @@ qbittorrent:
       traefik:
         enable: true
         exposure: private
-        port: 8091
+        port: 22607
+        backend_mode: host
+        backend_host_inventory: "{{ services_storage_host }}"
+      operational_requirements:
+        acl: [worker_backends]

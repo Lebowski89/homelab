@@ -63,6 +63,14 @@ sabnzbd:
   ################################
   # FILESYSTEM
   ################################
+  ports:
+    web_backend:
+      published: 22613
+      target: 8080
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sabnzbd"
       state: directory
@@ -108,13 +116,6 @@ sabnzbd:
       mode: "0755"
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sabnzbd/sabnzbd.ini.bak"
       state: absent
-  copies:
-    - src: files/themepark/98-themepark-sabnzbd
-      dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sabnzbd/98-themepark-sabnzbd"
-      mode: "0755"
-      force: false
-      wait: true
-      wait_timeout: 30
   templates:
     - src: configs/sabnzbd.ini.j2
       dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sabnzbd/sabnzbd.ini"
@@ -132,21 +133,21 @@ sabnzbd:
       source: "{{ hostvars[services_storage_host].container_host_data_root }}/usenet"
       target: /data/usenet
       read_only: false
-    themepark:
-      type: bind
-      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sabnzbd/98-themepark-sabnzbd"
-      target: /etc/cont-init.d/98-themepark
-      read_only: false
   ################################
   # INTEGRATIONS
   ################################
   traefik:
     enable: true
     exposure: private
-    port: 8080
+    port: 22613
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

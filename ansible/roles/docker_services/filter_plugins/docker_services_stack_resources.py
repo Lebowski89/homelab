@@ -94,6 +94,10 @@ def docker_services_normalize_stack_resources(
                 continue
 
             definition = deepcopy(dict(raw_definition)) if _is_mapping(raw_definition) else {}
+            if "enable_ipv6" in definition:
+                raise AnsibleFilterError(
+                    "enable_ipv6 is currently supported only by managed Podman bridge networks; Docker rendering cannot silently discard it"
+                )
 
             if "external" not in definition:
                 definition["external"] = default_external

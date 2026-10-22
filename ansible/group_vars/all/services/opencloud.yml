@@ -61,6 +61,14 @@ opencloud:
   ################################
   # FILESYSTEM
   ################################
+  ports:
+    web_backend:
+      published: 22604
+      target: 9200
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/opencloud"
       state: directory
@@ -117,10 +125,15 @@ opencloud:
   traefik:
     enable: true
     exposure: private
-    port: 9200
+    port: 22604
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

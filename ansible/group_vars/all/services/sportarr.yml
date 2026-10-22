@@ -48,6 +48,14 @@ sportarr:
   ################################
   # FILESYSTEM
   ################################
+  ports:
+    web_backend:
+      published: 22616
+      target: 1867
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sportarr"
       state: directory
@@ -75,7 +83,9 @@ sportarr:
   traefik:
     enable: true
     exposure: private
-    port: 1867
+    port: 22616
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
   postgres:
     enable: true
     databases:
@@ -83,6 +93,9 @@ sportarr:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

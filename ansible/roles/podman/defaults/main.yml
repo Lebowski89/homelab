@@ -16,3 +16,5 @@ podman_packages:
   - fuse-overlayfs
   - dbus-user-session
 podman_install_extra_packages: []
+podman_shared_network_name: mgt-services
+podman_shared_network_dns_bind_port: 5533

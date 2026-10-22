@@ -1,0 +1,76 @@
+---
+
+- name: Infisical | Reset current bootstrap inputs
+  ansible.builtin.set_fact:
+    infisical_podman_values: {}
+    infisical_podman_declarations: []
+  no_log: true
+  diff: false
+  tags:
+    - infisical_bootstrap
+    - infisical_deploy
+    - infisical_recreate
+    - infisical_remove
+- name: Infisical | Select only current-service Vault declarations
+  ansible.builtin.set_fact:
+    infisical_podman_values: >-
+      {{ infisical_podman_values | combine({infisical_podman_secret_name: ('NONPRODUCTION-check-only' if ansible_check_mode
+      else infisical_redis_required_docker_secrets[infisical_podman_secret_name])}) }}
+    infisical_podman_declarations: >-
+      {{ infisical_podman_declarations + [{'name': infisical_podman_secret_name, 'var': infisical_podman_secret_name, 'target':
+      infisical_podman_secret_targets.get(infisical_podman_secret_name, '/run/secrets/' ~ infisical_podman_secret_name),
+      'update_policy': 'preserve'}] }}
+  loop: '{{ infisical_podman_definition.secrets }}'
+  loop_control:
+    loop_var: infisical_podman_secret_name
+  no_log: true
+  diff: false
+  tags:
+    - infisical_bootstrap
+    - infisical_deploy
+    - infisical_recreate
+    - infisical_remove
+  when: infisical_podman_action != "remove"
+- name: Infisical | Require nonempty current-service credentials
+  ansible.builtin.assert:
+    that:
+      - infisical_podman_values.values() | select("equalto", "") | list | length == 0
+    fail_msg: A required bootstrap credential is empty.
+  no_log: true
+  diff: false
+  tags:
+    - infisical_bootstrap
+    - infisical_deploy
+    - infisical_recreate
+    - infisical_remove
+- name: Infisical | Deploy through the Podman adapter
+  ansible.builtin.include_role:
+    name: podman_services
+    apply:
+      tags:
+        - infisical_bootstrap
+        - infisical_deploy
+        - infisical_recreate
+        - infisical_remove
+      no_log: true
+      diff: false
+  vars:
+    podman_services_service_cfg: '{{ infisical_podman_definition }}'
+    podman_services_role_prefix: '{{ infisical_podman_definition.name }}'
+    podman_services_action_remove: '{{ infisical_podman_action == "remove" }}'
+    podman_services_action_recreate: '{{ infisical_podman_action == "recreate" }}'
+    podman_services_common_context:
+      requirements_proof: "{{ infisical_podman_prerequisite_proofs[infisical_podman_definition.name] }}"
+      runtime: podman
+      dispatch_host: '{{ inventory_hostname }}'
+      controller_host: '{{ inventory_hostname }}'
+      lookup_values: '{{ infisical_podman_values }}'
+      resolved_environment: '{{ {} if ansible_check_mode else infisical_podman_definition.environment }}'
+      secret_declarations: '{{ infisical_podman_declarations }}'
+    ansible_pipelining: true
+  no_log: true
+  tags:
+    - infisical_bootstrap
+    - infisical_deploy
+    - infisical_recreate
+    - infisical_remove

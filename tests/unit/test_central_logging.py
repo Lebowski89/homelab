@@ -69,8 +69,10 @@ def render_docker_alloy(*, shared_appdata_root: bool = False) -> str:
             services_storage_host="unraid",
             services_plex_host="plex",
             services_log_root="/var/log/skynet",
+            services_internal_zone="private.example.internal",
+            services_private_https_port=9443,
             hostvars={
-                "mgt": {"container_host_appdata_root": controller_root},
+                "mgt": {"container_host_appdata_root": controller_root, "local_ip": "192.0.2.10"},
                 "unraid": {"container_host_appdata_root": "/mnt/user/appdata"},
                 "plex": {"container_host_appdata_root": plex_root},
             },
@@ -79,11 +81,12 @@ def render_docker_alloy(*, shared_appdata_root: bool = False) -> str:
 
 
 def test_docker_alloy_is_global_with_stable_node_identity_and_local_state():
-    service = load_service("alloy")
+    service = CATALOG_FILTERS.service_catalog_merge_target(load_service("alloy"), "workers")
 
     assert service["deploy"]["mode"] == "global"
     assert "replicas" not in service["deploy"]
-    assert service["deploy"]["constraints"] == ["node.platform.os == linux"]
+    assert "node.platform.os == linux" in service["deploy"]["constraints"]
+    assert "node.labels.ansible_host != {{ services_controller_host }}" in service["deploy"]["constraints"]
     assert not any("primary_manager" in constraint for constraint in service["deploy"]["constraints"])
     assert Environment(undefined=StrictUndefined).from_string(service["environment"]["ALLOY_HOST"]).render() == "{{.Node.Hostname}}"
     assert service["swarm_configs"] == [{"name": "alloy_config", "src": "alloy_config.alloy.j2", "data_is_template": True}]
@@ -104,7 +107,7 @@ def test_docker_alloy_is_global_with_stable_node_identity_and_local_state():
 
 
 def test_swarm_node_template_survives_the_actual_compose_renderer():
-    service = load_service("alloy")
+    service = CATALOG_FILTERS.service_catalog_merge_target(load_service("alloy"), "workers")
     node_hostname = Environment(undefined=StrictUndefined).from_string(service["environment"]["ALLOY_HOST"]).render()
     environment = Environment(
         loader=FileSystemLoader(REPO_ROOT / "ansible/roles/docker_services/templates"),
@@ -231,7 +234,7 @@ def test_traefik_access_log_has_bounded_reopen_safe_rotation():
     log_root = NativeEnvironment(undefined=StrictUndefined).from_string(service["volumes"]["logs"]["source"]).render(**TEST_HOST_CONTEXT)
     template_context = {
         "name": service["name"],
-        "stack": service["stack"],
+        "stack": "traefik",
         "volumes": {"logs": {"source": log_root}},
     }
     environment = Environment(
@@ -239,7 +242,14 @@ def test_traefik_access_log_has_bounded_reopen_safe_rotation():
         undefined=StrictUndefined,
     )
     policy = environment.get_template("configs/proxy/traefik/logrotate.j2").render(service_common_service=template_context)
-    reopen = environment.get_template("configs/proxy/traefik/reopen-logs.sh.j2").render(service_common_service=template_context)
+    reopen = environment.get_template("configs/proxy/traefik/reopen-logs.sh.j2").render(
+        service_common_service=template_context, service_common_runtime="docker"
+    )
+    podman_reopen = environment.get_template("configs/proxy/traefik/reopen-logs.sh.j2").render(
+        service_common_service=template_context, service_common_runtime="podman"
+    )
+    assert "/usr/bin/podman kill --signal USR1 traefik" in podman_reopen
+    assert "docker" not in podman_reopen
     declarations = {item["src"]: item for item in service["templates"]}
     alloy_config = render_docker_alloy()
 
@@ -274,9 +284,8 @@ def test_traefik_access_log_has_bounded_reopen_safe_rotation():
         "mode": "0755",
         "force": True,
     }
-    assert service["deploy"]["mode"] == "replicated"
-    assert service["deploy"]["replicas"] == 1
-    assert service["deploy"]["constraints"] == ["node.labels.docker_services_host == docker_services_primary_manager"]
+    assert service["deploy"]["type"] == "container"
+    assert service["deploy"]["host"] == "{{ services_controller_host }}"
     assert alloy_config.count("/host/rootfs/var/log/skynet/traefik/access.log") == 1
     assert "access.log*" not in alloy_config
 
@@ -302,6 +311,7 @@ def test_loki_private_ingest_route_and_clients_render_end_to_end():
             services_private_https_port=9443,
         )
     )
+    service["traefik"]["backend_host_inventory"] = "mgt"
     context = SERVICE_COMMON_FILTERS.service_common_traefik_context(
         service,
         "loki",
@@ -320,7 +330,8 @@ def test_loki_private_ingest_route_and_clients_render_end_to_end():
     router = route["http"]["routers"]["loki"]
     middleware = route["http"]["middlewares"]["loki-private-ui-chain"]["chain"]["middlewares"]
 
-    assert service["traefik"] == {"enable": True, "exposure": "private", "port": 3100}
+    assert service["traefik"]["enable"] is True
+    assert context["backend_url"] == "http://192.0.2.10:3100"
     assert router["entryPoints"] == ["https_private"]
     assert router["rule"] == "Host(`loki.private.example.internal`)"
     assert router["middlewares"] == ["loki-private-ui-chain"]
@@ -329,7 +340,7 @@ def test_loki_private_ingest_route_and_clients_render_end_to_end():
     assert 'address: ":{{ services_private_https_port }}"' in static_traefik
     assert "{{ services_internal_zone }}" in static_traefik
     assert native_url == "https://loki.private.example.internal:9443/loki/api/v1/push"
-    assert 'url = "http://loki:3100/loki/api/v1/push"' in render_docker_alloy()
+    assert 'url = "https://loki.private.example.internal:9443/loki/api/v1/push"' in render_docker_alloy()
     assert re.search(r"^\s+\"loki\",$", dns, flags=re.MULTILINE)
     assert "retention_period: 168h" in loki_config
     assert "replication_factor: 1" in loki_config

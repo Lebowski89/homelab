@@ -69,6 +69,7 @@ def _classify(repository: Path, base_sha: str, head_sha: str, *, author: str = R
     )
 
 
+@pytest.mark.integration
 def test_single_service_tag_change_uses_fast_path(git_repository: tuple[Path, str]) -> None:
     repository, base_sha = git_repository
     head_sha = _commit(repository, "update qui", {QUI_PATH: SERVICE_YAML.replace("v1.20.0", "v1.25.0")})
@@ -79,6 +80,7 @@ def test_single_service_tag_change_uses_fast_path(git_repository: tuple[Path, st
     assert classification.changed_files == (QUI_PATH,)
 
 
+@pytest.mark.integration
 def test_multiple_service_tag_changes_use_fast_path(git_repository: tuple[Path, str]) -> None:
     repository, base_sha = git_repository
     gotify_base = SERVICE_YAML.replace("ghcr.io/autobrr/qui:v1.20.0", "gotify/server:2.6.1")
@@ -98,6 +100,7 @@ def test_multiple_service_tag_changes_use_fast_path(git_repository: tuple[Path, 
     assert set(classification.changed_files) == {QUI_PATH, GOTIFY_PATH}
 
 
+@pytest.mark.integration
 def test_digest_only_change_uses_fast_path(git_repository: tuple[Path, str]) -> None:
     repository, _ = git_repository
     base_content = SERVICE_YAML.replace("v1.20.0", f"v1.20.0@sha256:{'a' * 64}")
@@ -107,6 +110,7 @@ def test_digest_only_change_uses_fast_path(git_repository: tuple[Path, str]) -> 
     assert _classify(repository, base_sha, head_sha).renovate_docker_tag_only is True
 
 
+@pytest.mark.integration
 def test_multiple_target_image_changes_in_one_service_use_fast_path(git_repository: tuple[Path, str]) -> None:
     repository, _ = git_repository
     base_content = """---
@@ -125,6 +129,7 @@ service:
     assert _classify(repository, base_sha, head_sha).renovate_docker_tag_only is True
 
 
+@pytest.mark.integration
 def test_podman_runtime_image_change_uses_fast_path(git_repository: tuple[Path, str]) -> None:
     repository, _ = git_repository
     base_content = """---
@@ -138,6 +143,7 @@ service:
     assert _classify(repository, base_sha, head_sha).renovate_docker_tag_only is True
 
 
+@pytest.mark.integration
 def test_cli_emits_true_github_output_contract(git_repository: tuple[Path, str], capsys: pytest.CaptureFixture[str]) -> None:
     repository, base_sha = git_repository
     head_sha = _commit(repository, "update qui", {QUI_PATH: SERVICE_YAML.replace("v1.20.0", "v1.25.0")})
@@ -168,6 +174,7 @@ def test_cli_emits_true_github_output_contract(git_repository: tuple[Path, str],
     assert QUI_PATH in output_lines[header_index + 1 : footer_index]
 
 
+@pytest.mark.integration
 def test_cli_emits_false_github_output_contract(git_repository: tuple[Path, str], capsys: pytest.CaptureFixture[str]) -> None:
     repository, base_sha = git_repository
     head_sha = _commit(repository, "update qui", {QUI_PATH: SERVICE_YAML.replace("v1.20.0", "v1.25.0")})
@@ -196,6 +203,7 @@ def test_cli_emits_false_github_output_contract(git_repository: tuple[Path, str]
     assert reason.removeprefix("classification_reason=")
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("old", "new"),
     [
@@ -220,6 +228,7 @@ def test_non_tag_service_changes_use_full_ci(
     assert _classify(repository, base_sha, head_sha).renovate_docker_tag_only is False
 
 
+@pytest.mark.integration
 def test_added_configuration_uses_full_ci(git_repository: tuple[Path, str]) -> None:
     repository, base_sha = git_repository
     changed = SERVICE_YAML.replace("  environment:\n", "  privileged: true\n  environment:\n").replace("v1.20.0", "v1.25.0")
@@ -228,6 +237,7 @@ def test_added_configuration_uses_full_ci(git_repository: tuple[Path, str]) -> N
     assert _classify(repository, base_sha, head_sha).renovate_docker_tag_only is False
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("path", "content"),
     [
@@ -254,6 +264,7 @@ def test_other_repository_change_alongside_tag_uses_full_ci(
     assert _classify(repository, base_sha, head_sha).renovate_docker_tag_only is False
 
 
+@pytest.mark.integration
 def test_human_authored_image_change_uses_full_ci(git_repository: tuple[Path, str]) -> None:
     repository, base_sha = git_repository
     head_sha = _commit(repository, "human image update", {QUI_PATH: SERVICE_YAML.replace("v1.20.0", "v1.25.0")})
@@ -261,6 +272,7 @@ def test_human_authored_image_change_uses_full_ci(git_repository: tuple[Path, st
     assert _classify(repository, base_sha, head_sha, author="human").renovate_docker_tag_only is False
 
 
+@pytest.mark.integration
 def test_multiple_commits_with_manual_change_use_full_ci(git_repository: tuple[Path, str]) -> None:
     repository, base_sha = git_repository
     _commit(repository, "renovate image update", {QUI_PATH: SERVICE_YAML.replace("v1.20.0", "v1.25.0")})
@@ -270,6 +282,7 @@ def test_multiple_commits_with_manual_change_use_full_ci(git_repository: tuple[P
     assert _classify(repository, base_sha, head_sha).renovate_docker_tag_only is False
 
 
+@pytest.mark.integration
 def test_whitespace_change_alongside_tag_uses_full_ci(git_repository: tuple[Path, str]) -> None:
     repository, base_sha = git_repository
     changed = SERVICE_YAML.replace("v1.20.0", "v1.25.0").replace('    PUID: "1000"', '    PUID:  "1000"')
@@ -278,18 +291,21 @@ def test_whitespace_change_alongside_tag_uses_full_ci(git_repository: tuple[Path
     assert _classify(repository, base_sha, head_sha).renovate_docker_tag_only is False
 
 
+@pytest.mark.integration
 def test_no_changed_files_uses_full_ci(git_repository: tuple[Path, str]) -> None:
     repository, base_sha = git_repository
 
     assert _classify(repository, base_sha, base_sha).renovate_docker_tag_only is False
 
 
+@pytest.mark.integration
 def test_malformed_sha_uses_full_ci(git_repository: tuple[Path, str]) -> None:
     repository, base_sha = git_repository
 
     assert _classify(repository, base_sha, "not-a-sha").renovate_docker_tag_only is False
 
 
+@pytest.mark.integration
 def test_non_pull_request_event_uses_full_ci(git_repository: tuple[Path, str]) -> None:
     repository, base_sha = git_repository
 

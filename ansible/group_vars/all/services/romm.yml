@@ -67,6 +67,14 @@ romm:
   ################################
   # FILESYSTEM
   ################################
+  ports:
+    web_backend:
+      published: 22612
+      target: 8080
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     # RomM application data root.
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/romm"
@@ -172,7 +180,9 @@ romm:
   traefik:
     enable: true
     exposure: private
-    port: 8080
+    port: 22612
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
   postgres:
     enable: true
     databases:
@@ -180,6 +190,9 @@ romm:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

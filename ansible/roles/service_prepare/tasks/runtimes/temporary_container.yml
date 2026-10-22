@@ -42,6 +42,26 @@
     service_prepare_temporary_container_output: ""
   tags: [deploy, update, recreate, bootstrap]
 
+- name: Temporary preparation container | Require the rootless execution context
+  when:
+    - service_prepare_context.runtime == 'podman'
+    - >-
+      (((service_prepare_context.service | default({})).deploy | default({})).execution | default({})).mode
+      | default('rootful') == 'rootless'
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - service_prepare_context.execution is mapping
+      - service_prepare_context.execution.mode == 'rootless'
+      - service_prepare_context.execution.host_user == service_prepare_context.service.deploy.execution.host_user
+      - service_prepare_context.runtime_environment is mapping
+      - service_prepare_context.runtime_environment.HOME is string
+      - service_prepare_context.runtime_environment.XDG_RUNTIME_DIR is string
+      - service_prepare_context.runtime_environment.DBUS_SESSION_BUS_ADDRESS is string
+    fail_msg: Rootless preparation requires the adapter's explicit current-account runtime context.
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Temporary preparation container | Execute with guaranteed cleanup
   when: not ansible_check_mode
   no_log: true

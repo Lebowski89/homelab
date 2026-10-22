@@ -1,0 +1,19 @@
+---
+
+# Keep the installed skynet interface until its template update is deployed.
+- name: Manage mgt private endpoint policy independently of applications
+  hosts: '{{ services_controller_inventory_group }}'
+  vars_files:
+    - group_vars/all/services.yml
+  gather_facts: false
+  become: true
+  any_errors_fatal: true
+  tags:
+    - never
+    - mgt_firewall_install
+    - mgt_firewall_observe
+    - mgt_firewall_check
+    - mgt_firewall_remove
+  tasks:
+    - name: Compatibility entry point for installed skynet; manual workflow lives in operations/
+      ansible.builtin.import_tasks: operations/mgt-firewall.yml

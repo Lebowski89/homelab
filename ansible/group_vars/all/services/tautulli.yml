@@ -22,10 +22,6 @@ tautulli:
     PGID: "{{ hostvars[services_plex_host].container_host_pgid }}"
     UMASK: "022"
     WEBUI_PORTS: "8181/tcp,8181/udp"
-    TP_SCHEME: "http"
-    TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
-    TP_HOTIO: "true"
-    TP_THEME: "hotline"
   ################################
   # CONNECTIVITY
   ################################
@@ -35,27 +31,23 @@ tautulli:
   ################################
   # FILESYSTEM
   ################################
+  ports:
+    web_backend:
+      published: 22619
+      target: 8181
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_plex_host].container_host_appdata_root }}/tautulli"
       state: directory
       mode: "0755"
-  copies:
-    - src: files/themepark/98-themepark-tautulli
-      dest: "{{ hostvars[services_plex_host].container_host_appdata_root }}/tautulli/98-themepark-tautulli"
-      mode: "0755"
-      force: false
-      wait: true
-      wait_timeout: 30
   volumes:
     config:
       type: bind
       source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/tautulli"
       target: /config
-      read_only: false
-    themepark:
-      type: bind
-      source: "{{ hostvars[services_plex_host].container_host_appdata_root }}/tautulli/98-themepark-tautulli"
-      target: /etc/cont-init.d/98-themepark
       read_only: false
   ################################
   # INTEGRATIONS
@@ -63,13 +55,18 @@ tautulli:
   traefik:
     enable: true
     exposure: private
-    port: 8181
+    port: 22619
+    backend_mode: host
+    backend_host_inventory: "{{ services_plex_host }}"
   themepark:
     app: tautulli
     theme: hotpink
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

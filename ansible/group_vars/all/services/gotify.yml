@@ -5,17 +5,20 @@ gotify:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
-  tags: [monitoring, pgsql, gotify]
+  runtime: podman
+  tags:
+    - monitoring
+    - pgsql
+    - gotify
   name: gotify
-  stack: gotify
   ################################
   # IMAGE/PROCESS
   ################################
-  image: gotify/server:3.1.1
+  image: "docker.io/gotify/server:3.1.1@sha256:44fc5bbd1c0618878e33073d38c2c13126b48f245c3fe12236b1da48eb203b86"
   ################################
   # ENVIRONMENT/SECRETS
   ################################
+  user: "0:0"
   environment:
     TZ: "{{ timezone }}"
   env_file:
@@ -32,8 +35,15 @@ gotify:
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    gotify:
+      driver: bridge
+      external: false
+  ports:
+    backend:
+      host_ip: "{{ local_ip }}"
+      published: 18081
+      target: 80
+      protocol: tcp
   ################################
   # FILESYSTEM
   ################################
@@ -62,10 +72,13 @@ gotify:
   ################################
   # INTEGRATIONS
   ################################
+  no_new_privileges: false
   traefik:
     enable: true
     exposure: private
-    port: 80
+    port: 18081
+    backend_mode: host
+    backend_host_inventory: "{{ services_controller_host }}"
   postgres:
     enable: true
     databases:
@@ -73,11 +86,23 @@ gotify:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [mgt_backends]
+    ownership_transition: true
+
   deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    profile: careful
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-gotify
+      userns:
+        mode: keep-id
+        uid: "0"
+        gid: "0"
+  systemd:
+    restart: always
+    restart_sec: 15s
+    timeout_start_sec: 300s
+    after:
+      - network-online.target

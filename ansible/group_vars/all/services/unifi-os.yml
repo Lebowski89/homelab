@@ -5,15 +5,14 @@ unifi:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
-  tags: [unifi]
+  runtime: podman
+  tags:
+    - unifi
   name: unifi
-  stack: unifi
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/lemker/unifi-os-server:v1.7.0
-  container_name: unifi
+  image: ghcr.io/lemker/unifi-os-server:v1.7.0@sha256:a5922924d7408413ebb3312adbbd650a6eef646e22b626899c092970b72322bb
   ################################
   # ENVIRONMENT/SECRETS
   ################################
@@ -24,8 +23,11 @@ unifi:
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    unifi:
+      external: false
+      name: unifi
+      driver: bridge
+      enable_ipv6: true
   ports:
     ## UniFi OS Server GUI/API
     gui:
@@ -99,27 +101,43 @@ unifi:
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/unifi-os"
       state: directory
+      owner: null
+      group: null
       mode: "0755"
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/unifi-os/persistent"
       state: directory
+      owner: null
+      group: null
       mode: "0755"
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/unifi-os/var-log"
       state: directory
+      owner: null
+      group: null
       mode: "0755"
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/unifi-os/data"
       state: directory
+      owner: null
+      group: null
       mode: "0755"
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/unifi-os/srv"
       state: directory
+      owner: null
+      group: null
       mode: "0755"
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/unifi-os/var-lib-unifi"
       state: directory
+      owner: null
+      group: null
       mode: "0755"
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/unifi-os/var-lib-mongodb"
       state: directory
+      owner: null
+      group: null
       mode: "0755"
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/unifi-os/etc-rabbitmq-ssl"
       state: directory
+      owner: null
+      group: null
       mode: "0755"
   volumes:
     cgroup:
@@ -178,6 +196,13 @@ unifi:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  no_new_privileges: false
   deploy:
     type: container
     host: "{{ services_controller_host }}"
+  systemd:
+    requires:
+      - unifi-network.service
+    restart: always
+    restart_sec: 15s
+    timeout_start_sec: 300s

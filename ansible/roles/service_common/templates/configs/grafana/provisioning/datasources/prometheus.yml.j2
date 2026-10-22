@@ -26,5 +26,5 @@ datasources:
     uid: loki
     type: loki
     access: proxy
-    url: http://loki:3100
+    url: https://loki.{{ services_internal_zone }}:{{ services_private_https_port }}
     editable: true

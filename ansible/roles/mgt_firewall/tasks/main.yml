@@ -1,0 +1,11 @@
+---
+
+# Compatibility for retained role invocations; service_firewall is the only owner.
+- name: Mgt firewall | Forward to the canonical profile
+  ansible.builtin.include_role:
+    name: service_firewall
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  vars:
+    service_firewall_profile: mgt
+    service_firewall_operation: "{{ mgt_firewall_operation | default('install') }}"

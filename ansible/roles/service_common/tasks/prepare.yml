@@ -1,5 +1,16 @@
 ---
 
+- name: Service common prepare | Reset managed configuration change output
+  ansible.builtin.set_fact:
+    service_common_config_changed: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service common prepare | Validate managed file restart policy
+  ansible.builtin.assert:
+    that:
+      - service_common_service | service_common_file_policy
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Service common prepare | Include interface validation
   ansible.builtin.include_tasks:
     file: validate.yml

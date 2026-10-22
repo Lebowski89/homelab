@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/09/26 |
+| Readme update        | 2026/10/20 |
 
 
 
@@ -44,6 +44,8 @@
 | [podman_packages.**5**](defaults/main.yml#L16)   | str | `fuse-overlayfs` |    
 | [podman_packages.**6**](defaults/main.yml#L17)   | str | `dbus-user-session` |    
 | [podman_install_extra_packages](defaults/main.yml#L18)   | list | `[]` |    
+| [podman_shared_network_name](defaults/main.yml#L19)   | str | `mgt-services` |    
+| [podman_shared_network_dns_bind_port](defaults/main.yml#L20)   | int | `5533` |    
 
 
 
@@ -66,6 +68,25 @@
 | Podman ¦ Check system Quadlet generator | ansible.builtin.stat | True |  |
 | Podman ¦ Record system Quadlet generator path | ansible.builtin.set_fact | True |  |
 | Podman ¦ Assert system Quadlet generator exists | ansible.builtin.assert | True |  |
+
+#### File: tasks/rootful_dns.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Podman rootful DNS ¦ Validate forwarding port | ansible.builtin.assert | False |
+| Podman rootful DNS ¦ Ensure configuration drop-in directory | ansible.builtin.file | False |
+| Podman rootful DNS ¦ Configure only the netavark DNS bind port | ansible.builtin.template | False |
+
+#### File: tasks/shared_network.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Podman shared network ¦ Validate central network name | ansible.builtin.assert | False |
+| Podman shared network ¦ Configure non-conflicting rootful bridge DNS | ansible.builtin.include_tasks | False |
+| Podman shared network ¦ Ensure system Quadlet directory | ansible.builtin.file | False |
+| Podman shared network ¦ Write persistent central bridge | ansible.builtin.template | False |
+| Podman shared network ¦ Reload system manager | ansible.builtin.systemd_service | True |
+| Podman shared network ¦ Start central bridge | ansible.builtin.systemd_service | True |
 
 
 

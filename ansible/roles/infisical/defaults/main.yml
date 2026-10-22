@@ -45,7 +45,7 @@ infisical_smtp_port: 587
 
 infisical_frontend_fqdn: "{{ infisical_name }}.{{ services_internal_zone }}"
 infisical_frontend_address: "https://{{ infisical_frontend_fqdn }}:{{ services_private_https_port }}"
-infisical_backend_address: "http://{{ infisical_name }}:8080"
+infisical_backend_address: "http://{{ local_ip }}:{{ infisical_port }}"
 
 infisical_docker_network: overlay
 
@@ -63,7 +63,7 @@ infisical_restart_policy: unless-stopped
 ################################
 
 infisical_redis_name: infisical-redis
-infisical_redis_image: valkey/valkey:9.2-alpine
+infisical_redis_image: docker.io/valkey/valkey:9.2-alpine
 infisical_redis_puid: "{{ container_host_puid | default('1000') }}"
 infisical_redis_pgid: "{{ container_host_pgid | default('1000') }}"
 infisical_redis_path: "{{ infisical_base_path }}/redis"
@@ -92,3 +92,141 @@ infisical_traefik_certresolver: dns-cloudflare
 infisical_traefik_tls_options: securetls@file
 infisical_traefik_dynamic_owner: 1000
 infisical_traefik_dynamic_group: 1000
+
+# Explicit Vault bootstrap; these definitions never use dynamic catalog or Infisical lookup.
+infisical_podman_services:
+  - name: '{{ infisical_redis_name }}'
+    runtime: podman
+    image: '{{ infisical_redis_image }}'
+    user: "0:0"
+    environment:
+      TZ: '{{ infisical_timezone }}'
+      PUID: '{{ infisical_redis_puid }}'
+      PGID: '{{ infisical_redis_pgid }}'
+      REDIS_PASSWORD_FILE: /run/secrets/infisical_redis_password_secret
+    secrets:
+      - infisical_redis_password_secret
+    named_networks:
+      infisical-redis:
+        driver: bridge
+        external: false
+    ports:
+      cache:
+        host_ip: "{{ local_ip }}"
+        published: "{{ infisical_redis_backend_port }}"
+        target: 6379
+        protocol: tcp
+    paths:
+      # The shared parent retains the Docker recovery files and their ownership.
+      - path: '{{ infisical_redis_path }}'
+        state: directory
+        mode: '0755'
+    volumes:
+      data:
+        type: bind
+        source: '{{ infisical_redis_path }}'
+        target: /data
+        read_only: false
+    no_new_privileges: false
+    operational_requirements:
+      acl: [bootstrap]
+      ownership_transition: true
+    deploy:
+      type: container
+      host: '{{ inventory_hostname }}'
+      execution:
+        mode: rootless
+        host_user: podman-infisical-redis
+        userns:
+          mode: keep-id
+          uid: "0"
+          gid: "0"
+    systemd:
+      restart: always
+      restart_sec: 15s
+      timeout_start_sec: 600s
+      after:
+        - network-online.target
+    command:
+      - sh
+      - -c
+      - >-
+        umask 077; printf 'requirepass "%s"\n' "$(sed 's/[\\"]/\\&/g' /run/secrets/infisical_redis_password_secret)"
+        > /tmp/skynet-valkey.conf;
+        exec valkey-server /tmp/skynet-valkey.conf
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - REDISCLI_AUTH="$(cat /run/secrets/infisical_redis_password_secret)" valkey-cli ping | grep -q PONG
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    notify_healthy: true
+    tmpfs:
+      - /tmp:mode=1777
+  - name: '{{ infisical_name }}'
+    runtime: podman
+    image: '{{ infisical_image }}'
+    user: "1001:1001"
+    environment:
+      TZ: '{{ infisical_timezone }}'
+      PUID: '{{ infisical_puid }}'
+      PGID: '{{ infisical_pgid }}'
+      NODE_ENV: production
+      ENCRYPTION_KEY: '{{ infisical_enc_key }}'
+      AUTH_SECRET: '{{ infisical_jwt_key }}'
+      DB_CONNECTION_URI: >-
+        postgres://{{ infisical_postgres_user | urlencode }}:{{ infisical_postgres_pass | urlencode }}@{{ infisical_postgres_host
+        }}:{{ infisical_postgres_port }}/{{ infisical_postgres_db_name }}?sslmode=disable
+      REDIS_URL: "redis://:{{ infisical_redis_password | urlencode }}@{{ local_ip }}:{{ infisical_redis_backend_port }}"
+      SITE_URL: "{{ infisical_frontend_address }}"
+      SMTP_HOST: '{{ infisical_smtp_host }}'
+      SMTP_PORT: '{{ infisical_smtp_port }}'
+      SMTP_FROM_ADDRESS: '{{ infisical_smtp_email }}'
+      SMTP_FROM_NAME: '{{ infisical_smtp_sender }}'
+      SMTP_USERNAME: '{{ infisical_smtp_user }}'
+      SMTP_PASSWORD: '{{ infisical_smtp_pass }}'
+    secrets: []
+    named_networks:
+      infisical:
+        driver: bridge
+        external: false
+    paths: []
+    volumes: {}
+    no_new_privileges: false
+    operational_requirements:
+      acl: [bootstrap]
+    deploy:
+      type: container
+      host: '{{ inventory_hostname }}'
+      execution:
+        mode: rootless
+        host_user: podman-infisical
+        userns:
+          mode: keep-id
+          uid: "1001"
+          gid: "1001"
+    systemd:
+      restart: always
+      restart_sec: 15s
+      timeout_start_sec: 600s
+      after:
+        - network-online.target
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "fetch('http://127.0.0.1:8080/api/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    notify_healthy: true
+    ports:
+      lookup:
+        host_ip: '{{ local_ip }}'
+        published: '{{ infisical_port }}'
+        target: 8080
+infisical_podman_secret_targets: {}
+infisical_redis_backend_port: 16381
+infisical_postgres_host: "{{ local_ip }}"

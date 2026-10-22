@@ -11,6 +11,8 @@
               (hostvars[docker_services_primary_manager].docker_services_compose_stacks | default({}))
               .get(docker_services_stack_name_effective, {})
               | combine({
+                  'firewall_plans': ({docker_services_service_name: docker_services_common_context.firewall_plan}
+                    if ((docker_services_common_context | default({})).firewall_plan | default({})).managed | default(false) else {}),
                   'type': (docker_services_stack_deploy_type | string | trim),
                   'docker_services_deploy_host': (docker_services_deploy_host_effective | string | trim),
                   'services': (docker_services_compose_services | default({}, true)),

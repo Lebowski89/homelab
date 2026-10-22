@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/09/23 |
+| Readme update        | 2026/10/21 |
 
 
 
@@ -31,32 +31,33 @@
 | [service_common_runtime](defaults/main.yml#L4)   | str |  |    
 | [service_common_action](defaults/main.yml#L5)   | str |  |    
 | [service_common_service](defaults/main.yml#L6)   | dict | `{}` |    
-| [service_common_target_hosts](defaults/main.yml#L7)   | list | `[]` |    
-| [service_common_controller_host](defaults/main.yml#L8)   | str |  |    
-| [service_common_default_owner](defaults/main.yml#L9)   | str | `1000` |    
-| [service_common_default_group](defaults/main.yml#L10)   | str | `1000` |    
-| [service_common_default_mode](defaults/main.yml#L11)   | str | `0755` |    
-| [service_common_host_defaults](defaults/main.yml#L12)   | dict | `{}` |    
-| [service_common_template_vars](defaults/main.yml#L13)   | dict | `{}` |    
-| [service_common_infisical_secrets_map](defaults/main.yml#L14)   | list | `[]` |    
-| [service_common_infisical_lookup_params](defaults/main.yml#L15)   | dict | `{}` |    
-| [service_common_infisical_fail_on_empty](defaults/main.yml#L16)   | bool | `True` |    
-| [service_common_environment](defaults/main.yml#L17)   | dict | `{}` |    
-| [service_common_infisical_config](defaults/main.yml#L18)   | dict | `{}` |    
-| [service_common_infisical_values](defaults/main.yml#L19)   | dict | `{}` |    
-| [service_common_secret_declarations](defaults/main.yml#L20)   | list | `[]` |    
-| [service_common_resolved_environment](defaults/main.yml#L21)   | dict | `{}` |    
-| [service_common_traefik_internal_zone](defaults/main.yml#L22)   | str |  |    
-| [service_common_traefik_dynamic_dir](defaults/main.yml#L23)   | str | `/opt/traefik/dynamic` |    
-| [service_common_traefik_owner](defaults/main.yml#L24)   | str | `1000` |    
-| [service_common_traefik_group](defaults/main.yml#L25)   | str | `1000` |    
-| [service_common_prepare_actions](defaults/main.yml#L26)   | list | `[]` |    
-| [service_common_prepare_actions.**0**](defaults/main.yml#L26)   | str | `deploy` |    
-| [service_common_prepare_actions.**1**](defaults/main.yml#L26)   | str | `update` |    
-| [service_common_prepare_actions.**2**](defaults/main.yml#L26)   | str | `recreate` |    
-| [service_common_prepare_actions.**3**](defaults/main.yml#L26)   | str | `bootstrap` |    
-| [service_common_remove_actions](defaults/main.yml#L27)   | list | `[]` |    
-| [service_common_remove_actions.**0**](defaults/main.yml#L27)   | str | `remove` |    
+| [service_common_execution_only](defaults/main.yml#L7)   | bool | `False` |    
+| [service_common_target_hosts](defaults/main.yml#L8)   | list | `[]` |    
+| [service_common_controller_host](defaults/main.yml#L9)   | str |  |    
+| [service_common_default_owner](defaults/main.yml#L10)   | str | `1000` |    
+| [service_common_default_group](defaults/main.yml#L11)   | str | `1000` |    
+| [service_common_default_mode](defaults/main.yml#L12)   | str | `0755` |    
+| [service_common_host_defaults](defaults/main.yml#L13)   | dict | `{}` |    
+| [service_common_template_vars](defaults/main.yml#L14)   | dict | `{}` |    
+| [service_common_infisical_secrets_map](defaults/main.yml#L15)   | list | `[]` |    
+| [service_common_infisical_lookup_params](defaults/main.yml#L16)   | dict | `{}` |    
+| [service_common_infisical_fail_on_empty](defaults/main.yml#L17)   | bool | `True` |    
+| [service_common_environment](defaults/main.yml#L18)   | dict | `{}` |    
+| [service_common_infisical_config](defaults/main.yml#L19)   | dict | `{}` |    
+| [service_common_infisical_values](defaults/main.yml#L20)   | dict | `{}` |    
+| [service_common_secret_declarations](defaults/main.yml#L21)   | list | `[]` |    
+| [service_common_resolved_environment](defaults/main.yml#L22)   | dict | `{}` |    
+| [service_common_traefik_internal_zone](defaults/main.yml#L23)   | str |  |    
+| [service_common_traefik_dynamic_dir](defaults/main.yml#L24)   | str | `/opt/traefik/dynamic` |    
+| [service_common_traefik_owner](defaults/main.yml#L25)   | str | `1000` |    
+| [service_common_traefik_group](defaults/main.yml#L26)   | str | `1000` |    
+| [service_common_prepare_actions](defaults/main.yml#L27)   | list | `[]` |    
+| [service_common_prepare_actions.**0**](defaults/main.yml#L27)   | str | `deploy` |    
+| [service_common_prepare_actions.**1**](defaults/main.yml#L27)   | str | `update` |    
+| [service_common_prepare_actions.**2**](defaults/main.yml#L27)   | str | `recreate` |    
+| [service_common_prepare_actions.**3**](defaults/main.yml#L27)   | str | `bootstrap` |    
+| [service_common_remove_actions](defaults/main.yml#L28)   | list | `[]` |    
+| [service_common_remove_actions.**0**](defaults/main.yml#L28)   | str | `remove` |    
 
 
 
@@ -69,8 +70,15 @@
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Service common copies ¦ Copy static files | ansible.builtin.copy | False |
+| Service common copies ¦ Copy static files | ansible.builtin.copy | True |
+| Service common copies ¦ Track application configuration changes | ansible.builtin.set_fact | False |
 | Service common copies ¦ Wait for copied files | ansible.builtin.wait_for | True |
+
+#### File: tasks/file_policy.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Service common ¦ Validate managed file restart policy | ansible.builtin.assert | False |
 
 #### File: tasks/infisical.yml
 
@@ -96,6 +104,30 @@
 | Service common ¦ Include shared Traefik integration | ansible.builtin.include_tasks | True |  |
 | Service common ¦ Include shared integration removal | ansible.builtin.include_tasks | True |  |
 
+#### File: tasks/operational_inspection.yml
+
+| Name | Module | Has Conditions | Tags | Comments |
+| ---- | ------ | -------------- | -----| -------- |
+| Service common ¦ Use the standalone runtime host connection | ansible.builtin.set_fact | True |  |  |
+| Service common ¦ Inspect the managed service before making changes | service_operational_check | True |  |  |
+| Service common ¦ Use the endpoint host's configured connection | ansible.builtin.set_fact | True |  | The controller can use a local connection. Set the delegated host connection
+explicitly so endpoint audits use that host's inventory transport instead. |
+| Service common ¦ Audit installed protection on each endpoint host | service_operational_check | True |  |  |
+| Service common ¦ Save verified prerequisites for this service operation | ansible.builtin.set_fact | True |  |  |
+
+#### File: tasks/operational_requirements.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Service common ¦ Validate service requirements before inspection | ansible.builtin.assert | False |  |
+| Service common ¦ Clear prerequisite results from the previous service operation | ansible.builtin.set_fact | False | A prerequisite proof is an in-memory result for one exact service contract.
+It is not persisted acceptance and must not carry over to another operation. |
+| Service common ¦ Check prerequisites before changing the service | ansible.builtin.include_tasks | True |  |
+| Service common ¦ Reuse prerequisite checks completed before stopping the service | ansible.builtin.set_fact | True | Recreate must reuse successful checks after its old runtime has stopped;
+rechecking stopped runtime identities could block their replacements. |
+| Service common ¦ Require verified prerequisites before changing the service | ansible.builtin.assert | False |  |
+| Service common ¦ Show required acknowledgements in the check-mode plan | ansible.builtin.debug | True |  |
+
 #### File: tasks/paths.yml
 
 | Name | Module | Has Conditions |
@@ -115,6 +147,8 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Service common prepare ¦ Reset managed configuration change output | ansible.builtin.set_fact | False |  |
+| Service common prepare ¦ Validate managed file restart policy | ansible.builtin.assert | False |  |
 | Service common prepare ¦ Include interface validation | ansible.builtin.include_tasks | False |  |
 | Service common prepare ¦ Include PostgreSQL database preparation | ansible.builtin.include_tasks | True |  |
 | Service common prepare ¦ Require target hosts for filesystem preparation | ansible.builtin.assert | True |  |
@@ -139,6 +173,7 @@
 | Service common templates ¦ Inspect application template destinations | ansible.builtin.stat | False |
 | Service common templates ¦ Render application templates on target host | ansible.builtin.template | True |
 | Service common templates ¦ Reconcile application template filesystem metadata | ansible.builtin.file | True |
+| Service common templates ¦ Track application configuration changes | ansible.builtin.set_fact | False |
 
 #### File: tasks/traefik.yml
 

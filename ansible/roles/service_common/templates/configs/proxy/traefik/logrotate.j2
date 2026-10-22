@@ -7,7 +7,8 @@
   notifempty
   compress
   delaycompress
-  create 0640 root root
+{% set execution = (service_common_template_vars | default({})).runtime_execution | default((service_common_service.deploy | default({})).execution | default({'mode': 'rootful'})) %}
+  create 0640 {{ execution.host_user if execution.mode == 'rootless' else 'root' }} {{ execution.host_user if execution.mode == 'rootless' else 'root' }}
   sharedscripts
   postrotate
     /usr/local/sbin/skynet-traefik-reopen-logs

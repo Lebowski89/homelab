@@ -1,0 +1,5 @@
+---
+
+# Compatibility for retained imports; manual workflows live under operations/.
+- name: Forward the retained worker-backend-firewall task entry
+  ansible.builtin.import_tasks: "../operations/worker-backend-firewall.yml"

@@ -1,0 +1,9 @@
+---
+
+# Compatibility for saved tasks_from imports; implementation is owned by service_firewall.
+- name: Worker backend firewall | Forward the retained unraid task entry
+  ansible.builtin.include_role:
+    name: service_firewall
+    tasks_from: workers/unraid
+    apply:
+      tags: "{{ ansible_run_tags }}"

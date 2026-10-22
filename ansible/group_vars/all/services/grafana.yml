@@ -5,15 +5,16 @@ grafana:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
-  tags: [monitoring, grafana]
+  runtime: podman
+  tags:
+    - monitoring
+    - grafana
   name: grafana
-  stack: grafana
   ################################
   # IMAGE/PROCESS
   ################################
-  image: grafana/grafana:13.2.3-ubuntu
-  user: "0"
+  image: "docker.io/grafana/grafana:13.2.3-ubuntu@sha256:7bfd3fbaa4ac8073616d81fff83bcda163022a9a259f302a1df5a9cb128b8cf8"
+  user: "0:0"
   ################################
   # ENVIRONMENT/SECRETS
   ################################
@@ -29,9 +30,13 @@ grafana:
       - var: grafana_user
         path: "/Grafana"
         name: USER
+        secret:
+          name: grafana_admin_user_secret
       - var: grafana_pass
         path: "/Grafana"
         name: PASS
+        secret:
+          name: grafana_admin_pass_secret
       - var: grafana_oidc_client_secret
         path: "/Grafana"
         name: OIDC_CLIENT_SECRET
@@ -44,13 +49,23 @@ grafana:
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    grafana:
+      driver: bridge
+      external: false
+  ports:
+    backend:
+      host_ip: "{{ local_ip }}"
+      published: 13002
+      target: 3000
+      protocol: tcp
   ################################
   # FILESYSTEM
   ################################
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/provisioning"
       state: directory
       mode: "0755"
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/provisioning/datasources"
@@ -64,7 +79,8 @@ grafana:
       mode: "0755"
   templates:
     - src: configs/grafana/provisioning/datasources/prometheus.yml.j2
-      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/provisioning/datasources/prometheus.yml"
+      dest: >-
+        {{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/provisioning/datasources/prometheus.yml
       mode: "0644"
       force: true
     - src: configs/grafana/provisioning/dashboards/dashboards.yml.j2
@@ -88,7 +104,8 @@ grafana:
       mode: "0644"
       force: true
     - src: configs/grafana/dashboards/traefik-official-standalone-dashboard.json.j2
-      dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards/traefik-official-standalone-dashboard.json"
+      dest: >-
+        {{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/dashboards/traefik-official-standalone-dashboard.json
       mode: "0644"
       force: true
     - src: configs/grafana/dashboards/node-exporter-full.json.j2
@@ -97,8 +114,9 @@ grafana:
       force: true
     - src: configs/grafana/grafana.env.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/grafana/.env"
-      mode: "0664"
+      mode: "0600"
       force: true
+      no_log: true
   volumes:
     data:
       type: bind
@@ -118,18 +136,33 @@ grafana:
   ################################
   # INTEGRATIONS
   ################################
+  no_new_privileges: false
   traefik:
     enable: true
     exposure: private
-    port: 3000
+    port: 13002
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+    backend_mode: host
+    backend_host_inventory: "{{ services_controller_host }}"
+  operational_requirements:
+    acl: [mgt_backends]
+    ownership_transition: true
+
   deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    profile: careful
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-grafana
+      userns:
+        mode: keep-id
+        uid: "0"
+        gid: "0"
+  systemd:
+    restart: always
+    restart_sec: 15s
+    timeout_start_sec: 300s
+    after:
+      - network-online.target

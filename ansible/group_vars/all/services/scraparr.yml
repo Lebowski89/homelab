@@ -5,17 +5,19 @@ scraparr:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
-  tags: [monitoring, scraparr]
+  runtime: podman
+  tags:
+    - monitoring
+    - scraparr
   name: scraparr
-  stack: scraparr
   ################################
   # IMAGE/PROCESS
   ################################
-  image: thegameprofi/scraparr:3.2.0
+  image: "docker.io/thegameprofi/scraparr:3.2.0@sha256:b9f79a85c33564dfdb1e50ab3d725faeb27b89f4ad5cae7013e39e2f572a8085"
   ################################
   # ENVIRONMENT/SECRETS
   ################################
+  user: "0:0"
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
@@ -56,6 +58,11 @@ scraparr:
     SONARR_SECONDARY_ALIAS: "sonarr-4k"
   infisical:
     secrets_map:
+      - var: bazarr_api
+        path: /Bazarr
+        name: API
+        secret:
+          name: bazarr_api_secret
       - var: lidarr_api
         path: "/Lidarr"
         name: API
@@ -97,16 +104,35 @@ scraparr:
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    scraparr:
+      driver: bridge
+      external: false
+  ports:
+    backend:
+      host_ip: "{{ local_ip }}"
+      published: 17100
+      target: 7100
+      protocol: tcp
+  no_new_privileges: false
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [mgt_backends]
+
   deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    profile: standard
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-scraparr
+      userns:
+        mode: keep-id
+        uid: "0"
+        gid: "0"
+  systemd:
+    restart: always
+    restart_sec: 15s
+    timeout_start_sec: 300s
+    after:
+      - network-online.target

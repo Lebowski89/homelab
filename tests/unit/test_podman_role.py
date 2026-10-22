@@ -54,6 +54,7 @@ def run_assertion_task(tmp_path: Path, task_name: str, variables: dict) -> subpr
     )
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "facts",
     [
@@ -88,6 +89,7 @@ def test_supported_podman_platforms_pass_the_role_contract(tmp_path: Path, facts
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "facts",
     [
@@ -135,6 +137,7 @@ def test_unsupported_podman_platforms_fail_the_role_contract(tmp_path: Path, fac
     assert "LMDE 7" in result.stdout + result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("version", ["5.4.2", "5.7.0", "6.0.0"])
 def test_supported_podman_versions_pass_the_role_contract(tmp_path: Path, version: str):
     result = run_assertion_task(
@@ -149,6 +152,7 @@ def test_supported_podman_versions_pass_the_role_contract(tmp_path: Path, versio
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("version", ["5.4.1", "4.9.3"])
 def test_podman_versions_below_the_supported_floor_fail(tmp_path: Path, version: str):
     result = run_assertion_task(

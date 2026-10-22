@@ -5,17 +5,19 @@ traefik:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
-  tags: [proxy, traefik]
+  runtime: podman
+  tags:
+    - proxy
+    - traefik
   name: traefik
-  stack: traefik
   ################################
   # IMAGE/PROCESS
   ################################
-  image: traefik:v3.7.13
+  image: "docker.io/library/traefik:v3.7.13@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0"
   ################################
   # ENVIRONMENT/SECRETS
   ################################
+  user: "0:0"
   environment:
     TZ: "{{ timezone }}"
     PUID: "{{ hostvars[services_controller_host].container_host_puid }}"
@@ -32,17 +34,19 @@ traefik:
   ################################
   # CONNECTIVITY
   ################################
-  named_networks:
-    overlay:
-      external: true
+  network_mode: pasta
   ports:
     web_secure_private:
       published: "{{ services_private_https_port }}"
       target: "{{ services_private_https_port }}"
-      mode: host
   ################################
   # FILESYSTEM
   ################################
+    metrics:
+      host_ip: "{{ local_ip }}"
+      published: 18084
+      target: 8082
+      protocol: tcp
   paths:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/traefik"
       state: directory
@@ -53,6 +57,8 @@ traefik:
     - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/traefik/acme.json"
       state: touch
       mode: "0600"
+      access_time: preserve
+      modification_time: preserve
     - path: "{{ services_log_root }}"
       state: directory
       owner: "0"
@@ -60,8 +66,6 @@ traefik:
       mode: "0755"
     - path: "{{ services_log_root }}/traefik"
       state: directory
-      owner: "0"
-      group: "0"
       mode: "0755"
   templates:
     - src: configs/proxy/traefik/config.yml.j2
@@ -72,17 +76,21 @@ traefik:
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/traefik/dynamic/middlewares.yml"
       mode: "0664"
       force: true
+      restart: false
     - src: configs/proxy/authelia/middleware.yml.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/traefik/dynamic/authelia-middleware.yml"
       mode: "0664"
+      restart: false
     - src: configs/proxy/authelia/router.yml.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/traefik/dynamic/authelia-router.yml"
       mode: "0664"
       force: true
+      restart: false
     - src: configs/proxy/traefik/dashboard.yml.j2
       dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/traefik/dynamic/traefik-dashboard.yml"
       mode: "0664"
       force: true
+      restart: false
     - src: configs/proxy/traefik/logrotate.j2
       dest: /etc/logrotate.d/skynet-traefik
       owner: "0"
@@ -109,6 +117,7 @@ traefik:
   ################################
   # HEALTH
   ################################
+  no_new_privileges: false
   healthcheck:
     test:
       - "CMD"
@@ -119,11 +128,27 @@ traefik:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+    interval: 1m
+    timeout: 15s
+    retries: 3
+    start_period: 30s
+  operational_requirements:
+    acl: [mgt_backends]
+    ownership_transition: true
+
   deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    profile: careful
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-traefik
+      userns:
+        mode: keep-id
+        uid: "0"
+        gid: "0"
+  systemd:
+    restart: always
+    restart_sec: 15s
+    timeout_start_sec: 300s
+    after:
+      - network-online.target

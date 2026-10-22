@@ -5,14 +5,16 @@ autobrr:
   # IDENTITY
   ################################
   enabled: true
-  runtime: docker
-  tags: [media, pgsql, autobrr]
+  runtime: podman
+  tags:
+    - media
+    - pgsql
+    - autobrr
   name: autobrr
-  stack: autobrr
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/autobrr/autobrr:v1.87.0
+  image: ghcr.io/autobrr/autobrr:v1.87.0@sha256:8b6f98c5dffe567e4dbdcf5ee924681c29d17dca6e0de33fe549d906e598a010
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
   ################################
@@ -28,7 +30,7 @@ autobrr:
       value_from:
         infisical: autobrr_session
     AUTOBRR__DATABASE_TYPE: "postgres"
-    AUTOBRR__POSTGRES_HOST: "haproxy"
+    AUTOBRR__POSTGRES_HOST: "haproxy.{{ services_internal_zone }}"
     AUTOBRR__POSTGRES_PORT: "5432"
     AUTOBRR__POSTGRES_DATABASE: "autobrr"
     AUTOBRR__POSTGRES_USER:
@@ -53,8 +55,15 @@ autobrr:
   # CONNECTIVITY
   ################################
   named_networks:
-    overlay:
-      external: true
+    autobrr:
+      driver: bridge
+      external: false
+  ports:
+    backend:
+      host_ip: "{{ local_ip }}"
+      published: 17474
+      target: 7474
+      protocol: tcp
   ################################
   # FILESYSTEM
   ################################
@@ -71,10 +80,13 @@ autobrr:
   ################################
   # INTEGRATIONS
   ################################
+  no_new_privileges: false
   traefik:
     enable: true
     exposure: private
-    port: 7474
+    port: 17474
+    backend_mode: host
+    backend_host_inventory: "{{ services_controller_host }}"
   postgres:
     enable: true
     databases:
@@ -82,11 +94,23 @@ autobrr:
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [mgt_backends]
+    ownership_transition: true
+
   deploy:
-    type: swarm
-    mode: replicated
-    replicas: 1
-    profile: standard
+    type: container
     host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_primary_manager
+    execution:
+      mode: rootless
+      host_user: podman-autobrr
+      userns:
+        mode: keep-id
+        uid: "{{ hostvars[services_controller_host].container_host_puid }}"
+        gid: "{{ hostvars[services_controller_host].container_host_pgid }}"
+  systemd:
+    restart: always
+    restart_sec: 15s
+    timeout_start_sec: 300s
+    after:
+      - network-online.target

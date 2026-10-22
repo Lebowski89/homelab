@@ -33,6 +33,16 @@ PODMAN_SECRET_TASKS = PODMAN_SECRET_TASKS_PATH.read_text()
 EXPECTED_TAGS = {"deploy", "update", "recreate", "bootstrap"}
 
 
+def grouped_tasks(source):
+    def walk(tasks):
+        for task in tasks:
+            yield task
+            for branch in ["block", "rescue", "always"]:
+                yield from walk(task.get(branch, []))
+
+    return list(walk(yaml.safe_load(source)))
+
+
 def load_module(path, name):
     spec = importlib.util.spec_from_file_location(name, path)
     module = importlib.util.module_from_spec(spec)
@@ -152,10 +162,10 @@ def test_common_dispatch_context_is_snapshotted_into_both_runtime_adapters():
         "Init | Store shared service context",
     )
     podman_prepare = task_named(
-        yaml.safe_load(PODMAN_MAIN),
+        grouped_tasks(PODMAN_MAIN),
         "Podman services | Prepare service files and directories",
     )
-    podman_traefik = task_named(yaml.safe_load(PODMAN_MAIN), "Podman services | Configure Traefik integration")
+    podman_traefik = task_named(grouped_tasks(PODMAN_MAIN), "Podman services | Configure Traefik integration")
     podman_secret = task_named(yaml.safe_load(PODMAN_SECRET_TASKS), "Secrets | Create or update Podman secrets")
 
     assert podman_reset["ansible.builtin.set_fact"]["podman_services_common_values"] == {}

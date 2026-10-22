@@ -30,6 +30,14 @@ upbrr:
   ################################
   # FILESYSTEM
   ################################
+  ports:
+    web_backend:
+      published: 22620
+      target: 7480
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/upbrr"
       state: directory
@@ -51,10 +59,15 @@ upbrr:
   traefik:
     enable: true
     exposure: private
-    port: 7480
+    port: 22620
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

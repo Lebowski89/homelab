@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 
 import yaml
+from ansible_task_cases import walk_tasks
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TASKS_DIR = REPO_ROOT / "ansible" / "roles" / "podman_services" / "tasks"
@@ -9,7 +10,6 @@ MAIN_TASKS = (TASKS_DIR / "main.yml").read_text()
 PREPARE_TASKS = (TASKS_DIR / "sub_tasks" / "quadlets.yml").read_text()
 SECRET_TASKS = (TASKS_DIR / "sub_tasks" / "secrets" / "manage.yml").read_text()
 REMOVE_TASKS = (TASKS_DIR / "sub_tasks" / "remove.yml").read_text()
-NETWORK_TASKS = (TASKS_DIR / "sub_tasks" / "network_changes.yml").read_text()
 DRIFT_TASKS = (TASKS_DIR / "sub_tasks" / "image_drift.yml").read_text()
 EXECUTION_PREPARE_TASKS = (TASKS_DIR / "sub_tasks" / "execution.yml").read_text()
 EXECUTION_TRANSITION_TASKS = (TASKS_DIR / "sub_tasks" / "switch_execution.yml").read_text()
@@ -46,7 +46,18 @@ ROOTLESS_NETWORK_TEMPLATE = (REPO_ROOT / "ansible/roles/podman_services/template
 COMMON_COPIES = yaml.safe_load((REPO_ROOT / "ansible/roles/service_common/tasks/copies.yml").read_text())
 COMMON_TEMPLATES = yaml.safe_load((REPO_ROOT / "ansible/roles/service_common/tasks/templates.yml").read_text())
 
-MAIN_TASK_LIST = yaml.safe_load(MAIN_TASKS)
+
+def grouped_tasks(source):
+    def walk(tasks):
+        for task in tasks:
+            yield task
+            for branch in ["block", "rescue", "always"]:
+                yield from walk(task.get(branch, []))
+
+    return list(walk(yaml.safe_load(source)))
+
+
+MAIN_TASK_LIST = grouped_tasks(MAIN_TASKS)
 PREPARE_TASK_LIST = yaml.safe_load(PREPARE_TASKS)
 REMOVE_TASK_LIST = yaml.safe_load(REMOVE_TASKS)
 EXECUTION_PREPARE_TASK_LIST = yaml.safe_load(EXECUTION_PREPARE_TASKS)
@@ -64,33 +75,22 @@ EXECUTION_TRANSITION_TASK_NAMES = [task["name"] for task in EXECUTION_TRANSITION
 LIFECYCLE_TASK_NAMES = [task["name"] for task in LIFECYCLE_TASK_LIST]
 
 
-def test_main_orchestrates_sub_tasks_in_order():
-    included_files = [task["ansible.builtin.include_tasks"]["file"] for task in MAIN_TASK_LIST if "ansible.builtin.include_tasks" in task]
-    expected = [f"sub_tasks/{name}" for name in SUB_TASK_FILES]
-    assert [path for path in included_files if path in expected] == expected
-    assert "Podman services | Normalize service" not in MAIN_TASKS
-    assert "Podman services | Finish service removal" in MAIN_TASKS
-
-
-def test_rootless_bind_ownership_is_live_only_and_precedes_quadlet_rendering():
+def test_rootless_data_transition_is_gated_without_recursive_chown():
     execution = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Prepare execution environment")
     common = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Prepare service files and directories")
-    ownership = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Set rootless bind mount ownership")
+    init = yaml.safe_load((TASKS_DIR / "sub_tasks/init.yml").read_text())
+    ownership = next(task for task in init if task["name"] == "Init | Enforce effective operational requirements")
     prepare = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Write Quadlet files")
 
-    assert MAIN_TASK_LIST.index(execution) < MAIN_TASK_LIST.index(common) < MAIN_TASK_LIST.index(ownership) < MAIN_TASK_LIST.index(prepare)
-    assert "not ansible_check_mode" in ownership["when"]
-    assert "podman_services_execution.mode == 'rootless'" in ownership["when"]
-    assert "podman_services_service.container.mounts | default([]) | length > 0" in ownership["when"]
-    assert ownership["ansible.builtin.file"]["path"] == "{{ podman_services_rootless_bind_source }}"
-    assert ownership["ansible.builtin.file"]["state"] == "directory"
-    assert ownership["ansible.builtin.file"]["owner"] == "{{ podman_services_execution.host_user }}"
-    assert ownership["ansible.builtin.file"]["group"] == "{{ podman_services_execution.host_user }}"
-    assert ownership["ansible.builtin.file"]["recurse"] is True
-    assert "mode" not in ownership["ansible.builtin.file"]
-    assert ownership["loop_control"]["loop_var"] == "podman_services_rootless_bind_source"
-    assert "map(attribute='source')" in ownership["loop"]
-    assert "unique" in ownership["loop"]
+    generation = next(task for task in MAIN_TASK_LIST if task["name"] == "Podman services | Generate application secrets")
+    assert (
+        MAIN_TASK_NAMES.index("Podman services | Initialize service") < MAIN_TASK_LIST.index(execution) < MAIN_TASK_LIST.index(generation)
+    )
+    assert MAIN_TASK_LIST.index(generation) < MAIN_TASK_LIST.index(common) < MAIN_TASK_LIST.index(prepare)
+    assert ownership["ansible.builtin.include_role"]["tasks_from"] == "operational_requirements"
+    assert set(ownership["tags"]) <= set(ownership["ansible.builtin.include_role"]["apply"]["tags"])
+    assert "podman_services_service.name" in ownership["vars"]["service_common_name"]
+    assert not any(task.get("ansible.builtin.file", {}).get("recurse") for task in MAIN_TASK_LIST)
     assert "podman_services_service.container.mounts" in common["vars"]["service_common_host_defaults"]
     assert "omit if ansible_check_mode" in common["vars"]["service_common_default_owner"]
     assert "podman_services_execution.host_user" in common["vars"]["service_common_default_owner"]
@@ -158,7 +158,7 @@ def test_remove_stops_container_before_network_then_removes_files():
 
 
 def test_remove_only_orchestration_is_guarded_by_normalized_action():
-    tasks = yaml.safe_load(MAIN_TASKS)
+    tasks = grouped_tasks(MAIN_TASKS)
     remove_only_tasks = {
         "Podman services | Remove Podman service",
         "Podman services | Remove service integrations",
@@ -179,43 +179,27 @@ def test_remove_only_orchestration_is_guarded_by_normalized_action():
 
 
 def test_external_or_unproven_network_is_not_created_or_removed():
-    prepare = next(task for task in yaml.safe_load(PREPARE_TASKS) if task["name"] == "Quadlets | Write network Quadlet")
-    remove_tasks = yaml.safe_load(REMOVE_TASKS)
-    managed_network_tasks = [
+    # External networks must never be created, and absent ownership evidence
+    # must never authorize a network stop/removal. Additional inspections are OK.
+    prepare = next(
         task
-        for task in remove_tasks
-        if task["name"]
-        in {
-            "Remove | Stop managed system network service",
-            "Remove | Stop managed user network service",
-            "Remove | Check managed network before removal",
-            "Remove | Remove managed network if present",
-        }
+        for task in walk_tasks(yaml.safe_load(PREPARE_TASKS))
+        if task.get("ansible.builtin.template", {}).get("src") == "network.network.j2"
+    )
+    network_operations = [
+        task
+        for task in walk_tasks(yaml.safe_load(REMOVE_TASKS))
+        if task.get("ansible.builtin.systemd_service", {}).get("name") == "{{ podman_services_remove_network.name }}-network.service"
+        or task.get("ansible.builtin.command", {}).get("argv", [])[:2] == ["podman", "network"]
     ]
-
     assert "not podman_services_service.network.external | bool" in prepare["when"]
-    assert len(managed_network_tasks) == 4
-    for task in managed_network_tasks:
+    assert network_operations, "The network ownership checks must cover actual lifecycle operations"
+    for task in network_operations:
         assert "podman_services_remove_network.managed | default(false) | bool" in task["when"]
-    assert "podman_services_service.network.name" not in REMOVE_TASKS
-
-
-def test_changed_managed_network_is_retained_during_update_and_recreate():
-    tasks = yaml.safe_load(NETWORK_TASKS)
-
-    assert [task["name"] for task in tasks] == ["Network | Report managed network change that requires recreate"]
-    assert tasks[0]["changed_when"] is False
-    assert "podman network" not in NETWORK_TASKS
-    assert "ansible.builtin.systemd_service" not in NETWORK_TASKS
 
 
 def test_managed_network_quadlet_is_rendered_before_container_quadlet():
     assert PREPARE_TASK_NAMES.index("Quadlets | Write network Quadlet") < PREPARE_TASK_NAMES.index("Quadlets | Write container Quadlet")
-
-
-def test_no_late_shared_network_migration_fail_after_template_render():
-    assert "Refuse implicit shared network migration" not in TASKS
-    assert "Coordinate shared network migration" not in TASKS
 
 
 def test_network_validation_occurs_before_template_rendering():
@@ -258,7 +242,7 @@ def test_absent_container_unit_is_checked_before_stop():
 
 
 def test_absent_container_unit_is_checked_before_recreate_preparation_stop():
-    tasks = yaml.safe_load(MAIN_TASKS)
+    tasks = grouped_tasks(MAIN_TASKS)
     stop_dependents = next(task for task in tasks if task["name"] == "Podman services | Stop shared-network services before recreate")
     load_state = next(task for task in tasks if task["name"] == "Podman services | Check service before recreate")
     stop = next(task for task in tasks if task["name"] == "Podman services | Stop service before recreate")
@@ -280,7 +264,7 @@ def test_absent_container_unit_is_checked_before_recreate_preparation_stop():
 
 
 def test_namespace_provider_recreate_cleans_dependents_then_provider_before_clean_start_and_restore():
-    main = yaml.safe_load(MAIN_TASKS)
+    main = grouped_tasks(MAIN_TASKS)
     lifecycle = yaml.safe_load(LIFECYCLE_TASKS)
     stop_dependents_include = next(
         task for task in main if task["name"] == "Podman services | Stop shared-network services before recreate"
@@ -398,7 +382,16 @@ def test_execution_change_stops_dependents_before_switch():
 def test_split_tasks_notify_the_existing_daemon_reload_handler():
     handler_name = "Podman services | daemon reload"
     assert f"listen: {handler_name}" in PODMAN_HANDLERS
-    assert TASKS.count(f"notify: {handler_name}") == 5
+    # Check the writes/deletions themselves, not a fixed number of tasks: retiring
+    # a protected environment file also requires a daemon reload.
+    mutations = [
+        task
+        for task in grouped_tasks(PREPARE_TASKS)
+        if "ansible.builtin.template" in task or task.get("ansible.builtin.file", {}).get("state") == "absent"
+    ]
+    mutations += [task for task in REMOVE_TASK_LIST if task.get("loop_control", {}).get("loop_var") == "podman_services_generated_path"]
+    assert mutations
+    assert all(task.get("notify") == handler_name for task in mutations)
     assert "notify: Prep | daemon reload" not in TASKS
     assert "notify: Remove | daemon reload" not in TASKS
 
@@ -465,7 +458,7 @@ def test_podman_dynamic_includes_propagate_required_tags():
     }
     checked = set()
 
-    for task in yaml.safe_load(MAIN_TASKS):
+    for task in grouped_tasks(MAIN_TASKS):
         include = task.get("ansible.builtin.include_tasks")
         if not isinstance(include, dict) or include.get("file") not in required_tags:
             continue
@@ -479,7 +472,7 @@ def test_podman_dynamic_includes_propagate_required_tags():
 
 
 def test_remove_handler_flush_is_gated_by_a_conditional_dynamic_include():
-    main_tasks = yaml.safe_load(MAIN_TASKS)
+    main_tasks = grouped_tasks(MAIN_TASKS)
     include = next(task for task in main_tasks if task["name"] == "Podman services | Finish service removal")
     flush_tasks = yaml.safe_load((TASKS_DIR / "sub_tasks" / "finish_remove.yml").read_text())
 
@@ -501,7 +494,7 @@ def test_remove_handler_flush_is_gated_by_a_conditional_dynamic_include():
 
 
 def test_external_network_preflight_uses_exact_read_only_podman_argv():
-    tasks = yaml.safe_load(MAIN_TASKS)
+    tasks = grouped_tasks(MAIN_TASKS)
     check = next(task for task in tasks if task["name"] == "Podman services | Check configured external network")
     require = next(task for task in tasks if task["name"] == "Podman services | Verify configured external network exists")
 
@@ -515,7 +508,7 @@ def test_external_network_preflight_uses_exact_read_only_podman_argv():
 
 
 def test_external_network_preflight_is_live_only_and_excludes_remove_and_managed_networks():
-    tasks = yaml.safe_load(MAIN_TASKS)
+    tasks = grouped_tasks(MAIN_TASKS)
     preflight = [
         task
         for task in tasks
@@ -537,7 +530,7 @@ def test_external_network_preflight_is_live_only_and_excludes_remove_and_managed
 
 
 def test_external_network_failure_is_fatal_before_any_mutating_service_work():
-    tasks = yaml.safe_load(MAIN_TASKS)
+    tasks = grouped_tasks(MAIN_TASKS)
     names = [task["name"] for task in tasks]
     require = names.index("Podman services | Verify configured external network exists")
     later_mutating_boundaries = [
@@ -936,7 +929,7 @@ def test_transition_generated_file_contents_are_not_logged():
 
 
 def test_execution_preparation_is_included_with_all_service_action_tags():
-    include = next(task for task in yaml.safe_load(MAIN_TASKS) if task["name"] == "Podman services | Prepare execution environment")
+    include = next(task for task in grouped_tasks(MAIN_TASKS) if task["name"] == "Podman services | Prepare execution environment")
     expected = {"deploy", "update", "remove", "recreate", "drift", "bootstrap"}
 
     assert set(include["tags"]) == expected

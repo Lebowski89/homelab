@@ -331,6 +331,7 @@ def test_remote_capability_defaults_are_provider_neutral_and_disabled():
     assert not any(key.startswith("postgres_backup_remote_") for key in group_vars)
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
 def test_disabled_remote_management_does_not_require_a_provider(tmp_path: Path):
     result = run_setup_check(tmp_path)
@@ -350,6 +351,7 @@ def test_enabled_scheduling_requires_management_and_repository():
     assert "postgres_backup_remote_repository | trim | length > 0" in conditions
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
 def test_enabled_scheduling_without_repository_is_rejected_before_mutation(tmp_path: Path):
     result = run_setup_check(tmp_path, remote_manage=True, remote_enabled=True)
@@ -359,6 +361,7 @@ def test_enabled_scheduling_without_repository_is_rejected_before_mutation(tmp_p
     assert "Remote logical backup | Install Restic package" not in result.stdout
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
 @pytest.mark.skipif(not POSTGRES_USER_AVAILABLE, reason="postgres OS user is unavailable")
 def test_configured_check_mode_uses_placeholders_without_live_restic_actions(tmp_path: Path):
@@ -516,6 +519,7 @@ def test_managed_secret_manifest_reconciles_only_previously_owned_files(tmp_path
     assert unrelated.exists()
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
 @pytest.mark.skipif(not POSTGRES_USER_AVAILABLE, reason="postgres OS user is unavailable")
 def test_secret_reconciliation_check_mode_plans_without_mutating_files(tmp_path: Path):
@@ -576,6 +580,7 @@ def test_reserved_backend_environment_names_cover_shell_startup_and_loader_contr
         assert source.count(f"- {name}") == 2
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("backend_environment", "backend_secrets"),
     [
@@ -603,6 +608,7 @@ def test_reserved_backend_environment_names_are_rejected(
     assert "must be safe string assignments" in result.stdout or "declarations are invalid" in result.stdout
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
 @pytest.mark.skipif(not POSTGRES_USER_AVAILABLE, reason="postgres OS user is unavailable")
 def test_normal_provider_environment_names_remain_allowed(tmp_path: Path):
@@ -629,6 +635,7 @@ def test_normal_provider_environment_names_remain_allowed(tmp_path: Path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("unsafe_name", [".", "..", "sub/../escaped", "sub//escaped"])
 @pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
 def test_unsafe_secret_file_paths_are_rejected(tmp_path: Path, unsafe_name: str):
@@ -654,6 +661,7 @@ def test_unsafe_secret_file_paths_are_rejected(tmp_path: Path, unsafe_name: str)
     assert "secret-file declarations are invalid" in result.stdout
 
 
+@pytest.mark.integration
 def test_backend_environment_template_quotes_values_as_literal_assignments(tmp_path: Path):
     marker = tmp_path / "must-not-exist"
     rendered = render_jinja(
@@ -793,6 +801,7 @@ def test_remote_tags_are_wired_through_playbook_and_skynet():
         assert command in skynet
 
 
+@pytest.mark.integration
 def test_only_completed_verified_backups_are_uploaded_with_stable_metadata(tmp_path: Path):
     script = render_remote_runner(tmp_path)
     eligible = make_completed_backup(tmp_path, "20260811T030412Z")
@@ -820,6 +829,7 @@ def test_only_completed_verified_backups_are_uploaded_with_stable_metadata(tmp_p
     assert not list((tmp_path / "textfile").glob("*.tmp.*"))
 
 
+@pytest.mark.integration
 def test_checksum_failure_prevents_upload_marker_and_emits_failure_metrics(tmp_path: Path):
     script = render_remote_runner(tmp_path)
     make_completed_backup(tmp_path, "20260811T030412Z", valid_checksum=False)
@@ -835,6 +845,7 @@ def test_checksum_failure_prevents_upload_marker_and_emits_failure_metrics(tmp_p
     assert "postgres_backup_remote_pending_count 1" in metrics
 
 
+@pytest.mark.integration
 def test_failed_upload_remains_pending_and_retries_successfully(tmp_path: Path):
     script = render_remote_runner(tmp_path)
     make_completed_backup(tmp_path, "20260811T030412Z")
@@ -850,6 +861,7 @@ def test_failed_upload_remains_pending_and_retries_successfully(tmp_path: Path):
     assert restic_log(tmp_path).count("\tbackup\t") == 2
 
 
+@pytest.mark.integration
 def test_uploaded_marker_skips_backup_and_preserves_last_upload_timestamp(tmp_path: Path):
     script = render_remote_runner(tmp_path)
     make_completed_backup(tmp_path, "20260811T030412Z")
@@ -869,6 +881,7 @@ def test_uploaded_marker_skips_backup_and_preserves_last_upload_timestamp(tmp_pa
     assert "postgres_backup_remote_pending_count 0" in metrics
 
 
+@pytest.mark.integration
 def test_same_restic_repository_marker_prevents_duplicate_upload(tmp_path: Path):
     script = render_remote_runner(tmp_path)
     make_completed_backup(tmp_path, "20260811T030412Z")
@@ -885,6 +898,7 @@ def test_same_restic_repository_marker_prevents_duplicate_upload(tmp_path: Path)
     assert restic_log(tmp_path).count("\tbackup\t") == 1
 
 
+@pytest.mark.integration
 def test_changing_restic_repository_id_reuploads_retained_local_backup_at_same_url(
     tmp_path: Path,
 ):
@@ -907,6 +921,7 @@ def test_changing_restic_repository_id_reuploads_retained_local_backup_at_same_u
     assert restic_log(tmp_path).count("\tbackup\t") == 2
 
 
+@pytest.mark.integration
 def test_failed_upload_to_new_repository_preserves_only_old_repository_marker(
     tmp_path: Path,
 ):
@@ -930,6 +945,7 @@ def test_failed_upload_to_new_repository_preserves_only_old_repository_marker(
     assert restic_log(tmp_path).count("\tbackup\t") == 2
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "restic_mode",
     ["invalid-json", "missing-id", "empty-id", "unsafe-id"],
@@ -949,6 +965,7 @@ def test_invalid_restic_repository_identity_fails_before_backup(
     assert not list((tmp_path / "state/uploaded").iterdir())
 
 
+@pytest.mark.integration
 def test_overlap_lock_skips_cleanly_without_overwriting_metrics(tmp_path: Path):
     script = render_remote_runner(tmp_path)
     make_completed_backup(tmp_path, "20260811T030412Z")
@@ -990,6 +1007,7 @@ def test_overlap_lock_skips_cleanly_without_overwriting_metrics(tmp_path: Path):
     assert restic_log(tmp_path).count("\tbackup\t") == 1
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("restic_mode", "expected_message"),
     [
@@ -1016,6 +1034,7 @@ def test_upload_probe_failures_never_initialize_or_upload(
     assert "\tbackup" not in log
 
 
+@pytest.mark.integration
 def test_repository_initialization_only_initializes_precisely_missing_repository(tmp_path: Path):
     script = render_remote_runner(tmp_path)
 
@@ -1033,6 +1052,7 @@ def test_repository_initialization_only_initializes_precisely_missing_repository
     assert "\tinit" not in restic_log(tmp_path)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("restic_mode", "expected_message"),
     [
@@ -1056,6 +1076,7 @@ def test_explicit_init_refuses_wrong_password_and_backend_failures(
     assert "\tinit" not in log
 
 
+@pytest.mark.integration
 def test_explicit_init_failure_is_loud_after_missing_repository_probe(tmp_path: Path):
     script = render_remote_runner(tmp_path)
 
@@ -1067,6 +1088,7 @@ def test_explicit_init_failure_is_loud_after_missing_repository_probe(tmp_path: 
     assert "\tinit" in log
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("restic_mode", "expected_message"),
     [
@@ -1092,6 +1114,7 @@ def test_maintenance_probe_failures_never_initialize_or_forget(
     assert "\tforget" not in log
 
 
+@pytest.mark.integration
 def test_maintenance_is_scoped_and_uses_configured_retention_without_upload(tmp_path: Path):
     script = render_remote_runner(tmp_path)
 
@@ -1111,6 +1134,7 @@ def test_maintenance_is_scoped_and_uses_configured_retention_without_upload(tmp_
     assert "\tinit" not in log
 
 
+@pytest.mark.integration
 def test_maintenance_failure_is_loud(tmp_path: Path):
     script = render_remote_runner(tmp_path)
 
@@ -1120,6 +1144,7 @@ def test_maintenance_failure_is_loud(tmp_path: Path):
     assert "maintenance operation failed" in result.stderr
 
 
+@pytest.mark.integration
 def test_additional_restic_options_are_rendered_as_array_arguments(tmp_path: Path):
     script = render_remote_runner(tmp_path, options=["--option", "sftp.command=ssh -i /protected/key"])
 
@@ -1131,6 +1156,7 @@ def test_additional_restic_options_are_rendered_as_array_arguments(tmp_path: Pat
     assert "eval" not in script.read_text()
 
 
+@pytest.mark.integration
 def test_retry_lock_reaches_probe_backup_and_maintenance(tmp_path: Path):
     script = render_remote_runner(tmp_path, retry_lock="10m")
     make_completed_backup(tmp_path, "20260811T030412Z")
@@ -1161,6 +1187,7 @@ def test_remote_runner_uses_atomic_metrics_and_state_without_touching_local_back
     assert "run_restic init" not in upload_function
 
 
+@pytest.mark.integration
 def test_remote_systemd_units_pass_systemd_analyze_verify(tmp_path: Path):
     if shutil.which("systemd-analyze") is None:
         pytest.skip("systemd-analyze is unavailable")
@@ -1206,6 +1233,7 @@ def test_remote_systemd_units_pass_systemd_analyze_verify(tmp_path: Path):
     assert "After=network-online.target" in service_path.read_text()
 
 
+@pytest.mark.integration
 def test_rendered_remote_runner_passes_bash_syntax(tmp_path: Path):
     script = render_remote_runner(tmp_path)
 
@@ -1214,6 +1242,7 @@ def test_rendered_remote_runner_passes_bash_syntax(tmp_path: Path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(shutil.which("shellcheck") is None, reason="shellcheck is unavailable")
 def test_rendered_remote_runner_passes_shellcheck(tmp_path: Path):
     script = render_remote_runner(tmp_path)

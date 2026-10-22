@@ -223,7 +223,17 @@
         podman_services_rootless_pasta_subnet
         | podman_rootless_pasta_config(
             podman_services_rootless_pasta_gateway,
-            podman_services_rootless_pasta_dns_forward
+            podman_services_rootless_pasta_dns_forward,
+            (
+              podman_services_rootless_pasta_ipv6_address
+              if ((podman_services_service.container | default({})).network_mode | default('')) == 'pasta'
+              else none
+            ),
+            (
+              podman_services_rootless_pasta_ipv6_gateway
+              if ((podman_services_service.container | default({})).network_mode | default('')) == 'pasta'
+              else none
+            )
           )
       }}
   tags: [deploy, update, recreate, bootstrap]
@@ -280,6 +290,44 @@
       {{ podman_services_rootless_host_route_overlaps | join(', ') }};
       choose a non-overlapping role-level subnet before managing the account.
   tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Read host IPv6 routes for direct pasta conflict detection
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_rootless_pasta_config.ipv6_subnet is defined
+  ansible.builtin.command:
+    argv: [ip, -j, "-6", route, show, table, all]
+  register: podman_services_rootless_host_ipv6_routes
+  changed_when: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Execution | Detect conflicting host IPv6 routes
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_rootless_pasta_config.ipv6_subnet is defined
+  tags: [deploy, update, recreate, bootstrap]
+  ansible.builtin.set_fact:
+    podman_services_rootless_host_ipv6_route_overlaps: >-
+      {{ podman_services_rootless_host_ipv6_routes.stdout | from_json |
+         podman_rootless_pasta_route_overlaps(podman_services_rootless_pasta_config.ipv6_subnet) }}
+
+- name: Execution | Require a private IPv6 subnet separate from host routes
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode == 'rootless'
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - podman_services_rootless_pasta_config.ipv6_subnet is defined
+  tags: [deploy, update, recreate, bootstrap]
+  ansible.builtin.assert:
+    that:
+      - podman_services_rootless_host_ipv6_route_overlaps | length == 0
+    fail_msg: >-
+      Direct pasta subnet {{ podman_services_rootless_pasta_config.ipv6_subnet }}
+      overlaps host IPv6 routes {{ podman_services_rootless_host_ipv6_route_overlaps | join(', ') }}.
 
 - name: Execution | Check selected rootless account
   when:
@@ -607,6 +655,46 @@
       }}
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
+- name: Execution | Finish stable identity preparation before manager activation
+  when: podman_services_identity_only | default(false)
+  ansible.builtin.meta: end_role
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Podman services | Protect declared publications before changing the service
+  when:
+    - not podman_services_prepare_execution_only
+    - (podman_services_common_context.firewall_plan | default({})).managed | default(false)
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap', 'remove']
+  ansible.builtin.include_role:
+    name: service_firewall
+    tasks_from: lifecycle
+    apply:
+      tags: [deploy, update, recreate, bootstrap, remove]
+  vars:
+    service_firewall_adapter_plan: "{{ podman_services_common_context.firewall_plan }}"
+    service_firewall_lifecycle_phase: "{{ 'prepare_remove' if podman_services_common_action == 'remove' else 'stage' }}"
+  tags: [deploy, update, recreate, bootstrap, remove]
+
+- name: Execution | Record successful publication protection
+  when:
+    - not ansible_check_mode
+    - not podman_services_prepare_execution_only
+    - (podman_services_common_context.firewall_plan | default({})).managed | default(false)
+    - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap', 'remove']
+  ansible.builtin.set_fact:
+    podman_services_firewall_staged: true
+  tags: [deploy, update, recreate, bootstrap, remove]
+
+- name: Execution | Check for an application Quadlet before account-only manager preparation
+  when:
+    - podman_services_prepare_execution_only
+    - podman_services_execution.mode == 'rootless'
+  ansible.builtin.stat:
+    path: "{{ podman_services_quadlet_dir }}/{{ podman_services_service.unit_name }}.container"
+    follow: false
+  register: podman_services_account_only_quadlet
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Execution | Check rootless account linger state
   when:
     - not ansible_check_mode
@@ -618,6 +706,7 @@
 
 - name: Execution | Enable rootless account linger
   when:
+    - not (podman_services_prepare_execution_only and (podman_services_account_only_quadlet.stat.exists | default(false)))
     - not ansible_check_mode
     - podman_services_execution.mode == 'rootless'
     - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
@@ -629,6 +718,7 @@
 
 - name: Execution | Start rootless user systemd manager
   when:
+    - not (podman_services_prepare_execution_only and (podman_services_account_only_quadlet.stat.exists | default(false)))
     - not ansible_check_mode
     - podman_services_execution.mode == 'rootless'
     - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
@@ -639,6 +729,7 @@
 
 - name: Execution | Verify rootless runtime directory exists
   when:
+    - not (podman_services_prepare_execution_only and (podman_services_account_only_quadlet.stat.exists | default(false)))
     - not ansible_check_mode
     - podman_services_execution.mode == 'rootless'
   ansible.builtin.stat:
@@ -686,6 +777,7 @@
 
 - name: Execution | Verify rootless user systemd manager
   when:
+    - not (podman_services_prepare_execution_only and (podman_services_account_only_quadlet.stat.exists | default(false)))
     - not ansible_check_mode
     - podman_services_execution.mode == 'rootless'
     - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']

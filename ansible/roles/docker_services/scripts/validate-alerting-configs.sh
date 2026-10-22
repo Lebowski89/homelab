@@ -32,12 +32,12 @@ import os
 import re
 from pathlib import Path
 
-from jinja2 import Environment
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
 import yaml
 
 root = Path(os.environ["ROOT_DIR"])
 out = Path(os.environ["OUT_DIR"])
-env = Environment()
+env = Environment(loader=FileSystemLoader(root / "ansible/roles/service_common/templates"), undefined=StrictUndefined)
 
 
 def read_yaml(path: Path) -> dict:
@@ -129,6 +129,7 @@ prometheus_group_vars["prometheus_availability_tcp_targets"] = {
 }
 
 context = {
+    **services,
     **prometheus_group_vars,
     "groups": groups,
     "hostvars": hostvars,
@@ -138,7 +139,9 @@ context = {
     "services_private_https_port": 8443,
     "services_controller_host": "mgt",
     "services_plex_host": "plex",
+    "services_storage_host": "unraid",
     "docker_services_svc": prometheus_service_vars.get("prometheus", {}),
+    "service_common_service": prometheus_service_vars.get("prometheus", {}),
     "service_common_infisical_values": {
         "smtp_email": "alerts@example.com",
         "smtp_host": "smtp.example.com",
@@ -159,6 +162,17 @@ env.filters.update(
         "to_nice_json": lambda value: json.dumps(value, indent=2, sort_keys=True),
     }
 )
+
+
+# Jinja does not recursively resolve Ansible's group-var strings. Resolve only
+# these value-free destination fields from the synthetic inventory/catalog.
+for key in [
+    "prometheus_blackbox_exporter_address",
+    "prometheus_worker_metrics_address",
+    "prometheus_authelia_metrics_address",
+    "prometheus_traefik_metrics_address",
+]:
+    context[key] = env.from_string(context[key]).render(**context)
 
 
 def render(src: Path, dest: Path) -> None:

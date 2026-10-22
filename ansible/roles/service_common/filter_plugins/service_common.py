@@ -62,8 +62,11 @@ def _resource_name(value: Any, *, name: str) -> str:
 
 
 def _numeric_id(value: Any, *, name: str) -> str:
+    # Native Ansible templating may return inventory UID/GID values as integers.
+    if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+        return str(value)
     if not isinstance(value, str) or not value.strip().isdigit():
-        raise AnsibleFilterError(f"{name} must be a numeric string")
+        raise AnsibleFilterError(f"{name} must be a numeric string or non-negative integer")
     return value.strip()
 
 
@@ -354,6 +357,17 @@ def service_common_infisical_check_values(config: Any) -> dict[str, str]:
             else f"__CHECK_MODE_REDACTED_INFISICAL_{var}__"
         )
     return {var: values[var] for var in sorted(values)}
+
+
+def service_common_postgres_operator_interpreter(enabled: Any, current: Any) -> str:
+    """Opt only the delegated database module into the prepared native context."""
+    if type(enabled) is not bool:
+        raise AnsibleFilterError("service_common_postgres_operator_context must be a strict boolean")
+    return (
+        "/usr/local/libexec/skynet-mgt-operator/postgres-python"
+        if enabled
+        else _nonempty_text(current, name="controller ansible_python_interpreter")
+    )
 
 
 def service_common_postgres_normalize(
@@ -705,6 +719,149 @@ def service_common_traefik_context(
     }
 
 
+def service_common_files_changed(results: Any, loop_var: str, declaration_key: str | None = None) -> bool:
+    """Return whether a managed application file requiring restart changed.
+
+    Metadata tasks loop over earlier stat results; declaration_key unwraps the
+    original declaration rather than treating a route-only update as a restart.
+    """
+    for result in results.get("results", []):
+        declaration = result.get(loop_var, {})
+        if declaration_key is not None:
+            declaration = declaration.get(declaration_key, {})
+        if result.get("changed", False) and declaration.get("restart", True):
+            return True
+    return False
+
+
+def service_common_file_policy(service: Any) -> bool:
+    """Validate restart policy before filesystem preparation."""
+    service = _mapping(service, name="service_common_service")
+    for field in ("copies", "templates"):
+        declarations = service.get(field, [])
+        if not isinstance(declarations, list):
+            raise AnsibleFilterError(f"{field} must be a list of managed file declarations")
+        for declaration in declarations:
+            if not isinstance(declaration, Mapping) or not isinstance(declaration.get("restart", True), bool):
+                raise AnsibleFilterError(f"{field} declarations must be mappings with boolean restart policy")
+    return True
+
+
+_OPERATIONAL_ACL_INPUTS = {
+    "mgt_receivers": "services_mgt_receiver_acl_ready",
+    "mgt_backends": "services_mgt_backend_acl_ready",
+    "worker_backends": "services_worker_backend_acl_ready",
+    "bootstrap": "services_bootstrap_acl_ready",
+}
+
+
+def service_common_requirements_normalize(value: Any) -> dict[str, Any]:
+    """Validate value-free operational requirements independently of selectors."""
+    requirements = _mapping(value, name="operational_requirements")
+    if set(requirements) - {"acl", "ownership_transition"}:
+        raise AnsibleFilterError("operational_requirements contains unsupported fields")
+    acl = requirements.get("acl", [])
+    if not isinstance(acl, list) or any(not isinstance(scope, str) or scope not in _OPERATIONAL_ACL_INPUTS for scope in acl):
+        raise AnsibleFilterError("operational_requirements.acl must be a list of supported ACL scopes")
+    ownership = requirements.get("ownership_transition", False)
+    if not isinstance(ownership, bool):
+        raise AnsibleFilterError("operational_requirements.ownership_transition must be a boolean")
+    return {"acl": list(dict.fromkeys(acl)), "ownership_transition": ownership}
+
+
+def service_common_requirements_metadata(service: Any, name: str) -> dict[str, Any]:
+    """Project only value-free runtime/endpoint and ownership declarations."""
+    service = _mapping(service, name="service_common_service")
+    result = {
+        key: service[key]
+        for key in ("runtime", "image", "stack", "user", "ports", "volumes", "named_networks", "network_mode")
+        if key in service
+    }
+    if "paths" in service:
+        result["paths"] = [
+            {key: path[key] for key in ("path", "state", "owner", "group", "mode") if key in path} for path in service["paths"]
+        ]
+    if "runtime" not in result and service.get("deploy", {}).get("execution"):
+        result["runtime"] = "podman"
+    result["name"] = service.get("name", name)
+    result["operational_requirements"] = service_common_requirements_normalize(service.get("operational_requirements", {}))
+    for section, keys in {
+        "deploy": ("type", "mode", "host", "constraints", "execution"),
+        "traefik": ("port", "backend_mode", "backend_host_inventory"),
+        "postgres": ("enable",),
+        "application_prepare": ("handler",),
+    }.items():
+        value = _mapping(service.get(section, {}), name=section)
+        result[section] = {key: value[key] for key in keys if key in value}
+    return result
+
+
+def service_common_requirements_proof(service: Any, name: str, proof: Any) -> bool:
+    """Match this operation's saved prerequisite checks to the selected service.
+
+    The proof is an in-memory result, not a durable acceptance record. Matching
+    value-free service metadata allows recreate to reuse it after the old
+    runtime stops, while rejecting reuse for another service or changed target.
+    """
+    return (
+        isinstance(proof, Mapping)
+        and isinstance(proof.get("acl"), list)
+        and all(scope in _OPERATIONAL_ACL_INPUTS for scope in proof["acl"])
+        and isinstance(proof.get("ownership_transition"), bool)
+        and proof.get("metadata") == service_common_requirements_metadata(service, name)
+    )
+
+
+def service_common_requirements_validate(
+    service: Any,
+    name: str,
+    action: str,
+    acknowledgements: Any,
+    check_mode: bool = False,
+    execution_only: bool = False,
+    proof: Any = None,
+) -> bool:
+    """Fail before mutation when an effective service's required inputs are absent.
+
+    Check mode and read-only/removal operations validate declarations without
+    requiring deployment acknowledgements. Explicit account preparation does
+    likewise, and remains restricted to deploy/update/bootstrap operations.
+    Errors contain input names only, never acknowledgement values.
+    """
+    service = _mapping(service, name="service_common_service")
+    requirements = service_common_requirements_normalize(service.get("operational_requirements", {}))
+    name = _nonempty_text(name, name="service_common_name")
+    if action not in {"deploy", "update", "recreate", "bootstrap", "remove", "drift"}:
+        raise AnsibleFilterError("operational requirements need a supported service action")
+    if not isinstance(check_mode, bool) or not isinstance(execution_only, bool):
+        raise AnsibleFilterError("operational requirement planning options must be booleans")
+    if execution_only and action not in {"deploy", "update", "bootstrap"}:
+        raise AnsibleFilterError("account-only preparation requires deploy, update or bootstrap")
+    if check_mode or execution_only or action in {"remove", "drift"}:
+        return True
+    inputs = _mapping(acknowledgements, name="operational acknowledgements")
+    evidence = proof if service_common_requirements_proof(service, name, proof) else {}
+    for scope in requirements["acl"]:
+        variable = _OPERATIONAL_ACL_INPUTS[scope]
+        if inputs.get(variable) is not None and not isinstance(inputs[variable], bool):
+            raise AnsibleFilterError(f"{variable} must be a strict boolean when supplied")
+        if scope in evidence.get("acl", []):
+            continue
+        if inputs.get(variable) is not True:
+            raise AnsibleFilterError(f"{name} requires {variable}: true (a strict boolean) before live mutation")
+    if requirements["ownership_transition"] and "services_rootless_data_ready" in inputs:
+        readiness = inputs["services_rootless_data_ready"]
+        if not isinstance(readiness, Mapping) or (name in readiness and not isinstance(readiness[name], bool)):
+            raise AnsibleFilterError("services_rootless_data_ready must map actual service names to strict booleans")
+    if requirements["ownership_transition"] and evidence.get("ownership_transition") is not True:
+        readiness = inputs.get("services_rootless_data_ready", {})
+        if not isinstance(readiness, Mapping) or readiness.get(name) is not True:
+            raise AnsibleFilterError(
+                f"{name} requires services_rootless_data_ready[{name}]: true (a strict boolean) after its ownership transition"
+            )
+    return True
+
+
 class FilterModule:
     """Register runtime-neutral service preparation filters with Ansible."""
 
@@ -721,11 +878,18 @@ class FilterModule:
             ``service_common_traefik_context``.
         """
         return {
+            "service_common_requirements_normalize": service_common_requirements_normalize,
+            "service_common_requirements_validate": service_common_requirements_validate,
+            "service_common_requirements_metadata": service_common_requirements_metadata,
+            "service_common_requirements_proof": service_common_requirements_proof,
+            "service_common_files_changed": service_common_files_changed,
+            "service_common_file_policy": service_common_file_policy,
             "service_common_environment_normalize": service_common_environment_normalize,
             "service_common_environment_resolve": service_common_environment_resolve,
             "service_common_infisical_check_values": service_common_infisical_check_values,
             "service_common_infisical_finalize": service_common_infisical_finalize,
             "service_common_infisical_normalize": service_common_infisical_normalize,
             "service_common_postgres_normalize": service_common_postgres_normalize,
+            "service_common_postgres_operator_interpreter": service_common_postgres_operator_interpreter,
             "service_common_traefik_context": service_common_traefik_context,
         }

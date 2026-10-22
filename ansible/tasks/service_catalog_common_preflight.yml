@@ -1,5 +1,117 @@
 ---
 
+- name: Service catalog preflight | Resolve publication protection and callers
+  service_firewall_plan:
+    entry: "{{ service_catalog_materialized_service }}"
+    action: "{{ service_catalog_action }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Service catalog preflight | Inspect automatic firewall prerequisites
+  when:
+    - service_firewall_lifecycle_plan.managed
+    - not (service_catalog_execution_only | default(false))
+  ansible.builtin.include_role:
+    name: service_firewall
+    tasks_from: lifecycle_inspect
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Service catalog preflight | Use the standalone endpoint host connection
+  when:
+    - service_firewall_lifecycle_plan.legacy_publications | default(false)
+    - service_firewall_lifecycle_plan.metadata.runtime | default("docker") == 'docker'
+    - (service_firewall_lifecycle_plan.metadata.deploy | default({})).type | default('swarm') == 'container'
+  ansible.builtin.set_fact:
+    ansible_connection: "{{ hostvars[service_firewall_runtime_host].ansible_connection | default('ssh') }}"
+  delegate_to: "{{ service_firewall_runtime_host }}"
+  delegate_facts: true
+  vars:
+    service_firewall_runtime_host: >-
+      {{ (service_firewall_lifecycle_plan.metadata.deploy.host if service_firewall_lifecycle_plan.metadata.deploy.host is string else service_firewall_lifecycle_plan.metadata.deploy.host[0]) if service_firewall_lifecycle_plan.metadata.runtime | default("docker") == "docker" and (service_firewall_lifecycle_plan.metadata.deploy | default({})).type | default("swarm") == "container" else inventory_hostname }}
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service catalog preflight | Inspect publications without an exposure declaration
+  when:
+    - service_firewall_lifecycle_plan.legacy_publications | default(false)
+    - not ansible_check_mode
+    - not (service_catalog_execution_only | default(false))
+    - service_catalog_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  delegate_to: >-
+    {{ (service_firewall_lifecycle_plan.metadata.deploy.host if service_firewall_lifecycle_plan.metadata.deploy.host is string else service_firewall_lifecycle_plan.metadata.deploy.host[0]) if service_firewall_lifecycle_plan.metadata.runtime | default("docker") == "docker" and (service_firewall_lifecycle_plan.metadata.deploy | default({})).type | default("swarm") == "container" else inventory_hostname }}
+  service_operational_check:
+    phase: runtime
+    metadata: "{{ service_firewall_lifecycle_plan.metadata }}"
+  register: service_firewall_legacy_runtime
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service catalog preflight | Require explicit exposure for new publications
+  when:
+    - service_firewall_lifecycle_plan.legacy_publications | default(false)
+    - not ansible_check_mode
+    - not (service_catalog_execution_only | default(false))
+    - service_catalog_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.assert:
+    that: service_firewall_legacy_runtime.managed | default(false)
+    fail_msg: New publications require exposure public or private, with logical callers for private ports. Existing-data migration safeguards still apply.
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service catalog preflight | Enforce operational requirements before secret preflight
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: operational_requirements
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+  vars:
+    service_common_service: >-
+      {{ (service_catalog_materialized_service.config | service_common_requirements_metadata(service_common_name))
+         | combine({'operational_requirements': {
+           'acl': [],
+           'ownership_transition': (service_catalog_materialized_service.config.operational_requirements | default({})).ownership_transition | default(false)
+         }}) if (service_firewall_lifecycle_plan | default({})).managed | default(false)
+         else service_catalog_materialized_service.config | service_common_requirements_metadata(service_common_name) }}
+    service_common_name: >-
+      {{ service_catalog_materialized_service.config.name
+         | default((service_catalog_materialized_service.podman_lifecycle | default({})).container_name
+         | default(service_catalog_materialized_service.name)) }}
+    service_common_preflight_proof: "{{ service_firewall_ownership_proof | default({}) if service_firewall_lifecycle_plan.managed else {} }}"
+    service_common_action: "{{ service_catalog_action }}"
+    service_common_execution_only: "{{ service_catalog_execution_only | default(false) }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Service catalog preflight | Save the selected service's prerequisites before caller preparation
+  ansible.builtin.set_fact:
+    service_catalog_selected_requirements_proof: "{{ service_common_prerequisite_proof }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Service catalog preflight | Prepare stable caller identities before service secrets
+  when:
+    - service_firewall_lifecycle_plan.managed
+    - not (service_catalog_execution_only | default(false))
+    - service_catalog_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.include_role:
+    name: service_firewall
+    tasks_from: prepare_callers
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service catalog preflight | Reconcile provider access before application preparation
+  when:
+    - service_firewall_lifecycle_plan.managed
+    - not (service_catalog_execution_only | default(false))
+    - service_catalog_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.include_role:
+    name: service_firewall
+    tasks_from: access
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    service_firewall_access_plan: "{{ service_firewall_lifecycle_plan }}"
+    service_firewall_access_phase: access_stage
+    service_firewall_access_preflight_owned: true
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Service catalog preflight | Reset current-service common context
   no_log: true
   diff: false
@@ -10,6 +122,9 @@
       runtime: "{{ service_catalog_materialized_service.runtime }}"
       dispatch_host: "{{ inventory_hostname }}"
       controller_host: "{{ service_catalog_controller_host }}"
+      requirements_proof: "{{ service_catalog_selected_requirements_proof }}"
+      firewall_plan: "{{ service_firewall_lifecycle_plan }}"
+      firewall_access_hosts: "{{ service_firewall_access_stage_progress.attempted_hosts | default([]) }}"
       preflight_performed: false
       infisical_config: {}
       resolved_environment: >-
@@ -22,6 +137,7 @@
   when:
     - "'remove' not in (ansible_run_tags | default([]))"
     - "'drift' not in (ansible_run_tags | default([]))"
+    - not (service_catalog_execution_only | default(false))
   no_log: true
   ansible.builtin.include_role:
     name: service_common
@@ -46,6 +162,7 @@
   when:
     - "'remove' not in (ansible_run_tags | default([]))"
     - "'drift' not in (ansible_run_tags | default([]))"
+    - not (service_catalog_execution_only | default(false))
   no_log: true
   diff: false
   ansible.builtin.set_fact:
@@ -55,6 +172,9 @@
       runtime: "{{ service_catalog_materialized_service.runtime }}"
       dispatch_host: "{{ inventory_hostname }}"
       controller_host: "{{ service_catalog_controller_host }}"
+      requirements_proof: "{{ service_catalog_common_context.requirements_proof }}"
+      firewall_plan: "{{ service_catalog_common_context.firewall_plan }}"
+      firewall_access_hosts: "{{ service_catalog_common_context.firewall_access_hosts }}"
       preflight_performed: true
       infisical_config: "{{ service_common_infisical_config }}"
       resolved_environment: "{{ service_common_resolved_environment }}"

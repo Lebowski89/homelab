@@ -10,6 +10,9 @@
   retries: 5
   delay: 5
   until: service_prepare_temporary_stale_remove is succeeded
+  become: true
+  become_user: "{{ (service_prepare_context.execution | default({})).host_user | default('root') }}"
+  environment: "{{ service_prepare_context.runtime_environment | default({}) }}"
   delegate_to: "{{ service_prepare_temporary_container.host }}"
 
 - name: Podman temporary preparation | Verify stale container is absent
@@ -27,6 +30,9 @@
     service_prepare_temporary_stale_absence is failed
     or service_prepare_temporary_stale_absence.containers | default([{}]) | length > 0
   changed_when: false
+  become: true
+  become_user: "{{ (service_prepare_context.execution | default({})).host_user | default('root') }}"
+  environment: "{{ service_prepare_context.runtime_environment | default({}) }}"
   delegate_to: "{{ service_prepare_temporary_container.host }}"
 
 - name: Podman temporary preparation | Start container
@@ -42,8 +48,15 @@
     rm: false
     env: "{{ service_prepare_temporary_container.environment | default({}) }}"
     volume: "{{ service_prepare_temporary_container.mounts | default([]) }}"
+    user: "{{ service_prepare_context.service.user | default(omit) }}"
+    userns: >-
+      {{ ('keep-id:uid=' ~ service_prepare_context.execution.userns.uid ~ ',gid=' ~ service_prepare_context.execution.userns.gid)
+      if (service_prepare_context.execution | default({})).userns is defined else omit }}
     restart_policy: "no"
   register: service_prepare_temporary_container_result
+  become: true
+  become_user: "{{ (service_prepare_context.execution | default({})).host_user | default('root') }}"
+  environment: "{{ service_prepare_context.runtime_environment | default({}) }}"
   delegate_to: "{{ service_prepare_temporary_container.host }}"
 
 - name: Podman temporary preparation | Capture foreground output
@@ -62,6 +75,9 @@
   failed_when: >-
     service_prepare_temporary_container_capture is failed
     or service_prepare_temporary_container_capture.rc | default(1) != 0
+  become: true
+  become_user: "{{ (service_prepare_context.execution | default({})).host_user | default('root') }}"
+  environment: "{{ service_prepare_context.runtime_environment | default({}) }}"
   delegate_to: "{{ service_prepare_temporary_container.host }}"
 
 - name: Podman temporary preparation | Publish foreground output

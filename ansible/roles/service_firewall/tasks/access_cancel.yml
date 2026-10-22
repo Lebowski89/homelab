@@ -1,0 +1,27 @@
+---
+
+- name: Service firewall | Cancel only this operation's recorded provider reservations
+  when: not ansible_check_mode
+  service_firewall_lifecycle:
+    plan: "{{ service_firewall_access_cancel_plan }}"
+    phase: access_cancel
+    inventory_host: "{{ service_firewall_access_cancel_host }}"
+  delegate_to: "{{ service_firewall_access_cancel_host }}"
+  loop: "{{ service_firewall_access_cancel_hosts }}"
+  loop_control:
+    loop_var: service_firewall_access_cancel_host
+  register: service_firewall_access_cleanup
+  # Report every failed host without replacing the original operation failure.
+  ignore_errors: true  # noqa ignore-errors
+
+- name: Service firewall | Report retained reservations separately from the original failure
+  when: service_firewall_access_cleanup is failed
+  ansible.builtin.debug:
+    msg: >-
+      Provider reservation cleanup failed for {{ service_firewall_access_cancel_plan.service }}
+      on {{ service_firewall_access_cleanup.results | selectattr('failed', 'equalto', true)
+             | map(attribute='service_firewall_access_cancel_host') | list }}.
+      Token {{ service_firewall_access_cancel_plan.token }} may remain reserved.
+      Repair the reported host/write failure, then retry service_firewall_lifecycle
+      phase=access_cancel with this exact operation plan/token before rerunning skynet.
+      Do not remove a healthy application or replace its policy snapshot.

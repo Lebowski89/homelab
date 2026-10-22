@@ -46,6 +46,7 @@
   diff: false
   ansible.builtin.set_fact:
     docker_services_common_values: {}
+    docker_services_config_changed: false
     docker_services_secret_declarations: []
     docker_services_resolved_environment: {}
     docker_services_controller_host: ""
@@ -128,6 +129,35 @@
         ('bootstrap' if 'bootstrap' in (ansible_run_tags | default([])) else 'deploy'))))
       }}
   tags: [remove, drift]
+
+- name: Docker services | Require the firewall plan to belong to this service
+  when: ((docker_services_common_context | default({})).firewall_plan | default({})).managed | default(false)
+  ansible.builtin.assert:
+    that:
+      - docker_services_common_context.firewall_plan.metadata == (docker_services_svc | service_common_requirements_metadata(docker_services_service_name))
+      - docker_services_common_context.firewall_plan.runtime.service == docker_services_service_name
+    fail_msg: The firewall plan belongs to another service or an earlier declaration; resolve it through the catalog before mutation.
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Initialize | Enforce effective operational requirements
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: operational_requirements
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap, drift]
+  vars:
+    service_common_service: >-
+      {{ (docker_services_svc | service_common_requirements_metadata(service_common_name))
+         | combine({'operational_requirements': {
+           'acl': [],
+           'ownership_transition': (docker_services_svc.operational_requirements | default({})).ownership_transition | default(false)
+         }}) if ((docker_services_common_context | default({})).firewall_plan | default({})).managed | default(false)
+         else docker_services_svc | service_common_requirements_metadata(service_common_name) }}
+    service_common_name: "{{ docker_services_service_name }}"
+    service_common_preflight_proof: "{{ docker_services_common_context.requirements_proof | default({}) }}"
+    service_common_action: "{{ docker_services_common_action }}"
+    service_common_execution_only: "{{ false }}"
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
 
 - name: Initialize | Set stack name
   ansible.builtin.set_fact:

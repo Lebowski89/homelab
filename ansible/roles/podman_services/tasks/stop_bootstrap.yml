@@ -1,0 +1,46 @@
+---
+
+# Resolve persisted ownership through the adapter before stopping a bootstrap
+# batch. A changed desired account must not hide the old writer's manager.
+- name: Bootstrap stop | Initialize exact service
+  ansible.builtin.include_tasks:
+    file: sub_tasks/init.yml
+    apply:
+      tags: [recreate]
+  tags: [recreate]
+
+- name: Bootstrap stop | Resolve persisted execution owner
+  ansible.builtin.include_tasks:
+    file: sub_tasks/execution.yml
+    apply:
+      tags: [recreate]
+  tags: [recreate]
+
+- name: Bootstrap stop | Inspect exact owned unit
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode in ['rootful', 'rootless']
+  become: true
+  become_user: "{{ podman_services_execution.host_user | default('root') }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.command:
+    argv: >-
+      {{ ['systemctl'] + (['--user'] if podman_services_execution.mode == 'rootless' else [])
+      + ['show', podman_services_unit_name, '--property=LoadState', '--value'] }}
+  register: podman_services_bootstrap_unit
+  changed_when: false
+  tags: [recreate]
+
+- name: Bootstrap stop | Stop exact owned unit
+  when:
+    - not ansible_check_mode
+    - podman_services_execution.mode in ['rootful', 'rootless']
+    - podman_services_bootstrap_unit.stdout | trim != 'not-found'
+  become: true
+  become_user: "{{ podman_services_execution.host_user | default('root') }}"
+  environment: "{{ podman_services_runtime_environment }}"
+  ansible.builtin.systemd_service:
+    scope: "{{ 'user' if podman_services_execution.mode == 'rootless' else 'system' }}"
+    name: "{{ podman_services_unit_name }}"
+    state: stopped
+  tags: [recreate]

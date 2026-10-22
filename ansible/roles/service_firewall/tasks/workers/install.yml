@@ -1,0 +1,46 @@
+---
+
+- name: Service firewall | Workers | Check existing firewall tools and selected backend # noqa var-naming[no-role-prefix]
+  ansible.builtin.command:
+    argv: ["{{ worker_backend_firewall_tool }}", --version]
+  loop: [iptables, ip6tables, iptables-restore, ip6tables-restore]
+  loop_control:
+    loop_var: worker_backend_firewall_tool
+  register: worker_backend_firewall_tool_result
+  changed_when: false
+  failed_when: >-
+    worker_backend_firewall_tool_result.rc != 0 or
+    '(' ~ worker_backend_firewall_backend ~ ')' not in worker_backend_firewall_tool_result.stdout
+
+- name: Service firewall | Workers | Read Unraid flash permissions from the boot script # noqa var-naming[no-role-prefix]
+  when: worker_backend_firewall_unraid.stat.exists
+  ansible.builtin.stat:
+    path: /boot/config/go
+  register: worker_backend_firewall_go_stat
+
+- name: Service firewall | Workers | Read existing supported boot script # noqa var-naming[no-role-prefix]
+  when: worker_backend_firewall_unraid.stat.exists
+  ansible.builtin.slurp:
+    src: /boot/config/go
+  register: worker_backend_firewall_go
+
+- name: Service firewall | Workers | Require a shell boot script
+  when: worker_backend_firewall_unraid.stat.exists
+  ansible.builtin.assert:
+    that:
+      - (worker_backend_firewall_go.content | b64decode).splitlines()[0] in ['#!/bin/bash', '#!/bin/sh']
+    fail_msg: Preserve and inspect the existing Unraid go script; this role inserts only its marked block after the shebang.
+
+- name: Service firewall | Workers | Extend and reconcile the current policy under its writer lock
+  service_firewall_lifecycle:
+    phase: install
+    profile: workers
+    policy: "{{ worker_backend_firewall_policy }}"
+    inventory_host: "{{ inventory_hostname }}"
+  register: worker_backend_firewall_helper_copy # noqa var-naming[no-role-prefix]
+
+- name: Service firewall | Workers | Configure policy startup and reconciliation for this platform
+  ansible.builtin.include_tasks:
+    file: "{{ 'unraid.yml' if worker_backend_firewall_unraid.stat.exists else 'systemd.yml' }}"
+    apply:
+      tags: [worker_backend_firewall_install]

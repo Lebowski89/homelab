@@ -1,0 +1,11 @@
+[Unit]
+Description=Reconcile mgt endpoint guards after Docker/Podman and address changes
+
+[Timer]
+OnBootSec=5s
+OnUnitInactiveSec=5s
+AccuracySec=1s
+Unit=skynet-mgt-firewall-reconcile.service
+
+[Install]
+WantedBy=timers.target

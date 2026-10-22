@@ -1,153 +1,152 @@
 ---
-
-################################
-# ASSERTS
-################################
-
-- name: NetBox | Assert required non-secret values are defined
+- name: Netbox | Validate bootstrap inputs
   ansible.builtin.assert:
     that:
-      - netbox_domain is defined
-      - netbox_domain | string | length > 0
-      - netbox_base_path is defined
-      - netbox_base_path | string | length > 0
-      - netbox_swarm_node_hostname is defined
-      - netbox_swarm_node_hostname | string | length > 0
-      - netbox_docker_network is defined
-      - netbox_docker_network | string | length > 0
-    fail_msg: "Required NetBox variable is missing."
+      - netbox_domain is string
+      - netbox_domain | trim | length > 0
+      - local_ip is defined
+      - podman_services_prepare_execution_only | default(false) is boolean
   tags:
     - netbox_bootstrap
     - netbox_deploy
     - netbox_recreate
-
-################################
-# OPTIONAL CLEAN UP
-################################
-
-- name: NetBox | Remove stack
-  community.docker.docker_stack:
-    name: "{{ netbox_stack }}"
-    state: absent
+    - netbox_remove
+- name: Netbox | Select explicit bootstrap operation
+  ansible.builtin.set_fact:
+    netbox_podman_action: >-
+      {{ 'remove' if 'netbox_remove' in ansible_run_tags else ('recreate' if 'netbox_recreate' in ansible_run_tags else
+      'deploy') }}
   tags:
+    - netbox_bootstrap
+    - netbox_deploy
     - netbox_recreate
     - netbox_remove
-
-- name: NetBox | Remove compose file
-  ansible.builtin.file:
-    path: "{{ netbox_compose_path }}"
-    state: absent
-  tags:
-    - netbox_recreate
-    - netbox_remove
-
-################################
-# DIRECTORIES
-################################
-
-- name: NetBox | Create directories
-  ansible.builtin.file:
-    path: "{{ _netbox_dir.path }}"
-    state: directory
-    owner: "{{ _netbox_dir.owner }}"
-    group: "{{ _netbox_dir.group }}"
-    mode: "{{ _netbox_dir.mode }}"
-  loop:
-    - path: "{{ netbox_base_path }}"
-      owner: "{{ netbox_puid }}"
-      group: "{{ netbox_pgid }}"
-      mode: "0755"
-    - path: "{{ netbox_base_path }}/config"
-      owner: "{{ netbox_puid }}"
-      group: "{{ netbox_pgid }}"
-      mode: "0755"
-    - path: "{{ netbox_redis_path }}"
-      owner: "{{ netbox_redis_puid }}"
-      group: "{{ netbox_redis_pgid }}"
-      mode: "0755"
-    - path: "{{ netbox_postgres_path }}"
-      owner: "{{ netbox_postgres_puid }}"
-      group: "{{ netbox_postgres_pgid }}"
-      mode: "0700"
+- name: Netbox | Validate required Vault inputs before mutation
+  when:
+    - not ansible_check_mode
+    - netbox_podman_action != "remove"
+    - not (podman_services_prepare_execution_only | default(false))
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - netbox_podman_input.value is string
+      - netbox_podman_input.value | length > 0
+    fail_msg: Required bootstrap Vault inputs must be nonempty strings.
+  loop: "{{ [] if (podman_services_prepare_execution_only | default(false)) else (netbox_required_docker_secrets | dict2items) }}"
   loop_control:
-    loop_var: _netbox_dir
+    loop_var: netbox_podman_input
   tags:
     - netbox_bootstrap
     - netbox_deploy
     - netbox_recreate
-
-################################
-# SECRETS
-################################
-
-- name: NetBox | Assert Docker secrets values are defined
-  ansible.builtin.assert:
-    that:
-      - item.value is defined
-      - item.value | string | length > 0
-    fail_msg: "NetBox Docker secrets '{{ item.key }}' is empty or undefined."
-  loop: "{{ netbox_docker_secrets | dict2items }}"
+    - netbox_remove
+- name: Netbox | Validate all Quadlet definitions before mutation
+  ansible.builtin.include_role:
+    name: podman_services
+    tasks_from: validate_definitions
+    apply:
+      tags:
+        - netbox_bootstrap
+        - netbox_deploy
+        - netbox_recreate
+        - netbox_remove
+      no_log: true
+      diff: false
+  vars:
+    podman_services_bootstrap_definitions: '{{ netbox_podman_services }}'
   no_log: true
   tags:
     - netbox_bootstrap
     - netbox_deploy
     - netbox_recreate
+    - netbox_remove
+- name: Netbox | Reset this operation's bootstrap prerequisite proofs
+  ansible.builtin.set_fact:
+    netbox_podman_prerequisite_proofs: {}
+  tags: [netbox_bootstrap, netbox_deploy, netbox_recreate, netbox_remove]
 
-- name: NetBox | Ensure Docker Swarm secrets exist
-  community.docker.docker_secret:
-    name: "{{ item.key }}"
-    data: "{{ item.value }}"
-    state: present
-    force: false
-    labels:
-      app: netbox
-      managed_by: ansible
-      role: netbox
-  loop: "{{ netbox_docker_secrets | dict2items }}"
+- name: Netbox | Enforce every bootstrap requirement before stopping or preparing services
+  ansible.builtin.include_tasks:
+    file: requirements.yml
+    apply:
+      tags: [netbox_bootstrap, netbox_deploy, netbox_recreate, netbox_remove]
+  loop: "{{ netbox_podman_services }}"
+  loop_control:
+    loop_var: netbox_podman_requirement
+    label: "{{ netbox_podman_requirement.name }}"
+  tags: [netbox_bootstrap, netbox_deploy, netbox_recreate, netbox_remove]
+
+- name: Netbox | Stop consumers before providers in their persisted managers
+  when:
+    - not ansible_check_mode
+    - netbox_podman_action == "recreate"
+  ansible.builtin.include_role:
+    name: podman_services
+    tasks_from: stop_bootstrap
+    apply:
+      tags: &id001
+        - netbox_recreate
+      no_log: true
+      diff: false
+  vars:
+    podman_services_service_cfg: '{{ netbox_podman_definition }}'
+    podman_services_role_prefix: '{{ netbox_podman_definition.name }}'
+    podman_services_action_remove: true
+    podman_services_common_context:
+      requirements_proof: "{{ netbox_podman_prerequisite_proofs[netbox_podman_definition.name] }}"
+      runtime: podman
+      dispatch_host: '{{ inventory_hostname }}'
+      controller_host: '{{ inventory_hostname }}'
+      lookup_values: {}
+      resolved_environment: {}
+      secret_declarations: []
+  loop: '{{ netbox_podman_services | reverse | list }}'
+  loop_control:
+    loop_var: netbox_podman_definition
   no_log: true
+  tags: *id001
+- name: Netbox | Process bootstrap providers and consumers
+  ansible.builtin.include_tasks:
+    file: service.yml
+    apply:
+      tags:
+        - netbox_bootstrap
+        - netbox_deploy
+        - netbox_recreate
+        - netbox_remove
+      no_log: true
+      diff: false
+  no_log: true
+  loop: >-
+    {{ netbox_podman_services | reverse | list if netbox_podman_action == 'remove' else netbox_podman_services }}
+  loop_control:
+    loop_var: netbox_podman_definition
   tags:
     - netbox_bootstrap
     - netbox_deploy
     - netbox_recreate
-
-################################
-# TRAEFIK
-################################
-
-- name: NetBox | Render Traefik dynamic file
+    - netbox_remove
+- name: Netbox | Render Traefik dynamic file
+  when:
+    - netbox_traefik_enable | bool
+    - netbox_podman_action != "remove"
+    - not (podman_services_prepare_execution_only | default(false))
   ansible.builtin.template:
     src: traefik_dynamic_file.j2
-    dest: "{{ netbox_traefik_dynamic_dir }}/{{ netbox_name }}-dynamic.yml"
-    owner: "{{ netbox_traefik_dynamic_owner }}"
-    group: "{{ netbox_traefik_dynamic_group }}"
-    mode: "0644"
+    dest: '{{ netbox_traefik_dynamic_dir }}/{{ netbox_name }}-dynamic.yml'
+    owner: '{{ netbox_traefik_dynamic_owner }}'
+    group: '{{ netbox_traefik_dynamic_group }}'
+    mode: '0644'
     force: true
   tags:
+    - netbox_bootstrap
     - netbox_deploy
     - netbox_recreate
-
-################################
-# DEPLOY
-################################
-
-- name: NetBox | Render compose file
-  ansible.builtin.template:
-    src: netbox-compose.yml.j2
-    dest: "{{ netbox_compose_path }}"
-    force: true
-    owner: "{{ netbox_puid }}"
-    group: "{{ netbox_pgid }}"
-    mode: "0664"
+- name: Netbox | Retire Traefik route
+  when: netbox_podman_action == "remove"
+  ansible.builtin.file:
+    path: '{{ netbox_traefik_dynamic_dir }}/{{ netbox_name }}-dynamic.yml'
+    state: absent
   tags:
-    - netbox_deploy
-    - netbox_recreate
-
-- name: NetBox | Deploy stack
-  community.docker.docker_stack:
-    state: present
-    name: "{{ netbox_stack }}"
-    compose:
-      - "{{ netbox_compose_path }}"
-  tags:
-    - netbox_deploy
-    - netbox_recreate
+    - netbox_remove

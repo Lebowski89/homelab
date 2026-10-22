@@ -1,0 +1,41 @@
+---
+
+- name: Podman shared network | Validate central network name
+  ansible.builtin.assert:
+    that:
+      - podman_shared_network_name is string
+      - podman_shared_network_name is match('^[A-Za-z0-9][A-Za-z0-9_.-]*$')
+    fail_msg: "The centrally owned rootful bridge requires a valid explicit resource name."
+
+- name: Podman shared network | Configure non-conflicting rootful bridge DNS
+  ansible.builtin.include_tasks: rootful_dns.yml
+
+- name: Podman shared network | Ensure system Quadlet directory
+  ansible.builtin.file:
+    path: /etc/containers/systemd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Podman shared network | Write persistent central bridge
+  ansible.builtin.template:
+    src: shared.network.j2
+    dest: "/etc/containers/systemd/{{ podman_shared_network_name }}.network"
+    owner: root
+    group: root
+    mode: "0644"
+  register: podman_shared_network_quadlet
+
+- name: Podman shared network | Reload system manager
+  when:
+    - not ansible_check_mode
+    - podman_shared_network_quadlet is changed
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Podman shared network | Start central bridge
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: "{{ podman_shared_network_name }}-network.service"
+    state: started

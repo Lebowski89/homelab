@@ -49,6 +49,14 @@ stash:
   ################################
   # FILESYSTEM
   ################################
+  ports:
+    web_backend:
+      published: 22617
+      target: 9999
+      mode: host
+  ################################
+  # FILESYSTEM
+  ################################
   paths:
     - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/stash"
       state: directory
@@ -95,10 +103,15 @@ stash:
   traefik:
     enable: true
     exposure: private
-    port: 9999
+    port: 22617
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
+  operational_requirements:
+    acl: [worker_backends]
+
   deploy:
     type: swarm
     mode: replicated

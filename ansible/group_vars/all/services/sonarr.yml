@@ -25,10 +25,6 @@ sonarr:
     SONARR__POSTGRES__PORT: "5432"
     FILE__SONARR__POSTGRES__USER: /run/secrets/postgres_user_secret
     FILE__SONARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
-    TP_SCHEME: "http"
-    TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
-    TP_HOTIO: "true"
-    TP_THEME: "hotline"
   infisical:
     secrets_map:
       - var: postgres_user
@@ -113,6 +109,11 @@ sonarr:
       ################################
       # FILESYSTEM
       ################################
+      ports:
+        web_backend:
+          published: 22614
+          target: 8989
+          mode: host
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr"
           state: directory
@@ -120,23 +121,11 @@ sonarr:
         - path: "{{ hostvars[services_storage_host].container_host_data_root }}/media/tv"
           state: directory
           mode: "0755"
-      copies:
-        - src: files/themepark/98-themepark-sonarr
-          dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr/98-themepark-sonarr"
-          mode: "0755"
-          force: false
-          wait: true
-          wait_timeout: 30
       volumes:
         config:
           type: bind
           source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr"
           target: /config
-          read_only: false
-        themepark:
-          type: bind
-          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr/98-themepark-sonarr"
-          target: /etc/cont-init.d/98-themepark
           read_only: false
       ################################
       # HEALTH
@@ -148,6 +137,12 @@ sonarr:
       ################################
       # INTEGRATIONS
       ################################
+      traefik:
+        enable: true
+        exposure: private
+        port: 22614
+        backend_mode: host
+        backend_host_inventory: "{{ services_storage_host }}"
       postgres:
         enable: true
         databases:
@@ -156,6 +151,9 @@ sonarr:
     ################################
     # SONARR 2160p SERVICE
     ################################
+      operational_requirements:
+        acl: [worker_backends]
+
     sonarr_4k:
       ################################
       # IDENTITY
@@ -181,6 +179,11 @@ sonarr:
       ################################
       # FILESYSTEM
       ################################
+      ports:
+        web_backend:
+          published: 22615
+          target: 8989
+          mode: host
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr-4k"
           state: directory
@@ -188,23 +191,11 @@ sonarr:
         - path: "{{ hostvars[services_storage_host].container_host_data_root }}/media/tv-4k"
           state: directory
           mode: "0755"
-      copies:
-        - src: files/themepark/98-themepark-sonarr
-          dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr-4k/98-themepark-sonarr"
-          mode: "0755"
-          force: false
-          wait: true
-          wait_timeout: 30
       volumes:
         config:
           type: bind
           source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr-4k"
           target: /config
-          read_only: false
-        themepark:
-          type: bind
-          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/sonarr-4k/98-themepark-sonarr"
-          target: /etc/cont-init.d/98-themepark
           read_only: false
       ################################
       # HEALTH
@@ -216,8 +207,16 @@ sonarr:
       ################################
       # INTEGRATIONS
       ################################
+      traefik:
+        enable: true
+        exposure: private
+        port: 22615
+        backend_mode: host
+        backend_host_inventory: "{{ services_storage_host }}"
       postgres:
         enable: true
         databases:
           - sonarr-4k-main
           - sonarr-4k-log
+      operational_requirements:
+        acl: [worker_backends]

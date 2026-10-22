@@ -1,0 +1,5 @@
+---
+
+# Compatibility for retained imports; no implementation lives in tasks/.
+- name: Forward the retained haproxy-firewall-preflight operation
+  ansible.builtin.import_tasks: "../operations/haproxy-firewall-preflight.yml"

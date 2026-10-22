@@ -51,4 +51,11 @@
     label: "{{ service_common_postgres_database }}"
   delegate_to: "{{ service_common_controller_host }}"
   run_once: true
+  vars:
+    # Remain on the delegated host and retain its interpreter unless explicitly
+    # entering the prepared native operator context. Other modules are unchanged.
+    ansible_python_interpreter: >-
+      {{ service_common_postgres_operator_context | default(false)
+         | service_common_postgres_operator_interpreter(
+             hostvars[service_common_controller_host].ansible_python_interpreter | default('auto')) }}
   tags: [deploy, update, recreate, bootstrap]

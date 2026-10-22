@@ -18,9 +18,6 @@
     container_host_pgid: "1000"
     container_host_appdata_root: /opt
 
-    # Docker Swarm node name, not Ansible inventory name.
-    netbox_swarm_node_hostname: mgt
-
   tasks:
     - name: Include NetBox bootstrap role
       ansible.builtin.include_role:
@@ -288,6 +285,15 @@
     # INFISICAL (STACK)
     ################################
 
+    - name: Include central Podman bridge owner
+      when: inventory_hostname == services_controller_host
+      ansible.builtin.include_role:
+        name: podman
+        tasks_from: shared_network
+        apply:
+          tags: [podman_network]
+      tags: [never, podman_network]
+
     - name: Include Infisical role
       when: inventory_hostname == services_controller_host
       ansible.builtin.include_role:
@@ -549,6 +555,7 @@
 
     - name: Share lightweight service catalog selection with play hosts
       ansible.builtin.set_fact:
+        service_catalog_action: "{{ hostvars[services_controller_host].service_catalog_action }}"
         service_catalog_matched: "{{ hostvars[services_controller_host].service_catalog_matched }}"
         service_catalog_selected: "{{ hostvars[services_controller_host].service_catalog_selected }}"
         service_catalog_disabled_only_selection: >-

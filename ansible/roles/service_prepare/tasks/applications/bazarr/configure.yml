@@ -13,7 +13,10 @@
     service_prepare_bazarr_pgid: >-
       {{ hostvars[service_prepare_context.filesystem_hosts | first].container_host_pgid | default('1000') }}
     service_prepare_bazarr_port: >-
-      {{ service_prepare_context.service.traefik.port | default('6767') | string }}
+      {{
+        (service_prepare_context.service.ports | default({})).get('web_backend', {})
+        .get('target', service_prepare_context.service.traefik.port | default('6767')) | string
+      }}
   run_once: true
 
 - name: Prep - Bazarr | Set secret vars

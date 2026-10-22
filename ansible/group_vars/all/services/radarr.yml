@@ -25,10 +25,6 @@ radarr:
     RADARR__POSTGRES__PORT: "5432"
     FILE__RADARR__POSTGRES__USER: /run/secrets/postgres_user_secret
     FILE__RADARR__POSTGRES__PASSWORD: /run/secrets/postgres_pass_secret
-    TP_SCHEME: "http"
-    TP_DOMAIN: "{{ hostvars[services_controller_host].local_ip }}:8089"
-    TP_HOTIO: "true"
-    TP_THEME: "hotline"
   infisical:
     secrets_map:
       - var: postgres_user
@@ -109,6 +105,11 @@ radarr:
       ################################
       # FILESYSTEM
       ################################
+      ports:
+        web_backend:
+          published: 22610
+          target: 7878
+          mode: host
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr"
           state: directory
@@ -116,23 +117,11 @@ radarr:
         - path: "{{ hostvars[services_storage_host].container_host_data_root }}/media/movies"
           state: directory
           mode: "0755"
-      copies:
-        - src: files/themepark/98-themepark-radarr
-          dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr/98-themepark-radarr"
-          mode: "0755"
-          force: false
-          wait: true
-          wait_timeout: 30
       volumes:
         config:
           type: bind
           source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr"
           target: /config
-          read_only: false
-        themepark:
-          type: bind
-          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr/98-themepark-radarr"
-          target: /etc/cont-init.d/98-themepark
           read_only: false
       ################################
       # HEALTH
@@ -144,6 +133,12 @@ radarr:
       ################################
       # INTEGRATIONS
       ################################
+      traefik:
+        enable: true
+        exposure: private
+        port: 22610
+        backend_mode: host
+        backend_host_inventory: "{{ services_storage_host }}"
       postgres:
         enable: true
         databases:
@@ -152,6 +147,9 @@ radarr:
     ################################
     # RADARR 2160p SERVICE
     ################################
+      operational_requirements:
+        acl: [worker_backends]
+
     radarr_4k:
       ################################
       # IDENTITY
@@ -177,6 +175,11 @@ radarr:
       ################################
       # FILESYSTEM
       ################################
+      ports:
+        web_backend:
+          published: 22611
+          target: 7878
+          mode: host
       paths:
         - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr-4k"
           state: directory
@@ -184,23 +187,11 @@ radarr:
         - path: "{{ hostvars[services_storage_host].container_host_data_root }}/media/movies-4k"
           state: directory
           mode: "0755"
-      copies:
-        - src: files/themepark/98-themepark-radarr
-          dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr-4k/98-themepark-radarr"
-          mode: "0755"
-          force: false
-          wait: true
-          wait_timeout: 30
       volumes:
         config:
           type: bind
           source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr-4k"
           target: /config
-          read_only: false
-        themepark:
-          type: bind
-          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/radarr-4k/98-themepark-radarr"
-          target: /etc/cont-init.d/98-themepark
           read_only: false
       ################################
       # HEALTH
@@ -212,8 +203,16 @@ radarr:
       ################################
       # INTEGRATIONS
       ################################
+      traefik:
+        enable: true
+        exposure: private
+        port: 22611
+        backend_mode: host
+        backend_host_inventory: "{{ services_storage_host }}"
       postgres:
         enable: true
         databases:
           - radarr-4k-main
           - radarr-4k-log
+      operational_requirements:
+        acl: [worker_backends]

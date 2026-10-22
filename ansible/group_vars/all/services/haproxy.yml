@@ -8,22 +8,13 @@ haproxy:
   runtime: docker
   tags: [haproxy]
   name: haproxy
-  stack: haproxy
   ################################
   # IMAGE/PROCESS
   ################################
-  image: haproxy:3.4-alpine
+  image: "docker.io/library/haproxy:3.4-alpine"
   ################################
   # ENVIRONMENT/SECRETS
   ################################
-  swarm_configs:
-    - name: haproxy_cfg
-      src: templates/configs/haproxy.cfg.j2
-      data_is_template: true
-  configs:
-    - source: haproxy_cfg
-      target: /usr/local/etc/haproxy/haproxy.cfg
-      mode: "0444"
   settings:
     haproxy_maxconn: 4096
     haproxy_timeout_connect: 5s
@@ -35,21 +26,106 @@ haproxy:
   ################################
   # CONNECTIVITY
   ################################
-  named_networks:
-    overlay:
-      external: true
-  ports:
-    postgres:
-      published: 5432
-      target: 5432
-      mode: host
+  application_prepare:
+    handler: haproxy
+  targets:
+    workers:
+      tags:
+        - docker-workers
+        - haproxy-workers
+      stack: haproxy
+      swarm_configs:
+        - name: haproxy_cfg
+          src: templates/configs/haproxy.cfg.j2
+          data_is_template: true
+      configs:
+        - source: haproxy_cfg
+          target: /usr/local/etc/haproxy/haproxy.cfg
+          mode: "0444"
+      settings:
+        # Transitional relay while these producers remain on the Docker overlay.
+        haproxy_overlay_metrics_proxy: true
+      named_networks:
+        overlay:
+          external: true
+      ports:
+        postgres:
+          published: 5432
+          target: 5432
+          mode: host
+        metrics:
+          published: 22623
+          target: 8405
+          protocol: tcp
+          mode: host
+      operational_requirements:
+        acl: [worker_backends]
   ################################
   # RUNTIME/LIFECYCLE
   ################################
-  deploy:
-    type: swarm
-    mode: global
-    profile: careful
-    host: "{{ services_controller_host }}"
-    constraints:
-      - node.labels.haproxy == true
+      deploy:
+        type: swarm
+        mode: global
+        profile: careful
+        host:
+          - "{{ services_storage_host }}"
+          - "{{ services_plex_host }}"
+        constraints:
+          - node.labels.haproxy == true
+          - "node.labels.ansible_host != {{ services_controller_host }}"
+    mgt:
+      runtime: podman
+      tags:
+        - mgt-haproxy
+      name: haproxy
+      user: "99:99"
+      named_networks:
+        haproxy:
+          driver: bridge
+          external: false
+      ports:
+        postgres:
+          published: 5432
+          target: 5432
+          host_ip: "{{ local_ip }}"
+        metrics:
+          host_ip: "{{ local_ip }}"
+          published: 18405
+          target: 8405
+          protocol: tcp
+      paths:
+        - path: "{{ hostvars[services_controller_host].container_host_appdata_root }}/haproxy"
+          state: directory
+          mode: "0755"
+      templates:
+        - src: configs/haproxy.cfg.j2
+          dest: "{{ hostvars[services_controller_host].container_host_appdata_root }}/haproxy/haproxy.cfg"
+          mode: "0644"
+          force: true
+      volumes:
+        config:
+          type: bind
+          source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/haproxy"
+          target: /usr/local/etc/haproxy
+          read_only: true
+      no_new_privileges: false
+      operational_requirements:
+        acl: [mgt_backends]
+        ownership_transition: true
+
+      deploy:
+        type: container
+        host: "{{ services_controller_host }}"
+        execution:
+          mode: rootless
+          host_user: podman-haproxy
+          userns:
+            mode: keep-id
+            uid: "99"
+            gid: "99"
+      systemd:
+        restart: always
+        restart_sec: 15s
+        timeout_start_sec: 300s
+        after:
+          - network-online.target

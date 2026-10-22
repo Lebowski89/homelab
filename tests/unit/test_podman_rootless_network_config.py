@@ -1,9 +1,15 @@
 import importlib.util
+import json
+import os
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
 import pytest
+import yaml
 from ansible.errors import AnsibleFilterError
+from ansible_task_cases import task_section
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -53,6 +59,47 @@ def test_rootless_pasta_dropin_renders_valid_toml_with_exact_options():
     assert tomllib.loads(rendered)["network"]["pasta_options"] == config["options"]
 
 
+def test_direct_pasta_dual_stack_renders_private_addresses_without_disabling_ndp():
+    config = podman_services.podman_rootless_pasta_config("10.0.2.0/24", "10.0.2.2", "10.0.2.3", "fd00:2::2/64", "fd00:2::1")
+    rendered = (
+        Environment(loader=FileSystemLoader(ROLE_ROOT / "templates"), undefined=StrictUndefined)
+        .get_template("rootless-network.conf.j2")
+        .render(podman_services_rootless_pasta_config=config)
+    )
+    options = tomllib.loads(rendered)["network"]["pasta_options"]
+    addresses = [options[i + 1] for i, value in enumerate(options) if value == "-a"]
+    assert addresses == [config["address"], config["ipv6_address"]]
+    assert config["ipv6_subnet"] == "fd00:2::/64"
+    assert "--no-ra" in options and "--no-dhcpv6" in options
+    assert "--no-ndp" not in options and "--ipv4-only" not in options
+    # Rendering a later ordinary service cannot inherit the ingress profile.
+    ordinary = podman_services.podman_rootless_pasta_config("10.0.2.0/24", "10.0.2.2", "10.0.2.3")
+    assert "ipv6_subnet" not in ordinary and "--ipv4-only" in ordinary["options"]
+
+
+@pytest.mark.parametrize(
+    ("address", "gateway"),
+    [
+        ("fd00:2::2/64", None),
+        (False, "fd00:2::1"),
+        ("2001:db8::2/64", "2001:db8::1"),
+        ("fd00:2::2/128", "fd00:2::1"),
+        ("fd00:2::2/64", "fd00:3::1"),
+        ("fd00:2::/64", "fd00:2::1"),
+        ("fd00:2::2/64", "fd00:2::2"),
+    ],
+)
+def test_direct_pasta_rejects_incomplete_public_or_incoherent_ipv6(address, gateway):
+    with pytest.raises(AnsibleFilterError, match="IPv6"):
+        podman_services.podman_rootless_pasta_config("10.0.2.0/24", "10.0.2.2", "10.0.2.3", address, gateway)
+
+
+def test_pasta_ipv6_route_overlap_rejects_real_conflicts_and_ignores_defaults():
+    routes = [{"dst": "::/0"}, {"dst": "fd7a:115c:a1e0::/48"}, {"dst": "fe80::/64"}, {"dst": "192.0.2.0/24"}]
+    assert podman_services.podman_rootless_pasta_route_overlaps(routes, "fd00:2::/64") == []
+    assert podman_services.podman_rootless_pasta_route_overlaps([*routes, {"dst": "fd00::/8"}], "fd00:2::/64") == ["fd00::/8"]
+
+
 @pytest.mark.parametrize(
     ("subnet", "gateway", "dns_forward", "message"),
     [
@@ -96,5 +143,110 @@ def test_rootless_pasta_route_overlap_rejects_direct_or_reachable_conflicts(dest
 
 @pytest.mark.parametrize("routes", ["invalid", {}, [{"dst": "not-a-route"}], ["not-a-mapping"]])
 def test_rootless_pasta_route_overlap_fails_closed_on_invalid_route_data(routes):
-    with pytest.raises(AnsibleFilterError, match="Host IPv4 route"):
+    with pytest.raises(AnsibleFilterError, match="Host route"):
         podman_services.podman_rootless_pasta_route_overlaps(routes, "10.0.2.0/24")
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("case", ["clear", "conflict", "invalid", "check", "no-ipv6"])
+def test_actual_ipv6_route_tasks_reject_conflicts_before_account_work(tmp_path, case):
+    tasks = yaml.safe_load((ROLE_ROOT / "tasks/sub_tasks/execution.yml").read_text())
+    # Account preparation is outside this local route-validation fixture.
+    route_tasks = task_section(
+        tasks,
+        lambda task: "podman_services_rootless_host_ipv6_route_overlaps" in task.get("ansible.builtin.set_fact", {}),
+        lambda task: (
+            "podman_services_rootless_host_ipv6_route_overlaps | length == 0" in task.get("ansible.builtin.assert", {}).get("that", [])
+        ),
+        purpose="IPv6 conflict validation before account preparation",
+    )
+    # Invalid data in skipped cases proves that the original guards still avoid
+    # reading live route results during planning or without IPv6 configuration.
+    routes = json.dumps([{"dst": "fd00::/8" if case == "conflict" else "fd7a:115c:a1e0::/48"}])
+    if case in {"invalid", "check", "no-ipv6"}:
+        routes = "not JSON"
+    variables = {
+        "podman_services_execution": {"mode": "rootless"},
+        "podman_services_common_action": "deploy",
+        "podman_services_rootless_pasta_config": {} if case == "no-ipv6" else {"ipv6_subnet": "fd00:2::/64"},
+        "podman_services_rootless_host_ipv6_routes": {"stdout": routes},
+    }
+    play = [
+        {
+            "name": "Offline IPv6 prerequisite fixture",
+            "hosts": "localhost",
+            "gather_facts": False,
+            "vars": variables,
+            "tasks": [*route_tasks, {"name": "Account work boundary", "ansible.builtin.debug": {"msg": "ACCOUNT_BOUNDARY_REACHED"}}],
+        }
+    ]
+    (tmp_path / "play.yml").write_text(yaml.safe_dump(play))
+    config = tmp_path / "ansible.cfg"
+    config.write_text(
+        f"[defaults]\nfilter_plugins={ROLE_ROOT}/filter_plugins\nvars_plugins_enabled=\n[inventory]\nenable_plugins=host_list\n"
+    )
+    result = subprocess.run(
+        [str(Path(sys.executable).parent / "ansible-playbook"), "-i", "localhost,", "-c", "local", str(tmp_path / "play.yml")]
+        + (["--check"] if case == "check" else []),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ, "ANSIBLE_CONFIG": str(config)},
+    )
+    output = result.stdout + result.stderr
+    if case in {"conflict", "invalid"}:
+        assert result.returncode != 0, output
+        assert "ACCOUNT_BOUNDARY_REACHED" not in output
+        assert ("overlaps host IPv6 routes" if case == "conflict" else "from_json") in output
+    else:
+        assert result.returncode == 0 and "ACCOUNT_BOUNDARY_REACHED" in output, output
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("check", [False, True])
+def test_network_change_entry_point_retains_the_existing_network(tmp_path, check):
+    # Run the entire supported task entry point. A connection that cannot execute
+    # anything proves this planning/reporting step does not contact a runtime.
+    connections = tmp_path / "connections"
+    connections.mkdir()
+    (connections / "no_runtime.py").write_text(
+        "from ansible.plugins.connection.local import Connection as LocalConnection\n"
+        "class Connection(LocalConnection):\n"
+        "    transport = 'no_runtime'\n"
+        "    def exec_command(self, *args, **kwargs):\n"
+        "        raise AssertionError('Network update must not execute runtime or host commands')\n"
+    )
+    play = [
+        {
+            "name": "Offline network retention",
+            "hosts": "localhost",
+            "gather_facts": False,
+            "vars": {
+                "podman_services_state": "{{ network_case.action }}",
+                "podman_services_service": {"network": {"external": False}},
+                "podman_services_network_quadlet": {"changed": "{{ network_case.changed }}"},
+            },
+            "tasks": [
+                {
+                    "name": "Exercise the network-change entry point",
+                    "ansible.builtin.include_tasks": str(ROLE_ROOT / "tasks/sub_tasks/network_changes.yml"),
+                    "loop": [{"action": action, "changed": changed} for action in ("update", "recreate") for changed in (False, True)],
+                    "loop_control": {"loop_var": "network_case"},
+                }
+            ],
+        }
+    ]
+    (tmp_path / "play.yml").write_text(yaml.safe_dump(play))
+    config = tmp_path / "ansible.cfg"
+    config.write_text(f"[defaults]\nconnection_plugins={connections}\nvars_plugins_enabled=\n[inventory]\nenable_plugins=host_list\n")
+    result = subprocess.run(
+        [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", "-c", "no_runtime", str(tmp_path / "play.yml")]
+        + (["--check"] if check else []),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ, "ANSIBLE_CONFIG": str(config)},
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode == 0 and "changed=0" in output, output
+    assert output.count("existing network is retained") == 2, output

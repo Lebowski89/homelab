@@ -1,183 +1,150 @@
 ---
-
-################################
-# ASSERTS
-################################
-
-- name: Infisical | Assert required non-secret values are defined
+- name: Infisical | Validate bootstrap inputs
   ansible.builtin.assert:
     that:
+      - local_ip is defined
       - services_internal_zone is string
-      - services_internal_zone | trim | length > 0
-      - services_private_https_port | int >= 1
-      - services_private_https_port | int <= 65535
-      - infisical_base_path is defined
-      - infisical_base_path | string | length > 0
-      - infisical_docker_network is defined
-      - infisical_docker_network | string | length > 0
-    fail_msg: "Required infisical variable is missing."
   tags:
     - infisical_bootstrap
     - infisical_deploy
     - infisical_recreate
-
-################################
-# OPTIONAL CLEAN UP
-################################
-
-- name: Infisical | Check if compose file exists
-  ansible.builtin.stat:
-    path: "{{ infisical_compose_path }}"
-  register: infisical_existing_compose_yaml
-  tags:
-    - infisical_recreate
     - infisical_remove
-
-- name: Infisical | Compose down
-  when: infisical_existing_compose_yaml.stat.exists
-  community.docker.docker_compose_v2:
-    project_src: "{{ infisical_base_path }}"
-    project_name: "{{ infisical_stack }}"
-    files: "{{ infisical_compose_file }}"
-    state: absent
-  tags:
-    - infisical_recreate
-    - infisical_remove
-
-- name: Infisical | Remove compose file
-  ansible.builtin.file:
-    path: "{{ infisical_compose_path }}"
-    state: absent
-  tags:
-    - infisical_recreate
-    - infisical_remove
-
-################################
-# DIRECTORIES
-################################
-
-- name: Infisical | Create directories
-  ansible.builtin.file:
-    path: "{{ _infisical_dir.path }}"
-    state: directory
-    owner: "{{ _infisical_dir.owner }}"
-    group: "{{ _infisical_dir.group }}"
-    mode: "{{ _infisical_dir.mode }}"
-  loop:
-    - path: "{{ infisical_base_path }}"
-      owner: "{{ infisical_puid }}"
-      group: "{{ infisical_pgid }}"
-      mode: "0755"
-    - path: "{{ infisical_redis_path }}"
-      owner: "{{ infisical_redis_puid }}"
-      group: "{{ infisical_redis_pgid }}"
-      mode: "0755"
-  loop_control:
-    loop_var: _infisical_dir
+- name: Infisical | Select explicit bootstrap operation
+  ansible.builtin.set_fact:
+    infisical_podman_action: >-
+      {{ 'remove' if 'infisical_remove' in ansible_run_tags else ('recreate' if 'infisical_recreate' in ansible_run_tags
+      else 'deploy') }}
   tags:
     - infisical_bootstrap
     - infisical_deploy
     - infisical_recreate
-
-################################
-# CONFIG
-################################
-
-- name: Infisical | Template env file
-  ansible.builtin.template:
-    src: infisical.env.j2
-    dest: "{{ infisical_env_path }}"
-    force: true
-    owner: root
-    group: root
-    mode: "0600"
+    - infisical_remove
+- name: Infisical | Validate required Vault inputs before mutation
+  when:
+    - not ansible_check_mode
+    - infisical_podman_action != "remove"
   no_log: true
-  tags:
-    - infisical_bootstrap
-    - infisical_deploy
-    - infisical_recreate
-
-################################
-# SECRETS
-################################
-
-- name: Infisical | Assert Docker secrets values are defined
+  diff: false
   ansible.builtin.assert:
     that:
-      - item.value is defined
-      - item.value | string | length > 0
-    fail_msg: "Infisical Docker secret '{{ item.key }}' is empty or undefined."
-  loop: "{{ infisical_redis_docker_secrets | dict2items }}"
+      - infisical_enc_key is string and infisical_enc_key | length > 0
+      - infisical_jwt_key is string and infisical_jwt_key | length > 0
+      - infisical_postgres_user is string and infisical_postgres_user | length > 0
+      - infisical_postgres_pass is string and infisical_postgres_pass | length > 0
+      - infisical_redis_password is string and infisical_redis_password | length > 0
+    fail_msg: Required bootstrap Vault inputs must be nonempty.
+  tags:
+    - infisical_bootstrap
+    - infisical_deploy
+    - infisical_recreate
+    - infisical_remove
+- name: Infisical | Validate all Quadlet definitions before mutation
+  ansible.builtin.include_role:
+    name: podman_services
+    tasks_from: validate_definitions
+    apply:
+      tags:
+        - infisical_bootstrap
+        - infisical_deploy
+        - infisical_recreate
+        - infisical_remove
+      no_log: true
+      diff: false
+  vars:
+    podman_services_bootstrap_definitions: '{{ infisical_podman_services }}'
   no_log: true
   tags:
     - infisical_bootstrap
     - infisical_deploy
     - infisical_recreate
+    - infisical_remove
+- name: Infisical | Reset this operation's bootstrap prerequisite proofs
+  ansible.builtin.set_fact:
+    infisical_podman_prerequisite_proofs: {}
+  tags: [infisical_bootstrap, infisical_deploy, infisical_recreate, infisical_remove]
 
-- name: Infisical | Create Docker secrets directory
-  ansible.builtin.file:
-    path: "{{ infisical_redis_secrets_files_path }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0700"
-  tags:
-    - infisical_bootstrap
-    - infisical_deploy
-    - infisical_recreate
+- name: Infisical | Enforce every bootstrap requirement before stopping or preparing services
+  ansible.builtin.include_tasks:
+    file: requirements.yml
+    apply:
+      tags: [infisical_bootstrap, infisical_deploy, infisical_recreate, infisical_remove]
+  loop: "{{ infisical_podman_services }}"
+  loop_control:
+    loop_var: infisical_podman_requirement
+    label: "{{ infisical_podman_requirement.name }}"
+  tags: [infisical_bootstrap, infisical_deploy, infisical_recreate, infisical_remove]
 
-- name: Infisical | Create Docker secrets files
-  ansible.builtin.copy:
-    dest: "{{ infisical_redis_secrets_files_path }}/{{ item.key }}"
-    content: "{{ item.value }}\n"
-    owner: root
-    group: root
-    mode: "0600"
-  loop: "{{ infisical_redis_docker_secrets | dict2items }}"
+- name: Infisical | Stop consumers before providers in their persisted managers
+  when:
+    - not ansible_check_mode
+    - infisical_podman_action == "recreate"
+  ansible.builtin.include_role:
+    name: podman_services
+    tasks_from: stop_bootstrap
+    apply:
+      tags: &id001
+        - infisical_recreate
+      no_log: true
+      diff: false
+  vars:
+    podman_services_service_cfg: '{{ infisical_podman_definition }}'
+    podman_services_role_prefix: '{{ infisical_podman_definition.name }}'
+    podman_services_action_remove: true
+    podman_services_common_context:
+      requirements_proof: "{{ infisical_podman_prerequisite_proofs[infisical_podman_definition.name] }}"
+      runtime: podman
+      dispatch_host: '{{ inventory_hostname }}'
+      controller_host: '{{ inventory_hostname }}'
+      lookup_values: {}
+      resolved_environment: {}
+      secret_declarations: []
+  loop: '{{ infisical_podman_services | reverse | list }}'
+  loop_control:
+    loop_var: infisical_podman_definition
   no_log: true
+  tags: *id001
+- name: Infisical | Process bootstrap providers and consumers
+  ansible.builtin.include_tasks:
+    file: service.yml
+    apply:
+      tags:
+        - infisical_bootstrap
+        - infisical_deploy
+        - infisical_recreate
+        - infisical_remove
+      no_log: true
+      diff: false
+  no_log: true
+  loop: >-
+    {{ infisical_podman_services | reverse | list if infisical_podman_action == 'remove' else infisical_podman_services
+    }}
+  loop_control:
+    loop_var: infisical_podman_definition
   tags:
     - infisical_bootstrap
     - infisical_deploy
     - infisical_recreate
-
-################################
-# TRAEFIK
-################################
-
+    - infisical_remove
 - name: Infisical | Render Traefik dynamic file
-  when: infisical_traefik_enable | bool
+  when:
+    - infisical_traefik_enable | bool
+    - infisical_podman_action != "remove"
+    - not (podman_services_prepare_execution_only | default(false))
   ansible.builtin.template:
     src: traefik_dynamic_file.j2
-    dest: "{{ infisical_traefik_dynamic_dir }}/{{ infisical_name }}-dynamic.yml"
-    owner: "{{ infisical_traefik_dynamic_owner }}"
-    group: "{{ infisical_traefik_dynamic_group }}"
-    mode: "0644"
+    dest: '{{ infisical_traefik_dynamic_dir }}/{{ infisical_name }}-dynamic.yml'
+    owner: '{{ infisical_traefik_dynamic_owner }}'
+    group: '{{ infisical_traefik_dynamic_group }}'
+    mode: '0644'
     force: true
   tags:
+    - infisical_bootstrap
     - infisical_deploy
     - infisical_recreate
-
-################################
-# DEPLOY
-################################
-
-- name: Infisical | Import compose file
-  ansible.builtin.template:
-    src: infisical-compose.yml.j2
-    dest: "{{ infisical_compose_path }}"
-    force: true
-    owner: "{{ infisical_puid }}"
-    group: "{{ infisical_pgid }}"
-    mode: "0664"
+- name: Infisical | Retire Traefik route
+  when: infisical_podman_action == "remove"
+  ansible.builtin.file:
+    path: '{{ infisical_traefik_dynamic_dir }}/{{ infisical_name }}-dynamic.yml'
+    state: absent
   tags:
-    - infisical_deploy
-    - infisical_recreate
-
-- name: Infisical | Compose stack up
-  community.docker.docker_compose_v2:
-    project_src: "{{ infisical_base_path }}"
-    files: "{{ infisical_compose_file }}"
-    state: present
-  tags:
-    - infisical_deploy
-    - infisical_recreate
+    - infisical_remove
