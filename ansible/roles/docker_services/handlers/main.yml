@@ -1,8 +1,0 @@
----
-
-# Compatibility for retained older task/rollback imports. Current scrape updates
-# reload directly inside their recovery boundary, without flushing handlers.
-- name: Docker services | Reload the exact Swarm Prometheus caller
-  ansible.builtin.command:
-    argv: [docker, --host, 'unix:///var/run/docker.sock', kill, --signal, HUP, '{{ docker_services_prometheus_scrape_ids.stdout }}']
-  changed_when: true

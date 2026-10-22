@@ -210,10 +210,6 @@ elif command == "docker":
             mount = {"type": "bind", "source": "/", "destination": "/host/rootfs", "rw": False}
             if scenario == "mount-writable-root":
                 mount["rw"] = True
-            elif scenario == "mount-missing-rw":
-                del mount["rw"]
-            elif scenario == "mount-direct-config":
-                mount["source"] = str(root / "apps/haproxy/haproxy.cfg")
             output(
                 {
                     "id": "a" * 64,

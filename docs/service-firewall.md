@@ -297,13 +297,12 @@ Compatibility remains intentionally narrow:
   directories, `policy.py` destinations, chain/comment names, drop-ins and systemd
   units are unchanged. Reorganisation alone needs no reinstall or migration replay.
 - Completed Swarm-only Loki ruler and Prometheus Alertmanager/HAProxy/Scraparr
-  configuration workflows are removed from normal operation selection. Their
-  exact pre-removal source/tests are in the existing private review archive under
-  `/opt/ansible/migration/mgt-completed-20261019-kibomgve/firewall-layout.2e7sqdij`.
-  Old tags now fail explicitly. Docker adapter handlers/filters and behavioral
-  regressions remain as compatibility code: saved external rollback references
-  cannot all be established offline. They are not the update path for rootless
-  Loki/Prometheus. Change canonical configuration and use its runtime adapter.
+  configuration-patching workflows are retired. Their old tags still fail
+  explicitly; direct task imports and the old patch filters/reload handler are
+  no longer supported. The existing private review archive under
+  `/opt/ansible/migration/mgt-completed-20261019-kibomgve/firewall-layout.2e7sqdij`
+  and all private rollback material remain untouched. No retained repository
+  caller or rollback import depends on these retired implementations.
 
 Saved self-contained installed helpers and accepted rollback snapshots remain
 untouched. Very old external scripts that build helpers by concatenating raw
@@ -311,13 +310,20 @@ source instead of using the bundler may need review; path aliases preserve
 imports, not an undocumented source-concatenation interface. No live cleanup is
 implied. Docsible owns generated role READMEs; this guide is human-maintained.
 
-The retained Docker Prometheus HAProxy scrape task reloads directly inside its
-recovery block rather than using a handler flush. It verifies the original
-container/PID/mount before writes and signals, and retains the invocation's
-configuration backup. On failure it restores only a verified baseline when the
-current file still matches its written candidate, including file identity,
-ownership and mode. Concurrent edits or runtime replacement stop recovery;
-failed recovery retains the private candidate and backup paths for inspection.
-A restored baseline is reloaded and compared with the original loaded
-configuration, and the operation still returns failure. Check mode writes and
-signals nothing. This compatibility task does not authorise a new rollout.
+Retired Docker role paths:
+
+- `tasks/sub_tasks/loki_alertmanager_route.yml`
+- `tasks/sub_tasks/prometheus_alertmanager_routes.yml` (also handled Scraparr)
+- `tasks/sub_tasks/prometheus_haproxy_scrape.yml` and its
+  `prometheus_haproxy_identity.yml` include
+- `filter_plugins/docker_services_alertmanager_routes.py`
+- `files/prometheus_scrape_restore.py`
+- The sole obsolete Swarm Prometheus SIGHUP handler in `handlers/main.yml`
+
+For supported changes, edit canonical templates under
+`roles/service_common/templates/configs/` and use `skynet update prometheus` or
+`skynet update loki` through the selected runtime adapter. Preserve both HAProxy
+scrape instances and their labels. The shared scrape fragments and normal
+Docker/Swarm deployment remain supported; there is no separate live-file
+patch/reload operation. Recovery uses the matching retained batch backup and
+scoped rollback, not these removed configuration-patching tasks.

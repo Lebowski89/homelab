@@ -69,21 +69,6 @@ def payload_body(binary, payload, data):
 
 
 @pytest.mark.integration
-def test_captured_mapping_reproduces_object_title(go_renderer):
-    legacy = {
-        "title": '{{ if eq .Status "firing" }}FIRING{{ else }}RESOLVED{{ end }}: {{ .CommonLabels.alertname }}',
-        "message": '{{ range .Alerts }}{{ .Annotations.summary }}{{ "\\n" }}{{ end }}',
-        "priority": 8,
-    }
-    body = payload_body(
-        go_renderer,
-        legacy,
-        {"Status": "firing", "CommonLabels": {"alertname": "Probe"}, "Alerts": [{"Annotations": {"summary": "Controlled notification"}}]},
-    )
-    assert body["title"] == {"FIRING": "Probe"}  # Gotify's string title cannot decode this object.
-
-
-@pytest.mark.integration
 @pytest.mark.parametrize("status", ["firing", "resolved"])
 @pytest.mark.parametrize("summary", ["Controlled notification", 'Error: value "quoted"\\path\nsecond line', "true", "null", "[x]", "☃"])
 def test_current_payload_preserves_gotify_strings(go_renderer, status, summary):

@@ -2,8 +2,10 @@
 
 import importlib.util
 import os
+import re
 import subprocess
 import time
+from fnmatch import fnmatchcase
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -74,7 +76,15 @@ def test_retry_clock_only_shortens_synthetic_backoffs(tmp_path, monkeypatch):
 @pytest.mark.integration
 @pytest.mark.parametrize(
     "quality,tests",
-    [("success", "success"), ("failure", "success"), ("success", "failure"), ("success", "cancelled"), ("skipped", "success")],
+    [
+        ("success", "success"),
+        ("failure", "success"),
+        ("cancelled", "success"),
+        ("skipped", "success"),
+        ("success", "failure"),
+        ("success", "cancelled"),
+        ("success", "skipped"),
+    ],
 )
 def test_existing_required_lint_gate_propagates_all_group_failures(quality, tests):
     workflow = yaml.safe_load((ROOT / ".github/workflows/lint.yml").read_text())
@@ -90,3 +100,49 @@ def test_existing_required_lint_gate_propagates_all_group_failures(quality, test
         text=True,
     )
     assert (result.returncode == 0) is (quality == tests == "success")
+
+
+def test_workflow_filters_feature_pushes_but_keeps_pr_updates_and_main_validation():
+    # BaseLoader preserves the GitHub YAML key "on" rather than YAML 1.1's boolean.
+    workflow = yaml.load((ROOT / ".github/workflows/lint.yml").read_text(), Loader=yaml.BaseLoader)
+    triggers = workflow["on"]
+    assert set(triggers) == {"push", "pull_request"}
+    assert triggers["push"]["branches"] == ["main"]
+    assert set(triggers["pull_request"]) == {"paths"}  # Includes synchronize/reopened by default.
+    assert triggers["push"]["paths"] == triggers["pull_request"]["paths"]
+    for event, branch, path, expected in [
+        ("push", "feat/mgt-podman-migration", "ansible/playbook.yml", False),
+        ("pull_request", "feat/mgt-podman-migration", "ansible/playbook.yml", True),
+        ("push", "main", "ansible/playbook.yml", True),
+        ("pull_request", "other-feature", "tests/unit/test_test_execution.py", True),
+        ("pull_request", "other-feature", ".github/workflows/lint.yml", True),
+        ("push", "main", "unrelated.txt", False),
+    ]:
+        trigger = triggers[event]
+        selected = ("branches" not in trigger or branch in trigger["branches"]) and any(
+            fnmatchcase(path, pattern) for pattern in trigger["paths"]
+        )
+        assert selected is expected, (event, branch, path)
+
+
+def test_superseded_runs_share_a_concurrency_group_without_cancelling_other_prs():
+    workflow = yaml.safe_load((ROOT / ".github/workflows/lint.yml").read_text())
+    concurrency = workflow["concurrency"]
+    assert concurrency["cancel-in-progress"] is True
+
+    def group(ref, pr=None, name=workflow["name"], sha="first-revision"):
+        values = {"github.workflow": name, "github.event.pull_request.number": pr, "github.ref": ref, "github.sha": sha}
+
+        # Evaluate only the dotted-context fallback expressions used by this key;
+        # unknown contexts fail instead of silently modelling them incorrectly.
+        def expand(match):
+            return next(str(values[key.strip()]) for key in match[1].split("||") if values[key.strip()])
+
+        return re.sub(r"\$\{\{(.*?)\}\}", expand, concurrency["group"])
+
+    assert group("refs/pull/680/merge", 680) == group("refs/pull/680/head", 680)
+    assert group("refs/pull/680/merge", 680) != group("refs/pull/681/merge", 681)
+    assert group("refs/heads/main") == group("refs/heads/main", sha="next-revision")
+    assert group("refs/heads/main") != group("refs/heads/feature")
+    assert group("refs/heads/main") != group("refs/pull/680/merge", 680)
+    assert group("refs/pull/680/merge", 680) != group("refs/pull/680/merge", 680, "Other workflow")

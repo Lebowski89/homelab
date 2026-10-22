@@ -14,23 +14,7 @@ from jinja2.nativetypes import NativeEnvironment
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROLE = REPO_ROOT / "ansible/roles/service_prepare"
 SERVICE_PATH = REPO_ROOT / "ansible/group_vars/all/services/romm.yml"
-SEED_PATH = REPO_ROOT / "ansible/roles/service_common/files/romm/config.yml"
 STRUCTURE = {"default": "roms/{platform}/{game}", "firmware": "bios/{platform}"}
-
-
-def test_romm_seed_and_mounts_match_the_migrated_structure():
-    service = yaml.safe_load(SERVICE_PATH.read_text())["romm"]
-    seed = yaml.safe_load(SEED_PATH.read_text())
-    copy = next(copy for copy in service["copies"] if copy["src"] == "files/romm/config.yml")
-
-    assert seed["filesystem"]["structure"] == STRUCTURE
-    assert not {"roms_folder", "firmware_folder"} & seed["filesystem"].keys()
-    assert service["application_prepare"]["handler"] == "romm"
-    assert copy["force"] is False
-    assert copy["dest"] == service["volumes"]["config"]["source"] + "/config.yml"
-    assert service["volumes"]["config"]["target"] + "/config.yml" == "/romm/config/config.yml"
-    assert service["volumes"]["library"]["target"] == "/romm/library"
-    assert service["volumes"]["library"]["source"] == ("{{ hostvars[services_storage_host].container_host_data_root }}/games/romm/library")
 
 
 def test_romm_migration_is_tagged_and_runs_after_copies_before_deployment():

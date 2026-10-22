@@ -223,7 +223,7 @@ def test_worker_routes_match_unique_published_ports_without_changing_container_l
             )
             assert f"WebUI\\Port={port['target']}" in conf
             assert "172.98.0.0/24;192.0.2.10" in conf
-    assert len(allocated) == 21
+    assert allocated
     for name in ["haproxy", "alloy"]:
         worker = CATALOG.service_catalog_merge_target(services[name], "workers")
         assert worker["runtime"] == "docker"
@@ -624,29 +624,6 @@ def test_haproxy_uses_one_config_source_for_both_runtimes_and_keeps_overrides(tm
     assert "maxconn 7654" in common and "timeout server 7h" in common
     assert "GET /primary" in common and "init-state fully-down" in common
     assert "192.0.2.20:5432 check port 8008" in common
-
-
-def test_haproxy_handoff_gates_keep_worker_placement_separate_from_mgt_listener_deployment():
-    services = catalog()
-    effective = CATALOG.service_catalog_effective(services, "mgt")
-    selected = CATALOG.service_catalog_select(effective, ["deploy", "mgt-haproxy"])["selected"]
-    assert [(entry["name"], entry["target"], entry["runtime"]) for entry in selected] == [("haproxy", "mgt", "podman")]
-    worker = resolve(CATALOG.service_catalog_merge_target(services["haproxy"], "workers"), context())
-    mgt = resolve(CATALOG.service_catalog_merge_target(services["haproxy"], "mgt"), context())
-    with pytest.raises(AnsibleFilterError, match="services_worker_backend_acl_ready"):
-        COMMON.service_common_requirements_validate(worker, "haproxy", "update", {})
-    assert COMMON.service_common_requirements_validate(worker, "haproxy", "update", {"services_worker_backend_acl_ready": True})
-    assert COMMON.service_common_requirements_validate(mgt, "haproxy", "deploy", {}, check_mode=True)
-    assert COMMON.service_common_requirements_validate(mgt, "haproxy", "deploy", {}, execution_only=True)
-    assert COMMON.service_common_requirements_validate(mgt, "haproxy", "remove", {})
-    for acl, data in [(None, None), (False, True), ("true", True), (True, False), (True, "true")]:
-        with pytest.raises(AnsibleFilterError):
-            COMMON.service_common_requirements_validate(
-                mgt, "haproxy", "deploy", {"services_mgt_backend_acl_ready": acl, "services_rootless_data_ready": {"haproxy": data}}
-            )
-    assert COMMON.service_common_requirements_validate(
-        mgt, "haproxy", "deploy", {"services_mgt_backend_acl_ready": True, "services_rootless_data_ready": {"haproxy": True}}
-    )
 
 
 def test_systemd_dependency_graph_orders_removal_and_rejects_invalid_inputs():

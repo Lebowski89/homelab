@@ -4,6 +4,7 @@ name: Lint (Ansible + YAML + Python)
 
 on:
   push:
+    branches: [main]
     paths:
       - "ansible/**"
       - "scripts/ci/**"
@@ -17,6 +18,10 @@ on:
       - "tests/**"
       - "pyproject.toml"
       - ".github/workflows/lint.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
