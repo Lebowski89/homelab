@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 import pytest
 import yaml
+from ansible_task_cases import walk_tasks
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("preflight_fixture", ROOT / "tests/unit/test_service_firewall_lifecycle.py")
@@ -169,7 +170,15 @@ class LookupModule(LookupBase):
     # Keep the actual adapter's ownership handoff and rescue. Replace its
     # application/runtime boundary with an inert finish or initialization error.
     adapter = yaml.safe_load((ROOT / "ansible/roles/podman_services/tasks/main.yml").read_text())
-    adapter[1]["block"] = [
+    preparation = next(
+        task
+        for task in walk_tasks(adapter)
+        if any(
+            child.get("ansible.builtin.include_role", {}).get("tasks_from") == "access_cancel"
+            for child in walk_tasks(task.get("rescue", []))
+        )
+    )
+    preparation["block"] = [
         {
             "name": "NONPRODUCTION adapter initialization",
             "when": "fixture_mode == 'adapter-init'",

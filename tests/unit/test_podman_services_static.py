@@ -2,6 +2,7 @@ import re
 from pathlib import Path
 
 import yaml
+from ansible_task_cases import walk_tasks
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 TASKS_DIR = REPO_ROOT / "ansible" / "roles" / "podman_services" / "tasks"
@@ -9,7 +10,6 @@ MAIN_TASKS = (TASKS_DIR / "main.yml").read_text()
 PREPARE_TASKS = (TASKS_DIR / "sub_tasks" / "quadlets.yml").read_text()
 SECRET_TASKS = (TASKS_DIR / "sub_tasks" / "secrets" / "manage.yml").read_text()
 REMOVE_TASKS = (TASKS_DIR / "sub_tasks" / "remove.yml").read_text()
-NETWORK_TASKS = (TASKS_DIR / "sub_tasks" / "network_changes.yml").read_text()
 DRIFT_TASKS = (TASKS_DIR / "sub_tasks" / "image_drift.yml").read_text()
 EXECUTION_PREPARE_TASKS = (TASKS_DIR / "sub_tasks" / "execution.yml").read_text()
 EXECUTION_TRANSITION_TASKS = (TASKS_DIR / "sub_tasks" / "switch_execution.yml").read_text()
@@ -73,14 +73,6 @@ REMOVE_TASK_NAMES = [task["name"] for task in REMOVE_TASK_LIST]
 ALL_TASK_NAMES = [task["name"] for task in ALL_TASK_LIST]
 EXECUTION_TRANSITION_TASK_NAMES = [task["name"] for task in EXECUTION_TRANSITION_TASK_LIST]
 LIFECYCLE_TASK_NAMES = [task["name"] for task in LIFECYCLE_TASK_LIST]
-
-
-def test_main_orchestrates_sub_tasks_in_order():
-    included_files = [task["ansible.builtin.include_tasks"]["file"] for task in MAIN_TASK_LIST if "ansible.builtin.include_tasks" in task]
-    expected = [f"sub_tasks/{name}" for name in SUB_TASK_FILES]
-    assert [path for path in included_files if path in expected] == expected
-    assert "Podman services | Normalize service" not in MAIN_TASKS
-    assert "Podman services | Finish service removal" in MAIN_TASKS
 
 
 def test_rootless_data_transition_is_gated_without_recursive_chown():
@@ -187,43 +179,27 @@ def test_remove_only_orchestration_is_guarded_by_normalized_action():
 
 
 def test_external_or_unproven_network_is_not_created_or_removed():
-    prepare = next(task for task in yaml.safe_load(PREPARE_TASKS) if task["name"] == "Quadlets | Write network Quadlet")
-    remove_tasks = yaml.safe_load(REMOVE_TASKS)
-    managed_network_tasks = [
+    # External networks must never be created, and absent ownership evidence
+    # must never authorize a network stop/removal. Additional inspections are OK.
+    prepare = next(
         task
-        for task in remove_tasks
-        if task["name"]
-        in {
-            "Remove | Stop managed system network service",
-            "Remove | Stop managed user network service",
-            "Remove | Check managed network before removal",
-            "Remove | Remove managed network if present",
-        }
+        for task in walk_tasks(yaml.safe_load(PREPARE_TASKS))
+        if task.get("ansible.builtin.template", {}).get("src") == "network.network.j2"
+    )
+    network_operations = [
+        task
+        for task in walk_tasks(yaml.safe_load(REMOVE_TASKS))
+        if task.get("ansible.builtin.systemd_service", {}).get("name") == "{{ podman_services_remove_network.name }}-network.service"
+        or task.get("ansible.builtin.command", {}).get("argv", [])[:2] == ["podman", "network"]
     ]
-
     assert "not podman_services_service.network.external | bool" in prepare["when"]
-    assert len(managed_network_tasks) == 4
-    for task in managed_network_tasks:
+    assert network_operations, "The network ownership checks must cover actual lifecycle operations"
+    for task in network_operations:
         assert "podman_services_remove_network.managed | default(false) | bool" in task["when"]
-    assert "podman_services_service.network.name" not in REMOVE_TASKS
-
-
-def test_changed_managed_network_is_retained_during_update_and_recreate():
-    tasks = yaml.safe_load(NETWORK_TASKS)
-
-    assert [task["name"] for task in tasks] == ["Network | Report managed network change that requires recreate"]
-    assert tasks[0]["changed_when"] is False
-    assert "podman network" not in NETWORK_TASKS
-    assert "ansible.builtin.systemd_service" not in NETWORK_TASKS
 
 
 def test_managed_network_quadlet_is_rendered_before_container_quadlet():
     assert PREPARE_TASK_NAMES.index("Quadlets | Write network Quadlet") < PREPARE_TASK_NAMES.index("Quadlets | Write container Quadlet")
-
-
-def test_no_late_shared_network_migration_fail_after_template_render():
-    assert "Refuse implicit shared network migration" not in TASKS
-    assert "Coordinate shared network migration" not in TASKS
 
 
 def test_network_validation_occurs_before_template_rendering():

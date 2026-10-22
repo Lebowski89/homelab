@@ -11,6 +11,7 @@ from types import SimpleNamespace
 
 import pytest
 import yaml
+from ansible_task_cases import task_section, walk_tasks
 from test_mgt_firewall import FW, PREFLIGHT, PreflightHost
 
 
@@ -24,7 +25,7 @@ def test_embedded_collector_preserves_account_shell_variables_through_actual_ans
     command = deepcopy(
         next(
             task["ansible.builtin.command"]
-            for task in playbook["tasks"]
+            for task in walk_tasks(playbook["tasks"])
             if task.get("ansible.builtin.command", {}).get("argv", [])[-1:] == [operation]
         )
     )
@@ -382,26 +383,17 @@ def test_actual_ansible_async_collection_polling_aggregation_and_read_only_check
     root = Path(__file__).resolve().parents[2]
     source_play = {"tasks": yaml.safe_load((root / "ansible/operations/haproxy-firewall-preflight.yml").read_text())}
     tasks = source_play["tasks"]
-    first = next(i for i, task in enumerate(tasks) if task.get("register") == "haproxy_preflight_collection")
-    # The optional projection is a sequence of guarded tasks, not a block.
-    # Keep the real collection, polling, aggregation and evidence writes.
-    projection_guard = "haproxy_preflight_stage_output is defined"
-    last = next(i for i, task in enumerate(tasks) if projection_guard in task.get("when", []))
-    selected = deepcopy(tasks[first:last])
-    assert selected, "The collection/aggregation section must not be empty"
-    assert all(projection_guard not in task.get("when", []) for task in selected)
-    assert selected[0].get("ansible.builtin.command", {}).get("argv", [])[-1:] == ["collect"]
-    assert any(
-        task.get("register") == "haproxy_preflight_windows" and "ansible.builtin.async_status" in task and "until" in task
-        for task in selected
-    ), "The collection section must include async polling"
-    assert any(
-        task.get("register") == "haproxy_preflight_candidate"
-        and task.get("ansible.builtin.command", {}).get("argv", [])[-1:] == ["candidates"]
-        for task in selected
-    ), "The collection section must include candidate aggregation"
+    # The synthetic local workers cannot pass the production SSH-only host
+    # contract. Execute the real collection through evidence writes, retaining
+    # any parent conditions/tags rather than depending on task names or shape.
+    selected = task_section(
+        tasks,
+        lambda task: task.get("ansible.builtin.command", {}).get("argv", [])[-1:] == ["collect"],
+        lambda task: "haproxy_preflight_candidate" in task.get("ansible.builtin.copy", {}).get("content", ""),
+        purpose="HAProxy collection and aggregation",
+    )
     executable = str(Path(sys.executable).with_name("ansible-playbook"))
-    for task in selected:
+    for task in walk_tasks(selected):
         if "ansible.builtin.command" in task:
             task["ansible.builtin.command"]["argv"][0] = sys.executable
     collector = (

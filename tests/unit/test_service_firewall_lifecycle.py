@@ -1154,6 +1154,7 @@ def test_production_stack_rescue_contains_exact_service_and_retains_original_fai
     import sys
 
     import yaml
+    from ansible_task_cases import walk_tasks
 
     plugins = tmp_path / "actions"
     plugins.mkdir()
@@ -1237,7 +1238,11 @@ class ActionModule(transport.f.CONTAIN_ACTION.ActionModule):
     }
     # Execute the production deploy/rescue block, replacing only the failing
     # application deployment boundary. No file/stack/runtime socket is reachable.
-    task = yaml.safe_load((ROOT / "ansible/roles/docker_services/tasks/sub_tasks/deploy/stack.yml").read_text())[-1]
+    task = next(
+        entry
+        for entry in walk_tasks(yaml.safe_load((ROOT / "ansible/roles/docker_services/tasks/sub_tasks/deploy/stack.yml").read_text()))
+        if any("docker_services_contain" in child for child in walk_tasks(entry.get("rescue", [])))
+    )
     task["block"] = [{"name": "NONPRODUCTION deployment failure", "ansible.builtin.fail": {"msg": "original deployment failure"}}]
     playbook = tmp_path / "rescue.yml"
     variables = {

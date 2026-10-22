@@ -4,6 +4,64 @@ Use `/opt/ansible/ansible-venv/bin/python -m pytest tests/unit` for the complete
 suite. Tests use synthetic inventories, fake external I/O and private temporary
 state. They do not establish live application or firewall acceptance.
 
+## Task fixtures and safety assertions
+
+Prefer running a supported role/task entry point with external I/O replaced.
+Assert its output, generated configuration, selected hosts, commands, failure
+status, cleanup and unchanged data. Task display names, exact task counts and
+complete phase sequences are not operating contracts.
+
+This pass audits the HAProxy preflight/route-capture/projection fixtures, related
+firewall preflight/recovery fixtures, and rootless planning/network assertions:
+
+| Coupling found | Contract and treatment |
+| --- | --- |
+| HAProxy collection selected up to an optional projection name/condition | Execute collection through candidate evidence writes; identify the two boundaries by command operation and consumed result, independent of projection structure. Keep all five async scenarios and their output/failure assertions. |
+| Projection and IPv6 fixtures selected only top-level tasks | Preserve parent guards, vars and tags when selecting the required validation/output section. Names and equivalent block grouping may change. |
+| Delegation fixtures selected a play's first task or a named collection task | Find the operation tag and collector command; exercise effective connection, host identity, result aggregation and sanitized failures. |
+| Firewall recovery replaced the second/last task's block | Find the block through its cancellation/containment action and run its actual rescue. Block ownership is meaningful here; list position is not. |
+| Rootless check mode required a long list of skipped task names | Verify generated artifact kinds/paths, secret-free output, runtime-command sentinels, account and filesystem snapshots, and whether the removal adapter was reached. |
+| Podman tests froze the complete phase order, old error wording and network-task count | Remove these snapshots. Keep narrow validation-before-write and stop-before-delete checks; execute the complete network-change entry point for update/recreate in normal/check mode with host commands forbidden. |
+| Protocol JSON, policy union, namespace maps and hook results compared exactly | Retain: these are data/identity or enforcement contracts, not YAML/task snapshots. |
+
+`tests/unit/ansible_task_cases.py` is a small test-only walker/section selector
+for cases where a complete entry point cannot safely use the fixture hosts.
+The async fixture uses local simulated workers, which cannot satisfy the real
+SSH-only host contract. The projection must not invoke preceding live discovery;
+the IPv6 fixture must not proceed into account preparation. Section selection
+requires unique, ordered execution boundaries and fails clearly if incomplete.
+It preserves enclosing block directives and refuses to slice recovery blocks;
+those must be exercised through their entry point. Mutable task trees remain
+case-local. No production test interface is exported.
+
+Retain structural checks when they directly enforce a safety boundary:
+
+- Applied tags prevent a selected include from silently skipping guards.
+- Delegation and runtime ownership keep filesystem/runtime work on its owner.
+- Check-mode guards and command sentinels prevent live mutations during planning.
+- `no_log`/`diff` boundaries prevent credentials entering output.
+- Validation before writes, stopping before cleanup, and rescue propagation
+  prevent partial mutation, simultaneous writers and false success.
+
+Use a narrow module/argument or result property for these checks rather than an
+entire task dictionary. Comments should explain the concrete failure. The
+existing isolated operator/kernel, policy-transaction and rollback tests remain
+responsible for runtime isolation and recovery behaviour; task-source substring
+checks cannot replace them.
+
+Validation on base `a0578cde` plus this test-only patch used Python 3.14.4,
+pytest 9.1.1 and `/opt/ansible/ansible-venv`. The final complete unit run passed
+2,630 cases with three existing ShellCheck-unavailable skips in 853.79 seconds.
+Three incidental static cases were removed and two network entry-point cases
+added (2,633 collected, net minus one). No new skips were added. Temporary
+renames/regrouping passed 23 selected cases in 69.26 seconds; dropping collected
+reports from candidate input caused the existing success scenario to fail in
+6.57 seconds. All temporary production edits were restored byte-for-byte.
+Evidence is retained locally under `.pytest_cache/task-coupling-a0578cde/`.
+These are serial local validation timings, not a claimed CI speedup. Ruff
+0.16.8 passed affected checks/formatting; the repository pins 0.17.0, which was
+not available locally. No dependencies or generated documentation changed.
+
 ## CI events and required checks
 
 Feature branches validate on `pull_request` (including PR updates), not on

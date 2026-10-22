@@ -1690,6 +1690,8 @@ def test_exact_overlay_routes_distinguish_vips_tasks_and_host_publications():
 )
 @pytest.mark.parametrize("window", [0, 1])
 def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path, failure, window):
+    from ansible_task_cases import walk_tasks
+
     executable = Path(str(Path(sys.executable).with_name("ansible-playbook")))
     if not executable.exists():
         pytest.skip("configured Ansible environment unavailable")
@@ -1764,7 +1766,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
         f"filter_plugins={ROOT / 'ansible/filter_plugins'}\nstdout_callback=default\n[inventory]\nenable_plugins=yaml\n"
     )
     plays = yaml.safe_load((ROOT / "ansible/operations.yml").read_text())
-    plays = [next(play for play in plays if "haproxy_preflight" in play["tasks"][0]["tags"])]
+    plays = [next(play for play in plays if any("haproxy_preflight" in task.get("tags", []) for task in walk_tasks(play["tasks"])))]
     plays[0]["tasks"] = yaml.safe_load((ROOT / "ansible/operations/haproxy-firewall-preflight.yml").read_text())
     play = plays[0]
     play["become"] = False
@@ -1777,7 +1779,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
         mgt_firewall_active_endpoints=["homepage/backend"],
         mgt_firewall_callers={"traefik": [container()]},
     )
-    for task in play["tasks"]:
+    for task in walk_tasks(play["tasks"]):
         if "ansible.builtin.include_vars" in task:
             task["ansible.builtin.include_vars"]["dir"] = str(ROOT / "ansible/group_vars/all/services")
         if "ansible.builtin.set_fact" in task and "haproxy_preflight_source" in task["ansible.builtin.set_fact"]:
@@ -1785,12 +1787,16 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
             facts["haproxy_preflight_source"] = facts["haproxy_preflight_source"].replace(
                 "roles/service_firewall/files/haproxy-preflight.py", str(ROLE / "files/haproxy-preflight.py")
             )
-        if "Collect projected" in task["name"]:
+        if task.get("ansible.builtin.command", {}).get("argv", [])[-1:] == ["collect"]:
             task["fixture_collect"] = task.pop("ansible.builtin.command")
         if "ansible.builtin.async_status" in task:
             task["fixture_wait"] = task.pop("ansible.builtin.async_status")
     if failure == "inherited-local":
-        play["tasks"] = [task for task in play["tasks"] if "Pin delegated transports" not in task["name"]]
+        # Remove only the connection fact to reproduce inherited controller
+        # transport. Display names have no role in transport isolation.
+        for task in walk_tasks(play["tasks"]):
+            if task.get("delegate_facts") and "ansible_connection" in task.get("ansible.builtin.set_fact", {}):
+                task["when"] = False
     plan = tmp_path / "plan.yml"
     plan.write_text(yaml.safe_dump(plays, sort_keys=False))
     defaults = yaml.safe_load((ROOT / "ansible/roles/ubuntu/defaults/main.yml").read_text())
@@ -2291,6 +2297,8 @@ def test_actual_ansible_loader_guards_readme_and_offline_recovery(tmp_path, oper
 
 
 def test_persistence_ordering_and_dynamic_tags_do_not_deploy_applications():
+    from ansible_task_cases import walk_tasks
+
     service = (ROLE / "templates/mgt/skynet-mgt-firewall.service.j2").read_text()
     assert "systemd-logind.service" in service and "Before=docker.service" in service
     assert "ExecStop=" not in service
@@ -2302,11 +2310,21 @@ def test_persistence_ordering_and_dynamic_tags_do_not_deploy_applications():
     assert "apply --allow-pending --deny-runtime" in next(line for line in dropin.splitlines() if line.startswith("ExecStartPre="))
     assert "--deny-runtime" not in next(line for line in dropin.splitlines() if line.startswith("ExecStartPost="))
     tasks = yaml.safe_load((ROLE / "tasks/mgt/main.yml").read_text())
-    include = tasks[-1]["ansible.builtin.include_tasks"]
-    assert set(include["apply"]["tags"]) == {"mgt_firewall_install", "mgt_firewall_observe", "mgt_firewall_check", "mgt_firewall_remove"}
-    install = yaml.safe_load((ROLE / "tasks/mgt/install.yml").read_text())
+    # Missing applied tags silently skip the selected firewall operation.
+    includes = [
+        task["ansible.builtin.include_tasks"]
+        for task in walk_tasks(tasks)
+        if task.get("ansible.builtin.include_tasks", {}).get("file") == "{{ mgt_firewall_operation }}.yml"
+    ]
+    assert any(
+        {"mgt_firewall_install", "mgt_firewall_observe", "mgt_firewall_check", "mgt_firewall_remove"}
+        <= set(include.get("apply", {}).get("tags", []))
+        for include in includes
+    )
+    # Caller and both-family validation must finish before the policy writer.
+    install = list(walk_tasks(yaml.safe_load((ROLE / "tasks/mgt/install.yml").read_text())))
     first_write = next(index for index, task in enumerate(install) if "service_firewall_lifecycle" in task)
-    assert any("command" in key and "validate" in str(value) for task in install[:first_write] for key, value in task.items())
+    assert any("validate" in task.get("ansible.builtin.command", {}).get("argv", []) for task in install[:first_write])
     for path in (ROLE / "tasks/mgt").glob("*.yml"):
         for task in yaml.safe_load(path.read_text()):
             unit = task.get("ansible.builtin.systemd_service", {})

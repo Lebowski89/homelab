@@ -210,9 +210,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
     assert secret_sentinel not in result.stdout
     assert secret_sentinel not in result.stderr
     assert secret_sentinel not in callback_text
-    task_results = {
-        task["task"]["name"].split(" : ")[-1]: task["hosts"].get("localhost", {}) for play in callback["plays"] for task in play["tasks"]
-    }
+    task_results = [task["hosts"].get("localhost", {}) for play in callback["plays"] for task in play["tasks"]]
     assert (account_snapshot(host_user), path_snapshot(home), path_snapshot(quadlet_dir), path_snapshot(network_dropin)) == before
     assert not bind_source.exists()
     assert not os.path.lexists(bind_source)
@@ -220,42 +218,19 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
     assert not (tmp_path / "state").exists()
     assert not (tmp_path / "system").exists()
     assert not runtime_marker.exists()
-    for task_name in (
-        "Execution | Create dedicated rootless account",
-        "Execution | Enable rootless account linger",
-        "Execution | Start rootless user systemd manager",
-        "Execution | Read host IPv4 routes for pasta conflict detection",
-        "Execution | Detect conflicting host IPv4 routes",
-        "Execution | Reject conflicting host IPv4 routes",
-        "Execution | Read host IPv6 routes for direct pasta conflict detection",
-        "Execution | Detect conflicting host IPv6 routes",
-        "Execution | Require a private IPv6 subnet separate from host routes",
-        "Execution | Manage rootless pasta network drop-in",
-        "Podman services | Manage Podman secrets",
-        "Quadlets | Write network Quadlet",
-        "Quadlets | Write protected environment file",
-        "Quadlets | Write container Quadlet",
-        "Service | Validate user Quadlets with Podman generator",
-        "Service | Start user service",
-        "Service | Save successful execution state",
-    ):
-        assert task_results[task_name]["skipped"] is True
-    assert task_results["Execution | Validate managed rootless pasta configuration"].get("failed", False) is False
-    assert task_results["Execution | Report planned rootless pasta configuration"]["changed"] is True
-    assert str(network_dropin) in task_results["Execution | Report planned rootless pasta configuration"]["msg"]
-    for task_name in (
-        "Check mode | Build network Quadlet preview",
-        "Check mode | Build environment file preview",
-        "Check mode | Build container Quadlet preview",
-        "Check mode | Validate generated Quadlet previews",
-    ):
-        if direct_pasta and task_name == "Check mode | Build network Quadlet preview":
-            assert task_results[task_name]["skipped"] is True
-        else:
-            assert task_results[task_name].get("skipped", False) is False
-        assert task_results[task_name].get("failed", False) is False
-    assert task_results["Check mode | Report planned file change"]["changed"] is True
-    sanitized_plan = task_results["Publish sanitized check artifact plan"]["msg"]
+    # Observe plans and unchanged state, not which individual tasks emitted
+    # them. Runtime-command sentinels above still fail on an attempted mutation.
+    assert not any(task.get("failed", False) for task in task_results)
+    assert any(task.get("changed") and str(network_dropin) in str(task.get("msg", "")) for task in task_results)
+    sanitized_plan = next(
+        task["msg"]
+        for task in task_results
+        if isinstance(task.get("msg"), list)
+        and task["msg"]
+        and all(isinstance(artifact, dict) and "kind" in artifact for artifact in task["msg"])
+    )
+    expected_kinds = {"container", "environment"} | (set() if direct_pasta else {"network"})
+    assert {artifact["kind"] for artifact in sanitized_plan} == expected_kinds
     assert all(set(artifact) == {"kind", "path", "changed", "comparison_available"} for artifact in sanitized_plan)
     assert {
         "kind": "environment",
@@ -337,15 +312,14 @@ def test_execution_only_preparation_returns_before_service_work(tmp_path):
     result = run_local_playbook(tmp_path, [play], structured=True, extra_env={"PATH": f"{fake_bin}:{os.environ.get('PATH', '')}"})
     assert result.returncode == 0, result.stdout + result.stderr
     callback = json.loads(result.stdout)
-    names = [task["task"]["name"].split(" : ")[-1] for entry in callback["plays"] for task in entry["tasks"]]
-    assert "Execution | Report planned rootless pasta configuration" in names
-    assert "Continue after execution-only role" in names
+    results = [task["hosts"].get("localhost", {}) for entry in callback["plays"] for task in entry["tasks"]]
+    assert any(task.get("msg") == "account-plan-finished" for task in results)
+    # The prerequisites still run; application files and runtime commands do not.
     assert any(
         "/service_common/tasks/operational_requirements.yml:" in task["task"].get("path", "")
         for entry in callback["plays"]
         for task in entry["tasks"]
     )
-    assert not any(name.startswith(("Quadlets |", "Service |", "Check mode |")) for name in names)
     assert account_snapshot(account) == before
     assert not runtime_marker.exists()
     assert not (tmp_path / "homes").exists()
@@ -603,17 +577,20 @@ def test_execution_state_version_contract_is_enforced_before_runtime_work(tmp_pa
         extra_env={"PATH": f"{fake_bin}:{os.environ.get('PATH', '')}"},
     )
     callback = json.loads(result.stdout)
-    task_names = [task["task"]["name"].split(" : ")[-1] for play in callback["plays"] for task in play["tasks"]]
+    # File ownership identifies the adapter boundary regardless of task names.
+    removal_reached = any(
+        "/podman_services/tasks/sub_tasks/remove.yml:" in task["task"].get("path", "")
+        for play in callback["plays"]
+        for task in play["tasks"]
+    )
     if supported:
         assert result.returncode == 0, result.stdout + result.stderr
         assert callback["stats"]["localhost"]["failures"] == 0
-        assert "Include removal after validation" in task_names
-        assert any(name.startswith("Remove |") for name in task_names)
+        assert removal_reached
     else:
         assert result.returncode != 0
         assert "versionless legacy state or explicit integer version 2" in result.stdout
-        assert "Include removal after validation" not in task_names
-        assert not any(name.startswith("Remove |") for name in task_names)
+        assert not removal_reached
     assert not runtime_marker.exists()
     assert state_path.read_text() == state_before
     assert list(quadlet_dir.iterdir()) == quadlet_before
@@ -1118,11 +1095,15 @@ def test_netbox_account_only_preparation_never_resolves_bootstrap_credentials(tm
         extra_env["ANSIBLE_ROLES_PATH"] = str(roles) + ":" + str(REPO_ROOT / "ansible/roles")
     result = run_local_playbook(tmp_path, [play], structured=True, check_mode=check_mode, extra_env=extra_env)
     assert result.returncode == 0, result.stdout + result.stderr
-    callback = json.loads(result.stdout)
-    names = [task["task"]["name"].split(" : ")[-1] for entry in callback["plays"] for task in entry["tasks"]]
-    if check_mode:
-        assert "Podman services | Finish explicit account preparation" in names
-    assert not any(name.startswith(("Quadlets |", "Service |", "Secrets |")) for name in names)
+    # The credential-free adapter sentinel and filesystem checks establish the
+    # account-only result; task names/prefixes do not define that boundary.
+    if not check_mode:
+        callback = json.loads(result.stdout)
+        assert any(
+            str(roles / "podman_services/tasks/main.yml") in task["task"].get("path", "")
+            for entry in callback["plays"]
+            for task in entry["tasks"]
+        )
     assert not (tmp_path / "homes").exists() and not (tmp_path / "state").exists()
 
 

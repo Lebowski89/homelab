@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from ansible_task_cases import task_section, walk_tasks
 
 ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("cutover_test", ROOT / "ansible/operator/haproxy-cutover.py")
@@ -487,8 +488,15 @@ def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path,
     for path in (ROOT / "ansible/group_vars/all/services").glob("*.yml"):
         catalog.update(yaml.safe_load(path.read_text()))
     play = {"tasks": yaml.safe_load((ROOT / "ansible/operations/haproxy-firewall-preflight.yml").read_text())}
-    projection_tasks = deepcopy([task for task in play["tasks"] if "haproxy_preflight_stage_output is defined" in task.get("when", [])])
-    for entry in projection_tasks:
+    # Full preflight would run real runtime discovery. Keep the value-free
+    # projection with its inherited guards, regardless of block regrouping.
+    projection_tasks = task_section(
+        play["tasks"],
+        lambda task: "haproxy_preflight_stage_output is string" in task.get("ansible.builtin.assert", {}).get("that", []),
+        lambda task: task.get("ansible.builtin.copy", {}).get("dest") == "{{ haproxy_preflight_stage_output }}",
+        purpose="HAProxy value-free projection",
+    )
+    for entry in walk_tasks(projection_tasks):
         if "ansible.builtin.include_vars" in entry:
             entry["ansible.builtin.include_vars"]["file"] = str(ROOT / "ansible" / entry["ansible.builtin.include_vars"]["file"])
         if "ansible.builtin.include_tasks" in entry:

@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 from ansible.errors import AnsibleFilterError
+from ansible_task_cases import task_section
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -150,12 +151,15 @@ def test_rootless_pasta_route_overlap_fails_closed_on_invalid_route_data(routes)
 @pytest.mark.parametrize("case", ["clear", "conflict", "invalid", "check", "no-ipv6"])
 def test_actual_ipv6_route_tasks_reject_conflicts_before_account_work(tmp_path, case):
     tasks = yaml.safe_load((ROLE_ROOT / "tasks/sub_tasks/execution.yml").read_text())
-    route_tasks = [
-        task
-        for task in tasks
-        if "podman_services_rootless_host_ipv6_route_overlaps" in task.get("ansible.builtin.set_fact", {})
-        or "podman_services_rootless_host_ipv6_route_overlaps | length == 0" in task.get("ansible.builtin.assert", {}).get("that", [])
-    ]
+    # Account preparation is outside this local route-validation fixture.
+    route_tasks = task_section(
+        tasks,
+        lambda task: "podman_services_rootless_host_ipv6_route_overlaps" in task.get("ansible.builtin.set_fact", {}),
+        lambda task: (
+            "podman_services_rootless_host_ipv6_route_overlaps | length == 0" in task.get("ansible.builtin.assert", {}).get("that", [])
+        ),
+        purpose="IPv6 conflict validation before account preparation",
+    )
     # Invalid data in skipped cases proves that the original guards still avoid
     # reading live route results during planning or without IPv6 configuration.
     routes = json.dumps([{"dst": "fd00::/8" if case == "conflict" else "fd7a:115c:a1e0::/48"}])
@@ -196,3 +200,53 @@ def test_actual_ipv6_route_tasks_reject_conflicts_before_account_work(tmp_path, 
         assert ("overlaps host IPv6 routes" if case == "conflict" else "from_json") in output
     else:
         assert result.returncode == 0 and "ACCOUNT_BOUNDARY_REACHED" in output, output
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("check", [False, True])
+def test_network_change_entry_point_retains_the_existing_network(tmp_path, check):
+    # Run the entire supported task entry point. A connection that cannot execute
+    # anything proves this planning/reporting step does not contact a runtime.
+    connections = tmp_path / "connections"
+    connections.mkdir()
+    (connections / "no_runtime.py").write_text(
+        "from ansible.plugins.connection.local import Connection as LocalConnection\n"
+        "class Connection(LocalConnection):\n"
+        "    transport = 'no_runtime'\n"
+        "    def exec_command(self, *args, **kwargs):\n"
+        "        raise AssertionError('Network update must not execute runtime or host commands')\n"
+    )
+    play = [
+        {
+            "name": "Offline network retention",
+            "hosts": "localhost",
+            "gather_facts": False,
+            "vars": {
+                "podman_services_state": "{{ network_case.action }}",
+                "podman_services_service": {"network": {"external": False}},
+                "podman_services_network_quadlet": {"changed": "{{ network_case.changed }}"},
+            },
+            "tasks": [
+                {
+                    "name": "Exercise the network-change entry point",
+                    "ansible.builtin.include_tasks": str(ROLE_ROOT / "tasks/sub_tasks/network_changes.yml"),
+                    "loop": [{"action": action, "changed": changed} for action in ("update", "recreate") for changed in (False, True)],
+                    "loop_control": {"loop_var": "network_case"},
+                }
+            ],
+        }
+    ]
+    (tmp_path / "play.yml").write_text(yaml.safe_dump(play))
+    config = tmp_path / "ansible.cfg"
+    config.write_text(f"[defaults]\nconnection_plugins={connections}\nvars_plugins_enabled=\n[inventory]\nenable_plugins=host_list\n")
+    result = subprocess.run(
+        [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", "-c", "no_runtime", str(tmp_path / "play.yml")]
+        + (["--check"] if check else []),
+        capture_output=True,
+        text=True,
+        timeout=30,
+        env={**os.environ, "ANSIBLE_CONFIG": str(config)},
+    )
+    output = result.stdout + result.stderr
+    assert result.returncode == 0 and "changed=0" in output, output
+    assert output.count("existing network is retained") == 2, output
