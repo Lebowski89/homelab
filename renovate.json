@@ -148,14 +148,14 @@
             ]
         },
         {
-            "description": "Do not automerge Docker updates",
+            "description": "Do not automerge container image updates",
             "matchDatasources": [
                 "docker"
             ],
             "automerge": false
         },
         {
-            "description": "Do not split Docker updates by major/minor/patch",
+            "description": "Do not split container image updates by major/minor/patch",
             "matchDatasources": [
                 "docker"
             ],
@@ -165,7 +165,7 @@
             "separateMultipleMinor": false
         },
         {
-            "description": "Require dependency dashboard approval for major Docker updates",
+            "description": "Require dependency dashboard approval for major container image updates",
             "matchDatasources": [
                 "docker"
             ],
@@ -175,12 +175,12 @@
             "dependencyDashboardApproval": true,
             "prPriority": 20,
             "addLabels": [
-                "docker",
+                "container image updates",
                 "major"
             ]
         },
         {
-            "description": "Label Docker minor updates",
+            "description": "Label minor container image updates",
             "matchDatasources": [
                 "docker"
             ],
@@ -189,12 +189,12 @@
             ],
             "prPriority": 0,
             "addLabels": [
-                "docker",
+                "container image updates",
                 "minor"
             ]
         },
         {
-            "description": "Label Docker patch updates",
+            "description": "Label patch container image updates",
             "matchDatasources": [
                 "docker"
             ],
@@ -203,12 +203,12 @@
             ],
             "prPriority": -1,
             "addLabels": [
-                "docker",
+                "container image updates",
                 "patch"
             ]
         },
         {
-            "description": "Nightly batch for non-critical Docker minor/patch updates",
+            "description": "Nightly batch for non-critical container image updates (minor/patch)",
             "matchDatasources": [
                 "docker"
             ],
@@ -216,7 +216,7 @@
                 "minor",
                 "patch"
             ],
-            "groupName": "weekly non-critical docker image updates",
+            "groupName": "nightly non-critical container image updates",
             "groupSlug": "weekly-docker-minor-patch",
             "schedule": [
                 "* 3-7 * * *"
@@ -224,56 +224,44 @@
             "minimumGroupSize": 2,
             "prPriority": 0,
             "addLabels": [
-                "docker",
+                "container image updates",
                 "batch"
             ],
             "matchPackageNames": [
-                "!postgres",
-                "!docker.io/library/postgres",
-                "!valkey/valkey",
-                "!traefik",
-                "!docker.io/library/traefik",
-                "!authelia/authelia",
-                "!docker.io/infisical/infisical",
-                "!infisical/infisical",
+                "!/^(?:docker\\.io/)?(?:library/)?(?:postgres|traefik|haproxy)$/",
+                "!/^(?:docker\\.io/)?valkey/valkey$/",
+                "!/^(?:docker\\.io/)?authelia/authelia$/",
+                "!/^(?:docker\\.io/)?infisical/infisical$/",
                 "!lscr.io/linuxserver/netbox",
                 "!lscr.io/linuxserver/plex",
-                "!prom/prometheus",
-                "!prom/alertmanager",
-                "!grafana/grafana",
-                "!grafana/loki",
-                "!grafana/alloy",
-                "!haproxy",
-                "!docker.io/library/haproxy"
+                "!/^(?:docker\\.io/)?prom/prometheus$/",
+                "!/^(?:docker\\.io/)?prom/alertmanager$/",
+                "!/^(?:docker\\.io/)?grafana/grafana$/",
+                "!/^(?:docker\\.io/)?grafana/loki$/",
+                "!/^(?:docker\\.io/)?grafana/alloy$/"
             ]
         },
         {
-            "description": "Keep critical infrastructure and database images separate",
+            "description": "Keep critical infrastructure and database container image updates separate",
             "matchDatasources": [
                 "docker"
             ],
             "matchPackageNames": [
-                "postgres",
-                "docker.io/library/postgres",
-                "valkey/valkey",
-                "traefik",
-                "docker.io/library/traefik",
-                "authelia/authelia",
-                "docker.io/infisical/infisical",
-                "infisical/infisical",
+                "/^(?:docker\\.io/)?(?:library/)?(?:postgres|traefik|haproxy)$/",
+                "/^(?:docker\\.io/)?valkey/valkey$/",
+                "/^(?:docker\\.io/)?authelia/authelia$/",
+                "/^(?:docker\\.io/)?infisical/infisical$/",
                 "lscr.io/linuxserver/netbox",
                 "lscr.io/linuxserver/plex",
-                "prom/prometheus",
-                "prom/alertmanager",
-                "grafana/grafana",
-                "grafana/loki",
-                "grafana/alloy",
-                "haproxy",
-                "docker.io/library/haproxy"
+                "/^(?:docker\\.io/)?prom/prometheus$/",
+                "/^(?:docker\\.io/)?prom/alertmanager$/",
+                "/^(?:docker\\.io/)?grafana/grafana$/",
+                "/^(?:docker\\.io/)?grafana/loki$/",
+                "/^(?:docker\\.io/)?grafana/alloy$/"
             ],
             "groupName": null,
             "addLabels": [
-                "docker",
+                "container image updates",
                 "critical"
             ]
         },
@@ -283,8 +271,7 @@
                 "docker"
             ],
             "matchPackageNames": [
-                "traefik",
-                "docker.io/library/traefik"
+                "/^(?:docker\\.io/)?(?:library/)?traefik$/"
             ],
             "branchTopic": "{{{depNameSanitized}}}-{{{newVersion}}}",
             "groupName": null,

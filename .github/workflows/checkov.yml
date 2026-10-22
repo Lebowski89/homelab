@@ -50,7 +50,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Classify Renovate Docker tag-only change
+      - name: Classify Renovate container image tag-only change
         id: classify
         env:
           PR_AUTHOR: ${{ github.event.pull_request.user.login }}
@@ -64,9 +64,9 @@ jobs:
             --head-sha "$PR_HEAD_SHA" \
             >> "$GITHUB_OUTPUT"
 
-      - name: Renovate Docker tag-only fast path
+      - name: Renovate container image tag-only fast path
         if: fromJSON(steps.classify.outputs.renovate_docker_tag_only)
-        run: echo "Checkov is not required for a proven Docker tag-only Renovate change."
+        run: echo "Checkov is not required for a proven container image tag-only Renovate change."
 
       - name: Set up Python
         if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
