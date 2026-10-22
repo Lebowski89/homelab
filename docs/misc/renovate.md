@@ -12,12 +12,15 @@ This is achieved by:
 
 I really enjoy this method updating. Renovate creates PRs with the tag update, I then read the change notes to see if any changes are required on my end before merging. It voids potential issues of automatic updates (I ran Watchtower extensively in the past), while not requiring a separate Diun container. I also like that it only changes the image tag and leaves me in control of when I redeploy the service.
 
-Minor and patch updates for non-critical images join the nightly batch, scheduled
-from 03:00 to 07:59 Australia/Melbourne, with at least two updates required.
+Minor, patch and digest updates for non-critical images join the nightly batch,
+scheduled from 03:00 to 07:59 Australia/Melbourne, with at least two updates required.
 The group is called `nightly non-critical container image updates`; its existing
 `weekly-docker-minor-patch` branch slug is retained to preserve open branches.
 Image updates use the `container image updates` label. Renovate's technical
 datasource remains `docker` for both runtimes.
+Same-tag digest changes for already pinned images, including Autobrr and Seerr,
+qualify for this batch. This does not enable digest pinning for additional images
+or change any service image reference.
 
 The existing critical classification is unchanged: PostgreSQL, Valkey, Traefik,
 Authelia, Infisical, NetBox, Plex, Prometheus, Alertmanager, Grafana, Loki, Alloy,
@@ -29,15 +32,32 @@ implicitly classified as critical.
 
 Image automerge stays disabled. Major updates still require Dependency Dashboard
 approval. Version restrictions (including Forgejo's 15.0.x rootless LTS line),
-release-age settings, tag-plus-digest extraction and digest handling are unchanged.
+tag-plus-digest extraction and digest pinning policy are unchanged.
 
-After this configuration reaches `main`, request Renovate to regenerate #672 by
-selecting its **rebase/retry** checkbox, or its corresponding rebase action in
-the Dependency Dashboard. Grafana and Alloy should then leave the non-critical
-batch and receive separate critical updates, subject to the existing update
-policies. The remaining batch can retain its branch; if fewer than two updates
-remain, the minimum group size may defer it. Review the regenerated diff before
-merging. See [Renovate's rebasing documentation](https://docs.renovatebot.com/updating-rebasing/).
+The global minimum release age remains **three days**. Renovate's container-image
+datasource [documents release timestamp support only for Docker Hub](https://docs.renovatebot.com/modules/datasource/docker/).
+Images whose names begin with the complete `ghcr.io/`, `lscr.io/` or
+`codeberg.org/` registry prefix therefore use `minimumReleaseAgeBehaviour:
+"timestamp-optional"`. This includes service images and bootstrap defaults, such
+as NetBox on LSCR and Hugo on GHCR. The exception applies only to the `docker`
+datasource. Docker Hub, including shorthand, `library/` and `docker.io/` names,
+other registries, and non-container dependencies retain the default
+`timestamp-required` behaviour.
+
+When a timestamp is missing, `timestamp-optional` **bypasses age verification**;
+it does **not** implement an equivalent three-day waiting period, including a
+wait since first discovery. When a timestamp is available, it must still satisfy
+the configured three-day age. See [Renovate's release-age behaviour](https://docs.renovatebot.com/configuration-options/#minimumreleaseagebehaviour).
+
+After these changes reach `main`, let Renovate refresh the Dependency Dashboard
+and regenerate the existing nightly batch. To request regeneration, select the
+nightly PR's **rebase/retry** checkbox or the corresponding action in the
+Dependency Dashboard. Separate Autobrr/Seerr digest entries should join the batch
+instead of remaining separate, and missing timestamps from the three allowed
+registries should stop holding updates pending indefinitely. Scheduling, the
+minimum group size of two, major approval and other update policies still apply;
+available timestamps can still leave updates waiting for three days. Review the
+refreshed dashboard and regenerated diff before merging. See [Renovate's rebasing documentation](https://docs.renovatebot.com/updating-rebasing/).
 
 Focused local regression checks run with:
 
@@ -45,10 +65,12 @@ Focused local regression checks run with:
 /opt/ansible/ansible-venv/bin/python -m pytest -q tests/unit/test_renovate_container_images.py
 ```
 
-These checks execute the configured extraction regex and package-name selectors
-with Node.js against aliases, real service files, effective base-plus-target
-images, and bootstrap defaults. They cover tag-plus-digest references and
-non-critical controls. They do not run Renovate, resolve presets, fetch releases,
-or prove hosted branch/PR behaviour. When Renovate tooling is available, also
+These checks execute the configured extraction regex and package-name,
+datasource and update-type selectors with Node.js against aliases, real service
+files, effective base-plus-target images, and bootstrap defaults. They cover
+tag-plus-digest references, same-tag digest batching, major approval, disabled
+image automerge, and registry timestamp exceptions with non-container controls.
+They do not run Renovate, resolve presets, fetch releases, calculate release age,
+or prove hosted dashboard/branch/PR behaviour. When Renovate tooling is available, also
 run its configuration validator and an extraction-only local dry run before
 relying on the hosted result; do not install dependencies just for these checks.

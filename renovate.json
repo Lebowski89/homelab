@@ -155,6 +155,16 @@
             "automerge": false
         },
         {
+            "description": "Allow missing release timestamps for GHCR, LSCR and Codeberg container images",
+            "matchDatasources": [
+                "docker"
+            ],
+            "matchPackageNames": [
+                "/^(?:ghcr\\.io|lscr\\.io|codeberg\\.org)\\//"
+            ],
+            "minimumReleaseAgeBehaviour": "timestamp-optional"
+        },
+        {
             "description": "Do not split container image updates by major/minor/patch",
             "matchDatasources": [
                 "docker"
@@ -208,13 +218,14 @@
             ]
         },
         {
-            "description": "Nightly batch for non-critical container image updates (minor/patch)",
+            "description": "Nightly batch for non-critical container image updates (minor/patch/digest)",
             "matchDatasources": [
                 "docker"
             ],
             "matchUpdateTypes": [
                 "minor",
-                "patch"
+                "patch",
+                "digest"
             ],
             "groupName": "nightly non-critical container image updates",
             "groupSlug": "weekly-docker-minor-patch",
