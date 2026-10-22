@@ -12,7 +12,7 @@ imagemaid:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: kometateam/imagemaid:v1.2.0
+  image: kometateam/imagemaid:v1.2.2
   ################################
   # ENVIRONMENT/SECRETS
   ################################
