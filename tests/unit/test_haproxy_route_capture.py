@@ -21,8 +21,13 @@ def test_embedded_collector_preserves_account_shell_variables_through_actual_ans
     """command's default argument expansion must not substitute the become HOME."""
     root = Path(__file__).resolve().parents[2]
     playbook = {"tasks": yaml.safe_load((root / "ansible/operations/haproxy-firewall-preflight.yml").read_text())}
-    name = "Collect projected" if operation == "collect" else "Generate unverified additions"
-    command = deepcopy(next(task["ansible.builtin.command"] for task in playbook["tasks"] if name in task["name"]))
+    command = deepcopy(
+        next(
+            task["ansible.builtin.command"]
+            for task in playbook["tasks"]
+            if task.get("ansible.builtin.command", {}).get("argv", [])[-1:] == [operation]
+        )
+    )
     if default_expansion:
         command.pop("expand_argument_vars", None)
     operator = tmp_path / "private-operator"
@@ -377,9 +382,24 @@ def test_actual_ansible_async_collection_polling_aggregation_and_read_only_check
     root = Path(__file__).resolve().parents[2]
     source_play = {"tasks": yaml.safe_load((root / "ansible/operations/haproxy-firewall-preflight.yml").read_text())}
     tasks = source_play["tasks"]
-    first = next(i for i, t in enumerate(tasks) if "Collect projected" in t["name"])
-    last = next(i for i, t in enumerate(tasks) if "Prepare optional" in t["name"])
+    first = next(i for i, task in enumerate(tasks) if task.get("register") == "haproxy_preflight_collection")
+    # The optional projection is a sequence of guarded tasks, not a block.
+    # Keep the real collection, polling, aggregation and evidence writes.
+    projection_guard = "haproxy_preflight_stage_output is defined"
+    last = next(i for i, task in enumerate(tasks) if projection_guard in task.get("when", []))
     selected = deepcopy(tasks[first:last])
+    assert selected, "The collection/aggregation section must not be empty"
+    assert all(projection_guard not in task.get("when", []) for task in selected)
+    assert selected[0].get("ansible.builtin.command", {}).get("argv", [])[-1:] == ["collect"]
+    assert any(
+        task.get("register") == "haproxy_preflight_windows" and "ansible.builtin.async_status" in task and "until" in task
+        for task in selected
+    ), "The collection section must include async polling"
+    assert any(
+        task.get("register") == "haproxy_preflight_candidate"
+        and task.get("ansible.builtin.command", {}).get("argv", [])[-1:] == ["candidates"]
+        for task in selected
+    ), "The collection section must include candidate aggregation"
     executable = str(Path(sys.executable).with_name("ansible-playbook"))
     for task in selected:
         if "ansible.builtin.command" in task:
