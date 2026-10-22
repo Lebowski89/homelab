@@ -14,14 +14,6 @@
 - Automate deployment of apps and services, primarily via Docker and Podman
 - Automate app settings, configs, databases and other needs in a single Ansible or OpenTofu run
 
-## Service migrations
-
-The [migrator workspace](migrator/README.md) provides private batch scaffolding,
-reviewed plan/recipe checksums and the existing Docker-to-Podman toolkit. See [Podman operations](docs/podman-services.md) for ongoing selectors and
-recovery boundaries. [Service firewall and manual operations](docs/service-firewall.md)
-explains the two profiles, supported commands and compatibility paths. Completed
-migration records stay outside the repository.
-
 ## Apps in Use
 
 (Logos sourced from selfh.st <img src="https://cdn.jsdelivr.net/gh/selfhst/icons@main/svg/selfh-st.svg" alt="selfh-st" width="24" />)
