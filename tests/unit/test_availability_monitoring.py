@@ -3,6 +3,7 @@ import json
 import re
 from pathlib import Path
 
+import pytest
 import yaml
 from jinja2 import Environment, StrictUndefined
 from jinja2.nativetypes import NativeEnvironment
@@ -299,6 +300,7 @@ def test_availability_dashboard_renders_valid_json_and_queries_generated_labels(
     assert 'category=~"$category"' in expressions
 
 
+@pytest.mark.integration
 def test_ci_renderer_resolves_inventory_destinations_before_offline_tool_dispatch(tmp_path):
     import os
     import subprocess

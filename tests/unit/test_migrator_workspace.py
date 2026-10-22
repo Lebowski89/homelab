@@ -93,6 +93,7 @@ def test_ambiguous_or_invalid_selection_fails_before_creating_workspace(reposito
     assert list(evidence.iterdir()) == []
 
 
+@pytest.mark.integration
 def test_drafts_fail_closed_and_cannot_be_sealed(repository):
     _, evidence = repository
     directory = M.initialize(evidence, "fixture", ["example:mgt"])
@@ -142,6 +143,7 @@ def test_nonprivate_evidence_root_rejected(repository):
     assert list(evidence.iterdir()) == []
 
 
+@pytest.mark.integration
 def test_real_catalogue_cli_init_is_offline_and_target_scoped(tmp_path):
     tmp_path.chmod(0o700)
     result = subprocess.run(

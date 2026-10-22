@@ -29,7 +29,7 @@ def canonical():
 
 
 @pytest.fixture(scope="module")
-def go_renderer(tmp_path_factory):
+def go_renderer(tmp_path_factory, go_cache):
     go = shutil.which("go")
     if not go:
         pytest.skip("Go unavailable: cannot execute the actual Go payload templates offline")
@@ -37,7 +37,7 @@ def go_renderer(tmp_path_factory):
     binary = directory / "render"
     subprocess.run(
         [go, "build", "-o", str(binary), str(ROOT / "tests/fixtures/alertmanager/render.go")],
-        env={**os.environ, "GOPROXY": "off", "GOSUMDB": "off", "GOTOOLCHAIN": "local"},
+        env={**os.environ, "GOPROXY": "off", "GOSUMDB": "off", "GOTOOLCHAIN": "local", "GOCACHE": str(go_cache)},
         check=True,
         capture_output=True,
     )
@@ -68,6 +68,7 @@ def payload_body(binary, payload, data):
     return promote(rendered)
 
 
+@pytest.mark.integration
 def test_captured_mapping_reproduces_object_title(go_renderer):
     legacy = {
         "title": '{{ if eq .Status "firing" }}FIRING{{ else }}RESOLVED{{ end }}: {{ .CommonLabels.alertname }}',
@@ -82,6 +83,7 @@ def test_captured_mapping_reproduces_object_title(go_renderer):
     assert body["title"] == {"FIRING": "Probe"}  # Gotify's string title cannot decode this object.
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("status", ["firing", "resolved"])
 @pytest.mark.parametrize("summary", ["Controlled notification", 'Error: value "quoted"\\path\nsecond line', "true", "null", "[x]", "☃"])
 def test_current_payload_preserves_gotify_strings(go_renderer, status, summary):

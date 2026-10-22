@@ -159,6 +159,7 @@ def local_deployment(tmp_path):
     return config, run, cleanup_marker
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("initial", "tags"),
     [
@@ -213,6 +214,7 @@ def test_actual_deployment_migrates_existing_configs_and_converges(local_deploym
     assert config.stat().st_mtime_ns == modified
 
 
+@pytest.mark.integration
 def test_check_mode_does_not_edit_config(local_deployment):
     config, run, cleanup_marker = local_deployment
     original = "scan: {custom: keep}\n"
@@ -224,6 +226,7 @@ def test_check_mode_does_not_edit_config(local_deployment):
     assert not cleanup_marker.exists()
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("original", "error", "check_mode"),
     [
@@ -254,6 +257,7 @@ def test_incompatible_existing_config_fails_before_recreate_cleanup(local_deploy
     assert restored.st_mtime_ns == permissions.st_mtime_ns
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("destination", [{}, {"dest": None}, {"dest": ""}, {"dest": " \t\n"}])
 def test_missing_or_blank_seed_destination_fails_preflight(local_deployment, destination):
     config, run, cleanup_marker = local_deployment

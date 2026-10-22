@@ -1214,7 +1214,7 @@ def test_preflight_candidates_preserve_accepted_stage_and_block_shared_worker_ro
 
 
 @pytest.fixture(scope="module")
-def network_projection(tmp_path_factory):
+def network_projection(tmp_path_factory, go_cache):
     """Use Go's strict template evaluator, as Docker does, without a daemon/API."""
     go = shutil.which("go")
     if not go:
@@ -1233,7 +1233,7 @@ func main() {
 }
 """)
     binary = root / "projection"
-    env = {**os.environ, "GOTOOLCHAIN": "local", "GOPROXY": "off", "GOSUMDB": "off", "GO111MODULE": "off", "GOCACHE": str(root / "cache")}
+    env = {**os.environ, "GOTOOLCHAIN": "local", "GOPROXY": "off", "GOSUMDB": "off", "GO111MODULE": "off", "GOCACHE": str(go_cache)}
     build = subprocess.run([go, "build", "-o", str(binary), str(source)], capture_output=True, text=True, env=env, timeout=120)
     assert build.returncode == 0, build.stderr
 
@@ -1248,6 +1248,7 @@ func main() {
     return render
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("populated", [False, True])
 @pytest.mark.parametrize("manager_metadata", [False, True])
 def test_actual_optional_network_projection_reaches_candidates_and_keeps_unknown_routes_pending(
@@ -1414,6 +1415,7 @@ def test_vip_mapping_still_rejects_malformed_addresses_and_missing_matched_netwo
         PREFLIGHT.map_routes([report], "manager", "haproxy", ["worker", "plex"])
 
 
+@pytest.mark.integration
 def test_network_projection_still_rejects_required_fields_and_real_command_failure(network_projection):
     raw = {"Id": "overlay-id", "Name": "db", "Driver": "overlay"}  # required Scope is missing
     with pytest.raises(RuntimeError, match='map has no entry for key "Scope"'):
@@ -1435,6 +1437,7 @@ def test_network_projection_still_rejects_required_fields_and_real_command_failu
         PREFLIGHT.topology({"provider": "haproxy"}, failed)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("host", ["mgt", "unraid", "plex"])
 def test_streamed_collector_exits_nonzero_with_concise_stderr_without_crash_hook(host):
     # Execute the real main/error boundary under -c, with a deterministic failed
@@ -1458,6 +1461,7 @@ sys.exit(main())
     assert "FIREWALL_SOURCE" not in result.stderr and len(result.stderr) < 250
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("failed_stage,status", [("check", 7), ("collect", 9), (None, 0)])
 def test_documented_preflight_prints_paths_logs_and_preserves_failure_status(tmp_path, failed_stage, status):
     blocks = re.findall(r"```bash\n(.*?)```", (ROOT / "migrator/guides/haproxy.md").read_text(), re.S)
@@ -1670,6 +1674,7 @@ def test_exact_overlay_routes_distinguish_vips_tasks_and_host_publications():
     assert record["destinations"][0]["routes"][0]["worker_only"] is False
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "failure",
     [
@@ -2155,6 +2160,7 @@ def test_persistence_audit_checks_only_owned_content_and_enabled_active_units(mo
     assert FW.audit_persistence(policy(), run)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "argv,operation,check",
     [
@@ -2203,6 +2209,7 @@ def test_executable_skynet_dispatch_is_policy_only_and_preserves_private_input_p
     assert ("--check" in args) is check
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "operation,verified,check_mode,malformed,success",
     [
@@ -2367,6 +2374,7 @@ def test_remote_recovery_is_an_explicit_exclusive_inventory_identity():
         FW.validate_policy(candidate)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("operation", ["install", "observe"])
 def test_actual_install_preflight_preserves_dedicated_account_shell_home(tmp_path, operation):
     """Command argument expansion must not rewrite HOME inside streamed Python."""

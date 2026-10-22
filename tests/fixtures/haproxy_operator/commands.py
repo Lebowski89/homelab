@@ -129,6 +129,15 @@ elif command == "runuser":
     if a[0] == "/usr/bin/python3":
         run(a)
     fail(99, "unexpected dedicated-account command")
+elif command == "cat":
+    if a == ["/proc/sys/kernel/random/uuid"]:
+        # Only a fresh, non-sensitive unit nonce is required here. Do not grant
+        # the child access to a dynamic host procfs inode for fixture entropy.
+        import uuid
+
+        output(str(uuid.uuid4()))
+    else:
+        run(["/usr/bin/cat", *a])
 elif command == "getent":
     assert a == ["passwd", "podman-haproxy"]
     output(f"podman-haproxy:x:1011:1011:fixture:{root}/haproxy:/usr/sbin/nologin")

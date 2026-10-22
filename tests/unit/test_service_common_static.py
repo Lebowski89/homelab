@@ -5,6 +5,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
 import yaml
 
 ROLE = Path("ansible/roles/service_common")
@@ -436,6 +437,7 @@ def test_common_infisical_tasks_reset_validate_resolve_and_hide_all_values():
     assert validate_params["no_log"] is True
 
 
+@pytest.mark.integration
 def test_empty_infisical_map_skips_live_lookup_and_keeps_empty_dispatch_owned_outputs(tmp_path):
     repo_root = Path(__file__).resolve().parents[2]
     ansible_playbook = Path(sys.executable).with_name("ansible-playbook")
@@ -748,6 +750,7 @@ def test_required_docker_dynamic_includes_propagate_selection_tags():
         assert required.issubset(set(include.get("apply", {}).get("tags", [])))
 
 
+@pytest.mark.integration
 def test_template_metadata_converges_without_replacing_force_false_content(tmp_path):
     existing = tmp_path / "existing-sensitive.conf"
     absent = tmp_path / "new-sensitive.conf"

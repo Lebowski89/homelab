@@ -155,6 +155,7 @@ def run_workstation_path_validation(tmp_path: Path, shell_directories, xdg_direc
     )
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
 @pytest.mark.parametrize(
     ("shell_directories", "xdg_directories"),
@@ -169,6 +170,7 @@ def test_workstation_user_path_validation_accepts_absolute_string_lists(tmp_path
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
 @pytest.mark.parametrize("variable", ["shell", "xdg"])
 @pytest.mark.parametrize("invalid_entry", [1, "", "   ", "relative/path", "/home/operator/bin "])
@@ -248,6 +250,7 @@ def test_workstation_directory_tasks_preserve_existing_permissions():
         assert "mode" not in directory
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
 @pytest.mark.parametrize("tag", sorted(WORKSTATION_TAGS))
 def test_main_playbook_accepts_each_workstation_tag_with_synthetic_inventory(tmp_path: Path, tag: str):

@@ -169,6 +169,7 @@ def test_translation_rejects_unmapped_owners_and_named_acls(tmp_path):
         proof.translations(report, selected, mapping, mapping)
 
 
+@pytest.mark.integration
 def test_account_shell_leaves_private_operator_cwd_and_preserves_arguments(tmp_path):
     import os
     import subprocess
@@ -199,6 +200,7 @@ def test_account_shell_leaves_private_operator_cwd_and_preserves_arguments(tmp_p
 
 
 @pytest.mark.parametrize("case", ["missing", "stage", "store-error", "wrapper-error", "pull-error", "present"])
+@pytest.mark.integration
 def test_actual_subprocess_image_status_and_explicit_staging(tmp_path, monkeypatch, case):
 
     report, output = tmp_path / "report", tmp_path / "output"

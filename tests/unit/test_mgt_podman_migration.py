@@ -11,6 +11,7 @@ import shlex
 import subprocess
 import sys
 from copy import deepcopy
+from functools import cache
 from pathlib import Path
 
 import pytest
@@ -64,17 +65,28 @@ def context():
     }
 
 
+@cache
+def native_template(source):
+    return NativeEnvironment(undefined=StrictUndefined).from_string(source)
+
+
 def resolve(value, variables):
     if isinstance(value, dict):
         return {key: resolve(item, variables) for key, item in value.items()}
     if isinstance(value, list):
         return [resolve(item, variables) for item in value]
     if isinstance(value, str) and ("{{" in value or "{%" in value):
-        return NativeEnvironment(undefined=StrictUndefined).from_string(value).render(**variables)
+        return native_template(value).render(**variables)
     return value
 
 
 def catalog():
+    # Tests may edit their catalog; only the parsed immutable baseline is shared.
+    return deepcopy(_catalog())
+
+
+@cache
+def _catalog():
     result = {}
     for file in sorted((ROOT / "ansible/group_vars/all/services").glob("*.yml")):
         result.update(yaml.safe_load(file.read_text()))
@@ -103,6 +115,7 @@ def worker_backend_entries(services):
     return entries
 
 
+@cache
 def renderer():
     env = Environment(
         loader=FileSystemLoader(ROOT / "ansible/roles/podman_services/templates"),
@@ -242,6 +255,7 @@ def test_config_changes_restart_only_declared_application_files():
         COMMON.service_common_file_policy({"templates": [{"restart": "false"}]})
 
 
+@pytest.mark.integration
 def test_generator_preserves_argv_and_shell_substitution_using_only_fake_files(tmp_path):
     generator = Path("/usr/lib/systemd/system-generators/podman-system-generator")
     if not generator.is_file():
@@ -294,6 +308,7 @@ def test_host_network_and_typed_systemd_options_reject_conflicting_or_unsafe_inp
             PODMAN.podman_service_normalize({"runtime": "podman", "image": cfg["image"]} | invalid, "fake")
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("role,count", [("netbox", 3), ("infisical", 2)])
 def test_bootstrap_definitions_render_with_private_fake_inputs_without_inventory_or_secret_store(role, count, tmp_path):
     defaults = yaml.safe_load((ROOT / f"ansible/roles/{role}/defaults/main.yml").read_text())
@@ -377,6 +392,7 @@ def test_bootstrap_definitions_render_with_private_fake_inputs_without_inventory
     assert "NONPRODUCTION-check-only" in source
 
 
+@pytest.mark.integration
 def test_all_real_mgt_quadlets_generate_offline_in_their_own_execution_stores(tmp_path):
     generator = Path("/usr/lib/systemd/system-generators/podman-system-generator")
     if not generator.is_file():
@@ -452,6 +468,7 @@ def test_alloy_readonly_config_provides_its_nested_writable_mountpoint(tmp_path)
     assert normalized["execution"]["mode"] == "rootful"
 
 
+@pytest.mark.integration
 def test_bootstrap_registers_adapter_filters_without_catalog_preconditions(tmp_path):
     import sys
 
@@ -524,6 +541,7 @@ def test_bootstrap_and_shared_network_lifecycle_guards_and_tag_propagation():
             assert "not ansible_check_mode" in task["when"]
 
 
+@pytest.mark.integration
 def test_real_cache_commands_keep_fake_credentials_out_of_argv_and_escape_config(tmp_path):
     service = CATALOG.service_catalog_merge_target(catalog()["authelia"], "redis")
     argv = resolve(service["command"], context())
@@ -542,6 +560,7 @@ def test_real_cache_commands_keep_fake_credentials_out_of_argv_and_escape_config
     assert config.stat().st_mode & 0o777 == 0o600
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("proxy", [False, True])
 def test_haproxy_uses_one_config_source_for_both_runtimes_and_keeps_overrides(tmp_path, proxy):
     source = ROOT / "ansible/roles/service_common/templates/configs/haproxy.cfg.j2"
@@ -762,6 +781,7 @@ def test_explicit_rootless_ingress_network_preserves_wildcard_https_and_private_
         PODMAN.podman_service_normalize(changed, "traefik")
 
 
+@pytest.mark.integration
 def test_rootless_signal_and_preparation_commands_use_the_declared_account(tmp_path):
     env = Environment(loader=FileSystemLoader(ROOT / "ansible/roles/service_common/templates"), undefined=StrictUndefined)
     env.filters["quote"] = shlex.quote
@@ -967,6 +987,7 @@ def test_changed_publications_have_explicit_acl_coverage_including_traefik_metri
         COMMON.service_common_requirements_validate(traefik, "traefik", "deploy", {"services_rootless_data_ready": {"traefik": True}})
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("entry_point", ["catalog", "netbox", "infisical"])
 def test_real_preflight_blocks_before_secret_resolution_files_or_bootstrap_recreate(tmp_path, entry_point):
     import sys
@@ -1090,6 +1111,7 @@ def test_catalog_ownership_acknowledgement_uses_adapter_default_name_for_unnamed
         COMMON.service_common_requirements_validate(cfg, name, "deploy", {"services_rootless_data_ready": {"fake": True}})
 
 
+@pytest.mark.integration
 def test_rootless_log_reopen_changes_to_account_home_before_podman(tmp_path):
     """Run the real account shell wrapper from an operator-private directory."""
     env = Environment(loader=FileSystemLoader(ROOT / "ansible/roles/service_common/templates"), undefined=StrictUndefined)
@@ -1129,6 +1151,7 @@ def test_rootless_log_reopen_changes_to_account_home_before_podman(tmp_path):
     ]
 
 
+@pytest.mark.integration
 def test_netbox_bootstrap_health_sends_the_allowed_host(tmp_path):
     """Run the rendered health command against a Host-restricting HTTP server."""
     import http.server
@@ -1182,6 +1205,7 @@ def test_netbox_bootstrap_health_sends_the_allowed_host(tmp_path):
         thread.join(timeout=5)
 
 
+@pytest.mark.integration
 def test_generated_health_shell_preserves_quotes_substitution_and_environment(tmp_path):
     """Run the generated health argument, without a container or real credentials."""
     generator = Path("/usr/lib/systemd/system-generators/podman-system-generator")
@@ -1212,3 +1236,13 @@ def test_generated_health_shell_preserves_quotes_substitution_and_environment(tm
         argv, env=dict(os.environ, POSTGRES_DB="NONPRODUCTION database with spaces"), capture_output=True, text=True, check=False
     )
     assert executed.returncode == 0, executed.stderr
+
+
+def test_cached_inputs_remain_independent_between_test_cases():
+    current = catalog()
+    name = next(iter(current))
+    baseline = deepcopy(current[name])
+    current[name]["image"] = "registry.invalid/nonproduction:changed"
+    assert catalog()[name] == baseline
+    assert resolve("{{ value }}", {"value": "first"}) == "first"
+    assert resolve("{{ value }}", {"value": "second"}) == "second"

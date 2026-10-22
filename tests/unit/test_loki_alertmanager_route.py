@@ -53,6 +53,7 @@ def test_only_ruler_url_changes(case):
     assert FILTER.docker_services_loki_alertmanager_route(result, canonical()) == result
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("failure", ["", "check", "validate", "replacement", "update-before", "update-after", "readiness", "dependency"])
 def test_actual_ansible_named_rollout_and_scoped_rollback(tmp_path, failure):
     config = tmp_path / "loki"
@@ -206,6 +207,7 @@ else:raise SystemExit('unapproved operation')
         assert not updates
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("case", ["success", "readiness", "config-http", "malformed", "oversized", "sensitive-destination"])
 def test_actual_embedded_query_retains_partial_observations_without_source_leaks(case):
     tasks = yaml.safe_load((ROLE / "tasks/sub_tasks/loki_alertmanager_route.yml").read_text())

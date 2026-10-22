@@ -14,6 +14,7 @@ import yaml
 from test_mgt_firewall import FW, PREFLIGHT, PreflightHost
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("operation", ["collect", "candidates"])
 @pytest.mark.parametrize("default_expansion", [False, True])
 def test_embedded_collector_preserves_account_shell_variables_through_actual_ansible(tmp_path, operation, default_expansion):
@@ -354,6 +355,7 @@ def test_capture_options_are_bounded_and_strict(key, value):
         window(machine, fw, config, report)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "mismatch,check,targeted,address_drift",
     [

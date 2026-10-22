@@ -5,6 +5,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PREFLIGHT_PATH = REPO_ROOT / "ansible/tasks/service_catalog_common_preflight.yml"
 
@@ -77,6 +79,7 @@ def run_playbook(tmp_path: Path, source: str):
     )
 
 
+@pytest.mark.integration
 def test_live_lookup_loop_accumulates_all_values_on_dispatch_host_and_resets_next_service(tmp_path):
     result = run_playbook(
         tmp_path,
@@ -190,6 +193,7 @@ def test_live_lookup_loop_accumulates_all_values_on_dispatch_host_and_resets_nex
             assert value not in output
 
 
+@pytest.mark.integration
 def test_failed_infisical_preflight_stops_before_destructive_cleanup(tmp_path):
     result = run_playbook(
         tmp_path,

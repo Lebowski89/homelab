@@ -203,6 +203,7 @@ def test_playbook_normalizes_host_defaults_before_loading_service_definitions():
     assert load_services in play["tasks"]
 
 
+@pytest.mark.integration
 def test_synthetic_inventory_normalizes_canonical_values_and_keeps_adapter_facts_host_local(tmp_path):
     inventory = tmp_path / "inventory.yml"
     inventory.write_text(
@@ -482,6 +483,7 @@ def test_real_arr_targets_use_canonical_host_values_and_preserve_inheritance(ser
     assert declarations.count(api_var) == 1
 
 
+@pytest.mark.integration
 def test_removed_container_host_field_names_are_absent_from_tracked_repository():
     tracked = subprocess.run(
         ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
@@ -519,6 +521,7 @@ def test_podman_operational_code_has_no_legacy_container_host_dependency():
     assert all("docker_" + "host_" not in path.read_text(errors="ignore") for path in operational_files)
 
 
+@pytest.mark.integration
 def test_opencloud_specific_host_custom_fields_are_not_reintroduced():
     forbidden = ("docker_" + "host_" + "opencloud_", "container_host_" + "opencloud_")
     tracked = subprocess.run(

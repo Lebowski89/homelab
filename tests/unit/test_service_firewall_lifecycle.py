@@ -383,6 +383,7 @@ def test_qualified_probe_rejects_namespace_or_pid_replacement(monkeypatch):
         REMOTE.qualified_probes(req)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "failure",
     [
@@ -559,7 +560,7 @@ class ActionModule(fixture.ACTION.ActionModule):
     config.write_text(
         f"[defaults]\nroles_path={ROOT / 'ansible/roles'}\naction_plugins={action_dir}\nstdout_callback=default\nvars_plugins_enabled=\n[inventory]\nenable_plugins=host_list\n"
     )
-    argv = [str(Path(sys.executable).parent / "ansible-playbook"), "-i", "manager,", str(playbook)]
+    argv = [sys.executable, str(ROOT / "tests/fixtures/ansible/retry_playbook.py"), "-i", "manager,", str(playbook)]
     if failure == "check-mode":
         argv.append("--check")
     result = subprocess.run(
@@ -572,6 +573,7 @@ class ActionModule(fixture.ACTION.ActionModule):
             "ANSIBLE_CONFIG": str(config),
             "ANSIBLE_LOG_PATH": str(tmp_path / "ansible.log"),
             "ANSIBLE_LOCAL_TEMP": str(tmp_path / "local"),
+            "ANSIBLE_TEST_RETRY_LOG": str(tmp_path / "retry-sleeps.jsonl"),
         },
     )
     output = result.stdout + result.stderr
@@ -623,6 +625,13 @@ class ActionModule(fixture.ACTION.ActionModule):
         events = (tmp_path / "events").read_text().splitlines()
         assert events == ["stage", "activate", "finish", "counters", "probe", "counters"]
         assert not json.loads((tmp_path / "policy.json").read_text())["managed_services"]["utility"]["pending"]
+
+    if failure in {"apply", "remove-delayed", "post-start-test"}:
+        sleeps = [json.loads(line) for line in (tmp_path / "retry-sleeps.jsonl").read_text().splitlines()]
+        events = (tmp_path / "events").read_text().splitlines()
+        phase = "remove" if failure == "remove-delayed" else "finish"
+        assert len(sleeps) == events.count(phase) - 1
+        assert all(seconds > 0 for seconds in sleeps)
 
 
 def test_all_real_mgt_targets_plan_without_templating_environments(monkeypatch):
@@ -1137,6 +1146,7 @@ def test_swarm_failure_containment_is_mode_aware_scoped_and_retryable(mode, fail
     assert all(a[4] == ("rm" if mode == "global" else "scale") for a in mutations)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("mode,stop_fails", [("global", False), ("global", True), ("global", "after-stop"), ("replicated", False)])
 def test_production_stack_rescue_contains_exact_service_and_retains_original_failure(tmp_path, mode, stop_fails):
     import os

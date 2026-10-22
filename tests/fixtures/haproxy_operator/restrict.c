@@ -38,7 +38,6 @@ int main(int argc, char **argv) {
     permit(ruleset,"/etc/ld.so.cache",LANDLOCK_ACCESS_FS_READ_FILE);
     permit(ruleset,"/dev/null",LANDLOCK_ACCESS_FS_READ_FILE|LANDLOCK_ACCESS_FS_WRITE_FILE);
     permit(ruleset,"/dev/urandom",LANDLOCK_ACCESS_FS_READ_FILE);
-    permit(ruleset,"/proc/sys/kernel/random/uuid",LANDLOCK_ACCESS_FS_READ_FILE);
     if (prctl(PR_SET_NO_NEW_PRIVS,1,0,0,0)) fail("no new privileges");
     if (syscall(SYS_landlock_restrict_self,ruleset,0)) fail("landlock restrict");
     close(ruleset);

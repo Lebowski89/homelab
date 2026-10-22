@@ -438,6 +438,7 @@ def test_actual_negative_operation_preserves_state_and_uses_recorded_unit(tmp_pa
     assert not any(c[0] in ["docker", "podman"] or "stop" in c or "restart" in c for c in commands)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("stage,status", [("sudo", 42), ("inventory", 75), ("acceptance", 66), ("success", 0)])
 @pytest.mark.parametrize("config_choice", ["default", "override"])
 @pytest.mark.parametrize("actual", [False, True])
@@ -517,6 +518,7 @@ echo 'fixture negative acceptance passed'
     assert os.path.commonpath([logs[0], tmp_path]) == str(tmp_path)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("initialize,success", [(False, False), (True, True)])
 def test_actual_embedded_inventory_projection_initializes_collection_loader(tmp_path, initialize, success):
     """Real Ansible parsing of a local NetBox-shaped plugin; outbound calls forbidden."""
@@ -660,6 +662,7 @@ def test_peer_ssh_retains_original_operator_context_and_strict_trust(tmp_path, m
     assert "BatchMode=yes" in command and command[-3:] == ["-p", "2222", "fixture-peer@192.0.2.59"]
 
 
+@pytest.mark.integration
 def test_real_openssh_resolves_fixture_operator_trust_without_connecting(tmp_path, monkeypatch):
     import shutil
     import subprocess
@@ -700,7 +703,8 @@ def test_real_openssh_resolves_fixture_operator_trust_without_connecting(tmp_pat
     assert results[0] != results[1]
 
 
-def test_actual_container_inspection_renders_go_fields_not_json_keys(tmp_path, monkeypatch):
+@pytest.mark.integration
+def test_actual_container_inspection_renders_go_fields_not_json_keys(tmp_path, monkeypatch, go_cache):
     import os
     import shutil
     import subprocess
@@ -737,7 +741,7 @@ func main() {
         "GOPROXY": "off",
         "GOSUMDB": "off",
         "GO111MODULE": "off",
-        "GOCACHE": str(tmp_path / "cache"),
+        "GOCACHE": str(go_cache),
     }
     binary = tmp_path / "projection"
     built = subprocess.run([go, "build", "-o", str(binary), str(source)], env=environment, capture_output=True, text=True, timeout=120)
@@ -975,6 +979,7 @@ def test_actual_acceptance_state_and_strict_deployment_gate(tmp_path, failure):
     assert all(p.read_bytes() == data for p, data in before.items())
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("status", [0, 69])
 def test_documented_activity_batch_runs_existing_capture_and_preserves_status(tmp_path, status):
     import os

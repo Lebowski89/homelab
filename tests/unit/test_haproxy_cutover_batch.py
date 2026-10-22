@@ -38,7 +38,7 @@ def mount_record(source="/", rw=False):
 
 
 @pytest.fixture(scope="module")
-def mount_projection(tmp_path_factory):
+def mount_projection(tmp_path_factory, go_cache):
     go = shutil.which("go")
     if not go:
         pytest.skip("Go unavailable for actual Docker mount projection regression")
@@ -62,7 +62,7 @@ func main() {
         "GOPROXY": "off",
         "GOSUMDB": "off",
         "GO111MODULE": "off",
-        "GOCACHE": str(root / "cache"),
+        "GOCACHE": str(go_cache),
     }
     result = subprocess.run([go, "build", "-o", str(binary), str(source)], capture_output=True, text=True, env=environment, timeout=120)
     assert result.returncode == 0, result.stderr
@@ -80,6 +80,7 @@ func main() {
     return project
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("rw", [False, True, "absent"])
 def test_actual_alloy_mount_projection_and_guard(tmp_path, mount_projection, rw):
     captured = {
@@ -479,6 +480,7 @@ def test_current_selector_resolves_again_and_requires_all_exact_labels(monkeypat
         )
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("check", [False, True])
 def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path, check):
     catalog = {}
@@ -584,6 +586,7 @@ def test_reviewed_policy_cannot_change_accepted_homepage(tmp_path, change):
         BATCH.homepage(current, source)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("state", ["before-write", "after-write", "outside-change", "new-paths"])
 def test_scoped_configuration_rollback_handles_partial_deployment(tmp_path, state):
     import re

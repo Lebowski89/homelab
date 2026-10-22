@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 ROLE = REPO_ROOT / "ansible/roles/docker_services"
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("operation", "force", "expected_cleanup"),
     [

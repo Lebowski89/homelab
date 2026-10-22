@@ -125,6 +125,7 @@ def test_scraparr_job_preserves_other_configuration_and_rejects_ambiguous_scope(
     assert FILTER.docker_services_prometheus_scraparr_job(result, job) == result
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("kind", ["alertmanager", "scraparr"])
 @pytest.mark.parametrize("failure", ["", "check", "promtool", "replacement", "namespace", "reload"])
 def test_actual_ansible_route_operation(tmp_path, failure, kind):

@@ -55,6 +55,7 @@ def path_snapshot(path: Path) -> tuple[bool, int | None, int | None, int | None]
     return (True, stat.st_uid, stat.st_gid, stat.st_mode)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("direct_pasta", [False, True])
 def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tmp_path, absent_rootless_bind_source, direct_pasta):
     host_user = f"podman-check-{os.getpid()}"
@@ -291,6 +292,7 @@ def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, ex
     )
 
 
+@pytest.mark.integration
 def test_execution_only_preparation_returns_before_service_work(tmp_path):
     account = f"podman-check-{os.getpid()}"
     before = account_snapshot(account)
@@ -350,6 +352,7 @@ def test_execution_only_preparation_returns_before_service_work(tmp_path):
     assert not (tmp_path / "state").exists()
 
 
+@pytest.mark.integration
 def test_reconciled_secret_restart_depends_on_material_change(tmp_path):
     case_tasks = tmp_path / "restart-case.yml"
     case_tasks.write_text(
@@ -395,6 +398,7 @@ def test_reconciled_secret_restart_depends_on_material_change(tmp_path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("field", "destination"),
     [
@@ -460,6 +464,7 @@ def test_rootless_check_mode_rejects_managed_files_outside_the_bind_tree(tmp_pat
     assert "declared rootless bind source" in result.stdout
 
 
+@pytest.mark.integration
 def test_common_path_preparation_restricts_existing_bind_root_without_replacing_contents(tmp_path):
     bind_source = tmp_path / "thelounge"
     nested = bind_source / "users"
@@ -518,6 +523,7 @@ def test_common_path_preparation_restricts_existing_bind_root_without_replacing_
     assert probe.read_text() == "writable\n"
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("version", "supported"), [(None, True), (2, True), ("2", False), (True, False), (1, False), (3, False), ({}, False)]
 )
@@ -613,6 +619,7 @@ def test_execution_state_version_contract_is_enforced_before_runtime_work(tmp_pa
     assert list(quadlet_dir.iterdir()) == quadlet_before
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("mode", ["rootful", "rootless"])
 @pytest.mark.parametrize("marked", [True, False])
 def test_removal_requires_managed_marker_for_existing_rootful_and_rootless_files(tmp_path, mode, marked):
@@ -686,6 +693,7 @@ def test_removal_requires_managed_marker_for_existing_rootful_and_rootless_files
     assert state_path.exists()
 
 
+@pytest.mark.integration
 def test_versionless_cleanup_ignores_unproven_resource_metadata_but_version_two_uses_it(tmp_path):
     for version in (None, 2):
         case_dir = tmp_path / ("legacy" if version is None else "v2")
@@ -781,6 +789,7 @@ def test_versionless_cleanup_ignores_unproven_resource_metadata_but_version_two_
         assert all(path.exists() for path in fallback + resource_files)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("action", "desired_mode", "persisted_mode", "legacy_rootful", "expected_mode", "expected_user", "check_mode"),
     [
@@ -959,6 +968,7 @@ def test_remove_and_drift_materialize_the_persisted_active_owner(
     assert not podman_marker.exists()
 
 
+@pytest.mark.integration
 def test_drift_uses_the_persisted_rootless_owner_runtime_environment(tmp_path):
     fake_bin = tmp_path / "bin"
     fake_bin.mkdir()
@@ -1042,6 +1052,7 @@ def test_drift_uses_the_persisted_rootless_owner_runtime_environment(tmp_path):
     assert observed.read_text().splitlines() == expected
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("check_mode", [True, False])
 def test_netbox_account_only_preparation_never_resolves_bootstrap_credentials(tmp_path, check_mode):
     """Exercise the real bootstrap tasks with deliberately unavailable values."""
@@ -1115,6 +1126,7 @@ def test_netbox_account_only_preparation_never_resolves_bootstrap_credentials(tm
     assert not (tmp_path / "homes").exists() and not (tmp_path / "state").exists()
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "mode,scenario",
     [

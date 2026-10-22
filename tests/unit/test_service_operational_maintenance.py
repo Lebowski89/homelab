@@ -199,6 +199,7 @@ def test_initial_cutover_and_changed_ownership_keep_strict_actual_service_acknow
     assert COMMON.service_common_requirements_validate(cfg, "wallos", "deploy", {}, execution_only=True)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("mode", ["accepted", "missing-policy", "stale-port", "noncompliant", "initial", "initial-authorized"])
 def test_actual_role_precedes_stop_and_caches_only_this_service_operation(tmp_path, mode):
     cfg, variables, policy, observed = worker_fixture()
@@ -332,6 +333,7 @@ class ActionModule(m.ActionModule):
         assert "services_worker_backend_acl_ready" in output
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("bootstrap", [False, True])
 def test_actual_mgt_audit_and_static_bootstrap_need_no_provider_or_replacement(tmp_path, bootstrap):
     defaults = yaml.safe_load((ROOT / "ansible/roles/netbox/defaults/main.yml").read_text())

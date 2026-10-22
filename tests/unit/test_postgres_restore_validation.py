@@ -574,6 +574,7 @@ def test_runner_preserves_restic_and_production_safety_boundaries():
     assert "/var/run/postgresql" not in source
 
 
+@pytest.mark.integration
 def test_successful_validation_restores_every_database_sequentially_and_emits_metrics(
     tmp_path: Path,
 ):
@@ -638,6 +639,7 @@ def test_successful_validation_restores_every_database_sequentially_and_emits_me
     assert not list((tmp_path / "textfile").glob("*.tmp.*"))
 
 
+@pytest.mark.integration
 def test_newest_valid_matching_snapshot_is_selected_and_unrelated_snapshot_is_ignored(
     tmp_path: Path,
 ):
@@ -675,6 +677,7 @@ def test_newest_valid_matching_snapshot_is_selected_and_unrelated_snapshot_is_ig
     assert "d" * 64 not in restore
 
 
+@pytest.mark.integration
 def test_nanosecond_snapshot_timestamp_with_offset_is_parsed_and_ordered(tmp_path: Path):
     backup_root = tmp_path / "backups"
     earlier = snapshot(
@@ -703,6 +706,7 @@ def test_nanosecond_snapshot_timestamp_with_offset_is_parsed_and_ordered(tmp_pat
     assert "2026-08-11T12:02:03.123456789+10:00" in (tmp_path / "snapshots.json").read_text()
 
 
+@pytest.mark.integration
 def test_validation_encoding_and_locale_overrides_reach_initdb(tmp_path: Path):
     script = render_validator(tmp_path, encoding="LATIN1", locale="C")
 
@@ -714,6 +718,7 @@ def test_validation_encoding_and_locale_overrides_reach_initdb(tmp_path: Path):
     assert "\t--locale=C" in initdb_call
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("mutator", "expected_message"),
     [
@@ -760,6 +765,7 @@ def test_malformed_matching_snapshot_metadata_is_rejected_before_restore(
     assert "INITDB\t" not in joined
 
 
+@pytest.mark.integration
 def test_no_matching_snapshot_and_stale_snapshot_fail_without_restore(tmp_path: Path):
     unrelated = snapshot(tmp_path / "no-match/backups", hostname="pg95")
     stale = snapshot(
@@ -779,6 +785,7 @@ def test_no_matching_snapshot_and_stale_snapshot_fail_without_restore(tmp_path: 
     assert not any("\trestore\t" in line for line in command_log(tmp_path / "stale"))
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("restic_mode", "message"),
     [
@@ -807,6 +814,7 @@ def test_restic_failures_are_loud_and_never_modify_repository(
     assert "--delete" not in joined
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("mutation", "expected_message"),
     [
@@ -860,6 +868,7 @@ def test_invalid_restored_artifacts_fail_before_postgresql_starts(
     assert not list((tmp_path / "work").glob("run-*"))
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("psql_mode", "expected_message"),
     [
@@ -888,6 +897,7 @@ def test_temporary_cluster_identity_mismatch_prevents_database_restore_and_clean
     assert not list((tmp_path / "work").glob("run-*"))
 
 
+@pytest.mark.integration
 def test_free_space_floor_fails_before_restic_restore(tmp_path: Path):
     script = render_validator(tmp_path, min_free_bytes=10**18)
 
@@ -901,6 +911,7 @@ def test_free_space_floor_fails_before_restic_restore(tmp_path: Path):
     assert "postgres_backup_restore_validation_last_run_success 0" in metrics(tmp_path)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("environment", "expected_log"),
     [
@@ -925,6 +936,7 @@ def test_postgresql_startup_and_sql_failures_fail_the_validation(
     assert not list((tmp_path / "work").glob("run-*"))
 
 
+@pytest.mark.integration
 def test_cleanup_stop_failure_is_reported_and_preserves_the_workspace(tmp_path: Path):
     script = render_validator(tmp_path)
 
@@ -936,6 +948,7 @@ def test_cleanup_stop_failure_is_reported_and_preserves_the_workspace(tmp_path: 
     assert len(list((tmp_path / "work").glob("run-*"))) == 1
 
 
+@pytest.mark.integration
 def test_pg_restore_failure_fails_run_preserves_last_success_and_cleans_cluster(
     tmp_path: Path,
 ):
@@ -965,6 +978,7 @@ def test_pg_restore_failure_fails_run_preserves_last_success_and_cleans_cluster(
     assert not list((tmp_path / "work").glob("run-*"))
 
 
+@pytest.mark.integration
 def test_overlap_skip_does_not_overwrite_health_metrics(tmp_path: Path):
     script = render_validator(tmp_path)
     environment = os.environ.copy()
@@ -999,6 +1013,7 @@ def test_overlap_skip_does_not_overwrite_health_metrics(tmp_path: Path):
     assert metrics_after == metrics_before
 
 
+@pytest.mark.integration
 def test_stale_workspace_without_pid_is_removed_without_stop_and_remains_root_bounded(tmp_path: Path):
     script = render_validator(tmp_path)
     stale, _ = make_stale_workspace(tmp_path)
@@ -1025,6 +1040,7 @@ def test_stale_workspace_without_pid_is_removed_without_stop_and_remains_root_bo
     assert source.count("process_belongs_to_validator_pgdata \\") == 2
 
 
+@pytest.mark.integration
 def test_dead_stale_pid_is_removed_without_postgresql_stop(tmp_path: Path):
     script = render_validator(tmp_path)
     stale, stale_pgdata = make_stale_workspace(tmp_path, pid="4242")
@@ -1038,6 +1054,7 @@ def test_dead_stale_pid_is_removed_without_postgresql_stop(tmp_path: Path):
     assert not any(line.startswith("PG_CTL\t") for line in command_log(tmp_path))
 
 
+@pytest.mark.integration
 def test_exact_live_stale_validator_process_is_stopped_before_removal(tmp_path: Path):
     script = render_validator(tmp_path)
     stale, stale_pgdata = make_stale_workspace(tmp_path, pid="4242")
@@ -1058,6 +1075,7 @@ def test_exact_live_stale_validator_process_is_stopped_before_removal(tmp_path: 
     assert f"\t-D\t{stale_pgdata}\t-m\tfast\t-w\t-t\t60\tstop" in stop_calls[0]
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("executable", "process_pgdata", "uid", "recorded_pgdata"),
     [
@@ -1101,6 +1119,7 @@ def test_ambiguous_live_stale_pid_fails_closed_without_stop_or_removal(
     assert "postgres_backup_restore_validation_last_run_success 0" in metrics(tmp_path)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("malformed_pid", ["", "not-a-pid", "0", "-12"])
 def test_malformed_stale_pid_never_causes_a_stop(tmp_path: Path, malformed_pid: str):
     script = render_validator(tmp_path)
@@ -1133,6 +1152,7 @@ def test_metrics_are_atomic_low_cardinality_and_failure_aware():
         assert f"postgres_backup_restore_validation_{metric_name}" in source
 
 
+@pytest.mark.integration
 def test_rendered_validator_passes_bash_syntax(tmp_path: Path):
     script = render_validator(tmp_path)
 
@@ -1146,6 +1166,7 @@ def test_rendered_validator_passes_bash_syntax(tmp_path: Path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(shutil.which("shellcheck") is None, reason="shellcheck is unavailable")
 def test_rendered_validator_passes_shellcheck(tmp_path: Path):
     script = render_validator(tmp_path)
@@ -1160,6 +1181,7 @@ def test_rendered_validator_passes_shellcheck(tmp_path: Path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.integration
 def test_restore_validation_systemd_units_pass_systemd_analyze_verify(tmp_path: Path):
     if shutil.which("systemd-analyze") is None:
         pytest.skip("systemd-analyze is unavailable")

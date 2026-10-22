@@ -16,6 +16,7 @@ BLOCK = b"# BEGIN SKYNET PODMAN PASTA TERM\n  signal (receive) set=(term) peer=p
 AFTER = BEFORE.replace(b"{\n", b"{\n" + BLOCK)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("scenario", ["apply_repeat", "check", "stale", "invalid_rule", "reload_failure"])
 def test_exact_profile_edit_idempotence_read_only_guards_and_rollback(tmp_path, scenario):
     binary = Path(os.sys.executable).parent / "ansible-playbook"

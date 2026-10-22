@@ -148,6 +148,7 @@ def test_actual_snapshot_preserves_both_stdout_files_before_classification(tmp_p
         assert all("hostname/boot identity differs" in row["reason"] for row in report["coverage"])
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("status", [0, 23])
 def test_actual_shell_runner_logs_early_failure_and_uses_only_snapshot(tmp_path, status):
     batch = tmp_path / "private batch"

@@ -430,6 +430,7 @@ def test_retention_is_root_bounded_and_name_constrained():
     assert 'mktemp "$BACKUP_ROOT/.retention-$retention_class.XXXXXX"' in source
 
 
+@pytest.mark.integration
 def test_runner_rejects_symlinked_backup_root(tmp_path: Path):
     script = render_runner(tmp_path)
     backup_root = tmp_path / "backups"
@@ -579,6 +580,7 @@ def test_setup_run_and_compatibility_tags_are_wired():
         assert tag in skynet
 
 
+@pytest.mark.integration
 def test_replica_skip_exits_zero_without_dumping_or_overwriting_metrics(tmp_path: Path):
     script = render_runner(tmp_path)
     metrics_file = tmp_path / "textfile" / "postgres_logical_backup.prom"
@@ -593,6 +595,7 @@ def test_replica_skip_exits_zero_without_dumping_or_overwriting_metrics(tmp_path
     assert not list((tmp_path / "backups").glob("[0-9]*"))
 
 
+@pytest.mark.integration
 def test_patroni_query_failure_is_not_a_replica_skip(tmp_path: Path):
     script = render_runner(tmp_path)
 
@@ -605,6 +608,7 @@ def test_patroni_query_failure_is_not_a_replica_skip(tmp_path: Path):
     assert "postgres_backup_last_run_success 0" in metrics
 
 
+@pytest.mark.integration
 def test_unexpected_patroni_http_status_fails(tmp_path: Path):
     script = render_runner(tmp_path)
 
@@ -615,6 +619,7 @@ def test_unexpected_patroni_http_status_fails(tmp_path: Path):
     assert "SKIPPED_NOT_LEADER" not in result.stdout
 
 
+@pytest.mark.integration
 def test_successful_runner_builds_verified_promoted_backup_and_metrics(tmp_path: Path):
     script = render_runner(tmp_path)
 
@@ -643,6 +648,7 @@ def test_successful_runner_builds_verified_promoted_backup_and_metrics(tmp_path:
     assert not list((tmp_path / "textfile").glob("*.tmp.*"))
 
 
+@pytest.mark.integration
 def test_runner_retention_succeeds_from_inaccessible_caller_working_directory(tmp_path: Path):
     script = render_runner(tmp_path)
     backup_root = tmp_path / "backups"
@@ -677,6 +683,7 @@ def test_runner_retention_succeeds_from_inaccessible_caller_working_directory(tm
     assert "Failed to restore initial working directory" not in result.stderr
 
 
+@pytest.mark.integration
 def test_pre_promotion_failure_does_not_apply_completed_retention(tmp_path: Path):
     script = render_runner(tmp_path)
     expired_completed = tmp_path / "backups" / "20000101T000000Z"
@@ -690,6 +697,7 @@ def test_pre_promotion_failure_does_not_apply_completed_retention(tmp_path: Path
     assert expired_completed.is_dir()
 
 
+@pytest.mark.integration
 def test_post_promotion_retention_failure_preserves_last_success_metrics(tmp_path: Path):
     script = render_runner(tmp_path)
     metrics_file = tmp_path / "textfile" / "postgres_logical_backup.prom"
@@ -714,6 +722,7 @@ def test_post_promotion_retention_failure_preserves_last_success_metrics(tmp_pat
     assert "postgres_backup_last_database_count 39" in metrics
 
 
+@pytest.mark.integration
 def test_successful_promotion_applies_bounded_retention_without_following_symlinks(tmp_path: Path):
     script = render_runner(tmp_path)
     backup_root = tmp_path / "backups"
@@ -739,6 +748,7 @@ def test_successful_promotion_applies_bounded_retention_without_following_symlin
     assert not list(backup_root.glob(".retention-*"))
 
 
+@pytest.mark.integration
 def test_flock_skips_an_overlapping_run_without_starting_another_backup(tmp_path: Path):
     script = render_runner(tmp_path)
     first_environment = os.environ.copy()
@@ -771,6 +781,7 @@ def test_flock_skips_an_overlapping_run_without_starting_another_backup(tmp_path
     assert len(list((tmp_path / "backups").glob("[0-9]*Z"))) == 1
 
 
+@pytest.mark.integration
 def test_rendered_runner_passes_bash_syntax(tmp_path: Path):
     script = render_runner(tmp_path)
 
@@ -779,6 +790,7 @@ def test_rendered_runner_passes_bash_syntax(tmp_path: Path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(shutil.which("shellcheck") is None, reason="shellcheck is unavailable")
 def test_rendered_runner_passes_shellcheck(tmp_path: Path):
     script = render_runner(tmp_path)
@@ -788,6 +800,7 @@ def test_rendered_runner_passes_shellcheck(tmp_path: Path):
     assert result.returncode == 0, result.stdout + result.stderr
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(shutil.which("systemd-analyze") is None, reason="systemd-analyze is unavailable")
 def test_postgres_units_pass_systemd_analyze_verify(tmp_path: Path):
     runner_path = tmp_path / "postgres-logical-backup"
@@ -940,6 +953,7 @@ def postgres_task_output(output: str, task_name: str) -> str:
     return output[start:] if end == -1 else output[start:end]
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("tags", [None, "postgres", "postgres_etcd", "postgres_patroni"])
 def test_ordinary_postgres_tag_selection_excludes_reset_tasks(tmp_path: Path, tags: str | None):
     result = run_postgres_role_selection(tmp_path, tags=tags, direct_components=True, list_tasks=True)
@@ -958,6 +972,7 @@ def test_ordinary_postgres_tag_selection_excludes_reset_tasks(tmp_path: Path, ta
         assert task_name not in output
 
 
+@pytest.mark.integration
 def test_never_tag_alone_cannot_bypass_explicit_reset_intent(tmp_path: Path):
     result = run_postgres_role_selection(tmp_path, tags="never", direct_components=True)
     output = result.stdout + result.stderr
@@ -977,6 +992,7 @@ def test_never_tag_alone_cannot_bypass_explicit_reset_intent(tmp_path: Path):
     assert "would stop Patroni" not in output
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("reset_tag", "include_name", "plan_name", "plan_message", "destructive_tasks"),
     [
@@ -1019,6 +1035,7 @@ def test_explicit_reset_tags_reach_real_role_path_safely_in_check_mode(
         assert "skipping: [localhost]" in postgres_task_output(output, task_name)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("tag", "plan_name", "forbidden_live_task"),
     [

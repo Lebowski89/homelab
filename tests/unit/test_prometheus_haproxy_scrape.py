@@ -29,6 +29,7 @@ def test_shared_haproxy_job_preserves_both_instances_across_runtime_transition(r
     assert instances == ["192.0.2.48:18405", "haproxy:8405"]
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "failure",
     [
@@ -203,15 +204,17 @@ print((root/'loaded.yml').read_text())
         f"[defaults]\ninventory={inventory}\nlocal_tmp={tmp_path / 'ansible-tmp'}\n"
         "vars_plugins_enabled=\n[inventory]\nenable_plugins=yaml\n"
     )
-    argv = [str(Path(sys.executable).parent / "ansible-playbook"), str(playbook), "--tags", "scrape_fixture"]
+    argv = [sys.executable, str(ROOT / "tests/fixtures/ansible/retry_playbook.py"), str(playbook), "--tags", "scrape_fixture"]
     if failure == "check":
         argv.append("--check")
-    environment = {**os.environ, "ANSIBLE_CONFIG": str(cfg)}
+    environment = {**os.environ, "ANSIBLE_CONFIG": str(cfg), "ANSIBLE_TEST_RETRY_LOG": str(tmp_path / "retry-sleeps.jsonl")}
     environment.pop("ANSIBLE_LOG_PATH", None)
     result = subprocess.run(argv, env=environment, cwd=tmp_path, capture_output=True, text=True, timeout=60)
     assert result.returncode == (0 if failure in {"", "check"} else 2), result.stdout + result.stderr
     commands = [json.loads(line) for line in receipt.read_text().splitlines()]
     assert all(command[0] in {"ps", "inspect", "exec", "kill", "query"} for command in commands)
+    if failure == "verification":
+        assert (tmp_path / "retry-sleeps.jsonl").read_text().splitlines()
     unsafe = failure in {"concurrent-edit", "identity-change", "recovery-failure"}
     assert bool(list(config_dir.glob(".skynet-haproxy-scrape-*"))) is unsafe
     if failure in {"reload", "verification", "recovery-failure", "concurrent-edit", "identity-change"}:

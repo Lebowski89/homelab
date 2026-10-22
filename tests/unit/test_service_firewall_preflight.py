@@ -17,6 +17,7 @@ F = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(F)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("failure", ["lookup", "environment", "resolution", "partial", "cleanup", "adapter-init", "check-mode"])
 def test_real_dispatch_cancels_preflight_and_transfers_adapter_cleanup(tmp_path, failure):
     plugins, roles = tmp_path / "actions", tmp_path / "roles"

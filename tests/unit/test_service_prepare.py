@@ -577,6 +577,7 @@ def test_check_mode_guards_external_and_mutating_application_phases():
     assert "not ansible_check_mode" in deploy_all["when"]
 
 
+@pytest.mark.integration
 def test_check_mode_selects_no_temporary_runtime_executor(tmp_path: Path):
     playbook = tmp_path / "temporary-container-check.yml"
     playbook.write_text(
@@ -672,6 +673,7 @@ def test_check_mode_selects_no_temporary_runtime_executor(tmp_path: Path):
     assert "example.invalid" not in output
 
 
+@pytest.mark.integration
 def test_validation_resets_seeded_outputs_without_mutation_or_external_calls(tmp_path: Path):
     playbook = tmp_path / "service-prepare-reset.yml"
     playbook.write_text(
@@ -816,6 +818,7 @@ def test_generated_application_secret_declarations_normalize_through_both_adapte
     assert all("podman" not in repr(item).lower() for item in generated)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("case", ["existing", "missing", "symlink", "wrong_type", "also_rendered"])
 def test_authelia_existing_users_preservation_uses_actual_tasks_without_generation(tmp_path: Path, case: str):
     source = tmp_path / "users_database.yml"

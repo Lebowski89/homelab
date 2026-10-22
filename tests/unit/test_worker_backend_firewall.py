@@ -425,6 +425,7 @@ def test_verified_ipv6_override_and_reply_local_unrelated_paths_are_preserved():
     assert path_verdict(kernel, packet(destination="192.0.2.25", original_destination="192.0.2.25"), True) == "DROP"
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("argv", "tag", "check"),
     [
@@ -475,6 +476,7 @@ def test_skynet_routes_firewall_only_to_isolated_playbook(tmp_path, argv, tag, c
     assert str(tmp_path / "ansible/playbook.yml") in output.read_text().splitlines()
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize(
     ("operation", "confirmation", "check_mode", "sources", "success", "malformed_catalog"),
     [
@@ -689,6 +691,7 @@ def test_allowed_sources_are_narrowly_accepted_with_existing_default_deny():
         assert path_verdict(kernel, packet(source="192.0.2.48", port=22, original_port=22), forwarding) == "DROP"
 
 
+@pytest.mark.integration
 def test_native_unraid_boot_block_is_early_idempotent_and_removable(tmp_path):
     binary = Path("/opt/ansible/ansible-venv/bin/ansible-playbook")
     if not binary.is_file():
@@ -832,6 +835,7 @@ def test_self_contained_worker_bundle_and_legacy_import_preserve_transactions(tm
     assert FW.MARK == legacy.MARK == bundled["MARK"] == "skynet-worker-backends"
 
 
+@pytest.mark.integration
 def test_documented_firewall_commands_forward_private_inputs_and_distinguish_audit_from_planning(tmp_path):
     """Run the actual guide's commands through the real wrapper, with inert Ansible."""
     import shlex
@@ -890,6 +894,7 @@ def test_documented_firewall_commands_forward_private_inputs_and_distinguish_aud
             assert not any(arg.startswith("@") for arg in args)
 
 
+@pytest.mark.integration
 @pytest.mark.parametrize("scenario", ["transient", "other-watcher", "repeated-start"])
 def test_watcher_start_uses_real_advisory_lock(tmp_path, monkeypatch, capsys, scenario):
     import fcntl
