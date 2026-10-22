@@ -1,0 +1,26 @@
+  - job_name: "etcd"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/file_sd/etcd.json
+
+  # Default etcd /health checks alarms (including NOSPACE), leader and a
+  # linearizable Range read. Do not exclude alarms or use serializable=true.
+  - job_name: "etcd-health"
+    scrape_interval: 30s
+    scrape_timeout: 10s
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    file_sd_configs:
+      - files:
+          - /etc/prometheus/file_sd/etcd.json
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+        replacement: "http://${1}/health"
+      - source_labels: [__address__]
+        target_label: instance
+      - target_label: __address__
+        replacement: "{{ prometheus_blackbox_exporter_address }}"

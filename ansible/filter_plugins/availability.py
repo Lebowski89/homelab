@@ -270,6 +270,30 @@ def availability_patroni_file_sd(hostvars: Mapping[str, Any], hosts: Sequence[An
     return sorted(result, key=lambda item: item["labels"]["host"])
 
 
+def availability_etcd_file_sd(hostvars: Mapping[str, Any], hosts: Sequence[Any], port: Any = 2379) -> list[dict[str, Any]]:
+    """Return etcd metrics and health targets from the tags_postgres inventory group."""
+    result = []
+    hostvars = _mapping(hostvars, "hostvars")
+    for raw_host in _sequence(hosts, "hosts"):
+        host = str(raw_host)
+        address = str(_mapping(hostvars.get(host, {}), f"hostvars.{host}").get("local_ip", "")).strip()
+        if not address:
+            raise AnsibleFilterError(f"etcd host {host!r} has no local_ip")
+        result.append(
+            _file_sd(
+                f"{address}:{int(port)}",
+                {
+                    "service": host,
+                    "host": host,
+                    "category": "Infrastructure",
+                    "probe_type": "etcd",
+                    "criticality": "critical",
+                },
+            )
+        )
+    return sorted(result, key=lambda item: item["labels"]["host"])
+
+
 class FilterModule:
     """Expose availability target generation filters to Ansible."""
 
@@ -281,4 +305,5 @@ class FilterModule:
             "availability_tcp_file_sd": availability_tcp_file_sd,
             "availability_postgres_file_sd": availability_postgres_file_sd,
             "availability_patroni_file_sd": availability_patroni_file_sd,
+            "availability_etcd_file_sd": availability_etcd_file_sd,
         }

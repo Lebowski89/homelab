@@ -1,0 +1,3 @@
+{{ hostvars | availability_etcd_file_sd(
+  groups['tags_postgres'] | default([])
+) | to_nice_json }}

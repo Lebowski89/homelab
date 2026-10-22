@@ -1,0 +1,738 @@
+---
+rule_files:
+  - etcd.yml
+evaluation_interval: 30s
+tests:
+  - name: below 95 percent is not urgency
+    interval: 30s
+    input_series:
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="pg95"}
+        values: 949+0x180
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="pg95"}
+        values: 1000+0x180
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdQuotaSameDayReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdQuotaImmediateReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdQuotaForecastSameDayReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdQuotaForecastImmediateReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: 95 percent exact same-day boundary
+    interval: 30s
+    input_series:
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="pg95"}
+        values: 950+0x180
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="pg95"}
+        values: 1000+0x180
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdQuotaSameDayReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdQuotaImmediateReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: 97 percent exact immediate boundary
+    interval: 30s
+    input_series:
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="pg95"}
+        values: 970+0x180
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="pg95"}
+        values: 1000+0x180
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdQuotaSameDayReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdQuotaImmediateReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+  - name: positive growth time to95 under72h but exhaustion over24h
+    interval: 30s
+    input_series:
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="pg95"}
+        values: 500+0.1x180
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="pg95"}
+        values: 1000+0x180
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdQuotaForecastSameDayReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdQuotaForecastImmediateReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: positive growth exhaustion under24h
+    interval: 30s
+    input_series:
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="pg95"}
+        values: 500+0.3x180
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="pg95"}
+        values: 1000+0x180
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdQuotaForecastSameDayReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdQuotaForecastImmediateReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+  - name: declining allocation is not negative or infinite urgency
+    interval: 30s
+    input_series:
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="pg95"}
+        values: 550-0.1x180
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="pg95"}
+        values: 1000+0x180
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdQuotaForecastSameDayReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdQuotaForecastImmediateReview",alertstate="firing"}) or vector(0)
+        eval_time: 30m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: insufficient trend history remains unknown
+    interval: 30s
+    input_series:
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="pg95"}
+        values: 500+0.3x180
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="pg95"}
+        values: 1000+0x180
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdQuotaForecastSameDayReview",alertstate="firing"}) or vector(0)
+        eval_time: 5m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdQuotaForecastImmediateReview",alertstate="firing"}) or vector(0)
+        eval_time: 5m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: new acceleration uses shorter slope
+    interval: 30s
+    input_series:
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="pg95"}
+        values: 50+0x120 50+0.02x60
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="pg95"}
+        values: 100+0x180
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdQuotaForecastImmediateReview",alertstate="firing"}) or vector(0)
+        eval_time: 90m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+  - name: NOSPACE or failed linearizable health returns failed probe
+    interval: 30s
+    input_series:
+      - series: probe_success{job="etcd-health",instance="pg95"}
+        values: 0+0x10
+      - series: up{job="etcd-health",instance="pg95"}
+        values: 1+0x10
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdDCSFailure",alertstate="firing"}) or vector(0)
+        eval_time: 30s
+        exp_samples:
+          - labels: '{}'
+            value: 1
+  - name: health exporter failure also escalates
+    interval: 30s
+    input_series:
+      - series: up{job="etcd-health",instance="pg95"}
+        values: 0+0x10
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdDCSFailure",alertstate="firing"}) or vector(0)
+        eval_time: 30s
+        exp_samples:
+          - labels: '{}'
+            value: 1
+  - name: missing quota does not pass as healthy
+    interval: 30s
+    input_series:
+      - series: up{job="etcd",instance="pg95"}
+        values: 1+0x10
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="pg95"}
+        values: 900+0x10
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 30s
+        exp_samples:
+          - labels: '{}'
+            value: 3
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 90s
+        exp_samples:
+          - labels: '{}'
+            value: 3
+      - expr: count(ALERTS{alertname="EtcdQuotaSameDayReview",alertstate="firing"}) or vector(0)
+        eval_time: 30s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: DCS age uses scrape timestamp instead of rule evaluation age
+    interval: 30s
+    input_series:
+      - series: patroni_dcs_last_seen{job="patroni",instance="pg95"}
+        values: 0+30x10
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="PatroniDCSStale",alertstate="firing"}) or vector(0)
+        eval_time: 5m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: stale DCS beyond verified TTL escalates
+    interval: 30s
+    input_series:
+      - series: patroni_dcs_last_seen{job="patroni",instance="pg95"}
+        values: 269+0x10
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="PatroniDCSStale",alertstate="firing"}) or vector(0)
+        eval_time: 5m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+  - name: demotion and repromotion both observed within window
+    interval: 30s
+    input_series:
+      - series: patroni_primary{job="patroni",instance="pg95"}
+        values: 1 0 1+0x10
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="PatroniRoleChanged",alertstate="firing"}) or vector(0)
+        eval_time: 2m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+  - name: healthy actual Patroni labels do not trigger health failure
+    interval: 30s
+    input_series:
+      - series: up{job="patroni",instance="192.0.2.95:8008",host="pg95",service="pg95",category="Infrastructure",criticality="critical",probe_type="patroni"}
+        values: 1+0x10
+      - series: patroni_primary{job="patroni",instance="192.0.2.95:8008",host="pg95",service="pg95",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg95",scope="pg-cluster"}
+        values: 1+0x10
+      - series: patroni_postgres_running{job="patroni",instance="192.0.2.95:8008",host="pg95",service="pg95",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg95",scope="pg-cluster"}
+        values: 1+0x10
+      - series: patroni_cluster_unlocked{job="patroni",instance="192.0.2.95:8008",host="pg95",service="pg95",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg95",scope="pg-cluster"}
+        values: 0+0x10
+      - series: patroni_dcs_last_seen{job="patroni",instance="192.0.2.95:8008",host="pg95",service="pg95",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg95",scope="pg-cluster"}
+        values: 0+30x10
+      - series: up{job="patroni",instance="192.0.2.96:8008",host="pg96",service="pg96",category="Infrastructure",criticality="critical",probe_type="patroni"}
+        values: 1+0x10
+      - series: patroni_primary{job="patroni",instance="192.0.2.96:8008",host="pg96",service="pg96",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg96",scope="pg-cluster"}
+        values: 0+0x10
+      - series: patroni_postgres_running{job="patroni",instance="192.0.2.96:8008",host="pg96",service="pg96",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg96",scope="pg-cluster"}
+        values: 1+0x10
+      - series: patroni_cluster_unlocked{job="patroni",instance="192.0.2.96:8008",host="pg96",service="pg96",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg96",scope="pg-cluster"}
+        values: 0+0x10
+      - series: patroni_dcs_last_seen{job="patroni",instance="192.0.2.96:8008",host="pg96",service="pg96",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg96",scope="pg-cluster"}
+        values: 0+30x10
+      - series: up{job="patroni",instance="192.0.2.97:8008",host="pg97",service="pg97",category="Infrastructure",criticality="critical",probe_type="patroni"}
+        values: 1+0x10
+      - series: patroni_primary{job="patroni",instance="192.0.2.97:8008",host="pg97",service="pg97",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg97",scope="pg-cluster"}
+        values: 0+0x10
+      - series: patroni_postgres_running{job="patroni",instance="192.0.2.97:8008",host="pg97",service="pg97",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg97",scope="pg-cluster"}
+        values: 1+0x10
+      - series: patroni_cluster_unlocked{job="patroni",instance="192.0.2.97:8008",host="pg97",service="pg97",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg97",scope="pg-cluster"}
+        values: 0+0x10
+      - series: patroni_dcs_last_seen{job="patroni",instance="192.0.2.97:8008",host="pg97",service="pg97",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg97",scope="pg-cluster"}
+        values: 0+30x10
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="PatroniImmediateHealthFailure",alertstate="firing"}) or vector(0)
+        eval_time: 5m
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: missing one Patroni DCS metric still fails closed
+    interval: 30s
+    input_series:
+      - series: up{job="patroni",instance="192.0.2.95:8008",host="pg95",service="pg95",category="Infrastructure",criticality="critical",probe_type="patroni"}
+        values: 1+0x10
+      - series: patroni_primary{job="patroni",instance="192.0.2.95:8008",host="pg95",service="pg95",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg95",scope="pg-cluster"}
+        values: 1+0x10
+      - series: patroni_postgres_running{job="patroni",instance="192.0.2.95:8008",host="pg95",service="pg95",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg95",scope="pg-cluster"}
+        values: 1+0x10
+      - series: patroni_cluster_unlocked{job="patroni",instance="192.0.2.95:8008",host="pg95",service="pg95",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg95",scope="pg-cluster"}
+        values: 0+0x10
+      - series: patroni_dcs_last_seen{job="patroni",instance="192.0.2.95:8008",host="pg95",service="pg95",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg95",scope="pg-cluster"}
+        values: 0+30x10
+      - series: up{job="patroni",instance="192.0.2.96:8008",host="pg96",service="pg96",category="Infrastructure",criticality="critical",probe_type="patroni"}
+        values: 1+0x10
+      - series: patroni_primary{job="patroni",instance="192.0.2.96:8008",host="pg96",service="pg96",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg96",scope="pg-cluster"}
+        values: 0+0x10
+      - series: patroni_postgres_running{job="patroni",instance="192.0.2.96:8008",host="pg96",service="pg96",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg96",scope="pg-cluster"}
+        values: 1+0x10
+      - series: patroni_cluster_unlocked{job="patroni",instance="192.0.2.96:8008",host="pg96",service="pg96",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg96",scope="pg-cluster"}
+        values: 0+0x10
+      - series: up{job="patroni",instance="192.0.2.97:8008",host="pg97",service="pg97",category="Infrastructure",criticality="critical",probe_type="patroni"}
+        values: 1+0x10
+      - series: patroni_primary{job="patroni",instance="192.0.2.97:8008",host="pg97",service="pg97",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg97",scope="pg-cluster"}
+        values: 0+0x10
+      - series: patroni_postgres_running{job="patroni",instance="192.0.2.97:8008",host="pg97",service="pg97",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg97",scope="pg-cluster"}
+        values: 1+0x10
+      - series: patroni_cluster_unlocked{job="patroni",instance="192.0.2.97:8008",host="pg97",service="pg97",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg97",scope="pg-cluster"}
+        values: 0+0x10
+      - series: patroni_dcs_last_seen{job="patroni",instance="192.0.2.97:8008",host="pg97",service="pg97",category="Infrastructure",criticality="critical",probe_type="patroni",name="pg97",scope="pg-cluster"}
+        values: 0+30x10
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="PatroniImmediateHealthFailure",alertstate="firing"}) or vector(0)
+        eval_time: 5m
+        exp_samples:
+          - labels: '{}'
+            value: 1
+  - name: startup absence becomes pending then clears on successful scrapes
+    interval: 30s
+    input_series:
+      - series: up{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: _ _ 1+0x12
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: _ _ 900+0x12
+      - series: etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: _ _ 900+0x12
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: _ _ 1000+0x12
+      - series: etcd_server_has_leader{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: _ _ 1+0x12
+      - series: up{job="etcd-health",instance="192.0.2.95:2379",host="pg95"}
+        values: _ _ 1+0x12
+      - series: probe_success{job="etcd-health",instance="192.0.2.95:2379",host="pg95"}
+        values: _ _ 1+0x12
+      - series: up{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: _ _ 1+0x12
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: _ _ 900+0x12
+      - series: etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: _ _ 900+0x12
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: _ _ 1000+0x12
+      - series: etcd_server_has_leader{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: _ _ 1+0x12
+      - series: up{job="etcd-health",instance="192.0.2.96:2379",host="pg96"}
+        values: _ _ 1+0x12
+      - series: probe_success{job="etcd-health",instance="192.0.2.96:2379",host="pg96"}
+        values: _ _ 1+0x12
+      - series: up{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: _ _ 1+0x12
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: _ _ 900+0x12
+      - series: etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: _ _ 900+0x12
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: _ _ 1000+0x12
+      - series: etcd_server_has_leader{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: _ _ 1+0x12
+      - series: up{job="etcd-health",instance="192.0.2.97:2379",host="pg97"}
+        values: _ _ 1+0x12
+      - series: probe_success{job="etcd-health",instance="192.0.2.97:2379",host="pg97"}
+        values: _ _ 1+0x12
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 0s
+        exp_samples:
+          - labels: '{}'
+            value: 2
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 0s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 30s
+        exp_samples:
+          - labels: '{}'
+            value: 2
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 30s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 60s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 60s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 90s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 90s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 120s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 120s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: sustained missing jobs progress from pending to firing
+    interval: 30s
+    input_series: []
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 0s
+        exp_samples:
+          - labels: '{}'
+            value: 2
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 0s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 60s
+        exp_samples:
+          - labels: '{}'
+            value: 2
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 60s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 90s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 90s
+        exp_samples:
+          - labels: '{}'
+            value: 2
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 120s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 120s
+        exp_samples:
+          - labels: '{}'
+            value: 2
+  - name: one disappearing member is detected and firing clears on recovery
+    interval: 30s
+    input_series:
+      - series: up{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 1+0x12
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 900+0x12
+      - series: etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 900+0x12
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 1000+0x12
+      - series: etcd_server_has_leader{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 1+0x12
+      - series: up{job="etcd-health",instance="192.0.2.95:2379",host="pg95"}
+        values: 1+0x12
+      - series: probe_success{job="etcd-health",instance="192.0.2.95:2379",host="pg95"}
+        values: 1+0x12
+      - series: up{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 1+0x12
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 900+0x12
+      - series: etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 900+0x12
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 1000+0x12
+      - series: etcd_server_has_leader{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 1+0x12
+      - series: up{job="etcd-health",instance="192.0.2.96:2379",host="pg96"}
+        values: 1+0x12
+      - series: probe_success{job="etcd-health",instance="192.0.2.96:2379",host="pg96"}
+        values: 1+0x12
+      - series: up{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 1 1 stale _ _ _ 1+0x12
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 900 900 stale _ _ _ 900+0x12
+      - series: etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 900 900 stale _ _ _ 900+0x12
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 1000 1000 stale _ _ _ 1000+0x12
+      - series: etcd_server_has_leader{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 1 1 stale _ _ _ 1+0x12
+      - series: up{job="etcd-health",instance="192.0.2.97:2379",host="pg97"}
+        values: 1 1 stale _ _ _ 1+0x12
+      - series: probe_success{job="etcd-health",instance="192.0.2.97:2379",host="pg97"}
+        values: 1 1 stale _ _ _ 1+0x12
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 30s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 30s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 60s
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 60s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 120s
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 120s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 150s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 150s
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 180s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 180s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 210s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 210s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: failed member scrapes persist to firing and clear on recovery
+    interval: 30s
+    input_series:
+      - series: up{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 1+0x12
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 900+0x12
+      - series: etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 900+0x12
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 1000+0x12
+      - series: etcd_server_has_leader{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 1+0x12
+      - series: up{job="etcd-health",instance="192.0.2.95:2379",host="pg95"}
+        values: 1+0x12
+      - series: probe_success{job="etcd-health",instance="192.0.2.95:2379",host="pg95"}
+        values: 1+0x12
+      - series: up{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 1+0x12
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 900+0x12
+      - series: etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 900+0x12
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 1000+0x12
+      - series: etcd_server_has_leader{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 1+0x12
+      - series: up{job="etcd-health",instance="192.0.2.96:2379",host="pg96"}
+        values: 1+0x12
+      - series: probe_success{job="etcd-health",instance="192.0.2.96:2379",host="pg96"}
+        values: 1+0x12
+      - series: up{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 1 1 0+0x3 1+0x6
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 900+0x12
+      - series: etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 900+0x12
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 1000+0x12
+      - series: etcd_server_has_leader{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 1+0x12
+      - series: up{job="etcd-health",instance="192.0.2.97:2379",host="pg97"}
+        values: 1+0x12
+      - series: probe_success{job="etcd-health",instance="192.0.2.97:2379",host="pg97"}
+        values: 1+0x12
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 30s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 30s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 60s
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 60s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 120s
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 120s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 150s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 150s
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 180s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 180s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+  - name: one missing quota metric retains per-member failure detection
+    interval: 30s
+    input_series:
+      - series: up{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 1+0x12
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 900+0x12
+      - series: etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 900+0x12
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 1000+0x12
+      - series: etcd_server_has_leader{job="etcd",instance="192.0.2.95:2379",host="pg95"}
+        values: 1+0x12
+      - series: up{job="etcd-health",instance="192.0.2.95:2379",host="pg95"}
+        values: 1+0x12
+      - series: probe_success{job="etcd-health",instance="192.0.2.95:2379",host="pg95"}
+        values: 1+0x12
+      - series: up{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 1+0x12
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 900+0x12
+      - series: etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 900+0x12
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 1000+0x12
+      - series: etcd_server_has_leader{job="etcd",instance="192.0.2.96:2379",host="pg96"}
+        values: 1+0x12
+      - series: up{job="etcd-health",instance="192.0.2.96:2379",host="pg96"}
+        values: 1+0x12
+      - series: probe_success{job="etcd-health",instance="192.0.2.96:2379",host="pg96"}
+        values: 1+0x12
+      - series: up{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 1+0x12
+      - series: etcd_mvcc_db_total_size_in_bytes{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 900+0x12
+      - series: etcd_mvcc_db_total_size_in_use_in_bytes{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 900+0x12
+      - series: etcd_server_quota_backend_bytes{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 1000 1000 stale _ _ _ 1000+0x6
+      - series: etcd_server_has_leader{job="etcd",instance="192.0.2.97:2379",host="pg97"}
+        values: 1+0x12
+      - series: up{job="etcd-health",instance="192.0.2.97:2379",host="pg97"}
+        values: 1+0x12
+      - series: probe_success{job="etcd-health",instance="192.0.2.97:2379",host="pg97"}
+        values: 1+0x12
+    promql_expr_test:
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 60s
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 60s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 120s
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 120s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 150s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 150s
+        exp_samples:
+          - labels: '{}'
+            value: 1
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="pending"}) or vector(0)
+        eval_time: 180s
+        exp_samples:
+          - labels: '{}'
+            value: 0
+      - expr: count(ALERTS{alertname="EtcdMonitoringIncomplete",alertstate="firing"}) or vector(0)
+        eval_time: 180s
+        exp_samples:
+          - labels: '{}'
+            value: 0
