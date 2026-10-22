@@ -12,7 +12,7 @@ whisparr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/whisparr:v3-3.6.2-release.1727
+  image: ghcr.io/hotio/whisparr:v3-3.6.5-release.1886
   ################################
   # ENVIRONMENT/SECRETS
   ################################

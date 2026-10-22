@@ -11,7 +11,7 @@ forgejo:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: codeberg.org/forgejo/forgejo:15.0.9-rootless
+  image: codeberg.org/forgejo/forgejo:15.0.10-rootless
   user: "1000:1000"
   ################################
   # ENVIRONMENT/SECRETS
