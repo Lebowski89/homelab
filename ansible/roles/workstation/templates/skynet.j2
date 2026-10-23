@@ -341,10 +341,6 @@ role_tag() {
 
     ubuntu:deploy)                  echo "ubuntu" ;;
     ubuntu:apt)                     echo "ubuntu_apt" ;;
-    ubuntu:repo)                    echo "ubuntu_repo" ;;
-    ubuntu:venv)                    echo "ubuntu_venv" ;;
-    ubuntu:requirements)            echo "ubuntu_requirements" ;;
-    ubuntu:skynet)                  echo "ubuntu_skynet" ;;
     ubuntu:sysctl)                  echo "ubuntu_sysctl" ;;
     ubuntu:pam)                     echo "ubuntu_pam" ;;
     ubuntu:network)                 echo "ubuntu_network" ;;
@@ -382,7 +378,6 @@ role_tag() {
     tailscale:bootstrap)            echo "tailscale_bootstrap" ;;
 
     opentofu:deploy)                echo "opentofu" ;;
-    opentofu:install)               echo "opentofu_install" ;;
     opentofu:pve-user)              echo "opentofu_pve_user" ;;
 
     postgres:deploy)                echo "postgres" ;;
@@ -563,10 +558,6 @@ Role/action targets:
   ubuntu:
     deploy       -> ubuntu
     apt          -> ubuntu_apt
-    repo         -> ubuntu_repo
-    venv         -> ubuntu_venv
-    requirements -> ubuntu_requirements
-    skynet       -> ubuntu_skynet
     sysctl       -> ubuntu_sysctl
     pam          -> ubuntu_pam
     network      -> ubuntu_network
@@ -608,7 +599,6 @@ Role/action targets:
 
   opentofu:
     deploy   -> opentofu
-    install  -> opentofu_install
     pve-user -> opentofu_pve_user
 
   postgres:

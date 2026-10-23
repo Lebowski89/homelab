@@ -1,5 +1,5 @@
 ---
-# Also called directly by Ubuntu. No desktop, network or server tasks here.
+# Workstation administration tools, independently selectable from the desktop baseline.
 - name: Workstation Ansible | Validate and resolve ownership
   ansible.builtin.import_tasks: tools/validate_tools.yml
   tags: always
@@ -12,10 +12,10 @@
     file: packages.yml
     apply:
       become: true
-      tags: [workstation_tools, workstation_repository, ubuntu_repo]
+      tags: [workstation_tools, workstation_repository]
   vars:
     workstation_package_selection: [git, ca-certificates]
-  tags: [workstation_tools, workstation_repository, ubuntu_repo]
+  tags: [workstation_tools, workstation_repository]
 
 - name: Workstation Repository | Preserve or optionally clone checkout
   when: workstation_tools_enabled
@@ -24,8 +24,8 @@
     apply:
       become: true
       become_user: "{{ workstation_user }}"
-      tags: [workstation_tools, workstation_repository, ubuntu_repo]
-  tags: [workstation_tools, workstation_repository, ubuntu_repo]
+      tags: [workstation_tools, workstation_repository]
+  tags: [workstation_tools, workstation_repository]
 
 - name: Workstation Ansible | Install Python virtualenv prerequisites
   when:
@@ -35,10 +35,10 @@
     file: packages.yml
     apply:
       become: true
-      tags: [workstation_tools, workstation_ansible, ubuntu_venv, ubuntu_requirements]
+      tags: [workstation_tools, workstation_ansible]
   vars:
     workstation_package_selection: "{{ workstation_ansible_prereq_packages }}"
-  tags: [workstation_tools, workstation_ansible, ubuntu_venv, ubuntu_requirements]
+  tags: [workstation_tools, workstation_ansible]
 
 - name: Workstation Ansible | Prepare virtualenv and pinned Python dependencies
   when:
@@ -50,8 +50,8 @@
     apply:
       become: true
       become_user: "{{ workstation_user }}"
-      tags: [workstation_tools, workstation_ansible, ubuntu_venv, ubuntu_requirements]
-  tags: [workstation_tools, workstation_ansible, ubuntu_venv, ubuntu_requirements]
+      tags: [workstation_tools, workstation_ansible]
+  tags: [workstation_tools, workstation_ansible]
 
 - name: Workstation Ansible | Install pinned Ansible collections
   when:
@@ -63,8 +63,8 @@
     apply:
       become: true
       become_user: "{{ workstation_user }}"
-      tags: [workstation_tools, workstation_collections, ubuntu_requirements]
-  tags: [workstation_tools, workstation_collections, ubuntu_requirements]
+      tags: [workstation_tools, workstation_collections]
+  tags: [workstation_tools, workstation_collections]
 
 - name: Workstation Skynet | Install local wrapper
   when:
@@ -74,8 +74,8 @@
     file: tools/skynet.yml
     apply:
       become: true
-      tags: [workstation_tools, workstation_skynet, ubuntu_skynet]
-  tags: [workstation_tools, workstation_skynet, ubuntu_skynet]
+      tags: [workstation_tools, workstation_skynet]
+  tags: [workstation_tools, workstation_skynet]
 
 - name: Workstation OpenTofu | Install without infrastructure operations
   when:

@@ -1,9 +1,0 @@
----
-# Compatibility entry point; package installation belongs to workstation.
-- name: OpenTofu | Forward installation to workstation tooling
-  ansible.builtin.include_role:
-    name: workstation
-    tasks_from: tools/opentofu
-    apply:
-      tags: [opentofu, opentofu_install]
-  tags: [opentofu, opentofu_install]

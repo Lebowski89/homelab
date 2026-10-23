@@ -13,7 +13,6 @@ from pathlib import Path
 import pytest
 import yaml
 from jinja2 import Environment, StrictUndefined
-from jinja2.nativetypes import NativeEnvironment
 
 ROOT = Path(__file__).resolve().parents[2]
 ROLE = ROOT / "ansible/roles/workstation"
@@ -112,8 +111,7 @@ def test_real_workstation_validation_resolves_user_and_checks_portable_paths(tmp
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("legacy", [False, True])
-def test_rendered_wrapper_executes_locally_with_portable_paths_and_overrides(tmp_path, legacy):
+def test_rendered_wrapper_executes_locally_with_portable_paths_and_overrides(tmp_path):
     repo = tmp_path / "operator checkout"
     (repo / "ansible").mkdir(parents=True)
     variables = {
@@ -125,17 +123,6 @@ def test_rendered_wrapper_executes_locally_with_portable_paths_and_overrides(tmp
         "workstation_vault_pass_file": str(tmp_path / "absent-vault"),
         "workstation_skynet_doctor_ping_target": "tags_skynet",
     }
-    if legacy:
-        # Resolve the real Ubuntu adapter mappings rather than inventing a second configuration.
-        ubuntu = yaml.safe_load((ROOT / "ansible/roles/ubuntu/tasks/main.yml").read_text())
-        adapter = next(t for t in ubuntu if t["name"] == "Ubuntu | Manage workstation tooling")["vars"]
-        defaults = yaml.safe_load((ROOT / "ansible/roles/ubuntu/defaults/main.yml").read_text())
-        defaults = {k: v for k, v in defaults.items() if k.startswith(("ubuntu_ansible_", "ubuntu_repo_", "ubuntu_skynet_"))}
-        defaults.update(ansible_user="synthetic-user")
-        environment = NativeEnvironment()
-        for _ in range(8):
-            defaults = {k: environment.from_string(v).render(**defaults) if isinstance(v, str) else v for k, v in defaults.items()}
-        variables.update({k: environment.from_string(v).render(**defaults) for k, v in adapter.items() if k in variables})
     wrapper = tmp_path / "skynet"
     wrapper.write_text(Environment(undefined=StrictUndefined).from_string((ROLE / "templates/skynet.j2").read_text()).render(**variables))
     syntax = subprocess.run(["bash", "-n", str(wrapper)], capture_output=True, text=True)
@@ -167,6 +154,16 @@ def test_rendered_wrapper_executes_locally_with_portable_paths_and_overrides(tmp
     assert result.returncode == 0, result.stdout + result.stderr
     observed = json.loads(result.stdout.splitlines()[-1])
     assert observed["argv"] == ["-i", str(repo / "ansible/netbox.yml"), str(repo / "ansible/playbook.yml"), "--tags", "workstation_tools"]
+    for target, action in (
+        ("ubuntu", "repo"),
+        ("ubuntu", "venv"),
+        ("ubuntu", "requirements"),
+        ("ubuntu", "skynet"),
+        ("opentofu", "install"),
+    ):
+        removed = subprocess.run(["bash", str(wrapper), "run", target, action], env=env, capture_output=True, text=True)
+        assert removed.returncode != 0
+        assert "Unknown role target/action" in removed.stdout + removed.stderr
     env.update(
         PLAYBOOK=str(repo / "ansible/bootstrap.yml"), INVENTORY="private-static.yml", ANSIBLE_COLLECTIONS_PATH="override-collections"
     )
@@ -220,8 +217,6 @@ def test_bootstrap_entry_points_cannot_select_the_execution_machine():
         for task in play["tasks"]:
             tags = set(task["tags"]) - {"never"}
             assert tags <= set(task["ansible.builtin.include_role"]["apply"]["tags"])
-    manager = yaml.safe_load((ROOT / "ansible/group_vars/tags_ansible_manager.yml").read_text())
-    assert "ansible_connection" not in manager
     mgt = yaml.safe_load((ROOT / "ansible/host_vars/mgt.yml").read_text())
     assert mgt["docker_user"] == "mgt"
     assert mgt["podman_install_enable"] is True

@@ -1738,7 +1738,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
             {
                 "all": {
                     "children": {
-                        "tags_ansible_manager": {
+                        "tags_service_controller": {
                             "vars": {"ansible_connection": "local"},
                             "hosts": {"manager": {"ansible_host": "192.0.2.48", "local_ip": "192.0.2.48", "ansible_user": "manager-user"}},
                         },

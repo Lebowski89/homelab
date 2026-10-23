@@ -5,10 +5,8 @@
 It standardises how the homelab playbook is executed by wrapping `ansible-playbook`, `ansible-lint`, `yamllint`, `ruff`, inventory checks, vault/become password files, and common role/service tags behind a simpler command interface.
 
 The existing workstation role installs the wrapper for an operator user. It
-runs Ansible locally and connects directly to managed hosts; mgt remains the
-application host. Existing mgt tooling is retained during acceptance. See the
-[workstation transition](../workstation-transition.md) and
-[workstation paths and tags](../workstation.md).
+runs Ansible locally and connects directly to managed hosts. See
+[workstation setup](workstation-setup.md) for installation commands.
 
 For firewall profiles, explicit manual operations and retained compatibility
 paths, see [service firewall operations](../service-firewall.md). Ordinary
@@ -327,10 +325,6 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 | -------------------------------- | --------------------- |
 | `skynet run ubuntu`              | `ubuntu`              |
 | `skynet run ubuntu apt`          | `ubuntu_apt`          |
-| `skynet run ubuntu repo`         | `ubuntu_repo`         |
-| `skynet run ubuntu venv`         | `ubuntu_venv`         |
-| `skynet run ubuntu requirements` | `ubuntu_requirements` |
-| `skynet run ubuntu skynet`       | `ubuntu_skynet`       |
 | `skynet run ubuntu sysctl`       | `ubuntu_sysctl`       |
 | `skynet run ubuntu pam`          | `ubuntu_pam`          |
 | `skynet run ubuntu network`      | `ubuntu_network`      |
@@ -378,7 +372,6 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 | Command                        | Raw tag             |
 | ------------------------------ | ------------------- |
 | `skynet run opentofu`          | `opentofu`          |
-| `skynet run opentofu install`  | `opentofu_install`  |
 | `skynet run opentofu pve-user` | `opentofu_pve_user` |
 
 ### Postgres

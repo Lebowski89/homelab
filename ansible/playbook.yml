@@ -175,10 +175,6 @@
       tags:
         - ubuntu
         - ubuntu_apt
-        - ubuntu_repo
-        - ubuntu_venv
-        - ubuntu_requirements
-        - ubuntu_skynet
         - ubuntu_sysctl
         - ubuntu_postgres_swap
         - ubuntu_pam
@@ -202,10 +198,6 @@
       tags:
         - ubuntu
         - ubuntu_apt
-        - ubuntu_repo
-        - ubuntu_venv
-        - ubuntu_requirements
-        - ubuntu_skynet
         - ubuntu_sysctl
         - ubuntu_postgres_swap
         - ubuntu_pam
@@ -323,20 +315,12 @@
     # TERRAFORM
     ################################
 
-    - name: Gather facts for OpenTofu installation
-      when: "'tags_opentofu_install' in group_names"
-      ansible.builtin.setup:
-      tags:
-        - opentofu
-        - opentofu_install
-
     - name: Include OpenTofu role
       when: "'tags_opentofu' in group_names"
       ansible.builtin.include_role:
         name: opentofu
       tags:
         - opentofu
-        - opentofu_install
         - opentofu_pve_user
 
     ################################

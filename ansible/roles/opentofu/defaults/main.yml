@@ -1,2 +1,2 @@
 ---
-# Installation defaults are owned by workstation. Proxmox API configuration stays here.
+# Binary installation belongs to workstation; this role configures Proxmox API access.

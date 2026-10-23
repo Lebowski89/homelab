@@ -62,6 +62,8 @@ def test_main_playbook_provisions_workstation_first_and_only_once():
 
 
 def test_ubuntu_role_remains_explicitly_ubuntu_only():
+    ubuntu_tasks = load_yaml(REPO_ROOT / "ansible/roles/ubuntu/tasks/main.yml")
+    assert all(task.get("ansible.builtin.include_role", {}).get("name") != "workstation" for task in ubuntu_tasks)
     plays = load_yaml(PLAYBOOK_PATH)
     play = next(play for play in plays if play["name"] == "Deploy homelab services")
     include = next(task for task in play["tasks"] if task["name"] == "Include Ubuntu role")

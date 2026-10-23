@@ -58,9 +58,6 @@ pg95 ansible_host= ansible_user=
 pg96 ansible_host= ansible_user=
 pg97 ansible_host= ansible_user=
 
-[opentofu_install]
-mgt
-
 [opentofu_pve_user]
 pve1
 
@@ -70,10 +67,9 @@ pg96
 pg97
 
 [opentofu:children]
-opentofu_install
 opentofu_pve_user
 
-[ansible_managers]
+[service_controller]
 mgt
 
 [docker_install]
@@ -115,7 +111,7 @@ The replacement NetBox tags are:
 
 - `skynet`
 - `workstation`
-- `ansible_manager`
+- `service_controller`
 - `docker`
 - `docker_install`
 - `swarm`
@@ -124,7 +120,6 @@ The replacement NetBox tags are:
 - `haproxy`
 - `postgres`
 - `opentofu`
-- `opentofu_install`
 - `opentofu_managed`
 - `opentofu_pve_user`
 
@@ -140,7 +135,7 @@ The NetBox inventory plugin creates Ansible groups from NetBox tags by prefixing
 |---|---|
 | `skynet` | `tags_skynet` |
 | `workstation` | `tags_workstation` |
-| `ansible_manager` | `tags_ansible_manager` |
+| `service_controller` | `tags_service_controller` |
 | `docker` | `tags_docker` |
 | `docker_install` | `tags_docker_install` |
 | `swarm` | `tags_swarm` |
@@ -149,7 +144,6 @@ The NetBox inventory plugin creates Ansible groups from NetBox tags by prefixing
 | `haproxy` | `tags_haproxy` |
 | `postgres` | `tags_postgres` |
 | `opentofu` | `tags_opentofu` |
-| `opentofu_install` | `tags_opentofu_install` |
 | `opentofu_managed` | `tags_opentofu_managed` |
 | `opentofu_pve_user` | `tags_opentofu_pve_user` |
 
@@ -305,17 +299,15 @@ Tailscale IPv4 → custom_fields.tailscale_ip → ansible_host
 ```
 
 This keeps LAN-aware configuration anchored to a stable local address while
-the execution workstation (or retained `mgt` tooling) uses Tailscale for SSH, including when a workstation is
+the execution workstation uses Tailscale for SSH, including when a workstation is
 away from the home LAN. `blacktop` is tagged with `skynet`, `workstation`,
 `podman`, and `podman_install`, so it appears naturally in the corresponding
 `tags_*` groups and its `device_roles_workstation` group without
 workstation-specific inventory code.
 
-The workstation transition proposes singleton `service_controller` for mgt.
-Blacktop retains its existing workstation identity; no separate automation
-inventory group is needed. This application-host tag never forces local
-transport. The exact unapplied changes and compatibility fallback are in the
-[transition runbook](../workstation-transition.md).
+The singleton `service_controller` tag identifies the application host.
+Workstations keep the `workstation` tag; neither tag forces local transport.
+See [workstation setup](../cheat_sheets/workstation-setup.md) for local bootstrap.
 
 ---
 
@@ -323,16 +315,10 @@ transport. The exact unapplied changes and compatibility fallback are in the
 
 The Skynet wrapper script was updated to use the NetBox inventory file by default.
 
-From:
+The default is:
 
 ```bash
-INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/hosts.ini}"
-```
-
-to:
-
-```bash
-INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/netbox.yml}"
+INVENTORY="${INVENTORY:-$REPO_ROOT/ansible/netbox.yml}"
 ```
 
 The wrapper also gained an inventory helper command:
@@ -376,7 +362,7 @@ Useful additional checks:
 ```bash
 ansible tags_postgres -i netbox.yml -m debug -a "var=group_names"
 ansible tags_swarm -i netbox.yml -m debug -a "var=group_names"
-ansible tags_ansible_manager -i netbox.yml -m debug -a "var=ansible_connection"
+ansible tags_service_controller -i netbox.yml -m debug -a "var=ansible_connection"
 ```
 
 ---

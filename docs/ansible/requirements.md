@@ -13,8 +13,7 @@ pip install -r ansible/requirements.txt
 The existing workstation role owns workstation dependency installation through
 `workstation_ansible` (venv plus pinned Python dependencies) and
 `workstation_collections` (collections in the configured path).
-Ubuntu's `ubuntu_venv` and `ubuntu_requirements` compatibility tags delegate to
-that implementation. See [workstation setup](../workstation.md).
+See [workstation setup](../cheat_sheets/workstation-setup.md).
 
 Python needed on a delegated managed host remains a separate requirement. In
 particular, PostgreSQL reconciliation still executes on mgt and retains its

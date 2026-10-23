@@ -178,7 +178,7 @@ def test_repository_service_host_contract_uses_real_netbox_groups_and_explicit_p
         "podman_shared_network_name": "mgt-services",
     }
     assert set(inventory["group_by"]) >= {"device_roles", "tags"}
-    assert 'slug        = "ansible_manager"' in netbox_locals
+    assert 'slug        = "service_controller"' in netbox_locals
     assert 'slug      = "storage"' in netbox_locals
     assert "services_plex_host: plex" in SERVICE_HOST_VARS.read_text()
 
