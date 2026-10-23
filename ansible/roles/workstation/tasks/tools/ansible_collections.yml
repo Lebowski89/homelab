@@ -22,3 +22,22 @@
       - "{{ workstation_ansible_collections_path }}"
   register: workstation_collections_result
   changed_when: "'was installed successfully' in workstation_collections_result.stdout"
+
+- name: Workstation Ansible | Locate existing collections after an unchanged installation
+  when: not workstation_collections_result.changed
+  ansible.builtin.command:
+    argv:
+      - "{{ workstation_ansible_venv_path }}/bin/ansible-galaxy"
+      - collection
+      - list
+      - -p
+      - "{{ workstation_ansible_collections_path }}"
+  register: workstation_collections_installed
+  changed_when: false
+
+- name: Workstation Ansible | Explain why collection installation was unchanged
+  when: not workstation_collections_result.changed
+  ansible.builtin.debug:
+    msg: >-
+      {{ (workstation_collections_result.stdout_lines | default([]))
+         + (workstation_collections_installed.stdout_lines | default([])) }}

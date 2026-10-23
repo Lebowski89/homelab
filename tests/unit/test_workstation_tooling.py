@@ -75,6 +75,74 @@ def run_tasks(tmp_path, tasks, variables, *, host="localhost", connection="local
 
 
 @pytest.mark.integration
+def test_collection_skip_explains_existing_install_location(tmp_path, monkeypatch):
+    galaxy = str(Path(sys.executable).with_name("ansible-galaxy"))
+    old_path = tmp_path / "old-collections"
+    destination = tmp_path / "checkout/ansible/collections"
+    config = tmp_path / "galaxy.cfg"
+    config.write_text("[defaults]\n")
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setenv("ANSIBLE_CONFIG", str(config))
+    monkeypatch.setenv("ANSIBLE_COLLECTIONS_PATH", str(old_path))
+    monkeypatch.setenv("ANSIBLE_COLLECTIONS_SCAN_SYS_PATH", "false")
+    monkeypatch.setenv("ANSIBLE_LOCAL_TEMP", str(tmp_path / "local"))
+    source = tmp_path / "source"
+    source.mkdir()
+    (source / "README.md").write_text("Synthetic offline collection fixture.\n")
+    (source / "galaxy.yml").write_text(
+        yaml.safe_dump(
+            {
+                "namespace": "workstation_fixture",
+                "name": "relocation",
+                "version": "1.0.0",
+                "readme": "README.md",
+                "authors": ["NONPRODUCTION fixture"],
+                "license": ["MIT"],
+                "dependencies": {},
+            }
+        )
+    )
+    subprocess.run([galaxy, "collection", "build", str(source), "--output-path", str(tmp_path)], capture_output=True, text=True, check=True)
+    artifact = tmp_path / "workstation_fixture-relocation-1.0.0.tar.gz"
+    subprocess.run(
+        [galaxy, "collection", "install", str(artifact), "-p", str(old_path), "--offline"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    old_manifest = old_path / "ansible_collections/workstation_fixture/relocation/MANIFEST.json"
+    original = old_manifest.read_bytes(), old_manifest.stat().st_mtime_ns
+    requirements = destination.parent / "requirements.yml"
+    requirements.parent.mkdir(parents=True)
+    requirements.write_text(yaml.safe_dump({"collections": [{"name": str(artifact), "type": "file", "version": "1.0.0"}]}))
+    # The real role runs Galaxy, forced offline by this fixture-only executable.
+    venv = tmp_path / "fixture-venv"
+    executable = venv / "bin/ansible-galaxy"
+    executable.parent.mkdir(parents=True)
+    executable.write_text(
+        f"#!{sys.executable}\nimport os, sys\nargs = sys.argv[1:]\n"
+        "if args[:2] == ['collection', 'install']:\n    args.append('--offline')\n"
+        f"os.execv({galaxy!r}, [{galaxy!r}, *args])\n"
+    )
+    executable.chmod(0o755)
+    variables = {
+        "workstation_ansible_path": str(requirements.parent),
+        "workstation_ansible_venv_path": str(venv),
+        "workstation_ansible_collections_path": str(destination),
+    }
+    tasks = [{"ansible.builtin.import_tasks": str(ROLE / "tasks/tools/ansible_collections.yml")}]
+    result = run_tasks(tmp_path, tasks, variables)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "changed=0" in result.stdout
+    assert not list((destination / "ansible_collections").iterdir())
+    assert "already installed" in result.stdout
+    assert str(old_path / "ansible_collections") in result.stdout
+    assert "workstation_fixture.relocation" in result.stdout
+    assert "1.0.0" in result.stdout
+    assert (old_manifest.read_bytes(), old_manifest.stat().st_mtime_ns) == original
+
+
+@pytest.mark.integration
 @pytest.mark.parametrize("worktree", [False, True])
 @pytest.mark.parametrize("clone", [False, True])
 def test_existing_dirty_checkout_is_never_updated_or_switched(tmp_path, worktree, clone):

@@ -603,10 +603,16 @@ def test_actual_main_bootstrap_without_netbox_or_application_inputs(workstation_
     assert "Recovery target |" not in result.stdout
     assert "Include NetBox bootstrap role" not in result.stdout
     assert "Infisical" not in result.stdout
-    # The real blacktop host_vars opts into tools and selects src/homelab.
+    # Follow the real host configuration rather than pinning its checkout location.
+    blacktop = load_yaml(REPO_ROOT / "ansible/host_vars/blacktop.yml")
+    repository = NativeEnvironment().from_string(blacktop["workstation_repository_path"]).render(workstation_user_home="/fixture/home")
     installs = [call for call in calls if call["module"] == "pip" and "requirements" in call["options"]]
     assert len(installs) == 1
-    assert installs[0]["options"]["requirements"] == "/fixture/home/src/homelab/ansible/requirements.txt"
+    assert installs[0]["options"]["requirements"] == f"{repository}/ansible/requirements.txt"
+    for call in calls:
+        argv = call["options"].get("argv", []) if call["module"] == "command" else []
+        if "collection" in argv:
+            assert argv[argv.index("-p") + 1] == f"{repository}/ansible/collections"
     assert all(call["user"] == "fixture" for call in installs)
     assert sum(call["module"] == "setup" for call in calls) == 1
     assert {call["module"] for call in calls if call["module"] in {"apt", "dnf"}} == {"dnf" if fedora else "apt"}
