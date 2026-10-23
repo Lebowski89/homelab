@@ -441,6 +441,7 @@ def test_verified_ipv6_override_and_reply_local_unrelated_paths_are_preserved():
 def test_skynet_routes_firewall_only_to_isolated_playbook(tmp_path, argv, tag, check):
     defaults = yaml.safe_load((ROOT / "ansible/roles/workstation/defaults/main.yml").read_text())
     variables = {key: str(tmp_path / key) for key in defaults}
+    variables["workstation_user_home"] = str(tmp_path / "managed-user")
     variables["workstation_ansible_path"] = str(tmp_path / "ansible")
     rendered = (
         Environment(undefined=StrictUndefined)
@@ -916,6 +917,7 @@ def test_documented_firewall_commands_forward_private_inputs_and_distinguish_aud
 
     defaults = yaml.safe_load((ROOT / "ansible/roles/workstation/defaults/main.yml").read_text())
     variables = {key: str(tmp_path / key) for key in defaults}
+    variables["workstation_user_home"] = str(tmp_path / "managed-user")
     variables["workstation_ansible_path"] = str(tmp_path / "ansible")
     wrapper = tmp_path / "skynet"
     wrapper.write_text(

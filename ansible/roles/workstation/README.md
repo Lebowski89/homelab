@@ -279,6 +279,8 @@
 | Workstation Ansible ¦ Assert Ansible collections requirements file exists | ansible.builtin.stat | False |
 | Workstation Ansible ¦ Fail if Ansible collections requirements file is missing | ansible.builtin.fail | True |
 | Workstation Ansible ¦ Install Ansible collections from requirements.yml | ansible.builtin.command | False |
+| Workstation Ansible ¦ Locate existing collections after an unchanged installation | ansible.builtin.command | True |
+| Workstation Ansible ¦ Explain why collection installation was unchanged | ansible.builtin.debug | True |
 
 #### File: tasks/tools/ansible_python.yml
 

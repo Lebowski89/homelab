@@ -17,7 +17,7 @@ DOCKER_SERVICES_DIR="$SERVICES_DIR"
 RUFF_PATHS="${RUFF_PATHS:-ansible/filter_plugins ansible/roles/docker_services/filter_plugins ansible/roles/docker_services/library ansible/roles/podman_services/filter_plugins tests/unit}"
 PYTEST_PATHS="${PYTEST_PATHS:-tests/unit}"
 ANSIBLE_LOG_PATH="${ANSIBLE_LOG_PATH:-{{ workstation_ansible_log_path }}}"
-ANSIBLE_COLLECTIONS_PATH="${ANSIBLE_COLLECTIONS_PATH:-{{ workstation_ansible_collections_path }}}"
+ANSIBLE_COLLECTIONS_PATH="${ANSIBLE_COLLECTIONS_PATH:-{{ workstation_ansible_collections_path }}:{{ workstation_user_home }}/.ansible/collections:{{ workstation_user_home }}/.local/share/homelab/collections}"
 
 tool_path() {
   local name="$1"
