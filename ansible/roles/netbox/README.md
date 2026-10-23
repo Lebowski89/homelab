@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/20 |
+| Readme update        | 2026/10/23 |
 
 
 
@@ -44,7 +44,7 @@
 | [netbox_stack](defaults/main.yml#L31)   | str | `netbox` |    
 | [netbox_compose_file](defaults/main.yml#L32)   | str | `netbox-compose.yml` |    
 | [netbox_compose_path](defaults/main.yml#L33)   | str | `{{ netbox_base_path }}/{{ netbox_compose_file }}` |    
-| [netbox_image](defaults/main.yml#L35)   | str | `lscr.io/linuxserver/netbox:v4.6.0-ls351` |    
+| [netbox_image](defaults/main.yml#L35)   | str | `lscr.io/linuxserver/netbox:v4.7.3-ls387` |    
 | [netbox_timezone](defaults/main.yml#L36)   | str | `{{ timezone ¦ default('Australia/Melbourne') }}` |    
 | [netbox_puid](defaults/main.yml#L37)   | str | `{{ container_host_puid ¦ default('1000') }}` |    
 | [netbox_pgid](defaults/main.yml#L38)   | str | `{{ container_host_pgid ¦ default('1000') }}` |    
