@@ -75,9 +75,11 @@ def run_tasks(tmp_path, tasks, variables, *, host="localhost", connection="local
 
 
 @pytest.mark.integration
-def test_collection_skip_explains_existing_install_location(tmp_path, monkeypatch):
+@pytest.mark.parametrize("previous_directory", [".ansible/collections", ".local/share/homelab/collections"])
+def test_collection_skip_explains_existing_install_location(tmp_path, monkeypatch, previous_directory):
     galaxy = str(Path(sys.executable).with_name("ansible-galaxy"))
-    old_path = tmp_path / "old-collections"
+    home = tmp_path / "managed-user"
+    old_path = home / previous_directory
     destination = tmp_path / "checkout/ansible/collections"
     config = tmp_path / "galaxy.cfg"
     config.write_text("[defaults]\n")
@@ -88,6 +90,14 @@ def test_collection_skip_explains_existing_install_location(tmp_path, monkeypatc
     monkeypatch.setenv("ANSIBLE_LOCAL_TEMP", str(tmp_path / "local"))
     source = tmp_path / "source"
     source.mkdir()
+    actions = source / "plugins/action"
+    actions.mkdir(parents=True)
+    (actions / "probe.py").write_text(
+        "from ansible.plugins.action import ActionBase\n"
+        "class ActionModule(ActionBase):\n"
+        "    def run(self, tmp=None, task_vars=None):\n"
+        "        return {'changed': False, 'resolved': True}\n"
+    )
     (source / "README.md").write_text("Synthetic offline collection fixture.\n")
     (source / "galaxy.yml").write_text(
         yaml.safe_dump(
@@ -139,6 +149,59 @@ def test_collection_skip_explains_existing_install_location(tmp_path, monkeypatc
     assert str(old_path / "ansible_collections") in result.stdout
     assert "workstation_fixture.relocation" in result.stdout
     assert "1.0.0" in result.stdout
+    second = run_tasks(tmp_path, tasks, variables)
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert "changed=0" in second.stdout
+    assert not list((destination / "ansible_collections").iterdir())
+
+    variables.update(
+        workstation_user_home=str(home),
+        workstation_repository_path=str(destination.parents[1]),
+        workstation_ansible_log_path=str(tmp_path / "wrapper.log"),
+        workstation_become_pass_file=str(tmp_path / "absent-become"),
+        workstation_vault_pass_file=str(tmp_path / "absent-vault"),
+        workstation_skynet_doctor_ping_target="tags_skynet",
+    )
+    wrapper = tmp_path / "skynet"
+    wrapper.write_text(Environment(undefined=StrictUndefined).from_string((ROLE / "templates/skynet.j2").read_text()).render(**variables))
+    play = tmp_path / "resolve.yml"
+    play.write_text(
+        yaml.safe_dump(
+            [
+                {
+                    "hosts": "localhost",
+                    "connection": "local",
+                    "gather_facts": False,
+                    "tasks": [
+                        {"workstation_fixture.relocation.probe": {}, "register": "probe"},
+                        {"ansible.builtin.assert": {"that": "probe.resolved"}},
+                    ],
+                }
+            ]
+        )
+    )
+    # Neither inherited overrides nor the checkout's relative collections path
+    # may mask a broken wrapper default. HOME also differs from the managed user.
+    execution_home = tmp_path / "execution-home"
+    execution_home.mkdir()
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("ANSIBLE_")}
+    environment.update(
+        HOME=str(execution_home),
+        REPO_ROOT=variables["workstation_repository_path"],
+        PLAYBOOK=str(play),
+        INVENTORY="localhost,",
+        BECOME_PASS_FILE=variables["workstation_become_pass_file"],
+        VAULT_PASS_FILE=variables["workstation_vault_pass_file"],
+        ANSIBLE_PLAYBOOK_BIN=ANSIBLE,
+        ANSIBLE_CONFIG=str(config),
+        ANSIBLE_LOCAL_TEMP=str(tmp_path / "wrapper-local"),
+        ANSIBLE_COLLECTIONS_SCAN_SYS_PATH="false",
+    )
+    resolved = subprocess.run(
+        ["bash", str(wrapper), "raw", "--check"], cwd=tmp_path, env=environment, capture_output=True, text=True, check=False
+    )
+    assert resolved.returncode == 0, resolved.stdout + resolved.stderr
+    assert "ok=2" in resolved.stdout
     assert (old_manifest.read_bytes(), old_manifest.stat().st_mtime_ns) == original
 
 
@@ -216,6 +279,7 @@ def test_rendered_wrapper_executes_locally_with_portable_paths_and_overrides(tmp
     repo = tmp_path / "operator checkout"
     (repo / "ansible").mkdir(parents=True)
     variables = {
+        "workstation_user_home": str(tmp_path / "managed-user"),
         "workstation_repository_path": str(repo),
         "workstation_ansible_venv_path": str(tmp_path / "venv"),
         "workstation_ansible_collections_path": str(tmp_path / "collections"),
@@ -248,7 +312,11 @@ def test_rendered_wrapper_executes_locally_with_portable_paths_and_overrides(tmp
     assert result.returncode == 0, result.stdout + result.stderr
     observed = json.loads(result.stdout.splitlines()[-1])
     assert observed["argv"] == ["-i", str(repo / "ansible/netbox.yml"), str(repo / "ansible/playbook.yml"), "--tags", "deploy,homepage"]
-    assert observed["collections"] == variables["workstation_ansible_collections_path"]
+    home = variables["workstation_user_home"]
+    assert (
+        observed["collections"]
+        == f"{variables['workstation_ansible_collections_path']}:{home}/.ansible/collections:{home}/.local/share/homelab/collections"
+    )
     assert observed["config"] == str(repo / "ansible/ansible.cfg")
     assert observed["log"] == str(tmp_path / "test.log")
     result = subprocess.run(["bash", str(wrapper), "run", "workstation", "tools"], env=env, capture_output=True, text=True)
@@ -438,7 +506,11 @@ def test_service_tags_use_python3_with_or_without_a_configured_venv(tmp_path, co
         binary.chmod(0o755)
     defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
     variables = {key: str(tmp_path / key) for key in defaults}
-    variables.update(workstation_repository_path=str(repository), workstation_ansible_venv_path=str(venv))
+    variables.update(
+        workstation_user_home=str(tmp_path / "managed-user"),
+        workstation_repository_path=str(repository),
+        workstation_ansible_venv_path=str(venv),
+    )
     wrapper = tmp_path / "skynet"
     wrapper.write_text(Environment(undefined=StrictUndefined).from_string((ROLE / "templates/skynet.j2").read_text()).render(**variables))
     assert shutil.which("python", path=str(tools)) is None

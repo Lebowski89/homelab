@@ -57,6 +57,7 @@ def bootstrap(tmp_path):
     become.write_text("NONPRODUCTION-unused-become-password")
     wrapper = tmp_path / "skynet"
     variables = {
+        "workstation_user_home": str(tmp_path / "managed-user"),
         "workstation_repository_path": str(repo),
         "workstation_become_pass_file": str(become),
         "workstation_vault_pass_file": str(password),

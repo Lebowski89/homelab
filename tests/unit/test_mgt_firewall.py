@@ -1804,7 +1804,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
     wrapper.write_text(
         Environment(undefined=StrictUndefined)
         .from_string((ROOT / "ansible/roles/workstation/templates/skynet.j2").read_text())
-        .render(**{key: str(tmp_path / key) for key in defaults})
+        .render(workstation_user_home=str(tmp_path / "managed-user"), **{key: str(tmp_path / key) for key in defaults})
     )
     env = {
         **os.environ,
@@ -2181,6 +2181,7 @@ def test_persistence_audit_checks_only_owned_content_and_enabled_active_units(mo
 def test_executable_skynet_dispatch_is_policy_only_and_preserves_private_input_path(tmp_path, argv, operation, check):
     defaults = yaml.safe_load((ROOT / "ansible/roles/workstation/defaults/main.yml").read_text())
     variables = {key: str(tmp_path / key) for key in defaults}
+    variables["workstation_user_home"] = str(tmp_path / "managed-user")
     variables["workstation_ansible_path"] = str(tmp_path / "ansible")
     wrapper = tmp_path / "skynet"
     wrapper.write_text(
