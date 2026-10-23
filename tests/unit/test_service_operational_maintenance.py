@@ -342,7 +342,7 @@ def test_actual_mgt_audit_and_static_bootstrap_need_no_provider_or_replacement(t
         raw = defaults["netbox_podman_services"][1]
         variables = {
             **defaults,
-            "inventory_hostname": "localhost",
+            "inventory_hostname": "mgt",
             "local_ip": "192.0.2.10",
             "container_host_appdata_root": "/opt",
             "container_host_puid": "1000",
@@ -459,9 +459,8 @@ class ActionModule(m.ActionModule):
         "service_common_execution_only": False,
         "local_ip": "192.0.2.10",
     }
-    host = "localhost" if bootstrap else "mgt"
-    if not bootstrap:
-        variables["services_controller_host"] = "mgt"
+    host = "mgt"
+    variables["services_controller_host"] = host
     inventory = tmp_path / "inventory.yml"
     inventory.write_text(yaml.safe_dump({"all": {"hosts": {host: {"ansible_connection": "local", "local_ip": "192.0.2.10"}}}}))
     config = tmp_path / "ansible.cfg"

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.util
 import json
 import os
 import shutil
@@ -212,3 +213,174 @@ def test_missing_bootstrap_inputs_fail_before_lifecycle(bootstrap, missing):
     result, entered = run("run", "netbox", "deploy")
     assert result.returncode != 0, result.stdout + result.stderr
     assert entered is None
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("fault", [None, "policy-host", "policy-address", "observed-address", "policy-owner", "firewall"])
+def test_remote_bootstrap_inspects_actual_protection_before_stops(bootstrap, tmp_path, fault):
+    directory, run = bootstrap
+    spec = importlib.util.spec_from_file_location("bootstrap_maintenance", ROOT / "tests/unit/test_service_operational_maintenance.py")
+    maintenance = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(maintenance)
+    check, fixture = maintenance.CHECK, maintenance.FIXTURE
+
+    # Keep the real bootstrap -> NetBox -> common requirements -> action path.
+    # Only the remote module boundary and the subsequent stop payload are stubbed.
+    for path in (
+        "roles/netbox/tasks/main.yml",
+        "roles/netbox/tasks/requirements.yml",
+        "roles/podman_services/tasks/validate_definitions.yml",
+        "roles/podman_services/filter_plugins/podman_services.py",
+        "roles/service_common/defaults/main.yml",
+        "roles/service_common/filter_plugins/service_common.py",
+        "roles/service_common/tasks/operational_requirements.yml",
+        "roles/service_common/tasks/operational_inspection.yml",
+    ):
+        target = directory / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / "ansible" / path, target)
+    # Supply synthetic values separately, through the same explicit Vault file.
+    vault = directory / "group_vars/all/vault/netbox.yml"
+    vault_lib = VaultLib([("default", VaultSecret((tmp_path / "vault-password").read_bytes()))])
+    inputs = yaml.safe_load(vault_lib.decrypt(vault.read_bytes()))
+    inputs.update(
+        {
+            key: "NONPRODUCTION-fixture-input"
+            for key in ("netbox_superuser_email", "netbox_superuser_password", "netbox_postgres_user", "netbox_postgres_pass")
+        }
+    )
+    vault.write_bytes(vault_lib.encrypt(yaml.safe_dump(inputs)))
+    context = {
+        **yaml.safe_load((directory / "group_vars/all/services.yml").read_text()),
+        **yaml.safe_load((directory / "roles/netbox/defaults/main.yml").read_text()),
+        "inventory_hostname": "mgt",
+        "local_ip": "192.0.2.48",
+        "container_host_appdata_root": "/opt",
+        "container_host_puid": "1000",
+        "container_host_pgid": "1000",
+        "services_internal_zone": "example.internal",
+        "services_private_https_port": 9443,
+    }
+
+    def resolve(value, defaults=None):
+        for _ in range(8):
+            value = fixture.resolve(value, {**(defaults or {}), **context})
+        return value
+
+    records = []
+    for role in ("netbox", "infisical"):
+        defaults = yaml.safe_load((ROOT / f"ansible/roles/{role}/defaults/main.yml").read_text())
+        records.extend(check.MGT.bootstrap_metadata(role, defaults, resolve))
+    plan = check.MGT.build_plan({}, "mgt", resolve, records)
+    # Only NetBox's endpoints are active; all declared bootstrap principals remain.
+    endpoints = [e for e in plan["endpoints"] if e["service"].startswith("netbox")]
+    callers = {name for e in endpoints for name in e["callers"]}
+    policy = {
+        "schema": 1,
+        "backend": "nf_tables",
+        "inputs_verified": True,
+        "inventory_host": "other" if fault == "policy-host" else "mgt",
+        "inventory_address": "192.0.2.99" if fault == "policy-address" else context["local_ip"],
+        "endpoints": endpoints,
+        "principals": plan["principals"],
+        "callers": {
+            name: [
+                {"kind": "local", "phase": "podman", "account": "podman-" + name, "uid": 2019, "verified": True, "restart_verified": True}
+            ]
+            for name in callers
+        },
+    }
+    files = {
+        "/etc/skynet-mgt-firewall/policy.json": [1000 if fault == "policy-owner" else 0, json.dumps(policy)],
+        "/etc/skynet-mgt-firewall/policy.py": [0, "# NONPRODUCTION helper fixture"],
+    }
+    units = []
+    for raw in context["netbox_podman_services"]:
+        cfg = resolve(maintenance.COMMON.service_common_requirements_metadata(raw, resolve(raw["name"])))
+        unit = cfg["name"]
+        units.append(unit)
+        account = cfg["deploy"]["execution"]["host_user"]
+        state = {
+            "version": 2,
+            "managed_by": "podman_services",
+            "service": unit,
+            "unit_name": unit + ".service",
+            "mode": "rootless",
+            "host_user": account,
+            "uid": "2019",
+            "gid": "2019",
+            "home": "/var/lib/" + account,
+            "quadlet_dir": "/var/lib/" + account + "/.config/containers/systemd",
+        }
+        marker = {key: state[key] for key in ("managed_by", "service", "host_user", "uid", "gid", "home")}
+        normalized = check.PODMAN.podman_service_normalize(cfg, unit)
+        files["/var/lib/podman-services/" + unit + ".yml"] = [0, yaml.safe_dump(state)]
+        files["/var/lib/podman-services/accounts/" + account + ".yml"] = [0, yaml.safe_dump(marker)]
+        files[state["quadlet_dir"] + "/" + unit + ".container"] = [2019, fixture.render_container(normalized)]
+        for mount in normalized["container"].get("mounts", []):
+            files[mount["source"]] = [2019, None]
+    remote_files = tmp_path / "remote-files.json"
+    remote_files.write_text(json.dumps(files))
+    events = tmp_path / "remote-events.jsonl"
+    observed_address = "192.0.2.99" if fault == "observed-address" else context["local_ip"]
+    (directory / "action_plugins/service_operational_check.py").write_text(f"""
+import base64, importlib.util, json
+from pathlib import Path
+spec = importlib.util.spec_from_file_location("actual_check", {str(ROOT / "ansible/action_plugins/service_operational_check.py")!r})
+m = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(m)
+files = json.loads(Path({str(remote_files)!r}).read_text())
+
+class ActionModule(m.ActionModule):
+    def _execute_module(self, module_name=None, module_args=None, **kwargs):
+        a = module_args
+        with Path({str(events)!r}).open("a") as stream:
+            stream.write(json.dumps([module_name, a]) + "\\n")
+        if module_name == "ansible.builtin.stat":
+            v = files.get(a["path"])
+            return {{"stat": {{"exists": v is not None, "uid": v[0] if v else 0,
+                "isreg": v is not None and v[1] is not None, "isdir": v is not None and v[1] is None,
+                "islnk": False, "mode": "0644"}}}}
+        if module_name == "ansible.builtin.slurp":
+            return {{"content": base64.b64encode(files[a["src"]][1].encode()).decode()}}
+        if module_name == "ansible.builtin.command":
+            argv = a["argv"]
+            if argv[0] == "getent":
+                account = argv[-1]
+                return {{"rc": 0, "stdout": account + ":x:2019:2019::/var/lib/" + account + ":/usr/sbin/nologin"}}
+            if argv[0] == "ip":
+                return {{"rc": 0, "stdout": json.dumps([{{"addr_info": [{{"local": {observed_address!r}}}]}}])}}
+            if "check" in argv:
+                return {{"rc": 0, "stdout": json.dumps({{"compliant": {fault != "firewall"!r}, "pending": [], "families": [4, 6]}})}}
+            if argv[0] == "systemctl":
+                return {{"rc": 0, "stdout": "active"}}
+        raise AssertionError("Unexpected remote operation")
+""")
+    stopped = tmp_path / "stop-reached.json"
+    (directory / "action_plugins/stop_probe.py").write_text(
+        "import json\nfrom pathlib import Path\nfrom ansible.plugins.action import ActionBase\n"
+        "class ActionModule(ActionBase):\n"
+        "    def run(self, tmp=None, task_vars=None):\n"
+        f"        Path({str(stopped)!r}).write_text(json.dumps(task_vars['netbox_podman_prerequisite_proofs']))\n"
+        "        return {'changed': False}\n"
+    )
+    (directory / "roles/podman_services/tasks/stop_bootstrap.yml").write_text("- stop_probe: {}\n- ansible.builtin.meta: end_play\n")
+    result, _ = run("run", "netbox", "recreate")
+    output = result.stdout + result.stderr
+    assert (result.returncode == 0) == (fault is None), output
+    assert stopped.exists() == (fault is None), output
+    rows = [json.loads(row) for row in events.read_text().splitlines()]
+    if fault is None:
+        proofs = json.loads(stopped.read_text())
+        assert set(proofs) == set(units)
+        assert all(proof["acl"] == ["bootstrap"] and proof["ownership_transition"] for proof in proofs.values())
+        assert sum(name.endswith("command") and "check" in args["argv"] for name, args in rows) == len(units)
+    else:
+        expected = {
+            "policy-host": "installed mgt policy inventory identity differs",
+            "policy-address": "installed mgt policy inventory identity differs",
+            "observed-address": "does not carry its verified inventory address",
+            "policy-owner": "installed metadata ownership/mode differs",
+            "firewall": "installed mgt protection or caller reconciliation is not compliant",
+        }
+        assert expected[fault] in output, output

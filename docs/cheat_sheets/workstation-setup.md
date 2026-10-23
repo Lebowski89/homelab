@@ -133,6 +133,13 @@ frontend domain/port from `api_endpoint` in your existing `ansible/netbox.yml`
 without loading its inventory plugin or calling its API. Existing host overrides
 take precedence over those defaults.
 
+After validating the single remote application target, recovery uses that host
+as the controller identity for protection inspection. The installed firewall
+policy must match this identity and its configured LAN address, and the remote
+host must carry that address. No storage/worker inventory or additional
+controller variable is required; firewall, ownership and pre-stop checks still
+run before recreation.
+
 Keep `ansible/group_vars/all/vault/netbox.yml` encrypted. Skynet loads that file
 with its configured `VAULT_PASS_FILE`; no second credentials file or duplicated
 application settings are needed. Configure verified SSH access to mgt and
