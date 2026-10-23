@@ -44,6 +44,14 @@ Use Debian/LMDE or conventional Fedora Desktop/KDE, with Python 3.12 or newer.
      "$(sed -n '/^ansible-core==/p' "$checkout/ansible/requirements.txt")"
    ```
 
+   Encode the checkout path once, including any spaces:
+
+   ```bash
+   workstation_extra_vars="$("$bootstrap_venv/bin/python" -c \
+     'import json, sys; print(json.dumps({"workstation_repository_path": sys.argv[1], "workstation_opentofu_enabled": True}))' \
+     "$checkout")"
+   ```
+
 5. **Test without installing the workstation tools.** Enter your local sudo
    password when prompted. NetBox and application credentials are not needed.
 
@@ -53,8 +61,7 @@ Use Debian/LMDE or conventional Fedora Desktop/KDE, with Python 3.12 or newer.
      -i "$workstation_name," -c local \
      "$checkout/ansible/playbook.yml" \
      -e "workstation_hosts=$workstation_name" \
-     -e "workstation_repository_path=$checkout" \
-     -e '{"workstation_opentofu_enabled": true}' \
+     -e "$workstation_extra_vars" \
      --tags workstation_tools --check --ask-become-pass
    ```
 
@@ -70,8 +77,7 @@ Use Debian/LMDE or conventional Fedora Desktop/KDE, with Python 3.12 or newer.
      -i "$workstation_name," -c local \
      "$checkout/ansible/playbook.yml" \
      -e "workstation_hosts=$workstation_name" \
-     -e "workstation_repository_path=$checkout" \
-     -e '{"workstation_opentofu_enabled": true}' \
+     -e "$workstation_extra_vars" \
      --tags workstation_tools --ask-become-pass
    ```
 
@@ -100,3 +106,19 @@ HTTPS secret-store access and SSH host-key verification.
 
 OpenTofu infrastructure/state operations remain blocked until an authoritative
 shared state location and the required private state/variable handoff are resolved.
+
+
+## Recovery when NetBox is unavailable
+
+Use `ansible/bootstrap.yml` with a private static inventory based on
+[`ansible/recovery.yml.sample`](../../ansible/recovery.yml.sample).
+Set `ansible_host` to the verified numeric SSH address of the application host:
+IPv4, IPv6 or IPv4-mapped IPv6. DNS names, brackets, CIDR suffixes and IPv6 scope
+IDs are not supported. Loopback, unspecified and multicast addresses are rejected.
+Keep SSH host-key verification enabled.
+
+Fill in the host's numeric `local_ip`, absolute `container_host_appdata_root`,
+non-negative UID/GID, DNS `services_internal_zone` and TCP port (1–65535).
+These values are checked before either recovery role runs. Supply required
+bootstrap secrets separately as encrypted Vault inputs; workstation setup above
+needs none of them.

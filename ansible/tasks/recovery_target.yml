@@ -9,11 +9,12 @@
       - ansible_play_hosts_all | length == 1
       - inventory_hostname not in ['localhost', '127.0.0.1', '::1']
       - ansible_connection | default('ssh') in ['ssh', 'paramiko']
-      - ansible_host | default(inventory_hostname) not in ['localhost', '::1']
-      - not (ansible_host | default(inventory_hostname) is match('^127[.]'))
+      - ansible_host is defined
+      - ansible_host | valid_remote_ip
     fail_msg: >-
       Recovery requires one explicit remote SSH application host and its managed-host
-      variables. Local transport and loopback targets are forbidden.
+      variables, including an explicit non-loopback numeric ansible_host.
+      Hostnames, local transport, unspecified and multicast addresses are forbidden.
   become: false
 
 - name: Recovery target | Require managed-host addressing and placement
@@ -26,4 +27,52 @@
       - services_internal_zone is defined
       - services_private_https_port is defined
     fail_msg: Provide the application's existing managed-host configuration; workstation paths are not deployment defaults.
+  become: false
+
+- name: Recovery target | Validate managed-host network and storage values
+  ansible.builtin.assert:
+    that:
+      - local_ip | valid_remote_ip
+      - container_host_appdata_root is string
+      - container_host_appdata_root == container_host_appdata_root | trim
+      - container_host_appdata_root is match('^/')
+      - not (container_host_appdata_root is search('[\x00\r\n]'))
+      - services_internal_zone | valid_dns_zone
+      - services_private_https_port | valid_tcp_port
+    fail_msg: >-
+      Recovery requires a numeric managed-host LAN address, an absolute application
+      root, a DNS internal zone and a TCP port in 1..65535.
+  become: false
+
+- name: Recovery target | Validate runtime ownership IDs
+  ansible.builtin.assert:
+    that:
+      - recovery_owner.value is not boolean
+      - recovery_owner.value is integer or recovery_owner.value is string
+      - recovery_owner.value | string | trim is match('^[0-9]+$')
+    fail_msg: Recovery runtime UID/GID must be non-negative integers or decimal strings.
+  loop:
+    - field: container_host_puid
+      value: "{{ container_host_puid }}"
+    - field: container_host_pgid
+      value: "{{ container_host_pgid }}"
+  loop_control:
+    loop_var: recovery_owner
+    label: "{{ recovery_owner.field }}"
+  become: false
+
+- name: Recovery target | Reject unfilled sample placeholders
+  ansible.builtin.assert:
+    that:
+      - not (recovery_config_value | string is search('(?i)(^|[/._-])(REPLACE_WITH|REPLACE_ME|CHANGEME)([/._-]|$)'))
+    fail_msg: Replace recovery inventory placeholders with the managed host's actual configuration.
+  loop:
+    - "{{ local_ip }}"
+    - "{{ container_host_appdata_root }}"
+    - "{{ container_host_puid }}"
+    - "{{ container_host_pgid }}"
+    - "{{ services_internal_zone }}"
+    - "{{ services_private_https_port }}"
+  loop_control:
+    loop_var: recovery_config_value
   become: false

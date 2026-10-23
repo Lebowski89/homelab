@@ -1,18 +1,20 @@
 ---
 # Save privately outside the repository and replace placeholders from operator records.
 # No dynamic inventory or local execution. Do not place secrets in this file.
+# ansible_host and local_ip must be numeric IPv4 or unscoped IPv6 addresses.
+# No DNS names, CIDR suffixes, brackets, loopback, unspecified or multicast addresses.
 all:
   children:
     service_recovery:
       hosts:
-        mgt:
+        application_host:
           ansible_connection: ssh
-          ansible_host: REPLACE_WITH_VERIFIED_MGT_SSH_ADDRESS
-          ansible_user: REPLACE_WITH_MGT_SSH_USER
+          ansible_host: REPLACE_WITH_VERIFIED_NUMERIC_SSH_IP
+          ansible_user: REPLACE_WITH_SSH_USER
           ansible_port: 22
-          recovery_application_host: mgt
-          ansible_python_interpreter: /opt/ansible/ansible-venv/bin/python
-          local_ip: REPLACE_WITH_MGT_PRIMARY_LAN_IP
+          recovery_application_host: application_host
+          ansible_python_interpreter: /usr/bin/python3  # Use the existing managed-host interpreter.
+          local_ip: REPLACE_WITH_NUMERIC_PRIMARY_LAN_IP
           container_host_puid: REPLACE_WITH_EXISTING_UID
           container_host_pgid: REPLACE_WITH_EXISTING_GID
           container_host_appdata_root: REPLACE_WITH_EXISTING_APPLICATION_ROOT

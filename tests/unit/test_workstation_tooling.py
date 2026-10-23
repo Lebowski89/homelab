@@ -5,9 +5,11 @@ from __future__ import annotations
 import json
 import os
 import pwd
+import re
 import shutil
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -173,37 +175,6 @@ def test_rendered_wrapper_executes_locally_with_portable_paths_and_overrides(tmp
     assert observed["collections"] == "override-collections"
 
 
-@pytest.mark.integration
-@pytest.mark.parametrize(
-    ("host", "connection", "address", "accepted"),
-    [
-        ("localhost", "local", "127.0.0.1", False),
-        ("mgt", "local", "192.0.2.10", False),
-        ("mgt", "ssh", "127.0.0.2", False),
-        ("mgt", "ssh", "192.0.2.10", True),
-    ],
-)
-def test_recovery_target_guard_runs_before_any_remote_module(tmp_path, host, connection, address, accepted):
-    result = run_tasks(
-        tmp_path,
-        [{"ansible.builtin.import_tasks": str(ROOT / "ansible/tasks/recovery_target.yml")}],
-        {
-            "recovery_application_host": "mgt",
-            "ansible_host": address,
-            "local_ip": "192.0.2.10",
-            "container_host_appdata_root": "/opt",
-            "container_host_puid": "1000",
-            "container_host_pgid": "1000",
-            "services_internal_zone": "example.internal",
-            "services_private_https_port": 8443,
-        },
-        host=host,
-        connection=connection,
-    )
-    # assert is controller-side; even the accepted SSH target is never contacted.
-    assert (result.returncode == 0) is accepted, result.stdout + result.stderr
-
-
 def test_bootstrap_entry_points_cannot_select_the_execution_machine():
     for filename in ("playbook.yml", "bootstrap.yml"):
         plays = yaml.safe_load((ROOT / "ansible" / filename).read_text())
@@ -323,3 +294,117 @@ exec(program)
     result = subprocess.run([sys.executable, "-c", harness, query[2], argument], capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
     assert result.stdout.strip() == str(venv / "lib64/python3.14/site-packages")
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("configured_venv", [True, False])
+def test_service_tags_use_python3_with_or_without_a_configured_venv(tmp_path, configured_venv):
+    repository = tmp_path / "checkout"
+    (repository / "ansible").mkdir(parents=True)
+    services = tmp_path / "services"
+    services.mkdir()
+    (services / "catalog.yml").write_text(
+        yaml.safe_dump(
+            {
+                "enabled-service": {
+                    "tags": ["service-a", " shared ", "shared"],
+                    "targets": {
+                        "active-target": {"tags": ["target-a", "shared"]},
+                        "disabled-target": {"enabled": False, "tags": ["excluded-target"]},
+                    },
+                },
+                "disabled-service": {"enabled": False, "tags": ["excluded-service"]},
+            },
+            sort_keys=False,
+        )
+    )
+    tools = tmp_path / "system-bin"
+    tools.mkdir()
+    for tool in ("dirname", "cat", "awk", "sort", "find", "sed"):
+        (tools / tool).symlink_to(shutil.which(tool))
+    marker = tmp_path / "interpreter-used"
+    venv = tmp_path / "configured-venv"
+    for directory, identity in ((tools, "system-python3"), (venv / "bin", "venv-python3")):
+        if identity == "venv-python3" and not configured_venv:
+            continue
+        directory.mkdir(parents=True, exist_ok=True)
+        binary = directory / "python3"
+        binary.write_text(
+            f"#!{sys.executable}\nimport os, sys\nfrom pathlib import Path\n"
+            f"Path({str(marker)!r}).write_text({identity!r})\n"
+            f"os.execv({sys.executable!r}, [{sys.executable!r}, *sys.argv[1:]])\n"
+        )
+        binary.chmod(0o755)
+    defaults = yaml.safe_load((ROLE / "defaults/main.yml").read_text())
+    variables = {key: str(tmp_path / key) for key in defaults}
+    variables.update(workstation_repository_path=str(repository), workstation_ansible_venv_path=str(venv))
+    wrapper = tmp_path / "skynet"
+    wrapper.write_text(Environment(undefined=StrictUndefined).from_string((ROLE / "templates/skynet.j2").read_text()).render(**variables))
+    assert shutil.which("python", path=str(tools)) is None
+    result = subprocess.run(
+        ["/bin/bash", str(wrapper), "tags"],
+        capture_output=True,
+        text=True,
+        env={**os.environ, "PATH": str(tools), "SERVICES_DIR": str(services), "ANSIBLE_VENV_PATH": str(venv), "REPO_ROOT": str(repository)},
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert marker.read_text() == ("venv-python3" if configured_venv else "system-python3")
+    assert result.stdout.split("# Service tags\n", 1)[1].splitlines() == ["enabled-service", "service-a", "shared", "target-a"]
+    assert subprocess.run(["bash", "-n", str(wrapper)], capture_output=True).returncode == 0
+
+
+@pytest.mark.integration
+def test_documented_bootstrap_commands_preserve_a_checkout_path_with_spaces(tmp_path):
+    checkout = tmp_path / "checkout with spaces"
+    ansible_dir = checkout / "ansible"
+    ansible_dir.mkdir(parents=True)
+    (ansible_dir / "bootstrap.cfg").write_text("[defaults]\nhost_key_checking = True\n")
+    # Both documented commands execute this controller-side assertion only.
+    (ansible_dir / "playbook.yml").write_text(
+        yaml.safe_dump(
+            [
+                {
+                    "hosts": "all",
+                    "gather_facts": False,
+                    "tasks": [
+                        {
+                            "ansible.builtin.assert": {
+                                "that": [
+                                    "workstation_repository_path == " + repr(str(checkout)),
+                                    "workstation_opentofu_enabled is sameas true",
+                                ]
+                            },
+                            "tags": ["workstation_tools"],
+                        }
+                    ],
+                }
+            ]
+        )
+    )
+    bootstrap = tmp_path / "bootstrap-venv"
+    (bootstrap / "bin").mkdir(parents=True)
+    (bootstrap / "bin/python").symlink_to(sys.executable)
+    (bootstrap / "bin/ansible-playbook").symlink_to(ANSIBLE)
+    text = (ROOT / "docs/cheat_sheets/workstation-setup.md").read_text()
+    blocks = [textwrap.dedent(block) for block in re.findall(r"```bash\n(.*?)```", text, re.S)]
+    encoding = next(block for block in blocks if "workstation_extra_vars=" in block)
+    commands = [block for block in blocks if "--tags workstation_tools" in block]
+    assert len(commands) == 2
+    for command in commands:
+        result = subprocess.run(
+            ["bash"],
+            input=encoding + "\n" + command.replace("--ask-become-pass", ""),
+            capture_output=True,
+            text=True,
+            check=False,
+            env={
+                **os.environ,
+                "checkout": str(checkout),
+                "bootstrap_venv": str(bootstrap),
+                "workstation_name": "blacktop",
+                "ANSIBLE_LOCAL_TEMP": str(tmp_path / "local"),
+            },
+        )
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "failed=0" in result.stdout

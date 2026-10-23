@@ -745,8 +745,8 @@ print_tags() {
     echo
 
     echo "# Service tags"
-    if bin_exists "$(tool_path python)"; then
-      "$(tool_path python)" - "$DOCKER_SERVICES_DIR" <<'PY'
+    if bin_exists "$(tool_path python3)"; then
+      "$(tool_path python3)" - "$DOCKER_SERVICES_DIR" <<'PY'
 import sys
 from collections import OrderedDict
 from pathlib import Path
