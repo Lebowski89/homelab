@@ -53,7 +53,7 @@ def test_main_playbook_provisions_workstation_first_and_only_once():
     assert play["become"] is True
     assert play["tasks"][0]["become"] is False
     assert include["ansible.builtin.include_role"]["name"] == "workstation"
-    assert set(include["tags"]) == WORKSTATION_TAGS | TOOL_TAGS
+    assert set(include["tags"]) == WORKSTATION_TAGS | TOOL_TAGS | {"workstation_credentials"}
     assert include["ansible.builtin.include_role"]["apply"]["tags"] == ["workstation"]
     assert all(
         task.get("ansible.builtin.include_role", {}).get("name") != "workstation" for later in plays[1:] for task in later.get("tasks", [])
@@ -75,7 +75,12 @@ def test_ubuntu_role_remains_explicitly_ubuntu_only():
 
 
 def test_workstation_dynamic_includes_propagate_their_selection_tags():
-    tasks = [task for task in load_yaml(MAIN_TASKS_PATH) if task["name"] != "Workstation | Configure automation tooling"]
+    tasks = [
+        task
+        for task in load_yaml(MAIN_TASKS_PATH)
+        if task["name"]
+        not in {"Workstation | Configure automation tooling", "Workstation | Set up password files only when explicitly selected"}
+    ]
 
     for task in tasks:
         include = task["ansible.builtin.include_tasks"]

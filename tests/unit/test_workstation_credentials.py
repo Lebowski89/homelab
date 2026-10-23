@@ -1,0 +1,437 @@
+"""Exercise credential setup only in temporary directories with synthetic input."""
+
+from __future__ import annotations
+
+import errno
+import fcntl
+import importlib.util
+import io
+import json
+import os
+import pty
+import pwd
+import select
+import shutil
+import stat
+import subprocess
+import sys
+import termios
+import time
+from pathlib import Path
+
+import pytest
+import yaml
+from jinja2 import Environment, StrictUndefined
+
+ROOT = Path(__file__).resolve().parents[2]
+ROLE = ROOT / "ansible/roles/workstation"
+ANSIBLE = str(Path(sys.executable).with_name("ansible-playbook"))
+SPEC = importlib.util.spec_from_file_location("credential_files", ROLE / "library/workstation_credential_files.py")
+FILES = importlib.util.module_from_spec(SPEC)
+SPEC.loader.exec_module(FILES)
+VAULT = "NONPRODUCTION-existing-vault-pass"
+BECOME = "NONPRODUCTION-managed-sudo-pass"
+LOCAL = "NONPRODUCTION-local-provisioning-pass"
+
+
+@pytest.fixture
+def parameters(tmp_path):
+    account = pwd.getpwuid(os.getuid())
+    if account.pw_uid == 0:
+        pytest.skip("credential setup deliberately requires a non-root workstation account")
+    directory = tmp_path / "private directory"
+    return {
+        "directory": str(directory),
+        "vault_file": str(directory / "vault password"),
+        "become_file": str(directory / "sudo password"),
+        "owner": account.pw_name,
+        "operation": "apply",
+        "values": {"vault": VAULT, "become": BECOME},
+    }
+
+
+def test_exclusive_creation_and_metadata_only_preservation(parameters, monkeypatch):
+    result = FILES.configure(parameters, False)
+    assert result["created"] == ["vault", "become"]
+    directory = Path(parameters["directory"])
+    assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+    before = {}
+    for kind in ("vault", "become"):
+        path = Path(parameters[kind + "_file"])
+        info = path.stat()
+        assert path.read_text() == parameters["values"][kind] + "\n"
+        assert (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) == (os.getuid(), os.getgid(), 0o600)
+        before[kind] = (info.st_ino, info.st_mtime_ns)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("preservation must not read password contents")
+
+    monkeypatch.setattr(FILES.os, "read", forbidden)
+    monkeypatch.setattr(FILES.os, "pread", forbidden)
+    import builtins
+
+    targets = {parameters[kind + "_file"] for kind in ("vault", "become")}
+    for api, name in ((builtins, "open"), (io, "open")):
+        original = getattr(api, name)
+
+        def guard(file, *args, _original=original, **kwargs):
+            if isinstance(file, (str, os.PathLike)) and str(file) in targets:
+                forbidden()
+            return _original(file, *args, **kwargs)
+
+        monkeypatch.setattr(api, name, guard)
+    assert FILES.configure({**parameters, "values": {}}, False) == {"changed": False, "missing": [], "created": []}
+    for kind in before:
+        info = Path(parameters[kind + "_file"]).stat()
+        assert (info.st_ino, info.st_mtime_ns) == before[kind]
+
+
+def test_file_appearing_after_inspection_is_never_replaced(parameters, monkeypatch):
+    link = FILES.os.link
+
+    def race(source, destination, **kwargs):
+        if destination == Path(parameters["vault_file"]).name:
+            Path(parameters["vault_file"]).write_text("NONPRODUCTION-concurrent-existing-file")
+        return link(source, destination, **kwargs)
+
+    monkeypatch.setattr(FILES.os, "link", race)
+    assert FILES.configure(parameters, False)["created"] == ["become"]
+    assert Path(parameters["vault_file"]).read_text() == "NONPRODUCTION-concurrent-existing-file"
+    assert not list(Path(parameters["directory"]).glob(".workstation-credential-*"))
+
+
+@pytest.mark.parametrize("kind", ["directory", "vault_file", "become_file"])
+def test_unsafe_destinations_rejected_before_any_creation(parameters, tmp_path, kind):
+    target = tmp_path / "unrelated"
+    target.write_text("NONPRODUCTION-do-not-touch")
+    destination = Path(parameters[kind])
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.symlink_to(target)
+    with pytest.raises(ValueError, match="Unsafe"):
+        FILES.configure(parameters, False)
+    assert target.read_text() == "NONPRODUCTION-do-not-touch"
+    if kind != "become_file":
+        assert not Path(parameters["become_file"]).exists()
+    else:
+        assert destination.is_symlink()
+
+
+def test_check_mode_and_invalid_values_never_write(parameters):
+    assert FILES.configure(parameters, True)["missing"] == ["vault", "become"]
+    for value in ("", "   ", "invalid\npassword", None):
+        with pytest.raises(ValueError, match="missing or invalid"):
+            FILES.configure({**parameters, "values": {"vault": value, "become": BECOME}}, False)
+    assert not Path(parameters["directory"]).exists()
+
+
+def test_existing_unreadable_files_are_secured_without_content_access(parameters, monkeypatch):
+    FILES.configure(parameters, False)
+    for kind in ("vault", "become"):
+        Path(parameters[kind + "_file"]).chmod(0o000)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("password contents must not be read")
+
+    monkeypatch.setattr(FILES.os, "read", forbidden)
+    assert FILES.configure({**parameters, "values": {}}, False)["changed"]
+    for kind in ("vault", "become"):
+        assert stat.S_IMODE(Path(parameters[kind + "_file"]).stat().st_mode) == 0o600
+
+
+def test_separate_configured_password_parents_are_honored(parameters, tmp_path):
+    parameters["vault_file"] = str(tmp_path / "separate vault/password")
+    parameters["become_file"] = str(tmp_path / "separate sudo/password")
+    FILES.configure(parameters, False)
+    for kind in ("vault", "become"):
+        target = Path(parameters[kind + "_file"])
+        assert target.read_text() == parameters["values"][kind] + "\n"
+        assert stat.S_IMODE(target.parent.stat().st_mode) == 0o700
+
+
+def test_explicit_selection_is_required_at_both_include_layers():
+    tasks = yaml.safe_load((ROLE / "tasks/main.yml").read_text())
+    setup = next(task for task in tasks if task.get("ansible.builtin.include_tasks", {}).get("file") == "credentials.yml")
+    assert "workstation_credentials" in setup["tags"]
+    assert "workstation_credentials" in setup["ansible.builtin.include_tasks"]["apply"]["tags"]
+    assert setup["when"] == "'workstation_credentials' in ansible_run_tags"
+    assert tasks.index(setup) < next(i for i, task in enumerate(tasks) if task["name"] == "Workstation | Configure automation tooling")
+    secret = next(task for task in yaml.safe_load((ROLE / "tasks/credentials.yml").read_text()) if "block" in task)["block"][0]
+    assert secret["no_log"] is True and secret["diff"] is False
+
+
+@pytest.fixture
+def credentials(tmp_path, parameters):
+    directory = tmp_path / "operator checkout/ansible"
+    directory.mkdir(parents=True)
+    shutil.copytree(ROLE, directory / "roles/workstation", ignore=shutil.ignore_patterns("__pycache__"))
+    shutil.copytree(ROOT / "ansible/tasks", directory / "tasks")
+    for filename in ("playbook.yml", "bootstrap.cfg"):
+        shutil.copyfile(ROOT / "ansible" / filename, directory / filename)
+    # All non-credential installation payloads are harmless sentinels.
+    for filename in ("tools", "validate", "timezone", "packages", "development", "vscode", "shell", "desktop"):
+        (directory / f"roles/workstation/tasks/{filename}.yml").write_text(
+            yaml.safe_dump([{"name": "SYNTHETIC WORKSTATION PAYLOAD", "ansible.builtin.debug": {"msg": filename}}])
+        )
+    host = os.uname().nodename.split(".")[0]
+    hosts = directory / "host_vars"
+    hosts.mkdir()
+    (hosts / (host + ".yml")).write_text(
+        yaml.safe_dump(
+            {
+                "workstation_user": parameters["owner"],
+                "workstation_tools_enabled": True,
+                "workstation_secrets_path": parameters["directory"],
+                "workstation_vault_pass_file": parameters["vault_file"],
+                "workstation_become_pass_file": parameters["become_file"],
+            }
+        )
+    )
+    wrapper = tmp_path / "skynet"
+    wrapper.write_text(
+        Environment(undefined=StrictUndefined)
+        .from_string((ROLE / "templates/skynet.j2").read_text())
+        .render(
+            workstation_repository_path=str(directory.parent),
+            workstation_user_home=str(tmp_path / "managed-home"),
+            workstation_vault_pass_file=parameters["vault_file"],
+            workstation_become_pass_file=parameters["become_file"],
+            workstation_skynet_doctor_ping_target="tags_skynet",
+            workstation_ansible_venv_path=str(Path(sys.executable).parent.parent),
+            workstation_ansible_log_path=str(tmp_path / "ansible.log"),
+            workstation_ansible_collections_path=str(tmp_path / "empty-collections"),
+        )
+    )
+    env = {key: value for key, value in os.environ.items() if not key.startswith("ANSIBLE_")}
+    env.update(
+        ANSIBLE_CONFIG=str(directory / "bootstrap.cfg"),
+        ANSIBLE_LOCAL_TEMP=str(tmp_path / "local"),
+        ANSIBLE_REMOTE_TEMP=str(tmp_path / "remote"),
+        ANSIBLE_LOG_PATH=str(tmp_path / "ansible.log"),
+        ANSIBLE_NOCOLOR="true",
+        ANSIBLE_COLLECTIONS_SCAN_SYS_PATH="false",
+    )
+
+    def run(*, answers=None, tags="workstation_credentials", check=False, skynet=False, record=False, ask_become=False):
+        run_env = dict(env)
+        if record:
+            recorder = tmp_path / "record-playbook"
+            recorder.write_text(
+                f"#!{sys.executable}\nimport json, os, sys\n"
+                "print(json.dumps({'argv': sys.argv[1:], 'config': os.environ['ANSIBLE_CONFIG']}))\n"
+            )
+            recorder.chmod(0o755)
+            run_env["ANSIBLE_PLAYBOOK_BIN"] = str(recorder)
+        command = (
+            ["bash", str(wrapper), "check" if check else "run", "workstation", "credentials"]
+            if skynet
+            else [
+                ANSIBLE,
+                "-i",
+                host + ",",
+                "-c",
+                "local",
+                str(directory / "playbook.yml"),
+                "-e",
+                "workstation_hosts=" + host,
+                "--tags",
+                tags,
+                "--diff",
+                "-vvv",
+                *(["--check"] if check else []),
+            ]
+        )
+        if ask_become:
+            command.append("--ask-become-pass")
+        if answers is None:
+            result = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, text=True, env=run_env, timeout=40)
+            output = result.stdout + result.stderr
+            code = result.returncode
+        else:
+            master, slave = pty.openpty()
+
+            def terminal():
+                os.setsid()
+                fcntl.ioctl(slave, termios.TIOCSCTTY, 0)
+
+            process = subprocess.Popen(command, stdin=slave, stdout=slave, stderr=slave, env=run_env, preexec_fn=terminal)
+            os.close(slave)
+            output = ""
+            position = 0
+            pending = list(answers)
+            deadline = time.monotonic() + 45
+            try:
+                while time.monotonic() < deadline:
+                    ready, _, _ = select.select([master], [], [], 0.1)
+                    if ready:
+                        try:
+                            chunk = os.read(master, 65536)
+                        except OSError as error:
+                            if error.errno != errno.EIO:
+                                raise
+                            break
+                        if not chunk:
+                            break
+                        output += chunk.decode(errors="replace")
+                    if pending and pending[0][0] in output[position:] and not termios.tcgetattr(master)[3] & termios.ECHO:
+                        prompt, value = pending.pop(0)
+                        position = output.index(prompt, position) + len(prompt)
+                        os.write(master, value)
+                else:
+                    pytest.fail("Credential setup hung waiting for synthetic input")
+                code = process.wait(timeout=5)
+                assert not pending, output
+            finally:
+                if process.poll() is None:
+                    process.kill()
+                    process.wait()
+                os.close(master)
+        log = (tmp_path / "ansible.log").read_text() if (tmp_path / "ansible.log").exists() else ""
+        assert all(secret not in output + log for secret in (VAULT, BECOME, LOCAL))
+        return code, output
+
+    return parameters, run
+
+
+def inputs(vault=True, become=True):
+    answers = []
+    for enabled, label, value in (
+        (vault, "Existing Ansible Vault encryption password", VAULT),
+        (become, "Managed-host sudo password supplied by Skynet", BECOME),
+    ):
+        if enabled:
+            answers.extend([(label, (value + "\n").encode()), ("Confirm " + label, (value + "\n").encode())])
+    return answers
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("skynet", [False, True])
+def test_real_bootstrap_and_skynet_create_then_preserve(credentials, skynet):
+    parameters, run = credentials
+    code, output = run(answers=inputs(), skynet=skynet)
+    assert code == 0, output
+    before = {}
+    for kind, expected in (("vault", VAULT), ("become", BECOME)):
+        path = Path(parameters[kind + "_file"])
+        assert path.read_text() == expected + "\n"
+        assert stat.S_IMODE(path.stat().st_mode) == 0o600
+        before[kind] = path.stat().st_mtime_ns
+    code, output = run(skynet=skynet)
+    assert code == 0, output
+    assert "Confirm Existing" not in output
+    assert all(Path(parameters[kind + "_file"]).stat().st_mtime_ns == value for kind, value in before.items())
+    assert "Service host contract |" not in output and "Recovery target |" not in output
+
+
+@pytest.mark.integration
+def test_only_the_missing_file_is_prompted(credentials):
+    parameters, run = credentials
+    directory = Path(parameters["directory"])
+    directory.mkdir(mode=0o700)
+    path = Path(parameters["vault_file"])
+    path.write_text(VAULT + "\n")
+    path.chmod(0o600)
+    code, output = run(answers=inputs(vault=False))
+    assert code == 0, output
+    assert "Confirm Existing Ansible" not in output
+    assert path.read_text() == VAULT + "\n"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("answers", "message"),
+    [
+        ([("Existing Ansible Vault encryption password", b"\n")], "Empty or invalid password"),
+        (
+            [
+                ("Existing Ansible Vault encryption password", (VAULT + "\n").encode()),
+                ("Confirm Existing Ansible Vault encryption password", b"NONPRODUCTION-mismatch\n"),
+            ],
+            "did not match",
+        ),
+        ([("Existing Ansible Vault encryption password", b"\x03")], "cancelled"),
+        ([("Existing Ansible Vault encryption password", b"\x04")], "cancelled"),
+        (inputs(become=False) + [("Managed-host sudo password supplied by Skynet", b"\x03")], "cancelled"),
+    ],
+)
+def test_rejected_or_cancelled_input_creates_no_password_files(credentials, answers, message):
+    parameters, run = credentials
+    code, output = run(answers=answers)
+    assert code != 0 and message in output, output
+    assert not Path(parameters["directory"]).exists()
+    assert "NONPRODUCTION-mismatch" not in output
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("check", [False, True])
+@pytest.mark.parametrize("skynet", [False, True])
+def test_noninteractive_and_check_mode(credentials, check, skynet):
+    parameters, run = credentials
+    code, output = run(check=check, skynet=skynet)
+    assert (code == 0) == check, output
+    assert not Path(parameters["directory"]).exists()
+    if check:
+        assert "Missing password files" in output and "vault" in output and "become" in output
+    else:
+        assert "interactive prompting is unavailable" in output and "--tags workstation_credentials" in output
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("tags", ["workstation", "workstation_tools"])
+def test_ordinary_workstation_runs_do_not_prompt(credentials, tags):
+    parameters, run = credentials
+    code, output = run(tags=tags)
+    assert code == 0, output
+    assert not Path(parameters["directory"]).exists()
+    assert "Privately confirm" not in output
+
+
+@pytest.mark.integration
+def test_credentials_can_precede_tools_in_the_same_bootstrap(credentials):
+    _, run = credentials
+    code, output = run(answers=inputs(), tags="workstation_tools,workstation_credentials")
+    assert code == 0, output
+    assert output.index("Privately confirm missing credentials") < output.index("SYNTHETIC WORKSTATION PAYLOAD")
+
+
+@pytest.mark.integration
+def test_local_become_prompt_is_independent_of_saved_managed_host_password(credentials):
+    parameters, run = credentials
+    answers = [("BECOME password:", (LOCAL + "\n").encode()), *inputs()]
+    code, output = run(answers=answers, ask_become=True)
+    assert code == 0, output
+    assert Path(parameters["become_file"]).read_text() == BECOME + "\n"
+
+
+@pytest.mark.integration
+def test_unsafe_existing_directory_fails_without_prompting(credentials):
+    parameters, run = credentials
+    Path(parameters["vault_file"]).mkdir(parents=True)
+    code, output = run()
+    assert code != 0 and "Unsafe password destination" in output, output
+    assert "Existing Ansible Vault encryption password" not in output
+    assert not Path(parameters["become_file"]).exists()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("check", [False, True])
+def test_skynet_credentials_dispatch_uses_local_bootstrap_without_password_arguments(credentials, check):
+    parameters, run = credentials
+    # Even existing files must not be passed to Ansible for setup to read.
+    directory = Path(parameters["directory"])
+    directory.mkdir(mode=0o700)
+    for kind in ("vault", "become"):
+        Path(parameters[kind + "_file"]).write_text("NONPRODUCTION-existing-file")
+    code, output = run(skynet=True, check=check, record=True)
+    assert code == 0, output
+    observed = json.loads(output.splitlines()[-1])
+    args = observed["argv"]
+    assert args[:2] == ["-i", os.uname().nodename.split(".")[0] + ","]
+    assert args[2].endswith("/ansible/playbook.yml")
+    assert args[args.index("--tags") + 1] == "workstation_credentials"
+    assert args[args.index("-c") + 1] == "local"
+    paths = json.loads(args[args.index("-e") + 1])
+    assert paths["workstation_vault_pass_file"] == parameters["vault_file"]
+    assert paths["workstation_become_pass_file"] == parameters["become_file"]
+    assert "--vault-password-file" not in args and "--become-password-file" not in args
+    assert ("--check" in args) == check
+    assert observed["config"].endswith("/ansible/bootstrap.cfg")

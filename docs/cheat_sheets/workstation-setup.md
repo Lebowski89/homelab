@@ -4,7 +4,7 @@ Run these steps on the workstation as your normal user with sudo access.
 Use Debian/LMDE or conventional Fedora Desktop/KDE, with Python 3.12 or newer.
 
 1. **Get the repository.** Open [homelab on GitHub](https://github.com/Lebowski89/homelab),
-   select the branch containing the workstation changes (currently `refactor/workstation`),
+   select `main` or the branch you intend to test,
    then **Code → Download ZIP** and extract it. Cloning that branch with your Git
    client also works. If you already have a checkout/worktree, use it as-is.
 
@@ -62,14 +62,15 @@ Use Debian/LMDE or conventional Fedora Desktop/KDE, with Python 3.12 or newer.
      "$checkout/ansible/playbook.yml" \
      -e "workstation_hosts=$workstation_name" \
      -e "$workstation_extra_vars" \
-     --tags workstation_tools --check --ask-become-pass
+     --tags workstation_tools,workstation_credentials --check --ask-become-pass
    ```
 
    Expect `failed=0`. Warnings about missing `tags_service_controller` and
    `tags_skynet` groups are normal here; their application plays are skipped.
+   Credential check mode reports missing files without prompting or writing them.
 
-6. **Install Ansible, collections, OpenTofu and Skynet.** Same command without
-   `--check`:
+6. **Set up password files and install Ansible, collections, OpenTofu and Skynet.**
+   Same command without `--check`:
 
    ```bash
    ANSIBLE_CONFIG="$checkout/ansible/bootstrap.cfg" \
@@ -78,8 +79,23 @@ Use Debian/LMDE or conventional Fedora Desktop/KDE, with Python 3.12 or newer.
      "$checkout/ansible/playbook.yml" \
      -e "workstation_hosts=$workstation_name" \
      -e "$workstation_extra_vars" \
-     --tags workstation_tools --ask-become-pass
+     --tags workstation_tools,workstation_credentials --ask-become-pass
    ```
+
+   `--ask-become-pass` asks for **this workstation's local sudo password** to
+   provision it. Credential setup separately asks, only for missing files, for:
+
+   - The **existing Ansible Vault encryption password** for the repository's
+     encrypted variables. Do not choose a new password: setup does not generate
+     passwords or re-encrypt any variables.
+   - The **managed-host sudo password** that Skynet supplies during remote
+     operations. This is not automatically the workstation's local sudo password.
+
+   Both inputs are hidden and require matching confirmation. Empty input and
+   cancellation stop setup before any password files are written. Run this step
+   from an interactive terminal; piped input and unattended missing-file setup
+   fail with instructions. To install tools without credential prompts, select
+   only `--tags workstation_tools`.
 
 7. **Check the installed commands.**
 
@@ -89,6 +105,44 @@ Use Debian/LMDE or conventional Fedora Desktop/KDE, with Python 3.12 or newer.
    tofu version
    skynet targets
    ```
+
+   To set up missing password files later, or inspect the plan:
+
+   ```bash
+   skynet run workstation credentials
+   skynet check workstation credentials
+   ```
+
+   These commands use the local machine's hostname and `host_vars`, the existing
+   `ansible/playbook.yml`, and `bootstrap.cfg`. They do not require NetBox,
+   application Vault variables, or saved password files, and do not read existing
+   password contents. Ordinary `workstation` and `workstation_tools` runs never
+   select credential prompts implicitly.
+
+   Credential setup alone can also be selected in the same direct bootstrap:
+
+   ```bash
+   ANSIBLE_CONFIG="$checkout/ansible/bootstrap.cfg" \
+     "$bootstrap_venv/bin/ansible-playbook" \
+     -i "$workstation_name," -c local \
+     "$checkout/ansible/playbook.yml" \
+     -e "workstation_hosts=$workstation_name" \
+     --tags workstation_credentials
+   ```
+
+   Password files belong to the managed workstation user and use mode `0600`;
+   their private directories use `0700`. Existing regular files keep their
+   contents, even on reruns; setup secures their ownership and permissions without
+   reading them. Symlinks, directories at password-file destinations and hard
+   links are rejected. Rotation is a separate operation.
+
+   Configure machine-specific locations in `ansible/host_vars/<hostname>.yml`
+   through the existing `workstation_secrets_path`, `workstation_vault_pass_file`
+   and `workstation_become_pass_file` settings. Defaults remain
+   `~/.config/homelab/.ansible_vault_pass` and `.ansible_become_pass`. Skynet also
+   honors its existing `VAULT_PASS_FILE` and `BECOME_PASS_FILE` path overrides for
+   this action. No password values belong in inventory, extra vars, shell
+   arguments or environment variables.
 
 For direct Ansible commands in this terminal:
 
