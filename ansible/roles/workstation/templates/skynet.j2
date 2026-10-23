@@ -73,6 +73,8 @@ Aliases:
   skynet target   -> run
 
 Role/action examples:
+  skynet run netbox deploy
+  skynet run netbox recreate
   skynet check resolved
   skynet run resolved
   skynet check ubuntu sysctl
@@ -93,6 +95,12 @@ Role/action examples:
   skynet check worker-backend-firewall
   skynet run worker-backend-firewall check
   skynet remove worker-backend-firewall
+
+NetBox operations always use the static mgt SSH inventory and bootstrap.yml,
+including when NetBox is down. They load the existing encrypted NetBox Vault
+file using VAULT_PASS_FILE. Ordinary service commands still use NetBox inventory.
+Create ansible/inventory/netbox-bootstrap.yml from its .sample once per machine;
+fill in mgt's verified numeric addresses. The populated inventory is gitignored.
 
 Service examples:
   skynet check homepage
@@ -458,7 +466,14 @@ run_role_playbook() {
   shift
   target="${target,,}"
   target="${target//_/-}"
-  if [[ "$target" == "worker-backend-firewall" ]]; then
+  if [[ "$target" == "netbox" ]]; then
+    INVENTORY="$REPO_ROOT/ansible/inventory/netbox-bootstrap.yml" \
+      PLAYBOOK="$REPO_ROOT/ansible/bootstrap.yml" \
+      ANSIBLE_CONFIG="$REPO_ROOT/ansible/bootstrap.cfg" \
+      ANSIBLE_INVENTORY_UNPARSED_FAILED=true \
+      ANSIBLE_INVENTORY_ANY_UNPARSED_IS_FAILED=true \
+      run_playbook "$@" -e "@$REPO_ROOT/ansible/group_vars/all/vault/netbox.yml"
+  elif [[ "$target" == "worker-backend-firewall" ]]; then
     local -a policy_vars=()
     if [[ -n "${WORKER_BACKEND_FIREWALL_VARS_FILE:-}" ]]; then
       [[ -r "$WORKER_BACKEND_FIREWALL_VARS_FILE" ]] || die "Worker firewall inputs are not readable: $WORKER_BACKEND_FIREWALL_VARS_FILE"

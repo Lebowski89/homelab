@@ -2,6 +2,10 @@
 
 This homelab uses NetBox as the infrastructure source of truth for Ansible inventory.
 
+NetBox itself is the bootstrap exception: `skynet run netbox deploy` and
+`skynet run netbox recreate` use static SSH inventory targeting mgt, including
+when its API is unavailable. See the [bootstrap commands](../cheat_sheets/workstation-setup.md#deploy-or-recover-netbox).
+
 Traditional Ansible inventory management via `hosts.ini` has been replaced with a dynamic inventory powered by the `netbox.netbox.nb_inventory` plugin.
 
 ---

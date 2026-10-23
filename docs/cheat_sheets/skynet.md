@@ -257,6 +257,22 @@ For catalog services, this passes the normal `bootstrap,<tag>` Ansible tag combi
 
 For role/action targets, it maps to the role-specific bootstrap tag where supported.
 
+NetBox deployment and recreation work from mgt or a workstation without a running
+NetBox API:
+
+```bash
+skynet run netbox deploy
+skynet run netbox recreate
+```
+
+These automatically select the gitignored local static mgt SSH inventory and
+`ansible/bootstrap.yml`, retain `host_vars/mgt.yml`, and load only the existing
+encrypted `ansible/group_vars/all/vault/netbox.yml` using `VAULT_PASS_FILE`.
+The existing `ansible/netbox.yml` supplies the frontend HTTPS URL locally; its
+inventory plugin is not loaded. Runtime defaults and shared deployment settings
+are reused. See [workstation setup](workstation-setup.md#deploy-or-recover-netbox)
+for prerequisites. An older installed wrapper must be refreshed from this branch.
+
 ### `skynet run`
 
 Runs a role/action target directly.

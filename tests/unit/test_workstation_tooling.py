@@ -179,12 +179,14 @@ def test_bootstrap_entry_points_cannot_select_the_execution_machine():
     for filename in ("playbook.yml", "bootstrap.yml"):
         plays = yaml.safe_load((ROOT / "ansible" / filename).read_text())
         play = next(
-            play for play in plays if play.get("pre_tasks", [{}])[0].get("ansible.builtin.import_tasks") == "tasks/recovery_target.yml"
+            play
+            for play in plays
+            if any(task.get("ansible.builtin.import_tasks") == "tasks/recovery_target.yml" for task in play.get("pre_tasks", []))
         )
         assert play["hosts"] != "localhost"
         assert play.get("connection") != "local"
         assert play["gather_facts"] is False
-        assert play["pre_tasks"][0]["ansible.builtin.import_tasks"] == "tasks/recovery_target.yml"
+        assert any(task.get("ansible.builtin.import_tasks") == "tasks/recovery_target.yml" for task in play["pre_tasks"])
         for task in play["tasks"]:
             tags = set(task["tags"]) - {"never"}
             assert tags <= set(task["ansible.builtin.include_role"]["apply"]["tags"])

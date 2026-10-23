@@ -10,6 +10,7 @@ __pycache__/
 .coverage.*
 htmlcov/
 ansible/netbox.yml
+ansible/inventory/netbox-bootstrap.yml
 ansible/collections/
 ansible/group_vars/all/vault
 ansible/group_vars/all/vault.yml

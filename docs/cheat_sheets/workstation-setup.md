@@ -108,7 +108,42 @@ OpenTofu infrastructure/state operations remain blocked until an authoritative
 shared state location and the required private state/variable handoff are resolved.
 
 
-## Recovery when NetBox is unavailable
+## Deploy or recover NetBox
+
+Create the local inventory once on each machine (the populated file is gitignored):
+
+```bash
+cp -n ansible/inventory/netbox-bootstrap.yml.sample ansible/inventory/netbox-bootstrap.yml
+```
+
+Edit that file: replace both IP placeholders with mgt's verified numeric SSH and
+LAN addresses, and check the SSH port. Keep the inventory hostname `mgt`.
+
+With Skynet installed from this branch, run from mgt or an operator workstation:
+
+```bash
+skynet run netbox deploy
+skynet run netbox recreate
+```
+
+NetBox commands automatically use `ansible/inventory/netbox-bootstrap.yml` and
+SSH to mgt, even when NetBox is down. They retain `host_vars/mgt.yml`, reuse the
+NetBox role's UID/GID, application paths and timezone defaults, and read the
+frontend domain/port from `api_endpoint` in your existing `ansible/netbox.yml`
+without loading its inventory plugin or calling its API. Existing host overrides
+take precedence over those defaults.
+
+Keep `ansible/group_vars/all/vault/netbox.yml` encrypted. Skynet loads that file
+with its configured `VAULT_PASS_FILE`; no second credentials file or duplicated
+application settings are needed. Configure verified SSH access to mgt and
+the existing become/Vault password files first. Other application Vault files
+and Infisical are not loaded. Ordinary managed-host commands still use NetBox.
+
+`recreate` preserves persistent data; it does not repair or clear damaged Valkey
+files. Refresh an older installed Skynet wrapper from this branch before using
+these commands; editing the checkout alone does not update the installed command.
+
+## Infisical recovery when NetBox is unavailable
 
 Use `ansible/bootstrap.yml` with a private static inventory based on
 [`ansible/recovery.yml.sample`](../../ansible/recovery.yml.sample).
@@ -119,6 +154,6 @@ Keep SSH host-key verification enabled.
 
 Fill in the host's numeric `local_ip`, absolute `container_host_appdata_root`,
 non-negative UID/GID, DNS `services_internal_zone` and TCP port (1–65535).
-These values are checked before either recovery role runs. Supply required
+These values are checked before the recovery role runs. Supply required
 bootstrap secrets separately as encrypted Vault inputs; workstation setup above
 needs none of them.
