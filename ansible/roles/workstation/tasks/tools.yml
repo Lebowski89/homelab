@@ -1,0 +1,89 @@
+---
+# Workstation administration tools, independently selectable from the desktop baseline.
+- name: Workstation Ansible | Validate and resolve ownership
+  ansible.builtin.import_tasks: tools/validate_tools.yml
+  tags: always
+
+- name: Workstation Repository | Install optional clone prerequisites
+  when:
+    - workstation_tools_enabled
+    - workstation_repository_clone
+  ansible.builtin.include_tasks:
+    file: packages.yml
+    apply:
+      become: true
+      tags: [workstation_tools, workstation_repository]
+  vars:
+    workstation_package_selection: [git, ca-certificates]
+  tags: [workstation_tools, workstation_repository]
+
+- name: Workstation Repository | Preserve or optionally clone checkout
+  when: workstation_tools_enabled
+  ansible.builtin.include_tasks:
+    file: tools/repository.yml
+    apply:
+      become: true
+      become_user: "{{ workstation_user }}"
+      tags: [workstation_tools, workstation_repository]
+  tags: [workstation_tools, workstation_repository]
+
+- name: Workstation Ansible | Install Python virtualenv prerequisites
+  when:
+    - workstation_tools_enabled
+    - workstation_ansible_enabled
+  ansible.builtin.include_tasks:
+    file: packages.yml
+    apply:
+      become: true
+      tags: [workstation_tools, workstation_ansible]
+  vars:
+    workstation_package_selection: "{{ workstation_ansible_prereq_packages }}"
+  tags: [workstation_tools, workstation_ansible]
+
+- name: Workstation Ansible | Prepare virtualenv and pinned Python dependencies
+  when:
+    - workstation_tools_enabled
+    - workstation_ansible_enabled
+    - not ansible_check_mode
+  ansible.builtin.include_tasks:
+    file: tools/ansible.yml
+    apply:
+      become: true
+      become_user: "{{ workstation_user }}"
+      tags: [workstation_tools, workstation_ansible]
+  tags: [workstation_tools, workstation_ansible]
+
+- name: Workstation Ansible | Install pinned Ansible collections
+  when:
+    - workstation_tools_enabled
+    - workstation_ansible_collections_enabled
+    - not ansible_check_mode
+  ansible.builtin.include_tasks:
+    file: tools/ansible_collections.yml
+    apply:
+      become: true
+      become_user: "{{ workstation_user }}"
+      tags: [workstation_tools, workstation_collections]
+  tags: [workstation_tools, workstation_collections]
+
+- name: Workstation Skynet | Install local wrapper
+  when:
+    - workstation_tools_enabled
+    - workstation_skynet_enabled
+  ansible.builtin.include_tasks:
+    file: tools/skynet.yml
+    apply:
+      become: true
+      tags: [workstation_tools, workstation_skynet]
+  tags: [workstation_tools, workstation_skynet]
+
+- name: Workstation OpenTofu | Install without infrastructure operations
+  when:
+    - workstation_tools_enabled
+    - workstation_opentofu_enabled
+  ansible.builtin.include_tasks:
+    file: tools/opentofu.yml
+    apply:
+      become: true
+      tags: [workstation_tools, workstation_opentofu]
+  tags: [workstation_tools, workstation_opentofu]

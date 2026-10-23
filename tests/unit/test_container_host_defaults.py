@@ -198,8 +198,9 @@ def test_playbook_normalizes_host_defaults_before_loading_service_definitions():
     assert include["ansible.builtin.include_tasks"]["file"] == "tasks/container_host_defaults.yml"
     assert include["ansible.builtin.include_tasks"]["apply"]["tags"] == "always"
     assert include["tags"] == "always"
-    assert play["pre_tasks"].index(host_contract) == 0
-    assert play["pre_tasks"].index(include) == 1
+    assert play["pre_tasks"][0]["ansible.builtin.meta"] == "end_play"
+    assert play["pre_tasks"].index(host_contract) < play["pre_tasks"].index(include)
+    assert play["pre_tasks"].index(include) == play["pre_tasks"].index(host_contract) + 1
     assert load_services in play["tasks"]
 
 

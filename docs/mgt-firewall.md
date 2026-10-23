@@ -388,7 +388,7 @@ The installed helper/policy use local NSS, runtime metadata, ip/nft/iptables and
 systemd only. They need no NetBox, Infisical, DNS route, service catalog or secret.
 For skynet audit/removal while NetBox is unavailable, set `INVENTORY` to a
 private cached/offline inventory containing the same single controller in
-`tags_ansible_manager` with a local connection; do not use the dynamic plugin.
+`tags_service_controller` with a local connection; do not use the dynamic plugin.
 Direct recovery on mgt works without any inventory:
 
 ```bash

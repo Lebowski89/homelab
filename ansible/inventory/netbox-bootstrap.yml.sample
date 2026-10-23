@@ -1,0 +1,15 @@
+---
+# Copy to netbox-bootstrap.yml (gitignored) and fill in verified numeric IPs.
+# Use the existing mgt connection details; never substitute the workstation.
+# Host variables supply the SSH user. Application settings and secrets stay separate.
+all:
+  children:
+    service_recovery:
+      hosts:
+        mgt:
+          ansible_connection: ssh
+          ansible_host: REPLACE_WITH_MGT_NUMERIC_SSH_IP
+          ansible_user: "{{ docker_user }}"
+          ansible_port: 22
+          local_ip: REPLACE_WITH_MGT_NUMERIC_LAN_IP
+          recovery_application_host: mgt

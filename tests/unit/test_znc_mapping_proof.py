@@ -47,7 +47,9 @@ def test_projection_resolves_real_selected_declaration_without_secret_preparatio
     monkeypatch.setattr(plugins, "init_plugin_loader", lambda: None)
     host = SimpleNamespace(name="mgt")
     monkeypatch.setattr(
-        inventory_module, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_ansible_manager": SimpleNamespace(hosts=[host])})
+        inventory_module,
+        "InventoryManager",
+        lambda **kw: SimpleNamespace(groups={"tags_service_controller": SimpleNamespace(hosts=[host])}),
     )
     monkeypatch.setattr(VariableManager, "__init__", lambda self, **kw: None)
     monkeypatch.setattr(

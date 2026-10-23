@@ -1,0 +1,34 @@
+---
+- name: Workstation OpenTofu | Install Fedora repository prerequisites
+  ansible.builtin.include_tasks: ../../packages.yml
+  vars:
+    workstation_package_selection: "{{ workstation_opentofu_prereq_packages }}"
+
+- name: Workstation OpenTofu | Import RPM signing keys
+  become: true
+  ansible.builtin.rpm_key:
+    key: "{{ workstation_opentofu_signing_key }}"
+    state: present
+  loop: "{{ workstation_opentofu_signing_keys }}"
+  loop_control:
+    loop_var: workstation_opentofu_signing_key
+
+- name: Workstation OpenTofu | Configure verified RPM package repository
+  become: true
+  ansible.builtin.yum_repository:
+    name: opentofu
+    description: OpenTofu
+    file: "{{ workstation_opentofu_repo_filename }}"
+    baseurl: "{{ workstation_opentofu_rpm_baseurl }}"
+    enabled: true
+    gpgcheck: true
+    # Vendor RPM metadata is unsigned; package signatures are verified.
+    repo_gpgcheck: false
+    gpgkey: "{{ workstation_opentofu_signing_keys }}"
+    sslverify: true
+    metadata_expire: 300
+
+- name: Workstation OpenTofu | Install compatible Fedora package
+  ansible.builtin.include_tasks: ../../packages.yml
+  vars:
+    workstation_package_selection: "{{ workstation_opentofu_packages }}"

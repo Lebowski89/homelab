@@ -4,7 +4,9 @@
 
 It standardises how the homelab playbook is executed by wrapping `ansible-playbook`, `ansible-lint`, `yamllint`, `ruff`, inventory checks, vault/become password files, and common role/service tags behind a simpler command interface.
 
-The wrapper is installed on the Ansible manager host and is mainly intended to be run from the management VM.
+The existing workstation role installs the wrapper for an operator user. It
+runs Ansible locally and connects directly to managed hosts. See
+[workstation setup](workstation-setup.md) for installation commands.
 
 For firewall profiles, explicit manual operations and retained compatibility
 paths, see [service firewall operations](../service-firewall.md). Ordinary
@@ -255,6 +257,22 @@ For catalog services, this passes the normal `bootstrap,<tag>` Ansible tag combi
 
 For role/action targets, it maps to the role-specific bootstrap tag where supported.
 
+NetBox deployment and recreation work from mgt or a workstation without a running
+NetBox API:
+
+```bash
+skynet run netbox deploy
+skynet run netbox recreate
+```
+
+These automatically select the gitignored local static mgt SSH inventory and
+`ansible/bootstrap.yml`, retain `host_vars/mgt.yml`, and load only the existing
+encrypted `ansible/group_vars/all/vault/netbox.yml` using `VAULT_PASS_FILE`.
+The existing `ansible/netbox.yml` supplies the frontend HTTPS URL locally; its
+inventory plugin is not loaded. Runtime defaults and shared deployment settings
+are reused. See [workstation setup](workstation-setup.md#deploy-or-recover-netbox)
+for prerequisites. An older installed wrapper must be refreshed from this branch.
+
 ### `skynet run`
 
 Runs a role/action target directly.
@@ -323,10 +341,6 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 | -------------------------------- | --------------------- |
 | `skynet run ubuntu`              | `ubuntu`              |
 | `skynet run ubuntu apt`          | `ubuntu_apt`          |
-| `skynet run ubuntu repo`         | `ubuntu_repo`         |
-| `skynet run ubuntu venv`         | `ubuntu_venv`         |
-| `skynet run ubuntu requirements` | `ubuntu_requirements` |
-| `skynet run ubuntu skynet`       | `ubuntu_skynet`       |
 | `skynet run ubuntu sysctl`       | `ubuntu_sysctl`       |
 | `skynet run ubuntu pam`          | `ubuntu_pam`          |
 | `skynet run ubuntu network`      | `ubuntu_network`      |
@@ -374,7 +388,6 @@ Role/action targets are manually mapped inside the wrapper’s `role_tag()` func
 | Command                        | Raw tag             |
 | ------------------------------ | ------------------- |
 | `skynet run opentofu`          | `opentofu`          |
-| `skynet run opentofu install`  | `opentofu_install`  |
 | `skynet run opentofu pve-user` | `opentofu_pve_user` |
 
 ### Postgres
@@ -791,7 +804,7 @@ For smaller task-level actions, use more specific tags:
 Open the `skynet` wrapper template:
 
 ```text
-ansible/roles/ubuntu/templates/skynet.j2
+ansible/roles/workstation/templates/skynet.j2
 ```
 
 Find the `role_tag()` function.

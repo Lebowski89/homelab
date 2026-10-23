@@ -10,4 +10,12 @@ Typically, you'd manually install both before running playbooks:
 ansible-galaxy collection install -r ansible/requirements.yml
 pip install -r ansible/requirements.txt
 ```
-... but we're about that automation life, so the Ubuntu role will take care of it (via ubuntu or ubuntu_requirements tag).
+The existing workstation role owns workstation dependency installation through
+`workstation_ansible` (venv plus pinned Python dependencies) and
+`workstation_collections` (collections in the configured path).
+See [workstation setup](../cheat_sheets/workstation-setup.md).
+
+Python needed on a delegated managed host remains a separate requirement. In
+particular, PostgreSQL reconciliation still executes on mgt and retains its
+host-local interpreter and dependencies; workstation installation does not
+replace them.

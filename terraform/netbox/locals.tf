@@ -217,11 +217,11 @@ locals {
       description = "Interactive workstation hosts managed by Ansible."
     }
 
-    ansible_manager = {
-      name        = "ansible-manager"
-      slug        = "ansible_manager"
-      color_hex   = "673ab7"
-      description = "Hosts that run Ansible locally."
+    service_controller = {
+      name        = "service-controller"
+      slug        = "service_controller"
+      color_hex   = "512da8"
+      description = "Singleton application controller host for services, delegation and firewall ownership."
     }
 
     docker = {
@@ -299,13 +299,6 @@ locals {
       slug        = "opentofu"
       color_hex   = "ff5722"
       description = "Hosts where the OpenTofu role should be included."
-    }
-
-    opentofu_install = {
-      name        = "opentofu-install"
-      slug        = "opentofu_install"
-      color_hex   = "ff7043"
-      description = "Hosts where OpenTofu should be installed."
     }
 
     opentofu_managed = {
@@ -478,20 +471,18 @@ locals {
     }
 
     mgt = {
-      description     = "Docker Swarm manager, automation host, HAProxy endpoint, Technitium DNS primary"
+      description     = "Docker Swarm manager, application host, HAProxy endpoint, Technitium DNS primary"
       role_key        = "server"
       device_type_key = "generic_vm"
       tags = [
         "skynet",
-        "ansible_manager",
+        "service_controller",
         "docker",
         "docker_install",
         "podman",
         "podman_install",
         "haproxy",
         "node_exporter",
-        "opentofu",
-        "opentofu_install",
         "swarm",
         "swarm_manager",
         "dns",

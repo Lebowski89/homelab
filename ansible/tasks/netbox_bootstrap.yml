@@ -1,0 +1,49 @@
+---
+# Controller-side configuration only. bootstrap.cfg keeps unrelated application
+# group_vars/Vault files out; Skynet supplies only the existing NetBox Vault file.
+- name: Netbox bootstrap | Load shared deployment settings
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/group_vars/all/services.yml"
+    name: netbox_bootstrap_shared
+
+- name: Netbox bootstrap | Retain host overrides of shared settings
+  ansible.builtin.set_fact:
+    "{{ netbox_bootstrap_setting.key }}": "{{ vars[netbox_bootstrap_setting.key] | default(netbox_bootstrap_setting.value) }}"
+  loop: "{{ netbox_bootstrap_shared | dict2items }}"
+  loop_control:
+    loop_var: netbox_bootstrap_setting
+
+- name: Netbox bootstrap | Read existing runtime defaults
+  ansible.builtin.include_vars:
+    file: "{{ playbook_dir }}/roles/netbox/defaults/main.yml"
+    name: netbox_bootstrap_defaults
+  no_log: true
+  diff: false
+
+- name: Netbox bootstrap | Read configured frontend URL without loading inventory
+  ansible.builtin.set_fact:
+    netbox_bootstrap_endpoint: >-
+      {{ (lookup('ansible.builtin.file', playbook_dir ~ '/netbox.yml') | from_yaml).api_endpoint | urlsplit }}
+  no_log: true
+  diff: false
+
+- name: Netbox bootstrap | Validate existing frontend configuration
+  ansible.builtin.assert:
+    that:
+      - netbox_bootstrap_endpoint.scheme == 'https'
+      - netbox_bootstrap_endpoint.hostname is string
+      - netbox_bootstrap_endpoint.hostname is match('^netbox\.')
+      - netbox_bootstrap_endpoint.username is none
+      - netbox_bootstrap_endpoint.password is none
+    fail_msg: >-
+      Configure api_endpoint in ansible/netbox.yml as https://netbox.<internal-zone>:<port>.
+      Bootstrap reads this URL locally; it does not query NetBox or use its API token.
+
+- name: Netbox bootstrap | Reuse runtime defaults and shared frontend settings
+  ansible.builtin.set_fact:
+    container_host_puid: "{{ container_host_puid | default(netbox_bootstrap_defaults.netbox_puid) }}"
+    container_host_pgid: "{{ container_host_pgid | default(netbox_bootstrap_defaults.netbox_pgid) }}"
+    container_host_appdata_root: "{{ container_host_appdata_root | default(netbox_bootstrap_defaults.netbox_base_path | dirname) }}"
+    services_internal_zone: >-
+      {{ services_internal_zone | default(netbox_bootstrap_endpoint.hostname | regex_replace('^netbox\.', '')) }}
+    services_private_https_port: "{{ services_private_https_port | default(netbox_bootstrap_endpoint.port | default(443, true)) }}"

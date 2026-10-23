@@ -1,0 +1,35 @@
+---
+- name: Workstation Skynet | Inspect Skynet directories
+  ansible.builtin.stat:
+    path: "{{ workstation_skynet_dir.path }}"
+  loop:
+    - path: "{{ workstation_skynet_install_path | dirname }}"
+      mode: '0755'
+    - path: "{{ workstation_secrets_path }}"
+      mode: '0700'
+    - path: "{{ workstation_ansible_log_path | dirname }}"
+      mode: '0700'
+  loop_control:
+    loop_var: workstation_skynet_dir
+  register: workstation_skynet_directories
+
+- name: Workstation Skynet | Create missing Skynet directories
+  when: not workstation_skynet_directory.stat.exists
+  ansible.builtin.file:
+    path: "{{ workstation_skynet_directory.workstation_skynet_dir.path }}"
+    state: directory
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user_gid }}"
+    mode: "{{ workstation_skynet_directory.workstation_skynet_dir.mode }}"
+  loop: "{{ workstation_skynet_directories.results }}"
+  loop_control:
+    loop_var: workstation_skynet_directory
+    label: "{{ workstation_skynet_directory.workstation_skynet_dir.path }}"
+
+- name: Workstation Skynet | Install local Skynet wrapper
+  ansible.builtin.template:
+    src: skynet.j2
+    dest: "{{ workstation_skynet_install_path }}"
+    owner: "{{ workstation_skynet_owner }}"
+    group: "{{ workstation_skynet_group }}"
+    mode: '0755'

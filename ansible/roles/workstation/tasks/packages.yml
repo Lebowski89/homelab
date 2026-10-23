@@ -1,0 +1,30 @@
+---
+- name: Workstation Packages | Validate effective package selection
+  ansible.builtin.assert:
+    that:
+      - workstation_package_selection | default(workstation_packages) is sequence
+      - workstation_package_selection | default(workstation_packages) is not string
+      - >-
+        workstation_package_selection | default(workstation_packages) | select('string') | list | length
+        == workstation_package_selection | default(workstation_packages) | length
+      - >-
+        workstation_package_selection | default(workstation_packages) | select('match', '^\S+$') | list | length
+        == workstation_package_selection | default(workstation_packages) | length
+      - "'*' not in (workstation_package_selection | default(workstation_packages))"
+      - workstation_apt_update_cache is boolean
+      - workstation_dnf_update_cache is boolean
+    fail_msg: Workstation packages must be a list of non-empty package identifiers, never a distribution-wide wildcard.
+
+- name: Workstation Packages | Report check-mode package plan
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Would ensure {{ workstation_package_selection | default(workstation_packages) }}
+      are present using {{ workstation_platform }} package management.
+
+- name: Workstation Packages | Install selected platform packages
+  when:
+    - not ansible_check_mode
+    - workstation_package_selection | default(workstation_packages) | length > 0
+  ansible.builtin.include_tasks:
+    file: "{{ 'apt' if workstation_platform == 'debian' else 'dnf' }}.yml"

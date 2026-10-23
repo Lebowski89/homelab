@@ -1,0 +1,58 @@
+---
+- name: Workstation | Validate tooling platform
+  ansible.builtin.import_tasks: ../platform.yml
+
+- name: Workstation | Validate platform and switches
+  ansible.builtin.assert:
+    that:
+      - workstation_tools_enabled is boolean
+      - workstation_ansible_enabled is boolean
+      - workstation_ansible_collections_enabled is boolean
+      - workstation_skynet_enabled is boolean
+      - workstation_opentofu_enabled is boolean
+      - workstation_repository_clone is boolean
+      - workstation_user is string
+      - workstation_user | trim | length > 0
+    fail_msg: Workstation tooling requires strict boolean switches and an existing user.
+
+- name: Workstation | Resolve existing user account
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ workstation_user }}"
+  register: workstation_user_account
+
+- name: Workstation | Require non-root tooling owner
+  ansible.builtin.assert:
+    that:
+      - workstation_user_account.ansible_facts.getent_passwd[workstation_user][1] | int > 0
+      - workstation_user_account.ansible_facts.getent_passwd[workstation_user][4] is match('^/')
+
+- name: Workstation | Resolve user paths
+  ansible.builtin.set_fact:
+    workstation_user_home: "{{ workstation_user_account.ansible_facts.getent_passwd[workstation_user][4] }}"
+    workstation_user_gid: "{{ workstation_user_account.ansible_facts.getent_passwd[workstation_user][2] }}"
+
+- name: Workstation | Validate absolute paths
+  ansible.builtin.assert:
+    that:
+      - workstation_ansible_path_item is string
+      - workstation_ansible_path_item is match('^/')
+      - workstation_ansible_path_item == workstation_ansible_path_item | trim
+      - workstation_ansible_path_item != '/'
+      - "'\n' not in workstation_ansible_path_item"
+      - "'\"' not in workstation_ansible_path_item"
+      - "'`' not in workstation_ansible_path_item"
+      - "'$' not in workstation_ansible_path_item"
+    fail_msg: Workstation paths must be absolute paths safe for a quoted shell default.
+  loop:
+    - "{{ workstation_repository_path }}"
+    - "{{ workstation_ansible_tools_path }}"
+    - "{{ workstation_ansible_venv_path }}"
+    - "{{ workstation_ansible_collections_path }}"
+    - "{{ workstation_secrets_path }}"
+    - "{{ workstation_become_pass_file }}"
+    - "{{ workstation_vault_pass_file }}"
+    - "{{ workstation_skynet_install_path }}"
+    - "{{ workstation_ansible_log_path }}"
+  loop_control:
+    loop_var: workstation_ansible_path_item

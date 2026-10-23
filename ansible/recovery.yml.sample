@@ -1,0 +1,25 @@
+---
+# Save privately outside the repository and replace placeholders from operator records.
+# No dynamic inventory or local execution. Do not place secrets in this file.
+# ansible_host and local_ip must be numeric IPv4 or unscoped IPv6 addresses.
+# No DNS names, CIDR suffixes, brackets, loopback, unspecified or multicast addresses.
+all:
+  children:
+    service_recovery:
+      hosts:
+        application_host:
+          ansible_connection: ssh
+          ansible_host: REPLACE_WITH_VERIFIED_NUMERIC_SSH_IP
+          ansible_user: REPLACE_WITH_SSH_USER
+          ansible_port: 22
+          recovery_application_host: application_host
+          ansible_python_interpreter: /usr/bin/python3  # Use the existing managed-host interpreter.
+          local_ip: REPLACE_WITH_NUMERIC_PRIMARY_LAN_IP
+          container_host_puid: REPLACE_WITH_EXISTING_UID
+          container_host_pgid: REPLACE_WITH_EXISTING_GID
+          container_host_appdata_root: REPLACE_WITH_EXISTING_APPLICATION_ROOT
+          services_internal_zone: REPLACE_WITH_INTERNAL_ZONE
+          services_private_https_port: 8443
+          timezone: Australia/Melbourne
+# Bootstrap secrets are separate encrypted Vault inputs, supplied explicitly with -e @path.
+# Preserve existing runtime/account/route/protection settings as well as these basics.

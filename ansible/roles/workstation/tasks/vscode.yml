@@ -1,47 +1,17 @@
 ---
+- name: Workstation VS Code | Validate installation platform
+  ansible.builtin.import_tasks: platform.yml
 
-- name: Workstation VS Code | Install repository prerequisites
-  become: true
-  ansible.builtin.apt:
-    name:
-      - ca-certificates
-      - gnupg
-    state: present
-    update_cache: "{{ workstation_apt_update_cache }}"
-    cache_valid_time: 3600
+- name: Workstation VS Code | Report check-mode installation plan
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Would install Microsoft VS Code using {{ workstation_platform }} packages
+      and user extensions {{ workstation_vscode_extensions }}.
 
-- name: Workstation VS Code | Install Microsoft signing key
-  become: true
-  ansible.builtin.get_url:
-    url: "{{ workstation_vscode_key_url }}"
-    dest: "{{ workstation_vscode_key_path }}"
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Workstation VS Code | Configure Microsoft repository
-  become: true
-  ansible.builtin.copy:
-    dest: "{{ workstation_vscode_repository_path }}"
-    owner: root
-    group: root
-    mode: "0644"
-    content: |
-      Types: deb
-      URIs: https://packages.microsoft.com/repos/code
-      Suites: stable
-      Components: main
-      Architectures: amd64 arm64 armhf
-      Signed-By: {{ workstation_vscode_key_path }}
-  register: workstation_vscode_repository
-
-- name: Workstation VS Code | Install Visual Studio Code
-  become: true
-  ansible.builtin.apt:
-    name: code
-    state: present
-    update_cache: "{{ workstation_vscode_repository.changed or workstation_apt_update_cache }}"
-    cache_valid_time: "{{ 0 if workstation_vscode_repository.changed else 3600 }}"
+- name: Workstation VS Code | Install platform package and repository
+  when: not ansible_check_mode
+  ansible.builtin.include_tasks: "{{ workstation_platform }}/vscode.yml"
 
 - name: Workstation VS Code | Check for Visual Studio Code command
   ansible.builtin.stat:
@@ -49,7 +19,9 @@
   register: workstation_vscode_command
 
 - name: Workstation VS Code | List installed extensions
-  when: workstation_vscode_command.stat.exists
+  when:
+    - not ansible_check_mode
+    - workstation_vscode_command.stat.exists
   become: true
   become_user: "{{ workstation_user }}"
   ansible.builtin.command:

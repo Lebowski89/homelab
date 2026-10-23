@@ -1,22 +1,23 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PLAYBOOK="${PLAYBOOK:-{{ ubuntu_ansible_path }}/playbook.yml}"
-INVENTORY="${INVENTORY:-{{ ubuntu_ansible_path }}/netbox.yml}"
-ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-{{ ubuntu_ansible_path }}/ansible.cfg}"
-BECOME_PASS_FILE="${BECOME_PASS_FILE:-{{ ubuntu_ansible_become_pass_file }}}"
-VAULT_PASS_FILE="${VAULT_PASS_FILE:-{{ ubuntu_ansible_vault_pass_file }}}"
-DOCTOR_PING_TARGET="${SKYNET_DOCTOR_PING_TARGET:-{{ ubuntu_skynet_doctor_ping_target }}}"
-ANSIBLE_VENV_PATH="${ANSIBLE_VENV_PATH:-{{ ubuntu_ansible_venv_path }}}"
-
-DEFAULT_REPO_ROOT="$(cd "$(dirname "$PLAYBOOK")/.." >/dev/null 2>&1 && pwd || true)"
+DEFAULT_REPO_ROOT="{{ workstation_repository_path }}"
+PLAYBOOK="${PLAYBOOK:-${REPO_ROOT:-$DEFAULT_REPO_ROOT}/ansible/playbook.yml}"
+DEFAULT_REPO_ROOT="$(cd "$(dirname "$PLAYBOOK")/.." >/dev/null 2>&1 && pwd || printf '%s' "$DEFAULT_REPO_ROOT")"
 REPO_ROOT="${REPO_ROOT:-$DEFAULT_REPO_ROOT}"
+INVENTORY="${INVENTORY:-$REPO_ROOT/ansible/netbox.yml}"
+ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-$REPO_ROOT/ansible/ansible.cfg}"
+BECOME_PASS_FILE="${BECOME_PASS_FILE:-{{ workstation_become_pass_file }}}"
+VAULT_PASS_FILE="${VAULT_PASS_FILE:-{{ workstation_vault_pass_file }}}"
+DOCTOR_PING_TARGET="${SKYNET_DOCTOR_PING_TARGET:-{{ workstation_skynet_doctor_ping_target }}}"
+ANSIBLE_VENV_PATH="${ANSIBLE_VENV_PATH:-{{ workstation_ansible_venv_path }}}"
+
 SERVICES_DIR="${SERVICES_DIR:-${DOCKER_SERVICES_DIR:-$REPO_ROOT/ansible/group_vars/all/services}}"
 DOCKER_SERVICES_DIR="$SERVICES_DIR"
 RUFF_PATHS="${RUFF_PATHS:-ansible/filter_plugins ansible/roles/docker_services/filter_plugins ansible/roles/docker_services/library ansible/roles/podman_services/filter_plugins tests/unit}"
 PYTEST_PATHS="${PYTEST_PATHS:-tests/unit}"
-ANSIBLE_LOG_PATH="${ANSIBLE_LOG_PATH:-$REPO_ROOT/.ansible/ansible.log}"
-ANSIBLE_COLLECTIONS_PATH="${ANSIBLE_COLLECTIONS_PATH:-$REPO_ROOT/ansible/collections}"
+ANSIBLE_LOG_PATH="${ANSIBLE_LOG_PATH:-{{ workstation_ansible_log_path }}}"
+ANSIBLE_COLLECTIONS_PATH="${ANSIBLE_COLLECTIONS_PATH:-{{ workstation_ansible_collections_path }}}"
 
 tool_path() {
   local name="$1"
@@ -36,6 +37,8 @@ ANSIBLE_LINT_BIN="${ANSIBLE_LINT_BIN:-$(tool_path ansible-lint)}"
 YAMLLINT_BIN="${YAMLLINT_BIN:-$(tool_path yamllint)}"
 RUFF_BIN="${RUFF_BIN:-$(tool_path ruff)}"
 PYTEST_BIN="${PYTEST_BIN:-$(tool_path pytest)}"
+
+export ANSIBLE_CONFIG ANSIBLE_LOG_PATH ANSIBLE_COLLECTIONS_PATH
 
 usage() {
   cat <<'USAGE'
@@ -70,6 +73,8 @@ Aliases:
   skynet target   -> run
 
 Role/action examples:
+  skynet run netbox deploy
+  skynet run netbox recreate
   skynet check resolved
   skynet run resolved
   skynet check ubuntu sysctl
@@ -90,6 +95,12 @@ Role/action examples:
   skynet check worker-backend-firewall
   skynet run worker-backend-firewall check
   skynet remove worker-backend-firewall
+
+NetBox operations always use the static mgt SSH inventory and bootstrap.yml,
+including when NetBox is down. They load the existing encrypted NetBox Vault
+file using VAULT_PASS_FILE. Ordinary service commands still use NetBox inventory.
+Create ansible/inventory/netbox-bootstrap.yml from its .sample once per machine;
+fill in mgt's verified numeric addresses. The populated inventory is gitignored.
 
 Service examples:
   skynet check homepage
@@ -156,7 +167,7 @@ run_yaml_lint() {
 
   local -a yaml_files=()
 
-  if [[ -d "$REPO_ROOT/.git" ]] && cmd_exists git; then
+  if [[ -e "$REPO_ROOT/.git" ]] && cmd_exists git; then
     mapfile -t yaml_files < <(cd "$REPO_ROOT" && git ls-files '*.yml' '*.yaml')
   else
     mapfile -t yaml_files < <(
@@ -322,6 +333,15 @@ role_tag() {
   action="${action//_/-}"
 
   case "${target}:${action}" in
+    workstation:deploy)            echo "workstation" ;;
+    workstation:tools)        echo "workstation_tools" ;;
+    workstation:ansible)           echo "workstation_ansible" ;;
+    workstation:venv)              echo "workstation_ansible" ;;
+    workstation:collections)       echo "workstation_collections" ;;
+    workstation:skynet)            echo "workstation_skynet" ;;
+    workstation:repo)              echo "workstation_repository" ;;
+    workstation:opentofu)          echo "workstation_opentofu" ;;
+
     netbox:bootstrap)               echo "netbox_bootstrap" ;;
     netbox:deploy)                  echo "netbox_deploy" ;;
     netbox:recreate)                echo "netbox_recreate" ;;
@@ -329,10 +349,6 @@ role_tag() {
 
     ubuntu:deploy)                  echo "ubuntu" ;;
     ubuntu:apt)                     echo "ubuntu_apt" ;;
-    ubuntu:repo)                    echo "ubuntu_repo" ;;
-    ubuntu:venv)                    echo "ubuntu_venv" ;;
-    ubuntu:requirements)            echo "ubuntu_requirements" ;;
-    ubuntu:skynet)                  echo "ubuntu_skynet" ;;
     ubuntu:sysctl)                  echo "ubuntu_sysctl" ;;
     ubuntu:pam)                     echo "ubuntu_pam" ;;
     ubuntu:network)                 echo "ubuntu_network" ;;
@@ -370,7 +386,6 @@ role_tag() {
     tailscale:bootstrap)            echo "tailscale_bootstrap" ;;
 
     opentofu:deploy)                echo "opentofu" ;;
-    opentofu:install)               echo "opentofu_install" ;;
     opentofu:pve-user)              echo "opentofu_pve_user" ;;
 
     postgres:deploy)                echo "postgres" ;;
@@ -451,7 +466,14 @@ run_role_playbook() {
   shift
   target="${target,,}"
   target="${target//_/-}"
-  if [[ "$target" == "worker-backend-firewall" ]]; then
+  if [[ "$target" == "netbox" ]]; then
+    INVENTORY="$REPO_ROOT/ansible/inventory/netbox-bootstrap.yml" \
+      PLAYBOOK="$REPO_ROOT/ansible/bootstrap.yml" \
+      ANSIBLE_CONFIG="$REPO_ROOT/ansible/bootstrap.cfg" \
+      ANSIBLE_INVENTORY_UNPARSED_FAILED=true \
+      ANSIBLE_INVENTORY_ANY_UNPARSED_IS_FAILED=true \
+      run_playbook "$@" -e "@$REPO_ROOT/ansible/group_vars/all/vault/netbox.yml"
+  elif [[ "$target" == "worker-backend-firewall" ]]; then
     local -a policy_vars=()
     if [[ -n "${WORKER_BACKEND_FIREWALL_VARS_FILE:-}" ]]; then
       [[ -r "$WORKER_BACKEND_FIREWALL_VARS_FILE" ]] || die "Worker firewall inputs are not readable: $WORKER_BACKEND_FIREWALL_VARS_FILE"
@@ -532,6 +554,16 @@ print_targets() {
   cat <<'TARGETS'
 Role/action targets:
 
+  workstation:
+    deploy      -> workstation
+    tools       -> workstation_tools
+    ansible     -> workstation_ansible
+    venv        -> workstation_ansible
+    collections -> workstation_collections
+    skynet      -> workstation_skynet
+    repo        -> workstation_repository
+    opentofu    -> workstation_opentofu
+
   netbox:
     bootstrap -> netbox_bootstrap
     deploy    -> netbox_deploy
@@ -541,10 +573,6 @@ Role/action targets:
   ubuntu:
     deploy       -> ubuntu
     apt          -> ubuntu_apt
-    repo         -> ubuntu_repo
-    venv         -> ubuntu_venv
-    requirements -> ubuntu_requirements
-    skynet       -> ubuntu_skynet
     sysctl       -> ubuntu_sysctl
     pam          -> ubuntu_pam
     network      -> ubuntu_network
@@ -586,7 +614,6 @@ Role/action targets:
 
   opentofu:
     deploy   -> opentofu
-    install  -> opentofu_install
     pve-user -> opentofu_pve_user
 
   postgres:
@@ -733,8 +760,8 @@ print_tags() {
     echo
 
     echo "# Service tags"
-    if command -v python3 >/dev/null 2>&1; then
-      python3 - "$DOCKER_SERVICES_DIR" <<'PY'
+    if bin_exists "$(tool_path python3)"; then
+      "$(tool_path python3)" - "$DOCKER_SERVICES_DIR" <<'PY'
 import sys
 from collections import OrderedDict
 from pathlib import Path

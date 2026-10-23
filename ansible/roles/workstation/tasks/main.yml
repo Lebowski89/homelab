@@ -1,5 +1,20 @@
 ---
 
+- name: Workstation | Configure automation tooling
+  when: workstation_tools_enabled
+  ansible.builtin.include_tasks:
+    file: tools.yml
+    apply:
+      tags: [workstation, workstation_tools]
+  tags:
+    - workstation
+    - workstation_tools
+    - workstation_repository
+    - workstation_ansible
+    - workstation_collections
+    - workstation_skynet
+    - workstation_opentofu
+
 - name: Workstation | Validate configuration and resolve user
   ansible.builtin.include_tasks:
     file: validate.yml
@@ -30,7 +45,7 @@
 
 - name: Workstation | Install baseline packages
   ansible.builtin.include_tasks:
-    file: apt.yml
+    file: packages.yml
     apply:
       tags:
         - workstation

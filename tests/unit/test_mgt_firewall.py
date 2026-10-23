@@ -1738,7 +1738,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
             {
                 "all": {
                     "children": {
-                        "tags_ansible_manager": {
+                        "tags_service_controller": {
                             "vars": {"ansible_connection": "local"},
                             "hosts": {"manager": {"ansible_host": "192.0.2.48", "local_ip": "192.0.2.48", "ansible_user": "manager-user"}},
                         },
@@ -1799,11 +1799,11 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
                 task["when"] = False
     plan = tmp_path / "plan.yml"
     plan.write_text(yaml.safe_dump(plays, sort_keys=False))
-    defaults = yaml.safe_load((ROOT / "ansible/roles/ubuntu/defaults/main.yml").read_text())
+    defaults = yaml.safe_load((ROOT / "ansible/roles/workstation/defaults/main.yml").read_text())
     wrapper = tmp_path / "skynet"
     wrapper.write_text(
         Environment(undefined=StrictUndefined)
-        .from_string((ROOT / "ansible/roles/ubuntu/templates/skynet.j2").read_text())
+        .from_string((ROOT / "ansible/roles/workstation/templates/skynet.j2").read_text())
         .render(**{key: str(tmp_path / key) for key in defaults})
     )
     env = {
@@ -2179,13 +2179,13 @@ def test_persistence_audit_checks_only_owned_content_and_enabled_active_units(mo
     ],
 )
 def test_executable_skynet_dispatch_is_policy_only_and_preserves_private_input_path(tmp_path, argv, operation, check):
-    defaults = yaml.safe_load((ROOT / "ansible/roles/ubuntu/defaults/main.yml").read_text())
+    defaults = yaml.safe_load((ROOT / "ansible/roles/workstation/defaults/main.yml").read_text())
     variables = {key: str(tmp_path / key) for key in defaults}
-    variables["ubuntu_ansible_path"] = str(tmp_path / "ansible")
+    variables["workstation_ansible_path"] = str(tmp_path / "ansible")
     wrapper = tmp_path / "skynet"
     wrapper.write_text(
         Environment(undefined=StrictUndefined)
-        .from_string((ROOT / "ansible/roles/ubuntu/templates/skynet.j2").read_text())
+        .from_string((ROOT / "ansible/roles/workstation/templates/skynet.j2").read_text())
         .render(**variables)
     )
     assert subprocess.run(["bash", "-n", str(wrapper)], capture_output=True).returncode == 0

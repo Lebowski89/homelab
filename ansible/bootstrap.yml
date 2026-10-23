@@ -1,22 +1,30 @@
 ---
-# Explicit recovery entry point. Use INVENTORY=localhost, PLAYBOOK=... with skynet.
-# This play never loads dynamic inventory, the catalog, or Infisical lookup.
-- name: Recover local inventory and secret-store bootstrap
-  hosts: localhost
-  connection: local
+# Skynet selects inventory/netbox-bootstrap.yml for NetBox operations.
+# Infisical recovery can still use a private inventory based on recovery.yml.sample.
+# This play never requires dynamic inventory, the catalog, or Infisical lookup.
+- name: Recover remote inventory and secret-store applications
+  hosts: service_recovery
   become: true
   gather_facts: false
-  vars:
-    ansible_python_interpreter: /opt/ansible/ansible-venv/bin/python
+  pre_tasks:
+    - name: Load existing NetBox bootstrap configuration
+      ansible.builtin.import_tasks: tasks/netbox_bootstrap.yml
+      tags: [never, netbox_bootstrap, netbox_deploy, netbox_recreate, netbox_remove]
+
+    - name: Validate explicit remote application target
+      ansible.builtin.import_tasks: tasks/recovery_target.yml
+      tags: always
   tasks:
     - name: Include NetBox recovery owner
       ansible.builtin.include_role:
         name: netbox
         apply:
-          tags: [never]
+          tags: [never, netbox_bootstrap, netbox_deploy, netbox_recreate, netbox_remove]
       tags: [never, netbox_bootstrap, netbox_deploy, netbox_recreate, netbox_remove]
 
     - name: Include Infisical recovery owner
       ansible.builtin.include_role:
         name: infisical
+        apply:
+          tags: [never, infisical_bootstrap, infisical_deploy, infisical_recreate, infisical_remove]
       tags: [never, infisical_bootstrap, infisical_deploy, infisical_recreate, infisical_remove]

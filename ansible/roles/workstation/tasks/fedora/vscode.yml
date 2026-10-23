@@ -1,0 +1,28 @@
+---
+- name: Workstation VS Code | Install Fedora repository prerequisites
+  ansible.builtin.include_tasks: ../packages.yml
+  vars:
+    workstation_package_selection: "{{ workstation_package_profiles.fedora.signing }}"
+
+- name: Workstation VS Code | Import Microsoft RPM signing key
+  become: true
+  ansible.builtin.rpm_key:
+    key: "{{ workstation_vscode_key_url }}"
+    state: present
+
+- name: Workstation VS Code | Configure Microsoft RPM repository
+  become: true
+  ansible.builtin.yum_repository:
+    name: code
+    description: Visual Studio Code
+    file: vscode
+    baseurl: "{{ workstation_vscode_rpm_baseurl }}"
+    enabled: true
+    gpgcheck: true
+    gpgkey: "{{ workstation_vscode_key_url }}"
+    sslverify: true
+
+- name: Workstation VS Code | Install Visual Studio Code on Fedora
+  ansible.builtin.include_tasks: ../packages.yml
+  vars:
+    workstation_package_selection: [code]

@@ -12,7 +12,7 @@ UBUNTU_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/main.yml"
 SWAP_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/sub_tasks/postgres_emergency_swap.yml"
 POSTGRES_VARS_PATH = REPO_ROOT / "ansible/group_vars/tags_postgres.yml"
 POSTGRES_TFVARS_SAMPLE_PATH = REPO_ROOT / "terraform/proxmox/vms/postgres-cluster/private.auto.tfvars.sample"
-SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
+SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/workstation/templates/skynet.j2"
 
 
 def task_named(tasks, name):

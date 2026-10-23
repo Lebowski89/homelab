@@ -11,3 +11,7 @@ docker_swarm_node_labels:
   dns: technitium
 
 podman_install_enable: true
+
+# Managed-host interpreter for application preparation and PostgreSQL hooks.
+# This is independent of the workstation's own Ansible virtualenv.
+ansible_python_interpreter: /opt/ansible/ansible-venv/bin/python

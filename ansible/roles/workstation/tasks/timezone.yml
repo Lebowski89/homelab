@@ -21,6 +21,7 @@
     force: true
 
 - name: Workstation | Record local timezone
+  when: workstation_platform == "debian"
   become: true
   ansible.builtin.copy:
     content: "{{ workstation_timezone }}\n"

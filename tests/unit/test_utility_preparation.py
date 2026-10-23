@@ -386,14 +386,15 @@ def test_infisical_collection_requires_exact_compose_pair_and_preserves_policy(t
 
 
 def test_projection_real_catalog_never_templates_environment_secrets(monkeypatch):
-    from ansible.inventory import manager
     from ansible.plugins import loader
     from ansible.vars.manager import VariableManager
+
+    from ansible.inventory import manager
 
     monkeypatch.setattr(loader, "init_plugin_loader", lambda: None)
     host = SimpleNamespace(name="mgt")
     monkeypatch.setattr(
-        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_ansible_manager": SimpleNamespace(hosts=[host])})
+        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_service_controller": SimpleNamespace(hosts=[host])})
     )
     monkeypatch.setattr(VariableManager, "__init__", lambda self, **kw: None)
     monkeypatch.setattr(
@@ -942,14 +943,15 @@ def test_mapping_cli_keeps_retained_collection_and_uses_a_fresh_output(tmp_path,
 
 
 def test_alerting_projection_uses_inventory_and_keeps_credentials_value_free(monkeypatch):
-    from ansible.inventory import manager
     from ansible.plugins import loader
     from ansible.vars.manager import VariableManager
+
+    from ansible.inventory import manager
 
     monkeypatch.setattr(loader, "init_plugin_loader", lambda: None)
     host = SimpleNamespace(name="mgt")
     monkeypatch.setattr(
-        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_ansible_manager": SimpleNamespace(hosts=[host])})
+        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_service_controller": SimpleNamespace(hosts=[host])})
     )
     monkeypatch.setattr(VariableManager, "__init__", lambda self, **kw: None)
     monkeypatch.setattr(
@@ -1209,14 +1211,15 @@ def test_replacement_preserves_artifacts_maps_and_mounts(change):
     ],
 )
 def test_bounded_batch_projection_and_cli_use_real_catalog_without_secret_resolution(monkeypatch, tmp_path, batch):
-    from ansible.inventory import manager
     from ansible.plugins import loader
     from ansible.vars.manager import VariableManager
+
+    from ansible.inventory import manager
 
     monkeypatch.setattr(loader, "init_plugin_loader", lambda: None)
     host = SimpleNamespace(name="mgt")
     monkeypatch.setattr(
-        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_ansible_manager": SimpleNamespace(hosts=[host])})
+        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_service_controller": SimpleNamespace(hosts=[host])})
     )
     monkeypatch.setattr(VariableManager, "__init__", lambda self, **kw: None)
     monkeypatch.setattr(

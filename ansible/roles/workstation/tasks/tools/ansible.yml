@@ -1,0 +1,108 @@
+---
+
+- name: Workstation Ansible | Ensure Ansible tooling path exists
+  ansible.builtin.file:
+    path: "{{ workstation_ansible_tools_path }}"
+    state: directory
+    owner: "{{ workstation_user }}"
+    group: "{{ workstation_user_gid }}"
+    mode: "0755"
+
+- name: Workstation Ansible | Determine Python ABI directory
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - >-
+        import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")
+  register: workstation_ansible_python_abi
+  changed_when: false
+  check_mode: false
+
+- name: Workstation Ansible | Check existing Ansible virtualenv interpreter
+  ansible.builtin.stat:
+    path: "{{ workstation_ansible_venv_path }}/bin/python"
+  register: workstation_ansible_python
+
+- name: Workstation Ansible | Determine virtualenv library directory
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - >-
+        import sys, sysconfig;
+        print(sysconfig.get_path('purelib', scheme='venv', vars={'base': sys.argv[1], 'platbase': sys.argv[1]}))
+      - "{{ workstation_ansible_venv_path }}"
+  register: workstation_ansible_library_path
+  changed_when: false
+  check_mode: false
+
+- name: Workstation Ansible | Check matching Ansible virtualenv site-packages
+  ansible.builtin.stat:
+    path: >-
+      {{ workstation_ansible_library_path.stdout | trim }}
+  register: workstation_ansible_site_packages
+
+- name: Workstation Ansible | Probe existing Ansible virtualenv interpreter
+  when: workstation_ansible_python.stat.exists
+  ansible.builtin.command:
+    argv:
+      - "{{ workstation_ansible_venv_path }}/bin/python"
+      - -c
+      - >-
+        import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")
+  register: workstation_ansible_python_probe
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Workstation Ansible | Recreate Ansible virtualenv after Python ABI drift
+  when:
+    - not ansible_check_mode
+    - >-
+      ({
+        'python_exists': workstation_ansible_python.stat.exists,
+        'site_packages_exists': workstation_ansible_site_packages.stat.exists,
+        'probe_rc': workstation_ansible_python_probe.rc | default(1),
+        'probe_abi': workstation_ansible_python_probe.stdout | default(''),
+        'system_abi': workstation_ansible_python_abi.stdout
+      } | workstation_venv_recovery_action) == 'recreate'
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - venv
+      - --clear
+      - "{{ workstation_ansible_venv_path }}"
+  changed_when: true
+
+- name: Workstation Ansible | Create missing Ansible virtualenv
+  when:
+    - not ansible_check_mode
+    - >-
+      ({
+        'python_exists': workstation_ansible_python.stat.exists,
+        'site_packages_exists': workstation_ansible_site_packages.stat.exists,
+        'probe_rc': workstation_ansible_python_probe.rc | default(1),
+        'probe_abi': workstation_ansible_python_probe.stdout | default(''),
+        'system_abi': workstation_ansible_python_abi.stdout
+      } | workstation_venv_recovery_action) == 'create'
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - venv
+      - "{{ workstation_ansible_venv_path }}"
+  changed_when: true
+
+- name: Workstation Ansible | Upgrade pip tooling in virtualenv
+  ansible.builtin.pip:
+    name:
+      - pip==26.2.1
+      - setuptools==84.2.0
+      - wheel==0.48.0
+    state: present
+    virtualenv: "{{ workstation_ansible_venv_path }}"
+
+- name: Workstation Ansible | Install repository-pinned Python requirements
+  ansible.builtin.import_tasks: ansible_python.yml

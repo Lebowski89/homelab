@@ -1,14 +1,7 @@
 ---
 
 - name: Workstation | Validate supported platform
-  ansible.builtin.assert:
-    that:
-      - ansible_facts.os_family | default("") == "Debian"
-      - ansible_facts.pkg_mgr | default("") == "apt"
-      - ansible_facts.service_mgr | default("") == "systemd"
-    fail_msg: >-
-      The workstation role supports Debian-family systems using APT and systemd.
-      Its initial supported target is LMDE 7 (Debian 13).
+  ansible.builtin.import_tasks: platform.yml
 
 - name: Workstation | Validate primary role variables
   ansible.builtin.assert:
@@ -24,6 +17,7 @@
       - workstation_desktop_packages is sequence
       - workstation_desktop_packages is not string
       - workstation_apt_update_cache is boolean
+      - workstation_dnf_update_cache is boolean
       - workstation_vscode_enabled is boolean
       - workstation_vscode_extensions is sequence
       - workstation_vscode_extensions is not string

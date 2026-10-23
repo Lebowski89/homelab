@@ -44,18 +44,12 @@
       - services_public_zone | length > 0
       - "'://' not in services_public_zone"
       - "'/' not in services_public_zone"
-      - services_internal_zone is string
-      - services_internal_zone == services_internal_zone | trim
-      - services_internal_zone | length > 0
-      - "'://' not in services_internal_zone"
-      - "'/' not in services_internal_zone"
+      - services_internal_zone | valid_dns_zone
       - services_lan_cidr is string
       - services_lan_cidr == services_lan_cidr | trim
       - services_lan_cidr | length > 0
       - services_lan_cidr | valid_ipv4_cidr
-      - services_private_https_port | string | regex_replace('[0-9]', '') | length == 0
-      - services_private_https_port | int >= 1
-      - services_private_https_port | int <= 65535
+      - services_private_https_port | valid_tcp_port
     fail_msg: >-
       NetBox Config Context / dynamic inventory did not provide valid required
       service-topology vars: services_public_zone, services_internal_zone,

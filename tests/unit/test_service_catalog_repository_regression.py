@@ -483,11 +483,9 @@ def test_service_play_gathers_facts_only_for_selected_operations_and_hosts():
     setup_names = {task["name"] for task in host_management_setup_tasks}
     assert setup_names == {
         "Gather facts for Ubuntu role",
-        "Gather facts for Workstation role",
         "Gather facts for systemd-resolved role",
         "Gather facts for Docker role",
         "Gather facts for Podman role",
-        "Gather facts for OpenTofu installation",
         "Gather facts for PostgreSQL backup prerequisites",
         "Gather facts for PostgreSQL host management",
         "Gather facts for Keepalived role",

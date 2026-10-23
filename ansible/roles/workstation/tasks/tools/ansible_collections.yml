@@ -1,0 +1,24 @@
+---
+
+- name: Workstation Ansible | Assert Ansible collections requirements file exists
+  ansible.builtin.stat:
+    path: "{{ workstation_ansible_path }}/requirements.yml"
+  register: workstation_ansible_requirements_yml
+
+- name: Workstation Ansible | Fail if Ansible collections requirements file is missing
+  ansible.builtin.fail:
+    msg: "Missing requirements.yml at {{ workstation_ansible_path }}/requirements.yml"
+  when: not workstation_ansible_requirements_yml.stat.exists
+
+- name: Workstation Ansible | Install Ansible collections from requirements.yml
+  ansible.builtin.command:
+    argv:
+      - "{{ workstation_ansible_venv_path }}/bin/ansible-galaxy"
+      - collection
+      - install
+      - -r
+      - "{{ workstation_ansible_path }}/requirements.yml"
+      - -p
+      - "{{ workstation_ansible_collections_path }}"
+  register: workstation_collections_result
+  changed_when: "'was installed successfully' in workstation_collections_result.stdout"

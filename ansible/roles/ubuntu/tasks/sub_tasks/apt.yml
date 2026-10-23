@@ -8,7 +8,6 @@
           []
           + (ubuntu_apt_package_profiles_base | default([]))
           + (ubuntu_apt_package_profiles_extra | default([]))
-          + (ubuntu_apt_package_profiles_ansible_manager | default([]))
           + (ubuntu_apt_package_profiles_docker | default([]))
           + (ubuntu_apt_package_profiles_podman | default([]))
           + (ubuntu_apt_package_profiles_postgres | default([]))

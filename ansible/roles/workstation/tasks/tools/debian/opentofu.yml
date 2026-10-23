@@ -1,0 +1,72 @@
+---
+
+- name: Workstation OpenTofu | Ensure apt prerequisites are installed
+  ansible.builtin.apt:
+    name: "{{ workstation_opentofu_prereq_packages }}"
+    state: present
+    update_cache: true
+
+- name: Workstation OpenTofu | Ensure OpenTofu keyring directory exists
+  ansible.builtin.file:
+    path: "{{ workstation_opentofu_keyring_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Workstation OpenTofu | Download OpenTofu package signing key
+  ansible.builtin.get_url:
+    url: https://get.opentofu.org/opentofu.gpg
+    dest: "{{ workstation_opentofu_keyring_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Workstation OpenTofu | Download OpenTofu repository key
+  ansible.builtin.get_url:
+    url: https://packages.opentofu.org/opentofu/tofu/gpgkey
+    dest: "{{ workstation_opentofu_keyring_file_repo }}.asc"
+    owner: root
+    group: root
+    mode: "0644"
+  register: workstation_opentofu_repository_key
+
+- name: Workstation OpenTofu | Check dearmored repository key
+  ansible.builtin.stat:
+    path: "{{ workstation_opentofu_keyring_file_repo }}"
+  register: workstation_opentofu_binary_key
+
+- name: Workstation OpenTofu | Dearmor OpenTofu repository key
+  when: workstation_opentofu_repository_key.changed or not workstation_opentofu_binary_key.stat.exists
+  ansible.builtin.command:
+    argv:
+      - gpg
+      - --batch
+      - --yes
+      - --dearmor
+      - -o
+      - "{{ workstation_opentofu_keyring_file_repo }}"
+      - "{{ workstation_opentofu_keyring_file_repo }}.asc"
+  changed_when: true
+
+- name: Workstation OpenTofu | Keep repository key readable by APT
+  ansible.builtin.file:
+    path: "{{ workstation_opentofu_keyring_file_repo }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Workstation OpenTofu | Add OpenTofu apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by={{ workstation_opentofu_keyring_file }},{{ workstation_opentofu_keyring_file_repo }}]
+      {{ workstation_opentofu_source_url }}
+      {{ workstation_opentofu_source_suite }} main
+    filename: "{{ workstation_opentofu_repo_filename }}"
+    state: present
+    update_cache: true
+
+- name: Workstation OpenTofu | Install OpenTofu packages
+  ansible.builtin.apt:
+    name: "{{ workstation_opentofu_packages }}"
+    state: present
