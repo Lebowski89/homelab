@@ -21,6 +21,37 @@ ROLE = ROOT / "ansible/roles/workstation"
 ANSIBLE = str(Path(sys.executable).with_name("ansible-playbook"))
 
 
+@pytest.mark.integration
+@pytest.mark.parametrize("configuration", ["ansible.cfg", "bootstrap.cfg"])
+def test_direct_ansible_discovers_default_workstation_collections(tmp_path, configuration):
+    home = tmp_path / "home"
+    modules = home / ".local/share/homelab/collections/ansible_collections/workstation_fixture/discovery/plugins/modules"
+    modules.mkdir(parents=True)
+    module = modules / "probe.py"
+    module.write_text('"""Offline module-discovery fixture."""\n')
+    cfg = tmp_path / configuration
+    shutil.copyfile(ROOT / "ansible" / configuration, cfg)
+    # Use direct Ansible tooling with neither Skynet nor a collection-path override.
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("ANSIBLE_")}
+    environment.update(
+        HOME=str(home),
+        ANSIBLE_CONFIG=str(cfg),
+        ANSIBLE_LOCAL_TEMP=str(tmp_path / "local"),
+        ANSIBLE_COLLECTIONS_SCAN_SYS_PATH="false",
+    )
+    result = subprocess.run(
+        [str(Path(sys.executable).with_name("ansible-doc")), "-t", "module", "-F", "workstation_fixture.discovery"],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "workstation_fixture.discovery.probe" in result.stdout
+    assert str(module) in result.stdout
+
+
 def run_tasks(tmp_path, tasks, variables, *, host="localhost", connection="local"):
     """Use only a temporary static inventory/config; never load repository Vault."""
     cfg = tmp_path / "ansible.cfg"

@@ -16,6 +16,8 @@ SPEC.loader.exec_module(NETWORK)
     "address, accepted",
     [
         ("192.0.2.10", True),
+        ("192.168.1.10", True),
+        ("100.64.0.10", True),
         ("2001:db8::10", True),
         ("::ffff:c000:20a", True),
         ("127.0.0.1", False),
@@ -29,6 +31,8 @@ SPEC.loader.exec_module(NETWORK)
         ("0.0.0.0", False),
         ("::", False),
         ("::ffff:0.0.0.0", False),
+        ("255.255.255.255", False),
+        ("::ffff:255.255.255.255", False),
         ("224.0.0.1", False),
         ("[2001:db8::10]", False),
         ("192.0.2.10/32", False),

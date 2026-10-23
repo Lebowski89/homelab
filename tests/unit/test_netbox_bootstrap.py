@@ -101,7 +101,9 @@ def bootstrap(tmp_path):
                         "vault_loaded": "{{ netbox_redis_password == 'NONPRODUCTION-fixture-redis' }}",
                         "domain_loaded": "{{ netbox_domain == 'example.test' }}",
                         "log_root": "{{ services_log_root }}",
-                    }
+                    },
+                    "no_log": True,
+                    "diff": False,
                 }
             ]
         )

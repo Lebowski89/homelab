@@ -27,7 +27,7 @@ def valid_remote_ip(value: Any) -> bool:
         return False
     if isinstance(address, IPv6Address) and address.ipv4_mapped is not None:
         address = address.ipv4_mapped
-    return not (address.is_loopback or address.is_unspecified or address.is_multicast)
+    return not (address.is_loopback or address.is_unspecified or address.is_multicast or address == ip_address("255.255.255.255"))
 
 
 def valid_dns_zone(value: Any) -> bool:
