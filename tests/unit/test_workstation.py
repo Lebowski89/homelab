@@ -20,8 +20,6 @@ DEVELOPMENT_TASKS_PATH = ROLE_PATH / "tasks/development.yml"
 SHELL_TASKS_PATH = ROLE_PATH / "tasks/shell.yml"
 DESKTOP_TASKS_PATH = ROLE_PATH / "tasks/desktop.yml"
 VSCODE_TASKS_PATH = ROLE_PATH / "tasks/vscode.yml"
-STANDALONE_PLAYBOOK_PATH = REPO_ROOT / "ansible/workstation.yml"
-BOOTSTRAP_SCRIPT_PATH = REPO_ROOT / "scripts/bootstrap-workstation.sh"
 ANSIBLE_PLAYBOOK = shutil.which(str(Path(sys.executable).with_name("ansible-playbook")))
 
 TOOL_TAGS = {
@@ -47,18 +45,20 @@ def load_yaml(path: Path):
     return yaml.safe_load(path.read_text())
 
 
-def test_main_playbook_dispatches_workstation_role_from_inventory_group():
+def test_main_playbook_provisions_workstation_first_and_only_once():
     plays = load_yaml(PLAYBOOK_PATH)
-    play = next(play for play in plays if play["name"] == "Deploy homelab services")
-    include = next(task for task in play["tasks"] if task["name"] == "Include Workstation role")
-
-    assert play["hosts"] == "tags_skynet"
+    play = plays[0]
+    include = next(task for task in play["tasks"] if "ansible.builtin.include_role" in task)
+    assert play["hosts"] == "{{ workstation_hosts | default('tags_workstation') }}"
     assert play["become"] is True
+    assert play["tasks"][0]["become"] is False
     assert include["ansible.builtin.include_role"]["name"] == "workstation"
-    assert include["when"] == "'tags_workstation' in group_names"
     assert set(include["tags"]) == WORKSTATION_TAGS | TOOL_TAGS
     assert include["ansible.builtin.include_role"]["apply"]["tags"] == ["workstation"]
-    assert "blacktop" not in str(include)
+    assert all(
+        task.get("ansible.builtin.include_role", {}).get("name") != "workstation" for later in plays[1:] for task in later.get("tasks", [])
+    )
+    assert not (REPO_ROOT / "ansible/workstation.yml").exists()
 
 
 def test_ubuntu_role_remains_explicitly_ubuntu_only():
@@ -111,9 +111,10 @@ def test_workstation_user_is_resolved_from_remote_inventory_identity():
     getent = next(task for task in validation if task["name"] == "Workstation | Read workstation user account")
     resolution = next(task for task in validation if task["name"] == "Workstation | Resolve workstation user facts")
 
-    assert defaults["workstation_user"] == "{{ ansible_user }}"
     rendered_user = NativeEnvironment().from_string(defaults["workstation_user"]).render(ansible_user="remote-user", ansible_user_id="root")
     assert rendered_user == "remote-user"
+    local_user = NativeEnvironment().from_string(defaults["workstation_user"]).render(ansible_facts={"user_id": "local-user"})
+    assert local_user == "local-user"
     assert getent["ansible.builtin.getent"]["key"] == "{{ workstation_user }}"
     assert set(resolution["ansible.builtin.set_fact"]) == {
         "workstation_user_uid",
@@ -206,9 +207,6 @@ def test_workstation_tooling_is_opt_in_and_isolated_from_development_baseline():
         "Workstation Development | Install development packages",
         "Workstation Development | Manage Git identity block",
     ]
-    standalone = load_yaml(STANDALONE_PLAYBOOK_PATH)
-    assert standalone[0]["roles"] == ["workstation"]
-    assert not BOOTSTRAP_SCRIPT_PATH.exists()
 
 
 def test_workstation_does_not_manage_server_networking_or_ssh_state():
@@ -274,6 +272,13 @@ blacktop
             "--list-tasks",
         ],
         cwd=REPO_ROOT,
+        env={
+            **os.environ,
+            "ANSIBLE_CONFIG": str(REPO_ROOT / "ansible/bootstrap.cfg"),
+            "ANSIBLE_LOCAL_TEMP": str(tmp_path / "local"),
+            "ANSIBLE_COLLECTIONS_PATH": str(tmp_path / "empty-collections"),
+            "ANSIBLE_COLLECTIONS_SCAN_SYS_PATH": "false",
+        },
         check=False,
         capture_output=True,
         text=True,
@@ -291,7 +296,7 @@ def workstation_run(tmp_path):
     import json
 
     copied = tmp_path / "roles/workstation"
-    shutil.copytree(ROLE_PATH, copied)
+    shutil.copytree(ROLE_PATH, copied, ignore=shutil.ignore_patterns("__pycache__"))
     operations = {
         "apt",
         "dnf",
@@ -339,6 +344,8 @@ class ActionModule(ActionBase):
         if module == 'stat':
             result['stat'] = {'exists': task_vars['fixture_ostree'] if options['path'] == '/run/ostree-booted' else True,
                               'isreg': True}
+        elif module == 'setup':
+            result['ansible_facts'] = task_vars['fixture_system_facts']
         elif module == 'getent':
             result['ansible_facts'] = {'getent_passwd': task_vars['fixture_passwd']}
         elif module == 'command' and 'argv' in options:
@@ -351,7 +358,7 @@ class ActionModule(ActionBase):
     cfg.write_text(f"[defaults]\naction_plugins = {plugins}\nhost_key_checking = True\n")
     record = tmp_path / "operations.jsonl"
 
-    def run(*, fedora=False, tags="workstation", overrides=None, ostree=False, check=False):
+    def run(*, fedora=False, tags="workstation", overrides=None, ostree=False, check=False, main=False, managed=False, inline=False):
         facts = {
             "distribution": "Fedora" if fedora else "Debian",
             "os_family": "RedHat" if fedora else "Debian",
@@ -375,12 +382,53 @@ class ActionModule(ActionBase):
                 [{"hosts": "localhost", "connection": "local", "gather_facts": False, "vars": variables, "roles": ["workstation"]}]
             )
         )
-        args = [ANSIBLE_PLAYBOOK, "-i", "localhost,", str(play), "--tags", tags]
+        inventory_args = ["-i", "localhost,"]
+        environment = {**os.environ, "ANSIBLE_CONFIG": str(cfg), "ANSIBLE_LOCAL_TEMP": str(tmp_path / "local")}
+        if main:
+            # Run the real complete entry point, with only host operations mocked.
+            plays = load_yaml(PLAYBOOK_PATH)
+            instrument(plays[0]["tasks"])
+            setup = plays[0]["tasks"][0]
+            setup["fixture_operation"] = {"module": "setup", "options": setup.pop("ansible.builtin.setup")}
+            play = tmp_path / "playbook.yml"
+            play.write_text(yaml.safe_dump(plays, sort_keys=False))
+            shutil.copytree(REPO_ROOT / "ansible/tasks", tmp_path / "tasks", dirs_exist_ok=True)
+            hosts = tmp_path / "host_vars"
+            hosts.mkdir(exist_ok=True)
+            shutil.copyfile(REPO_ROOT / "ansible/host_vars/blacktop.yml", hosts / "blacktop.yml")
+            # An unreadable fake Vault catches accidental application-wide loading.
+            group_vars = tmp_path / "group_vars/all"
+            group_vars.mkdir(parents=True, exist_ok=True)
+            (group_vars / "private.yml").write_text("$ANSIBLE_VAULT;1.1;AES256\nsynthetic-invalid-vault\n")
+            config = (REPO_ROOT / "ansible/bootstrap.cfg").read_text()
+            cfg.write_text(config.replace("[defaults]", f"[defaults]\naction_plugins = {plugins}"))
+            facts["user_id"] = "fixture"
+            variables.pop("ansible_user")
+            variables.pop("ansible_facts")
+            variables.pop("workstation_tools_enabled")
+            variables.pop("workstation_opentofu_enabled")
+            variables.update(fixture_system_facts=facts, ansible_connection="local")
+            variables.update(overrides or {})
+            inventory = tmp_path / "inventory.yml"
+            children = {"tags_workstation": {"hosts": {"blacktop": variables}}}
+            if managed:
+                children["tags_skynet"] = {"hosts": {"blacktop": {}}}
+            inventory.write_text(yaml.safe_dump({"all": {"children": children}}))
+            inventory_args = ["-i", str(inventory)]
+            if inline:
+                bootstrap_vars = tmp_path / "bootstrap-vars.yml"
+                bootstrap_vars.write_text(yaml.safe_dump(variables))
+                inventory_args = ["-i", "blacktop,", "-c", "local", "-e", "workstation_hosts=blacktop", "-e", f"@{bootstrap_vars}"]
+            # No NetBox credentials, application Vault passwords or installed
+            # collections are supplied. Disable scanning site-packages as well.
+            environment.update(ANSIBLE_COLLECTIONS_PATH=str(tmp_path / "empty-collections"), ANSIBLE_COLLECTIONS_SCAN_SYS_PATH="false")
+            assert not (tmp_path / "netbox.yml").exists()
+        args = [ANSIBLE_PLAYBOOK, *inventory_args, str(play), "--tags", tags]
         if check:
             args.append("--check")
         result = subprocess.run(
             args,
-            env={**os.environ, "ANSIBLE_CONFIG": str(cfg), "ANSIBLE_LOCAL_TEMP": str(tmp_path / "local")},
+            env=environment,
             capture_output=True,
             text=True,
             check=False,
@@ -539,3 +587,48 @@ def test_package_selection_cannot_become_a_distribution_upgrade(workstation_run,
     result, calls = workstation_run(tags="workstation_apt", overrides={"workstation_packages": selection})
     assert (result.returncode == 0) is accepted
     assert not any(call["module"] in {"apt", "dnf"} for call in calls)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "fedora, tag, managed",
+    [(False, "workstation", False), (True, "workstation", False), (False, "workstation_tools", True), (True, "workstation_ansible", True)],
+)
+def test_actual_main_bootstrap_without_netbox_or_application_inputs(workstation_run, fedora, tag, managed):
+    result, calls = workstation_run(fedora=fedora, tags=tag, main=True, managed=managed)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Service host contract |" not in result.stdout
+    assert "Recovery target |" not in result.stdout
+    assert "Include NetBox bootstrap role" not in result.stdout
+    assert "Infisical" not in result.stdout
+    # The real blacktop host_vars opts into tools and selects src/homelab.
+    installs = [call for call in calls if call["module"] == "pip" and "requirements" in call["options"]]
+    assert len(installs) == 1
+    assert installs[0]["options"]["requirements"] == "/fixture/home/src/homelab/ansible/requirements.txt"
+    assert all(call["user"] == "fixture" for call in installs)
+    assert sum(call["module"] == "setup" for call in calls) == 1
+    assert {call["module"] for call in calls if call["module"] in {"apt", "dnf"}} == {"dnf" if fedora else "apt"}
+    # Blacktop does not opt into OpenTofu installation; no API or service work.
+    assert not any(call["module"] == "yum_repository" and call["options"].get("name") == "opentofu" for call in calls)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("tags", ["deploy", "workstation_tools,deploy"])
+def test_normal_service_selection_keeps_service_host_assertions(workstation_run, tags):
+    result, calls = workstation_run(tags=tags, main=True, managed=True)
+    assert result.returncode != 0
+    assert "Service host contract | Validate singleton inventory roles" in result.stdout
+    assert bool(calls) is ("workstation_tools" in tags)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("tag", sorted(TOOL_TAGS))
+def test_inline_bootstrap_inventory_and_granular_tools(workstation_run, tag):
+    result, calls = workstation_run(main=True, inline=True, fedora=True, tags=tag, overrides={"workstation_opentofu_enabled": True})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Service host contract |" not in result.stdout
+    assert "Recovery target |" not in result.stdout
+    assert "Infisical" not in result.stdout
+    assert sum(call["module"] == "setup" for call in calls) == 1
+    repos = [call["options"]["name"] for call in calls if call["module"] == "yum_repository"]
+    assert ("opentofu" in repos) is (tag in {"workstation_tools", "workstation_opentofu"})

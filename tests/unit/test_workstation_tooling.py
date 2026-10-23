@@ -163,6 +163,10 @@ def test_rendered_wrapper_executes_locally_with_portable_paths_and_overrides(tmp
     assert observed["collections"] == variables["workstation_ansible_collections_path"]
     assert observed["config"] == str(repo / "ansible/ansible.cfg")
     assert observed["log"] == str(tmp_path / "test.log")
+    result = subprocess.run(["bash", str(wrapper), "run", "workstation", "tools"], env=env, capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    observed = json.loads(result.stdout.splitlines()[-1])
+    assert observed["argv"] == ["-i", str(repo / "ansible/netbox.yml"), str(repo / "ansible/playbook.yml"), "--tags", "workstation_tools"]
     env.update(
         PLAYBOOK=str(repo / "ansible/bootstrap.yml"), INVENTORY="private-static.yml", ANSIBLE_COLLECTIONS_PATH="override-collections"
     )
@@ -205,7 +209,10 @@ def test_recovery_target_guard_runs_before_any_remote_module(tmp_path, host, con
 
 def test_bootstrap_entry_points_cannot_select_the_execution_machine():
     for filename in ("playbook.yml", "bootstrap.yml"):
-        play = yaml.safe_load((ROOT / "ansible" / filename).read_text())[0]
+        plays = yaml.safe_load((ROOT / "ansible" / filename).read_text())
+        play = next(
+            play for play in plays if play.get("pre_tasks", [{}])[0].get("ansible.builtin.import_tasks") == "tasks/recovery_target.yml"
+        )
         assert play["hosts"] != "localhost"
         assert play.get("connection") != "local"
         assert play["gather_facts"] is False

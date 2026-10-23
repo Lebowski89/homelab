@@ -463,9 +463,7 @@ run_role_playbook() {
   shift
   target="${target,,}"
   target="${target//_/-}"
-  if [[ "$target" == "workstation" ]]; then
-    PLAYBOOK="${WORKSTATION_PLAYBOOK:-$(dirname "$PLAYBOOK")/workstation.yml}" run_playbook "$@"
-  elif [[ "$target" == "worker-backend-firewall" ]]; then
+  if [[ "$target" == "worker-backend-firewall" ]]; then
     local -a policy_vars=()
     if [[ -n "${WORKER_BACKEND_FIREWALL_VARS_FILE:-}" ]]; then
       [[ -r "$WORKER_BACKEND_FIREWALL_VARS_FILE" ]] || die "Worker firewall inputs are not readable: $WORKER_BACKEND_FIREWALL_VARS_FILE"

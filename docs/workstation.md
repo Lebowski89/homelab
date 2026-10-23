@@ -71,8 +71,13 @@ not create or rename accounts.
 
 ## Independently selectable tooling
 
-Use `ansible/workstation.yml` for provisioning without the service catalog or
-NetBox service-host contract. Main-playbook workstation tags remain available.
+The first play in `ansible/playbook.yml` provisions workstations independently of
+NetBox. For a fresh machine, use an explicit local/static inventory and
+`ansible/bootstrap.cfg`; it excludes application group-variable files while
+preserving per-host options. See the [initial setup procedure](workstation-transition.md#initial-provisioning-later-operator-action)
+for obtaining the prerequisite checkout/minimal Ansible core, and the complete
+bootstrap command. No NetBox collection, application Vault inputs or service-host
+groups are required. Task tags do not disable inventory parsing.
 
 | Tag | Behaviour |
 | --- | --- |
@@ -143,8 +148,10 @@ Skynet retains its commands and environment overrides: `PLAYBOOK`, `INVENTORY`,
 `REPO_ROOT` selects the default playbook, inventory and config; a supplied
 `PLAYBOOK` still derives its repository root when `REPO_ROOT` is unset.
 `skynet run workstation tools`, `ansible` (or `venv`), `collections`, `skynet`, `repo`, and
-`opentofu` dispatch through the workstation-only playbook. `WORKSTATION_PLAYBOOK`
-can override that entry point. Other established role/service commands remain.
+`opentofu` use `ansible/playbook.yml`, like ordinary managed-host commands.
+There is no separate workstation playbook or `WORKSTATION_PLAYBOOK` override.
+Normal Skynet invocations use NetBox; before NetBox exists, invoke Ansible directly
+with the explicit bootstrap config and inventory documented in the runbook.
 No command wraps SSH to `mgt` to run Ansible there.
 
 The legacy Ubuntu adapter retains `/opt/homelab`, `/opt/ansible/ansible-venv`,
@@ -178,7 +185,8 @@ workstation_git_manage_config: false
 
 No Fedora hostname, user, IP address, extra controller role or inventory category
 is introduced by this example. Override `workstation_user` only when the tooling
-owner intentionally differs from the NetBox connection user. Effective package
+owner intentionally differs from the inventory connection user or local invoking
+account. Effective package
 lists (`workstation_packages`, `workstation_dev_packages`,
 `workstation_desktop_packages`, `workstation_ansible_prereq_packages`) can be
 overridden per host without changing another platform's defaults.
@@ -198,10 +206,12 @@ The last command requires `workstation_opentofu_enabled: true`. The historical
 using DNF on Fedora. Other existing `workstation_*` tags keep their selection
 behaviour. These inventory-backed commands are later operator actions, not
 offline validation; check mode still requires a connection to the selected host.
-For fresh local provisioning without NetBox, use `ansible/workstation.yml` with
-an explicit single-host local inventory, `workstation_hosts`, `ansible_user`,
-and the existing checkout path as shown in the transition runbook. Apply that
-same pattern to the Fedora workstation's actual hostname.
+For fresh local provisioning without NetBox, use `ansible/playbook.yml` with
+`ANSIBLE_CONFIG="$PWD/ansible/bootstrap.cfg"`, `-i blacktop, -c local`,
+`-e workstation_hosts=blacktop` and workstation-only tags, as shown in the
+transition runbook. Unprivileged facts resolve the local account without NetBox;
+`ansible_user` still takes precedence when supplied by an inventory. Use the
+actual inventory hostname so its `host_vars` apply, including on Fedora.
 
 Workstations execute their own tooling and SSH directly to managed hosts.
 `services_controller_host` still names the application host: mgt retains service
@@ -242,7 +252,7 @@ Repository-only checks for this extension:
 - `/opt/ansible/ansible-venv/bin/ansible-lint --offline ansible/roles/workstation ansible/roles/opentofu/tasks/sub_tasks/install.yml`: passed.
 - `/opt/ansible/ansible-venv/bin/yamllint ansible/roles/workstation`: passed.
 - `/opt/ansible/ansible-venv/bin/ruff check` and `ruff format --check` on the three affected test files: passed. Installed Ruff 0.17.1 matches the repository pin.
-- Localhost-only `ansible-playbook -i localhost, <playbook> --syntax-check`: passed for `workstation.yml`, `playbook.yml` and `bootstrap.yml`, using an orchestration mirror under `/tmp/homelab-fedora-workstation/syntax` without private inventory or group_vars/Vault inputs.
+- Localhost-only `ansible-playbook -i localhost, <playbook> --syntax-check`: passed for the then-current entry points (`playbook.yml` and `bootstrap.yml` remain), using an orchestration mirror under `/tmp/homelab-fedora-workstation/syntax` without private inventory or group_vars/Vault inputs.
 - `git diff --check` and local documentation-link checks: passed.
 
 The configured venv contains Ansible 2.21.4 versus pinned 2.21.5, and ansible-lint
@@ -263,3 +273,21 @@ installation documentation. No private credentials or state were accessed, and
 nothing was staged, committed, pushed, deployed or applied.
 
 Suggested commit title: `feat(workstation): support Debian and Fedora provisioning`.
+
+
+## Workstation bootstrap isolation
+
+For local bootstrap, `bootstrap.cfg` retains per-host variables and inline static
+inventory variables but excludes automatic group-variable files. Keep machine
+choices in `host_vars/<actual-hostname>.yml`; this includes tool enablement,
+checkout paths and optional OpenTofu installation. NetBox identity/address data
+continues to take precedence during normal inventory-backed operations.
+
+The first play gathers system/user facts without escalation, then runs the
+existing role. Workstation-only selections end the homelab play before its
+always-tagged pre_tasks. Ordinary service selections still enforce service-host
+and topology validation; application placement requires `tags_service_controller`
+or an explicit `services_controller_inventory_group` override, with no legacy
+`ansible_manager` fallback. The workstation role is included only in the first
+play. Drift email tasks are dynamically included so their collection is not a
+parse-time bootstrap dependency.

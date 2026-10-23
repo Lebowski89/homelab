@@ -1,13 +1,46 @@
 ---
 
 ################################
+# WORKSTATION (NO APPLICATION DEPENDENCIES)
+################################
+
+- name: Provision operator workstation
+  hosts: "{{ workstation_hosts | default('tags_workstation') }}"
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Gather workstation system and invoking user facts
+      become: false
+      ansible.builtin.setup:
+      tags: &workstation_tags
+        - workstation
+        - workstation_apt
+        - workstation_dev
+        - workstation_vscode
+        - workstation_shell
+        - workstation_desktop
+        - workstation_tools
+        - workstation_repository
+        - workstation_ansible
+        - workstation_collections
+        - workstation_skynet
+        - workstation_opentofu
+
+    - name: Include Workstation role
+      ansible.builtin.include_role:
+        name: workstation
+        apply:
+          tags: [workstation]
+      tags: *workstation_tags
+
+################################
 # BOOTSTRAP
 ################################
 
 - name: Deploy NetBox
   hosts: >-
-    {{ services_controller_inventory_group | default(
-         'tags_service_controller' if 'tags_service_controller' in groups else 'tags_ansible_manager') }}
+    {{ services_controller_inventory_group | default('tags_service_controller') }}
   become: true
   gather_facts: false
 
@@ -49,6 +82,13 @@
   strategy: linear
 
   pre_tasks:
+    # Tags do not suppress always-tagged pre_tasks. End only workstation-only
+    # selections before entering the ordinary service contract and lifecycle.
+    - name: Keep workstation-only runs outside homelab operations
+      when: ansible_run_tags | reject('match', '^workstation(_|$)') | list | length == 0
+      ansible.builtin.meta: end_play
+      tags: always
+
     - name: Include runtime-neutral service host contract validation
       ansible.builtin.include_tasks:
         file: tasks/services_host_contract.yml
@@ -174,48 +214,6 @@
         - postgres_backup
         - postgres_backup_setup
         - postgres_backup_run
-
-    ################################
-    # WORKSTATION
-    ################################
-
-    - name: Gather facts for Workstation role
-      when: "'tags_workstation' in group_names"
-      ansible.builtin.setup:
-      tags:
-        - workstation
-        - workstation_apt
-        - workstation_dev
-        - workstation_vscode
-        - workstation_shell
-        - workstation_desktop
-        - workstation_tools
-        - workstation_repository
-        - workstation_ansible
-        - workstation_collections
-        - workstation_skynet
-        - workstation_opentofu
-
-    - name: Include Workstation role
-      when: "'tags_workstation' in group_names"
-      ansible.builtin.include_role:
-        name: workstation
-        apply:
-          tags:
-            - workstation
-      tags:
-        - workstation
-        - workstation_apt
-        - workstation_dev
-        - workstation_vscode
-        - workstation_shell
-        - workstation_desktop
-        - workstation_tools
-        - workstation_repository
-        - workstation_ansible
-        - workstation_collections
-        - workstation_skynet
-        - workstation_opentofu
 
     ################################
     # SYSTEMD-RESOLVED / NSS
@@ -676,8 +674,11 @@
           tags: [drift]
       tags: [drift]
 
-    - name: Drift | Import email notification tasks
-      ansible.builtin.import_tasks: "{{ playbook_dir }}/roles/docker_services/tasks/sub_tasks/drift/notify_email.yml"
+    - name: Drift | Include email notification tasks
+      ansible.builtin.include_tasks:
+        file: "{{ playbook_dir }}/roles/docker_services/tasks/sub_tasks/drift/notify_email.yml"
+        apply:
+          tags: [drift]
       tags: [drift]
 
     - name: Drift | Report no image drift found

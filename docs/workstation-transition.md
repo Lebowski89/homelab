@@ -23,10 +23,11 @@ tag during the transition. Do not give workstations `ansible_manager` or
 `service_controller`. Do not add `opentofu_pve_user` to workstations.
 
 No API calls or apply were made. The canonical
-`services_controller_inventory_group` now prefers `tags_service_controller` and
-falls back to `tags_ansible_manager` only while the new group is absent. Existing
-singleton validation remains in effect; duplicate or missing application hosts
-fail. Adding several eligible workstations does not affect application placement.
+`services_controller_inventory_group` now requires `tags_service_controller`.
+There is no legacy `ansible_manager` fallback. Before ordinary service operations,
+apply the proposed application-host tag through the authorised NetBox workflow,
+or explicitly select an existing singleton application-host group. Missing or
+duplicate application hosts fail the existing validation. Adding several eligible workstations does not affect application placement.
 An explicit `services_controller_inventory_group` override remains supported.
 After NetBox is available, an operator must apply these exact tag changes through
 its existing ownership workflow. The prepared OpenTofu source is not permission
@@ -38,7 +39,8 @@ No Config Context identity/address duplication is needed. Preserve existing
 services topology (`public_zone`, `internal_zone`, `lan_cidr`,
 `private_https_port`), runtime UID/GIDs, app/data roots, SSH user/port/address,
 Tailscale and primary-IP fields. Local tooling paths/enablement belong in
-`ansible/host_vars/blacktop.yml`; user identity already comes from NetBox.
+`ansible/host_vars/blacktop.yml`. Once available, NetBox supplies connection
+identity; before that, local bootstrap discovers the invoking account from facts.
 
 The previous `ansible_connection: local` tag variable is removed. mgt is now an
 SSH target from workstations, and uses its existing managed-host interpreter in
@@ -75,39 +77,89 @@ No dependency installation was performed during repository preparation.
 
 ## Initial provisioning (later operator action)
 
-From the chosen checkout on Blacktop, use the existing workstation role through
-its standalone entry point. Replace the bootstrap binary path and use the
-current non-root account. Local inventory bypasses NetBox for this step only:
+A checkout and a minimal Ansible installation must exist before the role can run.
+Use an existing trusted checkout/worktree on its current branch whenever possible.
+For a fresh machine only, install the prerequisites for its platform:
 
 ```bash
+# Debian / LMDE
+sudo apt-get update
+sudo apt-get install git python3 python3-venv python3-pip
+# Conventional Fedora Desktop/KDE: use this instead of the APT commands
+sudo dnf install git python3 python3-pip
+```
+
+Use Python 3.12 or newer, as required by the pinned Ansible core. If no checkout
+exists, choose an absent destination and clone there:
+
+```bash
+git clone https://github.com/Lebowski89/homelab.git "$HOME/src/homelab"
+```
+
+Do not run that clone over an existing checkout. Enter the chosen checkout and
+install only its pinned Ansible core into a separate initial venv. This is an
+operator prerequisite, not a command executed during repository validation:
+
+```bash
+checkout="$PWD"  # repository root, including an existing Git worktree
 bootstrap_venv="$HOME/.local/share/homelab-bootstrap"
-checkout="$PWD"
-ANSIBLE_CONFIG="$checkout/ansible/ansible.cfg" \
+python3 -m venv "$bootstrap_venv"
+ansible_core_requirement="$(sed -n '/^ansible-core==/p' "$checkout/ansible/requirements.txt")"
+"$bootstrap_venv/bin/python" -m pip install "$ansible_core_requirement"
+```
+
+The first play in `ansible/playbook.yml` provisions workstations before NetBox.
+Use the actual inventory hostname (`blacktop` here), rather than `localhost`, so
+`ansible/host_vars/blacktop.yml` is loaded. The explicit `-i` overrides the normal
+NetBox inventory; tags alone cannot prevent inventory parsing:
+
+```bash
+ANSIBLE_CONFIG="$checkout/ansible/bootstrap.cfg" \
   "$bootstrap_venv/bin/ansible-playbook" -i blacktop, -c local \
-  ansible/workstation.yml -e workstation_hosts=blacktop \
-  -e "ansible_user=$(id -un)" \
+  "$checkout/ansible/playbook.yml" -e workstation_hosts=blacktop \
   -e "workstation_repository_path=$checkout" \
+  -e '{"workstation_opentofu_enabled": true}' \
   --tags workstation_tools --ask-become-pass
 ```
 
-The explicit existing path may point at a worktree on any branch. Persist a
-preferred non-default path in Blacktop's host vars; do not put authentication
-there. Add `$HOME/.local/bin` to the interactive PATH if not already present.
-To provision remotely from an existing Ansible control node, use its normal NetBox
-inventory and `--limit blacktop`; no `ansible_connection: local` override should
-be put in NetBox or group vars. Its selected checkout must already exist, or
-explicitly enable cloning into an absent path.
+This converges the managed venv with repository-pinned Python dependencies,
+collections, Skynet and compatible OpenTofu. The OpenTofu override opts into binary
+installation only; all infrastructure/state operations remain blocked. Omit it
+if OpenTofu installation is not wanted. Use `--tags workstation` to include the
+existing desktop/development baseline, or one granular tag from the
+[workstation documentation](workstation.md). Python/collections downloads and
+repository/key configuration are skipped in check mode.
 
-The same command accepts one granular tag from [workstation documentation](workstation.md).
-Select `workstation_ansible` first, then collections and Skynet if doing
-individual components. To opt into a new clone use
-`-e workstation_repository_clone=true`; existing destinations still
-remain untouched. To install OpenTofu only, select
-`workstation_opentofu` and set
-`-e workstation_opentofu_enabled=true`. This installs compatible
-1.11.x packages without init, API-user creation, plan, apply or state access.
-The install uses workstation-owned APT or DNF tasks for the validated platform.
-See [supported workstation platforms and prerequisites](workstation.md#supported-platforms-and-prerequisites).
+`bootstrap.cfg` enables only built-in static inventory parsers. Its group-variable
+precedence excludes automatic `group_vars` files, including application-wide
+Vault files, while preserving automatic per-host `host_vars`. Inline variables in
+a static inventory still work. This config is for workstation bootstrap only;
+no NetBox collection, credentials, private application inputs, service-controller
+or storage groups, service topology or Infisical access is required. Local facts
+are gathered without sudo to resolve the existing account and system; a static
+remote inventory should provide its connection user. Never invoke the whole
+playbook without workstation-only tags during bootstrap.
+
+For a reusable static inventory, place only the workstation in `tags_workstation`
+and set `ansible_connection: local` on that host. Then use
+`-i /path/to/workstations.yml --limit blacktop`, without `workstation_hosts`.
+Do not add fake homelab groups or topology. For Fedora, use its actual hostname
+and the corresponding `host_vars/<hostname>.yml` options. The role detects the
+platform from gathered facts and rejects Atomic/image-based systems.
+
+The explicit existing path may point at a worktree on any branch. Persist a
+preferred path and optional feature choices in host vars; never put authentication
+there. Add `$HOME/.local/bin` to the interactive PATH if needed. Optional repository
+cloning applies only to an absent destination and never updates or switches an
+existing checkout. CLI boolean overrides should use JSON as above, rather than
+string-valued `-e key=true`, because role switches require real booleans.
+
+After NetBox/private handoff, return to `ansible/ansible.cfg` and the normal
+inventory. Skynet workstation commands now use this same `playbook.yml`, with
+NetBox and the existing granular tags. A workstation-only selection ends the
+homelab play before its always-tagged service assertions; ordinary service
+operations retain all those validations. No separate workstation playbook or
+`WORKSTATION_PLAYBOOK` override remains.
 
 ## Narrow private configuration handoff
 
@@ -143,8 +195,10 @@ localhost. `bootstrap.yml` selects only `service_recovery` from an explicitly
 supplied static inventory. Both validate one explicit remote SSH target, reject
 local transport and loopback, and require managed-host path/identity/topology
 inputs before entering service roles. There is no hard-coded workstation
-interpreter or application-root default in these plays. Ordinary workstation
-provisioning uses `workstation.yml` and never loads NetBox or Infisical roles.
+interpreter or application-root default in these plays. Workstation provisioning is the first play in `playbook.yml`; workstation-only
+tags skip application roles and end the homelab play before service assertions.
+Bootstrap inventory and variable-loading isolation come from explicit `-i` and
+`bootstrap.cfg`, not from task tags.
 
 When NetBox is unavailable, do not run the dynamic inventory or `INVENTORY=localhost,`.
 Use the operator's verified static recovery inventory. Confirm its one target is
@@ -312,7 +366,7 @@ Changed files are grouped by purpose:
   `tasks/tools/ansible_python.yml`, `tasks/tools/ansible_collections.yml`, `tasks/tools/repository.yml`,
   `tasks/tools/skynet.yml`, `tasks/tools/opentofu.yml`, `templates/skynet.j2` and
   `filter_plugins/workstation.py`; `ansible/host_vars/blacktop.yml` and
-  `ansible/workstation.yml`. Extracted Ubuntu task/filter/template sources are
+  `ansible/playbook.yml` (first workstation play). Extracted Ubuntu task/filter/template sources are
   removed; `ubuntu/tasks/main.yml` delegates only tooling. OpenTofu's install
   entry point forwards to workstation, and its installation defaults move there.
 - Application placement/recovery: `ansible/playbook.yml`, `ansible/bootstrap.yml`,
@@ -348,7 +402,7 @@ Validation used `/opt/ansible/ansible-venv` and Ruff 0.17.1, matching
 /opt/ansible/ansible-venv/bin/ansible-lint --offline \
   ansible/roles/workstation ansible/roles/ubuntu/tasks/main.yml \
   ansible/roles/opentofu ansible/bootstrap.yml ansible/tasks/recovery_target.yml \
-  ansible/workstation.yml
+  ansible/playbook.yml
 /opt/ansible/ansible-venv/bin/yamllint ansible/roles/workstation \
   ansible/bootstrap.yml ansible/playbook.yml ansible/recovery.yml.sample \
   ansible/host_vars/blacktop.yml ansible/host_vars/mgt.yml \
@@ -361,8 +415,8 @@ Focused result: **114 passed**. Offline Ansible lint, YAML lint, formatting and
 whitespace checks passed. `ruff check` and `ruff format --check` passed on all 16
 affected Python files (the two operator scripts, workstation filter and affected
 tests). Localhost-only `ansible-playbook -i localhost, <playbook> --syntax-check`
-passed for all three entry points: `playbook.yml`, `bootstrap.yml` and
-`workstation.yml`. Syntax checks used an orchestration-only mirror under
+passed for the then-current entry points. The separate workstation entry point
+has since been removed; current bootstrap validation is described below. Syntax checks used an orchestration-only mirror under
 `/tmp/homelab-controller-validation/syntax`, with explicit role/plugin paths and
 no repository group_vars, private inventory or Vault inputs.
 
@@ -388,3 +442,45 @@ contents were read or copied. Nothing was staged, committed, pushed, applied,
 deployed, removed from mgt, or posted to GitHub.
 
 Suggested commit title: `feat(workstation): prepare operator automation tooling`.
+
+
+## Bootstrap correction validation
+
+The current bootstrap regression fixture executes the complete `playbook.yml`
+with mocked host operations, the real Blacktop host options, a static inventory,
+no `netbox.yml`, empty collection search paths and no site-package collection
+scanning. A deliberately unreadable synthetic Vault file verifies exclusion of
+application group variables. It covers Debian/Fedora selection, unprivileged
+fact/user resolution, granular tags and bypass of homelab pre_tasks. A separate
+service-selection test confirms the singleton assertions still run. These are
+execution/rendering checks, not installation or live acceptance. Docsible remains
+owned by `.github/workflows/ansible-docs.yml`; generated role READMEs are not edited.
+
+
+Checks for this bootstrap correction (repository-only):
+
+- Focused workstation/tooling/service-host/NetBox/Ubuntu tests: **163 passed**
+  (`python -m pytest tests/unit/test_workstation.py tests/unit/test_workstation_tooling.py tests/unit/test_services_host_contract.py tests/unit/test_netbox_workstation.py tests/unit/test_ubuntu_netplan.py`).
+- Final complete-entry-point bootstrap and ordinary/mixed service-tag checks:
+  **12 passed** (`python -m pytest tests/unit/test_workstation.py -k
+  'actual_main_bootstrap or inline_bootstrap or normal_service_selection'`).
+- Fast repository suite: **2,035 passed, 708 deselected**
+  (`python -m pytest tests/unit -m 'not integration'`).
+- Offline Ansible lint passed for `ansible/playbook.yml`, the workstation role
+  and `ansible/group_vars/all/services.yml`, with explicit localhost inventory,
+  bootstrap config and both repository/service-common filter paths.
+- The actual main and recovery playbooks passed `--syntax-check` with explicit
+  `-i localhost,`, bootstrap config and empty collection paths/site scanning off.
+- Ruff check/format passed on all seven affected test files; affected YAML lint
+  and `git diff --check` passed.
+
+Successful pytest temporary directories were removed per test with
+`-o tmp_path_retention_policy=failed` after earlier runs hit the local disk quota.
+Installed Ansible core 2.21.4 / ansible-lint 26.8.0 differ from repository pins
+2.21.5 / 26.10.1; exact-pinned-version validation remains unavailable. Ruff 0.17.1
+matches its pin. No dependencies were installed or changed. No live installation,
+service/API/secret access, infrastructure/state action or Git publication occurred.
+Public Ansible documentation was consulted for variable/connection behaviour.
+The bootstrap config uses Ansible's configurable
+[group-variable precedence](https://docs.ansible.com/projects/ansible/latest/reference_appendices/config.html#variable-precedence);
+per-host loading is verified by the execution tests above.

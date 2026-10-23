@@ -1,6 +1,7 @@
 ---
 
-workstation_user: "{{ ansible_user }}"
+# NetBox/static connection identity wins; local bootstrap uses unprivileged facts.
+workstation_user: "{{ ansible_user | default((ansible_facts | default({})).get('user_id', '')) }}"
 workstation_timezone: Australia/Melbourne
 
 # Workstation tooling is separate from the desktop baseline and server tuning.

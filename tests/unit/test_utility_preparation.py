@@ -393,7 +393,7 @@ def test_projection_real_catalog_never_templates_environment_secrets(monkeypatch
     monkeypatch.setattr(loader, "init_plugin_loader", lambda: None)
     host = SimpleNamespace(name="mgt")
     monkeypatch.setattr(
-        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_ansible_manager": SimpleNamespace(hosts=[host])})
+        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_service_controller": SimpleNamespace(hosts=[host])})
     )
     monkeypatch.setattr(VariableManager, "__init__", lambda self, **kw: None)
     monkeypatch.setattr(
@@ -949,7 +949,7 @@ def test_alerting_projection_uses_inventory_and_keeps_credentials_value_free(mon
     monkeypatch.setattr(loader, "init_plugin_loader", lambda: None)
     host = SimpleNamespace(name="mgt")
     monkeypatch.setattr(
-        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_ansible_manager": SimpleNamespace(hosts=[host])})
+        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_service_controller": SimpleNamespace(hosts=[host])})
     )
     monkeypatch.setattr(VariableManager, "__init__", lambda self, **kw: None)
     monkeypatch.setattr(
@@ -1216,7 +1216,7 @@ def test_bounded_batch_projection_and_cli_use_real_catalog_without_secret_resolu
     monkeypatch.setattr(loader, "init_plugin_loader", lambda: None)
     host = SimpleNamespace(name="mgt")
     monkeypatch.setattr(
-        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_ansible_manager": SimpleNamespace(hosts=[host])})
+        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_service_controller": SimpleNamespace(hosts=[host])})
     )
     monkeypatch.setattr(VariableManager, "__init__", lambda self, **kw: None)
     monkeypatch.setattr(

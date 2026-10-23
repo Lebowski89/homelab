@@ -96,7 +96,7 @@ def write_inventory(
         "all": {
             "vars": topology,
             "children": {
-                "tags_ansible_manager": {"hosts": {host: {} for host in controllers}},
+                "tags_service_controller": {"hosts": {host: {} for host in controllers}},
                 "device_roles_storage": {"hosts": {host: {} for host in storage_hosts}},
             },
             "hosts": {host: {} for host in all_hosts},
@@ -124,7 +124,7 @@ def run_host_contract(
   connection: local
   gather_facts: false
   vars:
-    services_controller_inventory_group: tags_ansible_manager
+    services_controller_inventory_group: tags_service_controller
     services_storage_inventory_group: device_roles_storage
     services_plex_host: {plex_host}
     services_log_root: /var/log/skynet
@@ -166,7 +166,7 @@ def test_repository_service_host_contract_uses_real_netbox_groups_and_explicit_p
 
     group_expression = variables.pop("services_controller_inventory_group")
     for groups, expected in (
-        ({"tags_ansible_manager": ["mgt"], "tags_workstation": ["blacktop", "second"]}, "tags_ansible_manager"),
+        ({"tags_ansible_manager": ["mgt"], "tags_workstation": ["blacktop", "second"]}, "tags_service_controller"),
         ({"tags_service_controller": ["mgt"], "tags_workstation": ["blacktop", "second"]}, "tags_service_controller"),
         ({"tags_service_controller": [], "tags_ansible_manager": ["mgt"]}, "tags_service_controller"),
     ):
@@ -378,9 +378,12 @@ def test_host_contract_precedes_other_preparation_and_linear_dispatch_remains_ex
     play = next(item for item in playbook if item.get("name") == "Deploy homelab services")
 
     assert play["strategy"] == "linear"
-    assert play["pre_tasks"][0]["name"] == "Include runtime-neutral service host contract validation"
-    assert play["pre_tasks"][0]["tags"] == "always"
-    assert play["pre_tasks"][0]["ansible.builtin.include_tasks"]["apply"]["tags"] == "always"
+    guard, contract = play["pre_tasks"][:2]
+    assert guard["ansible.builtin.meta"] == "end_play"
+    assert guard["tags"] == "always"
+    assert contract["name"] == "Include runtime-neutral service host contract validation"
+    assert contract["tags"] == "always"
+    assert contract["ansible.builtin.include_tasks"]["apply"]["tags"] == "always"
 
 
 def test_filesystem_hosts_are_validated_before_adapter_or_common_mutation():
@@ -567,3 +570,12 @@ def test_service_topology_validation_rejects_invalid_or_non_ipv4_cidrs(tmp_path:
     assert result.returncode != 0
     assert "Validate canonical service topology" in output
     assert "Publish Docker adapter compatibility alias" not in output
+
+
+def test_drift_notification_collection_tasks_are_loaded_only_on_demand():
+    play = next(play for play in yaml.safe_load(PLAYBOOK_PATH.read_text()) if play["name"] == "Deploy homelab services")
+    task = next(
+        task for task in play["tasks"] if task.get("ansible.builtin.include_tasks", {}).get("file", "").endswith("/drift/notify_email.yml")
+    )
+    assert "drift" in task["tags"]
+    assert set(task["tags"]) <= set(task["ansible.builtin.include_tasks"]["apply"]["tags"])

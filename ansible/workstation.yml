@@ -1,8 +1,0 @@
----
-
-- name: Provision operator workstation
-  hosts: "{{ workstation_hosts | default('tags_workstation') }}"
-  become: true
-  gather_facts: true
-  roles:
-    - workstation
