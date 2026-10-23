@@ -221,7 +221,14 @@ locals {
       name        = "ansible-manager"
       slug        = "ansible_manager"
       color_hex   = "673ab7"
-      description = "Hosts that run Ansible locally."
+      description = "Legacy automation tooling eligibility; retained during workstation transition."
+    }
+
+    service_controller = {
+      name        = "service-controller"
+      slug        = "service_controller"
+      color_hex   = "512da8"
+      description = "Singleton application controller host for services, delegation and firewall ownership."
     }
 
     docker = {
@@ -484,6 +491,7 @@ locals {
       tags = [
         "skynet",
         "ansible_manager",
+        "service_controller",
         "docker",
         "docker_install",
         "podman",

@@ -500,7 +500,10 @@ The four pre-existing accounts/networks retain their ownership.
 
 Production NetBox and Infisical bootstrap reuse `podman_services` with explicit
 Vault-backed context and no catalog, dynamic inventory, or Infisical lookup.
-`ansible/bootstrap.yml` is the localhost recovery entry point. NetBox retains
+`ansible/bootstrap.yml` is the explicit remote recovery entry point, using a
+private static SSH inventory when NetBox is unavailable. It rejects local
+transport and loopback targets before entering either role. See the
+[controller transition and recovery runbook](workstation-transition.md). NetBox retains
 its local PostgreSQL major, database tree, `/var/lib/postgresql` mount, cache,
 and LSIO configuration. Infisical retains its external HAProxy/PostgreSQL path,
 keys and direct port 8066. NetBox adds an inventory-bound recovery port 18000.

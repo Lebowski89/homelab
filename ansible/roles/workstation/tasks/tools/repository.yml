@@ -1,0 +1,46 @@
+---
+- name: Workstation Repository | Inspect checkout destination
+  ansible.builtin.stat:
+    path: "{{ workstation_repository_path }}"
+  register: workstation_repository_checkout
+
+- name: Workstation Repository | Require existing checkout or explicit clone opt-in
+  ansible.builtin.assert:
+    that:
+      - workstation_repository_checkout.stat.exists or workstation_repository_clone
+    fail_msg: Provide an existing checkout/worktree or explicitly enable workstation_repository_clone.
+
+- name: Workstation Repository | Create parent for new optional clone
+  when:
+    - workstation_repository_clone
+    - not workstation_repository_checkout.stat.exists
+  ansible.builtin.file:
+    path: "{{ workstation_repository_path | dirname }}"
+    state: directory
+    mode: '0755'
+
+- name: Workstation Repository | Clone only into an absent destination
+  when:
+    - workstation_repository_clone
+    - not workstation_repository_checkout.stat.exists
+    - not ansible_check_mode
+  ansible.builtin.git:
+    repo: "{{ workstation_repository_url }}"
+    dest: "{{ workstation_repository_path }}"
+    version: "{{ workstation_repository_version }}"
+    update: false
+    force: false
+  diff: false
+
+- name: Workstation Repository | Check existing repository interface without changing Git state
+  when: workstation_repository_checkout.stat.exists
+  ansible.builtin.stat:
+    path: "{{ workstation_ansible_path }}/requirements.txt"
+  register: workstation_repository_checkout_requirements
+
+- name: Workstation Repository | Require valid checkout interface
+  when: workstation_repository_checkout.stat.exists
+  ansible.builtin.assert:
+    that:
+      - workstation_repository_checkout_requirements.stat.exists
+    fail_msg: Existing destination is not a usable homelab checkout; it has been left untouched.

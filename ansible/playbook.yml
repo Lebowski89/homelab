@@ -5,18 +5,19 @@
 ################################
 
 - name: Deploy NetBox
-  hosts: localhost
-  connection: local
+  hosts: >-
+    {{ services_controller_inventory_group | default(
+         'tags_service_controller' if 'tags_service_controller' in groups else 'tags_ansible_manager') }}
   become: true
   gather_facts: false
 
   vars:
-    ansible_python_interpreter: /opt/ansible/ansible-venv/bin/python
+    recovery_application_host: "{{ ansible_play_hosts_all | first }}"
 
-    timezone: Australia/Melbourne
-    container_host_puid: "1000"
-    container_host_pgid: "1000"
-    container_host_appdata_root: /opt
+  pre_tasks:
+    - name: Validate explicit remote application target
+      ansible.builtin.import_tasks: tasks/recovery_target.yml
+      tags: [never, netbox_bootstrap, netbox_deploy, netbox_recreate, netbox_remove]
 
   tasks:
     - name: Include NetBox bootstrap role
@@ -25,6 +26,10 @@
         apply:
           tags:
             - never
+            - netbox_bootstrap
+            - netbox_deploy
+            - netbox_recreate
+            - netbox_remove
       tags:
         - never
         - netbox_bootstrap
@@ -184,6 +189,12 @@
         - workstation_vscode
         - workstation_shell
         - workstation_desktop
+        - workstation_tools
+        - workstation_repository
+        - workstation_ansible
+        - workstation_collections
+        - workstation_skynet
+        - workstation_opentofu
 
     - name: Include Workstation role
       when: "'tags_workstation' in group_names"
@@ -199,6 +210,12 @@
         - workstation_vscode
         - workstation_shell
         - workstation_desktop
+        - workstation_tools
+        - workstation_repository
+        - workstation_ansible
+        - workstation_collections
+        - workstation_skynet
+        - workstation_opentofu
 
     ################################
     # SYSTEMD-RESOLVED / NSS

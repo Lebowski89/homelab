@@ -305,11 +305,17 @@ Tailscale IPv4 → custom_fields.tailscale_ip → ansible_host
 ```
 
 This keeps LAN-aware configuration anchored to a stable local address while
-the `mgt` controller uses Tailscale for SSH, including when the workstation is
+the execution workstation (or retained `mgt` tooling) uses Tailscale for SSH, including when a workstation is
 away from the home LAN. `blacktop` is tagged with `skynet`, `workstation`,
 `podman`, and `podman_install`, so it appears naturally in the corresponding
 `tags_*` groups and its `device_roles_workstation` group without
 workstation-specific inventory code.
+
+The workstation transition proposes singleton `service_controller` for mgt.
+Blacktop retains its existing workstation identity; no separate automation
+inventory group is needed. This application-host tag never forces local
+transport. The exact unapplied changes and compatibility fallback are in the
+[transition runbook](../workstation-transition.md).
 
 ---
 

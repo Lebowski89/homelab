@@ -3,26 +3,53 @@
 workstation_user: "{{ ansible_user }}"
 workstation_timezone: Australia/Melbourne
 
-workstation_packages:
-  - ca-certificates
-  - curl
-  - gnupg
-  - jq
-  - openssh-client
-  - ripgrep
-  - rsync
-  - wget
+# Workstation tooling is separate from the desktop baseline and server tuning.
+workstation_tools_enabled: false
+workstation_ansible_enabled: true
+workstation_ansible_collections_enabled: true
+workstation_skynet_enabled: true
+workstation_opentofu_enabled: false
+workstation_repository_clone: false
+workstation_repository_url: https://github.com/Lebowski89/homelab.git
+workstation_repository_version: main
+workstation_repository_path: "{{ workstation_user_home }}/homelab"
+workstation_ansible_path: "{{ workstation_repository_path }}/ansible"
+workstation_ansible_tools_path: "{{ workstation_user_home }}/.local/share/homelab"
+workstation_ansible_venv_path: "{{ workstation_ansible_tools_path }}/ansible-venv"
+workstation_ansible_collections_path: "{{ workstation_ansible_tools_path }}/collections"
+workstation_secrets_path: "{{ workstation_user_home }}/.config/homelab"
+workstation_become_pass_file: "{{ workstation_secrets_path }}/.ansible_become_pass"
+workstation_vault_pass_file: "{{ workstation_secrets_path }}/.ansible_vault_pass"
+workstation_skynet_install_path: "{{ workstation_user_home }}/.local/bin/skynet"
+workstation_skynet_owner: "{{ workstation_user }}"
+workstation_skynet_group: "{{ workstation_user_gid }}"
+workstation_skynet_doctor_ping_target: tags_skynet
+workstation_ansible_log_path: "{{ workstation_user_home }}/.local/state/homelab/ansible.log"
 
-workstation_dev_packages:
-  - git
-  - python3
-  - python3-pip
-  - python3-venv
+# OS package names stay in the role; host_vars may override an effective list.
+workstation_package_profiles:
+  debian:
+    baseline: [ca-certificates, curl, gnupg, jq, openssh-client, ripgrep, rsync, wget]
+    development: [git, python3, python3-pip, python3-venv]
+    desktop: [xdg-user-dirs]
+    ansible: [python3, python3-venv, python3-pip, python3-dev, build-essential]
+    signing: [ca-certificates, gnupg, python3-apt]
+    opentofu: ['tofu=1.11.*']
+  fedora:
+    baseline: [ca-certificates, curl, gnupg2, jq, openssh-clients, ripgrep, rsync, wget]
+    development: [git, python3, python3-pip]
+    desktop: [xdg-user-dirs]
+    ansible: [python3, python3-pip, python3-devel, gcc, make]
+    signing: [ca-certificates, gnupg2]
+    opentofu: ['tofu-1.11.*']
 
-workstation_desktop_packages:
-  - xdg-user-dirs
+workstation_packages: "{{ workstation_package_profiles[workstation_platform].baseline }}"
+workstation_dev_packages: "{{ workstation_package_profiles[workstation_platform].development }}"
+workstation_desktop_packages: "{{ workstation_package_profiles[workstation_platform].desktop }}"
+workstation_ansible_prereq_packages: "{{ workstation_package_profiles[workstation_platform].ansible }}"
 
 workstation_apt_update_cache: true
+workstation_dnf_update_cache: true
 
 workstation_vscode_enabled: true
 workstation_vscode_key_url: https://packages.microsoft.com/keys/microsoft.asc
@@ -49,3 +76,19 @@ workstation_xdg_directories:
   - "{{ workstation_user_home }}/Public"
   - "{{ workstation_user_home }}/Templates"
   - "{{ workstation_user_home }}/Videos"
+
+workstation_opentofu_prereq_packages: "{{ workstation_package_profiles[workstation_platform].signing }}"
+
+workstation_opentofu_source_url: "https://packages.opentofu.org/opentofu/tofu/any/"
+workstation_opentofu_source_suite: any
+workstation_opentofu_keyring_dir: /etc/apt/keyrings
+workstation_opentofu_keyring_file: /etc/apt/keyrings/opentofu.gpg
+workstation_opentofu_keyring_file_repo: /etc/apt/keyrings/opentofu-repo.gpg
+workstation_opentofu_repo_filename: opentofu
+
+workstation_opentofu_packages: "{{ workstation_package_profiles[workstation_platform].opentofu }}"
+workstation_opentofu_rpm_baseurl: https://packages.opentofu.org/opentofu/tofu/rpm_any/rpm_any/$basearch
+workstation_opentofu_signing_keys:
+  - https://get.opentofu.org/opentofu.gpg
+  - https://packages.opentofu.org/opentofu/tofu/gpgkey
+workstation_vscode_rpm_baseurl: https://packages.microsoft.com/yumrepos/vscode

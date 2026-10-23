@@ -1,0 +1,27 @@
+---
+- name: Workstation | Detect image-based deployment
+  become: false
+  ansible.builtin.stat:
+    path: /run/ostree-booted
+  register: workstation_ostree_boot
+
+- name: Workstation | Reject unsupported host package management
+  ansible.builtin.assert:
+    that:
+      - not workstation_ostree_boot.stat.exists
+      - >-
+        (ansible_facts.os_family | default('') == 'Debian' and
+         ansible_facts.pkg_mgr | default('') == 'apt') or
+        (ansible_facts.os_family | default('') == 'RedHat' and
+         ansible_facts.distribution | default('') == 'Fedora' and
+         ansible_facts.pkg_mgr | default('') in ['dnf', 'dnf5'])
+      - ansible_facts.service_mgr | default('') == 'systemd'
+    fail_msg: >-
+      Workstation supports Debian/Ubuntu/LMDE with APT and conventional Fedora
+      Desktop/KDE with DNF and systemd. Atomic/image-based hosts (including
+      Bazzite, Silverblue and Kinoite) and other Fedora derivatives are unsupported;
+      no host packages have been installed.
+
+- name: Workstation | Select platform package configuration
+  ansible.builtin.set_fact:
+    workstation_platform: "{{ 'debian' if ansible_facts.os_family == 'Debian' else 'fedora' }}"

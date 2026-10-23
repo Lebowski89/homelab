@@ -22,7 +22,16 @@ DESKTOP_TASKS_PATH = ROLE_PATH / "tasks/desktop.yml"
 VSCODE_TASKS_PATH = ROLE_PATH / "tasks/vscode.yml"
 STANDALONE_PLAYBOOK_PATH = REPO_ROOT / "ansible/workstation.yml"
 BOOTSTRAP_SCRIPT_PATH = REPO_ROOT / "scripts/bootstrap-workstation.sh"
-ANSIBLE_PLAYBOOK = shutil.which("ansible-playbook") or shutil.which(str(Path(sys.executable).with_name("ansible-playbook")))
+ANSIBLE_PLAYBOOK = shutil.which(str(Path(sys.executable).with_name("ansible-playbook")))
+
+TOOL_TAGS = {
+    "workstation_tools",
+    "workstation_repository",
+    "workstation_ansible",
+    "workstation_collections",
+    "workstation_skynet",
+    "workstation_opentofu",
+}
 
 WORKSTATION_TAGS = {
     "workstation",
@@ -47,7 +56,7 @@ def test_main_playbook_dispatches_workstation_role_from_inventory_group():
     assert play["become"] is True
     assert include["ansible.builtin.include_role"]["name"] == "workstation"
     assert include["when"] == "'tags_workstation' in group_names"
-    assert set(include["tags"]) == WORKSTATION_TAGS
+    assert set(include["tags"]) == WORKSTATION_TAGS | TOOL_TAGS
     assert include["ansible.builtin.include_role"]["apply"]["tags"] == ["workstation"]
     assert "blacktop" not in str(include)
 
@@ -64,7 +73,7 @@ def test_ubuntu_role_remains_explicitly_ubuntu_only():
 
 
 def test_workstation_dynamic_includes_propagate_their_selection_tags():
-    tasks = load_yaml(MAIN_TASKS_PATH)
+    tasks = [task for task in load_yaml(MAIN_TASKS_PATH) if task["name"] != "Workstation | Configure automation tooling"]
 
     for task in tasks:
         include = task["ansible.builtin.include_tasks"]
@@ -77,7 +86,7 @@ def test_workstation_dynamic_includes_propagate_their_selection_tags():
     assert set(validation["tags"]) == WORKSTATION_TAGS
 
     expected_sections = {
-        "workstation_apt": "apt.yml",
+        "workstation_apt": "packages.yml",
         "workstation_dev": "development.yml",
         "workstation_vscode": "vscode.yml",
         "workstation_shell": "shell.yml",
@@ -88,13 +97,12 @@ def test_workstation_dynamic_includes_propagate_their_selection_tags():
         assert selected_files == {"validate.yml", task_file}
 
 
-def test_workstation_platform_guard_is_debian_family_apt_and_systemd():
-    validation = load_yaml(VALIDATE_TASKS_PATH)
-    platform_assert = validation[0]["ansible.builtin.assert"]["that"]
-
-    assert 'ansible_facts.os_family | default("") == "Debian"' in platform_assert
-    assert 'ansible_facts.pkg_mgr | default("") == "apt"' in platform_assert
-    assert 'ansible_facts.service_mgr | default("") == "systemd"' in platform_assert
+def test_workstation_entries_share_the_platform_guard():
+    for entry in ("validate.yml", "tools/validate_tools.yml", "tools/opentofu.yml", "vscode.yml"):
+        tasks = load_yaml(ROLE_PATH / "tasks" / entry)
+        assert (ROLE_PATH / "tasks" / entry).parent.joinpath(
+            tasks[0]["ansible.builtin.import_tasks"]
+        ).resolve() == ROLE_PATH / "tasks/platform.yml"
 
 
 def test_workstation_user_is_resolved_from_remote_inventory_identity():
@@ -188,29 +196,18 @@ def test_workstation_user_path_validation_rejects_invalid_entries(tmp_path: Path
     assert "Workstation user paths must be lists of non-empty absolute path strings." in result.stdout + result.stderr
 
 
-def test_workstation_no_longer_provisions_a_local_ansible_controller():
-    defaults = DEFAULTS_PATH.read_text()
-    role_source = "\n".join(path.read_text() for path in ROLE_PATH.rglob("*.yml"))
-
-    for obsolete in (
-        "workstation_ansible_venv_enabled",
-        "workstation_ansible_venv_path",
-        "workstation_ansible_requirements_path",
-        "workstation_ansible_collections_requirements_path",
-        "workstation_ansible_collections_path",
-        "ansible-galaxy",
-        "ansible.builtin.pip",
-        "playbook_dir",
-    ):
-        assert obsolete not in defaults
-        assert obsolete not in role_source
-
+def test_workstation_tooling_is_opt_in_and_isolated_from_development_baseline():
+    defaults = load_yaml(DEFAULTS_PATH)
+    assert defaults["workstation_tools_enabled"] is False
+    assert defaults["workstation_repository_clone"] is False
+    assert defaults["workstation_opentofu_enabled"] is False
     development = load_yaml(DEVELOPMENT_TASKS_PATH)
     assert [task["name"] for task in development] == [
         "Workstation Development | Install development packages",
         "Workstation Development | Manage Git identity block",
     ]
-    assert not STANDALONE_PLAYBOOK_PATH.exists()
+    standalone = load_yaml(STANDALONE_PLAYBOOK_PATH)
+    assert standalone[0]["roles"] == ["workstation"]
     assert not BOOTSTRAP_SCRIPT_PATH.exists()
 
 
@@ -224,10 +221,11 @@ def test_workstation_does_not_manage_server_networking_or_ssh_state():
 
 
 def test_vscode_uses_microsoft_apt_repository_and_user_extensions():
-    tasks = load_yaml(VSCODE_TASKS_PATH)
-    source_task = next(task for task in tasks if task["name"].endswith("Configure Microsoft repository"))
-    install_task = next(task for task in tasks if task["name"].endswith("Install Visual Studio Code"))
-    extension_task = next(task for task in tasks if task["name"].endswith("Install configured extensions"))
+    tasks = load_yaml(ROLE_PATH / "tasks/debian/vscode.yml")
+    common = load_yaml(VSCODE_TASKS_PATH)
+    source_task = next(task for task in tasks if "ansible.builtin.copy" in task)
+    install_task = next(task for task in tasks if task.get("ansible.builtin.apt", {}).get("name") == "code")
+    extension_task = next(task for task in common if "--install-extension" in task.get("ansible.builtin.command", {}).get("argv", []))
 
     source = source_task["ansible.builtin.copy"]["content"]
     assert "https://packages.microsoft.com/repos/code" in source
@@ -252,7 +250,7 @@ def test_workstation_directory_tasks_preserve_existing_permissions():
 
 @pytest.mark.integration
 @pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
-@pytest.mark.parametrize("tag", sorted(WORKSTATION_TAGS))
+@pytest.mark.parametrize("tag", sorted(WORKSTATION_TAGS | TOOL_TAGS))
 def test_main_playbook_accepts_each_workstation_tag_with_synthetic_inventory(tmp_path: Path, tag: str):
     inventory = tmp_path / "inventory.ini"
     inventory.write_text(
@@ -284,3 +282,260 @@ blacktop
     assert result.returncode == 0, result.stderr
     assert "Include Workstation role" in result.stdout
     assert tag in result.stdout
+
+
+# Real Ansible dispatch with controller-side fake operations. These fixtures never
+# invoke host package managers, downloads, sudo, user executables or services.
+@pytest.fixture
+def workstation_run(tmp_path):
+    import json
+
+    copied = tmp_path / "roles/workstation"
+    shutil.copytree(ROLE_PATH, copied)
+    operations = {
+        "apt",
+        "dnf",
+        "get_url",
+        "rpm_key",
+        "yum_repository",
+        "apt_repository",
+        "copy",
+        "file",
+        "template",
+        "command",
+        "pip",
+        "git",
+        "blockinfile",
+        "stat",
+        "getent",
+    }
+
+    def instrument(tasks):
+        for task in tasks:
+            for branch in ("block", "rescue", "always"):
+                instrument(task.get(branch, []))
+            for module in operations:
+                key = f"ansible.builtin.{module}"
+                if key in task:
+                    task["fixture_operation"] = {"module": module, "options": task.pop(key)}
+
+    for path in (copied / "tasks").rglob("*.yml"):
+        tasks = load_yaml(path)
+        instrument(tasks)
+        path.write_text(yaml.safe_dump(tasks, sort_keys=False))
+    plugins = tmp_path / "action_plugins"
+    plugins.mkdir()
+    (plugins / "fixture_operation.py").write_text(
+        """from ansible.plugins.action import ActionBase
+import json
+class ActionModule(ActionBase):
+    def run(self, tmp=None, task_vars=None):
+        module = self._task.args['module']
+        options = self._task.args['options']
+        with open(task_vars['fixture_record'], 'a') as output:
+            output.write(json.dumps({'module': module, 'options': options,
+                                     'user': self._play_context.become_user}, default=str) + '\\n')
+        result = {'changed': False, 'rc': 0, 'stdout': '', 'stdout_lines': []}
+        if module == 'stat':
+            result['stat'] = {'exists': task_vars['fixture_ostree'] if options['path'] == '/run/ostree-booted' else True,
+                              'isreg': True}
+        elif module == 'getent':
+            result['ansible_facts'] = {'getent_passwd': task_vars['fixture_passwd']}
+        elif module == 'command' and 'argv' in options:
+            program = str(options['argv'])
+            result['stdout'] = '/fixture/home/venv/lib64/python3.13/site-packages' if 'sysconfig' in program else 'python3.13'
+        return result
+"""
+    )
+    cfg = tmp_path / "ansible.cfg"
+    cfg.write_text(f"[defaults]\naction_plugins = {plugins}\nhost_key_checking = True\n")
+    record = tmp_path / "operations.jsonl"
+
+    def run(*, fedora=False, tags="workstation", overrides=None, ostree=False, check=False):
+        facts = {
+            "distribution": "Fedora" if fedora else "Debian",
+            "os_family": "RedHat" if fedora else "Debian",
+            "pkg_mgr": "dnf5" if fedora else "apt",
+            "service_mgr": "systemd",
+            "getent_passwd": {"fixture": ["x", "1001", "1001", "", "/fixture/home", "/bin/bash"]},
+        }
+        variables = {
+            "ansible_user": "fixture",
+            "ansible_facts": facts,
+            "fixture_passwd": facts["getent_passwd"],
+            "fixture_record": str(record),
+            "fixture_ostree": ostree,
+            "workstation_tools_enabled": True,
+            "workstation_opentofu_enabled": True,
+        }
+        variables.update(overrides or {})
+        play = tmp_path / "play.yml"
+        play.write_text(
+            yaml.safe_dump(
+                [{"hosts": "localhost", "connection": "local", "gather_facts": False, "vars": variables, "roles": ["workstation"]}]
+            )
+        )
+        args = [ANSIBLE_PLAYBOOK, "-i", "localhost,", str(play), "--tags", tags]
+        if check:
+            args.append("--check")
+        result = subprocess.run(
+            args,
+            env={**os.environ, "ANSIBLE_CONFIG": str(cfg), "ANSIBLE_LOCAL_TEMP": str(tmp_path / "local")},
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        calls = [json.loads(line) for line in record.read_text().splitlines()] if record.exists() else []
+        return result, calls
+
+    return run
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("fedora", [False, True])
+def test_effective_platform_packages_and_shared_user_configuration(workstation_run, fedora):
+    result, calls = workstation_run(
+        fedora=fedora,
+        overrides={
+            "workstation_packages": ["fixture-host-package"],
+            "workstation_git_manage_config": True,
+            "workstation_git_user_name": "Fixture User",
+            "workstation_git_user_email": "fixture@example.test",
+        },
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    manager = "dnf" if fedora else "apt"
+    installs = [call["options"] for call in calls if call["module"] == manager]
+    assert any(options["name"] == ["fixture-host-package"] for options in installs)
+    assert all(options["state"] == "present" and options["name"] != ["*"] for options in installs)
+    assert not any(call["module"] == ("apt" if fedora else "dnf") for call in calls)
+    names = {name for options in installs for name in options["name"]}
+    assert ("python3-devel" in names) is fedora
+    assert ("python3-venv" in names) is not fedora
+    assert not ({"python3-apt", "build-essential", "python3-dev"} & names) if fedora else True
+    git = next(call for call in calls if call["module"] == "blockinfile")
+    assert git["user"] == "fixture"
+    assert git["options"]["path"] == "/fixture/home/.gitconfig"
+    pip = [call for call in calls if call["module"] == "pip"]
+    assert any(call["options"].get("requirements", "").endswith("/ansible/requirements.txt") for call in pip)
+    assert any(call["module"] == "command" and "collection" in call["options"].get("argv", []) for call in calls)
+    assert not any("proxmox" in str(call).lower() for call in calls)
+    rpm_repos = [call["options"] for call in calls if call["module"] == "yum_repository"]
+    if fedora:
+        assert {repo["name"] for repo in rpm_repos} == {"code", "opentofu"}
+        assert all(repo["gpgcheck"] and repo["sslverify"] for repo in rpm_repos)
+    else:
+        assert not rpm_repos
+        source = next(
+            call["options"]["content"] for call in calls if call["module"] == "copy" and "Types: deb" in call["options"].get("content", "")
+        )
+        assert "Signed-By:" in source
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "tag",
+    [
+        "workstation_apt",
+        "workstation_dev",
+        "workstation_desktop",
+        "workstation_vscode",
+        "workstation_ansible",
+        "workstation_collections",
+        "workstation_opentofu",
+    ],
+)
+@pytest.mark.parametrize("fedora", [False, True])
+def test_platform_selection_survives_granular_dynamic_tags(workstation_run, tag, fedora):
+    result, calls = workstation_run(fedora=fedora, tags=tag)
+    assert result.returncode == 0, result.stdout + result.stderr
+    packages = [call for call in calls if call["module"] in {"apt", "dnf"}]
+    if tag != "workstation_collections":
+        assert packages
+        assert {call["module"] for call in packages} == {"dnf" if fedora else "apt"}
+        if tag == "workstation_apt":
+            names = {name for call in packages for name in call["options"]["name"]}
+            assert ("openssh-clients" in names) is fedora
+            assert ("openssh-client" in names) is not fedora
+    else:
+        assert not packages
+        assert any(call["module"] == "command" and "collection" in call["options"].get("argv", []) for call in calls)
+    if tag != "workstation_vscode":
+        assert not any(call["module"] == "yum_repository" and call["options"].get("name") == "code" for call in calls)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "facts, ostree",
+    [
+        ({"os_family": "RedHat", "distribution": "Fedora", "pkg_mgr": "dnf5", "service_mgr": "systemd"}, True),
+        ({"os_family": "RedHat", "distribution": "Bazzite", "pkg_mgr": "dnf5", "service_mgr": "systemd"}, False),
+        ({"os_family": "RedHat", "distribution": "Fedora", "pkg_mgr": "atomic_container", "service_mgr": "systemd"}, False),
+        ({"os_family": "RedHat", "distribution": "Nobara", "pkg_mgr": "dnf", "service_mgr": "systemd"}, False),
+    ],
+)
+@pytest.mark.parametrize("tag", ["workstation", "workstation_ansible", "workstation_opentofu"])
+def test_unsupported_platform_is_rejected_before_mutation(workstation_run, facts, ostree, tag):
+    result, calls = workstation_run(fedora=True, tags=tag, overrides={"ansible_facts": facts}, ostree=ostree)
+    assert result.returncode != 0
+    assert calls and all(call["module"] == "stat" for call in calls)
+    assert "unsupported" in result.stdout.lower()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("fedora", [False, True])
+def test_check_mode_never_calls_external_installers(workstation_run, fedora):
+    result, calls = workstation_run(fedora=fedora, check=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not any(
+        call["module"] in {"apt", "dnf", "get_url", "rpm_key", "yum_repository", "apt_repository", "pip", "command", "git"}
+        for call in calls
+    )
+    assert "Would install" in result.stdout
+    assert "Would ensure" in result.stdout
+
+
+@pytest.mark.integration
+def test_host_feature_toggles_skip_installers(workstation_run):
+    result, calls = workstation_run(
+        fedora=True,
+        overrides={
+            "workstation_vscode_enabled": False,
+            "workstation_opentofu_enabled": False,
+            "workstation_ansible_enabled": False,
+            "workstation_ansible_collections_enabled": False,
+        },
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not any(call["module"] in {"get_url", "rpm_key", "yum_repository", "apt_repository", "pip", "command"} for call in calls)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "distribution, family, manager",
+    [
+        ("Ubuntu", "Debian", "apt"),
+        ("Linux Mint", "Debian", "apt"),
+        ("Fedora", "RedHat", "dnf"),
+    ],
+)
+def test_supported_distribution_facts_choose_the_matching_backend(workstation_run, distribution, family, manager):
+    result, calls = workstation_run(
+        tags="workstation_ansible",
+        overrides={
+            "ansible_facts": {"distribution": distribution, "os_family": family, "pkg_mgr": manager, "service_mgr": "systemd"},
+        },
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    packages = [call for call in calls if call["module"] in {"apt", "dnf"}]
+    assert packages and {call["module"] for call in packages} == {manager}
+    if manager == "dnf":
+        assert all(call["options"]["use_backend"] == "dnf" for call in packages)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("selection, accepted", [([], True), (["*"], False), ([True], False)])
+def test_package_selection_cannot_become_a_distribution_upgrade(workstation_run, selection, accepted):
+    result, calls = workstation_run(tags="workstation_apt", overrides={"workstation_packages": selection})
+    assert (result.returncode == 0) is accepted
+    assert not any(call["module"] in {"apt", "dnf"} for call in calls)

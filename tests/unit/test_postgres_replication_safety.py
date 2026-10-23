@@ -14,7 +14,7 @@ FILTER_PATH = POSTGRES_ROLE / "filter_plugins/patroni.py"
 PATRONI_TEMPLATE_PATH = POSTGRES_ROLE / "templates/patroni.yml.j2"
 MAIN_TASKS_PATH = POSTGRES_ROLE / "tasks/main.yml"
 RECONCILE_TASKS_PATH = POSTGRES_ROLE / "tasks/sub_tasks/admin/replication_safety.yml"
-SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
+SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/workstation/templates/skynet.j2"
 RULES_PATH = REPO_ROOT / "ansible/roles/service_common/templates/configs/prometheus/rules/availability.yml.j2"
 DASHBOARD_PATH = REPO_ROOT / "ansible/roles/service_common/templates/configs/grafana/dashboards/homelab-availability.json.j2"
 

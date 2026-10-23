@@ -397,7 +397,12 @@ def project(services=SERVICES):
     loader = DataLoader()
     inventory = InventoryManager(loader=loader, sources=[str(REPO / "ansible/netbox.yml")])
     defaults = loader.load_from_file(str(REPO / "ansible/group_vars/all/services.yml"))
-    group = inventory.groups.get(defaults["services_controller_inventory_group"])
+    # Resolve only inventory group names. Do not template host credentials or service inputs.
+    selector = Templar(
+        loader=loader, variables={"groups": {name: [host.name for host in group.hosts] for name, group in inventory.groups.items()}}
+    )
+    controller_group = selector.template(trust_as_template(defaults["services_controller_inventory_group"]))
+    group = inventory.groups.get(controller_group)
     if group is None or len(group.hosts) != 1:
         raise ValueError("require exactly one inventory controller")
     host = group.hosts[0]

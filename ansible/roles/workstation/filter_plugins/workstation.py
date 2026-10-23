@@ -1,4 +1,4 @@
-"""Classify Ansible virtualenv recovery for the Ubuntu role.
+"""Classify Ansible virtualenv recovery for the workstation role.
 
 The role feeds stat and interpreter-probe results into this filter before it
 chooses whether to preserve, create, or recreate its managed virtualenv.
@@ -24,12 +24,12 @@ def _abi(value: Any, *, name: str) -> str:
     return value.strip()
 
 
-def ubuntu_venv_recovery_action(status: Any) -> str:
+def workstation_venv_recovery_action(status: Any) -> str:
     """Return the required recovery action for a managed virtualenv.
 
     Args:
         status: Mapping containing ``python_exists``, ``site_packages_exists``,
-            ``probe_rc``, ``probe_abi``, and ``controller_abi`` probe results.
+            ``probe_rc``, ``probe_abi``, and ``system_abi`` probe results.
 
     Returns:
         ``create`` when no interpreter exists, ``recreate`` when the probe or
@@ -44,7 +44,7 @@ def ubuntu_venv_recovery_action(status: Any) -> str:
     if not isinstance(status, Mapping):
         raise AnsibleFilterError("virtualenv recovery status must be a mapping")
     python_exists = _boolean(status.get("python_exists"), name="python_exists")
-    _abi(status.get("controller_abi"), name="controller_abi")
+    _abi(status.get("system_abi"), name="system_abi")
     if not python_exists:
         return "create"
 
@@ -59,13 +59,13 @@ def ubuntu_venv_recovery_action(status: Any) -> str:
         return "recreate"
 
     probe_abi = _abi(status.get("probe_abi"), name="probe_abi")
-    controller_abi = _abi(status.get("controller_abi"), name="controller_abi")
-    return "preserve" if probe_abi == controller_abi else "recreate"
+    system_abi = _abi(status.get("system_abi"), name="system_abi")
+    return "preserve" if probe_abi == system_abi else "recreate"
 
 
 class FilterModule:
-    """Register Ubuntu virtualenv recovery filters with Ansible."""
+    """Register workstation virtualenv recovery filters with Ansible."""
 
     def filters(self) -> dict[str, Any]:
         """Return the virtualenv recovery filter mapping."""
-        return {"ubuntu_venv_recovery_action": ubuntu_venv_recovery_action}
+        return {"workstation_venv_recovery_action": workstation_venv_recovery_action}

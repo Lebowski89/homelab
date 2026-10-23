@@ -1,0 +1,8 @@
+---
+- name: Workstation DNF | Install selected packages
+  become: true
+  ansible.builtin.dnf:
+    name: "{{ workstation_package_selection | default(workstation_packages) }}"
+    state: present
+    update_cache: "{{ workstation_dnf_update_cache }}"
+    use_backend: "{{ ansible_facts.pkg_mgr }}"

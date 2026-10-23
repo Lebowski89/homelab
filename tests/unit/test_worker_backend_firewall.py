@@ -439,12 +439,12 @@ def test_verified_ipv6_override_and_reply_local_unrelated_paths_are_preserved():
     ],
 )
 def test_skynet_routes_firewall_only_to_isolated_playbook(tmp_path, argv, tag, check):
-    defaults = yaml.safe_load((ROOT / "ansible/roles/ubuntu/defaults/main.yml").read_text())
+    defaults = yaml.safe_load((ROOT / "ansible/roles/workstation/defaults/main.yml").read_text())
     variables = {key: str(tmp_path / key) for key in defaults}
-    variables["ubuntu_ansible_path"] = str(tmp_path / "ansible")
+    variables["workstation_ansible_path"] = str(tmp_path / "ansible")
     rendered = (
         Environment(undefined=StrictUndefined)
-        .from_string((ROOT / "ansible/roles/ubuntu/templates/skynet.j2").read_text())
+        .from_string((ROOT / "ansible/roles/workstation/templates/skynet.j2").read_text())
         .render(**variables)
     )
     wrapper = tmp_path / "skynet"
@@ -914,13 +914,13 @@ def test_documented_firewall_commands_forward_private_inputs_and_distinguish_aud
     """Run the actual guide's commands through the real wrapper, with inert Ansible."""
     import shlex
 
-    defaults = yaml.safe_load((ROOT / "ansible/roles/ubuntu/defaults/main.yml").read_text())
+    defaults = yaml.safe_load((ROOT / "ansible/roles/workstation/defaults/main.yml").read_text())
     variables = {key: str(tmp_path / key) for key in defaults}
-    variables["ubuntu_ansible_path"] = str(tmp_path / "ansible")
+    variables["workstation_ansible_path"] = str(tmp_path / "ansible")
     wrapper = tmp_path / "skynet"
     wrapper.write_text(
         Environment(undefined=StrictUndefined)
-        .from_string((ROOT / "ansible/roles/ubuntu/templates/skynet.j2").read_text())
+        .from_string((ROOT / "ansible/roles/workstation/templates/skynet.j2").read_text())
         .render(**variables)
     )
     recorder = tmp_path / "ansible-recorder"

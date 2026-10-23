@@ -208,7 +208,7 @@ def test_postgres_exporter_role_is_checksum_pinned_unprivileged_and_secret_safe(
     assert postgres_vault_sample["postgres_monitor_role_pass"] == "replace-me"
     assert "INHERIT" in monitor_tasks
     assert "NOINHERIT" not in monitor_tasks
-    skynet = (REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2").read_text()
+    skynet = (REPO_ROOT / "ansible/roles/workstation/templates/skynet.j2").read_text()
     assert 'postgres:admin-monitor)         echo "postgres_admin_monitor"' in skynet
     exporter_tags = "postgres_admin_monitor,postgres_exporter"
     for action in ("deploy", "install", "run"):

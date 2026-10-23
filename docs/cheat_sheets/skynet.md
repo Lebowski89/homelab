@@ -4,7 +4,11 @@
 
 It standardises how the homelab playbook is executed by wrapping `ansible-playbook`, `ansible-lint`, `yamllint`, `ruff`, inventory checks, vault/become password files, and common role/service tags behind a simpler command interface.
 
-The wrapper is installed on the Ansible manager host and is mainly intended to be run from the management VM.
+The existing workstation role installs the wrapper for an operator user. It
+runs Ansible locally and connects directly to managed hosts; mgt remains the
+application host. Existing mgt tooling is retained during acceptance. See the
+[workstation transition](../workstation-transition.md) and
+[workstation paths and tags](../workstation.md).
 
 For firewall profiles, explicit manual operations and retained compatibility
 paths, see [service firewall operations](../service-firewall.md). Ordinary
@@ -791,7 +795,7 @@ For smaller task-level actions, use more specific tags:
 Open the `skynet` wrapper template:
 
 ```text
-ansible/roles/ubuntu/templates/skynet.j2
+ansible/roles/workstation/templates/skynet.j2
 ```
 
 Find the `role_tag()` function.

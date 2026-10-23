@@ -164,8 +164,14 @@ def test_repository_service_host_contract_uses_real_netbox_groups_and_explicit_p
     inventory = yaml.safe_load((REPO_ROOT / "ansible/netbox.yml.sample").read_text())
     netbox_locals = (REPO_ROOT / "terraform/netbox/locals.tf").read_text()
 
+    group_expression = variables.pop("services_controller_inventory_group")
+    for groups, expected in (
+        ({"tags_ansible_manager": ["mgt"], "tags_workstation": ["blacktop", "second"]}, "tags_ansible_manager"),
+        ({"tags_service_controller": ["mgt"], "tags_workstation": ["blacktop", "second"]}, "tags_service_controller"),
+        ({"tags_service_controller": [], "tags_ansible_manager": ["mgt"]}, "tags_service_controller"),
+    ):
+        assert NativeEnvironment().from_string(group_expression).render(groups=groups) == expected
     assert variables == {
-        "services_controller_inventory_group": "tags_ansible_manager",
         "services_storage_inventory_group": "device_roles_storage",
         "services_plex_host": "plex",
         "services_log_root": "/var/log/skynet",

@@ -1,0 +1,5 @@
+---
+# Identity and addresses remain NetBox-owned. workstation_user defaults to ansible_user.
+workstation_tools_enabled: true
+workstation_repository_path: "{{ workstation_user_home }}/src/homelab"
+# Use an existing checkout/worktree. Cloning and OpenTofu installation are opt-in.

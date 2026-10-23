@@ -1,7 +1,6 @@
 ---
 
-ansible_connection: local
-ansible_python_interpreter: /opt/ansible/ansible-venv/bin/python
+# Legacy tooling eligibility only. Never override SSH transport based on a tag.
 
 ubuntu_apt_package_profiles_ansible_manager:
   - admin

@@ -1,0 +1,17 @@
+---
+
+- name: Workstation Ansible | Assert requirements.txt exists
+  ansible.builtin.stat:
+    path: "{{ workstation_ansible_path }}/requirements.txt"
+  register: workstation_ansible_requirements_txt
+
+- name: Workstation Ansible | Fail if requirements.txt is missing
+  ansible.builtin.fail:
+    msg: "Missing requirements.txt at {{ workstation_ansible_path }}/requirements.txt"
+  when: not workstation_ansible_requirements_txt.stat.exists
+
+- name: Workstation Ansible | Install Python packages from requirements.txt
+  ansible.builtin.pip:
+    requirements: "{{ workstation_ansible_path }}/requirements.txt"
+    state: present
+    virtualenv: "{{ workstation_ansible_venv_path }}"

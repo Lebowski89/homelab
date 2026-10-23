@@ -1,13 +1,9 @@
 ---
 
 - name: Workstation Development | Install development packages
-  when: workstation_dev_packages | length > 0
-  become: true
-  ansible.builtin.apt:
-    name: "{{ workstation_dev_packages }}"
-    state: present
-    update_cache: "{{ workstation_apt_update_cache }}"
-    cache_valid_time: 3600
+  ansible.builtin.include_tasks: packages.yml
+  vars:
+    workstation_package_selection: "{{ workstation_dev_packages }}"
 
 - name: Workstation Development | Manage Git identity block
   when: workstation_git_manage_config

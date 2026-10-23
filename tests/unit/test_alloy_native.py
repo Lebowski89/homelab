@@ -5,7 +5,7 @@ import yaml
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROLE_DIR = REPO_ROOT / "ansible/roles/alloy_native"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
-SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/ubuntu/templates/skynet.j2"
+SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/workstation/templates/skynet.j2"
 
 
 def task_named(tasks, name: str):

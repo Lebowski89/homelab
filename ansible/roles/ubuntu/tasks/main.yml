@@ -30,53 +30,33 @@
     - postgres_backup_setup
     - postgres_backup_run
 
-- name: Ubuntu | Clone Homelab repo
+- name: Ubuntu | Manage workstation tooling
   when: "'tags_ansible_manager' in group_names"
-  ansible.builtin.include_tasks:
-    file: sub_tasks/repo.yml
+  ansible.builtin.include_role:
+    name: workstation
+    tasks_from: tools
     apply:
-      tags:
-        - ubuntu
-        - ubuntu_repo
-  tags:
-    - ubuntu
-    - ubuntu_repo
-
-- name: Ubuntu | Setup Python venv
-  when: "'tags_ansible_manager' in group_names"
-  ansible.builtin.include_tasks:
-    file: sub_tasks/venv.yml
-    apply:
-      tags:
-        - ubuntu
-        - ubuntu_venv
-  tags:
-    - ubuntu
-    - ubuntu_venv
-
-- name: Ubuntu | Install required collections
-  when: "'tags_ansible_manager' in group_names"
-  ansible.builtin.include_tasks:
-    file: sub_tasks/requirements.yml
-    apply:
-      tags:
-        - ubuntu
-        - ubuntu_requirements
-  tags:
-    - ubuntu
-    - ubuntu_requirements
-
-- name: Ubuntu | Install Skynet wrapper
-  when: "'tags_ansible_manager' in group_names"
-  ansible.builtin.include_tasks:
-    file: sub_tasks/skynet.yml
-    apply:
-      tags:
-        - ubuntu
-        - ubuntu_skynet
-  tags:
-    - ubuntu
-    - ubuntu_skynet
+      tags: [ubuntu]
+  vars:
+    workstation_user: "{{ ubuntu_ansible_owner | default(ansible_user) }}"
+    workstation_tools_enabled: true
+    workstation_repository_path: "{{ ubuntu_ansible_repo_path }}"
+    workstation_ansible_tools_path: "{{ ubuntu_ansible_opt_path }}"
+    workstation_ansible_venv_path: "{{ ubuntu_ansible_venv_path }}"
+    workstation_secrets_path: "{{ ubuntu_ansible_secrets_path }}"
+    workstation_become_pass_file: "{{ ubuntu_ansible_become_pass_file }}"
+    workstation_vault_pass_file: "{{ ubuntu_ansible_vault_pass_file }}"
+    workstation_ansible_collections_path: "{{ ubuntu_ansible_path }}/collections"
+    workstation_ansible_log_path: "{{ ubuntu_ansible_opt_path }}/ansible.log"
+    workstation_repository_clone: "{{ ubuntu_manage_repo_clone }}"
+    workstation_repository_url: "{{ ubuntu_repo_url }}"
+    workstation_repository_version: "{{ ubuntu_repo_version }}"
+    workstation_skynet_enabled: "{{ ubuntu_skynet_install }}"
+    workstation_skynet_install_path: "{{ ubuntu_skynet_install_path }}"
+    workstation_skynet_owner: root
+    workstation_skynet_group: root
+    workstation_skynet_doctor_ping_target: "{{ ubuntu_skynet_doctor_ping_target }}"
+  tags: [ubuntu, ubuntu_repo, ubuntu_venv, ubuntu_requirements, ubuntu_skynet]
 
 - name: Ubuntu | Tune sysctl settings
   when: ubuntu_sysctl_enabled | default(true) | bool
