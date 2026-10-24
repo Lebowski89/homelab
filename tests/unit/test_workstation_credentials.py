@@ -18,6 +18,7 @@ import sys
 import termios
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -32,6 +33,27 @@ SPEC.loader.exec_module(FILES)
 VAULT = "NONPRODUCTION-existing-vault-pass"
 BECOME = "NONPRODUCTION-managed-sudo-pass"
 LOCAL = "NONPRODUCTION-local-provisioning-pass"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("tmp", [None, "/unused-legacy-action-tmp"])
+def test_action_accepts_legacy_tmp_without_forwarding_it(monkeypatch, tmp):
+    from ansible.plugins.action import ActionBase
+
+    spec = importlib.util.spec_from_file_location("credential_action", ROLE / "action_plugins/workstation_credentials.py")
+    action_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(action_module)
+    action = object.__new__(action_module.ActionModule)
+    action._task = SimpleNamespace(args={}, check_mode=True)
+    variables = {"synthetic": True}
+
+    def base_run(self, *, task_vars):
+        assert task_vars is variables
+        return {}
+
+    monkeypatch.setattr(ActionBase, "run", base_run)
+    monkeypatch.setattr(action, "_execute_module", lambda **kwargs: {"changed": True, "missing": ["vault", "become"]})
+    assert action.run(tmp, variables) == {"changed": True, "missing": ["vault", "become"], "created": []}
 
 
 @pytest.fixture

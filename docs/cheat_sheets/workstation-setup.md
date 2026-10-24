@@ -152,6 +152,10 @@ ansible --version
 ```
 
 Skynet uses that venv automatically. OpenTofu (`tofu`) is a system package.
+On Debian/LMDE, the role installs `python3-debian` and manages OpenTofu's APT
+repository in deb822 `.sources` format using both existing signing keys. It removes
+the previously managed entry from the corresponding `.list` file, preserves any
+unrelated entries there, and refreshes APT after repository changes.
 
 Before remote management, privately configure `ansible/netbox.yml`, the required
 encrypted Vault inputs, verified SSH access and the password-file paths under

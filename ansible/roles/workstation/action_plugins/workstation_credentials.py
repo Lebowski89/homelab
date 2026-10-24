@@ -24,7 +24,7 @@ class ActionModule(ActionBase):
     _supports_check_mode = True
 
     def run(self, tmp=None, task_vars=None):
-        result = super().run(tmp, task_vars)
+        result = super().run(task_vars=task_vars)
         values = {}
         try:
             arguments = dict(self._task.args, operation="inspect")

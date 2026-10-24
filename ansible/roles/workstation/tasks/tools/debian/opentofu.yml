@@ -57,13 +57,30 @@
     mode: "0644"
 
 - name: Workstation OpenTofu | Add OpenTofu apt repository
-  ansible.builtin.apt_repository:
-    repo: >-
+  ansible.builtin.deb822_repository:
+    name: "{{ workstation_opentofu_repo_filename }}"
+    types: [deb]
+    uris: "{{ workstation_opentofu_source_url }}"
+    suites: "{{ workstation_opentofu_source_suite }}"
+    components: [main]
+    signed_by: "{{ workstation_opentofu_keyring_file }} {{ workstation_opentofu_keyring_file_repo }}"
+    mode: "0644"
+    state: present
+  register: workstation_opentofu_repository
+
+- name: Workstation OpenTofu | Remove the previous one-line repository entry
+  ansible.builtin.lineinfile:
+    path: "/etc/apt/sources.list.d/{{ workstation_opentofu_repo_filename }}.list"
+    line: >-
       deb [signed-by={{ workstation_opentofu_keyring_file }},{{ workstation_opentofu_keyring_file_repo }}]
       {{ workstation_opentofu_source_url }}
       {{ workstation_opentofu_source_suite }} main
-    filename: "{{ workstation_opentofu_repo_filename }}"
-    state: present
+    state: absent
+  register: workstation_opentofu_legacy_repository
+
+- name: Workstation OpenTofu | Refresh APT after repository changes
+  when: workstation_opentofu_repository.changed or workstation_opentofu_legacy_repository.changed
+  ansible.builtin.apt:
     update_cache: true
 
 - name: Workstation OpenTofu | Install OpenTofu packages
