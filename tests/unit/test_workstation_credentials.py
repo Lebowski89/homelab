@@ -72,11 +72,45 @@ def parameters(tmp_path):
     }
 
 
+@pytest.fixture
+def managed_home(parameters, tmp_path, monkeypatch):
+    home = tmp_path / "managed account/home"
+    home.mkdir(parents=True, mode=0o751)
+    account = pwd.getpwnam(parameters["owner"])
+    substitute = SimpleNamespace(pw_uid=account.pw_uid, pw_gid=account.pw_gid, pw_dir=str(home))
+    monkeypatch.setattr(FILES.pwd, "getpwnam", lambda owner: substitute)
+    return home
+
+
+def metadata(destination):
+    info = destination.stat()
+    return info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)
+
+
+@pytest.mark.parametrize("destination", ["root", "home", "ancestor"])
+@pytest.mark.parametrize("operation,check_mode", [("inspect", False), ("apply", True), ("apply", False)])
+def test_private_directory_rejects_home_root_and_ancestors_without_mutation(
+    parameters, managed_home, tmp_path, monkeypatch, destination, operation, check_mode
+):
+    parameters["directory"] = str({"root": Path("/"), "home": managed_home, "ancestor": managed_home.parent}[destination])
+    parameters["operation"] = operation
+    before = {entry: metadata(entry) for entry in (tmp_path, *tmp_path.rglob("*"))}
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("unsafe directory configurations must fail before filesystem mutation")
+
+    for name in ("mkdir", "fchown", "fchmod", "chown", "chmod", "link"):
+        monkeypatch.setattr(FILES.os, name, forbidden)
+    with pytest.raises(ValueError, match="root|home"):
+        FILES.configure(parameters, check_mode)
+    assert {entry: metadata(entry) for entry in (tmp_path, *tmp_path.rglob("*"))} == before
+
+
 def test_exclusive_creation_and_metadata_only_preservation(parameters, monkeypatch):
     result = FILES.configure(parameters, False)
     assert result["created"] == ["vault", "become"]
     directory = Path(parameters["directory"])
-    assert stat.S_IMODE(directory.stat().st_mode) == 0o700
+    assert metadata(directory) == (os.getuid(), os.getgid(), 0o700)
     before = {}
     for kind in ("vault", "become"):
         path = Path(parameters[kind + "_file"])
@@ -129,6 +163,14 @@ def test_unsafe_destinations_rejected_before_any_creation(parameters, tmp_path, 
     destination = Path(parameters[kind])
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.symlink_to(target)
+    if kind == "become_file":
+        # An invalid second destination must not even secure an existing first
+        # file or its dedicated directory during preflight validation.
+        first = Path(parameters["vault_file"])
+        first.write_text(VAULT + "\n")
+        first.chmod(0o640)
+        first.parent.chmod(0o750)
+        before = (metadata(first), metadata(first.parent))
     with pytest.raises(ValueError, match="Unsafe"):
         FILES.configure(parameters, False)
     assert target.read_text() == "NONPRODUCTION-do-not-touch"
@@ -136,6 +178,8 @@ def test_unsafe_destinations_rejected_before_any_creation(parameters, tmp_path, 
         assert not Path(parameters["become_file"]).exists()
     else:
         assert destination.is_symlink()
+        assert (metadata(first), metadata(first.parent)) == before
+        assert first.read_text() == VAULT + "\n"
 
 
 def test_check_mode_and_invalid_values_never_write(parameters):
@@ -161,13 +205,93 @@ def test_existing_unreadable_files_are_secured_without_content_access(parameters
 
 
 def test_separate_configured_password_parents_are_honored(parameters, tmp_path):
-    parameters["vault_file"] = str(tmp_path / "separate vault/password")
-    parameters["become_file"] = str(tmp_path / "separate sudo/password")
-    FILES.configure(parameters, False)
+    shared = tmp_path / "existing shared ancestor"
+    shared.mkdir(mode=0o755)
+    before = {entry: metadata(entry) for entry in (tmp_path, shared)}
+    parameters["vault_file"] = str(shared / "separate vault/nested/password")
+    parameters["become_file"] = str(shared / "separate sudo/password")
+    for operation, check_mode in (("inspect", False), ("apply", True)):
+        assert FILES.configure({**parameters, "operation": operation}, check_mode) == {
+            "changed": True,
+            "missing": ["vault", "become"],
+            "created": [],
+        }
+        assert list(shared.iterdir()) == []
+        assert not Path(parameters["directory"]).exists()
+        assert {entry: metadata(entry) for entry in before} == before
+    assert FILES.configure(parameters, False)["changed"]
     for kind in ("vault", "become"):
         target = Path(parameters[kind + "_file"])
         assert target.read_text() == parameters["values"][kind] + "\n"
-        assert stat.S_IMODE(target.parent.stat().st_mode) == 0o700
+    created = [Path(parameters["directory"]), *(entry for entry in shared.rglob("*") if entry.is_dir())]
+    assert all(metadata(entry) == (os.getuid(), os.getgid(), 0o700) for entry in created)
+    assert {entry: metadata(entry) for entry in before} == before
+    assert FILES.configure({**parameters, "values": {}}, False) == {"changed": False, "missing": [], "created": []}
+
+
+def test_existing_home_and_alternate_parents_keep_metadata_and_check_plan(parameters, managed_home, tmp_path, monkeypatch):
+    shared = tmp_path / "shared passwords"
+    shared.mkdir()
+    shared.chmod(0o775)
+    private = Path(parameters["directory"])
+    private.mkdir(mode=0o700)
+    parameters["vault_file"] = str(managed_home / "vault password")
+    parameters["become_file"] = str(shared / "sudo password")
+    parents = {entry: metadata(entry) for entry in (tmp_path, managed_home.parent, managed_home, shared)}
+    parent_ids = {(entry.stat().st_dev, entry.stat().st_ino) for entry in parents}
+    for name in ("fchown", "fchmod"):
+        original = getattr(FILES.os, name)
+
+        def protect_existing_parents(descriptor, *args, _original=original):
+            info = os.fstat(descriptor)
+            assert (info.st_dev, info.st_ino) not in parent_ids
+            return _original(descriptor, *args)
+
+        monkeypatch.setattr(FILES.os, name, protect_existing_parents)
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("inspection and check mode must never mutate the filesystem")
+
+    def plan(changed, missing):
+        before = {entry: metadata(entry) for entry in (private, *parents)}
+        files = {
+            entry: (metadata(entry), entry.stat().st_mtime_ns)
+            for entry in (managed_home / "vault password", shared / "sudo password")
+            if entry.exists()
+        }
+        for operation, check_mode in (("inspect", False), ("apply", True)):
+            with monkeypatch.context() as guard:
+                for name in ("mkdir", "fchown", "fchmod", "chown", "chmod", "link", "unlink"):
+                    guard.setattr(FILES.os, name, forbidden)
+                assert FILES.configure({**parameters, "operation": operation}, check_mode) == {
+                    "changed": changed,
+                    "missing": missing,
+                    "created": [],
+                }
+            assert {entry: metadata(entry) for entry in before} == before
+            for entry, snapshot in files.items():
+                assert (metadata(entry), entry.stat().st_mtime_ns) == snapshot
+            assert all(Path(parameters[kind + "_file"]).exists() == (kind not in missing) for kind in ("vault", "become"))
+
+    plan(True, ["vault", "become"])
+    assert FILES.configure(parameters, False) == {"changed": True, "missing": [], "created": ["vault", "become"]}
+    assert {entry: metadata(entry) for entry in parents} == parents
+    plan(False, [])
+    assert FILES.configure({**parameters, "values": {}}, False) == {"changed": False, "missing": [], "created": []}
+
+    # Check-mode metadata repairs must match apply without treating a shared
+    # parent's different mode as drift, before or after the repair.
+    private.chmod(0o750)
+    Path(parameters["vault_file"]).chmod(0o640)
+    plan(True, [])
+    assert FILES.configure({**parameters, "values": {}}, False)["changed"]
+    assert metadata(private) == (os.getuid(), os.getgid(), 0o700)
+    for kind in ("vault", "become"):
+        target = Path(parameters[kind + "_file"])
+        assert metadata(target) == (os.getuid(), os.getgid(), 0o600)
+        assert target.read_text() == parameters["values"][kind] + "\n"
+    assert {entry: metadata(entry) for entry in parents} == parents
+    plan(False, [])
 
 
 def test_explicit_selection_is_required_at_both_include_layers():

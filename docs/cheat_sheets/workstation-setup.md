@@ -130,11 +130,18 @@ Use Debian/LMDE or conventional Fedora Desktop/KDE, with Python 3.12 or newer.
      --tags workstation_credentials
    ```
 
-   Password files belong to the managed workstation user and use mode `0600`;
-   their private directories use `0700`. Existing regular files keep their
-   contents, even on reruns; setup secures their ownership and permissions without
-   reading them. Symlinks, directories at password-file destinations and hard
-   links are rejected. Rotation is a separate operation.
+   Password files belong to the managed workstation user and use mode `0600`.
+   The configured `workstation_secrets_path` is a dedicated private directory:
+   setup enforces its ownership and mode `0700`. It cannot be the filesystem
+   root, the managed user's home or an ancestor of that home. Password files
+   may use other configured locations, including directly under the user's home;
+   existing alternate parent directories keep their ownership and permissions.
+   Missing directories are created for the workstation user with mode `0700`,
+   without changing existing ancestor metadata. Inspect/check mode validates the
+   same paths and predicts these changes without writing. Existing regular files
+   keep their contents, even on reruns; setup secures their ownership and
+   permissions without reading them. Symlinks, directories at password-file
+   destinations and hard links are rejected. Rotation is a separate operation.
 
    Configure machine-specific locations in `ansible/host_vars/<hostname>.yml`
    through the existing `workstation_secrets_path`, `workstation_vault_pass_file`

@@ -18,12 +18,14 @@ short_description: Preserve or exclusively create workstation password files
 description:
   - Internal filesystem half of the workstation credential setup action.
   - Inspection never reads password contents and rejects symlinks in all path components.
-  - Existing regular files are never replaced. Files and directories are secured to their owner.
+  - Existing regular files are never replaced and use mode 0600.
+  - Only the configured private directory and newly created directories are secured to their owner with mode 0700.
+  - Existing alternate password-file parents retain their ownership and permissions.
 options:
   directory:
     type: path
     required: true
-    description: Configured private secrets directory.
+    description: Configured private secrets directory, excluding root, the managed user's home and its ancestors.
   vault_file:
     type: path
     required: true
@@ -111,12 +113,12 @@ def metadata_differs(info, uid, gid, mode):
     return (info.st_uid, info.st_gid, stat.S_IMODE(info.st_mode)) != (uid, gid, mode)
 
 
-def inspect(directories, files, uid, gid):
+def inspect(directories, files, uid, gid, private):
     changed = False
     missing = []
     for destination in directories:
         with directory_fd(destination) as descriptor:
-            changed |= descriptor is None or metadata_differs(os.fstat(descriptor), uid, gid, 0o700)
+            changed |= descriptor is None or (destination == private and metadata_differs(os.fstat(descriptor), uid, gid, 0o700))
     for kind, destination in files.items():
         with directory_fd(os.path.dirname(destination)) as descriptor:
             try:
@@ -175,13 +177,17 @@ def configure(parameters, check_mode):
         raise ValueError("Credential files require an existing non-root workstation account.")
     uid, gid = account.pw_uid, account.pw_gid
     private = path(parameters["directory"])
+    if os.path.commonpath((private, os.path.normpath(account.pw_dir))) == private:
+        raise ValueError("The private secrets directory cannot be the managed user's home or an ancestor of that home.")
     files = {kind: path(parameters[kind + "_file"]) for kind in ("vault", "become")}
     directories = sorted({private, *(path(os.path.dirname(value)) for value in files.values())})
     if len(set(files.values())) != 2 or any(
         directory == value or directory.startswith(value + "/") for directory in directories for value in files.values()
     ):
         raise ValueError("Vault and become destinations must be distinct files and cannot also be credential directories.")
-    changed, missing = inspect(directories, files, uid, gid)
+    # Validate every directory and both destinations before changing any metadata
+    # or publishing either password file.
+    changed, missing = inspect(directories, files, uid, gid, private)
     if check_mode or parameters["operation"] == "inspect":
         return {"changed": changed, "missing": missing, "created": []}
     values = parameters["values"]
@@ -195,7 +201,7 @@ def configure(parameters, check_mode):
     made_directories = []
     for destination in directories:
         with directory_fd(destination, create=True, uid=uid, gid=gid, created=made_directories) as descriptor:
-            if metadata_differs(os.fstat(descriptor), uid, gid, 0o700):
+            if destination == private and metadata_differs(os.fstat(descriptor), uid, gid, 0o700):
                 os.fchown(descriptor, uid, gid)
                 os.fchmod(descriptor, 0o700)
                 changed = True
