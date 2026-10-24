@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/23 |
+| Readme update        | 2026/10/24 |
 
 
 
@@ -78,6 +78,7 @@
 | [workstation_package_profiles.debian.signing.**0**](defaults/main.yml#L37)   | str | `ca-certificates` |    
 | [workstation_package_profiles.debian.signing.**1**](defaults/main.yml#L37)   | str | `gnupg` |    
 | [workstation_package_profiles.debian.signing.**2**](defaults/main.yml#L37)   | str | `python3-apt` |    
+| [workstation_package_profiles.debian.signing.**3**](defaults/main.yml#L37)   | str | `python3-debian` |    
 | [workstation_package_profiles.debian.**opentofu**](defaults/main.yml#L38)   | list | `[]` |    
 | [workstation_package_profiles.debian.opentofu.**0**](defaults/main.yml#L38)   | str | `tofu=1.11.*` |    
 | [workstation_package_profiles.**fedora**](defaults/main.yml#L39)   | dict | `{}` |    
@@ -162,6 +163,17 @@
 | ---- | ------ | -------------- |
 | Workstation APT ¦ Install selected packages | ansible.builtin.apt | False |
 
+#### File: tasks/credentials.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Workstation credentials ¦ Resolve the managed workstation account | ansible.builtin.getent | False |  |
+| Workstation credentials ¦ Require an existing non-root account | ansible.builtin.assert | False |  |
+| Workstation credentials ¦ Resolve the managed user's home | ansible.builtin.set_fact | False |  |
+| Workstation credentials ¦ Inspect destinations and create only missing password files | block | False |  |
+| Workstation credentials ¦ Privately confirm missing credentials | workstation_credentials | False |  |
+| Workstation credentials ¦ Report password-file setup plan | ansible.builtin.debug | False |  |
+
 #### File: tasks/debian/vscode.yml
 
 | Name | Module | Has Conditions |
@@ -204,6 +216,7 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Workstation ¦ Set up password files only when explicitly selected | ansible.builtin.include_tasks | True |  |
 | Workstation ¦ Configure automation tooling | ansible.builtin.include_tasks | True |  |
 | Workstation ¦ Validate configuration and resolve user | ansible.builtin.include_tasks | False |  |
 | Workstation ¦ Configure timezone | ansible.builtin.include_tasks | False |  |
@@ -301,7 +314,9 @@
 | Workstation OpenTofu ¦ Check dearmored repository key | ansible.builtin.stat | False |
 | Workstation OpenTofu ¦ Dearmor OpenTofu repository key | ansible.builtin.command | True |
 | Workstation OpenTofu ¦ Keep repository key readable by APT | ansible.builtin.file | False |
-| Workstation OpenTofu ¦ Add OpenTofu apt repository | ansible.builtin.apt_repository | False |
+| Workstation OpenTofu ¦ Add OpenTofu apt repository | ansible.builtin.deb822_repository | False |
+| Workstation OpenTofu ¦ Remove the previous one-line repository entry | ansible.builtin.lineinfile | False |
+| Workstation OpenTofu ¦ Refresh APT after repository changes | ansible.builtin.apt | True |
 | Workstation OpenTofu ¦ Install OpenTofu packages | ansible.builtin.apt | False |
 
 #### File: tasks/tools/fedora/opentofu.yml
