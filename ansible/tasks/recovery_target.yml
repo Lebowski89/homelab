@@ -76,3 +76,10 @@
   loop_control:
     loop_var: recovery_config_value
   become: false
+
+# Recovery has no NetBox inventory or ordinary storage/worker host contract.
+# Its single validated application target is the controller identity to audit.
+- name: Recovery target | Bind controller identity to the validated application host
+  ansible.builtin.set_fact:
+    services_controller_host: "{{ recovery_application_host }}"
+  become: false

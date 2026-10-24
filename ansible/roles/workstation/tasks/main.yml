@@ -1,5 +1,13 @@
 ---
 
+- name: Workstation | Set up password files only when explicitly selected
+  when: "'workstation_credentials' in ansible_run_tags"
+  ansible.builtin.include_tasks:
+    file: credentials.yml
+    apply:
+      tags: [workstation_credentials]
+  tags: [never, workstation_credentials]
+
 - name: Workstation | Configure automation tooling
   when: workstation_tools_enabled
   ansible.builtin.include_tasks:

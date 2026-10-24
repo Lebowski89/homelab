@@ -429,16 +429,10 @@ class ActionModule(ActionBase):
         hosts = self.variables["hostvars"]
         require(host in hosts, "endpoint host is absent from inventory")
         scopes = set(metadata["operational_requirements"]["acl"])
-        local_bootstrap = "bootstrap" in scopes and host == "localhost"
-        if local_bootstrap:
-            # Static bootstrap cannot depend on NetBox. Preserve the trusted
-            # installed identity and verify its address on this local host.
-            policy = json.loads(self.read("/etc/skynet-mgt-firewall/policy.json"))
-            MGT.HELPER.validate_policy(policy)
-            controller, address = policy["inventory_host"], policy["inventory_address"]
-        else:
-            address = hosts[host]["local_ip"]
-            controller = self.variables["services_controller_host"]
+        # Remote recovery binds this identity after validating its explicit
+        # target. Installed policy must agree; it cannot select the audit host.
+        address = hosts[host]["local_ip"]
+        controller = self.variables["services_controller_host"]
         addresses = json.loads(self.command(["ip", "-json", "address", "show"]))
         require(
             address in {a.get("local") for iface in addresses for a in iface.get("addr_info", [])},
@@ -478,7 +472,7 @@ class ActionModule(ActionBase):
                 for operation in ["is-enabled", "is-active"]:
                     self.command(["systemctl", operation, "skynet-worker-backend-firewall.timer"])
         if scopes & {"mgt_backends", "mgt_receivers", "bootstrap"}:
-            require(host == controller or local_bootstrap, "mgt protection must address the controller inventory host")
+            require(host == controller, "mgt protection must address the controller inventory host")
 
             def template(value, defaults):
                 return self._templar.copy_with_new_env(available_variables={**defaults, **self.variables}).template(
@@ -495,8 +489,6 @@ class ActionModule(ActionBase):
                     f"{role}_podman_services": self.variables.get(f"{role}_podman_services", defaults[f"{role}_podman_services"]),
                 }
                 bootstrap.extend(MGT.bootstrap_metadata(role, defaults, template))
-            if local_bootstrap:
-                bootstrap = [dict(record, host=controller if record["host"] == "localhost" else record["host"]) for record in bootstrap]
             # The selected effective declaration is authoritative, including target overrides.
             if "bootstrap" not in scopes:
                 flattened = {}

@@ -21,6 +21,7 @@
         - workstation_shell
         - workstation_desktop
         - workstation_tools
+        - workstation_credentials
         - workstation_repository
         - workstation_ansible
         - workstation_collections

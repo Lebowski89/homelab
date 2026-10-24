@@ -75,6 +75,7 @@ Aliases:
 Role/action examples:
   skynet run netbox deploy
   skynet run netbox recreate
+  skynet run workstation credentials
   skynet check resolved
   skynet run resolved
   skynet check ubuntu sysctl
@@ -101,6 +102,11 @@ including when NetBox is down. They load the existing encrypted NetBox Vault
 file using VAULT_PASS_FILE. Ordinary service commands still use NetBox inventory.
 Create ansible/inventory/netbox-bootstrap.yml from its .sample once per machine;
 fill in mgt's verified numeric addresses. The populated inventory is gitignored.
+
+Workstation credentials setup runs locally without NetBox or saved password files.
+It prompts only for missing files: the existing Ansible Vault encryption password
+and managed-host sudo password. These are distinct from local provisioning sudo;
+use --ask-become-pass with the direct workstation bootstrap when needed.
 
 Service examples:
   skynet check homepage
@@ -335,6 +341,7 @@ role_tag() {
   case "${target}:${action}" in
     workstation:deploy)            echo "workstation" ;;
     workstation:tools)        echo "workstation_tools" ;;
+    workstation:credentials)       echo "workstation_credentials" ;;
     workstation:ansible)           echo "workstation_ansible" ;;
     workstation:venv)              echo "workstation_ansible" ;;
     workstation:collections)       echo "workstation_collections" ;;
@@ -466,6 +473,26 @@ run_role_playbook() {
   shift
   target="${target,,}"
   target="${target//_/-}"
+  if [[ "$target" == "workstation" ]]; then
+    local argument
+    for argument in "$@"; do
+      if [[ "$argument" == "workstation_credentials" ]]; then
+        local workstation_host credential_paths
+        workstation_host="$(hostname -s)"
+        credential_paths="$("$(tool_path python3)" - "$workstation_host" "$VAULT_PASS_FILE" "$BECOME_PASS_FILE" <<'PY'
+import json, sys
+print(json.dumps({"workstation_hosts": sys.argv[1], "workstation_vault_pass_file": sys.argv[2], "workstation_become_pass_file": sys.argv[3]}))
+PY
+)"
+        INVENTORY="$workstation_host," \
+          PLAYBOOK="$REPO_ROOT/ansible/playbook.yml" \
+          ANSIBLE_CONFIG="$REPO_ROOT/ansible/bootstrap.cfg" \
+          SKYNET_CREDENTIAL_SETUP=true \
+          run_playbook "$@" -c local -e "$credential_paths"
+        return
+      fi
+    done
+  fi
   if [[ "$target" == "netbox" ]]; then
     INVENTORY="$REPO_ROOT/ansible/inventory/netbox-bootstrap.yml" \
       PLAYBOOK="$REPO_ROOT/ansible/bootstrap.yml" \
@@ -557,6 +584,7 @@ Role/action targets:
   workstation:
     deploy      -> workstation
     tools       -> workstation_tools
+    credentials -> workstation_credentials
     ansible     -> workstation_ansible
     venv        -> workstation_ansible
     collections -> workstation_collections
@@ -731,14 +759,19 @@ run_playbook() {
   local -a args=()
   args=(-i "$INVENTORY" "$PLAYBOOK")
 
-  if [[ -f "$BECOME_PASS_FILE" ]]; then
+  if [[ "${SKYNET_CREDENTIAL_SETUP:-false}" == true ]]; then
+    # Setup must neither require nor read the managed-host/Vault files it preserves.
+    :
+  elif [[ -f "$BECOME_PASS_FILE" ]]; then
     args+=(--become-password-file "$BECOME_PASS_FILE")
   else
     echo "[WARN] Become password file not found: $BECOME_PASS_FILE"
     echo "[WARN] If sudo requires a password, set BECOME_PASS_FILE or create .ansible_become_pass"
   fi
 
-  if [[ -f "$VAULT_PASS_FILE" ]]; then
+  if [[ "${SKYNET_CREDENTIAL_SETUP:-false}" == true ]]; then
+    :
+  elif [[ -f "$VAULT_PASS_FILE" ]]; then
     args+=(--vault-password-file "$VAULT_PASS_FILE")
   else
     echo "[WARN] Vault password file not found: $VAULT_PASS_FILE"

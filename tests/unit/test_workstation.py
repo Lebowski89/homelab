@@ -53,7 +53,7 @@ def test_main_playbook_provisions_workstation_first_and_only_once():
     assert play["become"] is True
     assert play["tasks"][0]["become"] is False
     assert include["ansible.builtin.include_role"]["name"] == "workstation"
-    assert set(include["tags"]) == WORKSTATION_TAGS | TOOL_TAGS
+    assert set(include["tags"]) == WORKSTATION_TAGS | TOOL_TAGS | {"workstation_credentials"}
     assert include["ansible.builtin.include_role"]["apply"]["tags"] == ["workstation"]
     assert all(
         task.get("ansible.builtin.include_role", {}).get("name") != "workstation" for later in plays[1:] for task in later.get("tasks", [])
@@ -75,7 +75,12 @@ def test_ubuntu_role_remains_explicitly_ubuntu_only():
 
 
 def test_workstation_dynamic_includes_propagate_their_selection_tags():
-    tasks = [task for task in load_yaml(MAIN_TASKS_PATH) if task["name"] != "Workstation | Configure automation tooling"]
+    tasks = [
+        task
+        for task in load_yaml(MAIN_TASKS_PATH)
+        if task["name"]
+        not in {"Workstation | Configure automation tooling", "Workstation | Set up password files only when explicitly selected"}
+    ]
 
     for task in tasks:
         include = task["ansible.builtin.include_tasks"]
@@ -306,6 +311,8 @@ def workstation_run(tmp_path):
         "rpm_key",
         "yum_repository",
         "apt_repository",
+        "deb822_repository",
+        "lineinfile",
         "copy",
         "file",
         "template",
@@ -325,6 +332,10 @@ def workstation_run(tmp_path):
                 key = f"ansible.builtin.{module}"
                 if key in task:
                     task["fixture_operation"] = {"module": module, "options": task.pop(key)}
+                    if module in {"deb822_repository", "lineinfile"}:
+                        # The optional real modules operate only on test-owned
+                        # temporary paths, always as the invoking test user.
+                        task["become"] = False
 
     for path in (copied / "tasks").rglob("*.yml"):
         tasks = load_yaml(path)
@@ -335,6 +346,7 @@ def workstation_run(tmp_path):
     (plugins / "fixture_operation.py").write_text(
         """from ansible.plugins.action import ActionBase
 import json
+from pathlib import Path
 class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         module = self._task.args['module']
@@ -343,6 +355,14 @@ class ActionModule(ActionBase):
             output.write(json.dumps({'module': module, 'options': options,
                                      'user': self._play_context.become_user}, default=str) + '\\n')
         result = {'changed': False, 'rc': 0, 'stdout': '', 'stdout_lines': []}
+        sources = task_vars.get('fixture_sources_dir')
+        if sources and module in ('deb822_repository', 'lineinfile'):
+            options = dict(options)
+            if module == 'lineinfile':
+                options['path'] = str(Path(sources) / Path(options['path']).name)
+            return self._execute_module(
+                module_name='fixture_deb822_repository' if module == 'deb822_repository' else 'ansible.builtin.lineinfile',
+                module_args=options, task_vars=task_vars)
         if module == 'stat':
             result['stat'] = {'exists': task_vars['fixture_ostree'] if options['path'] == '/run/ostree-booted' else True,
                               'isreg': True}
@@ -360,7 +380,29 @@ class ActionModule(ActionBase):
     cfg.write_text(f"[defaults]\naction_plugins = {plugins}\nhost_key_checking = True\n")
     record = tmp_path / "operations.jsonl"
 
-    def run(*, fedora=False, tags="workstation", overrides=None, ostree=False, check=False, main=False, managed=False, inline=False):
+    def run(
+        *,
+        fedora=False,
+        tags="workstation",
+        overrides=None,
+        ostree=False,
+        check=False,
+        main=False,
+        managed=False,
+        inline=False,
+        apt_sources=None,
+    ):
+        record.unlink(missing_ok=True)
+        if apt_sources is not None:
+            from ansible.modules import deb822_repository
+
+            # Exercise the installed repository module, changing only its fixed
+            # destination directory. All package managers and downloads stay stubbed.
+            source = Path(deb822_repository.__file__).read_text()
+            assert source.count("'/etc/apt/sources.list.d'") == 1
+            (copied / "library/fixture_deb822_repository.py").write_text(
+                source.replace("'/etc/apt/sources.list.d'", repr(str(apt_sources)))
+            )
         facts = {
             "distribution": "Fedora" if fedora else "Debian",
             "os_family": "RedHat" if fedora else "Debian",
@@ -378,6 +420,8 @@ class ActionModule(ActionBase):
             "workstation_opentofu_enabled": True,
         }
         variables.update(overrides or {})
+        if apt_sources is not None:
+            variables["fixture_sources_dir"] = str(apt_sources)
         play = tmp_path / "play.yml"
         play.write_text(
             yaml.safe_dump(
@@ -439,6 +483,70 @@ class ActionModule(ActionBase):
         return result, calls
 
     return run
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("legacy", [False, True])
+def test_opentofu_deb822_migration_refreshes_cache_and_preserves_other_sources(workstation_run, tmp_path, legacy):
+    dependency = subprocess.run(["/usr/bin/python3", "-c", "import debian.deb822"], capture_output=True, check=False)
+    if dependency.returncode:
+        pytest.skip("the real deb822 module requires system python3-debian; never install dependencies in this test")
+    sources = tmp_path / "apt-sources"
+    sources.mkdir()
+    overrides = {
+        "workstation_opentofu_repo_filename": "fixture-tofu",
+        "workstation_opentofu_source_url": "https://packages.example.test/tofu/",
+        "workstation_opentofu_source_suite": "fixture-suite",
+        "workstation_opentofu_keyring_file": str(tmp_path / "package-key.gpg"),
+        "workstation_opentofu_keyring_file_repo": str(tmp_path / "repository-key.gpg"),
+    }
+    old_entry = (
+        f"deb [signed-by={overrides['workstation_opentofu_keyring_file']},{overrides['workstation_opentofu_keyring_file_repo']}] "
+        "https://packages.example.test/tofu/ fixture-suite main\n"
+    )
+    unrelated = "# Keep locally configured sources\ndeb https://other.example.test/debian stable main\n"
+    old_file = sources / "fixture-tofu.list"
+    if legacy:
+        old_file.write_text(unrelated + old_entry)
+
+    def run():
+        result, calls = workstation_run(tags="workstation_opentofu", overrides=overrides, apt_sources=sources)
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert "DEPRECATION WARNING" not in result.stdout + result.stderr
+        return calls
+
+    calls = run()
+    source = sources / "fixture-tofu.sources"
+    fields = dict(line.split(": ", 1) for line in source.read_text().splitlines())
+    assert (
+        fields.items()
+        >= {
+            "Types": "deb",
+            "URIs": overrides["workstation_opentofu_source_url"],
+            "Suites": overrides["workstation_opentofu_source_suite"],
+            "Components": "main",
+            "Signed-By": f"{overrides['workstation_opentofu_keyring_file']} {overrides['workstation_opentofu_keyring_file_repo']}",
+        }.items()
+    )
+    assert source.stat().st_mode & 0o777 == 0o644
+    assert old_file.read_text() == unrelated if legacy else not old_file.exists()
+    assert any(call["module"] == "apt" and "python3-debian" in call["options"].get("name", []) for call in calls)
+    refresh = next(i for i, call in enumerate(calls) if call["module"] == "apt" and call["options"] == {"update_cache": True})
+    assert refresh > next(i for i, call in enumerate(calls) if call["module"] == "lineinfile")
+    assert calls[refresh + 1]["module"] == "apt"
+    assert calls[refresh + 1]["options"]["state"] == "present"
+
+    before = (source.read_bytes(), source.stat().st_mtime_ns)
+    calls = run()
+    assert (source.read_bytes(), source.stat().st_mtime_ns) == before
+    assert not any(call["module"] == "apt" and call["options"] == {"update_cache": True} for call in calls)
+
+    # A legacy-only change must also refresh the cache, even if .sources is unchanged.
+    old_file.write_text(unrelated + old_entry)
+    calls = run()
+    assert old_file.read_text() == unrelated
+    assert (source.read_bytes(), source.stat().st_mtime_ns) == before
+    assert any(call["module"] == "apt" and call["options"] == {"update_cache": True} for call in calls)
 
 
 @pytest.mark.integration
@@ -538,7 +646,20 @@ def test_check_mode_never_calls_external_installers(workstation_run, fedora):
     result, calls = workstation_run(fedora=fedora, check=True)
     assert result.returncode == 0, result.stdout + result.stderr
     assert not any(
-        call["module"] in {"apt", "dnf", "get_url", "rpm_key", "yum_repository", "apt_repository", "pip", "command", "git"}
+        call["module"]
+        in {
+            "apt",
+            "dnf",
+            "get_url",
+            "rpm_key",
+            "yum_repository",
+            "apt_repository",
+            "deb822_repository",
+            "lineinfile",
+            "pip",
+            "command",
+            "git",
+        }
         for call in calls
     )
     assert "Would install" in result.stdout
@@ -557,7 +678,10 @@ def test_host_feature_toggles_skip_installers(workstation_run):
         },
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert not any(call["module"] in {"get_url", "rpm_key", "yum_repository", "apt_repository", "pip", "command"} for call in calls)
+    assert not any(
+        call["module"] in {"get_url", "rpm_key", "yum_repository", "apt_repository", "deb822_repository", "lineinfile", "pip", "command"}
+        for call in calls
+    )
 
 
 @pytest.mark.integration
