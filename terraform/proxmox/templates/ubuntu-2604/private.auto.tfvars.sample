@@ -1,5 +1,4 @@
 pm_api_url      = "https://192.168.xx.xx:8006/"
-
-# Temporary compatibility for an untrusted/self-signed Proxmox certificate.
-# Prefer trusting the Proxmox CA and setting this to false.
+pm_ssh_username = "user"
+pm_ssh_host     = "100.00.00.00"
 pm_tls_insecure = true
