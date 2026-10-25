@@ -11,7 +11,7 @@ variable "name" {
 variable "description" {
   description = "Proxmox VM description."
   type        = string
-  default     = "Ubuntu cloud-init VM managed by OpenTofu"
+  default     = "Cloud-init VM managed by OpenTofu"
 }
 
 variable "vm_id" {
@@ -43,7 +43,7 @@ variable "clone_retries" {
 variable "tags" {
   description = "Tags applied to the Proxmox VM."
   type        = list(string)
-  default     = ["terraform", "ubuntu", "cloud-init"]
+  default     = ["terraform", "cloud-init"]
 }
 
 variable "on_boot" {
@@ -62,6 +62,28 @@ variable "started" {
   description = "Ensure the VM is started after creation."
   type        = bool
   default     = true
+}
+
+variable "bios" {
+  description = "Optional firmware override: seabios or ovmf. Null retains the provider default. Selecting ovmf manages a 4m EFI variables disk on datastore_id without pre-enrolled Secure Boot keys."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.bios == null ? true : contains(["seabios", "ovmf"], var.bios)
+    error_message = "bios must be null, seabios or ovmf."
+  }
+}
+
+variable "machine" {
+  description = "Optional Proxmox machine type override, for example q35. Null retains the provider default."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = var.machine == null ? true : trimspace(var.machine) != ""
+    error_message = "machine must be null or a non-empty machine type."
+  }
 }
 
 variable "snippet_datastore_id" {
@@ -148,7 +170,7 @@ variable "ballooning_memory_mb" {
 }
 
 variable "datastore_id" {
-  description = "Proxmox datastore used for the VM disk and cloud-init disk."
+  description = "Proxmox datastore used for the VM disk, cloud-init disk and optional EFI variables disk."
   type        = string
 }
 
@@ -202,9 +224,9 @@ variable "dns_domain" {
 }
 
 variable "cloud_init_user" {
-  description = "Cloud-init administrative username."
+  description = "Cloud-init administrative username for the selected template; callers must choose explicitly."
   type        = string
-  default     = "ubuntu"
+  nullable    = false
 }
 
 variable "ssh_public_keys" {

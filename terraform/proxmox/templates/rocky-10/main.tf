@@ -21,6 +21,16 @@ resource "proxmox_virtual_environment_vm" "rocky_template" {
   on_boot  = false
   started  = false
 
+  bios    = "ovmf"
+  machine = "q35"
+
+  efi_disk {
+    datastore_id      = var.vm_storage
+    file_format       = "raw"
+    type              = "4m"
+    pre_enrolled_keys = false
+  }
+
   agent {
     # Clones must install/start the guest agent before relying on integration.
     enabled = false

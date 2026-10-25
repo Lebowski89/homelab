@@ -51,6 +51,21 @@ resource "proxmox_virtual_environment_vm" "this" {
   protection = var.protection
   started    = var.started
 
+  # Null preserves the provider's existing defaults for callers that do not opt in.
+  bios    = var.bios
+  machine = var.machine
+
+  dynamic "efi_disk" {
+    for_each = var.bios == "ovmf" ? [true] : []
+
+    content {
+      datastore_id      = var.datastore_id
+      file_format       = "raw"
+      type              = "4m"
+      pre_enrolled_keys = false
+    }
+  }
+
   depends_on = [
     proxmox_virtual_environment_file.qemu_guest_agent_cloud_init,
   ]
@@ -142,12 +157,12 @@ resource "proxmox_virtual_environment_vm" "this" {
 
     precondition {
       condition     = length(var.dns_servers) > 0
-      error_message = "At least one DNS server must be supplied to the Ubuntu VM module."
+      error_message = "At least one DNS server must be supplied to the cloud-init VM module."
     }
 
     precondition {
       condition     = length(var.ssh_public_keys) > 0
-      error_message = "At least one SSH public key must be supplied to the Ubuntu VM module."
+      error_message = "At least one SSH public key must be supplied to the cloud-init VM module."
     }
 
     precondition {
