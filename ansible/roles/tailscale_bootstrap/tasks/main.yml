@@ -10,7 +10,7 @@
       - not ansible_check_mode
     fail_msg: >-
       The Tailscale bootstrap role cannot run in check mode because it must
-      interrogate and potentially modify the guest through QEMU Guest Agent.
+      interrogate and potentially modify the guest through the selected transport.
 
 - name: Tailscale Bootstrap | Validate guest selector
   ansible.builtin.assert:
@@ -41,9 +41,11 @@
       - >-
         tailscale_bootstrap_guest_config.enable_ssh is not defined
         or tailscale_bootstrap_guest_config.enable_ssh is boolean
+      - tailscale_bootstrap_guest_config.transport | default('qga') is string
+      - tailscale_bootstrap_guest_config.transport | default('qga') | trim in ['qga', 'ssh']
     fail_msg: >-
       The selected guest requires a numeric vmid, a valid hostname, and an
-      optional boolean enable_ssh value.
+      optional boolean enable_ssh value. Transport must be qga or ssh; qga is the default.
 
 - name: Tailscale Bootstrap | Build effective guest configuration
   ansible.builtin.set_fact:
@@ -53,12 +55,39 @@
       {{ tailscale_bootstrap_guest_config.hostname | string | trim }}
     tailscale_bootstrap_enable_ssh_effective: >-
       {{ tailscale_bootstrap_guest_config.enable_ssh | default(true) | bool }}
+    tailscale_bootstrap_transport_effective: >-
+      {{ tailscale_bootstrap_guest_config.transport | default('qga') | trim }}
+
+- name: Tailscale Bootstrap | Validate explicit SSH connection
+  when: tailscale_bootstrap_transport_effective == 'ssh'
+  ansible.builtin.assert:
+    that:
+      - tailscale_bootstrap_guest_config.ssh_host is defined
+      - tailscale_bootstrap_guest_config.ssh_host is string
+      - tailscale_bootstrap_guest_config.ssh_host | trim | valid_remote_ip
+      - tailscale_bootstrap_guest_config.ssh_user is defined
+      - tailscale_bootstrap_guest_config.ssh_user is string
+      - tailscale_bootstrap_guest_config.ssh_user | trim is match('^[A-Za-z_][A-Za-z0-9_.-]*[$]?$')
+      - tailscale_bootstrap_guest_config.ssh_port | default(22) is integer
+      - tailscale_bootstrap_guest_config.ssh_port | default(22) >= 1
+      - tailscale_bootstrap_guest_config.ssh_port | default(22) <= 65535
+    fail_msg: >-
+      SSH transport requires an explicit numeric LAN ssh_host, ssh_user, and an
+      optional integer ssh_port in 1..65535. It never discovers the guest through NetBox or Tailscale.
+
+- name: Tailscale Bootstrap | Build explicit SSH destination
+  when: tailscale_bootstrap_transport_effective == 'ssh'
+  ansible.builtin.set_fact:
+    tailscale_bootstrap_ssh_destination: >-
+      {{ tailscale_bootstrap_guest_config.ssh_user | trim }}@{{ tailscale_bootstrap_guest_config.ssh_host | trim }}
+    tailscale_bootstrap_ssh_port_effective: "{{ tailscale_bootstrap_guest_config.ssh_port | default(22) }}"
 
 ################################
 # QEMU GUEST AGENT
 ################################
 
 - name: Tailscale Bootstrap | Wait for QEMU Guest Agent
+  when: tailscale_bootstrap_transport_effective == 'qga'
   ansible.builtin.command:
     argv:
       - qm
@@ -78,15 +107,13 @@
 ################################
 
 - name: Tailscale Bootstrap | Check whether Tailscale is installed
-  ansible.builtin.command:
-    argv:
-      - qm
-      - guest
-      - exec
-      - "{{ tailscale_bootstrap_vmid_effective | string }}"
-      - --timeout
-      - "30"
-      - --
+  ansible.builtin.include_tasks:
+    file: execute.yml
+    apply:
+      tags: tailscale_bootstrap
+  vars:
+    tailscale_bootstrap_exec_timeout: 30
+    tailscale_bootstrap_exec_argv:
       - /bin/sh
       - -c
       - >-
@@ -94,13 +121,12 @@
         then printf 'TAILSCALE_INSTALLED=1\n';
         else printf 'TAILSCALE_INSTALLED=0\n';
         fi
-  register: tailscale_bootstrap_install_probe_raw
-  changed_when: false
+  tags: tailscale_bootstrap
 
 - name: Tailscale Bootstrap | Parse installation probe
   ansible.builtin.set_fact:
     tailscale_bootstrap_install_probe_envelope: >-
-      {{ tailscale_bootstrap_install_probe_raw.stdout | from_json }}
+      {{ tailscale_bootstrap_exec_envelope }}
 
 - name: Tailscale Bootstrap | Validate installation probe
   ansible.builtin.assert:
@@ -115,7 +141,7 @@
         'TAILSCALE_INSTALLED='
         in tailscale_bootstrap_install_probe_envelope.get('out-data', '')
     fail_msg: >-
-      Proxmox reached the guest, but the Tailscale installation probe did not
+      The selected transport reached the guest, but the Tailscale installation probe did not
       complete successfully.
 
 - name: Tailscale Bootstrap | Record installation state
@@ -128,37 +154,128 @@
 
 - name: Tailscale Bootstrap | Install Tailscale
   when: not tailscale_bootstrap_installed | bool
-  ansible.builtin.command:
-    argv:
-      - qm
-      - guest
-      - exec
-      - "{{ tailscale_bootstrap_vmid_effective | string }}"
-      - --timeout
-      - "600"
-      - --
+  ansible.builtin.include_tasks:
+    file: execute.yml
+    apply:
+      tags: tailscale_bootstrap
+  vars:
+    tailscale_bootstrap_exec_timeout: 600
+    tailscale_bootstrap_exec_changed: true
+    tailscale_bootstrap_exec_argv:
       - /bin/sh
       - -c
       - |-
         set -eu
-        export DEBIAN_FRONTEND=noninteractive
 
-        apt-get update
-        apt-get install --yes ca-certificates curl
+        guest_os=unknown
+        stage='OS detection'
+        installer=
 
+        cleanup() {
+          result=$?
+          trap - EXIT
+          if [ -n "$installer" ]; then
+            rm -f "$installer"
+          fi
+          if [ "$result" -ne 0 ]; then
+            printf 'Tailscale bootstrap failed for guest OS %s during %s (exit %s).\n' \
+              "$guest_os" "$stage" "$result" >&2
+          fi
+          exit "$result"
+        }
+        trap cleanup EXIT
+        trap 'exit 129' HUP
+        trap 'exit 130' INT
+        trap 'exit 143' TERM
+
+        if [ ! -r /etc/os-release ]; then
+          printf 'Cannot read the guest OS from /etc/os-release.\n' >&2
+          exit 1
+        fi
+        . /etc/os-release
+        guest_os="${ID:-unknown} ${VERSION_ID:-unknown}"
+        printf 'Detected guest OS: %s\n' "$guest_os"
+
+        stage='OS validation'
+        if [ -e /run/ostree-booted ] || [ -n "${OSTREE_VERSION:-}" ]; then
+          printf 'Atomic/OSTree guests are not supported by this bootstrap.\n' >&2
+          exit 1
+        fi
+
+        case "${ID:-}" in
+          debian|ubuntu)
+            package_manager=apt-get
+            ca_bundle=/etc/ssl/certs/ca-certificates.crt
+            export DEBIAN_FRONTEND=noninteractive
+            ;;
+          fedora|rocky)
+            package_manager=dnf
+            ca_bundle=/etc/pki/tls/certs/ca-bundle.crt
+            ;;
+          *)
+            printf 'Supported guest OS IDs are debian, ubuntu, fedora and rocky.\n' >&2
+            exit 1
+            ;;
+        esac
+
+        stage="prerequisite validation ($package_manager)"
+        if ! command -v "$package_manager" >/dev/null 2>&1; then
+          printf 'Required guest package manager %s is not discoverable or executable in the guest execution context (PATH=%s).\n' \
+            "$package_manager" "$PATH" >&2
+          printf '%s\n' \
+            'The package manager may be installed but blocked by execution permissions or SELinux.' \
+            'Inspect guest audit records before changing packages or policy.' >&2
+          exit 1
+        fi
+
+        set --
+        if ! command -v curl >/dev/null 2>&1 || ! curl --version >/dev/null 2>&1; then
+          set -- "$@" curl
+        fi
+        if [ ! -s "$ca_bundle" ]; then
+          set -- "$@" ca-certificates
+        fi
+
+        if [ "$#" -gt 0 ]; then
+          case "$package_manager" in
+            apt-get)
+              stage='APT metadata refresh'
+              apt-get update
+              stage='APT prerequisite installation'
+              apt-get install --yes --no-install-recommends "$@"
+              ;;
+            dnf)
+              stage='DNF prerequisite installation'
+              dnf install --assumeyes "$@"
+              ;;
+          esac
+        fi
+
+        stage='prerequisite verification'
+        if ! curl --version >/dev/null 2>&1; then
+          printf 'A working curl is still unavailable after prerequisite installation.\n' >&2
+          exit 1
+        fi
+        if [ ! -s "$ca_bundle" ]; then
+          printf 'Guest CA bundle is missing or empty: %s\n' "$ca_bundle" >&2
+          exit 1
+        fi
+
+        stage='installer temporary file creation'
         installer="$(mktemp /tmp/tailscale-install.XXXXXX)"
-        trap 'rm -f "$installer"' EXIT HUP INT TERM
 
-        curl -fsSL https://tailscale.com/install.sh -o "$installer"
+        stage='HTTPS installer download'
+        curl -fsSL --connect-timeout 15 --max-time 120 \
+          https://tailscale.com/install.sh -o "$installer"
+        stage='official Tailscale installer'
         /bin/sh "$installer"
-  register: tailscale_bootstrap_install_raw
-  changed_when: true
+  tags: tailscale_bootstrap
 
 - name: Tailscale Bootstrap | Parse installation result
   when: not tailscale_bootstrap_installed | bool
   ansible.builtin.set_fact:
     tailscale_bootstrap_install_envelope: >-
-      {{ tailscale_bootstrap_install_raw.stdout | from_json }}
+      {{ tailscale_bootstrap_exec_envelope }}
 
 - name: Tailscale Bootstrap | Validate installation result
   when: not tailscale_bootstrap_installed | bool
@@ -167,23 +284,24 @@
       - tailscale_bootstrap_install_envelope.get('exited', 0) | int == 1
       - tailscale_bootstrap_install_envelope.get('exitcode', 1) | int == 0
     fail_msg: >-
-      Tailscale installation inside the guest failed. Inspect the returned
-      guest-agent output and the guest's APT configuration.
+      Tailscale installation inside the selected guest did not complete.
+      {{ tailscale_bootstrap_install_envelope.get('err-data', '') | trim }}
+      Inspect the guest command output for the detected OS, failed stage and
+      package-manager or installer details.
 
 ################################
 # TAILSCALED
 ################################
 
 - name: Tailscale Bootstrap | Enable and start tailscaled
-  ansible.builtin.command:
-    argv:
-      - qm
-      - guest
-      - exec
-      - "{{ tailscale_bootstrap_vmid_effective | string }}"
-      - --timeout
-      - "60"
-      - --
+  ansible.builtin.include_tasks:
+    file: execute.yml
+    apply:
+      tags: tailscale_bootstrap
+  vars:
+    tailscale_bootstrap_exec_timeout: 60
+    tailscale_bootstrap_exec_change_marker: TAILSCALED_CHANGED=1
+    tailscale_bootstrap_exec_argv:
       - /bin/sh
       - -c
       - |-
@@ -197,14 +315,12 @@
         systemctl enable --now tailscaled
 
         printf 'TAILSCALED_CHANGED=%s\n' "$changed"
-  register: tailscale_bootstrap_daemon_raw
-  changed_when: >-
-    'TAILSCALED_CHANGED=1' in tailscale_bootstrap_daemon_raw.stdout
+  tags: tailscale_bootstrap
 
 - name: Tailscale Bootstrap | Parse tailscaled result
   ansible.builtin.set_fact:
     tailscale_bootstrap_daemon_envelope: >-
-      {{ tailscale_bootstrap_daemon_raw.stdout | from_json }}
+      {{ tailscale_bootstrap_exec_envelope }}
 
 - name: Tailscale Bootstrap | Validate tailscaled result
   ansible.builtin.assert:
@@ -219,25 +335,22 @@
 ################################
 
 - name: Tailscale Bootstrap | Query current Tailscale status
-  ansible.builtin.command:
-    argv:
-      - qm
-      - guest
-      - exec
-      - "{{ tailscale_bootstrap_vmid_effective | string }}"
-      - --timeout
-      - "30"
-      - --
+  ansible.builtin.include_tasks:
+    file: execute.yml
+    apply:
+      tags: tailscale_bootstrap
+  vars:
+    tailscale_bootstrap_exec_timeout: 30
+    tailscale_bootstrap_exec_argv:
       - tailscale
       - status
       - --json
-  register: tailscale_bootstrap_status_raw
-  changed_when: false
+  tags: tailscale_bootstrap
 
 - name: Tailscale Bootstrap | Parse status envelope
   ansible.builtin.set_fact:
     tailscale_bootstrap_status_envelope: >-
-      {{ tailscale_bootstrap_status_raw.stdout | from_json }}
+      {{ tailscale_bootstrap_exec_envelope }}
 
 - name: Tailscale Bootstrap | Validate status envelope
   ansible.builtin.assert:
@@ -286,6 +399,7 @@
     echo: false
   register: tailscale_bootstrap_auth_prompt
   no_log: true
+  diff: false
 
 - name: Tailscale Bootstrap | Validate supplied authentication key
   when: not tailscale_bootstrap_connected | bool
@@ -295,20 +409,21 @@
       - tailscale_bootstrap_auth_prompt.user_input | trim | length > 0
     fail_msg: A non-empty one-off Tailscale authentication key is required.
   no_log: true
+  diff: false
 
 - name: Tailscale Bootstrap | Authenticate guest with Tailscale
   when: not tailscale_bootstrap_connected | bool
-  ansible.builtin.command:
-    argv:
-      - qm
-      - guest
-      - exec
-      - "{{ tailscale_bootstrap_vmid_effective | string }}"
-      - --pass-stdin
-      - "1"
-      - --timeout
-      - "120"
-      - --
+  ansible.builtin.include_tasks:
+    file: execute.yml
+    apply:
+      tags: tailscale_bootstrap
+      diff: false
+  vars:
+    tailscale_bootstrap_exec_timeout: 120
+    tailscale_bootstrap_exec_sensitive: true
+    tailscale_bootstrap_exec_changed: true
+    tailscale_bootstrap_exec_stdin: "{{ tailscale_bootstrap_auth_prompt.user_input | trim }}"
+    tailscale_bootstrap_exec_argv:
       - /bin/sh
       - -c
       - |-
@@ -336,18 +451,16 @@
       - tailscale-bootstrap
       - "{{ tailscale_bootstrap_hostname_effective }}"
       - "{{ '1' if tailscale_bootstrap_enable_ssh_effective else '0' }}"
-    stdin: "{{ tailscale_bootstrap_auth_prompt.user_input | trim }}"
-    stdin_add_newline: false
-  register: tailscale_bootstrap_auth_raw
-  changed_when: true
+  tags: tailscale_bootstrap
   no_log: true
 
 - name: Tailscale Bootstrap | Parse authentication result
   when: not tailscale_bootstrap_connected | bool
   ansible.builtin.set_fact:
     tailscale_bootstrap_auth_envelope: >-
-      {{ tailscale_bootstrap_auth_raw.stdout | from_json }}
+      {{ tailscale_bootstrap_exec_envelope }}
   no_log: true
+  diff: false
 
 - name: Tailscale Bootstrap | Record authentication result
   when: not tailscale_bootstrap_connected | bool
@@ -359,6 +472,7 @@
         tailscale_bootstrap_auth_envelope.get('exitcode', 1) | int == 0
       }}
   no_log: true
+  diff: false
 
 - name: Tailscale Bootstrap | Validate authentication result
   when: not tailscale_bootstrap_connected | bool
@@ -374,25 +488,22 @@
 ################################
 
 - name: Tailscale Bootstrap | Query final Tailscale status
-  ansible.builtin.command:
-    argv:
-      - qm
-      - guest
-      - exec
-      - "{{ tailscale_bootstrap_vmid_effective | string }}"
-      - --timeout
-      - "30"
-      - --
+  ansible.builtin.include_tasks:
+    file: execute.yml
+    apply:
+      tags: tailscale_bootstrap
+  vars:
+    tailscale_bootstrap_exec_timeout: 30
+    tailscale_bootstrap_exec_argv:
       - tailscale
       - status
       - --json
-  register: tailscale_bootstrap_final_status_raw
-  changed_when: false
+  tags: tailscale_bootstrap
 
 - name: Tailscale Bootstrap | Parse final status envelope
   ansible.builtin.set_fact:
     tailscale_bootstrap_final_status_envelope: >-
-      {{ tailscale_bootstrap_final_status_raw.stdout | from_json }}
+      {{ tailscale_bootstrap_exec_envelope }}
 
 - name: Tailscale Bootstrap | Validate final status command
   ansible.builtin.assert:
@@ -431,25 +542,22 @@
       Tailscale was installed but its final BackendState is not Running.
 
 - name: Tailscale Bootstrap | Query Tailscale IPv4 address
-  ansible.builtin.command:
-    argv:
-      - qm
-      - guest
-      - exec
-      - "{{ tailscale_bootstrap_vmid_effective | string }}"
-      - --timeout
-      - "30"
-      - --
+  ansible.builtin.include_tasks:
+    file: execute.yml
+    apply:
+      tags: tailscale_bootstrap
+  vars:
+    tailscale_bootstrap_exec_timeout: 30
+    tailscale_bootstrap_exec_argv:
       - tailscale
       - ip
       - -4
-  register: tailscale_bootstrap_ip_raw
-  changed_when: false
+  tags: tailscale_bootstrap
 
 - name: Tailscale Bootstrap | Parse Tailscale IP result
   ansible.builtin.set_fact:
     tailscale_bootstrap_ip_envelope: >-
-      {{ tailscale_bootstrap_ip_raw.stdout | from_json }}
+      {{ tailscale_bootstrap_exec_envelope }}
 
 - name: Tailscale Bootstrap | Validate Tailscale IP result
   ansible.builtin.assert:
