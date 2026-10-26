@@ -41,3 +41,11 @@
         name: qemu-guest-agent
         enabled: true
         state: started
+  rescue:
+    - name: System | Report guest agent setup failure
+      ansible.builtin.fail:
+        msg: >-
+          QEMU Guest Agent setup failed on {{ inventory_hostname }} during
+          {{ ansible_failed_task.name | default('an unknown task') }}:
+          {{ ansible_failed_result.msg | default('See the preceding task error for details.') }}
+          Inspect any partial package or service changes before retrying.

@@ -174,3 +174,11 @@
           Check mode renders NIC persistence and checks inputs only. Device identity,
           driver capabilities and current settings must be verified during an authorized
           run with ethtool/pciutils installed; no NIC setting or service was changed.
+  rescue:
+    - name: System NIC | Report configuration failure
+      ansible.builtin.fail:
+        msg: >-
+          NIC configuration failed on {{ inventory_hostname }} during
+          {{ ansible_failed_task.name | default('an unknown task') }}:
+          {{ ansible_failed_result.msg | default('See the preceding task error for details.') }}
+          Inspect any partial NIC or persistence changes before retrying.

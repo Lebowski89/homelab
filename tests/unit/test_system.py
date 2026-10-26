@@ -76,6 +76,8 @@ class ActionModule(ActionBase):
         state_path = Path(v['fixture_state'])
         state = json.loads(state_path.read_text())
         result = {'changed': False, 'rc': 0, 'stdout': '', 'stdout_lines': []}
+        if module in ('apt', 'dnf') and options.get('name') == 'qemu-guest-agent' and v.get('fixture_guest_agent_failure', False):
+            return dict(result, failed=True, rc=1, msg='fixture-agent-failure')
         if module == 'setup':
             result['ansible_facts'] = v['fixture_facts']
         elif module == 'template':
@@ -100,7 +102,7 @@ class ActionModule(ActionBase):
                 result['stdout_lines'] = ['SYSTEM_NIC_CHANGE=' + name for name in v.get('fixture_nic_drift', [])]
                 result['stdout'] = '\\n'.join(result['stdout_lines'])
                 if v.get('fixture_nic_preflight_failure', False):
-                    result.update(rc=1, failed=True)
+                    result.update(rc=1, failed=True, msg='fixture-nic-preflight-failure')
             elif command == 'systemd-escape':
                 result['stdout'] = argv[-1].replace('-', r'\\x2d')
             elif command == 'swapon' and '--show=NAME' in argv:
@@ -538,3 +540,21 @@ def test_nic_management_refuses_to_overwrite_an_unrelated_script(system_run):
     assert result.returncode != 0
     assert not package_calls(calls)
     assert not any(call["module"] == "template" for call in calls)
+
+
+@pytest.mark.parametrize(
+    ("tag", "overrides", "error"),
+    [
+        ("system_packages", {"fixture_guest_agent_failure": True}, "fixture-agent-failure"),
+        (
+            "system_nic",
+            {"system_nic_interfaces": {"p0": {"disable_fw_lldp": True}}, "fixture_nic_preflight_failure": True},
+            "fixture-nic-preflight-failure",
+        ),
+    ],
+)
+def test_block_error_handling_preserves_failure_and_stops_later_changes(system_run, tag, overrides, error):
+    result, calls, _ = system_run(tags=tag, overrides=overrides)
+    assert result.returncode != 0
+    assert error in result.stdout
+    assert not any(call["module"] in {"template", "systemd_service"} for call in calls)
