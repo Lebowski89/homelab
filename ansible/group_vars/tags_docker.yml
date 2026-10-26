@@ -1,5 +1,0 @@
----
-
-ubuntu_apt_package_profiles_docker:
-  - network
-  - docker

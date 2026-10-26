@@ -25,10 +25,6 @@ RUN_TASKS_PATH = ROLE_PATH / "tasks/sub_tasks/backup.yml"
 SCRIPT_TEMPLATE_PATH = ROLE_PATH / "templates/postgres-logical-backup.sh.j2"
 PLAYBOOK_PATH = REPO_ROOT / "ansible/playbook.yml"
 GROUP_VARS_PATH = REPO_ROOT / "ansible/group_vars/tags_postgres.yml"
-UBUNTU_DEFAULTS_PATH = REPO_ROOT / "ansible/roles/ubuntu/defaults/main.yml"
-UBUNTU_MAIN_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/main.yml"
-UBUNTU_APT_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/sub_tasks/apt.yml"
-UBUNTU_BACKUP_PREREQUISITES_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/sub_tasks/postgres_backup_prerequisites.yml"
 SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/workstation/templates/skynet.j2"
 SYSTEMD_SERVICE_TEMPLATE = REPO_ROOT / "ansible/roles/systemd_jobs/templates/systemd-job.service.j2"
 SYSTEMD_TIMER_TEMPLATE = REPO_ROOT / "ansible/roles/systemd_jobs/templates/systemd-job.timer.j2"
@@ -185,41 +181,17 @@ def test_role_default_is_opt_in_but_postgres_group_enables_timer():
     assert group_vars["postgres_backup_manage_timer"] is True
 
 
-def test_postgres_package_profile_installs_acl_for_unprivileged_backup_become():
-    ubuntu_defaults = yaml.safe_load(UBUNTU_DEFAULTS_PATH.read_text())
-    group_vars = yaml.safe_load(GROUP_VARS_PATH.read_text())
-    apt_tasks = yaml.safe_load(UBUNTU_APT_TASKS_PATH.read_text())
-    selection = task_named(apt_tasks, "Ubuntu APT | Build selected package list")
+def test_backup_prerequisites_remain_owned_by_postgres_before_backup_operations():
+    tasks = yaml.safe_load(MAIN_TASKS_PATH.read_text())
+    prerequisites = next(
+        task for task in tasks if task.get("ansible.builtin.include_tasks", {}).get("file") == "sub_tasks/backup_prerequisites.yml"
+    )
+    setup = next(task for task in tasks if task.get("ansible.builtin.include_tasks", {}).get("file") == "sub_tasks/backup_setup.yml")
+    backup_tags = {"postgres", "postgres_backup", "postgres_backup_setup", "postgres_backup_run"}
+    assert backup_tags <= set(prerequisites["tags"])
+    assert backup_tags <= set(prerequisites["ansible.builtin.include_tasks"]["apply"]["tags"])
+    assert tasks.index(prerequisites) < tasks.index(setup)
     invoke = task_named(yaml.safe_load(RUN_TASKS_PATH.read_text()), "Logical backup run | Invoke installed leader-gated runner")
-
-    assert "postgres" in group_vars["ubuntu_apt_package_profiles_postgres"]
-    assert ubuntu_defaults["ubuntu_apt_postgres_packages"] == ["acl"]
-    assert "ubuntu_apt_postgres_packages" in selection["ansible.builtin.set_fact"]["ubuntu_apt_selected_packages"]
-    assert "if 'postgres' in" in selection["ansible.builtin.set_fact"]["ubuntu_apt_selected_packages"]
-    assert invoke["become_user"] == "postgres"
-
-
-def test_local_backup_tags_select_only_the_ubuntu_package_prerequisite_path():
-    playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
-    ubuntu_tasks = yaml.safe_load(UBUNTU_MAIN_TASKS_PATH.read_text())
-    prerequisite_tasks = yaml.safe_load(UBUNTU_BACKUP_PREREQUISITES_PATH.read_text())
-    backup_tags = {"postgres_backup", "postgres_backup_setup", "postgres_backup_run"}
-    deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")
-    ubuntu_include = task_named(deploy_play["tasks"], "Include Ubuntu role")
-    prerequisite_include = task_named(ubuntu_tasks, "Ubuntu | Install PostgreSQL backup prerequisites")
-    install = task_named(prerequisite_tasks, "Ubuntu PostgreSQL backup prerequisites | Install package profile")
-    invoke = task_named(yaml.safe_load(RUN_TASKS_PATH.read_text()), "Logical backup run | Invoke installed leader-gated runner")
-
-    assert backup_tags <= set(ubuntu_include["tags"])
-    assert "apply" not in ubuntu_include["ansible.builtin.include_role"]
-    assert backup_tags <= set(prerequisite_include["tags"])
-    assert backup_tags <= set(prerequisite_include["ansible.builtin.include_tasks"]["apply"]["tags"])
-    assert prerequisite_include["ansible.builtin.include_tasks"]["file"] == "sub_tasks/postgres_backup_prerequisites.yml"
-    assert install["ansible.builtin.apt"]["name"] == "{{ ubuntu_apt_postgres_packages }}"
-    assert len(prerequisite_tasks) == 1
-    for backup_tag in backup_tags:
-        selected_tasks = [task["name"] for task in ubuntu_tasks if backup_tag in task.get("tags", [])]
-        assert selected_tasks == ["Ubuntu | Install PostgreSQL backup prerequisites"]
     assert invoke["become_user"] == "postgres"
 
 

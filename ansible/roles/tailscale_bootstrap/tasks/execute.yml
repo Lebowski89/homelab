@@ -1,0 +1,100 @@
+---
+
+- name: Tailscale Bootstrap | Execute guest command through QEMU Guest Agent
+  when: tailscale_bootstrap_transport_effective == 'qga'
+  ansible.builtin.command:
+    argv: >-
+      {{
+        ['qm', 'guest', 'exec', tailscale_bootstrap_vmid_effective | string]
+        + (['--pass-stdin', '1'] if tailscale_bootstrap_exec_stdin is defined else [])
+        + ['--timeout', tailscale_bootstrap_exec_timeout | string, '--']
+        + tailscale_bootstrap_exec_argv
+      }}
+    stdin: "{{ tailscale_bootstrap_exec_stdin | default(omit) }}"
+    stdin_add_newline: false
+  register: tailscale_bootstrap_exec_qga_raw
+  changed_when: >-
+    tailscale_bootstrap_exec_changed | default(false) | bool
+    or (
+      tailscale_bootstrap_exec_change_marker | default('') | length > 0
+      and tailscale_bootstrap_exec_change_marker in tailscale_bootstrap_exec_qga_raw.stdout
+    )
+  no_log: "{{ tailscale_bootstrap_exec_sensitive | default(false) | bool }}"
+  diff: false
+
+- name: Tailscale Bootstrap | Execute guest command through workstation SSH and sudo
+  when: tailscale_bootstrap_transport_effective == 'ssh'
+  delegate_to: localhost
+  become: false
+  vars:
+    ansible_connection: local
+    ansible_become: false
+    ansible_python_interpreter: "{{ ansible_playbook_python }}"
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - --signal=TERM
+      - --kill-after=5
+      - "{{ (tailscale_bootstrap_exec_timeout | int + 30) | string }}s"
+      - ssh
+      - -T
+      - -o
+      - BatchMode=yes
+      - -o
+      - StrictHostKeyChecking=yes
+      - -o
+      - ForwardAgent=no
+      - -o
+      - ConnectTimeout=10
+      - -o
+      - ServerAliveInterval=10
+      - -o
+      - ServerAliveCountMax=2
+      - -p
+      - "{{ tailscale_bootstrap_ssh_port_effective | string }}"
+      - --
+      - "{{ tailscale_bootstrap_ssh_destination }}"
+      - >-
+        {{
+          (
+            ['sudo', '-n', '--', '/usr/bin/timeout', '--signal=TERM', '--kill-after=5',
+             (tailscale_bootstrap_exec_timeout | string) ~ 's']
+            + tailscale_bootstrap_exec_argv
+          ) | map('quote') | join(' ')
+        }}
+    stdin: "{{ tailscale_bootstrap_exec_stdin | default(omit) }}"
+    stdin_add_newline: false
+  register: tailscale_bootstrap_exec_ssh_raw
+  changed_when: >-
+    tailscale_bootstrap_exec_changed | default(false) | bool
+    or (
+      tailscale_bootstrap_exec_change_marker | default('') | length > 0
+      and tailscale_bootstrap_exec_change_marker in tailscale_bootstrap_exec_ssh_raw.stdout
+    )
+  failed_when: false
+  no_log: "{{ tailscale_bootstrap_exec_sensitive | default(false) | bool }}"
+  diff: false
+
+- name: Tailscale Bootstrap | Record guest command result
+  ansible.builtin.set_fact:
+    tailscale_bootstrap_exec_envelope: >-
+      {{
+        tailscale_bootstrap_exec_qga_raw.stdout | from_json
+        if tailscale_bootstrap_transport_effective == 'qga'
+        else {
+          'exited': 1,
+          'exitcode': tailscale_bootstrap_exec_ssh_raw.rc,
+          'out-data': tailscale_bootstrap_exec_ssh_raw.stdout,
+          'err-data': tailscale_bootstrap_exec_ssh_raw.stderr
+        }
+      }}
+  no_log: "{{ tailscale_bootstrap_exec_sensitive | default(false) | bool }}"
+  diff: false
+
+- name: Tailscale Bootstrap | Require a guest command result mapping
+  ansible.builtin.assert:
+    that:
+      - tailscale_bootstrap_exec_envelope is mapping
+    fail_msg: The selected guest transport returned an invalid command result.
+  no_log: "{{ tailscale_bootstrap_exec_sensitive | default(false) | bool }}"
+  diff: false

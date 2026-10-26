@@ -1,0 +1,15 @@
+# Managed by Ansible: system NIC settings.
+[Unit]
+Description=Apply selected NIC settings on %I
+BindsTo=sys-subsystem-net-devices-%i.device
+After=sys-subsystem-net-devices-%i.device
+JobTimeoutSec=60
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/skynet-system-nic --apply "%I"
+TimeoutStartSec=30
+RemainAfterExit=no
+
+[Install]
+WantedBy=multi-user.target

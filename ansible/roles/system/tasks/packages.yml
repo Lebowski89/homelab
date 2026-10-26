@@ -1,0 +1,51 @@
+---
+- name: System | Install APT baseline packages
+  when: ansible_facts.pkg_mgr == 'apt'
+  ansible.builtin.apt:
+    name: "{{ (system_platform_packages + system_extra_packages) | unique }}"
+    state: present
+    update_cache: true
+    cache_valid_time: "{{ system_package_cache_valid_time }}"
+  environment: "{{ system_apt_environment }}"
+
+- name: System | Install DNF baseline packages
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.dnf:
+    name: "{{ (system_platform_packages + system_extra_packages) | unique }}"
+    state: present
+    use_backend: "{{ ansible_facts.pkg_mgr }}"
+
+- name: System | Install QEMU Guest Agent for virtual machines
+  when:
+    - system_guest_agent_enabled
+    - ansible_facts.virtualization_role | default('') == 'guest'
+    - ansible_facts.virtualization_type | default('') in ['kvm', 'qemu']
+  block:
+    - name: System | Install guest agent using APT
+      when: ansible_facts.pkg_mgr == 'apt'
+      ansible.builtin.apt:
+        name: qemu-guest-agent
+        state: present
+      environment: "{{ system_apt_environment }}"
+
+    - name: System | Install guest agent using DNF
+      when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+      ansible.builtin.dnf:
+        name: qemu-guest-agent
+        state: present
+        use_backend: "{{ ansible_facts.pkg_mgr }}"
+
+    - name: System | Enable and start QEMU Guest Agent
+      when: not ansible_check_mode
+      ansible.builtin.systemd_service:
+        name: qemu-guest-agent
+        enabled: true
+        state: started
+  rescue:
+    - name: System | Report guest agent setup failure
+      ansible.builtin.fail:
+        msg: >-
+          QEMU Guest Agent setup failed on {{ inventory_hostname }} during
+          {{ ansible_failed_task.name | default('an unknown task') }}:
+          {{ ansible_failed_result.msg | default('See the preceding task error for details.') }}
+          Inspect any partial package or service changes before retrying.

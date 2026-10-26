@@ -1,0 +1,106 @@
+---
+- name: System | Inspect image-based deployment marker
+  ansible.builtin.stat:
+    path: /run/ostree-booted
+  register: system_ostree_boot
+
+- name: System | Reject unsupported platforms before changes
+  ansible.builtin.assert:
+    that:
+      - not system_ostree_boot.stat.exists
+      - ansible_facts.service_mgr | default('') == 'systemd'
+      - >-
+        (ansible_facts.os_family | default('') == 'Debian'
+         and ansible_facts.distribution | default('') in ['Debian', 'Ubuntu']
+         and ansible_facts.pkg_mgr | default('') == 'apt') or
+        (ansible_facts.os_family | default('') == 'RedHat'
+         and ansible_facts.pkg_mgr | default('') in ['dnf', 'dnf5']
+         and (ansible_facts.distribution | default('') == 'Fedora'
+              or (ansible_facts.distribution | default('') == 'Rocky'
+                  and ansible_facts.distribution_major_version | default('') == '10')))
+    fail_msg: >-
+      System supports conventional Debian/Ubuntu (APT), Rocky Linux 10 and Fedora
+      (DNF/DNF5), with systemd. Detected {{ ansible_facts.distribution | default('unknown') }}
+      {{ ansible_facts.distribution_version | default('') }} using
+      {{ ansible_facts.pkg_mgr | default('unknown') }}.
+      Atomic/OSTree and other image-based or derivative systems are unsupported.
+      No baseline changes have been made.
+
+- name: System | Validate boolean feature flags
+  ansible.builtin.assert:
+    that: system_boolean_flag is boolean
+    fail_msg: System feature flags must be YAML booleans.
+  loop:
+    - "{{ system_packages_enabled }}"
+    - "{{ system_sysctl_enabled }}"
+    - "{{ system_limits_enabled }}"
+    - "{{ system_guest_agent_enabled }}"
+    - "{{ system_nic_migrate_legacy }}"
+    - "{{ system_swap_enabled }}"
+    - "{{ system_resolved_enabled }}"
+    - "{{ system_resolved_disable_stub }}"
+    - "{{ system_resolved_manage_resolv_conf }}"
+    - "{{ system_resolved_manage_nsswitch }}"
+    - "{{ system_updates_upgrade }}"
+    - "{{ system_updates_autoremove }}"
+    - "{{ system_updates_autoclean }}"
+  loop_control:
+    loop_var: system_boolean_flag
+
+- name: System | Reject unsupported cache maintenance
+  when: "'system_updates' in ansible_run_tags"
+  ansible.builtin.assert:
+    that: not system_updates_autoclean or ansible_facts.pkg_mgr == 'apt'
+    fail_msg: system_updates_autoclean is APT-only; DNF cache cleanup is not managed by this role.
+
+- name: System | Validate optional resolver support
+  when: system_resolved_enabled
+  ansible.builtin.assert:
+    that: ansible_facts.os_family == 'Debian'
+    fail_msg: >-
+      The optional resolver feature currently supports Debian/Ubuntu only.
+      Leave it disabled on DNF hosts to preserve their existing resolver ownership.
+
+- name: System | Validate swap inputs before discovery
+  when: system_swap_enabled
+  ansible.builtin.assert:
+    that:
+      - system_swap_path is string
+      - system_swap_path is match('^/[^\s]+$')
+      - system_swap_size_mb is integer
+      - system_swap_size_mb > 0
+      - ansible_facts.virtualization_type | default('') != 'lxc'
+    fail_msg: Swap requires an absolute file path and positive integer MiB size on a non-LXC host.
+
+- name: System NIC | Validate interface selection mapping
+  ansible.builtin.assert:
+    that:
+      - system_nic_interfaces is mapping
+      - not system_nic_migrate_legacy or system_nic_interfaces | length > 0
+    fail_msg: NIC configuration requires a mapping; legacy migration also requires explicit replacement interface settings.
+
+- name: System NIC | Validate selected names and independent boolean settings
+  ansible.builtin.assert:
+    that:
+      - system_nic_interface.key is string
+      - system_nic_interface.key is match('^[a-zA-Z0-9_][a-zA-Z0-9_.:-]{0,14}$')
+      - system_nic_interface.value is mapping
+      - system_nic_interface.value.keys() | difference(['disable_fw_lldp', 'udp_gro_forwarding']) | length == 0
+      - system_nic_interface.value.disable_fw_lldp | default(false) is boolean
+      - system_nic_interface.value.udp_gro_forwarding | default(false) is boolean
+      - system_nic_interface.value.disable_fw_lldp | default(false) or system_nic_interface.value.udp_gro_forwarding | default(false)
+    fail_msg: >-
+      Each selected NIC needs a valid Linux interface name and at least one opt-in
+      boolean (disable_fw_lldp or udp_gro_forwarding). Remove a port from the mapping
+      to stop managing it; false does not reverse firmware/offload settings.
+  loop: "{{ system_nic_interfaces | dict2items }}"
+  loop_control:
+    loop_var: system_nic_interface
+    label: "{{ system_nic_interface.key }}"
+
+- name: System NIC | Reset preflight result for this role invocation
+  ansible.builtin.set_fact:
+    system_nic_preflight_succeeded: false
+
+- name: System | Select native package list
+  ansible.builtin.include_vars: "{{ ansible_facts.os_family }}.yml"

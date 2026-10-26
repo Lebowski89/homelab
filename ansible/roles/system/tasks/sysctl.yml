@@ -1,0 +1,25 @@
+---
+- name: System | Remove retired keys only from the role-owned sysctl file
+  ansible.builtin.lineinfile:
+    path: "{{ system_sysctl_file }}"
+    regexp: '^\s*{{ system_retired_sysctl | regex_escape }}\s*='
+    state: absent
+  loop:
+    - fs.file-max
+    - net.ipv4.tcp_adv_win_scale
+    - net.core.netdev_budget
+    - net.core.netdev_max_backlog
+  loop_control:
+    loop_var: system_retired_sysctl
+
+- name: System | Persist shared kernel settings
+  ansible.posix.sysctl:
+    name: "{{ system_sysctl.key }}"
+    value: "{{ system_sysctl.value }}"
+    state: present
+    sysctl_file: "{{ system_sysctl_file }}"
+    reload: true
+    ignoreerrors: true
+  loop: "{{ system_sysctl_settings | dict2items }}"
+  loop_control:
+    loop_var: system_sysctl

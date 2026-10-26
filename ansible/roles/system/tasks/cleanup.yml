@@ -1,0 +1,95 @@
+---
+# Preserve legacy settings by default. Only an explicit, validated replacement
+# may retire the exact unit and generated script previously owned by ubuntu.
+- name: System cleanup | Inspect legacy NIC tuning files
+  ansible.builtin.stat:
+    path: "{{ system_legacy_nic_path }}"
+    follow: false
+  loop:
+    - /etc/systemd/system/nic-tuning.service
+    - /usr/local/sbin/nic-tuning.sh
+  loop_control:
+    loop_var: system_legacy_nic_path
+  register: system_legacy_nic_files
+
+- name: System cleanup | Read regular legacy NIC tuning files
+  when: system_legacy_nic_file.stat.isreg | default(false)
+  ansible.builtin.slurp:
+    src: "{{ system_legacy_nic_file.system_legacy_nic_path }}"
+  loop: "{{ system_legacy_nic_files.results }}"
+  loop_control:
+    loop_var: system_legacy_nic_file
+    label: "{{ system_legacy_nic_file.system_legacy_nic_path }}"
+  register: system_legacy_nic_contents
+
+- name: System cleanup | Identify unchanged role-owned NIC tuning
+  ansible.builtin.set_fact:
+    system_legacy_nic_owned: >-
+      {{ (system_legacy_nic_contents.results[0].content | default('') | b64decode | trim)
+         == system_legacy_nic_unit | trim
+         and (system_legacy_nic_contents.results[1].content | default('') | b64decode | trim)
+         is match('^#!/usr/bin/env bash\nset -e\n\nethtool -K [a-zA-Z0-9_.:-]+ ' ~
+                  '(disable-fw-lldp on )?rx-udp-gro-forwarding on rx-gro-list off$') }}
+  vars:
+    system_legacy_nic_unit: |
+      [Unit]
+      Description=Apply NIC tuning
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/sbin/nic-tuning.sh
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+
+- name: System cleanup | Require an explicit verified transition before replacing a legacy tuner
+  when:
+    - system_legacy_nic_files.results | selectattr('stat.exists') | list | length > 0
+    - system_nic_interfaces | length > 0 or system_nic_migrate_legacy
+  ansible.builtin.assert:
+    that:
+      - system_nic_migrate_legacy
+      - system_legacy_nic_owned
+      - ansible_check_mode or system_nic_preflight_succeeded
+    fail_msg: >-
+      Legacy nic-tuning files are present. Select the intended replacement ports,
+      review the old files, and set system_nic_migrate_legacy: true for a system nic
+      run. Only the exact former role-owned pair can be transitioned automatically;
+      modified/administrator files must be reconciled explicitly. No legacy tuner
+      has been disabled or deleted.
+
+- name: System cleanup | Disable unchanged legacy NIC tuning
+  when:
+    - system_nic_migrate_legacy
+    - system_legacy_nic_owned
+    - not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: nic-tuning.service
+    enabled: false
+    state: stopped
+
+- name: System cleanup | Remove unchanged legacy NIC tuning files
+  when:
+    - system_nic_migrate_legacy
+    - system_legacy_nic_owned
+  ansible.builtin.file:
+    path: "{{ system_legacy_nic_path }}"
+    state: absent
+  loop:
+    - /etc/systemd/system/nic-tuning.service
+    - /usr/local/sbin/nic-tuning.sh
+  loop_control:
+    loop_var: system_legacy_nic_path
+  notify: System | Reload systemd after legacy unit retirement
+
+- name: System cleanup | Report preserved legacy NIC tuning
+  when:
+    - not system_nic_migrate_legacy
+    - system_legacy_nic_files.results | selectattr('stat.exists') | list | length > 0
+  ansible.builtin.debug:
+    msg: >-
+      Legacy NIC tuning files were preserved. To replace the old tuner, explicitly
+      select the physical/virtual ports and request the verified system NIC transition.

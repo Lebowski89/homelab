@@ -39,10 +39,13 @@ jobs:
           - terraform/netbox
           - terraform/proxmox/containers/dns03
           - terraform/proxmox/mappings/resources
+          - terraform/proxmox/modules/cloudinit-vm
           - terraform/proxmox/settings/pve1
           - terraform/proxmox/templates/ubuntu-2604
+          - terraform/proxmox/templates/rocky-10
           - terraform/proxmox/templates/ubuntu-2404-lxc
           - terraform/proxmox/vms/postgres-cluster
+          - terraform/proxmox/vms/rocky
           - terraform/proxmox/vms/unraid
           - terraform/seerr
           - terraform/technitium/internal-dns
@@ -70,3 +73,7 @@ jobs:
 
       - name: Validate
         run: tofu validate
+
+      - name: Test optional VM firmware
+        if: matrix.root == 'terraform/proxmox/modules/cloudinit-vm'
+        run: tofu test -no-color

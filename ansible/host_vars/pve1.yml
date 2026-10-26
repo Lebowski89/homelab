@@ -21,7 +21,7 @@ tailscale_bootstrap_guests: {}
 
 # Populate the variables above before running:
 #
-#  skynet bootstrap tailscale
+#  skynet limit pve1 bootstrap tailscale
 #
 # Example:
 #
@@ -32,3 +32,8 @@ tailscale_bootstrap_guests: {}
 #     vmid: 9000
 #     hostname: guest-name
 #     enable_ssh: true
+#     # Select SSH for guests with restricted QGA execution, such as some
+#     # Rocky/Fedora SELinux guests. Omit transport to use the QGA default.
+#     transport: ssh
+#     ssh_host: 192.0.2.10  # Replace with the guest's LAN IP.
+#     ssh_user: guestuser  # Guest SSH user with passwordless sudo.

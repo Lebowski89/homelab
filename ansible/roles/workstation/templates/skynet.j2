@@ -5,6 +5,7 @@ DEFAULT_REPO_ROOT="{{ workstation_repository_path }}"
 PLAYBOOK="${PLAYBOOK:-${REPO_ROOT:-$DEFAULT_REPO_ROOT}/ansible/playbook.yml}"
 DEFAULT_REPO_ROOT="$(cd "$(dirname "$PLAYBOOK")/.." >/dev/null 2>&1 && pwd || printf '%s' "$DEFAULT_REPO_ROOT")"
 REPO_ROOT="${REPO_ROOT:-$DEFAULT_REPO_ROOT}"
+SYSTEM_BOOTSTRAP_CONFIG="${ANSIBLE_CONFIG:-$REPO_ROOT/ansible/bootstrap.cfg}"
 INVENTORY="${INVENTORY:-$REPO_ROOT/ansible/netbox.yml}"
 ANSIBLE_CONFIG="${ANSIBLE_CONFIG:-$REPO_ROOT/ansible/ansible.cfg}"
 BECOME_PASS_FILE="${BECOME_PASS_FILE:-{{ workstation_become_pass_file }}}"
@@ -78,7 +79,7 @@ Role/action examples:
   skynet run workstation credentials
   skynet check resolved
   skynet run resolved
-  skynet check ubuntu sysctl
+  skynet check system sysctl
   skynet run docker swarm
   skynet run opentofu pve-user
   skynet check infisical-podman
@@ -354,18 +355,19 @@ role_tag() {
     netbox:recreate)                echo "netbox_recreate" ;;
     netbox:remove)                  echo "netbox_remove" ;;
 
-    ubuntu:deploy)                  echo "ubuntu" ;;
-    ubuntu:apt)                     echo "ubuntu_apt" ;;
-    ubuntu:sysctl)                  echo "ubuntu_sysctl" ;;
-    ubuntu:pam)                     echo "ubuntu_pam" ;;
-    ubuntu:network)                 echo "ubuntu_network" ;;
-    ubuntu:netplan)                 echo "ubuntu_netplan" ;;
-    ubuntu:postgres-swap)           echo "ubuntu_postgres_swap" ;;
+    system:deploy)                 echo "system" ;;
+    system:packages)               echo "system_packages" ;;
+    system:updates)                echo "system_updates" ;;
+    system:sysctl)                 echo "system_sysctl" ;;
+    system:limits)                 echo "system_limits" ;;
+    system:swap)                   echo "system_swap" ;;
+    system:resolved)               echo "system_resolved" ;;
+    system:nic)                    echo "system_nic" ;;
+    system:cleanup)                echo "system_cleanup" ;;
 
-    resolved:deploy)                echo "resolved" ;;
-    resolved:run)                   echo "resolved" ;;
-    systemd-resolved:deploy)        echo "resolved" ;;
-    systemd-resolved:run)           echo "resolved" ;;
+    # Preserve the established resolver entry points without a second role.
+    resolved:deploy|resolved:run|systemd-resolved:deploy|systemd-resolved:run)
+                                    echo "system_resolved" ;;
 
     docker:deploy)                  echo "docker" ;;
     docker:install)                 echo "docker_install" ;;
@@ -493,7 +495,10 @@ PY
       fi
     done
   fi
-  if [[ "$target" == "netbox" ]]; then
+  if [[ "$target" == "system" || "$target" == "resolved" || "$target" == "systemd-resolved" ]] &&
+     [[ "$INVENTORY" != "$REPO_ROOT/ansible/netbox.yml" ]]; then
+    ANSIBLE_CONFIG="$SYSTEM_BOOTSTRAP_CONFIG" run_playbook "$@" -e system_hosts=all
+  elif [[ "$target" == "netbox" ]]; then
     INVENTORY="$REPO_ROOT/ansible/inventory/netbox-bootstrap.yml" \
       PLAYBOOK="$REPO_ROOT/ansible/bootstrap.yml" \
       ANSIBLE_CONFIG="$REPO_ROOT/ansible/bootstrap.cfg" \
@@ -553,6 +558,8 @@ run_check_action() {
     local tags
     if tags="$(role_tag "$1" "${2:-deploy}")"; then
       run_role_playbook "$1" "${LIMIT_ARGS[@]}" --check --diff --tags "$tags"
+    elif [[ "${1,,}" == "system" ]]; then
+      die "Unknown system action: ${2:-deploy}. Run: skynet targets"
     else
       tags="deploy,$(join_csv "$@")"
       run_playbook "${LIMIT_ARGS[@]}" --check --diff --tags "$tags"
@@ -598,18 +605,20 @@ Role/action targets:
     recreate  -> netbox_recreate
     remove    -> netbox_remove
 
-  ubuntu:
-    deploy       -> ubuntu
-    apt          -> ubuntu_apt
-    sysctl       -> ubuntu_sysctl
-    pam          -> ubuntu_pam
-    network      -> ubuntu_network
-    netplan      -> ubuntu_netplan
-    postgres-swap -> ubuntu_postgres_swap
+  system:
+    deploy    -> system
+    packages  -> system_packages
+    updates   -> system_updates
+    sysctl    -> system_sysctl
+    limits    -> system_limits
+    swap      -> system_swap
+    resolved  -> system_resolved
+    cleanup   -> system_cleanup
+    nic       -> system_nic
 
-  resolved:
-    deploy -> resolved
-    run    -> resolved
+  resolved (compatibility alias for system resolved):
+    deploy -> system_resolved
+    run    -> system_resolved
 
   docker:
     deploy              -> docker
@@ -723,7 +732,7 @@ Role/action targets:
 Examples:
   skynet check resolved
   skynet run resolved
-  skynet check ubuntu sysctl
+  skynet check system sysctl
   skynet run docker swarm
   skynet run opentofu pve-user
   skynet check infisical-podman
@@ -1024,6 +1033,15 @@ case "$CMD" in
   dry-run) CMD="check" ;;
   target)  CMD="run" ;;
 esac
+
+# Retired network commands must never fall through to service deployment.
+requested_role_target="${1:-}"
+requested_role_target="${requested_role_target,,}"
+requested_role_target="${requested_role_target//_/-}"
+if [[ "$requested_role_target" == "ubuntu" || "$requested_role_target" == ubuntu-* ]] &&
+   [[ "$CMD" =~ ^(run|check|deploy|update|remove|recreate|bootstrap)$ ]]; then
+  die "The ubuntu target is retired. Use skynet run system <action>; network/netplan management was removed."
+fi
 
 case "$CMD" in
   deploy)

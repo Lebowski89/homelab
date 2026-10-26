@@ -1,0 +1,6 @@
+---
+# Preserve resolver/NSS integration on existing Ubuntu hosts. DNF hosts keep
+# their existing resolver stack; Debian hosts may explicitly opt in.
+system_resolved_enabled: "{{ ansible_facts.distribution | default('') == 'Ubuntu' }}"
+# Explicit DNS-service integration: free port 53 for Technitium only on DNS hosts.
+system_resolved_disable_stub: "{{ 'tags_dns' in group_names }}"

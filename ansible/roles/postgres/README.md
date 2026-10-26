@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/01 |
+| Readme update        | 2026/10/26 |
 
 
 
@@ -139,6 +139,7 @@
 | Ensure dedicated PostgreSQL admin role exists | ansible.builtin.include_tasks | True | postgres_admin,postgres_admin_monitor |
 | Report PostgreSQL admin role check-mode plan | ansible.builtin.debug | True | postgres_admin,postgres_admin_monitor |
 | Ensure neutral PostgreSQL monitoring role exists | ansible.builtin.include_tasks | True | postgres_admin_monitor |
+| Install PostgreSQL backup prerequisites | ansible.builtin.include_tasks | True | postgres,postgres_backup,postgres_backup_setup,postgres_backup_run |
 | Configure PostgreSQL logical backups | ansible.builtin.include_tasks | True | postgres,postgres_backup,postgres_backup_setup,postgres_backup_run |
 | Run PostgreSQL logical backup manually | ansible.builtin.include_tasks | True | postgres_backup,postgres_backup_run |
 | Report PostgreSQL logical backup manual check-mode plan | ansible.builtin.debug | True | postgres_backup,postgres_backup_run |
@@ -262,6 +263,12 @@
 | Logical backup run ¦ Validate leader inventory mapping | ansible.builtin.assert | False |
 | Logical backup run ¦ Invoke installed leader-gated runner | ansible.builtin.command | False |
 | Logical backup run ¦ Report status and location | ansible.builtin.debug | False |
+
+#### File: tasks/sub_tasks/backup_prerequisites.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| PostgreSQL backup ¦ Install ACL support for unprivileged become | ansible.builtin.apt | False |
 
 #### File: tasks/sub_tasks/backup_remote_action.yml
 
