@@ -23,7 +23,7 @@ variable "pm_tls_insecure" {
   default     = false
 }
 
-variable "template_node" {
+variable "template_node_name" {
   type = string
 }
 
@@ -32,7 +32,7 @@ variable "template_datastore" {
   default = "local"
 }
 
-variable "template_name" {
+variable "template_file_name" {
   type    = string
   default = "noble-server-cloudimg-amd64-root.tar.xz"
 }
