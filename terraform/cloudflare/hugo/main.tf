@@ -18,10 +18,10 @@ resource "cloudflare_dns_record" "github_pages_a" {
   for_each = toset(local.github_pages_ipv4)
 
   zone_id = var.cloudflare_zone_id
-  name    = var.apex_name
+  name    = "@"
   type    = "A"
   content = each.value
-  ttl     = var.ttl
+  ttl     = 1
   proxied = false
 }
 
@@ -29,9 +29,9 @@ resource "cloudflare_dns_record" "github_pages_aaaa" {
   for_each = toset(local.github_pages_ipv6)
 
   zone_id = var.cloudflare_zone_id
-  name    = var.apex_name
+  name    = "@"
   type    = "AAAA"
   content = each.value
-  ttl     = var.ttl
+  ttl     = 1
   proxied = false
 }
