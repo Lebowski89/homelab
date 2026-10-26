@@ -1,0 +1,10 @@
+---
+- name: PostgreSQL backup | Install ACL support for unprivileged become
+  ansible.builtin.apt:
+    name: acl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+    DEBIAN_PRIORITY: critical

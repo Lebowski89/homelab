@@ -1,0 +1,17 @@
+---
+- name: System | Retire blanket memlock rules from the old role-owned file
+  ansible.builtin.lineinfile:
+    path: "{{ system_limits_file }}"
+    regexp: '^\*\s+(soft|hard)\s+memlock\s+unlimited\s*$'
+    state: absent
+
+- name: System | Configure login-session limits
+  community.general.pam_limits:
+    dest: "{{ system_limits_file }}"
+    domain: "{{ system_limit.domain }}"
+    limit_type: "{{ system_limit.type }}"
+    limit_item: "{{ system_limit.item }}"
+    value: "{{ system_limit.value }}"
+  loop: "{{ system_limits }}"
+  loop_control:
+    loop_var: system_limit

@@ -1,0 +1,15 @@
+---
+# Curl prerequisites belong to the installer that needs them. In particular,
+# do not replace Rocky's working curl-minimal with the conflicting curl package.
+system_platform_packages:
+  - python3
+  - ca-certificates
+  - wget
+  - git
+  - jq
+  - rsync
+  - logrotate
+  - nano
+  - unzip
+  - tree
+  - lsof

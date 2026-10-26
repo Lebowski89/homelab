@@ -88,6 +88,22 @@
   tags:
     - postgres_admin_monitor
 
+- name: Install PostgreSQL backup prerequisites
+  when: "'tags_postgres' in group_names"
+  ansible.builtin.include_tasks:
+    file: sub_tasks/backup_prerequisites.yml
+    apply:
+      tags:
+        - postgres
+        - postgres_backup
+        - postgres_backup_setup
+        - postgres_backup_run
+  tags:
+    - postgres
+    - postgres_backup
+    - postgres_backup_setup
+    - postgres_backup_run
+
 - name: Configure PostgreSQL logical backups
   when:
     - "'tags_postgres' in group_names"

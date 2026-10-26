@@ -7,12 +7,7 @@ from jinja2 import Environment, StrictUndefined
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NODE_RULES_PATH = REPO_ROOT / "ansible/roles/service_common/templates/configs/prometheus/rules/node-exporter.yml.j2"
 HAPROXY_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/service_common/templates/configs/haproxy.cfg.j2"
-UBUNTU_DEFAULTS_PATH = REPO_ROOT / "ansible/roles/ubuntu/defaults/main.yml"
-UBUNTU_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/main.yml"
-SWAP_TASKS_PATH = REPO_ROOT / "ansible/roles/ubuntu/tasks/sub_tasks/postgres_emergency_swap.yml"
-POSTGRES_VARS_PATH = REPO_ROOT / "ansible/group_vars/tags_postgres.yml"
 POSTGRES_TFVARS_SAMPLE_PATH = REPO_ROOT / "terraform/proxmox/vms/postgres-cluster/private.auto.tfvars.sample"
-SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/workstation/templates/skynet.j2"
 
 
 def task_named(tasks, name):
@@ -66,45 +61,6 @@ def test_haproxy_postgres_backends_start_fully_down_until_primary_checks_pass():
     assert "tcp-check expect rstring ^HTTP/1\\.[01][[:space:]]+200" in backend
     assert "default-server inter 2s fall 3 rise 2 init-state fully-down on-marked-down shutdown-sessions" in backend
     assert backend.index("init-state fully-down") < backend.index("server pg95")
-
-
-def test_postgres_emergency_swap_is_scoped_idempotent_and_check_mode_safe():
-    defaults = yaml.safe_load(UBUNTU_DEFAULTS_PATH.read_text())
-    postgres_vars = yaml.safe_load(POSTGRES_VARS_PATH.read_text())
-    role_tasks = yaml.safe_load(UBUNTU_TASKS_PATH.read_text())
-    swap_tasks = yaml.safe_load(SWAP_TASKS_PATH.read_text())
-
-    include = task_named(role_tasks, "Ubuntu | Configure PostgreSQL emergency swap")
-    active = task_named(swap_tasks, "PostgreSQL emergency swap | Discover active swap sources")
-    persistent = task_named(swap_tasks, "PostgreSQL emergency swap | Discover persistent swap sources")
-    preserve = task_named(swap_tasks, "PostgreSQL emergency swap | Preserve administrator-provided swap")
-    reconcile = task_named(swap_tasks, "PostgreSQL emergency swap | Reconcile managed swap file")
-    nested = {task["name"]: task for task in reconcile["block"]}
-    rescue = task_named(reconcile["rescue"], "PostgreSQL emergency swap | Stop after reconciliation failure")
-
-    assert defaults["ubuntu_postgres_emergency_swap_enabled"] is False
-    assert postgres_vars["ubuntu_postgres_emergency_swap_enabled"] is True
-    assert postgres_vars["ubuntu_postgres_emergency_swap_size_mb"] == 2048
-    assert defaults["ubuntu_sysctl_settings"]["vm.swappiness"] == 10
-    assert "'tags_postgres' in group_names" in include["when"]
-    assert "ubuntu_postgres_swap" in include["tags"]
-    assert active["check_mode"] is False and active["changed_when"] is False
-    assert persistent["check_mode"] is False and persistent["changed_when"] is False
-    assert "alternate_sources | length > 0" in preserve["when"]
-    assert "alternate_sources | length == 0" in reconcile["when"]
-    assert nested["PostgreSQL emergency swap | Allocate managed file"]["ansible.builtin.command"]["creates"]
-    assert nested["PostgreSQL emergency swap | Protect managed file"]["ansible.builtin.file"]["mode"] == "0600"
-    assert "not ansible_check_mode" in nested["PostgreSQL emergency swap | Format newly allocated file"]["when"]
-    assert nested["PostgreSQL emergency swap | Persist managed file"]["ansible.builtin.lineinfile"]["path"] == "/etc/fstab"
-    assert "not ansible_check_mode" in nested["PostgreSQL emergency swap | Activate managed file"]["when"]
-    assert "ansible.builtin.fail" in rescue
-
-
-def test_postgres_emergency_swap_has_friendly_skynet_mapping():
-    skynet = SKYNET_TEMPLATE_PATH.read_text()
-
-    assert 'ubuntu:postgres-swap)           echo "ubuntu_postgres_swap"' in skynet
-    assert "postgres-swap -> ubuntu_postgres_swap" in skynet
 
 
 def test_postgres_proxmox_vm_definitions_use_four_gib_each():

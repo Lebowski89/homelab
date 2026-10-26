@@ -1,0 +1,104 @@
+#!/bin/bash
+# Managed by Ansible: system NIC settings.
+set -Eeuo pipefail
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+export LC_ALL=C
+sysfs=/sys/class/net
+interface=unknown
+driver=unknown
+bus=unknown
+stage=arguments
+trap 'rc=$?; printf "System NIC %s (%s at %s): %s failed (exit %s).\n" "$interface" "$driver" "$bus" "$stage" "$rc" >&2; exit "$rc"' ERR
+
+fail() {
+    printf 'System NIC %s (%s at %s): %s: %s\n' "$interface" "$driver" "$bus" "$stage" "$*" >&2
+    exit 1
+}
+
+select_interface() {
+    case "$interface" in
+{% for name, settings in system_nic_interfaces | dictsort %}
+        {{ name | quote }})
+            lldp={{ settings.get('disable_fw_lldp', false) | ternary(1, 0) }}
+            gro={{ settings.get('udp_gro_forwarding', false) | ternary(1, 0) }} ;;
+{% endfor %}
+        *) fail 'interface is not selected in system_nic_interfaces' ;;
+    esac
+}
+
+inspect() {
+    stage='device inspection'
+    driver=unknown
+    bus=unknown
+    select_interface
+    [[ -d "$sysfs/$interface" ]] || fail 'selected interface is missing'
+    info=$(ethtool -i "$interface")
+    driver=$(awk '$1 == "driver:" {print $2}' <<< "$info")
+    bus=$(awk '$1 == "bus-info:" {print $2}' <<< "$info")
+    [[ -n "$driver" && -n "$bus" ]] || fail 'cannot establish driver and device identity'
+    printf '%s: driver=%s bus=%s\n' "$interface" "$driver" "$bus"
+    lldp_needed=0
+    gro_needed=0
+    if (( lldp )); then
+        stage='X710 physical-function validation'
+        [[ "$driver" == i40e ]] || fail 'firmware LLDP requires the X710 PF owner using i40e, not VirtIO or a VF'
+        [[ ! -e "$sysfs/$interface/device/physfn" && ! -L "$sysfs/$interface/device/physfn" ]] || fail 'SR-IOV VF cannot own firmware LLDP'
+        [[ "$bus" =~ ^[[:xdigit:]]{4}:[[:xdigit:]]{2}:[[:xdigit:]]{2}\.[0-7]$ ]] || fail 'expected a PCI physical function'
+        [[ $(basename "$(readlink -f "$sysfs/$interface/device")") == "$bus" ]] || fail 'driver bus and sysfs device disagree'
+        [[ $(cat "$sysfs/$interface/device/vendor") == 0x8086 ]] || fail 'device is not an Intel PCI function'
+        identity=$(lspci -D -s "$bus" -nn)
+        grep -Eq '(^|[^[:alnum:]])X710([^[:alnum:]]|$)' <<< "$identity" || fail "cannot identify an X710: $identity"
+        printf '%s: %s\n' "$interface" "$identity"
+        stage='firmware LLDP capability inspection'
+        private=$(ethtool --show-priv-flags "$interface")
+        flag=$(awk '$1 == "disable-fw-lldp:" {print $2}' <<< "$private")
+        case "$flag" in
+            on) ;;
+            off) lldp_needed=1 ;;
+            *) fail 'disable-fw-lldp private flag is unavailable' ;;
+        esac
+    fi
+    if (( gro )); then
+        stage='UDP GRO capability inspection'
+        features=$(ethtool -k "$interface")
+        for feature in rx-udp-gro-forwarding rx-gro-list; do
+            wanted=on
+            [[ "$feature" != rx-gro-list ]] || wanted=off
+            line=$(awk -v key="$feature:" '$1 == key {print}' <<< "$features")
+            value=$(awk '{print $2}' <<< "$line")
+            [[ "$value" == on || "$value" == off ]] || fail "$feature is unavailable"
+            if [[ "$value" != "$wanted" ]]; then
+                [[ "$line" != *'[fixed]'* ]] || fail "$feature is fixed at $value; requested $wanted"
+                gro_needed=1
+            fi
+        done
+    fi
+}
+
+mode=${1:---check}
+[[ "$mode" == --check || "$mode" == --apply ]] || fail 'usage: --check|--apply [selected interface ...]'
+if (( $# )); then shift; fi
+if (( $# == 0 )); then
+    set --{% for name in system_nic_interfaces | sort %} {{ name | quote }}{% endfor %}
+
+fi
+# Validate every requested interface before changing any of them.
+for interface in "$@"; do
+    inspect
+    if (( lldp_needed || gro_needed )); then printf 'SYSTEM_NIC_CHANGE=%s\n' "$interface"; fi
+done
+[[ "$mode" == --apply ]] || exit 0
+for interface in "$@"; do
+    inspect
+    if (( lldp_needed )); then
+        stage='firmware LLDP application'
+        ethtool --set-priv-flags "$interface" disable-fw-lldp on
+    fi
+    if (( gro_needed )); then
+        stage='UDP GRO application'
+        ethtool -K "$interface" rx-udp-gro-forwarding on rx-gro-list off
+    fi
+    inspect
+    stage='post-application verification'
+    (( lldp_needed == 0 && gro_needed == 0 )) || fail 'requested settings did not take effect'
+done

@@ -36,6 +36,44 @@
       tags: *workstation_tags
 
 ################################
+# SHARED OS BASELINE (NO APPLICATION DEPENDENCIES)
+################################
+
+- name: Configure shared operating system baseline
+  hosts: "{{ system_hosts | default('tags_skynet') }}"
+  become: true
+  gather_facts: false
+
+  pre_tasks:
+    - name: Keep unrelated selections outside system provisioning
+      when:
+        - "'all' not in ansible_run_tags"
+        - ansible_run_tags | select('match', '^system(_|$)') | list | length == 0
+      ansible.builtin.meta: end_play
+      tags: always
+
+  tasks:
+    - name: Gather system platform facts
+      ansible.builtin.setup:
+      tags: &system_tags
+        - system
+        - system_packages
+        - system_updates
+        - system_sysctl
+        - system_limits
+        - system_swap
+        - system_resolved
+        - system_cleanup
+        - system_nic
+
+    - name: Include shared system role
+      # Preserve full-run Ubuntu scope; other platforms explicitly opt in.
+      when: system_enabled | default(ansible_facts.distribution == 'Ubuntu' or 'all' not in ansible_run_tags)
+      ansible.builtin.include_role:
+        name: system
+      tags: *system_tags
+
+################################
 # BOOTSTRAP
 ################################
 
@@ -83,10 +121,9 @@
   strategy: linear
 
   pre_tasks:
-    # Tags do not suppress always-tagged pre_tasks. End only workstation-only
-    # selections before entering the ordinary service contract and lifecycle.
-    - name: Keep workstation-only runs outside homelab operations
-      when: ansible_run_tags | reject('match', '^workstation(_|$)') | list | length == 0
+    # Infrastructure-only selections must not enter application host contracts.
+    - name: Keep workstation and system runs outside homelab operations
+      when: ansible_run_tags | reject('match', '^(workstation|system)(_|$)') | list | length == 0
       ansible.builtin.meta: end_play
       tags: always
 
@@ -166,65 +203,6 @@
       tags:
         - never
         - tailscale_bootstrap
-
-    ################################
-    # OS (CONFIG/SETTINGS)
-    ################################
-
-    - name: Gather facts for Ubuntu role
-      ansible.builtin.setup:
-      tags:
-        - ubuntu
-        - ubuntu_apt
-        - ubuntu_sysctl
-        - ubuntu_postgres_swap
-        - ubuntu_pam
-        - ubuntu_network
-        - ubuntu_netplan
-
-    - name: Gather facts for PostgreSQL backup prerequisites
-      when: "'tags_postgres' in group_names"
-      ansible.builtin.setup:
-      tags:
-        - postgres_backup
-        - postgres_backup_setup
-        - postgres_backup_run
-
-    - name: Include Ubuntu role
-      when:
-        - ansible_facts.os_family | default("") == "Debian"
-        - ansible_facts.distribution | default("") == "Ubuntu"
-      ansible.builtin.include_role:
-        name: ubuntu
-      tags:
-        - ubuntu
-        - ubuntu_apt
-        - ubuntu_sysctl
-        - ubuntu_postgres_swap
-        - ubuntu_pam
-        - ubuntu_network
-        - ubuntu_netplan
-        - postgres_backup
-        - postgres_backup_setup
-        - postgres_backup_run
-
-    ################################
-    # SYSTEMD-RESOLVED / NSS
-    ################################
-
-    - name: Gather facts for systemd-resolved role
-      ansible.builtin.setup:
-      tags: [resolved]
-
-    - name: Include systemd-resolved role
-      when:
-        - ansible_facts.os_family | default("") == "Debian"
-        - ansible_facts.distribution | default("") == "Ubuntu"
-      ansible.builtin.include_role:
-        name: resolved
-        apply:
-          tags: [resolved]
-      tags: [resolved]
 
     ################################
     # DOCKER
@@ -334,6 +312,9 @@
       tags:
         - postgres
         - postgres_apt
+        - postgres_backup
+        - postgres_backup_setup
+        - postgres_backup_run
         - postgres_backup_remote_setup
         - postgres_backup_remote_init
         - postgres_backup_remote_run

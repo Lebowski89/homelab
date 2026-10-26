@@ -50,9 +50,18 @@ Use `skynet targets` to find supported targets and actions:
 skynet check <target> [action]
 skynet run <target> [action]
 skynet limit pve1 run opentofu pve-user
+skynet limit <host> run system packages
+skynet limit <host> run system updates
+skynet limit <host> run system sysctl
+skynet limit <host> run system limits
 ```
 
 The default action is `deploy`. Only actions listed by the wrapper are supported.
+System baseline runs do not upgrade or remove packages; `system updates` is
+explicit maintenance. See [system baseline and static bootstrap](../system-baseline.md)
+for supported platforms, feature flags and operation without NetBox.
+The old Ubuntu network/netplan commands are retired. Explicit NIC workarounds
+use `skynet limit <host> run system nic`; see the guide before selecting ports.
 
 ## Bootstrap and recovery
 

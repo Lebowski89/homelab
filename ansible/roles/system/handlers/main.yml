@@ -1,0 +1,11 @@
+---
+- name: System | Restart systemd-resolved
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: "{{ system_resolved_service_name }}"
+    state: restarted
+
+- name: System | Reload systemd after legacy unit retirement
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    daemon_reload: true

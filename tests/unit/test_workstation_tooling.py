@@ -332,7 +332,7 @@ def test_rendered_wrapper_executes_locally_with_portable_paths_and_overrides(tmp
     ):
         removed = subprocess.run(["bash", str(wrapper), "run", target, action], env=env, capture_output=True, text=True)
         assert removed.returncode != 0
-        assert "Unknown role target/action" in removed.stdout + removed.stderr
+        assert not any(line.startswith('{"argv":') for line in removed.stdout.splitlines())
     env.update(
         PLAYBOOK=str(repo / "ansible/bootstrap.yml"), INVENTORY="private-static.yml", ANSIBLE_COLLECTIONS_PATH="override-collections"
     )

@@ -1,0 +1,176 @@
+---
+- name: System NIC | Inspect existing role persistence
+  ansible.builtin.stat:
+    path: /etc/systemd/system/skynet-system-nic@.service
+  register: system_nic_unit_stat
+
+- name: System NIC | Configure selected devices and retire removed selections
+  when: system_nic_interfaces | length > 0 or system_nic_unit_stat.stat.exists
+  block:
+    - name: System NIC | Inspect persistence artifact ownership
+      ansible.builtin.stat:
+        path: "{{ system_nic_existing_path }}"
+        follow: false
+      loop:
+        - /usr/local/sbin/skynet-system-nic
+        - /etc/systemd/system/skynet-system-nic@.service
+        - /etc/NetworkManager/dispatcher.d/90-skynet-system-nic
+      loop_control:
+        loop_var: system_nic_existing_path
+      register: system_nic_existing_files
+
+    - name: System NIC | Read existing regular persistence artifacts
+      when: system_nic_existing_file.stat.isreg | default(false)
+      ansible.builtin.slurp:
+        src: "{{ system_nic_existing_file.system_nic_existing_path }}"
+      loop: "{{ system_nic_existing_files.results }}"
+      loop_control:
+        loop_var: system_nic_existing_file
+        label: "{{ system_nic_existing_file.system_nic_existing_path }}"
+      register: system_nic_existing_contents
+
+    - name: System NIC | Refuse unrelated persistence artifacts
+      when: system_nic_existing_file.stat.exists
+      ansible.builtin.assert:
+        that:
+          - system_nic_existing_file.stat.isreg | default(false)
+          - >-
+            '# Managed by Ansible: system NIC settings.' in
+            (system_nic_existing_contents.results[system_nic_existing_index].content | default('') | b64decode).splitlines()[:2]
+        fail_msg: An existing system NIC artifact is not role-owned; reconcile it before enabling NIC management.
+      loop: "{{ system_nic_existing_files.results }}"
+      loop_control:
+        loop_var: system_nic_existing_file
+        index_var: system_nic_existing_index
+        label: "{{ system_nic_existing_file.system_nic_existing_path }}"
+
+    - name: System NIC | Install inspection tools using APT
+      when: ansible_facts.pkg_mgr == 'apt'
+      ansible.builtin.apt:
+        name: [ethtool, pciutils]
+        state: present
+        update_cache: true
+        cache_valid_time: "{{ system_package_cache_valid_time }}"
+      environment: "{{ system_apt_environment }}"
+
+    - name: System NIC | Install inspection tools using DNF
+      when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+      ansible.builtin.dnf:
+        name: [ethtool, pciutils]
+        state: present
+        use_backend: "{{ ansible_facts.pkg_mgr }}"
+
+    - name: System NIC | Validate all selected hardware and capabilities before changes
+      when: not ansible_check_mode
+      ansible.builtin.command:
+        argv: [timeout, --kill-after=5, '30', /bin/bash, -s, --, --check]
+        stdin: "{{ lookup('ansible.builtin.template', 'nic-settings.sh.j2') }}"
+      register: system_nic_inspection
+      changed_when: false
+
+    - name: System NIC | Record completed preflight
+      ansible.builtin.set_fact:
+        system_nic_preflight_succeeded: "{{ not ansible_check_mode }}"
+
+    - name: System NIC | Transition the former role-owned tuner explicitly
+      ansible.builtin.include_tasks:
+        file: cleanup.yml
+        apply:
+          tags: [system, system_nic]
+      tags: [system, system_nic]
+
+    - name: System NIC | Escape selected interface instance names
+      ansible.builtin.command:
+        argv: [systemd-escape, --, "{{ system_nic_interface.key }}"]
+      loop: "{{ system_nic_interfaces | dict2items }}"
+      loop_control:
+        loop_var: system_nic_interface
+        label: "{{ system_nic_interface.key }}"
+      register: system_nic_instances
+      check_mode: false
+      changed_when: false
+
+    - name: System NIC | Inspect enabled instances
+      ansible.builtin.find:
+        paths: /etc/systemd/system/multi-user.target.wants
+        patterns: skynet-system-nic@*.service
+        file_type: link
+      register: system_nic_enabled_instances
+
+    - name: System NIC | Disable removed interface selections without resetting hardware
+      when:
+        - not ansible_check_mode
+        - >-
+          (system_nic_old_instance.path | basename | regex_replace('^skynet-system-nic@|\.service$', ''))
+          not in (system_nic_instances.results | map(attribute='stdout') | list)
+      ansible.builtin.systemd_service:
+        name: "{{ system_nic_old_instance.path | basename }}"
+        enabled: false
+        state: stopped
+      loop: "{{ system_nic_enabled_instances.files }}"
+      loop_control:
+        loop_var: system_nic_old_instance
+        label: "{{ system_nic_old_instance.path }}"
+
+    - name: System NIC | Ensure NetworkManager dispatcher directory exists
+      ansible.builtin.file:
+        path: /etc/NetworkManager/dispatcher.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: System NIC | Write shared settings and persistence
+      ansible.builtin.template:
+        src: "{{ system_nic_artifact.src }}"
+        dest: "{{ system_nic_artifact.dest }}"
+        owner: root
+        group: root
+        mode: "{{ system_nic_artifact.mode }}"
+      loop:
+        - src: nic-settings.sh.j2
+          dest: /usr/local/sbin/skynet-system-nic
+          mode: "0755"
+        - src: nic-settings.service.j2
+          dest: /etc/systemd/system/skynet-system-nic@.service
+          mode: "0644"
+        - src: nic-dispatcher.sh.j2
+          dest: /etc/NetworkManager/dispatcher.d/90-skynet-system-nic
+          mode: "0755"
+      loop_control:
+        loop_var: system_nic_artifact
+        label: "{{ system_nic_artifact.dest }}"
+      register: system_nic_artifacts
+
+    - name: System NIC | Enable device-bound instances
+      when: not ansible_check_mode
+      ansible.builtin.systemd_service:
+        name: "skynet-system-nic@{{ system_nic_instance.stdout }}.service"
+        enabled: true
+        daemon_reload: "{{ system_nic_artifacts.changed }}"
+      loop: "{{ system_nic_instances.results }}"
+      loop_control:
+        loop_var: system_nic_instance
+        label: "{{ system_nic_instance.system_nic_interface.key }}"
+
+    - name: System NIC | Apply configuration changes or repair detected drift
+      when:
+        - not ansible_check_mode
+        - >-
+          system_nic_artifacts.changed or
+          ('SYSTEM_NIC_CHANGE=' ~ system_nic_instance.system_nic_interface.key) in system_nic_inspection.stdout_lines
+      ansible.builtin.systemd_service:
+        name: "skynet-system-nic@{{ system_nic_instance.stdout }}.service"
+        state: restarted
+      loop: "{{ system_nic_instances.results }}"
+      loop_control:
+        loop_var: system_nic_instance
+        label: "{{ system_nic_instance.system_nic_interface.key }}"
+
+    - name: System NIC | Explain check-mode hardware verification boundary
+      when: ansible_check_mode
+      ansible.builtin.debug:
+        msg: >-
+          Check mode renders NIC persistence and checks inputs only. Device identity,
+          driver capabilities and current settings must be verified during an authorized
+          run with ethtool/pciutils installed; no NIC setting or service was changed.

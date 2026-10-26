@@ -1,0 +1,44 @@
+---
+- name: System updates | Upgrade installed APT packages
+  when:
+    - ansible_facts.pkg_mgr == 'apt'
+    - system_updates_upgrade
+  ansible.builtin.apt:
+    upgrade: safe
+    update_cache: true
+  environment: "{{ system_apt_environment }}"
+
+- name: System updates | Upgrade installed DNF packages
+  when:
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - system_updates_upgrade
+  ansible.builtin.dnf:
+    name: '*'
+    state: latest
+    update_only: true
+    update_cache: true
+    use_backend: "{{ ansible_facts.pkg_mgr }}"
+
+- name: System updates | Remove unused APT dependencies when requested
+  when:
+    - ansible_facts.pkg_mgr == 'apt'
+    - system_updates_autoremove
+  ansible.builtin.apt:
+    autoremove: true
+  environment: "{{ system_apt_environment }}"
+
+- name: System updates | Clean obsolete APT cache when requested
+  when:
+    - ansible_facts.pkg_mgr == 'apt'
+    - system_updates_autoclean
+  ansible.builtin.apt:
+    autoclean: true
+  environment: "{{ system_apt_environment }}"
+
+- name: System updates | Remove unused DNF dependencies when requested
+  when:
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - system_updates_autoremove
+  ansible.builtin.dnf:
+    autoremove: true
+    use_backend: "{{ ansible_facts.pkg_mgr }}"

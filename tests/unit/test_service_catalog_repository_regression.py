@@ -441,11 +441,6 @@ def test_service_play_gathers_facts_only_for_selected_operations_and_hosts():
 
     controller_facts = task_named(pre_tasks, "Gather service controller facts")
     dispatch_facts = task_named(deploy_tasks, "Gather facts on selected service dispatch hosts")
-    ubuntu_facts = task_named(deploy_tasks, "Gather facts for Ubuntu role")
-    postgres_backup_facts = task_named(
-        deploy_tasks,
-        "Gather facts for PostgreSQL backup prerequisites",
-    )
     postgres_host_facts = task_named(
         deploy_tasks,
         "Gather facts for PostgreSQL host management",
@@ -474,19 +469,13 @@ def test_service_play_gathers_facts_only_for_selected_operations_and_hosts():
         "postgres_backup_setup",
         "postgres_backup_run",
     }
-    assert set(ubuntu_facts["tags"]).isdisjoint(postgres_backup_tags)
-    assert postgres_backup_facts["when"] == "'tags_postgres' in group_names"
-    assert set(postgres_backup_facts["tags"]) == postgres_backup_tags
     assert postgres_host_facts["when"] == "'tags_postgres' in group_names"
-    assert set(postgres_host_facts["tags"]).isdisjoint(postgres_backup_tags)
+    assert postgres_backup_tags <= set(postgres_host_facts["tags"])
 
     setup_names = {task["name"] for task in host_management_setup_tasks}
     assert setup_names == {
-        "Gather facts for Ubuntu role",
-        "Gather facts for systemd-resolved role",
         "Gather facts for Docker role",
         "Gather facts for Podman role",
-        "Gather facts for PostgreSQL backup prerequisites",
         "Gather facts for PostgreSQL host management",
         "Gather facts for Keepalived role",
         "Gather facts for Technitium native role",

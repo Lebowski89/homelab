@@ -1,0 +1,79 @@
+---
+
+- name: System | Validate platform and feature selection
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags: &system_feature_tags
+        - system
+        - system_packages
+        - system_updates
+        - system_sysctl
+        - system_limits
+        - system_swap
+        - system_resolved
+        - system_cleanup
+        - system_nic
+  tags: *system_feature_tags
+
+- name: System | Install baseline packages
+  when: system_packages_enabled
+  ansible.builtin.include_tasks:
+    file: packages.yml
+    apply:
+      tags: [system, system_packages]
+  tags: [system, system_packages]
+
+- name: System | Configure kernel settings
+  when: system_sysctl_enabled
+  ansible.builtin.include_tasks:
+    file: sysctl.yml
+    apply:
+      tags: [system, system_sysctl]
+  tags: [system, system_sysctl]
+
+- name: System | Configure login-session limits
+  when: system_limits_enabled
+  ansible.builtin.include_tasks:
+    file: limits.yml
+    apply:
+      tags: [system, system_limits]
+  tags: [system, system_limits]
+
+- name: System | Configure explicitly enabled emergency swap
+  when: system_swap_enabled
+  ansible.builtin.include_tasks:
+    file: swap.yml
+    apply:
+      tags: [system, system_swap]
+  tags: [system, system_swap]
+
+- name: System | Configure optional host resolver
+  when: system_resolved_enabled
+  ansible.builtin.include_tasks:
+    file: resolved.yml
+    apply:
+      tags: [system, system_resolved]
+  tags: [system, system_resolved]
+
+- name: System | Configure explicitly selected NIC settings
+  ansible.builtin.include_tasks:
+    file: nic.yml
+    apply:
+      tags: [system, system_nic]
+  tags: [system, system_nic]
+
+- name: System | Inspect legacy NIC tuning and explicit transition
+  ansible.builtin.include_tasks:
+    file: cleanup.yml
+    apply:
+      tags: [system, system_cleanup]
+  tags: [system, system_cleanup]
+
+- name: System | Perform explicitly requested package maintenance
+  when: "'system_updates' in ansible_run_tags"
+  ansible.builtin.include_tasks:
+    file: updates.yml
+    apply:
+      tags: [system_updates]
+  tags: [never, system_updates]

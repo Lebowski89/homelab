@@ -1,0 +1,79 @@
+---
+
+- name: System resolver | Assert supported host
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family | default("") == "Debian"
+      - ansible_facts.service_mgr | default("") == "systemd"
+    fail_msg: "The optional system resolver feature only supports Debian/Ubuntu hosts using systemd."
+
+- name: System resolver | Install NSS resolver packages
+  when: system_resolved_packages | length > 0
+  ansible.builtin.apt:
+    name: "{{ system_resolved_packages }}"
+    state: present
+    update_cache: true
+  environment: "{{ system_apt_environment }}"
+
+- name: System resolver | Ensure systemd-resolved is enabled and running
+  ansible.builtin.systemd:
+    name: "{{ system_resolved_service_name }}"
+    enabled: true
+    state: started
+
+- name: System resolver | Ensure resolved config directory exists
+  ansible.builtin.file:
+    path: "{{ system_resolved_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: System resolver | Remove stale unmanaged resolved drop-ins
+  when: system_resolved_cleanup_dropins | length > 0
+  ansible.builtin.file:
+    path: "{{ system_resolved_cleanup_dropin }}"
+    state: absent
+  loop: "{{ system_resolved_cleanup_dropins }}"
+  loop_control:
+    loop_var: system_resolved_cleanup_dropin
+  notify: System | Restart systemd-resolved
+
+- name: System resolver | Configure systemd-resolved drop-in
+  ansible.builtin.copy:
+    dest: "{{ system_resolved_dropin_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Resolve]
+      {% if system_resolved_fallback_dns | length > 0 %}
+      FallbackDNS={{ system_resolved_fallback_dns | join(' ') }}
+      {% endif %}
+      {% if system_resolved_disable_stub | bool %}
+      DNSStubListener=no
+      {% endif %}
+  notify: System | Restart systemd-resolved
+
+- name: System resolver | Apply DNS stub listener changes before dependent services
+  when: system_resolved_disable_stub | bool
+  ansible.builtin.meta: flush_handlers
+
+- name: System resolver | Point resolv.conf at resolved upstream file
+  when:
+    - system_resolved_manage_resolv_conf | bool
+    - ansible_facts.virtualization_type | default("") != "lxc"
+  ansible.builtin.file:
+    src: "{{ system_resolved_resolv_conf_target }}"
+    dest: "{{ system_resolved_resolv_conf_path }}"
+    state: link
+    force: true
+    follow: false
+
+- name: System resolver | Ensure NSS uses systemd-resolved before plain DNS
+  when: system_resolved_manage_nsswitch | bool
+  ansible.builtin.lineinfile:
+    path: "{{ system_resolved_nsswitch_path }}"
+    regexp: '^hosts:'
+    line: "{{ system_resolved_nsswitch_hosts_line }}"
+    backup: "{{ system_resolved_nsswitch_backup | bool }}"

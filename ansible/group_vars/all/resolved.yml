@@ -1,3 +1,0 @@
----
-
-resolved_disable_stub: "{{ 'tags_dns' in group_names }}"

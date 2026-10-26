@@ -1,0 +1,13 @@
+#!/bin/sh
+# Managed by Ansible: system NIC settings.
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+case "${2:-}" in up|reapply) ;; *) exit 0 ;; esac
+case "${1:-}" in
+{% for name in system_nic_interfaces | sort %}
+    {{ name | quote }}) ;;
+{% endfor %}
+    *) exit 0 ;;
+esac
+unit=$(systemd-escape --template=skynet-system-nic@.service -- "$1") || exit "$?"
+# All applications go through the same per-interface unit, never a second tuner.
+exec systemctl --no-block restart "$unit"
