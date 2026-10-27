@@ -207,7 +207,7 @@ def test_netbox_loads_shared_configuration_and_only_its_vault(bootstrap, executo
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("override", [None, False, 0, "", [], {}])
+@pytest.mark.parametrize("override", [None, False, 0, 42, 1.5, "0", "", [], {}])
 def test_shared_configuration_preserves_defined_falsy_host_overrides(bootstrap, override):
     directory, run = bootstrap
     path = directory / "host_vars/mgt.yml"

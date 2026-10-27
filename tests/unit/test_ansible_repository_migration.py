@@ -15,10 +15,10 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.mark.parametrize(
-    "role,architecture,overrides,expected_architectures",
+    "role,architecture,overrides,expected_architectures,legacy_layout",
     [
-        ("docker", "x86_64", {}, "amd64"),
-        ("docker", "aarch64", {}, "arm64"),
+        ("docker", "x86_64", {}, "amd64", "canonical"),
+        ("docker", "aarch64", {}, "arm64", "annotated"),
         (
             "docker",
             "x86_64",
@@ -30,11 +30,20 @@ pytestmark = pytest.mark.integration
                 "docker_keyring_file": "/etc/apt/keyrings/operator-docker.asc",
             },
             "amd64 arm64",
+            "other-file",
         ),
-        ("postgres", "x86_64", {}, None),
+        ("docker", "x86_64", {}, "amd64", "main-file"),
+        ("docker", "x86_64", {}, "amd64", "symlink"),
+        ("postgres", "x86_64", {}, None, "canonical"),
+        ("postgres", "x86_64", {}, None, "annotated"),
+        ("postgres", "x86_64", {}, None, "other-file"),
+        ("postgres", "x86_64", {}, None, "main-file"),
+        ("postgres", "x86_64", {}, None, "symlink"),
     ],
 )
-def test_repository_migration_preserves_sources_overrides_and_cache_order(tmp_path, role, architecture, overrides, expected_architectures):
+def test_repository_migration_preserves_sources_overrides_and_cache_order(
+    tmp_path, role, architecture, overrides, expected_architectures, legacy_layout
+):
     dependency = subprocess.run(["/usr/bin/python3", "-c", "import debian.deb822"], capture_output=True, check=False)
     if dependency.returncode:
         pytest.skip("the real deb822 module requires existing python3-debian; do not install test dependencies")
@@ -56,8 +65,16 @@ def test_repository_migration_preserves_sources_overrides_and_cache_order(tmp_pa
         "import json\nfrom pathlib import Path\nfrom ansible.plugins.action import ActionBase\n"
         "class ActionModule(ActionBase):\n"
         "    def run(self, tmp=None, task_vars=None):\n"
+        "        module, options = self._task.args['module'], self._task.args['options']\n"
         f"        with Path({str(record)!r}).open('a') as stream:\n"
         "            stream.write(json.dumps(self._task.args) + '\\n')\n"
+        "        if module == 'find':\n"
+        f"            options['paths'] = {str(sources)!r}\n"
+        "            return self._execute_module(module_name='ansible.builtin.find', module_args=options, task_vars=task_vars)\n"
+        "        if module == 'lineinfile':\n"
+        f"            options['path'] = options['path'].replace('/etc/apt/sources.list', {str(tmp_path / 'sources.list')!r})\n"
+        f"            if Path(options['path']).is_relative_to({str(tmp_path)!r}):\n"
+        "                return self._execute_module(module_name='ansible.builtin.lineinfile', module_args=options, task_vars=task_vars)\n"
         "        return {'changed': False}\n"
     )
     role_dir = ROOT / "ansible/roles" / role
@@ -67,12 +84,8 @@ def test_repository_migration_preserves_sources_overrides_and_cache_order(tmp_pa
     for task in tasks:
         if "ansible.builtin.deb822_repository" in task:
             task["fixture_deb822_repository"] = task.pop("ansible.builtin.deb822_repository")
-        elif "ansible.builtin.lineinfile" in task and "/etc/apt/sources.list.d/" in task["ansible.builtin.lineinfile"]["path"]:
-            task["ansible.builtin.lineinfile"]["path"] = task["ansible.builtin.lineinfile"]["path"].replace(
-                "/etc/apt/sources.list.d", str(sources)
-            )
         else:
-            for module in ("apt", "file", "get_url", "group", "user", "lineinfile"):
+            for module in ("apt", "file", "get_url", "group", "user", "lineinfile", "find"):
                 if f"ansible.builtin.{module}" in task:
                     task["fixture_operation"] = {"module": module, "options": task.pop(f"ansible.builtin.{module}")}
     # Load defaults as role defaults so play/host overrides retain real precedence.
@@ -124,8 +137,26 @@ def test_repository_migration_preserves_sources_overrides_and_cache_order(tmp_pa
     components = overrides.get("docker_repo_channel", "stable") if role == "docker" else "main"
     arch = f"arch={overrides.get('docker_apt_arch', expected_architectures)} " if role == "docker" else ""
     legacy_entry = f"deb [{arch}signed-by={key}] {uri} {suite} {components}\n"
-    unrelated = "# Operator-owned source\ndeb https://other.example.test/debian stable main\n"
+    if legacy_layout == "annotated":
+        legacy_entry = "  " + legacy_entry.rstrip("\n").replace(" ", "\t") + "  # operator annotation\n"
+    # Near-matches must survive: a different component, suite, signing key or
+    # architecture is a different declaration even when the URL is identical.
+    unrelated = (
+        "# Operator-owned source\ndeb https://other.example.test/debian stable main\n"
+        f"deb [{arch}signed-by={key}] {uri} {suite} {components} extra\n"
+        f"deb [{arch}signed-by={key}] {uri} other-suite {components}\n"
+        f"deb [{arch}signed-by=/operator-key.asc] {uri} {suite} {components}\n"
+        f"# {legacy_entry.strip()}\n"
+    )
+    if role == "docker":
+        unrelated += f"deb [arch=other signed-by={key}] {uri} {suite} {components}\n"
     legacy = sources / f"{filename}.list"
+    if legacy_layout == "other-file":
+        legacy = sources / "operator.list"
+    elif legacy_layout == "main-file":
+        legacy = tmp_path / "sources.list"
+    elif legacy_layout == "symlink":
+        legacy.symlink_to(tmp_path / "linked-source")
     destination = sources / f"{filename}.sources"
 
     def run(*args):
@@ -148,6 +179,8 @@ def test_repository_migration_preserves_sources_overrides_and_cache_order(tmp_pa
     # Existing installation: retain other entries and refresh before installing.
     calls = run()
     assert legacy.read_text() == unrelated
+    if legacy_layout == "symlink":
+        assert legacy.is_symlink()
     fields = dict(line.split(": ", 1) for line in destination.read_text().splitlines())
     assert fields.items() >= {"URIs": uri, "Suites": suite, "Components": components, "Signed-By": key}.items()
     if expected_architectures:

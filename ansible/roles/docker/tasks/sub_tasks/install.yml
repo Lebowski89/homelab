@@ -42,14 +42,32 @@
     state: present
   register: docker_apt_repository
 
+- name: Find legacy APT source files
+  ansible.builtin.find:
+    paths: /etc/apt/sources.list.d
+    patterns: "*.list"
+    file_type: any
+  register: docker_apt_legacy_sources
+
 - name: Remove the previous Docker one-line repository entry
   ansible.builtin.lineinfile:
-    path: "/etc/apt/sources.list.d/{{ docker_repo_filename }}.list"
-    line: >-
+    path: "{{ docker_apt_legacy_source_file }}"
+    regexp: >-
+      ^\s*{{ docker_apt_legacy_source.split() | map('regex_escape') | join('\s+') }}\s*(?:#.*)?$
+    state: absent
+  vars:
+    # apt_repository reused matching entries in any .list file and retained comments.
+    docker_apt_legacy_source: >-
       deb [arch={{ docker_apt_arch }} signed-by={{ docker_keyring_file }}]
       {{ docker_repo_url }}
       {{ ansible_facts.distribution_release }} {{ docker_repo_channel }}
-    state: absent
+  loop: >-
+    {{ ['/etc/apt/sources.list'] +
+       (((docker_apt_legacy_sources.files | selectattr('isreg') | list) +
+         (docker_apt_legacy_sources.files | selectattr('islnk') | list))
+        | map(attribute='path') | list) }}
+  loop_control:
+    loop_var: docker_apt_legacy_source_file
   register: docker_apt_legacy_repository
 
 - name: Refresh APT after Docker repository changes

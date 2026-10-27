@@ -41,8 +41,8 @@ no secret-store lookup or SDK integration was exercised.
   See the [official lookup documentation](https://docs.ansible.com/projects/ansible/latest/collections/ansible/builtin/vars_lookup.html).
 - Docker and PGDG installation use `deb822_repository`. Their URLs, suites,
   channels, signing-key paths and Docker architecture overrides are preserved,
-  including comma-separated architecture lists. Only the matching managed line
-  is removed from the old `.list` file; unrelated sources stay intact. APT is
+  including comma-separated architecture lists. Complete matching declarations
+  are removed from standard legacy source files; unrelated sources stay intact. APT is
   refreshed after source creation or legacy-line removal, before package
   installation. The prerequisites include `python3-debian` for the replacement
   module. `apt_repository` is deprecated for removal in core 2.25;
@@ -79,9 +79,8 @@ The complete non-integration suite exposes two failures in unchanged
 - `test_stable_configuration_read_rejects_writer_or_identity_changes[contents]`
 - `test_ownership_hardlink_apply_rejects_changed_identity_before_chown[mode]`
 
-They also occur outside the sandbox; an isolated rerun reproduced the contents
-failure while the mode case passed. These filesystem regressions are separate
-from the compatibility changes and need their own investigation.
+The follow-up base comparison below establishes that both failures predate the
+compatibility commit, including the mode case's test-order dependency.
 
 ## Changed files
 
@@ -97,7 +96,7 @@ from the compatibility changes and need their own investigation.
   `tests/unit/test_postgres_membership_compatibility.py`.
 - Human-maintained audit record: this document.
 
-## Checks and results
+## Initial implementation checks and results
 
 Commands used the existing binaries under
 `/home/john/.local/share/homelab/ansible-venv/bin` from the repository root, with
@@ -148,9 +147,112 @@ connections and permissions, keepalived interface selection, and Docker/Podman
 deployment still need an explicitly authorized runtime check on suitable hosts.
 A fresh-host check-mode run needs `python3-debian` already visible to an eligible
 interpreter; check mode cannot install it. Hosts overriding Docker prerequisites
-must also make that module dependency available. Custom legacy source entries
-are deliberately retained.
+must also make that module dependency available. Legacy source entries with a
+different complete declaration are deliberately retained, even when they share
+a URL with a managed repository.
 
 No live inventory, host, provider, API, database or credential store was used.
 Only public documentation was fetched externally. Nothing was committed,
 pushed, deployed, applied or posted to a pull request.
+
+## Follow-up review of the committed changes
+
+The review compared `ansible/fixes` at `1b160f360fe24e4e22105deac81e1a1ecadd3f9d`
+with `main`/`origin/main` and their merge base at
+`c019d9da8e4cbe15b0b2ccfc030495b79fc911b1`. The current checkout and index were
+preserved. Both commits were exported with `git archive` into separate temporary
+directories; no branch switch, reset or worktree metadata change was needed.
+
+### P2 correction: incomplete legacy repository cleanup
+
+The committed cleanup compared the entire line literally in only the nominal
+`docker.list` or `pgdg.list` file. The old `apt_repository` module accepts existing
+entries with comments and whitespace, and reuses matching entries in other
+`.list` files or `/etc/apt/sources.list`. The new deb822 entry therefore left
+duplicate active declarations in these supported cases. Adding an inline comment
+to the existing migration fixture reproduced this failure for both roles.
+
+`ansible/roles/docker/tasks/sub_tasks/install.yml` and
+`ansible/roles/postgres/tasks/sub_tasks/install/apt.yml` now discover standard
+legacy source files, including symlinks, and remove only complete matching active
+declarations. Each token is escaped before constructing an anchored expression;
+whitespace and trailing comments are allowed. Disabled entries and declarations
+with different suites, components, signing keys or architectures remain intact.
+No repository definition or OS gate changed. Legacy removal still contributes
+to the cache-refresh condition, including when the `.sources` file is unchanged.
+
+Coverage in `tests/unit/test_ansible_repository_migration.py` now includes
+annotated/whitespace entries, alternate files, the main source list and symlinks,
+alongside the existing override, fresh-install, check-mode and idempotence cases.
+`tests/unit/test_netbox_bootstrap.py` also checks positive integers, floats and
+numeric strings without type conversion.
+
+### Non-blocking for this branch: reproduced base failures
+
+Both exports used the same Python 3.13.5 executable, installed packages
+(`ansible-core` 2.21.5, pytest 9.1.1 and PyYAML 6.0.3), process environment and
+temporary filesystem. Implementation, test and requirements hashes also matched.
+The actual test execution, rather than those hashes alone, established the result:
+
+| Invocation | Branch | Unchanged base |
+| --- | --- | --- |
+| The two exact failing nodes, three alternating runs per revision | Each run: contents failed, mode passed | Each run: contents failed, mode passed |
+| Entire utility test module, non-integration selection | 2 failed, 163 passed, 4 deselected | 2 failed, 163 passed, 4 deselected |
+
+The module comparison preloaded `ansible.plugins.action`, as full-suite collection
+does, before invoking pytest. Without this preload, cold Ansible imports attempt
+libc discovery under the unit subprocess guard and cause additional import errors
+on both revisions. Neither inventory nor credentials were loaded.
+
+The decisive invocation, run from each export with the same environment, was:
+
+```bash
+/home/john/.local/share/homelab/ansible-venv/bin/python -c 'import ansible.plugins.action; import pytest; raise SystemExit(pytest.main(["tests/unit/test_utility_preparation.py", "-m", "not integration", "-q", "-p", "no:cacheprovider"]))'
+```
+
+The mode failure is order-dependent: earlier utility CLI tests call `main()`,
+which sets process umask `077` without restoring it. The later hardlink fixture
+then creates its file as `0600`, so the test's `chmod(0600)` does not change its
+permissions. The contents-race failure reproduces in isolation on both commits.
+Neither utility implementation nor its tests were changed during this review.
+
+### Loader warning attribution and unchanged contracts
+
+A standalone temporary filter containing only `deepcopy(dict(value))`, invoked
+through core's `Templar` with nested synthetic data, reproduced both filter/test
+loader alias deprecations without importing repository code. The traceback is
+core `_lazy_containers.py:364` copying the templar, then
+`plugins/loader.py:411` reconstructing the loader with saved aliases. The repository
+filter uses normal Python copying to keep outputs independent. Removing shallow
+redundant copies would not remove the necessary nested-copy trigger; changing
+that contract or introducing a custom clone mechanism was not justified.
+No warnings were suppressed and installed dependencies were not patched.
+
+Fact replacements remain on the host whose facts are gathered immediately before
+the Docker, PostgreSQL and keepalived role calls; none of these changed expressions
+introduces delegation. NetBox lookup still resolves the current recovery host's
+variables. The pinned PostgreSQL 5.0.0 documentation explicitly identifies
+`memberships` with `granted_by_any: true` as equivalent to the old `groups` behavior;
+the six existing collection-logic cases passed without database I/O.
+
+### Review validation
+
+Only focused tests and affected-path lint were run; the full suite was not repeated.
+The base/branch comparison results are above. The NetBox override/fallback checks
+and membership checks passed (18 cases). The initial corrected migration run
+exposed an overescaped regex delimiter, which was fixed and checked through the
+installed templating engine before rerunning the migration cases.
+The final `python -m pytest tests/unit/test_ansible_repository_migration.py -q
+--tb=short` run passed all 10 cases. The combined focused invocation was
+`python -m pytest tests/unit/test_ansible_repository_migration.py
+tests/unit/test_netbox_bootstrap.py
+tests/unit/test_postgres_membership_compatibility.py -k 'migration_preserves or
+loads_shared or falsy or monitor_membership' -q --tb=short`; its 18 NetBox and
+membership cases passed before the migration expression correction, and were
+not repeated afterward because their inputs and implementation did not change.
+
+Affected-role `ansible-lint --offline --format=pep8` passed for Docker, PostgreSQL
+and NetBox bootstrap; a final run on the two changed installation task files also
+passed. `ruff check` and `ruff format --check` passed for the two changed test
+files; `yamllint` passed for the two changed task files; `git diff --check` passed.
+Generated READMEs, staging, commits and remote operations were left untouched.
