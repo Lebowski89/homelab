@@ -46,10 +46,16 @@ include:
 ```text
 proxmox_download_file.ubuntu_cloud_image
 proxmox_virtual_environment_vm.ubuntu_template
+proxmox_virtual_environment_file.postgres_qemu_guest_agent_cloud_init
 ```
 
-Confirm these mappings belong to the intended existing template and image. A
-resource address alone does not prove which VM it represents. Do not paste full
+Confirm these mappings belong to the intended existing template, image and
+shared PostgreSQL guest-agent snippet. Transfer the complete current template
+state, including the snippet binding; do not overwrite it with an older two-resource
+snapshot. The PostgreSQL VM roots read its `qemu_guest_agent_vendor_data_file_id`
+output. See [PostgreSQL ownership](postgres-opentofu.md).
+
+A resource address alone does not prove which VM it represents. Do not paste full
 state or `state show` output into chats or logs; state can contain secret values.
 
 ## 2. Prepare Blacktop

@@ -44,7 +44,9 @@ jobs:
           - terraform/proxmox/templates/ubuntu-2604
           - terraform/proxmox/templates/rocky-10
           - terraform/proxmox/templates/ubuntu-2404-lxc
-          - terraform/proxmox/vms/postgres-cluster
+          - terraform/proxmox/vms/pg01
+          - terraform/proxmox/vms/pg02
+          - terraform/proxmox/vms/pg03
           - terraform/proxmox/vms/rocky
           - terraform/proxmox/vms/unraid
           - terraform/seerr
@@ -74,6 +76,6 @@ jobs:
       - name: Validate
         run: tofu validate
 
-      - name: Test optional VM firmware
+      - name: Test shared VM behavior with mocked providers
         if: matrix.root == 'terraform/proxmox/modules/cloudinit-vm'
         run: tofu test -no-color

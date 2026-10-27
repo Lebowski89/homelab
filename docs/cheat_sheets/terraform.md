@@ -72,7 +72,7 @@ Destroys resources managed by the current state.
 
 ```bash
 terraform output
-terraform output postgres_vm_ips
+tofu -chdir=terraform/proxmox/vms/pg01 output postgres_vm_ips
 terraform output -json
 ```
 
@@ -90,7 +90,7 @@ Shows the providers required by the configuration.
 
 ```bash
 terraform state list
-terraform state show proxmox_vm_qemu.postgres["pg95"]
+tofu -chdir=terraform/proxmox/vms/pg01 state list
 terraform show
 ```
 
@@ -104,11 +104,9 @@ terraform show
 terraform import <resource_address> <real_world_id>
 ```
 
-**Example:**
-
-```bash
-terraform import 'proxmox_vm_qemu.postgres["pg95"]' 9205
-```
+PostgreSQL VMs already have state in the independent `pg01`, `pg02` and `pg03`
+roots. Do not import them again. See [PostgreSQL OpenTofu ownership](postgres-opentofu.md)
+for the state layout and workstation handoff requirements.
 
 + `terraform import` - associates an existing real resource with a Terraform resource address.
 
@@ -121,7 +119,7 @@ terraform console
 **Useful for testing expressions:**
 
 ```bash
-keys(var.postgres_vms)
+var.postgres_vm.name
 file(var.ssh_public_key_path)
 ```
 
@@ -129,19 +127,20 @@ file(var.ssh_public_key_path)
 
 ## Useful targeting and debugging commands
 
-### Target a single resource
+### Select one PostgreSQL VM
 
 ```bash
-terraform plan -target='proxmox_vm_qemu.postgres["pg95"]'
-terraform apply -target='proxmox_vm_qemu.postgres["pg95"]'
+tofu -chdir=terraform/proxmox/vms/pg01 plan
 ```
 
-Good for first-pass testing, but avoid relying on -target for normal ongoing workflow.
+Choose `pg01`, `pg02` or `pg03`; normal operations use the root's complete state,
+without `-target` or `-exclude`. The directories still manage guests `pg95`,
+`pg96` and `pg97`, respectively.
 
 ### Replace a resource
 
 ```bash
-terraform apply -replace='proxmox_vm_qemu.postgres["pg95"]'
+terraform apply -replace=resource_type.resource_name
 ```
 
 Useful when you want Terraform to recreate a specific resource.
@@ -288,44 +287,44 @@ terraform state show <resource>
 terraform destroy
 ```
 
-**For one-resource testing:**
-
-```bash
-terraform plan -target='proxmox_vm_qemu.postgres["pg95"]'
-terraform apply -target='proxmox_vm_qemu.postgres["pg95"]'
-```
+For PostgreSQL VM maintenance, select its independent root. See
+[PostgreSQL OpenTofu ownership](postgres-opentofu.md); intentional removal also
+requires database leadership and quorum checks.
 
 ## Practical workflow for your homelab
 
 ### First run
 
 ```bash
-terraform fmt
-terraform init -upgrade
-terraform validate
-terraform plan
-terraform apply -target='proxmox_vm_qemu.postgres["pg95"]'
+tofu -chdir=terraform/proxmox/vms/pg01 init -lockfile=readonly
+tofu -chdir=terraform/proxmox/vms/pg01 validate
+tofu -chdir=terraform/proxmox/vms/pg01 plan
 ```
 
-### After the first VM works
+### Later changes
 
 ```bash
-terraform plan
-terraform apply
+tofu -chdir=terraform/proxmox/vms/pg01 plan
 ```
 
-### Inspect what Terraform knows
+Review the complete refreshed plan before a separately authorized apply in the
+same root. Substitute `pg02` or `pg03` for another VM.
+
+### Inspect what OpenTofu knows
 
 ```bash
-terraform state list
-terraform state show 'proxmox_vm_qemu.postgres["pg95"]'
-terraform output postgres_vm_ips
+tofu -chdir=terraform/proxmox/vms/pg01 state list
+tofu -chdir=terraform/proxmox/vms/pg01 output postgres_vm_ips
 ```
 
-### Tear down when done
+### Intentional VM removal
+
+Check database leadership, replication and quorum first; follow the
+[PostgreSQL maintenance guidance](postgres-opentofu.md#intentional-vm-removal).
+An authorized operator can then review a destroy plan for the selected root:
 
 ```bash
-terraform destroy
+tofu -chdir=terraform/proxmox/vms/pg01 plan -destroy
 ```
 
 ## Easy mistakes to avoid

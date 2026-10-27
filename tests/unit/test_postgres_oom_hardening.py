@@ -7,7 +7,7 @@ from jinja2 import Environment, StrictUndefined
 REPO_ROOT = Path(__file__).resolve().parents[2]
 NODE_RULES_PATH = REPO_ROOT / "ansible/roles/service_common/templates/configs/prometheus/rules/node-exporter.yml.j2"
 HAPROXY_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/service_common/templates/configs/haproxy.cfg.j2"
-POSTGRES_TFVARS_SAMPLE_PATH = REPO_ROOT / "terraform/proxmox/vms/postgres-cluster/private.auto.tfvars.sample"
+POSTGRES_VM_ROOTS = REPO_ROOT / "terraform/proxmox/vms"
 
 
 def task_named(tasks, name):
@@ -64,11 +64,8 @@ def test_haproxy_postgres_backends_start_fully_down_until_primary_checks_pass():
 
 
 def test_postgres_proxmox_vm_definitions_use_four_gib_each():
-    tfvars = POSTGRES_TFVARS_SAMPLE_PATH.read_text()
-
-    for host in ("pg95", "pg96", "pg97"):
-        match = re.search(r"^  " + re.escape(host) + r" = {(?P<body>.*?)^  }", tfvars, flags=re.MULTILINE | re.DOTALL)
-        assert match is not None
-        memory = re.search(r"^    memory\s*=\s*(\d+)$", match.group("body"), flags=re.MULTILINE)
+    for root in ("pg01", "pg02", "pg03"):
+        tfvars = (POSTGRES_VM_ROOTS / root / "private.auto.tfvars.sample").read_text()
+        memory = re.search(r"^  memory\s*=\s*(\d+)\b", tfvars, flags=re.MULTILINE)
         assert memory is not None
         assert int(memory.group(1)) == 4096
