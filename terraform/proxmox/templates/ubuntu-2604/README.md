@@ -35,6 +35,7 @@
 | Name | Description |
 |------|-------------|
 | <a name="output_cloud_image_file_id"></a> [cloud\_image\_file\_id](#output\_cloud\_image\_file\_id) | n/a |
+| <a name="output_qemu_guest_agent_vendor_data_file_id"></a> [qemu\_guest\_agent\_vendor\_data\_file\_id](#output\_qemu\_guest\_agent\_vendor\_data\_file\_id) | Existing shared QEMU guest-agent vendor data for PostgreSQL clones; owned by this template root. |
 | <a name="output_template_name"></a> [template\_name](#output\_template\_name) | n/a |
 | <a name="output_template_vmid"></a> [template\_vmid](#output\_template\_vmid) | n/a |
 <!-- END_TF_DOCS -->
