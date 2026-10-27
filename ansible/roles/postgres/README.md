@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/26 |
+| Readme update        | 2026/10/28 |
 
 
 
@@ -367,7 +367,10 @@
 | Ensure PostgreSQL common prerequisites are installed | ansible.builtin.apt | False |
 | Ensure PGDG keyring directory exists | ansible.builtin.file | False |
 | Download PGDG repository signing key | ansible.builtin.get_url | False |
-| Add PGDG repository | ansible.builtin.apt_repository | False |
+| Add PGDG repository | ansible.builtin.deb822_repository | False |
+| Find legacy APT source files | ansible.builtin.find | False |
+| Remove the previous PGDG one-line repository entry | ansible.builtin.lineinfile | False |
+| Refresh APT after PGDG repository changes | ansible.builtin.apt | True |
 | Install PostgreSQL common packages first | ansible.builtin.apt | False |
 | Disable automatic Debian PostgreSQL cluster creation | ansible.builtin.lineinfile | False |
 | Set default PostgreSQL start_conf to manual | ansible.builtin.lineinfile | False |
