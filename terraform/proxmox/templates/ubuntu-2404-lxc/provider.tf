@@ -8,7 +8,7 @@ provider "proxmox" {
     username = var.pm_ssh_username
 
     node {
-      name    = var.template_node_name
+      name    = var.template_node
       address = var.pm_ssh_host
       port    = 22
     }

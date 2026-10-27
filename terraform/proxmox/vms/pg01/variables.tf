@@ -42,7 +42,7 @@ variable "pm_ssh_port" {
 
 variable "target_node" {
   type        = string
-  description = "Proxmox node to place the VMs on"
+  description = "Proxmox node on which the VM and its local storage reside"
 }
 
 variable "clone_template_vmid" {
@@ -68,6 +68,15 @@ variable "vm_nameserver" {
   description = "Optional space-separated VM DNS nameserver fallback. Ignored while enable_netbox_remote_state is true."
   type        = string
   default     = ""
+
+  validation {
+    condition = (
+      (var.enable_netbox_remote_state || trimspace(var.vm_nameserver) == "")
+      ? length(local.dns_vip_nameservers) == 2
+      : trimspace(var.vm_nameserver) != ""
+    )
+    error_message = "Unable to determine valid VM DNS servers. Ensure NetBox outputs.dns_ips contains distinct dns_vip_a and dns_vip_b values, provide them through dns_ips, or set vm_nameserver when NetBox remote state is disabled."
+  }
 }
 
 variable "vm_searchdomain" {
@@ -95,9 +104,10 @@ variable "vm_storage" {
   description = "Proxmox datastore for VM disks and cloud-init disks"
 }
 
-variable "postgres_vms" {
-  description = "Postgres cluster VM definitions"
-  type = map(object({
+variable "postgres_vm" {
+  description = "One existing PostgreSQL VM. Root directory names do not rename the guest."
+  type = object({
+    name                = string
     vmid                = number
     ip                  = string
     cores               = number
@@ -108,7 +118,30 @@ variable "postgres_vms" {
     vlan_tag            = optional(number)
     onboot              = optional(bool, true)
     ci_user             = optional(string)
-  }))
+  })
+}
+
+variable "guest_agent_vendor_data_file_id" {
+  description = "Optional explicit existing vendor-data ID for bootstrap use. Null reads the Ubuntu template owner's output; this root never owns the shared file."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.guest_agent_vendor_data_file_id == null ? true : trimspace(var.guest_agent_vendor_data_file_id) != ""
+    error_message = "guest_agent_vendor_data_file_id must be null or a non-empty existing file ID."
+  }
+}
+
+variable "ubuntu_template_state_path" {
+  description = "Authoritative local Ubuntu 26.04 template state exporting qemu_guest_agent_vendor_data_file_id; used unless an explicit vendor-data ID is supplied."
+  type        = string
+  default     = "../../templates/ubuntu-2604/terraform.tfstate"
+
+  validation {
+    condition     = trimspace(var.ubuntu_template_state_path) != ""
+    error_message = "ubuntu_template_state_path must not be empty."
+  }
 }
 
 variable "enable_netbox_remote_state" {

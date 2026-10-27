@@ -1,0 +1,34 @@
+# Copy to private.auto.tfvars and fill in your workstation values.
+# This directory owns pg95 / VMID 9205; it does not rename the guest.
+pm_api_url           = "https://pve.example.com:8006/"
+pm_tls_insecure      = false
+target_node          = "pve1"
+clone_template_vmid  = 9003
+vm_storage           = "local-zfs"
+vm_bridge            = "vmbr1"
+vm_gateway           = "192.0.2.1"
+vm_cidr              = 24
+ci_user              = "ubuntu"
+ssh_public_key_path  = "~/.ssh/proxmox_terraform.pub"
+
+# Default: read DNS VIPs/internal_zone from ../../../netbox/terraform.tfstate.
+# Bootstrap alternative (explicit opt-out):
+# enable_netbox_remote_state = false
+# vm_nameserver             = "192.0.2.53 192.0.2.54"
+# vm_searchdomain           = "example.internal"
+
+postgres_vm = {
+  name                = "pg95"
+  vmid                = 9205
+  ip                  = "192.0.2.95"
+  clone_template_vmid = 9003
+  cores               = 2
+  sockets             = 1
+  memory              = 4096 # Example only; retain existing private/state sizing.
+  disk_size_gb        = 60
+}
+
+# Shared vendor data normally comes from the Ubuntu template owner's output.
+# ubuntu_template_state_path = "../../templates/ubuntu-2604/terraform.tfstate"
+# Bootstrap only: guest_agent_vendor_data_file_id can explicitly supply the
+# existing exported ID when that authoritative state snapshot is unavailable.

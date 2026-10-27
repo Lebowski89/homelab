@@ -26,3 +26,17 @@ ansible/group_vars/all/vault.yml
 **/*_override.tf.json
 **/*.auto.tfvars
 !**/*.auto.tfvars.sample
+
+# Local OpenTofu inputs, saved plans/JSON and state-transfer scratch files.
+**/*.tfvars
+**/*.tfvars.json
+!**/*.tfvars.sample
+!**/*.tfvars.json.sample
+**/*.tfplan
+**/*.tfplan.*
+**/tfplan
+**/tfplan.*
+**/tofu-state-backups/
+
+# This non-secret, checked-in override is part of the shared VM implementation.
+!terraform/proxmox/modules/cloudinit-vm/initialization-ignored/initialization_override.tf
