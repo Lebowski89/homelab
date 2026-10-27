@@ -203,6 +203,23 @@ def test_netbox_loads_shared_configuration_and_only_its_vault(bootstrap, executo
         "log_root": "/var/log/operator-services" if overrides else "/var/log/skynet",
     }
     assert "Failed to parse inventory" not in result.stderr
+    assert "DEPRECATION WARNING" not in result.stdout + result.stderr
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("override", [None, False, 0, 42, 1.5, "0", "", [], {}])
+def test_shared_configuration_preserves_defined_falsy_host_overrides(bootstrap, override):
+    directory, run = bootstrap
+    path = directory / "host_vars/mgt.yml"
+    settings = yaml.safe_load(path.read_text())
+    settings["services_log_root"] = override
+    path.write_text(yaml.safe_dump(settings))
+
+    result, observed = run("run", "netbox", "recreate")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert observed["log_root"] == override
+    assert type(observed["log_root"]) is type(override)
+    assert "DEPRECATION WARNING" not in result.stdout + result.stderr
 
 
 @pytest.mark.integration

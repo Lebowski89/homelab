@@ -7,6 +7,7 @@
       - ca-certificates
       - gnupg
       - lsb-release
+      - python3-debian
     state: present
     update_cache: true
 
@@ -27,13 +28,48 @@
     mode: "0644"
 
 - name: Add PGDG repository
-  ansible.builtin.apt_repository:
-    repo: >-
+  ansible.builtin.deb822_repository:
+    name: pgdg
+    types: [deb]
+    uris: https://apt.postgresql.org/pub/repos/apt
+    suites: "{{ ansible_facts.distribution_release }}-pgdg"
+    components: [main]
+    signed_by: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+    mode: "0644"
+    state: present
+  register: postgres_apt_repository
+
+- name: Find legacy APT source files
+  ansible.builtin.find:
+    paths: /etc/apt/sources.list.d
+    patterns: "*.list"
+    file_type: any
+  register: postgres_apt_legacy_sources
+
+- name: Remove the previous PGDG one-line repository entry
+  ansible.builtin.lineinfile:
+    path: "{{ postgres_apt_legacy_source_file }}"
+    regexp: >-
+      ^\s*{{ postgres_apt_legacy_source.split() | map('regex_escape') | join('\s+') }}\s*(?:#.*)?$
+    state: absent
+  vars:
+    # apt_repository reused matching entries in any .list file and retained comments.
+    postgres_apt_legacy_source: >-
       deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc]
       https://apt.postgresql.org/pub/repos/apt
-      {{ ansible_distribution_release }}-pgdg main
-    filename: pgdg
-    state: present
+      {{ ansible_facts.distribution_release }}-pgdg main
+  loop: >-
+    {{ ['/etc/apt/sources.list'] +
+       (((postgres_apt_legacy_sources.files | selectattr('isreg') | list) +
+         (postgres_apt_legacy_sources.files | selectattr('islnk') | list))
+        | map(attribute='path') | list) }}
+  loop_control:
+    loop_var: postgres_apt_legacy_source_file
+  register: postgres_apt_legacy_repository
+
+- name: Refresh APT after PGDG repository changes
+  when: postgres_apt_repository.changed or postgres_apt_legacy_repository.changed
+  ansible.builtin.apt:
     update_cache: true
 
 - name: Install PostgreSQL common packages first

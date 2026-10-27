@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/07/15 |
+| Readme update        | 2026/10/28 |
 
 
 
@@ -41,7 +41,7 @@
 | [keepalived_script_weight](defaults/main.yml#L16)   | int | `-80` |    
 | [keepalived_dns_group](defaults/main.yml#L18)   | str | `tags_keepalived` |    
 | [keepalived_host_ip](defaults/main.yml#L19)   | str | `{{ local_ip ¦ default('') }}` |    
-| [keepalived_host_interface](defaults/main.yml#L20)   | str | `{{ ansible_default_ipv4.interface ¦ default('') }}` |    
+| [keepalived_host_interface](defaults/main.yml#L20)   | str | `{{ ansible_facts.default_ipv4.interface ¦ default('') }}` |    
 | [keepalived_host_mode](defaults/main.yml#L21)   | str | `native` |    
 | [keepalived_instances](defaults/main.yml#L22)   | dict | `{}` |    
 

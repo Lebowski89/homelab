@@ -10,12 +10,13 @@ docker_packages:
 docker_prereq_packages:
   - ca-certificates
   - curl
+  - python3-debian
 
 docker_apt_arch_map:
   x86_64: amd64
   aarch64: arm64
 
-docker_apt_arch: "{{ docker_apt_arch_map[ansible_architecture] | default(ansible_architecture) }}"
+docker_apt_arch: "{{ docker_apt_arch_map[ansible_facts.architecture] | default(ansible_facts.architecture) }}"
 
 docker_repo_url: "https://download.docker.com/linux/ubuntu"
 docker_repo_channel: stable

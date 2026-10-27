@@ -8,7 +8,8 @@
 
 - name: Netbox bootstrap | Retain host overrides of shared settings
   ansible.builtin.set_fact:
-    "{{ netbox_bootstrap_setting.key }}": "{{ vars[netbox_bootstrap_setting.key] | default(netbox_bootstrap_setting.value) }}"
+    "{{ netbox_bootstrap_setting.key }}": >-
+      {{ lookup('ansible.builtin.vars', netbox_bootstrap_setting.key, default=netbox_bootstrap_setting.value) }}
   loop: "{{ netbox_bootstrap_shared | dict2items }}"
   loop_control:
     loop_var: netbox_bootstrap_setting

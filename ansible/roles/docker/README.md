@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/08/11 |
+| Readme update        | 2026/10/28 |
 
 
 
@@ -36,40 +36,41 @@
 | [docker_prereq_packages](defaults/main.yml#L10)   | list | `[]` |    
 | [docker_prereq_packages.**0**](defaults/main.yml#L11)   | str | `ca-certificates` |    
 | [docker_prereq_packages.**1**](defaults/main.yml#L12)   | str | `curl` |    
-| [docker_apt_arch_map](defaults/main.yml#L14)   | dict | `{}` |    
-| [docker_apt_arch_map.**x86_64**](defaults/main.yml#L15)   | str | `amd64` |    
-| [docker_apt_arch_map.**aarch64**](defaults/main.yml#L16)   | str | `arm64` |    
-| [docker_apt_arch](defaults/main.yml#L18)   | str | `{{ docker_apt_arch_map[ansible_architecture] ¦ default(ansible_architecture) }}` |    
-| [docker_repo_url](defaults/main.yml#L20)   | str | `https://download.docker.com/linux/ubuntu` |    
-| [docker_repo_channel](defaults/main.yml#L21)   | str | `stable` |    
-| [docker_keyring_dir](defaults/main.yml#L22)   | str | `/etc/apt/keyrings` |    
-| [docker_keyring_file](defaults/main.yml#L23)   | str | `/etc/apt/keyrings/docker.asc` |    
-| [docker_repo_filename](defaults/main.yml#L24)   | str | `docker` |    
-| [docker_install_compose_plugin](defaults/main.yml#L26)   | bool | `True` |    
-| [docker_manage_user](defaults/main.yml#L27)   | bool | `False` |    
-| [docker_user](defaults/main.yml#L28)   | str |  |    
-| [docker_network](defaults/main.yml#L30)   | str | `overlay` |    
-| [docker_network_driver](defaults/main.yml#L31)   | str | `overlay` |    
-| [docker_network_subnet](defaults/main.yml#L32)   | str | `172.98.0.0/24` |    
-| [docker_prune_threshold_percent](defaults/main.yml#L34)   | int | `80` |    
-| [docker_prune_filesystem_path](defaults/main.yml#L35)   | str | `/` |    
-| [docker_prune_until](defaults/main.yml#L36)   | str | `168h` |    
-| [docker_prune_images](defaults/main.yml#L38)   | bool | `True` |    
-| [docker_prune_containers](defaults/main.yml#L39)   | bool | `True` |    
-| [docker_prune_builder_cache](defaults/main.yml#L40)   | bool | `True` |    
-| [docker_prune_networks](defaults/main.yml#L41)   | bool | `False` |    
-| [docker_prune_volumes](defaults/main.yml#L42)   | bool | `False` |    
-| [docker_prune_manage_timer](defaults/main.yml#L44)   | bool | `True` |    
-| [docker_prune_timer_name](defaults/main.yml#L45)   | str | `docker-prune-safe` |    
-| [docker_prune_timer_on_calendar](defaults/main.yml#L46)   | str | `Sun *-*-* 04:30:00` |    
-| [docker_prune_timer_randomized_delay_sec](defaults/main.yml#L47)   | str | `1h` |    
-| [docker_prune_script_path](defaults/main.yml#L48)   | str | `/usr/local/sbin/docker-prune-safe` |    
-| [docker_prune_timer_min_usage_percent](defaults/main.yml#L52)   | int | `0` |    
-| [docker_prune_unraid_user_script_manage](defaults/main.yml#L54)   | bool | `True` |    
-| [docker_prune_unraid_user_script_name](defaults/main.yml#L55)   | str | `docker-prune-safe` |    
-| [docker_prune_unraid_user_scripts_root](defaults/main.yml#L56)   | str | `/boot/config/plugins/user.scripts/scripts` |    
-| [docker_prune_unraid_user_script_dir](defaults/main.yml#L57)   | str | `{{ docker_prune_unraid_user_scripts_root }}/{{ docker_prune_unraid_user_script_name }}` |    
-| [docker_prune_unraid_user_script_path](defaults/main.yml#L58)   | str | `{{ docker_prune_unraid_user_script_dir }}/script` |    
+| [docker_prereq_packages.**2**](defaults/main.yml#L13)   | str | `python3-debian` |    
+| [docker_apt_arch_map](defaults/main.yml#L15)   | dict | `{}` |    
+| [docker_apt_arch_map.**x86_64**](defaults/main.yml#L16)   | str | `amd64` |    
+| [docker_apt_arch_map.**aarch64**](defaults/main.yml#L17)   | str | `arm64` |    
+| [docker_apt_arch](defaults/main.yml#L19)   | str | `{{ docker_apt_arch_map[ansible_facts.architecture] ¦ default(ansible_facts.architecture) }}` |    
+| [docker_repo_url](defaults/main.yml#L21)   | str | `https://download.docker.com/linux/ubuntu` |    
+| [docker_repo_channel](defaults/main.yml#L22)   | str | `stable` |    
+| [docker_keyring_dir](defaults/main.yml#L23)   | str | `/etc/apt/keyrings` |    
+| [docker_keyring_file](defaults/main.yml#L24)   | str | `/etc/apt/keyrings/docker.asc` |    
+| [docker_repo_filename](defaults/main.yml#L25)   | str | `docker` |    
+| [docker_install_compose_plugin](defaults/main.yml#L27)   | bool | `True` |    
+| [docker_manage_user](defaults/main.yml#L28)   | bool | `False` |    
+| [docker_user](defaults/main.yml#L29)   | str |  |    
+| [docker_network](defaults/main.yml#L31)   | str | `overlay` |    
+| [docker_network_driver](defaults/main.yml#L32)   | str | `overlay` |    
+| [docker_network_subnet](defaults/main.yml#L33)   | str | `172.98.0.0/24` |    
+| [docker_prune_threshold_percent](defaults/main.yml#L35)   | int | `80` |    
+| [docker_prune_filesystem_path](defaults/main.yml#L36)   | str | `/` |    
+| [docker_prune_until](defaults/main.yml#L37)   | str | `168h` |    
+| [docker_prune_images](defaults/main.yml#L39)   | bool | `True` |    
+| [docker_prune_containers](defaults/main.yml#L40)   | bool | `True` |    
+| [docker_prune_builder_cache](defaults/main.yml#L41)   | bool | `True` |    
+| [docker_prune_networks](defaults/main.yml#L42)   | bool | `False` |    
+| [docker_prune_volumes](defaults/main.yml#L43)   | bool | `False` |    
+| [docker_prune_manage_timer](defaults/main.yml#L45)   | bool | `True` |    
+| [docker_prune_timer_name](defaults/main.yml#L46)   | str | `docker-prune-safe` |    
+| [docker_prune_timer_on_calendar](defaults/main.yml#L47)   | str | `Sun *-*-* 04:30:00` |    
+| [docker_prune_timer_randomized_delay_sec](defaults/main.yml#L48)   | str | `1h` |    
+| [docker_prune_script_path](defaults/main.yml#L49)   | str | `/usr/local/sbin/docker-prune-safe` |    
+| [docker_prune_timer_min_usage_percent](defaults/main.yml#L53)   | int | `0` |    
+| [docker_prune_unraid_user_script_manage](defaults/main.yml#L55)   | bool | `True` |    
+| [docker_prune_unraid_user_script_name](defaults/main.yml#L56)   | str | `docker-prune-safe` |    
+| [docker_prune_unraid_user_scripts_root](defaults/main.yml#L57)   | str | `/boot/config/plugins/user.scripts/scripts` |    
+| [docker_prune_unraid_user_script_dir](defaults/main.yml#L58)   | str | `{{ docker_prune_unraid_user_scripts_root }}/{{ docker_prune_unraid_user_script_name }}` |    
+| [docker_prune_unraid_user_script_path](defaults/main.yml#L59)   | str | `{{ docker_prune_unraid_user_script_dir }}/script` |    
 
 
 
@@ -96,7 +97,10 @@
 | Ensure apt prerequisites are installed | ansible.builtin.apt | False |
 | Ensure Docker keyring directory exists | ansible.builtin.file | False |
 | Download Docker GPG key | ansible.builtin.get_url | False |
-| Add Docker apt repository | ansible.builtin.apt_repository | False |
+| Add Docker apt repository | ansible.builtin.deb822_repository | False |
+| Find legacy APT source files | ansible.builtin.find | False |
+| Remove the previous Docker one-line repository entry | ansible.builtin.lineinfile | False |
+| Refresh APT after Docker repository changes | ansible.builtin.apt | True |
 | Install Docker packages | ansible.builtin.apt | False |
 | Ensure docker group exists | ansible.builtin.group | True |
 | Add user to docker group | ansible.builtin.user | True |

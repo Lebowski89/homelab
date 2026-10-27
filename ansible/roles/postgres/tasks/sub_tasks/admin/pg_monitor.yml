@@ -21,8 +21,10 @@
     login_port: "{{ postgres_patroni_postgres_port }}"
     login_user: "{{ postgres_patroni_superuser_name }}"
     login_password: "{{ postgres_patroni_superuser_pass }}"
-    groups:
-      - pg_monitor
+    memberships:
+      - groups: [pg_monitor]
+    # Retain the previous pair-based behaviour regardless of the granting role.
+    granted_by_any: true
     target_roles:
       - "{{ postgres_monitor_role_name }}"
     state: present
