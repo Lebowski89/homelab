@@ -7,6 +7,7 @@
       - ca-certificates
       - gnupg
       - lsb-release
+      - python3-debian
     state: present
     update_cache: true
 
@@ -27,13 +28,30 @@
     mode: "0644"
 
 - name: Add PGDG repository
-  ansible.builtin.apt_repository:
-    repo: >-
+  ansible.builtin.deb822_repository:
+    name: pgdg
+    types: [deb]
+    uris: https://apt.postgresql.org/pub/repos/apt
+    suites: "{{ ansible_facts.distribution_release }}-pgdg"
+    components: [main]
+    signed_by: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+    mode: "0644"
+    state: present
+  register: postgres_apt_repository
+
+- name: Remove the previous PGDG one-line repository entry
+  ansible.builtin.lineinfile:
+    path: /etc/apt/sources.list.d/pgdg.list
+    line: >-
       deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc]
       https://apt.postgresql.org/pub/repos/apt
-      {{ ansible_distribution_release }}-pgdg main
-    filename: pgdg
-    state: present
+      {{ ansible_facts.distribution_release }}-pgdg main
+    state: absent
+  register: postgres_apt_legacy_repository
+
+- name: Refresh APT after PGDG repository changes
+  when: postgres_apt_repository.changed or postgres_apt_legacy_repository.changed
+  ansible.builtin.apt:
     update_cache: true
 
 - name: Install PostgreSQL common packages first
