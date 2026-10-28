@@ -156,6 +156,7 @@
          }}) if ((docker_services_common_context | default({})).firewall_plan | default({})).managed | default(false)
          else docker_services_svc | service_common_requirements_metadata(service_common_name) }}
     service_common_name: "{{ docker_services_service_name }}"
+    service_common_controller_host: "{{ docker_services_controller_host }}"
     service_common_preflight_proof: "{{ docker_services_common_context.requirements_proof | default({}) }}"
     service_common_action: "{{ docker_services_common_action }}"
     service_common_execution_only: "{{ false }}"

@@ -31,6 +31,12 @@
     workers: ["{{ services_storage_host }}", "{{ services_plex_host }}"]
     controller_address: "{{ hostvars[services_controller_host].local_ip }}"
   when: worker_backend_firewall_operation != 'remove'
+  register: service_firewall_worker_plan_result
+
+- name: Service firewall | Workers | Retain current generated placement # noqa var-naming[no-role-prefix]
+  when: worker_backend_firewall_operation != 'remove'
+  ansible.builtin.set_fact:
+    worker_backend_firewall_plan: "{{ service_firewall_worker_plan_result.ansible_facts.worker_backend_firewall_plan }}"
 
 - name: Service firewall | Workers | Require published ports and the worker inventory address
   ansible.builtin.assert:

@@ -46,58 +46,6 @@
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
 ################################
-# CLEANUP
-################################
-
-- name: Cleanup | Read cleanup settings
-  ansible.builtin.set_fact:
-    docker_services_cleanup_enable: "{{ (docker_services_svc.cleanup.enable | default(true)) | bool }}"
-    docker_services_cleanup_force: "{{ (docker_services_svc.cleanup.force | default(false)) | bool }}"
-  tags: [remove, recreate]
-
-- name: Cleanup | Start cleaned-stack tracker
-  when: docker_services_is_deploy_host
-  ansible.builtin.set_fact:
-    docker_services_stacks_cleaned: "{{ docker_services_stacks_cleaned | default([]) }}"
-  tags: [remove, recreate]
-
-- name: Cleanup | Decide whether cleanup is needed
-  when: docker_services_is_deploy_host
-  ansible.builtin.set_fact:
-    docker_services_do_stack_cleanup: >-
-      {{
-        docker_services_cleanup_enable
-        and (
-          docker_services_cleanup_force
-          or (docker_services_stack_name_effective not in docker_services_stacks_cleaned)
-        )
-      }}
-  tags: [remove, recreate]
-
-- name: Cleanup | Remove existing deployment
-  when:
-    - docker_services_common_action in ['remove', 'recreate']
-    - not ansible_check_mode
-    - docker_services_is_deploy_host
-    - docker_services_do_stack_cleanup | bool
-  ansible.builtin.include_tasks:
-    file: sub_tasks/cleanup.yml
-    apply:
-      tags: [remove, recreate]
-  tags: [remove, recreate]
-
-- name: Cleanup | Record cleaned stack
-  when:
-    - docker_services_common_action in ['remove', 'recreate']
-    - not ansible_check_mode
-    - docker_services_is_deploy_host
-    - docker_services_do_stack_cleanup | bool
-    - docker_services_stack_name_effective not in docker_services_stacks_cleaned
-  ansible.builtin.set_fact:
-    docker_services_stacks_cleaned: "{{ docker_services_stacks_cleaned + [docker_services_stack_name_effective] }}"
-  tags: [remove, recreate]
-
-################################
 # APPLICATION SECRETS
 ################################
 
@@ -150,28 +98,6 @@
   tags: [deploy, update, recreate, bootstrap]
 
 ################################
-# DOCKER SECRETS
-################################
-
-- name: Secrets | Manage Docker secrets
-  when:
-    - not ansible_check_mode
-    - docker_services_effective_secret_declarations | length > 0
-    - >-
-      (docker_services_stack_deploy_type == 'swarm')
-      | ternary(
-          inventory_hostname == docker_services_controller_host,
-          docker_services_is_deploy_host
-        )
-  ansible.builtin.include_tasks:
-    file: sub_tasks/secrets/manage.yml
-    apply:
-      tags: [deploy, update, recreate, bootstrap]
-      no_log: true
-      diff: false
-  tags: [deploy, update, recreate, bootstrap]
-
-################################
 # TEMPLATE VALUES
 ################################
 
@@ -196,14 +122,131 @@
     docker_services_application_template_vars: "{{ service_prepare_template_vars }}"
   tags: [deploy, update, recreate, bootstrap]
 
+- name: Prepare | Complete prerequisites before interrupting the service
+  when: docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.include_tasks:
+    file: sub_tasks/preflight.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate, bootstrap]
+
+################################
+# CLEANUP
+################################
+
+- name: Cleanup | Read cleanup settings
+  ansible.builtin.set_fact:
+    docker_services_cleanup_enable: "{{ (docker_services_svc.cleanup.enable | default(true)) | bool }}"
+    docker_services_cleanup_force: "{{ (docker_services_svc.cleanup.force | default(false)) | bool }}"
+  tags: [remove, recreate]
+
+- name: Cleanup | Start cleaned-stack tracker
+  when: docker_services_is_deploy_host
+  ansible.builtin.set_fact:
+    docker_services_stacks_cleaned: "{{ docker_services_stacks_cleaned | default([]) }}"
+  tags: [remove, recreate]
+
+- name: Cleanup | Decide whether cleanup is needed
+  when: docker_services_is_deploy_host
+  ansible.builtin.set_fact:
+    docker_services_do_stack_cleanup: >-
+      {{
+        docker_services_cleanup_enable
+        and (
+          docker_services_cleanup_force
+          or (docker_services_stack_name_effective not in docker_services_stacks_cleaned)
+        )
+      }}
+  tags: [remove, recreate]
+
+- name: Cleanup | Remove existing deployment
+  when:
+    - docker_services_common_action in ['remove', 'recreate']
+    - not ansible_check_mode
+    - docker_services_is_deploy_host
+    - docker_services_do_stack_cleanup | bool
+  ansible.builtin.include_tasks:
+    file: sub_tasks/cleanup.yml
+    apply:
+      tags: [remove, recreate]
+  tags: [remove, recreate]
+
+- name: Cleanup | Record cleaned stack
+  when:
+    - docker_services_common_action in ['remove', 'recreate']
+    - not ansible_check_mode
+    - docker_services_is_deploy_host
+    - docker_services_do_stack_cleanup | bool
+    - docker_services_stack_name_effective not in docker_services_stacks_cleaned
+  ansible.builtin.set_fact:
+    docker_services_stacks_cleaned: "{{ docker_services_stacks_cleaned + [docker_services_stack_name_effective] }}"
+  tags: [remove, recreate]
+
+################################
+# DOCKER SECRETS
+################################
+
+- name: Secrets | Manage Docker secrets
+  when:
+    - not ansible_check_mode
+    - docker_services_effective_secret_declarations | length > 0
+    - >-
+      (docker_services_stack_deploy_type == 'swarm')
+      | ternary(
+          inventory_hostname == docker_services_controller_host,
+          docker_services_is_deploy_host
+        )
+  ansible.builtin.include_tasks:
+    file: sub_tasks/secrets/manage.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate, bootstrap]
+
 ################################
 # SHARED FILES AND INTEGRATIONS
 ################################
 
 - name: Prepare | Prepare shared files and integrations
+  when: >-
+    docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    or (docker_services_common_action == 'remove' and docker_services_svc.traefik.enable | default(false) | bool)
   no_log: true
   ansible.builtin.include_role:
     name: service_common
+    tasks_from: "{{ 'remove_integrations' if docker_services_common_action == 'remove' else 'files' }}"
+    apply:
+      tags: [deploy, update, remove, recreate, bootstrap]
+      no_log: true
+      diff: false
+  vars:
+    service_common_name: "{{ docker_services_service_name }}"
+    service_common_runtime: docker
+    service_common_action: "{{ docker_services_common_action }}"
+    service_common_service: "{{ docker_services_svc }}"
+    service_common_target_hosts: "{{ docker_services_fs_hosts_effective }}"
+    service_common_controller_host: "{{ docker_services_controller_host }}"
+    service_common_infisical_values: "{{ docker_services_common_values }}"
+    service_common_host_defaults: "{{ docker_services_common_host_defaults }}"
+    service_common_template_vars: "{{ docker_services_application_template_vars }}"
+    service_common_traefik_internal_zone: "{{ services_internal_zone }}"
+    service_common_traefik_dynamic_dir: >-
+      {{ hostvars[docker_services_controller_host].container_host_appdata_root }}/traefik/dynamic
+    service_common_traefik_owner: "1000"
+    service_common_traefik_group: "1000"
+  tags: [deploy, update, remove, recreate, bootstrap]
+
+- name: Prepare | Apply shared Traefik integration
+  when:
+    - docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - docker_services_svc.traefik.enable | default(false) | bool
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: traefik
     apply:
       tags: [deploy, update, remove, recreate, bootstrap]
       no_log: true

@@ -4,6 +4,12 @@
   service_firewall_plan:
     entry: "{{ service_catalog_materialized_service }}"
     action: "{{ service_catalog_action }}"
+  register: service_catalog_firewall_plan_result
+  tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+- name: Service catalog preflight | Retain the returned plan for this service
+  ansible.builtin.set_fact:
+    service_firewall_lifecycle_plan: "{{ service_catalog_firewall_plan_result.ansible_facts.service_firewall_lifecycle_plan }}"
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 
 - name: Service catalog preflight | Inspect automatic firewall prerequisites
@@ -45,6 +51,26 @@
   register: service_firewall_legacy_runtime
   tags: [deploy, update, recreate, bootstrap]
 
+- name: Service catalog preflight | Require complete runtime ownership evidence
+  when:
+    - service_firewall_lifecycle_plan.legacy_publications | default(false)
+    - not ansible_check_mode
+    - not (service_catalog_execution_only | default(false))
+    - service_catalog_action in ['deploy', 'update', 'recreate', 'bootstrap']
+  ansible.builtin.assert:
+    that:
+      - service_firewall_legacy_runtime is defined
+      - service_firewall_legacy_runtime is mapping
+      - not (service_firewall_legacy_runtime.skipped | default(false))
+      - not (service_firewall_legacy_runtime.failed | default(false))
+      - service_firewall_legacy_runtime.managed is defined
+      - service_firewall_legacy_runtime.managed is boolean
+    fail_msg: >-
+      Runtime publication inspection for {{ service_firewall_lifecycle_plan.metadata.name }}
+      did not return a valid boolean managed result. Ownership could not be established;
+      no publication change is authorized. Check the inspection result and declared runtime host.
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Service catalog preflight | Require explicit exposure for new publications
   when:
     - service_firewall_lifecycle_plan.legacy_publications | default(false)
@@ -52,8 +78,21 @@
     - not (service_catalog_execution_only | default(false))
     - service_catalog_action in ['deploy', 'update', 'recreate', 'bootstrap']
   ansible.builtin.assert:
-    that: service_firewall_legacy_runtime.managed | default(false)
-    fail_msg: New publications require exposure public or private, with logical callers for private ports. Existing-data migration safeguards still apply.
+    that: service_firewall_legacy_runtime.managed
+    fail_msg: >-
+      {{ service_firewall_lifecycle_plan.metadata.name }} has no existing owned
+      {{ service_firewall_lifecycle_plan.metadata.runtime | default('docker') }} deployment
+      at its declared identity. New publications require exposure public or private,
+      with logical callers for private ports. Existing-data migration safeguards still apply.
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service catalog preflight | Explain deferred check-mode readiness checks
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      {{ service_catalog_materialized_service.name }} declarations are being previewed.
+      Live runtime ownership, installed protection, storage and database connectivity
+      are deferred; this check is not verified deployment readiness.
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Service catalog preflight | Enforce operational requirements before secret preflight
@@ -76,6 +115,7 @@
          | default(service_catalog_materialized_service.name)) }}
     service_common_preflight_proof: "{{ service_firewall_ownership_proof | default({}) if service_firewall_lifecycle_plan.managed else {} }}"
     service_common_action: "{{ service_catalog_action }}"
+    service_common_controller_host: "{{ service_catalog_controller_host }}"
     service_common_execution_only: "{{ service_catalog_execution_only | default(false) }}"
   tags: [deploy, update, remove, recreate, bootstrap, drift]
 

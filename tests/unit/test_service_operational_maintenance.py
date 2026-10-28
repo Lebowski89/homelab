@@ -296,6 +296,9 @@ class ActionModule(m.ActionModule):
         service_common_service=cfg,
         service_common_name="whisparr",
         service_common_action="recreate",
+        service_common_controller_host="mgt",
+        # This fixture audits runtime/firewall state; operator entry has its own fixture.
+        service_common_postgres_operator_context=False,
         service_common_execution_only=False,
         service_common_preflight_proof={},
     )
@@ -331,7 +334,8 @@ class ActionModule(m.ActionModule):
     play.write_text(yaml.safe_dump([{"hosts": "mgt", "gather_facts": False, "vars": variables, "tasks": tasks}]))
     config = tmp_path / "ansible.cfg"
     config.write_text(
-        f"[defaults]\ninventory={inventory}\nroles_path={ROOT}/ansible/roles\naction_plugins={actions}\nlibrary={ROOT}/ansible/library\nvars_plugins_enabled=\nstdout_callback=default\n"
+        f"[defaults]\ninventory={inventory}\nroles_path={ROOT}/ansible/roles\naction_plugins={actions}\nlibrary={ROOT}/ansible/library\n"
+        f"filter_plugins={ROOT}/ansible/filter_plugins\nvars_plugins_enabled=\ninject_facts_as_vars=false\nstdout_callback=default\n"
     )
     result = subprocess.run(
         [str(Path(sys.executable).with_name("ansible-playbook")), "-i", str(inventory), str(play)],
@@ -478,6 +482,8 @@ class ActionModule(m.ActionModule):
         "service_common_service": cfg,
         "service_common_name": unit,
         "service_common_action": "recreate",
+        "service_common_controller_host": "mgt",
+        "service_common_postgres_operator_context": False,
         "service_common_execution_only": False,
         "local_ip": "192.0.2.10",
     }
@@ -487,7 +493,8 @@ class ActionModule(m.ActionModule):
     inventory.write_text(yaml.safe_dump({"all": {"hosts": {host: {"ansible_connection": "local", "local_ip": "192.0.2.10"}}}}))
     config = tmp_path / "ansible.cfg"
     config.write_text(
-        f"[defaults]\ninventory={inventory}\nroles_path={ROOT}/ansible/roles\naction_plugins={actions}\nlibrary={ROOT}/ansible/library\nvars_plugins_enabled=\nstdout_callback=default\n"
+        f"[defaults]\ninventory={inventory}\nroles_path={ROOT}/ansible/roles\naction_plugins={actions}\nlibrary={ROOT}/ansible/library\n"
+        f"filter_plugins={ROOT}/ansible/filter_plugins\nvars_plugins_enabled=\ninject_facts_as_vars=false\nstdout_callback=default\n"
     )
     play = tmp_path / "play.yml"
     play.write_text(

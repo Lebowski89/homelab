@@ -448,57 +448,114 @@ class Store:
 
 
 def counters(helper, profile, ports):
-    """Read owned pre-DNAT RETURN counters, without installing observation rules."""
+    """Read the profile's owned allow path, without installing observation rules.
+
+    Worker pre-DNAT RETURN rules allow a source without a port match. Their
+    port-scoped evidence is in filter ACCEPT rules, including original ports
+    after DNAT. Workers coalesce adjacent ports; those counters cover a range,
+    not a uniquely attributable connection. Qualified TCP and the policy audit
+    are still required, just as for counters shared by callers on mgt.
+    """
     import re
     import shlex
 
     totals = {}
-    chains = {"SKY-MGT-PRE", "SKY-MGT-OUT"} if profile == "mgt" else {"SKY-WBACK-PRE"}
+    table, chains, target = (
+        ("mangle", {"SKY-MGT-PRE", "SKY-MGT-OUT"}, "RETURN")
+        if profile == "mgt"
+        else ("filter", {"SKY-WBACK-IN", "SKY-WBACK-FWD"}, "ACCEPT")
+    )
     for family, tool in [(4, "iptables-save"), (6, "ip6tables-save")]:
-        saved = command([tool, "-c", "-t", "mangle"])
+        saved = command([tool, "-c", "-t", table])
         for line in saved.splitlines():
             match = re.match(r"\[(\d+):\d+\] (.*)", line)
             if not match:
                 continue
             tokens = shlex.split(match[2])
-            if (
-                len(tokens) < 4
-                or tokens[:1] != ["-A"]
-                or tokens[1] not in chains
-                or "--dport" not in tokens
-                or tokens[-2:] != ["-j", "RETURN"]
-            ):
+            if len(tokens) < 4 or tokens[:1] != ["-A"] or tokens[1] not in chains or tokens[-2:] != ["-j", target]:
                 continue
-            port = int(tokens[tokens.index("--dport") + 1])
-            if port in ports:
+            option = "--ctorigdstport" if "--ctorigdstport" in tokens else "--dport"
+            if option not in tokens:
+                continue
+            bounds = tokens[tokens.index(option) + 1].split(":")
+            require(len(bounds) <= 2 and all(value.isdecimal() for value in bounds), "owned counter port match is unsupported")
+            low, high = int(bounds[0]), int(bounds[-1])
+            require(0 < low <= high <= 65535, "owned counter port range is invalid")
+            for port in sorted(ports):
+                if not low <= port <= high:
+                    continue
                 key = str(family) + ":" + str(port)
                 totals[key] = totals.get(key, 0) + int(match[1])
     return totals
 
 
-def qualified_probes(request, policy=None):
-    """Handshake in each exact current caller network namespace, without data.
+class ProbeError(ValueError):
+    """A value-free failure stage; only transient TCP readiness is retryable."""
 
-    The namespace source is recorded as such: it is not asserted to be the
-    translated source observed by a remote worker. An audited source guard plus
-    a completed handshake proves membership of its existing verified allow set.
-    """
+    def __init__(self, message, retryable=False):
+        super().__init__(message)
+        self.retryable = retryable
+
+
+def namespace_probe(argv):
+    try:
+        result = subprocess.run(argv, text=True, capture_output=True, timeout=8, check=False)
+    except subprocess.TimeoutExpired:
+        raise ProbeError("probe execution exceeded its time bound") from None
+    except OSError as error:
+        raise ProbeError("namespace launcher: " + os.strerror(error.errno)) from None
+    # Never echo Python source, command arguments, requests or arbitrary stderr.
+    lines = result.stdout.splitlines()
+    started = bool(lines and lines[0] == '{"stage": "python_started"}')
+    if result.returncode:
+        stage = (
+            "probe execution"
+            if started
+            else "namespace entry"
+            if result.stderr.lstrip().startswith("nsenter:") and "failed to execute" not in result.stderr
+            else "interpreter startup"
+        )
+        reason = next(
+            (os.strerror(code) for code in [1, 2, 13] if os.strerror(code).lower() in result.stderr.lower()), "launcher/process failure"
+        )
+        exception = result.stderr.strip().splitlines()[-1].partition(":")[0] if result.stderr.strip() else ""
+        if exception.isidentifier() and exception.endswith(("Error", "Exception")):
+            reason = exception
+        raise ProbeError(f"{stage}: {reason} (status {result.returncode})")
+    try:
+        value = json.loads(lines[-1])
+        require(started and isinstance(value, dict) and isinstance(value.get("connected"), bool), "malformed probe result")
+    except (ValueError, IndexError, TypeError):
+        raise ProbeError("probe execution: interpreter returned incomplete or malformed evidence") from None
+    return value
+
+
+def qualified_probes(request, policy=None):
+    """Credential-free TCP readiness in the exact current caller namespaces."""
     results = []
-    script = """import json,socket,sys
+    script = """import errno,json,os,socket,sys
+print(json.dumps({'stage':'python_started'}),flush=True)
 address,port=json.loads(sys.argv[1])
-with socket.create_connection((address,port),timeout=3) as client:
-    print(json.dumps({'namespace_source':client.getsockname()[0],'connected':True}))
+try:
+    with socket.create_connection((address,port),timeout=3) as client:
+        result={'namespace_source':client.getsockname()[0],'connected':True}
+except OSError as error:
+    kind=('timeout' if isinstance(error,TimeoutError) else
+          'connection refused' if error.errno==errno.ECONNREFUSED else
+          'routing failure' if error.errno in {errno.ENETUNREACH,errno.EHOSTUNREACH} else 'socket failure')
+    result={'connected':False,'error':kind,'errno':errno.errorcode.get(error.errno,'unspecified')}
+result.update(net_namespace=os.readlink('/proc/self/ns/net'),user_namespace=os.readlink('/proc/self/ns/user'))
+print(json.dumps(result),flush=True)
 """
     for name, record in request["callers"].items():
         if record.get("binding") is None:
             results.append({"caller": name, "not_probed": "retained native/remote contract audited in the installed policy"})
             continue
         binding = record["binding"]
-        if binding.get("runtime") == "podman" and binding.get("mode") == "rootless" and policy_engine.future_caller(policy or {}, name):
+        rootless = binding.get("runtime") == "podman" and binding.get("mode") == "rootless"
+        if rootless and policy_engine.future_caller(policy or {}, name):
             user = pwd.getpwnam(binding["account"])
             if not Path(f"/run/user/{user.pw_uid}").is_dir():
-                # Account-only preparation deliberately does not activate the
-                # user's manager. No runtime socket/store query is safe yet.
                 results.append(
                     {
                         "caller": name,
@@ -519,33 +576,56 @@ with socket.create_connection((address,port),timeout=3) as client:
         require(pid.isdecimal() and int(pid) > 0, "qualified caller is not running: " + name)
 
         def continuity(pid=pid):
-            stat = command(["cat", f"/proc/{pid}/stat"]).rsplit(")", 1)[-1].split()
-            return (command(["readlink", f"/proc/{pid}/ns/net"]).strip(), stat[19])
+            process = command(["cat", f"/proc/{pid}/stat"]).rsplit(")", 1)[-1].split()
+            return (
+                command(["readlink", f"/proc/{pid}/ns/net"]).strip(),
+                command(["readlink", f"/proc/{pid}/ns/user"]).strip(),
+                process[19],
+            )
 
         before = continuity()
-        for endpoint in request["endpoints"]:
-            if name not in endpoint["callers"]:
-                continue
-            result = json.loads(
-                command(
-                    [
-                        "nsenter",
-                        "--target",
-                        pid,
-                        "--net",
-                        "--",
-                        "/usr/bin/python3",
-                        "-c",
-                        script,
-                        json.dumps([endpoint["address"], endpoint["port"]]),
-                    ]
+        failure = None
+        try:
+            for endpoint in request["endpoints"]:
+                if name not in endpoint["callers"]:
+                    continue
+                try:
+                    value = namespace_probe(
+                        [
+                            "nsenter",
+                            "--target",
+                            pid,
+                            *(["--user"] if rootless else []),
+                            "--net",
+                            "--",
+                            "/usr/bin/python3",
+                            "-c",
+                            script,
+                            json.dumps([endpoint["address"], endpoint["port"]]),
+                        ]
+                    )
+                except ProbeError as error:
+                    raise ProbeError(f"caller {name} -> {endpoint['address']}:{endpoint['port']}: {error}") from None
+                require(
+                    value.get("net_namespace") == before[0] and (not rootless or value.get("user_namespace") == before[1]),
+                    "probe entered a different caller namespace",
                 )
-            )
-            results.append({"caller": name, "port": endpoint["port"], "destination": endpoint["address"], **result})
+                if not value["connected"]:
+                    raise ProbeError(
+                        f"caller {name} -> {endpoint['address']}:{endpoint['port']}: TCP connect: {value['error']} ({value['errno']})",
+                        value["error"] in {"connection refused", "timeout"},
+                    )
+                results.append({"caller": name, "port": endpoint["port"], "destination": endpoint["address"], **value})
+        except ProbeError as error:
+            failure = error
+        # Check continuity after failures too. A replaced caller must never be
+        # retried as though it were an ordinary TCP readiness delay.
         require(
             pid == command(base + ["container", "inspect", "--format", "{{.State.Pid}}", ids[0]]).strip() and continuity() == before,
             "caller replaced during qualified handshakes: " + name,
         )
+        if failure:
+            raise failure
     return {"changed": False, "handshakes": results}
 
 

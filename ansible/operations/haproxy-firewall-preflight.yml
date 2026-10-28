@@ -42,6 +42,13 @@
     callers: {}
     verified: false
     require_verified: false
+  register: haproxy_preflight_plan_result
+
+- name: HAProxy preflight | Retain the returned endpoint projection
+  ansible.builtin.set_fact:
+    mgt_firewall_plan: "{{ haproxy_preflight_plan_result.ansible_facts.mgt_firewall_plan }}"
+    mgt_firewall_policy: "{{ haproxy_preflight_plan_result.ansible_facts.mgt_firewall_policy }}"
+    mgt_firewall_helper_source: "{{ haproxy_preflight_plan_result.ansible_facts.mgt_firewall_helper_source }}"
 
 - name: HAProxy preflight | Select only the PostgreSQL publication
   ansible.builtin.set_fact:
@@ -377,6 +384,16 @@
     callers: {}
     verified: false
     require_verified: false
+  register: haproxy_preflight_handoff_plan_result
+
+- name: HAProxy handoff | Retain the returned policy projection
+  when:
+    - haproxy_preflight_stage_output is defined
+    - not ansible_check_mode
+  ansible.builtin.set_fact:
+    mgt_firewall_plan: "{{ haproxy_preflight_handoff_plan_result.ansible_facts.mgt_firewall_plan }}"
+    mgt_firewall_policy: "{{ haproxy_preflight_handoff_plan_result.ansible_facts.mgt_firewall_policy }}"
+    mgt_firewall_helper_source: "{{ haproxy_preflight_handoff_plan_result.ansible_facts.mgt_firewall_helper_source }}"
 
 - name: HAProxy handoff | Write only value-free configuration and policy projections
   when:

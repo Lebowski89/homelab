@@ -27,6 +27,30 @@
   loop_control:
     loop_var: service_firewall_host
 
+- name: Service firewall | Verify declared callers against the running publication
+  when:
+    - service_firewall_adapter_plan.managed | default(false)
+    - service_firewall_lifecycle_phase == 'finish'
+    - service_firewall_adapter_plan.endpoints | length > 0
+    - not ansible_check_mode
+  ansible.builtin.include_tasks:
+    file: lifecycle_probes.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service firewall | Check this client's access to its current providers
+  when:
+    - service_firewall_adapter_plan.managed | default(false)
+    - service_firewall_lifecycle_phase == 'finish'
+    - service_firewall_adapter_plan.providers | default([]) | length > 0
+    - not ansible_check_mode
+  ansible.builtin.include_tasks:
+    file: access_probes.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Service firewall | Apply this service's scoped protection transaction
   when:
     - service_firewall_adapter_plan.managed | default(false)
@@ -44,18 +68,6 @@
   retries: "{{ 30 if service_firewall_lifecycle_phase in ['finish', 'remove'] else 0 }}"
   delay: 2
 
-- name: Service firewall | Verify declared callers against the running publication
-  when:
-    - service_firewall_adapter_plan.managed | default(false)
-    - service_firewall_lifecycle_phase == 'finish'
-    - service_firewall_adapter_plan.endpoints | length > 0
-    - not ansible_check_mode
-  ansible.builtin.include_tasks:
-    file: lifecycle_probes.yml
-    apply:
-      tags: [deploy, update, recreate, bootstrap]
-  tags: [deploy, update, recreate, bootstrap]
-
 - name: Service firewall | Complete or retain only this client's provider contributions
   when:
     - service_firewall_adapter_plan.managed | default(false)
@@ -68,15 +80,3 @@
     service_firewall_access_plan: "{{ service_firewall_adapter_plan }}"
     service_firewall_access_phase: "{{ 'access_' ~ service_firewall_lifecycle_phase }}"
   tags: [deploy, update, recreate, bootstrap, remove]
-
-- name: Service firewall | Check this client's access to its current providers
-  when:
-    - service_firewall_adapter_plan.managed | default(false)
-    - service_firewall_lifecycle_phase == 'finish'
-    - service_firewall_adapter_plan.providers | default([]) | length > 0
-    - not ansible_check_mode
-  ansible.builtin.include_tasks:
-    file: access_probes.yml
-    apply:
-      tags: [deploy, update, recreate, bootstrap]
-  tags: [deploy, update, recreate, bootstrap]

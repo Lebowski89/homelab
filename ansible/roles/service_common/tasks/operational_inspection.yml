@@ -42,10 +42,7 @@
     ansible_connection: "{{ hostvars[service_common_protection_host].ansible_connection | default('ssh') }}"
   delegate_to: "{{ service_common_protection_host }}"
   delegate_facts: true
-  loop: >-
-    {{ [(service_common_service.deploy | default({})).host]
-       if (service_common_service.deploy | default({})).host | default([]) is string
-       else (service_common_service.deploy | default({})).host | default([]) }}
+  loop: "{{ (service_common_service | service_catalog_resolve_placement(groups)).deploy.hosts }}"
   loop_control:
     loop_var: service_common_protection_host
 
@@ -58,10 +55,7 @@
     phase: protection
     metadata: "{{ service_common_service | service_common_requirements_metadata(service_common_name) }}"
     inventory_host: "{{ service_common_protection_host }}"
-  loop: >-
-    {{ [(service_common_service.deploy | default({})).host]
-       if (service_common_service.deploy | default({})).host | default([]) is string
-       else (service_common_service.deploy | default({})).host | default([]) }}
+  loop: "{{ (service_common_service | service_catalog_resolve_placement(groups)).deploy.hosts }}"
   loop_control:
     loop_var: service_common_protection_host
   register: service_common_protection_audits

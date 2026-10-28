@@ -62,6 +62,8 @@ bazarr:
   ################################
   ports:
     web_backend:
+      exposure: private
+      callers: [traefik]
       published: 22601
       target: 6767
       mode: host

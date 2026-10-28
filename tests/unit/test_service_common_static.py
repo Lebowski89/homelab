@@ -27,7 +27,9 @@ PODMAN_MAIN = Path("ansible/roles/podman_services/tasks/main.yml").read_text()
 PODMAN_INIT = Path("ansible/roles/podman_services/tasks/sub_tasks/init.yml").read_text()
 PODMAN_PREP = Path("ansible/roles/podman_services/tasks/sub_tasks/quadlets.yml").read_text()
 PODMAN_DISPATCH = Path("ansible/tasks/service_catalog_dispatch_podman.yml").read_text()
-DOCKER_SECRET_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/secrets/manage.yml").read_text()
+DOCKER_SECRET_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/secrets/inspect.yml").read_text() + Path(
+    "ansible/roles/docker_services/tasks/sub_tasks/secrets/manage.yml"
+).read_text().removeprefix("---\n")
 PODMAN_SECRET_TASKS = Path("ansible/roles/podman_services/tasks/sub_tasks/secrets/manage.yml").read_text()
 DOCKER_PREP_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/prepare.yml").read_text()
 DOCKER_COMPOSE_TASKS = Path("ansible/roles/docker_services/tasks/sub_tasks/compose.yml").read_text()
@@ -151,31 +153,31 @@ def test_expected_common_dynamic_includes_propagate_required_tags():
             "bootstrap",
         },
         ("main.yml", "remove_integrations.yml"): {"remove"},
-        ("prepare.yml", "validate.yml"): {
+        ("preflight.yml", "validate.yml"): {
             "deploy",
             "update",
             "recreate",
             "bootstrap",
         },
-        ("prepare.yml", "postgres.yml"): {
+        ("preflight.yml", "postgres.yml"): {
             "deploy",
             "update",
             "recreate",
             "bootstrap",
         },
-        ("prepare.yml", "paths.yml"): {
+        ("files.yml", "paths.yml"): {
             "deploy",
             "update",
             "recreate",
             "bootstrap",
         },
-        ("prepare.yml", "copies.yml"): {
+        ("files.yml", "copies.yml"): {
             "deploy",
             "update",
             "recreate",
             "bootstrap",
         },
-        ("prepare.yml", "templates.yml"): {
+        ("files.yml", "templates.yml"): {
             "deploy",
             "update",
             "recreate",
@@ -268,8 +270,6 @@ def test_infisical_lookup_sites_are_explicit_and_adapter_free():
 def test_docker_uses_normalized_service_and_effective_filesystem_hosts():
     assert 'service_common_service: "{{ docker_services_svc }}"' in DOCKER_PREP
     assert 'service_common_target_hosts: "{{ docker_services_fs_hosts_effective }}"' in DOCKER_PREP
-    prepare = next(task for task in yaml.safe_load(DOCKER_PREP) if task["name"] == "Prepare | Prepare shared files and integrations")
-    assert "when" not in prepare
 
 
 def test_common_filesystem_and_integration_work_has_explicit_delegation():

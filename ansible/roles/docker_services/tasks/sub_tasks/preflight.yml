@@ -1,0 +1,98 @@
+---
+
+# These checks must finish while the current writer and its configuration remain
+# intact. Runtime secrets and application files are applied after interruption.
+- name: Preflight | Inspect runtime secret ownership without changing credentials
+  when:
+    - not ansible_check_mode
+    - docker_services_effective_secret_declarations | length > 0
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: sub_tasks/secrets/inspect.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Preflight | Validate shared files and reconcile declared databases
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: preflight
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  vars:
+    service_common_name: "{{ docker_services_service_name }}"
+    service_common_runtime: docker
+    service_common_action: "{{ docker_services_common_action }}"
+    service_common_service: "{{ docker_services_svc }}"
+    service_common_target_hosts: "{{ docker_services_fs_hosts_effective }}"
+    service_common_controller_host: "{{ docker_services_controller_host }}"
+    service_common_infisical_values: "{{ docker_services_common_values }}"
+    service_common_host_defaults: "{{ docker_services_common_host_defaults }}"
+    service_common_template_vars: "{{ docker_services_application_template_vars }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Preflight | Validate controller environment templates
+  when: docker_services_svc.swarm_env_templates | default([]) | length > 0
+  no_log: true
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: templates_validate
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  vars:
+    service_common_name: "{{ docker_services_service_name }}"
+    service_common_templates: "{{ docker_services_svc.swarm_env_templates }}"
+    service_common_target_host: "{{ docker_services_controller_host }}"
+    service_common_infisical_values: "{{ docker_services_common_values }}"
+    service_common_host_defaults: "{{ docker_services_common_host_defaults }}"
+    service_common_template_vars: "{{ docker_services_application_template_vars }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Preflight | Render declared Swarm config content without applying it
+  when: docker_services_config_preview.state | default('present') != 'absent'
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - docker_services_config_preview.name | string | trim | length > 0
+      - docker_services_config_preview.state | default('present') == 'present'
+      - >-
+        (docker_services_config_preview.data | string
+         if docker_services_config_preview.data is defined else
+         lookup('ansible.builtin.template', docker_services_config_preview.src, rstrip=false)
+         if docker_services_config_preview.data_is_template | default(false)
+            or docker_services_config_preview.src.endswith('.j2') else
+         lookup('ansible.builtin.file', docker_services_config_preview.src, rstrip=false)) is string
+  loop: "{{ docker_services_svc.swarm_configs | default([]) }}"
+  loop_control:
+    loop_var: docker_services_config_preview
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Preflight | Assemble Compose configuration before interruption
+  no_log: true
+  ansible.builtin.include_tasks:
+    file: sub_tasks/compose.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+      no_log: true
+      diff: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Preflight | Render and parse the stack configuration without writing it
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - lookup('ansible.builtin.template', role_path ~ '/templates/compose.yml.j2') | from_yaml is mapping
+  vars:
+    deploy_stack_type: "{{ docker_services_stack_deploy_type }}"
+    stack_networks: "{{ docker_services_stack_networks }}"
+    stack_volumes: "{{ docker_services_stack_volumes }}"
+  tags: [deploy, update, recreate, bootstrap]

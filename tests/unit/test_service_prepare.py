@@ -77,18 +77,12 @@ def render_repository_value(value):
 
 def test_docker_preparation_declares_the_required_lifecycle_order():
     tasks = yaml.safe_load(DOCKER_PREP_PATH.read_text())
-    names = [task["name"] for task in tasks]
-    expected = [
-        "Prepare | Validate application settings",
-        "Cleanup | Remove existing deployment",
-        "Prepare | Generate application secrets",
-        "Secrets | Manage Docker secrets",
-        "Prepare | Build application template values",
-        "Prepare | Prepare shared files and integrations",
-        "Prepare | Apply application configuration",
+    calls = [
+        task.get("ansible.builtin.include_tasks", {}).get("file")
+        for task in tasks
+        if isinstance(task.get("ansible.builtin.include_tasks"), dict)
     ]
-
-    assert [names.index(name) for name in expected] == sorted(names.index(name) for name in expected)
+    assert calls.index("sub_tasks/preflight.yml") < calls.index("sub_tasks/cleanup.yml") < calls.index("sub_tasks/secrets/manage.yml")
 
     cleanup = task_named(tasks, "Cleanup | Remove existing deployment")
     assert "not ansible_check_mode" in cleanup["when"]

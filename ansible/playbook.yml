@@ -646,6 +646,7 @@
       no_log: true
       when:
         - inventory_hostname == service_catalog_controller_host
+        - service_catalog_action != 'recreate'
         - not ansible_check_mode
         - >-
           (

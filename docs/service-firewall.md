@@ -9,12 +9,36 @@ For declaration-backed services, the dispatcher checks inventory, collisions,
 current protection and storage before secret preflight. The runtime adapter
 prepares its account, asks this role to stage the current policy union, then
 changes its application. After startup it reconciles identities before waiting for application health, verifies the image, running process and publications, and performs bounded
-TCP handshakes from current caller network namespaces with owned RETURN-counter
-increases. Both kernel families are audited. No browser, SQL, notification,
+TCP handshakes from current caller network namespaces with owned allow-counter
+increases: mgt uses pre-DNAT RETURN rules; workers use the existing port-scoped
+filter ACCEPT rules, including original destination ports after DNAT. Adjacent
+worker ports share range counters, so their increase corroborates the handshake
+and audited protection rather than uniquely attributing a packet to one service.
+Both kernel families are audited. No browser, SQL, notification,
 external-denial or application acceptance is inferred, and no historical
 acknowledgement is promoted.
 
+Rootless callers are probed in both their user and network namespaces. Diagnostics
+separate namespace entry, interpreter startup and TCP errors without returning
+requests, interpreter source or arbitrary stderr. Only connection refusal/timeouts
+receive bounded readiness retries; caller replacement invalidates the observation.
+Publication and provider reservations remain pending until probes and counters
+succeed, rather than being committed before those checks.
+
+Protecting a Docker backend can invoke `podman_services` identity-only preparation
+for its rootless Traefik caller on mgt. That entry validates/prepares the caller's
+account and stops before manager activation; it does not deploy the Docker
+application through Podman or redeploy Traefik.
+
 Existing managed declarations without exposure metadata are adopted through the existing value-free planners, after verifying their exact runtime/publication contract. Fresh or changed unclassified publications are rejected. Wallos and Whisparr exercise explicit declarations in the real catalog. Retained native/remote caller bindings are audited unchanged; they are not reprobed as ordinary root. Independent bootstrap/recovery gates remain separate.
+
+Arr HTTP backend publications declare private exposure with Traefik as their
+logical caller. This protects their direct worker ports independently of HTTPS
+frontend exposure. Recyclarr has no publication. Complete declarations can create
+an absent service through ordinary deploy/recreate, including a retry after a
+previous interruption; foreign runtime identities and installed protection/data
+checks still fail closed. Legacy declarations still require their exact existing
+runtime and are not a recovery authorization for a missing service.
 Existing-data ownership changes still need consistent backups, stopped writers,
 proved translations and the actual service-name ownership acknowledgement.
 Absent/empty writable roots can be prepared automatically after a complete
@@ -111,6 +135,17 @@ Administrative installs also merge the current union and reject conflicting/stal
 entries instead of overwriting them. They cannot overwrite an unfinished service
 operation. Saved whole-policy snapshots are never rollback inputs to this path.
 
+Docker recreation completes each service's credential lookup, application/input
+validation, controller PostgreSQL reconciliation, template rendering and Compose
+assembly before removing that service. Active application files and runtime
+secrets are applied only after interruption. Failures in the first phase retain
+the old writer; failures during configuration application or deployment retain
+data and protection for an ordinary retry. Recreate completes each prepared stack
+through the existing deploy/verify helper before preparing the next service;
+deploy/update keep their batch path. Check mode previews declarations and
+explicitly defers live
+ownership, protection, storage and database readiness checks.
+
 Remove checks declared runtime dependencies, reserves only installed ownership, verifies the selected runtime has stopped and its listeners/NAT publications are absent,
 then removes only its endpoints and unreferenced automatically added bindings. Authorised ACL callers are not treated as shared-state dependencies. Active same-host dependents must be retired explicitly first; configured dependents on other hosts require an explicit retirement before removal. Missing installed protection fails with a repair instruction before runtime removal; removal never creates missing policy infrastructure.
 Accepted operator/rollback bindings, data, shared hooks and other services remain.
@@ -120,6 +155,15 @@ remove retry can finish without recreating the application. Failed starts attemp
 only adapter-owned replacement stops, retain staged protection and the original
 failure, and release their reservation only after proving writer absence. Inspect
 an interrupted operation before recovery; never replace the union with an old file.
+
+Swarm containment captures task-to-node identities before quiescing the immutable
+service ID. It then requires quiescent scheduler state and matching node-local
+observations with no running containers for that service ID. Disappearing task
+history alone proves neither presence nor absence. Missing node identity, an
+unreachable required node or a replaced service retains protection and a pending
+reservation. A matching scoped `skynet remove <service>` can retire that failed
+operation through the existing ownership/removal checks before a fresh deployment;
+do not delete its policy record or manually clear containment flags.
 
 ### Client access to protected providers
 

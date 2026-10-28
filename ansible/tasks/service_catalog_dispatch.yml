@@ -100,7 +100,7 @@
       diff: false
       ansible.builtin.set_fact:
         service_catalog_preflight_failure:
-          task: "{{ ansible_failed_task.name }}"
+          task: "{{ ansible_failed_task.name | default('a failed peer-host task') }}"
           rc: "{{ ansible_failed_result.rc | default(1) }}"
 
     - name: Service catalog dispatch | Cancel provider reservations before adapter handoff

@@ -223,16 +223,18 @@ def transact(store, request, phase, token, runtime):
             saved = current.get("managed_services", {}).get(request["service"], {})
             require(saved.get("token") == token, "cannot release another operation's reservation")
             if request.get("containment_verified") is False:
-                saved.update(failed=True, containment_failed=True, manager_containment_failed=True)
+                saved.update(pending=True, failed=True, containment_failed=True, manager_containment_failed=True)
                 store.write(current)
                 raise ValueError("manager task containment was not proved; reservation/protection retained; use scoped remove/recovery")
             try:
                 runtime("absent")
             except (OSError, ValueError, RuntimeError):
-                saved.update(failed=True, containment_failed=True)
+                saved.update(pending=True, failed=True, containment_failed=True)
                 store.write(current)
                 raise
-            current["managed_services"][request["service"]].update(pending=False, failed=True)
+            current["managed_services"][request["service"]].update(
+                pending=False, failed=True, containment_failed=False, manager_containment_failed=False
+            )
             store.test(current, request, "abort")
             store.write(current)
             store.apply(current, request, "stage")
@@ -241,11 +243,11 @@ def transact(store, request, phase, token, runtime):
         # half-applied stage. Only its own exact operation may resume that stage.
         baseline = runtime("dependencies") if phase in {"stage", "prepare_remove"} else {}
         saved = current.get("managed_services", {}).get(request["service"], {})
+        require(
+            phase != "stage" or not saved.get("manager_containment_failed"),
+            "manager containment remains unproved; use scoped remove/recovery before redeployment",
+        )
         if phase == "stage" and saved.get("pending") and saved.get("containment_failed"):
-            require(
-                not saved.get("manager_containment_failed"),
-                "manager containment remains unverified; use scoped remove/recovery before redeployment",
-            )
             require(
                 saved.get("declaration") == fingerprint({k: v for k, v in request.items() if k not in {"action", "source_addresses"}}),
                 "failed containment declaration changed; use scoped remove/recovery before redeployment",

@@ -16,6 +16,14 @@
       }}
   tags: [deploy, update, recreate, bootstrap]
 
+- name: Service common PostgreSQL | Verify the selected execution context
+  when: service_common_postgres_config.enable
+  ansible.builtin.include_tasks:
+    file: postgres_operator.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Service common PostgreSQL | Report check-mode database plan
   when:
     - ansible_check_mode
@@ -55,7 +63,8 @@
     # Remain on the delegated host and retain its interpreter unless explicitly
     # entering the prepared native operator context. Other modules are unchanged.
     ansible_python_interpreter: >-
-      {{ service_common_postgres_operator_context | default(false)
+      {{ hostvars[service_common_controller_host].service_common_postgres_operator_context
+         | default(service_common_postgres_operator_context | default(false))
          | service_common_postgres_operator_interpreter(
              hostvars[service_common_controller_host].ansible_python_interpreter | default('auto')) }}
   tags: [deploy, update, recreate, bootstrap]

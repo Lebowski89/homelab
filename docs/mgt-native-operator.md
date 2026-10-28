@@ -15,17 +15,27 @@ and complete-policy transitions.
 ## Actual entry points and identities
 
 Normal catalog deployments run `ansible/playbook.yml` with `become: true`.
-Docker and Podman preparation both call `service_common`, whose `prepare.yml`
-includes `postgres.yml`. Its one `community.postgresql.postgresql_db` task
+Docker and Podman preparation both reach `service_common`'s `postgres.yml`
+through its preflight/prepare entries. Docker completes this before removing
+the existing stack. The one `community.postgresql.postgresql_db` task
 loops declared databases, uses the current service's resolved credential
 references, and delegates once to `service_common_controller_host` (mgt).
-The manager group declares local transport and the Ansible venv interpreter.
-The inherited become user is root. No database module runs in check mode.
+The delegated controller's inventory transport and Ansible venv interpreter are
+used, including SSH when launched from Blacktop. The inherited become user is
+root. No database module runs in check mode.
 
-`service_common_postgres_operator_context: true` now switches **only that
-task's delegated interpreter** to
-`/usr/local/libexec/skynet-mgt-operator/postgres-python`. Default false retains
-the delegate's interpreter. The wrapper runs **after become**, requires real
+`host_vars/mgt.yml` permanently enables `service_common_postgres_operator_context`
+for the service controller. Ordinary Skynet maintenance needs no migration gate
+files or operator extra-var. Other controllers retain the default false unless
+explicitly configured. Selection reads the controller's setting, with the existing
+scoped opt-in as fallback; Ansible extra-vars still override inventory values.
+Only the database task's delegated interpreter changes to
+`/usr/local/libexec/skynet-mgt-operator/postgres-python`. Shared preflight validates
+the root-owned directory/script/alias and enters the existing controller context
+with a no-op before an old writer can stop. Database preparation checks again.
+Missing ownership, alias, root execution or active-slice prerequisites fail clearly;
+normal deployment never installs or repairs them. For example, `skynet recreate arrs`
+uses this setting automatically. The wrapper runs **after become**, requires real
 and effective UID 0, checks the prepared persistent slice, then executes the
 same venv Python/module with pipelined stdin and normal stdout/stderr/exit
 status. Secrets remain in the existing module transport with `no_log`/`diff`
@@ -329,8 +339,9 @@ sudo systemctl daemon-reload
 ```
 
 Use the retained installation source if the checkout has since changed; a
-failed comparison is a stop, not permission to delete a collision. Disable the
-opt-in on subsequent catalog commands; default false retains previous behavior.
+failed comparison is a stop, not permission to delete a collision. Only after
+withdrawing the native bindings may an explicitly approved rollback change the
+controller's operator setting. Normal maintenance keeps it enabled.
 Keep local logs/recovery material until final acceptance. Live socket/hook
 coverage, actual database preparation, recovery execution and reboot persistence
 remain operator acceptance; no helper sets ACL/data or complete-policy flags.

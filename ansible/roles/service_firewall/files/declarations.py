@@ -26,7 +26,10 @@ def publication(value):
         "private publications need callers; public publications cannot have callers",
     )
     for key in ["published", "target"]:
-        require(type(value.get(key)) is int and 1 <= value[key] <= 65535, "publication needs explicit numeric host and container ports")
+        require(
+            isinstance(value.get(key), int) and not isinstance(value[key], bool) and 1 <= value[key] <= 65535,
+            "publication needs explicit numeric host and container ports",
+        )
     if exposure == "private":
         require(value.get("protocol", "tcp") == "tcp", "private UDP publications are unsupported by the current firewall profiles")
         require(value.get("mode", "host") == "host", "private Swarm ingress/routing-mesh publications are unsupported; use host mode")
@@ -120,7 +123,7 @@ def plan(selected, catalog, controller, workers, hostvars, legacy_endpoints=None
         values = entry.get("ports", {})
         values = dict(enumerate(values)) if isinstance(values, list) else values
         for port in values.values():
-            if not isinstance(port, dict) or type(port.get("published")) is not int:
+            if not isinstance(port, dict) or not isinstance(port.get("published"), int) or isinstance(port["published"], bool):
                 continue
             for host in records[name]["hosts"]:
                 key = (host, port.get("protocol", "tcp"), port["published"])

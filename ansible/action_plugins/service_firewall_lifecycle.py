@@ -51,6 +51,8 @@ def remote_source(profile):
 import json, sys
 try:
     print(json.dumps(remote.run_lifecycle(engine, helper, json.load(sys.stdin)), sort_keys=True))
+except remote.ProbeError as error:
+    print(json.dumps({'failed': True, 'changed': False, 'probe_retryable': error.retryable, 'msg': str(error)}))
 except (OSError, ValueError, RuntimeError, KeyError, TypeError, remote.subprocess.SubprocessError) as error:
     print('Service firewall: ' + str(error), file=sys.stderr)
     sys.exit(1)
@@ -187,7 +189,10 @@ class ActionModule(ActionBase):
                 # Never return the command module's invocation/embedded source.
                 message = observed.get("stderr", "remote firewall transaction failed").strip().splitlines()
                 raise ValueError(message[-1][:600] if message else "remote firewall transaction failed")
-            return dict(result, **json.loads(observed["stdout"]))
+            payload = json.loads(observed["stdout"])
+            if payload.get("failed"):
+                payload["msg"] = f"{host} {phase}: {payload['msg']}. Protection and the selected reservation are retained."
+            return dict(result, **payload)
         except (ValueError, KeyError, TypeError, OSError) as error:
             # A failed result participates in the task's bounded retry loop.
             # Raising an action exception would bypass health/removal polling.

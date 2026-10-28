@@ -1,0 +1,62 @@
+---
+
+- name: Service common PostgreSQL | Resolve the controller's operator setting
+  ansible.builtin.set_fact:
+    service_common_postgres_operator_enabled: >-
+      {{ hostvars[service_common_controller_host].service_common_postgres_operator_context
+         | default(service_common_postgres_operator_context | default(false)) }}
+
+- name: Service common PostgreSQL | Validate operator selection
+  ansible.builtin.assert:
+    that: service_common_postgres_operator_enabled is boolean
+    fail_msg: The controller PostgreSQL operator context must be a strict boolean.
+
+- name: Service common PostgreSQL | Verify the prepared controller context before lifecycle changes
+  when:
+    - service_common_postgres_operator_enabled
+    - not ansible_check_mode
+  delegate_to: "{{ service_common_controller_host }}"
+  run_once: true
+  block:
+    - name: Service common PostgreSQL | Inspect the existing operator installation
+      ansible.builtin.stat:
+        path: "{{ service_common_postgres_operator_path }}"
+        follow: false
+        get_attributes: false
+        get_checksum: false
+        get_mime: false
+      loop:
+        - /usr/local/libexec/skynet-mgt-operator
+        - /usr/local/libexec/skynet-mgt-operator/mgt-operator.py
+        - /usr/local/libexec/skynet-mgt-operator/postgres-python
+      loop_control:
+        loop_var: service_common_postgres_operator_path
+      register: service_common_postgres_operator_paths
+
+    - name: Service common PostgreSQL | Require the owned operator directory script and interpreter alias
+      ansible.builtin.assert:
+        that:
+          - service_common_postgres_operator_paths.results | map(attribute='stat.exists') | min
+          - service_common_postgres_operator_paths.results[0].stat.isdir
+          - service_common_postgres_operator_paths.results[1].stat.isreg
+          - service_common_postgres_operator_paths.results[2].stat.islnk
+          - service_common_postgres_operator_paths.results | map(attribute='stat.uid') | unique | list == [0]
+          - service_common_postgres_operator_paths.results | map(attribute='stat.gid') | unique | list == [0]
+          - not service_common_postgres_operator_paths.results[0].stat.wgrp
+          - not service_common_postgres_operator_paths.results[0].stat.woth
+          - not service_common_postgres_operator_paths.results[1].stat.wgrp
+          - not service_common_postgres_operator_paths.results[1].stat.woth
+          - service_common_postgres_operator_paths.results[1].stat.xusr
+          - service_common_postgres_operator_paths.results[2].stat.lnk_source == '/usr/local/libexec/skynet-mgt-operator/mgt-operator.py'
+        fail_msg: >-
+          Controller {{ service_common_controller_host }} requires the existing root-owned
+          skynet-mgt-operator installation and postgres-python alias. Restore its approved
+          operator prerequisites before database preparation or stopping the service.
+
+    # The launcher checks real/effective UID, the persistent slice and its exact
+    # cgroup, then starts the same Python used by the database module. No socket
+    # or database operation is needed to prove that this context can be entered.
+    - name: Service common PostgreSQL | Verify database interpreter entry without connecting
+      ansible.builtin.command:
+        argv: [/usr/local/libexec/skynet-mgt-operator/postgres-python, -c, pass]
+      changed_when: false

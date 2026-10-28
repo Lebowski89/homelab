@@ -80,7 +80,7 @@ def test_inherited_operation_tags_do_not_authorize_docker_cleanup(tmp_path, oper
         )
     )
     config = tmp_path / "ansible.cfg"
-    config.write_text("[defaults]\nstdout_callback=default\nretry_files_enabled=false\n")
+    config.write_text("[defaults]\nstdout_callback=default\nretry_files_enabled=false\ninject_facts_as_vars=false\n")
     environment = {
         **{key: value for key, value in os.environ.items() if not key.startswith("ANSIBLE_")},
         "ANSIBLE_CONFIG": str(config),

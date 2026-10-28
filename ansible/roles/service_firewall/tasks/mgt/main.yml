@@ -24,6 +24,14 @@
     callers: "{{ mgt_firewall_callers }}"
     verified: "{{ mgt_firewall_inputs_verified }}"
     require_verified: "{{ mgt_firewall_operation == 'install' and not ansible_check_mode }}"
+  register: service_firewall_mgt_plan_result
+
+- name: Service firewall | Mgt | Retain current generated policy outputs # noqa var-naming[no-role-prefix]
+  when: mgt_firewall_operation in ['install', 'observe']
+  ansible.builtin.set_fact:
+    mgt_firewall_plan: "{{ service_firewall_mgt_plan_result.ansible_facts.mgt_firewall_plan }}"
+    mgt_firewall_policy: "{{ service_firewall_mgt_plan_result.ansible_facts.mgt_firewall_policy }}"
+    mgt_firewall_helper_source: "{{ service_firewall_mgt_plan_result.ansible_facts.mgt_firewall_helper_source }}"
 
 - name: Service firewall | Mgt | Show endpoint coverage and pending caller identities
   ansible.builtin.debug:

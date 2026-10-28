@@ -2247,7 +2247,11 @@ def test_actual_ansible_loader_guards_readme_and_offline_recovery(tmp_path, oper
     (service_dir / "README.md").write_text("# Catalog\nReal directories include documentation.\n")
     services = catalog() if operation == "install-real" else synthetic()
     for service in services.values():
-        service["environment"] = {**service.get("environment", {}), "POISON": "{{ lookup('must_never_run') }}"}
+        if service["runtime"] == "native":
+            config = service["native"]["config"]
+            config[next(iter(config))] = "{{ lookup('must_never_run') }}"
+        else:
+            service["environment"] = {**service.get("environment", {}), "POISON": "{{ lookup('must_never_run') }}"}
     (service_dir / "service.yml").write_text(yaml.safe_dump(services))
     if malformed:
         (service_dir / "malformed.yml").write_text("malformed: [unterminated\n")
@@ -2279,6 +2283,7 @@ def test_actual_ansible_loader_guards_readme_and_offline_recovery(tmp_path, oper
                 "manager": {"ansible_connection": "local", "local_ip": "192.0.2.48"},
                 "storage": {"ansible_connection": "local", "local_ip": "192.0.2.20"},
                 "media": {"ansible_connection": "local", "local_ip": "192.0.2.59"},
+                "blacktop": {"ansible_connection": "local", "local_ip": "192.0.2.70"},
             }
         }
     }

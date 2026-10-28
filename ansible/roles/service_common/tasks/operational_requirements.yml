@@ -13,6 +13,16 @@
   ansible.builtin.set_fact:
     service_common_prerequisite_proof: {}
 
+- name: Service common | Verify database execution prerequisites before changing the service
+  when:
+    - service_common_action in service_common_prepare_actions
+    - not service_common_execution_only
+    - (service_common_service.postgres | default({})).enable | default(false)
+  ansible.builtin.include_tasks:
+    file: postgres_operator.yml
+    apply:
+      tags: "{{ ansible_run_tags }}"
+
 - name: Service common | Check prerequisites before changing the service
   when:
     - not ansible_check_mode

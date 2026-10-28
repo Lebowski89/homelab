@@ -497,15 +497,10 @@ locals {
       device_type_key = "generic_vm"
       tags = [
         "skynet",
-        "service_controller",
-        "docker",
-        "docker_install",
         "podman",
         "podman_install",
         "haproxy",
         "node_exporter",
-        "swarm",
-        "swarm_manager",
         "dns",
         "technitium",
         "keepalived",
