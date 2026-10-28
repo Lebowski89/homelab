@@ -21,7 +21,9 @@
 
 - name: Initialize | Load service configuration
   ansible.builtin.set_fact:
-    docker_services_svc: "{{ docker_services_service_cfg | service_catalog_resolve_placement(groups) }}"
+    docker_services_svc: >-
+      {{ docker_services_service_cfg | service_catalog_resolve_placement(groups)
+         | docker_services_resolve_constraints(hostvars) }}
   tags: [remove, drift]
 
 - name: Initialize | Validate shared service context

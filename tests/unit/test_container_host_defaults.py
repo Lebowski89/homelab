@@ -221,6 +221,8 @@ all:
       container_host_data_root: /srv/data
     storage:
       ansible_connection: local
+      docker_swarm_node_labels:
+        docker_services_host: fixture-storage-identity
       container_host_puid: "99"
       container_host_pgid: "100"
       container_host_appdata_root: /mnt/user/appdata

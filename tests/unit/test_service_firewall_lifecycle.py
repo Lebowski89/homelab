@@ -935,7 +935,11 @@ def test_unlisted_docker_project_members_are_rejected_before_lifecycle_mutation(
     check = load("ansible/action_plugins/service_operational_check.py", "lifecycle_membership_test")
     monkeypatch.setattr(ActionBase, "run", lambda *args: {})
     action = object.__new__(check.ActionModule)
-    metadata = {"name": "utility", "runtime": "docker", "deploy": {"hosts": "manager", "type": "container" if standalone else "swarm"}}
+    metadata = {
+        "name": "utility",
+        "runtime": "docker",
+        "deploy": {"hosts": "manager", "type": "container" if standalone else "swarm", "constraints": []},
+    }
     action._task = SimpleNamespace(check_mode=False, args={"phase": "placement", "metadata": metadata})
     calls = []
 

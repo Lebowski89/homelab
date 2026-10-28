@@ -515,7 +515,7 @@ plan without lookup or database connection.
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
 | `deploy` | Mapping | Yes | None | All | `docker_services` / `podman_services` | Placement and lifecycle metadata. |
 | `deploy.type` | String enum | No | Docker `swarm`; Podman single instance | Both | `docker_services` / `podman_services` | Docker accepts `swarm`/`container`. When supplied for Podman it must be exactly `container`; `swarm` is rejected. |
-| `deploy.hosts` | Inventory hostname/group or list of selections | Yes | None | All | `service_catalog` | Resolved full inventory placement. Docker standalone/Podman require exactly one concrete host; native and Swarm support multiple. Swarm dispatch stays on the manager and existing explicit constraints determine scheduling. |
+| `deploy.hosts` | Inventory hostname/group or list of selections | Yes | None | All | `service_catalog` | Resolved full inventory placement. Docker standalone/Podman require exactly one concrete host; native and Swarm support multiple. Swarm dispatch stays on the manager; scheduling uses explicit constraints or the single-host label default below. |
 | `deploy.execution.mode` | String enum | No | `rootful` | Podman | `podman_services` | Selects `rootful` system Quadlets or `rootless` user Quadlets for container deployments. Docker rejects this Podman-owned declaration. |
 | `deploy.execution.host_user` | Host account name | Conditional | None | Podman | `podman_services` | Required when `mode` is `rootless` and must use the reserved `podman-` prefix. This dedicated locked, non-interactive host account owns Podman storage and its user systemd manager; it is separate from top-level container `user`. Existing accounts are reused only when persisted service ownership and the complete account contract match. |
 | `deploy.execution.userns` | Mapping | Conditional | None | Podman | `podman_services` | Required for rootless bind mounts. Selects the validated `keep-id` mapping that makes the dedicated host account appear as the application UID/GID inside the container. |
@@ -525,7 +525,7 @@ plan without lookup or database connection.
 | `deploy.mode` | String enum | No | `replicated` | Both | `docker_services` / `podman_services` | Docker accepts `replicated`/`global`; Podman only `replicated`. |
 | `deploy.replicas` | Non-negative integer-like | No | `1` | Both | `docker_services` / `podman_services` | Docker replica count; Podman accepts only `1`. |
 | `deploy.profile` | Non-empty string | No | `none` | Docker | `docker_services` | `none`, `standard`, `careful`, or `stateless_ha`. Non-`none` is invalid for standalone; Podman rejects the field. |
-| `deploy.constraints` | String or list of strings | No | `[]` | Docker | `docker_services` | Literal Swarm constraints. Docker node-label names are not inventory variables; Podman rejects the field. |
+| `deploy.constraints` | String or list of strings | No | Single-host node-label constraint | Docker | `docker_services` | Explicit Swarm constraints own scheduling completely, including an explicit empty list. When omitted, derive the selected single host's existing `docker_services_host` node-label identity. Podman rejects the field. |
 
 Placement resolves against Ansible's full inventory groups, independently of
 `--limit`. Native execution intersects that placement with the active play;
@@ -536,11 +536,28 @@ A scalar target placement replaces the base; list-to-list target placement
 retains the ordinary append-rp merge rule. Use a scalar group to replace a base
 list with a different group.
 
-Existing Swarm constraints are retained explicitly: inventory hostnames need not
-match Swarm node hostnames or existing node-label values, and multiple host
-equalities would be combined with AND. No labels or scheduling constraints are
-generated from a multi-host selection. Architecture, hardware and manager
-exclusions remain unchanged.
+For a single-host Swarm declaration with **omitted** `constraints`, the Docker
+adapter derives `node.labels.docker_services_host == <value>` from that host's
+existing `docker_swarm_node_labels.docker_services_host`. Missing identity data
+fails before deployment. This uses the same managed label as the former literal
+constraints; it does not assume inventory aliases are Docker node names or
+modify node labels. Materialization and runtime inspection share this resolver,
+so installed-service checks compare the same constraints that Compose renders.
+
+Explicit `constraints` (including `[]`) remain authoritative. Retain the complete
+predicate when preparation and scheduling differ, including architecture,
+hardware and node-role requirements. Multi-host placement requires explicit
+constraints; no host-equality list is generated because Swarm combines it with
+AND. Alloy retains Linux/controller-label exclusion, HAProxy retains its HAProxy
+label/controller-label exclusion, and Technitium retains its hostname predicate.
+These cannot be replaced by the single-host label default without changing the
+identity contract or the set of potentially eligible nodes.
+
+The repository also declares `rocky` as a Swarm manager but supplies no node-label
+mapping for it in tracked `host_vars`. Alloy's inequality excludes only the controller label, not every manager:
+a Linux node without that label can qualify outside its preparation host list.
+Keep that behavior pending an explicit scheduling decision; inventory declarations
+and label-management intent do not establish live node labels or availability.
 
 Rootless pasta addressing is role-level infrastructure, not service schema.
 Every dedicated `podman-*` account receives only the role-owned

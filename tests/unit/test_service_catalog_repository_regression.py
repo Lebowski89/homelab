@@ -283,37 +283,46 @@ def test_every_effective_service_uses_the_canonical_secret_contract_and_default_
     assert checked
 
 
-def test_real_docker_swarm_constraints_match_configured_node_label_values():
-    catalog_filters = load_module(
-        REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
-        "service_catalog_repository_swarm_constraints",
+def test_real_swarm_single_host_constraints_use_managed_inventory_labels():
+    catalog_filters = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "repository_swarm_catalog")
+    deploy_filters = load_module(
+        REPO_ROOT / "ansible/roles/docker_services/filter_plugins/docker_services_deploy.py", "repository_swarm_deploy"
     )
     services = load_services()
-    expected_by_host = {
-        "{{ services_plex_host }}": "node.labels.docker_services_host == docker_services_plex_host",
-        "{{ services_storage_host }}": "node.labels.docker_services_host == docker_services_unraid_host",
+    hostvars = {
+        host: {
+            "docker_swarm_node_labels": yaml.safe_load((REPO_ROOT / f"ansible/host_vars/{host}.yml").read_text())[
+                "docker_swarm_node_labels"
+            ]
+        }
+        for host in ["mgt", "unraid", "plex"]
     }
-    observed = set()
-
-    for item in catalog_items(catalog_filters, services, "manager", NATIVE_GROUPS):
-        effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
-        if effective["runtime"] != "docker":
+    derived, explicit = [], []
+    for item in catalog_items(catalog_filters, services, "mgt"):
+        if item["runtime"] != "docker":
             continue
-
-        deploy = effective.get("deploy", {})
-        host_constraints = [
-            constraint for constraint in deploy.get("constraints", []) if constraint.startswith("node.labels.docker_services_host == ")
-        ]
-        if not host_constraints:
+        cfg = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
+        cfg["deploy"]["hosts"] = item["resolved_hosts"]
+        # Explicit predicates use host variables, but never materialize unrelated application inputs.
+        if "constraints" in cfg["deploy"]:
+            cfg["deploy"]["constraints"] = render_structure(
+                cfg["deploy"]["constraints"], {"services_controller_host": "mgt", "services_plex_host": "plex"}
+            )
+        result = deploy_filters.docker_services_resolve_constraints(cfg, hostvars)
+        if "constraints" in cfg["deploy"]:
+            assert result == cfg
+            explicit.append(item)
             continue
-
-        target = item.get("target", "base")
-        expected = expected_by_host.get(deploy.get("hosts"))
-        assert expected is not None, f"{item['name']}/{target} has an unknown constrained deploy host"
-        assert host_constraints == [expected], f"{item['name']}/{target} has a mismatched Swarm host constraint"
-        observed.add(expected)
-
-    assert observed == set(expected_by_host.values())
+        host = item["resolved_hosts"][0]
+        assert item["resolved_hosts"] == [host]
+        constraint = result["deploy"]["constraints"]
+        expected = hostvars[host]["docker_swarm_node_labels"]["docker_services_host"]
+        assert constraint == [f"node.labels.docker_services_host == {expected}"]
+        eligible = [name for name, values in hostvars.items() if values["docker_swarm_node_labels"].get("docker_services_host") == expected]
+        assert eligible == [host]
+        assert item["dispatch_host"] == "mgt"
+        derived.append(item)
+    assert derived and explicit
 
 
 @pytest.mark.parametrize(

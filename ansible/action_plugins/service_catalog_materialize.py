@@ -44,6 +44,15 @@ def _load_native_inputs():
     return module
 
 
+def _load_docker_deploy():
+    spec = importlib.util.spec_from_file_location(
+        "docker_catalog_deploy", Path(__file__).resolve().parents[1] / "roles/docker_services/filter_plugins/docker_services_deploy.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def materialize_selected(
     services: Any,
     selected: Any,
@@ -170,7 +179,10 @@ class ActionModule(ActionBase):
                     {**config, "native": {**native, "config": values}}, fail_on_undefined=True
                 )
                 concrete["native"]["config"] = _native_inputs.native_services_normalize(concrete["native"])
-            return _CATALOG.service_catalog_resolve_placement(concrete, task_vars["groups"])
+            concrete = _CATALOG.service_catalog_resolve_placement(concrete, task_vars["groups"])
+            if concrete["runtime"] == "docker":
+                concrete = _load_docker_deploy().docker_services_resolve_constraints(concrete, task_vars["hostvars"])
+            return concrete
 
         materialized = materialize_selected(
             task_vars[source_var],

@@ -27,6 +27,7 @@ def load(relative, name):
 
 
 CATALOG = load("filter_plugins/service_catalog.py", "maintenance_catalog")
+DOCKER = load("roles/docker_services/filter_plugins/docker_services_deploy.py", "maintenance_docker_deploy")
 MGT = load("action_plugins/mgt_firewall_plan.py", "maintenance_mgt_plan")
 WORKER = load("action_plugins/worker_backend_firewall_plan.py", "maintenance_worker_plan")
 WORKER_INPUTS = load("action_plugins/worker_backend_firewall_validate.py", "maintenance_worker_inputs")
@@ -166,6 +167,7 @@ class ActionModule(ActionBase):
             metadata = self._task.args["metadata"]
             if "hosts" in metadata.get("deploy", {}):
                 metadata = CATALOG.service_catalog_resolve_placement(metadata, variables["groups"])
+                metadata = DOCKER.docker_services_resolve_constraints(metadata, variables.get("hostvars", {}))
             if self._task.args["phase"] in {"runtime", "ownership", "placement"}:
                 if self._task.args["phase"] == "placement" and metadata.get("runtime", "docker") == "docker":
                     # Cleanup operates on a Docker project/stack. Check its real

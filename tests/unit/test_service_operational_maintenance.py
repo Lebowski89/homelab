@@ -31,9 +31,12 @@ COMMON = FIXTURE.COMMON
 
 def metadata(name):
     cfg = FIXTURE.resolve(FIXTURE.CATALOG.service_catalog_merge_target(FIXTURE.catalog()[name], None), FIXTURE.context())
-    return COMMON.service_common_requirements_metadata(
-        FIXTURE.CATALOG.service_catalog_resolve_placement(cfg, FIXTURE.context()["groups"]), name
-    )
+    cfg = FIXTURE.CATALOG.service_catalog_resolve_placement(cfg, FIXTURE.context()["groups"])
+    hostvars = {
+        host: {"docker_swarm_node_labels": yaml.safe_load((ROOT / f"ansible/host_vars/{host}.yml").read_text())["docker_swarm_node_labels"]}
+        for host in ["mgt", "unraid", "plex"]
+    }
+    return COMMON.service_common_requirements_metadata(CHECK.DOCKER.docker_services_resolve_constraints(cfg, hostvars), name)
 
 
 def worker_fixture():
@@ -66,9 +69,24 @@ def worker_fixture():
     return cfg, variables, policy, observed
 
 
-def test_real_whisparr_endpoint_and_placement_changes_require_explicit_reconciliation():
+def test_real_whisparr_endpoint_and_placement_changes_require_explicit_reconciliation(monkeypatch):
     cfg, variables, policy, observed = worker_fixture()
     assert CHECK.docker_contract(cfg, observed)["managed"]
+    # Inspect a raw catalogue declaration against the existing service's predicate.
+    from types import SimpleNamespace
+
+    from ansible.plugins.action import ActionBase
+
+    raw = deepcopy(cfg)
+    del raw["deploy"]["constraints"]
+    variables["hostvars"]["unraid"]["docker_swarm_node_labels"] = yaml.safe_load((ROOT / "ansible/host_vars/unraid.yml").read_text())[
+        "docker_swarm_node_labels"
+    ]
+    monkeypatch.setattr(ActionBase, "run", lambda *args: {})
+    action = object.__new__(CHECK.ActionModule)
+    action._task = SimpleNamespace(check_mode=False, args={"phase": "runtime", "metadata": raw})
+    action.runtime = lambda metadata, check_ports: CHECK.docker_contract(metadata, observed, check_ports)
+    assert action.run(task_vars=variables)["managed"]
     plan = CHECK.WORKER.build_plan(
         {"whisparr": cfg}, ["unraid", "plex"], variables["hostvars"]["mgt"]["local_ip"], lambda value: value, FIXTURE.context()["groups"]
     )

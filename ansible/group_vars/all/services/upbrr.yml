@@ -74,5 +74,3 @@ upbrr:
     replicas: 1
     profile: standard
     hosts: "{{ services_storage_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_unraid_host
