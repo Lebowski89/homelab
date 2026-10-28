@@ -20,6 +20,9 @@ ROOT = Path(__file__).resolve().parents[2]
 ROLE = ROOT / "ansible/roles/service_firewall"
 
 
+INVENTORY = {"all": ["storage", "media", "manager", "blacktop"]}
+
+
 def load(path, name):
     spec = importlib.util.spec_from_file_location(name, ROOT / path)
     module = importlib.util.module_from_spec(spec)
@@ -58,7 +61,7 @@ def catalog():
 
 
 def plan(services):
-    return PLAN.build_plan(services, ["storage", "media"], "192.0.2.48", resolve)
+    return PLAN.build_plan(services, ["storage", "media"], "192.0.2.48", resolve, INVENTORY)
 
 
 def test_real_catalog_selects_physical_workers_without_templating_application_values():
@@ -67,11 +70,11 @@ def test_real_catalog_selects_physical_workers_without_templating_application_va
     observed = []
 
     def minimal_template(metadata):
-        assert set(metadata) == {"host", "backend", "ports"}
+        assert set(metadata) == {"hosts", "backend", "ports"}
         observed.append(metadata)
         return resolve(metadata)
 
-    result = PLAN.build_plan(services, ["storage", "media"], "192.0.2.48", minimal_template)
+    result = PLAN.build_plan(services, ["storage", "media"], "192.0.2.48", minimal_template, INVENTORY)
     # Whole catalog evaluated, but only host backend publications protected;
     # Syncthing/P2P/IRC/etc. listeners stay outside this temporary allocation.
     assert len(result["storage"]["ports"]) == 22
@@ -97,7 +100,7 @@ def test_effective_target_ports_and_placement_override_base():
     service = catalog()["tautulli"]
     service["targets"] = {
         "new": {
-            "deploy": {"host": "storage"},
+            "deploy": {"hosts": "storage"},
             "traefik": {"backend_host_inventory": "storage"},
             "ports": {"web_backend": {"published": 22601}},
         },
@@ -116,7 +119,7 @@ def test_effective_target_ports_and_placement_override_base():
 @pytest.mark.parametrize(
     "change",
     [
-        {"deploy": {"host": "manager"}},
+        {"deploy": {"hosts": "manager"}},
         {"traefik": {"backend_host_inventory": "storage"}},
         {"ports": {"web_backend": {"published": 22, "target": 8181, "mode": "host"}}},
         {"ports": {"web_backend": {"published": True, "target": 8181, "mode": "host"}}},
@@ -138,7 +141,7 @@ def test_duplicate_host_publication_and_empty_worker_set_rejected():
     with pytest.raises(ValueError, match="duplicate"):
         plan({"a": service, "b": service})
     with pytest.raises(ValueError):
-        PLAN.build_plan({}, [], "192.0.2.48", resolve)
+        PLAN.build_plan({}, [], "192.0.2.48", resolve, INVENTORY)
 
 
 def policy(**overrides):
@@ -836,11 +839,10 @@ def test_direct_helper_invalid_confirmation_creates_no_lock_or_state(tmp_path, m
 @pytest.mark.parametrize(
     "change",
     [
-        {"host": ["storage", "manager"]},
-        {"host": ["storage", "storage"]},
-        {"host": []},
-        {"host": ["storage", "media"], "mode": "replicated"},
-        {"host": ["storage", "media"], "type": "container"},
+        {"hosts": ["storage", "manager"]},
+        {"hosts": []},
+        {"hosts": ["storage", "media"], "mode": "replicated"},
+        {"hosts": ["storage", "media"], "type": "container"},
     ],
 )
 def test_global_worker_publication_rejects_ambiguous_or_non_worker_placement(change):

@@ -923,7 +923,7 @@ def podman_rootless_account_contract(value: Any) -> dict[str, bool]:
 
 def _deploy(value: Any, *, name: str) -> dict[str, Any]:
     deploy = _as_mapping(value, name=name)
-    unsupported = sorted(set(deploy) - {"execution", "host", "mode", "replicas", "type"})
+    unsupported = sorted(set(deploy) - {"execution", "hosts", "mode", "replicas", "type"})
     if unsupported:
         raise AnsibleFilterError(f"{name} contains unsupported fields for Podman: {', '.join(unsupported)}")
     deploy["execution"] = _execution(deploy["execution"], name=f"{name}.execution") if "execution" in deploy else {"mode": "rootful"}
@@ -942,8 +942,11 @@ def _deploy(value: Any, *, name: str) -> dict[str, Any]:
         if replicas != 1:
             raise AnsibleFilterError(f"{name}.replicas={replicas} is not supported; Podman Quadlets run one instance")
         deploy["replicas"] = replicas
-    if "host" in deploy:
-        deploy["host"] = _nonempty_string(deploy["host"], name=f"{name}.host")
+    if "hosts" in deploy:
+        hosts = [deploy["hosts"]] if isinstance(deploy["hosts"], str) else deploy["hosts"]
+        if not isinstance(hosts, list) or len(hosts) != 1:
+            raise AnsibleFilterError(f"{name}.hosts requires exactly one resolved host")
+        deploy["hosts"] = [_nonempty_string(hosts[0], name=f"{name}.hosts")]
     return deploy
 
 
@@ -1271,8 +1274,8 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
 
     environment = _environment(cfg["environment"], name=f"{name}.environment") if "environment" in cfg else {}
 
-    if "host" in deploy:
-        container["host"] = deploy["host"]
+    if "hosts" in deploy:
+        container["host"] = deploy["hosts"][0]
 
     if "ports" in cfg:
         container["ports"] = _ports(cfg["ports"], name=f"{name}.ports")

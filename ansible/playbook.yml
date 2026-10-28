@@ -500,10 +500,10 @@
       ansible.builtin.assert:
         that:
           - >-
-            service_catalog_dispatch_item.dispatch_hosts | difference(groups['tags_skynet']) | length == 0
+            service_catalog_dispatch_item.resolved_hosts | difference(groups['tags_skynet']) | length == 0
             if service_catalog_dispatch_item.runtime == 'native' else true
           - >-
-            (service_catalog_dispatch_item.dispatch_hosts | intersect(ansible_play_hosts_all) | length > 0)
+            (service_catalog_dispatch_item.resolved_hosts | intersect(ansible_play_hosts_all) | length > 0)
             if service_catalog_dispatch_item.runtime == 'native'
             else service_catalog_dispatch_item.dispatch_host in ansible_play_hosts_all
         fail_msg: >-
@@ -581,7 +581,7 @@
           inventory_hostname in
           ((service_catalog_selected | map(attribute='dispatch_host') | list) +
            (service_catalog_selected | selectattr('runtime', 'equalto', 'native')
-            | map(attribute='dispatch_hosts') | flatten | list))
+            | map(attribute='resolved_hosts') | flatten | list))
       ansible.builtin.setup:
       tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 

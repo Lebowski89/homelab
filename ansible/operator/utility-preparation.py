@@ -429,6 +429,8 @@ def project(services=SERVICES):
             return [render(item) for item in value]
         return templar.template(trust_as_template(value)) if isinstance(value, str) else value
 
+    inventory_groups = inventory.get_groups_dict()
+    placement = load("ansible/filter_plugins/service_catalog.py", "utility_placement")
     selected = {}
     for key in services:
         if bootstrap_role:
@@ -449,7 +451,9 @@ def project(services=SERVICES):
                 "name": cfg["name"],
                 "image": cfg["image"],
                 "user": cfg.get("user"),
-                "host": cfg["deploy"]["host"],
+                "host": placement.service_catalog_resolve_placement(
+                    {"runtime": "podman", "deploy": {"hosts": render(cfg["deploy"]["hosts"])}}, inventory_groups
+                )["deploy"]["hosts"][0],
                 "execution": cfg["deploy"]["execution"],
                 "ports": cfg["ports"],
                 "volumes": cfg.get("volumes", {}),

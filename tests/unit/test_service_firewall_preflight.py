@@ -45,7 +45,7 @@ def test_real_dispatch_cancels_preflight_and_transfers_adapter_cleanup(tmp_path,
         "runtime": "podman",
         "image": "registry.invalid/nonproduction:1",
         "named_networks": {"utility": {"driver": "bridge", "external": False}},
-        "deploy": {"host": "manager", "type": "container", "execution": {"mode": "rootless", "host_user": "podman-utility"}},
+        "deploy": {"hosts": "manager", "type": "container", "execution": {"mode": "rootless", "host_user": "podman-utility"}},
         "infisical": {"secrets_map": [{"var": "one", "path": "/NONPRODUCTION", "name": "ONE"}]},
         "environment": {"VALUE": {"value_from": {"infisical": "one"}}},
     }
@@ -59,10 +59,10 @@ def test_real_dispatch_cancels_preflight_and_transfers_adapter_cleanup(tmp_path,
             "name": "database",
             "runtime": "podman",
             "image": "registry.invalid/nonproduction:1",
-            "deploy": {"host": "manager", "execution": {"mode": "rootless", "host_user": "podman-database"}},
+            "deploy": {"hosts": "manager", "execution": {"mode": "rootless", "host_user": "podman-database"}},
             "ports": {"postgres": {"exposure": "private", "callers": ["utility", "oldapp"], "published": 5432, "target": 5432}},
         },
-        "oldapp": {"runtime": "podman", "deploy": {"host": "manager", "execution": {"mode": "rootless", "host_user": "podman-oldapp"}}},
+        "oldapp": {"runtime": "podman", "deploy": {"hosts": "manager", "execution": {"mode": "rootless", "host_user": "podman-oldapp"}}},
     }
     (tmp_path / "catalog.json").write_text(json.dumps(catalog))
     (tmp_path / "mode").write_text(failure)

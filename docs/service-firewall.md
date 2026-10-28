@@ -85,7 +85,7 @@ example:
       target: 8080
   deploy:
     type: container
-    host: "{{ services_controller_host }}"
+    hosts: "{{ services_controller_host }}"
     execution:
       mode: rootless
       host_user: podman-example

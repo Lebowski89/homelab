@@ -201,6 +201,8 @@ def test_action_templates_selected_config_in_dispatch_host_context_only(tmp_path
     svcfiles:
       selected:
         runtime: docker
+        deploy:
+          hosts: localhost
         environment:
           ADDRESS: "{{ hostvars[inventory_hostname].local_ip }}"
         targets:
@@ -209,6 +211,8 @@ def test_action_templates_selected_config_in_dispatch_host_context_only(tmp_path
               - path: "{{ hostvars[inventory_hostname].application_root }}/selected"
       unselected:
         runtime: docker
+        deploy:
+          hosts: localhost
         environment:
           VALUE: "{{ deliberately_undefined }}"
     selected_entries:
@@ -283,21 +287,23 @@ def test_lifecycle_planning_keeps_unselected_configurations_unmaterialized(tmp_p
         tags: [bundle]
         network_mode: container:provider-runtime
         deploy:
-          host: localhost
+          hosts: localhost
       provider:
         runtime: podman
         tags: [bundle]
         name: provider-runtime
         deploy:
-          host: localhost
+          hosts: localhost
       unrelated:
         runtime: docker
+        deploy:
+          hosts: localhost
         environment:
           VALUE: "{{ deliberately_undefined }}"
   tasks:
     - name: Build lightweight catalog
       ansible.builtin.set_fact:
-        catalog_items: "{{ svcfiles | service_catalog_effective('localhost') }}"
+        catalog_items: "{{ svcfiles | service_catalog_effective('localhost', groups) }}"
 
     - name: Select synthetic bundle
       ansible.builtin.set_fact:

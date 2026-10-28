@@ -26,6 +26,7 @@ def load(relative, name):
     return module
 
 
+CATALOG = load("filter_plugins/service_catalog.py", "maintenance_catalog")
 MGT = load("action_plugins/mgt_firewall_plan.py", "maintenance_mgt_plan")
 WORKER = load("action_plugins/worker_backend_firewall_plan.py", "maintenance_worker_plan")
 WORKER_INPUTS = load("action_plugins/worker_backend_firewall_validate.py", "maintenance_worker_inputs")
@@ -163,6 +164,8 @@ class ActionModule(ActionBase):
             if self._task.check_mode:
                 return dict(result, changed=False, skipped=True)
             metadata = self._task.args["metadata"]
+            if "hosts" in metadata.get("deploy", {}):
+                metadata = CATALOG.service_catalog_resolve_placement(metadata, variables["groups"])
             if self._task.args["phase"] in {"runtime", "ownership", "placement"}:
                 if self._task.args["phase"] == "placement" and metadata.get("runtime", "docker") == "docker":
                     # Cleanup operates on a Docker project/stack. Check its real
@@ -178,8 +181,12 @@ class ActionModule(ActionBase):
                             "Docker stack has other services; split it or use scoped recovery before this operation",
                         )
                     else:
-                        host = metadata["deploy"]["host"]
-                        require(isinstance(host, str) and bool(host.strip()), "standalone deploy.host must be a non-empty string")
+                        hosts = metadata["deploy"]["hosts"]
+                        require(
+                            isinstance(hosts, list) and len(hosts) == 1 and isinstance(hosts[0], str) and bool(hosts[0].strip()),
+                            "standalone deploy.hosts must resolve to exactly one hostname",
+                        )
+                        host = hosts[0]
                         project = stack + "-" + host
                         rows = self.command(
                             docker
@@ -316,13 +323,17 @@ class ActionModule(ActionBase):
         return base64.b64decode(self.module("ansible.builtin.slurp", {"src": path})["content"]).decode()
 
     def runtime(self, metadata, check_ports=True):
-        if not metadata.get("deploy", {}).get("host"):
+        if not metadata.get("deploy", {}).get("hosts"):
             return {"managed": False}
         if metadata.get("runtime") == "docker":
             if metadata["deploy"].get("type", "swarm") != "swarm":
                 # Existing standalone services need exact Compose ownership too.
-                host = metadata["deploy"]["host"]
-                require(isinstance(host, str) and bool(host.strip()), "standalone deploy.host must be a non-empty string")
+                hosts = metadata["deploy"]["hosts"]
+                require(
+                    isinstance(hosts, list) and len(hosts) == 1 and isinstance(hosts[0], str) and bool(hosts[0].strip()),
+                    "standalone deploy.hosts must resolve to exactly one hostname",
+                )
+                host = hosts[0]
                 stack = metadata.get("stack", metadata["name"]) + "-" + host
                 docker = ["docker", "--host", "unix:///var/run/docker.sock"]
                 ids = self.command(
@@ -440,7 +451,9 @@ class ActionModule(ActionBase):
         )
         if "worker_backends" in scopes:
             workers = [self.variables["services_storage_host"], self.variables["services_plex_host"]]
-            plan = WORKER.build_plan({metadata["name"]: metadata}, workers, hosts[controller]["local_ip"], lambda value: value)
+            plan = WORKER.build_plan(
+                {metadata["name"]: metadata}, workers, hosts[controller]["local_ip"], lambda value: value, self.variables["groups"]
+            )
             unraid = host == self.variables["services_storage_host"]
             root = "/boot/config/skynet-worker-backend-firewall" if unraid else "/etc/skynet-worker-backend-firewall"
             flash_device = self.unraid_flash_device() if unraid else None
@@ -488,7 +501,7 @@ class ActionModule(ActionBase):
                     **defaults,
                     f"{role}_podman_services": self.variables.get(f"{role}_podman_services", defaults[f"{role}_podman_services"]),
                 }
-                bootstrap.extend(MGT.bootstrap_metadata(role, defaults, template))
+                bootstrap.extend(MGT.bootstrap_metadata(role, defaults, template, self.variables["groups"]))
             # The selected effective declaration is authoritative, including target overrides.
             if "bootstrap" not in scopes:
                 flattened = {}
@@ -497,7 +510,7 @@ class ActionModule(ActionBase):
                         effective = MGT.CATALOG.service_catalog_merge_target(base, target)
                         flattened[effective.get("name", key if target is None else key + "-" + target)] = effective
                 services = {**flattened, metadata["name"]: metadata}
-            plan = MGT.build_plan(services, controller, template, bootstrap)
+            plan = MGT.build_plan(services, controller, template, bootstrap, self.variables["groups"])
             policy = json.loads(self.read("/etc/skynet-mgt-firewall/policy.json"))
             mgt_contract(metadata, policy, plan, controller, address)
             self.owned("/etc/skynet-mgt-firewall/policy.py")

@@ -7,8 +7,10 @@ from pathlib import Path
 import pytest
 import yaml
 from ansible.errors import AnsibleFilterError
+from jinja2.nativetypes import NativeEnvironment
 
 ROOT = Path(__file__).resolve().parents[2]
+INVENTORY = {"all": ["controller", "storage", "plex", "blacktop"]}
 
 
 def load(path, name):
@@ -26,6 +28,14 @@ def services():
     result = {}
     for path in (ROOT / "ansible/group_vars/all/services").glob("*.yml"):
         result.update(yaml.safe_load(path.read_text()))
+    variables = {"services_controller_host": "controller", "services_storage_host": "storage", "services_plex_host": "plex"}
+    for service in result.values():
+        for cfg in [service, *service.get("targets", {}).values()]:
+            hosts = cfg.get("deploy", {}).get("hosts")
+            if isinstance(hosts, str) and "{{" in hosts:
+                cfg["deploy"]["hosts"] = NativeEnvironment().from_string(hosts).render(**variables)
+            elif isinstance(hosts, list):
+                cfg["deploy"]["hosts"] = [NativeEnvironment().from_string(h).render(**variables) for h in hosts]
     return result
 
 
@@ -47,7 +57,7 @@ def test_real_native_targets_isolate_container_installation_and_selection():
         cfg = CATALOG.service_catalog_merge_target(source[entry["name"]], entry.get("target"))
         assert "image" not in cfg and "infisical" not in cfg and "environment" not in cfg
         assert "ports" not in cfg and "volumes" not in cfg and "systemd" not in cfg
-        assert len(entry["dispatch_hosts"]) == 2
+        assert len(entry["resolved_hosts"]) == 2
     assert source == original
 
 
@@ -118,24 +128,26 @@ def test_native_firewall_planning_needs_no_container_context_and_rejects_protect
 def test_selected_placement_errors_are_distinct_from_disabled_and_unselected_services():
     source = services()
     for groups in ({}, {"tags_node_exporter": []}):
-        effective = CATALOG.service_catalog_effective(source, "controller", groups)
+        effective = CATALOG.service_catalog_effective(source, "controller", INVENTORY | groups)
         node = next(item for item in effective if item["name"] == "node_exporter")
         assert node["enabled"] is True
-        with pytest.raises(AnsibleFilterError, match="node_exporter.*deploy.group 'tags_node_exporter'.*no hosts"):
+        with pytest.raises(AnsibleFilterError, match="node_exporter.*deploy.hosts.*tags_node_exporter"):
             CATALOG.service_catalog_select(effective, ["node_exporter"])
         # Other optional native inventory groups are also absent. A container
         # operation must not need them merely because they share a catalogue.
         selected = CATALOG.service_catalog_select(effective, ["grafana"])["selected"]
         assert selected and all(item["name"] == "grafana" for item in selected)
     source["node_exporter"]["enabled"] = False
-    disabled = CATALOG.service_catalog_select(CATALOG.service_catalog_effective(source, "controller"), ["node_exporter"])
+    disabled = CATALOG.service_catalog_select(CATALOG.service_catalog_effective(source, "controller", INVENTORY), ["node_exporter"])
     assert disabled["disabled_only"] is True and disabled["selected"] == []
     with pytest.raises(AnsibleFilterError, match="node_exporter.*does not support drift"):
-        CATALOG.service_catalog_select(CATALOG.service_catalog_effective(source, "controller"), ["node_exporter"], action="drift")
+        CATALOG.service_catalog_select(
+            CATALOG.service_catalog_effective(source, "controller", INVENTORY), ["node_exporter"], action="drift"
+        )
     source["node_exporter"]["enabled"] = True
-    source["node_exporter"]["deploy"] = {"host": []}
-    with pytest.raises(AnsibleFilterError, match="node_exporter.*deploy.host.*no hosts"):
-        CATALOG.service_catalog_select(CATALOG.service_catalog_effective(source, "controller"), ["node_exporter"])
+    source["node_exporter"]["deploy"] = {"hosts": []}
+    with pytest.raises(AnsibleFilterError, match="node_exporter.*deploy.hosts"):
+        CATALOG.service_catalog_select(CATALOG.service_catalog_effective(source, "controller", INVENTORY), ["node_exporter"])
 
 
 def test_container_only_actions_preserve_mixed_targets_and_reject_explicit_native_selectors():
@@ -144,7 +156,7 @@ def test_container_only_actions_preserve_mixed_targets_and_reject_explicit_nativ
     # validation, both on the identity index and on resolved metadata.
     for effective in (
         CATALOG.service_catalog_effective(source, "", resolve_hosts=False),
-        CATALOG.service_catalog_effective(source, "controller"),
+        CATALOG.service_catalog_effective(source, "controller", INVENTORY),
     ):
         for action in ("drift", "bootstrap"):
             selected = CATALOG.service_catalog_select(effective, [action, "alloy"], action=action)["selected"]

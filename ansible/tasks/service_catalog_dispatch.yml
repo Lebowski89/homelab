@@ -7,7 +7,7 @@
     service_catalog_firewall_handoff: ""
 
 - name: Service catalog dispatch | Materialize selected entry on dispatch host
-  when: inventory_hostname in (service_catalog_dispatch_entry.dispatch_hosts | default([service_catalog_dispatch_entry.dispatch_host]))
+  when: inventory_hostname in (service_catalog_dispatch_entry.resolved_hosts if service_catalog_dispatch_entry.runtime == 'native' else [service_catalog_dispatch_entry.dispatch_host])
   service_catalog_materialize:
     source_var: svcfiles
     selected:
@@ -15,13 +15,13 @@
   register: service_catalog_materialize_result
 
 - name: Service catalog dispatch | Copy returned materialized entry
-  when: inventory_hostname in (service_catalog_dispatch_entry.dispatch_hosts | default([service_catalog_dispatch_entry.dispatch_host]))
+  when: inventory_hostname in (service_catalog_dispatch_entry.resolved_hosts if service_catalog_dispatch_entry.runtime == 'native' else [service_catalog_dispatch_entry.dispatch_host])
   ansible.builtin.set_fact:
     service_catalog_host_materialized: >-
       {{ service_catalog_materialize_result.ansible_facts.service_catalog_host_materialized }}
 
 - name: Service catalog dispatch | Validate single materialized entry
-  when: inventory_hostname in (service_catalog_dispatch_entry.dispatch_hosts | default([service_catalog_dispatch_entry.dispatch_host]))
+  when: inventory_hostname in (service_catalog_dispatch_entry.resolved_hosts if service_catalog_dispatch_entry.runtime == 'native' else [service_catalog_dispatch_entry.dispatch_host])
   ansible.builtin.assert:
     that:
       - service_catalog_host_materialized is sequence
@@ -57,7 +57,7 @@
     - name: Service catalog dispatch | Process native entry on each selected host
       when:
         - service_catalog_dispatch_entry.runtime == "native"
-        - inventory_hostname in service_catalog_dispatch_entry.dispatch_hosts
+        - inventory_hostname in service_catalog_dispatch_entry.resolved_hosts
       ansible.builtin.include_role:
         name: native_services
         defaults_from: "{{ service_catalog_host_materialized[0].config.native.application }}"

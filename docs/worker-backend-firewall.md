@@ -15,7 +15,7 @@ Rocky Linux and consolidated host firewall design remain separate work.
 ## Scope and ownership
 
 The controller action uses the canonical base-plus-target merger and templates
-only value-free endpoint metadata. Physical placement comes from `deploy.host`,
+only value-free endpoint metadata. Physical placement comes from `deploy.hosts`,
 not the Swarm manager that dispatches a stack. The controller/storage groups and
 `services_plex_host` use the existing NetBox inventory contract; `local_ip` is
 NetBox's primary address, which may differ from the Tailscale `ansible_host`.

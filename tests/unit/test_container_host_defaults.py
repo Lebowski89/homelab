@@ -264,7 +264,7 @@ all:
           image: example.invalid/app:1.0.0
           deploy:
             type: swarm
-            host: storage
+            hosts: storage
         docker_services_service_cfg_found: true
         docker_services_service_target: base
         docker_services_role_prefix: synthetic
@@ -303,7 +303,7 @@ all:
           image: example.invalid/other:1.0.0
           deploy:
             type: container
-            host: storage_two
+            hosts: storage_two
         docker_services_service_cfg_found: true
         docker_services_service_target: base
         docker_services_role_prefix: synthetic-other
@@ -346,7 +346,7 @@ all:
           image: example.invalid/app:1.0.0
           deploy:
             type: container
-            host: storage
+            hosts: storage
         podman_services_role_prefix: synthetic
         podman_services_common_context:
           service_name: synthetic

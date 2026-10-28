@@ -608,9 +608,7 @@ def test_podman_dispatch_is_routed_from_the_single_global_iteration():
     assert dispatch["loop"] == "{{ service_catalog_selected }}"
     assert "when" not in dispatch
     assert "inventory_hostname in" in materialization["when"]
-    assert (
-        "dispatch_hosts" in materialization["when"] and "default([service_catalog_dispatch_entry.dispatch_host])" in materialization["when"]
-    )
+    assert "resolved_hosts" in materialization["when"] and "else [service_catalog_dispatch_entry.dispatch_host]" in materialization["when"]
     assert podman_route["when"] == [
         "inventory_hostname == service_catalog_dispatch_entry.dispatch_host",
         'service_catalog_dispatch_entry.runtime == "podman"',

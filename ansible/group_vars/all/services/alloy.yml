@@ -96,7 +96,7 @@ alloy:
         type: swarm
         mode: global
         profile: careful
-        host:
+        hosts:
           - "{{ services_storage_host }}"
           - "{{ services_plex_host }}"
         constraints:
@@ -191,7 +191,7 @@ alloy:
 
       deploy:
         type: container
-        host: "{{ services_controller_host }}"
+        hosts: "{{ services_controller_host }}"
       systemd:
         requires:
           - "{{ podman_shared_network_name }}-network.service"
@@ -224,4 +224,4 @@ alloy:
           loki_url: https://loki.{{ services_internal_zone }}:{{ services_private_https_port }}/loki/api/v1/push
         update_policy: present
       deploy:
-        group: tags_podman
+        hosts: tags_podman

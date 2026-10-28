@@ -285,7 +285,7 @@ def test_traefik_access_log_has_bounded_reopen_safe_rotation():
         "force": True,
     }
     assert service["deploy"]["type"] == "container"
-    assert service["deploy"]["host"] == "{{ services_controller_host }}"
+    assert service["deploy"]["hosts"] == "{{ services_controller_host }}"
     assert alloy_config.count("/host/rootfs/var/log/skynet/traefik/access.log") == 1
     assert "access.log*" not in alloy_config
 

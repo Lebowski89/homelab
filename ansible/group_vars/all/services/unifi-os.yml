@@ -199,7 +199,7 @@ unifi:
   no_new_privileges: false
   deploy:
     type: container
-    host: "{{ services_controller_host }}"
+    hosts: "{{ services_controller_host }}"
   systemd:
     requires:
       - unifi-network.service

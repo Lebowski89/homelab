@@ -28,10 +28,11 @@ def _load_canonical_merge():
         raise ImportError(f"Unable to load canonical service catalog filter from {_SERVICE_CATALOG_PATH}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.service_catalog_merge_target
+    return module
 
 
-_CANONICAL_MERGE_TARGET = _load_canonical_merge()
+_CATALOG = _load_canonical_merge()
+_CANONICAL_MERGE_TARGET = _CATALOG.service_catalog_merge_target
 
 
 def _load_native_inputs():
@@ -158,18 +159,18 @@ class ActionModule(ActionBase):
 
         def template(config):
             if config["runtime"] != "native":
-                return self._templar.template(config, fail_on_undefined=True)
-            _native_inputs = _load_native_inputs()
-            native = config["native"]
-            # Apply defined inventory/extra-var values BEFORE resolving defaults,
-            # so an explicit endpoint override does not require the unused zone.
-            values = _native_inputs.native_services_inputs(native, task_vars)
-            aliases = {_native_inputs.PREFIXES[native["application"]] + key: value for key, value in values.items()}
-            concrete = self._templar.copy_with_new_env(available_variables={**task_vars, **aliases}).template(
-                {**config, "native": {**native, "config": values}}, fail_on_undefined=True
-            )
-            concrete["native"]["config"] = _native_inputs.native_services_normalize(concrete["native"])
-            return concrete
+                concrete = self._templar.template(config, fail_on_undefined=True)
+            else:
+                _native_inputs = _load_native_inputs()
+                native = config["native"]
+                # Apply defined overrides before templating unused defaults.
+                values = _native_inputs.native_services_inputs(native, task_vars)
+                aliases = {_native_inputs.PREFIXES[native["application"]] + key: value for key, value in values.items()}
+                concrete = self._templar.copy_with_new_env(available_variables={**task_vars, **aliases}).template(
+                    {**config, "native": {**native, "config": values}}, fail_on_undefined=True
+                )
+                concrete["native"]["config"] = _native_inputs.native_services_normalize(concrete["native"])
+            return _CATALOG.service_catalog_resolve_placement(concrete, task_vars["groups"])
 
         materialized = materialize_selected(
             task_vars[source_var],
@@ -177,6 +178,9 @@ class ActionModule(ActionBase):
             template,
         )
 
+        for entry in materialized:
+            if "resolved_hosts" in entry and entry["resolved_hosts"] != entry["config"]["deploy"]["hosts"]:
+                raise AnsibleActionFail("Host-local placement differs from catalogue selection; use inventory-wide placement declarations")
         result["ansible_facts"] = {"service_catalog_host_materialized": materialized}
         result["_ansible_facts_cacheable"] = False
         result["changed"] = False

@@ -786,7 +786,7 @@ def service_common_requirements_metadata(service: Any, name: str) -> dict[str, A
     result["name"] = service.get("name", name)
     result["operational_requirements"] = service_common_requirements_normalize(service.get("operational_requirements", {}))
     for section, keys in {
-        "deploy": ("type", "mode", "host", "constraints", "execution"),
+        "deploy": ("type", "mode", "hosts", "constraints", "execution"),
         "traefik": ("port", "backend_mode", "backend_host_inventory"),
         "postgres": ("enable",),
         "application_prepare": ("handler",),

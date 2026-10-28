@@ -207,13 +207,13 @@ def test_target_callers_collisions_and_unsupported_exposure_fail_before_a_transa
         "utility": {
             "runtime": "podman",
             "image": "nonproduction:1",
-            "deploy": {"host": "manager", "execution": {"mode": "rootless", "host_user": "podman-utility"}},
+            "deploy": {"hosts": "manager", "execution": {"mode": "rootless", "host_user": "podman-utility"}},
             "ports": {"web": {"exposure": "private", "callers": ["proxy:mgt"], "published": 18010, "target": 8080}},
         },
         "proxy:mgt": {
             "name": "proxy",
             "runtime": "podman",
-            "deploy": {"host": "manager", "execution": {"mode": "rootless", "host_user": "podman-proxy"}},
+            "deploy": {"hosts": "manager", "execution": {"mode": "rootless", "host_user": "podman-proxy"}},
         },
     }
     hosts = {"manager": {"local_ip": "192.0.2.48"}}
@@ -231,7 +231,7 @@ def test_target_callers_collisions_and_unsupported_exposure_fail_before_a_transa
 
 @pytest.mark.parametrize("runtime,mode", [("docker", None), ("podman", "rootful"), ("podman", "rootless")])
 def test_supported_identity_models_use_exact_selectors(runtime, mode):
-    cfg = {"name": "utility", "runtime": runtime, "deploy": {"host": "manager", "type": "container"}}
+    cfg = {"name": "utility", "runtime": runtime, "deploy": {"hosts": "manager", "type": "container"}}
     if mode:
         cfg["deploy"]["execution"] = {"mode": mode, "host_user": "podman-utility"}
     binding = DECL.identity("utility", cfg, "manager")["binding"]
@@ -654,7 +654,7 @@ def test_all_real_mgt_targets_plan_without_templating_environments(monkeypatch):
         "image": "registry.invalid/nonproduction:1",
         "named_networks": {"newapp": {"driver": "bridge", "external": False}},
         "postgres": {"enable": True},
-        "deploy": {"type": "container", "host": "mgt", "execution": {"mode": "rootless", "host_user": "podman-newapp"}},
+        "deploy": {"type": "container", "hosts": "mgt", "execution": {"mode": "rootless", "host_user": "podman-newapp"}},
     }
     planned = []
     entries = REAL.mgt_entries(catalog)
@@ -935,7 +935,7 @@ def test_unlisted_docker_project_members_are_rejected_before_lifecycle_mutation(
     check = load("ansible/action_plugins/service_operational_check.py", "lifecycle_membership_test")
     monkeypatch.setattr(ActionBase, "run", lambda *args: {})
     action = object.__new__(check.ActionModule)
-    metadata = {"name": "utility", "runtime": "docker", "deploy": {"host": "manager", "type": "container" if standalone else "swarm"}}
+    metadata = {"name": "utility", "runtime": "docker", "deploy": {"hosts": "manager", "type": "container" if standalone else "swarm"}}
     action._task = SimpleNamespace(check_mode=False, args={"phase": "placement", "metadata": metadata})
     calls = []
 
@@ -946,10 +946,10 @@ def test_unlisted_docker_project_members_are_rejected_before_lifecycle_mutation(
     action.runtime = unexpected_runtime
     action.command = lambda argv: "unlisted-id\tother-service" if standalone else "utility_other-service"
     with pytest.raises(AnsibleActionFail, match="other"):
-        action.run(task_vars={})
+        action.run(task_vars={"groups": {"all": ["manager"]}})
     assert calls == []
     action.command = lambda argv: "selected-id\tutility" if standalone else "utility_utility"
-    assert action.run(task_vars={})["managed"] is False
+    assert action.run(task_vars={"groups": {"all": ["manager"]}})["managed"] is False
     assert calls == ["runtime"]
 
 
@@ -1088,7 +1088,7 @@ def test_inverse_provider_planner_selects_only_declared_client_access():
             "name": name,
             "runtime": "podman",
             "image": "nonproduction:1",
-            "deploy": {"host": "manager", "execution": {"mode": "rootless", "host_user": "podman-" + name}},
+            "deploy": {"hosts": "manager", "execution": {"mode": "rootless", "host_user": "podman-" + name}},
         }
         for name in ["database", "oldapp", "newapp", "irc"]
     }
@@ -1098,7 +1098,7 @@ def test_inverse_provider_planner_selects_only_declared_client_access():
     planner = load("ansible/action_plugins/mgt_firewall_plan.py", "provider_postgres_planner")
     for cfg in catalog.values():
         cfg["operational_requirements"] = {"acl": ["mgt_backends"]}
-    legacy = planner.build_plan(catalog, "manager", lambda value, _: value, [])
+    legacy = planner.build_plan(catalog, "manager", lambda value, _: value, [], {"all": ["manager"]})
     plan = DECL.plan(
         "newapp",
         catalog,
@@ -1334,7 +1334,7 @@ def test_explicit_provider_relationship_is_discovered_without_a_legacy_catalog()
         name: {
             "runtime": "podman",
             "image": "registry.invalid/nonproduction:1",
-            "deploy": {"host": "manager", "execution": {"mode": "rootless", "host_user": "podman-" + name}},
+            "deploy": {"hosts": "manager", "execution": {"mode": "rootless", "host_user": "podman-" + name}},
         }
         for name in ["provider", "client", "unrelated"]
     }

@@ -107,7 +107,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
           protocol: tcp
       deploy:
         type: container
-        host: localhost
+        hosts: localhost
         execution:
           mode: rootless
           host_user: {host_user}
@@ -299,7 +299,7 @@ def test_execution_only_preparation_returns_before_service_work(tmp_path):
                 "runtime": "podman",
                 "operational_requirements": {"acl": ["mgt_backends"], "ownership_transition": True},
                 "image": "registry.example.invalid/test:1",
-                "deploy": {"type": "container", "execution": {"mode": "rootless", "host_user": account}},
+                "deploy": {"type": "container", "hosts": "localhost", "execution": {"mode": "rootless", "host_user": account}},
                 "named_networks": {"account-check": {"external": False}},
             },
             "podman_services_role_prefix": "account-check",
@@ -389,7 +389,7 @@ def test_rootless_check_mode_rejects_managed_files_outside_the_bind_tree(tmp_pat
         "ports": [{"published": 18081, "target": 8080, "protocol": "tcp"}],
         "deploy": {
             "type": "container",
-            "host": "localhost",
+            "hosts": "localhost",
             "execution": {
                 "mode": "rootless",
                 "host_user": "podman-check-invalid",
@@ -541,7 +541,7 @@ def test_execution_state_version_contract_is_enforced_before_runtime_work(tmp_pa
                     "podman_services_service_cfg": {
                         "runtime": "podman",
                         "image": "registry.example.invalid/synthetic:1.0",
-                        "deploy": {"type": "container", "host": "localhost"},
+                        "deploy": {"type": "container", "hosts": "localhost"},
                     },
                     "podman_services_role_prefix": "synthetic",
                     "podman_services_common_action": "remove",
@@ -632,7 +632,7 @@ def test_removal_requires_managed_marker_for_existing_rootful_and_rootless_files
                     "podman_services_service_cfg": {
                         "runtime": "podman",
                         "image": "registry.example.invalid/synthetic:1.0",
-                        "deploy": {"type": "container", "host": "localhost"},
+                        "deploy": {"type": "container", "hosts": "localhost"},
                     },
                     "podman_services_role_prefix": "synthetic",
                     "podman_services_common_action": "remove",
@@ -713,7 +713,7 @@ def test_versionless_cleanup_ignores_unproven_resource_metadata_but_version_two_
                         "podman_services_service_cfg": {
                             "runtime": "podman",
                             "image": "registry.example.invalid/synthetic:1.0",
-                            "deploy": {"type": "container", "host": "localhost"},
+                            "deploy": {"type": "container", "hosts": "localhost"},
                         },
                         "podman_services_role_prefix": "synthetic",
                         "podman_services_common_action": "remove",
@@ -823,7 +823,7 @@ def test_remove_and_drift_materialize_the_persisted_active_owner(
         "runtime": "podman",
         "name": "synthetic",
         "image": "registry.example.invalid/synthetic:1.0",
-        "deploy": {"type": "container", "host": "localhost", "execution": execution},
+        "deploy": {"type": "container", "hosts": "localhost", "execution": execution},
     }
     if desired_mode == "rootless":
         execution["host_user"] = "podman-synthetic"
@@ -1056,7 +1056,7 @@ def test_netbox_account_only_preparation_never_resolves_bootstrap_credentials(tm
                     "operational_requirements": {"acl": ["bootstrap"], "ownership_transition": True},
                     "deploy": {
                         "type": "container",
-                        "host": "localhost",
+                        "hosts": "localhost",
                         "execution": {"mode": "rootless", "host_user": "podman-check-netbox"},
                     },
                 }

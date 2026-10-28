@@ -80,6 +80,6 @@ kometa:
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ services_plex_host }}"
+    hosts: "{{ services_plex_host }}"
     constraints:
       - node.labels.docker_services_host == docker_services_plex_host

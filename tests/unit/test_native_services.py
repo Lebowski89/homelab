@@ -220,7 +220,7 @@ class ActionModule(ActionBase):
                 **variables,
                 "services_controller_inventory_group": "fixture_controller",
                 "services_storage_inventory_group": "fixture_storage",
-                "services_plex_host": "other",
+                "services_plex_host": variables.get("services_plex_host", "other"),
                 "services_log_root": "/fixture/logs",
                 "services_public_zone": "public.example.test",
                 "services_internal_zone": "private.example.test",
@@ -268,6 +268,7 @@ class ActionModule(ActionBase):
                                         "runtime": runtime,
                                         "action": "{{ service_catalog_action }}",
                                         "name": f"{{{{ {runtime}_services_service_cfg.name }}}}",
+                                        "deploy": f"{{{{ {runtime}_services_service_cfg.deploy }}}}",
                                     },
                                 },
                             }
@@ -589,3 +590,24 @@ def test_technitium_remove_retries_an_interrupted_regular_resolver_restore(nativ
     assert result.returncode == 0, result.stdout + result.stderr
     restored = [call["options"] for call in calls if call["module"] == "copy" and call["options"].get("dest") == "/etc/resolv.conf"]
     assert restored == [{"dest": "/etc/resolv.conf", "content": content, "owner": 0, "group": 0, "mode": "0644"}]
+
+
+def test_swarm_dispatch_under_limit_keeps_full_placement_on_manager(native_run):
+    result, calls = native_run(
+        [],
+        containers=True,
+        run_all=True,
+        action="drift",
+        limit="selected",
+        overrides={"services_plex_host": "selected"},
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    adapters = [call for call in calls if call["module"] == "container_adapter"]
+    docker = next(call for call in adapters if call["options"]["runtime"] == "docker")
+    assert docker["host"] == "selected"  # Manager executes; workers do not.
+    assert docker["options"]["deploy"]["hosts"] == ["other", "selected"]
+    assert docker["options"]["deploy"]["constraints"] == [
+        "node.platform.os == linux",
+        "node.labels.ansible_host != selected",
+    ]
+    assert {call["host"] for call in adapters} == {"selected"}

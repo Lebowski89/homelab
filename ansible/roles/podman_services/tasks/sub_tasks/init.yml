@@ -17,7 +17,7 @@
 
 - name: Init | Build Podman service settings
   ansible.builtin.set_fact:
-    podman_services_service: "{{ podman_services_service_cfg | podman_service_normalize(podman_services_role_prefix) }}"
+    podman_services_service: "{{ podman_services_service_cfg | service_catalog_resolve_placement(groups) | podman_service_normalize(podman_services_role_prefix) }}"
   tags: [deploy, update, remove, recreate, drift, bootstrap]
 
 - name: Init | Set systemd service name

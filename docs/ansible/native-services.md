@@ -26,7 +26,9 @@ remain deliberate aliases. No old role-directory shims are needed.
 
 A native declaration uses `runtime: native`, `native.application`, typed
 `native.config`, `native.update_policy`, and exactly one placement field:
-`deploy.group` names an inventory group; `deploy.host` names one host or a list.
+`deploy.hosts` accepts an inventory hostname, group, or list of both. The shared
+catalogue resolver expands groups and deduplicates in first-seen order, independently
+of the command limit.
 Selected hosts must belong to the existing `tags_skynet` play scope; each
 materializes its own configuration. `skynet limit <pattern>` restricts that host
 set without silently accepting hosts outside that play scope. Configured

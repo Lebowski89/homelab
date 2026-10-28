@@ -85,7 +85,7 @@ def canonical_service():
         "image": "ghcr.io/example/portable:1.2.3",
         "user": "1001:1002",
         "environment": {"APP_ENV": "production"},
-        "deploy": {"type": "container", "mode": "replicated", "replicas": 1, "host": "podman01"},
+        "deploy": {"type": "container", "mode": "replicated", "replicas": 1, "hosts": "podman01"},
         "ports": {
             "web": {
                 "published": 8443,
@@ -217,7 +217,7 @@ def test_rootful_native_device_container_namespace_and_shm_size_reach_quadlet():
         "devices": ["/dev/net/tun:/dev/net/tun"],
         "network_mode": "container:gluetun",
         "shm_size": "1gb",
-        "deploy": {"type": "container", "host": "podman01", "execution": {"mode": "rootful"}},
+        "deploy": {"type": "container", "hosts": "podman01", "execution": {"mode": "rootful"}},
     }
 
     normalized = podman_services_filters.podman_service_normalize(cfg, "portable")
@@ -435,7 +435,7 @@ def test_rootless_quadlet_uses_normalized_service_environment_without_task_envir
         "no_new_privileges": True,
         "deploy": {
             "type": "container",
-            "host": "podman01",
+            "hosts": "podman01",
             "execution": {"mode": "rootless", "host_user": "podman-adminer"},
         },
     }
@@ -486,7 +486,7 @@ def test_blacktop_vpn_namespace_services_normalize_and_render_as_one_privileged_
         assert config["runtime"] == "podman"
         assert config["deploy"] == {
             "type": "container",
-            "host": "blacktop",
+            "hosts": "blacktop",
             "execution": {"mode": "rootful"},
         }
 

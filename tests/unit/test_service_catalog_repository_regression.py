@@ -43,6 +43,17 @@ def load_services():
     return services
 
 
+def catalog_items(filters, services, manager, groups=None):
+    source = deepcopy(services)
+    variables = {"services_controller_host": manager, "services_storage_host": "unraid", "services_plex_host": "plex"}
+    for service in source.values():
+        for cfg in [service, *service.get("targets", {}).values()]:
+            if "hosts" in cfg.get("deploy", {}):
+                cfg["deploy"]["hosts"] = render_structure(cfg["deploy"]["hosts"], variables)
+    inventory = {"all": [manager, "mgt", "unraid", "plex", "blacktop", "docker-a", "docker-b"], **NATIVE_GROUPS, **(groups or {})}
+    return filters.service_catalog_effective(source, manager, inventory)
+
+
 def render_structure(value, variables):
     if isinstance(value, dict):
         return {key: render_structure(item, variables) for key, item in value.items()}
@@ -73,25 +84,26 @@ def test_real_repository_catalog_contains_only_lightweight_selection_metadata():
         "service_catalog_lightweight_repository",
     )
 
-    effective = catalog_filters.service_catalog_effective(load_services(), "manager", NATIVE_GROUPS)
+    effective = catalog_items(catalog_filters, load_services(), "manager", NATIVE_GROUPS)
 
     assert effective
     assert all("config" not in item for item in effective)
     assert all(
-        set(item) <= {"name", "target", "runtime", "tags", "enabled", "dispatch_host", "dispatch_hosts", "podman_lifecycle"}
+        set(item)
+        <= {"name", "target", "runtime", "tags", "enabled", "dispatch_host", "resolved_hosts", "podman_lifecycle", "placement_error"}
         for item in effective
     )
     assert all("podman_lifecycle" not in item for item in effective if item["runtime"] == "docker")
     assert all("podman_lifecycle" in item for item in effective if item["runtime"] == "podman")
 
 
-def test_real_repository_dispatch_hosts_are_lightweight_and_runtime_specific():
+def test_real_repository_resolved_hosts_are_lightweight_and_runtime_specific():
     catalog_filters = load_module(
         REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
         "service_catalog_repository_dispatch",
     )
     services = load_services()
-    effective = catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS)
+    effective = catalog_items(catalog_filters, services, "manager", NATIVE_GROUPS)
     seen_runtimes = set()
 
     for item in effective:
@@ -99,12 +111,9 @@ def test_real_repository_dispatch_hosts_are_lightweight_and_runtime_specific():
         deploy = service.get("deploy", {})
         if item["runtime"] == "docker":
             deploy_type = str(deploy.get("type", "swarm") or "swarm").strip()
-            expected_host = "manager" if deploy_type == "swarm" else (deploy.get("host") or "manager")
-        elif item["runtime"] == "native":
-            assert item["dispatch_hosts"] == NATIVE_GROUPS[deploy["group"]]
-            expected_host = item["dispatch_hosts"][0]
+            expected_host = "manager" if deploy_type == "swarm" else item["resolved_hosts"][0]
         else:
-            expected_host = deploy.get("host") or service.get("container", {}).get("host") or item["name"]
+            expected_host = item["resolved_hosts"][0]
 
         identity = f"{item['name']}:{item.get('target', '<base>')}"
         assert item["dispatch_host"] == expected_host, identity
@@ -114,7 +123,7 @@ def test_real_repository_dispatch_hosts_are_lightweight_and_runtime_specific():
     assert seen_runtimes == catalog_filters.VALID_RUNTIMES
 
 
-def test_real_repository_dispatch_hosts_match_repository_host_definitions():
+def test_real_repository_resolved_hosts_match_repository_host_definitions():
     catalog_filters = load_module(
         REPO_ROOT / "ansible/filter_plugins/service_catalog.py",
         "service_catalog_repository_hosts",
@@ -129,11 +138,11 @@ def test_real_repository_dispatch_hosts_match_repository_host_definitions():
         configurations = [service, *(service.get("targets", {}) or {}).values()]
         for configuration in configurations:
             deploy = configuration.get("deploy", {})
-            host = deploy.get("host")
+            host = deploy.get("hosts")
             if isinstance(host, str) and "{{" in host:
-                deploy["host"] = NativeEnvironment(undefined=StrictUndefined).from_string(host).render(**host_context)
+                deploy["hosts"] = NativeEnvironment(undefined=StrictUndefined).from_string(host).render(**host_context)
 
-    effective = catalog_filters.service_catalog_effective(services, "mgt", NATIVE_GROUPS)
+    effective = catalog_items(catalog_filters, services, "mgt", NATIVE_GROUPS)
     repository_hosts = {path.stem for path in (REPO_ROOT / "ansible/host_vars").glob("*.yml")}
     repository_hosts.update(path.name for path in (REPO_ROOT / "terraform/proxmox/vms").iterdir() if path.is_dir())
     netbox_locals = (REPO_ROOT / "terraform/netbox/locals.tf").read_text().split("base_hosts = {", 1)[1]
@@ -157,7 +166,7 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
     checked = []
     original = deepcopy(services)
 
-    for item in catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS):
+    for item in catalog_items(catalog_filters, services, "manager", NATIVE_GROUPS):
         if item["runtime"] != "podman":
             continue
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
@@ -241,7 +250,7 @@ def test_every_effective_service_uses_the_canonical_secret_contract_and_default_
             if isinstance(infisical, dict):
                 assert infisical.get("fail_on_empty") is not True, service_name
 
-    for item in catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS):
+    for item in catalog_items(catalog_filters, services, "manager", NATIVE_GROUPS):
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
         infisical = effective.get("infisical", {})
         normalized = common_filters.service_common_infisical_normalize(
@@ -286,7 +295,7 @@ def test_real_docker_swarm_constraints_match_configured_node_label_values():
     }
     observed = set()
 
-    for item in catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS):
+    for item in catalog_items(catalog_filters, services, "manager", NATIVE_GROUPS):
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
         if effective["runtime"] != "docker":
             continue
@@ -299,7 +308,7 @@ def test_real_docker_swarm_constraints_match_configured_node_label_values():
             continue
 
         target = item.get("target", "base")
-        expected = expected_by_host.get(deploy.get("host"))
+        expected = expected_by_host.get(deploy.get("hosts"))
         assert expected is not None, f"{item['name']}/{target} has an unknown constrained deploy host"
         assert host_constraints == [expected], f"{item['name']}/{target} has a mismatched Swarm host constraint"
         observed.add(expected)
@@ -341,7 +350,7 @@ def test_real_traefik_services_do_not_require_cloudflare_zone_infisical_declarat
     services = load_services()
     checked = []
 
-    for item in catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS):
+    for item in catalog_items(catalog_filters, services, "manager", NATIVE_GROUPS):
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
         if (effective.get("traefik") or {}).get("enable") is not True:
             continue
@@ -361,7 +370,7 @@ def test_real_docker_env_file_services_retain_their_effective_declarations():
     services = load_services()
     actual = set()
 
-    for item in catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS):
+    for item in catalog_items(catalog_filters, services, "manager", NATIVE_GROUPS):
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
         if effective.get("env_file"):
             actual.add((item["name"], item.get("target", "<base>")))
@@ -400,7 +409,7 @@ def test_real_common_templates_consume_declared_infisical_values_through_common_
         environment.filters[filter_name] = lambda value, *args, **kwargs: value
     checked = []
 
-    for item in catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS):
+    for item in catalog_items(catalog_filters, services, "manager", NATIVE_GROUPS):
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
         declared = {entry.get("var") for entry in (effective.get("infisical") or {}).get("secrets_map", []) if isinstance(entry, dict)}
         for field in ("templates", "swarm_env_templates"):
@@ -425,16 +434,16 @@ def test_cross_host_standalone_services_retain_global_catalog_order():
     services = {
         "first": {
             "runtime": "docker",
-            "deploy": {"type": "container", "host": "docker-a"},
+            "deploy": {"type": "container", "hosts": "docker-a"},
         },
         "second": {
             "runtime": "docker",
-            "deploy": {"type": "container", "host": "docker-b"},
+            "deploy": {"type": "container", "hosts": "docker-b"},
         },
     }
 
     selected = catalog_filters.service_catalog_select(
-        catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS),
+        catalog_items(catalog_filters, services, "manager", NATIVE_GROUPS),
         run_all=True,
     )["selected"]
 
@@ -450,7 +459,7 @@ def test_service_play_gathers_facts_only_for_selected_operations_and_hosts():
     assert play["any_errors_fatal"] is True
     setups = [task for task in play["tasks"] if "ansible.builtin.setup" in task]
     selected = next(task for task in setups if "service_catalog_selected" in str(task.get("when")))
-    assert "dispatch_hosts" in str(selected["when"])
+    assert "resolved_hosts" in str(selected["when"])
     assert {"deploy", "update", "remove", "recreate"} <= set(selected["tags"])
     assert all(task.get("when") for task in setups)
     # Native applications have one catalogue path, with no standalone includes.
@@ -468,11 +477,11 @@ def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
     assert set(dispatch["tags"]) <= set(dispatch["ansible.builtin.include_tasks"]["apply"]["tags"])
     routes = list(walk_mappings(yaml.safe_load(GLOBAL_DISPATCH_PATH.read_text())))
     materialize = next(task for task in routes if "service_catalog_materialize" in task)
-    assert "dispatch_hosts" in materialize["when"]
+    assert "resolved_hosts" in materialize["when"]
     assert materialize["service_catalog_materialize"]["source_var"] == "svcfiles"
     native = next(task for task in routes if task.get("ansible.builtin.include_role", {}).get("name") == "native_services")
     assert 'service_catalog_dispatch_entry.runtime == "native"' in native["when"]
-    assert "inventory_hostname in service_catalog_dispatch_entry.dispatch_hosts" in native["when"]
+    assert "inventory_hostname in service_catalog_dispatch_entry.resolved_hosts" in native["when"]
     for route in routes:
         include = route.get("ansible.builtin.include_tasks", {})
         if include.get("file") in {"service_catalog_dispatch_docker.yml", "service_catalog_dispatch_podman.yml"}:
@@ -496,7 +505,7 @@ def test_real_vpn_namespace_stack_has_managed_provider_edges_and_safe_recreate_o
         "service_catalog_namespace_lifecycle_repository",
     )
     services = load_services()
-    effective = catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS)
+    effective = catalog_items(catalog_filters, services, "manager", NATIVE_GROUPS)
     selected = catalog_filters.service_catalog_select(effective, ["gluetun_stack"])["selected"]
 
     plan = catalog_filters.service_catalog_podman_lifecycle_plan(effective, selected, "recreate")
@@ -526,16 +535,17 @@ def test_runtime_partition_only_sends_podman_entries_to_strict_podman_normalizat
         "docker-app": {
             "runtime": "docker",
             "image": "example.invalid/docker-app:1.0.0",
+            "deploy": {"hosts": "manager"},
             "command": ["serve"],
         },
         "podman-app": {
             "runtime": "podman",
             "image": "example.invalid/podman-app:1.0.0",
-            "deploy": {"type": "container"},
+            "deploy": {"type": "container", "hosts": "manager"},
         },
     }
     selected = catalog_filters.service_catalog_select(
-        catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS),
+        catalog_items(catalog_filters, services, "manager", NATIVE_GROUPS),
         run_all=True,
     )["selected"]
     docker_entries = catalog_filters.service_catalog_by_runtime(selected, "docker")

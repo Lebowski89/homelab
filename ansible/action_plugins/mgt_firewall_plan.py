@@ -7,7 +7,7 @@ from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
 
-from ansible.errors import AnsibleActionFail
+from ansible.errors import AnsibleActionFail, AnsibleFilterError
 from ansible.plugins.action import ActionBase
 
 ANSIBLE = Path(__file__).resolve().parents[1]
@@ -24,26 +24,28 @@ CATALOG = load(ANSIBLE / "filter_plugins/service_catalog.py", "mgt_firewall_cata
 HELPER = load(ANSIBLE / "roles/service_firewall/files/mgt-firewall.py", "mgt_firewall_validation")
 
 
-def bootstrap_metadata(role, defaults, template):
+def bootstrap_metadata(role, defaults, template, inventory_groups):
     """Project fields before templating; do not evaluate role secret defaults."""
     result = []
     for cfg in defaults[f"{role}_podman_services"]:
-        result.append(
-            template(
-                {
-                    "name": cfg["name"],
-                    "ports": cfg.get("ports", {}),
-                    "account": cfg["deploy"]["execution"]["host_user"],
-                    "host": cfg["deploy"]["host"],
-                    "bootstrap": role,
-                },
-                defaults,
-            )
+        metadata = template(
+            {
+                "name": cfg["name"],
+                "ports": cfg.get("ports", {}),
+                "account": cfg["deploy"]["execution"]["host_user"],
+                "hosts": cfg["deploy"]["hosts"],
+                "bootstrap": role,
+            },
+            defaults,
         )
+        resolved = CATALOG.service_catalog_resolve_placement(
+            {"runtime": "podman", "deploy": {"hosts": metadata.pop("hosts")}}, inventory_groups
+        )
+        result.append({**metadata, "host": resolved["deploy"]["hosts"][0]})
     return result
 
 
-def build_plan(services, controller, template, bootstrap):
+def build_plan(services, controller, template, bootstrap, inventory_groups):
     """Derive all private endpoints/callers independently of selector tags.
 
     Raw application environments and secrets never enter the templar. Named
@@ -74,7 +76,7 @@ def build_plan(services, controller, template, bootstrap):
             metadata = template(
                 {
                     "name": cfg.get("name", key),
-                    "host": cfg.get("deploy", {}).get("host"),
+                    "hosts": cfg.get("deploy", {}).get("hosts"),
                     "account": cfg.get("deploy", {}).get("execution", {}).get("host_user"),
                     "ports": cfg.get("ports", {}),
                     "proxy_port": cfg.get("traefik", {}).get("port"),
@@ -86,6 +88,11 @@ def build_plan(services, controller, template, bootstrap):
                 },
                 {},
             )
+            try:
+                hosts = CATALOG.service_catalog_resolve_hosts(metadata.pop("hosts"), inventory_groups)
+            except AnsibleFilterError as error:
+                raise ValueError(str(error)) from error
+            metadata["host"] = hosts[0] if len(hosts) == 1 else hosts
             name = metadata["name"]
             logical_names[key + (":" + target if target else "")] = name
             principals[name] = {
@@ -296,8 +303,8 @@ class ActionModule(ActionBase):
             bootstrap = []
             for role in ["netbox", "infisical"]:
                 defaults = self._loader.load_from_file(str(ANSIBLE / f"roles/{role}/defaults/main.yml"), trusted_as_template=True)
-                bootstrap.extend(bootstrap_metadata(role, defaults, template))
-            plan = build_plan(task_vars[args["source_var"]], args["controller"], template, bootstrap)
+                bootstrap.extend(bootstrap_metadata(role, defaults, template, task_vars["groups"]))
+            plan = build_plan(task_vars[args["source_var"]], args["controller"], template, bootstrap, task_vars["groups"])
             addresses = {host: values.get("local_ip") for host, values in task_vars["hostvars"].items()}
             policy = select_policy(
                 plan, args["active"], args["callers"], args["verified"], args["inventory_address"], args["controller"], addresses

@@ -75,7 +75,7 @@ technitium:
       no_new_privileges: false
       deploy:
         type: container
-        host: "{{ services_controller_host }}"
+        hosts: "{{ services_controller_host }}"
       systemd:
         restart: always
         restart_sec: 15s
@@ -123,7 +123,7 @@ technitium:
         mode: replicated
         replicas: 1
         profile: careful
-        host: "{{ services_plex_host }}"
+        hosts: "{{ services_plex_host }}"
         constraints:
           - "node.hostname == {{ services_plex_host }}"
     native:
@@ -147,4 +147,4 @@ technitium:
           disable_resolved_stub: true
         update_policy: present
       deploy:
-        group: tags_technitium_native
+        hosts: tags_technitium_native

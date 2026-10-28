@@ -11,7 +11,7 @@
   delegate_facts: true
   vars:
     service_common_runtime_host: >-
-      {{ (service_common_service.deploy.host if service_common_service.deploy.host is string else service_common_service.deploy.host[0]) if service_common_service.runtime | default("docker") == "docker" and (service_common_service.deploy | default({})).type | default("swarm") == "container" else inventory_hostname }}
+      {{ service_common_service.deploy.hosts[0] if service_common_service.runtime | default("docker") == "docker" and (service_common_service.deploy | default({})).type | default("swarm") == "container" else inventory_hostname }}
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Service common | Inspect the managed service before making changes
@@ -26,7 +26,7 @@
       (service_common_service.operational_requirements | default({}) | service_common_requirements_normalize).acl | length > 0
       or (service_common_service.operational_requirements | default({}) | service_common_requirements_normalize).ownership_transition
   delegate_to: >-
-    {{ (service_common_service.deploy.host if service_common_service.deploy.host is string else service_common_service.deploy.host[0]) if service_common_service.runtime | default("docker") == "docker" and (service_common_service.deploy | default({})).type | default("swarm") == "container" else inventory_hostname }}
+    {{ service_common_service.deploy.hosts[0] if service_common_service.runtime | default("docker") == "docker" and (service_common_service.deploy | default({})).type | default("swarm") == "container" else inventory_hostname }}
   service_operational_check:
     phase: runtime
     metadata: "{{ service_common_service | service_common_requirements_metadata(service_common_name) }}"

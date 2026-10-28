@@ -92,7 +92,7 @@ Check mode runs declaration, handler, credential-reference, and bootstrap-contra
 
 ## Canonical portable service and secret schema
 
-The Docker-shaped top-level service fields are the canonical portable schema. The Podman adapter maps them to its internal Quadlet structure. Every base service declares its runtime explicitly: existing Docker services use `runtime: docker`, while Adminer, The Lounge, and Homepage select Podman with `runtime: podman`. A missing or unsupported base runtime fails catalog validation; there is no implicit Docker default. Portable fields include `image`, numeric `user: UID:GID`, `environment`, `deploy.host`, canonical ports and volumes, `paths`, security fields, `healthcheck`, `infisical`, `postgres`, and `traefik`.
+The Docker-shaped top-level service fields are the canonical portable schema. The Podman adapter maps them to its internal Quadlet structure. Every base service declares its runtime explicitly: existing Docker services use `runtime: docker`, while Adminer, The Lounge, and Homepage select Podman with `runtime: podman`. A missing or unsupported base runtime fails catalog validation; there is no implicit Docker default. Portable fields include `image`, numeric `user: UID:GID`, `environment`, `deploy.hosts`, canonical ports and volumes, `paths`, security fields, `healthcheck`, `infisical`, `postgres`, and `traefik`.
 
 Podman additionally owns `deploy.execution`. Omission preserves rootful system
 Quadlets. `mode: rootless` requires a dedicated `host_user` and selects that
@@ -202,7 +202,7 @@ host must already have the selected runtime and supported version installed.
 
 Static tests prove normalized portable-field equivalence and render structure; they do not prove live Docker/Podman behavioral parity. The Adminer proof covers its managed Podman network and controller-host Traefik endpoint; Docker Swarm rejects `host_ip` explicitly. Swarm-only networks, configs, placement, replicas, application-specific preparation, and runtime installation remain adapter or operator concerns.
 
-Inventory topology and host identity remain unchanged. NetBox remains authoritative, services continue to resolve existing `local_ip`, hostnames, `deploy.host`, and Traefik inventory references, and no canonical address is hard-coded.
+Inventory topology and host identity remain unchanged. NetBox remains authoritative, services continue to resolve existing `local_ip`, hostnames, `deploy.hosts`, and Traefik inventory references, and no canonical address is hard-coded.
 
 ## Compatibility closeout audit
 

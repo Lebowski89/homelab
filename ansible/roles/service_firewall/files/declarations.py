@@ -34,7 +34,7 @@ def publication(value):
 
 
 def identity(name, cfg, controller):
-    hosts = cfg.get("deploy", {}).get("host", controller)
+    hosts = cfg.get("deploy", {}).get("hosts", [controller])
     hosts = [hosts] if isinstance(hosts, str) else hosts
     require(isinstance(hosts, list) and hosts and all(isinstance(h, str) for h in hosts), f"{name}: explicit inventory placement required")
     runtime = cfg.get("runtime", "docker")

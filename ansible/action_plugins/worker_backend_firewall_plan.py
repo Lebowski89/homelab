@@ -7,7 +7,7 @@ import ipaddress
 from collections.abc import Mapping
 from pathlib import Path
 
-from ansible.errors import AnsibleActionFail
+from ansible.errors import AnsibleActionFail, AnsibleFilterError
 from ansible.plugins.action import ActionBase
 
 _SPEC = importlib.util.spec_from_file_location(
@@ -27,7 +27,7 @@ def address(value):
     return str(parsed)
 
 
-def build_plan(services, workers, controller_address, template):
+def build_plan(services, workers, controller_address, template, inventory_groups):
     """Resolve only endpoint metadata, without templating secrets or application data.
 
     The temporary policy covers host-mode TCP ``web_backend``, ``probe`` and allocated metrics
@@ -72,12 +72,16 @@ def build_plan(services, workers, controller_address, template):
             # may contain lookups even during a supposedly read-only plan.
             metadata = template(
                 {
-                    "host": cfg.get("deploy", {}).get("host"),
+                    "hosts": cfg.get("deploy", {}).get("hosts"),
                     "backend": cfg.get("traefik", {}).get("backend_host_inventory"),
                     "ports": protected,
                 }
             )
-            host = metadata["host"]
+            try:
+                hosts = _CATALOG.service_catalog_resolve_hosts(metadata["hosts"], inventory_groups)
+            except AnsibleFilterError as error:
+                raise ValueError(str(error)) from error
+            host = hosts[0] if len(hosts) == 1 else hosts
             if isinstance(host, list):
                 if (
                     not host
@@ -127,6 +131,7 @@ class ActionModule(ActionBase):
                 self._task.args["workers"],
                 self._task.args["controller_address"],
                 lambda value: self._templar.template(value, fail_on_undefined=True),
+                task_vars["groups"],
             )
         except (ValueError, KeyError, TypeError) as error:
             raise AnsibleActionFail(str(error)) from error

@@ -24,4 +24,4 @@ node_exporter:
       extra_args: []
     update_policy: pinned
   deploy:
-    group: tags_node_exporter
+    hosts: tags_node_exporter

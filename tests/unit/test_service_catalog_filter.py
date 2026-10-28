@@ -11,19 +11,46 @@ service_catalog = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(service_catalog)
 
 
+INVENTORY = {
+    "all": [
+        "manager",
+        "app",
+        "svc",
+        "podman_app",
+        "off",
+        "podman",
+        "on",
+        "node-a",
+        "node-b",
+        "docker-node",
+        "docker-vm",
+        "podman-vm",
+        "filesystem",
+        "second",
+        "first",
+        "swarm",
+        "standalone",
+    ]
+}
+
+
+def catalog_items(services, manager):
+    return service_catalog.service_catalog_effective(services, manager, INVENTORY)
+
+
 def test_missing_base_runtime_is_rejected():
     with pytest.raises(AnsibleFilterError, match="Service 'app' must explicitly declare runtime"):
-        service_catalog.service_catalog_effective({"app": {"enabled": True}}, "manager")
+        catalog_items({"app": {"enabled": True}}, "manager")
 
 
 @pytest.mark.parametrize("runtime", ["", "   ", None, 1, [], {}])
 def test_empty_null_and_non_string_base_runtimes_are_rejected(runtime):
     with pytest.raises(AnsibleFilterError, match=r"app\.runtime must be a non-empty string"):
-        service_catalog.service_catalog_effective({"app": {"runtime": runtime}}, "manager")
+        catalog_items({"app": {"deploy": {"hosts": "app"}, "runtime": runtime}}, "manager")
 
 
 def test_explicit_podman_runtime():
-    items = service_catalog.service_catalog_effective({"podman_app": {"runtime": "podman", "tags": ["automation"]}}, "manager")
+    items = catalog_items({"podman_app": {"deploy": {"hosts": "podman_app"}, "runtime": "podman", "tags": ["automation"]}}, "manager")
 
     assert items[0]["runtime"] == "podman"
     assert items[0]["dispatch_host"] == "podman_app"
@@ -37,9 +64,10 @@ def test_explicit_podman_runtime():
 
 
 def test_effective_target_entry_contains_only_selection_metadata():
-    items = service_catalog.service_catalog_effective(
+    items = catalog_items(
         {
             "app": {
+                "deploy": {"hosts": "app"},
                 "runtime": "docker",
                 "tags": ["base"],
                 "targets": {
@@ -61,6 +89,7 @@ def test_effective_target_entry_contains_only_selection_metadata():
             "tags": ["app", "base", "primary", "target"],
             "enabled": True,
             "dispatch_host": "app",
+            "resolved_hosts": ["app"],
             "podman_lifecycle": {
                 "container_name": "app-primary",
                 "namespace_provider": None,
@@ -73,12 +102,12 @@ def test_effective_target_entry_contains_only_selection_metadata():
 def test_invalid_runtime_fails():
     for runtime in ("containerd", "Docker", " docker"):
         with pytest.raises(AnsibleFilterError, match="must be one of"):
-            service_catalog.service_catalog_effective({"bad": {"runtime": runtime}}, "manager")
+            catalog_items({"bad": {"deploy": {"hosts": "bad"}, "runtime": runtime}}, "manager")
 
 
 def test_mixed_runtime_selection_splits():
-    items = service_catalog.service_catalog_effective(
-        {"app": {"runtime": "docker"}, "podman_app": {"runtime": "podman"}},
+    items = catalog_items(
+        {"app": {"deploy": {"hosts": "app"}, "runtime": "docker"}, "podman_app": {"deploy": {"hosts": "podman_app"}, "runtime": "podman"}},
         "manager",
     )
     selected = service_catalog.service_catalog_select(items, ["all"], run_all=True)["selected"]
@@ -124,7 +153,7 @@ def test_merge_target_rejects_nested_targets():
         service_catalog.service_catalog_merge_target(service_cfg, "primary")
 
     with pytest.raises(AnsibleFilterError, match="app.targets.primary must not contain nested targets"):
-        service_catalog.service_catalog_effective({"app": service_cfg}, "manager")
+        catalog_items({"app": service_cfg}, "manager")
 
 
 def test_merge_target_enforces_explicit_base_and_target_runtimes():
@@ -142,6 +171,7 @@ def test_merge_target_enforces_explicit_base_and_target_runtimes():
 def test_canonical_target_merge_contract():
     services = {
         "app": {
+            "deploy": {"hosts": "app"},
             "runtime": "docker",
             "enabled": True,
             "description": "base",
@@ -168,7 +198,7 @@ def test_canonical_target_merge_contract():
         }
     }
 
-    item = service_catalog.service_catalog_effective(services, "manager")[0]
+    item = catalog_items(services, "manager")[0]
     config = service_catalog.service_catalog_merge_target(services["app"], item["target"])
 
     assert item["runtime"] == "podman"
@@ -198,12 +228,13 @@ def test_canonical_target_merge_contract():
 def test_base_and_target_enabled_states_are_both_respected(base_enabled, target_enabled, expected):
     services = {
         "app": {
+            "deploy": {"hosts": "app"},
             "runtime": "docker",
             "enabled": base_enabled,
             "targets": {"primary": {"enabled": target_enabled}},
         }
     }
-    item = service_catalog.service_catalog_effective(services, "manager")[0]
+    item = catalog_items(services, "manager")[0]
 
     assert item["enabled"] is expected
     assert service_catalog.service_catalog_select([item], run_all=True)["selected"] == ([item] if expected else [])
@@ -213,6 +244,7 @@ def portable_target_fixture(runtime):
     shared_lookup = {"var": "shared", "path": "/App", "name": "SHARED"}
     return {
         "app": {
+            "deploy": {"hosts": "app"},
             "runtime": runtime,
             "image": "example/app:1.0.0",
             "environment": {"BASE": "base"},
@@ -253,14 +285,14 @@ def test_runtime_choice_does_not_change_portable_target_expansion():
     podman_services = portable_target_fixture("podman")
     docker_item = service_catalog.service_catalog_by_runtime(
         service_catalog.service_catalog_select(
-            service_catalog.service_catalog_effective(docker_services, "manager"),
+            catalog_items(docker_services, "manager"),
             run_all=True,
         )["selected"],
         "docker",
     )[0]
     podman_item = service_catalog.service_catalog_by_runtime(
         service_catalog.service_catalog_select(
-            service_catalog.service_catalog_effective(podman_services, "manager"),
+            catalog_items(podman_services, "manager"),
             run_all=True,
         )["selected"],
         "podman",
@@ -285,7 +317,7 @@ def test_runtime_choice_does_not_change_portable_target_expansion():
 
 
 def test_target_inherits_parent_runtime():
-    items = service_catalog.service_catalog_effective({"svc": {"runtime": "podman", "targets": {"one": {}}}}, "manager")
+    items = catalog_items({"svc": {"deploy": {"hosts": "svc"}, "runtime": "podman", "targets": {"one": {}}}}, "manager")
 
     assert items[0]["runtime"] == "podman"
     assert items[0]["dispatch_host"] == "svc"
@@ -301,22 +333,23 @@ def test_target_inherits_parent_runtime():
 def test_valid_target_runtime_override_is_allowed():
     services = {
         "svc": {
+            "deploy": {"hosts": "svc"},
             "runtime": "docker",
-            "targets": {"portable": {"runtime": "podman"}},
+            "targets": {"portable": {"deploy": {"hosts": "portable"}, "runtime": "podman"}},
         }
     }
 
-    assert service_catalog.service_catalog_effective(services, "manager")[0]["runtime"] == "podman"
+    assert catalog_items(services, "manager")[0]["runtime"] == "podman"
 
 
 def test_top_level_systemd_is_valid_only_for_effective_podman_services():
     podman_cfg = {"runtime": "podman", "systemd": {"restart": "on-failure"}}
     docker_cfg = {"runtime": "docker", "systemd": {"restart": "on-failure"}}
 
-    assert service_catalog.service_catalog_effective({"app": podman_cfg}, "manager")[0]["runtime"] == "podman"
+    assert catalog_items({"app": podman_cfg}, "manager")[0]["runtime"] == "podman"
     assert service_catalog.service_catalog_merge_target(podman_cfg)["systemd"] == {"restart": "on-failure"}
     with pytest.raises(AnsibleFilterError, match=r"Service 'app'.*valid only with runtime: podman.*runtime: docker"):
-        service_catalog.service_catalog_effective({"app": docker_cfg}, "manager")
+        catalog_items({"app": docker_cfg}, "manager")
     with pytest.raises(AnsibleFilterError, match=r"effective service.*valid only with runtime: podman"):
         service_catalog.service_catalog_merge_target(docker_cfg)
 
@@ -353,11 +386,11 @@ def test_target_switching_to_docker_cannot_inherit_podman_systemd_policy():
     service = {
         "runtime": "podman",
         "systemd": {"restart": "on-failure"},
-        "targets": {"docker": {"runtime": "docker"}},
+        "targets": {"docker": {"deploy": {"hosts": "docker"}, "runtime": "docker"}},
     }
 
     with pytest.raises(AnsibleFilterError, match=r"target 'docker'.*runtime: docker"):
-        service_catalog.service_catalog_effective({"app": service}, "manager")
+        catalog_items({"app": service}, "manager")
     with pytest.raises(AnsibleFilterError, match=r"target 'docker'.*runtime: docker"):
         service_catalog.service_catalog_merge_target(service, "docker")
 
@@ -366,27 +399,28 @@ def test_target_switching_to_docker_cannot_inherit_podman_systemd_policy():
 def test_invalid_target_runtime_override_is_rejected(runtime):
     services = {
         "svc": {
+            "deploy": {"hosts": "svc"},
             "runtime": "docker",
-            "targets": {"invalid": {"runtime": runtime}},
+            "targets": {"invalid": {"deploy": {"hosts": "invalid"}, "runtime": runtime}},
         }
     }
 
     with pytest.raises(AnsibleFilterError, match=r"svc\.targets\.invalid\.runtime must"):
-        service_catalog.service_catalog_effective(services, "manager")
+        catalog_items(services, "manager")
 
 
 def test_disabled_podman_and_remove_selection():
-    items = service_catalog.service_catalog_effective({"podman_app": {"runtime": "podman", "enabled": False}}, "manager")
+    items = catalog_items({"podman_app": {"deploy": {"hosts": "podman_app"}, "runtime": "podman", "enabled": False}}, "manager")
 
     assert service_catalog.service_catalog_select(items, ["podman_app"])["disabled_only"] is True
     assert service_catalog.service_catalog_select(items, ["podman_app"], allow_disabled=True)["selected"][0]["name"] == "podman_app"
 
 
 def test_all_selection_selects_enabled_mixed_services():
-    items = service_catalog.service_catalog_effective(
+    items = catalog_items(
         {
-            "app": {"runtime": "docker"},
-            "off": {"runtime": "podman", "enabled": False},
+            "app": {"deploy": {"hosts": "app"}, "runtime": "docker"},
+            "off": {"deploy": {"hosts": "off"}, "runtime": "podman", "enabled": False},
         },
         "manager",
     )
@@ -396,50 +430,30 @@ def test_all_selection_selects_enabled_mixed_services():
 
 
 def test_dispatch_host_selection_uses_runtime_orchestration_host():
-    items = service_catalog.service_catalog_effective(
+    items = catalog_items(
         {
-            "swarm": {"runtime": "docker", "deploy": {"type": "swarm", "host": "filesystem"}},
-            "standalone": {
-                "runtime": "docker",
-                "deploy": {"type": "container", "host": "docker-vm"},
-            },
-            "standalone-empty": {
-                "runtime": "docker",
-                "deploy": {"type": "container", "host": ""},
-            },
-            "podman": {"runtime": "podman", "deploy": {"host": "podman-vm"}},
-            "legacy-podman": {
-                "runtime": "podman",
-                "deploy": {"host": ""},
-                "container": {"host": "legacy-vm"},
-            },
-            "default-podman": {
-                "runtime": "podman",
-                "deploy": {"host": ""},
-                "container": {"host": ""},
-            },
+            "swarm": {"runtime": "docker", "deploy": {"type": "swarm", "hosts": "filesystem"}},
+            "standalone": {"runtime": "docker", "deploy": {"type": "container", "hosts": "docker-vm"}},
+            "podman": {"runtime": "podman", "deploy": {"hosts": "podman-vm"}},
         },
         "manager",
     )
     by_name = {item["name"]: item for item in items}
-
     assert by_name["swarm"]["dispatch_host"] == "manager"
+    assert by_name["swarm"]["resolved_hosts"] == ["filesystem"]
     assert by_name["standalone"]["dispatch_host"] == "docker-vm"
-    assert by_name["standalone-empty"]["dispatch_host"] == "manager"
     assert by_name["podman"]["dispatch_host"] == "podman-vm"
-    assert by_name["legacy-podman"]["dispatch_host"] == "legacy-vm"
-    assert by_name["default-podman"]["dispatch_host"] == "default-podman"
 
 
 def test_target_runtime_and_deploy_override_select_dispatch_host():
-    items = service_catalog.service_catalog_effective(
+    items = catalog_items(
         {
             "app": {
                 "runtime": "docker",
-                "deploy": {"type": "swarm", "host": "filesystem"},
+                "deploy": {"type": "swarm", "hosts": "filesystem"},
                 "targets": {
-                    "podman": {"runtime": "podman", "deploy": {"host": "podman-vm"}},
-                    "standalone": {"deploy": {"type": "container", "host": "docker-vm"}},
+                    "podman": {"runtime": "podman", "deploy": {"hosts": "podman-vm"}},
+                    "standalone": {"deploy": {"type": "container", "hosts": "docker-vm"}},
                 },
             }
         },
@@ -453,52 +467,51 @@ def test_target_runtime_and_deploy_override_select_dispatch_host():
 
 def test_catalog_requires_configured_docker_manager():
     with pytest.raises(AnsibleFilterError, match="docker_manager must be a non-empty string"):
-        service_catalog.service_catalog_effective({"app": {"runtime": "docker"}}, "")
+        catalog_items({"app": {"deploy": {"hosts": "app"}, "runtime": "docker"}}, "")
 
 
 def test_catalog_order_and_source_are_unchanged_by_runtime_validation():
     services = {
-        "first": {"runtime": "docker", "tags": ["one"]},
-        "second": {"runtime": "podman", "tags": ["two"]},
+        "first": {"deploy": {"hosts": "first"}, "runtime": "docker", "tags": ["one"]},
+        "second": {"deploy": {"hosts": "second"}, "runtime": "podman", "tags": ["two"]},
     }
     original = deepcopy(services)
 
-    items = service_catalog.service_catalog_effective(services, "manager")
+    items = catalog_items(services, "manager")
 
     assert [item["name"] for item in items] == ["first", "second"]
     assert services == original
 
 
 def test_missing_and_null_targets_are_base_only_services():
-    missing = {"app": {"runtime": "docker"}}
-    explicit_null = {"app": {"runtime": "docker", "targets": None}}
+    missing = {"app": {"deploy": {"hosts": "app"}, "runtime": "docker"}}
+    explicit_null = {"app": {"deploy": {"hosts": "app"}, "runtime": "docker", "targets": None}}
 
-    assert service_catalog.service_catalog_effective(missing, "manager") == (
-        service_catalog.service_catalog_effective(explicit_null, "manager")
-    )
+    assert catalog_items(missing, "manager") == (catalog_items(explicit_null, "manager"))
 
 
 def test_explicit_empty_targets_are_rejected_clearly():
-    services = {"empty_app": {"runtime": "docker", "targets": {}}}
+    services = {"empty_app": {"deploy": {"hosts": "empty_app"}, "runtime": "docker", "targets": {}}}
 
     with pytest.raises(
         AnsibleFilterError,
         match=r"empty_app\.targets must contain at least one target; omit targets for a base-only service",
     ):
-        service_catalog.service_catalog_effective(services, "manager")
+        catalog_items(services, "manager")
 
 
 def test_empty_targets_cannot_bypass_runtime_or_systemd_validation():
     with pytest.raises(AnsibleFilterError, match=r"invalid\.runtime must be one of"):
-        service_catalog.service_catalog_effective(
-            {"invalid": {"runtime": "containerd", "targets": {}}},
+        catalog_items(
+            {"invalid": {"deploy": {"hosts": "invalid"}, "runtime": "containerd", "targets": {}}},
             "manager",
         )
 
     with pytest.raises(AnsibleFilterError, match=r"systemd.*valid only with runtime: podman"):
-        service_catalog.service_catalog_effective(
+        catalog_items(
             {
                 "invalid_systemd": {
+                    "deploy": {"hosts": "invalid_systemd"},
                     "runtime": "docker",
                     "systemd": {"restart": "on-failure"},
                     "targets": {},
@@ -532,18 +545,18 @@ def test_direct_pasta_has_no_shared_namespace_dependency_and_requires_rootless_e
         "ingress": {
             "runtime": "podman",
             "network_mode": "pasta",
-            "deploy": {"host": "node-a", "execution": {"mode": "rootless", "host_user": "podman-ingress"}},
+            "deploy": {"hosts": "node-a", "execution": {"mode": "rootless", "host_user": "podman-ingress"}},
         },
     }
-    effective = service_catalog.service_catalog_effective(services, "manager")
+    effective = catalog_items(services, "manager")
     assert effective[0]["podman_lifecycle"]["namespace_provider"] is None
     assert effective[0]["podman_lifecycle"]["execution_account"] == "podman-ingress"
     services["ingress"]["deploy"]["execution"]["mode"] = "rootful"
     with pytest.raises(AnsibleFilterError, match="pasta requires rootless"):
-        service_catalog.service_catalog_effective(services, "manager")
+        catalog_items(services, "manager")
     services["ingress"]["network_mode"] = "pasta:--netns,/unowned"
     with pytest.raises(AnsibleFilterError, match="constrained"):
-        service_catalog.service_catalog_effective(services, "manager")
+        catalog_items(services, "manager")
 
 
 def podman_namespace_fixture():
@@ -551,39 +564,39 @@ def podman_namespace_fixture():
         "downloader": {
             "runtime": "podman",
             "network_mode": "container:vpn-runtime",
-            "deploy": {"host": "node-a", "execution": {"mode": "rootful"}},
+            "deploy": {"hosts": "node-a", "execution": {"mode": "rootful"}},
         },
         "docker-app": {
             "runtime": "docker",
             "name": "vpn-runtime",
-            "deploy": {"type": "container", "host": "docker-node"},
+            "deploy": {"type": "container", "hosts": "docker-node"},
         },
         "vpn": {
             "runtime": "podman",
             "name": "vpn-runtime",
-            "deploy": {"host": "node-a", "execution": {"mode": "rootful"}},
+            "deploy": {"hosts": "node-a", "execution": {"mode": "rootful"}},
         },
         "browser": {
             "runtime": "podman",
             "network_mode": "container:vpn-runtime",
-            "deploy": {"host": "node-a", "execution": {"mode": "rootful"}},
+            "deploy": {"hosts": "node-a", "execution": {"mode": "rootful"}},
         },
         "unrelated": {
             "runtime": "podman",
-            "deploy": {"host": "node-b", "execution": {"mode": "rootful"}},
+            "deploy": {"hosts": "node-b", "execution": {"mode": "rootful"}},
         },
     }
 
 
 def lifecycle_plan(services, *, selected_names=None, action="recreate"):
-    items = service_catalog.service_catalog_effective(services, "manager")
+    items = catalog_items(services, "manager")
     selected = items if selected_names is None else [item for item in items if item["name"] in selected_names]
     return service_catalog.service_catalog_podman_lifecycle_plan(items, selected, action)
 
 
 def test_podman_namespace_planner_uses_only_lightweight_catalog_metadata(monkeypatch):
     services = podman_namespace_fixture()
-    items = service_catalog.service_catalog_effective(services, "manager")
+    items = catalog_items(services, "manager")
     selected = service_catalog.service_catalog_select(items, ["vpn"])["selected"]
 
     def reject_materialization(*_args, **_kwargs):
@@ -654,23 +667,23 @@ def test_transitive_namespace_dependencies_use_reverse_stop_and_forward_restore_
         "leaf": {
             "runtime": "podman",
             "network_mode": "container:middle-runtime",
-            "deploy": {"host": "node-a"},
+            "deploy": {"hosts": "node-a"},
         },
         "sibling": {
             "runtime": "podman",
             "network_mode": "container:root-runtime",
-            "deploy": {"host": "node-a"},
+            "deploy": {"hosts": "node-a"},
         },
         "middle": {
             "runtime": "podman",
             "name": "middle-runtime",
             "network_mode": "container:root-runtime",
-            "deploy": {"host": "node-a"},
+            "deploy": {"hosts": "node-a"},
         },
         "root": {
             "runtime": "podman",
             "name": "root-runtime",
-            "deploy": {"host": "node-a"},
+            "deploy": {"hosts": "node-a"},
         },
     }
     plan = lifecycle_plan(services, selected_names={"root"})
@@ -707,7 +720,7 @@ def test_unmanaged_container_namespace_reference_remains_external():
         "consumer": {
             "runtime": "podman",
             "network_mode": "container:external-runtime",
-            "deploy": {"host": "node-a"},
+            "deploy": {"hosts": "node-a"},
         }
     }
 
@@ -722,12 +735,12 @@ def test_docker_service_with_matching_name_is_not_a_podman_namespace_provider():
         "docker-provider": {
             "runtime": "docker",
             "name": "shared-runtime",
-            "deploy": {"type": "container", "host": "docker-node"},
+            "deploy": {"type": "container", "hosts": "docker-node"},
         },
         "consumer": {
             "runtime": "podman",
             "network_mode": "container:shared-runtime",
-            "deploy": {"host": "node-a"},
+            "deploy": {"hosts": "node-a"},
         },
     }
 
@@ -744,7 +757,7 @@ def test_podman_namespace_self_dependency_is_rejected():
             "runtime": "podman",
             "name": "loop-runtime",
             "network_mode": "container:loop-runtime",
-            "deploy": {"host": "node-a"},
+            "deploy": {"hosts": "node-a"},
         }
     }
 
@@ -758,13 +771,13 @@ def test_podman_namespace_dependency_cycle_is_rejected():
             "runtime": "podman",
             "name": "alpha-runtime",
             "network_mode": "container:beta-runtime",
-            "deploy": {"host": "node-a"},
+            "deploy": {"hosts": "node-a"},
         },
         "beta": {
             "runtime": "podman",
             "name": "beta-runtime",
             "network_mode": "container:alpha-runtime",
-            "deploy": {"host": "node-a"},
+            "deploy": {"hosts": "node-a"},
         },
     }
 
@@ -777,12 +790,12 @@ def test_cross_host_managed_namespace_dependency_is_rejected():
         "provider": {
             "runtime": "podman",
             "name": "provider-runtime",
-            "deploy": {"host": "node-a"},
+            "deploy": {"hosts": "node-a"},
         },
         "consumer": {
             "runtime": "podman",
             "network_mode": "container:provider-runtime",
-            "deploy": {"host": "node-b"},
+            "deploy": {"hosts": "node-b"},
         },
     }
 
@@ -795,9 +808,101 @@ def test_rootless_container_namespace_restriction_is_preserved_by_planner():
         "consumer": {
             "runtime": "podman",
             "network_mode": "container:external-runtime",
-            "deploy": {"host": "node-a", "execution": {"mode": "rootless"}},
+            "deploy": {"hosts": "node-a", "execution": {"mode": "rootless"}},
         }
     }
 
     with pytest.raises(AnsibleFilterError, match="requires rootful Podman.*rootless"):
         lifecycle_plan(services)
+
+
+@pytest.mark.integration
+def test_inventory_placement_expands_children_deduplicates_and_survives_limit(tmp_path):
+    from ansible.inventory.manager import InventoryManager
+    from ansible.parsing.dataloader import DataLoader
+
+    inventory = tmp_path / "inventory.yml"
+    inventory.write_text("""all:
+  hosts:
+    manager: {}
+  children:
+    workers:
+      children:
+        storage:
+          hosts:
+            first: {}
+            second: {}
+    empty: {}
+""")
+    inv = InventoryManager(loader=DataLoader(), sources=[str(inventory)])
+    groups = inv.get_groups_dict()
+    selections = ["second", "workers", "first", "manager"]
+    expected = ["second", "first", "manager"]
+    assert service_catalog.service_catalog_resolve_hosts("workers", groups) == ["first", "second"]
+    assert service_catalog.service_catalog_resolve_hosts(selections, groups) == expected
+    inv.subset("manager")
+    assert [host.name for host in inv.get_hosts()] == ["manager"]
+    assert service_catalog.service_catalog_resolve_hosts(selections, inv.get_groups_dict()) == expected
+
+
+def test_selected_invalid_placement_is_distinct_from_disabled_and_unselected():
+    services = {
+        "valid": {"runtime": "docker", "deploy": {"hosts": "manager"}},
+        "optional": {"runtime": "podman", "deploy": {"hosts": "missing"}},
+        "disabled": {"enabled": False, "runtime": "docker", "deploy": {"hosts": "empty"}},
+    }
+    groups = {"all": ["manager"], "empty": []}
+    entries = service_catalog.service_catalog_effective(services, "manager", groups)
+    assert [item["name"] for item in service_catalog.service_catalog_select(entries, ["valid"])["selected"]] == ["valid"]
+    assert service_catalog.service_catalog_select(entries, ["disabled"])["disabled_only"]
+    with pytest.raises(AnsibleFilterError, match="optional.*deploy.hosts.*missing"):
+        service_catalog.service_catalog_select(entries, ["optional"])
+    services["optional"]["deploy"]["hosts"] = "empty"
+    entries = service_catalog.service_catalog_effective(services, "manager", groups)
+    with pytest.raises(AnsibleFilterError, match="optional.*empty.*no hosts"):
+        service_catalog.service_catalog_select(entries, ["optional"])
+
+
+def test_placement_targets_preserve_merge_rules_and_container_cardinality():
+    groups = {"all": ["manager", "first", "second"], "workers": ["first", "second"], "single": ["first"]}
+    source = {
+        "runtime": "podman",
+        "deploy": {"hosts": "manager", "execution": {"mode": "rootless", "host_user": "podman-app"}},
+        "targets": {"storage": {"deploy": {"hosts": ["single", "first"]}}},
+    }
+    merged = service_catalog.service_catalog_merge_target(source, "storage")
+    resolved = service_catalog.service_catalog_resolve_placement(merged, groups)
+    assert resolved["deploy"] == {"hosts": ["first"], "execution": source["deploy"]["execution"]}
+    for runtime in ("docker", "podman"):
+        with pytest.raises(AnsibleFilterError, match="exactly one resolved host"):
+            service_catalog.service_catalog_resolve_placement(
+                {"runtime": runtime, "deploy": {"type": "container", "hosts": "workers"}}, groups
+            )
+    # Ordinary list target merges still use append-rp; scalar target placement replaces.
+    source["runtime"] = "docker"
+    source["deploy"] = {"hosts": ["manager", "first"]}
+    source["targets"]["storage"]["deploy"]["hosts"] = ["first", "second"]
+    assert service_catalog.service_catalog_merge_target(source, "storage")["deploy"]["hosts"] == ["manager", "first", "second"]
+    source["targets"]["storage"]["deploy"]["hosts"] = "workers"
+    assert service_catalog.service_catalog_merge_target(source, "storage")["deploy"]["hosts"] == "workers"
+
+
+def test_swarm_placement_keeps_manager_dispatch_and_explicit_multi_node_constraints():
+    deploy = {
+        "hosts": ["first", "second"],
+        "type": "swarm",
+        "mode": "global",
+        "constraints": ["node.role != manager", "node.platform.arch == x86_64", "node.labels.storage == true"],
+    }
+    cfg = {"runtime": "docker", "deploy": deploy}
+    resolved = service_catalog.service_catalog_resolve_placement(cfg, INVENTORY)
+    item = service_catalog.service_catalog_effective({"app": cfg}, "manager", INVENTORY)[0]
+    assert item["dispatch_host"] == "manager"
+    assert item["resolved_hosts"] == ["first", "second"]
+    assert resolved["deploy"] == deploy  # No mutually exclusive hostname constraints are generated.
+
+
+def test_retired_or_conflicting_placement_fields_fail_before_materialization():
+    for deploy in ({"host": "manager"}, {"group": "workers"}, {"hosts": "manager", "host": "manager"}):
+        with pytest.raises(AnsibleFilterError, match="retired.*deploy.hosts"):
+            service_catalog.service_catalog_merge_target({"runtime": "docker", "deploy": deploy})

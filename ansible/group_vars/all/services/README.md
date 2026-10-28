@@ -29,7 +29,7 @@ node_exporter:
       # ... remaining declared settings
     update_policy: pinned
   deploy:
-    group: tags_node_exporter
+    hosts: tags_node_exporter
 ```
 
 Supported applications are `alloy`, `node_exporter`, `keepalived` and `technitium`.
@@ -39,8 +39,11 @@ All settings are required except Node Exporter's derived download/archive/checks
 fields. Existing prefixed host/extra-var overrides take precedence before default
 templating; defined empty/false/numeric values never trigger fallback. Native
 config target overrides replace each whole setting, including lists/maps.
-`deploy.host` accepts one inventory host or a list, or `deploy.group` selects group
-members. These fields are mutually exclusive. Native-only dispatch does not
+`deploy.hosts` accepts an inventory hostname, group name, or a list mixing both.
+The shared catalogue resolver expands groups and deduplicates concrete hostnames
+in first-seen order. Selected enabled entries require valid non-empty placement;
+unselected optional groups need not exist. Retired `deploy.host` and `deploy.group`
+fields are rejected, including combinations with `deploy.hosts`. Native-only dispatch does not
 require the container host/controller/Infisical contracts.
 
 A native target of a container application inherits selection metadata and
@@ -146,9 +149,9 @@ full catalog on the controller.
 
 | Host role | Derivation | Purpose |
 | --------- | ---------- | ------- |
-| Dispatch host | Docker Swarm: controller/primary manager. Docker standalone: `deploy.host`, else controller. Podman: `deploy.host`, else catalog name. | Owns current-service facts and runs common normalization plus adapter work. |
+| Dispatch host | Docker Swarm: controller/primary manager. Docker standalone/Podman: the single host resolved from `deploy.hosts`. Native: each resolved host. | Owns current-service facts and runs common normalization plus adapter work. |
 | Controller host | Orchestration-provided `service_common_controller_host`. | Runs the narrowly delegated Infisical lookup, PostgreSQL calls, Traefik rendering, and manager work without taking ownership of per-service facts. |
-| Filesystem hosts | Docker: `deploy.host` may be a host/group/list for Swarm; standalone requires one host. Podman: dispatch host. | Receive paths, copies, and templates. Defaults come from canonical `container_host_*` inventory values. |
+| Filesystem hosts | Docker: full resolved `deploy.hosts`; standalone requires one host. Podman: dispatch host. Native: each selected host. | Receive paths, copies, and templates. Defaults come from canonical `container_host_*` inventory values. |
 
 ## Defaults at a glance
 
@@ -510,9 +513,9 @@ plan without lookup or database connection.
 
 | Option | Type | Required | Default | Runtime | Owner | Description |
 | ------ | ---- | -------- | ------- | ------- | ----- | ----------- |
-| `deploy` | Mapping | No | `{}` | Both | `docker_services` / `podman_services` | Placement and lifecycle metadata. |
+| `deploy` | Mapping | Yes | None | All | `docker_services` / `podman_services` | Placement and lifecycle metadata. |
 | `deploy.type` | String enum | No | Docker `swarm`; Podman single instance | Both | `docker_services` / `podman_services` | Docker accepts `swarm`/`container`. When supplied for Podman it must be exactly `container`; `swarm` is rejected. |
-| `deploy.host` | Host/group/list for Docker Swarm; one host for standalone/Podman | No | Docker controller; Podman catalog name | Both | `service_catalog` + `docker_services` / `podman_services` | Dispatch/filesystem placement. Swarm constraints, not this value, determine runtime node placement. |
+| `deploy.hosts` | Inventory hostname/group or list of selections | Yes | None | All | `service_catalog` | Resolved full inventory placement. Docker standalone/Podman require exactly one concrete host; native and Swarm support multiple. Swarm dispatch stays on the manager and existing explicit constraints determine scheduling. |
 | `deploy.execution.mode` | String enum | No | `rootful` | Podman | `podman_services` | Selects `rootful` system Quadlets or `rootless` user Quadlets for container deployments. Docker rejects this Podman-owned declaration. |
 | `deploy.execution.host_user` | Host account name | Conditional | None | Podman | `podman_services` | Required when `mode` is `rootless` and must use the reserved `podman-` prefix. This dedicated locked, non-interactive host account owns Podman storage and its user systemd manager; it is separate from top-level container `user`. Existing accounts are reused only when persisted service ownership and the complete account contract match. |
 | `deploy.execution.userns` | Mapping | Conditional | None | Podman | `podman_services` | Required for rootless bind mounts. Selects the validated `keep-id` mapping that makes the dedicated host account appear as the application UID/GID inside the container. |
@@ -523,6 +526,21 @@ plan without lookup or database connection.
 | `deploy.replicas` | Non-negative integer-like | No | `1` | Both | `docker_services` / `podman_services` | Docker replica count; Podman accepts only `1`. |
 | `deploy.profile` | Non-empty string | No | `none` | Docker | `docker_services` | `none`, `standard`, `careful`, or `stateless_ha`. Non-`none` is invalid for standalone; Podman rejects the field. |
 | `deploy.constraints` | String or list of strings | No | `[]` | Docker | `docker_services` | Literal Swarm constraints. Docker node-label names are not inventory variables; Podman rejects the field. |
+
+Placement resolves against Ansible's full inventory groups, independently of
+`--limit`. Native execution intersects that placement with the active play;
+Swarm eligibility is never reduced by the command's limit. Docker retains its
+existing requirement that all filesystem preparation hosts be in the active
+play, so include those hosts and the manager when limiting a Swarm operation.
+A scalar target placement replaces the base; list-to-list target placement
+retains the ordinary append-rp merge rule. Use a scalar group to replace a base
+list with a different group.
+
+Existing Swarm constraints are retained explicitly: inventory hostnames need not
+match Swarm node hostnames or existing node-label values, and multiple host
+equalities would be combined with AND. No labels or scheduling constraints are
+generated from a multi-host selection. Architecture, hardware and manager
+exclusions remain unchanged.
 
 Rootless pasta addressing is role-level infrastructure, not service schema.
 Every dedicated `podman-*` account receives only the role-owned
@@ -699,7 +717,7 @@ example_podman:
 
   deploy:
     type: container
-    host: example_podman
+    hosts: example_podman
 ```
 
 ### Infisical lookup-only environment
@@ -730,7 +748,7 @@ example_lookup:
 
   deploy:
     type: container
-    host: example_host
+    hosts: example_host
 ```
 
 ### Native secret with default preserve policy
@@ -758,7 +776,7 @@ example_preserve:
 
   deploy:
     type: container
-    host: example_preserve
+    hosts: example_preserve
 ```
 
 ### Native secret with reconcile policy
@@ -845,7 +863,7 @@ example_quadlet:
 
   deploy:
     type: container
-    host: example_quadlet
+    hosts: example_quadlet
   systemd:
     after: [network-online.target]
     restart: on-failure

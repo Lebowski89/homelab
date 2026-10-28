@@ -31,7 +31,9 @@ COMMON = FIXTURE.COMMON
 
 def metadata(name):
     cfg = FIXTURE.resolve(FIXTURE.CATALOG.service_catalog_merge_target(FIXTURE.catalog()[name], None), FIXTURE.context())
-    return COMMON.service_common_requirements_metadata(cfg, name)
+    return COMMON.service_common_requirements_metadata(
+        FIXTURE.CATALOG.service_catalog_resolve_placement(cfg, FIXTURE.context()["groups"]), name
+    )
 
 
 def worker_fixture():
@@ -67,7 +69,9 @@ def worker_fixture():
 def test_real_whisparr_endpoint_and_placement_changes_require_explicit_reconciliation():
     cfg, variables, policy, observed = worker_fixture()
     assert CHECK.docker_contract(cfg, observed)["managed"]
-    plan = CHECK.WORKER.build_plan({"whisparr": cfg}, ["unraid", "plex"], variables["hostvars"]["mgt"]["local_ip"], lambda value: value)
+    plan = CHECK.WORKER.build_plan(
+        {"whisparr": cfg}, ["unraid", "plex"], variables["hostvars"]["mgt"]["local_ip"], lambda value: value, FIXTURE.context()["groups"]
+    )
     CHECK.worker_contract(policy, plan, "unraid", policy["inventory_address"], policy["sources"])
     for field in ["published", "target"]:
         changed = deepcopy(cfg)
@@ -98,7 +102,7 @@ def test_real_rootless_mapping_mounts_and_caller_contract_are_independent_of_ima
     changed = deepcopy(cfg)
     changed["image"] = "registry.example.invalid/nonproduction:2"
     assert CHECK.quadlet_contract(CHECK.PODMAN.podman_service_normalize(changed, "wallos"), body)
-    plan = CHECK.MGT.build_plan({"wallos": cfg}, "mgt", lambda value, defaults: value, [])
+    plan = CHECK.MGT.build_plan({"wallos": cfg}, "mgt", lambda value, defaults: value, [], FIXTURE.context()["groups"])
     policy = {
         "schema": 1,
         "backend": "nf_tables",
@@ -190,7 +194,7 @@ def test_initial_cutover_and_changed_ownership_keep_strict_actual_service_acknow
     assert COMMON.service_common_requirements_validate(
         cfg, "wallos", "recreate", {"services_rootless_data_ready": {"wallos": True}}, proof=bad
     )
-    for change in [{"name": "other"}, {"deploy": {"host": "other"}}]:
+    for change in [{"name": "other"}, {"deploy": {"hosts": "other"}}]:
         with pytest.raises(AnsibleFilterError):
             COMMON.service_common_requirements_validate(cfg | change, "wallos", "deploy", {}, proof=proof)
     for action in ["remove", "drift"]:
@@ -377,10 +381,10 @@ def test_actual_mgt_audit_and_static_bootstrap_need_no_provider_or_replacement(t
                 "bootstrap": "netbox",
             },
         ]
-        plan = CHECK.MGT.build_plan({}, "mgt", lambda value, defaults: value, records)
+        plan = CHECK.MGT.build_plan({}, "mgt", lambda value, defaults: value, records, FIXTURE.context()["groups"])
         plan["endpoints"] = [e for e in plan["endpoints"] if e["service"] == unit]
     else:
-        plan = CHECK.MGT.build_plan({unit: cfg}, "mgt", lambda value, defaults: value, [])
+        plan = CHECK.MGT.build_plan({unit: cfg}, "mgt", lambda value, defaults: value, [], FIXTURE.context()["groups"])
     caller = "netbox" if bootstrap else "traefik"
     policy = {
         "schema": 1,
@@ -551,16 +555,17 @@ def test_installed_metadata_trust_is_scoped_to_the_unraid_flash_mount(case):
             action.owned("/boot/config/unexpected/policy.json" if case == "path" else next(iter(CHECK.UNRAID_FILES)), flash_device=device)
 
 
-@pytest.mark.parametrize("host", [["manager"], ["manager", "other"]])
-def test_compose_maintenance_rejects_host_lists_before_runtime_io(host):
-    cfg = {"name": "utility", "runtime": "docker", "deploy": {"type": "container", "host": host}}
-    with pytest.raises(AnsibleFilterError, match="dispatch host must be a non-empty string"):
-        FIXTURE.CATALOG.service_catalog_effective({"utility": cfg}, "manager")
+def test_compose_maintenance_rejects_multiple_hosts_before_runtime_io():
+    cfg = {"name": "utility", "runtime": "docker", "deploy": {"type": "container", "hosts": ["manager", "other"]}}
+    groups = {"all": ["manager", "other"]}
+    items = FIXTURE.CATALOG.service_catalog_effective({"utility": cfg}, "manager", groups)
+    with pytest.raises(AnsibleFilterError, match="exactly one resolved host"):
+        FIXTURE.CATALOG.service_catalog_select(items, ["utility"])
     action = CHECK.ActionModule.__new__(CHECK.ActionModule)
 
     def forbidden(*args, **kwargs):
         raise AssertionError("invalid Compose placement must not query a runtime")
 
     action.command = forbidden
-    with pytest.raises(ValueError, match="standalone deploy.host must be a non-empty string"):
+    with pytest.raises(ValueError, match="exactly one hostname"):
         action.runtime(cfg)

@@ -39,4 +39,4 @@ keepalived:
           priority_var: keepalived_priority_dns_vip_b
     update_policy: present
   deploy:
-    group: tags_keepalived
+    hosts: tags_keepalived

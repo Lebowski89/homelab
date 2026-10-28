@@ -31,7 +31,7 @@ def repository(tmp_path, monkeypatch):
             "environment": {"PASSWORD": "NONPRODUCTION-MUST-NOT-BE-COPIED"},
             "operational_requirements": {"acl": ["worker_backends"]},
             "targets": {
-                "worker": {"name": "example-worker", "deploy": {"host": "{{ services_storage_host }}"}},
+                "worker": {"name": "example-worker", "deploy": {"hosts": "{{ services_storage_host }}"}},
                 "mgt": {
                     "runtime": "podman",
                     "name": "example-mgt",

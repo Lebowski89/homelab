@@ -21,7 +21,7 @@
 
 - name: Initialize | Load service configuration
   ansible.builtin.set_fact:
-    docker_services_svc: "{{ docker_services_service_cfg }}"
+    docker_services_svc: "{{ docker_services_service_cfg | service_catalog_resolve_placement(groups) }}"
   tags: [remove, drift]
 
 - name: Initialize | Validate shared service context
@@ -119,7 +119,7 @@
       {{ docker_services_svc.name | default(docker_services_role_prefix, true) | string | trim }}
     docker_services_stack_deploy_type: >-
       {{ docker_services_svc.deploy.type | default('swarm', true) | string | trim }}
-    docker_services_deploy_host: "{{ docker_services_svc.deploy.host | default(docker_services_primary_manager, true) }}"
+    docker_services_placement_hosts: "{{ docker_services_svc.deploy.hosts }}"
     docker_services_common_action: >-
       {{
         'remove' if 'remove' in (ansible_run_tags | default([])) else
@@ -171,7 +171,7 @@
       {{
         docker_services_primary_manager
         if (docker_services_stack_deploy_type | string | trim) == 'swarm'
-        else (docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim)
+        else docker_services_placement_hosts[0]
       }}
   tags: [remove, drift]
 
@@ -187,25 +187,7 @@
 
 - name: Initialize | Choose filesystem hosts
   ansible.builtin.set_fact:
-    docker_services_fs_hosts_effective: >-
-      {{
-        docker_services_deploy_host
-        if (docker_services_deploy_host is sequence and docker_services_deploy_host is not string)
-        else [ (docker_services_deploy_host | default(docker_services_primary_manager, true) | string | trim) ]
-      }}
-  tags: [remove, drift]
-
-- name: Initialize | Expand filesystem host group
-  when:
-    - docker_services_fs_hosts_effective | length == 1
-    - docker_services_fs_hosts_effective[0] in groups
-  ansible.builtin.set_fact:
-    docker_services_fs_hosts_effective: "{{ groups[docker_services_fs_hosts_effective[0]] | list }}"
-  tags: [remove, drift]
-
-- name: Initialize | Remove duplicate filesystem hosts
-  ansible.builtin.set_fact:
-    docker_services_fs_hosts_effective: "{{ docker_services_fs_hosts_effective | unique | list }}"
+    docker_services_fs_hosts_effective: "{{ docker_services_placement_hosts }}"
   tags: [remove, drift]
 
 - name: Initialize | Validate filesystem hosts
@@ -242,18 +224,6 @@
   loop: "{{ docker_services_fs_hosts_effective }}"
   loop_control:
     loop_var: docker_services_common_target_host
-  tags: [remove, drift]
-
-- name: Initialize | Require one host for standalone Docker
-  when: (docker_services_stack_deploy_type | string | trim) != 'swarm'
-  ansible.builtin.assert:
-    that:
-      - docker_services_deploy_host is string
-      - (docker_services_deploy_host | string | trim | length) > 0
-      - (docker_services_deploy_host | string | trim) not in groups
-    fail_msg: >-
-      Container deploys require deploy.host to be a single hostname (not a group or list).
-      Got: {{ docker_services_deploy_host }}
   tags: [remove, drift]
 
 - name: Initialize | Check whether this host builds Compose

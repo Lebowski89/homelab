@@ -28,7 +28,7 @@
   delegate_facts: true
   vars:
     service_firewall_runtime_host: >-
-      {{ (service_firewall_lifecycle_plan.metadata.deploy.host if service_firewall_lifecycle_plan.metadata.deploy.host is string else service_firewall_lifecycle_plan.metadata.deploy.host[0]) if service_firewall_lifecycle_plan.metadata.runtime | default("docker") == "docker" and (service_firewall_lifecycle_plan.metadata.deploy | default({})).type | default("swarm") == "container" else inventory_hostname }}
+      {{ service_firewall_lifecycle_plan.metadata.deploy.hosts[0] if service_firewall_lifecycle_plan.metadata.runtime | default("docker") == "docker" and (service_firewall_lifecycle_plan.metadata.deploy | default({})).type | default("swarm") == "container" else inventory_hostname }}
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Service catalog preflight | Inspect publications without an exposure declaration
@@ -38,7 +38,7 @@
     - not (service_catalog_execution_only | default(false))
     - service_catalog_action in ['deploy', 'update', 'recreate', 'bootstrap']
   delegate_to: >-
-    {{ (service_firewall_lifecycle_plan.metadata.deploy.host if service_firewall_lifecycle_plan.metadata.deploy.host is string else service_firewall_lifecycle_plan.metadata.deploy.host[0]) if service_firewall_lifecycle_plan.metadata.runtime | default("docker") == "docker" and (service_firewall_lifecycle_plan.metadata.deploy | default({})).type | default("swarm") == "container" else inventory_hostname }}
+    {{ service_firewall_lifecycle_plan.metadata.deploy.hosts[0] if service_firewall_lifecycle_plan.metadata.runtime | default("docker") == "docker" and (service_firewall_lifecycle_plan.metadata.deploy | default({})).type | default("swarm") == "container" else inventory_hostname }}
   service_operational_check:
     phase: runtime
     metadata: "{{ service_firewall_lifecycle_plan.metadata }}"

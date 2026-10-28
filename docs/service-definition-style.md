@@ -113,7 +113,7 @@ example:
 
   deploy:
     type: swarm
-    host: "{{ services_storage_host }}"
+    hosts: "{{ services_storage_host }}"
 ```
 
 A base-plus-target definition keeps all shared facts before `targets`:
@@ -136,7 +136,7 @@ example:
 
   deploy:
     type: swarm
-    host: "{{ services_storage_host }}"
+    hosts: "{{ services_storage_host }}"
 
   targets:
     primary:
