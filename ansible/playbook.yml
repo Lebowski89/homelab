@@ -368,7 +368,10 @@
     - name: Include Node Exporter role
       when: "'tags_node_exporter' in group_names"
       ansible.builtin.include_role:
-        name: node_exporter
+        name: native_services
+        tasks_from: node_exporter
+        defaults_from: node_exporter
+        handlers_from: node_exporter
         apply:
           tags: [node_exporter]
       tags: [node_exporter]
@@ -385,7 +388,10 @@
     - name: Include Keepalived role
       when: "'tags_keepalived' in group_names"
       ansible.builtin.include_role:
-        name: keepalived
+        name: native_services
+        tasks_from: keepalived
+        defaults_from: keepalived
+        handlers_from: keepalived
         apply:
           tags: [keepalived]
       tags: [keepalived]
@@ -402,7 +408,10 @@
     - name: Include Technitium native role
       when: "'tags_technitium_native' in group_names"
       ansible.builtin.include_role:
-        name: technitium_native
+        name: native_services
+        tasks_from: technitium
+        defaults_from: technitium
+        handlers_from: technitium
         apply:
           tags: [technitium_native]
       tags: [technitium_native]
@@ -688,7 +697,10 @@
     - name: Include native Alloy role
       when: "'tags_podman' in group_names"
       ansible.builtin.include_role:
-        name: alloy_native
+        name: native_services
+        tasks_from: alloy
+        defaults_from: alloy
+        handlers_from: alloy
         apply:
           tags: [alloy_native]
       tags: [alloy_native]

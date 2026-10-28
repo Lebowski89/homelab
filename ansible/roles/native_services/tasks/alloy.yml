@@ -99,7 +99,7 @@
 - name: Alloy native | Render collector configuration
   when: alloy_native_service_account_available
   ansible.builtin.template:
-    src: config.alloy.j2
+    src: alloy/config.alloy.j2
     dest: "{{ alloy_native_config_path }}"
     owner: root
     group: "{{ alloy_native_group }}"

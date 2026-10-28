@@ -302,7 +302,7 @@ def test_loki_private_ingest_route_and_clients_render_end_to_end():
     loki_config = (REPO_ROOT / "ansible/roles/service_common/templates/configs/loki-config.yaml.j2").read_text()
     dns = (REPO_ROOT / "terraform/technitium/internal-dns/main.tf").read_text()
     static_traefik = (REPO_ROOT / "ansible/roles/service_common/templates/configs/proxy/traefik/config.yml.j2").read_text()
-    native_defaults = yaml.safe_load((REPO_ROOT / "ansible/roles/alloy_native/defaults/main.yml").read_text())
+    native_defaults = yaml.safe_load((REPO_ROOT / "ansible/roles/native_services/defaults/alloy.yml").read_text())
     native_url = (
         Environment(undefined=StrictUndefined)
         .from_string(native_defaults["alloy_native_loki_url"])

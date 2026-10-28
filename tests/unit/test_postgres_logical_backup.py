@@ -28,7 +28,7 @@ GROUP_VARS_PATH = REPO_ROOT / "ansible/group_vars/tags_postgres.yml"
 SKYNET_TEMPLATE_PATH = REPO_ROOT / "ansible/roles/workstation/templates/skynet.j2"
 SYSTEMD_SERVICE_TEMPLATE = REPO_ROOT / "ansible/roles/systemd_jobs/templates/systemd-job.service.j2"
 SYSTEMD_TIMER_TEMPLATE = REPO_ROOT / "ansible/roles/systemd_jobs/templates/systemd-job.timer.j2"
-NODE_EXPORTER_SERVICE_TEMPLATE = REPO_ROOT / "ansible/roles/node_exporter/templates/node_exporter.service.j2"
+NODE_EXPORTER_SERVICE_TEMPLATE = REPO_ROOT / "ansible/roles/native_services/templates/node_exporter/node_exporter.service.j2"
 
 
 def task_named(tasks: list[dict], name: str) -> dict:
