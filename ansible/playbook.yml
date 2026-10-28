@@ -145,20 +145,35 @@
         fail_msg: "svcfiles is empty or not a dict. include_vars did not load your service files."
       tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
+    - name: Resolve requested service lifecycle before selection
+      ansible.builtin.set_fact:
+        service_catalog_action: >-
+          {{
+            'remove' if 'remove' in (ansible_run_tags | default([])) else
+            ('recreate' if 'recreate' in (ansible_run_tags | default([])) else
+            ('update' if 'update' in (ansible_run_tags | default([])) else
+            ('drift' if 'drift' in (ansible_run_tags | default([])) else
+            ('bootstrap' if 'bootstrap' in (ansible_run_tags | default([])) else 'deploy'))))
+          }}
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+
     - name: Select catalogue identities before resolving runtime prerequisites
       ansible.builtin.set_fact:
         service_catalog_requested: >-
           {{ svcfiles | service_catalog_effective('', {}, false)
              | service_catalog_select(ansible_run_tags | default([]),
                                       docker_services_run_all | default(false),
-                                      'remove' in (ansible_run_tags | default([]))) }}
+                                      'remove' in (ansible_run_tags | default([])),
+                                      service_catalog_action) }}
       tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Identify a native-only operation without container prerequisites
+      # A genuinely disabled native-only selection still needs no container
+      # controller merely to report its check-mode skip.
       ansible.builtin.set_fact:
         service_catalog_native_only: >-
-          {{ service_catalog_requested.selected | length > 0 and
-             service_catalog_requested.selected | rejectattr('runtime', 'equalto', 'native') | list | length == 0 }}
+          {{ (service_catalog_requested.selected or service_catalog_requested.matched)
+             | map(attribute='runtime') | unique | list == ['native'] }}
       tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Include runtime-neutral service host contract validation
@@ -451,7 +466,8 @@
             | service_catalog_select(
                 ansible_run_tags | default([]),
                 docker_services_run_all | default(false),
-                'remove' in (ansible_run_tags | default([]))
+                'remove' in (ansible_run_tags | default([])),
+                service_catalog_action
               )
           }}
       tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
@@ -462,14 +478,6 @@
         service_catalog_matched: "{{ service_catalog_selection.matched }}"
         service_catalog_selected: "{{ service_catalog_selection.selected }}"
         service_catalog_disabled_only_selection: "{{ service_catalog_selection.disabled_only }}"
-        service_catalog_action: >-
-          {{
-            'remove' if 'remove' in (ansible_run_tags | default([])) else
-            ('recreate' if 'recreate' in (ansible_run_tags | default([])) else
-            ('update' if 'update' in (ansible_run_tags | default([])) else
-            ('drift' if 'drift' in (ansible_run_tags | default([])) else
-            ('bootstrap' if 'bootstrap' in (ansible_run_tags | default([])) else 'deploy'))))
-          }}
       tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Order selected Podman services by shared-network dependencies

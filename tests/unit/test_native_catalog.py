@@ -113,3 +113,41 @@ def test_native_firewall_planning_needs_no_container_context_and_rejects_protect
     }
     with pytest.raises(AnsibleActionFail, match="host-listener/identity"):
         action.run(task_vars={"svcfiles": source})
+
+
+def test_selected_placement_errors_are_distinct_from_disabled_and_unselected_services():
+    source = services()
+    for groups in ({}, {"tags_node_exporter": []}):
+        effective = CATALOG.service_catalog_effective(source, "controller", groups)
+        node = next(item for item in effective if item["name"] == "node_exporter")
+        assert node["enabled"] is True
+        with pytest.raises(AnsibleFilterError, match="node_exporter.*deploy.group 'tags_node_exporter'.*no hosts"):
+            CATALOG.service_catalog_select(effective, ["node_exporter"])
+        # Other optional native inventory groups are also absent. A container
+        # operation must not need them merely because they share a catalogue.
+        selected = CATALOG.service_catalog_select(effective, ["grafana"])["selected"]
+        assert selected and all(item["name"] == "grafana" for item in selected)
+    source["node_exporter"]["enabled"] = False
+    disabled = CATALOG.service_catalog_select(CATALOG.service_catalog_effective(source, "controller"), ["node_exporter"])
+    assert disabled["disabled_only"] is True and disabled["selected"] == []
+    with pytest.raises(AnsibleFilterError, match="node_exporter.*does not support drift"):
+        CATALOG.service_catalog_select(CATALOG.service_catalog_effective(source, "controller"), ["node_exporter"], action="drift")
+    source["node_exporter"]["enabled"] = True
+    source["node_exporter"]["deploy"] = {"host": []}
+    with pytest.raises(AnsibleFilterError, match="node_exporter.*deploy.host.*no hosts"):
+        CATALOG.service_catalog_select(CATALOG.service_catalog_effective(source, "controller"), ["node_exporter"])
+
+
+def test_container_only_actions_preserve_mixed_targets_and_reject_explicit_native_selectors():
+    source = services()
+    # No native groups exist. Action filtering must happen before placement
+    # validation, both on the identity index and on resolved metadata.
+    for effective in (
+        CATALOG.service_catalog_effective(source, "", resolve_hosts=False),
+        CATALOG.service_catalog_effective(source, "controller"),
+    ):
+        for action in ("drift", "bootstrap"):
+            selected = CATALOG.service_catalog_select(effective, [action, "alloy"], action=action)["selected"]
+            assert {(item["target"], item["runtime"]) for item in selected} == {("workers", "docker"), ("mgt", "podman")}
+            with pytest.raises(AnsibleFilterError, match=f"alloy:native.*does not support {action}"):
+                CATALOG.service_catalog_select(effective, [action, "alloy_native", "grafana"], action=action)

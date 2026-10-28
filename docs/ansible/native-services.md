@@ -29,8 +29,12 @@ A native declaration uses `runtime: native`, `native.application`, typed
 `deploy.group` names an inventory group; `deploy.host` names one host or a list.
 Selected hosts must belong to the existing `tags_skynet` play scope; each
 materializes its own configuration. `skynet limit <pattern>` restricts that host
-set without silently accepting hosts outside that play scope. Empty groups disable their entries; explicitly unknown
-hosts fail validation. Native-only selections do not need an application
+set without silently accepting hosts outside that play scope. Configured
+`enabled` state is independent of placement: selecting an enabled native service
+with a missing/empty group or an empty host list fails with the service identity
+and inventory selection. Unselected optional native groups need not exist;
+explicitly disabled services retain the normal disabled-selection behavior.
+Explicitly unknown hosts fail validation. Native-only selections do not need an application
 controller, Infisical or a container runtime. NetBox still owns host identity,
 addresses, group membership and Keepalived per-host VRRP priorities.
 
@@ -72,7 +76,13 @@ opt-in: Alloy updates only its declared package list; Keepalived updates only
 change `version`/`arch` (or its existing download overrides) to update it.
 Technitium uses `present`: the existing installer marker prevents unattended
 upgrades. Updating the installer download does not upgrade an existing server.
-Native `bootstrap` and image `drift` operations are unsupported and fail clearly.
+Native `bootstrap` and image `drift` operations are unsupported. Broad/mixed
+container operations select only their supported Docker/Podman entries before
+materialization, so optional native groups/defaults are not required. A selector
+that explicitly requests a native-only name/tag still fails clearly, including
+when combined with container selectors. Application/category selectors shared
+with container targets (for example `alloy` or `monitoring`) retain their container
+action semantics.
 
 Installation ordering remains application-specific: Alloy uses its package-created
 account and available journal reader groups; Node Exporter verifies its archive
@@ -98,8 +108,10 @@ Keepalived's config and DNS-check script, or Technitium's resolved drop-in.
 Technitium also records the original `/etc/resolv.conf` symlink or regular file
 before first managing it. Removal verifies that the resolver is still role-owned
 (or already restored), removes the drop-in, restores the original link/content
-and restarts resolved. A conflicting resolver change fails before stopping DNS;
-the recovery record is retained. Check mode reports the plan without restoring
+and restarts resolved. A missing resolver path during an interrupted restore
+can be retried from the retained record; there is no existing file/link to
+replace in that case. A conflicting existing resolver change fails before
+stopping DNS; the recovery record is retained. Check mode reports the plan without restoring
 or restarting the resolver.
 
 An installation from before this catalogue phase has no ownership record.

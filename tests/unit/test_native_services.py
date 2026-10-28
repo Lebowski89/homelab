@@ -120,7 +120,21 @@ class ActionModule(ActionBase):
     selected_tasks = [task for task in source_play["tasks"] if set(task.get("tags", [])) & set(ENTRIES.values())]
     record = tmp_path / "operations.jsonl"
 
-    def run(entries, *, check=False, account=True, peer_address=True, overrides=None, action="deploy", multiple_hosts=False):
+    def run(
+        entries,
+        *,
+        check=False,
+        account=True,
+        peer_address=True,
+        overrides=None,
+        action="deploy",
+        multiple_hosts=False,
+        native_hosts=None,
+        enabled=None,
+        limit=None,
+        containers=False,
+        run_all=False,
+    ):
         variables = {
             "fixture_record": str(record),
             "fixture_account": account,
@@ -162,6 +176,12 @@ class ActionModule(ActionBase):
                 technitium_native_web_port=15380, technitium_native_dns_port=15353, technitium_native_resolved_dns_servers=["192.0.2.53"]
             )
         variables.update(overrides or {})
+        if enabled is not None:
+            for entry in entries:
+                path = tmp_path / f"group_vars/all/services/{entry}.yml"
+                declaration = yaml.safe_load(path.read_text())
+                declaration[entry]["enabled"] = enabled
+                path.write_text(yaml.safe_dump(declaration))
         inventory = {
             "all": {
                 "children": {
@@ -179,13 +199,81 @@ class ActionModule(ActionBase):
                     "fixture_dns_peers": {"hosts": {"selected": {}, "other": {}}},
                     **{
                         ("tags_podman" if entry == "alloy" else "tags_" + ENTRIES[entry]): {
-                            "hosts": {"selected": {}, **({"other": {}} if multiple_hosts else {})}
+                            "hosts": dict.fromkeys(
+                                native_hosts if native_hosts is not None else ["selected", "other"] if multiple_hosts else ["selected"], {}
+                            )
                         }
                         for entry in entries
                     },
                 }
             }
         }
+        if containers:
+            # Exercise real catalogue selection, materialization and dispatch
+            # for Alloy's Docker/Podman/native targets. Replace the container
+            # preflight and adapters at their I/O boundary; never inspect a
+            # runtime, resolve secrets, pull images or start containers.
+            for path in (tmp_path / "group_vars/all/services").glob("*.yml"):
+                if path.stem not in {"alloy", "node_exporter"}:
+                    path.unlink()
+            inventory["all"]["vars"] = {
+                **variables,
+                "services_controller_inventory_group": "fixture_controller",
+                "services_storage_inventory_group": "fixture_storage",
+                "services_plex_host": "other",
+                "services_log_root": "/fixture/logs",
+                "services_public_zone": "public.example.test",
+                "services_internal_zone": "private.example.test",
+                "services_lan_cidr": "192.0.2.0/24",
+                "services_private_https_port": 9443,
+                "local_ip": "192.0.2.10",
+                "container_host_puid": 1000,
+                "container_host_pgid": 1000,
+                "container_host_appdata_root": "/fixture/apps",
+                "container_host_data_root": "/fixture/data",
+                "podman_shared_network_name": "fixture-shared",
+            }
+            inventory["all"]["children"].update(
+                {
+                    "fixture_controller": {"hosts": {"selected": {}}},
+                    "fixture_storage": {"hosts": {"other": {}}},
+                }
+            )
+            (tmp_path / "tasks/service_catalog_common_preflight.yml").write_text(
+                yaml.safe_dump(
+                    [
+                        {
+                            "fixture_operation": {
+                                "module": "container_preflight",
+                                "options": {
+                                    "name": "{{ service_catalog_materialized_service.name }}",
+                                    "action": "{{ service_catalog_action }}",
+                                },
+                            }
+                        },
+                        {"ansible.builtin.set_fact": {"service_catalog_common_context": {}}},
+                    ]
+                )
+            )
+            for runtime in ("docker", "podman"):
+                tasks = tmp_path / f"roles/{runtime}_services/tasks"
+                tasks.mkdir(parents=True, exist_ok=True)
+                (tasks / "main.yml").write_text(
+                    yaml.safe_dump(
+                        [
+                            {
+                                "fixture_operation": {
+                                    "module": "container_adapter",
+                                    "options": {
+                                        "runtime": runtime,
+                                        "action": "{{ service_catalog_action }}",
+                                        "name": f"{{{{ {runtime}_services_service_cfg.name }}}}",
+                                    },
+                                },
+                            }
+                        ]
+                    )
+                )
         inv = tmp_path / "inventory.yml"
         inv.write_text(yaml.safe_dump(inventory))
         play = {**deepcopy(source_play), "tasks": deepcopy(selected_tasks)}
@@ -206,6 +294,10 @@ class ActionModule(ActionBase):
         ]
         if check:
             args.append("--check")
+        if limit:
+            args.extend(["--limit", limit])
+        if run_all:
+            args.extend(["-e", "docker_services_run_all=true"])
         result = subprocess.run(
             args,
             cwd=tmp_path,
@@ -288,10 +380,21 @@ def test_selected_service_preserves_target_overrides_and_handler_isolation(nativ
 
 
 def test_multiple_services_keep_their_defaults_and_handlers(native_run):
-    result, calls = native_run(list(ENTRIES))
+    result, calls = native_run(
+        list(ENTRIES),
+        overrides={
+            "alloy_native_loki_url": "https://logs.example.test/push",
+            "services_internal_zone": "{{ unused_native_zone }}",
+            "services_private_https_port": "{{ unused_native_port }}",
+        },
+    )
     assert result.returncode == 0, result.stdout + result.stderr
     restarted = [call["options"]["name"] for call in calls if call["handler"] and call["options"].get("state") == "restarted"]
     assert sorted(restarted) == ["fixture-alloyd", "keepalived", "node_exporter", "systemd-resolved"]
+    alloy_config = next(
+        call["content"] for call in calls if call["module"] == "template" and call["options"]["dest"] == "/fixture/alloy/config"
+    )
+    assert "https://logs.example.test/push" in alloy_config
 
 
 def test_fresh_alloy_check_mode_defers_package_account_work(native_run):
@@ -418,3 +521,71 @@ def test_failed_download_does_not_claim_preexisting_configuration(native_run):
     ]
     assert len(ownership) == 1 and ownership[0]["files"] == []
     assert not any(call["module"] == "template" for call in calls)
+
+
+def test_selected_native_empty_group_fails_check_before_host_work(native_run):
+    result, calls = native_run(["node_exporter"], check=True, native_hosts=[])
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "node_exporter" in result.stdout and "tags_node_exporter" in result.stdout
+    assert not calls
+
+
+def test_configured_disabled_native_check_needs_no_container_inventory(native_run):
+    result, calls = native_run(["node_exporter"], check=True, native_hosts=[], enabled=False)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not calls
+
+
+@pytest.mark.parametrize("action", ["drift", "bootstrap"])
+def test_broad_container_actions_do_not_dispatch_native_installations(native_run, action):
+    result, calls = native_run(
+        ["alloy"], action=action, containers=True, run_all=True, overrides={"alloy_native_loki_url": "{{ must_not_materialize_native }}"}
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    adapters = [call["options"] for call in calls if call["module"] == "container_adapter"]
+    assert {call["runtime"] for call in adapters} == {"docker", "podman"}
+    assert len(adapters) == 2 and all(call["action"] == action for call in adapters)
+    assert {call["module"] for call in calls} == {"setup", "container_preflight", "container_adapter"}
+
+
+def test_explicit_native_drift_fails_before_materialization_and_host_work(native_run):
+    result, calls = native_run(["alloy"], action="drift")
+    assert result.returncode != 0
+    assert "alloy:native" in result.stdout and "does not support drift" in result.stdout
+    assert not calls
+
+
+def test_native_host_limit_keeps_declared_group_placement(native_run):
+    result, calls = native_run(["node_exporter"], check=True, multiple_hosts=True, limit="selected")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert {call["host"] for call in calls} == {"selected"}
+    assert any(call["module"] == "template" for call in calls)
+
+
+def test_technitium_remove_retries_an_interrupted_regular_resolver_restore(native_run):
+    import base64
+
+    content = "nameserver 192.0.2.53\n"
+    record = {
+        "identity": "technitium:native",
+        "unit": "dns",
+        "files": ["/etc/systemd/resolved.conf.d/technitium.conf"],
+        "resolver": {
+            "managed": True,
+            "stat": {"exists": True, "islnk": False, "uid": 0, "gid": 0, "mode": "0644"},
+            "content": base64.b64encode(content.encode()).decode(),
+        },
+    }
+    # The previous attempt removed the owned link, then failed before copying
+    # the saved regular file. Its private recovery record is still present.
+    result, calls = native_run(
+        ["technitium"],
+        action="remove",
+        overrides={
+            "fixture_state": {"technitium": record},
+            "fixture_resolver": {"exists": False},
+        },
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    restored = [call["options"] for call in calls if call["module"] == "copy" and call["options"].get("dest") == "/etc/resolv.conf"]
+    assert restored == [{"dest": "/etc/resolv.conf", "content": content, "owner": 0, "group": 0, "mode": "0644"}]

@@ -901,7 +901,9 @@ def test_planning_removal_drift_and_account_only_preparation_need_no_deployment_
 
 def test_real_service_and_batch_selection_keep_requirements_after_all_configuration_tags_are_removed():
     services = catalog()
-    effective = CATALOG.service_catalog_effective(services, "mgt")
+    # This migration exercises container protection, independently of optional
+    # native inventory groups (which no longer implicitly disable entries).
+    effective = CATALOG.service_catalog_effective(services, "mgt", runtimes=["docker", "podman"])
     for selector in ["monitoring", "arrs", "alloy-workers", "mgt-collector"]:
         selected = CATALOG.service_catalog_select(effective, ["deploy", selector])["selected"]
         assert selected

@@ -379,8 +379,9 @@ def service_catalog_effective(
         Ordered metadata records containing ``name``, ``tags``, ``enabled``,
         ``runtime``, and ``dispatch_host``, plus ``target`` where applicable.
         Podman records also contain compact ``podman_lifecycle`` identity and
-        namespace-reference metadata; complete configurations are never
-        embedded.
+        namespace-reference metadata; unresolved native placement carries a
+        deferred ``placement_error`` without changing configured ``enabled``.
+        Complete configurations are never embedded.
 
     Raises:
         AnsibleFilterError: If the catalog or one of its service/target sections
@@ -416,15 +417,19 @@ def service_catalog_effective(
                 if not isinstance(group, str) or not group.strip():
                     raise AnsibleFilterError("native deploy.group must be a non-empty inventory group")
                 hosts = inventory_groups.get(group, [])
+                selection = f"deploy.group {group!r}"
             else:
                 hosts = _as_list(deploy["host"], name="native deploy.host")
-                if not hosts:
-                    raise AnsibleFilterError("native deploy.host must not be empty")
+                selection = f"deploy.host {deploy['host']!r}"
             if not isinstance(hosts, list) or any(not isinstance(host, str) or not host.strip() for host in hosts):
                 raise AnsibleFilterError("native deployment hosts must be non-empty inventory names")
             item["dispatch_hosts"] = _unique(hosts)
             item["dispatch_host"] = hosts[0] if hosts else ""
-            item["enabled"] = item["enabled"] and bool(hosts)
+            if not hosts:
+                identity = item["name"] + (":" + item["target"] if item.get("target") else "")
+                # Optional native groups need not exist for another service's
+                # operation. Raise only if selection actually requires this entry.
+                item["placement_error"] = f"Native service {identity!r} selects {selection}, which has no hosts in this inventory"
         else:
             item["dispatch_host"] = _dispatch_host(
                 item["name"], item["runtime"], service_cfg, target_cfg, normalized_docker_manager, name=item["name"]
@@ -501,7 +506,11 @@ def service_catalog_effective(
 
 
 def service_catalog_select(
-    items: list[Mapping[str, Any]], run_tags: list[str] | None = None, run_all: bool = False, allow_disabled: bool = False
+    items: list[Mapping[str, Any]],
+    run_tags: list[str] | None = None,
+    run_all: bool = False,
+    allow_disabled: bool = False,
+    action: str | None = None,
 ) -> dict[str, Any]:
     """Select catalog metadata by service name, tag, and enabled state.
 
@@ -514,6 +523,9 @@ def service_catalog_select(
         run_tags: Optional service names or tags to match.
         run_all: Boolean-like value that bypasses name and tag matching.
         allow_disabled: Boolean-like value that includes disabled matches.
+        action: Optional lifecycle action. Drift/bootstrap select container
+            entries only; a selector referring exclusively to native entries
+            fails instead of silently ignoring an explicit native request.
 
     Returns:
         ``matched`` and ``selected`` lists plus ``disabled_only``, which is true
@@ -522,7 +534,8 @@ def service_catalog_select(
 
     Raises:
         AnsibleFilterError: If an item is not a mapping or a runtime, tag value,
-            or boolean-like input is invalid.
+            or boolean-like input is invalid; a selected native placement is empty;
+            or a native-only selector requests an unsupported lifecycle action.
 
     Note:
         The input sequence and its records are not mutated.
@@ -544,6 +557,25 @@ def service_catalog_select(
         item_enabled = _as_bool(item.get("enabled", True), name=f"{item_name}.enabled", default=True)
         if item_enabled or allow_disabled_bool:
             selected.append(item)
+    if action in {"drift", "bootstrap"}:
+        native = [item for item in selected if item["runtime"] == "native"]
+        supported = [item for item in selected if item["runtime"] != "native"]
+        supported_tags = {tag for item in matched if item["runtime"] != "native" for tag in [item["name"], *item.get("tags", [])]}
+        explicit_native = [
+            item
+            for item in matched
+            if item["runtime"] == "native" and not run_all_bool and (run_tags_set - supported_tags) & {item["name"], *item.get("tags", [])}
+        ]
+        if explicit_native or (native and not supported):
+            identities = [item["name"] + (":" + item["target"] if item.get("target") else "") for item in explicit_native or native]
+            raise AnsibleFilterError(
+                f"Native service selection {', '.join(identities)} does not support {action}; "
+                "use deploy, update, recreate or remove (check previews deploy)"
+            )
+        selected = supported
+    for item in selected:
+        if item.get("placement_error"):
+            raise AnsibleFilterError(item["placement_error"])
     return {"matched": matched, "selected": selected, "disabled_only": len(matched) > 0 and len(selected) == 0}
 
 

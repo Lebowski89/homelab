@@ -6,17 +6,21 @@
     follow: false
   register: native_services_resolver_current
 
+# The caller requires a retained ownership/recovery record. An interrupted
+# unlink-then-copy restore can leave the path absent; no other content is
+# overwritten when resuming that state. Existing conflicting paths still fail.
 - name: Native services | Require the resolver link still owned by this installation
   ansible.builtin.assert:
     that:
       - >-
+        not native_services_resolver_current.stat.exists
+        or
         (native_services_resolver_current.stat.islnk | default(false) and
          native_services_resolver_current.stat.lnk_source in
            ['/run/systemd/resolve/resolv.conf', native_services_previous.resolver.stat.lnk_source | default('')])
         or
         (not (native_services_previous.resolver.stat.islnk | default(false)) and
          not (native_services_resolver_current.stat.islnk | default(false)) and
-         ((not native_services_resolver_current.stat.exists and not native_services_previous.resolver.stat.exists)
-          or (native_services_resolver_current.stat.checksum | default('') ==
-              (native_services_previous.resolver.content | b64decode | hash('sha1')))))
+         native_services_resolver_current.stat.checksum | default('') ==
+           (native_services_previous.resolver.content | b64decode | hash('sha1')))
     fail_msg: Resolver ownership changed after installation; refusing to replace it or remove the recovery record.
