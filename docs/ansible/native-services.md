@@ -1,76 +1,144 @@
-# Native service configuration
+# Native services in the catalogue
 
-`ansible/roles/native_services` owns Alloy, Node Exporter, Keepalived and native
-Technitium. Each has matching files in `tasks/`, `defaults/` and `handlers/`:
+`native_services` manages Alloy, Node Exporter, Keepalived and Technitium through
+`ansible/group_vars/all/services/`. It retains explicit installation procedures
+in `tasks/alloy.yml`, `tasks/node_exporter.yml`, `tasks/keepalived.yml` and
+`tasks/technitium.yml`, with application-specific defaults, handlers and templates.
+`tasks/main.yml` owns validation and lifecycle dispatch; it does not install all
+four applications. Infisical remains Podman bootstrap/recovery orchestration;
+PostgreSQL and the other native roles are unchanged.
 
-| Entry point | Existing variable prefix | Existing tag | Inventory selection |
+## Declarations and selection
+
+| Application | Canonical declaration | Native selector / Skynet name | Default inventory group |
 | --- | --- | --- | --- |
-| `alloy` | `alloy_native_` | `alloy_native` | `tags_podman` |
-| `node_exporter` | `node_exporter_` | `node_exporter` | `tags_node_exporter` |
-| `keepalived` | `keepalived_` | `keepalived` | `tags_keepalived` |
-| `technitium` | `technitium_native_` | `technitium_native` | `tags_technitium_native` |
+| Alloy | `alloy.yml`, target `native` | `alloy_native` / `alloy-native` | `tags_podman` |
+| Node Exporter | `node_exporter.yml` | `node_exporter` / `node-exporter` | `tags_node_exporter` |
+| Keepalived | `keepalived.yml` | `keepalived` | `tags_keepalived` |
+| Technitium | `technitium.yml`, target `native` | `technitium_native` / `technitium-native` | `tags_technitium_native` |
 
-The playbook selects the three files together using standard Ansible role entry
-points. For example:
+Alloy and Technitium keep their existing Docker/Podman targets in the same
+application definition. Use their explicit native selectors to select only the
+host installation; a bare application name selects its matching catalogue targets.
+The old standalone playbook includes are removed, so there is one execution path.
+Existing underscore tags and `deploy`, `install`, `run` and check-mode commands
+remain deliberate aliases. No old role-directory shims are needed.
 
-```yaml
-ansible.builtin.include_role:
-  name: native_services
-  tasks_from: alloy
-  defaults_from: alloy
-  handlers_from: alloy
-  apply:
-    tags: [alloy_native]
-```
+A native declaration uses `runtime: native`, `native.application`, typed
+`native.config`, `native.update_policy`, and exactly one placement field:
+`deploy.group` names an inventory group; `deploy.host` names one host or a list.
+Selected hosts must belong to the existing `tags_skynet` play scope; each
+materializes its own configuration. `skynet limit <pattern>` restricts that host
+set without silently accepting hosts outside that play scope. Empty groups disable their entries; explicitly unknown
+hosts fail validation. Native-only selections do not need an application
+controller, Infisical or a container runtime. NetBox still owns host identity,
+addresses, group membership and Keepalived per-host VRRP priorities.
 
-Keep the outer task's existing tag and host condition too. There is no default
-entry point that installs every service. Separate defaults preserve normal role
-default precedence and prevent selecting Node Exporter, for example, from
-requiring Alloy's Loki endpoint variables. The scoped entries in
-`.ansible-lint-ignore` preserve the existing public prefixes; other naming rules
-remain enabled.
+Crossing from a container base to a native target inherits selection tags,
+enabled state, description and operational requirements, but discards container
+images, commands, ports, environment, credentials, storage and placement. Explicit
+container fields on a native declaration are errors. For native-to-native target
+merges, individual `native.config` settings replace base values, including whole
+lists/maps and empty values. Container target merge behavior is unchanged.
 
-Templates are grouped under `templates/alloy/`, `templates/node_exporter/` and
-`templates/keepalived/`. Technitium's resolver drop-in remains inline. Handlers
-retain their notification names, conditions and service arguments. Installation
-procedures stay explicit: package-created Alloy accounts and journal access,
-verified Node Exporter archives, Keepalived VRRP/DNS validation, and Technitium's
-download-before-resolver-change sequence have different ownership and ordering
-requirements, so a shared provisioning abstraction would obscure them.
+Operator defaults live in the service declarations. Existing machine-specific
+`alloy_native_*`, `node_exporter_*`, `keepalived_*` and `technitium_native_*`
+variables remain supported in `host_vars` and extra vars. Ansible resolves those
+variables using its usual precedence; each defined value then overrides its
+corresponding catalogue setting **before** templating defaults. False, empty and
+numeric values are retained without truthy fallback or string conversion, and
+invalid values fail validation. Role defaults only alias the selected normalized
+configuration. Unselected service inputs are not required. Node Exporter's
+release URLs, archive paths and checksum URL derive from its selected version and
+architecture unless explicitly overridden. Prometheus reads the canonical
+Keepalived VIP declarations, retaining its existing explicit instances override.
 
-## Existing operator commands
+## Lifecycle
 
-Skynet command mappings and check-mode dispatch are unchanged:
+Use `skynet <action> alloy-native`, `node-exporter`, `keepalived` or
+`technitium-native`. `skynet run <name> <action>` reaches the same path.
 
-- `skynet deploy <target>`, `skynet install <target>`, `skynet run <target>` and
-  `skynet check <target>` work for `alloy-native`, `node-exporter`,
-  `technitium-native` and `keepalived`.
-- `skynet run <target> run` retains the existing explicit `run` action.
-- `skynet run <target> install` remains available for Alloy, Node Exporter and
-  Technitium. Keepalived's explicit actions remain `deploy` and `run`.
-- The existing `skynet limit <hostpattern> ...` prefix still limits these commands.
+| Action | Native behavior |
+| --- | --- |
+| `deploy` | Ensure declared installation/configuration and enable/start the service. |
+| `update` | Reconcile configuration and apply the declared update policy only to this application. |
+| `recreate` | Enable/restart the selected installed service; no reinstall or data deletion. Keepalived peer/VRRP validation and Technitium readiness checks still run. |
+| `check` | Check-mode deploy with diff. Download/extraction, installer execution, restarts and listener/DNS verification have explicit limitations; it is not a runtime health check. |
+| `remove` | Stop/disable the selected installed unit, retire recorded configuration and restore owned resolver integration. Retain persistent data and installation artifacts. |
 
-All calls remain at their existing positions in `ansible/playbook.yml`, with the
-same fact gathering, host conditions and tag propagation. No supported external
-caller of the old role names was found, so the four superseded role directories
-were removed without compatibility shims. Their generated READMEs were removed
-with those directories; the documentation workflow generates the new role README.
+Alloy and Keepalived default to `update_policy: present`. `latest` is an explicit
+opt-in: Alloy updates only its declared package list; Keepalived updates only
+`keepalived`, not `dnsutils` or other packages. Node Exporter uses `pinned`:
+change `version`/`arch` (or its existing download overrides) to update it.
+Technitium uses `present`: the existing installer marker prevents unattended
+upgrades. Updating the installer download does not upgrade an existing server.
+Native `bootstrap` and image `drift` operations are unsupported and fail clearly.
 
-## Phase boundary and deferred observations
+Installation ordering remains application-specific: Alloy uses its package-created
+account and available journal reader groups; Node Exporter verifies its archive
+and installs the declared binary/collectors; Keepalived validates inventory peers
+and VRRP priorities before mutation; Technitium downloads its installer before
+changing the resolver, flushes resolver handlers before installation, and checks
+DNS/listeners afterwards. Notifications are flushed before the next native entry
+can replace their configuration context.
 
-This is a structural consolidation. Variables, defaults, rendered contents,
-paths, ownership, service names, restart notifications and check-mode conditions
-are retained. Alloy, Keepalived and Technitium retain their Debian-family gates;
-Node Exporter's existing Linux archive installation has no new OS gate.
+## Removal ownership and recovery
 
-Alloy still uses the deprecated `ansible.builtin.apt_repository`. Its deb822
-migration is separate work because it requires source cleanup and cache behavior
-validation. Existing Technitium check-mode limitations also remain: the role's
-resolver/service/installer/readiness steps were not redesigned in this pass.
+A private `/var/lib/native_services/<application>.json` record identifies the
+catalogue owner, unit and exact managed configuration files. Deploy/update records
+resolver recovery state before installation and claims each managed file only
+after its successful copy/template task. A failed package/download operation
+cannot claim an unrelated pre-existing file; partially adopted files remain
+removable. Competing identities or changed unit names fail before mutation;
+remove the previous declaration before moving ownership. Managed file paths
+cannot be directories. Removal never recursively removes application directories.
 
-The next catalogue phase must explicitly define native declarations, selection
-and lifecycle semantics before introducing `runtime: native`. These services are
-not fed into the container-only loader. OS portability is separate work requiring
-package/repository, account, resolver and systemd validation on each intended OS;
-Rocky/Fedora support has not been added. Infisical remains Podman bootstrap and
-recovery orchestration. PostgreSQL and the other roles are unchanged.
+Owned configuration is Alloy's config file, Node Exporter's custom systemd unit,
+Keepalived's config and DNS-check script, or Technitium's resolved drop-in.
+Technitium also records the original `/etc/resolv.conf` symlink or regular file
+before first managing it. Removal verifies that the resolver is still role-owned
+(or already restored), removes the drop-in, restores the original link/content
+and restarts resolved. A conflicting resolver change fails before stopping DNS;
+the recovery record is retained. Check mode reports the plan without restoring
+or restarting the resolver.
+
+An installation from before this catalogue phase has no ownership record.
+Removal can stop/disable its explicitly selected service, but leaves unclaimed
+files/resolver state intact. Deploy once to adopt configuration before removing
+it. On an already-native Technitium host, its original pre-native resolver state
+cannot be reconstructed: deployment records the current link as its starting
+state, and removal preserves that link while retiring the managed drop-in.
+
+Packages, package sources/signing keys, downloaded installers/archives, binaries,
+accounts and Alloy journal group memberships are intentionally retained: they may
+pre-exist or be shared. `/etc/dns`, `/opt/technitium`, Alloy data and Node Exporter
+textfile data are retained. No uninstall or purge action is implied.
+
+## Protection and platform limits
+
+These native services have no existing catalogue endpoint ACL declarations;
+this phase preserves DNS, monitoring and VRRP reachability. Native dispatch reuses
+common requirement validation and firewall classification without invoking
+container preparation. Container protection plans exclude native identities.
+
+**Protected native endpoints/callers are blocked before mutation.** The current
+firewall lifecycle verifies Docker/Podman container identities/publications; it
+cannot verify a native host listener and its exclusive caller identity. Native
+`ports`, non-empty ACL/ownership-transition requirements and native references in
+protected provider caller lists therefore fail clearly. Do not substitute a
+container identity, silently skip a protection requirement, or mark a host listener
+protected without a verified host-listener/identity adapter. Such an adapter is
+required before adding protected native declarations; no firewall entries are
+created or retired for these currently unprotected native services.
+
+Alloy, Keepalived and Technitium retain Debian-family systemd gates. Node Exporter
+retains its Linux archive installation without a new OS gate. Rocky/Fedora
+support remains deferred: package/repository, account, resolver and systemd
+behavior need platform-specific implementation and runtime validation. Alloy's
+remaining deprecated `apt_repository` use is separate migration work.
+
+Offline tests verify selection, target isolation, host overrides, rendered
+configuration and lifecycle ordering with remote operations replaced by recorders.
+They cannot prove package/installer idempotence, DNS recovery, listener readiness,
+VRRP failover or systemd behavior on real hosts. Review a check-mode plan and use
+an explicitly authorized disposable host before production rollout.

@@ -47,6 +47,8 @@ class ActionModule(ActionBase):
                 for port in (values.values() if isinstance(values, dict) else values)
                 if isinstance(port, dict) and isinstance(port.get("callers", []), list)
             )
+            if entry["runtime"] == "native" and (ports or declared_caller):
+                raise ValueError("Protected native endpoints and callers require a verified host-listener/identity firewall adapter")
             if self._task.args["action"] == "drift" or (
                 legacy
                 and not ports
@@ -76,6 +78,10 @@ class ActionModule(ActionBase):
                 for target in base.get("targets", {None: {}}):
                     key = name + (":" + target if target else "")
                     cfg = CATALOG.service_catalog_merge_target(base, target)
+                    if cfg["runtime"] == "native":
+                        # No native runtime verifier exists yet. Native entries
+                        # cannot become container identities in another plan.
+                        continue
                     raw_configs[key] = cfg
                     # Project first. Templating a complete service would resolve
                     # environment/credential lookups belonging to other apps.

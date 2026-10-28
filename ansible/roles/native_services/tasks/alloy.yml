@@ -34,7 +34,7 @@
 - name: Alloy native | Install Alloy and ACL support
   ansible.builtin.apt:
     name: "{{ alloy_native_packages }}"
-    state: present
+    state: "{{ 'latest' if native_services_action == 'update' and native_services_entry.config.native.update_policy == 'latest' else 'present' }}"
 
 - name: Alloy native | Read local system accounts
   ansible.builtin.getent:
@@ -105,6 +105,15 @@
     group: "{{ alloy_native_group }}"
     mode: "0640"
   notify: Restart Alloy
+
+- name: Native services | Record adopted alloy configuration
+  when:
+    - not ansible_check_mode
+    - alloy_native_service_account_available
+  ansible.builtin.include_tasks: record_files.yml
+  vars:
+    native_services_adopted_files:
+      - "{{ alloy_native_config_path }}"
 
 - name: Alloy native | Enable and start service
   when: alloy_native_service_account_available

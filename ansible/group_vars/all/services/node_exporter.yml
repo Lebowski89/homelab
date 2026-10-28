@@ -1,0 +1,27 @@
+---
+
+node_exporter:
+  enabled: true
+  runtime: native
+  tags:
+    - node-exporter
+    - monitoring
+  native:
+    application: node_exporter
+    config:
+      version: 1.10.1
+      arch: amd64
+      user: node_exporter
+      group: node_exporter
+      install_dir: /usr/local/bin
+      textfile_dir: /var/lib/node_exporter/textfile_collector
+      listen_address: 0.0.0.0:9100
+      enabled_collectors:
+        - systemd
+        - processes
+        - textfile
+      disabled_collectors: []
+      extra_args: []
+    update_policy: pinned
+  deploy:
+    group: tags_node_exporter

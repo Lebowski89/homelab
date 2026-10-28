@@ -5,4 +5,3 @@ ansible/roles/native_services/defaults/node_exporter.yml var-naming[no-role-pref
 ansible/roles/native_services/defaults/keepalived.yml var-naming[no-role-prefix] skip
 ansible/roles/native_services/defaults/technitium.yml var-naming[no-role-prefix] skip
 ansible/roles/native_services/tasks/alloy.yml var-naming[no-role-prefix] skip
-ansible/roles/native_services/tasks/keepalived.yml var-naming[no-role-prefix] skip

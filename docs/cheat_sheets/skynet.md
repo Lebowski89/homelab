@@ -1,6 +1,6 @@
 # Skynet cheat sheet
 
-Run Skynet from your configured workstation. Services use the Docker or Podman
+Run Skynet from your configured workstation. Services use the Docker, Podman or native
 runtime declared in `ansible/group_vars/all/services/`.
 
 ## Find a command or target
@@ -21,6 +21,12 @@ skynet targets    # Supported role/action targets
 | `skynet recreate <service>` | Run its recreate operation |
 | `skynet remove <service>` | Run its removal operation |
 | `skynet drift <service>` | Run its drift checks |
+
+Native names: `alloy-native`, `node-exporter`, `keepalived`, `technitium-native`.
+They use the same five lifecycle commands; recreate restarts, and remove retains
+data/install artifacts. See [native services](../ansible/native-services.md) for
+update policies, resolver recovery and the protected-native endpoint limitation.
+Image drift is a container operation.
 
 Pass multiple service tags, or use `all` for all catalog services:
 

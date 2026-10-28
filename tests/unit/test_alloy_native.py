@@ -13,7 +13,12 @@ def task_using(tasks, module):
 
 
 def test_native_alloy_role_uses_official_repository_and_package_service_account():
-    defaults = yaml.safe_load((ROLE_DIR / "defaults/alloy.yml").read_text())
+    defaults = {
+        "alloy_native_" + key: value
+        for key, value in yaml.safe_load((REPO_ROOT / "ansible/group_vars/all/services/alloy.yml").read_text())["alloy"]["targets"][
+            "native"
+        ]["native"]["config"].items()
+    }
     tasks = yaml.safe_load((ROLE_DIR / "tasks/alloy.yml").read_text())
 
     key = task_using(tasks, "ansible.builtin.get_url")
@@ -53,7 +58,12 @@ def test_native_alloy_configuration_and_service_permissions_are_safe():
 
 def test_native_alloy_collects_journal_without_podman_socket_or_root_service_override():
     config = (ROLE_DIR / "templates/alloy/config.alloy.j2").read_text()
-    defaults = yaml.safe_load((ROLE_DIR / "defaults/alloy.yml").read_text())
+    defaults = {
+        "alloy_native_" + key: value
+        for key, value in yaml.safe_load((REPO_ROOT / "ansible/group_vars/all/services/alloy.yml").read_text())["alloy"]["targets"][
+            "native"
+        ]["native"]["config"].items()
+    }
 
     assert 'loki.source.journal "system"' in config
     assert 'max_age       = "24h"' in config
@@ -79,7 +89,12 @@ def test_native_alloy_collects_journal_without_podman_socket_or_root_service_ove
 
 def test_native_alloy_keeps_privacy_stack_visibility_to_systemd_lifecycle():
     tasks_text = (ROLE_DIR / "tasks/alloy.yml").read_text()
-    defaults = yaml.safe_load((ROLE_DIR / "defaults/alloy.yml").read_text())
+    defaults = {
+        "alloy_native_" + key: value
+        for key, value in yaml.safe_load((REPO_ROOT / "ansible/group_vars/all/services/alloy.yml").read_text())["alloy"]["targets"][
+            "native"
+        ]["native"]["config"].items()
+    }
     config = (ROLE_DIR / "templates/alloy/config.alloy.j2").read_text()
     services_dir = REPO_ROOT / "ansible/group_vars/all/services"
     privacy_services = {}
@@ -129,26 +144,11 @@ def test_native_alloy_keeps_privacy_stack_visibility_to_systemd_lifecycle():
     }
 
 
-def test_native_alloy_playbook_targeting_preserves_lazy_fact_gathering():
-    playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
-    play = next(item for item in playbook if item.get("hosts") == "tags_skynet")
-    setup = next(task for task in play["tasks"] if "ansible.builtin.setup" in task and "alloy_native" in task.get("tags", []))
-    include = next(task for task in play["tasks"] if task.get("ansible.builtin.include_role", {}).get("tasks_from") == "alloy")
-
-    assert play["gather_facts"] is False
-    assert "tags_podman" in setup["when"]
-    assert setup["tags"] == ["alloy_native"]
-    assert include["when"] == setup["when"]
-    assert include["tags"] == ["alloy_native"]
-    assert include["ansible.builtin.include_role"]["name"] == "native_services"
-    assert include["ansible.builtin.include_role"]["apply"]["tags"] == ["alloy_native"]
-
-
 def test_skynet_exposes_explicit_alloy_native_target_without_global_rollout():
     wrapper = SKYNET_TEMPLATE_PATH.read_text()
 
-    for action in ("deploy", "install", "run"):
-        assert f"alloy-native:{action})" in wrapper
-    assert wrapper.count('echo "alloy_native" ;;') >= 3
+    for action in ("deploy", "install", "run", "update", "remove", "recreate"):
+        assert f"alloy-native:{action}" in wrapper
+    assert 'echo "deploy,alloy_native"' in wrapper
     assert "  alloy-native:" in wrapper
     assert "skynet check alloy-native" in wrapper

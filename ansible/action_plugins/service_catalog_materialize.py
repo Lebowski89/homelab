@@ -18,7 +18,7 @@ from ansible.errors import AnsibleActionFail, AnsibleError
 from ansible.plugins.action import ActionBase
 
 _SERVICE_CATALOG_PATH = Path(__file__).resolve().parents[1] / "filter_plugins/service_catalog.py"
-_VALID_RUNTIMES = {"docker", "podman"}
+_VALID_RUNTIMES = {"docker", "podman", "native"}
 
 
 def _load_canonical_merge():
@@ -32,6 +32,15 @@ def _load_canonical_merge():
 
 
 _CANONICAL_MERGE_TARGET = _load_canonical_merge()
+
+
+def _load_native_inputs():
+    spec = importlib.util.spec_from_file_location(
+        "native_catalog_inputs", Path(__file__).resolve().parents[1] / "roles/native_services/filter_plugins/native_services.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def materialize_selected(
@@ -89,7 +98,7 @@ def materialize_selected(
         raw_runtime = entry.get("runtime")
         if not isinstance(raw_runtime, str) or raw_runtime.strip().lower() not in _VALID_RUNTIMES:
             raise AnsibleActionFail(
-                f"selected entry {index} ({service_name!r}).runtime must be one of: docker, podman; got {raw_runtime!r}"
+                f"selected entry {index} ({service_name!r}).runtime must be one of: docker, podman, native; got {raw_runtime!r}"
             )
 
         target_name: str | None = None
@@ -147,10 +156,25 @@ class ActionModule(ActionBase):
         if source_var not in task_vars:
             raise AnsibleActionFail(f"source variable {source_var!r} is not defined")
 
+        def template(config):
+            if config["runtime"] != "native":
+                return self._templar.template(config, fail_on_undefined=True)
+            _native_inputs = _load_native_inputs()
+            native = config["native"]
+            # Apply defined inventory/extra-var values BEFORE resolving defaults,
+            # so an explicit endpoint override does not require the unused zone.
+            values = _native_inputs.native_services_inputs(native, task_vars)
+            aliases = {_native_inputs.PREFIXES[native["application"]] + key: value for key, value in values.items()}
+            concrete = self._templar.copy_with_new_env(available_variables={**task_vars, **aliases}).template(
+                {**config, "native": {**native, "config": values}}, fail_on_undefined=True
+            )
+            concrete["native"]["config"] = _native_inputs.native_services_normalize(concrete["native"])
+            return concrete
+
         materialized = materialize_selected(
             task_vars[source_var],
             self._task.args.get("selected"),
-            lambda config: self._templar.template(config, fail_on_undefined=True),
+            template,
         )
 
         result["ansible_facts"] = {"service_catalog_host_materialized": materialized}

@@ -2,18 +2,56 @@
 
 This is the authoritative author-facing reference for
 `ansible/group_vars/all/services/*.yml`. It documents the schema implemented by
-`service_catalog`, `service_common`, `service_prepare`, `docker_services`, and
-`podman_services`. Generic Docker Compose or Podman options are not supported
-unless they appear here.
+`service_catalog`, `service_common`, `service_prepare`, `docker_services`,
+`podman_services`, and `native_services`. Generic Docker Compose or Podman
+options are not supported unless they appear here.
 
 The [style guide](../../../../docs/service-definition-style.md) defines the
 preferred key order. Ordering is for readability; it does not change behavior.
 
 > [!IMPORTANT]
-> Every base service must declare `runtime: docker` or `runtime: podman`. There
-> is no implicit Docker default. The destination host must already provide the
-> chosen runtime. Podman validates the complete effective declaration: changing only
+> Every base service must declare `runtime: docker`, `runtime: podman` or
+> `runtime: native`. There is no implicit Docker default. Container destinations must already provide
+> their chosen runtime. Podman validates the complete effective declaration: changing only
 > `runtime` is invalid while Docker-only or otherwise unsupported fields remain.
+
+Native applications use a separate typed section within this same catalogue:
+
+```yaml
+node_exporter:
+  enabled: true
+  runtime: native
+  tags: [node-exporter, monitoring]
+  native:
+    application: node_exporter
+    config: # Complete application settings live in node_exporter.yml
+      version: "1.10.1"
+      # ... remaining declared settings
+    update_policy: pinned
+  deploy:
+    group: tags_node_exporter
+```
+
+Supported applications are `alloy`, `node_exporter`, `keepalived` and `technitium`.
+`native.config` accepts only that application's existing settings with its old
+variable prefix removed (for example `alloy_native_loki_url` becomes `loki_url`).
+All settings are required except Node Exporter's derived download/archive/checksum
+fields. Existing prefixed host/extra-var overrides take precedence before default
+templating; defined empty/false/numeric values never trigger fallback. Native
+config target overrides replace each whole setting, including lists/maps.
+`deploy.host` accepts one inventory host or a list, or `deploy.group` selects group
+members. These fields are mutually exclusive. Native-only dispatch does not
+require the container host/controller/Infisical contracts.
+
+A native target of a container application inherits selection metadata and
+operational requirements, discarding container-specific inputs; explicit container
+fields are rejected. Existing container targets retain their normal merge rules.
+No image, container secrets or container process commands are required or accepted.
+Native protected listeners/callers currently require a missing host-listener
+identity verifier and are rejected before mutation. See the
+[native lifecycle guide](../../../../docs/ansible/native-services.md) for update
+policies, removal ownership, resolver recovery, retained artifacts and OS limits.
+The container options below apply to Docker/Podman targets.
 
 ## Contents
 

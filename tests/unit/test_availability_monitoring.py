@@ -54,10 +54,7 @@ def availability_model():
         "services_plex_host": "plex",
         "services_private_https_port": 8443,
         "services_internal_zone": "internal.example",
-        "keepalived_instances": {
-            "dns_vip_a": {"virtual_ip": "192.0.2.250"},
-            "dns_vip_b": {"virtual_ip": "192.0.2.251"},
-        },
+        "svcfiles": services,
     }
     prometheus_vars = render_structure(yaml.safe_load(PROMETHEUS_VARS_PATH.read_text()), variables)
     http = availability.availability_http_file_sd(

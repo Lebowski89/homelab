@@ -1,0 +1,61 @@
+---
+
+- name: Native services | Verify resolver ownership before stopping DNS
+  when:
+    - native_services_previous.resolver.managed | default(false)
+    - "'/etc/systemd/resolved.conf.d/technitium.conf' in (native_services_previous.files | default([]))"
+  ansible.builtin.include_tasks: resolver_validate.yml
+
+- name: Native services | Inspect installed services
+  ansible.builtin.service_facts:
+
+- name: Native services | Stop and disable the selected installed service
+  when:
+    - not ansible_check_mode
+    - native_services_unit ~ '.service' in ansible_facts.services
+  ansible.builtin.systemd_service:
+    name: "{{ native_services_unit }}"
+    state: stopped
+    enabled: false
+
+- name: Native services | Explain retained unclaimed installation files
+  when: not native_services_state_stat.stat.exists
+  ansible.builtin.debug:
+    msg: >-
+      No catalogue ownership record exists. Stop/disable applies only to the
+      selected installed service; configuration, resolver state and installation artifacts are
+      retained. Deploy once to adopt its managed configuration before removing it.
+
+- name: Native services | Restore owned resolver integration
+  when:
+    - native_services_previous.resolver.managed | default(false)
+    - "'/etc/systemd/resolved.conf.d/technitium.conf' in (native_services_previous.files | default([]))"
+  ansible.builtin.include_tasks: resolver_remove.yml
+
+- name: Native services | Remove only recorded managed configuration files
+  ansible.builtin.file:
+    path: "{{ native_services_owned_file }}"
+    state: absent
+  loop: "{{ native_services_previous.files | default([]) }}"
+  loop_control:
+    loop_var: native_services_owned_file
+
+- name: Native services | Reload units after retiring the exporter unit
+  when:
+    - native_services_application == 'node_exporter'
+    - native_services_state_stat.stat.exists
+    - not ansible_check_mode
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Native services | Retire the selected ownership record
+  ansible.builtin.file:
+    path: "{{ native_services_state_path }}"
+    state: absent
+
+- name: Native services | Report retained installation and check-mode limitations
+  ansible.builtin.debug:
+    msg: >-
+      Packages, repositories, signing keys, binaries, accounts, journal group
+      membership and persistent application/collector data are retained.
+      Check mode does not stop services or restore/restart the resolver.

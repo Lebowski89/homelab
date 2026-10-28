@@ -188,12 +188,12 @@ def test_netbox_inventory_preserves_unrelated_connection_grouping_and_priority_c
     assert inventory["virtual_chassis"] is False
 
 
-def test_playbook_normalizes_host_defaults_before_loading_service_definitions():
+def test_playbook_normalizes_host_defaults_before_materializing_container_services():
     playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
     play = next(item for item in playbook if item["name"] == "Deploy homelab services")
     host_contract = next(task for task in play["pre_tasks"] if task["name"] == "Include runtime-neutral service host contract validation")
     include = next(task for task in play["pre_tasks"] if task["name"] == "Include runtime-neutral container host default normalization")
-    load_services = next(task for task in play["tasks"] if task["name"].startswith("Load all service definitions"))
+    load_services = next(task for task in play["pre_tasks"] if "ansible.builtin.include_vars" in task)
 
     assert include["ansible.builtin.include_tasks"]["file"] == "tasks/container_host_defaults.yml"
     assert include["ansible.builtin.include_tasks"]["apply"]["tags"] == "always"
@@ -201,7 +201,9 @@ def test_playbook_normalizes_host_defaults_before_loading_service_definitions():
     assert play["pre_tasks"][0]["ansible.builtin.meta"] == "end_play"
     assert play["pre_tasks"].index(host_contract) < play["pre_tasks"].index(include)
     assert play["pre_tasks"].index(include) == play["pre_tasks"].index(host_contract) + 1
-    assert load_services in play["tasks"]
+    assert play["pre_tasks"].index(load_services) < play["pre_tasks"].index(host_contract)
+    assert include["when"] == host_contract["when"]
+    assert "service_catalog_native_only" in include["when"]
 
 
 @pytest.mark.integration

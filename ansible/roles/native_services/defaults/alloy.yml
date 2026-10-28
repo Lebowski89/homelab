@@ -1,19 +1,15 @@
 ---
-
-alloy_native_keyring_dir: /etc/apt/keyrings
-alloy_native_keyring_file: /etc/apt/keyrings/grafana.asc
-alloy_native_repo_url: https://apt.grafana.com
-alloy_native_repo_suite: stable
-alloy_native_repo_filename: grafana
-alloy_native_packages:
-  - alloy
-alloy_native_service_name: alloy
-alloy_native_user: alloy
-alloy_native_group: alloy
-alloy_native_config_dir: /etc/alloy
-alloy_native_config_path: /etc/alloy/config.alloy
-alloy_native_journal_groups:
-  - adm
-  - systemd-journal
-alloy_native_loki_url: >-
-  https://loki.{{ services_internal_zone }}:{{ services_private_https_port }}/loki/api/v1/push
+# Internal task aliases; operator defaults live in the service catalogue.
+alloy_native_keyring_dir: '{{ native_services_config.keyring_dir }}'
+alloy_native_keyring_file: '{{ native_services_config.keyring_file }}'
+alloy_native_repo_url: '{{ native_services_config.repo_url }}'
+alloy_native_repo_suite: '{{ native_services_config.repo_suite }}'
+alloy_native_repo_filename: '{{ native_services_config.repo_filename }}'
+alloy_native_packages: '{{ native_services_config.packages }}'
+alloy_native_service_name: '{{ native_services_config.service_name }}'
+alloy_native_user: '{{ native_services_config.user }}'
+alloy_native_group: '{{ native_services_config.group }}'
+alloy_native_config_dir: '{{ native_services_config.config_dir }}'
+alloy_native_config_path: '{{ native_services_config.config_path }}'
+alloy_native_journal_groups: '{{ native_services_config.journal_groups }}'
+alloy_native_loki_url: '{{ native_services_config.loki_url }}'

@@ -60,6 +60,10 @@ def build_plan(services, controller, template, bootstrap):
             raise ValueError(f"{key}: service/enabled is invalid")
         for target in base.get("targets", {None: {}}):
             cfg = CATALOG.service_catalog_merge_target(base, target)
+            if cfg["runtime"] == "native":
+                # Native callers need their own verified host identity adapter;
+                # never reinterpret a service unit as a container principal.
+                continue
             if type(cfg.get("enabled", True)) is not bool:
                 raise ValueError(f"{key}: effective enabled must be boolean")
             if not base.get("enabled", True) or not cfg.get("enabled", True):

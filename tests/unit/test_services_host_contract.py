@@ -378,10 +378,15 @@ def test_host_contract_precedes_other_preparation_and_linear_dispatch_remains_ex
     play = next(item for item in playbook if item.get("name") == "Deploy homelab services")
 
     assert play["strategy"] == "linear"
-    guard, contract = play["pre_tasks"][:2]
+    guard = play["pre_tasks"][0]
+    contract = next(
+        task
+        for task in play["pre_tasks"]
+        if task.get("ansible.builtin.include_tasks", {}).get("file") == "tasks/services_host_contract.yml"
+    )
     assert guard["ansible.builtin.meta"] == "end_play"
     assert guard["tags"] == "always"
-    assert contract["name"] == "Include runtime-neutral service host contract validation"
+    assert "service_catalog_native_only" in contract["when"]
     assert contract["tags"] == "always"
     assert contract["ansible.builtin.include_tasks"]["apply"]["tags"] == "always"
 

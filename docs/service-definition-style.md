@@ -1,7 +1,7 @@
 # Service definition style
 
 Service definitions under `ansible/group_vars/all/services` use one layout for
-both Docker and Podman. This is a source-layout convention only: mapping order
+Docker, Podman and native applications. This is a source-layout convention only: mapping order
 does not select a runtime or change service behavior. Keep existing values,
 list order, comments, quoting, and Jinja expressions intact when applying it.
 
@@ -10,13 +10,20 @@ limitations, use the
 [authoritative option reference](../ansible/group_vars/all/services/README.md).
 
 Every base service must include exactly one supported runtime declaration,
-`runtime: docker` or `runtime: podman`. A missing base runtime is invalid and
+`runtime: docker`, `runtime: podman` or `runtime: native`. A missing base runtime is invalid and
 does not default to Docker. Targets inherit the validated base runtime and add
 `runtime` only when intentionally overriding it with another supported adapter.
 Catalog selection remains lightweight; linear, globally ordered dispatch then
 materializes only the current selected service on its dispatch host.
 
 Publication mappings explicitly declare `exposure: public` or `exposure: private`; private ports list logical `callers`. See [automatic protection and lifecycle](service-firewall.md). These fields are consumed by `service_firewall`, not rendered as runtime port options.
+
+Native targets use the bounded `native.application/config/update_policy` contract
+and host/group placement described in [native services](ansible/native-services.md).
+A container-to-native target inherits selection metadata and operational
+requirements, never container installation/process fields. Explicit unsupported
+native fields fail validation. Native config settings replace inherited values,
+including empty lists/maps; container merge rules below are unchanged.
 
 ## Canonical order
 
@@ -30,7 +37,7 @@ between populated sections.
    `entrypoint`, `command`.
 3. Environment, secrets, and configuration inputs: `environment`, `env_file`,
    `infisical`, `secrets`, `swarm_configs`, `configs`,
-   `swarm_env_templates`, `settings`.
+   `swarm_env_templates`, `settings`, `native`.
 4. Application preparation: `paths_vault`, `application_prepare`, `prep`.
 5. Connectivity: `depends_on`, `named_networks`, `networks`, `network_mode`,
    `ports`.

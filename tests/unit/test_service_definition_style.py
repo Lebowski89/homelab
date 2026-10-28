@@ -9,7 +9,7 @@ SERVICES_DIR = REPO_ROOT / "ansible/group_vars/all/services"
 CANONICAL_SECTIONS = (
     ("enabled", "runtime", "tags", "name", "description", "stack"),
     ("image", "hostname", "container_name", "user", "group", "working_dir", "entrypoint", "command"),
-    ("environment", "env_file", "infisical", "secrets", "swarm_configs", "configs", "swarm_env_templates", "settings"),
+    ("environment", "env_file", "infisical", "secrets", "swarm_configs", "configs", "swarm_env_templates", "settings", "native"),
     ("paths_vault", "application_prepare", "prep"),
     ("depends_on", "named_networks", "networks", "network_mode", "ports", "expose", "extra_hosts", "dns"),
     ("paths", "copies", "templates", "named_volumes", "volumes", "tmpfs"),

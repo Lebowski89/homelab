@@ -40,6 +40,15 @@
       DNSStubListener=no
   notify: Restart systemd-resolved
 
+- name: Native services | Record adopted technitium configuration
+  when:
+    - not ansible_check_mode
+    - technitium_native_disable_resolved_stub | bool
+  ansible.builtin.include_tasks: record_files.yml
+  vars:
+    native_services_adopted_files:
+      - "/etc/systemd/resolved.conf.d/technitium.conf"
+
 - name: Technitium native | Point resolv.conf at real resolved output
   when: technitium_native_disable_resolved_stub | bool
   ansible.builtin.file:
@@ -53,6 +62,7 @@
   ansible.builtin.meta: flush_handlers
 
 - name: Technitium native | Verify DNS still works after resolver change
+  when: not ansible_check_mode
   ansible.builtin.command:
     cmd: getent hosts download.technitium.com
   changed_when: false
@@ -63,24 +73,17 @@
     creates: "{{ technitium_native_install_marker }}"
 
 - name: Technitium native | Enable and start service
+  when: not ansible_check_mode
   ansible.builtin.systemd:
     name: "{{ technitium_native_service_name }}"
     enabled: true
     state: started
 
-- name: Technitium native | Wait for web console
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: "{{ technitium_native_web_port }}"
-    timeout: 60
+- name: Technitium native | Check listener readiness
+  when: not ansible_check_mode
+  ansible.builtin.include_tasks: technitium_ready.yml
 
-- name: Technitium native | Wait for DNS listener
-  ansible.builtin.wait_for:
-    host: 127.0.0.1
-    port: "{{ technitium_native_dns_port }}"
-    timeout: 60
-
-- name: Technitium native | Test local DNS recursion
-  ansible.builtin.command:
-    cmd: dig @127.0.0.1 cloudflare.com A +short +time=2 +tries=1
-  changed_when: false
+- name: Technitium native | Explain check-mode installation limitations
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: Installer execution, DNS resolution, listener readiness and service lifecycle are deferred in check mode.

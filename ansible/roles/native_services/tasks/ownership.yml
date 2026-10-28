@@ -1,0 +1,58 @@
+---
+
+# Record the original resolver only once, before the existing installer
+# procedure changes it. Never save credentials or application configuration.
+- name: Native services | Inspect original resolver ownership
+  when:
+    - native_services_application == 'technitium'
+    - native_services_config.disable_resolved_stub
+    - >-
+      not (native_services_previous.resolver.managed | default(false))
+      or '/etc/systemd/resolved.conf.d/technitium.conf' not in (native_services_previous.files | default([]))
+  ansible.builtin.stat:
+    path: /etc/resolv.conf
+    follow: false
+  register: native_services_resolver_stat
+
+- name: Native services | Save original regular resolver content
+  when:
+    - native_services_resolver_stat.stat is defined
+    - native_services_resolver_stat.stat.exists
+    - not (native_services_resolver_stat.stat.islnk | default(false))
+  ansible.builtin.slurp:
+    src: /etc/resolv.conf
+  register: native_services_resolver_read
+
+- name: Native services | Resolve installation ownership record
+  ansible.builtin.set_fact:
+    native_services_record:
+      identity: "{{ native_services_identity }}"
+      unit: "{{ native_services_unit }}"
+      files: "{{ native_services_previous.files | default([]) }}"
+      resolver: >-
+        {{ native_services_previous.resolver if
+          native_services_previous.resolver.managed | default(false) and
+          '/etc/systemd/resolved.conf.d/technitium.conf' in (native_services_previous.files | default([])) else
+          {'managed': native_services_resolver_stat.stat is defined,
+           'stat': native_services_resolver_stat.stat | default({}),
+           'content': native_services_resolver_read.content | default('')} }}
+
+- name: Native services | Ensure private ownership directory exists
+  when: not ansible_check_mode
+  ansible.builtin.file:
+    path: /var/lib/native_services
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# Save recovery state before installation. Claim files only after their
+# successful template/copy task; a failed download must not adopt an old file.
+- name: Native services | Record the selected installation's owned files
+  when: not ansible_check_mode
+  ansible.builtin.copy:
+    dest: "{{ native_services_state_path }}"
+    content: "{{ native_services_record | to_nice_json }}\n"
+    owner: root
+    group: root
+    mode: "0600"

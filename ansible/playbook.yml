@@ -127,7 +127,42 @@
       ansible.builtin.meta: end_play
       tags: always
 
+    - name: Load all service definitions from group_vars/all/services/*.yml
+      ansible.builtin.include_vars:
+        dir: "{{ playbook_dir }}/group_vars/all/services"
+        files_matching: ".*\\.ya?ml$"
+        ignore_unknown_extensions: true
+        extensions: [yml, yaml]
+        name: svcfiles
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+
+    - name: Assert svcfiles loaded
+      ansible.builtin.assert:
+        that:
+          - svcfiles is defined
+          - (svcfiles | type_debug) == "dict"
+          - (svcfiles | length) > 0
+        fail_msg: "svcfiles is empty or not a dict. include_vars did not load your service files."
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+
+    - name: Select catalogue identities before resolving runtime prerequisites
+      ansible.builtin.set_fact:
+        service_catalog_requested: >-
+          {{ svcfiles | service_catalog_effective('', {}, false)
+             | service_catalog_select(ansible_run_tags | default([]),
+                                      docker_services_run_all | default(false),
+                                      'remove' in (ansible_run_tags | default([]))) }}
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+
+    - name: Identify a native-only operation without container prerequisites
+      ansible.builtin.set_fact:
+        service_catalog_native_only: >-
+          {{ service_catalog_requested.selected | length > 0 and
+             service_catalog_requested.selected | rejectattr('runtime', 'equalto', 'native') | list | length == 0 }}
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+
     - name: Include runtime-neutral service host contract validation
+      when: not (service_catalog_native_only | default(false))
       ansible.builtin.include_tasks:
         file: tasks/services_host_contract.yml
         apply:
@@ -135,6 +170,7 @@
       tags: always
 
     - name: Include runtime-neutral container host default normalization
+      when: not (service_catalog_native_only | default(false))
       ansible.builtin.include_tasks:
         file: tasks/container_host_defaults.yml
         apply:
@@ -142,7 +178,9 @@
       tags: always
 
     - name: Gather service controller facts
-      when: inventory_hostname == services_controller_host
+      when:
+        - not (service_catalog_native_only | default(false))
+        - inventory_hostname == services_controller_host
       ansible.builtin.setup:
       tags:
         - infisical_deploy
@@ -158,6 +196,7 @@
         - reconcile
 
     - name: Resolve host timezone variable
+      when: not (service_catalog_native_only | default(false))
       tags:
         - infisical_deploy
         - infisical_recreate
@@ -362,86 +401,13 @@
       tags: [postgres_exporter]
 
     ################################
-    # NODE EXPORTER (MONITORING)
+    # SERVICE CATALOG (DOCKER + PODMAN + NATIVE)
     ################################
-
-    - name: Include Node Exporter role
-      when: "'tags_node_exporter' in group_names"
-      ansible.builtin.include_role:
-        name: native_services
-        tasks_from: node_exporter
-        defaults_from: node_exporter
-        handlers_from: node_exporter
-        apply:
-          tags: [node_exporter]
-      tags: [node_exporter]
-
-    ################################
-    # KEEPALIVED (DNS VIPS)
-    ################################
-
-    - name: Gather facts for Keepalived role
-      when: "'tags_keepalived' in group_names"
-      ansible.builtin.setup:
-      tags: [keepalived]
-
-    - name: Include Keepalived role
-      when: "'tags_keepalived' in group_names"
-      ansible.builtin.include_role:
-        name: native_services
-        tasks_from: keepalived
-        defaults_from: keepalived
-        handlers_from: keepalived
-        apply:
-          tags: [keepalived]
-      tags: [keepalived]
-
-    ################################
-    # TECHNITIUM NATIVE (DNS)
-    ################################
-
-    - name: Gather facts for Technitium native role
-      when: "'tags_technitium_native' in group_names"
-      ansible.builtin.setup:
-      tags: [technitium_native]
-
-    - name: Include Technitium native role
-      when: "'tags_technitium_native' in group_names"
-      ansible.builtin.include_role:
-        name: native_services
-        tasks_from: technitium
-        defaults_from: technitium
-        handlers_from: technitium
-        apply:
-          tags: [technitium_native]
-      tags: [technitium_native]
-
-    ################################
-    # SERVICE CATALOG (DOCKER + PODMAN)
-    ################################
-
-    - name: Load all service definitions from group_vars/all/services/*.yml
-      ansible.builtin.include_vars:
-        dir: "{{ playbook_dir }}/group_vars/all/services"
-        files_matching: ".*\\.ya?ml$"
-        ignore_unknown_extensions: true
-        extensions: [yml, yaml]
-        name: svcfiles
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
-
-    - name: Assert svcfiles loaded
-      ansible.builtin.assert:
-        that:
-          - svcfiles is defined
-          - (svcfiles | type_debug) == "dict"
-          - (svcfiles | length) > 0
-        fail_msg: "svcfiles is empty or not a dict. include_vars did not load your service files."
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
 
     - name: Resolve runtime-neutral service controller host
       ansible.builtin.set_fact:
-        service_catalog_controller_host: "{{ services_controller_host }}"
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+        service_catalog_controller_host: "{{ (ansible_play_hosts_all | first) if service_catalog_native_only else services_controller_host }}"
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Validate runtime-neutral service controller host
       ansible.builtin.assert:
@@ -450,33 +416,34 @@
           - service_catalog_controller_host in hostvars
         fail_msg: >-
           The runtime-neutral service controller host must name a host in the current inventory.
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Build service catalog processing list from service definitions
-      when: inventory_hostname == services_controller_host
+      when: inventory_hostname == service_catalog_controller_host
       ansible.builtin.set_fact:
         service_catalog_effective: >-
-          {{ svcfiles | service_catalog_effective(services_controller_host) }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+          {{ svcfiles | service_catalog_effective(service_catalog_controller_host, groups, true,
+                 ['native'] if service_catalog_native_only else ['docker', 'podman', 'native']) }}
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Assert service catalog processing list was built
-      when: inventory_hostname == services_controller_host
+      when: inventory_hostname == service_catalog_controller_host
       ansible.builtin.assert:
         that:
           - service_catalog_effective is defined
           - service_catalog_effective is sequence
           - service_catalog_effective | length > 0
         fail_msg: "service_catalog_effective is empty. No service definitions were discovered."
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Drift | Initialise image drift summary
-      when: inventory_hostname == services_controller_host
+      when: inventory_hostname == service_catalog_controller_host
       ansible.builtin.set_fact:
         docker_services_image_drift: []
       tags: [drift]
 
     - name: Build selected service catalog processing list
-      when: inventory_hostname == services_controller_host
+      when: inventory_hostname == service_catalog_controller_host
       ansible.builtin.set_fact:
         service_catalog_selection: >-
           {{
@@ -487,10 +454,10 @@
                 'remove' in (ansible_run_tags | default([]))
               )
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Extract service catalog selection facts
-      when: inventory_hostname == services_controller_host
+      when: inventory_hostname == service_catalog_controller_host
       ansible.builtin.set_fact:
         service_catalog_matched: "{{ service_catalog_selection.matched }}"
         service_catalog_selected: "{{ service_catalog_selection.selected }}"
@@ -503,10 +470,10 @@
             ('drift' if 'drift' in (ansible_run_tags | default([])) else
             ('bootstrap' if 'bootstrap' in (ansible_run_tags | default([])) else 'deploy'))))
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Order selected Podman services by shared-network dependencies
-      when: inventory_hostname == services_controller_host
+      when: inventory_hostname == service_catalog_controller_host
       ansible.builtin.set_fact:
         service_catalog_selected: >-
           {{
@@ -518,13 +485,19 @@
                 )
             ).selected
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Validate selected service dispatch hosts
-      when: inventory_hostname == services_controller_host
+      when: inventory_hostname == service_catalog_controller_host
       ansible.builtin.assert:
         that:
-          - service_catalog_dispatch_item.dispatch_host in ansible_play_hosts_all
+          - >-
+            service_catalog_dispatch_item.dispatch_hosts | difference(groups['tags_skynet']) | length == 0
+            if service_catalog_dispatch_item.runtime == 'native' else true
+          - >-
+            (service_catalog_dispatch_item.dispatch_hosts | intersect(ansible_play_hosts_all) | length > 0)
+            if service_catalog_dispatch_item.runtime == 'native'
+            else service_catalog_dispatch_item.dispatch_host in ansible_play_hosts_all
         fail_msg: >-
           Selected service {{ service_catalog_dispatch_item.name }}{{
             ':' ~ service_catalog_dispatch_item.target
@@ -541,22 +514,22 @@
             if service_catalog_dispatch_item.target is defined
             else ''
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Share lightweight service catalog selection with play hosts
       ansible.builtin.set_fact:
-        service_catalog_action: "{{ hostvars[services_controller_host].service_catalog_action }}"
-        service_catalog_matched: "{{ hostvars[services_controller_host].service_catalog_matched }}"
-        service_catalog_selected: "{{ hostvars[services_controller_host].service_catalog_selected }}"
+        service_catalog_action: "{{ hostvars[service_catalog_controller_host].service_catalog_action }}"
+        service_catalog_matched: "{{ hostvars[service_catalog_controller_host].service_catalog_matched }}"
+        service_catalog_selected: "{{ hostvars[service_catalog_controller_host].service_catalog_selected }}"
         service_catalog_disabled_only_selection: >-
-          {{ hostvars[services_controller_host].service_catalog_disabled_only_selection }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+          {{ hostvars[service_catalog_controller_host].service_catalog_disabled_only_selection }}
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Report disabled service selection in check mode
       when:
         - ansible_check_mode
         - service_catalog_disabled_only_selection | bool
-        - inventory_hostname == services_controller_host
+        - inventory_hostname == service_catalog_controller_host
       ansible.builtin.debug:
         msg: >-
           Requested service/tag matched only disabled service definitions:
@@ -568,14 +541,14 @@
             | join(', ')
           }}.
           Skipping in check mode.
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: End play for disabled service selection in check mode
       when:
         - ansible_check_mode
         - service_catalog_disabled_only_selection | bool
       ansible.builtin.meta: end_play
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Assert selected service processing list was built
       ansible.builtin.assert:
@@ -592,27 +565,23 @@
             else
             'No matching service or target definitions were found.'
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Gather facts on selected service dispatch hosts
       when:
-        - inventory_hostname != services_controller_host
         - >-
           inventory_hostname in
-          (
-            service_catalog_selected
-            | map(attribute='dispatch_host')
-            | unique
-            | list
-          )
+          ((service_catalog_selected | map(attribute='dispatch_host') | list) +
+           (service_catalog_selected | selectattr('runtime', 'equalto', 'native')
+            | map(attribute='dispatch_hosts') | flatten | list))
       ansible.builtin.setup:
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Process globally ordered service catalog
       ansible.builtin.include_tasks:
         file: tasks/service_catalog_dispatch.yml
         apply:
-          tags: [deploy, update, remove, recreate, bootstrap, drift]
+          tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
       loop: "{{ service_catalog_selected }}"
       loop_control:
         loop_var: service_catalog_dispatch_entry
@@ -622,11 +591,11 @@
             if service_catalog_dispatch_entry.target is defined
             else ''
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
 
     - name: Drift | Report image drift summary
       when:
-        - inventory_hostname == services_controller_host
+        - inventory_hostname == service_catalog_controller_host
         - hostvars[services_controller_host].docker_services_image_drift is defined
         - (hostvars[services_controller_host].docker_services_image_drift | length) > 0
       ansible.builtin.debug:
@@ -658,7 +627,7 @@
 
     - name: Drift | Report no image drift found
       when:
-        - inventory_hostname == services_controller_host
+        - inventory_hostname == service_catalog_controller_host
         - hostvars[services_controller_host].docker_services_image_drift is not defined
           or (hostvars[services_controller_host].docker_services_image_drift | length) == 0
       ansible.builtin.debug:
@@ -668,7 +637,7 @@
     - name: Deploy all Docker stacks
       no_log: true
       when:
-        - inventory_hostname == services_controller_host
+        - inventory_hostname == service_catalog_controller_host
         - not ansible_check_mode
         - >-
           (
@@ -684,23 +653,3 @@
           no_log: true
           diff: false
       tags: [deploy, update, recreate]
-
-    ################################
-    # ALLOY NATIVE (JOURNAL/PODMAN LOGGING)
-    ################################
-
-    - name: Gather facts for native Alloy role
-      when: "'tags_podman' in group_names"
-      ansible.builtin.setup:
-      tags: [alloy_native]
-
-    - name: Include native Alloy role
-      when: "'tags_podman' in group_names"
-      ansible.builtin.include_role:
-        name: native_services
-        tasks_from: alloy
-        defaults_from: alloy
-        handlers_from: alloy
-        apply:
-          tags: [alloy_native]
-      tags: [alloy_native]

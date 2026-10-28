@@ -1,0 +1,18 @@
+---
+
+- name: Technitium native | Wait for web console
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ technitium_native_web_port }}"
+    timeout: 60
+
+- name: Technitium native | Wait for DNS listener
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ technitium_native_dns_port }}"
+    timeout: 60
+
+- name: Technitium native | Test local DNS recursion
+  ansible.builtin.command:
+    cmd: dig @127.0.0.1 cloudflare.com A +short +time=2 +tries=1
+  changed_when: false

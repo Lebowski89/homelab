@@ -1,0 +1,42 @@
+---
+
+keepalived:
+  enabled: true
+  runtime: native
+  tags:
+    - keepalived
+  native:
+    application: keepalived
+    config:
+      config_path: /etc/keepalived/keepalived.conf
+      check_script_path: /usr/local/sbin/check-technitium-dns.sh
+      dns_check_query: dns01.skynet
+      dns_check_type: A
+      dns_check_server: 127.0.0.1
+      dns_check_timeout: 1
+      dns_check_tries: 1
+      script_interval: 2
+      script_timeout: 2
+      script_fall: 3
+      script_rise: 2
+      script_weight: -80
+      dns_group: tags_keepalived
+      host_ip: "{{ local_ip | default('') }}"
+      host_interface: "{{ ansible_facts.default_ipv4.interface | default('') }}"
+      host_mode: native
+      instances:
+        dns_vip_a:
+          virtual_router_id: 53
+          virtual_ip: 192.168.80.53
+          prefix: 24
+          advert_int: 1
+          priority_var: keepalived_priority_dns_vip_a
+        dns_vip_b:
+          virtual_router_id: 54
+          virtual_ip: 192.168.80.54
+          prefix: 24
+          advert_int: 1
+          priority_var: keepalived_priority_dns_vip_b
+    update_policy: present
+  deploy:
+    group: tags_keepalived

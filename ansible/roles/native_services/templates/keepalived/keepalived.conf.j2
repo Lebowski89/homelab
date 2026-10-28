@@ -16,14 +16,14 @@ vrrp_script chk_technitium_dns {
 {% for instance_name, instance in keepalived_instances | dictsort %}
 vrrp_instance {{ instance_name | upper }} {
   state BACKUP
-  interface {{ keepalived_host_cfg.interface }}
+  interface {{ native_services_keepalived_host_cfg.interface }}
   virtual_router_id {{ instance.virtual_router_id }}
   priority {{ hostvars[inventory_hostname][instance.priority_var] }}
   advert_int {{ instance.advert_int | default(1) }}
 
-  unicast_src_ip {{ keepalived_host_cfg.ip }}
+  unicast_src_ip {{ native_services_keepalived_host_cfg.ip }}
   unicast_peer {
-{% for peer_name in keepalived_dns_hosts | sort %}
+{% for peer_name in native_services_keepalived_dns_hosts | sort %}
 {% if peer_name != inventory_hostname %}
     {{ hostvars[peer_name].local_ip }}
 {% endif %}
@@ -31,7 +31,7 @@ vrrp_instance {{ instance_name | upper }} {
   }
 
   virtual_ipaddress {
-    {{ instance.virtual_ip }}/{{ instance.prefix | default(24) }} dev {{ keepalived_host_cfg.interface }}
+    {{ instance.virtual_ip }}/{{ instance.prefix | default(24) }} dev {{ native_services_keepalived_host_cfg.interface }}
   }
 
   track_script {

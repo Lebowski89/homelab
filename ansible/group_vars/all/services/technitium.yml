@@ -126,3 +126,25 @@ technitium:
         host: "{{ services_plex_host }}"
         constraints:
           - "node.hostname == {{ services_plex_host }}"
+    native:
+      runtime: native
+      tags:
+        - technitium-native
+        - technitium_native
+      native:
+        application: technitium
+        config:
+          install_script_url: https://download.technitium.com/dns/install.sh
+          install_script_path: /tmp/technitium-dns-install.sh
+          service_name: dns
+          web_port: 5380
+          dns_port: 53
+          config_dir: /etc/dns
+          install_marker: /opt/technitium/dns/DnsServerApp.dll
+          resolved_dns_servers:
+            - 192.168.80.53
+            - 192.168.80.54
+          disable_resolved_stub: true
+        update_policy: present
+      deploy:
+        group: tags_technitium_native

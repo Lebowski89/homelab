@@ -640,6 +640,10 @@ def test_all_real_mgt_targets_plan_without_templating_environments(monkeypatch):
     planner = load("ansible/action_plugins/service_firewall_plan.py", "lifecycle_catalog_test")
     catalog, context = REAL.catalog(), REAL.context()
     for service in catalog.values():
+        if service["runtime"] == "native":
+            config = service["native"]["config"]
+            config[next(iter(config))] = "{{ lookup('must_never_run') }}"
+            continue
         service["environment"] = {"NEVER_EVALUATE": "{{ lookup('must_not_run') }}"}
         if service.get("runtime") == "podman" and not any(t.get("runtime") == "docker" for t in service.get("targets", {}).values()):
             service.setdefault("systemd", {})["service_add"] = ["{{ lookup('must_not_run') }}"]

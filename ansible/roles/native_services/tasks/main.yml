@@ -1,0 +1,123 @@
+---
+
+- name: Native services | Validate selected lifecycle
+  ansible.builtin.assert:
+    that:
+      - native_services_entry.runtime == 'native'
+      - native_services_action in ['deploy', 'update', 'recreate', 'remove']
+    fail_msg: Native services support deploy, update, recreate and remove; check uses Ansible check mode.
+
+- name: Native services | Resolve current application contract
+  ansible.builtin.set_fact:
+    native_services_application: "{{ native_services_entry.config.native.application }}"
+    native_services_config: "{{ native_services_entry.config.native | native_services_normalize }}"
+    native_services_identity: "{{ native_services_entry.name }}{{ ':' ~ native_services_entry.target if native_services_entry.target is defined else '' }}"
+
+- name: Native services | Classify firewall requirements before changing the host
+  service_firewall_plan:
+    entry: "{{ native_services_entry }}"
+    action: "{{ native_services_action }}"
+
+- name: Native services | Validate common operational requirements
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: operational_requirements
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  vars:
+    service_common_service: "{{ native_services_entry.config }}"
+    service_common_name: "{{ native_services_identity }}"
+    service_common_action: "{{ native_services_action }}"
+    service_common_execution_only: false
+
+- name: Native services | Resolve owned installation paths
+  ansible.builtin.set_fact:
+    native_services_unit: >-
+      {{ {'alloy': native_services_config.service_name | default(''),
+          'node_exporter': 'node_exporter', 'keepalived': 'keepalived',
+          'technitium': native_services_config.service_name | default('')}[native_services_application]
+         | regex_replace('[.]service$', '') }}
+    native_services_files: >-
+      {{ {'alloy': [native_services_config.config_path | default('')],
+          'node_exporter': ['/etc/systemd/system/node_exporter.service'],
+          'keepalived': [native_services_config.config_path | default(''), native_services_config.check_script_path | default('')],
+          'technitium': ['/etc/systemd/resolved.conf.d/technitium.conf']
+            if native_services_config.disable_resolved_stub | default(false) else []}[native_services_application] }}
+    native_services_state_path: "/var/lib/native_services/{{ native_services_application }}.json"
+    native_services_previous: {}
+
+- name: Native services | Read ownership record metadata
+  ansible.builtin.stat:
+    path: "{{ native_services_state_path }}"
+  register: native_services_state_stat
+
+- name: Native services | Read existing ownership record
+  when: native_services_state_stat.stat.exists
+  ansible.builtin.slurp:
+    src: "{{ native_services_state_path }}"
+  register: native_services_state_read
+
+- name: Native services | Resolve existing ownership record
+  when: native_services_state_stat.stat.exists
+  ansible.builtin.set_fact:
+    native_services_previous: "{{ native_services_state_read.content | b64decode | from_json }}"
+
+- name: Native services | Reject competing native installations
+  ansible.builtin.assert:
+    that:
+      - native_services_previous.identity | default(native_services_identity) == native_services_identity
+      - native_services_previous.unit | default(native_services_unit) == native_services_unit
+    fail_msg: Another declaration or service unit owns this native installation; remove it before changing identity.
+
+- name: Native services | Preserve supported platform gates
+  when: native_services_application != 'node_exporter'
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family == 'Debian'
+    fail_msg: This native application currently supports Debian-family systemd hosts only.
+
+- name: Native services | Validate Keepalived before any installation or restart
+  when:
+    - native_services_application == 'keepalived'
+    - native_services_action in ['deploy', 'update', 'recreate']
+  ansible.builtin.include_tasks: keepalived_validate.yml
+
+- name: Native services | Inspect managed file paths without following links
+  ansible.builtin.stat:
+    path: "{{ native_services_owned_file }}"
+    follow: false
+  loop: "{{ (native_services_previous.files | default([]) + native_services_files) | unique | list }}"
+  loop_control:
+    loop_var: native_services_owned_file
+  register: native_services_file_stats
+
+- name: Native services | Refuse directory deletion or replacement through file settings
+  ansible.builtin.assert:
+    that:
+      - not (native_services_file_stat.stat.isdir | default(false))
+    fail_msg: A managed configuration path is a directory; refusing to adopt or remove it.
+  loop: "{{ native_services_file_stats.results }}"
+  loop_control:
+    loop_var: native_services_file_stat
+    label: "{{ native_services_file_stat.native_services_owned_file }}"
+
+- name: Native services | Prepare installation ownership and resolver recovery
+  when: native_services_action in ['deploy', 'update']
+  ansible.builtin.include_tasks: ownership.yml
+
+- name: Native services | Apply the selected application
+  when: native_services_action in ['deploy', 'update']
+  ansible.builtin.include_tasks: "{{ native_services_application }}.yml"
+
+- name: Native services | Recreate the selected service without deleting data
+  when: native_services_action == 'recreate'
+  ansible.builtin.include_tasks: recreate.yml
+
+- name: Native services | Remove the selected service's managed integrations
+  when: native_services_action == 'remove'
+  ansible.builtin.include_tasks: remove.yml
+
+# Flush while this entry's configuration is still in scope. A later native
+# entry must never supply values to a pending handler for this application.
+- name: Native services | Complete selected service notifications
+  ansible.builtin.meta: flush_handlers

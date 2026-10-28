@@ -439,20 +439,23 @@ role_tag() {
     infisical-podman:recreate)      echo "infisical_recreate" ;;
     infisical-podman:remove)        echo "infisical_remove" ;;
 
-    keepalived:deploy)              echo "keepalived" ;;
-    keepalived:run)                 echo "keepalived" ;;
-
-    technitium-native:deploy)       echo "technitium_native" ;;
-    technitium-native:install)      echo "technitium_native" ;;
-    technitium-native:run)          echo "technitium_native" ;;
-
-    alloy-native:deploy)            echo "alloy_native" ;;
-    alloy-native:install)           echo "alloy_native" ;;
-    alloy-native:run)               echo "alloy_native" ;;
-
-    node-exporter:deploy)           echo "node_exporter" ;;
-    node-exporter:install)          echo "node_exporter" ;;
-    node-exporter:run)              echo "node_exporter" ;;
+    # Native aliases select catalogue entries through the same lifecycle path.
+    keepalived:deploy|keepalived:run|keepalived:install)
+                                    echo "deploy,keepalived" ;;
+    technitium-native:deploy|technitium-native:install|technitium-native:run)
+                                    echo "deploy,technitium_native" ;;
+    alloy-native:deploy|alloy-native:install|alloy-native:run)
+                                    echo "deploy,alloy_native" ;;
+    node-exporter:deploy|node-exporter:install|node-exporter:run)
+                                    echo "deploy,node_exporter" ;;
+    keepalived:update|keepalived:recreate|keepalived:remove)
+                                    echo "${action},keepalived" ;;
+    technitium-native:update|technitium-native:recreate|technitium-native:remove)
+                                    echo "${action},technitium_native" ;;
+    alloy-native:update|alloy-native:recreate|alloy-native:remove)
+                                    echo "${action},alloy_native" ;;
+    node-exporter:update|node-exporter:recreate|node-exporter:remove)
+                                    echo "${action},node_exporter" ;;
 
     postgres-exporter:deploy)       echo "postgres_admin_monitor,postgres_exporter" ;;
     postgres-exporter:install)      echo "postgres_admin_monitor,postgres_exporter" ;;
@@ -536,7 +539,11 @@ run_role_or_docker_action() {
   elif [[ $# -le 2 ]]; then
     local tags
 
-    if tags="$(role_tag "$1" "${2:-$default_role_action}")"; then
+    # Prefer an explicit update lifecycle when the target provides one.
+    # Existing host roles still retain their deploy fallback for update.
+    if [[ "$command" == "update" && $# -eq 1 ]] && tags="$(role_tag "$1" update)"; then
+      run_role_playbook "$1" "${LIMIT_ARGS[@]}" --tags "$tags"
+    elif tags="$(role_tag "$1" "${2:-$default_role_action}")"; then
       run_role_playbook "$1" "${LIMIT_ARGS[@]}" --tags "$tags"
     elif is_role_target "$1"; then
       die "Unknown role target/action: $1 ${2:-$default_role_action}. Run: skynet targets"
@@ -705,24 +712,10 @@ Role/action targets:
     recreate  -> infisical_recreate
     remove    -> infisical_remove
 
-  keepalived:
-    deploy -> keepalived
-    run    -> keepalived
-
-  technitium-native:
-    deploy  -> technitium_native
-    install -> technitium_native
-    run     -> technitium_native
-
-  alloy-native:
-    deploy  -> alloy_native
-    install -> alloy_native
-    run     -> alloy_native
-
-  node-exporter:
-    deploy  -> node_exporter
-    install -> node_exporter
-    run     -> node_exporter
+  keepalived, technitium-native, alloy-native, node-exporter:
+    deploy/install/run -> catalogue deploy (existing native selector tags)
+    update/recreate/remove -> catalogue action for the same native entry
+    check -> check-mode deploy
 
   postgres-exporter:
     deploy  -> postgres_admin_monitor,postgres_exporter

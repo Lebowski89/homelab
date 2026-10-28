@@ -323,6 +323,16 @@ def test_rendered_wrapper_executes_locally_with_portable_paths_and_overrides(tmp
     assert result.returncode == 0, result.stdout + result.stderr
     observed = json.loads(result.stdout.splitlines()[-1])
     assert observed["argv"] == ["-i", str(repo / "ansible/netbox.yml"), str(repo / "ansible/playbook.yml"), "--tags", "workstation_tools"]
+    for command, target, expected in (
+        ("update", "node-exporter", "update,node_exporter"),
+        ("remove", "technitium-native", "remove,technitium_native"),
+        ("check", "alloy-native", "deploy,alloy_native"),
+    ):
+        result = subprocess.run(["bash", str(wrapper), command, target], env=env, capture_output=True, text=True)
+        assert result.returncode == 0, result.stdout + result.stderr
+        arguments = json.loads(result.stdout.splitlines()[-1])["argv"]
+        assert arguments[arguments.index("--tags") + 1] == expected
+        assert ("--check" in arguments) is (command == "check")
     for target, action in (
         ("ubuntu", "repo"),
         ("ubuntu", "venv"),

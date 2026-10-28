@@ -107,8 +107,8 @@ prometheus_blackbox_dns_query_name: "adminer.{{ services_internal_zone }}"
 prometheus_blackbox_dns_expected_a: "{{ hostvars[services_controller_host].local_ip }}"
 
 prometheus_blackbox_dns_targets:
-  dns_vip_a: "{{ keepalived_instances.dns_vip_a.virtual_ip }}"
-  dns_vip_b: "{{ keepalived_instances.dns_vip_b.virtual_ip }}"
+  dns_vip_a: "{{ (keepalived_instances | default(svcfiles.keepalived.native.config.instances)).dns_vip_a.virtual_ip }}"
+  dns_vip_b: "{{ (keepalived_instances | default(svcfiles.keepalived.native.config.instances)).dns_vip_b.virtual_ip }}"
   dns01: "{{ hostvars[services_controller_host].local_ip }}"
   dns02: "{{ hostvars[services_plex_host].local_ip }}"
   dns03: "{{ hostvars['dns03'].local_ip }}"

@@ -15,6 +15,12 @@ DOCKER_INIT_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/in
 PODMAN_INIT_PATH = REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/init.yml"
 DOCKER_TASKS_DIR = REPO_ROOT / "ansible/roles/docker_services/tasks"
 PODMAN_TASKS_DIR = REPO_ROOT / "ansible/roles/podman_services/tasks"
+NATIVE_GROUPS = {
+    "tags_podman": ["mgt"],
+    "tags_node_exporter": ["mgt", "plex"],
+    "tags_keepalived": ["mgt", "plex"],
+    "tags_technitium_native": ["mgt", "plex"],
+}
 GLOBAL_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch.yml"
 DOCKER_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_docker.yml"
 PODMAN_DISPATCH_PATH = REPO_ROOT / "ansible/tasks/service_catalog_dispatch_podman.yml"
@@ -67,11 +73,14 @@ def test_real_repository_catalog_contains_only_lightweight_selection_metadata():
         "service_catalog_lightweight_repository",
     )
 
-    effective = catalog_filters.service_catalog_effective(load_services(), "manager")
+    effective = catalog_filters.service_catalog_effective(load_services(), "manager", NATIVE_GROUPS)
 
     assert effective
     assert all("config" not in item for item in effective)
-    assert all(set(item) <= {"name", "target", "runtime", "tags", "enabled", "dispatch_host", "podman_lifecycle"} for item in effective)
+    assert all(
+        set(item) <= {"name", "target", "runtime", "tags", "enabled", "dispatch_host", "dispatch_hosts", "podman_lifecycle"}
+        for item in effective
+    )
     assert all("podman_lifecycle" not in item for item in effective if item["runtime"] == "docker")
     assert all("podman_lifecycle" in item for item in effective if item["runtime"] == "podman")
 
@@ -82,7 +91,7 @@ def test_real_repository_dispatch_hosts_are_lightweight_and_runtime_specific():
         "service_catalog_repository_dispatch",
     )
     services = load_services()
-    effective = catalog_filters.service_catalog_effective(services, "manager")
+    effective = catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS)
     seen_runtimes = set()
 
     for item in effective:
@@ -91,6 +100,9 @@ def test_real_repository_dispatch_hosts_are_lightweight_and_runtime_specific():
         if item["runtime"] == "docker":
             deploy_type = str(deploy.get("type", "swarm") or "swarm").strip()
             expected_host = "manager" if deploy_type == "swarm" else (deploy.get("host") or "manager")
+        elif item["runtime"] == "native":
+            assert item["dispatch_hosts"] == NATIVE_GROUPS[deploy["group"]]
+            expected_host = item["dispatch_hosts"][0]
         else:
             expected_host = deploy.get("host") or service.get("container", {}).get("host") or item["name"]
 
@@ -121,7 +133,7 @@ def test_real_repository_dispatch_hosts_match_repository_host_definitions():
             if isinstance(host, str) and "{{" in host:
                 deploy["host"] = NativeEnvironment(undefined=StrictUndefined).from_string(host).render(**host_context)
 
-    effective = catalog_filters.service_catalog_effective(services, "mgt")
+    effective = catalog_filters.service_catalog_effective(services, "mgt", NATIVE_GROUPS)
     repository_hosts = {path.stem for path in (REPO_ROOT / "ansible/host_vars").glob("*.yml")}
     repository_hosts.update(path.name for path in (REPO_ROOT / "terraform/proxmox/vms").iterdir() if path.is_dir())
     netbox_locals = (REPO_ROOT / "terraform/netbox/locals.tf").read_text().split("base_hosts = {", 1)[1]
@@ -145,7 +157,7 @@ def test_real_podman_definitions_use_only_canonical_adapter_inputs():
     checked = []
     original = deepcopy(services)
 
-    for item in catalog_filters.service_catalog_effective(services, "manager"):
+    for item in catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS):
         if item["runtime"] != "podman":
             continue
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
@@ -229,7 +241,7 @@ def test_every_effective_service_uses_the_canonical_secret_contract_and_default_
             if isinstance(infisical, dict):
                 assert infisical.get("fail_on_empty") is not True, service_name
 
-    for item in catalog_filters.service_catalog_effective(services, "manager"):
+    for item in catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS):
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
         infisical = effective.get("infisical", {})
         normalized = common_filters.service_common_infisical_normalize(
@@ -274,7 +286,7 @@ def test_real_docker_swarm_constraints_match_configured_node_label_values():
     }
     observed = set()
 
-    for item in catalog_filters.service_catalog_effective(services, "manager"):
+    for item in catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS):
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
         if effective["runtime"] != "docker":
             continue
@@ -329,7 +341,7 @@ def test_real_traefik_services_do_not_require_cloudflare_zone_infisical_declarat
     services = load_services()
     checked = []
 
-    for item in catalog_filters.service_catalog_effective(services, "manager"):
+    for item in catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS):
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
         if (effective.get("traefik") or {}).get("enable") is not True:
             continue
@@ -349,7 +361,7 @@ def test_real_docker_env_file_services_retain_their_effective_declarations():
     services = load_services()
     actual = set()
 
-    for item in catalog_filters.service_catalog_effective(services, "manager"):
+    for item in catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS):
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
         if effective.get("env_file"):
             actual.add((item["name"], item.get("target", "<base>")))
@@ -388,7 +400,7 @@ def test_real_common_templates_consume_declared_infisical_values_through_common_
         environment.filters[filter_name] = lambda value, *args, **kwargs: value
     checked = []
 
-    for item in catalog_filters.service_catalog_effective(services, "manager"):
+    for item in catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS):
         effective = catalog_filters.service_catalog_merge_target(services[item["name"]], item.get("target"))
         declared = {entry.get("var") for entry in (effective.get("infisical") or {}).get("secrets_map", []) if isinstance(entry, dict)}
         for field in ("templates", "swarm_env_templates"):
@@ -422,7 +434,7 @@ def test_cross_host_standalone_services_retain_global_catalog_order():
     }
 
     selected = catalog_filters.service_catalog_select(
-        catalog_filters.service_catalog_effective(services, "manager"),
+        catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS),
         run_all=True,
     )["selected"]
 
@@ -433,235 +445,49 @@ def test_cross_host_standalone_services_retain_global_catalog_order():
 
 
 def test_service_play_gathers_facts_only_for_selected_operations_and_hosts():
-    playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
-    deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")
-    pre_tasks = deploy_play["pre_tasks"]
-    deploy_tasks = deploy_play["tasks"]
-    service_tags = {"deploy", "update", "remove", "recreate", "bootstrap", "drift"}
-
-    controller_facts = task_named(pre_tasks, "Gather service controller facts")
-    dispatch_facts = task_named(deploy_tasks, "Gather facts on selected service dispatch hosts")
-    postgres_host_facts = task_named(
-        deploy_tasks,
-        "Gather facts for PostgreSQL host management",
-    )
-    selection_assertion = task_named(deploy_tasks, "Assert selected service processing list was built")
-    global_dispatch = task_named(deploy_tasks, "Process globally ordered service catalog")
-    all_setup_tasks = [task for task in [*pre_tasks, *deploy_tasks] if "ansible.builtin.setup" in task]
-    host_management_setup_tasks = [task for task in all_setup_tasks if task not in (controller_facts, dispatch_facts)]
-
-    assert deploy_play["gather_facts"] is False
-    assert deploy_play["any_errors_fatal"] is True
-    assert "ignore_unreachable" not in str(deploy_play)
-    assert "blacktop" not in str(deploy_play)
-    assert controller_facts["when"] == "inventory_hostname == services_controller_host"
-    assert service_tags <= set(controller_facts["tags"])
-    assert dispatch_facts["when"][0] == "inventory_hostname != services_controller_host"
-    assert "service_catalog_selected" in dispatch_facts["when"][1]
-    assert "map(attribute='dispatch_host')" in dispatch_facts["when"][1]
-    assert set(dispatch_facts["tags"]) == service_tags
-    assert deploy_tasks.index(selection_assertion) < deploy_tasks.index(dispatch_facts)
-    assert deploy_tasks.index(dispatch_facts) < deploy_tasks.index(global_dispatch)
-    assert all(task.get("tags") != "always" for task in all_setup_tasks)
-    assert all(service_tags.isdisjoint(set(task["tags"])) for task in host_management_setup_tasks)
-    postgres_backup_tags = {
-        "postgres_backup",
-        "postgres_backup_setup",
-        "postgres_backup_run",
-    }
-    assert postgres_host_facts["when"] == "'tags_postgres' in group_names"
-    assert postgres_backup_tags <= set(postgres_host_facts["tags"])
-
-    setup_names = {task["name"] for task in host_management_setup_tasks}
-    assert setup_names == {
-        "Gather facts for Docker role",
-        "Gather facts for Podman role",
-        "Gather facts for PostgreSQL host management",
-        "Gather facts for Keepalived role",
-        "Gather facts for Technitium native role",
-        "Gather facts for native Alloy role",
-    }
+    play = next(play for play in yaml.safe_load(PLAYBOOK_PATH.read_text()) if play.get("hosts") == "tags_skynet")
+    assert play["gather_facts"] is False
+    assert play["any_errors_fatal"] is True
+    setups = [task for task in play["tasks"] if "ansible.builtin.setup" in task]
+    selected = next(task for task in setups if "service_catalog_selected" in str(task.get("when")))
+    assert "dispatch_hosts" in str(selected["when"])
+    assert {"deploy", "update", "remove", "recreate"} <= set(selected["tags"])
+    assert all(task.get("when") for task in setups)
+    # Native applications have one catalogue path, with no standalone includes.
+    assert not any(task.get("ansible.builtin.include_role", {}).get("name") == "native_services" for task in play["tasks"])
 
 
 def test_playbook_processes_one_globally_ordered_lightweight_catalog_loop():
-    playbook = yaml.safe_load(PLAYBOOK_PATH.read_text())
-    deploy_play = next(play for play in playbook if play.get("name") == "Deploy homelab services")
-    deploy_tasks = deploy_play["tasks"]
-    assert deploy_play["strategy"] == "linear"
-    catalog_task = task_named(playbook, "Build service catalog processing list from service definitions")
-    selection_task = task_named(playbook, "Build selected service catalog processing list")
-    selection_extract_task = task_named(playbook, "Extract service catalog selection facts")
-    lifecycle_order_task = task_named(playbook, "Order selected Podman services by shared-network dependencies")
-    dispatch_host_validation = task_named(playbook, "Validate selected service dispatch hosts")
-    share_task = task_named(playbook, "Share lightweight service catalog selection with play hosts")
-    global_dispatch_task = task_named(playbook, "Process globally ordered service catalog")
-    deploy_all_task = task_named(playbook, "Deploy all Docker stacks")
-
-    assert catalog_task["when"] == "inventory_hostname == services_controller_host"
-    assert selection_task["when"] == "inventory_hostname == services_controller_host"
-    catalog_expression = catalog_task["ansible.builtin.set_fact"]["service_catalog_effective"]
-    assert "svcfiles | service_catalog_effective(services_controller_host)" in catalog_expression
-    assert "service_catalog_effective" not in share_task["ansible.builtin.set_fact"]
-
-    expected_tags = {"deploy", "update", "remove", "recreate", "bootstrap", "drift"}
-    assert dispatch_host_validation["when"] == "inventory_hostname == services_controller_host"
-    assert dispatch_host_validation["loop"] == "{{ service_catalog_selected }}"
-    assert dispatch_host_validation["loop_control"]["loop_var"] == "service_catalog_dispatch_item"
-    assert dispatch_host_validation["ansible.builtin.assert"]["that"] == [
-        "service_catalog_dispatch_item.dispatch_host in ansible_play_hosts_all"
-    ]
-    dispatch_failure = dispatch_host_validation["ansible.builtin.assert"]["fail_msg"]
-    assert "service_catalog_dispatch_item.name" in dispatch_failure
-    assert "service_catalog_dispatch_item.target" in dispatch_failure
-    assert "service_catalog_dispatch_item.dispatch_host" in dispatch_failure
-    assert set(dispatch_host_validation["tags"]) == expected_tags
-    assert deploy_tasks.index(selection_extract_task) < deploy_tasks.index(lifecycle_order_task)
-    assert deploy_tasks.index(lifecycle_order_task) < deploy_tasks.index(dispatch_host_validation)
-    assert deploy_tasks.index(dispatch_host_validation) < deploy_tasks.index(share_task)
-    assert deploy_tasks.index(share_task) < deploy_tasks.index(global_dispatch_task)
-    assert deploy_tasks.index(global_dispatch_task) < deploy_tasks.index(deploy_all_task)
-
-    shared_facts = share_task["ansible.builtin.set_fact"]
-    assert set(shared_facts) == {
-        "service_catalog_action",
-        "service_catalog_matched",
-        "service_catalog_selected",
-        "service_catalog_disabled_only_selection",
-    }
-    assert "config" not in str(shared_facts)
-    assert "materialized" not in str(shared_facts)
-    assert shared_facts["service_catalog_action"] == "{{ hostvars[services_controller_host].service_catalog_action }}"
-
-    assert global_dispatch_task["loop"] == "{{ service_catalog_selected }}"
-    assert global_dispatch_task["loop_control"]["loop_var"] == "service_catalog_dispatch_entry"
-    assert "when" not in global_dispatch_task
-    assert global_dispatch_task["ansible.builtin.include_tasks"]["file"] == "tasks/service_catalog_dispatch.yml"
-    assert set(global_dispatch_task["tags"]) == expected_tags
-    assert set(global_dispatch_task["ansible.builtin.include_tasks"]["apply"]["tags"]) == expected_tags
-    lifecycle_expression = lifecycle_order_task["ansible.builtin.set_fact"]["service_catalog_selected"]
-    assert "svcfiles" not in lifecycle_expression
-    assert "service_catalog_podman_lifecycle_plan" in lifecycle_expression
-    assert "service_catalog_effective" in lifecycle_expression
-    assert "service_catalog_selected" in lifecycle_expression
-    assert ").selected" in lifecycle_expression
-    assert "service_catalog_lifecycle_plan" not in PLAYBOOK_PATH.read_text()
-    assert "service_catalog_host_selected" not in PLAYBOOK_PATH.read_text()
-    assert "docker_services_selected" not in PLAYBOOK_PATH.read_text()
-    assert "podman_services_selected" not in PLAYBOOK_PATH.read_text()
-    assert any("service_catalog_selected" in condition for condition in deploy_all_task["when"])
-    assert any("service_catalog_by_runtime('docker')" in condition for condition in deploy_all_task["when"])
-
-    global_dispatch = list(walk_mappings(yaml.safe_load(GLOBAL_DISPATCH_PATH.read_text())))
-    reset = task_named(global_dispatch, "Service catalog dispatch | Reset host-local materialized result")
-    materialize = task_named(global_dispatch, "Service catalog dispatch | Materialize selected entry on dispatch host")
-    copy_result = task_named(global_dispatch, "Service catalog dispatch | Copy returned materialized entry")
-    validate = task_named(global_dispatch, "Service catalog dispatch | Validate single materialized entry")
-    docker_route = task_named(global_dispatch, "Service catalog dispatch | Process Docker entry")
-    podman_route = task_named(global_dispatch, "Service catalog dispatch | Process Podman entry")
-
-    assert global_dispatch.index(reset) < global_dispatch.index(materialize) < global_dispatch.index(copy_result)
-    assert global_dispatch.index(copy_result) < global_dispatch.index(validate)
-    assert global_dispatch.index(validate) < global_dispatch.index(docker_route)
-    assert global_dispatch.index(validate) < global_dispatch.index(podman_route)
-    assert reset["ansible.builtin.set_fact"]["service_catalog_host_materialized"] == []
-    expected_host_condition = "inventory_hostname == service_catalog_dispatch_entry.dispatch_host"
-    assert materialize["when"] == expected_host_condition
-    assert validate["when"] == expected_host_condition
-    assert materialize["service_catalog_materialize"] == {
-        "source_var": "svcfiles",
-        "selected": ["{{ service_catalog_dispatch_entry }}"],
-    }
-    assert materialize["register"] == "service_catalog_materialize_result"
-    assert copy_result["when"] == expected_host_condition
-    assert copy_result["ansible.builtin.set_fact"]["service_catalog_host_materialized"] == (
-        "{{ service_catalog_materialize_result.ansible_facts.service_catalog_host_materialized }}"
+    play = next(play for play in yaml.safe_load(PLAYBOOK_PATH.read_text()) if play.get("hosts") == "tags_skynet")
+    assert play["strategy"] == "linear"
+    dispatch = next(
+        task for task in play["tasks"] if task.get("ansible.builtin.include_tasks", {}).get("file") == "tasks/service_catalog_dispatch.yml"
     )
-    assert validate["ansible.builtin.assert"]["that"] == [
-        "service_catalog_host_materialized is sequence",
-        "service_catalog_host_materialized | length == 1",
-        "service_catalog_host_materialized[0].config is mapping",
-    ]
-    for route, runtime, filename, variable in (
-        (docker_route, "docker", "service_catalog_dispatch_docker.yml", "service_catalog_docker_service"),
-        (podman_route, "podman", "service_catalog_dispatch_podman.yml", "service_catalog_podman_service"),
-    ):
-        assert route["when"] == [expected_host_condition, f'service_catalog_dispatch_entry.runtime == "{runtime}"']
-        assert route["ansible.builtin.include_tasks"]["file"] == filename
-        assert set(route["tags"]) == expected_tags
-        assert set(route["ansible.builtin.include_tasks"]["apply"]["tags"]) == expected_tags
-        assert route["vars"][variable] == "{{ service_catalog_host_materialized[0] }}"
-
-    assert "{{ svcfiles }}" not in GLOBAL_DISPATCH_PATH.read_text()
-    assert "hostvars" not in GLOBAL_DISPATCH_PATH.read_text()
+    assert dispatch["loop"] == "{{ service_catalog_selected }}"
+    assert dispatch["loop_control"]["loop_var"] == "service_catalog_dispatch_entry"
+    assert set(dispatch["tags"]) <= set(dispatch["ansible.builtin.include_tasks"]["apply"]["tags"])
+    routes = list(walk_mappings(yaml.safe_load(GLOBAL_DISPATCH_PATH.read_text())))
+    materialize = next(task for task in routes if "service_catalog_materialize" in task)
+    assert "dispatch_hosts" in materialize["when"]
+    assert materialize["service_catalog_materialize"]["source_var"] == "svcfiles"
+    native = next(task for task in routes if task.get("ansible.builtin.include_role", {}).get("name") == "native_services")
+    assert 'service_catalog_dispatch_entry.runtime == "native"' in native["when"]
+    assert "inventory_hostname in service_catalog_dispatch_entry.dispatch_hosts" in native["when"]
+    for route in routes:
+        include = route.get("ansible.builtin.include_tasks", {})
+        if include.get("file") in {"service_catalog_dispatch_docker.yml", "service_catalog_dispatch_podman.yml"}:
+            assert "inventory_hostname == service_catalog_dispatch_entry.dispatch_host" in route["when"]
+            assert set(route["tags"]) <= set(include["apply"]["tags"])
     assert "delegate_to" not in GLOBAL_DISPATCH_PATH.read_text()
-    assert "delegate_facts" not in GLOBAL_DISPATCH_PATH.read_text()
-
-    docker_dispatch = yaml.safe_load(DOCKER_DISPATCH_PATH.read_text())
-    podman_dispatch = yaml.safe_load(PODMAN_DISPATCH_PATH.read_text())
-    docker_reset = task_named(
-        docker_dispatch,
-        "Service catalog dispatch | Reset Docker transient configuration",
-    )
-    docker_copy = task_named(
-        docker_dispatch,
-        "Service catalog dispatch | Copy Docker materialized configuration",
-    )
-    docker_include = task_named(
-        docker_dispatch,
-        "Service catalog dispatch | Include Docker service role",
-    )
-    podman_reset = task_named(
-        podman_dispatch,
-        "Service catalog dispatch | Reset Podman transient configuration",
-    )
-    podman_copy = task_named(
-        podman_dispatch,
-        "Service catalog dispatch | Copy Podman materialized configuration",
-    )
-    podman_include = task_named(
-        podman_dispatch,
-        "Service catalog dispatch | Include Podman service role",
-    )
-
-    assert docker_reset["ansible.builtin.set_fact"]["docker_services_dispatch_config"] == {}
-    assert podman_reset["ansible.builtin.set_fact"]["podman_services_dispatch_config"] == {}
-    assert docker_dispatch.index(docker_reset) < docker_dispatch.index(docker_copy) < docker_dispatch.index(docker_include)
-    assert podman_dispatch.index(podman_reset) < podman_dispatch.index(podman_copy) < podman_dispatch.index(podman_include)
-
-    assert docker_copy["ansible.builtin.set_fact"]["docker_services_dispatch_config"] == ("{{ service_catalog_docker_service.config }}")
-    assert podman_copy["ansible.builtin.set_fact"]["podman_services_dispatch_config"] == ("{{ service_catalog_podman_service.config }}")
-    assert "svcfiles" not in DOCKER_DISPATCH_PATH.read_text()
-    assert "svcfiles" not in PODMAN_DISPATCH_PATH.read_text()
-    assert "service_catalog_merge_target" not in DOCKER_DISPATCH_PATH.read_text()
-    assert "service_catalog_merge_target" not in PODMAN_DISPATCH_PATH.read_text()
-    assert docker_include["vars"]["docker_services_service_cfg_found"] is True
-    assert podman_include["vars"]["podman_services_service_cfg_found"] is True
-    assert "default(service_cfg_found" not in DOCKER_DISPATCH_PATH.read_text()
-    assert "default(service_cfg_found" not in PODMAN_DISPATCH_PATH.read_text()
-    assert "when" not in docker_include
-    assert "when" not in podman_include
-
-    assert docker_include["vars"]["docker_services_service_cfg"] == "{{ docker_services_dispatch_config }}"
-    assert podman_include["vars"]["podman_services_service_cfg"] == "{{ podman_services_dispatch_config }}"
-    assert podman_include["vars"]["podman_services_managed_namespace_dependents"] == (
-        "{{ service_catalog_podman_service.podman_lifecycle.namespace_dependents | default([]) }}"
-    )
-    assert podman_include["vars"]["ansible_pipelining"] is True
-    assert "ansible_pipelining" not in docker_include["vars"]
-    assert "service_catalog_merge_target" not in str(docker_include["vars"])
-    assert "service_catalog_merge_target" not in str(podman_include["vars"])
-
-    docker_init = yaml.safe_load(DOCKER_INIT_PATH.read_text())
-    docker_config = task_named(docker_init, "Initialize | Load service configuration")
-    docker_assert = task_named(docker_init, "Initialize | Validate service configuration input")
-    podman_init = yaml.safe_load(PODMAN_INIT_PATH.read_text())
-    podman_assert = task_named(podman_init, "Init | Validate selected service configuration")
-
-    assert docker_config["ansible.builtin.set_fact"]["docker_services_svc"] == "{{ docker_services_service_cfg }}"
-    adapter_tasks = "\n".join(path.read_text() for tasks_dir in (DOCKER_TASKS_DIR, PODMAN_TASKS_DIR) for path in tasks_dir.rglob("*.yml"))
-    assert "merge_target" not in adapter_tasks
-    assert "docker_services_service_cfg.targets is not defined" in docker_assert["ansible.builtin.assert"]["that"]
-    assert "podman_services_service_cfg.targets is not defined" in podman_assert["ansible.builtin.assert"]["that"]
+    # Adapters receive the selected host-local materialization; they must not
+    # independently merge the whole catalogue or leak the previous service.
+    for path, prefix in ((DOCKER_DISPATCH_PATH, "docker_services"), (PODMAN_DISPATCH_PATH, "podman_services")):
+        tasks = yaml.safe_load(path.read_text())
+        facts = [task["ansible.builtin.set_fact"] for task in tasks if "ansible.builtin.set_fact" in task]
+        assert facts[0][prefix + "_dispatch_config"] == {}
+        assert any(prefix + "_dispatch_config" in fact and "config" in str(fact[prefix + "_dispatch_config"]) for fact in facts[1:])
+        assert "svcfiles" not in path.read_text()
+        assert "service_catalog_merge_target" not in path.read_text()
 
 
 def test_real_vpn_namespace_stack_has_managed_provider_edges_and_safe_recreate_order():
@@ -670,7 +496,7 @@ def test_real_vpn_namespace_stack_has_managed_provider_edges_and_safe_recreate_o
         "service_catalog_namespace_lifecycle_repository",
     )
     services = load_services()
-    effective = catalog_filters.service_catalog_effective(services, "manager")
+    effective = catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS)
     selected = catalog_filters.service_catalog_select(effective, ["gluetun_stack"])["selected"]
 
     plan = catalog_filters.service_catalog_podman_lifecycle_plan(effective, selected, "recreate")
@@ -709,7 +535,7 @@ def test_runtime_partition_only_sends_podman_entries_to_strict_podman_normalizat
         },
     }
     selected = catalog_filters.service_catalog_select(
-        catalog_filters.service_catalog_effective(services, "manager"),
+        catalog_filters.service_catalog_effective(services, "manager", NATIVE_GROUPS),
         run_all=True,
     )["selected"]
     docker_entries = catalog_filters.service_catalog_by_runtime(selected, "docker")

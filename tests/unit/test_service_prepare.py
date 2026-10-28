@@ -163,7 +163,8 @@ def test_controller_host_is_resolved_only_at_orchestration_boundary():
     podman_main = PODMAN_MAIN_PATH.read_text()
 
     expression = controller["ansible.builtin.set_fact"]["service_catalog_controller_host"]
-    assert expression == "{{ services_controller_host }}"
+    assert "service_catalog_native_only" in expression
+    assert "else services_controller_host" in expression
     assert "docker_services_primary_manager" not in preflight_text
     assert 'service_common_controller_host: "{{ service_catalog_controller_host }}"' in preflight_text
     assert 'controller_host: "{{ docker_services_common_context.controller_host }}"' not in docker_prep

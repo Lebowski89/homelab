@@ -198,3 +198,30 @@ alloy:
         restart: always
         restart_sec: 15s
         timeout_start_sec: 300s
+    native:
+      runtime: native
+      tags:
+        - alloy-native
+        - alloy_native
+      native:
+        application: alloy
+        config:
+          keyring_dir: /etc/apt/keyrings
+          keyring_file: /etc/apt/keyrings/grafana.asc
+          repo_url: https://apt.grafana.com
+          repo_suite: stable
+          repo_filename: grafana
+          packages:
+            - alloy
+          service_name: alloy
+          user: alloy
+          group: alloy
+          config_dir: /etc/alloy
+          config_path: /etc/alloy/config.alloy
+          journal_groups:
+            - adm
+            - systemd-journal
+          loki_url: https://loki.{{ services_internal_zone }}:{{ services_private_https_port }}/loki/api/v1/push
+        update_policy: present
+      deploy:
+        group: tags_podman

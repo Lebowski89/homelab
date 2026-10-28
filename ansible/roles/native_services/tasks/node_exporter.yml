@@ -66,6 +66,14 @@
     - Reload systemd
     - Restart node_exporter
 
+- name: Native services | Record adopted node_exporter configuration
+  when:
+    - not ansible_check_mode
+  ansible.builtin.include_tasks: record_files.yml
+  vars:
+    native_services_adopted_files:
+      - "/etc/systemd/system/node_exporter.service"
+
 - name: Node_Exporter | Enable and start node_exporter
   when: not ansible_check_mode
   ansible.builtin.systemd:

@@ -115,6 +115,10 @@ def test_real_catalog_and_bootstrap_project_only_metadata_and_ignore_tags():
     assert services == original
     for service in services.values():
         service["tags"] = []
+        if service["runtime"] == "native":
+            config = service["native"]["config"]
+            config[next(iter(config))] = "{{ lookup('must_never_run') }}"
+            continue
         service["environment"] = {**service.get("environment", {}), "POISON": "{{ lookup('must_never_run') }}"}
         for target in service.get("targets", {}).values():
             target["tags"] = []
