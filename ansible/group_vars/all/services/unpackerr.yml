@@ -12,54 +12,13 @@ unpackerr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/unpackerr:release-v0.15.2
+  image: ghcr.io/unpackerr/unpackerr:1.0.0@sha256:21c6bfa4f4c86ab2dd0232da0dfb3ed4c5d929e42e09894e7b4d2154d0c144f6
+  user: "{{ hostvars[services_storage_host].container_host_puid }}:{{ hostvars[services_storage_host].container_host_pgid }}"
   ################################
   # ENVIRONMENT/SECRETS
   ################################
   environment:
     TZ: "{{ timezone }}"
-    PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
-    PGID: "{{ hostvars[services_storage_host].container_host_pgid }}"
-    UMASK: "022"
-    UN_WEBSERVER_METRICS: "true"
-    UN_WEBSERVER_UPSTREAMS: "172.98.0.0/24"
-    ## Lidarr Settings
-    UN_LIDARR_0_URL: >-
-      https://lidarr.{{ services_internal_zone }}:{{ services_private_https_port }}
-    FILE__UN_LIDARR_0_API_KEY: /run/secrets/lidarr_api_secret
-    UN_LIDARR_0_PATHS_0: "/data/torrents/alpha/completed"
-    UN_LIDARR_0_PATHS_1: "/data/torrents/bravo/completed"
-    ## Radarr Settings
-    UN_RADARR_0_URL: >-
-      https://radarr.{{ services_internal_zone }}:{{ services_private_https_port }}
-    FILE__UN_RADARR_0_API_KEY: /run/secrets/radarr_api_secret
-    UN_RADARR_0_PATHS_0: "/data/torrents/alpha/completed"
-    UN_RADARR_0_PATHS_1: "/data/torrents/bravo/completed"
-    UN_RADARR_1_URL: >-
-      https://radarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}
-    FILE__UN_RADARR_1_API_KEY: /run/secrets/radarr_4k_api_secret
-    UN_RADARR_1_PATHS_0: "/data/torrents/alpha/completed"
-    UN_RADARR_1_PATHS_1: "/data/torrents/bravo/completed"
-    ## Sonarr Settings
-    UN_SONARR_0_URL: >-
-      https://sonarr.{{ services_internal_zone }}:{{ services_private_https_port }}
-    FILE__UN_SONARR_0_API_KEY: /run/secrets/sonarr_api_secret
-    UN_SONARR_0_PATHS_0: "/data/torrents/alpha/completed"
-    UN_SONARR_0_PATHS_1: "/data/torrents/bravo/completed"
-    UN_SONARR_1_URL: >-
-      https://sonarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}
-    FILE__UN_SONARR_1_API_KEY: /run/secrets/sonarr_4k_api_secret
-    UN_SONARR_1_PATHS_0: "/data/torrents/alpha/completed"
-    UN_SONARR_1_PATHS_1: "/data/torrents/bravo/completed"
-    ## Whisparr Settings
-    UN_WHISPARR_0_URL: >-
-      https://whisparr.{{ services_internal_zone }}:{{ services_private_https_port }}
-    UN_WHISPARR_0_API_KEY: /run/secrets/whisparr_api_secret
-    UN_WHISPARR_0_PATHS_0: "/data/torrents/alpha/completed"
-    UN_WHISPARR_0_PATHS_1: "/data/torrents/bravo/completed"
-    ## Webhook Settings
-    UN_WEBHOOK_0_URL: /run/secrets/unpackerr_webhook_secret
-    UN_WEBHOOK_0_NAME: "Notifiarr"
   infisical:
     secrets_map:
       - var: unpackerr_notifiarr_webhook
@@ -67,51 +26,107 @@ unpackerr:
         name: NOTIFIARR_WEBHOOK
         secret:
           name: unpackerr_webhook_secret
+          uid: "{{ hostvars[services_storage_host].container_host_puid }}"
+          gid: "{{ hostvars[services_storage_host].container_host_pgid }}"
+          mode: "0400"
       - var: lidarr_api
         path: "/Lidarr"
         name: API
         secret:
           name: lidarr_api_secret
+          uid: "{{ hostvars[services_storage_host].container_host_puid }}"
+          gid: "{{ hostvars[services_storage_host].container_host_pgid }}"
+          mode: "0400"
       - var: radarr_api
         path: "/Radarr"
         name: API
         secret:
           name: radarr_api_secret
+          uid: "{{ hostvars[services_storage_host].container_host_puid }}"
+          gid: "{{ hostvars[services_storage_host].container_host_pgid }}"
+          mode: "0400"
       - var: radarr_4k_api
         path: "/Radarr-4K"
         name: API
         secret:
           name: radarr_4k_api_secret
+          uid: "{{ hostvars[services_storage_host].container_host_puid }}"
+          gid: "{{ hostvars[services_storage_host].container_host_pgid }}"
+          mode: "0400"
       - var: sonarr_api
         path: "/Sonarr"
         name: API
         secret:
           name: sonarr_api_secret
+          uid: "{{ hostvars[services_storage_host].container_host_puid }}"
+          gid: "{{ hostvars[services_storage_host].container_host_pgid }}"
+          mode: "0400"
       - var: sonarr_4k_api
         path: "/Sonarr-4K"
         name: API
         secret:
           name: sonarr_4k_api_secret
+          uid: "{{ hostvars[services_storage_host].container_host_puid }}"
+          gid: "{{ hostvars[services_storage_host].container_host_pgid }}"
+          mode: "0400"
       - var: whisparr_api
         path: "/Whisparr"
         name: API
         secret:
           name: whisparr_api_secret
+          uid: "{{ hostvars[services_storage_host].container_host_puid }}"
+          gid: "{{ hostvars[services_storage_host].container_host_pgid }}"
+          mode: "0400"
   ################################
   # CONNECTIVITY
   ################################
   named_networks:
     overlay:
       external: true
+  ports:
+    web_backend:
+      exposure: private
+      callers: [traefik]
+      published: 22624
+      target: 5656
+      mode: host
   ################################
   # FILESYSTEM
   ################################
+  paths:
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/unpackerr"
+      state: directory
+      owner: "{{ hostvars[services_storage_host].container_host_puid }}"
+      group: "{{ hostvars[services_storage_host].container_host_pgid }}"
+      mode: "0750"
+  templates:
+    - src: configs/unpackerr.conf.j2
+      dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/unpackerr/unpackerr.conf"
+      owner: "{{ hostvars[services_storage_host].container_host_puid }}"
+      group: "{{ hostvars[services_storage_host].container_host_pgid }}"
+      mode: "0600"
+      force: false
+      no_log: true
   volumes:
+    config:
+      type: bind
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/unpackerr"
+      target: /config
+      read_only: false
     media:
       type: bind
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
+  ################################
+  # INTEGRATIONS
+  ################################
+  traefik:
+    enable: true
+    exposure: private
+    port: 22624
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
   ################################
   # RUNTIME/LIFECYCLE
   ################################

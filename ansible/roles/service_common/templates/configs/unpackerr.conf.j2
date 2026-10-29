@@ -1,0 +1,54 @@
+# Seeded once by Ansible. Subsequent changes belong to the Unpackerr UI.
+# Credentials remain in Infisical/Docker secrets; retain the filepath: references.
+file_mode = "0644"
+dir_mode = "0755"
+keep_history = 400
+
+[webserver]
+listen_addr = "0.0.0.0:5656"
+ui_password = ""
+urlbase = "/"
+# No existing scrape. Enabling metrics also requires a scoped API key.
+metrics = false
+# Traefik reaches the host publication through the verified mgt source boundary.
+upstreams = ["{{ hostvars[services_controller_host].local_ip }}/{{ '128' if ':' in hostvars[services_controller_host].local_ip else '32' }}"]
+
+[lidarr.lidarr]
+name = "Lidarr"
+url = "https://lidarr.{{ services_internal_zone }}:{{ services_private_https_port }}"
+api_key = "filepath:/run/secrets/lidarr_api_secret"
+paths = ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+
+[radarr.radarr]
+name = "Radarr"
+url = "https://radarr.{{ services_internal_zone }}:{{ services_private_https_port }}"
+api_key = "filepath:/run/secrets/radarr_api_secret"
+paths = ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+
+[radarr.radarr_4k]
+name = "Radarr 4K"
+url = "https://radarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}"
+api_key = "filepath:/run/secrets/radarr_4k_api_secret"
+paths = ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+
+[radarr.whisparr]
+name = "Whisparr"
+url = "https://whisparr.{{ services_internal_zone }}:{{ services_private_https_port }}"
+api_key = "filepath:/run/secrets/whisparr_api_secret"
+paths = ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+
+[sonarr.sonarr]
+name = "Sonarr"
+url = "https://sonarr.{{ services_internal_zone }}:{{ services_private_https_port }}"
+api_key = "filepath:/run/secrets/sonarr_api_secret"
+paths = ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+
+[sonarr.sonarr_4k]
+name = "Sonarr 4K"
+url = "https://sonarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}"
+api_key = "filepath:/run/secrets/sonarr_4k_api_secret"
+paths = ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+
+[webhook.notifiarr]
+name = "Notifiarr"
+url = "filepath:/run/secrets/unpackerr_webhook_secret"

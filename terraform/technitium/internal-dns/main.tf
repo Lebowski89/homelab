@@ -78,6 +78,7 @@ locals {
     "traefik",
     "unifi",
     "unifi-os",
+    "unpackerr",
     "upbrr",
     "vaultwarden",
     "wallos",

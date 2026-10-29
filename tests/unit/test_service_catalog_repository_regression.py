@@ -258,6 +258,7 @@ def test_every_effective_service_uses_the_canonical_secret_contract_and_default_
                 infisical.get("secrets_map", []),
                 {
                     "services_controller_host": "synthetic-controller",
+                    "services_storage_host": "synthetic-controller",
                     "hostvars": {"synthetic-controller": {"container_host_puid": 2301, "container_host_pgid": 2402}},
                 },
             ),

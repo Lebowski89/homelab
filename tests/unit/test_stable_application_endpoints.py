@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import tomllib
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -73,9 +74,8 @@ def render_expression(expression: str, lookup_values: dict[str, str] | None = No
     )
 
 
-@pytest.mark.parametrize("service_name", ["unpackerr", "scraparr"])
-def test_application_url_environment_uses_inventory_topology(service_name):
-    service = load_service(service_name)
+def test_application_url_environment_uses_inventory_topology():
+    service = load_service("scraparr")
     url_values = {
         name: value
         for name, value in service["environment"].items()
@@ -89,6 +89,33 @@ def test_application_url_environment_uses_inventory_topology(service_name):
         assert parsed.scheme == "https"
         assert parsed.hostname.endswith(".private.example.internal")
         assert parsed.port == 9443
+
+
+def test_unpackerr_persistent_toml_keeps_integrations_and_external_secret_ownership():
+    service = load_service("unpackerr")
+    config = tomllib.loads(render_template("unpackerr", "unpackerr.conf.j2"))
+    applications = [
+        ("lidarr", "lidarr", "lidarr"),
+        ("radarr", "radarr", "radarr"),
+        ("radarr", "radarr_4k", "radarr-4k"),
+        ("radarr", "whisparr", "whisparr"),
+        ("sonarr", "sonarr", "sonarr"),
+        ("sonarr", "sonarr_4k", "sonarr-4k"),
+    ]
+    references = []
+    for dialect, instance, hostname in applications:
+        app = config[dialect][instance]
+        assert app["url"] == f"https://{hostname}.private.example.internal:9443"
+        assert app["paths"] == ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+        references.append(app["api_key"])
+    assert "whisparr" not in config
+    references.append(config["webhook"]["notifiarr"]["url"])
+    assert set(references) == {"filepath:/run/secrets/" + item["secret"]["name"] for item in service["infisical"]["secrets_map"]}
+    assert not any(name.startswith(("UN_", "FILE__")) for name in service["environment"])
+    assert config["webserver"]["upstreams"] == ["192.0.2.58/32"]
+    assert config["webserver"]["metrics"] is False
+    assert config["webserver"]["ui_password"] != "noauth"
+    assert service["templates"][0]["force"] is False
 
 
 def test_service_infisical_declarations_do_not_contain_dns_topology():
