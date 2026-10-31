@@ -226,11 +226,14 @@ def test_worker_routes_match_unique_published_ports_without_changing_container_l
             assert f"WEBUI_PORTS={port['target']}/tcp,{port['target']}/udp" in rendered
             conf = env.get_template("configs/qbittorrent/qBittorrent.conf.j2").render(
                 service_common_service=cfg,
-                service_common_infisical_values={"qbittorrent_user": "NONPRODUCTION"},
+                service_common_infisical_values={"qbittorrent_user": "NONPRODUCTION", "qbittorrent_api": "NONPRODUCTION_API"},
                 service_common_template_vars={"qbittorrent_pass_pbkdf2": "NONPRODUCTION"},
                 **context(),
             )
             assert f"WebUI\\Port={port['target']}" in conf
+            assert "WebUI\\APIKey=NONPRODUCTION_API" in conf
+            assert f"Session\\DefaultSavePath={cfg['volumes']['media']['target']}/completed" in conf
+            assert f"Session\\TempPath={cfg['volumes']['media']['target']}/incoming" in conf
             assert "172.98.0.0/24;192.0.2.10" in conf
     assert allocated
     for name in ["haproxy", "alloy"]:

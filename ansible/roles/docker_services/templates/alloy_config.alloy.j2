@@ -53,19 +53,11 @@ loki.source.docker "docker" {
 discovery.relabel "application_paths_owned" {
   targets = [
     {
-      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha/log/qbittorrent.log",
+      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent/log/qbittorrent.log",
       __tmp_owner_host = "{{ services_storage_host }}",
       host      = sys.env("ALLOY_HOST"),
       log_type  = "application",
-      service   = "qbittorrent-alpha",
-      source    = "file",
-    },
-    {
-      __path__ = "/host/rootfs{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo/log/qbittorrent.log",
-      __tmp_owner_host = "{{ services_storage_host }}",
-      host      = sys.env("ALLOY_HOST"),
-      log_type  = "application",
-      service   = "qbittorrent-bravo",
+      service   = "qbittorrent",
       source    = "file",
     },
     {

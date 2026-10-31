@@ -187,7 +187,7 @@ def test_concurrent_services_merge_current_policy_under_one_lock(tmp_path, monke
     assert {e["port"] for e in json.loads(store.path.read_text())["endpoints"]} == {18100, 18101, 18102}
 
 
-@pytest.mark.parametrize("service,host", [("wallos", "mgt"), ("whisparr", "unraid")])
+@pytest.mark.parametrize("service,host", [("wallos", "mgt"), ("whisparr", "unraid"), ("qbittorrent", "unraid"), ("qui", "unraid")])
 def test_real_canonical_endpoint_declarations_resolve_without_migration_flags(service, host):
     context = REAL.context()
     catalog = REAL.catalog()
@@ -690,7 +690,9 @@ def test_real_mgt_and_arr_targets_plan_without_templating_environments(monkeypat
         "deploy": {"type": "container", "hosts": "mgt", "execution": {"mode": "rootless", "host_user": "podman-newapp"}},
     }
     planned = []
-    entries = REAL.mgt_entries(catalog) + [entry for entry in REAL.catalog_items(catalog) if "arrs" in entry["tags"]]
+    entries = REAL.mgt_entries(catalog) + [
+        entry for entry in REAL.catalog_items(catalog) if "arrs" in entry["tags"] or entry["name"] in {"qbittorrent", "qui"}
+    ]
     for entry in entries:
         raw = REAL.CATALOG.service_catalog_merge_target(catalog[entry["name"]], entry.get("target"))
         actual = raw.get("name", entry["name"] + ("-" + entry["target"] if entry.get("target") else ""))
@@ -719,7 +721,7 @@ def test_real_mgt_and_arr_targets_plan_without_templating_environments(monkeypat
         action._loader = SimpleNamespace(load_from_file=lambda path, **kwargs: yaml.safe_load(Path(path).read_text()))
         plan = action.run(task_vars=context | {"svcfiles": catalog})["ansible_facts"]["service_firewall_lifecycle_plan"]
         assert "must_not_run" not in json.dumps(plan)
-        if "arrs" in entry["tags"]:
+        if "arrs" in entry["tags"] or entry["name"] in {"qbittorrent", "qui"}:
             assert not plan.get("legacy_publications", False)
             if cfg.get("ports"):
                 assert plan["managed"] and plan["endpoints"]

@@ -1329,8 +1329,8 @@ def test_actual_optional_network_projection_reaches_candidates_and_keeps_unknown
     elif not populated:
         assert worker[0]["routes"] == [{"kind": "unresolved"}]
     assert worker[-1]["routes"] == [{"kind": "unresolved"}]
-    assert result["candidate"]["mgt_firewall_callers"]["qui-alpha"] == []
-    assert any("qui-alpha@worker: unresolved" in message for message in result["pending"])
+    assert result["candidate"]["mgt_firewall_callers"]["qui"] == []
+    assert any("qui@worker: unresolved" in message for message in result["pending"])
     assert result["candidate"]["mgt_firewall_callers"]["traefik"] == existing["mgt_firewall_callers"]["traefik"]
     assert result["candidate"]["mgt_firewall_inputs_verified"] is False
     assert all(
@@ -1397,7 +1397,7 @@ def test_captured_technitium_addressless_vips_do_not_block_haproxy_candidates():
     candidate = result["candidate"]
     assert candidate["mgt_firewall_callers"]["traefik"] == existing["mgt_firewall_callers"]["traefik"]
     assert candidate["mgt_firewall_inputs_verified"] is False
-    assert candidate["mgt_firewall_callers"]["qui-alpha"][0]["route_verified"] is False
+    assert candidate["mgt_firewall_callers"]["qui"][0]["route_verified"] is False
     for name, bindings in candidate["mgt_firewall_callers"].items():
         if name == "traefik":
             continue
@@ -1515,7 +1515,7 @@ class PreflightHost:
     def __init__(self, host):
         self.host = host
         self.pid = {"manager": 1234, "worker": 2345, "plex": 3456}[host]
-        self.name = {"manager": "infisical-infisical-1", "worker": "qui-alpha", "plex": "qui-bravo"}[host]
+        self.name = {"manager": "infisical-infisical-1", "worker": "qui", "plex": "fixture-db-client"}[host]
         self.calls = []
         self.host_network = False
         self.owned_socket = False
@@ -1867,7 +1867,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
     candidate = json.loads(output.read_text())
     assert candidate["mgt_firewall_inputs_verified"] is False
     assert candidate["mgt_firewall_callers"]["traefik"] == [container()]
-    for name in ["qui-alpha"]:
+    for name in ["qui"]:
         assert candidate["mgt_firewall_callers"][name][0]["kind"] == "elsewhere"
         assert candidate["mgt_firewall_callers"][name][0]["route_verified"] is False
     assert candidate["mgt_firewall_callers"]["controller"] == candidate["mgt_firewall_callers"]["recovery"] == []
@@ -2024,7 +2024,7 @@ def test_handoff_routes_wait_for_mgt_exclusion_and_idle_clients_without_confirmi
         )
 
     before = refresh()
-    assert before["candidate"]["mgt_firewall_callers"]["qui-alpha"] == []
+    assert before["candidate"]["mgt_firewall_callers"]["qui"] == []
     assert before["reports"][1]["containers"][0]["destinations"][0]["routes"][0]["worker_only"] is False
     baseline = deepcopy(provider)
     provider["tasks"].pop()  # Simulate only the mgt task leaving the existing VIP.
@@ -2034,8 +2034,8 @@ def test_handoff_routes_wait_for_mgt_exclusion_and_idle_clients_without_confirmi
     }
     assert provider["tasks"] == baseline["tasks"][:-1]
     callers = after["candidate"]["mgt_firewall_callers"]
-    assert callers["qui-alpha"][0]["kind"] == "elsewhere"
-    assert callers["qui-alpha"][0]["route_verified"] is False
+    assert callers["qui"][0]["kind"] == "elsewhere"
+    assert callers["qui"][0]["route_verified"] is False
     assert callers["bazarr"] == callers["romm"] == []
     assert any("bazarr@worker" in entry for entry in after["pending"])
     assert any("romm@worker" in entry for entry in after["pending"])
@@ -2045,7 +2045,7 @@ def test_handoff_routes_wait_for_mgt_exclusion_and_idle_clients_without_confirmi
     candidate = observed["candidate"]
     assert candidate["mgt_firewall_callers"]["traefik"] == existing["mgt_firewall_callers"]["traefik"]
     assert candidate["mgt_firewall_inputs_verified"] is False
-    for name in ["qui-alpha", "bazarr", "romm"]:
+    for name in ["qui", "bazarr", "romm"]:
         binding = candidate["mgt_firewall_callers"][name][0]
         assert binding["kind"] == "elsewhere" and binding["inventory_host"] == "worker"
         assert binding["route_verified"] is binding["verified"] is binding["restart_verified"] is False

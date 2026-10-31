@@ -95,8 +95,7 @@ compressed, backup, debug, trace, and unrelated log trees.
 | Service | Container path | Host-side path or pattern | Format | Rotation owner |
 | --- | --- | --- | --- | --- |
 | Traefik access | `/etc/traefik/logs/access.log` | `/var/log/skynet/traefik/access.log` | JSON | host logrotate: daily or 25 MiB, seven rotations/seven days |
-| qBittorrent alpha | `/config/log/qbittorrent.log` | `<storage-appdata>/qbittorrent-alpha/log/qbittorrent.log` | text | qBittorrent: 5 MiB active file, backups older than one month removed |
-| qBittorrent bravo | `/config/log/qbittorrent.log` | `<storage-appdata>/qbittorrent-bravo/log/qbittorrent.log` | text | qBittorrent: 5 MiB active file, backups older than one month removed |
+| qBittorrent | `/config/log/qbittorrent.log` | `<storage-appdata>/qbittorrent/log/qbittorrent.log` | text | qBittorrent: 5 MiB active file, backups older than one month removed |
 | SABnzbd | `/config/logs/sabnzbd.log` | `<storage-appdata>/sabnzbd/logs/sabnzbd.log` | text | SABnzbd native, five 5 MiB backups |
 | Radarr | `/config/logs/radarr.txt` | `<storage-appdata>/radarr/logs/radarr.txt` | text | Servarr native rolling logs |
 | Radarr 4K | `/config/logs/radarr.txt` | `<storage-appdata>/radarr-4k/logs/radarr.txt` | text | Servarr native rolling logs |
@@ -174,7 +173,7 @@ target or Docker collector integration.
 {source="journal", user_unit="thelounge.service"}
 {source="journal"} |= "error"
 {service="traefik", source="file", log_type="access"}
-{service="qbittorrent-alpha", source="file"}
+{service="qbittorrent", source="file"}
 ```
 
 ## Post-deployment acceptance

@@ -390,10 +390,8 @@ def test_real_docker_env_file_services_retain_their_effective_declarations():
         ("gotify", "<base>"),
         ("grafana", "<base>"),
         ("opencloud", "<base>"),
-        ("qbittorrent", "alpha"),
-        ("qbittorrent", "bravo"),
-        ("qui", "alpha"),
-        ("qui", "bravo"),
+        ("qbittorrent", "<base>"),
+        ("qui", "<base>"),
         ("seerr", "<base>"),
         ("vaultwarden", "<base>"),
     }

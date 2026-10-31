@@ -32,6 +32,12 @@ application through Podman or redeploy Traefik.
 
 Existing managed declarations without exposure metadata are adopted through the existing value-free planners, after verifying their exact runtime/publication contract. Fresh or changed unclassified publications are rejected. Wallos and Whisparr exercise explicit declarations in the real catalog. Retained native/remote caller bindings are audited unchanged; they are not reprobed as ordinary root. Independent bootstrap/recovery gates remain separate.
 
+Renaming a service creates a new runtime identity, so its published ports need
+explicit exposure metadata and, for private ports, callers before redeployment.
+qBittorrent and qui declare
+their `web_backend` ports private with Traefik as the caller. The separate
+`traefik.exposure` setting describes the HTTPS route, not its backend publication.
+
 Arr HTTP backend publications declare private exposure with Traefik as their
 logical caller. This protects their direct worker ports independently of HTTPS
 frontend exposure. Recyclarr has no publication. Complete declarations can create

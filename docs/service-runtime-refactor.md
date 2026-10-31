@@ -81,7 +81,7 @@ Each selected service declares an optional `application_prepare.handler`. The ha
 
 | Application | Application-owned work | Runtime-owned compatibility boundary |
 | --- | --- | --- |
-| qBittorrent | Validates the downloads/seeds password contract and derives the PBKDF2 template value before common templates. | None; the hash task is runtime-neutral and is available to either adapter. |
+| qBittorrent | Validates the current service's password contract and derives the PBKDF2 template value before common templates. | None; the hash task is runtime-neutral and is available to either adapter. |
 | Vaultwarden | Reads or creates the persistent Argon2 admin token and returns its value separately from its canonical declaration. | Docker or Podman materializes the resulting preserve-policy native secret. |
 | Authelia | Validates the password/storage-key contract, generates session/JWT values, and derives the user hash with a selected-runtime temporary container. Values and value-free declarations remain separate. | Docker or Podman materializes the generated preserve-policy native secrets. The canonical Infisical storage-key declaration remains separate and is materialized once through the normal adapter path. |
 | Plex | Validates the explicit bootstrap declaration; token, claim, and preference handling is application-owned. | `media_nfs` is a canonical managed Compose volume. Plex API/login/claim work runs only with the explicit `bootstrap` operation. This workflow remains Docker-only. |
@@ -89,6 +89,24 @@ Each selected service declares an optional `application_prepare.handler`. The ha
 | NZBHydra2 | Validates required and optional credential pairs before cleanup, starts a selected-runtime temporary container only when `nzbhydra.yml` is absent, mutates the generated YAML, and verifies the final schema. | The Docker or Podman executor guarantees temporary-container cleanup; deployed lifecycle remains adapter-owned. |
 
 Check mode runs declaration, handler, credential-reference, and bootstrap-contract validation. It does not perform Infisical lookups, runtime cleanup, secret generation/materialization, temporary container work, Plex API requests, application configuration mutation, or runtime lifecycle changes.
+
+qBittorrent and qui each have a single service, selected as `qbittorrent` and
+`qui`. Their appdata directories are `<storage-appdata>/qbittorrent` and
+`<storage-appdata>/qui`; qui uses the `qui` PostgreSQL database. Before
+redeployment, stop the previous instances and move any appdata and database
+contents that should be retained to these names. Repository changes do not
+migrate or delete existing directories or databases. qBittorrent credentials
+are declared under `/qBittorrent` in Infisical; the shared `/PIA` and `/Postgres`
+declarations are unchanged. Torrent data is mounted from
+`<storage-data>/torrents` at `/data/torrents`, with `completed`, `incoming`, and
+`watched` directories directly beneath that root. qBittorrent's generated save
+and incomplete-download paths follow this mount; Unpackerr watches
+`/data/torrents/completed`. Move existing data and update existing torrent and
+category paths within qBittorrent as a separate migration step; the repository
+does not rewrite saved torrent state. Existing Unpackerr configuration is
+preserved on redeployment (`force: false`), so update its saved paths manually
+as well. Run the DNS plan and apply separately in
+`terraform/technitium/internal-dns` before validating the renamed private routes.
 
 ## Canonical portable service and secret schema
 

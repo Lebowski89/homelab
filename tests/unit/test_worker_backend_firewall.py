@@ -77,12 +77,12 @@ def test_real_catalog_selects_physical_workers_without_templating_application_va
     result = PLAN.build_plan(services, ["storage", "media"], "192.0.2.48", minimal_template, INVENTORY)
     # Whole catalog evaluated, but only host backend publications protected;
     # Syncthing/P2P/IRC/etc. listeners stay outside this temporary allocation.
-    assert len(result["storage"]["ports"]) == 22
+    assert len(result["storage"]["ports"]) == 20
     assert len(result["media"]["ports"]) == 2
     assert any(endpoint["service"] == "tautulli" for endpoint in result["media"]["endpoints"])
     assert any(endpoint["service"] == "blackbox_exporter" for endpoint in result["storage"]["endpoints"])
     assert all(22601 <= port <= 22623 for entry in result.values() for port in entry["ports"])
-    assert len(observed) == 23
+    assert len(observed) == 21
     assert services == original
     for service in services.values():
         service["tags"] = []

@@ -208,8 +208,7 @@ def test_real_preparation_workflows_materialize_through_the_canonical_catalog():
     services = {name: load_service(name) for name in ("authelia", "qbittorrent", "plex", "bazarr", "nzbhydra2", "vaultwarden", "romm")}
     expected = {
         ("authelia", "main", "authelia"),
-        ("qbittorrent", "alpha", "qbittorrent"),
-        ("qbittorrent", "bravo", "qbittorrent"),
+        ("qbittorrent", None, "qbittorrent"),
         ("plex", None, "plex"),
         ("bazarr", None, "bazarr"),
         ("nzbhydra2", None, "nzbhydra2"),
@@ -253,27 +252,42 @@ def test_remaining_docker_preparation_services_require_explicit_podman_migration
         assert "targets" not in docker_effective
 
 
-def test_qbittorrent_targets_keep_separate_credentials():
+def test_qbittorrent_preparation_uses_current_service_credentials():
     catalog = load_module(REPO_ROOT / "ansible/filter_plugins/service_catalog.py", "service_catalog_prepare_qbit")
     base = load_service("qbittorrent")
 
-    alpha = catalog.service_catalog_merge_target(base, "alpha")
-    bravo = catalog.service_catalog_merge_target(base, "bravo")
+    instance = catalog.service_catalog_merge_target(base, None)
+    declarations = instance["infisical"]["secrets_map"]
+    assert instance["application_prepare"]["handler"] == "qbittorrent"
+    assert [entry["var"] for entry in declarations].count("qbittorrent_pass") == 1
+    assert len(instance["templates"]) == 1
+    assert instance["templates"][0]["src"] == "configs/qbittorrent/qBittorrent.conf.j2"
+    assert {entry["path"] for entry in declarations if entry["var"] in {"qbittorrent_user", "qbittorrent_pass"}} == {"/qBittorrent"}
+    assert {entry["path"] for entry in declarations if entry["var"].startswith("qbittorrent_pia_")} == {"/PIA"}
 
-    for instance in (alpha, bravo):
-        assert instance["application_prepare"]["handler"] == "qbittorrent"
-        assert [entry["var"] for entry in instance["infisical"]["secrets_map"]].count("qbittorrent_pass") == 1
-        assert len(instance["templates"]) == 1
-        assert instance["templates"][0]["src"] == "configs/qbittorrent/qBittorrent.conf.j2"
 
-    assert alpha["volumes"]["config"]["source"] != bravo["volumes"]["config"]["source"]
-    credential_paths = [
-        {entry["path"] for entry in instance["infisical"]["secrets_map"] if entry["var"] in {"qbittorrent_user", "qbittorrent_pass"}}
-        for instance in (alpha, bravo)
+@pytest.mark.parametrize(
+    ("name", "values", "hosts", "valid"),
+    [
+        ("qbittorrent", {"qbittorrent_pass": "NONPRODUCTION"}, ["worker"], True),
+        ("other-client", {"qbittorrent_pass": "NONPRODUCTION"}, ["worker"], False),
+        ("qbittorrent", {}, ["worker"], False),
+        ("qbittorrent", {"qbittorrent_pass": " "}, ["worker"], False),
+        ("qbittorrent", {"qbittorrent_pass": "NONPRODUCTION"}, [], False),
+    ],
+)
+def test_qbittorrent_preparation_validates_identity_password_and_filesystem(name, values, hosts, valid):
+    tasks = yaml.safe_load((ROLE / "tasks/applications/qbittorrent/validate.yml").read_text())
+    validation = task_named(tasks, "QBittorrent prepare | Validate instance and password")
+    context = {
+        "service_prepare_context": {"service_name": name, "lookup_values": values, "filesystem_hosts": hosts},
+        **tasks[0]["ansible.builtin.set_fact"],
+    }
+    environment = NativeEnvironment(undefined=StrictUndefined)
+    results = [
+        environment.from_string("{{ " + expression + " }}").render(context) for expression in validation["ansible.builtin.assert"]["that"]
     ]
-    assert all(len(paths) == 1 for paths in credential_paths)
-    assert credential_paths[0].isdisjoint(credential_paths[1])
-    assert alpha["traefik"]["port"] != bravo["traefik"]["port"]
+    assert all(results) is valid
 
 
 def test_runtime_executor_selection_names_and_output_parsing_are_behavioral():

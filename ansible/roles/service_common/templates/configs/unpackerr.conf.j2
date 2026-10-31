@@ -17,37 +17,37 @@ upstreams = ["{{ hostvars[services_controller_host].local_ip }}/{{ '128' if ':' 
 name = "Lidarr"
 url = "https://lidarr.{{ services_internal_zone }}:{{ services_private_https_port }}"
 api_key = "filepath:/run/secrets/lidarr_api_secret"
-paths = ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+paths = ["/data/torrents/completed"]
 
 [radarr.radarr]
 name = "Radarr"
 url = "https://radarr.{{ services_internal_zone }}:{{ services_private_https_port }}"
 api_key = "filepath:/run/secrets/radarr_api_secret"
-paths = ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+paths = ["/data/torrents/completed"]
 
 [radarr.radarr_4k]
 name = "Radarr 4K"
 url = "https://radarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}"
 api_key = "filepath:/run/secrets/radarr_4k_api_secret"
-paths = ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+paths = ["/data/torrents/completed"]
 
 [radarr.whisparr]
 name = "Whisparr"
 url = "https://whisparr.{{ services_internal_zone }}:{{ services_private_https_port }}"
 api_key = "filepath:/run/secrets/whisparr_api_secret"
-paths = ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+paths = ["/data/torrents/completed"]
 
 [sonarr.sonarr]
 name = "Sonarr"
 url = "https://sonarr.{{ services_internal_zone }}:{{ services_private_https_port }}"
 api_key = "filepath:/run/secrets/sonarr_api_secret"
-paths = ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+paths = ["/data/torrents/completed"]
 
 [sonarr.sonarr_4k]
 name = "Sonarr 4K"
 url = "https://sonarr-4k.{{ services_internal_zone }}:{{ services_private_https_port }}"
 api_key = "filepath:/run/secrets/sonarr_4k_api_secret"
-paths = ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+paths = ["/data/torrents/completed"]
 
 [webhook.notifiarr]
 name = "Notifiarr"

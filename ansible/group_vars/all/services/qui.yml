@@ -7,10 +7,15 @@ qui:
   enabled: true
   runtime: docker
   tags: [torrents, pgsql, qui]
+  name: qui
+  stack: qui
+
   ################################
   # IMAGE/PROCESS
   ################################
   image: ghcr.io/autobrr/qui:v1.33.1
+  hostname: qui.internal
+
   ################################
   # ENVIRONMENT/SECRETS
   ################################
@@ -19,6 +24,8 @@ qui:
     PUID: "{{ hostvars[services_storage_host].container_host_puid }}"
     PGID: "{{ hostvars[services_storage_host].container_host_pgid }}"
     UMASK: "022"
+  env_file:
+    - /opt/stacks/qui.env
   infisical:
     secrets_map:
       - var: postgres_user
@@ -27,149 +34,68 @@ qui:
       - var: postgres_pass
         path: /Postgres
         name: PASS
+  swarm_env_templates:
+    - src: configs/qui.env.j2
+      no_log: true
+      dest: /opt/stacks/qui.env
+      mode: "0600"
+      force: true
+
   ################################
   # CONNECTIVITY
   ################################
   named_networks:
     overlay:
       external: true
+  ports:
+    web_backend:
+      exposure: private
+      callers: [traefik]
+      published: 22608
+      target: 7476
+      mode: host
+
   ################################
   # FILESYSTEM
   ################################
+  paths:
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui"
+      state: directory
+      mode: "0755"
   volumes:
     media:
       type: bind
       source: "{{ hostvars[services_storage_host].container_host_data_root }}"
       target: /data
       read_only: false
+    config:
+      type: bind
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui"
+      target: /config
+      read_only: false
+
   ################################
   # INTEGRATIONS
   ################################
   traefik:
     enable: true
     exposure: private
-    port: 7476
+    port: 22608
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
   postgres:
     enable: true
+    databases:
+      - qui-alpha
+
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [worker_backends]
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
     hosts: "{{ services_storage_host }}"
-  ################################
-  # TARGETS (INSTANCES)
-  ################################
-  targets:
-    alpha:
-      ################################
-      # IDENTITY
-      ################################
-      tags: [qui-alpha]
-      name: qui-alpha
-      stack: qui-alpha
-      ################################
-      # IMAGE/PROCESS
-      ################################
-      hostname: qui-alpha.internal
-      ################################
-      # ENVIRONMENT/SECRETS
-      ################################
-      env_file:
-        - /opt/stacks/qui-alpha.env
-      swarm_env_templates:
-        - src: configs/qui.env.j2
-          no_log: true
-          dest: /opt/stacks/qui-alpha.env
-          mode: "0600"
-          force: true
-      ################################
-      # FILESYSTEM
-      ################################
-      ports:
-        web_backend:
-          published: 22608
-          target: 7476
-          mode: host
-      paths:
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui-alpha"
-          state: directory
-          mode: "0755"
-      volumes:
-        config:
-          type: bind
-          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui-alpha"
-          target: /config
-          read_only: false
-      ################################
-      # INTEGRATIONS
-      ################################
-      traefik:
-        enable: true
-        exposure: private
-        port: 22608
-        backend_mode: host
-        backend_host_inventory: "{{ services_storage_host }}"
-      postgres:
-        databases:
-          - qui-alpha
-      operational_requirements:
-        acl: [worker_backends]
-
-    bravo:
-      ################################
-      # IDENTITY
-      ################################
-      tags: [qui-bravo]
-      name: qui-bravo
-      stack: qui-bravo
-      ################################
-      # IMAGE/PROCESS
-      ################################
-      hostname: qui-bravo.internal
-      ################################
-      # ENVIRONMENT/SECRETS
-      ################################
-      env_file:
-        - /opt/stacks/qui-bravo.env
-      swarm_env_templates:
-        - src: configs/qui.env.j2
-          no_log: true
-          dest: /opt/stacks/qui-bravo.env
-          mode: "0600"
-          force: true
-      ################################
-      # FILESYSTEM
-      ################################
-      ports:
-        web_backend:
-          published: 22609
-          target: 7476
-          mode: host
-      paths:
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui-bravo"
-          state: directory
-          mode: "0755"
-      volumes:
-        config:
-          type: bind
-          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qui-bravo"
-          target: /config
-          read_only: false
-      ################################
-      # INTEGRATIONS
-      ################################
-      traefik:
-        enable: true
-        exposure: private
-        port: 22609
-        backend_mode: host
-        backend_host_inventory: "{{ services_storage_host }}"
-      postgres:
-        databases:
-          - qui-bravo
-      operational_requirements:
-        acl: [worker_backends]

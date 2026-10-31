@@ -7,10 +7,15 @@ qbittorrent:
   enabled: true
   runtime: docker
   tags: [torrents, qbittorrent]
+  name: qbittorrent
+  stack: qbittorrent
+
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/qbittorrent:release-v5.3.0
+  image: ghcr.io/hotio/qbittorrent:release-v5.2.4
+  hostname: qbittorrent.internal
+
   ################################
   # ENVIRONMENT/SECRETS
   ################################
@@ -20,6 +25,8 @@ qbittorrent:
     TZ: "{{ timezone }}"
     FILE__VPN_PIA_USER: /run/secrets/qbittorrent_pia_user_secret
     FILE__VPN_PIA_PASS: /run/secrets/qbittorrent_pia_pass_secret
+  env_file:
+    - /opt/stacks/qbittorrent.env
   infisical:
     secrets_map:
       - var: qbittorrent_pia_user
@@ -32,14 +39,43 @@ qbittorrent:
         name: PASS
         secret:
           name: qbittorrent_pia_pass_secret
+      - var: qbittorrent_user
+        path: "/qBittorrent"
+        name: USER
+      - var: qbittorrent_pass
+        path: "/qBittorrent"
+        name: PASS
+      - var: qbittorrent_api
+        path: "/qBittorrent"
+        name: API
+  swarm_env_templates:
+    - src: configs/qbittorrent/qBittorrent.env.j2
+      dest: /opt/stacks/qbittorrent.env
+      owner: "{{ hostvars[services_storage_host].container_host_puid }}"
+      group: "{{ hostvars[services_storage_host].container_host_pgid }}"
+      mode: "0600"
+      force: true
+
+  ################################
+  # APPLICATION PREPARATION
+  ################################
   application_prepare:
     handler: qbittorrent
+
   ################################
   # CONNECTIVITY
   ################################
   named_networks:
     overlay:
       external: true
+  ports:
+    web_backend:
+      exposure: private
+      callers: [traefik]
+      published: 22606
+      target: 8090
+      mode: host
+
   ################################
   # FILESYSTEM
   ################################
@@ -47,6 +83,42 @@ qbittorrent:
     - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents"
       state: directory
       mode: "0755"
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent/config"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent/wireguard"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/completed"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/incoming"
+      state: directory
+      mode: "0755"
+    - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/watched"
+      state: directory
+      mode: "0755"
+  templates:
+    - src: configs/qbittorrent/qBittorrent.conf.j2
+      dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent/config/qBittorrent.conf"
+      mode: "0664"
+      force: true
+      no_log: true
+  volumes:
+    config:
+      type: bind
+      source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent"
+      target: /config
+      read_only: false
+    media:
+      type: bind
+      source: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents"
+      target: /data/torrents
+      read_only: false
+
   ################################
   # DEVICES/SECURITY
   ################################
@@ -57,221 +129,36 @@ qbittorrent:
   sysctls:
     net.ipv4.conf.all.src_valid_mark: "1"
     net.ipv6.conf.all.disable_ipv6: "1"
+
+  ################################
+  # HEALTH
+  ################################
+  healthcheck:
+    test:
+      - "CMD"
+      - "wget"
+      - "--spider"
+      - "-q"
+      - "http://127.0.0.1:8090/"
+
+  ################################
+  # INTEGRATIONS
+  ################################
+  traefik:
+    enable: true
+    exposure: private
+    port: 22606
+    backend_mode: host
+    backend_host_inventory: "{{ services_storage_host }}"
+
   ################################
   # RUNTIME/LIFECYCLE
   ################################
+  operational_requirements:
+    acl: [worker_backends]
   deploy:
     type: swarm
     mode: replicated
     replicas: 1
     profile: standard
     hosts: "{{ services_storage_host }}"
-  ################################
-  # TARGETS (INSTANCES)
-  ################################
-  targets:
-    ################################
-    # ALPHA
-    ################################
-    alpha:
-      ################################
-      # IDENTITY
-      ################################
-      tags: [qbittorrent-alpha]
-      name: qbittorrent-alpha
-      stack: qbittorrent-alpha
-      ################################
-      # IMAGE/PROCESS
-      ################################
-      hostname: qbittorrent-alpha.internal
-      ################################
-      # ENVIRONMENT/SECRETS
-      ################################
-      env_file:
-        - /opt/stacks/qbittorrent-alpha.env
-      infisical:
-        secrets_map:
-          - var: qbittorrent_user
-            path: "/qBittorrent-Alpha"
-            name: USER
-          - var: qbittorrent_pass
-            path: "/qBittorrent-Alpha"
-            name: PASS
-      swarm_env_templates:
-        - src: configs/qbittorrent/qBittorrent.env.j2
-          dest: /opt/stacks/qbittorrent-alpha.env
-          owner: "{{ hostvars[services_storage_host].container_host_puid }}"
-          group: "{{ hostvars[services_storage_host].container_host_pgid }}"
-          mode: "0600"
-          force: true
-      ################################
-      # FILESYSTEM
-      ################################
-      ports:
-        web_backend:
-          published: 22606
-          target: 8090
-          mode: host
-      paths:
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha"
-          state: directory
-          mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha/config"
-          state: directory
-          mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha/wireguard"
-          state: directory
-          mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/alpha"
-          state: directory
-          mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/alpha/completed"
-          state: directory
-          mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/alpha/incoming"
-          state: directory
-          mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/alpha/watched"
-          state: directory
-          mode: "0755"
-      templates:
-        - src: configs/qbittorrent/qBittorrent.conf.j2
-          dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha/config/qBittorrent.conf"
-          mode: "0664"
-          force: true
-          no_log: true
-      volumes:
-        config:
-          type: bind
-          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-alpha"
-          target: /config
-          read_only: false
-        media:
-          type: bind
-          source: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/alpha"
-          target: /data/torrents/alpha
-          read_only: false
-      ################################
-      # HEALTH
-      ################################
-      healthcheck:
-        test:
-          - "CMD"
-          - "wget"
-          - "--spider"
-          - "-q"
-          - "http://127.0.0.1:8090/"
-      ################################
-      # INTEGRATIONS
-      ################################
-      traefik:
-        enable: true
-        exposure: private
-        port: 22606
-    ################################
-    # BRAVO
-    ################################
-        backend_mode: host
-        backend_host_inventory: "{{ services_storage_host }}"
-      operational_requirements:
-        acl: [worker_backends]
-
-    bravo:
-      ################################
-      # IDENTITY
-      ################################
-      tags: [qbittorrent-bravo]
-      name: qbittorrent-bravo
-      stack: qbittorrent-bravo
-      ################################
-      # IMAGE/PROCESS
-      ################################
-      hostname: qbittorrent-bravo.internal
-      ################################
-      # ENVIRONMENT/SECRETS
-      ################################
-      env_file:
-        - /opt/stacks/qbittorrent-bravo.env
-      infisical:
-        secrets_map:
-          - var: qbittorrent_user
-            path: "/qBittorrent-Bravo"
-            name: USER
-          - var: qbittorrent_pass
-            path: "/qBittorrent-Bravo"
-            name: PASS
-      swarm_env_templates:
-        - src: configs/qbittorrent/qBittorrent.env.j2
-          dest: /opt/stacks/qbittorrent-bravo.env
-          owner: "{{ hostvars[services_storage_host].container_host_puid }}"
-          group: "{{ hostvars[services_storage_host].container_host_pgid }}"
-          mode: "0600"
-          force: true
-      ################################
-      # FILESYSTEM
-      ################################
-      ports:
-        web_backend:
-          published: 22607
-          target: 8091
-          mode: host
-      paths:
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo"
-          state: directory
-          mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo/config"
-          state: directory
-          mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo/wireguard"
-          state: directory
-          mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/bravo"
-          state: directory
-          mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/bravo/completed"
-          state: directory
-          mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/bravo/incoming"
-          state: directory
-          mode: "0755"
-        - path: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/bravo/watched"
-          state: directory
-          mode: "0755"
-      templates:
-        - src: configs/qbittorrent/qBittorrent.conf.j2
-          dest: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo/config/qBittorrent.conf"
-          mode: "0664"
-          force: true
-          no_log: true
-      volumes:
-        config:
-          type: bind
-          source: "{{ hostvars[services_storage_host].container_host_appdata_root }}/qbittorrent-bravo"
-          target: /config
-          read_only: false
-        media:
-          type: bind
-          source: "{{ hostvars[services_storage_host].container_host_data_root }}/torrents/bravo"
-          target: /data/torrents/bravo
-          read_only: false
-      ################################
-      # HEALTH
-      ################################
-      healthcheck:
-        test:
-          - "CMD"
-          - "wget"
-          - "--spider"
-          - "-q"
-          - "http://127.0.0.1:8091/"
-      ################################
-      # INTEGRATIONS
-      ################################
-      traefik:
-        enable: true
-        exposure: private
-        port: 22607
-        backend_mode: host
-        backend_host_inventory: "{{ services_storage_host }}"
-      operational_requirements:
-        acl: [worker_backends]

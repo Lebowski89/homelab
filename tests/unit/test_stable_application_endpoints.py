@@ -106,7 +106,7 @@ def test_unpackerr_persistent_toml_keeps_integrations_and_external_secret_owners
     for dialect, instance, hostname in applications:
         app = config[dialect][instance]
         assert app["url"] == f"https://{hostname}.private.example.internal:9443"
-        assert app["paths"] == ["/data/torrents/alpha/completed", "/data/torrents/bravo/completed"]
+        assert app["paths"] == ["/data/torrents/completed"]
         references.append(app["api_key"])
     assert "whisparr" not in config
     references.append(config["webhook"]["notifiarr"]["url"])

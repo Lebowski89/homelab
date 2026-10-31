@@ -163,8 +163,7 @@ def test_docker_file_collection_is_an_explicit_active_file_allowlist():
     # then combined with an independently stated in-container log contract.
     contracts = [
         ("traefik", None, "logs", "/etc/traefik/logs/access.log"),
-        ("qbittorrent", "alpha", "config", "/config/log/qbittorrent.log"),
-        ("qbittorrent", "bravo", "config", "/config/log/qbittorrent.log"),
+        ("qbittorrent", None, "config", "/config/log/qbittorrent.log"),
         ("sabnzbd", None, "config", "/config/logs/sabnzbd.log"),
         ("radarr", "radarr", "config", "/config/logs/radarr.txt"),
         ("radarr", "radarr_4k", "config", "/config/logs/radarr.txt"),
@@ -398,8 +397,7 @@ def test_docker_file_targets_are_filtered_to_their_inventory_owner_before_discov
     targets = owned_file_targets(config)
 
     storage_services = {
-        "qbittorrent-alpha",
-        "qbittorrent-bravo",
+        "qbittorrent",
         "sabnzbd",
         "radarr",
         "radarr-4k",
@@ -415,7 +413,7 @@ def test_docker_file_targets_are_filtered_to_their_inventory_owner_before_discov
     plex_services = {"plex", "tautulli", "kometa", "imagemaid", "technitium"}
     controller_services = {"seerr", "unifi", "technitium", "traefik"}
 
-    assert len(targets) == 23
+    assert len(targets) == 22
     assert {service for _, owner, service in targets if owner == "unraid"} == storage_services
     assert {service for _, owner, service in targets if owner == "plex"} == plex_services
     assert {service for _, owner, service in targets if owner == "mgt"} == controller_services

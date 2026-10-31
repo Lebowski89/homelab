@@ -20,6 +20,51 @@ SPEC.loader.exec_module(F)
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("service_name", ["qbittorrent", "qui"])
+def test_real_swarm_environment_preview_uses_current_service_context(tmp_path, service_name):
+    context = F.REAL.context()
+    service = F.REAL.resolve(F.REAL.CATALOG.service_catalog_merge_target(F.REAL.catalog()[service_name], None), context)
+    active = tmp_path / "active.env"
+    active.write_text("NONPRODUCTION active configuration\n")
+    for declaration in service["swarm_env_templates"]:
+        declaration["dest"] = str(active)
+    task = next(
+        task
+        for task in yaml.safe_load((ROOT / "ansible/roles/docker_services/tasks/sub_tasks/preflight.yml").read_text())
+        if task["name"] == "Preflight | Validate controller environment templates"
+    )
+    variables = {
+        "docker_services_svc": service,
+        "docker_services_service_name": service_name,
+        "docker_services_controller_host": "localhost",
+        "docker_services_common_values": {declaration["var"]: "NONPRODUCTION_VALUE" for declaration in service["infisical"]["secrets_map"]},
+        "docker_services_common_host_defaults": {},
+        "docker_services_application_template_vars": {},
+        "services_lan_cidr": "192.0.2.0/24",
+    }
+    playbook = tmp_path / "preview.yml"
+    playbook.write_text(
+        yaml.safe_dump(
+            [{"hosts": "localhost", "connection": "local", "gather_facts": False, "become": False, "vars": variables, "tasks": [task]}]
+        )
+    )
+    config = tmp_path / "ansible.cfg"
+    config.write_text(f"[defaults]\nroles_path={ROOT / 'ansible/roles'}\nvars_plugins_enabled=\nstdout_callback=default\n")
+    result = subprocess.run(
+        [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", str(playbook), "--tags", "deploy"],
+        cwd=ROOT,
+        env={**os.environ, "ANSIBLE_CONFIG": str(config), "ANSIBLE_LOG_PATH": str(tmp_path / "ansible.log")},
+        capture_output=True,
+        text=True,
+    )
+    output = result.stdout + result.stderr
+    assert active.read_text() == "NONPRODUCTION active configuration\n"
+    assert "NONPRODUCTION_VALUE" not in output
+    assert result.returncode == 0, output
+    assert "Render declarations without changing active files" in output and "changed=0" in output
+
+
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "failure", ["lookup", "environment", "resolution", "partial", "cleanup", "adapter-init", "check-mode", "postgres-context"]
 )

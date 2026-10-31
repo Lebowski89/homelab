@@ -94,10 +94,8 @@ def test_catalogue_variants_special_urls_and_categories_are_preserved():
     for variant in (
         "radarr-4k",
         "sonarr-4k",
-        "qbittorrent-alpha",
-        "qbittorrent-bravo",
-        "qui-alpha",
-        "qui-bravo",
+        "qbittorrent",
+        "qui",
     ):
         assert f"http.{variant}-private" in targets
 
