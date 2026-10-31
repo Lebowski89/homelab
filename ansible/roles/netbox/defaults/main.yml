@@ -32,7 +32,7 @@ netbox_stack: netbox
 netbox_compose_file: netbox-compose.yml
 netbox_compose_path: "{{ netbox_base_path }}/{{ netbox_compose_file }}"
 
-netbox_image: lscr.io/linuxserver/netbox:v4.7.3-ls387
+netbox_image: lscr.io/linuxserver/netbox:v4.7.4-ls389
 netbox_timezone: "{{ timezone | default('Australia/Melbourne') }}"
 netbox_puid: "{{ container_host_puid | default('1000') }}"
 netbox_pgid: "{{ container_host_pgid | default('1000') }}"
