@@ -1,7 +1,24 @@
 ---
 
-- name: Install Docker
+- name: Docker | Detect externally managed Unraid installation
   when: "'tags_docker_install' in group_names"
+  ansible.builtin.stat:
+    path: /etc/unraid-version
+  register: docker_unraid_installation
+  tags: [docker, docker_install]
+
+- name: Docker | Retain Unraid managed installation
+  when:
+    - "'tags_docker_install' in group_names"
+    - docker_unraid_installation.stat.exists
+  ansible.builtin.debug:
+    msg: Unraid owns Docker installation; package and daemon installation tasks are skipped.
+  tags: [docker, docker_install]
+
+- name: Install Docker
+  when:
+    - "'tags_docker_install' in group_names"
+    - not docker_unraid_installation.stat.exists
   ansible.builtin.include_tasks:
     file: sub_tasks/install.yml
     apply:

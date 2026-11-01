@@ -1,0 +1,25 @@
+---
+
+podman_platform_packages:
+  Debian:
+    - podman
+    - crun
+    - netavark
+    - aardvark-dns
+    - containernetworking-plugins
+    - uidmap
+    - slirp4netns
+    - passt
+    - fuse-overlayfs
+    - dbus-user-session
+  RedHat:
+    - podman
+    - crun
+    - netavark
+    - aardvark-dns
+    - passt
+    - fuse-overlayfs
+    - shadow-utils
+    - dbus-broker
+    - systemd-pam
+    - container-selinux

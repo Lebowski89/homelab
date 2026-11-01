@@ -1,0 +1,82 @@
+---
+
+- name: Podman | Detect Atomic or OSTree deployment
+  ansible.builtin.stat:
+    path: /run/ostree-booted
+  register: podman_ostree_boot
+
+- name: Podman | Assert supported host
+  ansible.builtin.assert:
+    that:
+      - not podman_ostree_boot.stat.exists
+      - ansible_facts.system | default('') == 'Linux'
+      - ansible_facts.service_mgr | default('') == 'systemd'
+      - >-
+        (ansible_facts.os_family | default('') == 'Debian'
+         and ansible_facts.pkg_mgr | default('') == 'apt'
+         and ((ansible_facts.distribution | default('') == 'Debian'
+               and ansible_facts.distribution_major_version | default('') == '13')
+           or (ansible_facts.distribution | default('') == 'Ubuntu'
+               and ansible_facts.distribution_version | default('') in ['26.04', '26.10'])
+           or (ansible_facts.distribution | default('') == 'LMDE'
+               and ansible_facts.distribution_major_version | default('') == '7')))
+        or (ansible_facts.os_family | default('') == 'RedHat'
+            and ansible_facts.pkg_mgr | default('') in ['dnf', 'dnf5']
+            and ((ansible_facts.distribution | default('') == 'Fedora'
+                  and ansible_facts.distribution_major_version | default('') in ['43', '44', '45'])
+              or (ansible_facts.distribution | default('') == 'Rocky'
+                  and ((ansible_facts.distribution_major_version | default('') == '9'
+                        and ansible_facts.distribution_version | default('0') is version('9.7', '>='))
+                    or (ansible_facts.distribution_major_version | default('') == '10'
+                        and ansible_facts.distribution_version | default('0') is version('10.1', '>='))))))
+    fail_msg: >-
+      Podman requires conventional Debian 13, Ubuntu 26.04/26.10, LMDE 7,
+      Fedora 43-45 or Rocky 9.7+/10.1+ with APT or DNF/DNF5 and systemd.
+      Atomic/OSTree and unlisted derivatives/releases are unsupported.
+      Distribution repositories must supply Podman {{ podman_min_version }} or newer; no experimental repositories are enabled.
+
+- name: Podman | Validate installation options
+  ansible.builtin.assert:
+    that:
+      - podman_install_enable is boolean
+      - podman_update_cache is boolean
+      - podman_packages is sequence and podman_packages is not string and podman_packages is not mapping
+      - >-
+        podman_install_extra_packages is sequence and podman_install_extra_packages is not string
+        and podman_install_extra_packages is not mapping
+      - podman_cache_valid_time is integer and podman_cache_valid_time >= 0
+      - podman_min_version is version('5.4.2', '>=')
+    fail_msg: Installation flags must be booleans, packages lists, cache lifetime nonnegative, and the minimum version at least 5.4.2.
+
+- name: Podman | Inspect cgroup v2 before installation
+  ansible.builtin.stat:
+    path: /sys/fs/cgroup/cgroup.controllers
+  register: podman_cgroup_controllers
+
+- name: Podman | Assert cgroup v2
+  ansible.builtin.assert:
+    that: podman_cgroup_controllers.stat.exists
+    fail_msg: Podman Quadlet requires a host booted with cgroup v2; enable it before installation.
+
+- name: Podman | Inspect installed packages before installation
+  ansible.builtin.package_facts:
+    manager: "{{ 'apt' if ansible_facts.pkg_mgr == 'apt' else 'rpm' }}"
+
+- name: Podman | Reject Docker CLI replacement and conflicting runtime choices
+  ansible.builtin.assert:
+    that:
+      - "'podman-docker' not in ansible_facts.packages"
+      - >-
+        not podman_install_enable or
+        'podman-docker' not in ((podman_packages + podman_install_extra_packages)
+          | map('regex_replace', '[=<> ].*$|-[0-9].*$', '') | list)
+      - >-
+        not podman_install_enable or 'containerd.io' not in ansible_facts.packages or
+        (ansible_facts.packages.keys() | list
+          + ((podman_packages + podman_install_extra_packages)
+             | map('regex_replace', '[=<> ].*$|-[0-9].*$', '') | list))
+        | intersect(['runc', 'containerd']) | length == 0
+    fail_msg: >-
+      podman-docker replaces the Docker CLI and is not supported by these coexisting runtime roles.
+      Distribution runc/containerd conflict with Docker CE's containerd.io; use the distribution crun provider for Podman.
+      Review installed packages and package overrides explicitly. No package will be erased automatically.

@@ -1,0 +1,10 @@
+---
+
+- name: Podman | Install RPM runtime packages
+  ansible.builtin.dnf:
+    name: "{{ podman_packages + podman_install_extra_packages }}"
+    state: "{{ podman_state }}"
+    update_cache: "{{ podman_update_cache }}"
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    disable_gpg_check: false
+    allowerasing: false

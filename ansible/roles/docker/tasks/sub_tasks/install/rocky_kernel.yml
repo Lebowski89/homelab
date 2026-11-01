@@ -1,0 +1,70 @@
+---
+
+# Minimal/cloud EL10 images can omit xt_addrtype. Match the booted kernel,
+# rather than installing an unrelated latest kernel and requiring a reboot.
+# Require the RPM capability: DNF's Ansible adapter can silently skip an older
+# NEVRA request when another kernel supplement version is already installed.
+- name: Docker | Validate the running Rocky kernel identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.kernel | default('') is match('^[0-9][A-Za-z0-9_.+-]+$')
+    fail_msg: Gather the running kernel fact before preparing Rocky 10 Docker networking.
+
+- name: Docker | Inspect address-type match module availability
+  ansible.builtin.command:
+    argv: [modinfo, -F, filename, xt_addrtype]
+  register: docker_addrtype_module
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Docker | Preview the missing Rocky kernel supplement
+  when:
+    - ansible_check_mode
+    - docker_addrtype_module.rc != 0
+  ansible.builtin.debug:
+    msg: >-
+      Would require kernel-modules-extra-uname-r = {{ ansible_facts.kernel }} for the running kernel.
+      Address-type match verification is deferred until installation; no kernel upgrade or reboot is planned.
+
+- name: Docker | Supply address-type match support for the running kernel
+  when:
+    - not ansible_check_mode
+    - docker_addrtype_module.rc != 0
+  block:
+    - name: Docker | Install the matching Rocky kernel supplement
+      ansible.builtin.dnf:
+        name: "kernel-modules-extra-uname-r = {{ ansible_facts.kernel }}"
+        state: present
+        use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+        disable_gpg_check: false
+        allowerasing: false
+        install_weak_deps: false
+
+    - name: Docker | Verify the running kernel supplement package is installed
+      ansible.builtin.command:
+        argv:
+          - rpm
+          - -q
+          - "kernel-modules-extra-{{ ansible_facts.kernel }}"
+      register: docker_kernel_supplement_package
+      changed_when: false
+      failed_when: docker_kernel_supplement_package.rc != 0
+
+    - name: Docker | Verify the installed address-type match module
+      ansible.builtin.command:
+        argv: [modinfo, -F, filename, xt_addrtype]
+      register: docker_addrtype_installed
+      changed_when: false
+      failed_when: docker_addrtype_installed.rc != 0
+  rescue:
+    - name: Docker | Explain unavailable running-kernel support
+      ansible.builtin.fail:
+        msg: >-
+          Docker bridge networking needs xt_addrtype for running kernel {{ ansible_facts.kernel }}.
+          Required RPM capability kernel-modules-extra-uname-r = {{ ansible_facts.kernel }}
+          and exact installed-package/module verification did not both pass. Review the preceding package/module error.
+          If the package is installed but modinfo still fails, inspect its files and the module index for this kernel.
+          If matching packages are unavailable, arrange explicit OS maintenance and reboot into a supported installed kernel,
+          then rerun Docker installation.
+          This role does not upgrade the kernel, reboot, change firewall backends or remove Podman.

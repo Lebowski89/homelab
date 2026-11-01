@@ -8,7 +8,11 @@
     fail_msg: "The centrally owned rootful bridge requires a valid explicit resource name."
 
 - name: Podman shared network | Configure non-conflicting rootful bridge DNS
-  ansible.builtin.include_tasks: rootful_dns.yml
+  ansible.builtin.include_tasks:
+    file: rootful_dns.yml
+    apply:
+      tags: [podman_network]
+  tags: [podman_network]
 
 - name: Podman shared network | Ensure system Quadlet directory
   ansible.builtin.file:

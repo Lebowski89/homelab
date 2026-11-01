@@ -78,9 +78,7 @@ def test_repository_migration_preserves_sources_overrides_and_cache_order(
         "        return {'changed': False}\n"
     )
     role_dir = ROOT / "ansible/roles" / role
-    tasks = yaml.safe_load(
-        (role_dir / ("tasks/sub_tasks/install.yml" if role == "docker" else "tasks/sub_tasks/install/apt.yml")).read_text()
-    )
+    tasks = yaml.safe_load((role_dir / "tasks/sub_tasks/install/apt.yml").read_text())
     for task in tasks:
         if "ansible.builtin.deb822_repository" in task:
             task["fixture_deb822_repository"] = task.pop("ansible.builtin.deb822_repository")
@@ -93,6 +91,9 @@ def test_repository_migration_preserves_sources_overrides_and_cache_order(
     (fixture_role / "tasks").mkdir(parents=True)
     (fixture_role / "defaults").mkdir()
     (fixture_role / "tasks/main.yml").write_text(yaml.safe_dump(tasks, sort_keys=False))
+    if role == "docker":
+        (fixture_role / "vars").mkdir()
+        (fixture_role / "vars/main.yml").write_text((role_dir / "vars/main.yml").read_text())
     (fixture_role / "defaults/main.yml").write_text((role_dir / "defaults/main.yml").read_text())
     variables = {
         "ansible_facts": {"os_family": "Debian", "distribution": "Ubuntu", "distribution_release": "noble", "architecture": architecture},

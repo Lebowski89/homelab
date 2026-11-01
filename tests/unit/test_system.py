@@ -21,10 +21,18 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 def system_run(tmp_path):
     roles = tmp_path / "roles"
-    for role in ("system", "postgres"):
+    for role in ("system", "postgres", "docker", "podman"):
         shutil.copytree(REPO / "ansible/roles" / role, roles / role, ignore=shutil.ignore_patterns("__pycache__"))
     modules = {
         "apt",
+        "uri",
+        "get_url",
+        "rpm_key",
+        "yum_repository",
+        "deb822_repository",
+        "package_facts",
+        "group",
+        "user",
         "template",
         "find",
         "dnf",
@@ -39,6 +47,10 @@ def system_run(tmp_path):
         "setup",
         "ansible.posix.sysctl",
         "community.general.pam_limits",
+        "community.docker.docker_swarm",
+        "community.docker.docker_network",
+        "community.docker.docker_network_info",
+        "community.docker.docker_node",
     }
 
     def instrument(tasks):
@@ -49,12 +61,14 @@ def system_run(tmp_path):
                 key = module if "." in module else f"ansible.builtin.{module}"
                 if key in task:
                     task["fixture_operation"] = {"module": module, "options": task.pop(key)}
-            if "ansible.builtin.include_tasks" in task and task["ansible.builtin.include_tasks"].get("file", "").startswith("sub_tasks/"):
+            if isinstance(task.get("ansible.builtin.include_tasks"), dict) and task["ansible.builtin.include_tasks"].get(
+                "file", ""
+            ).startswith("sub_tasks/"):
                 include = task["ansible.builtin.include_tasks"]
-                if include["file"] != "sub_tasks/backup_prerequisites.yml":
+                if include["file"] not in {"sub_tasks/backup_prerequisites.yml", "sub_tasks/install.yml", "sub_tasks/swarm.yml"}:
                     task["fixture_operation"] = {"module": "include_tasks", "options": task.pop("ansible.builtin.include_tasks")}
 
-    for role in ("system", "postgres"):
+    for role in ("system", "postgres", "docker", "podman"):
         # Only PostgreSQL's entry point and the moved dependency file are selected.
         paths = list((roles / role / "tasks").rglob("*.yml")) + list((roles / role / "handlers").glob("*.yml"))
         for path in paths:
@@ -70,7 +84,8 @@ class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         v = task_vars
         module, options = self._task.args['module'], self._task.args['options'] or {}
-        record = {'module': module, 'options': options, 'environment': self._task.environment}
+        record = {'module': module, 'options': options, 'environment': self._task.environment,
+                  'no_log': self._task.no_log, 'diff': self._task.diff}
         with open(v['fixture_record'], 'a') as output:
             output.write(json.dumps(record, default=str) + '\\n')
         state_path = Path(v['fixture_state'])
@@ -78,8 +93,23 @@ class ActionModule(ActionBase):
         result = {'changed': False, 'rc': 0, 'stdout': '', 'stdout_lines': []}
         if module in ('apt', 'dnf') and options.get('name') == 'qemu-guest-agent' and v.get('fixture_guest_agent_failure', False):
             return dict(result, failed=True, rc=1, msg='fixture-agent-failure')
+        if module == 'dnf' and str(options.get('name', '')).startswith('kernel-modules-extra-'):
+            if v.get('fixture_kernel_package_unavailable', False):
+                return dict(result, failed=True, rc=1, msg='fixture-running-kernel-package-unavailable')
+            # Reproduce Ansible DNF4's older-NEVRA no-op when a newer kernel
+            # supplement is installed. An exact uname-r capability must still
+            # install its missing provider alongside that newer version.
+            skip_older = (options.get('use_backend') == 'dnf4'
+                          and v.get('fixture_newer_kernel_supplement', False)
+                          and 'uname-r = ' not in options['name'])
+            skip_older = skip_older or v.get('fixture_kernel_install_noop', False)
+            result['changed'] = not state.get('docker_addrtype_available', False) and not skip_older
+            if not self._play_context.check_mode and not skip_older:
+                state['docker_addrtype_available'] = True
         if module == 'setup':
             result['ansible_facts'] = v['fixture_facts']
+        elif module == 'package_facts':
+            result['ansible_facts'] = {'packages': v.get('fixture_packages', {})}
         elif module == 'template':
             result['changed'] = v.get('fixture_nic_artifacts_changed', False)
         elif module == 'find':
@@ -92,13 +122,48 @@ class ActionModule(ActionBase):
             if path in v.get('fixture_files', {}):
                 exists = True
             result['stat'] = {'exists': exists, 'isreg': exists,
-                              'size': state.get('size', 2048 * 1024 * 1024)}
+                              'path': path, 'executable': exists, 'size': state.get('size', 2048 * 1024 * 1024)}
         elif module == 'slurp':
             result['content'] = base64.b64encode(v['fixture_files'][options['src']].encode()).decode()
+        elif module == 'uri':
+            if options.get('method') == 'POST':
+                state['swarm_active'] = True
+                state['swarm_role'] = 'manager' if 'tags_swarm_manager' in v['group_names'] else 'worker'
+                state['swarm_availability'] = options['body']['Availability']
+                result.update(status=200, changed=True)
+            elif '/nodes/' in options['url']:
+                result.update(status=404 if v.get('fixture_other_swarm', False) else 200,
+                              json={'Spec': {'Role': state.get('swarm_role', v.get('fixture_swarm_existing_role', 'manager'))}})
+            else:
+                # This one-host fixture serves both delegated primary and local requests.
+                primary = sum(json.loads(line)['module'] == 'uri'
+                              for line in Path(v['fixture_record']).read_text().splitlines()) == 1
+                active = primary or state.get('swarm_active', False)
+                result.update(status=200, json={'Swarm': {
+                    'LocalNodeState': 'active' if active else 'inactive',
+                    'ControlAvailable': primary or state.get('swarm_role') == 'manager',
+                    'NodeID': 'fixture-node' if active else ''}})
         elif module == 'command':
             argv = options['argv']
             command = argv[0]
-            if command == 'timeout':
+            if command == 'docker' and 'join-token' in argv:
+                result['stdout'] = 'synthetic-test-token'
+            elif command == 'podman':
+                result['stdout'] = v.get('fixture_podman_version', 'podman version 5.4.2')
+                result['rc'] = 0 if result['stdout'] else 2
+            elif command == 'modinfo':
+                available = state.get('docker_addrtype_available', not v.get('fixture_addrtype_missing', False))
+                result['rc'] = 0 if available else 1
+                result['stdout'] = '/fixture/xt_addrtype.ko.xz' if available else ''
+            elif command == 'rpm':
+                available = state.get('docker_addrtype_available', False)
+                kernel_package = 'kernel-modules-extra-' + v['ansible_facts']['kernel']
+                # rpm --whatprovides indexes the literal provide name. It does
+                # not parse DNF's "capability = version" dependency expression.
+                exact_package = argv == ['rpm', '-q', kernel_package]
+                result['rc'] = 0 if available and exact_package else 1
+                result['stdout'] = kernel_package if available and exact_package else 'no matching installed package'
+            elif command == 'timeout':
                 result['stdout_lines'] = ['SYSTEM_NIC_CHANGE=' + name for name in v.get('fixture_nic_drift', [])]
                 result['stdout'] = '\\n'.join(result['stdout_lines'])
                 if v.get('fixture_nic_preflight_failure', False):
@@ -135,12 +200,26 @@ class ActionModule(ActionBase):
     state_file = tmp_path / "state.json"
     record = tmp_path / "calls.jsonl"
 
-    def run(*, distro="Rocky", backend=None, tags="system_packages", overrides=None, state=None, check=False, main=False, role="system"):
+    def run(
+        *,
+        distro="Rocky",
+        backend=None,
+        tags="system_packages",
+        overrides=None,
+        state=None,
+        check=False,
+        main=False,
+        role="system",
+        inventory_groups=None,
+    ):
         record.unlink(missing_ok=True)
         if state is not None or not state_file.exists():
             state_file.write_text(json.dumps(state or {}))
         facts = {
             "distribution": distro,
+            "system": "Linux",
+            "architecture": "x86_64",
+            "distribution_release": "noble",
             "distribution_version": "10.2",
             "distribution_major_version": "10",
             "os_family": "Debian" if distro in ("Ubuntu", "Debian") else "RedHat",
@@ -158,6 +237,19 @@ class ActionModule(ActionBase):
             "services_controller_host": "localhost",
             "ansible_become": False,
         }
+        if role in {"docker", "podman"}:
+            variables.update(
+                {
+                    "services_controller_inventory_group": "tags_service_controller",
+                    "services_storage_inventory_group": "tags_service_storage",
+                    "services_plex_host": "localhost",
+                    "services_log_root": "/fixture/logs",
+                    "services_public_zone": "example.invalid",
+                    "services_internal_zone": "int.example.invalid",
+                    "services_lan_cidr": "198.51.100.0/24",
+                    "services_private_https_port": 8443,
+                }
+            )
         variables.update(overrides or {})
         variables["fixture_facts"] = variables.pop("ansible_facts", facts)
         inventory = tmp_path / "inventory.yml"
@@ -168,6 +260,21 @@ class ActionModule(ActionBase):
                         "children": {
                             "tags_skynet": {"hosts": {"localhost": variables}},
                             "tags_postgres": {"hosts": {"localhost": {}}},
+                            **{
+                                group: {"hosts": {"localhost": {}}}
+                                for group in (
+                                    "tags_docker",
+                                    "tags_docker_install",
+                                    "tags_swarm",
+                                    "tags_podman",
+                                    "tags_podman_install",
+                                    "tags_service_controller",
+                                    "tags_service_storage",
+                                    *variables.get("fixture_inventory_groups", []),
+                                )
+                                if role in {"docker", "podman"}
+                            },
+                            **(inventory_groups or {}),
                         }
                     }
                 }
@@ -175,7 +282,7 @@ class ActionModule(ActionBase):
         )
         plays = [
             {
-                "hosts": "all",
+                "hosts": "localhost",
                 "connection": "local",
                 "gather_facts": False,
                 "pre_tasks": [{"name": "Gather fixture facts", "fixture_operation": {"module": "setup", "options": {}}, "tags": "always"}],
@@ -187,6 +294,7 @@ class ActionModule(ActionBase):
             for play in plays:
                 instrument(play.get("tasks", []))
             shutil.copytree(REPO / "ansible/tasks", tmp_path / "tasks", dirs_exist_ok=True)
+            shutil.copytree(REPO / "ansible/filter_plugins", tmp_path / "filter_plugins", dirs_exist_ok=True)
             # Prove that application-wide Vault is never loaded with bootstrap.cfg.
             all_vars = tmp_path / "group_vars/all"
             all_vars.mkdir(parents=True, exist_ok=True)
@@ -198,6 +306,7 @@ class ActionModule(ActionBase):
             env={
                 **os.environ,
                 "ANSIBLE_CONFIG": str(config),
+                "ANSIBLE_INJECT_FACT_VARS": "false",
                 "ANSIBLE_LOCAL_TEMP": str(tmp_path / "local"),
                 "ANSIBLE_COLLECTIONS_PATH": str(tmp_path / "empty-collections"),
                 "ANSIBLE_COLLECTIONS_SCAN_SYS_PATH": "false",

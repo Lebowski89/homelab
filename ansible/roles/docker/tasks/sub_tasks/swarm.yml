@@ -3,10 +3,12 @@
 - name: Ensure this host is part of the swarm inventory
   ansible.builtin.set_fact:
     docker_swarm_enabled: "{{ 'tags_swarm' in group_names }}"
+  tags: [docker_swarm_init, docker_swarm_join, docker_swarm_network, docker_swarm_labels]
 
 - name: End swarm tasks for non-swarm hosts
   ansible.builtin.meta: end_host
   when: not docker_swarm_enabled | bool
+  tags: [docker_swarm_init, docker_swarm_join, docker_swarm_network, docker_swarm_labels]
 
 - name: Assert primary swarm manager is defined
   ansible.builtin.assert:
@@ -14,6 +16,7 @@
       - docker_swarm_primary_manager is defined
       - docker_swarm_primary_manager in groups['tags_swarm_manager']
     fail_msg: "docker_swarm_primary_manager must be defined and be a member of tags_swarm_manager."
+  tags: [docker_swarm_init, docker_swarm_join, docker_swarm_network, docker_swarm_labels]
 
 - name: Assert local_ip is defined for swarm node
   ansible.builtin.assert:
@@ -21,6 +24,7 @@
       - local_ip is defined
       - local_ip | length > 0
     fail_msg: "local_ip must be defined for each swarm node."
+  tags: [docker_swarm_init, docker_swarm_join, docker_swarm_network, docker_swarm_labels]
 
 - name: Initialise swarm on primary manager
   community.docker.docker_swarm:
@@ -28,66 +32,124 @@
     advertise_addr: "{{ local_ip }}"
   when: inventory_hostname == docker_swarm_primary_manager
   register: docker_swarm_init_result
+  no_log: true
+  diff: false
   tags: docker_swarm_init
 
-- name: Get worker join token from primary manager
-  ansible.builtin.command:
-    argv:
-      - docker
-      - swarm
-      - join-token
-      - -q
-      - worker
-  delegate_to: "{{ docker_swarm_primary_manager }}"
-  run_once: true
-  register: docker_swarm_worker_token_cmd
-  changed_when: false
+- name: Join nodes to the existing Swarm
   tags: docker_swarm_join
+  block:
+    - name: Validate Swarm join settings
+      ansible.builtin.assert:
+        that:
+          - ('tags_swarm_manager' in group_names) != ('tags_swarm_worker' in group_names)
+          - docker_swarm_join_availability in ['active', 'pause', 'drain']
+          - hostvars[docker_swarm_primary_manager].local_ip | default('') | length > 0
+        fail_msg: Each joining node needs exactly one manager/worker tag, a valid availability and the primary manager's local_ip.
 
-- name: Get manager join token from primary manager
-  ansible.builtin.command:
-    argv:
-      - docker
-      - swarm
-      - join-token
-      - -q
-      - manager
-  delegate_to: "{{ docker_swarm_primary_manager }}"
-  run_once: true
-  register: docker_swarm_manager_token_cmd
-  changed_when: false
-  tags: docker_swarm_join
+    - name: Inspect the primary manager without retrieving join tokens
+      ansible.builtin.uri:
+        url: http://localhost/info
+        unix_socket: /var/run/docker.sock
+        return_content: true
+      delegate_to: "{{ docker_swarm_primary_manager }}"
+      run_once: true
+      register: docker_swarm_primary_info
+      check_mode: false
 
-- name: Store join tokens on primary manager hostvars
-  ansible.builtin.set_fact:
-    docker_swarm_worker_join_token: "{{ docker_swarm_worker_token_cmd.stdout }}"
-    docker_swarm_manager_join_token: "{{ docker_swarm_manager_token_cmd.stdout }}"
-  delegate_to: "{{ docker_swarm_primary_manager }}"
-  delegate_facts: true
-  run_once: true
-  tags: docker_swarm_join
+    - name: Verify the primary manager is available
+      ansible.builtin.assert:
+        that:
+          - docker_swarm_primary_info.json.Swarm.LocalNodeState == 'active'
+          - docker_swarm_primary_info.json.Swarm.ControlAvailable
+        fail_msg: The configured primary must already be an active Swarm manager; use the separate init operation for a new cluster.
 
-- name: Join additional managers to swarm
-  community.docker.docker_swarm:
-    state: join
-    advertise_addr: "{{ local_ip }}"
-    remote_addrs:
-      - "{{ hostvars[docker_swarm_primary_manager].local_ip }}:2377"
-    join_token: "{{ hostvars[docker_swarm_primary_manager].docker_swarm_manager_join_token }}"
-  when:
-    - "'tags_swarm_manager' in group_names"
-    - inventory_hostname != docker_swarm_primary_manager
-  tags: docker_swarm_join
+    - name: Inspect local Swarm membership
+      ansible.builtin.uri:
+        url: http://localhost/info
+        unix_socket: /var/run/docker.sock
+        return_content: true
+      register: docker_swarm_local_info
+      check_mode: false
 
-- name: Join workers to swarm
-  community.docker.docker_swarm:
-    state: join
-    advertise_addr: "{{ local_ip }}"
-    remote_addrs:
-      - "{{ hostvars[docker_swarm_primary_manager].local_ip }}:2377"
-    join_token: "{{ hostvars[docker_swarm_primary_manager].docker_swarm_worker_join_token }}"
-  when: "'tags_swarm_worker' in group_names"
-  tags: docker_swarm_join
+    - name: Validate local Swarm state
+      ansible.builtin.assert:
+        that:
+          - docker_swarm_local_info.json.Swarm.LocalNodeState in ['inactive', 'active']
+        fail_msg: Resolve the node's pending, locked or failed Swarm state before joining it.
+
+    - name: Inspect existing membership on the intended primary
+      when: docker_swarm_local_info.json.Swarm.LocalNodeState == 'active'
+      ansible.builtin.uri:
+        url: "http://localhost/nodes/{{ docker_swarm_local_info.json.Swarm.NodeID }}"
+        unix_socket: /var/run/docker.sock
+        status_code: [200, 404]
+        return_content: true
+      delegate_to: "{{ docker_swarm_primary_manager }}"
+      register: docker_swarm_existing_node
+      check_mode: false
+
+    - name: Verify existing membership and role
+      when: docker_swarm_local_info.json.Swarm.LocalNodeState == 'active'
+      ansible.builtin.assert:
+        that:
+          - docker_swarm_existing_node.status == 200
+          - docker_swarm_existing_node.json.Spec.Role == ('manager' if 'tags_swarm_manager' in group_names else 'worker')
+        fail_msg: >-
+          The node already belongs to a different Swarm or has a different role.
+          Review its membership and explicitly promote/demote it; joining never leaves or replaces an existing cluster.
+
+    - name: Preview joining an inactive node
+      when:
+        - ansible_check_mode
+        - docker_swarm_local_info.json.Swarm.LocalNodeState == 'inactive'
+      ansible.builtin.debug:
+        msg: >-
+          Would join {{ inventory_hostname }} to {{ docker_swarm_primary_manager }} as a
+          {{ 'manager' if 'tags_swarm_manager' in group_names else 'worker' }}
+          with availability {{ docker_swarm_join_availability }}. Token retrieval and runtime verification are deferred.
+      changed_when: true
+
+    - name: Retrieve the required join token
+      when:
+        - not ansible_check_mode
+        - docker_swarm_local_info.json.Swarm.LocalNodeState == 'inactive'
+      ansible.builtin.command:
+        argv:
+          - docker
+          - swarm
+          - join-token
+          - -q
+          - "{{ 'manager' if 'tags_swarm_manager' in group_names else 'worker' }}"
+      delegate_to: "{{ docker_swarm_primary_manager }}"
+      register: docker_swarm_join_token_result
+      changed_when: false
+      no_log: true
+      diff: false
+
+    # The Engine API supports join-time availability; the SDK-backed swarm
+    # module does not. Sending JSON over the Unix socket also keeps the token
+    # out of command arguments and needs no Python Docker SDK on the host.
+    - name: Join the intended Swarm with the selected availability
+      when:
+        - not ansible_check_mode
+        - docker_swarm_local_info.json.Swarm.LocalNodeState == 'inactive'
+      ansible.builtin.uri:
+        url: http://localhost/swarm/join
+        unix_socket: /var/run/docker.sock
+        method: POST
+        body_format: json
+        body:
+          ListenAddr: "0.0.0.0:2377"
+          AdvertiseAddr: "{{ local_ip }}"
+          RemoteAddrs: ["{{ hostvars[docker_swarm_primary_manager].local_ip }}:2377"]
+          JoinToken: "{{ docker_swarm_join_token_result.stdout }}"
+          Availability: "{{ docker_swarm_join_availability }}"
+        status_code: 200
+        timeout: 60
+      changed_when: true
+      no_log: true
+      diff: false
 
 - name: Conduct overlay network tasks
   delegate_to: "{{ docker_swarm_primary_manager }}"

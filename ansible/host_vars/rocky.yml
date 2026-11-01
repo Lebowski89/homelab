@@ -1,0 +1,7 @@
+---
+
+docker_manage_user: true
+docker_user: "{{ ansible_user }}"
+
+# Manager membership only until application placement is deliberately migrated.
+docker_swarm_join_availability: drain
