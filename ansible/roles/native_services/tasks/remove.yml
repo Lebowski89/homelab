@@ -40,9 +40,11 @@
   loop_control:
     loop_var: native_services_owned_file
 
-- name: Native services | Reload units after retiring the exporter unit
+- name: Native services | Reload units after retiring a managed unit
   when:
-    - native_services_application == 'node_exporter'
+    - >-
+      native_services_application == 'node_exporter' or
+      ('/etc/systemd/system/' ~ native_services_unit ~ '.service') in (native_services_previous.files | default([]))
     - native_services_state_stat.stat.exists
     - not ansible_check_mode
   ansible.builtin.systemd_service:

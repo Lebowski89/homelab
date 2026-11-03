@@ -1,0 +1,133 @@
+---
+
+# The upstream installer rewrites NetworkManager and resolv.conf. Use its portable
+# application with distro .NET instead, retaining the existing present-only marker.
+- name: Technitium native | Inspect the installed application marker
+  ansible.builtin.stat:
+    path: "{{ technitium_native_install_marker }}"
+  register: native_services_technitium_marker
+
+- name: Technitium native | Preview RPM installation in check mode
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Would ensure distribution ASP.NET Core 10, bind-utils, the dns-server account and a hardened native unit.
+      Would install the portable application only if its marker is absent. Downloads, installation, resolver changes,
+      listener verification and service lifecycle are deferred. NetworkManager ownership is preserved.
+
+- name: Technitium native | Install and configure the RPM application
+  when: not ansible_check_mode
+  block:
+    - name: Technitium native | Install distribution runtime and DNS tools
+      ansible.builtin.dnf:
+        name: [aspnetcore-runtime-10.0, ca-certificates, bind-utils, tar]
+        state: present
+        use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+        disable_gpg_check: false
+        allowerasing: false
+
+    - name: Technitium native | Ensure service group exists
+      ansible.builtin.group:
+        name: dns-server
+        system: true
+
+    - name: Technitium native | Ensure non-login service account exists
+      ansible.builtin.user:
+        name: dns-server
+        group: dns-server
+        system: true
+        create_home: false
+        shell: /usr/sbin/nologin
+
+    - name: Technitium native | Ensure root-owned application directory exists
+      ansible.builtin.file:
+        path: "{{ technitium_native_install_marker | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Technitium native | Ensure private application data directories exist
+      ansible.builtin.file:
+        path: "{{ native_services_technitium_directory }}"
+        state: directory
+        owner: dns-server
+        group: dns-server
+        mode: "0750"
+      loop: ["{{ technitium_native_config_dir }}", /var/log/technitium/dns]
+      loop_control:
+        loop_var: native_services_technitium_directory
+
+    - name: Technitium native | Download the portable application only for a fresh installation
+      when: not native_services_technitium_marker.stat.exists
+      ansible.builtin.get_url:
+        url: "{{ technitium_native_archive_url }}"
+        dest: /var/cache/technitium-dns.tar.gz
+        checksum: "{{ technitium_native_archive_checksum | default(omit, true) }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Technitium native | Extract the application without upgrading an existing installation
+      when: not native_services_technitium_marker.stat.exists
+      ansible.builtin.unarchive:
+        src: /var/cache/technitium-dns.tar.gz
+        dest: "{{ technitium_native_install_marker | dirname }}"
+        remote_src: true
+        creates: "{{ technitium_native_install_marker }}"
+        owner: root
+        group: root
+      notify: Restart Technitium DNS
+
+    - name: Technitium native | Require the application marker before starting DNS
+      ansible.builtin.stat:
+        path: "{{ technitium_native_install_marker }}"
+      register: native_services_technitium_installed
+
+    - name: Technitium native | Verify the extracted application
+      ansible.builtin.assert:
+        that:
+          - native_services_technitium_installed.stat.isreg | default(false)
+        fail_msg: The portable archive did not supply the declared application marker; DNS was not started.
+
+    - name: Technitium native | Configure the systemd unit
+      ansible.builtin.template:
+        src: technitium/dns.service.j2
+        dest: "/etc/systemd/system/{{ native_services_unit }}.service"
+        owner: root
+        group: root
+        mode: "0644"
+      notify: Restart Technitium DNS
+
+    - name: Native services | Record the adopted Technitium unit
+      ansible.builtin.include_tasks:
+        file: record_files.yml
+        apply:
+          tags: "{{ ansible_run_tags }}"
+      tags: "{{ ansible_run_tags }}"
+      vars:
+        native_services_adopted_files: ["/etc/systemd/system/{{ native_services_unit }}.service"]
+
+    - name: Technitium native | Reconcile only active systemd-resolved integration
+      when: native_services_technitium_manage_resolved
+      ansible.builtin.include_tasks:
+        file: technitium/resolved.yml
+        apply:
+          tags: "{{ ansible_run_tags }}"
+      tags: "{{ ansible_run_tags }}"
+
+    - name: Technitium native | Complete resolver and unit notifications before readiness
+      ansible.builtin.meta: flush_handlers
+
+    - name: Technitium native | Enable and start the selected service
+      ansible.builtin.systemd_service:
+        name: "{{ technitium_native_service_name }}"
+        enabled: true
+        state: started
+
+    - name: Technitium native | Check listener readiness
+      ansible.builtin.include_tasks:
+        file: technitium_ready.yml
+        apply:
+          tags: "{{ ansible_run_tags }}"
+      tags: "{{ ansible_run_tags }}"

@@ -17,6 +17,22 @@
   when: native_services_application == 'alloy'
   ansible.builtin.include_tasks: alloy_validate.yml
 
+- name: Native services | Validate native DNS platform before changing the host
+  when: native_services_application in ['keepalived', 'technitium']
+  ansible.builtin.include_tasks:
+    file: dns_platform.yml
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  tags: "{{ ansible_run_tags }}"
+
+- name: Native services | Inspect Technitium resolver requirements before ownership changes
+  when: native_services_application == 'technitium'
+  ansible.builtin.include_tasks:
+    file: technitium_validate.yml
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  tags: "{{ ansible_run_tags }}"
+
 - name: Native services | Classify firewall requirements before changing the host
   service_firewall_plan:
     entry: "{{ native_services_entry }}"
@@ -45,8 +61,11 @@
       {{ {'alloy': [native_services_config.config_path | default('')],
           'node_exporter': ['/etc/systemd/system/node_exporter.service'],
           'keepalived': [native_services_config.config_path | default(''), native_services_config.check_script_path | default('')],
-          'technitium': ['/etc/systemd/resolved.conf.d/technitium.conf']
-            if native_services_config.disable_resolved_stub | default(false) else []}[native_services_application] }}
+          'technitium':
+            (['/etc/systemd/resolved.conf.d/technitium.conf'] if native_services_technitium_manage_resolved | default(false) else [])
+            + (['/etc/systemd/system/' ~
+                (native_services_config.service_name | default('') | regex_replace('[.]service$', '')) ~ '.service']
+               if ansible_facts.pkg_mgr in ['dnf', 'dnf5'] else [])}[native_services_application] }}
     native_services_state_path: "/var/lib/native_services/{{ native_services_application }}.json"
     native_services_previous: {}
 
@@ -72,13 +91,6 @@
       - native_services_previous.identity | default(native_services_identity) == native_services_identity
       - native_services_previous.unit | default(native_services_unit) == native_services_unit
     fail_msg: Another declaration or service unit owns this native installation; remove it before changing identity.
-
-- name: Native services | Preserve supported platform gates
-  when: native_services_application in ['keepalived', 'technitium']
-  ansible.builtin.assert:
-    that:
-      - ansible_facts.os_family == 'Debian'
-    fail_msg: This native application currently supports Debian-family systemd hosts only.
 
 - name: Native services | Validate Keepalived before any installation or restart
   when:

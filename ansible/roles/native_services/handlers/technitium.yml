@@ -13,3 +13,4 @@
   ansible.builtin.systemd:
     name: "{{ technitium_native_service_name }}"
     state: restarted
+    daemon_reload: "{{ ansible_facts.pkg_mgr in ['dnf', 'dnf5'] }}"

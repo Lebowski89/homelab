@@ -1,0 +1,20 @@
+---
+
+- name: Keepalived native | Install distribution Keepalived and DNS health-check tools
+  ansible.builtin.dnf:
+    name: [keepalived, bind-utils]
+    state: present
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    disable_gpg_check: false
+    allowerasing: false
+
+- name: Keepalived native | Apply the declared RPM update policy to Keepalived only # noqa: package-latest -- explicit operator policy
+  when:
+    - native_services_action == 'update'
+    - native_services_entry.config.native.update_policy == 'latest'
+  ansible.builtin.dnf:
+    name: keepalived
+    state: latest
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    disable_gpg_check: false
+    allowerasing: false

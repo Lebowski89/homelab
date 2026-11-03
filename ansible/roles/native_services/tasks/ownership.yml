@@ -5,7 +5,7 @@
 - name: Native services | Inspect original resolver ownership
   when:
     - native_services_application == 'technitium'
-    - native_services_config.disable_resolved_stub
+    - native_services_technitium_manage_resolved
     - >-
       not (native_services_previous.resolver.managed | default(false))
       or '/etc/systemd/resolved.conf.d/technitium.conf' not in (native_services_previous.files | default([]))

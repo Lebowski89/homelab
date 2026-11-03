@@ -89,18 +89,29 @@ class ActionModule(ActionBase):
             record['content'] = self._templar.template(trust_as_template(expression))
         with open(v['fixture_record'], 'a') as output:
             output.write(json.dumps(record) + '\\n')
-        result = {'changed': module in ('file', 'user', 'copy', 'template'), 'rc': 0, 'stdout': ''}
+        result = {'changed': module in ('file', 'user', 'copy', 'template', 'unarchive')
+                  and not v.get('fixture_unchanged', False), 'rc': 0, 'stdout': ''}
         if module == 'stat':
             app = v['native_services_application']
             state = v.get('fixture_state', {}).get(app)
             result['stat'] = ({'exists': v.get('fixture_ostree', False)} if options['path'] == '/run/ostree-booted' else
                               {'exists': state is not None} if options['path'].endswith('.json') else
                               v.get('fixture_resolver', {'exists': True, 'islnk': True, 'lnk_source': '/run/systemd/resolve/stub-resolv.conf'}))
+            if app == 'technitium' and options['path'] == v['native_services_config']['install_marker']:
+                with open(v['fixture_record']) as source:
+                    operations = [json.loads(line) for line in source]
+                extracted = any(op['module'] == 'unarchive' and op['host'] == v['inventory_hostname'] for op in operations)
+                exists = v.get('fixture_application_installed', False) or (extracted and not v.get('fixture_bad_archive', False))
+                result['stat'] = {'exists': exists, 'isreg': exists}
+            if options['path'] == '/run/systemd/resolve/resolv.conf':
+                exists = v.get('fixture_resolved_output', True)
+                result['stat'] = {'exists': exists, 'isreg': exists}
         if module == 'slurp':
             state = v.get('fixture_state', {})[v['native_services_application']]
             result['content'] = base64.b64encode(json.dumps(state).encode()).decode()
         if module == 'service_facts':
-            result['ansible_facts'] = {'services': {v['native_services_unit'] + '.service': {'state': 'running'}}}
+            unit = v.get('native_services_unit', v.get('technitium_native_service_name', 'dns')).removesuffix('.service')
+            result['ansible_facts'] = {'services': v.get('fixture_services', {unit + '.service': {'state': 'running'}})}
         if module == 'get_url' and v.get('fixture_download_failure', False):
             result.update(failed=True, msg='fixture download failure')
         if module == 'setup':
@@ -446,11 +457,12 @@ def test_node_exporter_check_mode_skips_archive_and_service_lifecycle(native_run
     assert not any(call["module"] in ("get_url", "unarchive", "copy", "systemd") for call in calls)
 
 
-def test_keepalived_peer_validation_runs_before_installation(native_run):
-    result, calls = native_run(["keepalived"], peer_address=False)
+@pytest.mark.parametrize("rpm", [False, True])
+def test_keepalived_peer_validation_runs_before_installation(native_run, rpm):
+    result, calls = native_run(["keepalived"], peer_address=False, facts=rpm_alloy_facts() if rpm else None)
     assert result.returncode != 0
     assert "local_ip" in result.stdout
-    assert not any(call["module"] == "apt" for call in calls)
+    assert not any(call["module"] in {"apt", "dnf", "systemd_service", "file", "copy"} for call in calls)
 
 
 def test_native_collector_runs_on_multiple_hosts_without_a_controller(native_run):
@@ -486,10 +498,13 @@ def test_native_remove_retires_only_its_recorded_configuration(native_run):
     assert stopped == [{"name": "node_exporter", "state": "stopped", "enabled": False}]
 
 
-def test_technitium_defined_false_empty_and_numeric_overrides_do_not_fall_back(native_run):
+@pytest.mark.parametrize("rpm", [False, True])
+def test_technitium_defined_false_empty_and_numeric_overrides_do_not_fall_back(native_run, rpm):
     result, calls = native_run(
         ["technitium"],
+        facts=rpm_alloy_facts("Rocky", "10.2") if rpm else None,
         overrides={
+            "fixture_services": {"systemd-resolved.service": {"state": "running"}},
             "technitium_native_disable_resolved_stub": False,
             "technitium_native_resolved_dns_servers": [],
             "technitium_native_web_port": 15400,
@@ -497,7 +512,8 @@ def test_technitium_defined_false_empty_and_numeric_overrides_do_not_fall_back(n
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert not any(call["options"].get("dest") in {"/etc/resolv.conf", "/etc/systemd/resolved.conf.d/technitium.conf"} for call in calls)
-    assert not any(call["handler"] for call in calls)
+    restarted = [call["options"]["name"] for call in calls if call["handler"]]
+    assert restarted == (["dns"] if rpm else [])
     assert [call["options"]["port"] for call in calls if call["module"] == "wait_for"] == [15400, 15353]
 
 
@@ -736,14 +752,6 @@ def test_alloy_rejects_unsupported_platform_before_ownership_or_installation(nat
     assert "Native Alloy requires" in result.stdout
 
 
-@pytest.mark.parametrize("entry", ["keepalived", "technitium"])
-def test_alloy_rpm_support_does_not_lift_other_native_platform_gates(native_run, entry):
-    result, calls = native_run([entry], facts=rpm_alloy_facts())
-    assert result.returncode != 0
-    assert {call["module"] for call in calls} <= {"setup", "stat"}
-    assert "Debian-family" in result.stdout
-
-
 @pytest.mark.parametrize(
     "overrides", [{"alloy_native_rpm_baseurl": "http://packages.example.test"}, {"alloy_native_rpm_key_fingerprint": "incomplete"}]
 )
@@ -762,3 +770,167 @@ def test_alloy_rpm_lifecycle_needs_no_repository_or_package_changes(native_run, 
     services = [call["options"] for call in calls if call["module"] == "systemd_service"]
     assert len(services) == 1 and services[0]["name"] == "fixture-alloyd"
     assert services[0]["state"] == ("restarted" if action == "recreate" else "stopped")
+
+
+@pytest.mark.parametrize(
+    "facts,action,policy,state",
+    [
+        (rpm_alloy_facts(), "deploy", "latest", "present"),
+        (rpm_alloy_facts("Fedora", "45", "dnf5"), "update", "latest", "latest"),
+        (rpm_alloy_facts("Rocky", "9"), "update", "present", "present"),
+    ],
+)
+def test_keepalived_rpm_packages_update_scope_and_inventory_rendering(native_run, facts, action, policy, state):
+    result, calls = native_run(["keepalived"], facts=facts, action=action, update_policy=policy)
+    assert result.returncode == 0, result.stdout + result.stderr
+    packages = [call["options"] for call in calls if call["module"] == "dnf"]
+    assert "bind-utils" in packages[0]["name"]
+    assert packages[-1]["state"] == state
+    if state == "latest":
+        assert packages[-1]["name"] == "keepalived"
+    assert all(call["use_backend"] == ("dnf5" if facts["pkg_mgr"] == "dnf5" else "dnf4") for call in packages)
+    assert all(call["disable_gpg_check"] is False and call["allowerasing"] is False for call in packages)
+    assert not any(call["module"] == "apt" for call in calls)
+    configs = [call for call in calls if call["module"] == "template"]
+    assert any("interface fixture0" in call["content"] and "192.0.2.11" in call["content"] for call in configs)
+    script = next(call for call in configs if call["options"]["src"].endswith("check-dns.sh.j2"))
+    assert script["options"]["setype"] == "_default"  # Never opt into the unconfined-script domain.
+
+
+@pytest.mark.parametrize("facts", [rpm_alloy_facts("Rocky", "10.2"), rpm_alloy_facts("Fedora", "43", "dnf5")])
+def test_technitium_rpm_uses_portable_application_and_retains_networkmanager_resolver(native_run, facts):
+    result, calls = native_run(["technitium"], facts=facts)
+    assert result.returncode == 0, result.stdout + result.stderr
+    packages = [call["options"] for call in calls if call["module"] == "dnf"]
+    assert packages and "aspnetcore-runtime-10.0" in packages[0]["name"] and "bind-utils" in packages[0]["name"]
+    assert all(call["state"] == "present" and not call["disable_gpg_check"] and not call["allowerasing"] for call in packages)
+    archive = next(call["options"] for call in calls if call["module"] == "unarchive")
+    assert archive["creates"] == "/opt/technitium/dns/DnsServerApp.dll" and archive["owner"] == "root"
+    unit = next(call for call in calls if call["module"] == "template")
+    assert "User=dns-server" in unit["content"] and "NoNewPrivileges=true" in unit["content"]
+    assert "CapabilityBoundingSet=CAP_NET_BIND_SERVICE" in unit["content"]
+    assert not any("/etc/resolv.conf" in str(call["options"]) or "/etc/NetworkManager/" in str(call["options"]) for call in calls)
+    assert not any(call["module"] == "apt" or call["options"].get("cmd", "").startswith("bash ") for call in calls)
+    probe = next(call["options"]["argv"] for call in calls if call["module"] == "command")
+    assert probe[probe.index("-p") + 1] == "15353"
+
+
+def test_technitium_existing_rpm_marker_preserves_application_and_custom_unit_paths(native_run):
+    result, calls = native_run(
+        ["technitium"],
+        facts=rpm_alloy_facts("Rocky", "9.7"),
+        action="update",
+        overrides={
+            "fixture_application_installed": True,
+            "fixture_unchanged": True,
+            "technitium_native_install_marker": "/opt/operator-dns/DnsServerApp.dll",
+            "technitium_native_service_name": "operator-dns",
+            "technitium_native_config_dir": "/srv/operator-dns",
+        },
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not any(call["module"] in {"get_url", "unarchive"} for call in calls)
+    unit = next(call for call in calls if call["module"] == "template")
+    assert unit["options"]["dest"] == "/etc/systemd/system/operator-dns.service"
+    assert "ExecStart=/usr/bin/dotnet /opt/operator-dns/DnsServerApp.dll /srv/operator-dns" in unit["content"]
+    assert not any(call["handler"] for call in calls)
+    assert not any(call["options"].get("recurse", False) for call in calls if call["module"] == "file")
+
+
+def test_technitium_rpm_resolved_integration_records_recovery_and_precedes_service_restart(native_run):
+    result, calls = native_run(
+        ["technitium"],
+        facts=rpm_alloy_facts("Rocky", "10.1"),
+        overrides={"fixture_services": {"systemd-resolved.service": {"state": "running"}}},
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    writes = [call for call in calls if call["module"] == "copy" and call["options"].get("dest", "").endswith(".json")]
+    assert json.loads(writes[0]["options"]["content"])["resolver"]["managed"] is True
+    assert "/etc/systemd/resolved.conf.d/technitium.conf" in json.loads(writes[-1]["options"]["content"])["files"]
+    resolver = next(i for i, call in enumerate(calls) if call["options"].get("dest") == "/etc/resolv.conf")
+    dns = next(i for i, call in enumerate(calls) if call["handler"] and call["options"].get("name") == "dns")
+    assert resolver < dns
+
+
+@pytest.mark.parametrize("entry", ["keepalived", "technitium"])
+@pytest.mark.parametrize("rpm", [False, True])
+def test_native_dns_fresh_check_mode_defers_packages_installers_and_services(native_run, entry, rpm):
+    result, calls = native_run([entry], facts=rpm_alloy_facts("Rocky", "10.2") if rpm else None, check=True, action=None)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not any(call["module"] in {"apt", "dnf", "get_url", "unarchive", "systemd", "systemd_service", "command"} for call in calls)
+    assert "deferred" in result.stdout
+
+
+@pytest.mark.parametrize("entry", ["keepalived", "technitium"])
+@pytest.mark.parametrize(
+    "facts,ostree",
+    [
+        (rpm_alloy_facts("Rocky", "10.2"), True),
+        (rpm_alloy_facts("AlmaLinux", "10.2"), False),
+        (rpm_alloy_facts("Rocky", "8"), False),
+        (rpm_alloy_facts("Fedora", "40"), False),
+        (rpm_alloy_facts(backend="apt"), False),
+        ({**rpm_alloy_facts(), "service_mgr": "openrc"}, False),
+    ],
+)
+def test_native_dns_rejects_unsupported_platform_before_any_ownership_or_install(native_run, entry, facts, ostree):
+    result, calls = native_run([entry], facts=facts, ostree=ostree)
+    assert result.returncode != 0
+    assert {call["module"] for call in calls} <= {"setup", "stat"}
+    assert "Native DNS services require" in result.stdout
+
+
+@pytest.mark.parametrize("version", ["9.6", "10.0"])
+def test_technitium_rpm_requires_repositories_with_the_current_dotnet_runtime(native_run, version):
+    result, calls = native_run(["technitium"], facts=rpm_alloy_facts("Rocky", version))
+    assert result.returncode != 0
+    assert {call["module"] for call in calls} <= {"setup", "stat"}
+    assert "ASP.NET Core 10" in result.stdout
+
+
+def test_technitium_rpm_refuses_missing_resolved_output_before_ownership(native_run):
+    result, calls = native_run(
+        ["technitium"],
+        facts=rpm_alloy_facts("Rocky", "10.2"),
+        overrides={"fixture_services": {"systemd-resolved.service": {"state": "running"}}, "fixture_resolved_output": False},
+    )
+    assert result.returncode != 0 and "no usable resolver output" in result.stdout
+    assert {call["module"] for call in calls} <= {"setup", "stat", "service_facts"}
+
+
+def test_technitium_rpm_download_failure_never_changes_host_dns(native_run):
+    result, calls = native_run(["technitium"], facts=rpm_alloy_facts("Rocky", "10.2"), overrides={"fixture_download_failure": True})
+    assert result.returncode != 0
+    assert not any(call["module"] in {"systemd", "systemd_service", "unarchive"} for call in calls)
+    assert not any(call["options"].get("dest") in {"/etc/resolv.conf", "/etc/systemd/resolved.conf.d/technitium.conf"} for call in calls)
+
+
+@pytest.mark.parametrize("action", ["recreate", "remove"])
+def test_technitium_rpm_lifecycle_retires_only_owned_unit_and_retains_runtime_data(native_run, action):
+    record = {"identity": "technitium:native", "unit": "dns", "files": ["/etc/systemd/system/dns.service"], "resolver": {"managed": False}}
+    result, calls = native_run(
+        ["technitium"], facts=rpm_alloy_facts("Rocky", "10.2"), action=action, overrides={"fixture_state": {"technitium": record}}
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not any(call["module"] in {"apt", "dnf", "get_url", "unarchive", "group", "user"} for call in calls)
+    mutations = [call["options"]["path"] for call in calls if call["module"] == "file"]
+    assert mutations == (["/etc/systemd/system/dns.service", "/var/lib/native_services/technitium.json"] if action == "remove" else [])
+    services = [call["options"] for call in calls if call["module"] in {"systemd_service", "systemd"}]
+    assert services[0]["state"] == ("stopped" if action == "remove" else "restarted")
+    if action == "remove":
+        assert services[-1] == {"daemon_reload": True}
+
+
+def test_technitium_rpm_multihost_installation_keeps_each_host_marker_and_unit_independent(native_run):
+    result, calls = native_run(["technitium"], facts=rpm_alloy_facts("Rocky", "10.2"), multiple_hosts=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert {call["host"] for call in calls if call["module"] == "unarchive"} == {"selected", "other"}
+    assert {call["host"] for call in calls if call["handler"] and call["options"]["name"] == "dns"} == {"selected", "other"}
+
+
+def test_technitium_rpm_incomplete_archive_cannot_claim_a_unit_or_restart_dns(native_run):
+    result, calls = native_run(["technitium"], facts=rpm_alloy_facts("Rocky", "10.2"), overrides={"fixture_bad_archive": True})
+    assert result.returncode != 0 and "did not supply" in result.stdout
+    assert not any(call["module"] in {"template", "systemd", "systemd_service"} for call in calls)
+    records = [json.loads(call["options"]["content"]) for call in calls if call["options"].get("dest", "").endswith(".json")]
+    assert all(record["files"] == [] for record in records)

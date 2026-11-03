@@ -1,0 +1,36 @@
+[Unit]
+Description=Technitium DNS Server
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=dns-server
+Group=dns-server
+SyslogIdentifier=dns-server
+WorkingDirectory={{ technitium_native_install_marker | dirname }}
+ExecStart=/usr/bin/dotnet {{ technitium_native_install_marker }} {{ technitium_native_config_dir }}
+ReadWritePaths={{ technitium_native_config_dir }} /var/log/technitium/dns
+Restart=always
+RestartSec=10
+UMask=0077
+LockPersonality=true
+NoNewPrivileges=true
+PrivateDevices=true
+PrivateTmp=true
+ProtectClock=true
+ProtectControlGroups=true
+ProtectHome=true
+ProtectHostname=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+ProtectSystem=strict
+RemoveIPC=true
+RestrictRealtime=true
+RestrictSUIDSGID=true
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+
+[Install]
+WantedBy=multi-user.target

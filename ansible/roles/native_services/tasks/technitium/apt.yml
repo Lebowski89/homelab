@@ -1,0 +1,59 @@
+---
+
+- name: Technitium native | Install prerequisite packages
+  when: not ansible_check_mode
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - dnsutils
+    state: present
+    update_cache: true
+
+- name: Technitium native | Download installer before changing local DNS
+  when: not ansible_check_mode
+  ansible.builtin.get_url:
+    url: "{{ technitium_native_install_script_url }}"
+    dest: "{{ technitium_native_install_script_path }}"
+    mode: "0755"
+
+- name: Technitium native | Reconcile declared systemd-resolved integration
+  when: native_services_technitium_manage_resolved
+  ansible.builtin.include_tasks:
+    file: technitium/resolved.yml
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  tags: "{{ ansible_run_tags }}"
+
+- name: Technitium native | Flush resolver changes before install
+  ansible.builtin.meta: flush_handlers
+
+- name: Technitium native | Verify DNS still works after resolver change
+  when: not ansible_check_mode
+  ansible.builtin.command:
+    cmd: getent hosts download.technitium.com
+  changed_when: false
+
+- name: Technitium native | Run installer
+  when: not ansible_check_mode
+  ansible.builtin.command:
+    cmd: "bash {{ technitium_native_install_script_path }}"
+    creates: "{{ technitium_native_install_marker }}"
+
+- name: Technitium native | Enable and start service
+  when: not ansible_check_mode
+  ansible.builtin.systemd:
+    name: "{{ technitium_native_service_name }}"
+    enabled: true
+    state: started
+
+- name: Technitium native | Check listener readiness
+  when: not ansible_check_mode
+  ansible.builtin.include_tasks: technitium_ready.yml
+
+- name: Technitium native | Explain check-mode installation limitations
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Package installation, installer download/execution, DNS resolution,
+      listener readiness and service lifecycle are deferred in check mode.

@@ -3,13 +3,10 @@
 - name: Keepalived | Configure native service
   when: native_services_keepalived_host_cfg.mode | default('native') == 'native'
   block:
-    - name: Keepalived native | Assert supported OS
-      ansible.builtin.assert:
-        that:
-          - ansible_facts.os_family | default('') == 'Debian'
-        fail_msg: "Native keepalived backend currently supports Debian/Ubuntu hosts only."
-
-    - name: Keepalived native | Install packages
+    - name: Keepalived native | Install APT packages
+      when:
+        - ansible_facts.pkg_mgr == 'apt'
+        - not ansible_check_mode
       ansible.builtin.apt:
         name:
           - keepalived
@@ -18,13 +15,32 @@
         update_cache: true
         cache_valid_time: 3600
 
-    - name: Keepalived native | Apply declared update policy to Keepalived only # noqa: package-latest -- explicit operator policy
+    - name: Keepalived native | Apply declared APT update policy to Keepalived only # noqa: package-latest -- explicit operator policy
       when:
+        - ansible_facts.pkg_mgr == 'apt'
+        - not ansible_check_mode
         - native_services_action == 'update'
         - native_services_entry.config.native.update_policy == 'latest'
       ansible.builtin.apt:
         name: keepalived
         state: latest
+
+    - name: Keepalived native | Install RPM packages
+      when:
+        - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+        - not ansible_check_mode
+      ansible.builtin.include_tasks:
+        file: keepalived/rpm.yml
+        apply:
+          tags: "{{ ansible_run_tags }}"
+      tags: "{{ ansible_run_tags }}"
+
+    - name: Keepalived native | Explain deferred package and runtime checks
+      when: ansible_check_mode
+      ansible.builtin.debug:
+        msg: >-
+          Would ensure Keepalived and the distribution DNS tools. Package changes, configuration binary validation,
+          service lifecycle, SELinux DNS-script execution and VRRP failover verification are deferred in check mode.
 
     - name: Keepalived native | Ensure config directory exists
       ansible.builtin.file:
@@ -33,6 +49,7 @@
         owner: root
         group: root
         mode: "0755"
+        setype: _default
 
     - name: Keepalived native | Install DNS health check script
       ansible.builtin.template:
@@ -41,6 +58,7 @@
         owner: root
         group: root
         mode: "0755"
+        setype: _default
       notify: Restart keepalived
 
     - name: Native services | Record adopted keepalived configuration
@@ -58,6 +76,8 @@
         owner: root
         group: root
         mode: "0644"
+        setype: _default
+        validate: keepalived --config-test --use-file=%s
       notify: Restart keepalived
 
     - name: Native services | Record adopted keepalived configuration

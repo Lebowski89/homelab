@@ -14,5 +14,5 @@
 
 - name: Technitium native | Test local DNS recursion
   ansible.builtin.command:
-    cmd: dig @127.0.0.1 cloudflare.com A +short +time=2 +tries=1
+    argv: [dig, '@127.0.0.1', -p, "{{ technitium_native_dns_port | string }}", cloudflare.com, A, +short, +time=2, +tries=1]
   changed_when: false

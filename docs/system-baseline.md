@@ -229,7 +229,10 @@ inspect package/service changes, resolver behavior and a rerun. Repository tests
 mock host operations and cannot prove live package availability or kernel support.
 See [container host installation](container-runtimes.md) and
 [native service platform limits](ansible/native-services.md#protection-and-platform-limits)
-for Docker, Podman and native Alloy support. The mgt firewall policy still
-requires Ubuntu 26.04; native Technitium and Keepalived remain Debian-family only.
-These owners need separate Rocky preparation.
+for Docker, Podman, native Alloy and native DNS support. Keepalived supports
+conventional Rocky 9/10; native Technitium requires Rocky 9.7+/10.1+ and uses
+distribution .NET 10 with a portable application install. DNS reachability,
+resolver recovery, SELinux access and peer VRRP failover still need isolated
+validation. The mgt firewall policy still requires Ubuntu 26.04 and needs
+separate Rocky preparation.
 Do not use a full homelab deployment as Rocky's baseline test or change SELinux/firewall/networking to work around these limits.

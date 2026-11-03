@@ -1,0 +1,53 @@
+---
+
+- name: Technitium native | Inspect resolver service availability
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.service_facts:
+
+- name: Technitium native | Resolve current resolver ownership scope
+  ansible.builtin.set_fact:
+    native_services_technitium_manage_resolved: >-
+      {{ native_services_config.disable_resolved_stub and
+         (ansible_facts.pkg_mgr == 'apt' or
+          (ansible_facts.services | default({})).get('systemd-resolved.service', {}).get('state', '') == 'running') }}
+
+- name: Technitium native | Validate RPM installation settings
+  when:
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - native_services_action in ['deploy', 'update']
+  ansible.builtin.assert:
+    that:
+      - technitium_native_archive_url is string
+      - technitium_native_archive_url is match('^https://[^\s]+$')
+      - technitium_native_archive_checksum is string
+      - technitium_native_archive_checksum == '' or technitium_native_archive_checksum is match('^sha256:[a-fA-F0-9]{64}$')
+      - native_services_config.service_name is match('^[A-Za-z0-9_-]+([.]service)?$')
+      - native_services_config.install_marker is match('^/opt/[A-Za-z0-9_./-]+/DnsServerApp[.]dll$')
+      - native_services_config.config_dir is match('^/[A-Za-z0-9_./-]+$')
+      - native_services_config.config_dir not in ['/', '/etc', '/var', '/opt', '/usr', '/run', '/home', '/root']
+      - native_services_config.config_dir != (native_services_config.install_marker | dirname)
+      - not native_services_config.config_dir.startswith((native_services_config.install_marker | dirname) ~ '/')
+      - not (native_services_config.install_marker | dirname).startswith(native_services_config.config_dir ~ '/')
+    fail_msg: >-
+      RPM Technitium requires an HTTPS portable archive, optional SHA256 checksum, safe unit/config paths,
+      an /opt application marker and separate program/data directories.
+
+- name: Technitium native | Inspect active resolved output before adopting its resolver
+  when:
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - native_services_action in ['deploy', 'update']
+    - native_services_technitium_manage_resolved
+  ansible.builtin.stat:
+    path: /run/systemd/resolve/resolv.conf
+    follow: true
+  register: native_services_technitium_resolved_output
+
+- name: Technitium native | Refuse a dangling resolver link
+  when:
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - native_services_action in ['deploy', 'update']
+    - native_services_technitium_manage_resolved
+  ansible.builtin.assert:
+    that:
+      - native_services_technitium_resolved_output.stat.isreg | default(false)
+    fail_msg: Active systemd-resolved has no usable resolver output; repair host DNS before native Technitium installation.
