@@ -25,6 +25,9 @@ def native_run(tmp_path):
     operations = {
         "apt",
         "apt_repository",
+        "dnf",
+        "rpm_key",
+        "yum_repository",
         "get_url",
         "group",
         "user",
@@ -53,7 +56,7 @@ def native_run(tmp_path):
                     task["fixture_operation"] = {"module": module, "options": task.pop(key) or {}}
 
     for directory in ("tasks", "handlers"):
-        for path in (copied / directory).glob("*.yml"):
+        for path in (copied / directory).rglob("*.yml"):
             tasks = yaml.safe_load(path.read_text())
             instrument(tasks)
             path.write_text(yaml.safe_dump(tasks, sort_keys=False))
@@ -90,7 +93,8 @@ class ActionModule(ActionBase):
         if module == 'stat':
             app = v['native_services_application']
             state = v.get('fixture_state', {}).get(app)
-            result['stat'] = ({'exists': state is not None} if options['path'].endswith('.json') else
+            result['stat'] = ({'exists': v.get('fixture_ostree', False)} if options['path'] == '/run/ostree-booted' else
+                              {'exists': state is not None} if options['path'].endswith('.json') else
                               v.get('fixture_resolver', {'exists': True, 'islnk': True, 'lnk_source': '/run/systemd/resolve/stub-resolv.conf'}))
         if module == 'slurp':
             state = v.get('fixture_state', {})[v['native_services_application']]
@@ -106,7 +110,9 @@ class ActionModule(ActionBase):
                 accounts = {v['alloy_native_user']: ['x', '1001', '1001', '', '/fixture/alloy', '/usr/sbin/nologin']}
                 result['ansible_facts'] = {'getent_passwd': accounts if v['fixture_account'] else {}}
             else:
-                groups = {'adm': ['x', '4', ''], 'systemd-journal': ['x', '999', '']}
+                groups = {'systemd-journal': ['x', '999', '']}
+                if v['ansible_facts']['os_family'] == 'Debian':
+                    groups['adm'] = ['x', '4', '']
                 if v['fixture_account']:
                     groups[v['alloy_native_group']] = ['x', '1001', '']
                 result['ansible_facts'] = {'getent_group': groups}
@@ -134,12 +140,28 @@ class ActionModule(ActionBase):
         limit=None,
         containers=False,
         run_all=False,
+        facts=None,
+        ostree=False,
+        update_policy=None,
     ):
+        host_facts = {
+            "system": "Linux",
+            "distribution": "Ubuntu",
+            "distribution_version": "26.04",
+            "distribution_major_version": "26",
+            "os_family": "Debian",
+            "pkg_mgr": "apt",
+            "service_mgr": "systemd",
+            "architecture": "x86_64",
+            "default_ipv4": {"interface": "eth0"},
+            **(facts or {}),
+        }
         variables = {
             "fixture_record": str(record),
             "fixture_account": account,
-            "fixture_facts": {"os_family": "Debian", "default_ipv4": {"interface": "eth0"}},
-            "ansible_facts": {"os_family": "Debian", "default_ipv4": {"interface": "eth0"}},
+            "fixture_facts": host_facts,
+            "ansible_facts": host_facts,
+            "fixture_ostree": ostree,
         }
         if "alloy" in entries:
             variables.update(
@@ -176,11 +198,15 @@ class ActionModule(ActionBase):
                 technitium_native_web_port=15380, technitium_native_dns_port=15353, technitium_native_resolved_dns_servers=["192.0.2.53"]
             )
         variables.update(overrides or {})
-        if enabled is not None:
+        if enabled is not None or update_policy is not None:
             for entry in entries:
                 path = tmp_path / f"group_vars/all/services/{entry}.yml"
                 declaration = yaml.safe_load(path.read_text())
-                declaration[entry]["enabled"] = enabled
+                if enabled is not None:
+                    declaration[entry]["enabled"] = enabled
+                if update_policy is not None:
+                    config = declaration[entry].get("targets", {}).get("native", declaration[entry])
+                    config["native"]["update_policy"] = update_policy
                 path.write_text(yaml.safe_dump(declaration))
         inventory = {
             "all": {
@@ -401,14 +427,15 @@ def test_multiple_services_keep_their_defaults_and_handlers(native_run):
 def test_fresh_alloy_check_mode_defers_package_account_work(native_run):
     result, calls = native_run(["alloy"], check=True, account=False)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert any(call["module"] == "apt" for call in calls)
-    assert not any(call["module"] in ("user", "template", "systemd_service") for call in calls)
+    assert not any(call["module"] in ("apt", "apt_repository", "get_url", "user", "template", "systemd_service") for call in calls)
+    assert "deferred" in result.stdout
 
 
-def test_alloy_install_requires_the_package_account_before_configuration(native_run):
-    result, calls = native_run(["alloy"], account=False)
+@pytest.mark.parametrize("backend", ["apt", "dnf"])
+def test_alloy_install_requires_the_package_account_before_configuration(native_run, backend):
+    result, calls = native_run(["alloy"], account=False, facts={} if backend == "apt" else rpm_alloy_facts())
     assert result.returncode != 0
-    assert any(call["module"] == "apt" for call in calls)
+    assert any(call["module"] == backend for call in calls)
     assert not any(call["module"] in ("user", "template", "systemd_service") for call in calls)
 
 
@@ -611,3 +638,127 @@ def test_swarm_dispatch_under_limit_keeps_full_placement_on_manager(native_run):
         "node.labels.ansible_host != selected",
     ]
     assert {call["host"] for call in adapters} == {"selected"}
+
+
+def rpm_alloy_facts(distro="Rocky", version="10", backend="dnf"):
+    return {
+        "distribution": distro,
+        "distribution_version": version,
+        "distribution_major_version": version.split(".")[0],
+        "os_family": "RedHat",
+        "pkg_mgr": backend,
+    }
+
+
+@pytest.mark.parametrize(
+    "facts,action,policy,expected_state",
+    [
+        ({}, "deploy", "present", "present"),
+        ({**rpm_alloy_facts("Fedora", "43", "dnf5"), "architecture": "aarch64"}, "update", "latest", "latest"),
+        (rpm_alloy_facts(), "deploy", "latest", "present"),
+        (rpm_alloy_facts("Rocky", "9"), "update", "present", "present"),
+    ],
+    ids=["apt", "fedora-dnf5-update", "rocky10-deploy", "rocky9-update-present"],
+)
+def test_alloy_selects_signed_platform_repository_and_preserves_update_policy(native_run, facts, action, policy, expected_state):
+    result, calls = native_run(["alloy"], facts=facts, action=action, update_policy=policy)
+    assert result.returncode == 0, result.stdout + result.stderr
+    rpm = facts.get("pkg_mgr") in {"dnf", "dnf5"}
+    installs = [call["options"] for call in calls if call["module"] == ("dnf" if rpm else "apt")]
+    assert installs[-1]["name"] == ["alloy"] and installs[-1]["state"] == expected_state
+    assert not any(call["module"] == ("apt" if rpm else "dnf") for call in calls)
+    if rpm:
+        assert not any(call["module"] in {"apt_repository", "get_url"} for call in calls)
+        repo = next(call["options"] for call in calls if call["module"] == "yum_repository")
+        assert repo["baseurl"] == "https://rpm.grafana.com"
+        assert repo["gpgcheck"] and repo["repo_gpgcheck"] and repo["sslverify"]
+        assert any(call["module"] == "rpm_key" and call["options"].get("fingerprint") for call in calls)
+        assert all(install["disable_gpg_check"] is False and install["allowerasing"] is False for install in installs)
+        assert all(install["use_backend"] == ("dnf5" if facts["pkg_mgr"] == "dnf5" else "dnf4") for install in installs)
+    else:
+        repo = next(call["options"] for call in calls if call["module"] == "apt_repository")
+        assert "https://apt.grafana.com stable main" in repo["repo"]
+        assert "signed-by=/etc/apt/keyrings/grafana.asc" in repo["repo"]
+        assert repo["update_cache"] is True
+    user = next(call["options"] for call in calls if call["module"] == "user")
+    assert user["groups"] == ["systemd-journal"] and user["append"] is True
+    assert not any(call["module"] == "group" for call in calls)
+    services = [call["options"] for call in calls if call["module"] == "systemd_service" and not call["handler"]]
+    assert services == [{"name": "fixture-alloyd", "enabled": True, "state": "started"}]
+
+
+def test_alloy_preserves_rpm_repository_and_package_overrides(native_run):
+    result, calls = native_run(
+        ["alloy"],
+        facts=rpm_alloy_facts(),
+        overrides={
+            "alloy_native_rpm_baseurl": "https://packages.example.test/alloy",
+            "alloy_native_rpm_key_url": "https://packages.example.test/signing.key",
+            "alloy_native_repo_filename": "operator-grafana",
+            "alloy_native_packages": ["alloy", "operator-package"],
+        },
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    repo = next(call["options"] for call in calls if call["module"] == "yum_repository")
+    assert repo["baseurl"] == "https://packages.example.test/alloy"
+    assert repo["gpgkey"] == "https://packages.example.test/signing.key"
+    assert repo["file"] == "operator-grafana"
+    installs = [call["options"]["name"] for call in calls if call["module"] == "dnf"]
+    assert installs[-1] == ["alloy", "operator-package"]
+    assert not any("/etc/apt" in str(call["options"]) for call in calls)
+
+
+@pytest.mark.parametrize("facts", [rpm_alloy_facts(), rpm_alloy_facts("Fedora", "43", "dnf5")], ids=["rocky", "fedora"])
+def test_fresh_rpm_alloy_check_mode_defers_installation_accounts_and_services(native_run, facts):
+    result, calls = native_run(["alloy"], facts=facts, check=True, account=False, action=None)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert {call["module"] for call in calls} <= {"setup", "stat", "getent"}
+    assert "deferred" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "facts,ostree",
+    [
+        (rpm_alloy_facts(), True),
+        (rpm_alloy_facts("AlmaLinux"), False),
+        (rpm_alloy_facts("Rocky", "8"), False),
+        (rpm_alloy_facts("Fedora", "40"), False),
+        (rpm_alloy_facts(backend="apt"), False),
+        ({**rpm_alloy_facts(), "service_mgr": "openrc"}, False),
+        ({**rpm_alloy_facts(), "architecture": "s390x"}, False),
+    ],
+    ids=["ostree", "derivative", "old-rocky", "old-fedora", "wrong-manager", "no-systemd", "unsupported-architecture"],
+)
+def test_alloy_rejects_unsupported_platform_before_ownership_or_installation(native_run, facts, ostree):
+    result, calls = native_run(["alloy"], facts=facts, ostree=ostree)
+    assert result.returncode != 0
+    assert {call["module"] for call in calls} <= {"setup", "stat"}
+    assert "Native Alloy requires" in result.stdout
+
+
+@pytest.mark.parametrize("entry", ["keepalived", "technitium"])
+def test_alloy_rpm_support_does_not_lift_other_native_platform_gates(native_run, entry):
+    result, calls = native_run([entry], facts=rpm_alloy_facts())
+    assert result.returncode != 0
+    assert {call["module"] for call in calls} <= {"setup", "stat"}
+    assert "Debian-family" in result.stdout
+
+
+@pytest.mark.parametrize(
+    "overrides", [{"alloy_native_rpm_baseurl": "http://packages.example.test"}, {"alloy_native_rpm_key_fingerprint": "incomplete"}]
+)
+def test_alloy_invalid_rpm_repository_inputs_fail_before_ownership(native_run, overrides):
+    result, calls = native_run(["alloy"], facts=rpm_alloy_facts(), overrides=overrides)
+    assert result.returncode != 0
+    assert {call["module"] for call in calls} <= {"setup", "stat"}
+    assert "HTTPS repository/key URLs" in result.stdout
+
+
+@pytest.mark.parametrize("action", ["recreate", "remove"])
+def test_alloy_rpm_lifecycle_needs_no_repository_or_package_changes(native_run, action):
+    result, calls = native_run(["alloy"], facts=rpm_alloy_facts(), action=action, overrides={"alloy_native_rpm_baseurl": ""})
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not any(call["module"] in {"dnf", "apt", "yum_repository", "rpm_key", "get_url"} for call in calls)
+    services = [call["options"] for call in calls if call["module"] == "systemd_service"]
+    assert len(services) == 1 and services[0]["name"] == "fixture-alloyd"
+    assert services[0]["state"] == ("restarted" if action == "recreate" else "stopped")

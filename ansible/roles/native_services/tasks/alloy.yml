@@ -1,40 +1,25 @@
 ---
 
-- name: Alloy native | Assert supported OS
-  ansible.builtin.assert:
-    that:
-      - ansible_facts.os_family == "Debian"
-    fail_msg: "alloy_native currently supports Debian-family systemd hosts only."
+- name: Alloy native | Preview repository and package installation
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Would configure the Grafana {{ 'APT' if ansible_facts.pkg_mgr == 'apt' else 'RPM' }} repository
+      and ensure {{ alloy_native_packages }} with state
+      {{ 'latest' if native_services_action == 'update' and native_services_entry.config.native.update_policy == 'latest' else 'present' }}.
+      Repository, key and package changes are deferred in check mode.
 
-- name: Alloy native | Ensure apt keyring directory exists
-  ansible.builtin.file:
-    path: "{{ alloy_native_keyring_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+- name: Alloy native | Configure APT installation
+  when:
+    - not ansible_check_mode
+    - ansible_facts.pkg_mgr == 'apt'
+  ansible.builtin.import_tasks: alloy/apt.yml
 
-- name: Alloy native | Download Grafana package signing key
-  ansible.builtin.get_url:
-    url: "{{ alloy_native_repo_url }}/gpg-full.key"
-    dest: "{{ alloy_native_keyring_file }}"
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Alloy native | Configure Grafana apt repository
-  ansible.builtin.apt_repository:
-    repo: >-
-      deb [signed-by={{ alloy_native_keyring_file }}]
-      {{ alloy_native_repo_url }} {{ alloy_native_repo_suite }} main
-    filename: "{{ alloy_native_repo_filename }}"
-    state: present
-    update_cache: true
-
-- name: Alloy native | Install Alloy and ACL support
-  ansible.builtin.apt:
-    name: "{{ alloy_native_packages }}"
-    state: "{{ 'latest' if native_services_action == 'update' and native_services_entry.config.native.update_policy == 'latest' else 'present' }}"
+- name: Alloy native | Configure RPM installation
+  when:
+    - not ansible_check_mode
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.import_tasks: alloy/rpm.yml
 
 - name: Alloy native | Read local system accounts
   ansible.builtin.getent:
@@ -116,7 +101,9 @@
       - "{{ alloy_native_config_path }}"
 
 - name: Alloy native | Enable and start service
-  when: alloy_native_service_account_available
+  when:
+    - not ansible_check_mode
+    - alloy_native_service_account_available
   ansible.builtin.systemd_service:
     name: "{{ alloy_native_service_name }}"
     enabled: true

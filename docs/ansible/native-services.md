@@ -53,8 +53,9 @@ variables remain supported in `host_vars` and extra vars. Ansible resolves those
 variables using its usual precedence; each defined value then overrides its
 corresponding catalogue setting **before** templating defaults. False, empty and
 numeric values are retained without truthy fallback or string conversion, and
-invalid values fail validation. Role defaults only alias the selected normalized
-configuration. Unselected service inputs are not required. Node Exporter's
+invalid values fail validation. Role defaults alias the selected normalized
+application configuration; Alloy's RPM repository settings are role-local
+installation inputs. Unselected service inputs are not required. Node Exporter's
 release URLs, archive paths and checksum URL derive from its selected version and
 architecture unless explicitly overridden. Prometheus reads the canonical
 Keepalived VIP declarations, retaining its existing explicit instances override.
@@ -145,11 +146,43 @@ protected without a verified host-listener/identity adapter. Such an adapter is
 required before adding protected native declarations; no firewall entries are
 created or retired for these currently unprotected native services.
 
-Alloy, Keepalived and Technitium retain Debian-family systemd gates. Node Exporter
-retains its Linux archive installation without a new OS gate. Rocky/Fedora
-support remains deferred: package/repository, account, resolver and systemd
-behavior need platform-specific implementation and runtime validation. Alloy's
-remaining deprecated `apt_repository` use is separate migration work.
+Native Alloy retains its Debian-family APT installation and adds conventional
+Fedora 43–45 and Rocky 9/10 using DNF4/DNF5. It requires systemd, Linux AMD64/ARM64
+and a supported package manager; Atomic/OSTree hosts and other RPM derivatives
+are rejected before installation ownership or package changes. The Linux and
+architecture requirements follow [Grafana's supported platforms](https://grafana.com/docs/alloy/latest/set-up/supported-platforms/).
+Keepalived and Technitium remain Debian-family only. Node Exporter retains its
+Linux archive installation without a new OS gate. DNS, firewall and container
+application migrations remain separate work.
+
+Alloy uses [Grafana's stable repositories](https://grafana.com/docs/alloy/latest/set-up/install/linux/).
+APT repository/keyring settings and existing overrides are retained. RPM hosts
+verify package and repository metadata signatures using Grafana's published
+signing-key fingerprint. Host variables `alloy_native_rpm_baseurl`,
+`alloy_native_rpm_key_url` and `alloy_native_rpm_key_fingerprint` support an
+explicit HTTPS mirror; `alloy_native_repo_filename` and `alloy_native_packages`
+apply to both package managers. No OS-specific fields are added to the service
+declaration. The package-created account, available journal-reader groups,
+configuration permissions, Loki destination, privacy filters and removal
+ownership are unchanged. SELinux and firewall policy are not modified.
+
+Alloy check mode reports repository/package work without downloading keys,
+refreshing metadata or installing packages. It inspects existing accounts;
+configuration planning is deferred if the package account is absent. Service
+starts and restarts are deferred. Package installation remains `present` except
+for an explicit `update` with `native.update_policy: latest`; it never requests a
+host-wide upgrade. The existing APT repository format is retained.
+
+For example, after reviewing the plan and authorizing a live run:
+
+```bash
+skynet limit rocky check alloy-native
+skynet limit rocky run alloy-native
+```
+
+RPM package transactions, journal access under enforcing SELinux, service
+startup and successful delivery to Loki still require isolated live validation.
+Check mode does not establish those capabilities.
 
 Offline tests verify selection, target isolation, host overrides, rendered
 configuration and lifecycle ordering with remote operations replaced by recorders.

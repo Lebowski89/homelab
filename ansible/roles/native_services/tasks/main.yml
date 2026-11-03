@@ -13,6 +13,10 @@
     native_services_config: "{{ native_services_entry.config.native | native_services_normalize }}"
     native_services_identity: "{{ native_services_entry.name }}{{ ':' ~ native_services_entry.target if native_services_entry.target is defined else '' }}"
 
+- name: Native services | Validate Alloy platform before changing the host
+  when: native_services_application == 'alloy'
+  ansible.builtin.include_tasks: alloy_validate.yml
+
 - name: Native services | Classify firewall requirements before changing the host
   service_firewall_plan:
     entry: "{{ native_services_entry }}"
@@ -70,7 +74,7 @@
     fail_msg: Another declaration or service unit owns this native installation; remove it before changing identity.
 
 - name: Native services | Preserve supported platform gates
-  when: native_services_application != 'node_exporter'
+  when: native_services_application in ['keepalived', 'technitium']
   ansible.builtin.assert:
     that:
       - ansible_facts.os_family == 'Debian'

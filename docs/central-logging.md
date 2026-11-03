@@ -35,9 +35,10 @@ globalizing the service does not create ambiguous node series.
 
 Podman hosts run the package-managed native Alloy service. All managed rootful
 and rootless Quadlets explicitly use `LogDriver=journald`. Native Alloy reads
-the journal as the unprivileged `alloy` account through `adm` and
-`systemd-journal` group membership. It never opens Podman sockets or user
-runtime directories. This journal also includes useful non-container host
+the journal as the unprivileged `alloy` account through the available `adm` and
+`systemd-journal` groups. Native installation supports APT hosts and conventional
+Fedora/Rocky RPM hosts; see [native service platform limits](ansible/native-services.md#protection-and-platform-limits).
+It never opens Podman sockets or user runtime directories. This journal also includes useful non-container host
 services, so journal streams deliberately do not receive a blanket
 `runtime="podman"` label.
 

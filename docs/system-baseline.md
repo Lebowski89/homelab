@@ -227,8 +227,9 @@ the unit journal and read-back state after reactivation as well.
 Validate an isolated guest with check mode first, then explicitly authorize and
 inspect package/service changes, resolver behavior and a rerun. Repository tests
 mock host operations and cannot prove live package availability or kernel support.
-The production `podman` role still permits only Ubuntu 26.04+ or LMDE 7 with
-systemd; its DNF/runtime support is a separate migration. The mgt firewall policy
-explicitly requires Ubuntu 26.04; native Alloy, Technitium and Keepalived also
-remain Debian-family only. These owners need separate Rocky preparation.
+See [container host installation](container-runtimes.md) and
+[native service platform limits](ansible/native-services.md#protection-and-platform-limits)
+for Docker, Podman and native Alloy support. The mgt firewall policy still
+requires Ubuntu 26.04; native Technitium and Keepalived remain Debian-family only.
+These owners need separate Rocky preparation.
 Do not use a full homelab deployment as Rocky's baseline test or change SELinux/firewall/networking to work around these limits.

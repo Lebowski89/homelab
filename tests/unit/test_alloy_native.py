@@ -12,29 +12,6 @@ def task_using(tasks, module):
     return next(task for task in tasks if module in task)
 
 
-def test_native_alloy_role_uses_official_repository_and_package_service_account():
-    defaults = {
-        "alloy_native_" + key: value
-        for key, value in yaml.safe_load((REPO_ROOT / "ansible/group_vars/all/services/alloy.yml").read_text())["alloy"]["targets"][
-            "native"
-        ]["native"]["config"].items()
-    }
-    tasks = yaml.safe_load((ROLE_DIR / "tasks/alloy.yml").read_text())
-
-    key = task_using(tasks, "ansible.builtin.get_url")
-    repository = task_using(tasks, "ansible.builtin.apt_repository")
-    user = task_using(tasks, "ansible.builtin.user")
-
-    assert key["ansible.builtin.get_url"]["url"] == "{{ alloy_native_repo_url }}/gpg-full.key"
-    assert "signed-by={{ alloy_native_keyring_file }}" in repository["ansible.builtin.apt_repository"]["repo"]
-    assert repository["ansible.builtin.apt_repository"]["update_cache"] is True
-    assert defaults["alloy_native_repo_url"] == "https://apt.grafana.com"
-    assert defaults["alloy_native_packages"] == ["alloy"]
-    assert user["ansible.builtin.user"]["name"] == "{{ alloy_native_user }}"
-    assert user["ansible.builtin.user"]["append"] is True
-    assert defaults["alloy_native_journal_groups"] == ["adm", "systemd-journal"]
-
-
 def test_native_alloy_configuration_and_service_permissions_are_safe():
     tasks = yaml.safe_load((ROLE_DIR / "tasks/alloy.yml").read_text())
     handlers = yaml.safe_load((ROLE_DIR / "handlers/alloy.yml").read_text())

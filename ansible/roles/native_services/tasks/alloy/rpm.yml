@@ -1,0 +1,40 @@
+---
+
+- name: Alloy native | Install RPM HTTPS prerequisites
+  ansible.builtin.dnf:
+    name: ca-certificates
+    state: present
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    disable_gpg_check: false
+    allowerasing: false
+
+- name: Alloy native | Trust the Grafana RPM signing key
+  ansible.builtin.rpm_key:
+    key: "{{ alloy_native_rpm_key_url }}"
+    fingerprint: "{{ alloy_native_rpm_key_fingerprint }}"
+    state: present
+
+- name: Alloy native | Configure the Grafana RPM repository
+  ansible.builtin.yum_repository:
+    name: grafana
+    file: "{{ alloy_native_repo_filename }}"
+    description: Grafana stable packages
+    baseurl: "{{ alloy_native_rpm_baseurl }}"
+    enabled: true
+    gpgcheck: true
+    repo_gpgcheck: true
+    gpgkey: "{{ alloy_native_rpm_key_url }}"
+    sslverify: true
+    state: present
+  register: native_services_alloy_rpm_repository
+
+- name: Alloy native | Install RPM packages
+  ansible.builtin.dnf:
+    name: "{{ alloy_native_packages }}"
+    state: >-
+      {{ 'latest' if native_services_action == 'update'
+         and native_services_entry.config.native.update_policy == 'latest' else 'present' }}
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    update_cache: "{{ native_services_alloy_rpm_repository.changed }}"
+    disable_gpg_check: false
+    allowerasing: false
