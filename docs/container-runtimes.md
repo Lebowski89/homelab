@@ -143,8 +143,10 @@ The service adapters have not been migrated to Fedora/Rocky. In particular:
 - Application bind mounts support an [explicit SELinux storage policy](service-storage-selinux.md).
   Existing services still require a deliberate storage and ownership review;
   externally managed/shared data and protected ingress are not migrated automatically.
-- The central rootful bridge uses a nonstandard DNS forwarding port. RPM SELinux
-  and firewalld policy for this separate operation needs isolated validation.
+- The [central rootful bridge/DNS owner](podman-services.md#mgt-shared-bridge-and-bootstrap)
+  validates RPM platforms, local rootful Netavark and existing network compatibility,
+  and protects running bridge users during DNS port changes. Actual DNS traffic,
+  SELinux domains and Netavark/firewalld integration still need isolated validation.
 - Overlay networking, pruning and fresh-host package installation still need
   isolated validation. The existing Rocky VM's installation and drained-manager
   join have passed live execution and second-run convergence checks.

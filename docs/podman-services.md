@@ -498,6 +498,61 @@ All migrated ordinary services and five bootstrap containers use separate
 rootless accounts/bridges. Rootless services never attach to the root bridge.
 The four pre-existing accounts/networks retain their ownership.
 
+The central owner supports the same conventional platforms as Podman installation:
+Debian 13, Ubuntu 26.04/26.10, LMDE 7, Fedora 43–45 and Rocky 9.7+/10.1+.
+It gathers its own facts and validates the separately installed runtime before
+writing configuration. Normal execution requires local rootful Netavark,
+executable Netavark/Aardvark providers, cgroup v2 and the supported system Quadlet
+generator. It rejects an existing same-named network unless it is a DNS-enabled,
+non-internal bridge; it never replaces the network to repair a mismatch.
+
+`podman_shared_network_dns_bind_port` remains **5533** by default, keeping host
+port 53 available to Technitium. The narrow system drop-in retains its existing
+path and changes only `network.dns_bind_port`; no host resolver, application
+network, rootless account or per-user configuration is rewritten. Before a new
+or changed DNS declaration, running rootful bridge users must be quiescent.
+An unchanged port permits existing consumers. Host/none network users do not
+block the change. This guard is a point-in-time check, not a maintenance lock:
+do not start bridge workloads concurrently with a port change. The role never
+kills Aardvark or restarts containers to move an existing listener.
+
+SELinux remains in its existing mode. On enabled hosts the runtime must report
+SELinux support; RPM hosts require known SELinux facts. Managed files receive
+their policy-default contexts. No custom port mapping, boolean or allow rule is
+added: the upstream [container runtime policy](https://github.com/containers/container-selinux/blob/main/container.te)
+already permits runtime-domain TCP/UDP binds. This policy review does not prove
+the installed host's process domains, helper labels or packet flow.
+
+firewalld state and configuration are retained. The role does not change
+`firewall_driver`, disable `StrictForwardPorts`, add zones/services or open
+5533/53 to the LAN. [Netavark's normal integration](https://github.com/containers/netavark/blob/main/docs/netavark-firewalld.7.md)
+can add container subnets to firewalld's trusted zone when containers start;
+bridge creation alone does not test that integration. Strict port-forwarding
+settings can block later application publications and require the separate
+firewall phase, rather than a bypass here.
+
+Check mode plans the two configuration files and defers runtime info/network
+inspection, active DNS-user checks and service lifecycle. Only the safe version
+probe and generator metadata are checked when the runtime is installed; an
+absent runtime is explicitly deferred and is not installed by this operation.
+Neither check mode nor a successful network unit establishes DNS health.
+Conflicting later containers.conf overrides are outside this narrow drop-in's
+ownership; resolve them explicitly and verify effective DNS behavior before
+rollout. Upstream documents the setting in [containers.conf](https://github.com/containers/common/blob/main/docs/containers.conf.5.md).
+
+Use the existing controller identity from NetBox:
+
+```bash
+skynet limit <controller-inventory-host> check podman-network
+skynet limit <controller-inventory-host> install podman-network
+```
+
+A limit naming a different host does not relocate the centrally owned bridge.
+An isolated live test still needs to verify container-name resolution and
+external forwarding over UDP/TCP, Technitium on host port 53, actual SELinux
+domains/denials, firewalld reload behavior and second-run convergence. No new
+runtime test infrastructure or application migration is implied by these commands.
+
 Production NetBox and Infisical bootstrap reuse `podman_services` with explicit
 Vault-backed context and no catalog, dynamic inventory, or Infisical lookup.
 `ansible/bootstrap.yml` is the explicit remote recovery entry point, using a

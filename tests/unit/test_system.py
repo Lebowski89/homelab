@@ -47,6 +47,7 @@ def system_run(tmp_path):
         "systemd_service",
         "systemd",
         "setup",
+        "service_facts",
         "ansible.posix.sysctl",
         "community.general.pam_limits",
         "community.docker.docker_swarm",
@@ -80,6 +81,7 @@ def system_run(tmp_path):
     plugins = tmp_path / "action_plugins"
     plugins.mkdir()
     (plugins / "fixture_operation.py").write_text("""from ansible.plugins.action import ActionBase
+from ansible.template import trust_as_template
 import base64, json
 from pathlib import Path
 class ActionModule(ActionBase):
@@ -88,6 +90,9 @@ class ActionModule(ActionBase):
         module, options = self._task.args['module'], self._task.args['options'] or {}
         record = {'module': module, 'options': options, 'environment': self._task.environment,
                   'no_log': self._task.no_log, 'diff': self._task.diff}
+        if module == 'template' and options.get('src') in ('rootful-dns.conf.j2', 'shared.network.j2'):
+            expression = "{{ lookup('ansible.builtin.template', " + repr(options['src']) + ") }}"
+            record['content'] = self._templar.template(trust_as_template(expression))
         with open(v['fixture_record'], 'a') as output:
             output.write(json.dumps(record, default=str) + '\\n')
         state_path = Path(v['fixture_state'])
@@ -113,7 +118,11 @@ class ActionModule(ActionBase):
                 result['ansible_facts'] = {'ansible_selinux': v.get('fixture_selinux', {'status': 'enabled'}),
                     'ansible_distribution': v['fixture_facts']['distribution'], 'ansible_pkg_mgr': v['fixture_facts']['pkg_mgr']}
             else:
-                result['ansible_facts'] = v['fixture_facts']
+                result['ansible_facts'] = dict(v['fixture_facts'])
+                if 'selinux' in options.get('gather_subset', []):
+                    result['ansible_facts']['selinux'] = v.get('fixture_selinux', {'status': 'enabled'})
+        elif module == 'service_facts':
+            result['ansible_facts'] = {'services': v.get('fixture_services', {})}
         elif module in ('community.general.sefcontext', 'community.general.serestorecon'):
             key = 'policy_contexts' if module.endswith('sefcontext') else 'restored_contexts'
             value = options.get('target', options.get('path'))
@@ -123,7 +132,14 @@ class ActionModule(ActionBase):
         elif module == 'package_facts':
             result['ansible_facts'] = {'packages': v.get('fixture_packages', {})}
         elif module == 'template':
-            result['changed'] = v.get('fixture_nic_artifacts_changed', False)
+            if 'content' in record:
+                path = options['dest']
+                previous = state.get('podman_files', {}).get(path, v.get('fixture_files', {}).get(path))
+                result['changed'] = previous != record['content']
+                if not self._play_context.check_mode:
+                    state.setdefault('podman_files', {})[path] = record['content']
+            else:
+                result['changed'] = v.get('fixture_nic_artifacts_changed', False)
         elif module == 'find':
             result['files'] = [{'path': '/etc/systemd/system/multi-user.target.wants/' + unit} for unit in v.get('fixture_nic_enabled', [])]
         elif module == 'stat':
@@ -133,12 +149,16 @@ class ActionModule(ActionBase):
                 exists = state.get('exists', False)
             if path in v.get('fixture_files', {}):
                 exists = True
+            if path in state.get('podman_files', {}):
+                exists = True
             directory = path in v.get('fixture_directories', [])
             exists = exists or directory
             result['stat'] = {'exists': exists, 'isdir': directory, 'islnk': False, 'isreg': exists and not directory,
                               'path': path, 'executable': exists, 'size': state.get('size', 2048 * 1024 * 1024)}
         elif module == 'slurp':
-            result['content'] = base64.b64encode(v['fixture_files'][options['src']].encode()).decode()
+            path = options['src']
+            content = state['podman_files'][path] if path in state.get('podman_files', {}) else v['fixture_files'][path]
+            result['content'] = base64.b64encode(content.encode()).decode()
         elif module == 'uri':
             if options.get('method') == 'POST':
                 state['swarm_active'] = True
@@ -165,8 +185,22 @@ class ActionModule(ActionBase):
             elif command == 'docker' and 'join-token' in argv:
                 result['stdout'] = 'synthetic-test-token'
             elif command == 'podman':
-                result['stdout'] = v.get('fixture_podman_version', 'podman version 5.4.2')
-                result['rc'] = 0 if result['stdout'] else 2
+                if 'info' in argv:
+                    result['stdout'] = json.dumps(v.get('fixture_podman_host', {
+                        'networkBackend': 'netavark', 'cgroupVersion': 'v2',
+                        'security': {'rootless': False, 'selinuxEnabled': True},
+                        'networkBackendInfo': {'path': '/fixture/netavark', 'dns': {'path': '/fixture/aardvark-dns'}}}))
+                elif 'exists' in argv:
+                    result['rc'] = v.get('fixture_network_exists_rc', 0 if state.get('podman_network', False) else 1)
+                elif 'inspect' in argv:
+                    result['stdout'] = json.dumps(v.get('fixture_network', [{'name': v['podman_shared_network_name'],
+                        'driver': 'bridge', 'dns_enabled': True, 'internal': False}]))
+                elif 'ps' in argv:
+                    result['stdout_lines'] = v.get('fixture_dns_users', [])
+                    result['stdout'] = '\\n'.join(result['stdout_lines'])
+                else:
+                    result['stdout'] = v.get('fixture_podman_version', 'podman version 5.4.2')
+                    result['rc'] = 0 if result['stdout'] else 2
             elif command == 'modinfo':
                 available = state.get('docker_addrtype_available', not v.get('fixture_addrtype_missing', False))
                 result['rc'] = 0 if available else 1
@@ -208,6 +242,10 @@ class ActionModule(ActionBase):
         elif module == 'lineinfile' and options['path'] == '/etc/fstab':
             if not self._play_context.check_mode:
                 state['persistent'] = [v.get('system_swap_path', '/swapfile')]
+        elif module == 'systemd_service' and options.get('name', '').endswith('-network.service'):
+            result['changed'] = not state.get('podman_network', False)
+            if not self._play_context.check_mode:
+                state['podman_network'] = True
         state_path.write_text(json.dumps(state))
         return result
 """)

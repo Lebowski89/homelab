@@ -1,0 +1,137 @@
+---
+
+- name: Podman shared network | Inspect the local runtime host
+  ansible.builtin.command:
+    argv: [podman, --remote=false, info, --format, "{{ '{{json .Host}}' }}"]
+  register: podman_shared_network_info
+  changed_when: false
+
+- name: Podman shared network | Resolve only current runtime metadata
+  ansible.builtin.set_fact:
+    podman_shared_network_host: "{{ podman_shared_network_info.stdout | from_json }}"
+
+- name: Podman shared network | Require local rootful Netavark with DNS support
+  ansible.builtin.assert:
+    that:
+      - podman_shared_network_host.networkBackend == 'netavark'
+      - podman_shared_network_host.security.rootless is sameas false
+      - not (podman_shared_network_host.serviceIsRemote | default(false))
+      - podman_shared_network_host.networkBackendInfo.path | default('') | length > 0
+      - (podman_shared_network_host.networkBackendInfo.dns | default({})).path | default('') | length > 0
+      - podman_shared_network_host.cgroupVersion == 'v2'
+      - >-
+        ansible_facts.selinux.status | default('unknown') in ['enabled', 'disabled']
+        or ansible_facts.os_family != 'RedHat'
+      - >-
+        ansible_facts.selinux.status | default('unknown') != 'enabled'
+        or podman_shared_network_host.security.selinuxEnabled is sameas true
+    fail_msg: >-
+      The central bridge requires local rootful Podman, Netavark, Aardvark DNS and cgroup v2.
+      On an SELinux-enabled host the runtime must retain SELinux support; RPM SELinux state must be known.
+      Install supported distribution providers or repair the existing runtime. No backend or security setting is changed automatically.
+
+- name: Podman shared network | Inspect distribution networking helpers
+  ansible.builtin.stat:
+    path: "{{ podman_shared_network_helper }}"
+    follow: true
+  loop:
+    - "{{ podman_shared_network_host.networkBackendInfo.path }}"
+    - "{{ podman_shared_network_host.networkBackendInfo.dns.path }}"
+  loop_control:
+    loop_var: podman_shared_network_helper
+  register: podman_shared_network_helpers
+
+- name: Podman shared network | Require executable Netavark and Aardvark providers
+  ansible.builtin.assert:
+    that:
+      - podman_shared_network_helper_stat.stat.isreg | default(false)
+      - podman_shared_network_helper_stat.stat.executable | default(false)
+    fail_msg: Install the distribution Netavark and Aardvark DNS executables before configuring the central bridge.
+  loop: "{{ podman_shared_network_helpers.results }}"
+  loop_control:
+    loop_var: podman_shared_network_helper_stat
+
+- name: Podman shared network | Inspect the selected existing network
+  ansible.builtin.command:
+    argv: [podman, --remote=false, network, exists, "{{ podman_shared_network_name }}"]
+  register: podman_shared_network_exists
+  changed_when: false
+  failed_when: podman_shared_network_exists.rc not in [0, 1]
+
+- name: Podman shared network | Read existing network properties
+  when: podman_shared_network_exists.rc == 0
+  ansible.builtin.command:
+    argv: [podman, --remote=false, network, inspect, "{{ podman_shared_network_name }}"]
+  register: podman_shared_network_existing
+  changed_when: false
+
+- name: Podman shared network | Refuse an incompatible existing network
+  when: podman_shared_network_exists.rc == 0
+  ansible.builtin.assert:
+    that:
+      - podman_shared_network_existing.stdout | from_json | length == 1
+      - (podman_shared_network_existing.stdout | from_json)[0].name == podman_shared_network_name
+      - (podman_shared_network_existing.stdout | from_json)[0].driver == 'bridge'
+      - (podman_shared_network_existing.stdout | from_json)[0].dns_enabled is sameas true
+      - (podman_shared_network_existing.stdout | from_json)[0].internal is sameas false
+    fail_msg: >-
+      The existing central network must be a DNS-enabled, non-internal bridge. Review its consumers and arrange explicit
+      maintenance before replacing it. This role never removes networks or disconnects containers to change their properties.
+
+- name: Podman shared network | Inspect the previously managed DNS drop-in
+  ansible.builtin.stat:
+    path: /etc/containers/containers.conf.d/50-skynet-rootful-dns.conf
+    follow: false
+  register: podman_shared_network_dns_stat
+
+- name: Podman shared network | Refuse to replace a DNS configuration symlink or directory
+  ansible.builtin.assert:
+    that:
+      - >-
+        not podman_shared_network_dns_stat.stat.exists or
+        (podman_shared_network_dns_stat.stat.isreg | default(false)
+         and not (podman_shared_network_dns_stat.stat.islnk | default(false)))
+    fail_msg: The managed DNS drop-in must be a regular file; resolve its external ownership before continuing.
+
+- name: Podman shared network | Read the existing DNS port declaration
+  when: podman_shared_network_dns_stat.stat.exists
+  ansible.builtin.slurp:
+    src: /etc/containers/containers.conf.d/50-skynet-rootful-dns.conf
+  register: podman_shared_network_dns_read
+
+- name: Podman shared network | Determine whether the DNS port declaration changes
+  ansible.builtin.set_fact:
+    podman_shared_network_dns_port_changes: >-
+      {{ (podman_shared_network_dns_read.content | default('') | b64decode
+          | regex_replace('(?m)#.*$', '') | regex_replace('\s+', ''))
+          != '[network]dns_bind_port=' ~ (podman_shared_network_dns_bind_port | string) }}
+
+- name: Podman shared network | Inspect running rootful network users before changing DNS
+  when: podman_shared_network_dns_port_changes
+  ansible.builtin.command:
+    argv: [podman, --remote=false, ps, --format, "{{ '{{.Networks}}' }}"]
+  register: podman_shared_network_dns_users
+  changed_when: false
+
+- name: Podman shared network | Require quiescent bridge users for a DNS port change
+  when: podman_shared_network_dns_port_changes
+  ansible.builtin.assert:
+    that:
+      - >-
+        podman_shared_network_dns_users.stdout_lines | join(',') | split(',')
+        | map('trim') | reject('equalto', '') | difference(['host', 'none']) | length == 0
+    fail_msg: >-
+      The rootful DNS port declaration is new or changed while bridge containers are running. Arrange explicit maintenance
+      for affected rootful bridge users before changing the global port. A running Aardvark process does not change its port
+      when this file is rewritten. This role does not stop/restart containers, kill DNS processes or recreate networks.
+
+- name: Podman shared network | Inspect firewall service state without changing it
+  ansible.builtin.service_facts:
+
+- name: Podman shared network | Report preserved firewall ownership
+  ansible.builtin.debug:
+    msg: >-
+      firewalld running={{ (ansible_facts.services | default({})).get('firewalld.service', {}).get('state', '') == 'running' }}.
+      Existing firewall configuration is retained. Netavark owns its normal bridge DNS/NAT plumbing when containers start;
+      this role does not open host DNS ports, alter zones, change StrictForwardPorts or choose a different firewall driver.
+      Runtime DNS traffic and application ingress still require isolated validation.

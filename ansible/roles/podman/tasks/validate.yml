@@ -1,39 +1,7 @@
 ---
 
-- name: Podman | Detect Atomic or OSTree deployment
-  ansible.builtin.stat:
-    path: /run/ostree-booted
-  register: podman_ostree_boot
-
-- name: Podman | Assert supported host
-  ansible.builtin.assert:
-    that:
-      - not podman_ostree_boot.stat.exists
-      - ansible_facts.system | default('') == 'Linux'
-      - ansible_facts.service_mgr | default('') == 'systemd'
-      - >-
-        (ansible_facts.os_family | default('') == 'Debian'
-         and ansible_facts.pkg_mgr | default('') == 'apt'
-         and ((ansible_facts.distribution | default('') == 'Debian'
-               and ansible_facts.distribution_major_version | default('') == '13')
-           or (ansible_facts.distribution | default('') == 'Ubuntu'
-               and ansible_facts.distribution_version | default('') in ['26.04', '26.10'])
-           or (ansible_facts.distribution | default('') == 'LMDE'
-               and ansible_facts.distribution_major_version | default('') == '7')))
-        or (ansible_facts.os_family | default('') == 'RedHat'
-            and ansible_facts.pkg_mgr | default('') in ['dnf', 'dnf5']
-            and ((ansible_facts.distribution | default('') == 'Fedora'
-                  and ansible_facts.distribution_major_version | default('') in ['43', '44', '45'])
-              or (ansible_facts.distribution | default('') == 'Rocky'
-                  and ((ansible_facts.distribution_major_version | default('') == '9'
-                        and ansible_facts.distribution_version | default('0') is version('9.7', '>='))
-                    or (ansible_facts.distribution_major_version | default('') == '10'
-                        and ansible_facts.distribution_version | default('0') is version('10.1', '>='))))))
-    fail_msg: >-
-      Podman requires conventional Debian 13, Ubuntu 26.04/26.10, LMDE 7,
-      Fedora 43-45 or Rocky 9.7+/10.1+ with APT or DNF/DNF5 and systemd.
-      Atomic/OSTree and unlisted derivatives/releases are unsupported.
-      Distribution repositories must supply Podman {{ podman_min_version }} or newer; no experimental repositories are enabled.
+- name: Podman | Validate supported platform
+  ansible.builtin.import_tasks: validate_platform.yml
 
 - name: Podman | Validate installation options
   ansible.builtin.assert:

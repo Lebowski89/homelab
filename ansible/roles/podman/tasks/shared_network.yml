@@ -1,11 +1,45 @@
 ---
 
-- name: Podman shared network | Validate central network name
+- name: Podman shared network | Validate central network inputs
   ansible.builtin.assert:
     that:
       - podman_shared_network_name is string
       - podman_shared_network_name is match('^[A-Za-z0-9][A-Za-z0-9_.-]*$')
-    fail_msg: "The centrally owned rootful bridge requires a valid explicit resource name."
+      - podman_shared_network_dns_bind_port is integer
+      - podman_shared_network_dns_bind_port is not boolean
+      - podman_shared_network_dns_bind_port >= 1024
+      - podman_shared_network_dns_bind_port <= 65535
+      - podman_min_version is version('5.4.2', '>=')
+    fail_msg: >-
+      The central rootful bridge requires a valid resource name, an integer DNS port from 1024 through 65535,
+      and a Podman minimum version of at least 5.4.2.
+
+- name: Podman shared network | Gather platform and SELinux facts
+  ansible.builtin.setup:
+    gather_subset: ['!all', '!min', platform, distribution, service_mgr, pkg_mgr, selinux]
+
+- name: Podman shared network | Validate supported platform before changes
+  ansible.builtin.import_tasks: validate_platform.yml
+
+- name: Podman shared network | Validate the separately installed runtime
+  ansible.builtin.import_tasks: validate_runtime.yml
+
+- name: Podman shared network | Inspect the rootful runtime before changes
+  when: not ansible_check_mode
+  ansible.builtin.include_tasks:
+    file: shared_network_inspect.yml
+    apply:
+      tags: [podman_network]
+  tags: [podman_network]
+
+- name: Podman shared network | Explain deferred runtime verification
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Would configure the central rootful bridge and DNS port {{ podman_shared_network_dns_bind_port }}.
+      Runtime/backend, existing-network, active DNS users, SELinux runtime and firewall inspection are deferred;
+      no Podman database is opened and no network or service is started. Install Podman separately if absent.
+      This plan does not verify DNS traffic or firewall reachability.
 
 - name: Podman shared network | Configure non-conflicting rootful bridge DNS
   ansible.builtin.include_tasks:
@@ -21,6 +55,7 @@
     owner: root
     group: root
     mode: "0755"
+    setype: _default
 
 - name: Podman shared network | Write persistent central bridge
   ansible.builtin.template:
@@ -29,6 +64,7 @@
     owner: root
     group: root
     mode: "0644"
+    setype: _default
   register: podman_shared_network_quadlet
 
 - name: Podman shared network | Reload system manager
