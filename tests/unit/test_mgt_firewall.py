@@ -75,6 +75,7 @@ def test_account_probe_shares_one_invocation_budget_and_stops_before_more_querie
 @pytest.fixture(autouse=True)
 def isolate_systemd_files(tmp_path, monkeypatch):
     monkeypatch.setattr(FW, "SYSTEMD", tmp_path / "systemd")
+    monkeypatch.setattr(FW.OWNED, "read_os_release", lambda: {"ID": "ubuntu", "VERSION_ID": "26.04"})
 
 
 def template(value, defaults=None):

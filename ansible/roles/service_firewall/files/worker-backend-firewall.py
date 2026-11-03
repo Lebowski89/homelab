@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from transactions import execute, local_addresses, read_table, table_patch, writer_lock
+    from transactions import compatibility_table, execute, local_addresses, read_table, rpm_firewall_preflight, table_patch, writer_lock
 
 MARK = "skynet-worker-backends"
 CHAINS = {"mangle": {"SKY-WBACK-PRE": ["PREROUTING"]}, "filter": {"SKY-WBACK-IN": ["INPUT"], "SKY-WBACK-FWD": ["FORWARD", "DOCKER-USER"]}}
@@ -122,22 +122,32 @@ def reconcile(policy=None, operation="apply", backend=None, run=execute):
         addresses = local_addresses(run)
     else:
         addresses = set()
+    native = json.loads(run(["nft", "--json", "list", "ruleset"])) if backend == "nf_tables" else None
     transactions = []
+    missing = False
     for family, tool in [(4, "iptables"), (6, "ip6tables")]:
         if f"({backend})" not in run([tool, "--version"]):
             raise ValueError(f"{tool}: expected existing {backend} backend; backend switching is forbidden")
         desired = desired_rules(policy, family, addresses) if operation != "remove" else None
         payload = ""
         for table in CHAINS:
-            state = read_table(run([f"{tool}-save", "-t", table]))
             required = {"PREROUTING"} if table == "mangle" else {"INPUT", "FORWARD"}
+            state = (
+                compatibility_table(tool, table, native, required, operation, run)
+                if native is not None
+                else read_table(run([f"{tool}-save", "-t", table]))
+            )
+            if state is None:
+                if operation == "check":
+                    missing = True
+                continue
             if not required <= state.keys():
                 raise ValueError(f"{tool}: required {table} base chains are unavailable")
             payload += table_patch(table, state, desired)
         if payload:
             transactions.append((f"{tool}-restore", payload))
     if operation == "check":
-        return {"changed": False, "compliant": not transactions, "families": [4, 6]}
+        return {"changed": False, "compliant": not transactions and not missing, "families": [4, 6]}
     for tool, payload in transactions:
         run([tool, "--test", "--noflush", "--wait", "10"], payload)
     for tool, payload in transactions:
@@ -181,6 +191,7 @@ def watch(config):
                 time.sleep(0.02)
         while not (RUN / "stop").exists():
             try:
+                rpm_firewall_preflight()
                 with writer_lock():
                     if (RUN / "stop").exists():
                         break
@@ -205,6 +216,8 @@ def main():
     # Even direct helper invocation rejects unverified inputs before lock/state
     # files are created. Removal and stopping the watcher remain independent.
     policy = load_policy(args.config) if args.operation in {"apply", "check", "watch", "start"} else None
+    if args.operation not in {"remove", "stop-watch"}:
+        rpm_firewall_preflight()
     if args.operation == "watch":
         watch(args.config)
         return

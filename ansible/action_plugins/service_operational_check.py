@@ -438,6 +438,14 @@ class ActionModule(ActionBase):
                 )
         return {"managed": True, "ownership_transition": unchanged}
 
+    def firewall_interpreter(self, host):
+        values = self.variables["hostvars"][host]
+        facts = values.get("ansible_facts", {})
+        configured = values.get("ansible_python_interpreter", "")
+        return facts.get("python", {}).get("executable") or (
+            configured if configured.startswith("/") else facts.get("discovered_interpreter_python", "/usr/bin/python3")
+        )
+
     def protection(self, metadata, host):
         hosts = self.variables["hostvars"]
         require(host in hosts, "endpoint host is absent from inventory")
@@ -456,7 +464,8 @@ class ActionModule(ActionBase):
             plan = WORKER.build_plan(
                 {metadata["name"]: metadata}, workers, hosts[controller]["local_ip"], lambda value: value, self.variables["groups"]
             )
-            unraid = host == self.variables["services_storage_host"]
+            unraid = self.module("ansible.builtin.stat", {"path": "/etc/unraid-version", "follow": False})["stat"].get("exists", False)
+            require(not unraid or host == self.variables["services_storage_host"], "Unraid persistence requires the storage inventory host")
             root = "/boot/config/skynet-worker-backend-firewall" if unraid else "/etc/skynet-worker-backend-firewall"
             flash_device = self.unraid_flash_device() if unraid else None
             policy = json.loads(self.read(root + "/policy.json", flash_device=flash_device))
@@ -469,7 +478,7 @@ class ActionModule(ActionBase):
             audit = json.loads(
                 self.command(
                     [
-                        hosts[host].get("ansible_facts", {}).get("discovered_interpreter_python", "/usr/bin/python3"),
+                        self.firewall_interpreter(host),
                         root + "/policy.py",
                         "check",
                         "--config",
@@ -516,7 +525,7 @@ class ActionModule(ActionBase):
             policy = json.loads(self.read("/etc/skynet-mgt-firewall/policy.json"))
             mgt_contract(metadata, policy, plan, controller, address)
             self.owned("/etc/skynet-mgt-firewall/policy.py")
-            audit = json.loads(self.command(["/usr/bin/python3", "/etc/skynet-mgt-firewall/policy.py", "check"]))
+            audit = json.loads(self.command([self.firewall_interpreter(host), "/etc/skynet-mgt-firewall/policy.py", "check"]))
             require(
                 audit.get("compliant") is True and not audit.get("pending") and audit.get("families") == [4, 6],
                 "installed mgt protection or caller reconciliation is not compliant",

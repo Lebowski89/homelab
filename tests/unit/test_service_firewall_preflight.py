@@ -175,6 +175,9 @@ class ActionModule(ActionBase):
         + """
 class ActionModule(f.ACTION.ActionModule):
     def _execute_module(self, module_name, module_args, task_vars):
+        if module_name == 'ansible.builtin.stat':
+            assert module_args['path'] == '/etc/unraid-version'
+            return {'stat': {'exists': False}}
         root = Path(task_vars['fixture_root'])
         data = json.loads(module_args['stdin'])
         request, phase = data['request'], data['phase']

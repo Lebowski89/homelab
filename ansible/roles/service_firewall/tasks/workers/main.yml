@@ -59,14 +59,20 @@
     that:
       - >-
         worker_backend_firewall_unraid.stat.exists or
-        (ansible_facts.distribution == 'Ubuntu' and ansible_facts.distribution_version == '24.04'
-         and ansible_facts.service_mgr == 'systemd')
+        (ansible_facts.service_mgr == 'systemd' and (
+          (ansible_facts.distribution == 'Ubuntu' and ansible_facts.distribution_version == '24.04') or
+          (ansible_facts.distribution == 'Fedora' and ansible_facts.distribution_major_version in ['43', '44', '45']) or
+          (ansible_facts.distribution == 'Rocky' and ansible_facts.distribution_major_version == '10')
+        ))
       - >-
         (inventory_hostname == services_storage_host and worker_backend_firewall_unraid.stat.exists) or
-        (inventory_hostname == services_plex_host and not worker_backend_firewall_unraid.stat.exists)
+        (inventory_hostname in [services_storage_host, services_plex_host] and not worker_backend_firewall_unraid.stat.exists
+         and (inventory_hostname == services_plex_host or ansible_facts.distribution in ['Fedora', 'Rocky']))
       - ansible_facts.python.version.major == 3
       - ansible_facts.python.version.minor >= 10
-    fail_msg: This temporary policy supports the current Unraid and Ubuntu 24.04 workers with existing Python 3.10+ only.
+    fail_msg: >-
+      Worker policy requires the canonical storage or Plex inventory host on a supported platform with Python 3.10+.
+      Unraid is restricted to storage; Ubuntu 24.04 to Plex. Fedora 43-45 and Rocky 10 support either worker placement.
 
 - name: Service firewall | Workers | Select policy paths and the firewall backend for this platform # noqa var-naming[no-role-prefix]
   ansible.builtin.set_fact:

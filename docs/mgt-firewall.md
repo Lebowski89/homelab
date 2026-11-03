@@ -68,7 +68,10 @@ publication and its qualified caller binding.
 HTTPS ingress, Forgejo SSH, DNS, SSH, Swarm, UniFi and unrelated media/database
 publications retain existing policy. This guards host publications, including
 their DNAT paths; unpublished overlay/container-address access remains under
-existing policy. Rocky and the final consolidated-host firewall remain deferred.
+existing policy. Conventional Fedora 43–45 and Rocky 10 use the same profile
+under the [RPM coexistence prerequisites](service-firewall.md#fedora-and-rocky-prerequisites).
+The final consolidated-host firewall remains deferred; runtime installation does
+not establish application readiness.
 
 ## Caller identities and staging
 

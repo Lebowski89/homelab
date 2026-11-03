@@ -26,6 +26,12 @@
   ansible.builtin.set_fact:
     service_firewall_selected_operation: "{{ service_firewall_operation }}"
 
+- name: Service firewall | Validate the host platform before planning or mutation
+  ansible.builtin.include_tasks:
+    file: platform.yml
+    apply:
+      tags: "{{ ansible_run_tags }}"
+
 - name: Service firewall | Run the selected firewall profile
   ansible.builtin.include_tasks:
     file: "{{ service_firewall_profile }}/main.yml"

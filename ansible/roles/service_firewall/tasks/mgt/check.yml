@@ -2,7 +2,7 @@
 
 - name: Service firewall | Mgt | Audit installed firewall rules without changing them
   ansible.builtin.command:
-    argv: [/usr/bin/python3, "{{ mgt_firewall_root }}/policy.py", check]
+    argv: ["{{ ansible_facts.python.executable | default('/usr/bin/python3') }}", "{{ mgt_firewall_root }}/policy.py", check]
   changed_when: false
 
 - name: Service firewall | Mgt | Check startup protection and periodic rule reconciliation

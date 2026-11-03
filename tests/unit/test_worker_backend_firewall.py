@@ -35,6 +35,11 @@ VALIDATE = load("ansible/action_plugins/worker_backend_firewall_validate.py", "w
 FW = load("ansible/roles/service_firewall/files/worker-backend-firewall.py", "worker_firewall_test")
 
 
+@pytest.fixture(autouse=True)
+def fixture_platform(monkeypatch):
+    monkeypatch.setattr(FW, "read_os_release", lambda: {"ID": "ubuntu", "VERSION_ID": "24.04"})
+
+
 def resolve(value):
     if isinstance(value, dict):
         return {key: resolve(item) for key, item in value.items()}
@@ -195,11 +200,27 @@ class Kernel:
             for family in [4, 6]
         }
         self.fail_test_family = None
+        self.native_rules = {"nftables": [{"table": {"family": "inet", "name": "firewalld"}}]}
 
     def run(self, argv, data=None):
         self.calls.append((argv, data))
         if argv[0] == "ip":
             return json.dumps([{"addr_info": [{"local": address} for address in self.addresses]}])
+        if argv[0] == "nft":
+            assert argv == ["nft", "--json", "list", "ruleset"]
+            native = deepcopy(self.native_rules)
+            for family, tables in self.state.items():
+                for name, chains in tables.items():
+                    if not chains:
+                        continue
+                    family_name = "ip6" if family == 6 else "ip"
+                    native["nftables"].append({"table": {"family": family_name, "name": name}})
+                    for chain in chains:
+                        metadata = {"family": family_name, "table": name, "name": chain}
+                        if chain in {"INPUT", "FORWARD", "OUTPUT", "PREROUTING"}:
+                            metadata["hook"] = chain.lower()
+                        native["nftables"].append({"chain": metadata})
+            return json.dumps(native)
         family = 6 if argv[0].startswith("ip6") else 4
         if argv[1:] == ["--version"]:
             return f"{argv[0]} v1.8.11 ({self.backend})"
@@ -234,6 +255,7 @@ class Kernel:
                     table[chain].append(rule)
                 else:
                     assert rule[0] == "1"
+                    table.setdefault(chain, [])
                     table[chain].insert(0, rule[1:])
         return ""
 
@@ -283,7 +305,8 @@ def test_both_families_tested_before_any_mutation_and_backend_is_never_switched(
     assert kernel.state == original
     with pytest.raises(ValueError, match="switching"):
         FW.reconcile(policy(backend="nf_tables"), run=kernel.run)
-    assert not any(argv[0] in {"update-alternatives", "nft"} for argv, _ in kernel.calls)
+    assert not any(argv[0] == "update-alternatives" for argv, _ in kernel.calls)
+    assert all(argv == ["nft", "--json", "list", "ruleset"] for argv, _ in kernel.calls if argv[0] == "nft")
 
 
 @pytest.mark.parametrize("operation", ["apply", "remove"])

@@ -261,7 +261,11 @@ mode/identity is a failed guard, not permission to affect another service.
 
 ### Supported boundaries
 
-- The mgt profile retains its Ubuntu 26.04/nf_tables contract. Workers support the established Ubuntu/Plex and Unraid profiles; Rocky Linux is not supported by this lifecycle. One-service Docker standalone projects
+- The mgt profile retains Ubuntu 26.04; workers retain Ubuntu 24.04/Plex and
+  Unraid/storage. Both profiles also accept conventional Fedora 43–45 and Rocky
+  10 under the RPM prerequisites below. Inventory controller/storage/Plex
+  roles still determine placement; installing a runtime on another manager does
+  not move applications or firewall ownership. One-service Docker standalone projects
   (exact project AND service) and Swarm stacks with private host-mode TCP
   publications, and rootful/rootless Podman on mgt use their existing adapters. Swarm supports one replica or one global task per declared host.
 - Rootless caller rules use the dedicated account; bridged Docker/rootful Podman
@@ -282,6 +286,58 @@ mode/identity is a failed guard, not permission to affect another service.
   Genuine data migrations retain the existing reviewed paired-backup/ownership
   procedure and scoped recovery. Application acceptance remains a separate human
   observation.
+
+### Fedora and Rocky prerequisites
+
+RPM hosts require Linux, systemd, DNF/DNF5, an existing Python 3.10+ interpreter
+and firewalld 2.0+. Manager hooks use the gathered interpreter; retained direct
+check/observe/remove imports keep their existing default when facts are absent.
+Atomic/OSTree and other derivatives are rejected. Rocky 9 remains unsupported:
+[firewalld 1.x flushes all shared compatibility tables](https://github.com/firewalld/firewalld/blob/v1.3.4/src/firewall/core/fw.py#L863-L875),
+whereas [2.0 skips that flush without Direct configuration](https://github.com/firewalld/firewalld/blob/v2.0.0/src/firewall/core/fw.py#L875-L909).
+The role does not replace it or enable another repository. This is firewall
+compatibility, not application migration acceptance.
+
+Keep the distribution's `iptables-nft` compatibility tools, `nftables`, `iproute`
+and `util-linux` namespace tools available; the role installs no dependencies and
+never changes alternatives. Fedora's [package catalog](https://packages.fedoraproject.org/pkgs/iptables/iptables-nft/)
+and Rocky's [BaseOS catalog](https://dl.rockylinux.org/pub/rocky/10/BaseOS/x86_64/os/Packages/i/)
+still supply the compatibility package. IPv4/IPv6 command, save and restore tools
+must all report `nf_tables`. Both families' restore tests must pass before either
+family is applied, including the required kernel matches. A missing match needs
+explicit maintenance of packages for the running kernel, not a backend switch.
+Workers on this backend now inspect the native nftables snapshot before using
+iptables-save, so audit/removal cannot initialise absent compatibility tables.
+This read-only snapshot also requires `nft` on Ubuntu workers; Unraid retains its
+existing legacy path.
+
+Firewalld keeps its native nftables backend and all zones, policies, labels and
+port restrictions. RPM preflight rejects active or configured flowtables, mixed compatibility
+tools and nonempty runtime or permanent Direct configuration. Firewalld's
+[Direct path uses xtables](https://firewalld.org/documentation/man-pages/firewalld.conf.html),
+and its [reload implementation](https://github.com/firewalld/firewalld/blob/main/src/firewall/core/fw.py)
+can flush shared compatibility tables when Direct configuration is present.
+Resolve ownership and migrate that configuration in a separately reviewed change;
+this role neither deletes another owner's rules nor disables firewalld. An
+inactive daemon is inspected without activating it. Scoped removal remains
+available independently of these activation checks.
+
+An allow in this role cannot override a later firewalld deny. Existing base policy
+must permit the exact intended path; `StrictForwardPorts`, SELinux enforcing and
+firewalld permissions remain unchanged. Qualified caller handshakes and counters
+must still succeed before application lifecycle completion. Native listener ACLs,
+new host-network callers and broader firewall consolidation remain deferred.
+Do not make concurrent external firewall changes during policy transitions.
+Subsequent external Direct/backend/offload changes invalidate this prerequisite;
+periodic reconciliation cannot make an unsafe external reload atomic.
+
+Check mode validates metadata and plans policy without invoking runtime/kernel
+or firewalld probes; it explicitly leaves those checks unverified. Repository
+fixtures do not prove enforcement on a real RPM kernel. Before migrating services,
+validate dual-stack caller/denial paths, enforcing SELinux, ordinary firewalld
+reload, runtime restart, reboot persistence and a converged second run on an
+isolated host. A default-deny base policy may require a separate, narrowly scoped
+policy decision; do not add a broad allow to make this validation pass.
 
 ## Supported operator commands
 

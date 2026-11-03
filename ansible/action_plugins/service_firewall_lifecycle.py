@@ -119,7 +119,18 @@ class ActionModule(ActionBase):
         phase = self._task.args["phase"]
         try:
             profile = "mgt" if phase in {"probe", "addresses"} else plan["profile"][host]
-            unraid = host == variables["services_storage_host"]
+            unraid = False
+            if profile == "workers":
+                marker = self._execute_module(
+                    module_name="ansible.builtin.stat",
+                    module_args={"path": "/etc/unraid-version", "follow": False, "get_checksum": False},
+                    task_vars=variables,
+                )
+                if marker.get("failed") or marker.get("unreachable") or "stat" not in marker:
+                    raise ValueError("cannot inspect the worker platform marker before selecting policy storage")
+                unraid = marker["stat"].get("exists", False)
+                if unraid and host != variables["services_storage_host"]:
+                    raise ValueError("Unraid firewall persistence is restricted to the canonical storage host")
             request = {
                 "service": plan["service"],
                 "runtime": plan["runtime"],
@@ -150,10 +161,25 @@ class ActionModule(ActionBase):
             if phase == "probe":
                 request["endpoints"] = [{**e, "address": plan["inventory"][e["host"]]} for e in plan["endpoints"]]
             helper, source = remote_source(profile)
+            facts = variables["hostvars"][host].get("ansible_facts", {})
+            configured = variables["hostvars"][host].get("ansible_python_interpreter", "")
+            interpreter = facts.get("python", {}).get("executable") or (
+                configured if configured.startswith("/") else facts.get("discovered_interpreter_python", "/usr/bin/python3")
+            )
+            if (
+                not isinstance(interpreter, str)
+                or not interpreter.startswith("/")
+                or any(character.isspace() or character in "%'\"\\" for character in interpreter)
+            ):
+                raise ValueError("firewall interpreter must be an absolute executable path without systemd specifiers or quoting")
             units = {}
             if profile == "mgt":
                 environment = Environment(undefined=StrictUndefined)
-                context = {"mgt_firewall_root": request["root"], "mgt_firewall_plan": {"endpoints": request["endpoints"]}}
+                context = {
+                    "mgt_firewall_root": request["root"],
+                    "mgt_firewall_plan": {"endpoints": request["endpoints"]},
+                    "mgt_firewall_python": interpreter,
+                }
                 for name in [
                     "skynet-mgt-firewall.service",
                     "skynet-mgt-firewall-reconcile.service",
@@ -168,7 +194,7 @@ class ActionModule(ActionBase):
                     )
             args = {
                 "argv": [
-                    variables["hostvars"][host].get("ansible_facts", {}).get("discovered_interpreter_python", "/usr/bin/python3"),
+                    interpreter,
                     "-c",
                     source,
                 ],

@@ -13,6 +13,7 @@ import ipaddress
 import json
 import shlex
 import subprocess
+import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -23,7 +24,7 @@ RUN: Path
 
 
 def execute(argv, data=None):
-    """Run only explicit ip/ip[6]tables commands without a shell."""
+    """Run explicit firewall/platform commands without a shell."""
     result = subprocess.run(argv, input=data, text=True, capture_output=True, check=False)
     if result.returncode:
         raise RuntimeError(f"{argv[0]} failed ({result.returncode}): {result.stderr.strip()}")
@@ -46,6 +47,123 @@ def read_table(output):
             tokens = shlex.split(line)
             chains[tokens[1]].append(tokens[2:])
     return chains
+
+
+def read_os_release():
+    try:
+        content = Path("/etc/os-release").read_text()
+    except FileNotFoundError:
+        return {}  # Retain the explicit Unraid marker/flash boundary.
+    return {
+        key: value.strip().strip("\"'")
+        for line in content.splitlines()
+        if line and not line.startswith("#") and "=" in line
+        for key, _, value in [line.partition("=")]
+    }
+
+
+def supported_platform(profile, release, unraid=False):
+    """Keep profile-specific Ubuntu/Unraid boundaries and explicit RPM releases."""
+    distro, version = release.get("ID", ""), release.get("VERSION_ID", "")
+    return profile in {"mgt", "workers"} and (
+        (unraid and profile == "workers")
+        or (distro == "ubuntu" and version == ("26.04" if profile == "mgt" else "24.04"))
+        or (distro == "fedora" and version in {"43", "44", "45"})
+        or (distro == "rocky" and version.split(".")[0] == "10")
+    )
+
+
+def rpm_firewall_preflight(run=execute):
+    """Read-only coexistence checks for the supported RPM compatibility path.
+
+    Native firewalld owns its own table. Direct rules can make it flush shared
+    xtables tables on reload; refuse that configuration instead of changing it.
+    Native firewalld ACCEPT/DROP policy remains an independent access boundary.
+    """
+    release = read_os_release()
+    if release.get("ID") not in {"fedora", "rocky"}:
+        return
+    if not supported_platform("mgt", release) or Path("/run/ostree-booted").exists():
+        raise ValueError("firewall compatibility requires conventional Fedora 43-45 or Rocky 10; Atomic/OSTree is unsupported")
+    version = run(["firewalld", "--version"]).strip().split(".")
+    if not all(part.isdecimal() for part in version) or tuple(map(int, version)) < (2, 0, 0):
+        raise ValueError("firewalld 2.0+ is required: older releases flush shared compatibility tables even without Direct rules")
+    for tool in ["iptables", "ip6tables", "iptables-save", "ip6tables-save", "iptables-restore", "ip6tables-restore"]:
+        if "(nf_tables)" not in run([tool, "--version"]):
+            raise ValueError(f"{tool}: install matching distribution nf_tables tools; backend switching is forbidden")
+    native = json.loads(run(["nft", "--json", "list", "ruleset"]))
+    if any("flowtable" in entry for entry in native.get("nftables", [])):
+        raise ValueError("flowtables can bypass protection; review offload policy before activating this profile")
+    settings = {}
+    for directory in [Path("/usr/lib/firewalld"), Path("/etc/firewalld")]:
+        config = directory / "firewalld.conf"
+        if config.exists():
+            settings.update(
+                dict(
+                    [value.strip() for value in line.split("=", 1)]
+                    for line in config.read_text().splitlines()
+                    if line.strip() and not line.lstrip().startswith("#") and "=" in line
+                )
+            )
+        direct = directory / "direct.xml"
+        if direct.exists():
+            try:
+                root = ET.parse(direct).getroot()
+            except ET.ParseError as error:
+                raise ValueError("cannot verify firewalld Direct configuration") from error
+            if root.tag != "direct" or len(root):
+                raise ValueError("firewalld Direct configuration can flush shared tables; resolve it explicitly before activation")
+    if settings.get("FirewallBackend", "nftables") != "nftables":
+        raise ValueError("firewalld must retain its native nftables backend; migrate its policy explicitly, never disable it")
+    if settings.get("NftablesFlowtable", "off") != "off":
+        raise ValueError("configured firewalld flowtable offload can bypass protection after reload; review that policy explicitly")
+    state = run(["systemctl", "show", "firewalld.service", "--property=ActiveState", "--value"]).strip()
+    if state == "inactive":
+        return
+    if state != "active":
+        raise ValueError("firewalld state is not stable; inspect the daemon before changing protection")
+    backend = shlex.split(
+        run(
+            [
+                "busctl",
+                "get-property",
+                "org.fedoraproject.FirewallD1",
+                "/org/fedoraproject/FirewallD1/config",
+                "org.fedoraproject.FirewallD1.config",
+                "FirewallBackend",
+            ]
+        )
+    )
+    if backend != ["s", "nftables"] or not any(
+        entry.get("table", {}).get("family") == "inet" and entry["table"].get("name") == "firewalld" for entry in native.get("nftables", [])
+    ):
+        raise ValueError("active firewalld must have its native nftables table and backend; no host policy is switched automatically")
+    for scope in [[], ["--permanent"]]:
+        for query in ["--get-all-chains", "--get-all-rules", "--get-all-passthroughs"]:
+            if run(["firewall-cmd", *scope, "--direct", query]).strip():
+                raise ValueError("firewalld Direct rules can flush shared tables on reload; review their owner before activation")
+
+
+def compatibility_table(tool, table, native, required, operation, run):
+    """Read mapped tables without making xtables initialize absent skeletons."""
+    family = "ip6" if tool.startswith("ip6") else "ip"
+    present = any(
+        entry.get("table", {}).get("family") == family and entry["table"].get("name") == table for entry in native.get("nftables", [])
+    )
+    if not present:
+        return None if operation in {"check", "remove"} else {parent: [] for parent in required}
+    parents = {
+        entry["chain"]["name"]: entry["chain"]
+        for entry in native.get("nftables", [])
+        if entry.get("chain", {}).get("family") == family and entry["chain"].get("table") == table
+    }
+    saved = run([f"{tool}-save", "-t", table])
+    state = read_table(saved)
+    policies = {line.split()[0][1:]: line.split()[1] for line in saved.splitlines() if line.startswith(":")}
+    for parent in required:
+        if policies.get(parent) not in {"ACCEPT", "DROP"} or (parent in parents and parents[parent].get("hook") != parent.lower()):
+            raise ValueError(f"{tool}: incompatible {table} built-in chain {parent}; refusing shared-policy repair")
+    return state
 
 
 def owned_jump(rule, target):

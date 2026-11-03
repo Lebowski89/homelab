@@ -10,7 +10,9 @@ acceptance histories are retained outside Git under `/opt/ansible/migration/`.
 Keep verified policy and unchanged acceptance evidence; collect fresh source,
 listener, route and counter proof for changed paths. No application deployment,
 secret lookup or dependency installation is implied by policy-only operations.
-Rocky Linux and consolidated host firewall design remain separate work.
+Conventional Fedora 43–45 and Rocky 10 may fill either existing worker inventory
+role under the [RPM prerequisites](service-firewall.md#fedora-and-rocky-prerequisites).
+Consolidated host firewall design and application migration remain separate work.
 
 ## Scope and ownership
 

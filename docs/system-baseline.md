@@ -233,6 +233,7 @@ for Docker, Podman, native Alloy and native DNS support. Keepalived supports
 conventional Rocky 9/10; native Technitium requires Rocky 9.7+/10.1+ and uses
 distribution .NET 10 with a portable application install. DNS reachability,
 resolver recovery, SELinux access and peer VRRP failover still need isolated
-validation. The mgt firewall policy still requires Ubuntu 26.04 and needs
-separate Rocky preparation.
+validation. The [service firewall RPM path](service-firewall.md#fedora-and-rocky-prerequisites)
+requires existing nf_tables tools, compatible firewalld configuration and separate
+live enforcement/persistence validation before application migration.
 Do not use a full homelab deployment as Rocky's baseline test or change SELinux/firewall/networking to work around these limits.

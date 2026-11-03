@@ -11,6 +11,7 @@ import pwd
 import shlex
 import stat
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -268,12 +269,20 @@ class Store:
         return self.baseline
 
     def validate(self, policy):
-        if self.profile == "mgt":
-            release = dict(line.split("=", 1) for line in Path("/etc/os-release").read_text().splitlines() if "=" in line)
+        platform = self.helper.OWNED if self.profile == "mgt" else self.helper
+        release = platform.read_os_release()
+        require(
+            platform.supported_platform(self.profile, release, self.flash),
+            "unsupported service firewall platform: use the profile's Ubuntu/Unraid path, Fedora 43-45 or Rocky 10",
+        )
+        if release.get("ID") in {"fedora", "rocky"}:
             require(
-                release.get("ID", "").strip('"') == "ubuntu" and release.get("VERSION_ID", "").strip('"') == "26.04",
-                "automatic mgt protection currently supports Ubuntu 26.04 only",
+                sys.version_info >= (3, 10), "RPM firewall protection requires Python 3.10+; select an installed interpreter in inventory"
             )
+            require(not Path("/run/ostree-booted").exists(), "Atomic/OSTree firewall hosts are unsupported")
+            require(Path("/run/systemd/system").is_dir(), "RPM firewall protection requires a systemd host")
+            if self.request["action"] != "remove":
+                platform.rpm_firewall_preflight()
         self.helper.validate_policy(policy)
         if self.profile == "workers" and self.request["action"] != "install":
             require(

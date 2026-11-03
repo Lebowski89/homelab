@@ -1,21 +1,14 @@
 ---
 
-- name: Service firewall | Mgt | Gather minimal platform facts
-  ansible.builtin.setup:
-    gather_subset: ['!all', '!min', distribution, service_mgr, python]
+- name: Service firewall | Mgt | Validate platform for retained direct installation imports
+  ansible.builtin.include_tasks:
+    file: ../platform.yml
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  vars:
+    service_firewall_profile: mgt
 
-- name: Service firewall | Mgt | Validate the supported Ubuntu version and Python
-  ansible.builtin.assert:
-    that:
-      - ansible_facts.distribution == 'Ubuntu'
-      - ansible_facts.distribution_version.split('.')[0:2] | join('.') == '26.04'
-      - ansible_facts.service_mgr == 'systemd'
-      - ansible_facts.python.version.major == 3
-      - ansible_facts.python.version.minor >= 10
-      - mgt_firewall_root == '/etc/skynet-mgt-firewall'
-    fail_msg: This phase supports the current Ubuntu 26.04 mgt with existing Python 3.10+ only. Rocky support is deferred.
-
-- name: Service firewall | Mgt | Verify caller identities and test IPv4 and IPv6 rules before writing files # noqa var-naming[no-role-prefix]
+- name: Service firewall | Mgt | Verify callers and test both rule families before writes # noqa var-naming[no-role-prefix]
   ansible.builtin.command:
     argv: ["{{ ansible_facts.python.executable }}", -c, "{{ mgt_firewall_helper_source }}", validate, --stdin]
     expand_argument_vars: false

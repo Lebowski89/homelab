@@ -136,10 +136,12 @@ a package transaction or prove that a runtime is upgraded, running or usable.
 Disabling Podman installation retains the same existing-runtime checks. Normal runs verify the version and executable system generator at
 `/usr/lib/systemd/system-generators/` or `/lib/systemd/system-generators/`.
 
-The service adapters have not been migrated to Fedora/Rocky. In particular:
+Runtime installation remains separate from Fedora/Rocky application readiness:
 
-- The mgt firewall install path explicitly supports Ubuntu 26.04 only; Rocky is
-  deferred. Worker firewall paths accept the existing Unraid/Ubuntu 24.04 topology.
+- The [service firewall](service-firewall.md#fedora-and-rocky-prerequisites)
+  accepts conventional Fedora 43–45 and Rocky 10 with explicit coexistence
+  prerequisites. Enforcement, firewalld reload and enforcing SELinux still need
+  isolated live validation. Native listener ACLs remain deferred.
 - Application bind mounts support an [explicit SELinux storage policy](service-storage-selinux.md).
   Existing services still require a deliberate storage and ownership review;
   externally managed/shared data and protected ingress are not migrated automatically.
