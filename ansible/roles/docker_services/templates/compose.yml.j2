@@ -212,7 +212,8 @@ services:
 {% set _vtype = (vol.type | default('bind', true) | string | trim) %}
 {% if _vtype == 'bind' %}
 {% if _stack_type != 'swarm' %}
-      - "{{ vol.source }}:{{ vol.target }}{{ ':ro' if (vol.read_only | default(false)) else '' }}"
+{% set bind_flags = (['ro'] if vol.read_only | default(false) else []) + ({'shared': ['z'], 'private': ['Z']}.get(vol.selinux | default('preserve'), [])) %}
+      - "{{ vol.source }}:{{ vol.target }}{{ (':' ~ (bind_flags | join(','))) if bind_flags else '' }}"
 {% else %}
       - type: bind
         source: {{ vol.source }}

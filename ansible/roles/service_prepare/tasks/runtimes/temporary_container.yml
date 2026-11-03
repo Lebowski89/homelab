@@ -35,6 +35,15 @@
     fail_msg: "Temporary application preparation requires a valid selected-runtime container request."
   tags: [deploy, update, recreate, bootstrap]
 
+- name: Temporary preparation container | Resolve canonical storage labeling
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    service_prepare_temporary_mounts: >-
+      {{ service_prepare_context.service | default({})
+         | service_prepare_storage_mounts(service_prepare_temporary_container.mounts | default([])) }}
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Temporary preparation container | Reset execution output
   no_log: true
   diff: false

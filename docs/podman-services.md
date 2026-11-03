@@ -591,3 +591,7 @@ application deployment or `--tags all`, and running it requires separate host-
 security authorization. Do not reuse migration-era profile hashes after a
 package/profile change or infer permission from this source change. Historical
 execution/cleanup receipts remain in the private migration handoff.
+
+Application bind labeling uses the portable `volumes.<name>.selinux` field;
+see [SELinux storage policy](service-storage-selinux.md). Existing rootless
+ownership and UID/GID mappings are unchanged.

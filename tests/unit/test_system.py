@@ -21,11 +21,13 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 def system_run(tmp_path):
     roles = tmp_path / "roles"
-    for role in ("system", "postgres", "docker", "podman"):
+    for role in ("system", "postgres", "docker", "podman", "service_common"):
         shutil.copytree(REPO / "ansible/roles" / role, roles / role, ignore=shutil.ignore_patterns("__pycache__"))
     modules = {
         "apt",
         "uri",
+        "community.general.sefcontext",
+        "community.general.serestorecon",
         "get_url",
         "rpm_key",
         "yum_repository",
@@ -68,7 +70,7 @@ def system_run(tmp_path):
                 if include["file"] not in {"sub_tasks/backup_prerequisites.yml", "sub_tasks/install.yml", "sub_tasks/swarm.yml"}:
                     task["fixture_operation"] = {"module": "include_tasks", "options": task.pop("ansible.builtin.include_tasks")}
 
-    for role in ("system", "postgres", "docker", "podman"):
+    for role in ("system", "postgres", "docker", "podman", "service_common"):
         # Only PostgreSQL's entry point and the moved dependency file are selected.
         paths = list((roles / role / "tasks").rglob("*.yml")) + list((roles / role / "handlers").glob("*.yml"))
         for path in paths:
@@ -107,7 +109,17 @@ class ActionModule(ActionBase):
             if not self._play_context.check_mode and not skip_older:
                 state['docker_addrtype_available'] = True
         if module == 'setup':
-            result['ansible_facts'] = v['fixture_facts']
+            if 'ansible_selinux' in options.get('filter', []):
+                result['ansible_facts'] = {'ansible_selinux': v.get('fixture_selinux', {'status': 'enabled'}),
+                    'ansible_distribution': v['fixture_facts']['distribution'], 'ansible_pkg_mgr': v['fixture_facts']['pkg_mgr']}
+            else:
+                result['ansible_facts'] = v['fixture_facts']
+        elif module in ('community.general.sefcontext', 'community.general.serestorecon'):
+            key = 'policy_contexts' if module.endswith('sefcontext') else 'restored_contexts'
+            value = options.get('target', options.get('path'))
+            result['changed'] = value not in state.get(key, [])
+            if not self._play_context.check_mode and result['changed']:
+                state.setdefault(key, []).append(value)
         elif module == 'package_facts':
             result['ansible_facts'] = {'packages': v.get('fixture_packages', {})}
         elif module == 'template':
@@ -121,7 +133,9 @@ class ActionModule(ActionBase):
                 exists = state.get('exists', False)
             if path in v.get('fixture_files', {}):
                 exists = True
-            result['stat'] = {'exists': exists, 'isreg': exists,
+            directory = path in v.get('fixture_directories', [])
+            exists = exists or directory
+            result['stat'] = {'exists': exists, 'isdir': directory, 'islnk': False, 'isreg': exists and not directory,
                               'path': path, 'executable': exists, 'size': state.get('size', 2048 * 1024 * 1024)}
         elif module == 'slurp':
             result['content'] = base64.b64encode(v['fixture_files'][options['src']].encode()).decode()
@@ -146,7 +160,9 @@ class ActionModule(ActionBase):
         elif module == 'command':
             argv = options['argv']
             command = argv[0]
-            if command == 'docker' and 'join-token' in argv:
+            if command == 'readlink':
+                result['stdout'] = v.get('fixture_realpaths', {}).get(argv[-1], argv[-1])
+            elif command == 'docker' and 'join-token' in argv:
                 result['stdout'] = 'synthetic-test-token'
             elif command == 'podman':
                 result['stdout'] = v.get('fixture_podman_version', 'podman version 5.4.2')
@@ -211,6 +227,7 @@ class ActionModule(ActionBase):
         main=False,
         role="system",
         inventory_groups=None,
+        tasks_from=None,
     ):
         record.unlink(missing_ok=True)
         if state is not None or not state_file.exists():
@@ -286,7 +303,18 @@ class ActionModule(ActionBase):
                 "connection": "local",
                 "gather_facts": False,
                 "pre_tasks": [{"name": "Gather fixture facts", "fixture_operation": {"module": "setup", "options": {}}, "tags": "always"}],
-                "roles": [role],
+                **(
+                    {
+                        "tasks": [
+                            {
+                                "name": "Exercise the selected role entry point",
+                                "ansible.builtin.include_role": {"name": role, "tasks_from": tasks_from},
+                            }
+                        ]
+                    }
+                    if tasks_from
+                    else {"roles": [role]}
+                ),
             }
         ]
         if main:

@@ -1,0 +1,22 @@
+---
+
+- name: Docker services | Validate and prepare declared storage contexts
+  when:
+    - docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - docker_services_storage_plan.paths | default([]) | length > 0
+  ansible.builtin.include_role:
+    name: service_common
+    tasks_from: file_contexts
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    service_common_file_contexts: "{{ docker_services_storage_plan.paths }}"
+    service_common_file_context_apply: "{{ docker_services_storage_plan.persistent }}"
+    service_common_file_context_host: "{{ docker_services_storage_host }}"
+    service_common_file_context_roots:
+      - "{{ docker_services_common_host_defaults[docker_services_storage_host].appdata_root | default('') }}"
+      - "{{ docker_services_common_host_defaults[docker_services_storage_host].data_root | default('') }}"
+  loop: "{{ docker_services_fs_hosts_effective }}"
+  loop_control:
+    loop_var: docker_services_storage_host
+  tags: [deploy, update, recreate, bootstrap]

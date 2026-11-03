@@ -3,6 +3,7 @@
 - name: Docker services | Reset this operation's firewall progress
   ansible.builtin.set_fact:
     docker_services_firewall_staged: false
+    docker_services_storage_plan: {}
     docker_services_start_attempted: false
     # From this first task the adapter owns cancellation, including init failures.
     service_catalog_firewall_handoff: "{{ (docker_services_common_context.firewall_plan | default({})).token | default('') }}"  # noqa var-naming[no-role-prefix]
@@ -20,6 +21,12 @@
         apply:
           tags: [deploy, update, recreate, bootstrap]
       tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+    - name: Docker services | Validate explicit storage labeling before mutation
+      when: docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+      ansible.builtin.set_fact:
+        docker_services_storage_plan: "{{ docker_services_svc | service_storage_plan('docker', docker_services_stack_deploy_type) }}"
+      tags: [deploy, update, recreate, bootstrap]
 
     - name: Docker services | Protect declared publications before changing the service
       when:
@@ -43,6 +50,16 @@
       ansible.builtin.set_fact:
         docker_services_firewall_staged: true
       tags: [deploy, update, recreate, bootstrap, remove]
+
+    - name: Docker services | Validate and prepare scoped storage
+      when:
+        - docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+        - docker_services_storage_plan.paths | default([]) | length > 0
+      ansible.builtin.include_tasks:
+        file: sub_tasks/storage.yml
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+      tags: [deploy, update, recreate, bootstrap]
 
     ################################
     # IMAGE DRIFT

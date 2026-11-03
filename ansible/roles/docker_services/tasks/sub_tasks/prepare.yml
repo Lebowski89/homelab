@@ -239,6 +239,18 @@
     service_common_traefik_group: "1000"
   tags: [deploy, update, remove, recreate, bootstrap]
 
+# Fresh paths and generated files must have policy labels before Swarm starts.
+- name: Prepare | Restore scoped storage labels after filesystem preparation
+  when:
+    - docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+    - docker_services_storage_plan.persistent | default(false)
+    - docker_services_storage_plan.paths | default([]) | length > 0
+  ansible.builtin.include_tasks:
+    file: sub_tasks/storage.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
 - name: Prepare | Apply shared Traefik integration
   when:
     - docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']

@@ -56,7 +56,8 @@ PublishPort={% if port.host_ip is defined %}{{ port.host_ip }}:{% endif %}{{ por
 {% endfor %}
 {% for volume in podman_service.container.mounts | default([]) %}
 {% set volume_read_only = volume.read_only | default(false) %}
-Volume={{ volume.source }}:{{ volume.target }}{{ ':ro' if volume_read_only else '' }}
+{% set bind_flags = (['ro'] if volume_read_only else []) + ({'shared': ['z'], 'private': ['Z']}.get(volume.selinux | default('preserve'), [])) %}
+Volume={{ volume.source }}:{{ volume.target }}{{ (':' ~ (bind_flags | join(','))) if bind_flags else '' }}
 {% endfor %}
 {% for tmpfs in podman_service.container.tmpfs | default([]) %}
 {% set tmpfs_options = tmpfs.options | default([]) %}

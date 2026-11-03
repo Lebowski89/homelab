@@ -26,3 +26,9 @@ service_common_traefik_owner: "1000"
 service_common_traefik_group: "1000"
 service_common_prepare_actions: [deploy, update, recreate, bootstrap]
 service_common_remove_actions: [remove]
+
+# Generic, explicitly delegated filesystem contexts supplied by the current adapter.
+service_common_file_contexts: []
+service_common_file_context_roots: []
+service_common_file_context_host: ""
+service_common_file_context_apply: false

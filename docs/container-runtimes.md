@@ -140,10 +140,9 @@ The service adapters have not been migrated to Fedora/Rocky. In particular:
 
 - The mgt firewall install path explicitly supports Ubuntu 26.04 only; Rocky is
   deferred. Worker firewall paths accept the existing Unraid/Ubuntu 24.04 topology.
-- The Podman adapter's bind mounts do not establish SELinux relabelling or a
-  complete host policy for arbitrary applications. Review persistent paths,
-  shared data ownership, labelling, rootless session policy and protected ingress
-  before any migration. Do not disable SELinux or broaden firewall access.
+- Application bind mounts support an [explicit SELinux storage policy](service-storage-selinux.md).
+  Existing services still require a deliberate storage and ownership review;
+  externally managed/shared data and protected ingress are not migrated automatically.
 - The central rootful bridge uses a nonstandard DNS forwarding port. RPM SELinux
   and firewalld policy for this separate operation needs isolated validation.
 - Overlay networking, pruning and fresh-host package installation still need

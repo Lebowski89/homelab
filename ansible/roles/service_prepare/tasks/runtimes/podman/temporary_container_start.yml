@@ -47,7 +47,7 @@
     detach: "{{ service_prepare_temporary_container.detach | default(true) }}"
     rm: false
     env: "{{ service_prepare_temporary_container.environment | default({}) }}"
-    volume: "{{ service_prepare_temporary_container.mounts | default([]) }}"
+    volume: "{{ service_prepare_temporary_mounts }}"
     user: "{{ service_prepare_context.service.user | default(omit) }}"
     userns: >-
       {{ ('keep-id:uid=' ~ service_prepare_context.execution.userns.uid ~ ',gid=' ~ service_prepare_context.execution.userns.gid)

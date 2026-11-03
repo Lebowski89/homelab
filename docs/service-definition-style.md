@@ -217,3 +217,8 @@ coupled infrastructure, monitoring and control-plane traffic, and container
 self-healthchecks. When an application has no private route, use another stable
 interface such as an inventory-derived host address instead of inventing a new
 Traefik route.
+
+Bind mounts may declare `selinux: preserve`, `shared` or `private` after
+`read_only`. See [SELinux storage policy](service-storage-selinux.md) for runtime
+support, owned-path requirements and Swarm limitations. Keep host OS settings
+out of service declarations.

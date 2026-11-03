@@ -862,6 +862,91 @@ def service_common_requirements_validate(
     return True
 
 
+_FILE_CONTEXT_PROTECTED = (
+    "/etc",
+    "/usr",
+    "/proc",
+    "/sys",
+    "/dev",
+    "/run",
+    "/var/run",
+    "/var/log",
+    "/var/lib/docker",
+    "/var/lib/containers",
+)
+_FILE_CONTEXT_BROAD = {"/", "/opt", "/srv", "/mnt", "/var", "/var/lib", "/home", "/root"}
+
+
+def _file_context_path(value):
+    if (
+        not isinstance(value, str)
+        or not value.startswith("/")
+        or value != posixpath.normpath(value)
+        or any(c in value for c in "\n\r\x00:")
+    ):
+        raise AnsibleFilterError("File-context paths must be normalized absolute paths")
+    if value in _FILE_CONTEXT_BROAD or any(value == root or value.startswith(root + "/") for root in _FILE_CONTEXT_PROTECTED):
+        raise AnsibleFilterError(
+            "Automatic file-context changes cannot target broad roots or system/runtime paths; preserve an operator policy"
+        )
+    return value
+
+
+def service_common_file_contexts(contexts, roots, resolved=None):
+    """Validate generic filesystem label requests and their resolved containment."""
+    if not isinstance(contexts, list) or not isinstance(roots, list):
+        raise AnsibleFilterError("File contexts and their approved inventory roots must be lists")
+    # An inventory root may be /opt, but it must never resolve to a system root.
+    approved = []
+    for root in roots:
+        if not root:
+            continue
+        if (
+            not isinstance(root, str)
+            or not root.startswith("/")
+            or root != posixpath.normpath(root)
+            or root == "/"
+            or ".." in root.split("/")
+        ):
+            raise AnsibleFilterError("File-context inventory roots must be normalized absolute directories")
+        if any(c in root for c in "\n\r\x00:"):
+            raise AnsibleFilterError("Inventory roots cannot contain control characters or mount delimiters")
+        approved.append(root)
+    if resolved is not None and (not isinstance(resolved, Mapping) or any(not isinstance(path, str) for path in resolved.values())):
+        raise AnsibleFilterError("Resolved filesystem paths must be a mapping of strings")
+    if not approved and contexts:
+        raise AnsibleFilterError("Automatic file contexts require approved application/data roots from inventory")
+    result = []
+    for context in contexts:
+        if not isinstance(context, Mapping) or set(context) != {"path", "setype", "selevel", "recurse"}:
+            raise AnsibleFilterError("File contexts require path, setype, selevel and recurse only")
+        path = _file_context_path(context["path"])
+        if not isinstance(context["setype"], str) or not re.fullmatch(r"[A-Za-z0-9_]+_t", context["setype"]):
+            raise AnsibleFilterError("File-context type must be a SELinux type name")
+        if context["selevel"] != "s0" or type(context["recurse"]) is not bool:
+            raise AnsibleFilterError("Shared file contexts require s0 and a strict recursive boolean")
+        parents = [root for root in approved if path.startswith(root.rstrip("/") + "/")]
+        if not parents:
+            raise AnsibleFilterError(
+                "Automatic labeling must stay strictly below an approved inventory root; preserve broad shared storage"
+            )
+        if resolved is not None:
+            if any(key not in resolved for key in [path, *parents]):
+                raise AnsibleFilterError("Every source and approved parent needs a fresh realpath result")
+            actual = _file_context_path(resolved[path])
+            if not any(actual.startswith(resolved[root].rstrip("/") + "/") for root in parents if resolved[root] != "/"):
+                raise AnsibleFilterError("Resolved file-context source escapes its approved inventory root")
+            for root in parents:
+                canonical_root = resolved[root]
+                if canonical_root == "/" or any(
+                    canonical_root == protected or canonical_root.startswith(protected + "/") for protected in _FILE_CONTEXT_PROTECTED
+                ):
+                    raise AnsibleFilterError("Inventory root resolves into a protected system/runtime directory")
+            path = actual
+        result.append({**context, "path": path})
+    return result
+
+
 class FilterModule:
     """Register runtime-neutral service preparation filters with Ansible."""
 
@@ -878,6 +963,7 @@ class FilterModule:
             ``service_common_traefik_context``.
         """
         return {
+            "service_common_file_contexts": service_common_file_contexts,
             "service_common_requirements_normalize": service_common_requirements_normalize,
             "service_common_requirements_validate": service_common_requirements_validate,
             "service_common_requirements_metadata": service_common_requirements_metadata,

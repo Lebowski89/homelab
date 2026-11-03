@@ -3,6 +3,7 @@
 - name: Podman services | Reset this operation's firewall progress
   ansible.builtin.set_fact:
     podman_services_firewall_staged: false
+    podman_services_storage_plan: {}
     podman_services_start_attempted: false
     # From this first task the adapter owns cancellation, including init failures.
     service_catalog_firewall_handoff: "{{ (podman_services_common_context.firewall_plan | default({})).token | default('') }}"  # noqa var-naming[no-role-prefix]
@@ -20,6 +21,33 @@
         apply:
           tags: [deploy, update, remove, recreate, drift, bootstrap]
       tags: [deploy, update, remove, recreate, drift, bootstrap]
+
+    - name: Podman services | Validate explicit storage labeling before mutation
+      when: podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+      ansible.builtin.set_fact:
+        podman_services_storage_plan: "{{ podman_services_service_cfg | service_storage_plan('podman', 'container') }}"
+      tags: [deploy, update, recreate, bootstrap]
+
+    - name: Podman services | Validate and prepare declared storage contexts
+      when:
+        - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+        - podman_services_storage_plan.paths | default([]) | length > 0
+      ansible.builtin.include_role:
+        name: service_common
+        tasks_from: file_contexts
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+      vars:
+        service_common_file_contexts: "{{ podman_services_storage_plan.paths }}"
+        service_common_file_context_apply: "{{ podman_services_storage_plan.persistent }}"
+        service_common_file_context_host: "{{ podman_services_storage_host }}"
+        service_common_file_context_roots:
+          - "{{ podman_services_common_host_defaults[podman_services_storage_host].appdata_root | default('') }}"
+          - "{{ podman_services_common_host_defaults[podman_services_storage_host].data_root | default('') }}"
+      loop: "{{ [inventory_hostname] }}"
+      loop_control:
+        loop_var: podman_services_storage_host
+      tags: [deploy, update, recreate, bootstrap]
 
     - name: Podman services | Validate managed file policy before mutation
       ansible.builtin.include_role:

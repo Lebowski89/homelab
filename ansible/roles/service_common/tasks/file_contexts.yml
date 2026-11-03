@@ -1,0 +1,135 @@
+---
+
+- name: Service common file contexts | Validate the scoped request before inspection
+  ansible.builtin.assert:
+    that:
+      - service_common_file_context_host is string
+      - service_common_file_context_host in hostvars
+      - service_common_file_context_apply is boolean
+      - service_common_file_contexts | service_common_file_contexts(service_common_file_context_roots) is sequence
+
+- name: Service common file contexts | Inspect target SELinux and platform facts
+  ansible.builtin.setup:
+    gather_subset: ['!all', '!min', selinux, distribution, pkg_mgr]
+    filter: [ansible_selinux, ansible_distribution, ansible_os_family, ansible_pkg_mgr]
+  delegate_to: "{{ service_common_file_context_host }}"
+  delegate_facts: true
+  register: service_common_file_context_facts
+
+- name: Service common file contexts | Resolve only the inspected SELinux status
+  ansible.builtin.set_fact:
+    service_common_file_context_selinux_status: >-
+      {{ service_common_file_context_facts.ansible_facts.ansible_selinux.status | default('unknown') }}
+
+- name: Service common file contexts | Require known SELinux state
+  ansible.builtin.assert:
+    that:
+      - ansible_check_mode or service_common_file_context_selinux_status in ['enabled', 'disabled']
+    fail_msg: Gather usable SELinux facts and Python bindings before labeling storage; unknown state is not treated as disabled.
+
+- name: Service common file contexts | Resolve sources and approved roots without changing files
+  ansible.builtin.command:
+    argv: [readlink, -m, --, "{{ service_common_context_path }}"]
+  loop: >-
+    {{ ((service_common_file_contexts | map(attribute='path') | list)
+        + (service_common_file_context_roots | reject('equalto', '') | list)) | unique | list }}
+  loop_control:
+    loop_var: service_common_context_path
+  register: service_common_file_context_resolutions
+  delegate_to: "{{ service_common_file_context_host }}"
+  changed_when: false
+  check_mode: false
+
+- name: Service common file contexts | Validate resolved containment for this invocation
+  ansible.builtin.set_fact:
+    service_common_file_context_effective: >-
+      {{ service_common_file_contexts | service_common_file_contexts(service_common_file_context_roots,
+           dict(service_common_file_context_resolutions.results | map(attribute='service_common_context_path')
+                | zip(service_common_file_context_resolutions.results | map(attribute='stdout')))) }}
+
+- name: Service common file contexts | Inspect exact sources without following links
+  ansible.builtin.stat:
+    path: "{{ service_common_context.path }}"
+    follow: false
+  loop: "{{ service_common_file_contexts }}"
+  loop_control:
+    loop_var: service_common_context
+  delegate_to: "{{ service_common_file_context_host }}"
+  register: service_common_file_context_stats
+
+- name: Service common file contexts | Reject symlinks special files and mismatched path types
+  ansible.builtin.assert:
+    that:
+      - not (service_common_context_stat.stat.islnk | default(false))
+      - >-
+        not service_common_context_stat.stat.exists or
+        (service_common_context_stat.stat.isdir | default(false)
+         if service_common_context_stat.service_common_context.recurse else service_common_context_stat.stat.isreg | default(false))
+    fail_msg: Automatic labeling accepts only the exact declared regular file/directory, without symlink sources.
+  loop: "{{ service_common_file_context_stats.results }}"
+  loop_control:
+    loop_var: service_common_context_stat
+
+- name: Service common file contexts | Preview persistent label changes
+  when:
+    - ansible_check_mode
+    - service_common_file_context_apply
+    - service_common_file_context_selinux_status != 'disabled'
+  ansible.builtin.debug:
+    msg: >-
+      Would ensure policy tooling, declare the scoped persistent contexts and restore existing paths.
+      Observed SELinux status is {{ service_common_file_context_selinux_status }}; policy and label verification are deferred.
+
+- name: Service common file contexts | Apply only explicitly requested persistent contexts
+  when:
+    - not ansible_check_mode
+    - service_common_file_context_apply
+    - service_common_file_context_selinux_status == 'enabled'
+  block:
+    - name: Service common file contexts | Validate policy-tool package support
+      ansible.builtin.assert:
+        that:
+          - service_common_file_context_facts.ansible_facts.ansible_distribution in ['Fedora', 'Rocky']
+          - service_common_file_context_facts.ansible_facts.ansible_pkg_mgr in ['dnf', 'dnf5']
+        fail_msg: Persistent file-context tooling is supported on conventional Fedora/Rocky DNF hosts in this phase.
+
+    - name: Service common file contexts | Ensure SELinux policy tools are present
+      ansible.builtin.dnf:
+        name: [policycoreutils-python-utils, python3-libselinux]
+        state: present
+        use_backend: "{{ 'dnf5' if service_common_file_context_facts.ansible_facts.ansible_pkg_mgr == 'dnf5' else 'dnf4' }}"
+        disable_gpg_check: false
+        allowerasing: false
+      delegate_to: "{{ service_common_file_context_host }}"
+
+    - name: Service common file contexts | Persist only the declared mapping
+      community.general.sefcontext:
+        target: "{{ (service_common_context.path | regex_escape) ~ ('(/.*)?' if service_common_context.recurse else '') }}"
+        setype: "{{ service_common_context.setype }}"
+        selevel: "{{ service_common_context.selevel }}"
+        state: present
+      loop: "{{ service_common_file_context_effective }}"
+      loop_control:
+        loop_var: service_common_context
+      delegate_to: "{{ service_common_file_context_host }}"
+
+    - name: Service common file contexts | Restore existing owned paths without crossing filesystems
+      when: service_common_context_stat.stat.exists
+      community.general.serestorecon:
+        path: "{{ service_common_file_context_effective[service_common_context_index].path }}"
+        recurse: "{{ service_common_context_stat.service_common_context.recurse }}"
+        cross_filesystems: false
+        context: full
+      loop: "{{ service_common_file_context_stats.results }}"
+      loop_control:
+        loop_var: service_common_context_stat
+        index_var: service_common_context_index
+      delegate_to: "{{ service_common_file_context_host }}"
+      no_log: true
+      diff: false
+  rescue:
+    - name: Service common file contexts | Explain scoped label preparation failure
+      ansible.builtin.fail:
+        msg: >-
+          Could not prepare the explicitly declared filesystem contexts. Check policy tooling and SELinux xattr support.
+          Preserve an operator-managed policy for network filesystems and shared/system storage. Confinement is not disabled.

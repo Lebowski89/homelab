@@ -604,6 +604,10 @@ def _canonical_volumes(value: Any, *, name: str) -> tuple[list[dict[str, Any]], 
         volume_type = str(volume.get("type", "bind")).strip()
         if volume_type not in _VALID_VOLUME_TYPES:
             raise AnsibleFilterError(f"{item_name}.type must be one of {sorted(_VALID_VOLUME_TYPES)}")
+        if "selinux" in volume and (
+            volume_type != "bind" or not isinstance(volume["selinux"], str) or volume["selinux"] not in {"preserve", "shared", "private"}
+        ):
+            raise AnsibleFilterError("Bind selinux must be preserve, shared or private; other volume types cannot declare it")
         target = _nonempty_string(volume.get("target"), name=f"{item_name}.target")
         if volume_type == "tmpfs":
             tmpfs_mounts.append({"target": target, "options": _tmpfs_options(volume.get("tmpfs", {}), name=f"{item_name}.tmpfs")})
@@ -611,7 +615,14 @@ def _canonical_volumes(value: Any, *, name: str) -> tuple[list[dict[str, Any]], 
         source = _nonempty_string(volume.get("source"), name=f"{item_name}.source")
         read_only = _as_bool(volume.get("read_only", False), name=f"{item_name}.read_only")
         if volume_type == "bind":
-            mounts.append({"source": source, "target": target, "read_only": read_only})
+            mounts.append(
+                {
+                    "source": source,
+                    "target": target,
+                    "read_only": read_only,
+                    **({"selinux": volume["selinux"]} if "selinux" in volume else {}),
+                }
+            )
         else:
             volumes.append(
                 {
