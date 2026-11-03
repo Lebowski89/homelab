@@ -6,6 +6,18 @@
 
 postgres_version: 18
 
+# PGDG supplies versioned RPMs; keep Debian paths when facts are not yet gathered.
+postgres_rpm_repo_root: https://download.postgresql.org/pub/repos/yum
+postgres_rpm_key_url: >-
+  {{ postgres_rpm_repo_root }}/keys/PGDG-RPM-GPG-KEY-{{
+     'Fedora' if (ansible_facts | default({})).distribution | default('') == 'Fedora'
+     else 'AARCH64-RHEL' if (ansible_facts | default({})).architecture | default('') == 'aarch64' else 'RHEL' }}
+postgres_rpm_key_fingerprint: >-
+  {{ 'B031F89FC983E98262906B6E177B343BB9738825'
+     if (ansible_facts | default({})).distribution | default('') == 'Rocky'
+        and (ansible_facts | default({})).architecture | default('') == 'aarch64'
+     else 'D4BF08AE67A0B4C7A1DBCCD240BCA2B408B40D20' }}
+
 ################################
 # ETCD
 ################################
@@ -30,8 +42,14 @@ postgres_patroni_node_name: "{{ inventory_hostname }}"
 
 postgres_patroni_config_dir: /etc/patroni
 postgres_patroni_config_path: "{{ postgres_patroni_config_dir }}/config.yml"
-postgres_patroni_data_dir: "/var/lib/postgresql/{{ postgres_version }}/main"
-postgres_patroni_bin_dir: "/usr/lib/postgresql/{{ postgres_version }}/bin"
+postgres_patroni_data_dir: >-
+  {{ '/var/lib/pgsql/' ~ postgres_version ~ '/data'
+     if (ansible_facts | default({})).pkg_mgr | default('apt') in ['dnf', 'dnf5']
+     else '/var/lib/postgresql/' ~ postgres_version ~ '/main' }}
+postgres_patroni_bin_dir: >-
+  {{ '/usr/pgsql-' ~ postgres_version ~ '/bin'
+     if (ansible_facts | default({})).pkg_mgr | default('apt') in ['dnf', 'dnf5']
+     else '/usr/lib/postgresql/' ~ postgres_version ~ '/bin' }}
 postgres_patroni_restapi_port: 8008
 postgres_patroni_postgres_port: 5432
 # Allow local primary recovery without retaining a dead leader for multiple minutes.

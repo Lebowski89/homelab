@@ -1,0 +1,24 @@
+---
+
+postgres_platform:
+  etcd_config: /etc/etcd/etcd.conf
+  postgresql_service: "postgresql-{{ postgres_version }}"
+  repo_file: "{{ 'pgdg-fedora-all' if ansible_facts.distribution == 'Fedora' else 'pgdg-redhat-all' }}"
+  repo_suffix: >-
+    {{ 'fedora/fedora-' ~ ansible_facts.distribution_major_version ~ '-$basearch'
+       if ansible_facts.distribution == 'Fedora'
+       else 'redhat/rhel-' ~ ansible_facts.distribution_version ~ '-$basearch' }}
+  extras_name: >-
+    {{ 'pgdg-fedora-extras' if ansible_facts.distribution == 'Fedora'
+       else 'pgdg-rhel' ~ ansible_facts.distribution_major_version ~ '-extras' }}
+  packages:
+    - "postgresql{{ postgres_version }}"
+    - "postgresql{{ postgres_version }}-server"
+    - "postgresql{{ postgres_version }}-contrib"
+    - patroni
+    - patroni-etcd
+    - python3-psycopg2
+    - etcd
+    - policycoreutils-python-utils
+    - python3-libselinux
+    - python3-libsemanage

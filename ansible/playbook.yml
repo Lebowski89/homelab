@@ -366,6 +366,7 @@
       tags:
         - postgres
         - postgres_apt
+        - postgres_install
         - postgres_backup
         - postgres_backup_setup
         - postgres_backup_run
@@ -382,6 +383,7 @@
       tags:
         - postgres
         - postgres_apt
+        - postgres_install
         - postgres_etcd
         - postgres_etcd_reset
         - postgres_patroni

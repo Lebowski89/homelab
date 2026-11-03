@@ -1,0 +1,12 @@
+---
+
+- name: PostgreSQL | Refresh SELinux facts after policy-tool installation
+  ansible.builtin.setup:
+    gather_subset: ['!all', '!min', selinux]
+
+- name: PostgreSQL | Require known SELinux status before label preparation
+  ansible.builtin.assert:
+    that: ansible_facts.selinux.status | default('unknown') in ['enabled', 'disabled']
+    fail_msg: >-
+      SELinux status cannot be verified. Install the role's RPM policy tools and use an interpreter
+      with its distribution SELinux bindings before configuring PostgreSQL. Confinement is not disabled.

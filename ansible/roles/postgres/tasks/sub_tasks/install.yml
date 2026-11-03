@@ -1,0 +1,21 @@
+---
+
+- name: PostgreSQL | Validate existing installation before package changes
+  ansible.builtin.import_tasks: "{{ role_path }}/tasks/sub_tasks/install/preflight.yml"
+
+- name: PostgreSQL | Preview platform package installation
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Would ensure PostgreSQL {{ postgres_version }}, Patroni and etcd using {{ ansible_facts.pkg_mgr }}.
+      PostgreSQL binaries: {{ postgres_patroni_bin_dir }}; data: {{ postgres_patroni_data_dir }}.
+      Repository, key and package changes are deferred. Installed runtime verification is deferred when absent.
+      This selection does not initialise data, configure/start services, change membership or run backups.
+
+- name: PostgreSQL | Install APT packages
+  when: not ansible_check_mode and ansible_facts.pkg_mgr == 'apt'
+  ansible.builtin.import_tasks: "{{ role_path }}/tasks/sub_tasks/install/apt.yml"
+
+- name: PostgreSQL | Install RPM packages
+  when: not ansible_check_mode and ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.import_tasks: "{{ role_path }}/tasks/sub_tasks/install/rpm.yml"

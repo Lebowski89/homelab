@@ -1,0 +1,100 @@
+---
+
+- name: PostgreSQL | Validate current SELinux capability
+  ansible.builtin.import_tasks: "{{ role_path }}/tasks/selinux.yml"
+
+- name: PostgreSQL | Inspect system service ownership before Patroni configuration
+  ansible.builtin.service_facts:
+
+- name: PostgreSQL | Refuse to take over a running standalone server
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_facts.services.get(postgres_platform.postgresql_service ~ '.service', {}).get('state', 'stopped') != 'running'
+      - ansible_facts.services.get('postgresql.service', {}).get('state', 'stopped') != 'running'
+    fail_msg: A standalone PostgreSQL service is running. Arrange an explicit transition before Patroni may own its data and lifecycle.
+
+- name: PostgreSQL | Inspect effective Patroni unit settings privately
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - patroni.service
+      - --property=ExecStart,Environment,PassEnvironment,EnvironmentFiles,FragmentPath
+  changed_when: false
+  register: postgres_patroni_effective_unit
+  no_log: true
+  diff: false
+
+- name: PostgreSQL | Verify packaged unit and configuration selection privately
+  ansible.builtin.set_fact:
+    postgres_patroni_unit_supported: >-
+      {{ 'FragmentPath=/usr/lib/systemd/system/patroni.service' in postgres_patroni_effective_unit.stdout_lines
+         and postgres_patroni_effective_unit.stdout.count('argv[]=') == 1
+         and postgres_patroni_effective_unit.stdout.split('argv[]=')[1].split(' ;')[0] | trim
+             in ['/usr/bin/patroni /etc/patroni/patroni.yml', '/usr/bin/patroni ' ~ postgres_patroni_config_path]
+         and 'PATRONI_' not in (postgres_patroni_effective_unit.stdout_lines
+             | select('match', '^(Environment|PassEnvironment)=') | join(''))
+         and (postgres_patroni_effective_unit.stdout_lines | select('match', '^EnvironmentFiles=') | list)
+             in [['EnvironmentFiles='], ['EnvironmentFiles=/etc/patroni_env.conf (ignore_errors=yes)']] }}
+  no_log: true
+  diff: false
+
+- name: PostgreSQL | Inspect the packaged optional Patroni environment file
+  ansible.builtin.stat:
+    path: /etc/patroni_env.conf
+  register: postgres_patroni_environment_file
+
+- name: PostgreSQL | Refuse unreviewed unit or environment overrides
+  ansible.builtin.assert:
+    that:
+      - postgres_patroni_unit_supported
+      - not postgres_patroni_environment_file.stat.exists
+    fail_msg: >-
+      Existing Patroni unit/environment settings can override the declared configuration or data path.
+      Review custom units, ExecStart and environment files before adopting this packaged service;
+      no unit override, label preparation or service stop has been performed.
+
+- name: PostgreSQL | Create the Patroni unit drop-in directory
+  ansible.builtin.file:
+    path: /etc/systemd/system/patroni.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+    setype: _default
+
+- name: PostgreSQL | Point the packaged Patroni unit at the declared configuration
+  ansible.builtin.template:
+    src: patroni-rpm.conf.j2
+    dest: /etc/systemd/system/patroni.service.d/20-homelab.conf
+    owner: root
+    group: root
+    mode: "0644"
+    setype: _default
+  register: postgres_patroni_unit
+  notify: Restart patroni
+
+- name: PostgreSQL | Preserve enforcing policy for the declared data directory
+  when: ansible_facts.selinux.status | default('disabled') == 'enabled'
+  community.general.sefcontext:
+    target: "{{ postgres_patroni_data_dir | regex_escape }}(/.*)?"
+    setype: postgresql_db_t
+    state: present
+
+- name: PostgreSQL | Label only the selected PGDG server executables
+  when: ansible_facts.selinux.status | default('disabled') == 'enabled'
+  community.general.sefcontext:
+    target: "{{ postgres_patroni_bin_dir | regex_escape }}/(postgres|postmaster|pg_ctl|initdb)"
+    setype: postgresql_exec_t
+    state: present
+
+- name: PostgreSQL | Restore selected server executable labels
+  when: ansible_facts.selinux.status | default('disabled') == 'enabled'
+  community.general.serestorecon:
+    path: "{{ postgres_patroni_bin_dir }}/{{ postgres_server_binary }}"
+    recurse: false
+    context: full
+  loop: [postgres, pg_ctl, initdb]
+  loop_control:
+    loop_var: postgres_server_binary

@@ -398,6 +398,7 @@ role_tag() {
     opentofu:pve-user)              echo "opentofu_pve_user" ;;
 
     postgres:deploy)                echo "postgres" ;;
+    postgres:install)               echo "postgres_install" ;;
     postgres:apt)                   echo "postgres_apt" ;;
     postgres:etcd)                  echo "postgres_etcd" ;;
     postgres:etcd-reset)            echo "postgres_etcd_reset" ;;
@@ -662,6 +663,7 @@ Role/action targets:
 
   postgres:
     deploy              -> postgres
+    install             -> postgres_install (packages only; apt remains an alias)
     apt                 -> postgres_apt
     etcd                -> postgres_etcd
     etcd-reset          -> postgres_etcd_reset

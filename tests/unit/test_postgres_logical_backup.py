@@ -202,7 +202,7 @@ def test_setup_installs_runner_on_postgres_hosts_with_restrictive_ownership():
     install = task_named(setup_tasks, "Logical backup | Install host-local runner")
     backup_root = task_named(setup_tasks, "Logical backup | Create protected backup root")
 
-    assert include["when"] == ["'tags_postgres' in group_names"]
+    assert "'tags_postgres' in group_names" in include["when"]
     assert install["ansible.builtin.template"] == {
         "src": "postgres-logical-backup.sh.j2",
         "dest": "{{ postgres_backup_script_path }}",
@@ -869,6 +869,17 @@ def run_postgres_role_selection(
         "become": False,
         "vars": {
             "services_controller_host": "localhost",
+            "ansible_facts": {
+                "distribution": "Ubuntu",
+                "distribution_version": "26.04",
+                "distribution_major_version": "26",
+                "architecture": "x86_64",
+                "pkg_mgr": "apt",
+                "system": "Linux",
+                "service_mgr": "systemd",
+                "selinux": {"status": "disabled"},
+            },
+            "postgres_patroni_bin_dir": str(tmp_path / "absent-postgres-bin"),
             "postgres_etcd_data_dir": str(tmp_path / "etcd"),
             "postgres_etcd_node_name": "localhost",
             "postgres_etcd_initial_cluster": "localhost=http://192.0.2.10:2380",

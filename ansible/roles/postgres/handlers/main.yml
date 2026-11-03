@@ -1,11 +1,13 @@
 ---
 
 - name: Restart etcd
+  when: not ansible_check_mode
   ansible.builtin.systemd_service:
     name: etcd
     state: restarted
 
 - name: Restart patroni
+  when: not ansible_check_mode
   ansible.builtin.systemd_service:
     name: patroni
     state: restarted

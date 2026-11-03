@@ -48,6 +48,7 @@ def system_run(tmp_path):
         "systemd",
         "setup",
         "service_facts",
+        "wait_for",
         "ansible.posix.sysctl",
         "community.general.pam_limits",
         "community.docker.docker_swarm",
@@ -64,11 +65,20 @@ def system_run(tmp_path):
                 key = module if "." in module else f"ansible.builtin.{module}"
                 if key in task:
                     task["fixture_operation"] = {"module": module, "options": task.pop(key)}
+            if task.get("ansible.builtin.include_role", {}).get("name") == "systemd_jobs":
+                task["fixture_operation"] = {"module": "include_role", "options": task.pop("ansible.builtin.include_role")}
             if isinstance(task.get("ansible.builtin.include_tasks"), dict) and task["ansible.builtin.include_tasks"].get(
                 "file", ""
             ).startswith("sub_tasks/"):
                 include = task["ansible.builtin.include_tasks"]
-                if include["file"] not in {"sub_tasks/backup_prerequisites.yml", "sub_tasks/install.yml", "sub_tasks/swarm.yml"}:
+                if include["file"] not in {
+                    "sub_tasks/backup_prerequisites.yml",
+                    "sub_tasks/install.yml",
+                    "sub_tasks/swarm.yml",
+                    "sub_tasks/install/etcd.yml",
+                    "sub_tasks/install/patroni.yml",
+                    "sub_tasks/backup_remote_setup.yml",
+                }:
                     task["fixture_operation"] = {"module": "include_tasks", "options": task.pop("ansible.builtin.include_tasks")}
 
     for role in ("system", "postgres", "docker", "podman", "service_common"):
@@ -90,7 +100,8 @@ class ActionModule(ActionBase):
         module, options = self._task.args['module'], self._task.args['options'] or {}
         record = {'module': module, 'options': options, 'environment': self._task.environment,
                   'no_log': self._task.no_log, 'diff': self._task.diff}
-        if module == 'template' and options.get('src') in ('rootful-dns.conf.j2', 'shared.network.j2'):
+        if module == 'template' and options.get('src') in (
+            'rootful-dns.conf.j2', 'shared.network.j2', 'patroni.yml.j2', 'etcd.default.j2', 'patroni-rpm.conf.j2'):
             expression = "{{ lookup('ansible.builtin.template', " + repr(options['src']) + ") }}"
             record['content'] = self._templar.template(trust_as_template(expression))
         with open(v['fixture_record'], 'a') as output:
@@ -180,7 +191,22 @@ class ActionModule(ActionBase):
         elif module == 'command':
             argv = options['argv']
             command = argv[0]
-            if command == 'readlink':
+            if argv[:3] == ['systemctl', 'show', 'patroni.service']:
+                config = v.get('fixture_patroni_unit_config', '/etc/patroni/patroni.yml')
+                fragment = v.get('fixture_patroni_unit_fragment', '/usr/lib/systemd/system/patroni.service')
+                environment = v.get('fixture_patroni_unit_environment', 'MALLOC_ARENA_MAX=1')
+                envfiles = v.get('fixture_patroni_unit_envfiles', '/etc/patroni_env.conf (ignore_errors=yes)')
+                passed = v.get('fixture_patroni_unit_pass_environment', '')
+                result['stdout_lines'] = [
+                    'ExecStart={ path=/usr/bin/patroni ; argv[]=/usr/bin/patroni ' + config + ' ; ignore_errors=no ; }',
+                    'FragmentPath=' + fragment, 'Environment=' + environment,
+                    'PassEnvironment=' + passed, 'EnvironmentFiles=' + envfiles]
+                result['stdout'] = '\\n'.join(result['stdout_lines'])
+            elif command.endswith('/restic') and argv[-1] == 'version':
+                result['stdout'] = v.get('fixture_restic_version', 'restic 0.19.1 compiled with fixture')
+            elif command.endswith('/postgres') and argv[-1] == '--version':
+                result['stdout'] = 'postgres (PostgreSQL) ' + v.get('fixture_postgres_version', '18.6')
+            elif command == 'readlink':
                 result['stdout'] = v.get('fixture_realpaths', {}).get(argv[-1], argv[-1])
             elif command == 'docker' and 'join-token' in argv:
                 result['stdout'] = 'synthetic-test-token'
@@ -549,7 +575,21 @@ def test_legacy_nic_settings_are_preserved_without_an_explicit_transition(system
 
 @pytest.mark.parametrize("tag", ["postgres_backup", "postgres_backup_setup", "postgres_backup_run"])
 def test_postgres_backup_installs_dependencies_before_setup_or_execution(system_run, tag):
-    result, calls, _ = system_run(distro="Ubuntu", role="postgres", tags=tag)
+    result, calls, _ = system_run(
+        distro="Ubuntu",
+        role="postgres",
+        tags=tag,
+        overrides={
+            "ansible_facts": {
+                "distribution": "Ubuntu",
+                "distribution_version": "24.04",
+                "distribution_major_version": "24",
+                "pkg_mgr": "apt",
+                "system": "Linux",
+                "service_mgr": "systemd",
+            }
+        },
+    )
     successful(result)
     packages = package_calls(calls)
     assert len(packages) == 1 and packages[0]["options"]["state"] == "present"

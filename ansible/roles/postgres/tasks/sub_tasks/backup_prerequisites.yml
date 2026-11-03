@@ -1,5 +1,7 @@
 ---
+
 - name: PostgreSQL backup | Install ACL support for unprivileged become
+  when: not ansible_check_mode and ansible_facts.pkg_mgr == 'apt'
   ansible.builtin.apt:
     name: acl
     state: present
@@ -8,3 +10,17 @@
   environment:
     DEBIAN_FRONTEND: noninteractive
     DEBIAN_PRIORITY: critical
+
+- name: PostgreSQL backup | Install RPM ACL support for unprivileged become
+  when: not ansible_check_mode and ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.dnf:
+    name: acl
+    state: present
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    disable_gpg_check: false
+    allowerasing: false
+
+- name: PostgreSQL backup | Explain deferred prerequisite installation
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: Would ensure distribution ACL support for unprivileged become; package changes are deferred in check mode.

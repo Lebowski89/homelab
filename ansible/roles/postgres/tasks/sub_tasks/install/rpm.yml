@@ -1,0 +1,46 @@
+---
+
+- name: PostgreSQL | Ensure RPM HTTPS prerequisites
+  ansible.builtin.dnf:
+    name: ca-certificates
+    state: present
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    disable_gpg_check: false
+    allowerasing: false
+
+- name: PostgreSQL | Trust the PGDG signing key
+  ansible.builtin.rpm_key:
+    key: "{{ postgres_rpm_key_url }}"
+    fingerprint: "{{ postgres_rpm_key_fingerprint }}"
+    state: present
+
+- name: PostgreSQL | Configure only the selected stable PGDG repositories
+  ansible.builtin.yum_repository:
+    name: "{{ postgres_rpm_repository.name }}"
+    file: "{{ postgres_platform.repo_file }}"
+    description: "PostgreSQL PGDG {{ postgres_rpm_repository.section }}"
+    baseurl: "{{ postgres_rpm_repo_root }}/{{ postgres_rpm_repository.section }}/{{ postgres_platform.repo_suffix }}"
+    enabled: true
+    gpgcheck: true
+    repo_gpgcheck: true
+    gpgkey: "{{ postgres_rpm_key_url }}"
+    sslverify: true
+    module_hotfixes: true
+    includepkgs: "{{ ['etcd'] if postgres_rpm_repository.section == 'extras' else omit }}"
+    state: present
+  loop:
+    - {name: "pgdg{{ postgres_version }}", section: "{{ postgres_version }}"}
+    - {name: pgdg-common, section: common}
+    - {name: "{{ postgres_platform.extras_name }}", section: extras}
+  loop_control:
+    loop_var: postgres_rpm_repository
+  register: postgres_rpm_repositories
+
+- name: PostgreSQL | Install versioned server, Patroni and etcd packages
+  ansible.builtin.dnf:
+    name: "{{ postgres_platform.packages }}"
+    state: present
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    update_cache: "{{ postgres_rpm_repositories.changed }}"
+    disable_gpg_check: false
+    allowerasing: false

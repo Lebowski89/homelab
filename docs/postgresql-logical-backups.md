@@ -9,6 +9,11 @@ not move during failover.
 
 Patroni replicas provide high availability, not backups.
 
+The [host platform guide](postgresql-platforms.md) covers Fedora/Rocky package and
+SELinux prerequisites. ACL and optional Restic dependencies use the host package
+manager; runners retain the selected `postgres_patroni_bin_dir`, existing paths,
+disabled-by-default remote scheduling and credential handling.
+
 The optional remote layer copies only completed, checksum-verified backup trees
 to a provider-neutral encrypted Restic repository. It is intentionally
 disabled until a repository and its backend are selected. An optional restore

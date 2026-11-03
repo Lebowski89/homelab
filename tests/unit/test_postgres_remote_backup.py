@@ -222,7 +222,17 @@ def run_setup_check(
     playbook = tmp_path / "remote-backup.yml"
     play_vars = {
         "services_controller_host": "localhost",
-        "ansible_facts": {"service_mgr": "systemd"},
+        "ansible_facts": {
+            "distribution": "Ubuntu",
+            "distribution_version": "26.04",
+            "distribution_major_version": "26",
+            "architecture": "x86_64",
+            "pkg_mgr": "apt",
+            "system": "Linux",
+            "service_mgr": "systemd",
+            "selinux": {"status": "disabled"},
+        },
+        "postgres_patroni_bin_dir": str(tmp_path / "absent-postgres-bin"),
         "postgres_backup_remote_manage": remote_manage,
         "postgres_backup_remote_enabled": remote_enabled,
         "postgres_backup_remote_repository": repository,
@@ -384,7 +394,8 @@ def test_restic_install_and_runner_are_scoped_to_managed_postgres_hosts():
 
     assert include["when"] == "'tags_postgres' in group_names"
     assert "postgres" in include["tags"]
-    assert install["when"] == "postgres_backup_remote_manage"
+    assert "postgres_backup_remote_manage" in install["when"]
+    assert "not ansible_check_mode" in install["when"]
     assert install["ansible.builtin.apt"] == {"name": "restic", "state": "present"}
     assert runner["when"] == "postgres_backup_remote_manage"
     assert runner["ansible.builtin.template"]["dest"] == "{{ postgres_backup_remote_script_path }}"

@@ -288,10 +288,30 @@
     label: additional-option
 
 - name: Remote logical backup | Install Restic package
-  when: postgres_backup_remote_manage
+  when:
+    - postgres_backup_remote_manage
+    - not ansible_check_mode
+    - ansible_facts.pkg_mgr == 'apt'
   ansible.builtin.apt:
     name: restic
     state: present
+
+- name: Remote logical backup | Install RPM Restic package
+  when:
+    - postgres_backup_remote_manage
+    - not ansible_check_mode
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.dnf:
+    name: restic
+    state: present
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    disable_gpg_check: false
+    allowerasing: false
+
+- name: Remote logical backup | Explain deferred Restic installation
+  when: postgres_backup_remote_manage and ansible_check_mode
+  ansible.builtin.debug:
+    msg: Would ensure the distribution Restic package; package changes and installed-version verification are deferred.
 
 - name: Remote logical backup | Query installed Restic version
   when:
@@ -316,7 +336,7 @@
       - >-
         (
           postgres_backup_remote_restic_version_result.stdout
-          | regex_replace('^restic ([0-9]+\.[0-9]+\.[0-9]+).*', '\1')
+          | regex_search('[0-9]+[.][0-9]+[.][0-9]+')
         )
         is version('0.17.1', '>=')
     fail_msg: >-

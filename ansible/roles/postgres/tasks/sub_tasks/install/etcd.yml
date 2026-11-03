@@ -1,5 +1,13 @@
 ---
 
+- name: PostgreSQL | Validate platform for a direct etcd task import
+  when: postgres_platform is not defined
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/platform.yml"
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  tags: [always]
+
 - name: Assert etcd vars are defined
   ansible.builtin.assert:
     that:
@@ -13,6 +21,18 @@
   tags:
     - postgres
     - postgres_etcd
+
+- name: PostgreSQL | Validate existing paths before etcd configuration
+  ansible.builtin.import_tasks: "{{ role_path }}/tasks/sub_tasks/install/preflight.yml"
+  tags: [postgres, postgres_etcd]
+
+- name: PostgreSQL | Explain deferred etcd configuration in check mode
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Would configure {{ postgres_platform.etcd_config }} and data at {{ postgres_etcd_data_dir }}.
+      Account-dependent filesystem work, service lifecycle and endpoint verification are deferred.
+  tags: [postgres, postgres_etcd]
 
 - name: Stop etcd before optional reset
   when:
@@ -49,30 +69,35 @@
     - postgres_etcd_reset
 
 - name: Ensure etcd data directory exists
+  when: not ansible_check_mode
   ansible.builtin.file:
     path: "{{ postgres_etcd_data_dir }}"
     state: directory
     owner: etcd
     group: etcd
     mode: "0700"
+    setype: _default
   tags:
     - postgres
     - postgres_etcd
 
 - name: Template etcd defaults
+  when: not ansible_check_mode
   ansible.builtin.template:
     src: etcd.default.j2
-    dest: /etc/default/etcd
+    dest: "{{ postgres_platform.etcd_config }}"
     owner: root
     group: root
     mode: "0644"
     force: true
+    setype: _default
   notify: Restart etcd
   tags:
     - postgres
     - postgres_etcd
 
 - name: Enable and start etcd
+  when: not ansible_check_mode
   ansible.builtin.systemd_service:
     name: etcd
     state: started
@@ -82,6 +107,7 @@
     - postgres_etcd
 
 - name: Wait for etcd client port
+  when: not ansible_check_mode
   ansible.builtin.wait_for:
     host: "{{ local_ip }}"
     port: "{{ postgres_etcd_client_port }}"
