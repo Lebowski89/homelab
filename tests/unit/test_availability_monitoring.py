@@ -170,7 +170,9 @@ def test_dns_coverage_includes_all_configured_endpoints():
 
 def test_postgres_exporter_role_is_checksum_pinned_unprivileged_and_secret_safe():
     defaults = yaml.safe_load((REPO_ROOT / "ansible/roles/postgres_exporter/defaults/main.yml").read_text())
-    tasks = yaml.safe_load((REPO_ROOT / "ansible/roles/postgres_exporter/tasks/main.yml").read_text())
+    tasks = [
+        task for path in (REPO_ROOT / "ansible/roles/postgres_exporter/tasks").rglob("*.yml") for task in yaml.safe_load(path.read_text())
+    ]
     unit = (REPO_ROOT / "ansible/roles/postgres_exporter/templates/postgres_exporter.service.j2").read_text()
     environment = (REPO_ROOT / "ansible/roles/postgres_exporter/templates/environment.j2").read_text()
     playbook = yaml.safe_load((REPO_ROOT / "ansible/playbook.yml").read_text())

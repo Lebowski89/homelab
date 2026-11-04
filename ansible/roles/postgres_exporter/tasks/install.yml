@@ -1,0 +1,147 @@
+---
+
+- name: Postgres_Exporter | Validate database credential contract
+  ansible.builtin.assert:
+    that:
+      - postgres_exporter_database_user | string | trim | length > 0
+      - postgres_exporter_database_password | string | length > 0
+      - postgres_exporter_database_name | string | trim | length > 0
+    fail_msg: PostgreSQL exporter database credentials must be configured.
+  no_log: true
+  diff: false
+
+- name: Postgres_Exporter | Install APT archive prerequisites
+  when: ansible_facts.pkg_mgr == 'apt'
+  ansible.builtin.apt:
+    name: [ca-certificates, tar, gzip]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Postgres_Exporter | Install RPM archive and SELinux prerequisites
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.dnf:
+    name: [ca-certificates, tar, gzip, policycoreutils-python-utils, python3-libselinux, python3-libsemanage]
+    state: present
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    disable_gpg_check: false
+    allowerasing: false
+
+- name: Postgres_Exporter | Refresh RPM SELinux facts after installing bindings
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.setup:
+    gather_subset: ['!all', '!min', selinux]
+
+- name: Postgres_Exporter | Require known RPM SELinux status
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.assert:
+    that: ansible_facts.selinux.status | default('unknown') in ['enabled', 'disabled']
+    fail_msg: >-
+      SELinux status cannot be verified. Use an interpreter with the distribution SELinux bindings;
+      exporter configuration and service startup have not been attempted. Confinement is not disabled.
+
+- name: Postgres_Exporter | Create postgres_exporter group
+  ansible.builtin.group:
+    name: "{{ postgres_exporter_group }}"
+    system: true
+
+- name: Postgres_Exporter | Create postgres_exporter user
+  ansible.builtin.user:
+    name: "{{ postgres_exporter_user }}"
+    group: "{{ postgres_exporter_group }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Postgres_Exporter | Create configuration directory
+  ansible.builtin.file:
+    path: "{{ postgres_exporter_config_dir }}"
+    state: directory
+    owner: root
+    group: "{{ postgres_exporter_group }}"
+    mode: "0750"
+    setype: _default
+
+- name: Postgres_Exporter | Install protected password file
+  ansible.builtin.template:
+    src: password.j2
+    dest: "{{ postgres_exporter_password_file }}"
+    owner: root
+    group: "{{ postgres_exporter_group }}"
+    mode: "0640"
+    setype: _default
+  no_log: true
+  diff: false
+  notify: Restart postgres_exporter
+
+- name: Postgres_Exporter | Install protected environment file
+  ansible.builtin.template:
+    src: environment.j2
+    dest: "{{ postgres_exporter_environment_file }}"
+    owner: root
+    group: "{{ postgres_exporter_group }}"
+    mode: "0640"
+    setype: _default
+  no_log: true
+  diff: false
+  notify: Restart postgres_exporter
+
+- name: Postgres_Exporter | Ensure the selected binary directory exists
+  ansible.builtin.file:
+    path: "{{ postgres_exporter_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Postgres_Exporter | Download checksum-pinned archive
+  ansible.builtin.get_url:
+    url: "{{ postgres_exporter_download_url }}"
+    dest: "{{ postgres_exporter_archive_path }}"
+    mode: "0644"
+    checksum: "{{ postgres_exporter_checksum }}"
+    owner: root
+    group: root
+
+- name: Postgres_Exporter | Extract archive
+  ansible.builtin.unarchive:
+    src: "{{ postgres_exporter_archive_path }}"
+    dest: /tmp
+    remote_src: true
+    creates: "{{ postgres_exporter_extract_dir }}/postgres_exporter"
+    owner: root
+    group: root
+
+- name: Postgres_Exporter | Install binary
+  ansible.builtin.copy:
+    src: "{{ postgres_exporter_extract_dir }}/postgres_exporter"
+    dest: "{{ postgres_exporter_install_dir }}/postgres_exporter"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  notify: Restart postgres_exporter
+
+- name: Postgres_Exporter | Prepare enforcing RPM executable labels
+  when:
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - ansible_facts.selinux.status == 'enabled'
+  ansible.builtin.import_tasks: selinux.yml
+
+- name: Postgres_Exporter | Install systemd unit
+  ansible.builtin.template:
+    src: postgres_exporter.service.j2
+    dest: /etc/systemd/system/postgres_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+    setype: _default
+  register: postgres_exporter_unit
+  notify: Restart postgres_exporter
+
+- name: Postgres_Exporter | Enable and start service
+  ansible.builtin.systemd_service:
+    name: postgres_exporter
+    enabled: true
+    state: started
+    daemon_reload: "{{ postgres_exporter_unit.changed }}"

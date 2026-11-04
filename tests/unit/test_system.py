@@ -21,7 +21,8 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 def system_run(tmp_path):
     roles = tmp_path / "roles"
-    for role in ("system", "postgres", "docker", "podman", "service_common"):
+    fixture_roles = ("system", "postgres", "postgres_exporter", "docker", "podman", "service_common")
+    for role in fixture_roles:
         shutil.copytree(REPO / "ansible/roles" / role, roles / role, ignore=shutil.ignore_patterns("__pycache__"))
     modules = {
         "apt",
@@ -29,6 +30,7 @@ def system_run(tmp_path):
         "community.general.sefcontext",
         "community.general.serestorecon",
         "get_url",
+        "unarchive",
         "rpm_key",
         "yum_repository",
         "deb822_repository",
@@ -81,7 +83,7 @@ def system_run(tmp_path):
                 }:
                     task["fixture_operation"] = {"module": "include_tasks", "options": task.pop("ansible.builtin.include_tasks")}
 
-    for role in ("system", "postgres", "docker", "podman", "service_common"):
+    for role in fixture_roles:
         # Only PostgreSQL's entry point and the moved dependency file are selected.
         paths = list((roles / role / "tasks").rglob("*.yml")) + list((roles / role / "handlers").glob("*.yml"))
         for path in paths:
@@ -92,7 +94,7 @@ def system_run(tmp_path):
     plugins.mkdir()
     (plugins / "fixture_operation.py").write_text("""from ansible.plugins.action import ActionBase
 from ansible.template import trust_as_template
-import base64, json
+import base64, hashlib, json
 from pathlib import Path
 class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
@@ -101,9 +103,14 @@ class ActionModule(ActionBase):
         record = {'module': module, 'options': options, 'environment': self._task.environment,
                   'no_log': self._task.no_log, 'diff': self._task.diff}
         if module == 'template' and options.get('src') in (
-            'rootful-dns.conf.j2', 'shared.network.j2', 'patroni.yml.j2', 'etcd.default.j2', 'patroni-rpm.conf.j2'):
+            'rootful-dns.conf.j2', 'shared.network.j2', 'patroni.yml.j2', 'etcd.default.j2', 'patroni-rpm.conf.j2',
+            'postgres_exporter.service.j2', 'password.j2', 'environment.j2'):
             expression = "{{ lookup('ansible.builtin.template', " + repr(options['src']) + ") }}"
-            record['content'] = self._templar.template(trust_as_template(expression))
+            content = self._templar.template(trust_as_template(expression))
+            if self._task.no_log and options['src'] in ('password.j2', 'environment.j2'):
+                record['content_digest'] = hashlib.sha256(content.encode()).hexdigest()
+            else:
+                record['content'] = content
         with open(v['fixture_record'], 'a') as output:
             output.write(json.dumps(record, default=str) + '\\n')
         state_path = Path(v['fixture_state'])
@@ -143,14 +150,20 @@ class ActionModule(ActionBase):
         elif module == 'package_facts':
             result['ansible_facts'] = {'packages': v.get('fixture_packages', {})}
         elif module == 'template':
-            if 'content' in record:
+            if 'content' in record or 'content_digest' in record:
                 path = options['dest']
+                content = record.get('content', record.get('content_digest'))
                 previous = state.get('podman_files', {}).get(path, v.get('fixture_files', {}).get(path))
-                result['changed'] = previous != record['content']
+                result['changed'] = previous != content
                 if not self._play_context.check_mode:
-                    state.setdefault('podman_files', {})[path] = record['content']
+                    state.setdefault('podman_files', {})[path] = content
             else:
                 result['changed'] = v.get('fixture_nic_artifacts_changed', False)
+        elif module == 'copy' and options.get('dest', '').endswith('/postgres_exporter'):
+            path, source = options['dest'], options['src']
+            result['changed'] = state.get('exporter_binaries', {}).get(path) != source
+            if not self._play_context.check_mode:
+                state.setdefault('exporter_binaries', {})[path] = source
         elif module == 'find':
             result['files'] = [{'path': '/etc/systemd/system/multi-user.target.wants/' + unit} for unit in v.get('fixture_nic_enabled', [])]
         elif module == 'stat':
@@ -318,7 +331,7 @@ class ActionModule(ActionBase):
             "services_controller_host": "localhost",
             "ansible_become": False,
         }
-        if role in {"docker", "podman"}:
+        if role in {"docker", "podman", "postgres_exporter"}:
             variables.update(
                 {
                     "services_controller_inventory_group": "tags_service_controller",
@@ -353,7 +366,7 @@ class ActionModule(ActionBase):
                                     "tags_service_storage",
                                     *variables.get("fixture_inventory_groups", []),
                                 )
-                                if role in {"docker", "podman"}
+                                if role in {"docker", "podman", "postgres_exporter"}
                             },
                             **(inventory_groups or {}),
                         }
