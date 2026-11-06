@@ -106,6 +106,22 @@ firewalld's existing state and host iptables alternatives are preserved. Host
 firewall installation and policy remain a separate provisioning responsibility.
 Starting Docker can create Docker's own normal networking/firewall state.
 
+Docker container SELinux confinement requires the daemon's
+[`selinux-enabled` setting](https://docs.docker.com/reference/cli/dockerd/),
+independently of the host's enforcing state. Installation preserves the existing
+daemon configuration. Before accepting Docker storage-label tests, verify that
+`docker info` advertises SELinux and the container has a SELinux process label.
+Enabling daemon support requires a separately reviewed configuration and restart;
+a successful bind-mount write alone does not verify confinement.
+
+Package coexistence also needs a compatible forwarding policy. Docker can set
+the host's [default forwarding policy to DROP](https://docs.docker.com/engine/network/packet-filtering-firewalls/).
+With bridge filtering enabled, this can block rootful Podman peer traffic even
+when container DNS resolves correctly. Validate peer HTTP/TCP traffic separately
+from DNS, and test rootful and rootless networks independently. Any required
+forwarding permission needs a scoped ownership decision; neither installer changes
+the global forwarding policy or adds blanket permissions to make tests pass.
+
 ## Rocky 10 kernel networking prerequisite
 
 Minimal/cloud images can omit `xt_addrtype`, which Docker's bridge/NAT setup
@@ -153,11 +169,12 @@ Runtime installation remains separate from Fedora/Rocky application readiness:
   isolated validation. The existing Rocky VM's installation and drained-manager
   join have passed live execution and second-run convergence checks.
 
-## Adding Rocky as a manager
+## Optional Rocky manager test
 
-Keep `mgt` as `docker_swarm_primary_manager`. Rocky needs the NetBox tags
-`swarm` and `swarm-manager` (slugs `swarm` and `swarm_manager`), also retained in
-the OpenTofu NetBox source. Use:
+Rocky is a compatibility-test host and has no Swarm tags in the OpenTofu NetBox
+source by default. Keep `mgt` as `docker_swarm_primary_manager`. To deliberately
+repeat the manager test, assign Rocky the NetBox tags `swarm` and `swarm-manager`
+(slugs `swarm` and `swarm_manager`), then use:
 
 ```bash
 skynet limit rocky check docker swarm-join
@@ -170,6 +187,12 @@ This setting applies at join time only; it does not change an existing node's
 scheduling. Other nodes retain the existing `active` join default. Check mode
 inspects membership without fetching tokens. Execution rejects conflicting
 membership or roles rather than replacing an existing cluster.
+
+After testing, remove both Swarm tags from live NetBox and any matching source
+entries before future provisioning. Through a healthy surviving manager, demote
+the drained, task-free Rocky node; have Rocky leave without `--force`; then remove
+its inactive node record from the surviving manager. Runtime installation is
+retained. Swarm enrollment does not need to remain enabled for compatibility tests.
 
 A two-manager Swarm requires both managers for quorum and tolerates no manager
 failure. Plan a third manager for one-manager failure tolerance. Installation

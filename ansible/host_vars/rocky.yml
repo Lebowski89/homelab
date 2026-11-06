@@ -3,5 +3,5 @@
 docker_manage_user: true
 docker_user: "{{ ansible_user }}"
 
-# Manager membership only until application placement is deliberately migrated.
+# Keep any deliberate future Swarm test join drained by default.
 docker_swarm_join_availability: drain
