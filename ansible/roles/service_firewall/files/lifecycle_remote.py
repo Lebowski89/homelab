@@ -690,7 +690,10 @@ def run_lifecycle(engine, helper, data):
 
         def access_runtime(expected):
             if isinstance(expected, tuple):
-                runtime_check(expected[1], "healthy")
+                try:
+                    runtime_check(expected[1], "healthy")
+                except ValueError as error:
+                    raise ValueError(f"provider {expected[1]['service']}: {error}") from None
             else:
                 runtime_check(request["runtime"], expected)
 

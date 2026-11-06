@@ -390,7 +390,8 @@ def access_transact(store, request, phase, token, runtime):
                         identity["binding"] == provider["runtime"]["binding"] and identity["hosts"] == provider["runtime"]["hosts"],
                         "provider runtime ownership/placement differs",
                     )
-            runtime(("provider", provider["runtime"]))
+            if phase != "access_remove" and not (phase == "access_inspect" and request.get("action") == "remove"):
+                runtime(("provider", provider["runtime"]))
             for endpoint in provider["endpoints"]:
                 if request["profile"] == "workers":
                     require(endpoint["port"] in current["ports"], "provider publication is not protected; deploy the provider first")

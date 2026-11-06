@@ -1156,6 +1156,83 @@ def test_provider_access_rejects_changed_or_missing_provider_and_preserves_rollb
     assert "newapp" not in store.current["endpoints"][0]["callers"]
 
 
+@pytest.mark.parametrize("drift", ["image", "health", "missing"])
+def test_client_removal_does_not_need_a_canonical_healthy_provider(tmp_path, monkeypatch, drift):
+    store = Store(tmp_path / "policy.json", monkeypatch)
+    client = provider_request(store)
+    provider_policy = deepcopy(store.current)
+    ENGINE.access_transact(store, client, "access_stage", "deploy", lambda _: None)
+    ENGINE.access_transact(store, client, "access_finish", "deploy", lambda _: None)
+    installed = deepcopy(store.current)
+    store.root, store.policy_path = tmp_path, store.path
+    monkeypatch.setattr(REMOTE, "Store", lambda *args: store)
+    monkeypatch.setattr(REMOTE, "runtime_command", lambda record: (["fixture-runtime", record["service"]], []))
+    running, calls = {"newapp": True}, []
+
+    def run(argv):
+        service = argv[1]
+        calls.append(service)
+        if argv[2] == "ps":
+            return "a" * 64 if running.get(service, drift != "missing") else ""
+        return json.dumps(
+            {
+                "id": "a" * 64,
+                "running": True,
+                "pid": 321,
+                "image": "registry.invalid/nonproduction:old" if drift == "image" else client["providers"][0]["runtime"]["image"],
+                "state": {"Health": {"Status": "unhealthy" if drift == "health" else "healthy"}},
+                "ports": {},
+            }
+        )
+
+    runtime_check = REMOTE.runtime_check
+    monkeypatch.setattr(REMOTE, "runtime_check", lambda record, expected: runtime_check(record, expected, run))
+
+    def execute(request, phase):
+        return REMOTE.run_lifecycle(ENGINE, None, {"request": request, "phase": phase, "token": "operation", "helper": "", "units": {}})
+
+    reason = {"image": "image differs", "health": "not become healthy", "missing": "missing or ambiguous"}[drift]
+    failures = []
+    for phase in ["access_inspect", "access_stage"]:
+        with pytest.raises(ValueError, match=reason) as failure:
+            execute(client, phase)
+        failures.append(str(failure.value))
+        assert store.current == installed
+
+    removal = client | {"action": "remove"}
+    calls.clear()
+    assert not execute(removal, "access_inspect")["changed"]
+    assert not calls and store.current == installed
+    # Cleanup must still fail closed until the selected client has stopped.
+    with pytest.raises(ValueError, match="running writer"):
+        execute(removal, "access_remove")
+    assert store.current == installed
+    running["newapp"] = False
+    assert execute(removal, "access_remove")["changed"]
+    assert store.current == provider_policy
+    assert not execute(removal, "access_remove")["changed"]
+    assert set(calls) == {"newapp"}  # No provider CLI or application lifecycle operation.
+    assert all(message.startswith("provider database:") for message in failures)
+
+
+@pytest.mark.parametrize("phase", ["access_inspect", "access_remove"])
+@pytest.mark.parametrize("change", ["placement", "publication"])
+def test_removal_keeps_provider_ownership_and_publication_checks(tmp_path, monkeypatch, phase, change):
+    store = Store(tmp_path / "policy.json", monkeypatch)
+    client = provider_request(store)
+    ENGINE.access_transact(store, client, "access_stage", "deploy", lambda _: None)
+    ENGINE.access_transact(store, client, "access_finish", "deploy", lambda _: None)
+    installed = deepcopy(store.current)
+    client["action"] = "remove"
+    if change == "placement":
+        client["providers"][0]["runtime"]["hosts"] = ["another-host"]
+    else:
+        client["providers"][0]["endpoints"][0]["destination"] = 5433
+    with pytest.raises(ValueError, match="ownership/placement differs|publication missing or changed"):
+        ENGINE.access_transact(store, client, phase, "remove", lambda _: None)
+    assert store.current == installed
+
+
 def test_inverse_provider_planner_selects_only_declared_client_access():
     catalog = {
         name: {
