@@ -270,3 +270,11 @@ configuration and lifecycle ordering with remote operations replaced by recorder
 They cannot prove package/installer idempotence, DNS recovery, listener readiness,
 VRRP failover or systemd behavior on real hosts. Review a check-mode plan and use
 an explicitly authorized disposable host before production rollout.
+
+Fedora 44 AMD64 has passed live installation and zero-change repeat runs for
+Alloy, Node Exporter, Technitium and Keepalived under enforcing SELinux. Tests
+used a local discard-only log receiver, isolated DNS listeners and a dummy-link
+VIP; the real Keepalived health script succeeded. A single VM does not establish
+peer failover, production listener reachability or application migration readiness.
+All four services recovered after reboot, and their removal paths passed;
+Technitium restored its recorded resolver integration while retaining DNS data.

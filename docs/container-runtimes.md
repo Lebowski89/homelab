@@ -80,6 +80,13 @@ signature verification. `docker_repo_url`, `docker_repo_channel` and
 `docker_repo_filename` also apply on RPM; `docker_rpm_baseurl`,
 `docker_rpm_key_url` and `docker_rpm_key_fingerprint` support an explicit mirror.
 APT paths and `python3-debian` are absent from the RPM workflow.
+Fedora's default prerequisites include its distribution
+[`python3-docker` package](https://packages.fedoraproject.org/pkgs/python-docker/python3-docker/)
+for the existing Swarm initialization and node-label modules. Prerequisite
+overrides must retain that dependency when using these operations. On Rocky,
+prepare the SDK through the host's existing repository policy when needed;
+Docker installation does not implicitly enable EPEL. A fresh Swarm check-mode
+initialization defers network/label checks until the planned manager exists.
 
 Podman retains `podman_install_enable`, `podman_state`, `podman_packages`,
 `podman_install_extra_packages` and cache settings. Cache lifetime applies only
@@ -269,10 +276,38 @@ zero-change convergence, real application-UID writes and reboot persistence with
 exclusive private bind labels. Its listener and storage were isolated; no
 production application, Traefik route or database was migrated.
 
-This evidence does not certify the remaining catalog or Fedora/Debian live
-behaviour. Their equivalent host acceptance is still required. The repository's
-[Fedora 44 AMD64 template](fedora-44-template.md) is prepared for future use;
-it has not been applied or boot-tested. Native protected listeners and RPM
-PostgreSQL destructive recovery retain their documented safety gates. Optional
-[RPM resolver configuration](system-baseline.md#optional-fedorarocky-resolver-configuration)
-requires prepared NetworkManager/NSS ownership and still needs live acceptance.
+Fedora 44 AMD64 has also passed live Docker/Podman installation and zero-change
+repeat runs, enforcing-SELinux storage denial/label/write checks, and bridge
+DNS/HTTP for Docker, rootful Podman and rootless Podman. Dedicated rootless
+Wallos and HAProxy fixtures passed the real application preparation/Quadlet
+paths and zero-change convergence; a SQL query through HAProxy reached an
+isolated PostgreSQL primary. Swarm initialization, overlay creation and labels
+passed in a separate single-node test cluster, without joining the homelab Swarm.
+The native services, database, Compose/Quadlet applications, labels and isolated
+VIP recovered after a VM reboot; writes as the application UID succeeded on both
+runtime adapters. The Docker fixture needed explicit application storage
+ownership, reinforcing the need to review mounts before migrating a service.
+Application removal retained data, native removal restored recorded resolver
+ownership, and the disposable one-node Swarm was left after testing. Runtime
+packages remain installed; no production service or cluster membership changed.
+
+The tested Fedora cloud guest selected **legacy** iptables alternatives despite
+having `iptables-nft` installed. Protected-firewall preflight and the explicit
+Podman compatibility option correctly refused that configuration. After an
+explicitly authorised VM-only alternatives change and reboot, all six tools used
+nf_tables, the compatibility option converged, and the central bridge passed
+DNS/HTTP with native Technitium and the isolated Swarm active. Docker, rootful
+Podman and rootless Podman also passed storage/DNS/HTTP tests with native
+firewalld active and SELinux enforcing. Both firewall profiles passed isolated
+IPv4/IPv6 permitted/denied traffic tests across firewalld reloads and caller
+restarts, plus their own installed boot guards/timers across Docker restart and
+VM reboot. Worker test peers used fixed observed addresses to model the verified
+remote-source contract. Installing a package alone does not establish the selected backend;
+roles never switch host-wide alternatives automatically.
+
+These isolated tests do not certify the remaining catalog, multi-host overlay
+traffic, real VRRP/Patroni failover, or Debian live behaviour. Native protected
+listeners and RPM PostgreSQL destructive recovery retain their safety gates.
+Fedora's optional [RPM resolver configuration](system-baseline.md#optional-fedorarocky-resolver-configuration)
+passed with prepared NetworkManager/NSS ownership; other host configurations
+still require their own acceptance checks.

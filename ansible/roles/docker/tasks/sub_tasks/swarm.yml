@@ -152,6 +152,7 @@
       diff: false
 
 - name: Conduct overlay network tasks
+  when: not (ansible_check_mode and hostvars[docker_swarm_primary_manager].docker_swarm_init_result.changed | default(false))
   delegate_to: "{{ docker_swarm_primary_manager }}"
   delegate_facts: true
   run_once: true
@@ -184,7 +185,18 @@
     labels_state: merge
   delegate_to: "{{ docker_swarm_primary_manager }}"
   when:
+    - not (ansible_check_mode and hostvars[docker_swarm_primary_manager].docker_swarm_init_result.changed | default(false))
     - "'tags_swarm' in group_names"
     - docker_swarm_node_labels is defined
     - docker_swarm_node_labels | length > 0
   tags: docker_swarm_labels
+
+- name: Explain deferred configuration of the planned Swarm
+  when:
+    - ansible_check_mode
+    - hostvars[docker_swarm_primary_manager].docker_swarm_init_result.changed | default(false)
+  ansible.builtin.debug:
+    msg: >-
+      Swarm initialization is planned but has not occurred. Overlay network and node-label operations are deferred
+      until the manager exists; this check does not verify their runtime configuration.
+  tags: [docker_swarm_network, docker_swarm_labels]

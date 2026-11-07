@@ -84,6 +84,17 @@ encrypted NetBox Vault file without requiring its API. See
 
 Tailscale bootstrap uses the selected guest mapping in `ansible/host_vars/pve1.yml`.
 It does not support check mode.
+For a fresh VM, inspect `sudo cloud-init status --long` through the Proxmox console
+and allow first-boot setup to finish. A running VM alone does not establish SSH
+readiness. SSH transport uses the workstation's identities, strict host-key
+checking and passwordless `sudo -n` for the configured guest user. An installation
+probe failure reports the transport exit status and error before any Tailscale
+authentication; use that error to distinguish readiness, trust, key and sudo issues.
+
+Fedora's CA prerequisite check uses its extracted PEM trust bundle, retaining
+curl's default TLS verification. Fedora 44 removed the legacy CA-bundle aliases;
+see [Fedora's trust-store change](https://fedoraproject.org/wiki/Changes/droppingOfCertPemFile).
+The bootstrap does not recreate those aliases or bypass certificate verification.
 
 ## Troubleshooting and local checks
 

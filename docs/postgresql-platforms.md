@@ -29,6 +29,9 @@ PGDG extras is restricted to etcd. Package and repository metadata signatures ar
 verified, with the PGDG signing-key fingerprint pinned by the role. Repository
 root and signing-key overrides support reviewed mirrors. Packages use `present`;
 the role does not erase another server, request `latest` or perform a major upgrade.
+The server packages are requested with the host architecture and their installed
+identities are verified. Fedora's unversioned packages can satisfy or obsolete
+bare PGDG package names, but use different binary paths and service units.
 On Rocky, prepare the required supported EPEL/CRB availability for Patroni and
 Restic dependencies through the host's repository policy; this role does not
 enable those repositories implicitly. Restic is available from Fedora and
@@ -104,3 +107,10 @@ and installation, a second converged run, enforcing SELinux, correct unit/config
 consumption, database and etcd ownership, narrow network reachability, backup and
 isolated restore validation. Cluster bootstrap/join, failover, reset and data
 migration each require separate deliberate live validation.
+
+Fedora 44 AMD64 has passed an isolated PGDG 18 installation and zero-change
+repeat, enforcing-SELinux single-node etcd/Patroni bootstrap, admin/monitor roles,
+exporter queries, logical backup checksums and a restore into a separate test
+database. No production cluster was joined. Multi-node failover, remote Restic
+credentials/storage and RPM destructive recovery were not validated by that test.
+The test primary and restored row remained healthy after reboot.

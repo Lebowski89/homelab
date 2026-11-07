@@ -239,6 +239,36 @@ def test_swarm_suboperations_retain_preflight_without_selecting_installation(sys
     assert {call["module"] for call in calls} <= {"setup"}
 
 
+def test_fedora_install_supplies_swarm_sdk_without_initialising_cluster(system_run):
+    overrides = {
+        "ansible_facts": facts("Fedora", "44", "dnf5"),
+        "docker_swarm_primary_manager": "localhost",
+        "local_ip": "192.0.2.44",
+        "fixture_inventory_groups": ["tags_swarm_manager"],
+        "fixture_require_docker_sdk": True,
+    }
+    result, _, _ = system_run(role="docker", tags="docker_swarm_init", overrides=overrides)
+    assert result.returncode != 0
+    result, calls, state = run_role(system_run, "docker", "Fedora", "44", "dnf5")
+    successful(result)
+    assert state.get("docker_sdk") and not state.get("swarm_active")
+    assert not any(call["module"] == "community.docker.docker_swarm" for call in calls)
+    result, calls, state = system_run(
+        role="docker",
+        tags="docker_swarm_init,docker_swarm_network,docker_swarm_labels",
+        check=True,
+        overrides={**overrides, "docker_swarm_node_labels": {"acceptance": "fedora"}},
+    )
+    successful(result)
+    assert not state.get("swarm_active")
+    assert not any(call["module"] in {"community.docker.docker_network_info", "community.docker.docker_node"} for call in calls)
+    assert "deferred" in result.stdout
+    result, calls, state = system_run(role="docker", tags="docker_swarm_init", overrides=overrides)
+    successful(result)
+    assert state["swarm_active"]
+    assert not any(call["module"] in {"apt", "dnf"} for call in calls)
+
+
 @pytest.mark.parametrize("backend,newer_installed", [("dnf", True), ("dnf5", False)], ids=["dnf4-newer-installed", "dnf5"])
 def test_rocky_missing_module_installs_only_the_booted_kernel_supplement_before_startup(system_run, backend, newer_installed):
     overrides = {"fixture_addrtype_missing": True, "fixture_newer_kernel_supplement": newer_installed}

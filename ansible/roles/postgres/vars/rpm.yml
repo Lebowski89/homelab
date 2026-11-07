@@ -12,9 +12,10 @@ postgres_platform:
     {{ 'pgdg-fedora-extras' if ansible_facts.distribution == 'Fedora'
        else 'pgdg-rhel' ~ ansible_facts.distribution_major_version ~ '-extras' }}
   packages:
-    - "postgresql{{ postgres_version }}"
-    - "postgresql{{ postgres_version }}-server"
-    - "postgresql{{ postgres_version }}-contrib"
+    # A bare name can select Fedora's Obsoletes provider with incompatible paths.
+    - "postgresql{{ postgres_version }}.{{ ansible_facts.architecture }}"
+    - "postgresql{{ postgres_version }}-server.{{ ansible_facts.architecture }}"
+    - "postgresql{{ postgres_version }}-contrib.{{ ansible_facts.architecture }}"
     - patroni
     - patroni-etcd
     - python3-psycopg2

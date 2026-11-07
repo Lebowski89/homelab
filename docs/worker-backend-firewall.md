@@ -222,6 +222,9 @@ Removal disables only owned Plex units, removes only the owned Docker drop-in
 and Unraid boot block, stops the Unraid watcher and deletes only the owned
 policy files/rules. It leaves directories, other boot content, Docker and
 Tailscale intact. It does not restart Docker or restore a whole-host snapshot.
+On systemd hosts, removal disables the boot guard without stopping its active
+oneshot while Docker still requires it. Removing the owned drop-in and reloading
+unit definitions retires that dependency; reconciliation units are stopped.
 A missing persistent helper does not prevent kernel cleanup. Names/references
 that cannot be proven owned require operator review; do not flush the ruleset
 as a workaround.

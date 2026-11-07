@@ -71,7 +71,7 @@ def test_package_selection_and_install_only_boundary(system_run, distro, version
         assert installs[-1]["options"]["policy_rc_d"] == 101
     else:
         packages = installs[-1]["options"]["name"]
-        assert {"postgresql18-server", "postgresql18", "patroni", "patroni-etcd", "etcd"} <= set(packages)
+        assert {"postgresql18-server." + arch, "postgresql18." + arch, "patroni", "patroni-etcd", "etcd"} <= set(packages)
         assert not {"etcd-server", "etcd-client", "postgresql-common", "python3-debian"} & set(packages)
         repos = [call["options"] for call in calls if call["module"] == "yum_repository"]
         assert {repo["name"] for repo in repos} == {
@@ -86,6 +86,27 @@ def test_package_selection_and_install_only_boundary(system_run, distro, version
         assert key["key"].endswith("AARCH64-RHEL") is (distro == "Rocky" and arch == "aarch64")
         assert all(call["options"]["use_backend"] == ("dnf5" if backend == "dnf5" else "dnf4") for call in installs)
         assert all(not call["options"]["allowerasing"] and not call["options"]["disable_gpg_check"] for call in installs)
+
+
+@pytest.mark.parametrize(("version", "backend"), [("43", "dnf"), ("44", "dnf5")])
+def test_fedora_obsoletes_provider_is_avoided_and_install_converges(system_run, version, backend):
+    host = facts("Fedora", version, backend)
+    result, _, state = run(system_run, host_facts=host)
+    successful(result)
+    assert "postgresql18-server" in state["postgres_packages"]
+    assert "postgresql-server" not in state["postgres_packages"]
+    result, calls, _ = run(system_run, host_facts=host)
+    successful(result)
+    assert "changed=0" in result.stdout
+    assert not any(call["module"] in {"systemd_service", "template", "user"} for call in calls)
+
+
+def test_unexpected_dnf_provider_fails_install_before_cluster_work(system_run):
+    result, calls, _ = run(system_run, overrides={"fixture_postgres_wrong_provider": True})
+    assert result.returncode != 0
+    assert "DNF did not install the selected PGDG package identities" in result.stdout
+    assert not any(call["module"] in {"systemd_service", "template", "user"} for call in calls)
+    assert all(call["options"]["state"] == "present" for call in calls if call["module"] == "dnf")
 
 
 @pytest.mark.parametrize(

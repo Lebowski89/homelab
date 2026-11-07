@@ -21,7 +21,7 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 def system_run(tmp_path):
     roles = tmp_path / "roles"
-    fixture_roles = ("system", "postgres", "postgres_exporter", "docker", "podman", "service_common")
+    fixture_roles = ("system", "postgres", "postgres_exporter", "docker", "podman", "service_common", "service_firewall")
     for role in fixture_roles:
         shutil.copytree(REPO / "ansible/roles" / role, roles / role, ignore=shutil.ignore_patterns("__pycache__"))
     modules = {
@@ -95,7 +95,7 @@ def system_run(tmp_path):
     plugins.mkdir()
     (plugins / "fixture_operation.py").write_text("""from ansible.plugins.action import ActionBase
 from ansible.template import trust_as_template
-import base64, fnmatch, hashlib, json
+import base64, fnmatch, hashlib, json, re
 from pathlib import Path
 class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
@@ -123,6 +123,18 @@ class ActionModule(ActionBase):
         state_path = Path(v['fixture_state'])
         state = json.loads(state_path.read_text())
         result = {'changed': False, 'rc': 0, 'stdout': '', 'stdout_lines': []}
+        if v.get('fixture_firewall_dependencies', False):
+            if module == 'file' and options.get('state') == 'absent':
+                result['changed'] = options['path'] in v.get('fixture_files', {})
+            if module == 'command' and options['argv'][-3:-1] == ['remove', '--backend']:
+                result['stdout'] = json.dumps({'changed': True})
+            if module == 'systemd_service' and not self._play_context.check_mode:
+                if options.get('state') == 'stopped':
+                    state.setdefault('stopped_units', []).append(options['name'])
+                    if options['name'] == 'skynet-worker-backend-firewall.service' and state.get('docker_requires_guard'):
+                        state['docker_running'] = False
+                if options.get('daemon_reload'):
+                    state['docker_requires_guard'] = False
         if module in ('apt', 'dnf') and options.get('name') == 'qemu-guest-agent' and v.get('fixture_guest_agent_failure', False):
             return dict(result, failed=True, rc=1, msg='fixture-agent-failure')
         if module == 'dnf' and 'systemd-resolved' in options.get('name', []):
@@ -131,6 +143,24 @@ class ActionModule(ActionBase):
                 # Fedora's initial posttrans can replace the standard link.
                 if v['fixture_facts']['distribution'] == 'Fedora' and 'systemd-resolved' not in v.get('fixture_packages', {}):
                     state.setdefault('resolver_links', {})['/etc/resolv.conf'] = '/run/systemd/resolve/stub-resolv.conf'
+        if module == 'dnf' and isinstance(options.get('name'), list):
+            if 'python3-docker' in options['name']:
+                result['changed'] = not state.get('docker_sdk', False)
+                if not self._play_context.check_mode:
+                    state['docker_sdk'] = True
+            # Fedora's unversioned RPMs obsolete the bare PGDG names. Qualified
+            # name.arch requests select the real versioned package instead.
+            for spec in options['name']:
+                match = re.fullmatch(r'(postgresql[0-9]+(?:-server|-contrib)?)(?:[.](x86_64|aarch64))?', spec)
+                if match:
+                    name = match[1]
+                    if v.get('fixture_postgres_wrong_provider', False) or (
+                        v['fixture_facts']['distribution'] == 'Fedora' and not match[2]
+                    ):
+                        name = re.sub(r'[0-9]+', '', name)
+                    result['changed'] |= name not in state.get('postgres_packages', [])
+                    if not self._play_context.check_mode and name not in state.get('postgres_packages', []):
+                        state.setdefault('postgres_packages', []).append(name)
         if module == 'dnf' and str(options.get('name', '')).startswith('kernel-modules-extra-'):
             if v.get('fixture_kernel_package_unavailable', False):
                 return dict(result, failed=True, rc=1, msg='fixture-running-kernel-package-unavailable')
@@ -144,6 +174,12 @@ class ActionModule(ActionBase):
             result['changed'] = not state.get('docker_addrtype_available', False) and not skip_older
             if not self._play_context.check_mode and not skip_older:
                 state['docker_addrtype_available'] = True
+        if module == 'community.docker.docker_swarm' and v.get('fixture_require_docker_sdk', False):
+            if not state.get('docker_sdk', False):
+                return dict(result, failed=True, msg='fixture-missing-docker-sdk')
+            result['changed'] = not state.get('swarm_active', False)
+            if not self._play_context.check_mode:
+                state['swarm_active'] = True
         if module == 'setup':
             if 'ansible_selinux' in options.get('filter', []):
                 result['ansible_facts'] = {'ansible_selinux': v.get('fixture_selinux', {'status': 'enabled'}),
@@ -171,6 +207,7 @@ class ActionModule(ActionBase):
                 state.setdefault(key, []).append(value)
         elif module == 'package_facts':
             result['ansible_facts'] = {'packages': v.get('fixture_packages', {})}
+            result['ansible_facts']['packages'].update({name: [{'version': 'fixture'}] for name in state.get('postgres_packages', [])})
             if state.get('resolver_package_installed', False):
                 result['ansible_facts']['packages']['systemd-resolved'] = [{'version': 'fixture'}]
         elif module == 'template' or (module == 'copy' and 'content' in record):

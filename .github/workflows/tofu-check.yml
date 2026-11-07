@@ -49,6 +49,7 @@ jobs:
           - terraform/proxmox/vms/pg02
           - terraform/proxmox/vms/pg03
           - terraform/proxmox/vms/rocky
+          - terraform/proxmox/vms/fedora
           - terraform/proxmox/vms/unraid
           - terraform/seerr
           - terraform/technitium/internal-dns

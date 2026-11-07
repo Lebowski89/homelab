@@ -18,9 +18,38 @@ from jinja2.nativetypes import NativeEnvironment
 
 ROOT = Path(__file__).resolve().parents[2]
 ROLE = ROOT / "ansible/roles/service_firewall"
+pytest_plugins = ["test_system"]
 
 
 INVENTORY = {"all": ["storage", "media", "manager", "blacktop"]}
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("guard_installed", [True, False])
+def test_removal_keeps_docker_running_while_retiring_its_required_guard(system_run, guard_installed):
+    units = [
+        "skynet-worker-backend-firewall.timer",
+        "skynet-worker-backend-firewall.service",
+        "skynet-worker-backend-firewall-reconcile.service",
+    ]
+    result, calls, state = system_run(
+        role="service_firewall",
+        tasks_from="workers/remove",
+        tags="all",
+        state={"docker_running": True, "docker_requires_guard": guard_installed},
+        overrides={
+            "fixture_firewall_dependencies": True,
+            "fixture_files": {"/etc/systemd/system/" + unit: "fixture unit" for unit in units if guard_installed or unit != units[1]},
+            "worker_backend_firewall_unraid": {"stat": {"exists": False}},
+            "worker_backend_firewall_root": "/etc/skynet-worker-backend-firewall",
+            "worker_backend_firewall_python": "/usr/bin/python3",
+            "worker_backend_firewall_backend": "nf_tables",
+        },
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert state["docker_running"] and not state["docker_requires_guard"]
+    assert set(state["stopped_units"]) == {units[0], units[2]}
+    assert not any(call["module"] == "systemd_service" and call["options"].get("name") == "docker.service" for call in calls)
 
 
 def load(path, name):

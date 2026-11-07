@@ -5,7 +5,7 @@ docker_repo_platform: >-
       'Fedora': 'fedora', 'Rocky': 'rhel'}[ansible_facts.distribution] }}
 docker_platform_prereq_packages:
   Debian: [ca-certificates, curl, python3-debian]
-  RedHat: [ca-certificates]
+  RedHat: "{{ ['ca-certificates'] + (['python3-docker'] if ansible_facts.distribution == 'Fedora' else []) }}"
 # containerd.io bundles runc; Podman itself is deliberately not a conflict.
 docker_conflicting_packages:
   - podman-docker

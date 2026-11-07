@@ -58,6 +58,10 @@ has two explicit profiles, not interchangeable identity models:
 | `mgt` | Exact local account/cgroup and container identities; authorised controller/recovery contexts | install, check, observe, remove |
 | `workers` | Verified exact remote mgt sources, protecting declared worker publications | install, check, remove |
 
+These profiles belong on separate inventory hosts. Each reconciler owns
+first-position hooks; installing both on one host does not converge. Single-VM
+acceptance tests install and remove the profiles in sequence.
+
 `service_firewall_profile` and `service_firewall_operation` select direct role
 use. Unknown profiles/operations, worker observe, conflicting operation tags and
 cross-profile tags fail before mutation. Existing `mgt_firewall_*` and

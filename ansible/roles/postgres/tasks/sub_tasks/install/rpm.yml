@@ -44,3 +44,21 @@
     update_cache: "{{ postgres_rpm_repositories.changed }}"
     disable_gpg_check: false
     allowerasing: false
+
+- name: PostgreSQL | Read the installed RPM package identities
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: PostgreSQL | Require the selected PGDG package identities
+  ansible.builtin.assert:
+    that:
+      - >-
+        ['postgresql' ~ postgres_version, 'postgresql' ~ postgres_version ~ '-server',
+         'postgresql' ~ postgres_version ~ '-contrib'] | difference(ansible_facts.packages) | length == 0
+      - >-
+        ansible_facts.packages | select('match', '^postgresql[0-9]*-server$')
+        | difference(['postgresql' ~ postgres_version ~ '-server']) | length == 0
+    fail_msg: >-
+      DNF did not install the selected PGDG package identities. An alternative provider can use incompatible
+      binary paths and service units. Inspect installed packages and their data/service ownership before retrying;
+      this role does not erase or adopt another server.
