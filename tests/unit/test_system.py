@@ -104,6 +104,8 @@ class ActionModule(ActionBase):
                   'no_log': self._task.no_log, 'diff': self._task.diff}
         if module == 'copy' and options.get('src') == 'docker-iptables-compat.conf':
             record['content'] = (Path(v['role_path']) / 'files' / options['src']).read_text()
+        if module == 'copy' and options.get('dest') == '/etc/docker/daemon.json':
+            record['content'] = options['content']
         if module == 'template' and options.get('src') in (
             'rootful-dns.conf.j2', 'shared.network.j2', 'patroni.yml.j2', 'etcd.default.j2', 'patroni-rpm.conf.j2',
             'postgres_exporter.service.j2', 'password.j2', 'environment.j2'):
@@ -143,6 +145,8 @@ class ActionModule(ActionBase):
                     result['ansible_facts']['selinux'] = v.get('fixture_selinux', {'status': 'enabled'})
         elif module == 'service_facts':
             result['ansible_facts'] = {'services': v.get('fixture_services', {})}
+            if state.get('docker_started', False):
+                result['ansible_facts']['services']['docker.service'] = {'state': 'running'}
         elif module in ('community.general.sefcontext', 'community.general.serestorecon'):
             key = 'policy_contexts' if module.endswith('sefcontext') else 'restored_contexts'
             value = options.get('target', options.get('path'))
@@ -152,6 +156,8 @@ class ActionModule(ActionBase):
         elif module == 'package_facts':
             result['ansible_facts'] = {'packages': v.get('fixture_packages', {})}
         elif module == 'template' or (module == 'copy' and 'content' in record):
+            if options.get('dest') == '/etc/docker/daemon.json' and v.get('fixture_docker_config_invalid', False):
+                return dict(result, failed=True, msg='fixture-dockerd-validation-failed')
             if 'content' in record or 'content_digest' in record:
                 path = options['dest']
                 content = record.get('content', record.get('content_digest'))
@@ -198,7 +204,13 @@ class ActionModule(ActionBase):
             content = state['podman_files'][path] if path in state.get('podman_files', {}) else v['fixture_files'][path]
             result['content'] = base64.b64encode(content.encode()).decode()
         elif module == 'uri':
-            if options.get('method') == 'POST':
+            if options['url'].endswith('/info') and 'fixture_docker_selinux' in v:
+                enabled = state.get('docker_selinux_active', v['fixture_docker_selinux'])
+                result.update(status=200, json={'SecurityOptions': ['name=selinux'] if enabled else [],
+                              'Swarm': {'LocalNodeState': v.get('fixture_docker_swarm_state', 'inactive')}})
+            elif options['url'].endswith('/containers/json'):
+                result.update(status=200, json=v.get('fixture_docker_containers', []))
+            elif options.get('method') == 'POST':
                 state['swarm_active'] = True
                 state['swarm_role'] = 'manager' if 'tags_swarm_manager' in v['group_names'] else 'worker'
                 state['swarm_availability'] = options['body']['Availability']
@@ -218,7 +230,10 @@ class ActionModule(ActionBase):
         elif module == 'command':
             argv = options['argv']
             command = argv[0]
-            if command == 'printenv':
+            if argv[:3] == ['systemctl', 'show', 'docker.service']:
+                result['stdout'] = v.get('fixture_docker_exec_start',
+                    '{ path=/usr/bin/dockerd ; argv[]=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock ; }')
+            elif command == 'printenv':
                 result['stdout'] = v.get('fixture_provider_environment', '')
                 result['rc'] = 0 if result['stdout'] else 1
             elif command == 'ps':
@@ -308,6 +323,14 @@ class ActionModule(ActionBase):
             result['changed'] = not state.get('podman_network', False)
             if not self._play_context.check_mode:
                 state['podman_network'] = True
+        elif module == 'systemd_service' and options.get('name') == 'docker.service' and 'fixture_docker_selinux' in v:
+            active = state.get('docker_started', v.get('fixture_services', {}).get('docker.service', {}).get('state') == 'running')
+            result['changed'] = options['state'] == 'restarted' or not active
+            if not self._play_context.check_mode:
+                state['docker_started'] = True
+                if options['state'] == 'restarted' or not active:
+                    config = state.get('podman_files', {}).get('/etc/docker/daemon.json', v.get('fixture_files', {}).get('/etc/docker/daemon.json', '{}'))
+                    state['docker_selinux_active'] = json.loads(config).get('selinux-enabled', False) and not v.get('fixture_docker_capability_failure', False)
         state_path.write_text(json.dumps(state))
         return result
 """)

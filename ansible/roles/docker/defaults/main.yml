@@ -29,6 +29,9 @@ docker_install_compose_plugin: true
 docker_manage_user: false
 docker_user: ""
 
+# Enable only; false preserves existing daemon policy and never disables labelling.
+docker_selinux_enable: false
+
 # Applies only when joining a new node; existing scheduling is left to the operator.
 docker_swarm_join_availability: active
 

@@ -1,0 +1,124 @@
+---
+
+- name: Docker SELinux | Require an enforcing supported host
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution in ['Fedora', 'Rocky']
+      - ansible_facts.selinux.status | default('unknown') == 'enabled'
+      - ansible_facts.selinux.mode | default('unknown') == 'enforcing'
+    fail_msg: >-
+      docker_selinux_enable requires enforcing SELinux on a supported Fedora or Rocky host.
+      This role does not enable or weaken host SELinux policy.
+
+- name: Docker SELinux | Inspect the standard daemon configuration
+  ansible.builtin.stat:
+    path: /etc/docker/daemon.json
+    follow: false
+  register: docker_selinux_config_file
+
+- name: Docker SELinux | Require a regular configuration file
+  ansible.builtin.assert:
+    that: >-
+      not docker_selinux_config_file.stat.exists or
+      (docker_selinux_config_file.stat.isreg and not docker_selinux_config_file.stat.islnk)
+    fail_msg: Resolve daemon.json symlinks or non-file configuration before enabling Docker SELinux management.
+
+- name: Docker SELinux | Read existing daemon settings privately
+  when: docker_selinux_config_file.stat.exists
+  ansible.builtin.slurp:
+    src: /etc/docker/daemon.json
+  register: docker_selinux_config_read
+  no_log: true
+  diff: false
+
+- name: Docker SELinux | Preserve unrelated daemon settings
+  block:
+    - name: Docker SELinux | Parse the existing configuration privately
+      ansible.builtin.set_fact:
+        docker_selinux_config_original: >-
+          {{ (docker_selinux_config_read.content | b64decode | from_json)
+             if docker_selinux_config_file.stat.exists else {} }}
+      no_log: true
+      diff: false
+
+    - name: Docker SELinux | Require a JSON object
+      ansible.builtin.assert:
+        that: docker_selinux_config_original is mapping
+      no_log: true
+      diff: false
+
+    - name: Docker SELinux | Derive the requested configuration privately
+      ansible.builtin.set_fact:
+        docker_selinux_config_candidate: "{{ docker_selinux_config_original | combine({'selinux-enabled': true}) }}"
+        docker_selinux_config_change: "{{ docker_selinux_config_original.get('selinux-enabled') is not sameas true }}"
+      no_log: true
+      diff: false
+  rescue:
+    - name: Docker SELinux | Explain invalid existing configuration
+      ansible.builtin.fail:
+        msg: Docker daemon.json must contain a valid JSON object; its contents are withheld and no configuration was changed.
+
+- name: Docker SELinux | Inspect existing service state
+  ansible.builtin.service_facts:
+
+- name: Docker SELinux | Record the existing daemon state
+  ansible.builtin.set_fact:
+    docker_selinux_running: "{{ ansible_facts.services.get('docker.service', {}).get('state', '') == 'running' }}"
+    docker_selinux_restart: false
+
+- name: Docker SELinux | Inspect the existing service launch
+  when:
+    - not ansible_check_mode
+    - "'docker.service' in ansible_facts.services"
+  ansible.builtin.import_tasks: sub_tasks/install/selinux_unit.yml
+
+- name: Docker SELinux | Inspect an active daemon before changes
+  when:
+    - not ansible_check_mode
+    - docker_selinux_running
+  block:
+    - name: Docker SELinux | Read only the local daemon metadata privately
+      ansible.builtin.uri:
+        url: http://localhost/info
+        unix_socket: /var/run/docker.sock
+        use_proxy: false
+      register: docker_selinux_info
+      no_log: true
+      diff: false
+
+    - name: Docker SELinux | Determine whether the active daemon needs a restart
+      ansible.builtin.set_fact:
+        docker_selinux_restart: >-
+          {{ docker_selinux_config_change or 'name=selinux' not in docker_selinux_info.json.SecurityOptions }}
+      no_log: true
+      diff: false
+
+    - name: Docker SELinux | Inspect running containers before a required restart
+      when: docker_selinux_restart
+      ansible.builtin.uri:
+        url: http://localhost/containers/json
+        unix_socket: /var/run/docker.sock
+        use_proxy: false
+      register: docker_selinux_containers
+      no_log: true
+      diff: false
+
+    - name: Docker SELinux | Require an idle standalone daemon for a transition
+      when: docker_selinux_restart
+      ansible.builtin.assert:
+        that:
+          - docker_selinux_containers.json | length == 0
+          - docker_selinux_info.json.Swarm.LocalNodeState == 'inactive'
+        fail_msg: >-
+          Enabling Docker SELinux requires a daemon restart. Arrange maintenance with no running Docker containers
+          and no Swarm membership, then retry. No containers are stopped and no Swarm changes are made by this operation.
+
+- name: Docker SELinux | Explain deferred runtime checks in check mode
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Would ensure container-selinux and merge selinux-enabled=true into the standard daemon.json.
+      Configuration change required: {{ docker_selinux_config_change }}.
+      Service-launch, runtime, quiescence, candidate validation and restart checks are deferred.
+      No daemon is changed; SELinux runtime confinement has not been verified.
+  changed_when: docker_selinux_config_change

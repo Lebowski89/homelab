@@ -1,0 +1,49 @@
+---
+
+- name: Docker SELinux | Inspect the installed service before writing configuration
+  ansible.builtin.import_tasks: sub_tasks/install/selinux_unit.yml
+
+- name: Docker SELinux | Ensure the distribution container policy is installed
+  ansible.builtin.dnf:
+    name: container-selinux
+    state: present
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    disable_gpg_check: false
+    allowerasing: false
+
+- name: Docker SELinux | Ensure the daemon configuration directory
+  when: docker_selinux_config_change
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+    setype: _default
+
+- name: Docker SELinux | Validate and persist only the requested configuration change
+  when: docker_selinux_config_change
+  block:
+    - name: Docker SELinux | Validate the candidate before replacing daemon.json privately
+      ansible.builtin.copy:
+        content: "{{ docker_selinux_config_candidate | to_nice_json }}\n"
+        dest: /etc/docker/daemon.json
+        owner: root
+        group: root
+        mode: "0600"
+        setype: _default
+        validate: /usr/bin/dockerd --validate --config-file %s
+      no_log: true
+      diff: false
+  rescue:
+    - name: Docker SELinux | Explain rejected candidate configuration
+      ansible.builtin.fail:
+        msg: >-
+          Docker candidate validation or installation failed. Daemon settings are withheld;
+          inspect the local configuration and permissions before retrying. No daemon restart was attempted.
+
+- name: Docker SELinux | Restart only the idle daemon requiring the capability change
+  when: docker_selinux_restart
+  ansible.builtin.systemd_service:
+    name: docker.service
+    state: restarted

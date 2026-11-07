@@ -36,6 +36,7 @@
     that:
       - docker_install_compose_plugin is boolean
       - docker_manage_user is boolean
+      - docker_selinux_enable is boolean
       - docker_packages is sequence and docker_packages is not string and docker_packages is not mapping
       - docker_prereq_packages is sequence and docker_prereq_packages is not string and docker_prereq_packages is not mapping
       - docker_user is string

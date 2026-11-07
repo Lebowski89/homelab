@@ -3,6 +3,10 @@
 - name: Docker | Validate platform and package conflicts
   ansible.builtin.import_tasks: sub_tasks/install/validate.yml
 
+- name: Docker | Inspect the explicit SELinux transition before installation
+  when: docker_selinux_enable
+  ansible.builtin.import_tasks: sub_tasks/install/selinux_preflight.yml
+
 - name: Docker | Prepare Rocky 10 bridge kernel support
   when:
     - ansible_facts.distribution == 'Rocky'
@@ -34,12 +38,41 @@
     - not ansible_check_mode
   ansible.builtin.import_tasks: sub_tasks/install/rpm.yml
 
+- name: Docker | Apply the explicit SELinux configuration
+  when:
+    - docker_selinux_enable
+    - not ansible_check_mode
+  ansible.builtin.import_tasks: sub_tasks/install/selinux.yml
+
 - name: Docker | Enable and start the daemon
   when: not ansible_check_mode
   ansible.builtin.systemd_service:
     name: docker.service
     enabled: true
     state: started
+
+- name: Docker | Verify the requested SELinux capability
+  when:
+    - docker_selinux_enable
+    - not ansible_check_mode
+  block:
+    - name: Docker SELinux | Verify the local daemon advertises SELinux privately
+      ansible.builtin.uri:
+        url: http://localhost/info
+        unix_socket: /var/run/docker.sock
+        use_proxy: false
+      register: docker_selinux_verified
+      failed_when: >-
+        docker_selinux_verified.status | default(0) != 200 or
+        'name=selinux' not in (docker_selinux_verified.json.SecurityOptions | default([]))
+      no_log: true
+      diff: false
+  rescue:
+    - name: Docker SELinux | Explain unverified daemon confinement
+      ansible.builtin.fail:
+        msg: >-
+          Docker did not advertise SELinux after applying the requested configuration, or the local API was unavailable.
+          Inspect docker.service and daemon configuration locally; runtime confinement has not been verified.
 
 - name: Ensure docker group exists
   when:

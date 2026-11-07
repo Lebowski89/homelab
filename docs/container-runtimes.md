@@ -108,11 +108,35 @@ Starting Docker can create Docker's own normal networking/firewall state.
 
 Docker container SELinux confinement requires the daemon's
 [`selinux-enabled` setting](https://docs.docker.com/reference/cli/dockerd/),
-independently of the host's enforcing state. Installation preserves the existing
-daemon configuration. Before accepting Docker storage-label tests, verify that
-`docker info` advertises SELinux and the container has a SELinux process label.
-Enabling daemon support requires a separately reviewed configuration and restart;
-a successful bind-mount write alone does not verify confinement.
+independently of the host's enforcing state. `docker_selinux_enable: true` opts
+the existing `docker install` selection into enabling daemon confinement on
+supported enforcing Fedora/Rocky hosts. Rocky opts in; the role default remains
+`false`, which leaves existing daemon policy unchanged and never disables it.
+
+The opt-in ensures the distribution's `container-selinux` package and merges only
+`selinux-enabled: true` into `/etc/docker/daemon.json`, preserving other JSON
+values. It refuses malformed/non-object JSON, symlinks, alternate configuration
+paths, SELinux CLI flags, wrappers and environment-expanded launch arguments.
+The installed [`dockerd --validate`](https://docs.docker.com/reference/cli/dockerd/#daemon-configuration-file)
+checks the candidate before replacement. Daemon settings are kept out of output
+and diffs; a newly written file is root-owned mode `0600`.
+
+An active daemon is restarted only when its configuration or advertised SELinux
+capability requires it, after requiring no running Docker containers and no Swarm
+membership. An unchanged, confined daemon can converge with active workloads.
+Fresh installations configure before starting Docker. Arrange maintenance and
+avoid concurrent starts: the preflight is a point-in-time check, not a runtime
+lock. Existing containers and storage are not migrated, recreated or relabelled.
+Disabling the opt-in leaves the enabled configuration intact; weakening daemon
+confinement requires an explicit operator decision outside this option.
+
+Check mode validates host/configuration inputs, reports the configuration plan
+and defers daemon/API, launch, quiescence and installed-binary validation. It does
+not restart Docker or claim confinement. A normal run checks that `docker info`
+advertises SELinux; live acceptance must also verify a new container's SELinux
+process label and positive/negative bind access. A successful write alone does
+not verify confinement. Swarm application migration, existing-container recreation,
+host-wide policy changes and protected-ingress acceptance remain separate work.
 
 Package coexistence also needs a compatible forwarding policy. Docker can set
 the host's [default forwarding policy to DROP](https://docs.docker.com/engine/network/packet-filtering-firewalls/).
