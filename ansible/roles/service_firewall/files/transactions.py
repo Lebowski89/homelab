@@ -85,7 +85,7 @@ def rpm_firewall_preflight(run=execute):
         return
     if not supported_platform("mgt", release) or Path("/run/ostree-booted").exists():
         raise ValueError("firewall compatibility requires conventional Fedora 43-45 or Rocky 10; Atomic/OSTree is unsupported")
-    version = run(["firewalld", "--version"]).strip().split(".")
+    version = run(["firewall-offline-cmd", "--version"]).strip().split(".")
     if not all(part.isdecimal() for part in version) or tuple(map(int, version)) < (2, 0, 0):
         raise ValueError("firewalld 2.0+ is required: older releases flush shared compatibility tables even without Direct rules")
     for tool in ["iptables", "ip6tables", "iptables-save", "ip6tables-save", "iptables-restore", "ip6tables-restore"]:
@@ -122,6 +122,30 @@ def rpm_firewall_preflight(run=execute):
         return
     if state != "active":
         raise ValueError("firewalld state is not stable; inspect the daemon before changing protection")
+    # A package upgrade does not replace a still-running daemon. Its reload
+    # implementation, rather than the installed executable, controls shared tables.
+    runtime = {}
+    for property_ in ["version", "state"]:
+        value = shlex.split(
+            run(
+                [
+                    "busctl",
+                    "get-property",
+                    "org.fedoraproject.FirewallD1",
+                    "/org/fedoraproject/FirewallD1",
+                    "org.fedoraproject.FirewallD1",
+                    property_,
+                ]
+            )
+        )
+        if len(value) != 2 or value[0] != "s":
+            raise ValueError("cannot verify the running firewalld version/state; inspect the daemon before changing protection")
+        runtime[property_] = value[1]
+    runtime_version = runtime["version"].split(".")
+    if not all(part.isdecimal() for part in runtime_version) or tuple(map(int, runtime_version)) < (2, 0, 0):
+        raise ValueError("the running firewalld daemon must be 2.0+; an installed package upgrade alone does not establish reload safety")
+    if runtime["state"] != "RUNNING":
+        raise ValueError("firewalld has not reached RUNNING state; inspect initialization or failure before changing protection")
     backend = shlex.split(
         run(
             [

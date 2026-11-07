@@ -298,6 +298,16 @@ whereas [2.0 skips that flush without Direct configuration](https://github.com/f
 The role does not replace it or enable another repository. This is firewall
 compatibility, not application migration acceptance.
 
+The installed version is read with the non-mutating
+[`firewall-offline-cmd --version`](https://firewalld.org/documentation/man-pages/firewall-offline-cmd.html),
+which exits without activating or configuring the daemon; `firewalld --version`
+is not a supported daemon option. When firewalld is active, its D-Bus version
+must also be 2.0+ and its state must be `RUNNING`. Upgrading the installed package
+does not replace an older running
+daemon or prove reload safety. Arrange a separate maintenance transition for an
+old or unready daemon; preflight does not restart it. An inactive daemon remains
+inactive and does not require a D-Bus query.
+
 Keep the distribution's `iptables-nft` compatibility tools, `nftables`, `iproute`
 and `util-linux` namespace tools available; the role installs no dependencies and
 never changes alternatives. Fedora's [package catalog](https://packages.fedoraproject.org/pkgs/iptables/iptables-nft/)

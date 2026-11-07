@@ -49,11 +49,24 @@ def rpm_host(tmp_path, monkeypatch):
     monkeypatch.setattr(FW, "Path", lambda path: tmp_path / path.lstrip("/"))
     for directory in ["usr/lib/firewalld", "etc/firewalld"]:
         (tmp_path / directory).mkdir(parents=True)
-    host = SimpleNamespace(root=tmp_path, calls=[], state="active", backend="nftables", direct="", mixed=False, flow=False, version="2.4.3")
+    host = SimpleNamespace(
+        root=tmp_path,
+        calls=[],
+        state="active",
+        backend="nftables",
+        direct="",
+        mixed=False,
+        flow=False,
+        version="2.4.3",
+        runtime_version="2.4.3",
+        runtime_state="RUNNING",
+    )
 
     def read(argv):
         host.calls.append(argv)
         if argv == ["firewalld", "--version"]:
+            raise RuntimeError("firewalld: error: unrecognized arguments: --version")
+        if argv == ["firewall-offline-cmd", "--version"]:
             return host.version
         if argv[-1] == "--version":
             return "v1.8.11 (legacy)" if host.mixed and argv[0] == "ip6tables-restore" else "v1.8.11 (nf_tables)"
@@ -66,6 +79,9 @@ def rpm_host(tmp_path, monkeypatch):
             return host.state
         if argv[0] == "busctl":
             assert argv[1] == "get-property"
+            if argv[-1] in {"version", "state"}:
+                assert argv[3:5] == ["/org/fedoraproject/FirewallD1", "org.fedoraproject.FirewallD1"]
+                return 's "' + getattr(host, "runtime_" + argv[-1]) + '"'
             return 's "' + host.backend + '"'
         assert argv[0] == "firewall-cmd" and argv[-1] in {"--get-all-chains", "--get-all-rules", "--get-all-passthroughs"}
         return host.direct
@@ -115,6 +131,26 @@ def test_coexistence_uses_local_config_precedence(rpm_host):
     (rpm_host.root / "usr/lib/firewalld/firewalld.conf").write_text("FirewallBackend=iptables\n")
     (rpm_host.root / "etc/firewalld/firewalld.conf").write_text("# retained native backend\nFirewallBackend=nftables\n")
     FW.rpm_firewall_preflight(rpm_host.run)
+
+
+@pytest.mark.parametrize("runtime_version,runtime_state", [("1.3.4", "RUNNING"), ("2.4.3", "INIT"), ("2.4.3", "FAILED")])
+def test_upgraded_package_does_not_authorize_old_or_unready_daemon(rpm_host, runtime_version, runtime_state):
+    rpm_host.runtime_version, rpm_host.runtime_state = runtime_version, runtime_state
+    with pytest.raises(ValueError, match="running firewalld daemon|RUNNING state"):
+        FW.rpm_firewall_preflight(rpm_host.run)
+    assert not any(command[0] == "firewall-cmd" for command in rpm_host.calls)
+    assert not list(rpm_host.root.rglob("*.conf"))
+
+
+def test_unverifiable_runtime_property_is_rejected_without_activation(rpm_host):
+    def read(argv):
+        if argv[0] == "busctl" and argv[-1] == "version":
+            return 'as 1 "2.4.3"'
+        return rpm_host.run(argv)
+
+    with pytest.raises(ValueError, match="cannot verify the running firewalld"):
+        FW.rpm_firewall_preflight(read)
+    assert not any(command[0] == "firewall-cmd" for command in rpm_host.calls)
 
 
 def test_worker_fresh_nft_audit_and_removal_do_not_materialize_tables():
