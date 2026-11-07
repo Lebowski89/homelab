@@ -2,6 +2,8 @@
 
 podman_platform_packages:
   Debian:
+    # Secure Ansible module handoff from the SSH user to dedicated rootless users.
+    - acl
     - podman
     - crun
     - netavark
@@ -13,6 +15,7 @@ podman_platform_packages:
     - fuse-overlayfs
     - dbus-user-session
   RedHat:
+    - acl
     - podman
     - crun
     - netavark

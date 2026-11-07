@@ -262,7 +262,7 @@ mode/identity is a failed guard, not permission to affect another service.
 ### Supported boundaries
 
 - The mgt profile retains Ubuntu 26.04; workers retain Ubuntu 24.04/Plex and
-  Unraid/storage. Both profiles also accept conventional Fedora 43–45 and Rocky
+  Unraid/storage. Both profiles also accept conventional Debian 12/13, Fedora 43–45 and Rocky
   10 under the RPM prerequisites below. Inventory controller/storage/Plex
   roles still determine placement; installing a runtime on another manager does
   not move applications or firewall ownership. One-service Docker standalone projects
@@ -289,6 +289,16 @@ mode/identity is a failed guard, not permission to affect another service.
 
 ### Fedora and Rocky prerequisites
 
+Debian 12/13 also support both profiles with systemd, Python 3.10+ and the same
+IPv4/IPv6 nf_tables tools and namespace utilities. Firewalld is optional there:
+an absent service must have no orphaned native firewalld table. If firewalld is
+installed, the coexistence checks below apply, including version 2.0+.
+[Debian 13 provides firewalld 2.3](https://packages.debian.org/trixie/firewalld);
+[Debian 12's stock 1.3 package](https://packages.debian.org/bookworm/firewalld)
+does not satisfy that requirement and is rejected. No package is removed,
+daemon disabled, alternative switched or supplemental repository enabled to
+make Debian pass. Ubuntu's existing manager/worker boundaries remain unchanged.
+
 RPM hosts require Linux, systemd, DNF/DNF5, an existing Python 3.10+ interpreter
 and firewalld 2.0+. Manager hooks use the gathered interpreter; retained direct
 check/observe/remove imports keep their existing default when facts are absent.
@@ -307,6 +317,21 @@ does not replace an older running
 daemon or prove reload safety. Arrange a separate maintenance transition for an
 old or unready daemon; preflight does not restart it. An inactive daemon remains
 inactive and does not require a D-Bus query.
+
+Boot guards wait for an enabled `firewalld.service` to finish starting before
+checking its D-Bus API. This is ordering only: it does not enable or start an
+otherwise disabled native firewall. The manager's existing boot unit receives
+only this additional dependency after its installed manifest hash is verified;
+existing endpoint ordering and other unit contents are preserved. Worker units
+carry the same ordering through their ordinary role-owned templates. Unreviewed
+unit edits are rejected before the migration.
+Rocky's packaged `Type=simple` unit can report active before registering D-Bus.
+Live rule application retries registration and `RUNNING` within a 30-second
+readiness budget, using two-second D-Bus query timeouts, then reads the
+initialized native ruleset. Queries explicitly disable D-Bus
+activation. Inspection and installation preflight still reject an unready daemon
+immediately; missing/incompatible versions and failed initialization remain
+failures, with no rules applied by that invocation.
 
 Keep the distribution's `iptables-nft` compatibility tools, `nftables`, `iproute`
 and `util-linux` namespace tools available; the role installs no dependencies and

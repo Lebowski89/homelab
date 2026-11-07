@@ -92,12 +92,14 @@ def read_stable_config(path, limit=4194304):
         raise ValueError("configuration must be a regular file, not a symlink")
     expected = identity(before)
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-    with os.fdopen(descriptor, "rb") as stream:
+    with os.fdopen(descriptor, "rb", buffering=0) as stream:
         if identity(os.fstat(stream.fileno())) != expected:
             raise ValueError("configuration identity changed before reading")
         body = stream.read(limit + 1)
         if len(body) > limit:
             raise ValueError("configuration exceeds bounded read size")
+        if identity(os.fstat(stream.fileno())) != expected:
+            raise ValueError("configuration changed after its first read")
         stream.seek(0)
         if stream.read(limit + 1) != body or identity(os.fstat(stream.fileno())) != expected or identity(path.lstat()) != expected:
             raise ValueError("configuration identity, contents or write metadata changed during reading")

@@ -95,9 +95,12 @@ def quadlet_contract(normalized, body, check_ports=True):
     execution = normalized["execution"]
     userns = execution.get("userns")
     expected_mapping = [] if not userns else [f"{userns['mode']}:uid={userns['uid']},gid={userns['gid']}"]
-    mounts = [
-        f"{v['source']}:{v['target']}" + (":ro" if v.get("read_only", False) else "") for v in normalized["container"].get("mounts", [])
-    ]
+    mounts = []
+    for volume in normalized["container"].get("mounts", []):
+        options = (["ro"] if volume.get("read_only", False) else []) + {"shared": ["z"], "private": ["Z"]}.get(
+            volume.get("selinux", "preserve"), []
+        )
+        mounts.append(f"{volume['source']}:{volume['target']}" + (":" + ",".join(options) if options else ""))
     mounts += [f"{v['name']}.volume:{v['target']}" + (":ro" if v.get("read_only", False) else "") for v in normalized["volumes"]]
     user = normalized["container"].get("uid")
     group = normalized["container"].get("gid")

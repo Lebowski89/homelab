@@ -105,11 +105,18 @@ def test_real_whisparr_endpoint_and_placement_changes_require_explicit_reconcili
             CHECK.worker_contract(policy | mutation, plan, "unraid", policy["inventory_address"], policy["sources"])
 
 
-def test_real_rootless_mapping_mounts_and_caller_contract_are_independent_of_images():
+@pytest.mark.parametrize("label_mode", ["preserve", "shared", "private"])
+def test_real_rootless_mapping_mounts_and_caller_contract_are_independent_of_images(label_mode):
     cfg = metadata("wallos")
+    for volume in cfg["volumes"].values():
+        volume["selinux"] = label_mode
     normalized = CHECK.PODMAN.podman_service_normalize(cfg, "wallos")
     body = FIXTURE.render_container(normalized)
     assert CHECK.quadlet_contract(normalized, body)
+    for field, value in [("selinux", "shared" if label_mode != "shared" else "private"), ("read_only", True)]:
+        changed = deepcopy(cfg)
+        changed["volumes"]["db"][field] = value
+        assert not CHECK.quadlet_contract(CHECK.PODMAN.podman_service_normalize(changed, "wallos"), body)
     changed = deepcopy(cfg)
     changed["deploy"]["execution"]["userns"]["uid"] = "83"
     assert not CHECK.quadlet_contract(CHECK.PODMAN.podman_service_normalize(changed, "wallos"), body)

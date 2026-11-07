@@ -1,0 +1,36 @@
+---
+
+- name: System resolver | Validate platform and independent management flags
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system | default('') == 'Linux'
+      - ansible_facts.service_mgr | default('') == 'systemd'
+      - system_resolved_disable_stub is boolean
+      - system_resolved_manage_resolv_conf is boolean
+      - system_resolved_manage_nsswitch is boolean
+      - >-
+        (ansible_facts.pkg_mgr == 'apt' and ansible_facts.distribution in ['Debian', 'Ubuntu']) or
+        (ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and (
+          (ansible_facts.distribution == 'Fedora' and ansible_facts.distribution_major_version in ['43', '44', '45']) or
+          (ansible_facts.distribution == 'Rocky' and ansible_facts.distribution_major_version == '10')
+        ))
+    fail_msg: >-
+      Optional resolved configuration requires conventional Debian/Ubuntu with APT,
+      Fedora 43-45 or Rocky 10 with DNF4/DNF5 and systemd.
+
+- name: System resolver | Inspect image-based deployment before direct imports
+  ansible.builtin.stat:
+    path: /run/ostree-booted
+  register: system_resolved_ostree
+
+- name: System resolver | Reject image-based deployment before mutation
+  ansible.builtin.assert:
+    that: not system_resolved_ostree.stat.exists
+    fail_msg: Atomic/OSTree resolver configuration is unsupported; retain the image's existing DNS ownership.
+
+- name: System resolver | Validate RPM ownership before baseline or resolver changes
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.include_tasks:
+    file: resolved_rpm_validate.yml
+    apply:
+      tags: "{{ ansible_run_tags }}"

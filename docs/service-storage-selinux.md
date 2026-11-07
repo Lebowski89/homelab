@@ -61,7 +61,11 @@ tools, write policy mappings, relabel paths or run containers. Missing paths and
 unavailable SELinux bindings are reported without claiming label verification;
 normal execution requires a known SELinux state. Disabled SELinux is preserved.
 
-No application definition is migrated by this infrastructure change. Validate
-representative rootful/rootless workloads, actual file access, persistence and
-second-run convergence on an isolated enforcing host before migrating services.
-Firewall and shared-network/DNS policy remain separate phases.
+Wallos declares private labels for its exclusive database and uploaded-logo
+directories. Its isolated rootless Rocky validation uses the catalog image,
+user namespace and mounts, with a separate account/storage root and a loopback
+listener; it does not move the production application or validate Traefik access.
+Other applications retain their existing policies until their individual storage
+review. Validate actual file access, persistence and second-run convergence on an
+isolated enforcing host before moving each service. Firewall and shared-network
+DNS policy remain separate acceptance requirements.

@@ -92,6 +92,10 @@ identifies `newuidmap` and `newgidmap`. Fedora's [dbus-broker file list](https:/
 includes its user service; Rocky 10's [BaseOS package catalog](https://dl.rockylinux.org/pub/rocky/10/BaseOS/x86_64/os/Packages/d/)
 supplies dbus-broker rather than a dbus-daemon package. RPM defaults use pasta; installations
 needing legacy slirp must explicitly supply its available distribution package.
+Both package sets include `acl` for Ansible's secure temporary-module handoff
+from an unprivileged SSH user to dedicated rootless accounts. Custom package
+overrides must supply `setfacl` too, unless the connection already uses a secure
+module-transfer method. World-readable temporary modules are not enabled.
 No API socket or Podman daemon is enabled. Disabling installation still checks
 the supplied runtime; removing packages is not a supported runtime-ready outcome.
 
@@ -211,7 +215,7 @@ Disabling Podman installation retains the same existing-runtime checks. Normal r
 Runtime installation remains separate from Fedora/Rocky application readiness:
 
 - The [service firewall](service-firewall.md#fedora-and-rocky-prerequisites)
-  accepts conventional Fedora 43–45 and Rocky 10 with explicit coexistence
+  accepts conventional Debian 12/13, Fedora 43–45 and Rocky 10 with explicit coexistence
   prerequisites. Enforcement, firewalld reload and enforcing SELinux still need
   isolated live validation. Native listener ACLs remain deferred.
 - Application bind mounts support an [explicit SELinux storage policy](service-storage-selinux.md).
@@ -253,3 +257,22 @@ retained. Swarm enrollment does not need to remain enabled for compatibility tes
 A two-manager Swarm requires both managers for quorum and tolerates no manager
 failure. Plan a third manager for one-manager failure tolerance. Installation
 and manager membership do not establish Rocky application/firewall readiness.
+
+## Acceptance scope
+
+Rocky 10.2 AMD64 has passed isolated enforcing-SELinux tests for Docker, rootful
+Podman and rootless Podman storage/DNS/HTTP, plus dual-stack permitted/denied
+traffic for both firewall profiles. The installed manager guard, manifest and
+timer were also checked across Docker restart, native firewalld reload and VM
+reboot. A catalog-derived rootless Wallos fixture passed first installation,
+zero-change convergence, real application-UID writes and reboot persistence with
+exclusive private bind labels. Its listener and storage were isolated; no
+production application, Traefik route or database was migrated.
+
+This evidence does not certify the remaining catalog or Fedora/Debian live
+behaviour. Their equivalent host acceptance is still required. The repository's
+[Fedora 44 AMD64 template](fedora-44-template.md) is prepared for future use;
+it has not been applied or boot-tested. Native protected listeners and RPM
+PostgreSQL destructive recovery retain their documented safety gates. Optional
+[RPM resolver configuration](system-baseline.md#optional-fedorarocky-resolver-configuration)
+requires prepared NetworkManager/NSS ownership and still needs live acceptance.

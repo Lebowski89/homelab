@@ -1,7 +1,7 @@
 [Unit]
 Description=Skynet mgt private endpoint boot guard
 Before=docker.service podman.service systemd-logind.service{% for endpoint in mgt_firewall_plan.endpoints %} {{ endpoint.service }}.service{% endfor %}
-After=local-fs.target
+After=local-fs.target firewalld.service
 RequiresMountsFor={{ mgt_firewall_root }}
 
 [Service]

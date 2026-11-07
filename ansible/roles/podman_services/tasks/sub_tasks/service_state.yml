@@ -54,15 +54,39 @@
   become: true
   become_user: "{{ podman_services_execution.host_user }}"
   environment: "{{ podman_services_runtime_environment }}"
-  ansible.builtin.command:
-    argv:
-      - systemd-analyze
-      - --user
-      - --generators=true
-      - verify
-      - "{{ podman_services_unit_name }}"
-  changed_when: false
   tags: [deploy, update, recreate, bootstrap]
+  # systemd 257's verifier can replace the live manager's private socket
+  # (upstream #36540). Run its generators against an isolated runtime directory,
+  # retaining HOME so they still consume this account's actual Quadlets.
+  block:
+    - name: Service | Allocate a private verification runtime directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: podman-verify-
+      register: podman_services_verify_runtime
+      changed_when: false
+
+    - name: Service | Verify user units without the live manager socket
+      environment: >-
+        {{ podman_services_runtime_environment | combine({
+          'XDG_RUNTIME_DIR': podman_services_verify_runtime.path,
+          'DBUS_SESSION_BUS_ADDRESS': 'unix:path=' ~ podman_services_verify_runtime.path ~ '/bus'
+        }) }}
+      ansible.builtin.command:
+        argv:
+          - systemd-analyze
+          - --user
+          - --generators=true
+          - verify
+          - "{{ podman_services_unit_name }}"
+      changed_when: false
+  always:
+    - name: Service | Remove the private verification runtime directory
+      when: podman_services_verify_runtime.path is defined
+      ansible.builtin.file:
+        path: "{{ podman_services_verify_runtime.path }}"
+        state: absent
+      changed_when: false
 
 - name: Service | Stop shared-network services before execution change
   when:

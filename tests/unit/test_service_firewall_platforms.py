@@ -1,5 +1,6 @@
 """Platform/coexistence boundaries use only fixture metadata and fake kernels."""
 
+import hashlib
 import json
 import os
 import subprocess
@@ -10,9 +11,67 @@ from types import SimpleNamespace
 
 import pytest
 import yaml
+from jinja2 import Environment, StrictUndefined
 from test_service_firewall_lifecycle import ACTION, REMOTE
 from test_service_operational_maintenance import CHECK, worker_fixture
 from test_worker_backend_firewall import FW, ROLE, ROOT, Kernel, apply
+
+
+@pytest.mark.parametrize("modified", [False, True])
+def test_boot_guard_ordering_upgrade_preserves_owned_unit_and_rejects_tampering(tmp_path, modified):
+    unit = tmp_path / "skynet-mgt-firewall.service"
+    original = (
+        "[Unit]\nAfter=local-fs.target\nBefore=docker.service old-endpoint.service\n[Service]\nType=oneshot\nExecStart=/fixture/guard\n"
+    )
+    unit.write_text(original)
+    helper = SimpleNamespace(guard_units=lambda *_: [], persistence_paths=lambda _: [str(unit)])
+    store = REMOTE.Store(helper, {"profile": "mgt", "root": str(tmp_path / "policy")}, "fixture-helper", {str(unit): "new-template"})
+    # This fixture supplies trusted temporary I/O; the real hash check remains.
+    store.trusted = lambda *args, **kwargs: True
+    store.baseline = {"persistence": {str(unit): hashlib.sha256(original.encode()).hexdigest()}}
+    policy = {}
+    if modified:
+        unit.write_text(original + "# unreviewed edit\n")
+        with pytest.raises(ValueError, match="collision"):
+            store.persistence_preflight(policy)
+        assert not store.root.exists()
+        return
+    store.persistence_preflight(policy)
+    store.prepare(policy)
+    assert unit.read_text() == original.replace("[Unit]\n", "[Unit]\nAfter=firewalld.service\n", 1)
+    assert store.changed_files
+    store.baseline = deepcopy(policy)
+    store.persistence_preflight(policy)
+    store.prepare(policy)
+    assert not store.changed_files
+
+
+@pytest.mark.parametrize(
+    "template",
+    [
+        "mgt/skynet-mgt-firewall.service",
+        "workers/skynet-worker-backend-firewall.service",
+        "workers/skynet-worker-backend-firewall-reconcile.service",
+    ],
+)
+def test_firewall_units_wait_for_an_enabled_daemon_without_activating_it(template):
+    source = (ROLE / "templates" / (template + ".j2")).read_text()
+    rendered = (
+        Environment(undefined=StrictUndefined)
+        .from_string(source)
+        .render(
+            mgt_firewall_plan={"endpoints": []},
+            mgt_firewall_root="/etc/skynet-mgt-firewall",
+            worker_backend_firewall_root="/etc/skynet-worker-backend-firewall",
+            worker_backend_firewall_python="/usr/bin/python3",
+        )
+    )
+
+    def dependencies(key):
+        return {unit for line in rendered.splitlines() if line.startswith(key + "=") for unit in line.split("=", 1)[1].split()}
+
+    assert "firewalld.service" in dependencies("After")
+    assert "firewalld.service" not in dependencies("Requires") | dependencies("Wants")
 
 
 @pytest.mark.parametrize("profile", ["mgt", "workers"])
@@ -26,7 +85,9 @@ from test_worker_backend_firewall import FW, ROLE, ROOT, Kernel, apply
         ("rocky", "10.2", True),
         ("rocky", "8.10", False),
         ("rhel", "10", False),
-        ("debian", "13", False),
+        ("debian", "12", True),
+        ("debian", "13", True),
+        ("debian", "11", False),
     ],
 )
 def test_explicit_runtime_platforms(profile, distro, version, expected):
@@ -45,9 +106,10 @@ def test_legacy_profile_boundaries_are_retained():
 @pytest.fixture
 def rpm_host(tmp_path, monkeypatch):
     """Every command and configuration read is replaced at the I/O boundary."""
-    monkeypatch.setattr(FW, "read_os_release", lambda: {"ID": "rocky", "VERSION_ID": "10.2"})
+    release = {"ID": "rocky", "VERSION_ID": "10.2"}
+    monkeypatch.setattr(FW, "read_os_release", lambda: release)
     monkeypatch.setattr(FW, "Path", lambda path: tmp_path / path.lstrip("/"))
-    for directory in ["usr/lib/firewalld", "etc/firewalld"]:
+    for directory in ["usr/lib/firewalld", "etc/firewalld", "run/systemd/system"]:
         (tmp_path / directory).mkdir(parents=True)
     host = SimpleNamespace(
         root=tmp_path,
@@ -60,6 +122,9 @@ def rpm_host(tmp_path, monkeypatch):
         version="2.4.3",
         runtime_version="2.4.3",
         runtime_state="RUNNING",
+        release=release,
+        load="loaded",
+        native_firewalld=True,
     )
 
     def read(argv):
@@ -72,12 +137,21 @@ def rpm_host(tmp_path, monkeypatch):
             return "v1.8.11 (legacy)" if host.mixed and argv[0] == "ip6tables-restore" else "v1.8.11 (nf_tables)"
         if argv[0] == "nft":
             return json.dumps(
-                {"nftables": [{"table": {"family": "inet", "name": "firewalld"}}, *([{"flowtable": {}}] if host.flow else [])]}
+                {
+                    "nftables": [
+                        *([{"table": {"family": "inet", "name": "firewalld"}}] if host.native_firewalld else []),
+                        *([{"flowtable": {}}] if host.flow else []),
+                    ]
+                }
             )
         if argv[0] == "systemctl":
+            if argv[3:] == ["--property=LoadState", "--value"]:
+                return host.load
             assert argv[1:] == ["show", "firewalld.service", "--property=ActiveState", "--value"]
             return host.state
         if argv[0] == "busctl":
+            assert "--auto-start=no" in argv and "--timeout=2s" in argv
+            argv = [argument for argument in argv if not argument.startswith("--")]
             assert argv[1] == "get-property"
             if argv[-1] in {"version", "state"}:
                 assert argv[3:5] == ["/org/fedoraproject/FirewallD1", "org.fedoraproject.FirewallD1"]
@@ -88,6 +162,19 @@ def rpm_host(tmp_path, monkeypatch):
 
     host.run = read
     return host
+
+
+@pytest.mark.parametrize("distro,version", [("debian", "13"), ("rocky", "10.2")])
+@pytest.mark.parametrize("missing", ["python", "systemd"])
+def test_direct_helper_platform_requirements_precede_all_target_commands(rpm_host, monkeypatch, distro, version, missing):
+    rpm_host.release.update(ID=distro, VERSION_ID=version)
+    if missing == "python":
+        monkeypatch.setattr(FW, "sys", SimpleNamespace(version_info=(3, 9)))
+    else:
+        (rpm_host.root / "run/systemd/system").rmdir()
+    with pytest.raises(ValueError, match="Python 3.10.*systemd"):
+        FW.rpm_firewall_preflight(rpm_host.run)
+    assert not rpm_host.calls
 
 
 @pytest.mark.parametrize("version", ["2.0.0", "2.4.3"])
@@ -138,6 +225,46 @@ def test_upgraded_package_does_not_authorize_old_or_unready_daemon(rpm_host, run
     rpm_host.runtime_version, rpm_host.runtime_state = runtime_version, runtime_state
     with pytest.raises(ValueError, match="running firewalld daemon|RUNNING state"):
         FW.rpm_firewall_preflight(rpm_host.run)
+
+
+def test_boot_apply_waits_for_registration_and_init_then_checks_fresh_native_tables(rpm_host, monkeypatch):
+    sleeps = []
+    monkeypatch.setattr(FW.time, "sleep", sleeps.append)
+    rpm_host.native_firewalld = False
+    queries = 0
+
+    def starting(argv):
+        nonlocal queries
+        if argv[0] == "busctl" and argv[-1] == "version":
+            queries += 1
+            if queries == 1:
+                raise RuntimeError("name not registered")
+        if argv[0] == "busctl" and argv[-1] == "state":
+            rpm_host.runtime_state = "INIT" if queries == 2 else "RUNNING"
+            rpm_host.native_firewalld = rpm_host.runtime_state == "RUNNING"
+        return rpm_host.run(argv)
+
+    FW.rpm_firewall_preflight(starting, wait_for_daemon=True)
+    assert queries == 3 and sleeps == [1, 1]
+    assert sum(command[0] == "nft" for command in rpm_host.calls) == 2
+
+
+@pytest.mark.parametrize("state", ["INIT", "FAILED"])
+def test_boot_readiness_is_bounded_and_never_accepts_a_failed_daemon(rpm_host, monkeypatch, state):
+    clock = [0]
+    sleeps = []
+    monkeypatch.setattr(FW.time, "monotonic", lambda: clock[0])
+
+    def sleep(delay):
+        sleeps.append(delay)
+        clock[0] += delay
+
+    monkeypatch.setattr(FW.time, "sleep", sleep)
+    rpm_host.runtime_state = state
+    with pytest.raises(ValueError, match="RUNNING"):
+        FW.rpm_firewall_preflight(rpm_host.run, wait_for_daemon=True)
+    assert sum(sleeps) == (30 if state == "INIT" else 0)
+    assert not any(command[0] == "firewall-cmd" for command in rpm_host.calls)
     assert not any(command[0] == "firewall-cmd" for command in rpm_host.calls)
     assert not list(rpm_host.root.rglob("*.conf"))
 
@@ -151,6 +278,29 @@ def test_unverifiable_runtime_property_is_rejected_without_activation(rpm_host):
     with pytest.raises(ValueError, match="cannot verify the running firewalld"):
         FW.rpm_firewall_preflight(read)
     assert not any(command[0] == "firewall-cmd" for command in rpm_host.calls)
+
+
+@pytest.mark.parametrize("release", ["12", "13"])
+def test_debian_without_firewalld_verifies_kernel_tools_without_activating_or_requiring_a_daemon(rpm_host, release):
+    rpm_host.release.update(ID="debian", VERSION_ID=release)
+    rpm_host.load, rpm_host.native_firewalld = "not-found", False
+    FW.rpm_firewall_preflight(rpm_host.run)
+    assert any(command[0] == "nft" for command in rpm_host.calls)
+    assert len([command for command in rpm_host.calls if command[-1] == "--version"]) == 6
+    assert not any(command[0] in {"firewall-offline-cmd", "firewall-cmd", "busctl"} for command in rpm_host.calls)
+
+
+@pytest.mark.parametrize("unsafe", ["old-daemon", "orphan-table", "mixed-tools"])
+def test_debian_coexistence_does_not_bypass_existing_safety_checks(rpm_host, unsafe):
+    rpm_host.release.update(ID="debian", VERSION_ID="13")
+    if unsafe == "old-daemon":
+        rpm_host.version = "1.3.3"
+    else:
+        rpm_host.load = "not-found"
+        rpm_host.native_firewalld = unsafe == "orphan-table"
+        rpm_host.mixed = unsafe == "mixed-tools"
+    with pytest.raises(ValueError):
+        FW.rpm_firewall_preflight(rpm_host.run)
 
 
 def test_worker_fresh_nft_audit_and_removal_do_not_materialize_tables():
@@ -167,12 +317,13 @@ def test_worker_fresh_nft_audit_and_removal_do_not_materialize_tables():
 
 
 @pytest.mark.parametrize("profile", ["mgt", "workers"])
-def test_automatic_lifecycle_checks_rpm_boundary_before_policy_or_runtime_mutation(tmp_path, monkeypatch, profile):
+@pytest.mark.parametrize("distro,version", [("rocky", "10.2"), ("debian", "13")])
+def test_automatic_lifecycle_checks_platform_before_policy_or_runtime_mutation(tmp_path, monkeypatch, profile, distro, version):
     store = object.__new__(REMOTE.Store)
     store.profile, store.flash, store.request = profile, False, {"action": "install"}
     events = []
     platform = SimpleNamespace(
-        read_os_release=lambda: {"ID": "rocky", "VERSION_ID": "10.2"},
+        read_os_release=lambda: {"ID": distro, "VERSION_ID": version},
         supported_platform=FW.supported_platform,
         rpm_firewall_preflight=lambda: (_ for _ in ()).throw(ValueError("Direct configuration conflict")),
         local_addresses=lambda _: ["192.0.2.48"],
@@ -269,6 +420,9 @@ def test_rpm_storage_worker_protection_audit_uses_posix_policy_and_systemd():
     ("profile", "distro", "version", "manager", "ostree", "success"),
     [
         ("mgt", "Rocky", "10.2", "dnf", False, True),
+        ("mgt", "Debian", "12", "apt", False, True),
+        ("workers", "Debian", "13", "apt", False, True),
+        ("mgt", "Debian", "11", "apt", False, False),
         ("workers", "Rocky", "10.2", "dnf", False, True),
         ("workers", "Rocky", "9.7", "dnf", False, False),
         ("mgt", "Fedora", "43", "dnf5", False, True),

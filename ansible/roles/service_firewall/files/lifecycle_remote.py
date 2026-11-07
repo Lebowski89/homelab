@@ -273,14 +273,15 @@ class Store:
         release = platform.read_os_release()
         require(
             platform.supported_platform(self.profile, release, self.flash),
-            "unsupported service firewall platform: use the profile's Ubuntu/Unraid path, Fedora 43-45 or Rocky 10",
+            "unsupported service firewall platform: use Debian 12/13, the profile's Ubuntu/Unraid path, Fedora 43-45 or Rocky 10",
         )
-        if release.get("ID") in {"fedora", "rocky"}:
+        if release.get("ID") in {"debian", "fedora", "rocky"}:
             require(
-                sys.version_info >= (3, 10), "RPM firewall protection requires Python 3.10+; select an installed interpreter in inventory"
+                sys.version_info >= (3, 10),
+                "Debian/RPM firewall protection requires Python 3.10+; select an installed interpreter in inventory",
             )
             require(not Path("/run/ostree-booted").exists(), "Atomic/OSTree firewall hosts are unsupported")
-            require(Path("/run/systemd/system").is_dir(), "RPM firewall protection requires a systemd host")
+            require(Path("/run/systemd/system").is_dir(), "Debian/RPM firewall protection requires a systemd host")
             if self.request["action"] != "remove":
                 platform.rpm_firewall_preflight()
         self.helper.validate_policy(policy)
@@ -413,12 +414,25 @@ class Store:
             self.units[path] = (
                 "# Managed by skynet mgt endpoints\n[Unit]\nRequires=skynet-mgt-firewall.service\nAfter=skynet-mgt-firewall.service\n"
             )
-        # Existing base units remain byte-for-byte unchanged. New dependencies
-        # use the same owned drop-in destination and persistence manifest.
+        # Preserve existing base units, including their endpoint ordering.
+        # The sole migration is ordering the owned boot guard after firewalld;
+        # persistence_preflight has verified its prior manifest hash first.
         for filename, content in self.units.items():
             path = Path(filename)
             if path.exists():
                 self.trusted(path)
+                if path.name == "skynet-mgt-firewall.service":
+                    body = path.read_text()
+                    dependencies = {
+                        unit
+                        for line in body.split("[Service]", 1)[0].splitlines()
+                        if line.startswith("After=")
+                        for unit in line.removeprefix("After=").split()
+                    }
+                    if "firewalld.service" not in dependencies:
+                        require("[Unit]\n" in body, "owned boot guard lacks a supported Unit section; inspect before upgrading")
+                        atomic(path, body.replace("[Unit]\n", "[Unit]\nAfter=firewalld.service\n", 1), 0o644)
+                        self.changed_files = True
                 continue
             require(not path.is_symlink(), "unowned persistence collision")
             parent = path.parent if path.parent.exists() else path.parent.parent

@@ -24,6 +24,8 @@
       - >-
         (service_firewall_profile == 'workers' and service_firewall_unraid.stat.exists) or
         (ansible_facts.service_mgr == 'systemd' and (
+          (ansible_facts.distribution == 'Debian' and ansible_facts.pkg_mgr == 'apt' and
+           ansible_facts.distribution_major_version in ['12', '13']) or
           (ansible_facts.distribution == 'Ubuntu' and ansible_facts.pkg_mgr == 'apt' and
            ansible_facts.distribution_version == ('26.04' if service_firewall_profile == 'mgt' else '24.04')) or
           (ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and (
@@ -32,7 +34,7 @@
           ))
         ))
     fail_msg: >-
-      Service firewall requires conventional Fedora 43-45 or Rocky 10 with DNF/DNF5 and systemd,
+      Service firewall requires conventional Debian 12/13 with APT, Fedora 43-45 or Rocky 10 with DNF/DNF5 and systemd,
       or the existing Ubuntu 26.04 manager / Ubuntu 24.04 worker / Unraid worker platform.
       Existing Python 3.10+ is required. Rocky 9's firewalld 1.x, Atomic/OSTree and other derivatives are unsupported.
 

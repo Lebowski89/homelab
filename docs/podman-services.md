@@ -67,6 +67,12 @@ UIDs and GIDs, and systemd linger. The user manager receives explicit `HOME`,
 `XDG_RUNTIME_DIR`, and `DBUS_SESSION_BUS_ADDRESS` values without relying on an
 interactive login.
 
+User-unit verification runs generators in a private temporary runtime directory
+while retaining the account's actual HOME and Quadlets. This avoids the
+[systemd 257 verifier socket replacement bug](https://github.com/systemd/systemd/issues/36540)
+without bypassing unit validation or restarting the user manager. The temporary
+directory is removed after either successful or failed verification.
+
 ## Logging
 
 Every normalized Podman service carries `log_driver`. It defaults to the only

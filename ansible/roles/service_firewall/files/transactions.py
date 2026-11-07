@@ -13,6 +13,8 @@ import ipaddress
 import json
 import shlex
 import subprocess
+import sys
+import time
 import xml.etree.ElementTree as ET
 from contextlib import contextmanager
 from pathlib import Path
@@ -67,33 +69,47 @@ def supported_platform(profile, release, unraid=False):
     distro, version = release.get("ID", ""), release.get("VERSION_ID", "")
     return profile in {"mgt", "workers"} and (
         (unraid and profile == "workers")
+        or (distro == "debian" and version in {"12", "13"})
         or (distro == "ubuntu" and version == ("26.04" if profile == "mgt" else "24.04"))
         or (distro == "fedora" and version in {"43", "44", "45"})
         or (distro == "rocky" and version.split(".")[0] == "10")
     )
 
 
-def rpm_firewall_preflight(run=execute):
-    """Read-only coexistence checks for the supported RPM compatibility path.
+def rpm_firewall_preflight(run=execute, *, wait_for_daemon=False):
+    """Read-only coexistence checks for explicit Debian and RPM platforms.
 
     Native firewalld owns its own table. Direct rules can make it flush shared
     xtables tables on reload; refuse that configuration instead of changing it.
     Native firewalld ACCEPT/DROP policy remains an independent access boundary.
     """
     release = read_os_release()
-    if release.get("ID") not in {"fedora", "rocky"}:
+    if release.get("ID") not in {"debian", "fedora", "rocky"}:
         return
     if not supported_platform("mgt", release) or Path("/run/ostree-booted").exists():
-        raise ValueError("firewall compatibility requires conventional Fedora 43-45 or Rocky 10; Atomic/OSTree is unsupported")
-    version = run(["firewall-offline-cmd", "--version"]).strip().split(".")
-    if not all(part.isdecimal() for part in version) or tuple(map(int, version)) < (2, 0, 0):
-        raise ValueError("firewalld 2.0+ is required: older releases flush shared compatibility tables even without Direct rules")
+        raise ValueError(
+            "firewall compatibility requires conventional Debian 12/13, Fedora 43-45 or Rocky 10; Atomic/OSTree is unsupported"
+        )
+    if sys.version_info < (3, 10) or not Path("/run/systemd/system").is_dir():
+        raise ValueError("Debian/RPM firewall protection requires Python 3.10+ and a conventional systemd host")
     for tool in ["iptables", "ip6tables", "iptables-save", "ip6tables-save", "iptables-restore", "ip6tables-restore"]:
         if "(nf_tables)" not in run([tool, "--version"]):
             raise ValueError(f"{tool}: install matching distribution nf_tables tools; backend switching is forbidden")
     native = json.loads(run(["nft", "--json", "list", "ruleset"]))
     if any("flowtable" in entry for entry in native.get("nftables", [])):
         raise ValueError("flowtables can bypass protection; review offload policy before activating this profile")
+    if release.get("ID") == "debian":
+        load = run(["systemctl", "show", "firewalld.service", "--property=LoadState", "--value"]).strip()
+        if load == "not-found":
+            if any(
+                entry.get("table", {}).get("family") == "inet" and entry["table"].get("name") == "firewalld"
+                for entry in native.get("nftables", [])
+            ):
+                raise ValueError("firewalld rules exist without a verifiable service; resolve their ownership before activation")
+            return
+    version = run(["firewall-offline-cmd", "--version"]).strip().split(".")
+    if not all(part.isdecimal() for part in version) or tuple(map(int, version)) < (2, 0, 0):
+        raise ValueError("firewalld 2.0+ is required: older releases flush shared compatibility tables even without Direct rules")
     settings = {}
     for directory in [Path("/usr/lib/firewalld"), Path("/etc/firewalld")]:
         config = directory / "firewalld.conf"
@@ -124,32 +140,55 @@ def rpm_firewall_preflight(run=execute):
         raise ValueError("firewalld state is not stable; inspect the daemon before changing protection")
     # A package upgrade does not replace a still-running daemon. Its reload
     # implementation, rather than the installed executable, controls shared tables.
-    runtime = {}
-    for property_ in ["version", "state"]:
-        value = shlex.split(
-            run(
-                [
-                    "busctl",
-                    "get-property",
-                    "org.fedoraproject.FirewallD1",
-                    "/org/fedoraproject/FirewallD1",
-                    "org.fedoraproject.FirewallD1",
-                    property_,
-                ]
-            )
-        )
-        if len(value) != 2 or value[0] != "s":
-            raise ValueError("cannot verify the running firewalld version/state; inspect the daemon before changing protection")
-        runtime[property_] = value[1]
-    runtime_version = runtime["version"].split(".")
-    if not all(part.isdecimal() for part in runtime_version) or tuple(map(int, runtime_version)) < (2, 0, 0):
-        raise ValueError("the running firewalld daemon must be 2.0+; an installed package upgrade alone does not establish reload safety")
-    if runtime["state"] != "RUNNING":
-        raise ValueError("firewalld has not reached RUNNING state; inspect initialization or failure before changing protection")
+    # Some packaged firewalld units use Type=simple: "active" precedes D-Bus
+    # registration and INIT completion. Only live apply may wait for readiness;
+    # inspection/install preflight still rejects an unready daemon immediately.
+    deadline = time.monotonic() + 30
+    while True:
+        runtime = {}
+        try:
+            for property_ in ["version", "state"]:
+                value = shlex.split(
+                    run(
+                        [
+                            "busctl",
+                            "--auto-start=no",
+                            "--timeout=2s",
+                            "get-property",
+                            "org.fedoraproject.FirewallD1",
+                            "/org/fedoraproject/FirewallD1",
+                            "org.fedoraproject.FirewallD1",
+                            property_,
+                        ]
+                    )
+                )
+                if len(value) != 2 or value[0] != "s":
+                    raise ValueError("cannot verify the running firewalld version/state; inspect the daemon before changing protection")
+                runtime[property_] = value[1]
+        except RuntimeError:
+            if not wait_for_daemon or time.monotonic() >= deadline:
+                raise
+        else:
+            runtime_version = runtime["version"].split(".")
+            if not all(part.isdecimal() for part in runtime_version) or tuple(map(int, runtime_version)) < (2, 0, 0):
+                raise ValueError(
+                    "the running firewalld daemon must be 2.0+; an installed package upgrade alone does not establish reload safety"
+                )
+            if runtime["state"] == "RUNNING":
+                break
+            if not wait_for_daemon or runtime["state"] != "INIT" or time.monotonic() >= deadline:
+                raise ValueError("firewalld has not reached RUNNING state; inspect initialization or failure before changing protection")
+        time.sleep(1)
+    # Initialization can create native tables after the first snapshot.
+    native = json.loads(run(["nft", "--json", "list", "ruleset"]))
+    if any("flowtable" in entry for entry in native.get("nftables", [])):
+        raise ValueError("flowtables can bypass protection; review offload policy before activating this profile")
     backend = shlex.split(
         run(
             [
                 "busctl",
+                "--auto-start=no",
+                "--timeout=2s",
                 "get-property",
                 "org.fedoraproject.FirewallD1",
                 "/org/fedoraproject/FirewallD1/config",

@@ -32,24 +32,26 @@ system_updates_upgrade: true
 system_updates_autoremove: false
 system_updates_autoclean: false
 
-# Optional Debian/Ubuntu systemd-resolved + NSS integration only.
-# DNF hosts retain their existing NetworkManager/cloud-init resolver setup.
+# Optional resolver configuration. RPM requires an existing resolved DNS publisher;
+# NetworkManager/cloud-init profiles and authselect remain independently owned.
 system_resolved_enabled: false
 system_resolved_disable_stub: false
 system_resolved_manage_resolv_conf: "{{ system_resolved_disable_stub }}"
-system_resolved_manage_nsswitch: true
+system_resolved_manage_nsswitch: "{{ ansible_facts.pkg_mgr | default('') == 'apt' }}"
 system_resolved_nsswitch_path: /etc/nsswitch.conf
 system_resolved_nsswitch_backup: true
 system_resolved_nsswitch_hosts_line: 'hosts:          files resolve [!UNAVAIL=return] dns'
-system_resolved_packages: [libnss-resolve]
+system_resolved_packages: "{{ ['libnss-resolve'] if ansible_facts.pkg_mgr == 'apt' else ['systemd-resolved'] }}"
 system_resolved_service_name: systemd-resolved
 system_resolved_config_dir: /etc/systemd/resolved.conf.d
 system_resolved_dropin_path: "{{ system_resolved_config_dir }}/99-skynet.conf"
 system_resolved_resolv_conf_path: /etc/resolv.conf
-system_resolved_resolv_conf_target: /run/systemd/resolve/resolv.conf
+system_resolved_resolv_conf_target: >-
+  {{ '/run/systemd/resolve/stub-resolv.conf'
+     if ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and not system_resolved_disable_stub
+     else '/run/systemd/resolve/resolv.conf' }}
 system_resolved_fallback_dns: [1.1.1.1, 9.9.9.9]
-system_resolved_cleanup_dropins:
-  - /etc/systemd/resolved.conf.d/no-stub-listener.conf
+system_resolved_cleanup_dropins: "{{ ['/etc/systemd/resolved.conf.d/no-stub-listener.conf'] if ansible_facts.pkg_mgr == 'apt' else [] }}"
 
 system_apt_environment:
   DEBIAN_FRONTEND: noninteractive

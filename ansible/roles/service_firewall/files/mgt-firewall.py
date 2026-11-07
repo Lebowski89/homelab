@@ -828,7 +828,7 @@ def main():
         print(json.dumps({"callers": callers, "pending": pending}, sort_keys=True))
         return
     if args.operation != "remove":
-        OWNED.rpm_firewall_preflight()
+        OWNED.rpm_firewall_preflight(wait_for_daemon=args.operation == "apply")
     # Audit and preflight never create directories/locks or write rules. Live
     # install preflight has run before persistence is touched. Reconciliation
     # failures remain fail closed for disappearing runtime bindings.

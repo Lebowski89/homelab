@@ -15,6 +15,9 @@ from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 
+# Initialize controller plugins before the per-test process boundary. Ansible's
+# ctypes bootstrap may query ldconfig; the preparation operations stay guarded.
+import ansible.plugins.action  # noqa: F401
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -167,6 +170,28 @@ def test_stable_configuration_read_rejects_writer_or_identity_changes(tmp_path, 
         return original(descriptor)
 
     monkeypatch.setattr(UTILITY.os, "fstat", fstat)
+    with pytest.raises(ValueError, match="changed"):
+        UTILITY.read_stable_config(path)
+
+
+def test_stable_configuration_read_detects_same_size_write_even_with_coarse_metadata(tmp_path, monkeypatch):
+    path = tmp_path / "config.yml"
+    path.write_bytes(b"receivers: []\n")
+    before = path.lstat()
+    calls = 0
+    original_lstat = Path.lstat
+
+    def fstat(descriptor):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            path.write_bytes(b"receivers: {}\n")
+        return before
+
+    monkeypatch.setattr(UTILITY.os, "fstat", fstat)
+    monkeypatch.setattr(
+        Path, "lstat", lambda selected, *args, **kwargs: before if selected == path else original_lstat(selected, *args, **kwargs)
+    )
     with pytest.raises(ValueError, match="changed"):
         UTILITY.read_stable_config(path)
 
@@ -1585,7 +1610,7 @@ def test_ownership_hardlink_apply_rejects_changed_identity_before_chown(tmp_path
     elif change == "contents":
         file.write_bytes(b"changed fixture contents\n")
     elif change == "mode":
-        file.chmod(0o600)
+        file.chmod(file.stat().st_mode ^ 0o100)
     else:
         (roots[0] / "new").write_bytes(b"new pathname")
     monkeypatch.setattr(UTILITY.os, "fchown", lambda *args: pytest.fail("changed identity was mutated"))

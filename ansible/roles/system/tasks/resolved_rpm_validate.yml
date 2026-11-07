@@ -1,0 +1,164 @@
+---
+
+- name: System resolver | Preserve RPM NSS and require a usable resolver target
+  ansible.builtin.assert:
+    that:
+      - not system_resolved_manage_nsswitch
+      - ansible_facts.virtualization_type | default('') != 'lxc'
+      - system_resolved_resolv_conf_target in ['/run/systemd/resolve/stub-resolv.conf', '/run/systemd/resolve/resolv.conf']
+      - not system_resolved_disable_stub or system_resolved_resolv_conf_target == '/run/systemd/resolve/resolv.conf'
+    fail_msg: >-
+      RPM resolver configuration requires a conventional non-LXC host and a resolved output path.
+      Keep system_resolved_manage_nsswitch=false; configure NSS through the host's authselect policy.
+      A disabled stub requires the upstream output and an existing NSS resolve provider.
+
+- name: System resolver | Resolve this invocation's unit and NSS requirement
+  ansible.builtin.set_fact:
+    system_resolved_unit: >-
+      {{ system_resolved_service_name if system_resolved_service_name.endswith('.service') else system_resolved_service_name ~ '.service' }}
+    system_resolved_requires_nss: >-
+      {{ system_resolved_disable_stub or system_resolved_resolv_conf_target == '/run/systemd/resolve/resolv.conf' }}
+
+- name: System resolver | Inspect installed package ownership
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: System resolver | Require explicit ownership for Fedora's initial package transition
+  when:
+    - ansible_facts.distribution == 'Fedora'
+    - system_resolved_packages | length > 0
+    - "'systemd-resolved' not in ansible_facts.packages"
+  ansible.builtin.assert:
+    that:
+      - system_resolved_manage_resolv_conf
+      - system_resolved_resolv_conf_path == '/etc/resolv.conf'
+    fail_msg: >-
+      Fedora's initial systemd-resolved package scripts can replace /etc/resolv.conf.
+      Prepare that package through the existing OS/DNS policy first, or explicitly manage its standard resolver path here.
+
+- name: System resolver | Read the existing service ownership
+  ansible.builtin.service_facts:
+  register: system_resolved_services
+
+- name: System resolver | Require the existing NetworkManager publisher
+  ansible.builtin.assert:
+    that: system_resolved_services.ansible_facts.services.get('NetworkManager.service', {}).get('state', '') == 'running'
+    fail_msg: >-
+      RPM integration requires an active NetworkManager publisher.
+      Prepare DNS ownership through the host's existing network policy first.
+
+- name: System resolver | Inspect the active DNS publisher without activation
+  ansible.builtin.command:
+    argv:
+      - busctl
+      - --system
+      - --auto-start=no
+      - --timeout=5s
+      - get-property
+      - org.freedesktop.NetworkManager
+      - /org/freedesktop/NetworkManager/DnsManager
+      - org.freedesktop.NetworkManager.DnsManager
+      - Mode
+  register: system_resolved_dns_publisher
+  changed_when: false
+  check_mode: false
+
+- name: System resolver | Require resolved to be the selected DNS publisher
+  ansible.builtin.assert:
+    that: system_resolved_dns_publisher.stdout | trim == 's "systemd-resolved"'
+    fail_msg: >-
+      NetworkManager has not selected systemd-resolved. Arrange its DNS plugin transition through the existing host network policy first.
+      This role does not rewrite NetworkManager profiles, DNS publisher selection or cloud-init configuration.
+
+- name: System resolver | Inspect the resolver path without following links
+  ansible.builtin.stat:
+    path: "{{ system_resolved_resolv_conf_path }}"
+    follow: false
+  register: system_resolved_current
+
+- name: System resolver | Require a root-owned resolver path before adoption
+  ansible.builtin.assert:
+    that:
+      - not system_resolved_current.stat.exists or system_resolved_current.stat.uid | default(-1) == 0
+      - >-
+        not (system_resolved_current.stat.isreg | default(false)) or
+        system_resolved_current.stat.mode | default('') is match('^0?[0-7][0145][0145]$')
+    fail_msg: >-
+      Resolver ownership is untrusted; require a root-owned path and a regular file
+      without group/other write access before adoption.
+
+- name: System resolver | Read the existing regular resolver file
+  when: system_resolved_current.stat.isreg | default(false)
+  ansible.builtin.slurp:
+    src: "{{ system_resolved_resolv_conf_path }}"
+  register: system_resolved_current_content
+
+- name: System resolver | Refuse another resolver owner's file or link
+  ansible.builtin.assert:
+    that:
+      - >-
+        (not system_resolved_current.stat.exists and system_resolved_manage_resolv_conf) or
+        (system_resolved_current.stat.islnk | default(false) and
+          (system_resolved_current.stat.lnk_source == system_resolved_resolv_conf_target or
+           (system_resolved_manage_resolv_conf and system_resolved_current.stat.lnk_source in
+             ['/run/NetworkManager/resolv.conf', '/run/systemd/resolve/resolv.conf', '/run/systemd/resolve/stub-resolv.conf',
+              '/usr/lib/systemd/resolv.conf', '/lib/systemd/resolv.conf']))) or
+        (system_resolved_current.stat.isreg | default(false) and system_resolved_manage_resolv_conf and
+          (system_resolved_current_content.content | b64decode) is
+          search('^# (Generated by NetworkManager|This is /run/systemd/resolve/)'))
+    fail_msg: >-
+      Resolver ownership is not proved. Retain Tailscale, manual or other resolver-managed files
+      and arrange an explicit host DNS handoff first.
+      Replacing a NetworkManager/resolved-owned file requires system_resolved_manage_resolv_conf=true.
+
+- name: System resolver | Inspect NSS before disabling or bypassing the stub
+  when: system_resolved_requires_nss
+  ansible.builtin.slurp:
+    src: "{{ system_resolved_nsswitch_path }}"
+  register: system_resolved_nss
+
+- name: System resolver | Require split DNS through the existing NSS policy
+  when: system_resolved_requires_nss
+  vars:
+    system_resolved_nss_hosts: >-
+      {{ ((system_resolved_nss.content | b64decode | regex_findall('(?m)^hosts:[\t ]*([^\n#]+)')) | first | default('')).split() }}
+  ansible.builtin.assert:
+    that:
+      - "'resolve' in system_resolved_nss_hosts"
+      - >-
+        'dns' not in system_resolved_nss_hosts or
+        system_resolved_nss_hosts.index('resolve') < system_resolved_nss_hosts.index('dns')
+    fail_msg: >-
+      Disabling/bypassing the stub requires resolve before dns in the existing hosts NSS policy to preserve split DNS.
+      Configure that policy through authselect or the host's NSS owner; this role does not edit RPM NSS files.
+
+- name: System resolver | Inspect the current resolver process
+  when: system_resolved_services.ansible_facts.services.get(system_resolved_unit, {}).get('state', '') == 'running'
+  ansible.builtin.command:
+    argv: [systemctl, show, "{{ system_resolved_unit }}", --property=MainPID, --value]
+  changed_when: false
+  check_mode: false
+  register: system_resolved_current_pid
+
+- name: System resolver | Inspect socket ownership before enabling the stub
+  when: not system_resolved_disable_stub
+  community.general.listen_ports_facts:
+    command: ss
+  register: system_resolved_current_ports
+
+- name: System resolver | Reject another owner of the stub addresses
+  when: not system_resolved_disable_stub
+  ansible.builtin.assert:
+    that: >-
+      system_resolved_listener.address.split('%')[0] not in ['0.0.0.0', '::', '*', '127.0.0.53', '127.0.0.54'] or
+      (system_resolved_current_pid.stdout | default('0') | int > 0 and
+       system_resolved_listener.pid | int == system_resolved_current_pid.stdout | int)
+    fail_msg: >-
+      Another or unidentified process owns a conflicting port 53 socket;
+      resolve listener ownership before enabling the resolved stub.
+  loop: >-
+    {{ (system_resolved_current_ports.ansible_facts.tcp_listen + system_resolved_current_ports.ansible_facts.udp_listen)
+       | selectattr('port', 'equalto', 53) | list }}
+  loop_control:
+    loop_var: system_resolved_listener
+    label: "{{ system_resolved_listener.address }}:53"

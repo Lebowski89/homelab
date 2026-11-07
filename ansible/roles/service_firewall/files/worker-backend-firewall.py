@@ -217,7 +217,7 @@ def main():
     # files are created. Removal and stopping the watcher remain independent.
     policy = load_policy(args.config) if args.operation in {"apply", "check", "watch", "start"} else None
     if args.operation not in {"remove", "stop-watch"}:
-        rpm_firewall_preflight()
+        rpm_firewall_preflight(wait_for_daemon=args.operation == "apply")
     if args.operation == "watch":
         watch(args.config)
         return

@@ -268,6 +268,45 @@ def test_bundled_remote_entrypoint_imports_without_accessing_the_host(monkeypatc
         assert result["msg"] == "TCP connect: connection refused (ECONNREFUSED)" and not output.err
 
 
+@pytest.mark.integration
+def test_large_inline_transaction_crosses_exec_boundary_without_policy_in_argv(monkeypatch):
+    import subprocess
+    import sys
+
+    from ansible.plugins.action import ActionBase
+
+    monkeypatch.setattr(ActionBase, "run", lambda *args: {})
+    # Larger than a Linux exec argument; its only operation is reading stdin.
+    source = (
+        "# fixture padding\n" * 10000
+        + 'import json,sys\nprint(json.dumps({"changed": False, "observed": json.load(sys.stdin)["policy"]["schema"]}))'
+    )
+    monkeypatch.setattr(ACTION, "remote_source", lambda profile: ("fixture-helper", source))
+    action = object.__new__(ACTION.ActionModule)
+    action._task = SimpleNamespace(
+        args={
+            "phase": "install",
+            "profile": "mgt",
+            "inventory_host": "manager",
+            "policy": {"schema": 1, "inventory_address": "192.0.2.48"},
+        },
+        check_mode=False,
+    )
+    observed = []
+
+    def execute(**kwargs):
+        arguments = kwargs["module_args"]
+        observed.append(arguments)
+        result = subprocess.run(arguments["argv"], input=arguments["stdin"], text=True, capture_output=True, check=False)
+        return {"rc": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
+
+    action._execute_module = execute
+    result = action.run(task_vars={"hostvars": {"manager": {"ansible_python_interpreter": sys.executable}}})
+    assert result["observed"] == 1 and not result["changed"]
+    assert len(observed) == 1
+    assert "192.0.2.48" not in str(observed[0]["argv"])
+
+
 def test_cleanup_failure_can_be_retried_after_the_runtime_is_already_absent(tmp_path, monkeypatch):
     store = Store(tmp_path / "policy.json", monkeypatch)
     desired = request()

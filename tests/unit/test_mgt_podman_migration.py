@@ -33,6 +33,7 @@ def plugin(path, name):
 PODMAN = plugin("ansible/roles/podman_services/filter_plugins/podman_services.py", "migration_podman")
 CATALOG = plugin("ansible/filter_plugins/service_catalog.py", "migration_catalog")
 COMMON = plugin("ansible/roles/service_common/filter_plugins/service_common.py", "migration_common")
+DECLARATIONS = plugin("ansible/roles/service_firewall/files/declarations.py", "migration_firewall_declarations")
 
 
 def context():
@@ -968,6 +969,27 @@ def test_changed_publications_have_explicit_acl_coverage_including_traefik_metri
         cfg = resolve(CATALOG.service_catalog_merge_target(services[item["name"]], item.get("target")), context())
         # These five retain their already published listener contracts.
         if not cfg.get("ports") or item["name"] in {"adminer", "forgejo", "homepage", "thelounge", "unifi"}:
+            continue
+        ports = list(cfg["ports"].values()) if isinstance(cfg["ports"], dict) else cfg["ports"]
+        if any("exposure" in port for port in ports):
+            # Explicit declarations use the automatic transaction rather than
+            # an acknowledgement of the older fixed port allocation.
+            selected = item["name"] + (":" + item["target"] if item.get("target") else "")
+            effective = {selected: cfg}
+            for caller in {caller for port in ports for caller in port.get("callers", [])}:
+                base, _, target = caller.partition(":")
+                metadata = CATALOG.service_catalog_merge_target(services[base], target or None)
+                metadata = {
+                    key: metadata[key]
+                    for key in ["name", "runtime", "deploy", "ports", "image", "stack", "network_mode"]
+                    if key in metadata
+                }
+                effective[caller] = resolve(metadata, context())
+            planned = DECLARATIONS.plan(selected, effective, "mgt", ["unraid", "plex"], context()["hostvars"], include_providers=False)
+            assert planned["managed"]
+            assert {(endpoint["port"], endpoint["destination"]) for endpoint in planned["endpoints"]} == {
+                (port["published"], port["target"]) for port in ports if port["exposure"] == "private"
+            }
             continue
         expected = "worker_backends" if cfg["runtime"] == "docker" else "mgt_backends"
         assert expected in cfg.get("operational_requirements", {}).get("acl", []), item

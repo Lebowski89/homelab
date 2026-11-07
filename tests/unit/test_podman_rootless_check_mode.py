@@ -268,6 +268,65 @@ def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, ex
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("verification_fails", [False, True])
+def test_user_unit_verification_preserves_live_runtime_and_cleans_up(tmp_path, verification_fails):
+    tasks = yaml.safe_load((REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/service_state.yml").read_text())
+    verify = next(task for task in tasks if "block" in task and "podman_services_verify_runtime" in str(task))
+    verify["become"] = False
+    live = tmp_path / "live-runtime"
+    (live / "systemd").mkdir(parents=True)
+    private = live / "systemd/private"
+    private.write_bytes(b"LIVE_MANAGER_SOCKET")
+    recorded = tmp_path / "observed.json"
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    verifier = fake_bin / "systemd-analyze"
+    # Reproduce systemd 257's socket replacement, including a failing verify.
+    # The real task must contain it inside a disposable runtime directory.
+    verifier.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\nfrom pathlib import Path\n"
+        "runtime = Path(os.environ['XDG_RUNTIME_DIR'])\n"
+        f"Path({str(recorded)!r}).write_text(json.dumps({{key: os.environ[key] for key in ['HOME', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS']}}))\n"
+        "(runtime / 'systemd').mkdir(exist_ok=True)\n"
+        "(runtime / 'systemd/private').write_bytes(b'REPLACED')\n"
+        f"sys.exit({23 if verification_fails else 0})\n"
+    )
+    verifier.chmod(0o755)
+    result = run_local_playbook(
+        tmp_path,
+        [
+            {
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "vars": {
+                    "podman_services_state": "deploy",
+                    "podman_services_execution": {"mode": "rootless", "host_user": "unused-fixture-user"},
+                    "podman_services_unit_name": "fixture.service",
+                    "podman_services_runtime_environment": {
+                        "HOME": str(tmp_path / "actual-home"),
+                        "XDG_RUNTIME_DIR": str(live),
+                        "DBUS_SESSION_BUS_ADDRESS": "unix:path=" + str(live / "bus"),
+                        "PATH": str(fake_bin) + os.pathsep + os.environ["PATH"],
+                    },
+                },
+                "tasks": [verify],
+            }
+        ],
+        check_mode=False,
+        extra_env={"ANSIBLE_INJECT_FACT_VARS": "false"},
+    )
+    assert (result.returncode != 0) is verification_fails, result.stdout + result.stderr
+    observed = json.loads(recorded.read_text())
+    assert observed["HOME"] == str(tmp_path / "actual-home")
+    assert observed["XDG_RUNTIME_DIR"] != str(live)
+    assert observed["DBUS_SESSION_BUS_ADDRESS"] == "unix:path=" + observed["XDG_RUNTIME_DIR"] + "/bus"
+    assert not Path(observed["XDG_RUNTIME_DIR"]).exists()
+    assert private.read_bytes() == b"LIVE_MANAGER_SOCKET"
+
+
+@pytest.mark.integration
 def test_execution_only_preparation_returns_before_service_work(tmp_path):
     account = f"podman-check-{os.getpid()}"
     before = account_snapshot(account)

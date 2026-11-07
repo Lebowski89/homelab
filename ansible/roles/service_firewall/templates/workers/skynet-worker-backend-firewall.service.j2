@@ -1,6 +1,6 @@
 [Unit]
 Description=Skynet temporary worker backend restriction
-After=local-fs.target
+After=local-fs.target firewalld.service
 Before=docker.service
 
 [Service]

@@ -29,6 +29,7 @@ def system_run(tmp_path):
         "uri",
         "community.general.sefcontext",
         "community.general.serestorecon",
+        "community.general.listen_ports_facts",
         "get_url",
         "unarchive",
         "rpm_key",
@@ -106,6 +107,8 @@ class ActionModule(ActionBase):
             record['content'] = (Path(v['role_path']) / 'files' / options['src']).read_text()
         if module == 'copy' and options.get('dest') == '/etc/docker/daemon.json':
             record['content'] = options['content']
+        if module == 'copy' and options.get('dest') == v.get('system_resolved_dropin_path', '/etc/systemd/resolved.conf.d/99-skynet.conf'):
+            record['content'] = options['content']
         if module == 'template' and options.get('src') in (
             'rootful-dns.conf.j2', 'shared.network.j2', 'patroni.yml.j2', 'etcd.default.j2', 'patroni-rpm.conf.j2',
             'postgres_exporter.service.j2', 'password.j2', 'environment.j2'):
@@ -122,6 +125,12 @@ class ActionModule(ActionBase):
         result = {'changed': False, 'rc': 0, 'stdout': '', 'stdout_lines': []}
         if module in ('apt', 'dnf') and options.get('name') == 'qemu-guest-agent' and v.get('fixture_guest_agent_failure', False):
             return dict(result, failed=True, rc=1, msg='fixture-agent-failure')
+        if module == 'dnf' and 'systemd-resolved' in options.get('name', []):
+            if not self._play_context.check_mode:
+                state['resolver_package_installed'] = True
+                # Fedora's initial posttrans can replace the standard link.
+                if v['fixture_facts']['distribution'] == 'Fedora' and 'systemd-resolved' not in v.get('fixture_packages', {}):
+                    state.setdefault('resolver_links', {})['/etc/resolv.conf'] = '/run/systemd/resolve/stub-resolv.conf'
         if module == 'dnf' and str(options.get('name', '')).startswith('kernel-modules-extra-'):
             if v.get('fixture_kernel_package_unavailable', False):
                 return dict(result, failed=True, rc=1, msg='fixture-running-kernel-package-unavailable')
@@ -147,6 +156,13 @@ class ActionModule(ActionBase):
             result['ansible_facts'] = {'services': v.get('fixture_services', {})}
             if state.get('docker_started', False):
                 result['ansible_facts']['services']['docker.service'] = {'state': 'running'}
+            if state.get('resolver_started', False):
+                result['ansible_facts']['services'][v.get('system_resolved_unit', 'systemd-resolved.service')] = {'state': 'running'}
+        elif module == 'community.general.listen_ports_facts':
+            started = state.get('resolver_started', False) or v.get('fixture_services', {}).get('systemd-resolved.service', {}).get('state') == 'running'
+            listeners = [{'address': '127.0.0.53%lo', 'port': 53, 'pid': 777}] if started else []
+            listeners = v.get('fixture_resolver_ports', listeners)
+            result['ansible_facts'] = {'tcp_listen': listeners, 'udp_listen': listeners}
         elif module in ('community.general.sefcontext', 'community.general.serestorecon'):
             key = 'policy_contexts' if module.endswith('sefcontext') else 'restored_contexts'
             value = options.get('target', options.get('path'))
@@ -155,6 +171,8 @@ class ActionModule(ActionBase):
                 state.setdefault(key, []).append(value)
         elif module == 'package_facts':
             result['ansible_facts'] = {'packages': v.get('fixture_packages', {})}
+            if state.get('resolver_package_installed', False):
+                result['ansible_facts']['packages']['systemd-resolved'] = [{'version': 'fixture'}]
         elif module == 'template' or (module == 'copy' and 'content' in record):
             if options.get('dest') == '/etc/docker/daemon.json' and v.get('fixture_docker_config_invalid', False):
                 return dict(result, failed=True, msg='fixture-dockerd-validation-failed')
@@ -186,6 +204,12 @@ class ActionModule(ActionBase):
             result['changed'] = options['path'] in state.get('podman_files', {})
             if not self._play_context.check_mode:
                 state.get('podman_files', {}).pop(options['path'], None)
+        elif module == 'file' and options.get('state') == 'link' and options.get('path', options.get('dest')) == v.get('system_resolved_resolv_conf_path', '/etc/resolv.conf'):
+            path = options.get('path', options.get('dest'))
+            previous = state.get('resolver_links', {}).get(path, v.get('fixture_link_targets', {}).get(path))
+            result['changed'] = previous != options['src']
+            if not self._play_context.check_mode:
+                state.setdefault('resolver_links', {})[path] = options['src']
         elif module == 'stat':
             path = options['path']
             exists = v.get('fixture_ostree', False) if path == '/run/ostree-booted' else False
@@ -199,6 +223,15 @@ class ActionModule(ActionBase):
             exists = exists or directory
             result['stat'] = {'exists': exists, 'isdir': directory, 'islnk': path in v.get('fixture_symlinks', []), 'isreg': exists and not directory,
                               'path': path, 'executable': exists, 'size': state.get('size', 2048 * 1024 * 1024)}
+            link = state.get('resolver_links', {}).get(path, v.get('fixture_link_targets', {}).get(path))
+            if link:
+                result['stat'].update(exists=True, islnk=True, isreg=False, lnk_source=link)
+            if path == v.get('system_resolved_resolv_conf_path', '/etc/resolv.conf'):
+                result['stat'].update(uid=v.get('fixture_file_owners', {}).get(path, 0),
+                                      mode=v.get('fixture_file_modes', {}).get(path, '0644'))
+                content = state.get('resolver_foreign_file', v.get('fixture_files', {}).get(path, ''))
+                if result['stat']['isreg']:
+                    result['stat']['checksum'] = hashlib.sha1(content.encode()).hexdigest()
         elif module == 'slurp':
             path = options['src']
             content = state['podman_files'][path] if path in state.get('podman_files', {}) else v['fixture_files'][path]
@@ -230,7 +263,17 @@ class ActionModule(ActionBase):
         elif module == 'command':
             argv = options['argv']
             command = argv[0]
-            if argv[:3] == ['systemctl', 'show', 'docker.service']:
+            if command == 'busctl':
+                assert '--auto-start=no' in argv
+                result['stdout'] = 's "' + v.get('fixture_resolver_dns_mode', 'default') + '"'
+            elif command == 'nmcli' and v.get('fixture_resolver_owner_changes', False):
+                state['resolver_foreign_file'] = '# resolv.conf generated by another owner'
+            elif command == 'getent' and argv[1:4] == ['-s', 'resolve', 'hosts']:
+                result['rc'] = 2 if v.get('fixture_resolver_nss_missing', False) else 0
+                result['stdout'] = '127.0.0.1 localhost' if result['rc'] == 0 else ''
+            elif command == 'systemctl' and '--property=MainPID' in argv:
+                result['stdout'] = '777'
+            elif argv[:3] == ['systemctl', 'show', 'docker.service']:
                 result['stdout'] = v.get('fixture_docker_exec_start',
                     '{ path=/usr/bin/dockerd ; argv[]=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock ; }')
             elif command == 'printenv':
@@ -323,6 +366,11 @@ class ActionModule(ActionBase):
             result['changed'] = not state.get('podman_network', False)
             if not self._play_context.check_mode:
                 state['podman_network'] = True
+        elif module == 'systemd_service' and str(options.get('name', '')).removesuffix('.service') == str(v.get('system_resolved_service_name', 'systemd-resolved')).removesuffix('.service'):
+            started = state.get('resolver_started', v.get('fixture_services', {}).get('systemd-resolved.service', {}).get('state') == 'running')
+            result['changed'] = options.get('state') == 'restarted' or not started
+            if not self._play_context.check_mode:
+                state['resolver_started'] = True
         elif module == 'systemd_service' and options.get('name') == 'docker.service' and 'fixture_docker_selinux' in v:
             active = state.get('docker_started', v.get('fixture_services', {}).get('docker.service', {}).get('state') == 'running')
             result['changed'] = options['state'] == 'restarted' or not active
@@ -507,7 +555,6 @@ def test_native_packages_do_not_upgrade_or_cleanup_and_keep_guest_agent(system_r
         ("Fedora", "dnf5", {"fixture_ostree": True}),
         ("Ubuntu", "dnf", {}),
         ("Rocky", "dnf", {"fixture_ostree": True}),
-        ("Rocky", "dnf", {"system_resolved_enabled": True}),
         ("Rocky", "dnf", {"system_swap_enabled": "yes"}),
     ],
 )

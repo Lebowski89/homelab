@@ -1,7 +1,9 @@
 """Run only the firewall-owned part of a normal service operation."""
 
+import base64
 import importlib.util
 import json
+import zlib
 from pathlib import Path
 
 from ansible.errors import AnsibleActionFail
@@ -161,6 +163,15 @@ class ActionModule(ActionBase):
             if phase == "probe":
                 request["endpoints"] = [{**e, "address": plan["inventory"][e["host"]]} for e in plan["endpoints"]]
             helper, source = remote_source(profile)
+            # On 4 KiB-page Linux each exec argument is limited to 128 KiB.
+            # The manager bundle exceeds that even though overall argv fits.
+            # Keep policy input on stdin and compress only repository code.
+            encoded_source = base64.b64encode(zlib.compress(source.encode())).decode("ascii")
+            bootstrap = (
+                "import base64,zlib;exec(compile(zlib.decompress(base64.b64decode("
+                + repr(encoded_source)
+                + ")), '<service-firewall>', 'exec'))"
+            )
             facts = variables["hostvars"][host].get("ansible_facts", {})
             configured = variables["hostvars"][host].get("ansible_python_interpreter", "")
             interpreter = facts.get("python", {}).get("executable") or (
@@ -196,7 +207,7 @@ class ActionModule(ActionBase):
                 "argv": [
                     interpreter,
                     "-c",
-                    source,
+                    bootstrap,
                 ],
                 "stdin": json.dumps(
                     {
