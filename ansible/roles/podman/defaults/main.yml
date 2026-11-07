@@ -5,6 +5,8 @@ podman_state: present
 podman_update_cache: true
 podman_cache_valid_time: 3600
 podman_min_version: "5.4.2"
+# Explicit Netavark provider choice for mixed Docker/Podman hosts; default stays unmanaged.
+podman_docker_iptables_compatibility: false
 podman_quadlet_generator_paths:
   - /usr/lib/systemd/system-generators/podman-system-generator
   - /lib/systemd/system-generators/podman-system-generator

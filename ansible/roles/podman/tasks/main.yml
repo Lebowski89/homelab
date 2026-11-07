@@ -17,6 +17,10 @@
         missing-runtime verification is deferred until installation. No repository or cache is changed.
   tags: [podman, podman_install]
 
+- name: Podman | Inspect compatibility configuration before package changes
+  ansible.builtin.import_tasks: firewall_compatibility_preflight.yml
+  tags: [podman, podman_install]
+
 - name: Podman | Install distribution packages
   when:
     - podman_install_enable
@@ -29,4 +33,8 @@
 
 - name: Podman | Validate installed runtime capabilities
   ansible.builtin.import_tasks: validate_runtime.yml
+  tags: [podman, podman_install]
+
+- name: Podman | Configure the explicit Docker compatibility choice
+  ansible.builtin.import_tasks: firewall_compatibility.yml
   tags: [podman, podman_install]

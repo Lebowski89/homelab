@@ -8,6 +8,7 @@
     that:
       - podman_install_enable is boolean
       - podman_update_cache is boolean
+      - podman_docker_iptables_compatibility is boolean
       - podman_packages is sequence and podman_packages is not string and podman_packages is not mapping
       - >-
         podman_install_extra_packages is sequence and podman_install_extra_packages is not string

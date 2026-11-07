@@ -1,0 +1,46 @@
+---
+
+- name: Podman compatibility | Inspect the role-owned provider drop-in
+  ansible.builtin.stat:
+    path: /etc/containers/containers.conf.d/40-skynet-docker-compat.conf
+    follow: false
+  register: podman_docker_compat_file
+
+- name: Podman compatibility | Refuse ambiguous configuration ownership
+  ansible.builtin.assert:
+    that:
+      - >-
+        not podman_docker_compat_file.stat.exists or
+        (podman_docker_compat_file.stat.isreg | default(false) and not (podman_docker_compat_file.stat.islnk | default(false)))
+    fail_msg: The managed Podman compatibility drop-in must be a regular file, never a symlink or directory.
+
+- name: Podman compatibility | Read existing managed configuration privately
+  when: podman_docker_compat_file.stat.exists
+  ansible.builtin.slurp:
+    src: /etc/containers/containers.conf.d/40-skynet-docker-compat.conf
+  register: podman_docker_compat_read
+  no_log: true
+  diff: false
+
+- name: Podman compatibility | Determine ownership without publishing file contents
+  ansible.builtin.set_fact:
+    podman_docker_compat_owned: >-
+      {{ not podman_docker_compat_file.stat.exists or
+         (podman_docker_compat_read.content | default('') | b64decode | trim)
+         == (lookup('ansible.builtin.file', role_path ~ '/files/docker-iptables-compat.conf') | trim) }}
+    podman_docker_compat_change: "{{ podman_docker_iptables_compatibility != podman_docker_compat_file.stat.exists }}"
+  no_log: true
+  diff: false
+
+- name: Podman compatibility | Preserve externally edited configuration
+  ansible.builtin.assert:
+    that: podman_docker_compat_owned
+    fail_msg: >-
+      The compatibility drop-in differs from this role's managed configuration. Review its ownership before replacement or removal;
+      no package or provider change has been made.
+
+- name: Podman compatibility | Inspect an explicit provider transition
+  when:
+    - not ansible_check_mode
+    - podman_docker_iptables_compatibility or podman_docker_compat_change
+  ansible.builtin.import_tasks: firewall_compatibility_inspect.yml

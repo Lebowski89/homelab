@@ -523,13 +523,18 @@ added: the upstream [container runtime policy](https://github.com/containers/con
 already permits runtime-domain TCP/UDP binds. This policy review does not prove
 the installed host's process domains, helper labels or packet flow.
 
-firewalld state and configuration are retained. The role does not change
+firewalld state and configuration are retained. The shared-network operation does not change
 `firewall_driver`, disable `StrictForwardPorts`, add zones/services or open
 5533/53 to the LAN. [Netavark's normal integration](https://github.com/containers/netavark/blob/main/docs/netavark-firewalld.7.md)
 can add container subnets to firewalld's trusted zone when containers start;
 bridge creation alone does not test that integration. Strict port-forwarding
 settings can block later application publications and require the separate
 firewall phase, rather than a bypass here.
+The separate `podman install` operation can explicitly select the
+[Docker compatibility provider](container-runtimes.md#packages-overrides-and-coexistence)
+on an opted-in host after quiescence and ownership checks. The network operation
+does not install that choice or override it, and application definitions need no
+additional OS or provider fields.
 
 Check mode plans the two configuration files and defers runtime info/network
 inspection, active DNS-user checks and service lifecycle. Only the safe version

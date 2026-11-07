@@ -94,7 +94,7 @@ def system_run(tmp_path):
     plugins.mkdir()
     (plugins / "fixture_operation.py").write_text("""from ansible.plugins.action import ActionBase
 from ansible.template import trust_as_template
-import base64, hashlib, json
+import base64, fnmatch, hashlib, json
 from pathlib import Path
 class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
@@ -102,6 +102,8 @@ class ActionModule(ActionBase):
         module, options = self._task.args['module'], self._task.args['options'] or {}
         record = {'module': module, 'options': options, 'environment': self._task.environment,
                   'no_log': self._task.no_log, 'diff': self._task.diff}
+        if module == 'copy' and options.get('src') == 'docker-iptables-compat.conf':
+            record['content'] = (Path(v['role_path']) / 'files' / options['src']).read_text()
         if module == 'template' and options.get('src') in (
             'rootful-dns.conf.j2', 'shared.network.j2', 'patroni.yml.j2', 'etcd.default.j2', 'patroni-rpm.conf.j2',
             'postgres_exporter.service.j2', 'password.j2', 'environment.j2'):
@@ -149,7 +151,7 @@ class ActionModule(ActionBase):
                 state.setdefault(key, []).append(value)
         elif module == 'package_facts':
             result['ansible_facts'] = {'packages': v.get('fixture_packages', {})}
-        elif module == 'template':
+        elif module == 'template' or (module == 'copy' and 'content' in record):
             if 'content' in record or 'content_digest' in record:
                 path = options['dest']
                 content = record.get('content', record.get('content_digest'))
@@ -165,7 +167,19 @@ class ActionModule(ActionBase):
             if not self._play_context.check_mode:
                 state.setdefault('exporter_binaries', {})[path] = source
         elif module == 'find':
-            result['files'] = [{'path': '/etc/systemd/system/multi-user.target.wants/' + unit} for unit in v.get('fixture_nic_enabled', [])]
+            if str(options.get('paths', '')).startswith(('/etc/containers', '/root/.config/containers')):
+                files = dict(v.get('fixture_files', {}), **state.get('podman_files', {}))
+                result['files'] = [{'path': path, 'isreg': path not in v.get('fixture_symlinks', []),
+                                    'islnk': path in v.get('fixture_symlinks', [])}
+                                   for path in files if str(Path(path).parent) == options['paths']
+                                   and fnmatch.fnmatch(Path(path).name, options['patterns'])
+                                   and Path(path).name != options.get('excludes')]
+            else:
+                result['files'] = [{'path': '/etc/systemd/system/multi-user.target.wants/' + unit} for unit in v.get('fixture_nic_enabled', [])]
+        elif module == 'file' and options.get('path', '').endswith('/40-skynet-docker-compat.conf') and options.get('state') == 'absent':
+            result['changed'] = options['path'] in state.get('podman_files', {})
+            if not self._play_context.check_mode:
+                state.get('podman_files', {}).pop(options['path'], None)
         elif module == 'stat':
             path = options['path']
             exists = v.get('fixture_ostree', False) if path == '/run/ostree-booted' else False
@@ -177,7 +191,7 @@ class ActionModule(ActionBase):
                 exists = True
             directory = path in v.get('fixture_directories', [])
             exists = exists or directory
-            result['stat'] = {'exists': exists, 'isdir': directory, 'islnk': False, 'isreg': exists and not directory,
+            result['stat'] = {'exists': exists, 'isdir': directory, 'islnk': path in v.get('fixture_symlinks', []), 'isreg': exists and not directory,
                               'path': path, 'executable': exists, 'size': state.get('size', 2048 * 1024 * 1024)}
         elif module == 'slurp':
             path = options['src']
@@ -204,7 +218,16 @@ class ActionModule(ActionBase):
         elif module == 'command':
             argv = options['argv']
             command = argv[0]
-            if argv[:3] == ['systemctl', 'show', 'patroni.service']:
+            if command == 'printenv':
+                result['stdout'] = v.get('fixture_provider_environment', '')
+                result['rc'] = 0 if result['stdout'] else 1
+            elif command == 'ps':
+                result['stdout'] = '\\n'.join(str(uid) for uid in v.get('fixture_conmon_uids', []))
+                result['rc'] = 0 if result['stdout'] else 1
+            elif command in ('iptables', 'ip6tables', 'iptables-save', 'ip6tables-save', 'iptables-restore', 'ip6tables-restore'):
+                backend = 'legacy' if command == v.get('fixture_legacy_compat_tool') else 'nf_tables'
+                result['stdout'] = command + ' v1.8.11 (' + backend + ')'
+            elif argv[:3] == ['systemctl', 'show', 'patroni.service']:
                 config = v.get('fixture_patroni_unit_config', '/etc/patroni/patroni.yml')
                 fragment = v.get('fixture_patroni_unit_fragment', '/usr/lib/systemd/system/patroni.service')
                 environment = v.get('fixture_patroni_unit_environment', 'MALLOC_ARENA_MAX=1')

@@ -5,3 +5,6 @@ docker_user: "{{ ansible_user }}"
 
 # Keep any deliberate future Swarm test join drained by default.
 docker_swarm_join_availability: drain
+
+# Netavark owns scoped rules in the same nf_tables compatibility path as Docker.
+podman_docker_iptables_compatibility: true

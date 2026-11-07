@@ -122,6 +122,38 @@ from DNS, and test rootful and rootless networks independently. Any required
 forwarding permission needs a scoped ownership decision; neither installer changes
 the global forwarding policy or adds blanket permissions to make tests pass.
 
+For a reviewed mixed-runtime host, `podman_docker_iptables_compatibility: true`
+explicitly selects Netavark's iptables provider through the distribution's
+**nf_tables** compatibility tools. Rocky opts in; other hosts retain the default
+`false`. This is a Podman provider choice, not a switch of host iptables alternatives,
+Docker's backend, firewalld's backend or the global forwarding policy. Netavark
+owns its normal per-network rules; the role adds no custom forwarding chains.
+The provider is present in [Netavark 1.17](https://github.com/containers/netavark/blob/v1.17.2/src/firewall/mod.rs).
+This optional path accepts reviewed Netavark 1.14–1.17; newer provider availability
+must be reviewed before extending it. Podman's 5.4.2 minimum remains unchanged.
+
+The existing `podman install` selection manages only
+`/etc/containers/containers.conf.d/40-skynet-docker-compat.conf` for this feature.
+It requires matching IPv4/IPv6 nf_tables tools and refuses operator-owned
+`firewall_driver` declarations, configuration environment overrides, symlinks and
+externally edited managed files. System defaults also affect rootless users
+without a personal override: changing or removing the drop-in requires no running
+rootful containers and no rootless conmon monitors. Unchanged settings permit
+running consumers. Arrange maintenance across all Podman users and avoid concurrent
+starts; these checks are not a global runtime lock. No account is created, no
+container is stopped, no network is rewritten and no daemon is restarted.
+
+Setting the option back to `false` removes only the unmodified role-owned drop-in,
+after the same quiescence checks, restoring the distribution/operator defaults.
+It does not erase another configuration. Check mode reports the change and defers
+runtime, tool, competing-override and quiescence verification without claiming
+packet flow. With an already installed runtime, configuration can be reconciled
+using `podman_install_enable: false`; package and extra-package behaviour is retained.
+This path covers ordinary bridge networks. The service adapter already rejects
+`internal` named networks; internal-only bridges and protected ingress remain
+outside this validation. Changing provider does not establish firewall or
+application migration acceptance.
+
 ## Rocky 10 kernel networking prerequisite
 
 Minimal/cloud images can omit `xt_addrtype`, which Docker's bridge/NAT setup
