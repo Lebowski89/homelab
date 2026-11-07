@@ -14,7 +14,7 @@ seerr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/seerr:release-v3.5.1@sha256:536d85ec1b4e3bb1fb00259d9a3e91f29779a5c5b9cd905f1c21c6583362f4f0
+  image: ghcr.io/hotio/seerr:release-v3.5.1@sha256:b98c3d463a65e9da88fe2b898bd343d74174358c1f09b19a24ea0c2dd455b218
   ################################
   # ENVIRONMENT/SECRETS
   ################################
