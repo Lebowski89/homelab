@@ -10,7 +10,7 @@ qui:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/autobrr/qui:v1.33.1
+  image: ghcr.io/autobrr/qui:v1.35.0
   ################################
   # ENVIRONMENT/SECRETS
   ################################

@@ -12,7 +12,7 @@ stash:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/stash:release-v0.31.1
+  image: ghcr.io/hotio/stash:release-v0.32.0
   ################################
   # ENVIRONMENT/SECRETS
   ################################
