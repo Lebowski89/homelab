@@ -509,19 +509,6 @@ locals {
       ]
     }
 
-    fedora = {
-      description     = "Fedora 44 compatibility-test VM"
-      role_key        = "server"
-      device_type_key = "generic_vm"
-      tags = [
-        "skynet",
-        "docker",
-        "docker_install",
-        "podman",
-        "podman_install",
-      ]
-    }
-
     blacktop = {
       description     = "Primary LMDE workstation laptop"
       role_key        = "workstation"
