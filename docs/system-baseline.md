@@ -166,6 +166,18 @@ replacement. Without the management flag the existing link must already select
 the requested resolved output. Before relying on the stub, its TCP/UDP sockets
 must belong to the selected resolver, and its output file must exist.
 
+An existing Tailscale-managed guest needs an explicit DNS-owner handoff first.
+Tailscale may need a daemon restart to discover the new resolved backend; simply
+toggling DNS acceptance can retain its previous file-based manager. Preserve
+Tailscale DNS acceptance and verify public and MagicDNS lookups after the handoff,
+following [Tailscale's Linux DNS guidance](https://tailscale.com/docs/reference/linux-dns).
+This preparation remains separate from the System role and authselect/NSS policy.
+
+Rocky 10.2 AMD64 has passed live baseline, prepared resolver and 2 GiB emergency
+swap installation with zero-change repeats. The XFS-backed swap and public and
+MagicDNS resolution remained functional after reboot; authselect stayed valid
+and SELinux remained enforcing.
+
 Fedora's [initial package scripts](https://src.fedoraproject.org/rpms/systemd/raw/f43/f/systemd.spec)
 can replace `/etc/resolv.conf`. A fresh Fedora package installation therefore
 requires explicit management of that standard path, or prior package preparation

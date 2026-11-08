@@ -108,9 +108,10 @@ consumption, database and etcd ownership, narrow network reachability, backup an
 isolated restore validation. Cluster bootstrap/join, failover, reset and data
 migration each require separate deliberate live validation.
 
-Fedora 44 AMD64 has passed an isolated PGDG 18 installation and zero-change
-repeat, enforcing-SELinux single-node etcd/Patroni bootstrap, admin/monitor roles,
-exporter queries, logical backup checksums and a restore into a separate test
-database. No production cluster was joined. Multi-node failover, remote Restic
-credentials/storage and RPM destructive recovery were not validated by that test.
-The test primary and restored row remained healthy after reboot.
+Fedora 44 and Rocky 10.2 AMD64 have passed isolated PGDG 18 installation and
+zero-change repeats, enforcing-SELinux single-node etcd/Patroni bootstrap,
+admin/monitor roles, exporter queries, logical backup checksums and a restore into a separate test
+database. SQL queries through an isolated rootless HAProxy reached the test primary,
+and both the primary and restored row remained healthy after reboot. No production
+cluster was joined. Multi-node failover, remote Restic credentials/storage and RPM
+destructive recovery were not validated by these tests.

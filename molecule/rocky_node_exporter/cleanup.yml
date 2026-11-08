@@ -1,0 +1,111 @@
+---
+
+- name: Validate the isolated inventory and guest
+  ansible.builtin.import_playbook: guard.yml
+
+- name: Remove only an installation claimed by this scenario
+  hosts: molecule_node_exporter
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tags: always
+  tasks:
+    - name: Molecule | Inspect ownership before cleanup
+      ansible.builtin.import_tasks: ownership.tasks.yml
+
+    - name: Molecule | Leave unclaimed installations unchanged
+      when: not molecule_node_exporter_marker.stat.exists
+      ansible.builtin.debug:
+        msg: No scenario ownership marker exists; no Node Exporter lifecycle or cleanup is performed.
+
+    - name: Molecule | Remove only the owned catalogue installation
+      when: molecule_node_exporter_marker.stat.exists
+      block:
+        - name: Molecule | Read the real Node Exporter declaration
+          ansible.builtin.include_vars:
+            file: ../../ansible/group_vars/all/services/node_exporter.yml
+            name: svcfiles
+
+        - name: Molecule | Resolve the real native catalogue entry
+          ansible.builtin.set_fact:
+            molecule_node_exporter_removal: >-
+              {{ (svcfiles | service_catalog_effective(inventory_hostname, groups, true, ['native'])
+                  | service_catalog_select(['node_exporter'], false, true, 'remove')).selected }}
+
+        - name: Molecule | Snapshot retained artifacts before removal
+          ansible.builtin.stat:
+            path: '{{ molecule_node_exporter_retained_path }}'
+            checksum_algorithm: sha256
+          loop:
+            - '{{ svcfiles.node_exporter.native.config.install_dir }}/node_exporter'
+            - '{{ svcfiles.node_exporter.native.config.textfile_dir }}'
+            - '{{ svcfiles.node_exporter.native.config.textfile_dir }}/molecule.prom'
+          loop_control:
+            loop_var: molecule_node_exporter_retained_path
+          register: molecule_node_exporter_retained_before
+
+        - name: Molecule | Use the existing catalogue removal dispatch
+          ansible.builtin.include_tasks:
+            file: ../../ansible/tasks/service_catalog_dispatch.yml
+            apply:
+              tags: [node_exporter]
+          vars:
+            service_catalog_action: remove
+          loop: '{{ molecule_node_exporter_removal }}'
+          loop_control:
+            loop_var: service_catalog_dispatch_entry
+            label: '{{ service_catalog_dispatch_entry.name }}'
+
+        - name: Molecule | Inspect the retired unit and ownership record
+          ansible.builtin.stat:
+            path: '{{ molecule_node_exporter_retired_path }}'
+          loop:
+            - /etc/systemd/system/node_exporter.service
+            - /var/lib/native_services/node_exporter.json
+          loop_control:
+            loop_var: molecule_node_exporter_retired_path
+          register: molecule_node_exporter_retired
+
+        - name: Molecule | Require managed configuration to be retired
+          ansible.builtin.assert:
+            that: not molecule_node_exporter_retired_item.stat.exists
+          loop: '{{ molecule_node_exporter_retired.results }}'
+          loop_control:
+            loop_var: molecule_node_exporter_retired_item
+            label: '{{ molecule_node_exporter_retired_item.molecule_node_exporter_retired_path }}'
+
+        - name: Molecule | Verify the selected service stopped
+          ansible.builtin.service_facts:
+
+        - name: Molecule | Require the service to be inactive
+          ansible.builtin.assert:
+            that: ansible_facts.services.get('node_exporter.service', {}).get('state', '') != 'running'
+
+        - name: Molecule | Inspect retained binary and collector data
+          ansible.builtin.stat:
+            path: '{{ molecule_node_exporter_retained_path }}'
+            checksum_algorithm: sha256
+          loop:
+            - '{{ svcfiles.node_exporter.native.config.install_dir }}/node_exporter'
+            - '{{ svcfiles.node_exporter.native.config.textfile_dir }}'
+            - '{{ svcfiles.node_exporter.native.config.textfile_dir }}/molecule.prom'
+          loop_control:
+            loop_var: molecule_node_exporter_retained_path
+          register: molecule_node_exporter_retained
+
+        - name: Molecule | Require removal to preserve installation artifacts and data
+          ansible.builtin.assert:
+            that:
+              - molecule_node_exporter_retained_pair[0].stat.exists == molecule_node_exporter_retained_pair[1].stat.exists
+              - >-
+                molecule_node_exporter_retained_pair[0].stat.checksum | default('') ==
+                molecule_node_exporter_retained_pair[1].stat.checksum | default('')
+          loop: '{{ molecule_node_exporter_retained.results | zip(molecule_node_exporter_retained_before.results) | list }}'
+          loop_control:
+            loop_var: molecule_node_exporter_retained_pair
+            label: '{{ molecule_node_exporter_retained_pair[0].molecule_node_exporter_retained_path }}'
+
+        - name: Molecule | Retire the scenario claim after successful removal
+          ansible.builtin.file:
+            path: /var/lib/homelab-molecule-node-exporter
+            state: absent

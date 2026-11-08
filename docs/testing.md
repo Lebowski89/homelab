@@ -4,6 +4,17 @@ Use `/opt/ansible/ansible-venv/bin/python -m pytest tests/unit` for the complete
 suite. Tests use synthetic inventories, fake external I/O and private temporary
 state. They do not establish live application or firewall acceptance.
 
+## Optional Molecule VM tests
+
+The first [Molecule pilot](../molecule/README.md) exercises native Node Exporter
+through the real catalogue on an explicitly opted-in, externally provisioned
+Rocky VM. It adds fresh-host check mode, idempotence, live metrics and owned
+removal checks alongside the existing simulated-I/O tests. CI performs only
+scenario lint/syntax and the isolated safety regressions; it receives no guest
+inventory or production credentials. VM creation/destruction is outside the pilot.
+The optional-tooling CLI regressions in `tests/molecule` run in the quality job
+with SSH blocked. The existing `tests/unit` commands do not require Molecule.
+
 ## Task fixtures and safety assertions
 
 Prefer running a supported role/task entry point with external I/O replaced.

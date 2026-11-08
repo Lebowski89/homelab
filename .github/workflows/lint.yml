@@ -7,6 +7,7 @@ on:
     branches: [main]
     paths:
       - "ansible/**"
+      - "molecule/**"
       - "scripts/ci/**"
       - "tests/**"
       - "pyproject.toml"
@@ -14,6 +15,7 @@ on:
   pull_request:
     paths:
       - "ansible/**"
+      - "molecule/**"
       - "scripts/ci/**"
       - "tests/**"
       - "pyproject.toml"
@@ -59,7 +61,9 @@ jobs:
         with:
           python-version: "3.14.9"
           cache: pip
-          cache-dependency-path: ansible/requirements.txt
+          cache-dependency-path: |
+            ansible/requirements.txt
+            molecule/requirements.txt
 
       - name: Install fast-path tooling
         if: fromJSON(steps.classify.outputs.renovate_docker_tag_only)
@@ -75,6 +79,7 @@ jobs:
           fi
 
           python -m pip install ansible-core ansible-lint yamllint ruff pytest
+          python -m pip install -r molecule/requirements.txt
 
       - name: Prepare ansible log dir
         if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
@@ -138,6 +143,7 @@ jobs:
             ansible/roles/service_prepare/library \
             scripts/ci \
             tests/unit \
+            tests/molecule \
             tests/conftest.py \
             tests/fixtures/haproxy_operator/commands.py \
             tests/fixtures/ansible/retry_playbook.py
@@ -156,6 +162,7 @@ jobs:
             ansible/roles/service_prepare/library \
             scripts/ci \
             tests/unit \
+            tests/molecule \
             tests/conftest.py \
             tests/fixtures/haproxy_operator/commands.py \
             tests/fixtures/ansible/retry_playbook.py
@@ -164,6 +171,16 @@ jobs:
         if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           ansible-lint --format=pep8 ansible
+
+      - name: Molecule CLI and syntax (no guest access)
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
+        env:
+          HOMELAB_MOLECULE_INVENTORY: ${{ github.workspace }}/molecule/rocky_node_exporter/inventory/hosts.yml
+        run: |
+          ANSIBLE_FILTER_PLUGINS="$GITHUB_WORKSPACE/ansible/filter_plugins:$GITHUB_WORKSPACE/ansible/roles/service_common/filter_plugins" \
+            ansible-lint --format=pep8 molecule/rocky_node_exporter
+          molecule syntax -s rocky_node_exporter
+          python -m pytest tests/molecule -q --tb=short
 
   tests:
     name: pytest (${{ matrix.name }})

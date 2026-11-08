@@ -1,0 +1,64 @@
+---
+
+- name: Validate the explicit Molecule inventory before connecting to a guest
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  any_errors_fatal: true
+  tags: always
+  tasks:
+    - name: Molecule | Require exactly one isolated target
+      ansible.builtin.assert:
+        that:
+          - groups.get('molecule_node_exporter', []) | length == 1
+          - groups.get('all', []) | difference(['localhost']) | sort == groups.get('molecule_node_exporter', []) | sort
+          - groups.get('tags_skynet', []) | sort == groups.get('molecule_node_exporter', []) | sort
+          - groups.get('tags_node_exporter', []) | sort == groups.get('molecule_node_exporter', []) | sort
+        fail_msg: Use an isolated inventory containing exactly one disposable Molecule target.
+
+    - name: Molecule | Require an explicit disposable SSH guest
+      vars:
+        molecule_node_exporter_target: "{{ hostvars[groups.molecule_node_exporter[0]] }}"
+      ansible.builtin.assert:
+        that:
+          - molecule_node_exporter_target.molecule_node_exporter_disposable | default(false) is sameas true
+          - molecule_node_exporter_target.ansible_connection | default('ssh') == 'ssh'
+          - molecule_node_exporter_target.ansible_host | default('') | length > 0
+          - molecule_node_exporter_target.ansible_user | default('') | length > 0
+          - groups.molecule_node_exporter[0] != 'localhost'
+          - molecule_node_exporter_target.ansible_host not in ['localhost', '127.0.0.1', '::1']
+        fail_msg: Explicitly opt one disposable SSH VM into the Molecule scenario; local and unmarked targets are refused.
+
+- name: Validate the Rocky guest without changing it
+  hosts: molecule_node_exporter
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tags: always
+  tasks:
+    - name: Molecule | Gather explicit platform facts
+      ansible.builtin.setup:
+
+    - name: Molecule | Require conventional Rocky 10 AMD64 with enforcing SELinux
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.system == 'Linux'
+          - ansible_facts.distribution == 'Rocky'
+          - ansible_facts.distribution_major_version == '10'
+          - ansible_facts.architecture == 'x86_64'
+          - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+          - ansible_facts.service_mgr == 'systemd'
+          - ansible_facts.virtualization_role == 'guest'
+          - ansible_facts.virtualization_type in ['kvm', 'qemu']
+          - ansible_facts.selinux.mode | default('') == 'enforcing'
+        fail_msg: This pilot requires an enforcing Rocky 10 AMD64 KVM/QEMU VM.
+
+    - name: Molecule | Inspect OSTree deployment
+      ansible.builtin.stat:
+        path: /run/ostree-booted
+      register: molecule_node_exporter_ostree
+
+    - name: Molecule | Refuse image-based deployment
+      ansible.builtin.assert:
+        that: not molecule_node_exporter_ostree.stat.exists

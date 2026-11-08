@@ -1,0 +1,32 @@
+---
+
+- name: Validate the isolated inventory and guest
+  ansible.builtin.import_playbook: guard.yml
+
+- name: Add one metric to the owned test collector
+  hosts: molecule_node_exporter
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tags: always
+  tasks:
+    - name: Molecule | Inspect ownership before adding test data
+      ansible.builtin.import_tasks: ownership.tasks.yml
+
+    - name: Molecule | Require the prepared installation
+      ansible.builtin.assert:
+        that: molecule_node_exporter_marker.stat.exists
+
+    - name: Molecule | Read the real collector path
+      ansible.builtin.include_vars:
+        file: ../../ansible/group_vars/all/services/node_exporter.yml
+        name: molecule_node_exporter_catalogue
+
+    - name: Molecule | Add a non-sensitive textfile metric without replacing existing data
+      ansible.builtin.copy:
+        dest: '{{ molecule_node_exporter_catalogue.node_exporter.native.config.textfile_dir }}/molecule.prom'
+        content: "homelab_molecule_node_exporter 1\n"
+        owner: root
+        group: root
+        mode: '0644'
+        force: false

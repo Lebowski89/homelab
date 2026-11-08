@@ -278,3 +278,10 @@ VIP; the real Keepalived health script succeeded. A single VM does not establish
 peer failover, production listener reachability or application migration readiness.
 All four services recovered after reboot, and their removal paths passed;
 Technitium restored its recorded resolver integration while retaining DNS data.
+
+Rocky 10.2 AMD64 also passed Node Exporter, Technitium and Keepalived installation
+and zero-change repeats under enforcing SELinux, using isolated listeners and a
+dummy-link VIP. Keepalived's own DNS health script succeeded. These services and
+the previously validated Alloy installation recovered after reboot; real DNS,
+metrics and the test VIP were checked again. Removal retained persistent data and
+Technitium restored its recorded resolver link. This does not establish peer failover.

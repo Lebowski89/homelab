@@ -276,6 +276,17 @@ zero-change convergence, real application-UID writes and reboot persistence with
 exclusive private bind labels. Its listener and storage were isolated; no
 production application, Traefik route or database was migrated.
 
+Rocky's installed worker guard and timer also passed IPv4/IPv6 permitted/denied
+traffic tests after native firewalld reload, fixed-address caller restart, Docker
+restart and VM reboot. Checks waited for the normal reconciler after topology
+changes; they do not establish uninterrupted enforcement during those changes.
+Removing the worker guard preserved Docker's PID/invocation and every test
+container's identity/start time. A rootless HAProxy fixture passed preparation,
+zero-change convergence, private SELinux bind-label checks and SQL forwarding to
+an isolated PostgreSQL primary, including after reboot.
+The role-managed central Podman bridge and all three runtime modes also passed
+DNS/HTTP and SELinux storage checks with native Technitium and firewalld active.
+
 Fedora 44 AMD64 has also passed live Docker/Podman installation and zero-change
 repeat runs, enforcing-SELinux storage denial/label/write checks, and bridge
 DNS/HTTP for Docker, rootful Podman and rootless Podman. Dedicated rootless
@@ -308,6 +319,6 @@ roles never switch host-wide alternatives automatically.
 These isolated tests do not certify the remaining catalog, multi-host overlay
 traffic, real VRRP/Patroni failover, or Debian live behaviour. Native protected
 listeners and RPM PostgreSQL destructive recovery retain their safety gates.
-Fedora's optional [RPM resolver configuration](system-baseline.md#optional-fedorarocky-resolver-configuration)
-passed with prepared NetworkManager/NSS ownership; other host configurations
-still require their own acceptance checks.
+Optional [RPM resolver configuration](system-baseline.md#optional-fedorarocky-resolver-configuration)
+passed on Fedora and Rocky with prepared NetworkManager/NSS ownership; other host
+configurations still require their own acceptance checks.

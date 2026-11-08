@@ -1,0 +1,4 @@
+---
+
+# Extra vars retain this loopback boundary even if the inventory has overrides.
+node_exporter_listen_address: 127.0.0.1:19100
