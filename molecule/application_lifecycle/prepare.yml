@@ -1,0 +1,61 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Install the real runtimes on this fresh guest
+  ansible.builtin.import_playbook: ../runtime_install/prepare.yml
+
+- name: Install the real runtime packages
+  ansible.builtin.import_playbook: ../runtime_install/converge.yml
+
+- name: Prepare only the disposable application test's topology
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Initialize a single-node Swarm only for the explicit Swarm case
+      when: molecule_vm_runtime == 'swarm'
+      no_log: true
+      diff: false
+      community.docker.docker_swarm:
+        state: present
+        advertise_addr: '{{ local_ip }}'
+
+    - name: VM tests | Label only this disposable Swarm node with its inventory identity
+      when: molecule_vm_runtime == 'swarm'
+      community.docker.docker_node:
+        hostname: '{{ ansible_facts.hostname }}'
+        labels: '{{ docker_swarm_node_labels }}'
+        labels_state: merge
+
+    - name: VM tests | Snapshot security and runtime versions before application deployment
+      ansible.builtin.include_tasks: ../shared/diagnostics.tasks.yml
+
+    - name: VM tests | Create an unrelated observer that scoped removal must preserve
+      community.docker.docker_container:
+        name: 'molecule-keeper-{{ molecule_vm_run_id[:12] }}'
+        image: docker.io/library/busybox@sha256:66a6306db78bf2dbf3487f293aa8d6990d8e506fdffab9cc43fe422becf886e4
+        command: sleep 86400
+        command_handling: correct
+        user: '1000:1000'
+        cap_drop: [ALL]
+        read_only: true
+        network_mode: none
+        restart_policy: unless-stopped
+        labels:
+          homelab.molecule.run: '{{ molecule_vm_run_id }}'
+
+    - name: VM tests | Snapshot the unrelated observer identity
+      ansible.builtin.command:
+        argv: [docker, inspect, --format, '{{ "{{.Id}} {{.State.StartedAt}}" }}', 'molecule-keeper-{{ molecule_vm_run_id[:12] }}']
+      changed_when: false
+      register: molecule_vm_keeper
+
+    - name: VM tests | Retain the expected observer process
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/keeper-identity'
+        content: '{{ molecule_vm_keeper.stdout }}'
+        mode: '0600'
+      delegate_to: localhost
+      become: false

@@ -410,6 +410,37 @@ def test_remote_runtime_status_uses_correct_template_and_dedicated_home(monkeypa
         REMOTE.runtime_check(record, "absent", run)
 
 
+@pytest.mark.parametrize(
+    "runtime,declared,observed,accepted",
+    [
+        ("docker", "docker.io/library/demo@sha256:aaa", "demo@sha256:aaa", True),
+        ("docker", "docker.io/team/demo:one", "team/demo:one@sha256:aaa", True),
+        ("docker", "registry.invalid/library/demo@sha256:aaa", "demo@sha256:aaa", False),
+        ("docker", "docker.io/library/demo@sha256:aaa", "demo@sha256:bbb", False),
+        ("docker", "docker.io/library/demo:one", "demo:two@sha256:aaa", False),
+        ("docker", "docker.io/registry.invalid/demo:one", "registry.invalid/demo:one", False),
+        ("docker", "docker.io/localhost/demo:one", "localhost/demo:one", False),
+        ("docker", "docker.io/library/sha256:aaa", "sha256:aaa", False),
+        ("podman", "docker.io/library/demo@sha256:aaa", "demo@sha256:aaa", False),
+    ],
+)
+def test_runtime_image_check_accepts_only_equivalent_docker_hub_references(runtime, declared, observed, accepted):
+    record = identity("image-probe")
+    record["image"] = declared
+    record["binding"].update(runtime=runtime, mode="rootful")
+
+    def run(argv):
+        if "ps" in argv:
+            return "a" * 64
+        return json.dumps({"id": "a" * 64, "running": True, "pid": 321, "image": observed, "state": {}, "ports": {}})
+
+    if accepted:
+        REMOTE.runtime_check(record, "healthy", run)
+    else:
+        with pytest.raises(ValueError, match="image differs"):
+            REMOTE.runtime_check(record, "healthy", run)
+
+
 def test_qualified_probe_rejects_namespace_or_pid_replacement(monkeypatch):
     record = identity("proxy")
     record["binding"] = {"kind": "service", "runtime": "docker", "phase": "docker", "selector": "proxy_proxy"}

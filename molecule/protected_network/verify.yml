@@ -1,0 +1,185 @@
+---
+
+- name: Require the disposable current-run guests
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Observe actual rules, counters and caller namespace traffic
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Select the isolated plan
+      ansible.builtin.include_tasks: policy.tasks.yml
+
+    - name: VM tests | Audit persistent protection
+      ansible.builtin.command:
+        argv: [python3, /etc/skynet-mgt-firewall/policy.py, check]
+      changed_when: false
+
+    - name: VM tests | Observe initial generated allow counters
+      service_firewall_lifecycle:
+        phase: counters
+        plan: '{{ molecule_vm_net_plan }}'
+        inventory_host: subject
+      register: molecule_vm_before_allow
+
+    - name: VM tests | Snapshot real rules before traffic
+      ansible.builtin.command:
+        argv: ['{{ molecule_vm_save }}', '-c']
+      loop: [iptables-save, ip6tables-save]
+      loop_control:
+        loop_var: molecule_vm_save
+      changed_when: false
+      register: molecule_vm_before_rules
+
+    - name: VM tests | Independently observe the current allowed caller process
+      ansible.builtin.command:
+        argv: [docker, inspect, --format, '{{ "{{.State.Pid}}" }}', 'molecule-{{ molecule_vm_run_id[:12] }}-allow']
+      changed_when: false
+      register: molecule_vm_allowed_pid
+      failed_when: molecule_vm_allowed_pid.rc != 0 or molecule_vm_allowed_pid.stdout | int <= 0
+
+    - name: VM tests | Read that process's actual network namespace
+      ansible.builtin.command:
+        argv: [readlink, '/proc/{{ molecule_vm_allowed_pid.stdout }}/ns/net']
+      changed_when: false
+      register: molecule_vm_allowed_namespace
+
+    - name: VM tests | Probe the current caller's exact namespace on each address family
+      service_firewall_lifecycle:
+        phase: probe
+        plan: '{{ molecule_vm_net_plan | combine({"inventory": {"subject": molecule_vm_destination}}) }}'
+        inventory_host: subject
+      loop: ['{{ local_ip }}', '{{ molecule_vm_ipv6_prefix }}:1']
+      loop_control:
+        loop_var: molecule_vm_destination
+      register: molecule_vm_handshakes
+
+    - name: VM tests | Require namespace-qualified handshakes with current source evidence
+      ansible.builtin.assert:
+        that:
+          - molecule_vm_family_probe.handshakes | length == 2
+          - molecule_vm_family_probe.handshakes | selectattr('connected', 'equalto', true) | list | length == 2
+          - molecule_vm_family_probe.handshakes | selectattr('namespace_source', 'defined') | list | length == 2
+          - molecule_vm_family_probe.handshakes | map(attribute='net_namespace') | unique | list == [molecule_vm_allowed_namespace.stdout]
+      loop: '{{ molecule_vm_handshakes.results }}'
+      loop_control:
+        loop_var: molecule_vm_family_probe
+
+    - name: VM tests | Require real HTTP from the allowed caller on both families
+      ansible.builtin.command:
+        argv: [docker, exec, 'molecule-{{ molecule_vm_run_id[:12] }}-allow', wget, -qO-, '-T', '4', 'http://{{ molecule_vm_destination }}:18080/']
+      loop: ['{{ local_ip }}', '[{{ molecule_vm_ipv6_prefix }}:1]']
+      loop_control:
+        loop_var: molecule_vm_destination
+      changed_when: false
+      register: molecule_vm_allowed_http
+      failed_when: molecule_vm_allowed_http.rc != 0 or 'molecule-network' not in molecule_vm_allowed_http.stdout
+
+    - name: VM tests | Observe the actual allow counters after the qualified traffic
+      service_firewall_lifecycle:
+        phase: counters
+        plan: '{{ molecule_vm_net_plan }}'
+        inventory_host: subject
+      register: molecule_vm_after_allow
+
+    - name: VM tests | Require matching allow-counter increases for both families and ports
+      ansible.builtin.assert:
+        that:
+          - molecule_vm_counter in molecule_vm_before_allow.counters
+          - molecule_vm_counter in molecule_vm_after_allow.counters
+          - molecule_vm_after_allow.counters[molecule_vm_counter] > molecule_vm_before_allow.counters[molecule_vm_counter]
+      loop: ['4:18080', '6:18080', '4:18081', '6:18081']
+      loop_control:
+        loop_var: molecule_vm_counter
+
+- name: Deny an unrelated caller on the same real Docker bridge
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Read the unrelated caller's actual namespace PID
+      ansible.builtin.command:
+        argv: [docker, inspect, --format, '{{ "{{.State.Pid}}" }}', 'molecule-{{ molecule_vm_run_id[:12] }}-deny']
+      changed_when: false
+      register: molecule_vm_unrelated_pid
+
+    - name: VM tests | Require denial for the unrelated bridge identity on both families
+      ansible.builtin.command:
+        argv: [nsenter, --target, '{{ molecule_vm_unrelated_pid.stdout }}', --net, --, python3,
+               '/var/tmp/molecule-{{ molecule_vm_run_id }}-probe.py', '{{ molecule_vm_destination }}', '18080', deny]
+      loop: ['{{ local_ip }}', '{{ molecule_vm_ipv6_prefix }}:1']
+      loop_control:
+        loop_var: molecule_vm_destination
+      changed_when: false
+
+    - name: VM tests | Snapshot real counters immediately after unrelated bridge traffic
+      ansible.builtin.command:
+        argv: ['{{ molecule_vm_save }}', '-c']
+      loop: [iptables-save, ip6tables-save]
+      loop_control:
+        loop_var: molecule_vm_save
+      changed_when: false
+      register: molecule_vm_bridge_rules
+
+    - name: VM tests | Match the unrelated bridge traffic to its actual DROP increments
+      ansible.builtin.include_tasks: drop-counters.tasks.yml
+      vars:
+        molecule_vm_drop_before: '{{ molecule_vm_before_rules.results | map(attribute="stdout") | list }}'
+        molecule_vm_drop_after: '{{ molecule_vm_bridge_rules.results | map(attribute="stdout") | list }}'
+
+- name: Require timeout and matching drops for the separate peer namespace
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Require denied traffic through the isolated veth on each family
+      ansible.builtin.command:
+        argv: [ip, netns, exec, 'molecule-{{ molecule_vm_run_id[:12] }}', python3,
+               '/var/tmp/molecule-{{ molecule_vm_run_id }}-probe.py', '{{ molecule_vm_destination }}', '18080', deny]
+      loop: ['198.18.255.1', '{{ molecule_vm_ipv6_prefix }}:1']
+      loop_control:
+        loop_var: molecule_vm_destination
+      changed_when: false
+
+- name: Match denied traffic to observed generated rules and retain evidence
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Snapshot generated rules after external denial
+      ansible.builtin.command:
+        argv: ['{{ molecule_vm_save }}', '-c']
+      loop: [iptables-save, ip6tables-save]
+      loop_control:
+        loop_var: molecule_vm_save
+      changed_when: false
+      register: molecule_vm_after_rules
+
+    - name: VM tests | Match only the separate peer's traffic to its actual DROP increments
+      ansible.builtin.include_tasks: drop-counters.tasks.yml
+      vars:
+        molecule_vm_drop_before: '{{ molecule_vm_bridge_rules.results | map(attribute="stdout") | list }}'
+        molecule_vm_drop_after: '{{ molecule_vm_after_rules.results | map(attribute="stdout") | list }}'
+
+    - name: VM tests | Recheck the healthy listener after denial
+      ansible.builtin.command:
+        argv: [docker, exec, 'molecule-{{ molecule_vm_run_id[:12] }}-allow', wget, -qO-, '-T', '4', 'http://{{ local_ip }}:18080/']
+      changed_when: false
+      register: molecule_vm_listener_recheck
+      failed_when: molecule_vm_listener_recheck.rc != 0 or 'molecule-network' not in molecule_vm_listener_recheck.stdout
+
+    - name: VM tests | Preserve actual generated rules, counters and namespace observations
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/network-{{ molecule_vm_network_phase | default("initial") }}.json'
+        content: >-
+          {{ {'before': molecule_vm_before_rules.results | map(attribute='stdout') | list,
+              'after_bridge_denial': molecule_vm_bridge_rules.results | map(attribute='stdout') | list,
+              'after': molecule_vm_after_rules.results | map(attribute='stdout') | list,
+              'handshakes': molecule_vm_handshakes.results,
+              'caller_pid': molecule_vm_allowed_pid.stdout, 'caller_namespace': molecule_vm_allowed_namespace.stdout,
+              'allow_counters': molecule_vm_after_allow.counters} | to_json }}
+        mode: '0600'
+        force: false
+      delegate_to: localhost
+      become: false

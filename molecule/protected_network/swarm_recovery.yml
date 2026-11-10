@@ -1,0 +1,133 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Exercise actual absent and replacement Swarm caller tasks
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  vars:
+    molecule_vm_probe_image: docker.io/library/busybox@sha256:66a6306db78bf2dbf3487f293aa8d6990d8e506fdffab9cc43fe422becf886e4
+  tasks:
+    - name: VM tests | Select exact owned endpoint identities
+      ansible.builtin.include_tasks: policy.tasks.yml
+
+    - name: VM tests | Initialize only this disposable single-node Swarm
+      no_log: true
+      diff: false
+      community.docker.docker_swarm:
+        state: present
+        advertise_addr: '{{ local_ip }}'
+
+    - name: VM tests | Create the owned single-node overlay for the caller
+      community.docker.docker_network:
+        name: 'molecule-{{ molecule_vm_run_id[:12] }}-swarm'
+        driver: overlay
+        attachable: true
+        labels:
+          homelab.molecule.run: '{{ molecule_vm_run_id }}'
+
+    - name: VM tests | Start an isolated Swarm caller
+      community.docker.docker_swarm_service: &molecule_vm_swarm_caller
+        name: 'molecule-{{ molecule_vm_run_id[:12] }}-swarm-caller'
+        image: '{{ molecule_vm_probe_image }}'
+        command: [sleep, '86400']
+        user: '1000:1000'
+        networks:
+          - name: 'molecule-{{ molecule_vm_run_id[:12] }}-swarm'
+        labels:
+          homelab.molecule.run: '{{ molecule_vm_run_id }}'
+
+    - name: VM tests | Extend only the current owned endpoint with the Swarm caller
+      ansible.builtin.set_fact:
+        molecule_vm_swarm_policy: >-
+          {{ molecule_vm_net_policy | combine({'callers': molecule_vm_net_policy.callers | combine({
+             'testclient': molecule_vm_net_policy.callers.testclient + [{'kind': 'service', 'runtime': 'docker', 'phase': 'docker',
+               'selector': 'molecule-' ~ molecule_vm_run_id[:12] ~ '-swarm-caller'}]})}) }}
+
+    - name: VM tests | Reconcile the real running Swarm task identity
+      service_firewall_lifecycle:
+        phase: install
+        profile: mgt
+        policy: '{{ molecule_vm_swarm_policy }}'
+        inventory_host: subject
+      register: molecule_vm_swarm_ready
+      until: molecule_vm_swarm_ready is succeeded
+      retries: 30
+      delay: 2
+
+    - name: VM tests | Make the selected task disappear without substituting probes
+      community.docker.docker_swarm_service:
+        <<: *molecule_vm_swarm_caller
+        replicas: 0
+
+    - name: VM tests | Reconcile absent task identity while retaining guarded endpoints
+      ansible.builtin.command:
+        argv: [python3, /etc/skynet-mgt-firewall/policy.py, apply, --allow-pending]
+      changed_when: true
+      register: molecule_vm_missing_task
+      until: (molecule_vm_missing_task.stdout | from_json).pending | length > 0
+      retries: 20
+      delay: 2
+
+    - name: VM tests | Require the pending task to fail the strict production audit
+      ansible.builtin.command:
+        argv: [python3, /etc/skynet-mgt-firewall/policy.py, check]
+      changed_when: false
+      register: molecule_vm_pending_audit
+      failed_when: molecule_vm_pending_audit.rc != 1
+
+    - name: VM tests | Require denial to remain effective while a Swarm caller is absent
+      ansible.builtin.command:
+        argv: [ip, netns, exec, 'molecule-{{ molecule_vm_run_id[:12] }}', python3,
+               '/var/tmp/molecule-{{ molecule_vm_run_id }}-probe.py', '198.18.255.1', '18080', deny]
+      changed_when: false
+
+    - name: VM tests | Restore the actual Swarm caller task
+      community.docker.docker_swarm_service:
+        <<: *molecule_vm_swarm_caller
+        replicas: 1
+
+    - name: VM tests | Require recovery through the real production transaction
+      service_firewall_lifecycle:
+        phase: install
+        profile: mgt
+        policy: '{{ molecule_vm_swarm_policy }}'
+        inventory_host: subject
+      register: molecule_vm_swarm_recovered
+      until: molecule_vm_swarm_recovered is succeeded
+      retries: 30
+      delay: 2
+
+    - name: VM tests | Require qualified traffic from the actual replacement Swarm task
+      service_firewall_lifecycle:
+        phase: probe
+        plan: >-
+          {{ molecule_vm_net_plan | combine({'callers': {'testclient': {'binding':
+             {'kind': 'service', 'runtime': 'docker', 'phase': 'docker',
+              'selector': 'molecule-' ~ molecule_vm_run_id[:12] ~ '-swarm-caller'}}}}) }}
+        inventory_host: subject
+      register: molecule_vm_recovered_handshakes
+
+    - name: VM tests | Require real replacement-task handshakes for both publications
+      ansible.builtin.assert:
+        that:
+          - molecule_vm_recovered_handshakes.handshakes | length == 2
+          - molecule_vm_recovered_handshakes.handshakes | selectattr('connected', 'equalto', true) | list | length == 2
+
+    - name: VM tests | Preserve actual pending-state and replacement-task evidence
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/swarm-recovery.json'
+        content: >-
+          {{ {'pending': (molecule_vm_missing_task.stdout | from_json).pending,
+              'strict_audit_rc': molecule_vm_pending_audit.rc,
+              'handshakes': molecule_vm_recovered_handshakes.handshakes} | to_json }}
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+
+    # Administrative installation unions bindings; scoped rule removal retains
+    # its JSON for audit/reinstallation. Keep this recovered, run-owned caller
+    # alive until final policy removal and VM retirement. Deleting it here would
+    # leave an unresolved retained declaration during the later manager restore.

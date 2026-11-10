@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 import yaml
+from ansible.utils.vars import merge_hash
 
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIO = ROOT / "molecule/rocky_node_exporter"
@@ -17,7 +18,10 @@ ANSIBLE = str(Path(sys.executable).with_name("ansible-playbook"))
 
 
 def test_molecule_selects_only_node_exporter_without_provider_or_inventory_discovery():
-    config = yaml.safe_load((SCENARIO / "molecule.yml").read_text())
+    config = merge_hash(
+        yaml.safe_load((ROOT / ".config/molecule/config.yml").read_text()),
+        yaml.safe_load((SCENARIO / "molecule.yml").read_text()),
+    )
     assert config["prerun"] is False
     assert config["dependency"]["enabled"] is False
     destroy = yaml.safe_load((SCENARIO / config["ansible"]["playbooks"]["destroy"]).read_text())
@@ -37,6 +41,7 @@ def test_molecule_selects_only_node_exporter_without_provider_or_inventory_disco
 def molecule_run(tmp_path):
     scenario = tmp_path / "project/molecule/rocky_node_exporter"
     shutil.copytree(SCENARIO, scenario)
+    shutil.copytree(ROOT / "molecule/shared", scenario.parent / "shared")
     (tmp_path / "project/ansible").symlink_to(ROOT / "ansible", target_is_directory=True)
     operations = {"setup", "stat", "slurp", "getent", "copy", "file", "dnf", "user", "group", "systemd_service", "command", "service_facts"}
 
@@ -64,7 +69,7 @@ def molecule_run(tmp_path):
                 if isinstance(child, (list, dict)):
                     instrument(child)
 
-    for source in scenario.rglob("*.yml"):
+    for source in scenario.parent.rglob("*.yml"):
         value = yaml.safe_load(source.read_text())
         instrument(value)
         source.write_text(yaml.safe_dump(value, sort_keys=False))
@@ -131,6 +136,10 @@ class ActionModule(ActionBase):
             if exists:
                 result['checksum'] = 'changed' if removed and metric and v.get('fixture_damage') == 'changed' else 'original'
             return {'changed': False, 'stat': result}
+        if operation == 'command':
+            return {'changed': False, 'rc': 0, 'stdout': 'fixture diagnostics', 'stderr': ''}
+        if operation == 'copy' and 'diagnostics-' in args.get('dest', ''):
+            return {'changed': False}
         if operation == 'service_facts':
             return {'changed': False, 'ansible_facts': {'services': {}}}
         if operation == 'remove_fixture':
@@ -161,6 +170,8 @@ class ActionModule(ActionBase):
             "ansible_connection": "ssh",
             "molecule_node_exporter_disposable": True,
             "fixture_inspect": inspect,
+            "molecule_ephemeral_directory": str(tmp_path),
+            "molecule_vm_evidence_directory": str(tmp_path),
             "fixture_record": str(record),
             "fixture_marker_content": base64.b64encode(b"foreign marker\n").decode(),
             "fixture_existing": existing or [],

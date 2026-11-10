@@ -6,20 +6,26 @@ on:
   push:
     branches: [main]
     paths:
+      - ".config/molecule/**"
       - "ansible/**"
       - "molecule/**"
       - "scripts/ci/**"
+      - "scripts/testing/**"
       - "tests/**"
       - "pyproject.toml"
       - ".github/workflows/lint.yml"
+      - ".github/workflows/vm-tests.yml"
   pull_request:
     paths:
+      - ".config/molecule/**"
       - "ansible/**"
       - "molecule/**"
       - "scripts/ci/**"
+      - "scripts/testing/**"
       - "tests/**"
       - "pyproject.toml"
       - ".github/workflows/lint.yml"
+      - ".github/workflows/vm-tests.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -74,11 +80,6 @@ jobs:
         run: |
           python -m pip install --upgrade pip
 
-          if [ -f ansible/requirements.txt ]; then
-            python -m pip install -r ansible/requirements.txt
-          fi
-
-          python -m pip install ansible-core ansible-lint yamllint ruff pytest
           python -m pip install -r molecule/requirements.txt
 
       - name: Prepare ansible log dir
@@ -142,6 +143,8 @@ jobs:
             ansible/roles/service_prepare/filter_plugins \
             ansible/roles/service_prepare/library \
             scripts/ci \
+            scripts/testing \
+            molecule/shared \
             tests/unit \
             tests/molecule \
             tests/conftest.py \
@@ -161,6 +164,8 @@ jobs:
             ansible/roles/service_prepare/filter_plugins \
             ansible/roles/service_prepare/library \
             scripts/ci \
+            scripts/testing \
+            molecule/shared \
             tests/unit \
             tests/molecule \
             tests/conftest.py \
@@ -174,12 +179,13 @@ jobs:
 
       - name: Molecule CLI and syntax (no guest access)
         if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
-        env:
-          HOMELAB_MOLECULE_INVENTORY: ${{ github.workspace }}/molecule/rocky_node_exporter/inventory/hosts.yml
         run: |
           ANSIBLE_FILTER_PLUGINS="$GITHUB_WORKSPACE/ansible/filter_plugins:$GITHUB_WORKSPACE/ansible/roles/service_common/filter_plugins" \
-            ansible-lint --format=pep8 molecule/rocky_node_exporter
-          molecule syntax -s rocky_node_exporter
+            ANSIBLE_ACTION_PLUGINS="$GITHUB_WORKSPACE/ansible/action_plugins" \
+            ansible-lint --format=pep8 molecule
+          for scenario in rocky_node_exporter runtime_install application_lifecycle protected_network; do
+            molecule syntax -s "$scenario"
+          done
           python -m pytest tests/molecule -q --tb=short
 
   tests:

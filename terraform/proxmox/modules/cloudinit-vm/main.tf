@@ -103,7 +103,9 @@ resource "proxmox_virtual_environment_vm" "this" {
   }
 
   initialization {
-    datastore_id = var.datastore_id
+    upgrade              = var.cloud_init_upgrade
+    datastore_id         = var.datastore_id
+    network_data_file_id = var.network_data_file_id
     vendor_data_file_id = (
       var.vendor_data_file_id != null
       ? var.vendor_data_file_id
@@ -114,10 +116,14 @@ resource "proxmox_virtual_environment_vm" "this" {
       )
     )
 
-    ip_config {
-      ipv4 {
-        address = var.ipv4_address
-        gateway = var.ipv4_gateway
+    dynamic "ip_config" {
+      for_each = var.network_data_file_id == null ? [true] : []
+
+      content {
+        ipv4 {
+          address = var.ipv4_address
+          gateway = var.ipv4_gateway
+        }
       }
     }
 

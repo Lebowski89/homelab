@@ -1,0 +1,16 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Deploy through the real catalogue
+  hosts: molecule_guests
+  gather_facts: false
+  vars:
+    molecule_vm_fixture_file: '{{ playbook_dir }}/../shared/fixtures/application.yml'
+  tasks:
+    - name: VM tests | Dispatch production application deployment
+      ansible.builtin.include_tasks: ../shared/run.tasks.yml
+      vars:
+        molecule_vm_playbook: '{{ playbook_dir }}/../../ansible/playbook.yml'
+        molecule_vm_tags: 'molecule_{{ molecule_vm_runtime }},deploy'

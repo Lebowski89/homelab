@@ -1,0 +1,27 @@
+{
+  "debian13": {
+    "distribution": "Debian", "version": "13", "user": "debian", "package_manager": "apt", "selinux": false,
+    "url": "https://cloud.debian.org/images/cloud/trixie/20261103-2651/debian-13-generic-amd64-20261103-2651.qcow2",
+    "algorithm": "sha512",
+    "checksum": "1207e6e3efaff8ee77ab7a32c156a3eea6a9e53f94cfc48efbd1f49ba554ca36ac62ab27395aa813a1775a8c0a393b1a1ce5377d9e5670f6113e3110c57fee4b",
+    "source": "https://cloud.debian.org/images/cloud/trixie/20261103-2651/SHA512SUMS", "disk_gb": 8
+  },
+  "fedora44": {
+    "distribution": "Fedora", "version": "44", "user": "fedora", "package_manager": "dnf5", "selinux": true,
+    "url": "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/Fedora-Cloud-Base-Generic-44-1.7.x86_64.qcow2",
+    "algorithm": "sha256", "checksum": "28680fe5b371a5a82ebf43a31926e086a168e59949d03969c5093e7071f90b7f",
+    "source": "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Cloud/x86_64/images/Fedora-Cloud-44-1.7-x86_64-CHECKSUM", "disk_gb": 5
+  },
+  "rocky102": {
+    "distribution": "Rocky", "version": "10.2", "user": "rocky", "package_manager": "dnf", "selinux": true,
+    "url": "https://download.rockylinux.org/pub/rocky/10.2/images/x86_64/Rocky-10-GenericCloud-Base-10.2-20260525.0.x86_64.qcow2",
+    "algorithm": "sha256", "checksum": "9fc9e9ff16888bb68ac39b0392e25c9c92684d50c85f1cce6ab549363bbc4b48",
+    "source": "https://download.rockylinux.org/pub/rocky/10.2/images/x86_64/Rocky-10-GenericCloud-Base-10.2-20260525.0.x86_64.qcow2.CHECKSUM", "disk_gb": 10
+  },
+  "ubuntu2604": {
+    "distribution": "Ubuntu", "version": "26.04", "user": "ubuntu", "package_manager": "apt", "selinux": false,
+    "url": "https://cloud-images.ubuntu.com/releases/resolute/release-20261016/ubuntu-26.04-server-cloudimg-amd64.img",
+    "algorithm": "sha256", "checksum": "5645d0318ad21f643ebb1ac4567514620e9893380b07b0201fda163baa5b7eb5",
+    "source": "https://cloud-images.ubuntu.com/releases/resolute/release-20261016/SHA256SUMS", "disk_gb": 8
+  }
+}

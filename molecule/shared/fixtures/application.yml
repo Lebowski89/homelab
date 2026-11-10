@@ -1,0 +1,121 @@
+---
+
+svcfiles:
+  writer:
+    enabled: true
+    runtime: docker
+    tags: [molecule_writer]
+    name: 'molecule-writer-{{ molecule_vm_run_id[:12] }}'
+
+    image: docker.io/library/busybox@sha256:66a6306db78bf2dbf3487f293aa8d6990d8e506fdffab9cc43fe422becf886e4
+    user: '1000:1000'
+    command:
+      - /bin/sh
+      - -ec
+      - >-
+        grep -qx '{{ molecule_vm_run_id }}' /config/config-id;
+        grep -q '^molecule-{{ molecule_vm_run_id }}-' /run/secrets/molecule_credential;
+        env | grep -qx 'CONFIG_ID={{ molecule_vm_run_id }}';
+        id -u | grep -qx 1000;
+        test -f /data/persisted || printf '%s' '{{ molecule_vm_run_id }}' > /data/persisted;
+        printf 'ok' > /data/health;
+        exec httpd -f -p 8080 -h /data
+
+    environment:
+      CONFIG_ID: '{{ molecule_vm_run_id }}'
+    infisical:
+      secrets_map:
+        - var: credential
+          path: '/molecule/{{ molecule_vm_run_id }}'
+          name: credential
+          secret:
+            name: molecule_credential
+            uid: '1000'
+            gid: '1000'
+            mode: '0400'
+    secrets: [molecule_credential]
+
+    named_networks:
+      molecule:
+        driver: '{{ "overlay" if molecule_vm_runtime == "swarm" else "bridge" }}'
+        external: false
+    ports:
+      http:
+        exposure: public
+        published: 18080
+        target: 8080
+        protocol: tcp
+
+    paths:
+      - path: '/opt/molecule-apps/{{ molecule_vm_run_id }}'
+        state: directory
+        mode: '0755'
+      - path: '/opt/molecule-apps/{{ molecule_vm_run_id }}/data'
+        state: directory
+        mode: '0755'
+      - path: '/opt/molecule-apps/{{ molecule_vm_run_id }}/config'
+        state: directory
+        mode: '0755'
+    templates:
+      - src: '{{ "../../../../molecule/shared/fixtures/missing.j2" if molecule_vm_fail_prepare | default(false) else "../../../../molecule/shared/fixtures/config.j2" }}'
+        dest: '/opt/molecule-apps/{{ molecule_vm_run_id }}/config/config-id'
+        mode: '0444'
+        restart_on_change: true
+    volumes:
+      data:
+        type: bind
+        source: '/opt/molecule-apps/{{ molecule_vm_run_id }}/data'
+        target: /data
+        read_only: false
+        selinux: '{{ "shared" if molecule_vm_runtime == "swarm" else "private" }}'
+      config:
+        type: bind
+        source: '/opt/molecule-apps/{{ molecule_vm_run_id }}/config'
+        target: /config
+        read_only: true
+        selinux: '{{ "shared" if molecule_vm_runtime == "swarm" else "private" }}'
+
+    cap_drop: [ALL]
+    no_new_privileges: '{{ molecule_vm_runtime != "swarm" }}'
+
+    traefik:
+      enable: false
+
+    operational_requirements:
+      acl: []
+      ownership_transition: false
+    deploy:
+      type: container
+      hosts: [subject]
+
+    targets:
+      compose:
+        enabled: '{{ molecule_vm_runtime == "compose" }}'
+        tags: [molecule_compose]
+      swarm:
+        enabled: '{{ molecule_vm_runtime == "swarm" }}'
+        tags: [molecule_swarm]
+
+        deploy:
+          type: swarm
+      rootful:
+        enabled: '{{ molecule_vm_runtime == "rootful" }}'
+        runtime: podman
+        tags: [molecule_rootful]
+
+        deploy:
+          execution:
+            mode: rootful
+      rootless:
+        enabled: '{{ molecule_vm_runtime == "rootless" }}'
+        runtime: podman
+        tags: [molecule_rootless]
+
+        deploy:
+          execution:
+            mode: rootless
+            host_user: podman-molecule
+            userns:
+              mode: keep-id
+              uid: '1000'
+              gid: '1000'

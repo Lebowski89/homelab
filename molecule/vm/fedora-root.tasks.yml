@@ -1,0 +1,45 @@
+---
+
+- name: VM tests | Resolve the prepared Server image's mounted root
+  ansible.builtin.set_fact:
+    molecule_vm_fedora_root: '{{ ansible_facts.mounts | selectattr("mount", "equalto", "/") | first }}'
+
+- name: VM tests | Require the pinned Server image's single-volume allocation before growth
+  ansible.builtin.assert:
+    that:
+      - molecule_vm_fedora_root.fstype == 'xfs'
+      - molecule_vm_fedora_root.device in ['/dev/mapper/systemVG-LVRoot', '/dev/systemVG/LVRoot']
+      - ansible_facts.lvm is mapping
+      - ansible_facts.lvm.vgs.systemVG.num_lvs | int == 1
+      - ansible_facts.lvm.vgs.systemVG.num_pvs | int == 1
+      - ansible_facts.lvm.vgs.systemVG.lvs.keys() | list == ['LVRoot']
+      - ansible_facts.lvm.vgs.systemVG.size_g | float >= 28
+      - ansible_facts.lvm.vgs.systemVG.size_g | float <= 32
+    fail_msg: The prepared Fedora Server root layout differs from the approved 32 GiB single-volume image; no growth was attempted.
+
+- name: VM tests | Grow only the existing root logical volume within its allocated group
+  community.general.lvol:
+    vg: systemVG
+    lv: LVRoot
+    size: 100%VG
+    state: present
+    shrink: false
+    force: false
+    resizefs: false
+
+- name: VM tests | Grow the existing mounted XFS filesystem without formatting it
+  community.general.filesystem:
+    dev: '{{ molecule_vm_fedora_root.device }}'
+    fstype: xfs
+    force: false
+    resizefs: true
+
+- name: VM tests | Refresh actual mount capacity after growth
+  ansible.builtin.setup:
+    gather_subset: ['!all', mounts]
+    filter: ansible_mounts
+
+- name: VM tests | Require usable root capacity before installing any runtime
+  ansible.builtin.assert:
+    that: (ansible_facts.mounts | selectattr('mount', 'equalto', '/') | first).size_total >= 28 * 1024 * 1024 * 1024
+    fail_msg: The disposable Fedora root did not grow into its existing 32 GiB allocation.

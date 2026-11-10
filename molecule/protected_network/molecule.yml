@@ -1,0 +1,36 @@
+---
+
+ansible:
+  executor:
+    args:
+      ansible_playbook:
+        - --inventory=${HOMELAB_MOLECULE_INVENTORY:-../shared/inventory/hosts.yml}
+        - --extra-vars=@${HOMELAB_MOLECULE_VARS:-../shared/empty-vars.json}
+  playbooks:
+    prepare: prepare.yml
+    converge: converge.yml
+    verify: verify.yml
+    cleanup: cleanup.yml
+    destroy: ../shared/destroy.yml
+    side_effect: exercise.yml
+scenario:
+  create_sequence:
+    - prepare
+  converge_sequence:
+    - converge
+  check_sequence:
+    - syntax
+    - check
+  syntax_sequence:
+    - syntax
+  destroy_sequence: []
+  test_sequence:
+    - syntax
+    - prepare
+    - converge
+    - verify
+    - idempotence
+    - verify
+    - side_effect
+    - verify
+    - cleanup

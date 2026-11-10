@@ -61,6 +61,21 @@
       community.docker.docker_stack:
         name: "{{ docker_services_cleanup_stack_name }}"
         state: absent
+        absent_retries: 30
+        absent_retries_interval: 2
+
+    - name: Cleanup | Wait for the selected stack's networks to retire
+      community.docker.docker_host_info:
+        networks: true
+        networks_filters:
+          label: 'com.docker.stack.namespace={{ docker_services_cleanup_stack_name }}'
+      register: docker_services_retiring_stack_networks
+      until:
+        - docker_services_retiring_stack_networks is succeeded
+        - docker_services_retiring_stack_networks.networks is defined
+        - docker_services_retiring_stack_networks.networks | default([]) | length == 0
+      retries: 30
+      delay: 2
 
     - name: Cleanup | Remove Swarm stack file
       ansible.builtin.file:

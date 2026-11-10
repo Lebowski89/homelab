@@ -1,0 +1,55 @@
+---
+
+- name: VM tests | Discard only the previous controller statistics
+  ansible.builtin.file:
+    path: '{{ molecule_vm_evidence_directory }}/nested-stats.json'
+    state: absent
+  changed_when: false
+  check_mode: false
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: VM tests | Execute the production entry point with isolated inventory
+  ansible.builtin.command:
+    argv:
+      - '{{ ansible_playbook_python | dirname }}/ansible-playbook'
+      - --inventory
+      - "{{ lookup('ansible.builtin.env', 'HOMELAB_MOLECULE_INVENTORY') }}"
+      - '{{ molecule_vm_playbook }}'
+      - --extra-vars
+      - "@{{ lookup('ansible.builtin.env', 'HOMELAB_MOLECULE_VARS') }}"
+      - --extra-vars
+      - '@{{ molecule_vm_fixture_file | default(playbook_dir ~ "/../shared/empty-vars.json") }}'
+      - --extra-vars
+      - '{{ molecule_vm_overrides | default({}) | to_json }}'
+      - --tags
+      - '{{ molecule_vm_tags | default("all") }}'
+      - '{{ "--check" if ansible_check_mode else "--diff" }}'
+    chdir: '{{ molecule_vm_evidence_directory }}'
+  environment:
+    ANSIBLE_CALLBACK_PLUGINS: '{{ playbook_dir }}/../shared/callback_plugins'
+    ANSIBLE_CALLBACKS_ENABLED: vm_stats
+    HOMELAB_VM_STATS: '{{ molecule_vm_evidence_directory }}/nested-stats.json'
+    HOMELAB_VM_OPERATION: '{{ molecule_vm_tags | default("all") }}'
+    ANSIBLE_NOCOLOR: '1'
+  register: molecule_vm_nested
+  check_mode: false
+  changed_when: >-
+    (lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/nested-stats.json') | from_json).hosts.values()
+    | map(attribute='changed') | sum > 0
+  # Only the controller executes nested Ansible; no infrastructure credentials
+  # are present in its environment (vm.py passes an allowlist).
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: VM tests | Require actual host statistics and successful dispatch
+  vars:
+    molecule_vm_nested_stats: "{{ lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/nested-stats.json') | from_json }}"
+  ansible.builtin.assert:
+    that:
+      - molecule_vm_nested_stats.hosts.get('subject', {}).get('ok', 0) > 0
+      - molecule_vm_nested_stats.hosts.values() | map(attribute='failures') | sum == 0
+      - molecule_vm_nested_stats.hosts.values() | map(attribute='unreachable') | sum == 0
+  run_once: true

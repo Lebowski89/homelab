@@ -99,3 +99,68 @@ def test_inherited_operation_tags_do_not_authorize_docker_cleanup(tmp_path, oper
     assert result.returncode == 0, result.stdout + result.stderr
     assert marker.exists() is expected_cleanup, result.stdout + result.stderr
     assert json.loads(tracker.read_text()) == (["synthetic-stack"] if expected_cleanup else [])
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("network_state", ["retires", "stuck", "unavailable"])
+def test_swarm_cleanup_waits_for_owned_networks_and_retains_manifest_on_failure(tmp_path, network_state):
+    """Mock Docker I/O only; run the real cleanup ordering, retries and rescue."""
+    from test_podman_rootless_check_mode import run_local_playbook
+
+    actions = tmp_path / "collections/ansible_collections/community/docker/plugins/action"
+    actions.mkdir(parents=True)
+    plugin = """from pathlib import Path
+from ansible.plugins.action import ActionBase
+class ActionModule(ActionBase):
+    def run(self, tmp=None, task_vars=None):
+        manifest=Path(task_vars['test_stack_manifest'])
+        assert manifest.exists(), 'Manifest removed before network retirement'
+        if self._task.action.endswith('docker_stack'):
+            assert self._task.args['state']=='absent'
+            return {'changed': True}
+        expected='com.docker.stack.namespace='+task_vars['docker_services_cleanup_stack_name']
+        assert self._task.args['networks_filters']=={'label': expected}, 'Unscoped network query'
+        counter=Path(task_vars['test_network_counter'])
+        count=int(counter.read_text())+1 if counter.exists() else 1
+        counter.write_text(str(count))
+        if task_vars['test_network_state']=='unavailable':
+            return {'failed': True, 'msg': 'Synthetic unavailable daemon'}
+        retired=task_vars['test_network_state']=='retires' and count>=2
+        return {'changed': False, 'networks': [] if retired else [{'Id': 'retiring-network'}]}
+"""
+    for name in ["docker_stack", "docker_host_info", "docker_compose_v2"]:
+        (actions / (name + ".py")).write_text(plugin)
+    manifest = tmp_path / "stack.yml"
+    manifest.write_text("retained stack declaration")
+    counter = tmp_path / "network-queries"
+    tasks = deepcopy(yaml.safe_load((ROLE / "tasks/sub_tasks/cleanup.yml").read_text()))
+    for task in tasks:
+        for nested in task.get("block", []):
+            if "ansible.builtin.file" in nested and nested["ansible.builtin.file"]["path"].endswith("-stack.yml"):
+                nested["ansible.builtin.file"]["path"] = str(manifest)
+            if "until" in nested:
+                nested.update(retries=2, delay=0)
+    result = run_local_playbook(
+        tmp_path,
+        [
+            {
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "vars": {
+                    "ansible_python_interpreter": sys.executable,
+                    "docker_services_stack_name_effective": "synthetic-stack",
+                    "docker_services_stack_deploy_type": "swarm",
+                    "test_stack_manifest": str(manifest),
+                    "test_network_counter": str(counter),
+                    "test_network_state": network_state,
+                },
+                "tasks": tasks,
+            }
+        ],
+        check_mode=False,
+        extra_env={"ANSIBLE_COLLECTIONS_PATH": str(tmp_path / "collections")},
+    )
+    assert (result.returncode == 0) is (network_state == "retires"), result.stdout + result.stderr
+    assert int(counter.read_text()) >= 2
+    assert manifest.exists() is (network_state != "retires")

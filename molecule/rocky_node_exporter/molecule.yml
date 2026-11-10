@@ -1,34 +1,20 @@
 ---
 
-prerun: false
-
-dependency:
-  name: galaxy
-  enabled: false
+driver:
+  name: default
+  safe_files:
+    - '${MOLECULE_EPHEMERAL_DIRECTORY}/*.json'
+    - '${MOLECULE_EPHEMERAL_DIRECTORY}/node-exporter-invocation'
 
 ansible:
   executor:
-    backend: ansible-playbook
     args:
       ansible_playbook:
         # Molecule executes playbooks from this scenario directory.
         - --inventory=${HOMELAB_MOLECULE_INVENTORY:-inventory/hosts.yml}
+        - --extra-vars=@${HOMELAB_MOLECULE_VARS:-../shared/empty-vars.json}
         - --tags=node_exporter
         - --extra-vars=@${MOLECULE_SCENARIO_DIRECTORY}/vars/main.yml
-  env:
-    ANSIBLE_INJECT_FACT_VARS: 'false'
-  cfg:
-    defaults:
-      roles_path: ${MOLECULE_PROJECT_DIRECTORY}/ansible/roles
-      action_plugins: ${MOLECULE_PROJECT_DIRECTORY}/ansible/action_plugins
-      filter_plugins: ${MOLECULE_PROJECT_DIRECTORY}/ansible/filter_plugins
-      collections_path: ${MOLECULE_PROJECT_DIRECTORY}/ansible/collections:~/.ansible/collections:~/.local/share/homelab/collections
-      host_key_checking: true
-      inject_facts_as_vars: false
-      # Avoid automatic application group_vars/vault loading on a test target.
-      precedence: all_inventory,groups_inventory
-    inventory:
-      enable_plugins: yaml,ini,host_list
   playbooks:
     prepare: prepare.yml
     converge: converge.yml

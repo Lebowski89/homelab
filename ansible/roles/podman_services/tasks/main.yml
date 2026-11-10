@@ -172,69 +172,6 @@
       tags: [deploy, update, recreate, bootstrap]
 
     ################################
-    # RUNTIME CLEANUP
-    ################################
-
-    - name: Podman services | Stop shared-network services before recreate
-      when:
-        - not ansible_check_mode
-        - podman_services_state == 'recreate'
-        - podman_services_execution.mode == 'rootful'
-        - not (podman_services_execution_transition | bool)
-        - podman_services_namespace_dependents | length > 0
-        - not (podman_services_namespace_dependents_quiesced | bool)
-      ansible.builtin.include_tasks:
-        file: sub_tasks/stop_shared_network_services.yml
-        apply:
-          tags: [recreate]
-      tags: [recreate]
-
-    - name: Podman services | Check service before recreate
-      when:
-        - not ansible_check_mode
-        - podman_services_state == 'recreate'
-        - podman_services_execution.mode == 'rootful'
-        - not (podman_services_execution_transition | bool)
-      ansible.builtin.command:
-        argv:
-          - systemctl
-          - show
-          - "{{ podman_services_unit_name }}"
-          - --property=LoadState
-          - --value
-      register: podman_services_recreate_unit_load_state
-      changed_when: false
-      failed_when: false
-      tags: [recreate]
-
-    - name: Podman services | Stop service before recreate
-      when:
-        - not ansible_check_mode
-        - podman_services_state == 'recreate'
-        - podman_services_execution.mode == 'rootful'
-        - not (podman_services_execution_transition | bool)
-        - podman_services_recreate_unit_load_state.stdout | trim != 'not-found'
-      ansible.builtin.systemd_service:
-        name: "{{ podman_services_unit_name }}"
-        state: stopped
-      tags: [recreate]
-
-    - name: Podman services | Remove stopped container before recreate
-      when:
-        - not ansible_check_mode
-        - podman_services_state == 'recreate'
-        - podman_services_execution.mode == 'rootful'
-        - not (podman_services_execution_transition | bool)
-      ansible.builtin.include_tasks:
-        file: sub_tasks/cleanup_stopped_rootful_container.yml
-        apply:
-          tags: [recreate]
-      vars:
-        podman_services_cleanup_unit_name: "{{ podman_services_unit_name }}"
-        podman_services_cleanup_container_name: "{{ podman_services_service.unit_name }}"
-      tags: [recreate]
-
-    ################################
     # APPLICATION SECRET GENERATION
     ################################
 
@@ -269,6 +206,7 @@
       tags: [deploy, update, recreate, bootstrap]
 
     - name: Podman services | Validate secret attachments
+      when: podman_services_state != 'remove'
       no_log: true
       diff: false
       ansible.builtin.assert:
@@ -291,20 +229,6 @@
             podman_services_service
             | combine({'secrets': podman_services_effective_secret_declarations}, recursive=false)
           }}
-      tags: [deploy, update, recreate, bootstrap]
-
-    - name: Podman services | Manage Podman secrets
-      when:
-        - not ansible_check_mode
-        - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
-        - podman_services_effective_secret_declarations | length > 0
-      no_log: true
-      ansible.builtin.include_tasks:
-        file: sub_tasks/secrets/manage.yml
-        apply:
-          tags: [deploy, update, recreate, bootstrap]
-          no_log: true
-          diff: false
       tags: [deploy, update, recreate, bootstrap]
 
     ################################
@@ -458,6 +382,83 @@
           diff: false
       vars:
         service_prepare_context: "{{ podman_services_application_context }}"
+      tags: [deploy, update, recreate, bootstrap]
+
+    ################################
+    # RUNTIME CLEANUP
+    ################################
+
+    - name: Podman services | Stop shared-network services before recreate
+      when:
+        - not ansible_check_mode
+        - podman_services_state == 'recreate'
+        - podman_services_execution.mode == 'rootful'
+        - not (podman_services_execution_transition | bool)
+        - podman_services_namespace_dependents | length > 0
+        - not (podman_services_namespace_dependents_quiesced | bool)
+      ansible.builtin.include_tasks:
+        file: sub_tasks/stop_shared_network_services.yml
+        apply:
+          tags: [recreate]
+      tags: [recreate]
+
+    - name: Podman services | Check service before recreate
+      when:
+        - not ansible_check_mode
+        - podman_services_state == 'recreate'
+        - podman_services_execution.mode == 'rootful'
+        - not (podman_services_execution_transition | bool)
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - "{{ podman_services_unit_name }}"
+          - --property=LoadState
+          - --value
+      register: podman_services_recreate_unit_load_state
+      changed_when: false
+      failed_when: false
+      tags: [recreate]
+
+    - name: Podman services | Stop service before recreate
+      when:
+        - not ansible_check_mode
+        - podman_services_state == 'recreate'
+        - podman_services_execution.mode == 'rootful'
+        - not (podman_services_execution_transition | bool)
+        - podman_services_recreate_unit_load_state.stdout | trim != 'not-found'
+      ansible.builtin.systemd_service:
+        name: "{{ podman_services_unit_name }}"
+        state: stopped
+      tags: [recreate]
+
+    - name: Podman services | Remove stopped container before recreate
+      when:
+        - not ansible_check_mode
+        - podman_services_state == 'recreate'
+        - podman_services_execution.mode == 'rootful'
+        - not (podman_services_execution_transition | bool)
+      ansible.builtin.include_tasks:
+        file: sub_tasks/cleanup_stopped_rootful_container.yml
+        apply:
+          tags: [recreate]
+      vars:
+        podman_services_cleanup_unit_name: "{{ podman_services_unit_name }}"
+        podman_services_cleanup_container_name: "{{ podman_services_service.unit_name }}"
+      tags: [recreate]
+
+    - name: Podman services | Manage Podman secrets
+      when:
+        - not ansible_check_mode
+        - podman_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+        - podman_services_effective_secret_declarations | length > 0
+      no_log: true
+      ansible.builtin.include_tasks:
+        file: sub_tasks/secrets/manage.yml
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+          no_log: true
+          diff: false
       tags: [deploy, update, recreate, bootstrap]
 
     ################################

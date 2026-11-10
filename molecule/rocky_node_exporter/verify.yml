@@ -25,7 +25,7 @@
 
     - name: Molecule | Retain the first invocation on the controller
       ansible.builtin.copy:
-        dest: '{{ molecule_ephemeral_directory }}/node-exporter-invocation'
+        dest: '{{ (molecule_vm_evidence_directory | default(molecule_ephemeral_directory)) }}/node-exporter-invocation'
         content: '{{ molecule_node_exporter_invocation.stdout }}'
         force: false
         mode: '0600'
@@ -34,7 +34,7 @@
 
     - name: Molecule | Read the first invocation snapshot
       ansible.builtin.slurp:
-        src: '{{ molecule_ephemeral_directory }}/node-exporter-invocation'
+        src: '{{ (molecule_vm_evidence_directory | default(molecule_ephemeral_directory)) }}/node-exporter-invocation'
       delegate_to: localhost
       become: false
       register: molecule_node_exporter_first_invocation
@@ -80,3 +80,22 @@
           - molecule_node_exporter_metrics.content is search('(?m)^node_exporter_build_info[{]')
           - molecule_node_exporter_metrics.content is search('(?m)^node_uname_info[{]')
           - molecule_node_exporter_metrics.content is search('(?m)^homelab_molecule_node_exporter 1$')
+
+    - name: Molecule | Read the actual installed release
+      ansible.builtin.command:
+        argv: [/usr/local/bin/node_exporter, --version]
+      changed_when: false
+      register: molecule_node_exporter_release
+
+    - name: Molecule | Retain exact guest and runtime version evidence
+      ansible.builtin.copy:
+        dest: '{{ (molecule_vm_evidence_directory | default(molecule_ephemeral_directory)) }}/versions.json'
+        content: >-
+          {{ {'distribution': ansible_facts.distribution, 'version': ansible_facts.distribution_version,
+              'kernel': ansible_facts.kernel, 'architecture': ansible_facts.architecture,
+              'selinux': ansible_facts.selinux.mode | default('disabled'),
+              'vcpus': ansible_facts.processor_vcpus, 'memory_mb': ansible_facts.memtotal_mb,
+              'node_exporter': molecule_node_exporter_release.stdout ~ molecule_node_exporter_release.stderr} | to_json }}
+        mode: '0600'
+      delegate_to: localhost
+      become: false

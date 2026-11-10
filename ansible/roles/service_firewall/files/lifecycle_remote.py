@@ -72,6 +72,20 @@ def runtime_command(record):
     return prefix + ["/usr/bin/podman", "--remote=false"], ["--filter", "name=^" + binding["selector"] + "$"]
 
 
+def docker_image_reference(image):
+    """Qualify Docker Hub defaults, preserving explicit registries and IDs."""
+    require(isinstance(image, str) and image, "runtime image identity unavailable")
+    if image.startswith("sha256:"):
+        return image
+    name, separator, digest = image.partition("@")
+    first = name.split("/", 1)[0]
+    if "/" not in name:
+        name = "docker.io/library/" + name
+    elif "." not in first and ":" not in first and first != "localhost":
+        name = "docker.io/" + name
+    return name + separator + digest
+
+
 def runtime_check(record, expected, run=command):
     """Inspect exact local runtime identities; tolerate starting health only boundedly."""
     base, selectors = runtime_command(record)
@@ -96,8 +110,11 @@ def runtime_check(record, expected, run=command):
     )
     if expected == "baseline":
         return observed
+    declared_image, observed_image = record["image"], observed["image"]
+    if record["binding"]["runtime"] == "docker":
+        declared_image, observed_image = docker_image_reference(declared_image), docker_image_reference(observed_image)
     require(
-        observed["image"] == record["image"] or observed["image"].startswith(record["image"] + "@"),
+        observed_image == declared_image or observed_image.startswith(declared_image + "@"),
         "runtime image differs from canonical declaration",
     )
     health = observed.get("state", {}).get("Health") or {}

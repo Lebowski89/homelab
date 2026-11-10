@@ -6,12 +6,15 @@ state. They do not establish live application or firewall acceptance.
 
 ## Optional Molecule VM tests
 
-The first [Molecule pilot](../molecule/README.md) exercises native Node Exporter
-through the real catalogue on an explicitly opted-in, externally provisioned
-Rocky VM. It adds fresh-host check mode, idempotence, live metrics and owned
-removal checks alongside the existing simulated-I/O tests. CI performs only
-scenario lint/syntax and the isolated safety regressions; it receives no guest
-inventory or production credentials. VM creation/destruction is outside the pilot.
+The [disposable VM system](../molecule/README.md) shares a serial Proxmox/cloud-init
+lifecycle across Debian 13, Fedora 44, Rocky 10.2 and Ubuntu 26.04. It prepares
+private inventory and trusted SSH without NetBox or Tailscale. Native Node
+Exporter, runtime installation/coexistence, representative catalogue lifecycles
+and protected traffic are distinct scenario families. See the
+[acceptance summary](../molecule/README.md#recorded-acceptance) for recorded live results; syntax and simulated
+failure tests alone do not establish functional acceptance. Public PR CI has no
+infrastructure credentials. A separately enabled, protected controller workflow
+runs trusted VM cases within an explicitly approved allocation.
 The optional-tooling CLI regressions in `tests/molecule` run in the quality job
 with SSH blocked. The existing `tests/unit` commands do not require Molecule.
 

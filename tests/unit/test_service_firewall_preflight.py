@@ -615,13 +615,18 @@ m.exit_json(changed=False)
 from ansible.module_utils.basic import AnsibleModule
 from pathlib import Path
 import json
-m=AnsibleModule(argument_spec={{'name':{{'type':'str'}},'state':{{'type':'str'}},'compose':{{'type':'list','elements':'str'}}}},supports_check_mode=True)
+m=AnsibleModule(argument_spec={{'name':{{'type':'str'}},'state':{{'type':'str'}},'compose':{{'type':'list','elements':'str'}},'absent_retries':{{'type':'int'}},'absent_retries_interval':{{'type':'int'}}}},supports_check_mode=True)
 with Path({str(events)!r}).open('a') as s: s.write(json.dumps({{'runtime':m.params['state']}})+'\\n')
 p=Path({str(writer)!r})
 if m.params['state']=='absent': p.unlink(missing_ok=True)
 else: p.write_text('NONPRODUCTION replacement writer')
 m.exit_json(changed=True)
 """)
+    stack.with_name("docker_host_info.py").write_text(
+        "from ansible.module_utils.basic import AnsibleModule\n"
+        "m=AnsibleModule(argument_spec={'networks':{'type':'bool'},'networks_filters':{'type':'dict'}},supports_check_mode=True)\n"
+        "m.exit_json(changed=False,networks=[])\n"
+    )
     stack.with_name("docker_compose_v2.py").write_text(
         "from ansible.module_utils.basic import AnsibleModule\n"
         "m=AnsibleModule(argument_spec={})\n"

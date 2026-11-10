@@ -18,6 +18,13 @@ Both kernel families are audited. No browser, SQL, notification,
 external-denial or application acceptance is inferred, and no historical
 acknowledgement is promoted.
 
+Docker image checks recognize the equivalent default `docker.io` registry and
+`library` namespace forms that Swarm shortens, following
+[Docker's image-reference rules](https://docs.docker.com/reference/cli/docker/image/tag/).
+Tags and digests must still match; other registries and Podman references retain
+their existing comparison. Removal still checks ownership and absence without
+requiring the currently declared image version.
+
 Rootless callers are probed in both their user and network namespaces. Diagnostics
 separate namespace entry, interpreter startup and TCP errors without returning
 requests, interpreter source or arbitrary stderr. Only connection refusal/timeouts

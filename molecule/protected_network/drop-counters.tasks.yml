@@ -1,0 +1,27 @@
+---
+
+- name: VM tests | Compare actual owned DROP counters for this traffic path
+  ansible.builtin.command:
+    argv: [python3, '-']
+    stdin: |
+      import json,re,shlex
+      before=json.loads({{ molecule_vm_drop_before | to_json | to_json }})
+      after=json.loads({{ molecule_vm_drop_after | to_json | to_json }})
+      def drops(saved):
+          found={}
+          for line in saved.splitlines():
+              match=re.fullmatch(r'\[(\d+):\d+\] (.+)',line)
+              if not match: continue
+              tokens=shlex.split(match[2])
+              if len(tokens)<4 or not tokens[1].startswith('SKY-MGT-') or tokens[-2:]!=['-j','DROP']: continue
+              option='--ctorigdstport' if '--ctorigdstport' in tokens else '--dport'
+              if option not in tokens: continue
+              bounds=tokens[tokens.index(option)+1].split(':')
+              if int(bounds[0])<=18080<=int(bounds[-1]): found[match[2]]=int(match[1])
+          return found
+      assert len(before)==len(after)==2, 'Expected actual IPv4 and IPv6 rule snapshots'
+      for old,new in zip(before,after):
+          left,right=drops(old),drops(new)
+          assert left and any(right.get(rule,0)>value for rule,value in left.items()), 'No matching generated DROP counter increased'
+      print('Both families have matching observed DROP-counter increases for this path')
+  changed_when: false

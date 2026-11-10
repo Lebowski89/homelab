@@ -1,0 +1,27 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Preserve evidence before retiring only this run's protection
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Save bounded diagnostics before cleanup
+      ansible.builtin.include_tasks: ../shared/diagnostics.tasks.yml
+
+    - name: VM tests | Inspect the owned manager helper
+      ansible.builtin.stat:
+        path: /etc/skynet-mgt-firewall/policy.py
+      register: molecule_vm_manager_helper
+
+    - name: VM tests | Remove owned manager hooks without changing runtime state
+      when: molecule_vm_manager_helper.stat.exists
+      ansible.builtin.include_role:
+        name: service_firewall
+        tasks_from: mgt/remove
+
+    # The VM owns the test namespaces, containers and their retained state.
+    # VM retirement discards them after evidence collection. No prefix-based
+    # container, network, disk or data purge is part of application removal.

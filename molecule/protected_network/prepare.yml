@@ -1,0 +1,183 @@
+---
+
+- name: Require the disposable current-run guests
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Install the real runtimes on the fresh subject
+  ansible.builtin.import_playbook: ../runtime_install/prepare.yml
+
+- name: Install both real runtimes
+  ansible.builtin.import_playbook: ../runtime_install/converge.yml
+
+- name: Prepare explicit distribution firewall prerequisites
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Install distribution tools without changing selected alternatives
+      ansible.builtin.package:
+        name: '{{ ["curl", "nftables", "iptables", "firewalld"] if ansible_facts.pkg_mgr == "apt" else ["curl", "nftables", "iptables-nft", "firewalld"] }}'
+        state: present
+
+    - name: VM tests | Require all six tools to use the supported backend
+      ansible.builtin.command:
+        argv: ['{{ molecule_vm_tool }}', --version]
+      loop: [iptables, ip6tables, iptables-save, ip6tables-save, iptables-restore, ip6tables-restore]
+      loop_control:
+        loop_var: molecule_vm_tool
+      changed_when: false
+      register: molecule_vm_netfilter_tool
+      failed_when: molecule_vm_netfilter_tool.rc != 0 or '(nf_tables)' not in molecule_vm_netfilter_tool.stdout
+
+    - name: VM tests | Keep the native firewall enabled for persistence testing
+      ansible.builtin.systemd_service:
+        name: firewalld.service
+        enabled: true
+        state: started
+      notify: VM tests | Refresh Docker native firewall integration
+
+    - name: VM tests | Complete native firewall integration before creating test networks
+      ansible.builtin.meta: flush_handlers
+
+    - name: VM tests | Create the run-owned system helper directory
+      ansible.builtin.file:
+        path: /usr/local/libexec/homelab-molecule
+        state: directory
+        owner: root
+        mode: '0700'
+        setype: _default
+
+    - name: VM tests | Install a run-owned isolated traffic peer script
+      ansible.builtin.template:
+        src: peer.sh.j2
+        dest: '/usr/local/libexec/homelab-molecule/{{ molecule_vm_run_id }}-peer'
+        owner: root
+        mode: '0700'
+        setype: _default
+
+    - name: VM tests | Persist only the current run's network namespace across reboot
+      ansible.builtin.copy:
+        dest: '/etc/systemd/system/molecule-{{ molecule_vm_run_id }}-peer.service'
+        content: |
+          [Unit]
+          After=network-online.target firewalld.service
+          Wants=network-online.target
+          Before=docker.service
+          [Service]
+          Type=oneshot
+          RemainAfterExit=yes
+          ExecStart=/usr/local/libexec/homelab-molecule/{{ molecule_vm_run_id }}-peer
+          [Install]
+          WantedBy=multi-user.target
+        owner: root
+        mode: '0644'
+
+    - name: VM tests | Start the isolated peer path
+      ansible.builtin.systemd_service:
+        name: 'molecule-{{ molecule_vm_run_id }}-peer.service'
+        enabled: true
+        state: started
+        daemon_reload: true
+
+  handlers:
+    - name: VM tests | Refresh Docker native firewall integration
+      ansible.builtin.systemd_service:
+        name: docker.service
+        state: restarted
+
+- name: Prepare harmless real listeners and distinct caller namespaces
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  vars:
+    molecule_vm_network: 'molecule-{{ molecule_vm_run_id[:12] }}'
+    molecule_vm_probe_image: docker.io/library/busybox@sha256:66a6306db78bf2dbf3487f293aa8d6990d8e506fdffab9cc43fe422becf886e4
+  tasks:
+    - name: VM tests | Refuse existing production firewall ownership
+      ansible.builtin.stat:
+        path: '{{ molecule_vm_policy_path }}'
+      loop: [/etc/skynet-mgt-firewall, /etc/skynet-worker-backend-firewall]
+      loop_control:
+        loop_var: molecule_vm_policy_path
+      register: molecule_vm_existing_policy
+
+    - name: VM tests | Require an unclaimed firewall installation
+      ansible.builtin.assert:
+        that: not molecule_vm_existing_policy_result.stat.exists
+      loop: '{{ molecule_vm_existing_policy.results }}'
+      loop_control:
+        loop_var: molecule_vm_existing_policy_result
+
+    - name: VM tests | Create the owned dual-stack bridge
+      community.docker.docker_network:
+        name: '{{ molecule_vm_network }}'
+        enable_ipv6: true
+        labels:
+          homelab.molecule.run: '{{ molecule_vm_run_id }}'
+
+    - name: VM tests | Start a harmless HTTP listener on two adjacent ports
+      community.docker.docker_container:
+        name: '{{ molecule_vm_network }}-server'
+        image: '{{ molecule_vm_probe_image }}'
+        command: "sh -ec 'mkdir -p /tmp/web; echo molecule-network > /tmp/web/index.html; exec httpd -f -p 8080 -h /tmp/web'"
+        command_handling: correct
+        user: '1000:1000'
+        restart_policy: unless-stopped
+        cap_drop: [ALL]
+        networks:
+          - name: '{{ molecule_vm_network }}'
+        published_ports: ['0.0.0.0:18080:8080', '[::]:18080:8080', '0.0.0.0:18081:8080', '[::]:18081:8080']
+        labels:
+          homelab.molecule.run: '{{ molecule_vm_run_id }}'
+
+    - name: VM tests | Start distinct allowed and denied test callers
+      community.docker.docker_container:
+        name: '{{ molecule_vm_network }}-{{ molecule_vm_caller }}'
+        image: '{{ molecule_vm_probe_image }}'
+        command: sleep 86400
+        command_handling: correct
+        user: '1000:1000'
+        cap_drop: [ALL]
+        restart_policy: unless-stopped
+        networks:
+          - name: '{{ molecule_vm_network }}'
+        labels:
+          homelab.molecule.run: '{{ molecule_vm_run_id }}'
+          com.docker.compose.project: '{{ molecule_vm_network }}'
+          com.docker.compose.service: '{{ molecule_vm_caller }}'
+      loop: [allow, deny]
+      loop_control:
+        loop_var: molecule_vm_caller
+
+    - name: VM tests | Require a healthy listener on both families before installing protection
+      ansible.builtin.uri:
+        url: 'http://{{ molecule_vm_destination }}:18080/'
+        use_proxy: false
+        return_content: true
+      loop: ['{{ local_ip }}', '[{{ molecule_vm_ipv6_prefix }}:1]']
+      loop_control:
+        loop_var: molecule_vm_destination
+      register: molecule_vm_baseline_http
+      until: molecule_vm_baseline_http is succeeded
+      retries: 20
+      delay: 2
+
+- name: Verify a genuinely separate peer path before policy installation
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Stage the bounded traffic probe
+      ansible.builtin.copy:
+        src: ../shared/net_probe.py
+        dest: '/var/tmp/molecule-{{ molecule_vm_run_id }}-probe.py'
+        mode: '0600'
+
+    - name: VM tests | Require dual-stack healthy traffic through the isolated veth
+      ansible.builtin.command:
+        argv: [ip, netns, exec, 'molecule-{{ molecule_vm_run_id[:12] }}', python3,
+               '/var/tmp/molecule-{{ molecule_vm_run_id }}-probe.py', '{{ molecule_vm_destination }}', '18080', allow]
+      loop: ['198.18.255.1', '{{ molecule_vm_ipv6_prefix }}:1']
+      loop_control:
+        loop_var: molecule_vm_destination
+      changed_when: false

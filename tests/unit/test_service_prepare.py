@@ -89,21 +89,6 @@ def test_docker_preparation_declares_the_required_lifecycle_order():
     native = task_named(tasks, "Secrets | Manage Docker secrets")
     assert "not ansible_check_mode" in native["when"]
 
-    podman_tasks = list(iter_tasks(yaml.safe_load(PODMAN_MAIN_PATH.read_text())))
-    podman_names = [task["name"] for task in podman_tasks]
-    podman_expected = [
-        "Podman services | Validate application settings",
-        "Podman services | Stop service before recreate",
-        "Podman services | Generate application secrets",
-        "Podman services | Manage Podman secrets",
-        "Podman services | Build application template values",
-        "Podman services | Prepare service files and directories",
-        "Podman services | Configure application",
-        "Podman services | Write Quadlet files",
-        "Podman services | Manage service state",
-    ]
-    assert [podman_names.index(name) for name in podman_expected] == sorted(podman_names.index(name) for name in podman_expected)
-
 
 def test_application_role_has_separated_outputs_and_runtime_modules_only_in_executors():
     application_files = [*ROLE.joinpath("tasks/applications").rglob("*.yml"), *ROLE.joinpath("library").glob("*.py")]

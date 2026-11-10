@@ -30,7 +30,7 @@
           - molecule_node_exporter_target.ansible_host not in ['localhost', '127.0.0.1', '::1']
         fail_msg: Explicitly opt one disposable SSH VM into the Molecule scenario; local and unmarked targets are refused.
 
-- name: Validate the Rocky guest without changing it
+- name: Validate the selected guest without changing it
   hosts: molecule_node_exporter
   become: true
   gather_facts: false
@@ -40,19 +40,19 @@
     - name: Molecule | Gather explicit platform facts
       ansible.builtin.setup:
 
-    - name: Molecule | Require conventional Rocky 10 AMD64 with enforcing SELinux
+    - name: Molecule | Require the selected conventional AMD64 systemd platform
       ansible.builtin.assert:
         that:
           - ansible_facts.system == 'Linux'
-          - ansible_facts.distribution == 'Rocky'
-          - ansible_facts.distribution_major_version == '10'
+          - ansible_facts.distribution == (molecule_vm_images[molecule_vm_platform].distribution if molecule_vm_platform is defined else 'Rocky')
+          - ansible_facts.distribution_major_version == (molecule_vm_images[molecule_vm_platform].version.split('.')[0] if molecule_vm_platform is defined else '10')
           - ansible_facts.architecture == 'x86_64'
-          - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+          - ansible_facts.pkg_mgr == (molecule_vm_images[molecule_vm_platform].package_manager if molecule_vm_platform is defined else 'dnf')
           - ansible_facts.service_mgr == 'systemd'
           - ansible_facts.virtualization_role == 'guest'
           - ansible_facts.virtualization_type in ['kvm', 'qemu']
-          - ansible_facts.selinux.mode | default('') == 'enforcing'
-        fail_msg: This pilot requires an enforcing Rocky 10 AMD64 KVM/QEMU VM.
+          - not (molecule_vm_images[molecule_vm_platform].selinux if molecule_vm_platform is defined else true) or ansible_facts.selinux.mode | default('') == 'enforcing'
+        fail_msg: Use the selected supported AMD64 KVM/QEMU platform, with enforcing SELinux on RPM guests. Legacy manual runs require Rocky 10.
 
     - name: Molecule | Inspect OSTree deployment
       ansible.builtin.stat:
@@ -62,3 +62,7 @@
     - name: Molecule | Refuse image-based deployment
       ansible.builtin.assert:
         that: not molecule_node_exporter_ostree.stat.exists
+
+- name: Verify lifecycle-controller ownership for matrix runs
+  ansible.builtin.import_playbook: ../shared/guard.yml
+  when: molecule_vm_run_id is defined

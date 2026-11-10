@@ -1,0 +1,124 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Verify real runtime coexistence and installation-only boundaries
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Read actual runtime versions and standalone state
+      ansible.builtin.command:
+        argv: '{{ molecule_vm_argv }}'
+      loop:
+        - [docker, version, --format, '{{ "{{json .}}" }}']
+        - [podman, version, --format, json]
+        - [docker, info, --format, '{{ "{{.Swarm.LocalNodeState}}" }}']
+        - [docker, ps, -aq]
+        - [podman, ps, -aq]
+        - [systemctl, show, docker.service, '--property=MainPID,InvocationID,ActiveState,UnitFileState']
+        - [stat, -fc, '%T', /sys/fs/cgroup]
+        - [docker, info, --format, '{{ "{{json .SecurityOptions}}" }}']
+      loop_control:
+        loop_var: molecule_vm_argv
+      changed_when: false
+      register: molecule_vm_runtime_results
+
+    - name: VM tests | Require real Docker, Podman, cgroup v2 and no application or Swarm side effects
+      ansible.builtin.assert:
+        that:
+          - (molecule_vm_runtime_results.results[0].stdout | from_json).Server.Version | length > 0
+          - (molecule_vm_runtime_results.results[1].stdout | from_json).Client.Version is version('5.4.2', '>=')
+          - molecule_vm_runtime_results.results[2].stdout == 'inactive'
+          - molecule_vm_runtime_results.results[3].stdout | length == 0
+          - molecule_vm_runtime_results.results[4].stdout | length == 0
+          - "'ActiveState=active' in molecule_vm_runtime_results.results[5].stdout_lines"
+          - "'UnitFileState=enabled' in molecule_vm_runtime_results.results[5].stdout_lines"
+          - molecule_vm_runtime_results.results[6].stdout == 'cgroup2fs'
+          - not molecule_vm_images[molecule_vm_platform].selinux or 'name=selinux' in (molecule_vm_runtime_results.results[7].stdout | from_json)
+
+    - name: VM tests | Inspect the actual Docker CLI package provider
+      ansible.builtin.command:
+        argv: '{{ ["dpkg-query", "-S", "/usr/bin/docker"] if ansible_facts.pkg_mgr == "apt" else ["rpm", "-qf", "/usr/bin/docker"] }}'
+      changed_when: false
+      register: molecule_vm_cli_owner
+
+    - name: VM tests | Reject an emulated Docker CLI
+      ansible.builtin.assert:
+        that:
+          - "'docker-ce-cli' in molecule_vm_cli_owner.stdout"
+          - "'podman-docker' not in molecule_vm_cli_owner.stdout"
+
+    - name: VM tests | Inspect the dedicated application account without creating it
+      ansible.builtin.getent:
+        database: passwd
+        key: podman-molecule
+        fail_key: false
+
+    - name: VM tests | Require installation-only selection to leave application accounts absent
+      ansible.builtin.assert:
+        that: ansible_facts.getent_passwd['podman-molecule'] is none
+
+    - name: VM tests | Preserve the first daemon identity and runtime versions
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/runtime-identity.json'
+        content: '{{ molecule_vm_runtime_results.results | map(attribute="stdout") | list | to_json }}'
+        force: false
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+
+    - name: VM tests | Require repeated installation to preserve daemon identity
+      ansible.builtin.assert:
+        that: >-
+          (lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/runtime-identity.json') | from_json)[5]
+          == molecule_vm_runtime_results.results[5].stdout
+
+    - name: VM tests | Check the retained firewall and SELinux state
+      ansible.builtin.service_facts:
+
+    - name: VM tests | Require the initial security state to be preserved
+      vars:
+        molecule_vm_security: "{{ lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/security.json') | from_json }}"
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.selinux.mode | default('disabled') == molecule_vm_security.selinux
+          - (ansible_facts.services.get('firewalld.service', {}).get('state', '') == 'running') == molecule_vm_security.firewalld_active
+          - (ansible_facts.services.get('firewalld.service', {}).get('status', '') == 'enabled') == molecule_vm_security.firewalld_enabled
+
+    - name: VM tests | Verify Quadlet generators without creating an API service
+      ansible.builtin.command:
+        argv: [podman, info, --format, json]
+      changed_when: false
+      register: molecule_vm_podman_info
+
+    - name: VM tests | Require the expected networking and cgroup capabilities
+      ansible.builtin.assert:
+        that:
+          - (molecule_vm_podman_info.stdout | from_json).host.cgroupVersion == 'v2'
+          - (molecule_vm_podman_info.stdout | from_json).host.networkBackend == 'netavark'
+          - ansible_facts.services.get('podman.socket', {}).get('state', '') != 'running'
+
+    - name: VM tests | Read the actual API socket unit state
+      ansible.builtin.command:
+        argv: [systemctl, show, podman.socket, '--property=ActiveState,UnitFileState']
+      changed_when: false
+      register: molecule_vm_podman_socket
+
+    - name: VM tests | Require installation to leave the API socket inactive and disabled
+      ansible.builtin.assert:
+        that:
+          - "'ActiveState=inactive' in molecule_vm_podman_socket.stdout_lines"
+          - "'UnitFileState=disabled' in molecule_vm_podman_socket.stdout_lines or 'UnitFileState=static' in molecule_vm_podman_socket.stdout_lines"
+
+    - name: VM tests | Retain exact version evidence
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/versions.json'
+        content: >-
+          {{ {"distribution": ansible_facts.distribution, "version": ansible_facts.distribution_version,
+              "kernel": ansible_facts.kernel, "selinux": ansible_facts.selinux.mode | default('disabled'),
+              "runtime_outputs": molecule_vm_runtime_results.results | map(attribute="stdout") | list} | to_json }}
+        mode: '0600'
+      delegate_to: localhost
+      become: false

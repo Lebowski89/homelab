@@ -1,0 +1,36 @@
+---
+
+- name: VM tests | Resolve the selected execution store
+  ansible.builtin.import_tasks: app-execution.tasks.yml
+
+- name: VM tests | Find the selected writer in its actual runtime store
+  become: true
+  become_user: '{{ molecule_vm_runtime_user }}'
+  environment: '{{ molecule_vm_runtime_env }}'
+  ansible.builtin.command:
+    argv: >-
+      {{ [molecule_vm_engine, 'ps', '--filter',
+          ('label=com.docker.stack.namespace=molecule-writer-' ~ molecule_vm_run_id[:12]
+           if molecule_vm_runtime == 'swarm' else 'name=molecule-writer-' ~ molecule_vm_run_id[:12]), '--format', '{{.ID}}'] }}
+  changed_when: false
+  register: molecule_vm_writer_ids
+  until:
+    - molecule_vm_writer_ids.stdout_lines | length == 1
+    - >-
+      molecule_vm_prior_identity | default('') == '' or
+      not molecule_vm_prior_identity.split()[0].startswith(molecule_vm_writer_ids.stdout)
+  retries: 30
+  delay: 2
+
+- name: VM tests | Require exactly one running writer
+  ansible.builtin.assert:
+    that: molecule_vm_writer_ids.stdout_lines | length == 1
+
+- name: VM tests | Read the actual writer identity without exposing its environment or credentials
+  become: true
+  become_user: '{{ molecule_vm_runtime_user }}'
+  environment: '{{ molecule_vm_runtime_env }}'
+  ansible.builtin.command:
+    argv: ['{{ molecule_vm_engine }}', inspect, --format, '{{ "{{.Id}} {{.State.StartedAt}} {{.State.Pid}}" }}', '{{ molecule_vm_writer_ids.stdout }}']
+  changed_when: false
+  register: molecule_vm_writer_identity

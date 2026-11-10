@@ -73,6 +73,12 @@ while retaining the account's actual HOME and Quadlets. This avoids the
 without bypassing unit validation or restarting the user manager. The temporary
 directory is removed after either successful or failed verification.
 
+Rootful verification retains Podman's generator dry-run and verifies the actual
+unit under `/run/systemd/generator/` after daemon reload. It avoids rerunning
+unrelated host generators in systemd 257's read-only verification sandbox;
+SELinux remains enforcing. Removal does not require deployment secret
+declarations or values, and retains the existing native-secret retention policy.
+
 ## Logging
 
 Every normalized Podman service carries `log_driver`. It defaults to the only
@@ -661,3 +667,8 @@ execution/cleanup receipts remain in the private migration handoff.
 Application bind labeling uses the portable `volumes.<name>.selinux` field;
 see [SELinux storage policy](service-storage-selinux.md). Existing rootless
 ownership and UID/GID mappings are unchanged.
+
+Rootful recreation completes application preparation before stopping the existing
+writer or reconciling native secrets. A preparation failure preserves the running
+service; successful preparation still stops it before immutable secret
+replacement.

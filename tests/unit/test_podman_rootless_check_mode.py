@@ -240,7 +240,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
     } in sanitized_plan
 
 
-def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, extra_env=None):
+def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, extra_env=None, run_tags=None):
     playbook = tmp_path / "behavior.yml"
     playbook.write_text(yaml.safe_dump(plays, sort_keys=False))
     env = os.environ.copy()
@@ -258,13 +258,55 @@ def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, ex
     if extra_env:
         env.update(extra_env)
     return subprocess.run(
-        [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", str(playbook), *(["--check"] if check_mode else [])],
+        [
+            str(Path(sys.executable).with_name("ansible-playbook")),
+            "-i",
+            "localhost,",
+            str(playbook),
+            *(["--check"] if check_mode else []),
+            *(["--tags", run_tags] if run_tags else []),
+        ],
         cwd=REPO_ROOT,
         env=env,
         text=True,
         capture_output=True,
         check=False,
     )
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("operation,declared,success", [("remove", False, True), ("deploy", False, False), ("deploy", True, True)])
+def test_widened_operation_tags_do_not_require_deployment_secrets_for_removal(tmp_path, operation, declared, success):
+    from ansible_task_cases import walk_tasks
+
+    tasks = yaml.safe_load((REPO_ROOT / "ansible/roles/podman_services/tasks/main.yml").read_text())
+    guard = next(
+        task
+        for task in walk_tasks(tasks)
+        if "ansible.builtin.assert" in task and "podman_services_effective_secret_declarations" in str(task["ansible.builtin.assert"])
+    )
+    selected = tmp_path / "secret-guard.yml"
+    selected.write_text(yaml.safe_dump([guard], sort_keys=False))
+    result = run_local_playbook(
+        tmp_path,
+        [
+            {
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "vars": {
+                    "podman_services_state": operation,
+                    "podman_services_service": {"secret_attachments": ["credential"]},
+                    "podman_services_effective_secret_declarations": [{"name": "credential"}] if declared else [],
+                },
+                "tasks": [{"ansible.builtin.include_tasks": {"file": str(selected), "apply": {"tags": ["remove"]}}, "tags": ["remove"]}],
+            }
+        ],
+        check_mode=False,
+        run_tags="remove",
+        extra_env={"ANSIBLE_INJECT_FACT_VARS": "false"},
+    )
+    assert (result.returncode == 0) is success, result.stdout + result.stderr
 
 
 @pytest.mark.integration

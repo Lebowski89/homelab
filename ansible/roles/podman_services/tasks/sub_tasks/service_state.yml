@@ -24,9 +24,12 @@
   ansible.builtin.command:
     argv:
       - systemd-analyze
-      - --generators=true
+      - --generators=false
       - verify
-      - "{{ podman_services_unit_name }}"
+      - "/run/systemd/generator/{{ podman_services_unit_name }}"
+  # The preceding dry-run validates Quadlet generation; flush_handlers made
+  # PID 1 generate the current unit. Verify that artifact without rerunning
+  # unrelated host generators in systemd 257's read-only temporary sandbox.
   changed_when: false
   tags: [deploy, update, recreate, bootstrap]
 

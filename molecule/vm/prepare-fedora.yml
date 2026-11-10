@@ -1,0 +1,210 @@
+---
+
+- name: Require the exact disposable image builder
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Prepare a runtime-free Fedora image using standard image tools
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  vars:
+    molecule_vm_build_root: '/var/lib/molecule-image-builder/{{ molecule_vm_run_id }}'
+    molecule_vm_build_export: '/var/tmp/molecule-{{ molecule_vm_run_id }}-fedora.qcow2'
+  environment:
+    LIBGUESTFS_BACKEND: direct
+    LIBGUESTFS_MEMSIZE: '768'
+    LIBGUESTFS_SMP: '1'
+  tasks:
+    - name: VM images | Require the approved Ubuntu builder and explicit purpose
+      ansible.builtin.assert:
+        that:
+          - molecule_vm_platform == 'ubuntu2604'
+          - molecule_vm_image_builder | default(false) is sameas true
+          - molecule_vm_fedora_source.checksum is match('^[a-f0-9]{64}$')
+
+    - name: VM images | Refuse to adopt a previous image build
+      ansible.builtin.stat:
+        path: '{{ molecule_vm_build_root }}'
+      register: molecule_vm_build_existing
+
+    - name: VM images | Require an owned build directory if retrying a source-only failure
+      ansible.builtin.assert:
+        that:
+          - >-
+            not molecule_vm_build_existing.stat.exists or
+            (molecule_vm_build_existing.stat.isdir | default(false) and
+             not molecule_vm_build_existing.stat.islnk | default(false) and
+             molecule_vm_build_existing.stat.uid == 0 and molecule_vm_build_existing.stat.mode == '0700')
+
+    - name: VM images | Inspect existing build artifacts without following links
+      when: molecule_vm_build_existing.stat.exists
+      ansible.builtin.find:
+        paths: '{{ molecule_vm_build_root }}'
+        recurse: false
+        hidden: true
+        file_type: any
+        follow: false
+      register: molecule_vm_build_files
+
+    - name: VM images | Refuse to overwrite a modified or foreign image during a retry
+      ansible.builtin.assert:
+        that:
+          - molecule_vm_build_files.files | default([]) | length <= 1
+          - >-
+            molecule_vm_build_files.files | default([]) | length == 0 or
+            (molecule_vm_build_files.files[0].path == molecule_vm_build_root ~ '/source.qcow2' and
+             molecule_vm_build_files.files[0].isreg and molecule_vm_build_files.files[0].uid == 0 and
+             molecule_vm_build_files.files[0].mode == '0600')
+
+    - name: VM images | Inspect any previous exported artifact
+      ansible.builtin.stat:
+        path: '{{ molecule_vm_build_export }}'
+        follow: false
+      register: molecule_vm_build_export_existing
+
+    - name: VM images | Require a new export artifact
+      ansible.builtin.assert:
+        that: not molecule_vm_build_export_existing.stat.exists
+
+    - name: VM images | Install image tools only in the disposable builder
+      ansible.builtin.apt:
+        name: [libguestfs-tools, qemu-utils]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+        install_recommends: false
+        allow_unauthenticated: false
+
+    - name: VM images | Create the owned build directory
+      ansible.builtin.file:
+        path: '{{ molecule_vm_build_root }}'
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: VM images | Download and verify the official runtime-free Server image
+      ansible.builtin.get_url:
+        url: '{{ molecule_vm_fedora_source.url }}'
+        dest: '{{ molecule_vm_build_root }}/source.qcow2'
+        checksum: 'sha256:{{ molecule_vm_fedora_source.checksum }}'
+        timeout: 60
+        mode: '0600'
+      register: molecule_vm_source_download
+      until: molecule_vm_source_download is succeeded
+      retries: 3
+      delay: 10
+
+    - name: VM images | Inspect the pinned image layout before expanding it
+      ansible.builtin.command:
+        argv: [virt-filesystems, --format=qcow2, '-a', '{{ molecule_vm_build_root }}/source.qcow2', --all, --long]
+      changed_when: false
+      register: molecule_vm_source_layout
+
+    - name: VM images | Require the pinned Server image's expected LVM layout
+      ansible.builtin.assert:
+        that:
+          - "molecule_vm_source_layout.stdout_lines | select('match', '^/dev/sda4\\s+pv\\s+') | list | length == 1"
+          - "'/dev/systemVG/LVRoot' in molecule_vm_source_layout.stdout"
+
+    - name: VM images | Allocate a sparse image within the approved disk limit
+      ansible.builtin.command:
+        argv: [qemu-img, create, '-f', qcow2, '{{ molecule_vm_build_root }}/expanded.qcow2', 32G]
+      changed_when: true
+
+    - name: VM images | Expand only the inspected image's PV and root LV
+      ansible.builtin.command:
+        argv: [virt-resize, --format=qcow2, --output-format=qcow2, --expand, /dev/sda4, --LV-expand, /dev/systemVG/LVRoot,
+               '{{ molecule_vm_build_root }}/source.qcow2', '{{ molecule_vm_build_root }}/expanded.qcow2']
+      changed_when: true
+      async: 1800
+      poll: 10
+
+    - name: VM images | Add cloud-init without installing or removing a container runtime
+      ansible.builtin.command:
+        argv:
+          - virt-customize
+          - --format=qcow2
+          - '-a'
+          - '{{ molecule_vm_build_root }}/expanded.qcow2'
+          - --run-command
+          - update-ca-trust extract
+          - --run-command
+          - dnf5 -y --setopt=gpgcheck=1 --setopt=install_weak_deps=False install cloud-init cloud-utils-growpart
+          - --run-command
+          - >-
+            set -eu;
+            for unit in initial-setup.service initial-setup-reconfiguration.service; do
+              if test -f /usr/lib/systemd/system/"$unit"; then systemctl --root=/ disable "$unit"; fi;
+            done;
+            systemctl --root=/ enable cloud-init.target;
+            for unit in cloud-init-local.service cloud-init-network.service cloud-init.service cloud-config.service cloud-final.service; do
+              if test -f /usr/lib/systemd/system/"$unit"; then systemctl --root=/ enable "$unit"; fi;
+            done
+          - --run-command
+          - >-
+            set -eu;
+            grep -Eq '^ID="?fedora"?$' /etc/os-release;
+            grep -Eq '^VERSION_ID="?44"?$' /etc/os-release;
+            for package in podman podman-docker docker-ce moby-engine; do
+              if rpm -q "$package" >/dev/null 2>&1; then echo "Unexpected installed runtime: $package" >&2; exit 1; fi;
+            done;
+            rpm -q cloud-init cloud-utils-growpart selinux-policy-targeted > /etc/homelab-test-image-packages
+          - --selinux-relabel
+      changed_when: true
+      async: 1800
+      poll: 10
+
+    - name: VM images | Generalize only the unbooted image's machine and SSH identities
+      ansible.builtin.command:
+        argv: [virt-sysprep, --format=qcow2, '-a', '{{ molecule_vm_build_root }}/expanded.qcow2',
+               --operations, 'machine-id,ssh-hostkeys,net-hwaddr,dhcp-client-state']
+      changed_when: true
+      async: 900
+      poll: 10
+
+    - name: VM images | Compress the prepared image for transfer
+      ansible.builtin.command:
+        argv: [qemu-img, convert, '-f', qcow2, '-O', qcow2, '-c', '{{ molecule_vm_build_root }}/expanded.qcow2', '{{ molecule_vm_build_export }}']
+      changed_when: true
+      async: 1800
+      poll: 10
+
+    - name: VM images | Publish only the generic image for the unprivileged SSH transfer
+      ansible.builtin.file:
+        path: '{{ molecule_vm_build_export }}'
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: VM images | Read the actual prepared package versions
+      ansible.builtin.command:
+        argv: [virt-cat, --format=qcow2, '-a', '{{ molecule_vm_build_export }}', /etc/homelab-test-image-packages]
+      changed_when: false
+      register: molecule_vm_image_packages
+
+    - name: VM images | Record the prepared image checksum
+      ansible.builtin.stat:
+        path: '{{ molecule_vm_build_export }}'
+        checksum_algorithm: sha256
+      register: molecule_vm_image_stat
+
+    # No become/slurp of a multi-gigabyte artifact: the generic output contains
+    # no run credentials or host key. SSH/SFTP reads it as the dedicated account.
+    - name: VM images | Fetch the verified generic artifact into private controller state
+      become: false
+      ansible.builtin.fetch:
+        src: '{{ molecule_vm_build_export }}'
+        dest: '{{ molecule_vm_image_output }}'
+        flat: true
+        validate_checksum: true
+
+    - name: VM images | Preserve value-free image preparation evidence
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/prepared-image.json'
+        content: >-
+          {{ {'checksum': molecule_vm_image_stat.stat.checksum, 'packages': molecule_vm_image_packages.stdout_lines,
+              'layout': molecule_vm_source_layout.stdout_lines} | to_json }}
+        mode: '0600'
+      delegate_to: localhost
+      become: false

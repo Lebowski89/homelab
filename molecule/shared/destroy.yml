@@ -1,0 +1,12 @@
+---
+
+- name: Retain guests and controller evidence after any Molecule outcome
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  tags: always
+  tasks:
+    - name: VM tests | Require explicit exact-run retirement through the lifecycle controller
+      ansible.builtin.debug:
+        msg: No infrastructure action is performed by Molecule. Retire only this run with vm.py retire and its exact run ID.

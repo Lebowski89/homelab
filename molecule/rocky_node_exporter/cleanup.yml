@@ -21,6 +21,11 @@
     - name: Molecule | Remove only the owned catalogue installation
       when: molecule_node_exporter_marker.stat.exists
       block:
+        - name: Molecule | Preserve failure evidence before removal
+          ansible.builtin.include_tasks: ../shared/diagnostics.tasks.yml
+          vars:
+            molecule_vm_diagnostic_stage: before-removal
+
         - name: Molecule | Read the real Node Exporter declaration
           ansible.builtin.include_vars:
             file: ../../ansible/group_vars/all/services/node_exporter.yml

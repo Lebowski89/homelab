@@ -1,0 +1,32 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Verify that check mode did not install runtimes or application accounts
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Inspect installed packages after the preview
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: VM tests | Require runtimes to remain absent
+      ansible.builtin.assert:
+        that: ansible_facts.packages.keys() | intersect(['docker-ce', 'docker.io', 'podman', 'podman-docker']) | length == 0
+
+    - name: VM tests | Inspect application preparation paths
+      ansible.builtin.stat:
+        path: '{{ molecule_vm_path }}'
+      loop: [/var/lib/podman-services, /opt/compose, /etc/containers/systemd/molecule.container]
+      loop_control:
+        loop_var: molecule_vm_path
+      register: molecule_vm_preview_paths
+
+    - name: VM tests | Require installation-only preview to avoid application preparation
+      ansible.builtin.assert:
+        that: not molecule_vm_preview_path.stat.exists
+      loop: '{{ molecule_vm_preview_paths.results }}'
+      loop_control:
+        loop_var: molecule_vm_preview_path

@@ -1,0 +1,39 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Install both runtimes through production installation-only selections
+  hosts: molecule_guests
+  gather_facts: false
+  tasks:
+    - name: VM tests | Observe whether Docker already supplies compatibility prerequisites
+      ansible.builtin.stat:
+        path: /usr/bin/docker
+      register: molecule_vm_docker_before
+
+    - name: VM tests | Execute installation entry points in the selected order
+      ansible.builtin.include_tasks: ../shared/run.tasks.yml
+      vars:
+        molecule_vm_playbook: '{{ playbook_dir }}/../../ansible/playbook.yml'
+        molecule_vm_tags: '{{ molecule_vm_install_tag }}'
+        molecule_vm_overrides: >-
+          {{ {'podman_docker_iptables_compatibility': false}
+             if molecule_vm_order == 'podman-first' and molecule_vm_install_tag == 'podman_install'
+                and not molecule_vm_docker_before.stat.exists else {} }}
+      loop: '{{ ["docker_install", "podman_install"] if molecule_vm_order == "docker-first" else ["podman_install", "docker_install"] }}'
+      loop_control:
+        loop_var: molecule_vm_install_tag
+
+    # The opt-in deliberately requires existing nf_tables helpers. Install
+    # Podman with its distribution provider first, let Docker supply its own
+    # prerequisites, then reconcile the documented configuration-only path.
+    - name: VM tests | Select coexistence only after Docker supplies its prerequisites
+      when: molecule_vm_order == 'podman-first'
+      ansible.builtin.include_tasks: ../shared/run.tasks.yml
+      vars:
+        molecule_vm_playbook: '{{ playbook_dir }}/../../ansible/playbook.yml'
+        molecule_vm_tags: podman_install
+        molecule_vm_overrides:
+          podman_install_enable: false
+          podman_docker_iptables_compatibility: true
