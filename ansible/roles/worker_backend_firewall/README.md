@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/20 |
+| Readme update        | 2026/11/10 |
 
 
 
@@ -38,7 +38,8 @@
 
 | Name | Module | Has Conditions | Comments |
 | ---- | ------ | -------------- | -------- |
-| Worker backend firewall ¦ Forward the retained install task entry | ansible.builtin.include_role | False | Compatibility for saved tasks_from imports; implementation is owned by service_firewall. |
+| Worker backend firewall ¦ Validate the platform for a retained installation import | ansible.builtin.include_role | False | Compatibility for saved tasks_from imports; implementation is owned by service_firewall. |
+| Worker backend firewall ¦ Forward the retained install task entry | ansible.builtin.include_role | False |  |
 
 #### File: tasks/main.yml
 

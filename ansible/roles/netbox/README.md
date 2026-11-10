@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/23 |
+| Readme update        | 2026/11/10 |
 
 
 
@@ -129,7 +129,7 @@
 | [netbox_podman_services.0.operational_requirements.**ownership_transition**](defaults/main.yml#L135)   | bool | `True` |    
 | [netbox_podman_services.0.**deploy**](defaults/main.yml#L136)   | dict | `{}` |    
 | [netbox_podman_services.0.deploy.**type**](defaults/main.yml#L137)   | str | `container` |    
-| [netbox_podman_services.0.deploy.**host**](defaults/main.yml#L138)   | str | `{{ inventory_hostname }}` |    
+| [netbox_podman_services.0.deploy.**hosts**](defaults/main.yml#L138)   | str | `{{ inventory_hostname }}` |    
 | [netbox_podman_services.0.deploy.**execution**](defaults/main.yml#L139)   | dict | `{}` |    
 | [netbox_podman_services.0.deploy.execution.**mode**](defaults/main.yml#L140)   | str | `rootless` |    
 | [netbox_podman_services.0.deploy.execution.**host_user**](defaults/main.yml#L141)   | str | `podman-netbox-postgres` |    
@@ -191,7 +191,7 @@
 | [netbox_podman_services.1.operational_requirements.**ownership_transition**](defaults/main.yml#L194)   | bool | `True` |    
 | [netbox_podman_services.1.**deploy**](defaults/main.yml#L195)   | dict | `{}` |    
 | [netbox_podman_services.1.deploy.**type**](defaults/main.yml#L196)   | str | `container` |    
-| [netbox_podman_services.1.deploy.**host**](defaults/main.yml#L197)   | str | `{{ inventory_hostname }}` |    
+| [netbox_podman_services.1.deploy.**hosts**](defaults/main.yml#L197)   | str | `{{ inventory_hostname }}` |    
 | [netbox_podman_services.1.deploy.**execution**](defaults/main.yml#L198)   | dict | `{}` |    
 | [netbox_podman_services.1.deploy.execution.**mode**](defaults/main.yml#L199)   | str | `rootless` |    
 | [netbox_podman_services.1.deploy.execution.**host_user**](defaults/main.yml#L200)   | str | `podman-netbox-redis` |    
@@ -276,7 +276,7 @@
 | [netbox_podman_services.2.operational_requirements.**ownership_transition**](defaults/main.yml#L278)   | bool | `True` |    
 | [netbox_podman_services.2.**deploy**](defaults/main.yml#L279)   | dict | `{}` |    
 | [netbox_podman_services.2.deploy.**type**](defaults/main.yml#L280)   | str | `container` |    
-| [netbox_podman_services.2.deploy.**host**](defaults/main.yml#L281)   | str | `{{ inventory_hostname }}` |    
+| [netbox_podman_services.2.deploy.**hosts**](defaults/main.yml#L281)   | str | `{{ inventory_hostname }}` |    
 | [netbox_podman_services.2.deploy.**execution**](defaults/main.yml#L282)   | dict | `{}` |    
 | [netbox_podman_services.2.deploy.execution.**mode**](defaults/main.yml#L283)   | str | `rootless` |    
 | [netbox_podman_services.2.deploy.execution.**host_user**](defaults/main.yml#L284)   | str | `podman-netbox` |    

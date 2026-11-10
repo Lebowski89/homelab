@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/22 |
+| Readme update        | 2026/11/10 |
 
 
 
@@ -74,10 +74,10 @@ hosts retain their fail-closed contributions if a later host cannot commit. |
 | ---- | ------ | -------------- | -----|
 | Service firewall ¦ Activate provider access before application health checks | ansible.builtin.include_tasks | True |  |
 | Service firewall ¦ Reconcile new caller identities before waiting for application health | service_firewall_lifecycle | True |  |
-| Service firewall ¦ Apply this service's scoped protection transaction | service_firewall_lifecycle | True |  |
 | Service firewall ¦ Verify declared callers against the running publication | ansible.builtin.include_tasks | True |  |
-| Service firewall ¦ Complete or retain only this client's provider contributions | ansible.builtin.include_tasks | True |  |
 | Service firewall ¦ Check this client's access to its current providers | ansible.builtin.include_tasks | True |  |
+| Service firewall ¦ Apply this service's scoped protection transaction | service_firewall_lifecycle | True |  |
+| Service firewall ¦ Complete or retain only this client's provider contributions | ansible.builtin.include_tasks | True |  |
 
 #### File: tasks/lifecycle_inspect.yml
 
@@ -110,6 +110,7 @@ hosts retain their fail-closed contributions if a later host cannot commit. |
 | Service firewall ¦ Validate the firewall profile and operation | ansible.builtin.assert | False |  |
 | Service firewall ¦ Save the operation for the selected profile | ansible.builtin.set_fact | False | Keep the chosen operation before exposing the legacy profile variables below;
 those public names remain supported by saved rollback playbooks. |
+| Service firewall ¦ Validate the host platform before planning or mutation | ansible.builtin.include_tasks | False |  |
 | Service firewall ¦ Run the selected firewall profile | ansible.builtin.include_tasks | False |  |
 
 #### File: tasks/mgt/check.yml
@@ -123,9 +124,8 @@ those public names remain supported by saved rollback playbooks. |
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| Service firewall ¦ Mgt ¦ Gather minimal platform facts | ansible.builtin.setup | False |
-| Service firewall ¦ Mgt ¦ Validate the supported Ubuntu version and Python | ansible.builtin.assert | False |
-| Service firewall ¦ Mgt ¦ Verify caller identities and test IPv4 and IPv6 rules before writing files | ansible.builtin.command | False |
+| Service firewall ¦ Mgt ¦ Validate platform for retained direct installation imports | ansible.builtin.include_tasks | False |
+| Service firewall ¦ Mgt ¦ Verify callers and test both rule families before writes | ansible.builtin.command | False |
 | Service firewall ¦ Mgt ¦ Save the verified service-manager dependencies | ansible.builtin.set_fact | False |
 | Service firewall ¦ Mgt ¦ Extend and reconcile the current policy under its writer lock | service_firewall_lifecycle | False |
 
@@ -136,6 +136,7 @@ those public names remain supported by saved rollback playbooks. |
 | Service firewall ¦ Mgt ¦ Validate the selected operation | ansible.builtin.assert | False |
 | Service firewall ¦ Mgt ¦ Load service declarations without secret values | ansible.builtin.include_vars | True |
 | Service firewall ¦ Mgt ¦ Build endpoints from service and bootstrap declarations | mgt_firewall_plan | True |
+| Service firewall ¦ Mgt ¦ Retain current generated policy outputs | ansible.builtin.set_fact | True |
 | Service firewall ¦ Mgt ¦ Show endpoint coverage and pending caller identities | ansible.builtin.debug | True |
 | Service firewall ¦ Mgt ¦ Show the check-mode recovery plan | ansible.builtin.debug | True |
 | Service firewall ¦ Mgt ¦ Run the selected policy operation | ansible.builtin.include_tasks | True |
@@ -177,6 +178,16 @@ those public names remain supported by saved rollback playbooks. |
 | Service firewall ¦ Workers ¦ Reject conflicting operations | ansible.builtin.assert | False |  |
 | Service firewall ¦ Workers ¦ Run the workers profile on the selected worker hosts | ansible.builtin.include_tasks | True |  |
 
+#### File: tasks/platform.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Service firewall ¦ Gather platform facts | ansible.builtin.setup | False |
+| Service firewall ¦ Inspect the Unraid platform marker | ansible.builtin.stat | False |
+| Service firewall ¦ Inspect the OSTree deployment marker | ansible.builtin.stat | False |
+| Service firewall ¦ Validate the supported platform | ansible.builtin.assert | False |
+| Service firewall ¦ Explain deferred check-mode verification | ansible.builtin.debug | True |
+
 #### File: tasks/prepare_callers.yml
 
 | Name | Module | Has Conditions |
@@ -211,6 +222,7 @@ those public names remain supported by saved rollback playbooks. |
 | Service firewall ¦ Workers ¦ Validate the operation and source-address confirmation | ansible.builtin.assert | True |
 | Service firewall ¦ Workers ¦ Load service declarations without secret values | ansible.builtin.include_vars | True |
 | Service firewall ¦ Workers ¦ Build published worker ports from service declarations | worker_backend_firewall_plan | True |
+| Service firewall ¦ Workers ¦ Retain current generated placement | ansible.builtin.set_fact | True |
 | Service firewall ¦ Workers ¦ Require published ports and the worker inventory address | ansible.builtin.assert | True |
 | Service firewall ¦ Workers ¦ Gather minimal platform facts | ansible.builtin.setup | False |
 | Service firewall ¦ Workers ¦ Detect the supported Unraid platform | ansible.builtin.stat | False |
@@ -223,14 +235,16 @@ those public names remain supported by saved rollback playbooks. |
 
 #### File: tasks/workers/remove.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| Service firewall ¦ Workers ¦ Detect owned Plex units | ansible.builtin.stat | True |
-| Service firewall ¦ Workers ¦ Stop and disable only installed owned Plex units | ansible.builtin.systemd_service | True |
-| Service firewall ¦ Workers ¦ Remove the owned Unraid boot block | ansible.builtin.blockinfile | True |
-| Service firewall ¦ Workers ¦ Stop any Unraid reconciler and remove managed firewall rules | ansible.builtin.command | False |
-| Service firewall ¦ Workers ¦ Remove managed startup and reconciliation files | ansible.builtin.file | False |
-| Service firewall ¦ Workers ¦ Reload Plex unit definitions after removal | ansible.builtin.systemd_service | True |
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Service firewall ¦ Workers ¦ Detect owned Plex units | ansible.builtin.stat | True |  |
+| Service firewall ¦ Workers ¦ Stop and disable only installed reconciliation units | ansible.builtin.systemd_service | True |  |
+| Service firewall ¦ Workers ¦ Disable startup protection without stopping Docker | ansible.builtin.systemd_service | True | Docker Requires this active oneshot. Stopping it before retiring the drop-in
+propagates a stop to Docker; disabling it preserves the existing writer. |
+| Service firewall ¦ Workers ¦ Remove the owned Unraid boot block | ansible.builtin.blockinfile | True |  |
+| Service firewall ¦ Workers ¦ Stop any Unraid reconciler and remove managed firewall rules | ansible.builtin.command | False |  |
+| Service firewall ¦ Workers ¦ Remove managed startup and reconciliation files | ansible.builtin.file | False |  |
+| Service firewall ¦ Workers ¦ Reload Plex unit definitions after removal | ansible.builtin.systemd_service | True |  |
 
 #### File: tasks/workers/systemd.yml
 

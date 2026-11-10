@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/01 |
+| Readme update        | 2026/11/10 |
 
 
 
@@ -55,22 +55,51 @@
 ### Tasks
 
 
-#### File: tasks/main.yml
+#### File: tasks/install.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Postgres_Exporter ¦ Validate database credential contract | ansible.builtin.assert | False |
+| Postgres_Exporter ¦ Install APT archive prerequisites | ansible.builtin.apt | True |
+| Postgres_Exporter ¦ Install RPM archive and SELinux prerequisites | ansible.builtin.dnf | True |
+| Postgres_Exporter ¦ Refresh RPM SELinux facts after installing bindings | ansible.builtin.setup | True |
+| Postgres_Exporter ¦ Require known RPM SELinux status | ansible.builtin.assert | True |
 | Postgres_Exporter ¦ Create postgres_exporter group | ansible.builtin.group | False |
 | Postgres_Exporter ¦ Create postgres_exporter user | ansible.builtin.user | False |
 | Postgres_Exporter ¦ Create configuration directory | ansible.builtin.file | False |
 | Postgres_Exporter ¦ Install protected password file | ansible.builtin.template | False |
 | Postgres_Exporter ¦ Install protected environment file | ansible.builtin.template | False |
-| Postgres_Exporter ¦ Skip binary install in check mode | ansible.builtin.debug | True |
-| Postgres_Exporter ¦ Download checksum-pinned archive | ansible.builtin.get_url | True |
-| Postgres_Exporter ¦ Extract archive | ansible.builtin.unarchive | True |
-| Postgres_Exporter ¦ Install binary | ansible.builtin.copy | True |
+| Postgres_Exporter ¦ Ensure the selected binary directory exists | ansible.builtin.file | False |
+| Postgres_Exporter ¦ Download checksum-pinned archive | ansible.builtin.get_url | False |
+| Postgres_Exporter ¦ Extract archive | ansible.builtin.unarchive | False |
+| Postgres_Exporter ¦ Install binary | ansible.builtin.copy | False |
+| Postgres_Exporter ¦ Prepare enforcing RPM executable labels | ansible.builtin.import_tasks | True |
 | Postgres_Exporter ¦ Install systemd unit | ansible.builtin.template | False |
-| Postgres_Exporter ¦ Enable and start service | ansible.builtin.systemd | True |
+| Postgres_Exporter ¦ Enable and start service | ansible.builtin.systemd_service | False |
+
+#### File: tasks/main.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Postgres_Exporter ¦ Validate platform and installation inputs | ansible.builtin.import_tasks | False |
+| Postgres_Exporter ¦ Preview installation in check mode | ansible.builtin.debug | True |
+| Postgres_Exporter ¦ Install and configure the exporter | ansible.builtin.import_tasks | True |
+
+#### File: tasks/platform.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Postgres_Exporter ¦ Gather missing platform facts | ansible.builtin.setup | True |
+| Postgres_Exporter ¦ Detect Atomic or OSTree deployment | ansible.builtin.stat | False |
+| Postgres_Exporter ¦ Validate supported platform before changes | ansible.builtin.assert | False |
+| Postgres_Exporter ¦ Require a pinned archive and safe managed paths | ansible.builtin.assert | False |
+
+#### File: tasks/selinux.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Postgres_Exporter ¦ Persist a label for only the managed executable | community.general.sefcontext | False |
+| Postgres_Exporter ¦ Restore only the managed executable label | community.general.serestorecon | False |
 
 
 

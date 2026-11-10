@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/20 |
+| Readme update        | 2026/11/10 |
 
 
 
@@ -361,6 +361,7 @@
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Temporary preparation container ¦ Validate request | ansible.builtin.assert | False |  |
+| Temporary preparation container ¦ Resolve canonical storage labeling | ansible.builtin.set_fact | False |  |
 | Temporary preparation container ¦ Reset execution output | ansible.builtin.set_fact | False |  |
 | Temporary preparation container ¦ Require the rootless execution context | ansible.builtin.assert | True |  |
 | Temporary preparation container ¦ Execute with guaranteed cleanup | block | True |  |

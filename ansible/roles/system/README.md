@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/26 |
+| Readme update        | 2026/11/10 |
 
 
 
@@ -52,54 +52,52 @@
 | [system_resolved_enabled](defaults/main.yml#L37)   | bool | `False` |    
 | [system_resolved_disable_stub](defaults/main.yml#L38)   | bool | `False` |    
 | [system_resolved_manage_resolv_conf](defaults/main.yml#L39)   | str | `{{ system_resolved_disable_stub }}` |    
-| [system_resolved_manage_nsswitch](defaults/main.yml#L40)   | bool | `True` |    
+| [system_resolved_manage_nsswitch](defaults/main.yml#L40)   | str | `{{ ansible_facts.pkg_mgr ¦ default('') == 'apt' }}` |    
 | [system_resolved_nsswitch_path](defaults/main.yml#L41)   | str | `/etc/nsswitch.conf` |    
 | [system_resolved_nsswitch_backup](defaults/main.yml#L42)   | bool | `True` |    
 | [system_resolved_nsswitch_hosts_line](defaults/main.yml#L43)   | str | `hosts:          files resolve [!UNAVAIL=return] dns` |    
-| [system_resolved_packages](defaults/main.yml#L44)   | list | `[]` |    
-| [system_resolved_packages.**0**](defaults/main.yml#L44)   | str | `libnss-resolve` |    
+| [system_resolved_packages](defaults/main.yml#L44)   | str | `{{ ['libnss-resolve'] if ansible_facts.pkg_mgr == 'apt' else ['systemd-resolved'] }}` |    
 | [system_resolved_service_name](defaults/main.yml#L45)   | str | `systemd-resolved` |    
 | [system_resolved_config_dir](defaults/main.yml#L46)   | str | `/etc/systemd/resolved.conf.d` |    
 | [system_resolved_dropin_path](defaults/main.yml#L47)   | str | `{{ system_resolved_config_dir }}/99-skynet.conf` |    
 | [system_resolved_resolv_conf_path](defaults/main.yml#L48)   | str | `/etc/resolv.conf` |    
-| [system_resolved_resolv_conf_target](defaults/main.yml#L49)   | str | `/run/systemd/resolve/resolv.conf` |    
-| [system_resolved_fallback_dns](defaults/main.yml#L50)   | list | `[]` |    
-| [system_resolved_fallback_dns.**0**](defaults/main.yml#L50)   | str | `1.1.1.1` |    
-| [system_resolved_fallback_dns.**1**](defaults/main.yml#L50)   | str | `9.9.9.9` |    
-| [system_resolved_cleanup_dropins](defaults/main.yml#L51)   | list | `[]` |    
-| [system_resolved_cleanup_dropins.**0**](defaults/main.yml#L52)   | str | `/etc/systemd/resolved.conf.d/no-stub-listener.conf` |    
-| [system_apt_environment](defaults/main.yml#L54)   | dict | `{}` |    
-| [system_apt_environment.**DEBIAN_FRONTEND**](defaults/main.yml#L55)   | str | `noninteractive` |    
-| [system_apt_environment.**DEBIAN_PRIORITY**](defaults/main.yml#L56)   | str | `critical` |    
-| [system_sysctl_settings](defaults/main.yml#L58)   | dict | `{}` |    
-| [system_sysctl_settings.fs.inotify.**max_user_watches**](defaults/main.yml#L59)   | int | `524288` |    
-| [system_sysctl_settings.net.core.**default_qdisc**](defaults/main.yml#L60)   | str | `fq` |    
-| [system_sysctl_settings.net.core.**rmem_max**](defaults/main.yml#L61)   | int | `67108864` |    
-| [system_sysctl_settings.net.core.**somaxconn**](defaults/main.yml#L62)   | int | `4096` |    
-| [system_sysctl_settings.net.core.**wmem_max**](defaults/main.yml#L63)   | int | `67108864` |    
-| [system_sysctl_settings.net.ipv4.conf.all.**accept_redirects**](defaults/main.yml#L64)   | int | `0` |    
-| [system_sysctl_settings.net.ipv4.conf.all.**accept_source_route**](defaults/main.yml#L65)   | int | `0` |    
-| [system_sysctl_settings.net.ipv4.conf.all.**secure_redirects**](defaults/main.yml#L66)   | int | `0` |    
-| [system_sysctl_settings.net.ipv4.**tcp_congestion_control**](defaults/main.yml#L67)   | str | `bbr` |    
-| [system_sysctl_settings.net.ipv4.**tcp_fin_timeout**](defaults/main.yml#L68)   | int | `10` |    
-| [system_sysctl_settings.net.ipv4.**tcp_max_syn_backlog**](defaults/main.yml#L69)   | int | `30000` |    
-| [system_sysctl_settings.net.ipv4.**tcp_max_tw_buckets**](defaults/main.yml#L70)   | int | `2000000` |    
-| [system_sysctl_settings.net.ipv4.**tcp_mtu_probing**](defaults/main.yml#L71)   | int | `1` |    
-| [system_sysctl_settings.net.ipv4.**tcp_rfc1337**](defaults/main.yml#L72)   | int | `1` |    
-| [system_sysctl_settings.net.ipv4.**tcp_rmem**](defaults/main.yml#L73)   | str | `4096 87380 33554432` |    
-| [system_sysctl_settings.net.ipv4.**tcp_sack**](defaults/main.yml#L74)   | int | `1` |    
-| [system_sysctl_settings.net.ipv4.**tcp_slow_start_after_idle**](defaults/main.yml#L75)   | int | `0` |    
-| [system_sysctl_settings.net.ipv4.**tcp_tw_reuse**](defaults/main.yml#L76)   | int | `2` |    
-| [system_sysctl_settings.net.ipv4.**tcp_window_scaling**](defaults/main.yml#L77)   | int | `1` |    
-| [system_sysctl_settings.net.ipv4.**tcp_wmem**](defaults/main.yml#L78)   | str | `4096 87380 33554432` |    
-| [system_sysctl_settings.net.ipv4.**udp_rmem_min**](defaults/main.yml#L79)   | int | `8192` |    
-| [system_sysctl_settings.net.ipv4.**udp_wmem_min**](defaults/main.yml#L80)   | int | `8192` |    
-| [system_sysctl_settings.net.ipv4.neigh.default.**gc_thresh1**](defaults/main.yml#L81)   | int | `1024` |    
-| [system_sysctl_settings.net.ipv4.neigh.default.**gc_thresh2**](defaults/main.yml#L82)   | int | `2048` |    
-| [system_sysctl_settings.net.ipv4.neigh.default.**gc_thresh3**](defaults/main.yml#L83)   | int | `4096` |    
-| [system_sysctl_settings.vm.**dirty_background_ratio**](defaults/main.yml#L84)   | int | `10` |    
-| [system_sysctl_settings.vm.**dirty_ratio**](defaults/main.yml#L85)   | int | `15` |    
-| [system_sysctl_settings.vm.**swappiness**](defaults/main.yml#L86)   | int | `10` |    
+| [system_resolved_resolv_conf_target](defaults/main.yml#L49)   | str | `<multiline value: folded_strip>` |    
+| [system_resolved_fallback_dns](defaults/main.yml#L53)   | list | `[]` |    
+| [system_resolved_fallback_dns.**0**](defaults/main.yml#L53)   | str | `1.1.1.1` |    
+| [system_resolved_fallback_dns.**1**](defaults/main.yml#L53)   | str | `9.9.9.9` |    
+| [system_resolved_cleanup_dropins](defaults/main.yml#L54)   | str | `{{ ['/etc/systemd/resolved.conf.d/no-stub-listener.conf'] if ansible_facts.pkg_mgr == 'apt' else [] }}` |    
+| [system_apt_environment](defaults/main.yml#L56)   | dict | `{}` |    
+| [system_apt_environment.**DEBIAN_FRONTEND**](defaults/main.yml#L57)   | str | `noninteractive` |    
+| [system_apt_environment.**DEBIAN_PRIORITY**](defaults/main.yml#L58)   | str | `critical` |    
+| [system_sysctl_settings](defaults/main.yml#L60)   | dict | `{}` |    
+| [system_sysctl_settings.fs.inotify.**max_user_watches**](defaults/main.yml#L61)   | int | `524288` |    
+| [system_sysctl_settings.net.core.**default_qdisc**](defaults/main.yml#L62)   | str | `fq` |    
+| [system_sysctl_settings.net.core.**rmem_max**](defaults/main.yml#L63)   | int | `67108864` |    
+| [system_sysctl_settings.net.core.**somaxconn**](defaults/main.yml#L64)   | int | `4096` |    
+| [system_sysctl_settings.net.core.**wmem_max**](defaults/main.yml#L65)   | int | `67108864` |    
+| [system_sysctl_settings.net.ipv4.conf.all.**accept_redirects**](defaults/main.yml#L66)   | int | `0` |    
+| [system_sysctl_settings.net.ipv4.conf.all.**accept_source_route**](defaults/main.yml#L67)   | int | `0` |    
+| [system_sysctl_settings.net.ipv4.conf.all.**secure_redirects**](defaults/main.yml#L68)   | int | `0` |    
+| [system_sysctl_settings.net.ipv4.**tcp_congestion_control**](defaults/main.yml#L69)   | str | `bbr` |    
+| [system_sysctl_settings.net.ipv4.**tcp_fin_timeout**](defaults/main.yml#L70)   | int | `10` |    
+| [system_sysctl_settings.net.ipv4.**tcp_max_syn_backlog**](defaults/main.yml#L71)   | int | `30000` |    
+| [system_sysctl_settings.net.ipv4.**tcp_max_tw_buckets**](defaults/main.yml#L72)   | int | `2000000` |    
+| [system_sysctl_settings.net.ipv4.**tcp_mtu_probing**](defaults/main.yml#L73)   | int | `1` |    
+| [system_sysctl_settings.net.ipv4.**tcp_rfc1337**](defaults/main.yml#L74)   | int | `1` |    
+| [system_sysctl_settings.net.ipv4.**tcp_rmem**](defaults/main.yml#L75)   | str | `4096 87380 33554432` |    
+| [system_sysctl_settings.net.ipv4.**tcp_sack**](defaults/main.yml#L76)   | int | `1` |    
+| [system_sysctl_settings.net.ipv4.**tcp_slow_start_after_idle**](defaults/main.yml#L77)   | int | `0` |    
+| [system_sysctl_settings.net.ipv4.**tcp_tw_reuse**](defaults/main.yml#L78)   | int | `2` |    
+| [system_sysctl_settings.net.ipv4.**tcp_window_scaling**](defaults/main.yml#L79)   | int | `1` |    
+| [system_sysctl_settings.net.ipv4.**tcp_wmem**](defaults/main.yml#L80)   | str | `4096 87380 33554432` |    
+| [system_sysctl_settings.net.ipv4.**udp_rmem_min**](defaults/main.yml#L81)   | int | `8192` |    
+| [system_sysctl_settings.net.ipv4.**udp_wmem_min**](defaults/main.yml#L82)   | int | `8192` |    
+| [system_sysctl_settings.net.ipv4.neigh.default.**gc_thresh1**](defaults/main.yml#L83)   | int | `1024` |    
+| [system_sysctl_settings.net.ipv4.neigh.default.**gc_thresh2**](defaults/main.yml#L84)   | int | `2048` |    
+| [system_sysctl_settings.net.ipv4.neigh.default.**gc_thresh3**](defaults/main.yml#L85)   | int | `4096` |    
+| [system_sysctl_settings.vm.**dirty_background_ratio**](defaults/main.yml#L86)   | int | `10` |    
+| [system_sysctl_settings.vm.**dirty_ratio**](defaults/main.yml#L87)   | int | `15` |    
+| [system_sysctl_settings.vm.**swappiness**](defaults/main.yml#L88)   | int | `10` |    
 
 
 ### Vars
@@ -216,15 +214,64 @@ may retire the exact unit and generated script previously owned by ubuntu. |
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
-| System resolver ¦ Assert supported host | ansible.builtin.assert | False |
-| System resolver ¦ Install NSS resolver packages | ansible.builtin.apt | True |
-| System resolver ¦ Ensure systemd-resolved is enabled and running | ansible.builtin.systemd | False |
+| System resolver ¦ Validate the direct task entry point | ansible.builtin.import_tasks | False |
+| System resolver ¦ Install APT resolver packages | ansible.builtin.apt | True |
+| System resolver ¦ Install RPM resolver packages | ansible.builtin.dnf | True |
+| System resolver ¦ Preview RPM setup without runtime or file mutations | ansible.builtin.debug | True |
+| System resolver ¦ Configure the selected resolver | ansible.builtin.include_tasks | True |
+
+#### File: tasks/resolved_configure.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| System resolver ¦ Ensure systemd-resolved is enabled and running | ansible.builtin.systemd_service | False |
+| System resolver ¦ Verify the declared NSS provider without external DNS | ansible.builtin.command | True |
 | System resolver ¦ Ensure resolved config directory exists | ansible.builtin.file | False |
 | System resolver ¦ Remove stale unmanaged resolved drop-ins | ansible.builtin.file | True |
 | System resolver ¦ Configure systemd-resolved drop-in | ansible.builtin.copy | False |
 | System resolver ¦ Apply DNS stub listener changes before dependent services | ansible.builtin.meta | True |
-| System resolver ¦ Point resolv.conf at resolved upstream file | ansible.builtin.file | True |
+| System resolver ¦ Republish NetworkManager DNS after resolver changes | ansible.builtin.command | True |
+| System resolver ¦ Verify the active stub before relying on its output | block | True |
+| System resolver ¦ Read the running resolver process after configuration | ansible.builtin.command | False |
+| System resolver ¦ Read the configured stub socket owners | community.general.listen_ports_facts | False |
+| System resolver ¦ Require both stub protocols to belong to the selected resolver | ansible.builtin.assert | False |
+| System resolver ¦ Inspect the resolved output before changing the link | ansible.builtin.stat | True |
+| System resolver ¦ Require usable output before changing resolver ownership | ansible.builtin.assert | True |
+| System resolver ¦ Reinspect resolver ownership immediately before replacement | ansible.builtin.stat | True |
+| System resolver ¦ Retain a changed resolver owner during preparation | ansible.builtin.assert | True |
+| System resolver ¦ Point resolv.conf at the selected resolved output | ansible.builtin.file | True |
 | System resolver ¦ Ensure NSS uses systemd-resolved before plain DNS | ansible.builtin.lineinfile | True |
+
+#### File: tasks/resolved_rpm_validate.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| System resolver ¦ Preserve RPM NSS and require a usable resolver target | ansible.builtin.assert | False |
+| System resolver ¦ Resolve this invocation's unit and NSS requirement | ansible.builtin.set_fact | False |
+| System resolver ¦ Inspect installed package ownership | ansible.builtin.package_facts | False |
+| System resolver ¦ Require explicit ownership for Fedora's initial package transition | ansible.builtin.assert | True |
+| System resolver ¦ Read the existing service ownership | ansible.builtin.service_facts | False |
+| System resolver ¦ Require the existing NetworkManager publisher | ansible.builtin.assert | False |
+| System resolver ¦ Inspect the active DNS publisher without activation | ansible.builtin.command | False |
+| System resolver ¦ Require resolved to be the selected DNS publisher | ansible.builtin.assert | False |
+| System resolver ¦ Inspect the resolver path without following links | ansible.builtin.stat | False |
+| System resolver ¦ Require a root-owned resolver path before adoption | ansible.builtin.assert | False |
+| System resolver ¦ Read the existing regular resolver file | ansible.builtin.slurp | True |
+| System resolver ¦ Refuse another resolver owner's file or link | ansible.builtin.assert | False |
+| System resolver ¦ Inspect NSS before disabling or bypassing the stub | ansible.builtin.slurp | True |
+| System resolver ¦ Require split DNS through the existing NSS policy | ansible.builtin.assert | True |
+| System resolver ¦ Inspect the current resolver process | ansible.builtin.command | True |
+| System resolver ¦ Inspect socket ownership before enabling the stub | community.general.listen_ports_facts | True |
+| System resolver ¦ Reject another owner of the stub addresses | ansible.builtin.assert | True |
+
+#### File: tasks/resolved_validate.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| System resolver ¦ Validate platform and independent management flags | ansible.builtin.assert | False |
+| System resolver ¦ Inspect image-based deployment before direct imports | ansible.builtin.stat | False |
+| System resolver ¦ Reject image-based deployment before mutation | ansible.builtin.assert | False |
+| System resolver ¦ Validate RPM ownership before baseline or resolver changes | ansible.builtin.include_tasks | True |
 
 #### File: tasks/swap.yml
 
@@ -271,7 +318,7 @@ may retire the exact unit and generated script previously owned by ubuntu. |
 | System ¦ Reject unsupported platforms before changes | ansible.builtin.assert | False |
 | System ¦ Validate boolean feature flags | ansible.builtin.assert | False |
 | System ¦ Reject unsupported cache maintenance | ansible.builtin.assert | True |
-| System ¦ Validate optional resolver support | ansible.builtin.assert | True |
+| System ¦ Validate optional resolver support | ansible.builtin.import_tasks | True |
 | System ¦ Validate swap inputs before discovery | ansible.builtin.assert | True |
 | System NIC ¦ Validate interface selection mapping | ansible.builtin.assert | False |
 | System NIC ¦ Validate selected names and independent boolean settings | ansible.builtin.assert | False |
