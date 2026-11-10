@@ -14,6 +14,7 @@
 | <a name="input_bios"></a> [bios](#input\_bios) | Optional firmware override: seabios or ovmf. Null retains the provider default. Selecting ovmf manages a 4m EFI variables disk on datastore\_id without pre-enrolled Secure Boot keys. | `string` | `null` | no |
 | <a name="input_clone_retries"></a> [clone\_retries](#input\_clone\_retries) | Number of clone retries requested from the Proxmox provider. | `number` | `3` | no |
 | <a name="input_clone_template_vm_id"></a> [clone\_template\_vm\_id](#input\_clone\_template\_vm\_id) | VMID of the cloud-init template to clone. | `number` | n/a | yes |
+| <a name="input_cloud_init_upgrade"></a> [cloud\_init\_upgrade](#input\_cloud\_init\_upgrade) | Optional explicit first-boot package upgrade choice. Null preserves the existing Proxmox default; false is useful for checksum-pinned acceptance guests. Requires root@pam API authentication. | `bool` | `null` | no |
 | <a name="input_cloud_init_user"></a> [cloud\_init\_user](#input\_cloud\_init\_user) | Cloud-init administrative username for the selected template; callers must choose explicitly. | `string` | n/a | yes |
 | <a name="input_cpu_cores"></a> [cpu\_cores](#input\_cpu\_cores) | Number of virtual CPU cores. | `number` | `2` | no |
 | <a name="input_cpu_sockets"></a> [cpu\_sockets](#input\_cpu\_sockets) | Number of virtual CPU sockets. | `number` | `1` | no |
@@ -29,6 +30,7 @@
 | <a name="input_memory_mb"></a> [memory\_mb](#input\_memory\_mb) | Dedicated VM memory in MiB. | `number` | `2048` | no |
 | <a name="input_name"></a> [name](#input\_name) | Proxmox VM name. | `string` | n/a | yes |
 | <a name="input_network_bridge"></a> [network\_bridge](#input\_network\_bridge) | Proxmox bridge connected to the VM network interface. | `string` | `"vmbr0"` | no |
+| <a name="input_network_data_file_id"></a> [network\_data\_file\_id](#input\_network\_data\_file\_id) | Optional custom cloud-init network data. When supplied, replaces the generated ip\_config; callers own its network contents. | `string` | `null` | no |
 | <a name="input_node_name"></a> [node\_name](#input\_node\_name) | Proxmox node on which to create the VM. | `string` | n/a | yes |
 | <a name="input_on_boot"></a> [on\_boot](#input\_on\_boot) | Start the VM automatically when the Proxmox node boots. | `bool` | `true` | no |
 | <a name="input_protection"></a> [protection](#input\_protection) | Enable Proxmox VM protection. | `bool` | `false` | no |
