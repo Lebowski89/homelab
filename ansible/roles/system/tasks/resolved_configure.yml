@@ -62,6 +62,7 @@
   changed_when: false
 
 - name: System resolver | Verify the active stub before relying on its output
+  # checkov:skip=CKV2_ANSIBLE_3:Read-only stub ownership checks must fail before replacing resolv.conf; unsafe DNS ownership has no automatic recovery.
   when:
     - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
     - system_resolved_resolv_conf_target == '/run/systemd/resolve/stub-resolv.conf'

@@ -482,13 +482,17 @@ def test_alloy_readonly_config_provides_its_nested_writable_mountpoint(tmp_path)
 
 
 @pytest.mark.integration
-def test_bootstrap_registers_adapter_filters_without_catalog_preconditions(tmp_path):
+@pytest.mark.parametrize("placement", ["localhost", None, "missing-host"])
+def test_bootstrap_registers_adapter_filters_without_catalog_preconditions(tmp_path, placement):
     import sys
 
     definitions = [
         {"runtime": "podman", "name": "fake-db", "image": "registry.example.invalid/db:1.0", "command": ["echo", "NONPRODUCTION"]},
         {"runtime": "podman", "name": "fake-app", "image": "registry.example.invalid/app:1.0", "systemd": {"wants": ["fake-db.service"]}},
     ]
+    for definition in definitions:
+        if placement is not None:
+            definition["deploy"] = {"hosts": placement}
     play = [
         {
             "hosts": "localhost",
@@ -517,8 +521,14 @@ def test_bootstrap_registers_adapter_filters_without_catalog_preconditions(tmp_p
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "failed=0" in result.stdout
+    output = result.stdout + result.stderr
+    if placement == "localhost":
+        assert result.returncode == 0, output
+        assert "failed=0" in result.stdout
+    else:
+        assert result.returncode != 0, output
+        assert "deploy.hosts" in output, output
+        assert "No filter named" not in output
 
 
 def test_bootstrap_and_shared_network_lifecycle_guards_and_tag_propagation():
@@ -1009,6 +1019,7 @@ def test_real_preflight_blocks_before_secret_resolution_files_or_bootstrap_recre
         "runtime": "podman",
         "name": "fake-unit",
         "image": "registry.example.invalid/unit:1.0",
+        "deploy": {"hosts": "localhost"},
         "operational_requirements": {"ownership_transition": True},
     }
     variables = {"local_ip": "192.0.2.10", "services_internal_zone": "int.example.test", "netbox_domain": "example.test"}

@@ -19,3 +19,25 @@ framework:
   - github_actions
   - dockerfile
   - ansible
+
+# Checkov 3.4.3 builds block suppression IDs as block..name but graph IDs as
+# block.name, so inline CKV2_ANSIBLE_3 exceptions are not applied. Each reviewed
+# block has its fail-closed rationale beside it. Restrict this workaround to the
+# exact files below and this rule; other files and checks remain scanned. Remove
+# these path exceptions when upstream block-local suppressions work.
+skip-check:
+  - "CKV2_ANSIBLE_3:ansible/roles/service_common/tasks/postgres_operator[.]yml$"
+  - "CKV2_ANSIBLE_3:ansible/roles/podman/tasks/firewall_compatibility[.]yml$"
+  - "CKV2_ANSIBLE_3:ansible/roles/postgres/tasks/sub_tasks/backup_restore_validation_setup[.]yml$"
+  - "CKV2_ANSIBLE_3:ansible/roles/native_services/tasks/keepalived[.]yml$"
+  - "CKV2_ANSIBLE_3:ansible/roles/native_services/tasks/technitium/rpm[.]yml$"
+  - "CKV2_ANSIBLE_3:ansible/roles/podman_services/tasks/sub_tasks/service_state[.]yml$"
+  - "CKV2_ANSIBLE_3:ansible/roles/docker/tasks/sub_tasks/swarm[.]yml$"
+  - "CKV2_ANSIBLE_3:ansible/roles/system/tasks/resolved_configure[.]yml$"
+  - "CKV2_ANSIBLE_3:ansible/roles/docker/tasks/sub_tasks/install/selinux_preflight[.]yml$"
+  - "CKV2_ANSIBLE_3:molecule/shared/ready[.]yml$"
+  - "CKV2_ANSIBLE_3:molecule/shared/diagnostics[.]tasks[.]yml$"
+  - "CKV2_ANSIBLE_3:molecule/protected_network/worker_counters[.]yml$"
+  - "CKV2_ANSIBLE_3:molecule/protected_network/exercise[.]yml$"
+  - "CKV2_ANSIBLE_3:molecule/rocky_node_exporter/cleanup[.]yml$"
+  - "CKV2_ANSIBLE_3:molecule/application_lifecycle/cleanup[.]yml$"

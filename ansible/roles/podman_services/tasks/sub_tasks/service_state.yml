@@ -50,6 +50,7 @@
   tags: [deploy, update, recreate, bootstrap]
 
 - name: Service | Validate generated user systemd service
+  # checkov:skip=CKV2_ANSIBLE_3:Verification failure must abort deployment; always removes the isolated verifier directory while preserving the failure.
   when:
     - podman_services_state != 'remove'
     - not ansible_check_mode

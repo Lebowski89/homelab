@@ -116,6 +116,8 @@ def test_real_dispatch_cancels_preflight_and_transfers_adapter_cleanup(tmp_path,
         catalog["utility"]["postgres"] = {"enable": True, "databases": ["fixture_db"]}
         copied_common = roles / "service_common"
         shutil.copytree(ROOT / "ansible/roles/service_common", copied_common)
+        (tmp_path / "filter_plugins").mkdir()
+        shutil.copyfile(ROOT / "ansible/filter_plugins/service_catalog.py", tmp_path / "filter_plugins/service_catalog.py")
         prerequisites = yaml.safe_load((copied_common / "tasks/postgres_operator.yml").read_text())
         for task in walk_tasks(prerequisites):
             if "ansible.builtin.stat" in task:
@@ -312,6 +314,7 @@ class LookupModule(LookupBase):
             env=env,
         )
         (tmp_path / ("run-" + str(len(list(tmp_path.glob("run-*")))) + ".log")).write_text(result.stdout + result.stderr)
+        assert "Skipping plugin" not in result.stderr, result.stderr
         return result
 
     result = execute(["--check"] if failure == "check-mode" else [])
@@ -506,6 +509,8 @@ def test_real_bazarr_recreate_preserves_writer_and_recovers_absence(tmp_path, fa
     actions.mkdir()
     for role in ["docker_services", "service_common", "service_prepare", "service_firewall"]:
         shutil.copytree(ROOT / "ansible/roles" / role, roles / role)
+    (tmp_path / "filter_plugins").mkdir()
+    shutil.copyfile(ROOT / "ansible/filter_plugins/service_catalog.py", tmp_path / "filter_plugins/service_catalog.py")
     # Keep config application separate from read-only preparation. The real file
     # and application task implementations have their own rendering coverage.
     for role, file in [("service_common", "files"), ("service_common", "traefik"), ("service_prepare", "configure")]:
@@ -638,6 +643,7 @@ m.exit_json(changed=True)
     variables.pop("inventory_hostname")
     for host, values in hosts.items():
         values.update(ansible_connection="local", ansible_python_interpreter=sys.executable)
+        values.update(container_host_puid=str(os.getuid()), container_host_pgid=str(os.getgid()))
         values["docker_swarm_node_labels"] = yaml.safe_load((ROOT / f"ansible/host_vars/{host}.yml").read_text())[
             "docker_swarm_node_labels"
         ]
@@ -710,13 +716,15 @@ m.exit_json(changed=True)
     )
 
     def execute(check=False):
-        return subprocess.run(
+        result = subprocess.run(
             [str(Path(sys.executable).with_name("ansible-playbook")), str(playbook), "--tags", "recreate"] + (["--check"] if check else []),
             cwd=ROOT,
             env={**os.environ, "ANSIBLE_CONFIG": str(config), "ANSIBLE_INJECT_FACT_VARS": "false"},
             capture_output=True,
             text=True,
         )
+        assert "Skipping plugin" not in result.stderr, result.stderr
+        return result
 
     result = execute(check=failure == "invalid-publication")
     output = result.stdout + result.stderr

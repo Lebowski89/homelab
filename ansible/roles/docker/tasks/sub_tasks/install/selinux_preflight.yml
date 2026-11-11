@@ -73,6 +73,7 @@
   ansible.builtin.import_tasks: sub_tasks/install/selinux_unit.yml
 
 - name: Docker SELinux | Inspect an active daemon before changes
+  # checkov:skip=CKV2_ANSIBLE_3:Read-only daemon/quiescence checks must abort before configuration or restart; never stop workloads to recover.
   when:
     - not ansible_check_mode
     - docker_selinux_running

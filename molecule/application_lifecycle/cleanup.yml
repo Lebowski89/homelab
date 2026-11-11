@@ -60,6 +60,7 @@
       become: false
 
     - name: VM tests | Verify scoped runtime removal after a completed deployment
+      # checkov:skip=CKV2_ANSIBLE_3:Removal verification must fail acceptance if owned objects or Quadlets remain; never bypass these cleanup checks.
       when: molecule_vm_removal_baseline.stat.exists
       block:
         - name: VM tests | Resolve the execution store without requiring a running writer

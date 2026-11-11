@@ -42,6 +42,7 @@
           (lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/application-first.json') | from_json).identity
 
     - name: VM tests | Require the preserved writer to continue serving after preparation fails
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable synthetic application exposes HTTP only; loopback probe carries no credentials and verifies the actual listener.
       ansible.builtin.uri:
         url: http://127.0.0.1:18080/health
         use_proxy: false
@@ -62,6 +63,7 @@
         molecule_vm_prior_identity: '{{ (lookup("ansible.builtin.file", molecule_vm_evidence_directory ~ "/application-first.json") | from_json).identity }}'
 
     - name: VM tests | Require present-service recreation to preserve the application write
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable synthetic application exposes HTTP only; loopback probe carries no credentials and verifies the actual listener.
       ansible.builtin.uri:
         url: http://127.0.0.1:18080/persisted
         use_proxy: false
@@ -112,6 +114,7 @@
         state: restarted
 
     - name: VM tests | Require actual application recovery after the runtime or unit restart
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable synthetic application exposes HTTP only; loopback probe carries no credentials and verifies the actual listener.
       ansible.builtin.uri:
         url: http://127.0.0.1:18080/health
         use_proxy: false
@@ -128,6 +131,7 @@
         post_reboot_delay: 10
 
     - name: VM tests | Require boot-enabled application recovery without another deployment
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable synthetic application exposes HTTP only; loopback probe carries no credentials and verifies the actual listener.
       ansible.builtin.uri:
         url: http://127.0.0.1:18080/health
         use_proxy: false

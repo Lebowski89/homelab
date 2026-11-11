@@ -13,6 +13,7 @@
   changed_when: podman_docker_compat_change
 
 - name: Podman compatibility | Validate the selected installed provider
+  # checkov:skip=CKV2_ANSIBLE_3:Read-only provider and nf_tables checks must abort before persisting compatibility configuration.
   when:
     - not ansible_check_mode
     - podman_docker_iptables_compatibility

@@ -113,6 +113,9 @@ def test_canonical_dispatch_and_legacy_role_forwarding_reject_invalid_combinatio
     canonical = roles / "service_firewall"
     (canonical / "tasks").mkdir(parents=True)
     (canonical / "tasks/main.yml").write_text((ROOT / "ansible/roles/service_firewall/tasks/main.yml").read_text())
+    # Platform behaviour has its own real-role tests. Isolate host inspection
+    # here while retaining the dispatcher, validation and legacy wrappers.
+    (canonical / "tasks/platform.yml").write_text(yaml.safe_dump([{"ansible.builtin.debug": {"msg": "PLATFORM_SELECTED"}}]))
     # An external rollback playbook must not depend on playbook-local filter paths.
     (canonical / "filter_plugins").mkdir()
     (canonical / "files").mkdir()
@@ -203,9 +206,11 @@ def test_canonical_dispatch_and_legacy_role_forwarding_reject_invalid_combinatio
     output = result.stdout + result.stderr
     assert (result.returncode == 0) == success, output
     if success:
+        assert "PLATFORM_SELECTED" in output
         assert "SELECTED_" + profile + "_" + operation in output, output
         assert "SELECTED_" + ("workers" if profile == "mgt" else "mgt") not in output
     else:
+        assert "PLATFORM_SELECTED" not in output
         assert "SELECTED_" not in output
         assert "Select one firewall profile" in output
 

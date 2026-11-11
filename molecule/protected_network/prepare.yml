@@ -150,6 +150,7 @@
         loop_var: molecule_vm_caller
 
     - name: VM tests | Require a healthy listener on both families before installing protection
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable dual-stack synthetic HTTP listener proves baseline traffic before protection; no credentials or production endpoint.
       ansible.builtin.uri:
         url: 'http://{{ molecule_vm_destination }}:18080/'
         use_proxy: false

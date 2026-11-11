@@ -1,6 +1,7 @@
 ---
 
 - name: Keepalived | Configure native service
+  # checkov:skip=CKV2_ANSIBLE_3:Groups native-mode tasks; package or validated configuration failure must abort before enabling VRRP. Retain adopted files for repair.
   when: native_services_keepalived_host_cfg.mode | default('native') == 'native'
   block:
     - name: Keepalived native | Install APT packages

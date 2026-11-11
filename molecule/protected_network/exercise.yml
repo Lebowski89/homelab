@@ -128,6 +128,7 @@
         post_reboot_delay: 10
 
     - name: VM tests | Require Ubuntu cloud-init to finish after reboot without operational errors
+      # checkov:skip=CKV2_ANSIBLE_3:Post-reboot bootstrap checks must fail acceptance before firewall reconciliation; no incomplete guest is accepted.
       when: ansible_facts.distribution == 'Ubuntu'
       block:
         - name: VM tests | Observe completed post-boot cloud-init status

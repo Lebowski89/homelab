@@ -37,6 +37,7 @@
   tags: docker_swarm_init
 
 - name: Join nodes to the existing Swarm
+  # checkov:skip=CKV2_ANSIBLE_3:Membership checks and join errors must propagate; automatic leave or rollback could remove an existing cluster member.
   tags: docker_swarm_join
   block:
     - name: Validate Swarm join settings

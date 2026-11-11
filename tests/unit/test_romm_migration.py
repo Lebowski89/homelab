@@ -37,7 +37,7 @@ def test_romm_migration_is_tagged_and_runs_after_copies_before_deployment():
 
 @pytest.fixture
 def local_deployment(tmp_path):
-    """Execute real preflight/copy tasks with a file marker replacing Docker cleanup."""
+    """Execute real application validation/copy tasks with a cleanup boundary marker."""
     appdata = tmp_path / "appdata"
     config = appdata / "romm/config/config.yml"
     config.parent.mkdir(parents=True)
@@ -57,39 +57,56 @@ def local_deployment(tmp_path):
     cleanup_marker = tmp_path / "cleanup-reached"
     playbook = tmp_path / "migration.yml"
     prepare = yaml.safe_load((REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prepare.yml").read_text())
+    # This fixture tests application validation/migration around the cleanup
+    # boundary. Shared database/Compose preflight is exercised through the real
+    # adapter by test_service_firewall_preflight, with its remote boundaries
+    # supplied there. Do not accidentally import those external operations into
+    # this local file-migration fixture as the prepare pipeline grows.
+    preflight_index = next(
+        index for index, task in enumerate(prepare) if task["name"] == "Prepare | Complete prerequisites before interrupting the service"
+    )
     cleanup_index = next(index for index, task in enumerate(prepare) if task["name"] == "Cleanup | Remove existing deployment")
     cleanup = deepcopy(prepare[cleanup_index])
     del cleanup["ansible.builtin.include_tasks"]
     cleanup["ansible.builtin.copy"] = {"dest": str(cleanup_marker), "content": "SYNTHETIC_CLEANUP_REACHED", "mode": "0600"}
-    tasks = prepare[:cleanup_index] + [
-        cleanup,
-        {
-            "ansible.builtin.include_role": {
-                "name": "service_common",
-                "tasks_from": "copies",
-                "apply": {"tags": ["deploy", "update", "recreate", "bootstrap"]},
+    tasks = (
+        prepare[:preflight_index]
+        + prepare[preflight_index + 1 : cleanup_index]
+        + [
+            cleanup,
+            {
+                "ansible.builtin.include_role": {
+                    "name": "service_common",
+                    "tasks_from": "copies",
+                    "apply": {"tags": ["deploy", "update", "recreate", "bootstrap"]},
+                },
+                "vars": {
+                    "service_common_target_host": "localhost",
+                    "service_common_copies": "{{ docker_services_svc.copies }}",
+                    "service_common_host_defaults": {},
+                    "service_common_default_owner": str(os.getuid()),
+                    "service_common_default_group": str(os.getgid()),
+                },
             },
-            "vars": {
-                "service_common_target_host": "localhost",
-                "service_common_copies": "{{ docker_services_svc.copies }}",
-                "service_common_host_defaults": {},
-                "service_common_default_owner": str(os.getuid()),
-                "service_common_default_group": str(os.getgid()),
+            {
+                "ansible.builtin.include_role": {"name": "service_prepare", "tasks_from": "configure"},
+                "vars": {"service_prepare_context": "{{ docker_services_application_context }}"},
             },
-        },
-        {
-            "ansible.builtin.include_role": {"name": "service_prepare", "tasks_from": "configure"},
-            "vars": {"service_prepare_context": "{{ docker_services_application_context }}"},
-        },
-        {
-            "name": "RomM fixture | Deployment boundary",
-            "ansible.builtin.debug": {"msg": "SYNTHETIC_DEPLOYMENT_REACHED"},
-        },
-    ]
+            {
+                "name": "RomM fixture | Deployment boundary",
+                "ansible.builtin.debug": {"msg": "SYNTHETIC_DEPLOYMENT_REACHED"},
+            },
+        ]
+    )
     for task in tasks:
         task.setdefault("tags", ["deploy", "update", "recreate", "bootstrap"])
     ansible_config = tmp_path / "ansible.cfg"
-    ansible_config.write_text(f"[defaults]\nroles_path = {REPO_ROOT / 'ansible/roles'}\nstdout_callback = default\n")
+    # These tasks normally run inside docker_services, which registers its
+    # role-local filters. Restore that discovery for this extracted task slice.
+    ansible_config.write_text(
+        f"[defaults]\nroles_path = {REPO_ROOT / 'ansible/roles'}\n"
+        f"filter_plugins = {REPO_ROOT / 'ansible/roles/docker_services/filter_plugins'}\nstdout_callback = default\n"
+    )
     environment = os.environ.copy()
     environment.update(
         {
@@ -123,6 +140,7 @@ def local_deployment(tmp_path):
                             "docker_services_common_host_defaults": {},
                             "docker_services_is_deploy_host": True,
                             "docker_services_stack_name_effective": "romm",
+                            "docker_services_stack_deploy_type": current_service["deploy"]["type"],
                         },
                         "tasks": tasks,
                     }
@@ -167,6 +185,9 @@ def test_actual_deployment_migrates_existing_configs_and_converges(local_deploym
     before = (yaml.safe_load(initial) or {}) if initial is not None else {}
     if initial is not None:
         config.write_text(initial)
+        # Prove retention of an existing non-default mode independently of the
+        # controller's umask; a fresh seed still uses its declared 0644 mode.
+        config.chmod(0o640)
     rc, output = run("--tags", tags)
     assert rc == 0, output
     assert "SYNTHETIC_DEPLOYMENT_REACHED" in output
@@ -187,7 +208,7 @@ def test_actual_deployment_migrates_existing_configs_and_converges(local_deploym
     # YAML values must survive; comment preservation depends on the YAML backend.
     assert config.stat().st_uid == os.getuid()
     assert config.stat().st_gid == os.getgid()
-    assert config.stat().st_mode & 0o777 == 0o644
+    assert config.stat().st_mode & 0o777 == (0o640 if initial is not None else 0o644)
 
     converged = config.read_bytes()
     modified = config.stat().st_mtime_ns

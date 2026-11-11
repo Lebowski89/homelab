@@ -179,7 +179,7 @@ resource "proxmox_virtual_environment_file" "bootstrap" {
   file_mode    = "0600"
   source_raw {
     file_name = "molecule-${var.run.id}-bootstrap.yaml"
-    data = "#cloud-config\n${yamlencode({
+    data = format("#cloud-config\n%s", yamlencode({
       package_update  = true
       package_upgrade = false
       ssh_keys        = { ed25519_private = var.guest_ssh_host_key.private, ed25519_public = var.guest_ssh_host_key.public }
@@ -205,6 +205,6 @@ resource "proxmox_virtual_environment_file" "bootstrap" {
         ["/opt/homelab-molecule-ansible/bin/pip", "install", "--disable-pip-version-check", "--no-input", "--requirement", "/etc/homelab-molecule-python-requirements.txt"],
         ["systemctl", "enable", "--now", "qemu-guest-agent"]
       ]
-    })}"
+    }))
   }
 }

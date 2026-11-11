@@ -12,6 +12,7 @@
     fail_msg: The controller PostgreSQL operator context must be a strict boolean.
 
 - name: Service common PostgreSQL | Verify the prepared controller context before lifecycle changes
+  # checkov:skip=CKV2_ANSIBLE_3:Operator ownership/interpreter preflight must fail closed before database or lifecycle changes; no recovery is safe here.
   when:
     - service_common_postgres_operator_enabled
     - not ansible_check_mode

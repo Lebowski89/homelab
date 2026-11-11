@@ -152,6 +152,7 @@
     setype: _default
 
 - name: Backup restore validation | Prepare RPM temporary database labels
+  # checkov:skip=CKV2_ANSIBLE_3:Scoped SELinux preparation must abort on failure before enabling the restore job; do not run against partially labelled data.
   when:
     - postgres_backup_restore_validation_manage
     - inventory_hostname == postgres_backup_restore_validation_host

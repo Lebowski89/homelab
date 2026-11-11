@@ -34,6 +34,7 @@
   become: false
 
 - name: VM tests | Inspect only the selected Quadlet unit's diagnostic state
+  # checkov:skip=CKV2_ANSIBLE_3:Groups runtime-specific bounded diagnostics; account or evidence-write failures remain visible, with no successful rescue masking them.
   when:
     - molecule_vm_suite | default('') == 'application_lifecycle'
     - molecule_vm_runtime in ['rootful', 'rootless']

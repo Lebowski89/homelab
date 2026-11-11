@@ -16,6 +16,7 @@
       listener verification and service lifecycle are deferred. NetworkManager ownership is preserved.
 
 - name: Technitium native | Install and configure the RPM application
+  # checkov:skip=CKV2_ANSIBLE_3:Groups non-check installation; fail immediately on incomplete application or DNS readiness. Do not remove adopted data or mask resolver failure.
   when: not ansible_check_mode
   block:
     - name: Technitium native | Install distribution runtime and DNS tools

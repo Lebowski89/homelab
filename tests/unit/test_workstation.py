@@ -433,6 +433,15 @@ class ActionModule(ActionBase):
             group_vars = tmp_path / "group_vars/all"
             group_vars.mkdir(parents=True, exist_ok=True)
             (group_vars / "private.yml").write_text("$ANSIBLE_VAULT;1.1;AES256\nsynthetic-invalid-vault\n")
+            # Restore the normal playbook-local selector and catalogue context.
+            # The missing controller/storage groups below must be the reason a
+            # container deployment is rejected, after actual service selection.
+            shutil.copytree(REPO_ROOT / "ansible/filter_plugins", tmp_path / "filter_plugins", dirs_exist_ok=True)
+            definitions = group_vars / "services"
+            definitions.mkdir(exist_ok=True)
+            (definitions / "fixture.yml").write_text(
+                yaml.safe_dump({"fixture": {"runtime": "docker", "image": "registry.invalid/app:1", "deploy": {"hosts": "blacktop"}}})
+            )
             config = (REPO_ROOT / "ansible/bootstrap.cfg").read_text()
             cfg.write_text(config.replace("[defaults]", f"[defaults]\naction_plugins = {plugins}"))
             facts["user_id"] = "fixture"
@@ -441,6 +450,7 @@ class ActionModule(ActionBase):
             variables.pop("workstation_tools_enabled")
             variables.pop("workstation_opentofu_enabled")
             variables.update(fixture_system_facts=facts, ansible_connection="local")
+            variables.update(services_controller_inventory_group="fixture_controllers", services_storage_inventory_group="fixture_storage")
             variables.update(overrides or {})
             inventory = tmp_path / "inventory.yml"
             children = {"tags_workstation": {"hosts": {"blacktop": variables}}}
@@ -736,7 +746,8 @@ def test_actual_main_bootstrap_without_netbox_or_application_inputs(workstation_
 def test_normal_service_selection_keeps_service_host_assertions(workstation_run, tags):
     result, calls = workstation_run(tags=tags, main=True, managed=True)
     assert result.returncode != 0
-    assert "Service host contract | Validate singleton inventory roles" in result.stdout
+    output = result.stdout + result.stderr
+    assert "require exactly one host in fixture_controllers and exactly one host in fixture_storage" in output, output
     assert bool(calls) is ("workstation_tools" in tags)
 
 

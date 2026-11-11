@@ -19,6 +19,7 @@
         msg: No scenario ownership marker exists; no Node Exporter lifecycle or cleanup is performed.
 
     - name: Molecule | Remove only the owned catalogue installation
+      # checkov:skip=CKV2_ANSIBLE_3:Ownership-gated removal must fail on cleanup or retention errors and keep its scenario claim until all checks succeed.
       when: molecule_node_exporter_marker.stat.exists
       block:
         - name: Molecule | Preserve failure evidence before removal

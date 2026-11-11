@@ -2,6 +2,7 @@
 
 name: Controlled VM acceptance
 
+# checkov:skip=CKV_GHA_7:Fixed-choice suite/OS inputs select disposable acceptance tests, not release artifacts; trusted-ref and restricted-runner gates remain enforced.
 on:
   workflow_dispatch:
     inputs:

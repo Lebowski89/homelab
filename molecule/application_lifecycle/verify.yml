@@ -9,6 +9,7 @@
   gather_facts: false
   tasks:
     - name: VM tests | Require a successful application response after UID and input checks
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable synthetic application exposes HTTP only; loopback probe carries no credentials and verifies the actual listener.
       ansible.builtin.uri:
         url: http://127.0.0.1:18080/health
         use_proxy: false
@@ -77,6 +78,7 @@
           - molecule_vm_app_data.stat.checksum == ('retained-after-start-' ~ molecule_vm_run_id) | hash('sha256')
 
     - name: VM tests | Read the retained application write through its real HTTP listener
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable synthetic application exposes HTTP only; loopback probe carries no credentials and verifies the actual listener.
       ansible.builtin.uri:
         url: http://127.0.0.1:18080/persisted
         use_proxy: false

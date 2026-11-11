@@ -24,6 +24,9 @@ def system_run(tmp_path):
     fixture_roles = ("system", "postgres", "postgres_exporter", "docker", "podman", "service_common", "service_firewall")
     for role in fixture_roles:
         shutil.copytree(REPO / "ansible/roles" / role, roles / role, ignore=shutil.ignore_patterns("__pycache__"))
+    # Preserve the common role's canonical placement dependency in this copy.
+    (tmp_path / "filter_plugins").mkdir()
+    shutil.copyfile(REPO / "ansible/filter_plugins/service_catalog.py", tmp_path / "filter_plugins/service_catalog.py")
     modules = {
         "apt",
         "uri",
@@ -552,6 +555,7 @@ class ActionModule(ActionBase):
             check=False,
         )
         calls = [json.loads(line) for line in record.read_text().splitlines()] if record.exists() else []
+        assert "Skipping plugin" not in result.stderr, result.stderr
         return result, calls, json.loads(state_file.read_text())
 
     return run

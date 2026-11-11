@@ -55,6 +55,7 @@
     molecule_vm_nf_tools: [iptables-nft, ip6tables-nft, iptables-nft-save, ip6tables-nft-save, iptables-nft-restore, ip6tables-nft-restore]
   tasks:
     - name: VM tests | Select distribution nf_tables tools only under the allocation exception
+      # checkov:skip=CKV2_ANSIBLE_3:Allocation-gated tool selection and verification must fail acceptance on any error; no unverified fallback is allowed.
       when:
         - ansible_facts.distribution == 'Fedora'
         - molecule_vm_allow_nf_tables_alternatives | default(false) is sameas true

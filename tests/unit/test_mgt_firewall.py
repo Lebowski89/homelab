@@ -1755,6 +1755,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
                         },
                     },
                     "hosts": {
+                        "blacktop": {"ansible_host": "192.0.2.60", "local_ip": "192.0.2.60", "ansible_user": "fixture-user"},
                         "plex": {
                             "ansible_host": "192.0.2.59",
                             "local_ip": "192.0.2.59",
@@ -1762,7 +1763,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
                             "ansible_port": 2222,
                             "ansible_ssh_user": "plex-ssh-user",
                             "ansible_ssh_port": 2223,
-                        }
+                        },
                     },
                 }
             }
@@ -1843,6 +1844,9 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
         assert not output.exists() and not Path(str(output) + ".metadata.json").exists()
         if failure in {"inherited-local", "wrong-host", "global-host-override"}:
             assert "observed host identity does not match inventory address" in result.stdout
+        elif failure == "global-local-override":
+            assert "haproxy_preflight_host == services_controller_host or" in result.stdout
+            assert "Assertion failed" in result.stdout
         elif failure == "aggregation-label":
             assert "relabelled collection result" in result.stdout
         elif failure == "aggregation-identity":

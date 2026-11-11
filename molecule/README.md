@@ -203,10 +203,12 @@ All four follow-up VM pairs, including the diagnostic run, were retired, and
 the final allocation audit found no surviving test resources.
 
 Repository checks remain separate from guest acceptance. Focused runs passed
-314 and 64 checks. All 41 reported unit-suite failures reproduced on base
-`e49f085db0d1b1113d936cf926836f700aa81dac` under equivalent execution conditions;
-the complete unit suite remains unresolved. Controlled CI was not enabled or
-executed, and actionlint was unavailable.
+314 and 64 checks. The earlier 41-failure comparison used feature-branch revision
+`e49f085db0d1b1113d936cf926836f700aa81dac`, not the PR merge base, and does not
+establish that those failures were unrelated to this branch. The PR #726 CI
+follow-up and its repository-only validation are recorded in
+[the testing guide](../docs/testing.md#pr-726-ci-repairs). Controlled VM CI was
+not enabled or executed, and actionlint was unavailable.
 
 The full completion record is archived as `molecule-results.md` in the private
 Desktop `homelab-vm-tests` directory alongside the retained run evidence.

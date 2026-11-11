@@ -14,6 +14,7 @@
         msg: Ubuntu 26.04 covers the manager profile. Worker acceptance requires the separately supported Ubuntu 24.04 target.
 
     - name: VM tests | Exercise the supported worker profile
+      # checkov:skip=CKV2_ANSIBLE_3:Groups supported worker acceptance; any policy, traffic or cleanup failure must remain fatal for retained evidence and controller retirement.
       when: ansible_facts.distribution != 'Ubuntu'
       block:
         - name: VM tests | Retire only the owned manager policy before the worker case

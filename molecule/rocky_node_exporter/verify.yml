@@ -64,6 +64,7 @@
           - molecule_node_exporter_listeners | map(attribute='address') | unique | list == ['127.0.0.1']
 
     - name: Molecule | Query metrics through the guest loopback listener
+      # checkov:skip=CKV2_ANSIBLE_1:Guest loopback-only metrics listener is explicitly verified as 127.0.0.1; no credentials or remote TLS endpoint.
       ansible.builtin.uri:
         url: 'http://{{ node_exporter_listen_address }}/metrics'
         return_content: true
