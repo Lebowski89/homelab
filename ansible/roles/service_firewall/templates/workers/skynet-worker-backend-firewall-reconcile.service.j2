@@ -1,6 +1,6 @@
 [Unit]
 Description=Reconcile Skynet worker backend chains and jumps
-After=local-fs.target
+After=local-fs.target firewalld.service
 
 [Service]
 Type=oneshot

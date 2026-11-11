@@ -3,6 +3,7 @@
 - name: Docker services | Reset this operation's firewall progress
   ansible.builtin.set_fact:
     docker_services_firewall_staged: false
+    docker_services_storage_plan: {}
     docker_services_start_attempted: false
     # From this first task the adapter owns cancellation, including init failures.
     service_catalog_firewall_handoff: "{{ (docker_services_common_context.firewall_plan | default({})).token | default('') }}"  # noqa var-naming[no-role-prefix]
@@ -20,6 +21,12 @@
         apply:
           tags: [deploy, update, recreate, bootstrap]
       tags: [deploy, update, remove, recreate, bootstrap, drift]
+
+    - name: Docker services | Validate explicit storage labeling before mutation
+      when: docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+      ansible.builtin.set_fact:
+        docker_services_storage_plan: "{{ docker_services_svc | service_storage_plan('docker', docker_services_stack_deploy_type) }}"
+      tags: [deploy, update, recreate, bootstrap]
 
     - name: Docker services | Protect declared publications before changing the service
       when:
@@ -43,6 +50,16 @@
       ansible.builtin.set_fact:
         docker_services_firewall_staged: true
       tags: [deploy, update, recreate, bootstrap, remove]
+
+    - name: Docker services | Validate and prepare scoped storage
+      when:
+        - docker_services_common_action in ['deploy', 'update', 'recreate', 'bootstrap']
+        - docker_services_storage_plan.paths | default([]) | length > 0
+      ansible.builtin.include_tasks:
+        file: sub_tasks/storage.yml
+        apply:
+          tags: [deploy, update, recreate, bootstrap]
+      tags: [deploy, update, recreate, bootstrap]
 
     ################################
     # IMAGE DRIFT
@@ -72,6 +89,9 @@
     ################################
 
     - name: Docker services | Build Compose configuration
+      # Preflight already assembled ordinary services. Only versioned Swarm
+      # configs gain effective names during materialization and need rebuilding.
+      when: docker_services_svc.swarm_configs | default([]) | length > 0
       no_log: true
       ansible.builtin.include_tasks:
         file: sub_tasks/compose.yml
@@ -94,6 +114,39 @@
           no_log: true
           diff: false
       tags: [deploy, update, recreate]
+
+    # Finish this replacement before another service can fail preparation.
+    # The existing stack helper owns deployment, verification and containment.
+    - name: Docker services | Hand the prepared replacement to stack lifecycle
+      when:
+        - docker_services_common_action == 'recreate'
+        - not ansible_check_mode
+        - not (ci_mode | default(false) | bool)
+      ansible.builtin.set_fact:
+        docker_services_start_attempted: true
+      tags: [recreate]
+
+    - name: Docker services | Complete the prepared recreation
+      when:
+        - docker_services_common_action == 'recreate'
+        - not ansible_check_mode
+        - not (ci_mode | default(false) | bool)
+      no_log: true
+      ansible.builtin.include_tasks:
+        file: sub_tasks/deploy/stack.yml
+        apply:
+          tags: [recreate]
+          no_log: true
+          diff: false
+      vars:
+        docker_services_deploy_stack_name: "{{ docker_services_stack_name_effective }}"
+        _stack_def: "{{ hostvars[docker_services_primary_manager].docker_services_compose_stacks[docker_services_stack_name_effective] }}"
+        docker_services_deploy_stack_type: "{{ _stack_def.type }}"
+        docker_services_deploy_stack_host: "{{ _stack_def.docker_services_deploy_host }}"
+        docker_services_compose_services: "{{ _stack_def.services }}"
+        docker_services_stack_networks: "{{ _stack_def.networks }}"
+        docker_services_stack_volumes: "{{ _stack_def.volumes }}"
+      tags: [recreate]
 
     - name: Docker services | Reconcile protection after runtime removal
       when:
@@ -151,5 +204,6 @@
       ansible.builtin.fail:
         msg: >-
           Service operation failed at {{ docker_services_preparation_failure_task }}.
-          Staged protection and application data were retained. Preparation failures
-          do not stop an old writer; runtime failure containment is reported above.
+          Staged protection and application data were retained. Prerequisite failures
+          leave an existing writer untouched. If interruption had already begun,
+          correct the original error and retry the ordinary command to restore it.

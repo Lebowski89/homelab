@@ -1,0 +1,175 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Verify preparation failure and recreation preserve the existing data
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  vars:
+    molecule_vm_fixture_file: '{{ playbook_dir }}/../shared/fixtures/application.yml'
+  tasks:
+    - name: VM tests | Expect the real preparation preflight to refuse a missing template
+      block:
+        - name: VM tests | Attempt recreation with a missing declared configuration source
+          ansible.builtin.include_tasks: ../shared/run.tasks.yml
+          vars:
+            molecule_vm_playbook: '{{ playbook_dir }}/../../ansible/playbook.yml'
+            molecule_vm_tags: 'molecule_{{ molecule_vm_runtime }},recreate'
+            molecule_vm_overrides:
+              molecule_vm_fail_prepare: true
+
+        - name: VM tests | Reject unexpected preparation success
+          ansible.builtin.fail:
+            msg: The missing-template preflight unexpectedly succeeded.
+      rescue:
+        - name: VM tests | Require a real failed dispatch rather than accepting any failure
+          ansible.builtin.assert:
+            that:
+              - molecule_vm_nested.rc | default(0) != 0
+              - >-
+                (lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/nested-stats.json') | from_json)
+                .expected_preparation_failure is sameas true
+
+    - name: VM tests | Verify preparation failure preserved the current writer
+      ansible.builtin.include_tasks: ../shared/app-state.tasks.yml
+
+    - name: VM tests | Compare the writer before the intentional recreation
+      ansible.builtin.assert:
+        that: >-
+          molecule_vm_writer_identity.stdout ==
+          (lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/application-first.json') | from_json).identity
+
+    - name: VM tests | Require the preserved writer to continue serving after preparation fails
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable synthetic application exposes HTTP only; loopback probe carries no credentials and verifies the actual listener.
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18080/health
+        use_proxy: false
+        return_content: true
+        status_code: 200
+      register: molecule_vm_preserved_http
+      failed_when: molecule_vm_preserved_http.status | default(0) != 200 or molecule_vm_preserved_http.content | default('') != 'ok'
+
+    - name: VM tests | Recreate through the production adapter
+      ansible.builtin.include_tasks: ../shared/run.tasks.yml
+      vars:
+        molecule_vm_playbook: '{{ playbook_dir }}/../../ansible/playbook.yml'
+        molecule_vm_tags: 'molecule_{{ molecule_vm_runtime }},recreate'
+
+    - name: VM tests | Observe replacement before any removal can mask a failed present-service recreation
+      ansible.builtin.include_tasks: ../shared/app-state.tasks.yml
+      vars:
+        molecule_vm_prior_identity: '{{ (lookup("ansible.builtin.file", molecule_vm_evidence_directory ~ "/application-first.json") | from_json).identity }}'
+
+    - name: VM tests | Require present-service recreation to preserve the application write
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable synthetic application exposes HTTP only; loopback probe carries no credentials and verifies the actual listener.
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18080/persisted
+        use_proxy: false
+        return_content: true
+        status_code: 200
+      register: molecule_vm_recreated_data
+      until: molecule_vm_recreated_data is succeeded and molecule_vm_recreated_data.content == 'retained-after-start-' ~ molecule_vm_run_id
+      retries: 30
+      delay: 2
+
+    - name: VM tests | Remove the owned writer before testing absent-service recreation
+      ansible.builtin.include_tasks: ../shared/run.tasks.yml
+      vars:
+        molecule_vm_playbook: '{{ playbook_dir }}/../../ansible/playbook.yml'
+        molecule_vm_tags: 'molecule_{{ molecule_vm_runtime }},remove'
+
+    - name: VM tests | Recreate an absent service through the production lifecycle
+      ansible.builtin.include_tasks: ../shared/run.tasks.yml
+      vars:
+        molecule_vm_playbook: '{{ playbook_dir }}/../../ansible/playbook.yml'
+        molecule_vm_tags: 'molecule_{{ molecule_vm_runtime }},recreate'
+
+    - name: VM tests | Inspect the replacement writer
+      ansible.builtin.include_tasks: ../shared/app-state.tasks.yml
+
+    - name: VM tests | Require a real replacement process
+      ansible.builtin.assert:
+        that: >-
+          molecule_vm_writer_identity.stdout !=
+          (lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/application-first.json') | from_json).identity
+
+    - name: VM tests | Inspect the unrelated observer before intentional host lifecycle changes
+      ansible.builtin.command:
+        argv: [docker, inspect, --format, '{{ "{{.Id}} {{.State.StartedAt}} {{.State.Running}}" }}', 'molecule-keeper-{{ molecule_vm_run_id[:12] }}']
+      changed_when: false
+      register: molecule_vm_keeper_before_restart
+      failed_when: >-
+        molecule_vm_keeper_before_restart.rc != 0 or molecule_vm_keeper_before_restart.stdout !=
+        lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/keeper-identity') ~ ' true'
+
+    - name: VM tests | Restart the selected real daemon or Quadlet unit
+      become: true
+      become_user: '{{ molecule_vm_runtime_user }}'
+      environment: '{{ molecule_vm_runtime_env }}'
+      ansible.builtin.systemd_service:
+        name: '{{ "docker.service" if molecule_vm_runtime in ["compose", "swarm"] else "molecule-writer-" ~ molecule_vm_run_id[:12] ~ ".service" }}'
+        scope: '{{ "user" if molecule_vm_runtime == "rootless" else "system" }}'
+        state: restarted
+
+    - name: VM tests | Require actual application recovery after the runtime or unit restart
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable synthetic application exposes HTTP only; loopback probe carries no credentials and verifies the actual listener.
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18080/health
+        use_proxy: false
+        return_content: true
+      register: molecule_vm_restart_http
+      until: molecule_vm_restart_http is succeeded and molecule_vm_restart_http.content == 'ok'
+      retries: 30
+      delay: 2
+
+    - name: VM tests | Reboot only the disposable guest and reconnect through trusted SSH
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        connect_timeout: 5
+        post_reboot_delay: 10
+
+    - name: VM tests | Require boot-enabled application recovery without another deployment
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable synthetic application exposes HTTP only; loopback probe carries no credentials and verifies the actual listener.
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18080/health
+        use_proxy: false
+        return_content: true
+      register: molecule_vm_boot_http
+      until: molecule_vm_boot_http is succeeded and molecule_vm_boot_http.content == 'ok'
+      retries: 30
+      delay: 2
+
+    - name: VM tests | Inspect the expected post-reboot writer
+      ansible.builtin.include_tasks: ../shared/app-state.tasks.yml
+
+    - name: VM tests | Inspect the observer after the intentional restart and reboot
+      ansible.builtin.command:
+        argv: [docker, inspect, --format, '{{ "{{.Id}} {{.State.StartedAt}} {{.State.Running}}" }}', 'molecule-keeper-{{ molecule_vm_run_id[:12] }}']
+      changed_when: false
+      register: molecule_vm_keeper_rebooted
+
+    - name: VM tests | Require the same observer container to recover at boot
+      ansible.builtin.assert:
+        that:
+          - molecule_vm_keeper_rebooted.stdout.split()[0] == lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/keeper-identity').split()[0]
+          - molecule_vm_keeper_rebooted.stdout.split()[-1] == 'true'
+
+    - name: VM tests | Retain the observer's expected post-reboot process for scoped removal
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/keeper-expected'
+        content: '{{ molecule_vm_keeper_rebooted.stdout.split()[:2] | join(" ") }}'
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+
+    - name: VM tests | Advance only the expected writer identity after intentional recreation
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/application-expected.json'
+        content: >-
+          {{ (lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/application-first.json') | from_json)
+              | combine({'identity': molecule_vm_writer_identity.stdout}) | to_json }}
+        mode: '0600'
+      delegate_to: localhost
+      become: false

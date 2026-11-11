@@ -1,0 +1,56 @@
+---
+
+- name: Postgres_Exporter | Gather missing platform facts
+  when: >-
+    ['distribution', 'distribution_version', 'distribution_major_version', 'architecture', 'pkg_mgr', 'system', 'service_mgr']
+    | difference(ansible_facts.keys()) | length > 0
+  ansible.builtin.setup:
+    gather_subset: ['!all', '!min', distribution, system, service_mgr, pkg_mgr]
+
+- name: Postgres_Exporter | Detect Atomic or OSTree deployment
+  ansible.builtin.stat:
+    path: /run/ostree-booted
+  register: postgres_exporter_ostree
+
+- name: Postgres_Exporter | Validate supported platform before changes
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - ansible_facts.service_mgr == 'systemd'
+      - not postgres_exporter_ostree.stat.exists
+      - ansible_facts.architecture in ['x86_64', 'aarch64']
+      - postgres_exporter_arch == {'x86_64':'amd64', 'aarch64':'arm64'}.get(ansible_facts.architecture, '')
+      - >-
+        (ansible_facts.pkg_mgr == 'apt' and (
+          (ansible_facts.distribution == 'Debian' and ansible_facts.distribution_major_version in ['12', '13']) or
+          (ansible_facts.distribution == 'Ubuntu' and ansible_facts.distribution_version in ['22.04', '24.04', '26.04', '26.10'])
+        )) or
+        (ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and (
+          (ansible_facts.distribution == 'Fedora' and ansible_facts.distribution_major_version in ['43', '44']
+           and ansible_facts.architecture == 'x86_64') or
+          (ansible_facts.distribution == 'Rocky' and (
+            (ansible_facts.distribution_major_version == '9' and ansible_facts.distribution_version is version('9.7', '>=')) or
+            (ansible_facts.distribution_major_version == '10' and ansible_facts.distribution_version is version('10.1', '>='))
+          ))
+        ))
+    fail_msg: >-
+      PostgreSQL exporter follows the PostgreSQL host matrix: conventional Linux/systemd,
+      Debian 12/13 or Ubuntu 22.04/24.04/26.04/26.10 with APT, Fedora 43/44 AMD64 or Rocky 9.7+/10.1+
+      with DNF4/DNF5. Atomic/OSTree and other derivatives are unsupported. AMD64 remains the default;
+      ARM64 requires explicit postgres_exporter_arch=arm64 and a matching archive checksum override.
+
+- name: Postgres_Exporter | Require a pinned archive and safe managed paths
+  ansible.builtin.assert:
+    that:
+      - postgres_exporter_checksum is string
+      - postgres_exporter_checksum is match('^sha256:[0-9a-fA-F]{64}\Z')
+      - postgres_exporter_version is string
+      - postgres_exporter_version is match('^[A-Za-z0-9][A-Za-z0-9._-]*\Z')
+      - postgres_exporter_install_dir is match('^/[A-Za-z0-9_./@:+-]+\Z')
+      - postgres_exporter_config_dir is match('^/[A-Za-z0-9_./@:+-]+\Z')
+      - postgres_exporter_environment_file is match('^/[A-Za-z0-9_./@:+-]+\Z')
+      - postgres_exporter_password_file is match('^/[A-Za-z0-9_./@:+-]+\Z')
+      - postgres_exporter_environment_file != postgres_exporter_password_file
+    fail_msg: >-
+      Configure a SHA256-pinned release and absolute installation/configuration paths without spaces,
+      quotes or systemd specifiers. Password and environment files must be distinct.

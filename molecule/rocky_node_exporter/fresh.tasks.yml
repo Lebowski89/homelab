@@ -1,0 +1,41 @@
+---
+
+- name: Molecule | Read the real Node Exporter catalogue defaults
+  ansible.builtin.include_vars:
+    file: '{{ playbook_dir }}/../../ansible/group_vars/all/services/node_exporter.yml'
+    name: molecule_node_exporter_catalogue
+
+- name: Molecule | Inspect existing installation and data
+  ansible.builtin.stat:
+    path: '{{ molecule_node_exporter_path }}'
+    follow: false
+  loop:
+    - '{{ molecule_node_exporter_catalogue.node_exporter.native.config.install_dir }}/node_exporter'
+    - '{{ molecule_node_exporter_catalogue.node_exporter.native.config.textfile_dir }}'
+    - /etc/systemd/system/node_exporter.service
+    - /usr/lib/systemd/system/node_exporter.service
+    - /var/lib/native_services/node_exporter.json
+  loop_control:
+    loop_var: molecule_node_exporter_path
+  register: molecule_node_exporter_existing
+
+- name: Molecule | Refuse an existing installation or data
+  ansible.builtin.assert:
+    that:
+      - not molecule_node_exporter_existing_path.stat.exists
+      - not (molecule_node_exporter_existing_path.stat.islnk | default(false))
+    fail_msg: This test requires a fresh Node Exporter installation; retained files are never erased to make it pass.
+  loop: '{{ molecule_node_exporter_existing.results }}'
+  loop_control:
+    loop_var: molecule_node_exporter_existing_path
+    label: '{{ molecule_node_exporter_existing_path.molecule_node_exporter_path }}'
+
+- name: Molecule | Inspect the existing service account
+  ansible.builtin.getent:
+    database: passwd
+    key: '{{ molecule_node_exporter_catalogue.node_exporter.native.config.user }}'
+    fail_key: false
+
+- name: Molecule | Require the service account to remain absent
+  ansible.builtin.assert:
+    that: ansible_facts.getent_passwd.get(molecule_node_exporter_catalogue.node_exporter.native.config.user) is none

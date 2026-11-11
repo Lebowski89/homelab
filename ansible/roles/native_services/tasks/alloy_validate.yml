@@ -1,0 +1,41 @@
+---
+
+- name: Alloy native | Detect Atomic or OSTree deployment
+  ansible.builtin.stat:
+    path: /run/ostree-booted
+  register: native_services_alloy_ostree
+
+- name: Alloy native | Validate the supported platform before changes
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system | default('') == 'Linux'
+      - ansible_facts.service_mgr | default('') == 'systemd'
+      - ansible_facts.architecture | default('') in ['x86_64', 'aarch64']
+      - not native_services_alloy_ostree.stat.exists
+      - >-
+        (ansible_facts.os_family | default('') == 'Debian'
+         and ansible_facts.pkg_mgr | default('') == 'apt') or
+        (ansible_facts.os_family | default('') == 'RedHat'
+         and ansible_facts.pkg_mgr | default('') in ['dnf', 'dnf5']
+         and ((ansible_facts.distribution | default('') == 'Fedora'
+               and ansible_facts.distribution_major_version | default('') in ['43', '44', '45'])
+              or (ansible_facts.distribution | default('') == 'Rocky'
+                  and ansible_facts.distribution_major_version | default('') in ['9', '10'])))
+    fail_msg: >-
+      Native Alloy requires conventional Linux with systemd on AMD64/ARM64:
+      the existing Debian-family APT path, Fedora 43-45 or Rocky 9/10 with DNF/DNF5.
+      Atomic/OSTree hosts and other RPM derivatives are unsupported. No installation changes have been made.
+
+- name: Alloy native | Validate RPM repository inputs
+  when:
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - native_services_action in ['deploy', 'update']
+  ansible.builtin.assert:
+    that:
+      - alloy_native_rpm_baseurl is string
+      - alloy_native_rpm_baseurl is match('^https://[^\s]+$')
+      - alloy_native_rpm_key_url is string
+      - alloy_native_rpm_key_url is match('^https://[^\s]+$')
+      - alloy_native_rpm_key_fingerprint is string
+      - alloy_native_rpm_key_fingerprint is match('^[A-Fa-f0-9]{40}$')
+    fail_msg: Native Alloy RPM installation requires HTTPS repository/key URLs and a full signing-key fingerprint.

@@ -1,0 +1,60 @@
+---
+
+- name: Docker | Detect Atomic or OSTree deployment
+  ansible.builtin.stat:
+    path: /run/ostree-booted
+  register: docker_ostree_boot
+
+- name: Docker | Validate supported platform before changes
+  ansible.builtin.assert:
+    that:
+      - not docker_ostree_boot.stat.exists
+      - ansible_facts.system | default('') == 'Linux'
+      - ansible_facts.service_mgr | default('') == 'systemd'
+      - >-
+        (ansible_facts.os_family | default('') == 'Debian'
+         and ansible_facts.pkg_mgr | default('') == 'apt'
+         and ((ansible_facts.distribution | default('') == 'Debian'
+               and ansible_facts.distribution_major_version | default('') in ['12', '13'])
+           or (ansible_facts.distribution | default('') == 'Ubuntu'
+               and ansible_facts.distribution_version | default('') in ['22.04', '24.04', '26.04', '26.10'])
+           or (ansible_facts.distribution | default('') == 'LMDE'
+               and ansible_facts.distribution_major_version | default('') == '7')))
+        or (ansible_facts.os_family | default('') == 'RedHat'
+            and ansible_facts.pkg_mgr | default('') in ['dnf', 'dnf5']
+            and ((ansible_facts.distribution | default('') == 'Fedora'
+                  and ansible_facts.distribution_major_version | default('') in ['43', '44', '45'])
+              or (ansible_facts.distribution | default('') == 'Rocky'
+                  and ansible_facts.distribution_major_version | default('') in ['9', '10'])))
+    fail_msg: >-
+      Docker requires conventional Debian 12/13, Ubuntu 22.04/24.04/26.04/26.10,
+      LMDE 7 (Debian trixie upstream), Fedora 43-45 or Rocky 9/10 with APT or DNF/DNF5 and systemd.
+      Atomic/OSTree and unlisted derivatives/releases are unsupported. No installation changes made.
+
+- name: Docker | Validate installation options
+  ansible.builtin.assert:
+    that:
+      - docker_install_compose_plugin is boolean
+      - docker_manage_user is boolean
+      - docker_selinux_enable is boolean
+      - docker_packages is sequence and docker_packages is not string and docker_packages is not mapping
+      - docker_prereq_packages is sequence and docker_prereq_packages is not string and docker_prereq_packages is not mapping
+      - docker_user is string
+
+- name: Docker | Inspect installed packages before repository changes
+  ansible.builtin.package_facts:
+    manager: "{{ 'apt' if ansible_facts.pkg_mgr == 'apt' else 'rpm' }}"
+
+- name: Docker | Refuse conflicting runtime or CLI packages
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.packages.keys() | intersect(docker_conflicting_packages) | length == 0
+      - >-
+        (docker_packages + docker_prereq_packages) | map('regex_replace', '[=<> ].*$|-[0-9].*$', '')
+        | intersect(docker_conflicting_packages) | length == 0
+    fail_msg: >-
+      Docker CE conflicts with installed packages:
+      {{ ansible_facts.packages.keys() | intersect(docker_conflicting_packages) | join(', ') }}.
+      Also remove conflicting packages from installation overrides. Review dependent workloads and choose
+      an explicit package migration before retrying. Nothing will be erased automatically.
+      Podman using crun can coexist; podman-docker replaces the Docker CLI and runc/containerd conflict with containerd.io.

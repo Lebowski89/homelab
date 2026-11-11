@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/23 |
+| Readme update        | 2026/11/10 |
 
 
 
@@ -44,7 +44,7 @@
 | [infisical_stack](defaults/main.yml#L31)   | str | `infisical` |    
 | [infisical_compose_file](defaults/main.yml#L32)   | str | `infisical-compose.yml` |    
 | [infisical_compose_path](defaults/main.yml#L33)   | str | `{{ infisical_base_path }}/{{ infisical_compose_file }}` |    
-| [infisical_image](defaults/main.yml#L35)   | str | `docker.io/infisical/infisical:v0.166.8` |    
+| [infisical_image](defaults/main.yml#L35)   | str | `docker.io/infisical/infisical:v0.167.2` |    
 | [infisical_timezone](defaults/main.yml#L36)   | str | `{{ timezone ¦ default('Australia/Melbourne') }}` |    
 | [infisical_puid](defaults/main.yml#L37)   | str | `{{ container_host_puid ¦ default('1000') }}` |    
 | [infisical_pgid](defaults/main.yml#L38)   | str | `{{ container_host_pgid ¦ default('1000') }}` |    
@@ -123,7 +123,7 @@
 | [infisical_podman_services.0.operational_requirements.**ownership_transition**](defaults/main.yml#L133)   | bool | `True` |    
 | [infisical_podman_services.0.**deploy**](defaults/main.yml#L134)   | dict | `{}` |    
 | [infisical_podman_services.0.deploy.**type**](defaults/main.yml#L135)   | str | `container` |    
-| [infisical_podman_services.0.deploy.**host**](defaults/main.yml#L136)   | str | `{{ inventory_hostname }}` |    
+| [infisical_podman_services.0.deploy.**hosts**](defaults/main.yml#L136)   | str | `{{ inventory_hostname }}` |    
 | [infisical_podman_services.0.deploy.**execution**](defaults/main.yml#L137)   | dict | `{}` |    
 | [infisical_podman_services.0.deploy.execution.**mode**](defaults/main.yml#L138)   | str | `rootless` |    
 | [infisical_podman_services.0.deploy.execution.**host_user**](defaults/main.yml#L139)   | str | `podman-infisical-redis` |    
@@ -186,7 +186,7 @@
 | [infisical_podman_services.1.operational_requirements.acl.**0**](defaults/main.yml#L199)   | str | `bootstrap` |    
 | [infisical_podman_services.1.**deploy**](defaults/main.yml#L200)   | dict | `{}` |    
 | [infisical_podman_services.1.deploy.**type**](defaults/main.yml#L201)   | str | `container` |    
-| [infisical_podman_services.1.deploy.**host**](defaults/main.yml#L202)   | str | `{{ inventory_hostname }}` |    
+| [infisical_podman_services.1.deploy.**hosts**](defaults/main.yml#L202)   | str | `{{ inventory_hostname }}` |    
 | [infisical_podman_services.1.deploy.**execution**](defaults/main.yml#L203)   | dict | `{}` |    
 | [infisical_podman_services.1.deploy.execution.**mode**](defaults/main.yml#L204)   | str | `rootless` |    
 | [infisical_podman_services.1.deploy.execution.**host_user**](defaults/main.yml#L205)   | str | `podman-infisical` |    

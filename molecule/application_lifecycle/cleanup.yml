@@ -1,0 +1,112 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Collect evidence and remove only this run's declared application
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  vars:
+    molecule_vm_fixture_file: '{{ playbook_dir }}/../shared/fixtures/application.yml'
+  tasks:
+    - name: VM tests | Collect bounded evidence before removal
+      ansible.builtin.include_tasks: ../shared/diagnostics.tasks.yml
+      vars:
+        molecule_vm_diagnostic_stage: before-removal
+
+    - name: VM tests | Remove through the production catalogue, then retry the absent service
+      ansible.builtin.include_tasks: ../shared/run.tasks.yml
+      vars:
+        molecule_vm_playbook: '{{ playbook_dir }}/../../ansible/playbook.yml'
+        molecule_vm_tags: 'molecule_{{ molecule_vm_runtime }},remove'
+      loop: [first, absent_retry]
+      loop_control:
+        loop_var: molecule_vm_removal_attempt
+
+    - name: VM tests | Require the absent-service removal retry to converge without changes
+      vars:
+        molecule_vm_removal_stats: "{{ lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/nested-stats.json') | from_json }}"
+      ansible.builtin.assert:
+        that: molecule_vm_removal_stats.hosts.values() | map(attribute='changed') | sum == 0
+
+    - name: VM tests | Inspect retained application data
+      ansible.builtin.stat:
+        path: '/opt/molecule-apps/{{ molecule_vm_run_id }}/data/persisted'
+        checksum_algorithm: sha256
+      register: molecule_vm_retained_data
+
+    - name: VM tests | Require owned removal to preserve declared persistent data
+      vars:
+        molecule_vm_expected_file: '{{ molecule_vm_evidence_directory }}/application-first.json'
+      when: lookup('ansible.builtin.file', molecule_vm_expected_file, errors='ignore') | default('', true) | length > 0
+      ansible.builtin.assert:
+        that:
+          - molecule_vm_retained_data.stat.exists
+          - molecule_vm_retained_data.stat.checksum == (lookup('ansible.builtin.file', molecule_vm_expected_file) | from_json).checksum
+
+    - name: VM tests | Require the removed listener to be stopped
+      ansible.builtin.wait_for:
+        host: 127.0.0.1
+        port: 18080
+        state: stopped
+        timeout: 20
+
+    - name: VM tests | Inspect the completed application baseline before checking owned runtime absence
+      ansible.builtin.stat:
+        path: '{{ molecule_vm_evidence_directory }}/application-first.json'
+      register: molecule_vm_removal_baseline
+      delegate_to: localhost
+      become: false
+
+    - name: VM tests | Verify scoped runtime removal after a completed deployment
+      # checkov:skip=CKV2_ANSIBLE_3:Removal verification must fail acceptance if owned objects or Quadlets remain; never bypass these cleanup checks.
+      when: molecule_vm_removal_baseline.stat.exists
+      block:
+        - name: VM tests | Resolve the execution store without requiring a running writer
+          ansible.builtin.include_tasks: ../shared/app-execution.tasks.yml
+
+        - name: VM tests | Require the owned service or container objects to be absent
+          become: true
+          become_user: '{{ molecule_vm_runtime_user }}'
+          environment: '{{ molecule_vm_runtime_env }}'
+          ansible.builtin.command:
+            argv: >-
+              {{ ['docker', 'service', 'ls', '--filter',
+                  'label=com.docker.stack.namespace=molecule-writer-' ~ molecule_vm_run_id[:12], '--format', '{{.ID}}']
+                 if molecule_vm_runtime == 'swarm' else
+                 [molecule_vm_engine, 'ps', '--all', '--filter',
+                  ('label=com.docker.compose.project=molecule-writer-' ~ molecule_vm_run_id[:12] ~ '-subject'
+                   if molecule_vm_runtime == 'compose' else 'name=^molecule-writer-' ~ molecule_vm_run_id[:12] ~ '$'), '--format', '{{.ID}}'] }}
+          changed_when: false
+          register: molecule_vm_removed_objects
+          until: molecule_vm_removed_objects.rc == 0 and molecule_vm_removed_objects.stdout | trim == ''
+          retries: 20
+          delay: 1
+
+        - name: VM tests | Inspect the owned Quadlet source after removal
+          when: molecule_vm_runtime in ['rootful', 'rootless']
+          ansible.builtin.stat:
+            path: >-
+              {{ (molecule_vm_runtime_env.HOME ~ '/.config/containers/systemd' if molecule_vm_runtime == 'rootless'
+                  else '/etc/containers/systemd') ~ '/molecule-writer-' ~ molecule_vm_run_id[:12] ~ '.container' }}
+            follow: false
+          register: molecule_vm_removed_quadlet
+
+        - name: VM tests | Require the removed Quadlet to stay absent at the next boot
+          when: molecule_vm_runtime in ['rootful', 'rootless']
+          ansible.builtin.assert:
+            that: not molecule_vm_removed_quadlet.stat.exists
+
+    - name: VM tests | Verify removal did not disturb the unrelated observer
+      vars:
+        molecule_vm_keeper_expected_file: >-
+          {{ lookup('ansible.builtin.first_found', {'files': [molecule_vm_evidence_directory ~ '/keeper-expected',
+                                                           molecule_vm_evidence_directory ~ '/keeper-identity']}) }}
+      ansible.builtin.command:
+        argv: [docker, inspect, --format, '{{ "{{.Id}} {{.State.StartedAt}} {{.State.Running}}" }}', 'molecule-keeper-{{ molecule_vm_run_id[:12] }}']
+      changed_when: false
+      register: molecule_vm_keeper_after
+      failed_when: >-
+        molecule_vm_keeper_after.rc != 0 or molecule_vm_keeper_after.stdout !=
+        lookup('ansible.builtin.file', molecule_vm_keeper_expected_file) ~ ' true'

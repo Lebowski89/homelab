@@ -201,6 +201,8 @@ def test_action_templates_selected_config_in_dispatch_host_context_only(tmp_path
     svcfiles:
       selected:
         runtime: docker
+        deploy:
+          hosts: localhost
         environment:
           ADDRESS: "{{ hostvars[inventory_hostname].local_ip }}"
         targets:
@@ -209,6 +211,8 @@ def test_action_templates_selected_config_in_dispatch_host_context_only(tmp_path
               - path: "{{ hostvars[inventory_hostname].application_root }}/selected"
       unselected:
         runtime: docker
+        deploy:
+          hosts: localhost
         environment:
           VALUE: "{{ deliberately_undefined }}"
     selected_entries:
@@ -221,6 +225,8 @@ def test_action_templates_selected_config_in_dispatch_host_context_only(tmp_path
       ansible.builtin.set_fact:
         local_ip: 192.0.2.20
         application_root: /srv/apps
+        docker_swarm_node_labels:
+          docker_services_host: fixture-local-identity
 
     - name: Materialize selected service
       service_catalog_materialize:
@@ -233,6 +239,7 @@ def test_action_templates_selected_config_in_dispatch_host_context_only(tmp_path
           - service_catalog_host_materialized | length == 1
           - service_catalog_host_materialized[0].config.environment.ADDRESS == '192.0.2.20'
           - service_catalog_host_materialized[0].config.paths[0].path == '/srv/apps/selected'
+          - service_catalog_host_materialized[0].config.deploy.constraints == ['node.labels.docker_services_host == fixture-local-identity']
 """
     )
     environment = os.environ.copy()
@@ -283,21 +290,23 @@ def test_lifecycle_planning_keeps_unselected_configurations_unmaterialized(tmp_p
         tags: [bundle]
         network_mode: container:provider-runtime
         deploy:
-          host: localhost
+          hosts: localhost
       provider:
         runtime: podman
         tags: [bundle]
         name: provider-runtime
         deploy:
-          host: localhost
+          hosts: localhost
       unrelated:
         runtime: docker
+        deploy:
+          hosts: localhost
         environment:
           VALUE: "{{ deliberately_undefined }}"
   tasks:
     - name: Build lightweight catalog
       ansible.builtin.set_fact:
-        catalog_items: "{{ svcfiles | service_catalog_effective('localhost') }}"
+        catalog_items: "{{ svcfiles | service_catalog_effective('localhost', groups) }}"
 
     - name: Select synthetic bundle
       ansible.builtin.set_fact:

@@ -1,0 +1,22 @@
+---
+
+prerun: false
+dependency:
+  enabled: false
+  name: galaxy
+ansible:
+  cfg:
+    defaults:
+      action_plugins: ${MOLECULE_PROJECT_DIRECTORY}/ansible/action_plugins
+      collections_path: ${MOLECULE_PROJECT_DIRECTORY}/ansible/collections:~/.ansible/collections:~/.local/share/homelab/collections
+      filter_plugins: ${MOLECULE_PROJECT_DIRECTORY}/ansible/filter_plugins:${MOLECULE_PROJECT_DIRECTORY}/ansible/roles/service_common/filter_plugins
+      host_key_checking: true
+      inject_facts_as_vars: false
+      precedence: all_inventory,groups_inventory
+      roles_path: ${MOLECULE_PROJECT_DIRECTORY}/ansible/roles
+    inventory:
+      enable_plugins: yaml,ini,host_list
+  env:
+    ANSIBLE_INJECT_FACT_VARS: 'false'
+  executor:
+    backend: ansible-playbook

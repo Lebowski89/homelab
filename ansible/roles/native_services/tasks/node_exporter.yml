@@ -1,0 +1,83 @@
+---
+
+- name: Node_Exporter | Create node_exporter group
+  ansible.builtin.group:
+    name: "{{ node_exporter_group }}"
+    system: true
+
+- name: Node_Exporter | Create node_exporter user
+  ansible.builtin.user:
+    name: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: false
+
+- name: Node_Exporter | Create node_exporter textfile collector directory
+  ansible.builtin.file:
+    path: "{{ node_exporter_textfile_dir }}"
+    state: directory
+    owner: "{{ node_exporter_user }}"
+    group: "{{ node_exporter_group }}"
+    mode: "0755"
+
+- name: Node_Exporter | Skip node_exporter binary install in check mode
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Skipping node_exporter archive download/extract/install in check mode because
+      get_url does not materialize the archive for the following unarchive task.
+
+- name: Node_Exporter | Download node_exporter archive
+  when: not ansible_check_mode
+  ansible.builtin.get_url:
+    url: "{{ node_exporter_download_url }}"
+    dest: "{{ node_exporter_archive_path }}"
+    mode: "0644"
+    checksum: "{{ node_exporter_checksum | default(omit, true) }}"
+
+- name: Node_Exporter | Extract node_exporter archive
+  when: not ansible_check_mode
+  ansible.builtin.unarchive:
+    src: "{{ node_exporter_archive_path }}"
+    dest: /tmp
+    remote_src: true
+    creates: "{{ node_exporter_extract_dir }}/node_exporter"
+
+- name: Node_Exporter | Install node_exporter binary
+  when: not ansible_check_mode
+  ansible.builtin.copy:
+    src: "{{ node_exporter_extract_dir }}/node_exporter"
+    dest: "{{ node_exporter_install_dir }}/node_exporter"
+    owner: root
+    group: root
+    mode: "0755"
+    remote_src: true
+  notify: Restart node_exporter
+
+- name: Node_Exporter | Install node_exporter systemd unit
+  ansible.builtin.template:
+    src: node_exporter/node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Reload systemd
+    - Restart node_exporter
+
+- name: Native services | Record adopted node_exporter configuration
+  when:
+    - not ansible_check_mode
+  ansible.builtin.include_tasks: record_files.yml
+  vars:
+    native_services_adopted_files:
+      - "/etc/systemd/system/node_exporter.service"
+
+- name: Node_Exporter | Enable and start node_exporter
+  when: not ansible_check_mode
+  ansible.builtin.systemd:
+    name: node_exporter
+    enabled: true
+    state: started
+    daemon_reload: true

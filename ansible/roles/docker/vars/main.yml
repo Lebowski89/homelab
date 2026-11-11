@@ -1,0 +1,32 @@
+---
+
+docker_repo_platform: >-
+  {{ {'Ubuntu': 'ubuntu', 'Debian': 'debian', 'LMDE': 'debian',
+      'Fedora': 'fedora', 'Rocky': 'rhel'}[ansible_facts.distribution] }}
+docker_platform_prereq_packages:
+  Debian: [ca-certificates, curl, python3-debian]
+  RedHat: "{{ ['ca-certificates'] + (['python3-docker'] if ansible_facts.distribution == 'Fedora' else []) }}"
+# containerd.io bundles runc; Podman itself is deliberately not a conflict.
+docker_conflicting_packages:
+  - podman-docker
+  - containerd
+  - runc
+  - docker.io
+  - docker-compose
+  - docker-compose-v2
+  - docker-doc
+  - docker-buildx
+  - docker
+  - docker-client
+  - docker-client-latest
+  - docker-common
+  - docker-latest
+  - docker-latest-logrotate
+  - docker-logrotate
+  - docker-selinux
+  - docker-engine-selinux
+  - docker-engine
+  - moby-engine
+  - moby-cli
+  - moby-containerd
+  - moby-runc

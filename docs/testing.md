@@ -4,6 +4,20 @@ Use `/opt/ansible/ansible-venv/bin/python -m pytest tests/unit` for the complete
 suite. Tests use synthetic inventories, fake external I/O and private temporary
 state. They do not establish live application or firewall acceptance.
 
+## Optional Molecule VM tests
+
+The [disposable VM system](../molecule/README.md) shares a serial Proxmox/cloud-init
+lifecycle across Debian 13, Fedora 44, Rocky 10.2 and Ubuntu 26.04. It prepares
+private inventory and trusted SSH without NetBox or Tailscale. Native Node
+Exporter, runtime installation/coexistence, representative catalogue lifecycles
+and protected traffic are distinct scenario families. See the
+[acceptance summary](../molecule/README.md#recorded-acceptance) for recorded live results; syntax and simulated
+failure tests alone do not establish functional acceptance. Public PR CI has no
+infrastructure credentials. A separately enabled, protected controller workflow
+runs trusted VM cases within an explicitly approved allocation.
+The optional-tooling CLI regressions in `tests/molecule` run in the quality job
+with SSH blocked. The existing `tests/unit` commands do not require Molecule.
+
 ## Task fixtures and safety assertions
 
 Prefer running a supported role/task entry point with external I/O replaced.
@@ -360,3 +374,57 @@ Ruff 0.16.8, Ansible 2.21.4 and ansible-lint 26.8.0 differ from the repository's
 0.17.0/2.21.5/26.10.0 pins. Shellcheck and actionlint remain unavailable. Generated
 Docker role README entries are intentionally left for the repository's Docsible
 workflow; they are not retained executable imports or supported entry points.
+
+## PR #726 CI repairs
+
+The follow-up starts at reviewed head `d65fdd2e`. Its actual PR merge base is
+`d3ad682e512132a8da714887bc82818491b5eb15`; `e49f085d` is a feature-branch
+revision and cannot establish an unrelated baseline failure.
+
+Independent `service_common` prerequisite entry points register canonical
+inventory placement through their role-local `service_placement` plugin. They
+do not depend on a runtime adapter or a global test-only filter path. The plugin
+exports only placement resolution; runtime rendering and lifecycle remain with
+the adapters. The existing independent preflight tests still require ownership
+acknowledgements before any secrets, files or bootstrap interruption.
+
+Fixture boundaries follow the current contracts:
+
+| Family | Required fixture context and retained behaviour |
+| --- | --- |
+| Renovate | Extract effective Docker/Podman images after target merging; image-free native services are valid and malformed container images fail explicitly. |
+| HAProxy projection/capture | Supply all catalogue placement hosts and their synthetic inventory identity; retain identity, aggregation and command-failure assertions. |
+| Firewall dispatch | Isolate platform inspection with a read-only marker while exercising the real dispatcher and legacy wrappers; invalid selections cannot reach the marker. Platform tests retain the real gate. |
+| Bootstrap | Pass inventory groups into planners, include copied role dependencies and declare valid placement; absent and unknown placement remain rejected. |
+| RomM | Restore adapter-local filter discovery and normalized deployment type for extracted application tasks. Shared database/Compose preflight remains covered through the real adapter in `test_service_firewall_preflight.py`; file migration retains existing permissions independently of the controller umask. |
+| Bazarr | Synthetic managed-host ownership follows the test process UID/GID; production defaults and lifecycle failure/recovery cases remain intact. |
+| Workstation | Load synthetic container definitions and real selectors before requiring the missing inventory roles; workstation-only operations still avoid application dependencies. |
+
+Copied-role fixtures retain the canonical filter file at its normal relative
+location and reject skipped-plugin warnings, so successful cases cannot conceal
+a failed common-role loader behind another discovered filter.
+
+Checkov exceptions describe the boundary at each task/block. The eight HTTP
+probes exercise the actual disposable HTTP application or verified loopback
+metrics listener, without HTTP credentials. Fixed-choice VM workflow inputs
+select acceptance tests and do not construct release artifacts; its disabled
+state, trusted ref, environment and restricted runner requirements are unchanged.
+The 15 reviewed blocks deliberately propagate failure, including existing
+`always` cleanup. Checkov 3.4.3 builds their inline suppression context IDs as
+`block..name` while graph IDs use `block.name`. Until upstream fixes that mismatch,
+`.checkov.yml` limits the block-rule workaround to exact reviewed file paths;
+other rules and files remain checked. Remove those path exceptions when block
+annotations work. The equivalent cloud-init `format()` expression also lets the
+scanner parse its nested HCL without changing the generated user data.
+
+Gitleaks exclusions identify only the two historical public Docker CE and
+Grafana Labs RPM signing-key findings. Validate the original CI range
+`45bd39b8^..d65fdd2e` with `--no-merges --first-parent`; current-line edits alone
+cannot remove historical matches. Do not rewrite history or broaden detection
+exclusions. Detailed local commands, results and tooling limitations are retained
+outside tracked documentation in `.ansible/pr726-ci/`.
+
+For local Checkov validation, scan a tracked-source snapshot that includes the
+working patch, rather than an operator checkout containing ignored private
+inputs. Checkov automatically loads Terraform variable files; its normal
+GitHub checkout has no such local files. Keep scanner reports private.

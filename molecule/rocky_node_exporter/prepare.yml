@@ -1,0 +1,47 @@
+---
+
+- name: Validate the isolated inventory and guest
+  ansible.builtin.import_playbook: guard.yml
+
+- name: Claim only a fresh Node Exporter test installation
+  hosts: molecule_node_exporter
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tags: always
+  tasks:
+    - name: Molecule | Inspect existing ownership
+      ansible.builtin.import_tasks: ownership.tasks.yml
+
+    - name: Molecule | Refuse an unfinished previous test
+      ansible.builtin.assert:
+        that: not molecule_node_exporter_marker.stat.exists
+        fail_msg: Finish the owned scenario cleanup before preparing another fresh VM test.
+
+    - name: Molecule | Validate a fresh installation before claiming it
+      ansible.builtin.import_tasks: fresh.tasks.yml
+
+    - name: Molecule | Ensure APT archive prerequisites
+      when: ansible_facts.pkg_mgr == 'apt'
+      ansible.builtin.apt:
+        name: [ca-certificates, tar, gzip]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Molecule | Ensure the archive installer's explicit OS prerequisites
+      when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+      ansible.builtin.dnf:
+        name: [ca-certificates, tar, gzip]
+        state: present
+        use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+        disable_gpg_check: false
+        allowerasing: false
+
+    - name: Molecule | Record ownership before the real installation
+      ansible.builtin.copy:
+        dest: /var/lib/homelab-molecule-node-exporter
+        content: "homelab molecule rocky-node-exporter\n"
+        owner: root
+        group: root
+        mode: '0600'

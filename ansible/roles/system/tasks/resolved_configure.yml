@@ -1,0 +1,156 @@
+---
+
+- name: System resolver | Ensure systemd-resolved is enabled and running
+  ansible.builtin.systemd_service:
+    name: "{{ system_resolved_service_name }}"
+    enabled: true
+    state: started
+  register: system_resolved_service
+
+- name: System resolver | Verify the declared NSS provider without external DNS
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and system_resolved_requires_nss
+  ansible.builtin.command:
+    argv: [getent, -s, resolve, hosts, localhost]
+  changed_when: false
+
+- name: System resolver | Ensure resolved config directory exists
+  ansible.builtin.file:
+    path: "{{ system_resolved_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: System resolver | Remove stale unmanaged resolved drop-ins
+  when: system_resolved_cleanup_dropins | length > 0
+  ansible.builtin.file:
+    path: "{{ system_resolved_cleanup_dropin }}"
+    state: absent
+  loop: "{{ system_resolved_cleanup_dropins }}"
+  loop_control:
+    loop_var: system_resolved_cleanup_dropin
+  register: system_resolved_cleanup
+  notify: System | Restart systemd-resolved
+
+- name: System resolver | Configure systemd-resolved drop-in
+  ansible.builtin.copy:
+    dest: "{{ system_resolved_dropin_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Resolve]
+      {% if system_resolved_fallback_dns | length > 0 %}
+      FallbackDNS={{ system_resolved_fallback_dns | join(' ') }}
+      {% endif %}
+      {% if system_resolved_disable_stub | bool %}
+      DNSStubListener=no
+      {% endif %}
+  register: system_resolved_configuration
+  notify: System | Restart systemd-resolved
+
+- name: System resolver | Apply DNS stub listener changes before dependent services
+  when: system_resolved_disable_stub or ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.meta: flush_handlers
+
+- name: System resolver | Republish NetworkManager DNS after resolver changes
+  when:
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - system_resolved_service.changed or system_resolved_configuration.changed or system_resolved_cleanup.changed | default(false)
+  ansible.builtin.command:
+    argv: [nmcli, general, reload, dns-full]
+  changed_when: false
+
+- name: System resolver | Verify the active stub before relying on its output
+  # checkov:skip=CKV2_ANSIBLE_3:Read-only stub ownership checks must fail before replacing resolv.conf; unsafe DNS ownership has no automatic recovery.
+  when:
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - system_resolved_resolv_conf_target == '/run/systemd/resolve/stub-resolv.conf'
+  block:
+    - name: System resolver | Read the running resolver process after configuration
+      ansible.builtin.command:
+        argv: [systemctl, show, "{{ system_resolved_unit }}", --property=MainPID, --value]
+      register: system_resolved_output_pid
+      changed_when: false
+
+    - name: System resolver | Read the configured stub socket owners
+      community.general.listen_ports_facts:
+        command: ss
+      register: system_resolved_output_ports
+
+    - name: System resolver | Require both stub protocols to belong to the selected resolver
+      ansible.builtin.assert:
+        that:
+          - system_resolved_output_pid.stdout | int > 0
+          - >-
+            system_resolved_output_ports.ansible_facts[system_resolved_protocol]
+            | selectattr('port', 'equalto', 53)
+            | selectattr('pid', 'equalto', system_resolved_output_pid.stdout | int)
+            | map(attribute='address') | map('regex_replace', '%.*$', '')
+            | select('equalto', '127.0.0.53') | list | length > 0
+        fail_msg: >-
+          The selected resolver does not own its TCP and UDP stub sockets. Inspect conflicting drop-ins or listeners;
+          no additional resolver link was written here. Native package scripts may already have changed DNS setup.
+      loop: [tcp_listen, udp_listen]
+      loop_control:
+        loop_var: system_resolved_protocol
+
+- name: System resolver | Inspect the resolved output before changing the link
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and system_resolved_manage_resolv_conf
+  ansible.builtin.stat:
+    path: "{{ system_resolved_resolv_conf_target }}"
+  register: system_resolved_output
+
+- name: System resolver | Require usable output before changing resolver ownership
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and system_resolved_manage_resolv_conf
+  ansible.builtin.assert:
+    that: system_resolved_output.stat.isreg | default(false)
+    fail_msg: >-
+      Resolved has no usable output; no additional resolver link was written here.
+      Inspect partial package/service changes, including native package scripts, before retrying.
+
+- name: System resolver | Reinspect resolver ownership immediately before replacement
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and system_resolved_manage_resolv_conf
+  ansible.builtin.stat:
+    path: "{{ system_resolved_resolv_conf_path }}"
+    follow: false
+  register: system_resolved_before_link
+
+- name: System resolver | Retain a changed resolver owner during preparation
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and system_resolved_manage_resolv_conf
+  ansible.builtin.assert:
+    that:
+      - >-
+        not system_resolved_before_link.stat.exists or
+        (system_resolved_before_link.stat.uid | default(-1) == 0 and (
+          (system_resolved_before_link.stat.islnk | default(false) and
+           system_resolved_before_link.stat.lnk_source in
+             [system_resolved_current.stat.lnk_source | default(''), '/run/systemd/resolve/stub-resolv.conf',
+              '/run/systemd/resolve/resolv.conf']) or
+          (system_resolved_before_link.stat.isreg | default(false) and
+           system_resolved_before_link.stat.mode | default('') is match('^0?[0-7][0145][0145]$') and
+           system_resolved_current.stat.checksum | default('') | length > 0 and
+           system_resolved_before_link.stat.checksum | default('') == system_resolved_current.stat.checksum)
+        ))
+    fail_msg: >-
+      Resolver ownership/content changed during preparation. The changed path was retained;
+      inspect its owner and partial package/service changes before retrying.
+
+- name: System resolver | Point resolv.conf at the selected resolved output
+  when:
+    - system_resolved_manage_resolv_conf | bool
+    - ansible_facts.virtualization_type | default("") != "lxc"
+  ansible.builtin.file:
+    src: "{{ system_resolved_resolv_conf_target }}"
+    dest: "{{ system_resolved_resolv_conf_path }}"
+    state: link
+    force: true
+    follow: false
+
+- name: System resolver | Ensure NSS uses systemd-resolved before plain DNS
+  when: system_resolved_manage_nsswitch | bool
+  ansible.builtin.lineinfile:
+    path: "{{ system_resolved_nsswitch_path }}"
+    regexp: '^hosts:'
+    line: "{{ system_resolved_nsswitch_hosts_line }}"
+    backup: "{{ system_resolved_nsswitch_backup | bool }}"

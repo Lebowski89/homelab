@@ -1,0 +1,86 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Require a fresh runtime installation
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Inspect installed runtime packages
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: VM tests | Refuse installed runtimes and conflicting CLI providers
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.packages.keys() | intersect(['docker-ce', 'docker.io', 'podman', 'podman-docker', 'moby-engine']) | length == 0
+        fail_msg: >-
+          The selected base image already includes runtime packages:
+          {{ ansible_facts.packages.keys() | intersect(['docker-ce', 'docker.io', 'podman', 'podman-docker', 'moby-engine']) }}.
+          Choose a pinned image without those runtimes. Recreating the same image cannot provide a fresh installation test;
+          removing retained application data does not establish installation freshness.
+
+    # The pinned Rocky cloud image's running kernel predates current repository
+    # module packages. This is explicit disposable-guest OS preparation, not a
+    # change to Docker's deliberate refusal to upgrade/reboot a managed host.
+    - name: VM tests | Record the pinned image's running Rocky kernel
+      when: ansible_facts.distribution == 'Rocky'
+      ansible.builtin.set_fact:
+        molecule_vm_image_kernel: '{{ ansible_facts.kernel }}'
+
+    - name: VM tests | Prepare the supported Rocky kernel and matching module supplement
+      when: ansible_facts.distribution == 'Rocky'
+      ansible.builtin.dnf:
+        name: [kernel, kernel-modules-extra]
+        state: present
+        use_backend: '{{ "dnf5" if ansible_facts.pkg_mgr == "dnf5" else "dnf4" }}'
+        disable_gpg_check: false
+        allowerasing: false
+        install_weak_deps: false
+      register: molecule_vm_kernel_preparation
+
+    - name: VM tests | Boot the explicitly prepared disposable kernel
+      when:
+        - ansible_facts.distribution == 'Rocky'
+        - molecule_vm_kernel_preparation.changed
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        connect_timeout: 5
+
+    - name: VM tests | Refresh facts after explicit kernel preparation
+      when: ansible_facts.distribution == 'Rocky'
+      ansible.builtin.setup:
+
+    - name: VM tests | Require the running kernel's actual address-type match module
+      when: ansible_facts.distribution == 'Rocky'
+      ansible.builtin.command:
+        argv: [modinfo, '-F', filename, xt_addrtype]
+      changed_when: false
+
+    - name: VM tests | Record explicit kernel preparation separately from installation
+      when: ansible_facts.distribution == 'Rocky'
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/kernel-preparation.json'
+        content: >-
+          {{ {'image_kernel': molecule_vm_image_kernel, 'running_kernel': ansible_facts.kernel,
+              'package_changes': molecule_vm_kernel_preparation.changed} | to_json }}
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+
+    - name: VM tests | Snapshot the intended SELinux and firewalld state
+      ansible.builtin.service_facts:
+
+    - name: VM tests | Retain the initial security state on the controller
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/security.json'
+        content: >-
+          {{ {'selinux': ansible_facts.selinux.mode | default('disabled'),
+              'firewalld_active': ansible_facts.services.get('firewalld.service', {}).get('state', '') == 'running',
+              'firewalld_enabled': ansible_facts.services.get('firewalld.service', {}).get('status', '') == 'enabled',
+              'firewalld_observed': ansible_facts.services.get('firewalld.service', {})} | to_json }}
+        mode: '0600'
+      delegate_to: localhost
+      become: false

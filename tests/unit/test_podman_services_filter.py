@@ -194,7 +194,7 @@ def canonical_cfg():
         "image": "ghcr.io/example/portable:1.2.3",
         "user": "1001:1002",
         "environment": {"APP_ENV": "production", "COUNT": 2},
-        "deploy": {"type": "container", "host": "podman01"},
+        "deploy": {"type": "container", "hosts": "podman01"},
         "ports": {
             "web": {
                 "published": "8443",
@@ -428,7 +428,7 @@ def test_docker_style_service_switches_to_podman_by_changing_runtime():
             "type": "container",
             "mode": "replicated",
             "replicas": 1,
-            "host": "podman01",
+            "hosts": "podman01",
         },
     }
     docker_style["runtime"] = "podman"
@@ -522,7 +522,7 @@ def test_nested_boolean_fields_reject_integer_two(section, field):
 @pytest.mark.parametrize("host", ["", "   ", 42, None])
 def test_deploy_host_must_be_nonempty_string(host):
     cfg = minimal_canonical_cfg()
-    cfg["deploy"] = {"host": host}
+    cfg["deploy"] = {"hosts": host}
 
     with pytest.raises(AnsibleFilterError, match=r"deploy\.host"):
         podman_services.podman_service_normalize(cfg, "portable")
@@ -707,10 +707,10 @@ def test_unsupported_docker_deploy_semantics_are_rejected(deploy):
 @pytest.mark.parametrize(
     "deploy",
     [
-        {"host": "podman01"},
-        {"type": "container", "mode": "replicated", "host": "podman01"},
-        {"type": "container", "mode": "replicated", "replicas": 1, "host": "podman01"},
-        {"type": "container", "replicas": "1", "host": "podman01"},
+        {"hosts": "podman01"},
+        {"type": "container", "mode": "replicated", "hosts": "podman01"},
+        {"type": "container", "mode": "replicated", "replicas": 1, "hosts": "podman01"},
+        {"type": "container", "replicas": "1", "hosts": "podman01"},
     ],
 )
 def test_supported_single_instance_deploy_forms_are_accepted(deploy):
@@ -725,7 +725,7 @@ def test_supported_single_instance_deploy_forms_are_accepted(deploy):
 def test_docker_only_deploy_metadata_is_rejected_without_mutating_input():
     cfg = minimal_canonical_cfg()
     cfg["deploy"] = {
-        "host": "podman01",
+        "hosts": "podman01",
         "profile": "careful",
         "constraints": ["node.labels.docker_services_host == manager"],
     }
@@ -1222,7 +1222,7 @@ def rootless_cfg():
         "ports": [{"published": 18080, "target": 8080, "protocol": "tcp"}],
         "deploy": {
             "type": "container",
-            "host": "manager",
+            "hosts": "manager",
             "execution": {"mode": "rootless", "host_user": "podman-adminer"},
         },
         "cap_add": [],

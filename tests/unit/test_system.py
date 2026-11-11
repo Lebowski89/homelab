@@ -21,10 +21,26 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 def system_run(tmp_path):
     roles = tmp_path / "roles"
-    for role in ("system", "postgres"):
+    fixture_roles = ("system", "postgres", "postgres_exporter", "docker", "podman", "service_common", "service_firewall")
+    for role in fixture_roles:
         shutil.copytree(REPO / "ansible/roles" / role, roles / role, ignore=shutil.ignore_patterns("__pycache__"))
+    # Preserve the common role's canonical placement dependency in this copy.
+    (tmp_path / "filter_plugins").mkdir()
+    shutil.copyfile(REPO / "ansible/filter_plugins/service_catalog.py", tmp_path / "filter_plugins/service_catalog.py")
     modules = {
         "apt",
+        "uri",
+        "community.general.sefcontext",
+        "community.general.serestorecon",
+        "community.general.listen_ports_facts",
+        "get_url",
+        "unarchive",
+        "rpm_key",
+        "yum_repository",
+        "deb822_repository",
+        "package_facts",
+        "group",
+        "user",
         "template",
         "find",
         "dnf",
@@ -37,8 +53,14 @@ def system_run(tmp_path):
         "systemd_service",
         "systemd",
         "setup",
+        "service_facts",
+        "wait_for",
         "ansible.posix.sysctl",
         "community.general.pam_limits",
+        "community.docker.docker_swarm",
+        "community.docker.docker_network",
+        "community.docker.docker_network_info",
+        "community.docker.docker_node",
     }
 
     def instrument(tasks):
@@ -49,12 +71,23 @@ def system_run(tmp_path):
                 key = module if "." in module else f"ansible.builtin.{module}"
                 if key in task:
                     task["fixture_operation"] = {"module": module, "options": task.pop(key)}
-            if "ansible.builtin.include_tasks" in task and task["ansible.builtin.include_tasks"].get("file", "").startswith("sub_tasks/"):
+            if task.get("ansible.builtin.include_role", {}).get("name") == "systemd_jobs":
+                task["fixture_operation"] = {"module": "include_role", "options": task.pop("ansible.builtin.include_role")}
+            if isinstance(task.get("ansible.builtin.include_tasks"), dict) and task["ansible.builtin.include_tasks"].get(
+                "file", ""
+            ).startswith("sub_tasks/"):
                 include = task["ansible.builtin.include_tasks"]
-                if include["file"] != "sub_tasks/backup_prerequisites.yml":
+                if include["file"] not in {
+                    "sub_tasks/backup_prerequisites.yml",
+                    "sub_tasks/install.yml",
+                    "sub_tasks/swarm.yml",
+                    "sub_tasks/install/etcd.yml",
+                    "sub_tasks/install/patroni.yml",
+                    "sub_tasks/backup_remote_setup.yml",
+                }:
                     task["fixture_operation"] = {"module": "include_tasks", "options": task.pop("ansible.builtin.include_tasks")}
 
-    for role in ("system", "postgres"):
+    for role in fixture_roles:
         # Only PostgreSQL's entry point and the moved dependency file are selected.
         paths = list((roles / role / "tasks").rglob("*.yml")) + list((roles / role / "handlers").glob("*.yml"))
         for path in paths:
@@ -64,26 +97,159 @@ def system_run(tmp_path):
     plugins = tmp_path / "action_plugins"
     plugins.mkdir()
     (plugins / "fixture_operation.py").write_text("""from ansible.plugins.action import ActionBase
-import base64, json
+from ansible.template import trust_as_template
+import base64, fnmatch, hashlib, json, re
 from pathlib import Path
 class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
         v = task_vars
         module, options = self._task.args['module'], self._task.args['options'] or {}
-        record = {'module': module, 'options': options, 'environment': self._task.environment}
+        record = {'module': module, 'options': options, 'environment': self._task.environment,
+                  'no_log': self._task.no_log, 'diff': self._task.diff}
+        if module == 'copy' and options.get('src') == 'docker-iptables-compat.conf':
+            record['content'] = (Path(v['role_path']) / 'files' / options['src']).read_text()
+        if module == 'copy' and options.get('dest') == '/etc/docker/daemon.json':
+            record['content'] = options['content']
+        if module == 'copy' and options.get('dest') == v.get('system_resolved_dropin_path', '/etc/systemd/resolved.conf.d/99-skynet.conf'):
+            record['content'] = options['content']
+        if module == 'template' and options.get('src') in (
+            'rootful-dns.conf.j2', 'shared.network.j2', 'patroni.yml.j2', 'etcd.default.j2', 'patroni-rpm.conf.j2',
+            'postgres_exporter.service.j2', 'password.j2', 'environment.j2'):
+            expression = "{{ lookup('ansible.builtin.template', " + repr(options['src']) + ") }}"
+            content = self._templar.template(trust_as_template(expression))
+            if self._task.no_log and options['src'] in ('password.j2', 'environment.j2'):
+                record['content_digest'] = hashlib.sha256(content.encode()).hexdigest()
+            else:
+                record['content'] = content
         with open(v['fixture_record'], 'a') as output:
             output.write(json.dumps(record, default=str) + '\\n')
         state_path = Path(v['fixture_state'])
         state = json.loads(state_path.read_text())
         result = {'changed': False, 'rc': 0, 'stdout': '', 'stdout_lines': []}
+        if v.get('fixture_firewall_dependencies', False):
+            if module == 'file' and options.get('state') == 'absent':
+                result['changed'] = options['path'] in v.get('fixture_files', {})
+            if module == 'command' and options['argv'][-3:-1] == ['remove', '--backend']:
+                result['stdout'] = json.dumps({'changed': True})
+            if module == 'systemd_service' and not self._play_context.check_mode:
+                if options.get('state') == 'stopped':
+                    state.setdefault('stopped_units', []).append(options['name'])
+                    if options['name'] == 'skynet-worker-backend-firewall.service' and state.get('docker_requires_guard'):
+                        state['docker_running'] = False
+                if options.get('daemon_reload'):
+                    state['docker_requires_guard'] = False
         if module in ('apt', 'dnf') and options.get('name') == 'qemu-guest-agent' and v.get('fixture_guest_agent_failure', False):
             return dict(result, failed=True, rc=1, msg='fixture-agent-failure')
+        if module == 'dnf' and 'systemd-resolved' in options.get('name', []):
+            if not self._play_context.check_mode:
+                state['resolver_package_installed'] = True
+                # Fedora's initial posttrans can replace the standard link.
+                if v['fixture_facts']['distribution'] == 'Fedora' and 'systemd-resolved' not in v.get('fixture_packages', {}):
+                    state.setdefault('resolver_links', {})['/etc/resolv.conf'] = '/run/systemd/resolve/stub-resolv.conf'
+        if module == 'dnf' and isinstance(options.get('name'), list):
+            if 'python3-docker' in options['name']:
+                result['changed'] = not state.get('docker_sdk', False)
+                if not self._play_context.check_mode:
+                    state['docker_sdk'] = True
+            # Fedora's unversioned RPMs obsolete the bare PGDG names. Qualified
+            # name.arch requests select the real versioned package instead.
+            for spec in options['name']:
+                match = re.fullmatch(r'(postgresql[0-9]+(?:-server|-contrib)?)(?:[.](x86_64|aarch64))?', spec)
+                if match:
+                    name = match[1]
+                    if v.get('fixture_postgres_wrong_provider', False) or (
+                        v['fixture_facts']['distribution'] == 'Fedora' and not match[2]
+                    ):
+                        name = re.sub(r'[0-9]+', '', name)
+                    result['changed'] |= name not in state.get('postgres_packages', [])
+                    if not self._play_context.check_mode and name not in state.get('postgres_packages', []):
+                        state.setdefault('postgres_packages', []).append(name)
+        if module == 'dnf' and str(options.get('name', '')).startswith('kernel-modules-extra-'):
+            if v.get('fixture_kernel_package_unavailable', False):
+                return dict(result, failed=True, rc=1, msg='fixture-running-kernel-package-unavailable')
+            # Reproduce Ansible DNF4's older-NEVRA no-op when a newer kernel
+            # supplement is installed. An exact uname-r capability must still
+            # install its missing provider alongside that newer version.
+            skip_older = (options.get('use_backend') == 'dnf4'
+                          and v.get('fixture_newer_kernel_supplement', False)
+                          and 'uname-r = ' not in options['name'])
+            skip_older = skip_older or v.get('fixture_kernel_install_noop', False)
+            result['changed'] = not state.get('docker_addrtype_available', False) and not skip_older
+            if not self._play_context.check_mode and not skip_older:
+                state['docker_addrtype_available'] = True
+        if module == 'community.docker.docker_swarm' and v.get('fixture_require_docker_sdk', False):
+            if not state.get('docker_sdk', False):
+                return dict(result, failed=True, msg='fixture-missing-docker-sdk')
+            result['changed'] = not state.get('swarm_active', False)
+            if not self._play_context.check_mode:
+                state['swarm_active'] = True
         if module == 'setup':
-            result['ansible_facts'] = v['fixture_facts']
-        elif module == 'template':
-            result['changed'] = v.get('fixture_nic_artifacts_changed', False)
+            if 'ansible_selinux' in options.get('filter', []):
+                result['ansible_facts'] = {'ansible_selinux': v.get('fixture_selinux', {'status': 'enabled'}),
+                    'ansible_distribution': v['fixture_facts']['distribution'], 'ansible_pkg_mgr': v['fixture_facts']['pkg_mgr']}
+            else:
+                result['ansible_facts'] = dict(v['fixture_facts'])
+                if 'selinux' in options.get('gather_subset', []):
+                    result['ansible_facts']['selinux'] = v.get('fixture_selinux', {'status': 'enabled'})
+        elif module == 'service_facts':
+            result['ansible_facts'] = {'services': v.get('fixture_services', {})}
+            if state.get('docker_started', False):
+                result['ansible_facts']['services']['docker.service'] = {'state': 'running'}
+            if state.get('resolver_started', False):
+                result['ansible_facts']['services'][v.get('system_resolved_unit', 'systemd-resolved.service')] = {'state': 'running'}
+        elif module == 'community.general.listen_ports_facts':
+            started = state.get('resolver_started', False) or v.get('fixture_services', {}).get('systemd-resolved.service', {}).get('state') == 'running'
+            listeners = [{'address': '127.0.0.53%lo', 'port': 53, 'pid': 777}] if started else []
+            listeners = v.get('fixture_resolver_ports', listeners)
+            result['ansible_facts'] = {'tcp_listen': listeners, 'udp_listen': listeners}
+        elif module in ('community.general.sefcontext', 'community.general.serestorecon'):
+            key = 'policy_contexts' if module.endswith('sefcontext') else 'restored_contexts'
+            value = options.get('target', options.get('path'))
+            result['changed'] = value not in state.get(key, [])
+            if not self._play_context.check_mode and result['changed']:
+                state.setdefault(key, []).append(value)
+        elif module == 'package_facts':
+            result['ansible_facts'] = {'packages': v.get('fixture_packages', {})}
+            result['ansible_facts']['packages'].update({name: [{'version': 'fixture'}] for name in state.get('postgres_packages', [])})
+            if state.get('resolver_package_installed', False):
+                result['ansible_facts']['packages']['systemd-resolved'] = [{'version': 'fixture'}]
+        elif module == 'template' or (module == 'copy' and 'content' in record):
+            if options.get('dest') == '/etc/docker/daemon.json' and v.get('fixture_docker_config_invalid', False):
+                return dict(result, failed=True, msg='fixture-dockerd-validation-failed')
+            if 'content' in record or 'content_digest' in record:
+                path = options['dest']
+                content = record.get('content', record.get('content_digest'))
+                previous = state.get('podman_files', {}).get(path, v.get('fixture_files', {}).get(path))
+                result['changed'] = previous != content
+                if not self._play_context.check_mode:
+                    state.setdefault('podman_files', {})[path] = content
+            else:
+                result['changed'] = v.get('fixture_nic_artifacts_changed', False)
+        elif module == 'copy' and options.get('dest', '').endswith('/postgres_exporter'):
+            path, source = options['dest'], options['src']
+            result['changed'] = state.get('exporter_binaries', {}).get(path) != source
+            if not self._play_context.check_mode:
+                state.setdefault('exporter_binaries', {})[path] = source
         elif module == 'find':
-            result['files'] = [{'path': '/etc/systemd/system/multi-user.target.wants/' + unit} for unit in v.get('fixture_nic_enabled', [])]
+            if str(options.get('paths', '')).startswith(('/etc/containers', '/root/.config/containers')):
+                files = dict(v.get('fixture_files', {}), **state.get('podman_files', {}))
+                result['files'] = [{'path': path, 'isreg': path not in v.get('fixture_symlinks', []),
+                                    'islnk': path in v.get('fixture_symlinks', [])}
+                                   for path in files if str(Path(path).parent) == options['paths']
+                                   and fnmatch.fnmatch(Path(path).name, options['patterns'])
+                                   and Path(path).name != options.get('excludes')]
+            else:
+                result['files'] = [{'path': '/etc/systemd/system/multi-user.target.wants/' + unit} for unit in v.get('fixture_nic_enabled', [])]
+        elif module == 'file' and options.get('path', '').endswith('/40-skynet-docker-compat.conf') and options.get('state') == 'absent':
+            result['changed'] = options['path'] in state.get('podman_files', {})
+            if not self._play_context.check_mode:
+                state.get('podman_files', {}).pop(options['path'], None)
+        elif module == 'file' and options.get('state') == 'link' and options.get('path', options.get('dest')) == v.get('system_resolved_resolv_conf_path', '/etc/resolv.conf'):
+            path = options.get('path', options.get('dest'))
+            previous = state.get('resolver_links', {}).get(path, v.get('fixture_link_targets', {}).get(path))
+            result['changed'] = previous != options['src']
+            if not self._play_context.check_mode:
+                state.setdefault('resolver_links', {})[path] = options['src']
         elif module == 'stat':
             path = options['path']
             exists = v.get('fixture_ostree', False) if path == '/run/ostree-booted' else False
@@ -91,14 +257,123 @@ class ActionModule(ActionBase):
                 exists = state.get('exists', False)
             if path in v.get('fixture_files', {}):
                 exists = True
-            result['stat'] = {'exists': exists, 'isreg': exists,
-                              'size': state.get('size', 2048 * 1024 * 1024)}
+            if path in state.get('podman_files', {}):
+                exists = True
+            directory = path in v.get('fixture_directories', [])
+            exists = exists or directory
+            result['stat'] = {'exists': exists, 'isdir': directory, 'islnk': path in v.get('fixture_symlinks', []), 'isreg': exists and not directory,
+                              'path': path, 'executable': exists, 'size': state.get('size', 2048 * 1024 * 1024)}
+            link = state.get('resolver_links', {}).get(path, v.get('fixture_link_targets', {}).get(path))
+            if link:
+                result['stat'].update(exists=True, islnk=True, isreg=False, lnk_source=link)
+            if path == v.get('system_resolved_resolv_conf_path', '/etc/resolv.conf'):
+                result['stat'].update(uid=v.get('fixture_file_owners', {}).get(path, 0),
+                                      mode=v.get('fixture_file_modes', {}).get(path, '0644'))
+                content = state.get('resolver_foreign_file', v.get('fixture_files', {}).get(path, ''))
+                if result['stat']['isreg']:
+                    result['stat']['checksum'] = hashlib.sha1(content.encode()).hexdigest()
         elif module == 'slurp':
-            result['content'] = base64.b64encode(v['fixture_files'][options['src']].encode()).decode()
+            path = options['src']
+            content = state['podman_files'][path] if path in state.get('podman_files', {}) else v['fixture_files'][path]
+            result['content'] = base64.b64encode(content.encode()).decode()
+        elif module == 'uri':
+            if options['url'].endswith('/info') and 'fixture_docker_selinux' in v:
+                enabled = state.get('docker_selinux_active', v['fixture_docker_selinux'])
+                result.update(status=200, json={'SecurityOptions': ['name=selinux'] if enabled else [],
+                              'Swarm': {'LocalNodeState': v.get('fixture_docker_swarm_state', 'inactive')}})
+            elif options['url'].endswith('/containers/json'):
+                result.update(status=200, json=v.get('fixture_docker_containers', []))
+            elif options.get('method') == 'POST':
+                state['swarm_active'] = True
+                state['swarm_role'] = 'manager' if 'tags_swarm_manager' in v['group_names'] else 'worker'
+                state['swarm_availability'] = options['body']['Availability']
+                result.update(status=200, changed=True)
+            elif '/nodes/' in options['url']:
+                result.update(status=404 if v.get('fixture_other_swarm', False) else 200,
+                              json={'Spec': {'Role': state.get('swarm_role', v.get('fixture_swarm_existing_role', 'manager'))}})
+            else:
+                # This one-host fixture serves both delegated primary and local requests.
+                primary = sum(json.loads(line)['module'] == 'uri'
+                              for line in Path(v['fixture_record']).read_text().splitlines()) == 1
+                active = primary or state.get('swarm_active', False)
+                result.update(status=200, json={'Swarm': {
+                    'LocalNodeState': 'active' if active else 'inactive',
+                    'ControlAvailable': primary or state.get('swarm_role') == 'manager',
+                    'NodeID': 'fixture-node' if active else ''}})
         elif module == 'command':
             argv = options['argv']
             command = argv[0]
-            if command == 'timeout':
+            if command == 'busctl':
+                assert '--auto-start=no' in argv
+                result['stdout'] = 's "' + v.get('fixture_resolver_dns_mode', 'default') + '"'
+            elif command == 'nmcli' and v.get('fixture_resolver_owner_changes', False):
+                state['resolver_foreign_file'] = '# resolv.conf generated by another owner'
+            elif command == 'getent' and argv[1:4] == ['-s', 'resolve', 'hosts']:
+                result['rc'] = 2 if v.get('fixture_resolver_nss_missing', False) else 0
+                result['stdout'] = '127.0.0.1 localhost' if result['rc'] == 0 else ''
+            elif command == 'systemctl' and '--property=MainPID' in argv:
+                result['stdout'] = '777'
+            elif argv[:3] == ['systemctl', 'show', 'docker.service']:
+                result['stdout'] = v.get('fixture_docker_exec_start',
+                    '{ path=/usr/bin/dockerd ; argv[]=/usr/bin/dockerd -H fd:// --containerd=/run/containerd/containerd.sock ; }')
+            elif command == 'printenv':
+                result['stdout'] = v.get('fixture_provider_environment', '')
+                result['rc'] = 0 if result['stdout'] else 1
+            elif command == 'ps':
+                result['stdout'] = '\\n'.join(str(uid) for uid in v.get('fixture_conmon_uids', []))
+                result['rc'] = 0 if result['stdout'] else 1
+            elif command in ('iptables', 'ip6tables', 'iptables-save', 'ip6tables-save', 'iptables-restore', 'ip6tables-restore'):
+                backend = 'legacy' if command == v.get('fixture_legacy_compat_tool') else 'nf_tables'
+                result['stdout'] = command + ' v1.8.11 (' + backend + ')'
+            elif argv[:3] == ['systemctl', 'show', 'patroni.service']:
+                config = v.get('fixture_patroni_unit_config', '/etc/patroni/patroni.yml')
+                fragment = v.get('fixture_patroni_unit_fragment', '/usr/lib/systemd/system/patroni.service')
+                environment = v.get('fixture_patroni_unit_environment', 'MALLOC_ARENA_MAX=1')
+                envfiles = v.get('fixture_patroni_unit_envfiles', '/etc/patroni_env.conf (ignore_errors=yes)')
+                passed = v.get('fixture_patroni_unit_pass_environment', '')
+                result['stdout_lines'] = [
+                    'ExecStart={ path=/usr/bin/patroni ; argv[]=/usr/bin/patroni ' + config + ' ; ignore_errors=no ; }',
+                    'FragmentPath=' + fragment, 'Environment=' + environment,
+                    'PassEnvironment=' + passed, 'EnvironmentFiles=' + envfiles]
+                result['stdout'] = '\\n'.join(result['stdout_lines'])
+            elif command.endswith('/restic') and argv[-1] == 'version':
+                result['stdout'] = v.get('fixture_restic_version', 'restic 0.19.1 compiled with fixture')
+            elif command.endswith('/postgres') and argv[-1] == '--version':
+                result['stdout'] = 'postgres (PostgreSQL) ' + v.get('fixture_postgres_version', '18.6')
+            elif command == 'readlink':
+                result['stdout'] = v.get('fixture_realpaths', {}).get(argv[-1], argv[-1])
+            elif command == 'docker' and 'join-token' in argv:
+                result['stdout'] = 'synthetic-test-token'
+            elif command == 'podman':
+                if 'info' in argv:
+                    result['stdout'] = json.dumps(v.get('fixture_podman_host', {
+                        'networkBackend': 'netavark', 'cgroupVersion': 'v2',
+                        'security': {'rootless': False, 'selinuxEnabled': True},
+                        'networkBackendInfo': {'path': '/fixture/netavark', 'dns': {'path': '/fixture/aardvark-dns'}}}))
+                elif 'exists' in argv:
+                    result['rc'] = v.get('fixture_network_exists_rc', 0 if state.get('podman_network', False) else 1)
+                elif 'inspect' in argv:
+                    result['stdout'] = json.dumps(v.get('fixture_network', [{'name': v['podman_shared_network_name'],
+                        'driver': 'bridge', 'dns_enabled': True, 'internal': False}]))
+                elif 'ps' in argv:
+                    result['stdout_lines'] = v.get('fixture_dns_users', [])
+                    result['stdout'] = '\\n'.join(result['stdout_lines'])
+                else:
+                    result['stdout'] = v.get('fixture_podman_version', 'podman version 5.4.2')
+                    result['rc'] = 0 if result['stdout'] else 2
+            elif command == 'modinfo':
+                available = state.get('docker_addrtype_available', not v.get('fixture_addrtype_missing', False))
+                result['rc'] = 0 if available else 1
+                result['stdout'] = '/fixture/xt_addrtype.ko.xz' if available else ''
+            elif command == 'rpm':
+                available = state.get('docker_addrtype_available', False)
+                kernel_package = 'kernel-modules-extra-' + v['ansible_facts']['kernel']
+                # rpm --whatprovides indexes the literal provide name. It does
+                # not parse DNF's "capability = version" dependency expression.
+                exact_package = argv == ['rpm', '-q', kernel_package]
+                result['rc'] = 0 if available and exact_package else 1
+                result['stdout'] = kernel_package if available and exact_package else 'no matching installed package'
+            elif command == 'timeout':
                 result['stdout_lines'] = ['SYSTEM_NIC_CHANGE=' + name for name in v.get('fixture_nic_drift', [])]
                 result['stdout'] = '\\n'.join(result['stdout_lines'])
                 if v.get('fixture_nic_preflight_failure', False):
@@ -127,6 +402,23 @@ class ActionModule(ActionBase):
         elif module == 'lineinfile' and options['path'] == '/etc/fstab':
             if not self._play_context.check_mode:
                 state['persistent'] = [v.get('system_swap_path', '/swapfile')]
+        elif module == 'systemd_service' and options.get('name', '').endswith('-network.service'):
+            result['changed'] = not state.get('podman_network', False)
+            if not self._play_context.check_mode:
+                state['podman_network'] = True
+        elif module == 'systemd_service' and str(options.get('name', '')).removesuffix('.service') == str(v.get('system_resolved_service_name', 'systemd-resolved')).removesuffix('.service'):
+            started = state.get('resolver_started', v.get('fixture_services', {}).get('systemd-resolved.service', {}).get('state') == 'running')
+            result['changed'] = options.get('state') == 'restarted' or not started
+            if not self._play_context.check_mode:
+                state['resolver_started'] = True
+        elif module == 'systemd_service' and options.get('name') == 'docker.service' and 'fixture_docker_selinux' in v:
+            active = state.get('docker_started', v.get('fixture_services', {}).get('docker.service', {}).get('state') == 'running')
+            result['changed'] = options['state'] == 'restarted' or not active
+            if not self._play_context.check_mode:
+                state['docker_started'] = True
+                if options['state'] == 'restarted' or not active:
+                    config = state.get('podman_files', {}).get('/etc/docker/daemon.json', v.get('fixture_files', {}).get('/etc/docker/daemon.json', '{}'))
+                    state['docker_selinux_active'] = json.loads(config).get('selinux-enabled', False) and not v.get('fixture_docker_capability_failure', False)
         state_path.write_text(json.dumps(state))
         return result
 """)
@@ -135,12 +427,27 @@ class ActionModule(ActionBase):
     state_file = tmp_path / "state.json"
     record = tmp_path / "calls.jsonl"
 
-    def run(*, distro="Rocky", backend=None, tags="system_packages", overrides=None, state=None, check=False, main=False, role="system"):
+    def run(
+        *,
+        distro="Rocky",
+        backend=None,
+        tags="system_packages",
+        overrides=None,
+        state=None,
+        check=False,
+        main=False,
+        role="system",
+        inventory_groups=None,
+        tasks_from=None,
+    ):
         record.unlink(missing_ok=True)
         if state is not None or not state_file.exists():
             state_file.write_text(json.dumps(state or {}))
         facts = {
             "distribution": distro,
+            "system": "Linux",
+            "architecture": "x86_64",
+            "distribution_release": "noble",
             "distribution_version": "10.2",
             "distribution_major_version": "10",
             "os_family": "Debian" if distro in ("Ubuntu", "Debian") else "RedHat",
@@ -158,6 +465,19 @@ class ActionModule(ActionBase):
             "services_controller_host": "localhost",
             "ansible_become": False,
         }
+        if role in {"docker", "podman", "postgres_exporter"}:
+            variables.update(
+                {
+                    "services_controller_inventory_group": "tags_service_controller",
+                    "services_storage_inventory_group": "tags_service_storage",
+                    "services_plex_host": "localhost",
+                    "services_log_root": "/fixture/logs",
+                    "services_public_zone": "example.invalid",
+                    "services_internal_zone": "int.example.invalid",
+                    "services_lan_cidr": "198.51.100.0/24",
+                    "services_private_https_port": 8443,
+                }
+            )
         variables.update(overrides or {})
         variables["fixture_facts"] = variables.pop("ansible_facts", facts)
         inventory = tmp_path / "inventory.yml"
@@ -168,6 +488,21 @@ class ActionModule(ActionBase):
                         "children": {
                             "tags_skynet": {"hosts": {"localhost": variables}},
                             "tags_postgres": {"hosts": {"localhost": {}}},
+                            **{
+                                group: {"hosts": {"localhost": {}}}
+                                for group in (
+                                    "tags_docker",
+                                    "tags_docker_install",
+                                    "tags_swarm",
+                                    "tags_podman",
+                                    "tags_podman_install",
+                                    "tags_service_controller",
+                                    "tags_service_storage",
+                                    *variables.get("fixture_inventory_groups", []),
+                                )
+                                if role in {"docker", "podman", "postgres_exporter"}
+                            },
+                            **(inventory_groups or {}),
                         }
                     }
                 }
@@ -175,11 +510,22 @@ class ActionModule(ActionBase):
         )
         plays = [
             {
-                "hosts": "all",
+                "hosts": "localhost",
                 "connection": "local",
                 "gather_facts": False,
                 "pre_tasks": [{"name": "Gather fixture facts", "fixture_operation": {"module": "setup", "options": {}}, "tags": "always"}],
-                "roles": [role],
+                **(
+                    {
+                        "tasks": [
+                            {
+                                "name": "Exercise the selected role entry point",
+                                "ansible.builtin.include_role": {"name": role, "tasks_from": tasks_from},
+                            }
+                        ]
+                    }
+                    if tasks_from
+                    else {"roles": [role]}
+                ),
             }
         ]
         if main:
@@ -187,6 +533,7 @@ class ActionModule(ActionBase):
             for play in plays:
                 instrument(play.get("tasks", []))
             shutil.copytree(REPO / "ansible/tasks", tmp_path / "tasks", dirs_exist_ok=True)
+            shutil.copytree(REPO / "ansible/filter_plugins", tmp_path / "filter_plugins", dirs_exist_ok=True)
             # Prove that application-wide Vault is never loaded with bootstrap.cfg.
             all_vars = tmp_path / "group_vars/all"
             all_vars.mkdir(parents=True, exist_ok=True)
@@ -198,6 +545,7 @@ class ActionModule(ActionBase):
             env={
                 **os.environ,
                 "ANSIBLE_CONFIG": str(config),
+                "ANSIBLE_INJECT_FACT_VARS": "false",
                 "ANSIBLE_LOCAL_TEMP": str(tmp_path / "local"),
                 "ANSIBLE_COLLECTIONS_PATH": str(tmp_path / "empty-collections"),
                 "ANSIBLE_COLLECTIONS_SCAN_SYS_PATH": "false",
@@ -207,6 +555,7 @@ class ActionModule(ActionBase):
             check=False,
         )
         calls = [json.loads(line) for line in record.read_text().splitlines()] if record.exists() else []
+        assert "Skipping plugin" not in result.stderr, result.stderr
         return result, calls, json.loads(state_file.read_text())
 
     return run
@@ -247,7 +596,6 @@ def test_native_packages_do_not_upgrade_or_cleanup_and_keep_guest_agent(system_r
         ("Fedora", "dnf5", {"fixture_ostree": True}),
         ("Ubuntu", "dnf", {}),
         ("Rocky", "dnf", {"fixture_ostree": True}),
-        ("Rocky", "dnf", {"system_resolved_enabled": True}),
         ("Rocky", "dnf", {"system_swap_enabled": "yes"}),
     ],
 )
@@ -374,7 +722,21 @@ def test_legacy_nic_settings_are_preserved_without_an_explicit_transition(system
 
 @pytest.mark.parametrize("tag", ["postgres_backup", "postgres_backup_setup", "postgres_backup_run"])
 def test_postgres_backup_installs_dependencies_before_setup_or_execution(system_run, tag):
-    result, calls, _ = system_run(distro="Ubuntu", role="postgres", tags=tag)
+    result, calls, _ = system_run(
+        distro="Ubuntu",
+        role="postgres",
+        tags=tag,
+        overrides={
+            "ansible_facts": {
+                "distribution": "Ubuntu",
+                "distribution_version": "24.04",
+                "distribution_major_version": "24",
+                "pkg_mgr": "apt",
+                "system": "Linux",
+                "service_mgr": "systemd",
+            }
+        },
+    )
     successful(result)
     packages = package_calls(calls)
     assert len(packages) == 1 and packages[0]["options"]["state"] == "present"

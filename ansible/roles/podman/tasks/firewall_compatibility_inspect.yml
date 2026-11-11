@@ -1,0 +1,117 @@
+---
+
+- name: Podman compatibility | Discover operator configuration without reading its values
+  when: podman_docker_iptables_compatibility
+  ansible.builtin.find:
+    paths: "{{ podman_docker_compat_location.path }}"
+    patterns: "{{ podman_docker_compat_location.pattern }}"
+    file_type: any
+    recurse: false
+    follow: false
+    excludes: 40-skynet-docker-compat.conf
+  loop:
+    - {path: /etc/containers, pattern: containers.conf}
+    - {path: /etc/containers/containers.conf.d, pattern: "*.conf"}
+    - {path: /root/.config/containers, pattern: containers.conf}
+    - {path: /root/.config/containers/containers.conf.d, pattern: "*.conf"}
+  loop_control:
+    loop_var: podman_docker_compat_location
+  register: podman_docker_compat_discovery
+
+- name: Podman compatibility | Require inspectable configuration files
+  when: podman_docker_iptables_compatibility
+  ansible.builtin.assert:
+    that: podman_docker_compat_candidate.isreg and not podman_docker_compat_candidate.islnk
+    fail_msg: Resolve configuration symlinks or non-file drop-ins before selecting a host-wide Podman provider default.
+  loop: "{{ podman_docker_compat_discovery.results | map(attribute='files') | flatten }}"
+  loop_control:
+    loop_var: podman_docker_compat_candidate
+    label: "{{ podman_docker_compat_candidate.path }}"
+
+- name: Podman compatibility | Inspect existing provider declarations privately
+  when: podman_docker_iptables_compatibility
+  ansible.builtin.slurp:
+    src: "{{ podman_docker_compat_candidate.path }}"
+  loop: "{{ podman_docker_compat_discovery.results | map(attribute='files') | flatten }}"
+  loop_control:
+    loop_var: podman_docker_compat_candidate
+    label: "{{ podman_docker_compat_candidate.path }}"
+  register: podman_docker_compat_configuration
+  no_log: true
+  diff: false
+
+- name: Podman compatibility | Detect competing provider ownership privately
+  when: podman_docker_iptables_compatibility
+  vars:
+    podman_docker_compat_assignment: >-
+      (?m)^\s*["']?firewall_driver["']?\s*=
+  ansible.builtin.set_fact:
+    podman_docker_compat_override: >-
+      {{ podman_docker_compat_configuration.results | map(attribute='content') | map('b64decode')
+         | select('search', podman_docker_compat_assignment) | list | length > 0 }}
+  no_log: true
+  diff: false
+
+- name: Podman compatibility | Refuse competing operator provider declarations
+  when: podman_docker_iptables_compatibility
+  ansible.builtin.assert:
+    that: not podman_docker_compat_override
+    fail_msg: >-
+      Another operator configuration declares firewall_driver. Keep that owner's policy or arrange an explicit ownership transfer;
+      this role will not overwrite it or silently shadow it.
+
+- name: Podman compatibility | Inspect configuration environment overrides privately
+  when: podman_docker_iptables_compatibility
+  ansible.builtin.command:
+    argv: [printenv, CONTAINERS_CONF, CONTAINERS_CONF_OVERRIDE]
+  register: podman_docker_compat_environment
+  changed_when: false
+  failed_when: podman_docker_compat_environment.rc not in [0, 1]
+  no_log: true
+  diff: false
+
+- name: Podman compatibility | Record whether the execution environment selects another configuration
+  when: podman_docker_iptables_compatibility
+  ansible.builtin.set_fact:
+    podman_docker_compat_environment_override: "{{ podman_docker_compat_environment.stdout | length > 0 }}"
+  no_log: true
+  diff: false
+
+- name: Podman compatibility | Require the ordinary host configuration context
+  when: podman_docker_iptables_compatibility
+  ansible.builtin.assert:
+    that: not podman_docker_compat_environment_override
+    fail_msg: Remove CONTAINERS_CONF or CONTAINERS_CONF_OVERRIDE before managing the host provider default.
+
+- name: Podman compatibility | Inspect the local runtime binary before a provider transition
+  when: podman_docker_compat_change
+  ansible.builtin.stat:
+    path: /usr/bin/podman
+  register: podman_docker_compat_binary
+
+- name: Podman compatibility | Inspect running rootful containers before changing the provider
+  when:
+    - podman_docker_compat_change
+    - podman_docker_compat_binary.stat.exists
+  ansible.builtin.command:
+    argv: [podman, --remote=false, ps, --format, "{{ '{{.ID}}' }}"]
+  changed_when: false
+  register: podman_docker_compat_rootful_users
+
+- name: Podman compatibility | Inspect rootless container monitors before changing the host default
+  when: podman_docker_compat_change
+  ansible.builtin.command:
+    argv: [ps, -C, conmon, -o, uid=]
+  changed_when: false
+  failed_when: podman_docker_compat_monitors.rc not in [0, 1]
+  register: podman_docker_compat_monitors
+
+- name: Podman compatibility | Require quiescent Podman users for a provider transition
+  when: podman_docker_compat_change
+  ansible.builtin.assert:
+    that:
+      - podman_docker_compat_rootful_users.stdout | default('') | trim | length == 0
+      - podman_docker_compat_monitors.stdout.split() | map('int') | reject('equalto', 0) | list | length == 0
+    fail_msg: >-
+      A provider change affects Podman's system defaults, including rootless users without their own override.
+      Arrange maintenance for running Podman containers on all accounts before retrying. No container is stopped or network recreated.

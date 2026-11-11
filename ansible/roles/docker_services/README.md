@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/22 |
+| Readme update        | 2026/11/10 |
 
 
 
@@ -85,18 +85,23 @@
 
 #### File: tasks/main.yml
 
-| Name | Module | Has Conditions | Tags |
-| ---- | ------ | -------------- | -----|
-| Docker services ¦ Reset this operation's firewall progress | ansible.builtin.set_fact | False |  |
-| Docker services ¦ Prepare and run the scoped service operation | block | False |  |
-| Docker services ¦ Initialize service | ansible.builtin.include_tasks | False |  |
-| Docker services ¦ Protect declared publications before changing the service | ansible.builtin.include_role | True |  |
-| Docker services ¦ Record successful publication protection | ansible.builtin.set_fact | True |  |
-| Docker services ¦ Check image drift | ansible.builtin.include_tasks | True |  |
-| Docker services ¦ Prepare service | ansible.builtin.include_tasks | False |  |
-| Docker services ¦ Build Compose configuration | ansible.builtin.include_tasks | False |  |
-| Docker services ¦ Save stack configuration | ansible.builtin.include_tasks | False |  |
-| Docker services ¦ Reconcile protection after runtime removal | ansible.builtin.include_role | True |  |
+| Name | Module | Has Conditions | Tags | Comments |
+| ---- | ------ | -------------- | -----| -------- |
+| Docker services ¦ Reset this operation's firewall progress | ansible.builtin.set_fact | False |  |  |
+| Docker services ¦ Prepare and run the scoped service operation | block | False |  |  |
+| Docker services ¦ Initialize service | ansible.builtin.include_tasks | False |  |  |
+| Docker services ¦ Validate explicit storage labeling before mutation | ansible.builtin.set_fact | True |  |  |
+| Docker services ¦ Protect declared publications before changing the service | ansible.builtin.include_role | True |  |  |
+| Docker services ¦ Record successful publication protection | ansible.builtin.set_fact | True |  |  |
+| Docker services ¦ Validate and prepare scoped storage | ansible.builtin.include_tasks | True |  |  |
+| Docker services ¦ Check image drift | ansible.builtin.include_tasks | True |  |  |
+| Docker services ¦ Prepare service | ansible.builtin.include_tasks | False |  |  |
+| Docker services ¦ Build Compose configuration | ansible.builtin.include_tasks | True |  |  |
+| Docker services ¦ Save stack configuration | ansible.builtin.include_tasks | False |  |  |
+| Docker services ¦ Hand the prepared replacement to stack lifecycle | ansible.builtin.set_fact | True |  | Finish this replacement before another service can fail preparation.
+The existing stack helper owns deployment, verification and containment. |
+| Docker services ¦ Complete the prepared recreation | ansible.builtin.include_tasks | True |  |  |
+| Docker services ¦ Reconcile protection after runtime removal | ansible.builtin.include_role | True |  |  |
 
 #### File: tasks/sub_tasks/cleanup.yml
 
@@ -112,6 +117,7 @@
 | Cleanup ¦ Remove standalone stack directory | ansible.builtin.file | False |
 | Cleanup ¦ Remove Swarm stack | block | True |
 | Cleanup ¦ Remove Swarm stack from cluster | community.docker.docker_stack | False |
+| Cleanup ¦ Wait for the selected stack's networks to retire | community.docker.docker_host_info | False |
 | Cleanup ¦ Remove Swarm stack file | ansible.builtin.file | False |
 
 #### File: tasks/sub_tasks/compose.yml
@@ -292,6 +298,17 @@
 | Compose volumes ¦ Build final volume list | ansible.builtin.set_fact | False |
 | Compose volumes ¦ Add volumes to service | ansible.builtin.set_fact | False |
 
+#### File: tasks/sub_tasks/contain.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Containment ¦ Clear this service's proof before observing any nodes | ansible.builtin.set_fact | False |  |
+| Containment ¦ Quiesce and prove only the selected Swarm service | block | False |  |
+| Containment ¦ Capture task nodes and quiesce the immutable service | docker_services_contain | False |  |
+| Containment ¦ Observe selected writers through each node's inventory connection | docker_services_contain | False |  |
+| Containment ¦ Recheck manager identity scheduler and node evidence | docker_services_contain | False |  |
+| Containment ¦ Bind verified absence to this service only | ansible.builtin.set_fact | False |  |
+
 #### File: tasks/sub_tasks/deploy/all.yml
 
 | Name | Module | Has Conditions | Tags |
@@ -361,39 +378,51 @@
 | Initialize ¦ Choose deploy host | ansible.builtin.set_fact | False |  |
 | Initialize ¦ Choose stack key | ansible.builtin.set_fact | False |  |
 | Initialize ¦ Choose filesystem hosts | ansible.builtin.set_fact | False |  |
-| Initialize ¦ Expand filesystem host group | ansible.builtin.set_fact | True |  |
-| Initialize ¦ Remove duplicate filesystem hosts | ansible.builtin.set_fact | False |  |
 | Initialize ¦ Validate filesystem hosts | ansible.builtin.assert | False |  |
 | Initialize ¦ Reset container host defaults | ansible.builtin.set_fact | False |  |
 | Initialize ¦ Build container host defaults | ansible.builtin.set_fact | False |  |
-| Initialize ¦ Require one host for standalone Docker | ansible.builtin.assert | True |  |
 | Initialize ¦ Check whether this host builds Compose | ansible.builtin.set_fact | False |  |
+
+#### File: tasks/sub_tasks/preflight.yml
+
+| Name | Module | Has Conditions | Tags | Comments |
+| ---- | ------ | -------------- | -----| -------- |
+| Preflight ¦ Inspect runtime secret ownership without changing credentials | ansible.builtin.include_tasks | True |  | These checks must finish while the current writer and its configuration remain
+intact. Runtime secrets and application files are applied after interruption. |
+| Preflight ¦ Validate shared files and reconcile declared databases | ansible.builtin.include_role | False |  |  |
+| Preflight ¦ Validate controller environment templates | ansible.builtin.include_role | True |  |  |
+| Preflight ¦ Render declared Swarm config content without applying it | ansible.builtin.assert | True |  |  |
+| Preflight ¦ Assemble Compose configuration before interruption | ansible.builtin.include_tasks | False |  |  |
+| Preflight ¦ Render and parse the stack configuration without writing it | ansible.builtin.assert | False |  |  |
 
 #### File: tasks/sub_tasks/prepare.yml
 
-| Name | Module | Has Conditions | Tags |
-| ---- | ------ | -------------- | -----|
-| Prepare ¦ Build application context | ansible.builtin.set_fact | False |  |
-| Prepare ¦ Validate application settings | ansible.builtin.include_role | False |  |
-| Prepare ¦ Save application validation results | ansible.builtin.set_fact | False |  |
-| Cleanup ¦ Read cleanup settings | ansible.builtin.set_fact | False |  |
-| Cleanup ¦ Start cleaned-stack tracker | ansible.builtin.set_fact | True |  |
-| Cleanup ¦ Decide whether cleanup is needed | ansible.builtin.set_fact | True |  |
-| Cleanup ¦ Remove existing deployment | ansible.builtin.include_tasks | True |  |
-| Cleanup ¦ Record cleaned stack | ansible.builtin.set_fact | True |  |
-| Prepare ¦ Generate application secrets | ansible.builtin.include_role | True |  |
-| Prepare ¦ Save generated application secrets | ansible.builtin.set_fact | True |  |
-| Secrets ¦ Combine shared and generated secrets | ansible.builtin.set_fact | False |  |
-| Secrets ¦ Validate service secret attachments | ansible.builtin.set_fact | False |  |
-| Secrets ¦ Manage Docker secrets | ansible.builtin.include_tasks | True |  |
-| Prepare ¦ Build application template values | ansible.builtin.include_role | True |  |
-| Prepare ¦ Save application template values | ansible.builtin.set_fact | False |  |
-| Prepare ¦ Prepare shared files and integrations | ansible.builtin.include_role | False |  |
-| Prepare ¦ Snapshot managed configuration changes | ansible.builtin.set_fact | False |  |
-| Prepare ¦ Render Swarm environment templates | ansible.builtin.include_role | True |  |
-| Prepare ¦ Apply application configuration | ansible.builtin.include_role | True |  |
-| Prepare ¦ Run Plex bootstrap | ansible.builtin.include_role | True |  |
-| Swarm configs ¦ Manage service configs | ansible.builtin.include_tasks | True |  |
+| Name | Module | Has Conditions | Tags | Comments |
+| ---- | ------ | -------------- | -----| -------- |
+| Prepare ¦ Build application context | ansible.builtin.set_fact | False |  |  |
+| Prepare ¦ Validate application settings | ansible.builtin.include_role | False |  |  |
+| Prepare ¦ Save application validation results | ansible.builtin.set_fact | False |  |  |
+| Prepare ¦ Generate application secrets | ansible.builtin.include_role | True |  |  |
+| Prepare ¦ Save generated application secrets | ansible.builtin.set_fact | True |  |  |
+| Secrets ¦ Combine shared and generated secrets | ansible.builtin.set_fact | False |  |  |
+| Secrets ¦ Validate service secret attachments | ansible.builtin.set_fact | False |  |  |
+| Prepare ¦ Build application template values | ansible.builtin.include_role | True |  |  |
+| Prepare ¦ Save application template values | ansible.builtin.set_fact | False |  |  |
+| Prepare ¦ Complete prerequisites before interrupting the service | ansible.builtin.include_tasks | True |  |  |
+| Cleanup ¦ Read cleanup settings | ansible.builtin.set_fact | False |  |  |
+| Cleanup ¦ Start cleaned-stack tracker | ansible.builtin.set_fact | True |  |  |
+| Cleanup ¦ Decide whether cleanup is needed | ansible.builtin.set_fact | True |  |  |
+| Cleanup ¦ Remove existing deployment | ansible.builtin.include_tasks | True |  |  |
+| Cleanup ¦ Record cleaned stack | ansible.builtin.set_fact | True |  |  |
+| Secrets ¦ Manage Docker secrets | ansible.builtin.include_tasks | True |  |  |
+| Prepare ¦ Prepare shared files and integrations | ansible.builtin.include_role | True |  |  |
+| Prepare ¦ Restore scoped storage labels after filesystem preparation | ansible.builtin.include_tasks | True |  | Fresh paths and generated files must have policy labels before Swarm starts. |
+| Prepare ¦ Apply shared Traefik integration | ansible.builtin.include_role | True |  |  |
+| Prepare ¦ Snapshot managed configuration changes | ansible.builtin.set_fact | False |  |  |
+| Prepare ¦ Render Swarm environment templates | ansible.builtin.include_role | True |  |  |
+| Prepare ¦ Apply application configuration | ansible.builtin.include_role | True |  |  |
+| Prepare ¦ Run Plex bootstrap | ansible.builtin.include_role | True |  |  |
+| Swarm configs ¦ Manage service configs | ansible.builtin.include_tasks | True |  |  |
 
 #### File: tasks/sub_tasks/save_stack.yml
 
@@ -401,7 +430,7 @@
 | ---- | ------ | -------------- |
 | Save stack ¦ Store completed Compose configuration | ansible.builtin.set_fact | True |
 
-#### File: tasks/sub_tasks/secrets/manage.yml
+#### File: tasks/sub_tasks/secrets/inspect.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
@@ -413,15 +442,27 @@
 | Docker secrets ¦ Read Swarm secret inspection results | ansible.builtin.set_fact | False |
 | Docker secrets ¦ List existing Swarm secrets | ansible.builtin.set_fact | False |
 | Docker secrets ¦ Protect unmanaged Swarm secrets | ansible.builtin.assert | True |
-| Docker secrets ¦ Create required Swarm secrets | community.docker.docker_secret | True |
-| Docker secrets ¦ Ensure standalone secrets directory exists | ansible.builtin.file | True |
-| Docker secrets ¦ Inspect standalone secret paths | ansible.builtin.stat | True |
-| Docker secrets ¦ Remove incompatible standalone secret paths | ansible.builtin.file | True |
-| Docker secrets ¦ Report standalone secret path repair in check mode | ansible.builtin.debug | True |
-| Docker secrets ¦ Write standalone secret files | ansible.builtin.copy | True |
-| Docker secrets ¦ Enforce standalone secret permissions | ansible.builtin.file | True |
-| Docker secrets ¦ Verify standalone secret files | ansible.builtin.stat | True |
-| Docker secrets ¦ Require valid standalone secret files | ansible.builtin.assert | True |
+
+#### File: tasks/sub_tasks/secrets/manage.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Docker secrets ¦ Recheck secret ownership at materialization | ansible.builtin.include_tasks | False |  |
+| Docker secrets ¦ Create required Swarm secrets | community.docker.docker_secret | True |  |
+| Docker secrets ¦ Ensure standalone secrets directory exists | ansible.builtin.file | True |  |
+| Docker secrets ¦ Inspect standalone secret paths | ansible.builtin.stat | True |  |
+| Docker secrets ¦ Remove incompatible standalone secret paths | ansible.builtin.file | True |  |
+| Docker secrets ¦ Report standalone secret path repair in check mode | ansible.builtin.debug | True |  |
+| Docker secrets ¦ Write standalone secret files | ansible.builtin.copy | True |  |
+| Docker secrets ¦ Enforce standalone secret permissions | ansible.builtin.file | True |  |
+| Docker secrets ¦ Verify standalone secret files | ansible.builtin.stat | True |  |
+| Docker secrets ¦ Require valid standalone secret files | ansible.builtin.assert | True |  |
+
+#### File: tasks/sub_tasks/storage.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Docker services ¦ Validate and prepare declared storage contexts | ansible.builtin.include_role | True |  |
 
 #### File: tasks/sub_tasks/swarm_configs/create.yml
 
@@ -476,7 +517,7 @@
 | Validate service ¦ Require Swarm for non-default deploy profiles | ansible.builtin.assert | True |
 | Validate service ¦ Check Swarm deploy mode | ansible.builtin.assert | True |
 | Validate service ¦ Check replica count | ansible.builtin.assert | True |
-| Validate service ¦ Check deploy host | ansible.builtin.assert | True |
+| Validate service ¦ Check resolved placement | ansible.builtin.assert | False |
 | Validate service ¦ Check placement constraints | ansible.builtin.assert | True |
 | Validate service ¦ Check restart policy | ansible.builtin.assert | True |
 | Validate service ¦ Check update settings | ansible.builtin.assert | True |

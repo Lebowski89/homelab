@@ -1,0 +1,24 @@
+#!/bin/bash
+set -euo pipefail
+# Run-owned namespace; no production interface, routes or DNS are changed.
+test "$(cat /var/lib/homelab-molecule-vm)" = '{{ molecule_vm_run_id }}'
+peer='molecule-{{ molecule_vm_run_id[:12] }}'
+outer='mv{{ molecule_vm_run_id[:8] }}a'
+inner='mv{{ molecule_vm_run_id[:8] }}b'
+# Never adopt a leftover namespace/interface, even with a matching prefix.
+if ip netns list | cut -d' ' -f1 | grep -Fx "$peer" ||
+   ip link show "$outer" >/dev/null 2>&1 ||
+   ip -4 route show | grep -F '198.18.255.0/30'; then
+    echo 'The test namespace, interface or reserved route is already present; refusing adoption.' >&2
+    exit 1
+fi
+ip netns add "$peer"
+ip link add "$outer" type veth peer name "$inner"
+ip link set "$inner" netns "$peer"
+ip address add 198.18.255.1/30 dev "$outer"
+ip -6 address add {{ molecule_vm_ipv6_prefix }}:1/64 dev "$outer"
+ip link set "$outer" up
+ip netns exec "$peer" ip link set lo up
+ip netns exec "$peer" ip address add 198.18.255.2/30 dev "$inner"
+ip netns exec "$peer" ip -6 address add {{ molecule_vm_ipv6_prefix }}:2/64 dev "$inner"
+ip netns exec "$peer" ip link set "$inner" up

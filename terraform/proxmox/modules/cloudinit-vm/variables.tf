@@ -251,3 +251,22 @@ variable "vlan_id" {
     error_message = "vlan_id must be null or between 1 and 4094."
   }
 }
+
+variable "cloud_init_upgrade" {
+  description = "Optional explicit first-boot package upgrade choice. Null preserves the existing Proxmox default; false is useful for checksum-pinned acceptance guests. Requires root@pam API authentication."
+  type        = bool
+  default     = null
+  nullable    = true
+}
+
+variable "network_data_file_id" {
+  description = "Optional custom cloud-init network data. When supplied, replaces the generated ip_config; callers own its network contents."
+  type        = string
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.network_data_file_id == null ? true : trimspace(var.network_data_file_id) != ""
+    error_message = "network_data_file_id must be null or a non-empty file identifier."
+  }
+}

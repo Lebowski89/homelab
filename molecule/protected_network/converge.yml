@@ -1,0 +1,26 @@
+---
+
+- name: Require the disposable current-run guests
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Install real protection through the canonical firewall transaction
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Validate the supported manager platform
+      ansible.builtin.include_role:
+        name: service_firewall
+        tasks_from: platform
+      vars:
+        service_firewall_profile: mgt
+
+    - name: VM tests | Select the isolated policy
+      ansible.builtin.include_tasks: policy.tasks.yml
+
+    - name: VM tests | Install using the production ownership and transaction machinery
+      service_firewall_lifecycle:
+        phase: install
+        profile: mgt
+        policy: '{{ molecule_vm_net_policy }}'
+        inventory_host: subject

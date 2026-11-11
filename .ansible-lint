@@ -2,6 +2,9 @@
 
 profile: production
 
+kinds:
+  - tasks: "molecule/*/*.tasks.yml"
+
 exclude_paths:
   - .git/
   - .github/

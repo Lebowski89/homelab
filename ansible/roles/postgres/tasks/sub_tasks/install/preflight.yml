@@ -1,0 +1,213 @@
+---
+
+- name: PostgreSQL | Validate explicit filesystem locations
+  ansible.builtin.assert:
+    that:
+      - postgres_install_path is string
+      - postgres_install_path is match('^/[A-Za-z0-9_./-]+$')
+      - >-
+        postgres_install_path not in
+        ['/', '/etc', '/usr', '/usr/bin', '/usr/sbin', '/var', '/var/lib', '/var/lib/pgsql', '/srv', '/opt', '/home']
+      - postgres_install_path.split('/') | intersect(['.', '..']) | length == 0
+      - "'//' not in postgres_install_path"
+    fail_msg: Use dedicated absolute PostgreSQL/etcd data, binary and configuration paths without traversal or shared system roots.
+  loop: ["{{ postgres_patroni_data_dir }}", "{{ postgres_etcd_data_dir }}", "{{ postgres_patroni_config_path }}"]
+  loop_control:
+    loop_var: postgres_install_path
+
+- name: PostgreSQL | Validate the binary directory and separate storage ownership
+  ansible.builtin.assert:
+    that:
+      - postgres_patroni_bin_dir is string
+      - postgres_patroni_bin_dir is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_patroni_bin_dir.split('/') | intersect(['.', '..']) | length == 0
+      - postgres_patroni_data_dir != postgres_etcd_data_dir
+      - not postgres_patroni_bin_dir.startswith(postgres_patroni_data_dir ~ '/')
+      - postgres_patroni_bin_dir != postgres_patroni_data_dir
+      - not postgres_etcd_data_dir.startswith(postgres_patroni_data_dir ~ '/')
+      - not postgres_patroni_data_dir.startswith(postgres_etcd_data_dir ~ '/')
+    fail_msg: Database binaries, PostgreSQL data and etcd member data must have distinct, dedicated locations.
+
+- name: PostgreSQL | Inspect declared data directories without following symlinks
+  ansible.builtin.stat:
+    path: "{{ postgres_data_path }}"
+    follow: false
+  loop: ["{{ postgres_patroni_data_dir }}", "{{ postgres_etcd_data_dir }}"]
+  loop_control:
+    loop_var: postgres_data_path
+  register: postgres_data_directories
+
+- name: PostgreSQL | Refuse replaced data-directory identities
+  ansible.builtin.assert:
+    that:
+      - not postgres_data_directory.stat.exists or (postgres_data_directory.stat.isdir and not postgres_data_directory.stat.islnk)
+    fail_msg: A declared data directory is a symlink or non-directory; review its storage ownership before provisioning.
+  loop: "{{ postgres_data_directories.results }}"
+  loop_control:
+    loop_var: postgres_data_directory
+    label: "{{ postgres_data_directory.postgres_data_path }}"
+
+- name: PostgreSQL | Inspect existing data version
+  ansible.builtin.stat:
+    path: "{{ postgres_patroni_data_dir }}/PG_VERSION"
+  register: postgres_existing_version_file
+
+- name: PostgreSQL | Inspect the declared server executable
+  ansible.builtin.stat:
+    path: "{{ postgres_patroni_bin_dir }}/postgres"
+  register: postgres_server_executable
+
+- name: PostgreSQL | Require the declared runtime before Patroni configuration
+  when: postgres_require_runtime | default(false) and not ansible_check_mode
+  ansible.builtin.assert:
+    that: postgres_server_executable.stat.exists
+    fail_msg: Install PostgreSQL packages first and ensure postgres_patroni_bin_dir points to the intended major's server binaries.
+
+- name: PostgreSQL | Read the existing server binary version without starting it
+  when: postgres_server_executable.stat.exists
+  ansible.builtin.command:
+    argv: ["{{ postgres_patroni_bin_dir }}/postgres", --version]
+  check_mode: false
+  changed_when: false
+  register: postgres_server_version
+
+- name: PostgreSQL | Reject a binary-major mismatch before changing packages or data
+  when: postgres_server_executable.stat.exists
+  ansible.builtin.assert:
+    that:
+      - postgres_server_version.stdout is match('^postgres \(PostgreSQL\) ' ~ postgres_version ~ '(\.|\s|$)')
+    fail_msg: Selected binaries are another PostgreSQL major. Review postgres_version/bin_dir; no binary or data migration is attempted.
+
+- name: PostgreSQL | Read existing data version
+  when: postgres_existing_version_file.stat.exists
+  ansible.builtin.slurp:
+    src: "{{ postgres_patroni_data_dir }}/PG_VERSION"
+  register: postgres_existing_version
+
+- name: PostgreSQL | Refuse implicit major-version migration
+  when: postgres_existing_version_file.stat.exists
+  ansible.builtin.assert:
+    that:
+      - postgres_existing_version.content | b64decode | trim == postgres_version | string
+    fail_msg: Existing PG_VERSION differs from postgres_version. Package provisioning cannot upgrade or replace database data.
+
+- name: PostgreSQL | Inspect installed server packages before RPM repository changes
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: PostgreSQL | Reject a competing RPM server installation
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_facts.packages | select('match', '^postgresql[0-9]*-server$')
+        | difference(['postgresql' ~ postgres_version ~ '-server']) | length == 0
+    fail_msg: >-
+      Another distribution or PostgreSQL-major server package is installed. Review its data and service ownership
+      before selecting this PGDG major. This role never erases server packages or performs a major upgrade.
+
+- name: PostgreSQL | Inspect existing Patroni configuration
+  ansible.builtin.stat:
+    path: "{{ postgres_patroni_config_path }}"
+  register: postgres_existing_config_file
+
+- name: PostgreSQL | Verify existing Patroni configuration privately
+  when: postgres_existing_config_file.stat.exists
+  block:
+    - name: PostgreSQL | Read existing Patroni configuration privately
+      ansible.builtin.slurp:
+        src: "{{ postgres_patroni_config_path }}"
+      register: postgres_existing_config
+      no_log: true
+      diff: false
+
+    - name: PostgreSQL | Compare existing data and binary paths privately
+      ansible.builtin.set_fact:
+        postgres_existing_paths_match: >-
+          {{ (postgres_existing_config.content | b64decode | from_yaml).postgresql.data_dir == postgres_patroni_data_dir
+             and (postgres_existing_config.content | b64decode | from_yaml).postgresql.bin_dir == postgres_patroni_bin_dir }}
+      no_log: true
+      diff: false
+  rescue:
+    - name: PostgreSQL | Explain unverified existing configuration
+      ansible.builtin.fail:
+        msg: >-
+          Could not privately verify existing Patroni postgresql.data_dir/bin_dir declarations.
+          Review the configuration locally before provisioning; its contents are not displayed and no migration is attempted.
+
+- name: PostgreSQL | Refuse implicit Patroni data relocation or binary replacement
+  when: postgres_existing_config_file.stat.exists
+  ansible.builtin.assert:
+    that: postgres_existing_paths_match
+    fail_msg: >-
+      Existing Patroni data_dir/bin_dir differs from the selected paths. Preserve explicit overrides or arrange a reviewed migration.
+
+- name: PostgreSQL | Inspect alternate RPM Patroni configuration
+  when:
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - postgres_patroni_config_path != '/etc/patroni/patroni.yml'
+  ansible.builtin.stat:
+    path: /etc/patroni/patroni.yml
+  register: postgres_alternate_config
+
+- name: PostgreSQL | Refuse implicit adoption of another RPM Patroni configuration
+  when:
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - postgres_patroni_config_path != '/etc/patroni/patroni.yml'
+  ansible.builtin.assert:
+    that: not postgres_alternate_config.stat.exists
+    fail_msg: >-
+      The packaged Patroni configuration path already exists. Review it and explicitly select the existing
+      postgres_patroni_config_path/data/bin settings; this role will not initialise a parallel cluster.
+
+- name: PostgreSQL | Inspect RPM etcd configuration before selecting member storage
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.stat:
+    path: "{{ postgres_platform.etcd_config }}"
+  register: postgres_existing_etcd_config_file
+
+- name: PostgreSQL | Read existing RPM etcd configuration privately
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and postgres_existing_etcd_config_file.stat.exists
+  ansible.builtin.slurp:
+    src: "{{ postgres_platform.etcd_config }}"
+  register: postgres_existing_etcd_config
+  no_log: true
+  diff: false
+
+- name: PostgreSQL | Resolve the existing RPM etcd data declaration privately
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and postgres_existing_etcd_config_file.stat.exists
+  ansible.builtin.set_fact:
+    postgres_existing_etcd_data_dir: >-
+      {{ ((postgres_existing_etcd_config.content | b64decode | regex_findall('(?m)^ETCD_DATA_DIR=(.*)$'))
+          | first | default('')) | trim | replace('"', '') | replace("'", '') }}
+    postgres_existing_etcd_config_file_override: >-
+      {{ ((postgres_existing_etcd_config.content | b64decode | regex_findall('(?m)^ETCD_CONFIG_FILE=(.*)$'))
+          | first | default('')) | trim | replace('"', '') | replace("'", '') | length > 0 }}
+  no_log: true
+  diff: false
+
+- name: PostgreSQL | Require an explicit readable etcd storage declaration
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and postgres_existing_etcd_config_file.stat.exists
+  ansible.builtin.assert:
+    that:
+      - postgres_existing_etcd_data_dir is match('^/[A-Za-z0-9_./-]+$')
+      - postgres_existing_etcd_data_dir != '/'
+      - postgres_existing_etcd_data_dir.split('/') | intersect(['.', '..']) | length == 0
+      - not postgres_existing_etcd_config_file_override
+    fail_msg: Existing RPM etcd configuration does not have a supported explicit ETCD_DATA_DIR. Review it before changing member storage.
+
+- name: PostgreSQL | Inspect the existing etcd member identity
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and postgres_existing_etcd_config_file.stat.exists
+  ansible.builtin.stat:
+    path: "{{ postgres_existing_etcd_data_dir }}/member"
+  register: postgres_existing_etcd_member
+
+- name: PostgreSQL | Refuse implicit relocation of an existing etcd member
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and postgres_existing_etcd_config_file.stat.exists
+  ansible.builtin.assert:
+    that:
+      - not postgres_existing_etcd_member.stat.exists or postgres_existing_etcd_data_dir == postgres_etcd_data_dir
+    fail_msg: >-
+      Existing etcd member storage differs from postgres_etcd_data_dir.
+      Preserve that path or arrange a separate membership/storage transition.

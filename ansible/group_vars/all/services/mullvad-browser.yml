@@ -52,7 +52,7 @@ mullvad_browser:
   ################################
   deploy:
     type: container
-    host: blacktop
+    hosts: blacktop
     execution:
       mode: rootful
   systemd:

@@ -9,7 +9,7 @@
   register: worker_backend_firewall_remove_units
   when: not worker_backend_firewall_unraid.stat.exists
 
-- name: Service firewall | Workers | Stop and disable only installed owned Plex units
+- name: Service firewall | Workers | Stop and disable only installed reconciliation units
   ansible.builtin.systemd_service:
     name: "{{ worker_backend_firewall_unit_stat.worker_backend_firewall_unit }}"
     state: stopped
@@ -20,6 +20,21 @@
   when:
     - not worker_backend_firewall_unraid.stat.exists
     - worker_backend_firewall_unit_stat.stat.exists
+    - worker_backend_firewall_unit_stat.worker_backend_firewall_unit != 'skynet-worker-backend-firewall.service'
+
+# Docker Requires this active oneshot. Stopping it before retiring the drop-in
+# propagates a stop to Docker; disabling it preserves the existing writer.
+- name: Service firewall | Workers | Disable startup protection without stopping Docker
+  ansible.builtin.systemd_service:
+    name: skynet-worker-backend-firewall.service
+    enabled: false
+  when:
+    - not worker_backend_firewall_unraid.stat.exists
+    - >-
+      worker_backend_firewall_remove_units.results
+      | selectattr('stat.exists')
+      | selectattr('worker_backend_firewall_unit', 'equalto', 'skynet-worker-backend-firewall.service')
+      | list | length > 0
 
 - name: Service firewall | Workers | Remove the owned Unraid boot block
   ansible.builtin.blockinfile:

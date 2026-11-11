@@ -492,20 +492,17 @@ locals {
     }
 
     rocky = {
-      description     = "Docker Swarm manager, application host, HAProxy endpoint, Technitium DNS primary"
+      description     = "Application host, HAProxy endpoint, Technitium DNS primary"
       role_key        = "server"
       device_type_key = "generic_vm"
       tags = [
         "skynet",
-        "service_controller",
         "docker",
         "docker_install",
         "podman",
         "podman_install",
         "haproxy",
         "node_exporter",
-        "swarm",
-        "swarm_manager",
         "dns",
         "technitium",
         "keepalived",

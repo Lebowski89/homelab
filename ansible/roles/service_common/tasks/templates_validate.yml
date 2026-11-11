@@ -1,0 +1,13 @@
+---
+
+- name: Service common templates | Render declarations without changing active files
+  when: not (ansible_check_mode and service_common_template_preview.no_log | default(false) | bool)
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - >-
+        lookup('ansible.builtin.template', role_path ~ '/templates/' ~ service_common_template_preview.src) is string
+  loop: "{{ service_common_templates }}"
+  loop_control:
+    loop_var: service_common_template_preview

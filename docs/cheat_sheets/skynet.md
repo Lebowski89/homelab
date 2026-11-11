@@ -1,6 +1,6 @@
 # Skynet cheat sheet
 
-Run Skynet from your configured workstation. Services use the Docker or Podman
+Run Skynet from your configured workstation. Services use the Docker, Podman or native
 runtime declared in `ansible/group_vars/all/services/`.
 
 ## Find a command or target
@@ -21,6 +21,12 @@ skynet targets    # Supported role/action targets
 | `skynet recreate <service>` | Run its recreate operation |
 | `skynet remove <service>` | Run its removal operation |
 | `skynet drift <service>` | Run its drift checks |
+
+Native names: `alloy-native`, `node-exporter`, `keepalived`, `technitium-native`.
+They use the same five lifecycle commands; recreate restarts, and remove retains
+data/install artifacts. See [native services](../ansible/native-services.md) for
+update policies, resolver recovery and the protected-native endpoint limitation.
+Image drift is a container operation.
 
 Pass multiple service tags, or use `all` for all catalog services:
 
@@ -78,6 +84,17 @@ encrypted NetBox Vault file without requiring its API. See
 
 Tailscale bootstrap uses the selected guest mapping in `ansible/host_vars/pve1.yml`.
 It does not support check mode.
+For a fresh VM, inspect `sudo cloud-init status --long` through the Proxmox console
+and allow first-boot setup to finish. A running VM alone does not establish SSH
+readiness. SSH transport uses the workstation's identities, strict host-key
+checking and passwordless `sudo -n` for the configured guest user. An installation
+probe failure reports the transport exit status and error before any Tailscale
+authentication; use that error to distinguish readiness, trust, key and sudo issues.
+
+Fedora's CA prerequisite check uses its extracted PEM trust bundle, retaining
+curl's default TLS verification. Fedora 44 removed the legacy CA-bundle aliases;
+see [Fedora's trust-store change](https://fedoraproject.org/wiki/Changes/droppingOfCertPemFile).
+The bootstrap does not recreate those aliases or bypass certificate verification.
 
 ## Troubleshooting and local checks
 

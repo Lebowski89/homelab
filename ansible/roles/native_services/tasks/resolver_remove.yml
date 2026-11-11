@@ -1,0 +1,42 @@
+---
+
+- name: Native services | Remove Technitium resolver drop-in
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d/technitium.conf
+    state: absent
+
+- name: Native services | Restore original resolver symlink
+  when:
+    - not ansible_check_mode
+    - native_services_previous.resolver.stat.islnk | default(false)
+  ansible.builtin.file:
+    path: /etc/resolv.conf
+    src: "{{ native_services_previous.resolver.stat.lnk_source }}"
+    state: link
+    force: true
+
+- name: Native services | Remove role-created resolver link before restoring a regular file
+  when:
+    - not ansible_check_mode
+    - not (native_services_previous.resolver.stat.islnk | default(false))
+  ansible.builtin.file:
+    path: /etc/resolv.conf
+    state: absent
+
+- name: Native services | Restore original regular resolver file
+  when:
+    - not ansible_check_mode
+    - native_services_previous.resolver.stat.exists
+    - not native_services_previous.resolver.stat.islnk
+  ansible.builtin.copy:
+    dest: /etc/resolv.conf
+    content: "{{ native_services_previous.resolver.content | b64decode }}"
+    owner: "{{ native_services_previous.resolver.stat.uid }}"
+    group: "{{ native_services_previous.resolver.stat.gid }}"
+    mode: "{{ native_services_previous.resolver.stat.mode }}"
+
+- name: Native services | Restart resolved after restoring its configuration
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: systemd-resolved
+    state: restarted

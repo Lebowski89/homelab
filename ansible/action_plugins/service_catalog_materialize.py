@@ -18,7 +18,7 @@ from ansible.errors import AnsibleActionFail, AnsibleError
 from ansible.plugins.action import ActionBase
 
 _SERVICE_CATALOG_PATH = Path(__file__).resolve().parents[1] / "filter_plugins/service_catalog.py"
-_VALID_RUNTIMES = {"docker", "podman"}
+_VALID_RUNTIMES = {"docker", "podman", "native"}
 
 
 def _load_canonical_merge():
@@ -28,10 +28,29 @@ def _load_canonical_merge():
         raise ImportError(f"Unable to load canonical service catalog filter from {_SERVICE_CATALOG_PATH}")
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    return module.service_catalog_merge_target
+    return module
 
 
-_CANONICAL_MERGE_TARGET = _load_canonical_merge()
+_CATALOG = _load_canonical_merge()
+_CANONICAL_MERGE_TARGET = _CATALOG.service_catalog_merge_target
+
+
+def _load_native_inputs():
+    spec = importlib.util.spec_from_file_location(
+        "native_catalog_inputs", Path(__file__).resolve().parents[1] / "roles/native_services/filter_plugins/native_services.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _load_docker_deploy():
+    spec = importlib.util.spec_from_file_location(
+        "docker_catalog_deploy", Path(__file__).resolve().parents[1] / "roles/docker_services/filter_plugins/docker_services_deploy.py"
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def materialize_selected(
@@ -89,7 +108,7 @@ def materialize_selected(
         raw_runtime = entry.get("runtime")
         if not isinstance(raw_runtime, str) or raw_runtime.strip().lower() not in _VALID_RUNTIMES:
             raise AnsibleActionFail(
-                f"selected entry {index} ({service_name!r}).runtime must be one of: docker, podman; got {raw_runtime!r}"
+                f"selected entry {index} ({service_name!r}).runtime must be one of: docker, podman, native; got {raw_runtime!r}"
             )
 
         target_name: str | None = None
@@ -147,12 +166,33 @@ class ActionModule(ActionBase):
         if source_var not in task_vars:
             raise AnsibleActionFail(f"source variable {source_var!r} is not defined")
 
+        def template(config):
+            if config["runtime"] != "native":
+                concrete = self._templar.template(config, fail_on_undefined=True)
+            else:
+                _native_inputs = _load_native_inputs()
+                native = config["native"]
+                # Apply defined overrides before templating unused defaults.
+                values = _native_inputs.native_services_inputs(native, task_vars)
+                aliases = {_native_inputs.PREFIXES[native["application"]] + key: value for key, value in values.items()}
+                concrete = self._templar.copy_with_new_env(available_variables={**task_vars, **aliases}).template(
+                    {**config, "native": {**native, "config": values}}, fail_on_undefined=True
+                )
+                concrete["native"]["config"] = _native_inputs.native_services_normalize(concrete["native"])
+            concrete = _CATALOG.service_catalog_resolve_placement(concrete, task_vars["groups"])
+            if concrete["runtime"] == "docker":
+                concrete = _load_docker_deploy().docker_services_resolve_constraints(concrete, task_vars["hostvars"])
+            return concrete
+
         materialized = materialize_selected(
             task_vars[source_var],
             self._task.args.get("selected"),
-            lambda config: self._templar.template(config, fail_on_undefined=True),
+            template,
         )
 
+        for entry in materialized:
+            if "resolved_hosts" in entry and entry["resolved_hosts"] != entry["config"]["deploy"]["hosts"]:
+                raise AnsibleActionFail("Host-local placement differs from catalogue selection; use inventory-wide placement declarations")
         result["ansible_facts"] = {"service_catalog_host_materialized": materialized}
         result["_ansible_facts_cacheable"] = False
         result["changed"] = False

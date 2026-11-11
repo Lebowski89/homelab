@@ -49,6 +49,7 @@ def guest_arguments(argv):
     if argv[:2] == ["/bin/sh", "-c"]:
         for path in ["/etc/os-release", "/run/ostree-booted",
                      "/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt",
+                     "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
                      "/tmp/tailscale-install.", "/run/tailscale-auth."]:
             argv[2] = argv[2].replace(path, str(root) + path)
     return argv
@@ -58,6 +59,7 @@ if command == "ssh":
     assert "BatchMode=yes" in args and "StrictHostKeyChecking=yes" in args
     assert "ForwardAgent=no" in args and "-T" in args
     if config.get("ssh_exit"):
+        print(config.get("ssh_error", ""), file=sys.stderr)
         sys.exit(config["ssh_exit"])
     remote = shlex.split(args[-1])
     assert remote[:6] == ["sudo", "-n", "--", "/usr/bin/timeout", "--signal=TERM", "--kill-after=5"], remote
@@ -67,6 +69,7 @@ if command == "ssh":
 elif command == "sudo":
     assert args[:2] == ["-n", "--"], args
     if config.get("sudo_exit"):
+        print(config.get("sudo_error", ""), file=sys.stderr)
         sys.exit(config["sudo_exit"])
     os.execv(args[2], args[2:])
 elif command == "qm":
@@ -130,16 +133,20 @@ elif command != "systemctl":
 
 
 class Guest:
-    def __init__(self, root, os_id="rocky", *, curl=True, ca=True, installed=False, **options):
+    def __init__(self, root, os_id="rocky", *, version="test-release", curl=True, ca=True, installed=False, **options):
         self.root = root
         self.bin = root / "bin"
         self.bin.mkdir()
         (root / "etc").mkdir()
         (root / "run").mkdir()
         (root / "tmp").mkdir()
-        (root / "etc/os-release").write_text(f'ID={os_id}\nVERSION_ID="test-release"\n')
+        (root / "etc/os-release").write_text(f'ID={os_id}\nVERSION_ID="{version}"\n')
         self.manager = "apt-get" if os_id in ("debian", "ubuntu") else "dnf"
-        self.bundle = "etc/ssl/certs/ca-certificates.crt" if self.manager == "apt-get" else "etc/pki/tls/certs/ca-bundle.crt"
+        if os_id == "fedora":
+            # Fedora 44 removed the legacy /etc/pki/tls/certs CA-bundle aliases.
+            self.bundle = "etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem"
+        else:
+            self.bundle = "etc/ssl/certs/ca-certificates.crt" if self.manager == "apt-get" else "etc/pki/tls/certs/ca-bundle.crt"
         config = {"bundle": self.bundle, "curl_working": bool(curl), **options}
         (root / "config.json").write_text(json.dumps(config))
         mock = root / "mock-command"
@@ -307,6 +314,36 @@ def test_existing_curl_including_curl_minimal_needs_no_packages(tmp_path, os_id)
     assert len(guest.commands("mock-installer")) == 1
 
 
+def test_fedora_44_native_trust_store_bootstraps_without_legacy_aliases(tmp_path):
+    guest = Guest(tmp_path, "fedora", version="44")
+    legacy = tmp_path / "etc/pki/tls/certs/ca-bundle.crt"
+    assert not legacy.exists()
+    result = guest.role(transport="ssh", tags="tailscale_bootstrap")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not legacy.exists()
+    assert not guest.commands("apt-get", "dnf")
+    assert len(guest.commands("mock-installer")) == 1
+    assert guest.commands("tailscale")[-1]["args"] == ["ip", "-4"]
+
+
+@pytest.mark.parametrize("native_bundle", ["missing", "empty"])
+def test_unusable_fedora_trust_store_stops_before_download_even_with_legacy_file(tmp_path, native_bundle):
+    guest = Guest(tmp_path, "fedora", version="44", ca=False, leave_ca_missing=True)
+    legacy = tmp_path / "etc/pki/tls/certs/ca-bundle.crt"
+    legacy.parent.mkdir(parents=True)
+    legacy.write_text("NONPRODUCTION legacy CA fixture\n")
+    if native_bundle == "empty":
+        native = tmp_path / guest.bundle
+        native.parent.mkdir(parents=True)
+        native.touch()
+    result = guest.install()
+    assert result["exitcode"] != 0
+    assert "prerequisite verification" in result["err-data"]
+    assert guest.commands("dnf")[-1]["args"] == ["install", "--assumeyes", "ca-certificates"]
+    assert not guest.commands("mock-installer", "systemctl", "tailscale")
+    assert all(row["args"] == ["--version"] for row in guest.commands("curl"))
+
+
 def test_nonworking_curl_is_not_treated_as_ready(tmp_path):
     guest = Guest(tmp_path, "ubuntu", curl_working=False)
     assert guest.install()["exitcode"] == 0
@@ -457,11 +494,21 @@ def test_ssh_installs_using_guest_os_not_hypervisor_facts(tmp_path, os_id):
     assert len(guest.commands("mock-installer")) == 1
 
 
-@pytest.mark.parametrize("options", [{"ssh_exit": 255}, {"sudo_exit": 1}, {"installer_exit": 42}])
-def test_ssh_failure_never_falls_back_or_authenticates(tmp_path, options):
+@pytest.mark.parametrize(
+    "options,diagnostic",
+    [
+        ({"ssh_exit": 255, "ssh_error": "Host key verification failed."}, "Host key verification failed."),
+        ({"sudo_exit": 1, "sudo_error": "sudo: a password is required"}, "sudo: a password is required"),
+        ({"installer_exit": 42}, "official Tailscale installer"),
+    ],
+)
+def test_ssh_failure_reports_the_cause_without_fallback_or_authentication(tmp_path, options, diagnostic):
     guest = Guest(tmp_path, **options)
     result = guest.role(transport="ssh")
     assert result.returncode == 2, result.stdout + result.stderr
+    assert diagnostic in result.stdout + result.stderr
+    if "installer_exit" not in options:
+        assert not guest.commands("mock-installer", "apt-get", "dnf", "curl", "systemctl")
     assert not guest.commands("qm", "tailscale")
     assert not list((tmp_path / "tmp").iterdir())
 

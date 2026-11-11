@@ -67,7 +67,7 @@ haproxy:
         type: swarm
         mode: global
         profile: careful
-        host:
+        hosts:
           - "{{ services_storage_host }}"
           - "{{ services_plex_host }}"
         constraints:
@@ -115,7 +115,7 @@ haproxy:
 
       deploy:
         type: container
-        host: "{{ services_controller_host }}"
+        hosts: "{{ services_controller_host }}"
         execution:
           mode: rootless
           host_user: podman-haproxy

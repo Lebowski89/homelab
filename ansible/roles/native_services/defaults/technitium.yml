@@ -1,0 +1,20 @@
+---
+
+# Internal task aliases; operator defaults live in the service catalogue.
+technitium_native_install_script_url: '{{ native_services_config.install_script_url
+  }}'
+technitium_native_install_script_path: '{{ native_services_config.install_script_path
+  }}'
+technitium_native_service_name: '{{ native_services_config.service_name }}'
+technitium_native_web_port: '{{ native_services_config.web_port }}'
+technitium_native_dns_port: '{{ native_services_config.dns_port }}'
+technitium_native_config_dir: '{{ native_services_config.config_dir }}'
+technitium_native_install_marker: '{{ native_services_config.install_marker }}'
+technitium_native_resolved_dns_servers: '{{ native_services_config.resolved_dns_servers
+  }}'
+technitium_native_disable_resolved_stub: '{{ native_services_config.disable_resolved_stub
+  }}'
+
+# RPM uses the upstream portable application and distribution ASP.NET Core 10.
+technitium_native_archive_url: https://download.technitium.com/dns/DnsServerPortable.tar.gz
+technitium_native_archive_checksum: ""

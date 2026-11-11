@@ -248,8 +248,11 @@ def test_remote_bootstrap_inspects_actual_protection_before_stops(bootstrap, tmp
         "roles/netbox/tasks/requirements.yml",
         "roles/podman_services/tasks/validate_definitions.yml",
         "roles/podman_services/filter_plugins/podman_services.py",
+        "roles/podman_services/filter_plugins/service_catalog.py",
         "roles/service_common/defaults/main.yml",
         "roles/service_common/filter_plugins/service_common.py",
+        "roles/service_common/filter_plugins/service_placement.py",
+        "filter_plugins/service_catalog.py",
         "roles/service_common/tasks/operational_requirements.yml",
         "roles/service_common/tasks/operational_inspection.yml",
     ):
@@ -285,10 +288,11 @@ def test_remote_bootstrap_inspects_actual_protection_before_stops(bootstrap, tmp
         return value
 
     records = []
+    inventory_groups = {"all": ["mgt"], "service_recovery": ["mgt"]}
     for role in ("netbox", "infisical"):
         defaults = yaml.safe_load((ROOT / f"ansible/roles/{role}/defaults/main.yml").read_text())
-        records.extend(check.MGT.bootstrap_metadata(role, defaults, resolve))
-    plan = check.MGT.build_plan({}, "mgt", resolve, records)
+        records.extend(check.MGT.bootstrap_metadata(role, defaults, resolve, inventory_groups))
+    plan = check.MGT.build_plan({}, "mgt", resolve, records, inventory_groups)
     # Only NetBox's endpoints are active; all declared bootstrap principals remain.
     endpoints = [e for e in plan["endpoints"] if e["service"].startswith("netbox")]
     callers = {name for e in endpoints for name in e["callers"]}

@@ -1,0 +1,171 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Reload native firewall policy without altering its configuration
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Reload firewalld through its normal interface
+      ansible.builtin.command:
+        argv: [firewall-cmd, --reload]
+      changed_when: true
+
+    - name: VM tests | Observe the production timer's bounded reconciliation after reload
+      ansible.builtin.command:
+        argv: [python3, /etc/skynet-mgt-firewall/policy.py, check]
+      changed_when: false
+      register: molecule_vm_reload_reconciled
+      until: molecule_vm_reload_reconciled.rc == 0
+      retries: 20
+      delay: 1
+
+- name: Verify real traffic after firewalld reload
+  ansible.builtin.import_playbook: verify.yml
+  vars:
+    molecule_vm_network_phase: firewalld-reload
+
+- name: Replace the allowed caller identity and reconcile through production
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Snapshot the caller process before restart
+      ansible.builtin.command:
+        argv: [docker, inspect, --format, '{{ "{{.State.Pid}}" }}', 'molecule-{{ molecule_vm_run_id[:12] }}-allow']
+      changed_when: false
+      register: molecule_vm_caller_before_restart
+
+    - name: VM tests | Restart the current caller
+      ansible.builtin.command:
+        argv: [docker, restart, 'molecule-{{ molecule_vm_run_id[:12] }}-allow']
+      changed_when: true
+
+    - name: VM tests | Require restart to replace the actual caller process
+      ansible.builtin.command:
+        argv: [docker, inspect, --format, '{{ "{{.State.Pid}}" }}', 'molecule-{{ molecule_vm_run_id[:12] }}-allow']
+      changed_when: false
+      register: molecule_vm_caller_after_restart
+      failed_when: >-
+        molecule_vm_caller_after_restart.rc != 0 or molecule_vm_caller_after_restart.stdout | int <= 0
+        or molecule_vm_caller_after_restart.stdout == molecule_vm_caller_before_restart.stdout
+
+    - name: VM tests | Wait for the production reconcile timer to observe the new identity
+      ansible.builtin.command:
+        argv: [python3, /etc/skynet-mgt-firewall/policy.py, check]
+      changed_when: false
+      register: molecule_vm_reconciled
+      until: molecule_vm_reconciled.rc == 0
+      retries: 40
+      delay: 2
+
+- name: Verify the caller's current namespace and counters after restart
+  ansible.builtin.import_playbook: verify.yml
+  vars:
+    molecule_vm_network_phase: caller-restart
+
+- name: Exercise value-free diagnostics using the real namespace launcher
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Read the actual current caller PID
+      ansible.builtin.command:
+        argv: [docker, inspect, --format, '{{ "{{.State.Pid}}" }}', 'molecule-{{ molecule_vm_run_id[:12] }}-allow']
+      changed_when: false
+      register: molecule_vm_caller_pid
+
+    - name: VM tests | Require a real interpreter-startup failure to remain non-retryable and sanitized
+      ansible.builtin.command:
+        argv: [python3, '-']
+        stdin: |
+          {{ lookup('ansible.builtin.file', '../../ansible/roles/service_firewall/files/lifecycle_remote.py') }}
+          try:
+              namespace_probe(['nsenter','--target',{{ molecule_vm_caller_pid.stdout | to_json }},'--net','--','/molecule-missing-interpreter'])
+          except ProbeError as failure:
+              assert not failure.retryable and str(failure).startswith('interpreter startup:')
+              assert '/molecule-missing-interpreter' not in str(failure)
+              print('Real namespace-launcher diagnostic classified and sanitized')
+          else:
+              raise RuntimeError('Missing interpreter unexpectedly executed')
+      changed_when: false
+
+- name: Restart the disposable runtime without changing host policy
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Restart Docker with its production protection ordering
+      ansible.builtin.systemd_service:
+        name: docker.service
+        state: restarted
+
+    - name: VM tests | Wait for healthy owned policy after runtime restart
+      ansible.builtin.command:
+        argv: [python3, /etc/skynet-mgt-firewall/policy.py, check]
+      changed_when: false
+      register: molecule_vm_postrestart
+      until: molecule_vm_postrestart.rc == 0
+      retries: 40
+      delay: 2
+
+- name: Verify traffic after Docker restart
+  ansible.builtin.import_playbook: verify.yml
+  vars:
+    molecule_vm_network_phase: docker-restart
+
+- name: Reboot only the current disposable guest and reconnect through verified SSH
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Perform the controlled disposable-guest reboot
+      ansible.builtin.reboot:
+        reboot_timeout: 300
+        connect_timeout: 5
+        post_reboot_delay: 10
+
+    - name: VM tests | Require Ubuntu cloud-init to finish after reboot without operational errors
+      # checkov:skip=CKV2_ANSIBLE_3:Post-reboot bootstrap checks must fail acceptance before firewall reconciliation; no incomplete guest is accepted.
+      when: ansible_facts.distribution == 'Ubuntu'
+      block:
+        - name: VM tests | Observe completed post-boot cloud-init status
+          ansible.builtin.command:
+            argv: [timeout, '300', cloud-init, status, --wait, --format, json]
+          changed_when: false
+          register: molecule_vm_postboot_cloud_init
+          failed_when: molecule_vm_postboot_cloud_init.rc not in [0, 2]
+
+        - name: VM tests | Validate the actual post-boot bootstrap result
+          vars:
+            molecule_vm_postboot_cloud_status: '{{ molecule_vm_postboot_cloud_init.stdout | from_json }}'
+          ansible.builtin.assert:
+            that:
+              - molecule_vm_postboot_cloud_status.status == 'done'
+              - molecule_vm_postboot_cloud_status.errors | length == 0
+              - molecule_vm_postboot_cloud_status.recoverable_errors.keys() | difference(['DEPRECATED']) | length == 0
+
+    - name: VM tests | Wait for production protection reconciliation after boot
+      ansible.builtin.command:
+        argv: [python3, /etc/skynet-mgt-firewall/policy.py, check]
+      changed_when: false
+      register: molecule_vm_postboot
+      until: molecule_vm_postboot.rc == 0
+      retries: 40
+      delay: 2
+
+- name: Verify real post-boot traffic and persistence
+  ansible.builtin.import_playbook: verify.yml
+  vars:
+    molecule_vm_network_phase: reboot
+
+- name: Exercise disappearing Swarm task recovery using the production reconciler
+  ansible.builtin.import_playbook: swarm_recovery.yml
+
+- name: Verify worker counter ranges against actual generated rules and traffic
+  ansible.builtin.import_playbook: worker_counters.yml
+
+- name: Restore the manager scenario after scoped worker removal
+  ansible.builtin.import_playbook: converge.yml

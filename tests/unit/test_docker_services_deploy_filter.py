@@ -365,3 +365,42 @@ def test_docker_rejects_podman_execution_contract():
             {"type": "container", "execution": {"mode": "rootless", "host_user": "podman-adminer"}},
             profiles=deploy_profiles(),
         )
+
+
+def test_single_host_derives_existing_label_without_assuming_a_node_hostname():
+    plugin = load_plugin()
+    source = {"runtime": "docker", "deploy": {"type": "swarm", "hosts": ["inventory-alias"], "mode": "replicated", "replicas": 2}}
+    hosts = {
+        "inventory-alias": {
+            "docker_swarm_hostname": "different-node-name",
+            "docker_swarm_node_labels": {"docker_services_host": "existing-storage-identity"},
+        }
+    }
+    resolved = plugin.docker_services_resolve_constraints(source, hosts)
+    built = plugin.docker_services_build_deploy_config(resolved["deploy"])
+    assert built == {
+        "mode": "replicated",
+        "replicas": 2,
+        "placement": {"constraints": ["node.labels.docker_services_host == existing-storage-identity"]},
+    }
+    assert "constraints" not in source["deploy"]
+    assert plugin.docker_services_resolve_constraints(resolved, {}) == resolved
+    with pytest.raises(AnsibleFilterError, match="existing.*docker_swarm_node_labels"):
+        plugin.docker_services_resolve_constraints(source, {"inventory-alias": {}})
+
+
+def test_explicit_scheduling_keeps_additional_restrictions_and_multi_host_predicates():
+    plugin = load_plugin()
+    source = {
+        "runtime": "docker",
+        "deploy": {"hosts": ["first"], "constraints": ["node.platform.arch == arm64", "node.labels.gpu == true", "node.role != manager"]},
+    }
+    # Explicit constraints own eligibility; a preparation host alone cannot add a pin.
+    assert plugin.docker_services_resolve_constraints(source, {}) == source
+    source["deploy"]["hosts"] = ["first", "second"]
+    assert plugin.docker_services_resolve_constraints(source, {}) == source
+    source["deploy"]["constraints"] = []
+    assert plugin.docker_services_resolve_constraints(source, {}) == source
+    del source["deploy"]["constraints"]
+    with pytest.raises(AnsibleFilterError, match="one resolved deploy.hosts.*explicit constraints"):
+        plugin.docker_services_resolve_constraints(source, {})

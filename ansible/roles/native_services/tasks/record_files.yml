@@ -1,0 +1,15 @@
+---
+
+- name: Native services | Claim only configuration successfully managed by this entry
+  ansible.builtin.set_fact:
+    native_services_record: >-
+      {{ native_services_record | combine({
+        'files': (native_services_record.files + native_services_adopted_files) | unique | list}) }}
+
+- name: Native services | Save installation ownership after configuration adoption
+  ansible.builtin.copy:
+    dest: "{{ native_services_state_path }}"
+    content: "{{ native_services_record | to_nice_json }}\n"
+    owner: root
+    group: root
+    mode: "0600"

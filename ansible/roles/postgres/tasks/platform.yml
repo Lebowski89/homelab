@@ -1,0 +1,57 @@
+---
+
+- name: PostgreSQL | Gather platform facts
+  when: >-
+    ['distribution', 'distribution_version', 'distribution_major_version', 'architecture', 'pkg_mgr', 'system', 'service_mgr', 'selinux']
+    | difference(ansible_facts.keys()) | length > 0
+  ansible.builtin.setup:
+    gather_subset: ['!all', '!min', distribution, system, service_mgr, pkg_mgr, selinux]
+
+- name: PostgreSQL | Detect Atomic or OSTree deployment
+  ansible.builtin.stat:
+    path: /run/ostree-booted
+  register: postgres_ostree
+
+- name: PostgreSQL | Validate supported platform before changes
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - ansible_facts.service_mgr == 'systemd'
+      - not postgres_ostree.stat.exists
+      - postgres_version is not boolean
+      - postgres_version | string is match('^[0-9]+$')
+      - postgres_version | int in [14, 15, 16, 17, 18]
+      - >-
+        (ansible_facts.pkg_mgr == 'apt' and (
+          (ansible_facts.distribution == 'Debian' and ansible_facts.distribution_major_version in ['12', '13']) or
+          (ansible_facts.distribution == 'Ubuntu' and ansible_facts.distribution_version in ['22.04', '24.04', '26.04', '26.10'])
+        )) or
+        (ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and (
+          (ansible_facts.distribution == 'Fedora' and ansible_facts.distribution_major_version in ['43', '44']
+           and ansible_facts.architecture == 'x86_64') or
+          (ansible_facts.distribution == 'Rocky' and ansible_facts.architecture in ['x86_64', 'aarch64'] and (
+            (ansible_facts.distribution_major_version == '9' and ansible_facts.distribution_version is version('9.7', '>=')) or
+            (ansible_facts.distribution_major_version == '10' and ansible_facts.distribution_version is version('10.1', '>='))
+          ))
+        ))
+    fail_msg: >-
+      PostgreSQL requires conventional Linux/systemd: Debian 12/13 or Ubuntu 22.04/24.04/26.04/26.10 with APT,
+      Fedora 43/44 AMD64 or Rocky 9.7+/10.1+ AMD64/ARM64 with DNF4/DNF5 and PGDG stable packages.
+      PostgreSQL majors 14-18 are supported. Atomic/OSTree, other derivatives and unpublished Fedora PGDG releases are unsupported.
+
+- name: PostgreSQL | Load role-local platform settings
+  ansible.builtin.include_vars: "{{ 'rpm' if ansible_facts.pkg_mgr in ['dnf', 'dnf5'] else 'apt' }}.yml"
+
+- name: PostgreSQL | Inspect runtime availability for check-mode planning
+  ansible.builtin.stat:
+    path: "{{ postgres_patroni_bin_dir }}/postgres"
+  register: postgres_runtime
+
+- name: PostgreSQL | Keep destructive Debian recovery operations off RPM hosts
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.assert:
+    that:
+      - ansible_run_tags | intersect(['postgres_patroni_reset', 'postgres_etcd_reset', 'postgres_admin_nuke_node']) | length == 0
+    fail_msg: >-
+      RPM node reset/reinitialisation is outside this compatibility phase. Use a reviewed recovery procedure;
+      no Debian cluster command, data removal or membership change will be attempted.

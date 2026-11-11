@@ -74,3 +74,33 @@ run "creation_only_entry_point_retains_safety_checks" {
 
   expect_failures = [proxmox_virtual_environment_vm.this]
 }
+
+run "pinned_test_guest_can_disable_implicit_package_upgrades" {
+  command = plan
+
+  variables {
+    cloud_init_upgrade = false
+  }
+
+  assert {
+    condition     = proxmox_virtual_environment_vm.this.initialization[0].upgrade == false
+    error_message = "An explicit pinned-guest choice must suppress Proxmox's implicit first-boot package upgrade."
+  }
+}
+
+run "custom_network_data_replaces_only_generated_ip_config" {
+  command = plan
+
+  variables {
+    network_data_file_id = "local:snippets/explicit-network.yaml"
+  }
+
+  assert {
+    condition = (
+      proxmox_virtual_environment_vm.this.initialization[0].network_data_file_id == "local:snippets/explicit-network.yaml" &&
+      length(proxmox_virtual_environment_vm.this.initialization[0].ip_config) == 0 &&
+      proxmox_virtual_environment_vm.this.initialization[0].dns[0].servers == tolist(var.dns_servers)
+    )
+    error_message = "Explicit network data must suppress conflicting generated IP config while preserving the other initialization inputs."
+  }
+}

@@ -163,8 +163,7 @@ def test_docker_file_collection_is_an_explicit_active_file_allowlist():
     # then combined with an independently stated in-container log contract.
     contracts = [
         ("traefik", None, "logs", "/etc/traefik/logs/access.log"),
-        ("qbittorrent", "alpha", "config", "/config/log/qbittorrent.log"),
-        ("qbittorrent", "bravo", "config", "/config/log/qbittorrent.log"),
+        ("qbittorrent", None, "config", "/config/log/qbittorrent.log"),
         ("sabnzbd", None, "config", "/config/logs/sabnzbd.log"),
         ("radarr", "radarr", "config", "/config/logs/radarr.txt"),
         ("radarr", "radarr_4k", "config", "/config/logs/radarr.txt"),
@@ -285,7 +284,7 @@ def test_traefik_access_log_has_bounded_reopen_safe_rotation():
         "force": True,
     }
     assert service["deploy"]["type"] == "container"
-    assert service["deploy"]["host"] == "{{ services_controller_host }}"
+    assert service["deploy"]["hosts"] == "{{ services_controller_host }}"
     assert alloy_config.count("/host/rootfs/var/log/skynet/traefik/access.log") == 1
     assert "access.log*" not in alloy_config
 
@@ -302,10 +301,10 @@ def test_loki_private_ingest_route_and_clients_render_end_to_end():
     loki_config = (REPO_ROOT / "ansible/roles/service_common/templates/configs/loki-config.yaml.j2").read_text()
     dns = (REPO_ROOT / "terraform/technitium/internal-dns/main.tf").read_text()
     static_traefik = (REPO_ROOT / "ansible/roles/service_common/templates/configs/proxy/traefik/config.yml.j2").read_text()
-    native_defaults = yaml.safe_load((REPO_ROOT / "ansible/roles/alloy_native/defaults/main.yml").read_text())
+    native_defaults = yaml.safe_load((SERVICES_DIR / "alloy.yml").read_text())["alloy"]["targets"]["native"]["native"]["config"]
     native_url = (
         Environment(undefined=StrictUndefined)
-        .from_string(native_defaults["alloy_native_loki_url"])
+        .from_string(native_defaults["loki_url"])
         .render(
             services_internal_zone="private.example.internal",
             services_private_https_port=9443,
@@ -398,8 +397,7 @@ def test_docker_file_targets_are_filtered_to_their_inventory_owner_before_discov
     targets = owned_file_targets(config)
 
     storage_services = {
-        "qbittorrent-alpha",
-        "qbittorrent-bravo",
+        "qbittorrent",
         "sabnzbd",
         "radarr",
         "radarr-4k",
@@ -415,7 +413,7 @@ def test_docker_file_targets_are_filtered_to_their_inventory_owner_before_discov
     plex_services = {"plex", "tautulli", "kometa", "imagemaid", "technitium"}
     controller_services = {"seerr", "unifi", "technitium", "traefik"}
 
-    assert len(targets) == 23
+    assert len(targets) == 22
     assert {service for _, owner, service in targets if owner == "unraid"} == storage_services
     assert {service for _, owner, service in targets if owner == "plex"} == plex_services
     assert {service for _, owner, service in targets if owner == "mgt"} == controller_services

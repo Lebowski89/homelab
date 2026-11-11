@@ -81,7 +81,7 @@ Each selected service declares an optional `application_prepare.handler`. The ha
 
 | Application | Application-owned work | Runtime-owned compatibility boundary |
 | --- | --- | --- |
-| qBittorrent | Validates the downloads/seeds password contract and derives the PBKDF2 template value before common templates. | None; the hash task is runtime-neutral and is available to either adapter. |
+| qBittorrent | Validates the current service's password contract and derives the PBKDF2 template value before common templates. | None; the hash task is runtime-neutral and is available to either adapter. |
 | Vaultwarden | Reads or creates the persistent Argon2 admin token and returns its value separately from its canonical declaration. | Docker or Podman materializes the resulting preserve-policy native secret. |
 | Authelia | Validates the password/storage-key contract, generates session/JWT values, and derives the user hash with a selected-runtime temporary container. Values and value-free declarations remain separate. | Docker or Podman materializes the generated preserve-policy native secrets. The canonical Infisical storage-key declaration remains separate and is materialized once through the normal adapter path. |
 | Plex | Validates the explicit bootstrap declaration; token, claim, and preference handling is application-owned. | `media_nfs` is a canonical managed Compose volume. Plex API/login/claim work runs only with the explicit `bootstrap` operation. This workflow remains Docker-only. |
@@ -90,9 +90,27 @@ Each selected service declares an optional `application_prepare.handler`. The ha
 
 Check mode runs declaration, handler, credential-reference, and bootstrap-contract validation. It does not perform Infisical lookups, runtime cleanup, secret generation/materialization, temporary container work, Plex API requests, application configuration mutation, or runtime lifecycle changes.
 
+qBittorrent and qui each have a single service, selected as `qbittorrent` and
+`qui`. Their appdata directories are `<storage-appdata>/qbittorrent` and
+`<storage-appdata>/qui`; qui uses the `qui` PostgreSQL database. Before
+redeployment, stop the previous instances and move any appdata and database
+contents that should be retained to these names. Repository changes do not
+migrate or delete existing directories or databases. qBittorrent credentials
+are declared under `/qBittorrent` in Infisical; the shared `/PIA` and `/Postgres`
+declarations are unchanged. Torrent data is mounted from
+`<storage-data>/torrents` at `/data/torrents`, with `completed`, `incoming`, and
+`watched` directories directly beneath that root. qBittorrent's generated save
+and incomplete-download paths follow this mount; Unpackerr watches
+`/data/torrents/completed`. Move existing data and update existing torrent and
+category paths within qBittorrent as a separate migration step; the repository
+does not rewrite saved torrent state. Existing Unpackerr configuration is
+preserved on redeployment (`force: false`), so update its saved paths manually
+as well. Run the DNS plan and apply separately in
+`terraform/technitium/internal-dns` before validating the renamed private routes.
+
 ## Canonical portable service and secret schema
 
-The Docker-shaped top-level service fields are the canonical portable schema. The Podman adapter maps them to its internal Quadlet structure. Every base service declares its runtime explicitly: existing Docker services use `runtime: docker`, while Adminer, The Lounge, and Homepage select Podman with `runtime: podman`. A missing or unsupported base runtime fails catalog validation; there is no implicit Docker default. Portable fields include `image`, numeric `user: UID:GID`, `environment`, `deploy.host`, canonical ports and volumes, `paths`, security fields, `healthcheck`, `infisical`, `postgres`, and `traefik`.
+The Docker-shaped top-level service fields are the canonical portable schema. The Podman adapter maps them to its internal Quadlet structure. Every base service declares its runtime explicitly: existing Docker services use `runtime: docker`, while Adminer, The Lounge, and Homepage select Podman with `runtime: podman`. A missing or unsupported base runtime fails catalog validation; there is no implicit Docker default. Portable fields include `image`, numeric `user: UID:GID`, `environment`, `deploy.hosts`, canonical ports and volumes, `paths`, security fields, `healthcheck`, `infisical`, `postgres`, and `traefik`.
 
 Podman additionally owns `deploy.execution`. Omission preserves rootful system
 Quadlets. `mode: rootless` requires a dedicated `host_user` and selects that
@@ -202,7 +220,7 @@ host must already have the selected runtime and supported version installed.
 
 Static tests prove normalized portable-field equivalence and render structure; they do not prove live Docker/Podman behavioral parity. The Adminer proof covers its managed Podman network and controller-host Traefik endpoint; Docker Swarm rejects `host_ip` explicitly. Swarm-only networks, configs, placement, replicas, application-specific preparation, and runtime installation remain adapter or operator concerns.
 
-Inventory topology and host identity remain unchanged. NetBox remains authoritative, services continue to resolve existing `local_ip`, hostnames, `deploy.host`, and Traefik inventory references, and no canonical address is hard-coded.
+Inventory topology and host identity remain unchanged. NetBox remains authoritative, services continue to resolve existing `local_ip`, hostnames, `deploy.hosts`, and Traefik inventory references, and no canonical address is hard-coded.
 
 ## Compatibility closeout audit
 

@@ -16,6 +16,7 @@
     owner: root
     group: root
     mode: "0755"
+    setype: _default
 
 - name: Podman rootful DNS | Configure only the netavark DNS bind port
   ansible.builtin.template:
@@ -24,3 +25,4 @@
     owner: root
     group: root
     mode: "0644"
+    setype: _default

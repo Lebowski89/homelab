@@ -129,7 +129,7 @@ def fixture(host="manager"):
         "running_rootless_accounts": [],
         "window_seconds": 2,
         "sample_interval": 0.5,
-        "capture_callers": ["infisical", "qui-alpha", "qui-bravo"],
+        "capture_callers": ["infisical", "qui", "fixture-db-client"],
     }
     initial = PREFLIGHT.collect({**config, "window_seconds": 0}, fw, machine.run, identity_lookup=machine.identity)
     return machine, fw, config, initial
@@ -294,11 +294,11 @@ def test_targeted_capture_combines_windows_with_original_provenance_and_fresh_ro
     result = PREFLIGHT.candidates(
         {
             "plan": {
-                "endpoints": [{"ids": ["haproxy/postgres"], "callers": ["infisical", "qui-alpha", "qui-bravo"]}],
+                "endpoints": [{"ids": ["haproxy/postgres"], "callers": ["infisical", "qui", "fixture-db-client"]}],
                 "principals": {
                     "infisical": {"inventory_hosts": "manager"},
-                    "qui-alpha": {"inventory_hosts": "worker"},
-                    "qui-bravo": {"inventory_hosts": "plex"},
+                    "qui": {"inventory_hosts": "worker"},
+                    "fixture-db-client": {"inventory_hosts": "plex"},
                 },
             },
             "controller": "manager",
@@ -414,8 +414,8 @@ def test_actual_ansible_async_collection_polling_aggregation_and_read_only_check
     )
     hosts = PreflightHost.addresses
     plan = {
-        "endpoints": [{"ids": ["haproxy/postgres"], "callers": ["infisical", "qui-alpha"]}],
-        "principals": {"infisical": {"inventory_hosts": "manager"}, "qui-alpha": {"inventory_hosts": "worker"}},
+        "endpoints": [{"ids": ["haproxy/postgres"], "callers": ["infisical", "qui"]}],
+        "principals": {"infisical": {"inventory_hosts": "manager"}, "qui": {"inventory_hosts": "worker"}},
     }
     output = tmp_path / "candidate.json"
     variables = {
@@ -424,7 +424,7 @@ def test_actual_ansible_async_collection_polling_aggregation_and_read_only_check
         "haproxy_preflight_sample_interval": 0.1,
         "haproxy_preflight_hosts": list(hosts),
         "haproxy_preflight_expected_hosts": {h: {"inventory_address": a} for h, a in hosts.items()},
-        "haproxy_preflight_endpoint": {"port": 5432, "service": "haproxy", "callers": ["infisical", "qui-alpha", "qui-bravo"]},
+        "haproxy_preflight_endpoint": {"port": 5432, "service": "haproxy", "callers": ["infisical", "qui", "fixture-db-client"]},
         "haproxy_preflight_accounts": [],
         "haproxy_preflight_running_rootless_accounts": [],
         "services_controller_host": "manager",
@@ -518,7 +518,7 @@ def test_actual_ansible_async_collection_polling_aggregation_and_read_only_check
                 "path": str(capture_path),
                 "sha256": hashlib.sha256(capture_path.read_bytes()).hexdigest(),
             }
-        assert candidate["mgt_firewall_callers"]["qui-alpha"][0]["route_verified"] is False
+        assert candidate["mgt_firewall_callers"]["qui"][0]["route_verified"] is False
 
 
 @pytest.mark.parametrize("change", [None, "uid", "pid", "namespace"])
@@ -642,13 +642,13 @@ def provider_transition_fixture():
         "expected_hosts": {h: {"inventory_address": a} for h, a in PreflightHost.addresses.items()},
         "plan": {
             "endpoints": [
-                {"ids": ["haproxy/postgres"], "callers": ["infisical", "qui-alpha", "qui-bravo", "forgejo", "controller", "recovery"]}
+                {"ids": ["haproxy/postgres"], "callers": ["infisical", "qui", "fixture-db-client", "forgejo", "controller", "recovery"]}
             ],
             "principals": {
                 "forgejo": {"inventory_hosts": "manager", "future_account": "podman-forgejo"},
                 "infisical": {"inventory_hosts": "manager"},
-                "qui-alpha": {"inventory_hosts": "worker"},
-                "qui-bravo": {"inventory_hosts": "plex"},
+                "qui": {"inventory_hosts": "worker"},
+                "fixture-db-client": {"inventory_hosts": "plex"},
             },
         },
         "existing": {},
@@ -684,7 +684,7 @@ def test_candidates_reuse_only_validated_provider_removal_and_preserve_provenanc
     assert report["containers"][0]["destinations"][0]["observations"][0] == {"capture": retained[0]["capture"], "source": source}
     assert result["reports"][1]["containers"][0]["destinations"][0]["routes"][0]["worker_only"] is True
     assert result["candidate"]["mgt_firewall_inputs_verified"] is False
-    assert result["candidate"]["mgt_firewall_callers"]["qui-alpha"][0]["route_verified"] is False
+    assert result["candidate"]["mgt_firewall_callers"]["qui"][0]["route_verified"] is False
 
 
 @pytest.mark.parametrize(

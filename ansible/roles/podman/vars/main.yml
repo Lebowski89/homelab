@@ -1,0 +1,28 @@
+---
+
+podman_platform_packages:
+  Debian:
+    # Secure Ansible module handoff from the SSH user to dedicated rootless users.
+    - acl
+    - podman
+    - crun
+    - netavark
+    - aardvark-dns
+    - containernetworking-plugins
+    - uidmap
+    - slirp4netns
+    - passt
+    - fuse-overlayfs
+    - dbus-user-session
+  RedHat:
+    - acl
+    - podman
+    - crun
+    - netavark
+    - aardvark-dns
+    - passt
+    - fuse-overlayfs
+    - shadow-utils
+    - dbus-broker
+    - systemd-pam
+    - container-selinux

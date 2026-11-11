@@ -13,10 +13,10 @@
   diff: false
   ansible.builtin.assert:
     that:
-      - service_prepare_context.service_name in ['qbittorrent-alpha', 'qbittorrent-bravo']
+      - service_prepare_context.service_name == 'qbittorrent'
       - service_prepare_context.lookup_values.get(service_prepare_qbittorrent_password_var, '') | string | trim | length > 0
       - service_prepare_context.filesystem_hosts | length > 0
     fail_msg: >-
-      qBittorrent preparation requires an alpha or bravo instance, its declared password,
+      qBittorrent preparation requires the qbittorrent service, its declared password,
       and an explicit filesystem host.
   tags: [deploy, update, remove, recreate, bootstrap, drift]

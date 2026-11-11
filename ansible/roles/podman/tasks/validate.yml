@@ -1,0 +1,51 @@
+---
+
+- name: Podman | Validate supported platform
+  ansible.builtin.import_tasks: validate_platform.yml
+
+- name: Podman | Validate installation options
+  ansible.builtin.assert:
+    that:
+      - podman_install_enable is boolean
+      - podman_update_cache is boolean
+      - podman_docker_iptables_compatibility is boolean
+      - podman_packages is sequence and podman_packages is not string and podman_packages is not mapping
+      - >-
+        podman_install_extra_packages is sequence and podman_install_extra_packages is not string
+        and podman_install_extra_packages is not mapping
+      - podman_cache_valid_time is integer and podman_cache_valid_time >= 0
+      - podman_min_version is version('5.4.2', '>=')
+    fail_msg: Installation flags must be booleans, packages lists, cache lifetime nonnegative, and the minimum version at least 5.4.2.
+
+- name: Podman | Inspect cgroup v2 before installation
+  ansible.builtin.stat:
+    path: /sys/fs/cgroup/cgroup.controllers
+  register: podman_cgroup_controllers
+
+- name: Podman | Assert cgroup v2
+  ansible.builtin.assert:
+    that: podman_cgroup_controllers.stat.exists
+    fail_msg: Podman Quadlet requires a host booted with cgroup v2; enable it before installation.
+
+- name: Podman | Inspect installed packages before installation
+  ansible.builtin.package_facts:
+    manager: "{{ 'apt' if ansible_facts.pkg_mgr == 'apt' else 'rpm' }}"
+
+- name: Podman | Reject Docker CLI replacement and conflicting runtime choices
+  ansible.builtin.assert:
+    that:
+      - "'podman-docker' not in ansible_facts.packages"
+      - >-
+        not podman_install_enable or
+        'podman-docker' not in ((podman_packages + podman_install_extra_packages)
+          | map('regex_replace', '[=<> ].*$|-[0-9].*$', '') | list)
+      - >-
+        not podman_install_enable or 'containerd.io' not in ansible_facts.packages or
+        (ansible_facts.packages.keys() | list
+          + ((podman_packages + podman_install_extra_packages)
+             | map('regex_replace', '[=<> ].*$|-[0-9].*$', '') | list))
+        | intersect(['runc', 'containerd']) | length == 0
+    fail_msg: >-
+      podman-docker replaces the Docker CLI and is not supported by these coexisting runtime roles.
+      Distribution runc/containerd conflict with Docker CE's containerd.io; use the distribution crun provider for Podman.
+      Review installed packages and package overrides explicitly. No package will be erased automatically.

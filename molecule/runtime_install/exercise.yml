@@ -1,0 +1,53 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Exercise real container execution without leaving application state
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  vars:
+    molecule_vm_probe_image: docker.io/library/busybox@sha256:66a6306db78bf2dbf3487f293aa8d6990d8e506fdffab9cc43fe422becf886e4
+  tasks:
+    - name: VM tests | Prepare only the reviewed Ubuntu pasta signal prerequisite
+      when: ansible_facts.distribution == 'Ubuntu'
+      ansible.builtin.include_tasks: ubuntu-pasta-prerequisite.tasks.yml
+
+    - name: VM tests | Run an unprivileged process with each rootful runtime
+      ansible.builtin.command:
+        argv: ['{{ molecule_vm_engine }}', run, --rm, --network, none, --user, '1000:1000', --cap-drop, ALL, '{{ molecule_vm_probe_image }}', id, -u]
+      loop: [docker, podman]
+      loop_control:
+        loop_var: molecule_vm_engine
+      changed_when: true
+      register: molecule_vm_execution
+
+    - name: VM tests | Require both engines to execute the application UID
+      ansible.builtin.assert:
+        that: molecule_vm_execution_result.stdout == '1000'
+      loop: '{{ molecule_vm_execution.results }}'
+      loop_control:
+        loop_var: molecule_vm_execution_result
+
+    - name: VM tests | Exercise the cloud-init user's real rootless mappings
+      become: false
+      ansible.builtin.command:
+        argv: [podman, run, --rm, --network, none, --userns, keep-id, '{{ molecule_vm_probe_image }}', id, -u]
+      changed_when: true
+      register: molecule_vm_rootless_probe
+
+    - name: VM tests | Verify rootless UID mapping succeeded
+      ansible.builtin.assert:
+        that: molecule_vm_rootless_probe.stdout | int > 0
+
+    - name: VM tests | Read the real rootless account identity
+      ansible.builtin.getent:
+        database: passwd
+        key: '{{ ansible_user }}'
+
+    - name: VM tests | Verify managed-bridge DNS and HTTP in all execution stores
+      ansible.builtin.include_tasks: network.tasks.yml
+      loop: [docker, podman, rootless]
+      loop_control:
+        loop_var: molecule_vm_store

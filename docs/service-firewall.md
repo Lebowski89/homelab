@@ -9,12 +9,49 @@ For declaration-backed services, the dispatcher checks inventory, collisions,
 current protection and storage before secret preflight. The runtime adapter
 prepares its account, asks this role to stage the current policy union, then
 changes its application. After startup it reconciles identities before waiting for application health, verifies the image, running process and publications, and performs bounded
-TCP handshakes from current caller network namespaces with owned RETURN-counter
-increases. Both kernel families are audited. No browser, SQL, notification,
+TCP handshakes from current caller network namespaces with owned allow-counter
+increases: mgt uses pre-DNAT RETURN rules; workers use the existing port-scoped
+filter ACCEPT rules, including original destination ports after DNAT. Adjacent
+worker ports share range counters, so their increase corroborates the handshake
+and audited protection rather than uniquely attributing a packet to one service.
+Both kernel families are audited. No browser, SQL, notification,
 external-denial or application acceptance is inferred, and no historical
 acknowledgement is promoted.
 
+Docker image checks recognize the equivalent default `docker.io` registry and
+`library` namespace forms that Swarm shortens, following
+[Docker's image-reference rules](https://docs.docker.com/reference/cli/docker/image/tag/).
+Tags and digests must still match; other registries and Podman references retain
+their existing comparison. Removal still checks ownership and absence without
+requiring the currently declared image version.
+
+Rootless callers are probed in both their user and network namespaces. Diagnostics
+separate namespace entry, interpreter startup and TCP errors without returning
+requests, interpreter source or arbitrary stderr. Only connection refusal/timeouts
+receive bounded readiness retries; caller replacement invalidates the observation.
+Publication and provider reservations remain pending until probes and counters
+succeed, rather than being committed before those checks.
+
+Protecting a Docker backend can invoke `podman_services` identity-only preparation
+for its rootless Traefik caller on mgt. That entry validates/prepares the caller's
+account and stops before manager activation; it does not deploy the Docker
+application through Podman or redeploy Traefik.
+
 Existing managed declarations without exposure metadata are adopted through the existing value-free planners, after verifying their exact runtime/publication contract. Fresh or changed unclassified publications are rejected. Wallos and Whisparr exercise explicit declarations in the real catalog. Retained native/remote caller bindings are audited unchanged; they are not reprobed as ordinary root. Independent bootstrap/recovery gates remain separate.
+
+Renaming a service creates a new runtime identity, so its published ports need
+explicit exposure metadata and, for private ports, callers before redeployment.
+qBittorrent and qui declare
+their `web_backend` ports private with Traefik as the caller. The separate
+`traefik.exposure` setting describes the HTTPS route, not its backend publication.
+
+Arr HTTP backend publications declare private exposure with Traefik as their
+logical caller. This protects their direct worker ports independently of HTTPS
+frontend exposure. Recyclarr has no publication. Complete declarations can create
+an absent service through ordinary deploy/recreate, including a retry after a
+previous interruption; foreign runtime identities and installed protection/data
+checks still fail closed. Legacy declarations still require their exact existing
+runtime and are not a recovery authorization for a missing service.
 Existing-data ownership changes still need consistent backups, stopped writers,
 proved translations and the actual service-name ownership acknowledgement.
 Absent/empty writable roots can be prepared automatically after a complete
@@ -27,6 +64,10 @@ has two explicit profiles, not interchangeable identity models:
 | --- | --- | --- |
 | `mgt` | Exact local account/cgroup and container identities; authorised controller/recovery contexts | install, check, observe, remove |
 | `workers` | Verified exact remote mgt sources, protecting declared worker publications | install, check, remove |
+
+These profiles belong on separate inventory hosts. Each reconciler owns
+first-position hooks; installing both on one host does not converge. Single-VM
+acceptance tests install and remove the profiles in sequence.
 
 `service_firewall_profile` and `service_firewall_operation` select direct role
 use. Unknown profiles/operations, worker observe, conflicting operation tags and
@@ -85,7 +126,7 @@ example:
       target: 8080
   deploy:
     type: container
-    host: "{{ services_controller_host }}"
+    hosts: "{{ services_controller_host }}"
     execution:
       mode: rootless
       host_user: podman-example
@@ -111,6 +152,17 @@ Administrative installs also merge the current union and reject conflicting/stal
 entries instead of overwriting them. They cannot overwrite an unfinished service
 operation. Saved whole-policy snapshots are never rollback inputs to this path.
 
+Docker recreation completes each service's credential lookup, application/input
+validation, controller PostgreSQL reconciliation, template rendering and Compose
+assembly before removing that service. Active application files and runtime
+secrets are applied only after interruption. Failures in the first phase retain
+the old writer; failures during configuration application or deployment retain
+data and protection for an ordinary retry. Recreate completes each prepared stack
+through the existing deploy/verify helper before preparing the next service;
+deploy/update keep their batch path. Check mode previews declarations and
+explicitly defers live
+ownership, protection, storage and database readiness checks.
+
 Remove checks declared runtime dependencies, reserves only installed ownership, verifies the selected runtime has stopped and its listeners/NAT publications are absent,
 then removes only its endpoints and unreferenced automatically added bindings. Authorised ACL callers are not treated as shared-state dependencies. Active same-host dependents must be retired explicitly first; configured dependents on other hosts require an explicit retirement before removal. Missing installed protection fails with a repair instruction before runtime removal; removal never creates missing policy infrastructure.
 Accepted operator/rollback bindings, data, shared hooks and other services remain.
@@ -120,6 +172,15 @@ remove retry can finish without recreating the application. Failed starts attemp
 only adapter-owned replacement stops, retain staged protection and the original
 failure, and release their reservation only after proving writer absence. Inspect
 an interrupted operation before recovery; never replace the union with an old file.
+
+Swarm containment captures task-to-node identities before quiescing the immutable
+service ID. It then requires quiescent scheduler state and matching node-local
+observations with no running containers for that service ID. Disappearing task
+history alone proves neither presence nor absence. Missing node identity, an
+unreachable required node or a replaced service retains protection and a pending
+reservation. A matching scoped `skynet remove <service>` can retire that failed
+operation through the existing ownership/removal checks before a fresh deployment;
+do not delete its policy record or manually clear containment flags.
 
 ### Client access to protected providers
 
@@ -211,7 +272,11 @@ mode/identity is a failed guard, not permission to affect another service.
 
 ### Supported boundaries
 
-- The mgt profile retains its Ubuntu 26.04/nf_tables contract. Workers support the established Ubuntu/Plex and Unraid profiles; Rocky Linux is not supported by this lifecycle. One-service Docker standalone projects
+- The mgt profile retains Ubuntu 26.04; workers retain Ubuntu 24.04/Plex and
+  Unraid/storage. Both profiles also accept conventional Debian 12/13, Fedora 43–45 and Rocky
+  10 under the RPM prerequisites below. Inventory controller/storage/Plex
+  roles still determine placement; installing a runtime on another manager does
+  not move applications or firewall ownership. One-service Docker standalone projects
   (exact project AND service) and Swarm stacks with private host-mode TCP
   publications, and rootful/rootless Podman on mgt use their existing adapters. Swarm supports one replica or one global task per declared host.
 - Rootless caller rules use the dedicated account; bridged Docker/rootful Podman
@@ -232,6 +297,93 @@ mode/identity is a failed guard, not permission to affect another service.
   Genuine data migrations retain the existing reviewed paired-backup/ownership
   procedure and scoped recovery. Application acceptance remains a separate human
   observation.
+
+### Fedora and Rocky prerequisites
+
+Debian 12/13 also support both profiles with systemd, Python 3.10+ and the same
+IPv4/IPv6 nf_tables tools and namespace utilities. Firewalld is optional there:
+an absent service must have no orphaned native firewalld table. If firewalld is
+installed, the coexistence checks below apply, including version 2.0+.
+[Debian 13 provides firewalld 2.3](https://packages.debian.org/trixie/firewalld);
+[Debian 12's stock 1.3 package](https://packages.debian.org/bookworm/firewalld)
+does not satisfy that requirement and is rejected. No package is removed,
+daemon disabled, alternative switched or supplemental repository enabled to
+make Debian pass. Ubuntu's existing manager/worker boundaries remain unchanged.
+
+RPM hosts require Linux, systemd, DNF/DNF5, an existing Python 3.10+ interpreter
+and firewalld 2.0+. Manager hooks use the gathered interpreter; retained direct
+check/observe/remove imports keep their existing default when facts are absent.
+Atomic/OSTree and other derivatives are rejected. Rocky 9 remains unsupported:
+[firewalld 1.x flushes all shared compatibility tables](https://github.com/firewalld/firewalld/blob/v1.3.4/src/firewall/core/fw.py#L863-L875),
+whereas [2.0 skips that flush without Direct configuration](https://github.com/firewalld/firewalld/blob/v2.0.0/src/firewall/core/fw.py#L875-L909).
+The role does not replace it or enable another repository. This is firewall
+compatibility, not application migration acceptance.
+
+The installed version is read with the non-mutating
+[`firewall-offline-cmd --version`](https://firewalld.org/documentation/man-pages/firewall-offline-cmd.html),
+which exits without activating or configuring the daemon; `firewalld --version`
+is not a supported daemon option. When firewalld is active, its D-Bus version
+must also be 2.0+ and its state must be `RUNNING`. Upgrading the installed package
+does not replace an older running
+daemon or prove reload safety. Arrange a separate maintenance transition for an
+old or unready daemon; preflight does not restart it. An inactive daemon remains
+inactive and does not require a D-Bus query.
+
+Boot guards wait for an enabled `firewalld.service` to finish starting before
+checking its D-Bus API. This is ordering only: it does not enable or start an
+otherwise disabled native firewall. The manager's existing boot unit receives
+only this additional dependency after its installed manifest hash is verified;
+existing endpoint ordering and other unit contents are preserved. Worker units
+carry the same ordering through their ordinary role-owned templates. Unreviewed
+unit edits are rejected before the migration.
+Rocky's packaged `Type=simple` unit can report active before registering D-Bus.
+Live rule application retries registration and `RUNNING` within a 30-second
+readiness budget, using two-second D-Bus query timeouts, then reads the
+initialized native ruleset. Queries explicitly disable D-Bus
+activation. Inspection and installation preflight still reject an unready daemon
+immediately; missing/incompatible versions and failed initialization remain
+failures, with no rules applied by that invocation.
+
+Keep the distribution's `iptables-nft` compatibility tools, `nftables`, `iproute`
+and `util-linux` namespace tools available; the role installs no dependencies and
+never changes alternatives. Fedora's [package catalog](https://packages.fedoraproject.org/pkgs/iptables/iptables-nft/)
+and Rocky's [BaseOS catalog](https://dl.rockylinux.org/pub/rocky/10/BaseOS/x86_64/os/Packages/i/)
+still supply the compatibility package. IPv4/IPv6 command, save and restore tools
+must all report `nf_tables`. Both families' restore tests must pass before either
+family is applied, including the required kernel matches. A missing match needs
+explicit maintenance of packages for the running kernel, not a backend switch.
+Workers on this backend now inspect the native nftables snapshot before using
+iptables-save, so audit/removal cannot initialise absent compatibility tables.
+This read-only snapshot also requires `nft` on Ubuntu workers; Unraid retains its
+existing legacy path.
+
+Firewalld keeps its native nftables backend and all zones, policies, labels and
+port restrictions. RPM preflight rejects active or configured flowtables, mixed compatibility
+tools and nonempty runtime or permanent Direct configuration. Firewalld's
+[Direct path uses xtables](https://firewalld.org/documentation/man-pages/firewalld.conf.html),
+and its [reload implementation](https://github.com/firewalld/firewalld/blob/main/src/firewall/core/fw.py)
+can flush shared compatibility tables when Direct configuration is present.
+Resolve ownership and migrate that configuration in a separately reviewed change;
+this role neither deletes another owner's rules nor disables firewalld. An
+inactive daemon is inspected without activating it. Scoped removal remains
+available independently of these activation checks.
+
+An allow in this role cannot override a later firewalld deny. Existing base policy
+must permit the exact intended path; `StrictForwardPorts`, SELinux enforcing and
+firewalld permissions remain unchanged. Qualified caller handshakes and counters
+must still succeed before application lifecycle completion. Native listener ACLs,
+new host-network callers and broader firewall consolidation remain deferred.
+Do not make concurrent external firewall changes during policy transitions.
+Subsequent external Direct/backend/offload changes invalidate this prerequisite;
+periodic reconciliation cannot make an unsafe external reload atomic.
+
+Check mode validates metadata and plans policy without invoking runtime/kernel
+or firewalld probes; it explicitly leaves those checks unverified. Repository
+fixtures do not prove enforcement on a real RPM kernel. Before migrating services,
+validate dual-stack caller/denial paths, enforcing SELinux, ordinary firewalld
+reload, runtime restart, reboot persistence and a converged second run on an
+isolated host. A default-deny base policy may require a separate, narrowly scoped
+policy decision; do not add a broad allow to make this validation pass.
 
 ## Supported operator commands
 

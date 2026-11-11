@@ -41,6 +41,31 @@ def hub_aliases(name):
     return aliases
 
 
+def container_image(effective, identity):
+    runtime = effective.get("runtime", "docker")
+    if runtime == "native":
+        return None
+    if runtime not in {"docker", "podman"}:
+        raise ValueError(f"{identity}: unsupported runtime {runtime!r}")
+    image = effective.get("image")
+    if not isinstance(image, str) or not image.strip():
+        raise ValueError(f"{identity}: {runtime} definition requires a non-empty image")
+    return image
+
+
+@pytest.mark.parametrize("runtime", ["docker", "podman"])
+@pytest.mark.parametrize("image", [None, "", " ", 123])
+def test_container_image_extraction_rejects_malformed_containers(runtime, image):
+    with pytest.raises(ValueError, match=f"fixture: {runtime} definition requires a non-empty image"):
+        container_image({"runtime": runtime, "image": image}, "fixture")
+
+
+def test_container_image_extraction_supports_both_adapters_and_image_free_native_services():
+    assert container_image({"runtime": "native"}, "native") is None
+    for runtime in ("docker", "podman"):
+        assert container_image({"runtime": runtime, "image": "registry.invalid/app:1"}, runtime) == "registry.invalid/app:1"
+
+
 def test_batch_exclusions_mirror_the_critical_image_identities():
     rules = json.loads((ROOT / "renovate.json").read_text())["packageRules"]
     batch = next(rule for rule in rules if rule.get("groupSlug") == "weekly-docker-minor-patch")
@@ -102,8 +127,10 @@ def image_checks():
             for target in base.get("targets", {}) or [None]:
                 effective = catalog.service_catalog_merge_target(base, target)
                 key = f"effective/{name}/{target}"
-                effective_images[key] = effective["image"]
-                sources[key] = f"image: '{effective['image']}'"
+                image = container_image(effective, key)
+                if image is not None:
+                    effective_images[key] = image
+                    sources[key] = f"image: '{image}'"
     bootstrap_images = {}
     for role in ("netbox", "infisical", "hugo"):
         text = (ROOT / f"ansible/roles/{role}/defaults/main.yml").read_text()

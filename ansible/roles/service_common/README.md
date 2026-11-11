@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/21 |
+| Readme update        | 2026/11/10 |
 
 
 
@@ -58,6 +58,10 @@
 | [service_common_prepare_actions.**3**](defaults/main.yml#L27)   | str | `bootstrap` |    
 | [service_common_remove_actions](defaults/main.yml#L28)   | list | `[]` |    
 | [service_common_remove_actions.**0**](defaults/main.yml#L28)   | str | `remove` |    
+| [service_common_file_contexts](defaults/main.yml#L31)   | list | `[]` |    
+| [service_common_file_context_roots](defaults/main.yml#L32)   | list | `[]` |    
+| [service_common_file_context_host](defaults/main.yml#L33)   | str |  |    
+| [service_common_file_context_apply](defaults/main.yml#L34)   | bool | `False` |    
 
 
 
@@ -74,11 +78,39 @@
 | Service common copies ¦ Track application configuration changes | ansible.builtin.set_fact | False |
 | Service common copies ¦ Wait for copied files | ansible.builtin.wait_for | True |
 
+#### File: tasks/file_contexts.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Service common file contexts ¦ Validate the scoped request before inspection | ansible.builtin.assert | False |
+| Service common file contexts ¦ Inspect target SELinux and platform facts | ansible.builtin.setup | False |
+| Service common file contexts ¦ Resolve only the inspected SELinux status | ansible.builtin.set_fact | False |
+| Service common file contexts ¦ Require known SELinux state | ansible.builtin.assert | False |
+| Service common file contexts ¦ Resolve sources and approved roots without changing files | ansible.builtin.command | False |
+| Service common file contexts ¦ Validate resolved containment for this invocation | ansible.builtin.set_fact | False |
+| Service common file contexts ¦ Inspect exact sources without following links | ansible.builtin.stat | False |
+| Service common file contexts ¦ Reject symlinks special files and mismatched path types | ansible.builtin.assert | False |
+| Service common file contexts ¦ Preview persistent label changes | ansible.builtin.debug | True |
+| Service common file contexts ¦ Apply only explicitly requested persistent contexts | block | True |
+| Service common file contexts ¦ Validate policy-tool package support | ansible.builtin.assert | False |
+| Service common file contexts ¦ Ensure SELinux policy tools are present | ansible.builtin.dnf | False |
+| Service common file contexts ¦ Persist only the declared mapping | community.general.sefcontext | False |
+| Service common file contexts ¦ Restore existing owned paths without crossing filesystems | community.general.serestorecon | True |
+
 #### File: tasks/file_policy.yml
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
 | Service common ¦ Validate managed file restart policy | ansible.builtin.assert | False |
+
+#### File: tasks/files.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Service common prepare ¦ Require target hosts for filesystem preparation | ansible.builtin.assert | True |  |
+| Service common prepare ¦ Include path preparation per target | ansible.builtin.include_tasks | True |  |
+| Service common prepare ¦ Include static copies per target | ansible.builtin.include_tasks | True |  |
+| Service common prepare ¦ Include application templates per target | ansible.builtin.include_tasks | True |  |
 
 #### File: tasks/infisical.yml
 
@@ -122,6 +154,7 @@ explicitly so endpoint audits use that host's inventory transport instead. |
 | Service common ¦ Validate service requirements before inspection | ansible.builtin.assert | False |  |
 | Service common ¦ Clear prerequisite results from the previous service operation | ansible.builtin.set_fact | False | A prerequisite proof is an in-memory result for one exact service contract.
 It is not persisted acceptance and must not carry over to another operation. |
+| Service common ¦ Verify database execution prerequisites before changing the service | ansible.builtin.include_tasks | True |  |
 | Service common ¦ Check prerequisites before changing the service | ansible.builtin.include_tasks | True |  |
 | Service common ¦ Reuse prerequisite checks completed before stopping the service | ansible.builtin.set_fact | True | Recreate must reuse successful checks after its old runtime has stopped;
 rechecking stopped runtime identities could block their replacements. |
@@ -140,10 +173,24 @@ rechecking stopped runtime identities could block their replacements. |
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
 | Service common PostgreSQL ¦ Validate and normalize declaration | ansible.builtin.set_fact | False |  |
+| Service common PostgreSQL ¦ Verify the selected execution context | ansible.builtin.include_tasks | True |  |
 | Service common PostgreSQL ¦ Report check-mode database plan | ansible.builtin.debug | True |  |
 | Service common PostgreSQL ¦ Ensure declared databases exist | community.postgresql.postgresql_db | True |  |
 
-#### File: tasks/prepare.yml
+#### File: tasks/postgres_operator.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Service common PostgreSQL ¦ Resolve the controller's operator setting | ansible.builtin.set_fact | False |  |
+| Service common PostgreSQL ¦ Validate operator selection | ansible.builtin.assert | False |  |
+| Service common PostgreSQL ¦ Verify the prepared controller context before lifecycle changes | block | True |  |
+| Service common PostgreSQL ¦ Inspect the existing operator installation | ansible.builtin.stat | False |  |
+| Service common PostgreSQL ¦ Require the owned operator directory script and interpreter alias | ansible.builtin.assert | False |  |
+| Service common PostgreSQL ¦ Verify database interpreter entry without connecting | ansible.builtin.command | False | The launcher checks real/effective UID, the persistent slice and its exact
+cgroup, then starts the same Python used by the database module. No socket
+or database operation is needed to prove that this context can be entered. |
+
+#### File: tasks/preflight.yml
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
@@ -151,10 +198,16 @@ rechecking stopped runtime identities could block their replacements. |
 | Service common prepare ¦ Validate managed file restart policy | ansible.builtin.assert | False |  |
 | Service common prepare ¦ Include interface validation | ansible.builtin.include_tasks | False |  |
 | Service common prepare ¦ Include PostgreSQL database preparation | ansible.builtin.include_tasks | True |  |
-| Service common prepare ¦ Require target hosts for filesystem preparation | ansible.builtin.assert | True |  |
-| Service common prepare ¦ Include path preparation per target | ansible.builtin.include_tasks | True |  |
-| Service common prepare ¦ Include static copies per target | ansible.builtin.include_tasks | True |  |
-| Service common prepare ¦ Include application templates per target | ansible.builtin.include_tasks | True |  |
+| Service common prepare ¦ Validate application templates before changing files | ansible.builtin.include_tasks | False |  |
+| Service common prepare ¦ Inspect static configuration sources before applying files | ansible.builtin.stat | False |  |
+| Service common prepare ¦ Require static configuration sources to exist | ansible.builtin.assert | False |  |
+
+#### File: tasks/prepare.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Service common prepare ¦ Validate and reconcile prerequisites | ansible.builtin.include_tasks | False |  |
+| Service common prepare ¦ Apply filesystem configuration | ansible.builtin.include_tasks | False |  |
 
 #### File: tasks/remove_integrations.yml
 
@@ -174,6 +227,12 @@ rechecking stopped runtime identities could block their replacements. |
 | Service common templates ¦ Render application templates on target host | ansible.builtin.template | True |
 | Service common templates ¦ Reconcile application template filesystem metadata | ansible.builtin.file | True |
 | Service common templates ¦ Track application configuration changes | ansible.builtin.set_fact | False |
+
+#### File: tasks/templates_validate.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Service common templates ¦ Render declarations without changing active files | ansible.builtin.assert | True |
 
 #### File: tasks/traefik.yml
 

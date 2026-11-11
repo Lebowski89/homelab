@@ -604,6 +604,10 @@ def _canonical_volumes(value: Any, *, name: str) -> tuple[list[dict[str, Any]], 
         volume_type = str(volume.get("type", "bind")).strip()
         if volume_type not in _VALID_VOLUME_TYPES:
             raise AnsibleFilterError(f"{item_name}.type must be one of {sorted(_VALID_VOLUME_TYPES)}")
+        if "selinux" in volume and (
+            volume_type != "bind" or not isinstance(volume["selinux"], str) or volume["selinux"] not in {"preserve", "shared", "private"}
+        ):
+            raise AnsibleFilterError("Bind selinux must be preserve, shared or private; other volume types cannot declare it")
         target = _nonempty_string(volume.get("target"), name=f"{item_name}.target")
         if volume_type == "tmpfs":
             tmpfs_mounts.append({"target": target, "options": _tmpfs_options(volume.get("tmpfs", {}), name=f"{item_name}.tmpfs")})
@@ -611,7 +615,14 @@ def _canonical_volumes(value: Any, *, name: str) -> tuple[list[dict[str, Any]], 
         source = _nonempty_string(volume.get("source"), name=f"{item_name}.source")
         read_only = _as_bool(volume.get("read_only", False), name=f"{item_name}.read_only")
         if volume_type == "bind":
-            mounts.append({"source": source, "target": target, "read_only": read_only})
+            mounts.append(
+                {
+                    "source": source,
+                    "target": target,
+                    "read_only": read_only,
+                    **({"selinux": volume["selinux"]} if "selinux" in volume else {}),
+                }
+            )
         else:
             volumes.append(
                 {
@@ -923,7 +934,7 @@ def podman_rootless_account_contract(value: Any) -> dict[str, bool]:
 
 def _deploy(value: Any, *, name: str) -> dict[str, Any]:
     deploy = _as_mapping(value, name=name)
-    unsupported = sorted(set(deploy) - {"execution", "host", "mode", "replicas", "type"})
+    unsupported = sorted(set(deploy) - {"execution", "hosts", "mode", "replicas", "type"})
     if unsupported:
         raise AnsibleFilterError(f"{name} contains unsupported fields for Podman: {', '.join(unsupported)}")
     deploy["execution"] = _execution(deploy["execution"], name=f"{name}.execution") if "execution" in deploy else {"mode": "rootful"}
@@ -942,8 +953,11 @@ def _deploy(value: Any, *, name: str) -> dict[str, Any]:
         if replicas != 1:
             raise AnsibleFilterError(f"{name}.replicas={replicas} is not supported; Podman Quadlets run one instance")
         deploy["replicas"] = replicas
-    if "host" in deploy:
-        deploy["host"] = _nonempty_string(deploy["host"], name=f"{name}.host")
+    if "hosts" in deploy:
+        hosts = [deploy["hosts"]] if isinstance(deploy["hosts"], str) else deploy["hosts"]
+        if not isinstance(hosts, list) or len(hosts) != 1:
+            raise AnsibleFilterError(f"{name}.hosts requires exactly one resolved host")
+        deploy["hosts"] = [_nonempty_string(hosts[0], name=f"{name}.hosts")]
     return deploy
 
 
@@ -1271,8 +1285,8 @@ def podman_service_normalize(cfg: Mapping[str, Any], name: str) -> dict[str, Any
 
     environment = _environment(cfg["environment"], name=f"{name}.environment") if "environment" in cfg else {}
 
-    if "host" in deploy:
-        container["host"] = deploy["host"]
+    if "hosts" in deploy:
+        container["host"] = deploy["hosts"][0]
 
     if "ports" in cfg:
         container["ports"] = _ports(cfg["ports"], name=f"{name}.ports")

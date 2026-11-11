@@ -4,22 +4,34 @@
 # INSTALL / CLUSTER TASKS
 ################################
 
+- name: PostgreSQL | Validate platform for the selected operation
+  when: "'tags_postgres' in group_names or inventory_hostname == services_controller_host"
+  ansible.builtin.include_tasks:
+    file: platform.yml
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  tags: [always]
+
 - name: Install postgres packages
   when: "'tags_postgres' in group_names"
   ansible.builtin.include_tasks:
-    file: sub_tasks/install/apt.yml
+    file: sub_tasks/install.yml
     apply:
       tags:
         - postgres
         - postgres_apt
+        - postgres_install
   tags:
     - postgres
     - postgres_apt
+    - postgres_install
 
 - name: Configure etcd
   when: "'tags_postgres' in group_names"
   ansible.builtin.include_tasks:
     file: sub_tasks/install/etcd.yml
+    apply:
+      tags: [postgres, postgres_etcd]
   tags:
     - postgres
     - postgres_etcd
@@ -29,6 +41,8 @@
   when: "'tags_postgres' in group_names"
   ansible.builtin.include_tasks:
     file: sub_tasks/install/patroni.yml
+    apply:
+      tags: [postgres, postgres_patroni]
   tags:
     - postgres
     - postgres_patroni
@@ -107,6 +121,7 @@
 - name: Configure PostgreSQL logical backups
   when:
     - "'tags_postgres' in group_names"
+    - not ansible_check_mode or postgres_runtime.stat.exists
   ansible.builtin.include_tasks:
     file: sub_tasks/backup_setup.yml
     apply:
@@ -120,6 +135,15 @@
     - postgres_backup
     - postgres_backup_setup
     - postgres_backup_run
+
+- name: PostgreSQL | Explain deferred fresh-host backup configuration
+  when:
+    - ansible_check_mode
+    - "'tags_postgres' in group_names"
+    - not postgres_runtime.stat.exists
+  ansible.builtin.debug:
+    msg: Backup filesystem/account configuration is deferred until PostgreSQL is installed; no backup or runtime verification has run.
+  tags: [postgres, postgres_backup, postgres_backup_setup, postgres_backup_run]
 
 - name: Run PostgreSQL logical backup manually
   when:

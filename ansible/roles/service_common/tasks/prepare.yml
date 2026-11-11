@@ -1,87 +1,15 @@
 ---
 
-- name: Service common prepare | Reset managed configuration change output
-  ansible.builtin.set_fact:
-    service_common_config_changed: false
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Service common prepare | Validate managed file restart policy
-  ansible.builtin.assert:
-    that:
-      - service_common_service | service_common_file_policy
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Service common prepare | Include interface validation
+- name: Service common prepare | Validate and reconcile prerequisites
   ansible.builtin.include_tasks:
-    file: validate.yml
+    file: preflight.yml
     apply:
       tags: [deploy, update, recreate, bootstrap]
   tags: [deploy, update, recreate, bootstrap]
 
-- name: Service common prepare | Include PostgreSQL database preparation
-  when:
-    - service_common_action in service_common_prepare_actions
-    - service_common_service.postgres is defined
+- name: Service common prepare | Apply filesystem configuration
   ansible.builtin.include_tasks:
-    file: postgres.yml
+    file: files.yml
     apply:
       tags: [deploy, update, recreate, bootstrap]
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Service common prepare | Require target hosts for filesystem preparation
-  when: >-
-    (service_common_service.paths | default([]) | length > 0)
-    or (service_common_service.copies | default([]) | length > 0)
-    or (service_common_service.templates | default([]) | length > 0)
-  ansible.builtin.assert:
-    that:
-      - service_common_target_hosts | length > 0
-    fail_msg: "service_common requires explicit target hosts for paths, copies, or templates."
-
-- name: Service common prepare | Include path preparation per target
-  when:
-    - service_common_action in service_common_prepare_actions
-    - service_common_service.paths | default([]) | length > 0
-  ansible.builtin.include_tasks:
-    file: paths.yml
-    apply:
-      tags: [deploy, update, recreate, bootstrap]
-  vars:
-    service_common_paths: "{{ service_common_service.paths }}"
-  loop: "{{ service_common_target_hosts }}"
-  loop_control:
-    loop_var: service_common_target_host
-    label: "{{ service_common_target_host }}"
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Service common prepare | Include static copies per target
-  when:
-    - service_common_action in service_common_prepare_actions
-    - service_common_service.copies | default([]) | length > 0
-  ansible.builtin.include_tasks:
-    file: copies.yml
-    apply:
-      tags: [deploy, update, recreate, bootstrap]
-  vars:
-    service_common_copies: "{{ service_common_service.copies }}"
-  loop: "{{ service_common_target_hosts }}"
-  loop_control:
-    loop_var: service_common_target_host
-    label: "{{ service_common_target_host }}"
-  tags: [deploy, update, recreate, bootstrap]
-
-- name: Service common prepare | Include application templates per target
-  when:
-    - service_common_action in service_common_prepare_actions
-    - service_common_service.templates | default([]) | length > 0
-  ansible.builtin.include_tasks:
-    file: templates.yml
-    apply:
-      tags: [deploy, update, recreate, bootstrap]
-  vars:
-    service_common_templates: "{{ service_common_service.templates }}"
-  loop: "{{ service_common_target_hosts }}"
-  loop_control:
-    loop_var: service_common_target_host
-    label: "{{ service_common_target_host }}"
   tags: [deploy, update, recreate, bootstrap]

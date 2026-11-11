@@ -152,6 +152,13 @@ def _canonicalize_volume(volume: Any, *, index: int) -> dict[str, Any]:
     source = _as_str(volume_dict.get("source"))
     target = _as_str(volume_dict.get("target"))
 
+    if "selinux" in volume_dict and (
+        volume_type != "bind"
+        or not isinstance(volume_dict["selinux"], str)
+        or volume_dict["selinux"] not in {"preserve", "shared", "private"}
+    ):
+        raise AnsibleFilterError("Bind selinux must be preserve, shared or private; other volume types cannot declare it")
+
     if volume_type not in _VALID_VOLUME_TYPES:
         raise AnsibleFilterError(f"volumes[{index}].type must be one of {sorted(_VALID_VOLUME_TYPES)}, got {volume_type!r}.")
 
@@ -175,6 +182,7 @@ def _canonicalize_volume(volume: Any, *, index: int) -> dict[str, Any]:
         raise AnsibleFilterError(f"volumes[{index}].target is required for {volume_type} volumes.")
 
     return {
+        **({"selinux": volume_dict["selinux"]} if "selinux" in volume_dict else {}),
         "type": volume_type,
         "source": source,
         "target": target,
@@ -295,6 +303,9 @@ def docker_services_merge_volumes(
         key = _volume_key(volume)
 
         if key in seen:
+            previous = next(item for item in merged if _volume_key(item) == key)
+            if previous.get("selinux", "preserve") != volume.get("selinux", "preserve"):
+                raise AnsibleFilterError("Duplicate binds cannot silently replace a different SELinux policy")
             continue
 
         seen.add(key)

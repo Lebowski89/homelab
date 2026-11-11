@@ -1,0 +1,50 @@
+---
+
+- name: VM tests | Select exact current caller identities and owned endpoints
+  ansible.builtin.set_fact:
+    molecule_vm_net_binding:
+      kind: service
+      runtime: docker
+      phase: docker
+      compose:
+        project: 'molecule-{{ molecule_vm_run_id[:12] }}'
+        service: allow
+    molecule_vm_net_endpoints:
+      - ids: [molecule/http]
+        service: 'molecule-{{ molecule_vm_run_id[:12] }}-server'
+        port: 18080
+        destination: 8080
+        callers: [testclient]
+        host: subject
+      - ids: [molecule/http-adjacent]
+        service: 'molecule-{{ molecule_vm_run_id[:12] }}-server'
+        port: 18081
+        destination: 8080
+        callers: [testclient]
+        host: subject
+
+- name: VM tests | Build the value-free lifecycle request
+  ansible.builtin.set_fact:
+    molecule_vm_net_plan:
+      managed: true
+      profile: {subject: mgt}
+      service: molecule-network
+      runtime: {}
+      action: deploy
+      endpoints: '{{ molecule_vm_net_endpoints }}'
+      callers:
+        testclient:
+          binding: '{{ molecule_vm_net_binding }}'
+      inventory: {subject: '{{ local_ip }}'}
+      controller: subject
+      token: '{{ molecule_vm_run_id }}'
+    molecule_vm_net_policy:
+      schema: 1
+      backend: nf_tables
+      inventory_host: subject
+      inventory_address: '{{ local_ip }}'
+      inputs_verified: true
+      lifecycle: true
+      endpoints: '{{ molecule_vm_net_endpoints | map("dict2items") | list | map("items2dict") | list }}'
+      callers:
+        testclient: ['{{ molecule_vm_net_binding }}']

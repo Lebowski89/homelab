@@ -1,0 +1,14 @@
+---
+
+- name: Postgres_Exporter | Persist a label for only the managed executable
+  community.general.sefcontext:
+    target: "{{ (postgres_exporter_install_dir ~ '/postgres_exporter') | regex_escape }}"
+    setype: bin_t
+    state: present
+
+- name: Postgres_Exporter | Restore only the managed executable label
+  community.general.serestorecon:
+    path: "{{ postgres_exporter_install_dir }}/postgres_exporter"
+    recurse: false
+    context: full
+  notify: Restart postgres_exporter

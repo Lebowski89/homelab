@@ -1,9 +1,9 @@
 """Provide runtime-neutral service catalog filters to Ansible.
 
-These filters build lightweight Docker and Podman selection metadata, select
+These filters build lightweight Docker, Podman and native selection metadata, select
 and partition that metadata, plan managed Podman namespace dependencies, and
 materialize a canonical base-plus-target configuration only when dispatch needs
-it. This keeps shared catalog facts small while giving both runtime adapters
+it. This keeps shared catalog facts small while giving the runtime adapters
 identical target merge semantics.
 """
 
@@ -16,7 +16,8 @@ from typing import Any
 
 from ansible.errors import AnsibleFilterError
 
-VALID_RUNTIMES = {"docker", "podman"}
+VALID_RUNTIMES = {"docker", "podman", "native"}
+_NATIVE_FIELDS = {"enabled", "runtime", "tags", "name", "description", "native", "deploy", "operational_requirements"}
 _REPLACE_LIST_KEYS = {"command", "entrypoint"}
 _PODMAN_RESOURCE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _SERVICE_ACTIONS = {"deploy", "update", "remove", "recreate", "bootstrap", "drift"}
@@ -51,10 +52,10 @@ def _as_bool(value: Any, *, name: str = "value", default: bool = True) -> bool:
 
 def _runtime(value: Any, *, name: str) -> str:
     if not isinstance(value, str) or not value.strip():
-        raise AnsibleFilterError(f"{name} must be a non-empty string containing one of: docker, podman; got {value!r}")
+        raise AnsibleFilterError(f"{name} must be a non-empty string containing one of: docker, podman, native; got {value!r}")
     runtime = value
     if runtime not in VALID_RUNTIMES:
-        raise AnsibleFilterError(f"{name} must be one of: docker, podman; got {runtime!r}")
+        raise AnsibleFilterError(f"{name} must be one of: docker, podman, native; got {runtime!r}")
     return runtime
 
 
@@ -109,6 +110,44 @@ def _target_config(service_cfg: Mapping[str, Any], target_name: str) -> Mapping[
     return target
 
 
+def _native_merge(base, target):
+    """A native target inherits application identity, never container process/state."""
+    if set(target) - _NATIVE_FIELDS:
+        raise AnsibleFilterError(f"Native declaration contains unsupported fields: {', '.join(sorted(set(target) - _NATIVE_FIELDS))}")
+    for declaration in (base, target) if base["runtime"] == "native" else (target,):
+        if "native" in declaration and not isinstance(declaration["native"], Mapping):
+            raise AnsibleFilterError("native must be a mapping")
+        if "config" in declaration.get("native", {}) and not isinstance(declaration["native"]["config"], Mapping):
+            raise AnsibleFilterError("native.config must be a mapping")
+    if base["runtime"] == "native":
+        if set(base) - _NATIVE_FIELDS:
+            raise AnsibleFilterError("Native base contains unsupported container fields")
+        merged = _merge_recursive_append_rp(base, target)
+        # Native settings are values, including empty lists/maps; they replace.
+        if "config" in target.get("native", {}):
+            merged["native"]["config"] = {**base.get("native", {}).get("config", {}), **target["native"]["config"]}
+    else:
+        # Crossing an adapter boundary is explicit. Inherited images, secrets,
+        # ports, environment, storage and controller placement are inapplicable.
+        merged = {key: base[key] for key in ("enabled", "tags", "description", "operational_requirements") if key in base}
+        merged.update(deepcopy(dict(target)))
+        merged["tags"] = _unique(_as_list(base.get("tags", [])) + _as_list(target.get("tags", [])))
+    native = merged.get("native")
+    if not isinstance(native, Mapping) or set(native) - {"application", "config", "update_policy"}:
+        raise AnsibleFilterError("native must declare application/config and optional update_policy only")
+    if native.get("application") not in {"alloy", "node_exporter", "keepalived", "technitium"}:
+        raise AnsibleFilterError("native.application must select alloy, node_exporter, keepalived or technitium")
+    if not isinstance(native.get("config"), Mapping):
+        raise AnsibleFilterError("native.config must be a mapping")
+    deploy = merged.get("deploy", {})
+    if not isinstance(deploy, Mapping) or set(deploy) != {"hosts"}:
+        raise AnsibleFilterError("Native placement requires deploy.hosts only")
+    requirements = merged.get("operational_requirements", {})
+    if not isinstance(requirements, Mapping) or requirements.get("acl") or requirements.get("ownership_transition"):
+        raise AnsibleFilterError("Protected native endpoints/identity transitions require a verified host-listener firewall adapter")
+    return merged
+
+
 def service_catalog_merge_target(service_cfg: Mapping[str, Any], target_name: str | None = None) -> dict[str, Any]:
     """Materialize one canonical base or base-plus-target configuration.
 
@@ -124,7 +163,7 @@ def service_catalog_merge_target(service_cfg: Mapping[str, Any], target_name: st
             base configuration.
 
     Returns:
-        A deep-copied effective service mapping that can be passed to either
+        A deep-copied effective service mapping that can be passed to the selected
         runtime adapter.
 
     Raises:
@@ -145,7 +184,10 @@ def service_catalog_merge_target(service_cfg: Mapping[str, Any], target_name: st
 
     base = deepcopy(dict(service_cfg))
     base.pop("targets", None)
+    _placement_deploy(base.get("deploy", {}))
     if target_name is None or str(target_name).strip() == "":
+        if base["runtime"] == "native":
+            return _native_merge(base, {})
         _validate_runtime_fields(
             runtime=base["runtime"], has_systemd="systemd" in base, name="service_catalog_merge_target effective service"
         )
@@ -153,11 +195,14 @@ def service_catalog_merge_target(service_cfg: Mapping[str, Any], target_name: st
 
     normalized_target_name = str(target_name).strip()
     target = _target_config(service_cfg, normalized_target_name)
+    _placement_deploy(target.get("deploy", {}))
     if "runtime" in target:
         _runtime(
             target["runtime"],
             name=f"service_catalog_merge_target target {normalized_target_name!r}.runtime",
         )
+    if target.get("runtime", base["runtime"]) == "native":
+        return _native_merge(base, target)
     merged = _merge_recursive_append_rp(base, target)
 
     for key in _REPLACE_LIST_KEYS:
@@ -218,34 +263,51 @@ def _effective_section(
     return dict(value)
 
 
-def _dispatch_host(
-    service_name: str,
-    runtime: str,
-    service_cfg: Mapping[str, Any],
-    target_cfg: Mapping[str, Any] | None,
-    docker_manager: str,
-    *,
-    name: str,
-) -> str:
-    """Resolve and validate the inventory host that must process one record.
+def service_catalog_resolve_hosts(selections, inventory_groups):
+    """Expand exact inventory host/group names using Ansible's full groups map.
 
-    Docker Swarm services dispatch to the supplied manager. Standalone Docker
-    services use ``deploy.host`` with the manager as fallback. Podman services
-    prefer ``deploy.host``, then legacy ``container.host``, then the service
-    name.
+    Inventory membership is independent of --limit. Preserve first-seen order
+    across selections and group members, removing duplicate inventory names.
     """
-    deploy = _effective_section(service_cfg, target_cfg, "deploy", name=name)
-    container = _effective_section(service_cfg, target_cfg, "container", name=name)
+    if not isinstance(inventory_groups, Mapping):
+        raise AnsibleFilterError("deploy.hosts resolution requires Ansible inventory groups")
+    values = [selections] if isinstance(selections, str) else selections
+    if not isinstance(values, list) or not values:
+        raise AnsibleFilterError("deploy.hosts must be a non-empty hostname, group or list of selections")
+    known = {host for members in inventory_groups.values() for host in members}
+    hosts = []
+    for selection in values:
+        if not isinstance(selection, str) or not selection.strip() or selection != selection.strip():
+            raise AnsibleFilterError("deploy.hosts selections must be non-empty trimmed inventory names")
+        if selection in inventory_groups:
+            members = inventory_groups[selection]
+            if not members:
+                raise AnsibleFilterError(f"deploy.hosts inventory group {selection!r} has no hosts")
+            hosts.extend(members)
+        elif selection in known:
+            hosts.append(selection)
+        else:
+            raise AnsibleFilterError(f"deploy.hosts selection {selection!r} is not an inventory host or group")
+    return _unique(hosts)
 
-    if runtime == "docker":
-        deploy_type = str(deploy.get("type", "swarm") or "swarm").strip()
-        raw_host = docker_manager if deploy_type == "swarm" else (deploy.get("host") or docker_manager)
-    else:
-        raw_host = deploy.get("host") or container.get("host") or service_name
 
-    if not isinstance(raw_host, str) or not raw_host.strip():
-        raise AnsibleFilterError(f"{name} dispatch host must be a non-empty string, got {raw_host!r}")
-    return raw_host.strip()
+def _placement_deploy(deploy):
+    if not isinstance(deploy, Mapping):
+        raise AnsibleFilterError("deploy must be a mapping")
+    retired = set(deploy) & {"host", "group"}
+    if retired:
+        raise AnsibleFilterError("deploy.host/deploy.group are retired; use deploy.hosts alone (do not combine placement fields)")
+    return deploy
+
+
+def service_catalog_resolve_placement(service, inventory_groups):
+    """Return canonical concrete placement, preserving every other deploy field."""
+    deploy = _placement_deploy(service.get("deploy", {}))
+    hosts = service_catalog_resolve_hosts(deploy.get("hosts"), inventory_groups)
+    runtime = service.get("runtime", "docker")
+    if (runtime == "podman" or (runtime == "docker" and str(deploy.get("type") or "swarm").strip() != "swarm")) and len(hosts) != 1:
+        raise AnsibleFilterError(f"{runtime} standalone placement requires exactly one resolved host; got {hosts}")
+    return {**service, "deploy": {**deploy, "hosts": hosts}}
 
 
 def _effective_value(
@@ -309,10 +371,12 @@ def _podman_lifecycle_metadata(
     return metadata
 
 
-def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) -> list[dict[str, Any]]:
+def service_catalog_effective(
+    services: Mapping[str, Any], docker_manager: Any, inventory_groups=None, resolve_hosts=True, runtimes=None
+) -> list[dict[str, Any]]:
     """Expand service definitions into lightweight dispatch metadata.
 
-    Every base service must explicitly select Docker or Podman. A service
+    Every base service must explicitly select Docker, Podman or native. A service
     without targets produces one item; a service with targets produces one item
     per target. Target runtime can override or inherit the validated base
     runtime, target tags extend de-duplicated base tags, and base and target
@@ -322,39 +386,73 @@ def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) 
 
     Args:
         services: Mapping of service names to canonical service definitions.
-        docker_manager: Non-empty inventory hostname used for Docker Swarm and
-            as the standalone Docker fallback.
+        docker_manager: Inventory hostname used to dispatch Docker Swarm deployments. May be empty for an identity-only index.
+        inventory_groups: Ansible's complete inventory group membership for placement.
+        resolve_hosts: False builds only identity/tag/runtime metadata before
+            selecting runtime prerequisites; no placement variables are read.
+        runtimes: Optional runtime restriction before reading placement.
+
 
     Returns:
         Ordered metadata records containing ``name``, ``tags``, ``enabled``,
-        ``runtime``, and ``dispatch_host``, plus ``target`` where applicable.
+        ``runtime``, ``resolved_hosts`` and ``dispatch_host``, plus ``target`` where applicable.
         Podman records also contain compact ``podman_lifecycle`` identity and
-        namespace-reference metadata; complete configurations are never
-        embedded.
+        namespace-reference metadata; unresolved placement carries a
+        deferred ``placement_error`` without changing configured ``enabled``.
+        Complete configurations are never embedded.
 
     Raises:
         AnsibleFilterError: If the catalog or one of its service/target sections
             has an invalid shape; a runtime, enabled value, or tag value is
             invalid; ``targets`` is explicitly empty; nested targets are
             declared; top-level ``systemd`` applies to a non-Podman effective
-            service; or a dispatch host cannot be resolved to a non-empty
-            string.
+            service; or retired placement fields are declared. Inventory resolution errors
+            are deferred until selection.
 
     Note:
         Input service definitions are not mutated.
     """
     if not isinstance(services, Mapping):
         raise AnsibleFilterError(f"services must be a mapping, got {type(services).__name__}")
-    if not isinstance(docker_manager, str) or not docker_manager.strip():
+    if not isinstance(resolve_hosts, bool):
+        raise AnsibleFilterError("resolve_hosts must be a boolean")
+    if not isinstance(docker_manager, str) or (resolve_hosts and not docker_manager.strip()):
         raise AnsibleFilterError(f"docker_manager must be a non-empty string, got {docker_manager!r}")
     normalized_docker_manager = docker_manager.strip()
     out: list[dict[str, Any]] = []
+    inventory_groups = inventory_groups or {}
+
+    def placement(item, service_cfg, target_cfg):
+        if runtimes is not None and item["runtime"] not in runtimes:
+            return None
+        if not resolve_hosts:
+            return item
+        deploy = _effective_section(service_cfg, target_cfg, "deploy", name=item["name"])
+        try:
+            resolved = service_catalog_resolve_placement({"runtime": item["runtime"], "deploy": deploy}, inventory_groups)
+            item["resolved_hosts"] = resolved["deploy"]["hosts"]
+        except AnsibleFilterError as error:
+            item["resolved_hosts"] = []
+            identity = _catalog_label(_catalog_identity(item))
+            item["placement_error"] = f"Service {identity!r}: {error}"
+        item["dispatch_host"] = (
+            normalized_docker_manager
+            if item["runtime"] == "docker" and str(deploy.get("type") or "swarm").strip() == "swarm"
+            else next(iter(item["resolved_hosts"]), "")
+        )
+        if item["runtime"] == "podman":
+            item["podman_lifecycle"] = _podman_lifecycle_metadata(
+                item["name"], item.get("target"), service_cfg, target_cfg, name=item["name"]
+            )
+        return item
+
     for service_name, service_cfg in services.items():
         if not isinstance(service_cfg, Mapping):
             raise AnsibleFilterError(f"Service {service_name!r} must be a mapping, got {type(service_cfg).__name__}")
 
         if "runtime" not in service_cfg:
             raise AnsibleFilterError(f"Service {service_name!r} must explicitly declare runtime as one of: docker, podman")
+        _placement_deploy(service_cfg.get("deploy", {}))
         service_runtime = _runtime(service_cfg["runtime"], name=f"{service_name}.runtime")
         service_enabled = _as_bool(service_cfg.get("enabled", True), name=f"{service_name}.enabled", default=True)
         service_tags = _unique([service_name] + _as_list(service_cfg.get("tags", []), name=f"{service_name}.tags"))
@@ -367,24 +465,10 @@ def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) 
                 "tags": service_tags,
                 "enabled": service_enabled,
                 "runtime": service_runtime,
-                "dispatch_host": _dispatch_host(
-                    service_name,
-                    service_runtime,
-                    service_cfg,
-                    None,
-                    normalized_docker_manager,
-                    name=service_name,
-                ),
             }
-            if service_runtime == "podman":
-                item["podman_lifecycle"] = _podman_lifecycle_metadata(
-                    service_name,
-                    None,
-                    service_cfg,
-                    None,
-                    name=service_name,
-                )
-            out.append(item)
+            resolved = placement(item, service_cfg, None)
+            if resolved is not None:
+                out.append(resolved)
             continue
 
         if not isinstance(targets, Mapping):
@@ -403,46 +487,38 @@ def service_catalog_effective(services: Mapping[str, Any], docker_manager: Any) 
             if "targets" in target_cfg:
                 raise AnsibleFilterError(f"{service_name}.targets.{target_name} must not contain nested targets")
 
+            _placement_deploy(target_cfg.get("deploy", {}))
             target_runtime = _runtime(target_cfg.get("runtime", service_runtime), name=f"{service_name}.targets.{target_name}.runtime")
             _validate_runtime_fields(
                 runtime=target_runtime,
-                has_systemd="systemd" in service_cfg or "systemd" in target_cfg,
+                has_systemd=("systemd" in service_cfg or "systemd" in target_cfg)
+                if target_runtime != "native"
+                else "systemd" in target_cfg,
                 name=f"Service {service_name!r} target {target_name!r}",
             )
             target_enabled = _as_bool(target_cfg.get("enabled", True), name=f"{service_name}.targets.{target_name}.enabled", default=True)
             target_tags = _unique(
                 service_tags + [target_name] + _as_list(target_cfg.get("tags", []), name=f"{service_name}.targets.{target_name}.tags")
             )
-            target_path = f"{service_name}.targets.{target_name}"
             item = {
                 "name": service_name,
                 "target": target_name,
                 "tags": target_tags,
                 "enabled": service_enabled and target_enabled,
                 "runtime": target_runtime,
-                "dispatch_host": _dispatch_host(
-                    service_name,
-                    target_runtime,
-                    service_cfg,
-                    target_cfg,
-                    normalized_docker_manager,
-                    name=target_path,
-                ),
             }
-            if target_runtime == "podman":
-                item["podman_lifecycle"] = _podman_lifecycle_metadata(
-                    service_name,
-                    str(target_name),
-                    service_cfg,
-                    target_cfg,
-                    name=target_path,
-                )
-            out.append(item)
+            resolved = placement(item, service_cfg, target_cfg)
+            if resolved is not None:
+                out.append(resolved)
     return out
 
 
 def service_catalog_select(
-    items: list[Mapping[str, Any]], run_tags: list[str] | None = None, run_all: bool = False, allow_disabled: bool = False
+    items: list[Mapping[str, Any]],
+    run_tags: list[str] | None = None,
+    run_all: bool = False,
+    allow_disabled: bool = False,
+    action: str | None = None,
 ) -> dict[str, Any]:
     """Select catalog metadata by service name, tag, and enabled state.
 
@@ -455,6 +531,9 @@ def service_catalog_select(
         run_tags: Optional service names or tags to match.
         run_all: Boolean-like value that bypasses name and tag matching.
         allow_disabled: Boolean-like value that includes disabled matches.
+        action: Optional lifecycle action. Drift/bootstrap select container
+            entries only; a selector referring exclusively to native entries
+            fails instead of silently ignoring an explicit native request.
 
     Returns:
         ``matched`` and ``selected`` lists plus ``disabled_only``, which is true
@@ -463,7 +542,8 @@ def service_catalog_select(
 
     Raises:
         AnsibleFilterError: If an item is not a mapping or a runtime, tag value,
-            or boolean-like input is invalid.
+            or boolean-like input is invalid; a selected enabled placement is invalid;
+            or a native-only selector requests an unsupported lifecycle action.
 
     Note:
         The input sequence and its records are not mutated.
@@ -485,6 +565,25 @@ def service_catalog_select(
         item_enabled = _as_bool(item.get("enabled", True), name=f"{item_name}.enabled", default=True)
         if item_enabled or allow_disabled_bool:
             selected.append(item)
+    if action in {"drift", "bootstrap"}:
+        native = [item for item in selected if item["runtime"] == "native"]
+        supported = [item for item in selected if item["runtime"] != "native"]
+        supported_tags = {tag for item in matched if item["runtime"] != "native" for tag in [item["name"], *item.get("tags", [])]}
+        explicit_native = [
+            item
+            for item in matched
+            if item["runtime"] == "native" and not run_all_bool and (run_tags_set - supported_tags) & {item["name"], *item.get("tags", [])}
+        ]
+        if explicit_native or (native and not supported):
+            identities = [item["name"] + (":" + item["target"] if item.get("target") else "") for item in explicit_native or native]
+            raise AnsibleFilterError(
+                f"Native service selection {', '.join(identities)} does not support {action}; "
+                "use deploy, update, recreate or remove (check previews deploy)"
+            )
+        selected = supported
+    for item in selected:
+        if item.get("placement_error"):
+            raise AnsibleFilterError(item["placement_error"])
     return {"matched": matched, "selected": selected, "disabled_only": len(matched) > 0 and len(selected) == 0}
 
 
@@ -493,8 +592,8 @@ def service_catalog_by_runtime(items: list[Mapping[str, Any]], runtime: str) -> 
 
     Args:
         items: Catalog records whose ``runtime`` values should be inspected.
-        runtime: Exact requested runtime name. Supported values are ``docker``
-            and ``podman``.
+        runtime: Exact requested runtime name: ``docker``, ``podman`` or
+            ``native``.
 
     Returns:
         Records matching the requested runtime, preserving input order and
@@ -579,6 +678,10 @@ def service_catalog_podman_lifecycle_plan(
         }
         records[identity] = record
         if runtime != "podman":
+            continue
+        if item.get("placement_error"):
+            if any(isinstance(entry, Mapping) and _catalog_identity(entry) == identity for entry in selected):
+                raise AnsibleFilterError(item["placement_error"])
             continue
 
         lifecycle = item.get("podman_lifecycle")
@@ -800,6 +903,8 @@ class FilterModule:
         """
         return {
             "service_catalog_effective": service_catalog_effective,
+            "service_catalog_resolve_hosts": service_catalog_resolve_hosts,
+            "service_catalog_resolve_placement": service_catalog_resolve_placement,
             "service_catalog_merge_target": service_catalog_merge_target,
             "service_catalog_select": service_catalog_select,
             "service_catalog_by_runtime": service_catalog_by_runtime,

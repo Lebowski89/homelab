@@ -10,7 +10,7 @@ sonarr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/hotio/sonarr:release-4.0.20.3014
+  image: ghcr.io/hotio/sonarr:nightly-5.0.0.2838
   ################################
   # ENVIRONMENT/SECRETS
   ################################
@@ -69,9 +69,7 @@ sonarr:
     type: swarm
     mode: replicated
     replicas: 1
-    host: "{{ services_storage_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_unraid_host
+    hosts: "{{ services_storage_host }}"
     restart_policy:
       condition: on-failure
       delay: 10s
@@ -111,6 +109,8 @@ sonarr:
       ################################
       ports:
         web_backend:
+          exposure: private
+          callers: [traefik]
           published: 22614
           target: 8989
           mode: host
@@ -181,6 +181,8 @@ sonarr:
       ################################
       ports:
         web_backend:
+          exposure: private
+          callers: [traefik]
           published: 22615
           target: 8989
           mode: host

@@ -441,7 +441,9 @@ def test_podman_common_resolution_precedes_shared_and_runtime_rendering():
         < ALL_TASK_NAMES.index("Quadlets | Write protected environment file")
         < ALL_TASK_NAMES.index("Quadlets | Write container Quadlet")
     )
-    assert native_secret < shared < prepare
+    configure = MAIN_TASK_NAMES.index("Podman services | Configure application")
+    stop = MAIN_TASK_NAMES.index("Podman services | Stop service before recreate")
+    assert shared < configure < stop < native_secret < prepare
     native_secret_task = MAIN_TASK_LIST[native_secret]
     assert "not ansible_check_mode" in native_secret_task["when"]
 

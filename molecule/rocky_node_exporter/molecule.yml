@@ -1,0 +1,44 @@
+---
+
+driver:
+  name: default
+  safe_files:
+    - '${MOLECULE_EPHEMERAL_DIRECTORY}/*.json'
+    - '${MOLECULE_EPHEMERAL_DIRECTORY}/node-exporter-invocation'
+
+ansible:
+  executor:
+    args:
+      ansible_playbook:
+        # Molecule executes playbooks from this scenario directory.
+        - --inventory=${HOMELAB_MOLECULE_INVENTORY:-inventory/hosts.yml}
+        - --extra-vars=@${HOMELAB_MOLECULE_VARS:-../shared/empty-vars.json}
+        - --tags=node_exporter
+        - --extra-vars=@${MOLECULE_SCENARIO_DIRECTORY}/vars/main.yml
+  playbooks:
+    prepare: prepare.yml
+    converge: converge.yml
+    side_effect: seed.yml
+    verify: verify.yml
+    cleanup: cleanup.yml
+    # Molecule may invoke destroy automatically after a failed test.
+    destroy: destroy.yml
+
+scenario:
+  # The operator supplies a disposable VM. No provider create/destroy actions.
+  create_sequence: [prepare]
+  converge_sequence: [converge]
+  check_sequence: [syntax, check]
+  syntax_sequence: [syntax]
+  destroy_sequence: []
+  test_sequence:
+    - syntax
+    - prepare
+    - check
+    - verify verify_fresh.yml
+    - converge
+    - side_effect
+    - verify
+    - idempotence
+    - verify
+    - cleanup

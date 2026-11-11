@@ -1,0 +1,97 @@
+---
+
+- name: Keepalived | Configure native service
+  # checkov:skip=CKV2_ANSIBLE_3:Groups native-mode tasks; package or validated configuration failure must abort before enabling VRRP. Retain adopted files for repair.
+  when: native_services_keepalived_host_cfg.mode | default('native') == 'native'
+  block:
+    - name: Keepalived native | Install APT packages
+      when:
+        - ansible_facts.pkg_mgr == 'apt'
+        - not ansible_check_mode
+      ansible.builtin.apt:
+        name:
+          - keepalived
+          - dnsutils
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Keepalived native | Apply declared APT update policy to Keepalived only # noqa: package-latest -- explicit operator policy
+      when:
+        - ansible_facts.pkg_mgr == 'apt'
+        - not ansible_check_mode
+        - native_services_action == 'update'
+        - native_services_entry.config.native.update_policy == 'latest'
+      ansible.builtin.apt:
+        name: keepalived
+        state: latest
+
+    - name: Keepalived native | Install RPM packages
+      when:
+        - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+        - not ansible_check_mode
+      ansible.builtin.include_tasks:
+        file: keepalived/rpm.yml
+        apply:
+          tags: "{{ ansible_run_tags }}"
+      tags: "{{ ansible_run_tags }}"
+
+    - name: Keepalived native | Explain deferred package and runtime checks
+      when: ansible_check_mode
+      ansible.builtin.debug:
+        msg: >-
+          Would ensure Keepalived and the distribution DNS tools. Package changes, configuration binary validation,
+          service lifecycle, SELinux DNS-script execution and VRRP failover verification are deferred in check mode.
+
+    - name: Keepalived native | Ensure config directory exists
+      ansible.builtin.file:
+        path: /etc/keepalived
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+        setype: _default
+
+    - name: Keepalived native | Install DNS health check script
+      ansible.builtin.template:
+        src: keepalived/check-dns.sh.j2
+        dest: "{{ keepalived_check_script_path }}"
+        owner: root
+        group: root
+        mode: "0755"
+        setype: _default
+      notify: Restart keepalived
+
+    - name: Native services | Record adopted keepalived configuration
+      when:
+        - not ansible_check_mode
+      ansible.builtin.include_tasks: record_files.yml
+      vars:
+        native_services_adopted_files:
+          - "{{ keepalived_check_script_path }}"
+
+    - name: Keepalived native | Render keepalived config
+      ansible.builtin.template:
+        src: keepalived/keepalived.conf.j2
+        dest: "{{ keepalived_config_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        setype: _default
+        validate: keepalived --config-test --use-file=%s
+      notify: Restart keepalived
+
+    - name: Native services | Record adopted keepalived configuration
+      when:
+        - not ansible_check_mode
+      ansible.builtin.include_tasks: record_files.yml
+      vars:
+        native_services_adopted_files:
+          - "{{ keepalived_config_path }}"
+
+    - name: Keepalived native | Enable and start keepalived
+      when: not ansible_check_mode
+      ansible.builtin.systemd_service:
+        name: keepalived
+        enabled: true
+        state: started

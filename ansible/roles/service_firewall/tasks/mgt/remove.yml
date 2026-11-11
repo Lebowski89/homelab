@@ -2,7 +2,7 @@
 
 - name: Service firewall | Mgt | Check firewall chain ownership before disabling startup protection
   ansible.builtin.command:
-    argv: [/usr/bin/python3, "{{ mgt_firewall_root }}/policy.py", remove, --dry-run]
+    argv: ["{{ ansible_facts.python.executable | default('/usr/bin/python3') }}", "{{ mgt_firewall_root }}/policy.py", remove, --dry-run]
   changed_when: false
 
 - name: Service firewall | Mgt | Find installed rule-reconciliation units # noqa var-naming[no-role-prefix]
@@ -36,7 +36,11 @@
 
 - name: Service firewall | Mgt | Remove managed firewall rules and jumps without requiring a policy file # noqa var-naming[no-role-prefix]
   ansible.builtin.command:
-    argv: [/usr/bin/python3, "{{ mgt_firewall_root }}/policy.py", remove, --remove-dropins]
+    argv:
+      - "{{ ansible_facts.python.executable | default('/usr/bin/python3') }}"
+      - "{{ mgt_firewall_root }}/policy.py"
+      - remove
+      - --remove-dropins
   register: mgt_firewall_remove
   changed_when: (mgt_firewall_remove.stdout | from_json).changed
 

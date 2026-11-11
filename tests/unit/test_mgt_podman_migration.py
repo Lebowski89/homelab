@@ -33,6 +33,7 @@ def plugin(path, name):
 PODMAN = plugin("ansible/roles/podman_services/filter_plugins/podman_services.py", "migration_podman")
 CATALOG = plugin("ansible/filter_plugins/service_catalog.py", "migration_catalog")
 COMMON = plugin("ansible/roles/service_common/filter_plugins/service_common.py", "migration_common")
+DECLARATIONS = plugin("ansible/roles/service_firewall/files/declarations.py", "migration_firewall_declarations")
 
 
 def context():
@@ -49,6 +50,7 @@ def context():
     return {
         **catalog(),
         "hostvars": hosts,
+        "groups": {"all": ["mgt", "unraid", "plex", "blacktop", "worker", "manager"]},
         "local_ip": hosts["mgt"]["local_ip"],
         "inventory_hostname": "mgt",
         "services_controller_host": "mgt",
@@ -93,18 +95,28 @@ def _catalog():
     return result
 
 
+def catalog_items(services, manager="mgt", **options):
+    source = deepcopy(services)
+    variables = context() | {"services_controller_host": manager}
+    for service in source.values():
+        for cfg in [service, *service.get("targets", {}).values()]:
+            if "hosts" in cfg.get("deploy", {}):
+                cfg["deploy"]["hosts"] = resolve(cfg["deploy"]["hosts"], variables)
+    return CATALOG.service_catalog_effective(source, manager, variables["groups"], **options)
+
+
 def mgt_entries(services):
     variables = context()
     return [
         entry
-        for entry in CATALOG.service_catalog_effective(services, "mgt")
+        for entry in catalog_items(services, "mgt")
         if entry["enabled"] and entry["runtime"] == "podman" and resolve(entry["dispatch_host"], variables) == "mgt"
     ]
 
 
 def worker_backend_entries(services):
     entries = []
-    for entry in CATALOG.service_catalog_effective(services, "mgt"):
+    for entry in catalog_items(services, "mgt"):
         cfg = CATALOG.service_catalog_merge_target(services[entry["name"]], entry.get("target"))
         if (
             entry["enabled"]
@@ -164,9 +176,7 @@ def test_real_mgt_selection_normalizes_without_swarm_leakage_and_keeps_rootless_
     assert counts["rootful"] > 0 and counts["rootless"] > 0
     assert services == before
     assert all(item["runtime"] == "podman" for item in selected)
-    planned = CATALOG.service_catalog_podman_lifecycle_plan(CATALOG.service_catalog_effective(services, "mgt"), selected, "deploy")[
-        "selected"
-    ]
+    planned = CATALOG.service_catalog_podman_lifecycle_plan(catalog_items(services, "mgt"), selected, "deploy")["selected"]
     # Cross-account network dependencies never become user-manager edges.
     assert len(planned) == len(selected)
     for item in planned:
@@ -217,11 +227,14 @@ def test_worker_routes_match_unique_published_ports_without_changing_container_l
             assert f"WEBUI_PORTS={port['target']}/tcp,{port['target']}/udp" in rendered
             conf = env.get_template("configs/qbittorrent/qBittorrent.conf.j2").render(
                 service_common_service=cfg,
-                service_common_infisical_values={"qbittorrent_user": "NONPRODUCTION"},
+                service_common_infisical_values={"qbittorrent_user": "NONPRODUCTION", "qbittorrent_api": "NONPRODUCTION_API"},
                 service_common_template_vars={"qbittorrent_pass_pbkdf2": "NONPRODUCTION"},
                 **context(),
             )
             assert f"WebUI\\Port={port['target']}" in conf
+            assert "WebUI\\APIKey=NONPRODUCTION_API" in conf
+            assert f"Session\\DefaultSavePath={cfg['volumes']['media']['target']}/completed" in conf
+            assert f"Session\\TempPath={cfg['volumes']['media']['target']}/incoming" in conf
             assert "172.98.0.0/24;192.0.2.10" in conf
     assert allocated
     for name in ["haproxy", "alloy"]:
@@ -469,13 +482,17 @@ def test_alloy_readonly_config_provides_its_nested_writable_mountpoint(tmp_path)
 
 
 @pytest.mark.integration
-def test_bootstrap_registers_adapter_filters_without_catalog_preconditions(tmp_path):
+@pytest.mark.parametrize("placement", ["localhost", None, "missing-host"])
+def test_bootstrap_registers_adapter_filters_without_catalog_preconditions(tmp_path, placement):
     import sys
 
     definitions = [
         {"runtime": "podman", "name": "fake-db", "image": "registry.example.invalid/db:1.0", "command": ["echo", "NONPRODUCTION"]},
         {"runtime": "podman", "name": "fake-app", "image": "registry.example.invalid/app:1.0", "systemd": {"wants": ["fake-db.service"]}},
     ]
+    for definition in definitions:
+        if placement is not None:
+            definition["deploy"] = {"hosts": placement}
     play = [
         {
             "hosts": "localhost",
@@ -504,8 +521,14 @@ def test_bootstrap_registers_adapter_filters_without_catalog_preconditions(tmp_p
         capture_output=True,
         text=True,
     )
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "failed=0" in result.stdout
+    output = result.stdout + result.stderr
+    if placement == "localhost":
+        assert result.returncode == 0, output
+        assert "failed=0" in result.stdout
+    else:
+        assert result.returncode != 0, output
+        assert "deploy.hosts" in output, output
+        assert "No filter named" not in output
 
 
 def test_bootstrap_and_shared_network_lifecycle_guards_and_tag_propagation():
@@ -627,9 +650,9 @@ def test_haproxy_uses_one_config_source_for_both_runtimes_and_keeps_overrides(tm
 
 
 def test_systemd_dependency_graph_orders_removal_and_rejects_invalid_inputs():
-    base = {"runtime": "podman", "image": "registry.example.invalid/fake:1.0", "deploy": {"type": "container", "host": "mgt"}}
+    base = {"runtime": "podman", "image": "registry.example.invalid/fake:1.0", "deploy": {"type": "container", "hosts": "mgt"}}
     services = {"consumer": base | {"systemd": {"wants": ["provider.service"]}}, "provider": base}
-    items = CATALOG.service_catalog_effective(services, "mgt")
+    items = catalog_items(services, "mgt")
     deploy = CATALOG.service_catalog_podman_lifecycle_plan(items, items, "deploy")["selected"]
     remove = CATALOG.service_catalog_podman_lifecycle_plan(items, items, "remove")["selected"]
     assert [item["name"] for item in deploy] == ["provider", "consumer"]
@@ -638,14 +661,14 @@ def test_systemd_dependency_graph_orders_removal_and_rejects_invalid_inputs():
     assert all(not item["podman_lifecycle"]["namespace_dependents"] for item in deploy)
     for invalid in [None, "provider.service", [False], [""]]:
         with pytest.raises(AnsibleFilterError, match="systemd.wants"):
-            CATALOG.service_catalog_effective({"bad": base | {"systemd": {"wants": invalid}}}, "mgt")
+            catalog_items({"bad": base | {"systemd": {"wants": invalid}}}, "mgt")
     cycle = services | {"provider": base | {"systemd": {"requires": ["consumer.service"]}}}
-    items = CATALOG.service_catalog_effective(cycle, "mgt")
+    items = catalog_items(cycle, "mgt")
     with pytest.raises(AnsibleFilterError, match="dependency cycle"):
         CATALOG.service_catalog_podman_lifecycle_plan(items, items, "deploy")
 
-    across_stores = services | {"provider": base | {"deploy": {"type": "container", "host": "mgt", "execution": {"mode": "rootless"}}}}
-    items = CATALOG.service_catalog_effective(across_stores, "mgt")
+    across_stores = services | {"provider": base | {"deploy": {"type": "container", "hosts": "mgt", "execution": {"mode": "rootless"}}}}
+    items = catalog_items(across_stores, "mgt")
     with pytest.raises(AnsibleFilterError, match="execution stores"):
         CATALOG.service_catalog_podman_lifecycle_plan(items, items, "deploy")
 
@@ -654,22 +677,22 @@ def test_systemd_dependency_graph_orders_removal_and_rejects_invalid_inputs():
 def test_managed_unit_dependencies_require_one_host_and_user_manager(field):
     base = {
         "runtime": "podman",
-        "deploy": {"type": "container", "host": "mgt", "execution": {"mode": "rootless", "host_user": "podman-test"}},
+        "deploy": {"type": "container", "hosts": "mgt", "execution": {"mode": "rootless", "host_user": "podman-test"}},
     }
     services = {"consumer": base | {"systemd": {field: ["provider.service"]}}, "provider": deepcopy(base)}
-    items = CATALOG.service_catalog_effective(services, "mgt")
+    items = catalog_items(services, "mgt")
     plan = CATALOG.service_catalog_podman_lifecycle_plan(items, items, "deploy")["selected"]
     assert [item["name"] for item in plan] == ["provider", "consumer"]
     assert all(not item["podman_lifecycle"]["namespace_dependents"] for item in plan)
     for change in [{"host_user": "podman-other"}, {"mode": "rootful"}]:
         other = deepcopy(services)
         other["provider"]["deploy"]["execution"] = change | {"mode": change.get("mode", "rootless")}
-        items = CATALOG.service_catalog_effective(other, "mgt")
+        items = catalog_items(other, "mgt")
         with pytest.raises(AnsibleFilterError, match="execution stores or accounts"):
             CATALOG.service_catalog_podman_lifecycle_plan(items, items, "deploy")
     remote = deepcopy(services)
-    remote["provider"]["deploy"]["host"] = "worker"
-    items = CATALOG.service_catalog_effective(remote, "mgt")
+    remote["provider"]["deploy"]["hosts"] = "worker"
+    items = catalog_items(remote, "mgt")
     with pytest.raises(AnsibleFilterError, match="same host and manager"):
         CATALOG.service_catalog_podman_lifecycle_plan(items, items, "deploy")
 
@@ -901,7 +924,9 @@ def test_planning_removal_drift_and_account_only_preparation_need_no_deployment_
 
 def test_real_service_and_batch_selection_keep_requirements_after_all_configuration_tags_are_removed():
     services = catalog()
-    effective = CATALOG.service_catalog_effective(services, "mgt")
+    # This migration exercises container protection, independently of optional
+    # native inventory groups (which no longer implicitly disable entries).
+    effective = catalog_items(services, "mgt", runtimes=["docker", "podman"])
     for selector in ["monitoring", "arrs", "alloy-workers", "mgt-collector"]:
         selected = CATALOG.service_catalog_select(effective, ["deploy", selector])["selected"]
         assert selected
@@ -916,7 +941,7 @@ def test_real_service_and_batch_selection_keep_requirements_after_all_configurat
             for target in without_tags.get("targets", {}).values():
                 target.pop("tags", None)
             individual = CATALOG.service_catalog_select(
-                CATALOG.service_catalog_effective({entry["name"]: without_tags}, "mgt"), ["deploy", entry.get("target", entry["name"])]
+                catalog_items({entry["name"]: without_tags}, "mgt"), ["deploy", entry.get("target", entry["name"])]
             )["selected"]
             individual_entry = next(item for item in individual if item.get("target") == entry.get("target"))
             individual_cfg = resolve(CATALOG.service_catalog_merge_target(without_tags, individual_entry.get("target")), context())
@@ -955,6 +980,27 @@ def test_changed_publications_have_explicit_acl_coverage_including_traefik_metri
         # These five retain their already published listener contracts.
         if not cfg.get("ports") or item["name"] in {"adminer", "forgejo", "homepage", "thelounge", "unifi"}:
             continue
+        ports = list(cfg["ports"].values()) if isinstance(cfg["ports"], dict) else cfg["ports"]
+        if any("exposure" in port for port in ports):
+            # Explicit declarations use the automatic transaction rather than
+            # an acknowledgement of the older fixed port allocation.
+            selected = item["name"] + (":" + item["target"] if item.get("target") else "")
+            effective = {selected: cfg}
+            for caller in {caller for port in ports for caller in port.get("callers", [])}:
+                base, _, target = caller.partition(":")
+                metadata = CATALOG.service_catalog_merge_target(services[base], target or None)
+                metadata = {
+                    key: metadata[key]
+                    for key in ["name", "runtime", "deploy", "ports", "image", "stack", "network_mode"]
+                    if key in metadata
+                }
+                effective[caller] = resolve(metadata, context())
+            planned = DECLARATIONS.plan(selected, effective, "mgt", ["unraid", "plex"], context()["hostvars"], include_providers=False)
+            assert planned["managed"]
+            assert {(endpoint["port"], endpoint["destination"]) for endpoint in planned["endpoints"]} == {
+                (port["published"], port["target"]) for port in ports if port["exposure"] == "private"
+            }
+            continue
         expected = "worker_backends" if cfg["runtime"] == "docker" else "mgt_backends"
         assert expected in cfg.get("operational_requirements", {}).get("acl", []), item
     traefik = resolve(services["traefik"], context())
@@ -973,6 +1019,7 @@ def test_real_preflight_blocks_before_secret_resolution_files_or_bootstrap_recre
         "runtime": "podman",
         "name": "fake-unit",
         "image": "registry.example.invalid/unit:1.0",
+        "deploy": {"hosts": "localhost"},
         "operational_requirements": {"ownership_transition": True},
     }
     variables = {"local_ip": "192.0.2.10", "services_internal_zone": "int.example.test", "netbox_domain": "example.test"}
@@ -1073,7 +1120,7 @@ def test_catalog_ownership_acknowledgement_uses_adapter_default_name_for_unnamed
         "operational_requirements": {"ownership_transition": True},
         "targets": {"blue": {"tags": ["temporary"]}},
     }
-    entry = CATALOG.service_catalog_effective({"fake": base}, "mgt")[0]
+    entry = catalog_items({"fake": base}, "mgt")[0]
     cfg = CATALOG.service_catalog_merge_target(base, "blue")
     gate = next(
         task

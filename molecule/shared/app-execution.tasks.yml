@@ -1,0 +1,16 @@
+---
+
+- name: VM tests | Determine the rootless account when applicable
+  when: molecule_vm_runtime == 'rootless'
+  ansible.builtin.getent:
+    database: passwd
+    key: podman-molecule
+
+- name: VM tests | Select the execution store for real runtime inspection
+  ansible.builtin.set_fact:
+    molecule_vm_engine: '{{ "docker" if molecule_vm_runtime in ["compose", "swarm"] else "podman" }}'
+    molecule_vm_runtime_user: '{{ "podman-molecule" if molecule_vm_runtime == "rootless" else "root" }}'
+    molecule_vm_runtime_env: >-
+      {{ {'HOME': ansible_facts.getent_passwd['podman-molecule'][4], 'XDG_RUNTIME_DIR': '/run/user/' ~ ansible_facts.getent_passwd['podman-molecule'][1],
+          'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/' ~ ansible_facts.getent_passwd['podman-molecule'][1] ~ '/bus'}
+         if molecule_vm_runtime == 'rootless' else {} }}

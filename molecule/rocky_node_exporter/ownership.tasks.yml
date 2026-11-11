@@ -1,0 +1,24 @@
+---
+
+- name: Molecule | Inspect the scenario ownership marker
+  ansible.builtin.stat:
+    path: /var/lib/homelab-molecule-node-exporter
+    follow: false
+  register: molecule_node_exporter_marker
+
+- name: Molecule | Read an existing ownership marker
+  when: molecule_node_exporter_marker.stat.isreg | default(false)
+  ansible.builtin.slurp:
+    src: /var/lib/homelab-molecule-node-exporter
+  register: molecule_node_exporter_marker_content
+
+- name: Molecule | Refuse a foreign ownership marker
+  when: molecule_node_exporter_marker.stat.exists or molecule_node_exporter_marker.stat.islnk | default(false)
+  ansible.builtin.assert:
+    that:
+      - molecule_node_exporter_marker.stat.isreg | default(false)
+      - not (molecule_node_exporter_marker.stat.islnk | default(false))
+      - molecule_node_exporter_marker.stat.uid == 0
+      - molecule_node_exporter_marker.stat.mode == '0600'
+      - molecule_node_exporter_marker_content.content | default('') | b64decode == 'homelab molecule rocky-node-exporter\n'
+    fail_msg: The Node Exporter scenario does not own this marker; no installation or removal is allowed.

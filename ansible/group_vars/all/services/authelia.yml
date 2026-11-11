@@ -24,7 +24,7 @@ authelia:
   ################################
   deploy:
     type: container
-    host: "{{ services_controller_host }}"
+    hosts: "{{ services_controller_host }}"
   ################################
   # TARGETS (INSTANCES)
   ################################
@@ -101,7 +101,7 @@ authelia:
 
       deploy:
         type: container
-        host: "{{ services_controller_host }}"
+        hosts: "{{ services_controller_host }}"
         execution:
           mode: rootless
           host_user: podman-authelia-redis
@@ -266,7 +266,7 @@ authelia:
 
       deploy:
         type: container
-        host: "{{ services_controller_host }}"
+        hosts: "{{ services_controller_host }}"
         execution:
           mode: rootless
           host_user: podman-authelia

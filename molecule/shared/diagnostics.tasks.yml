@@ -1,0 +1,76 @@
+---
+
+# Run before any removal. Restrict evidence to non-secret state; never dump
+# container inspect Config.Env, process environments, cloud-init data or keys.
+- name: VM tests | Collect bounded service and kernel diagnostics before cleanup
+  no_log: true
+  diff: false
+  ansible.builtin.command:
+    argv: '{{ molecule_vm_diagnostic_argv }}'
+  loop:
+    - [journalctl, --no-pager, '-n', '150', '-u', docker.service, '-u', node_exporter.service, '-u', firewalld.service]
+    - [journalctl, --no-pager, '-n', '80', '-k']
+  loop_control:
+    loop_var: molecule_vm_diagnostic_argv
+  changed_when: false
+  failed_when: false  # Evidence is best effort; the original failure remains fatal.
+  register: molecule_vm_diagnostic
+
+- name: VM tests | Retain diagnostics on the private controller
+  vars:
+    molecule_vm_diagnostic_redaction: '(?im)^.*(?:keys?[ ":=]|token|secret|password|auth|credential).*$'
+  ansible.builtin.copy:
+    dest: >-
+      {{ (molecule_vm_evidence_directory | default(molecule_ephemeral_directory)) }}/diagnostics-{{
+      (molecule_vm_diagnostic_stage ~ '-') if molecule_vm_diagnostic_stage is defined else '' }}{{ inventory_hostname }}.json
+    content: >-
+      {{ {'rc': molecule_vm_diagnostic.results | map(attribute='rc') | list,
+          'stdout': molecule_vm_diagnostic.results | map(attribute='stdout')
+            | map('regex_replace', molecule_vm_diagnostic_redaction, '[sensitive diagnostic line omitted]') | list,
+          'stderr': molecule_vm_diagnostic.results | map(attribute='stderr')
+            | map('regex_replace', molecule_vm_diagnostic_redaction, '[sensitive diagnostic line omitted]') | list} | to_json }}
+    mode: '0600'
+  delegate_to: localhost
+  become: false
+
+- name: VM tests | Inspect only the selected Quadlet unit's diagnostic state
+  # checkov:skip=CKV2_ANSIBLE_3:Groups runtime-specific bounded diagnostics; account or evidence-write failures remain visible, with no successful rescue masking them.
+  when:
+    - molecule_vm_suite | default('') == 'application_lifecycle'
+    - molecule_vm_runtime in ['rootful', 'rootless']
+  block:
+    - name: VM tests | Find the existing execution account without creating it
+      ansible.builtin.getent:
+        database: passwd
+        key: '{{ "podman-molecule" if molecule_vm_runtime == "rootless" else "root" }}'
+        fail_key: false
+
+    - name: VM tests | Read value-free service state when the execution account exists
+      vars:
+        molecule_vm_diagnostic_account: '{{ "podman-molecule" if molecule_vm_runtime == "rootless" else "root" }}'
+      when: ansible_facts.getent_passwd[molecule_vm_diagnostic_account] is not none
+      become: true
+      become_user: '{{ molecule_vm_diagnostic_account }}'
+      environment:
+        HOME: '{{ ansible_facts.getent_passwd[molecule_vm_diagnostic_account][4] }}'
+        XDG_RUNTIME_DIR: '/run/user/{{ ansible_facts.getent_passwd[molecule_vm_diagnostic_account][1] }}'
+        DBUS_SESSION_BUS_ADDRESS: 'unix:path=/run/user/{{ ansible_facts.getent_passwd[molecule_vm_diagnostic_account][1] }}/bus'
+      ansible.builtin.command:
+        argv: >-
+          {{ ['systemctl'] + (['--user'] if molecule_vm_runtime == 'rootless' else [])
+             + ['show', 'molecule-writer-' ~ molecule_vm_run_id[:12] ~ '.service',
+                '--property=LoadState,ActiveState,SubState,Result,MainPID,ExecMainCode,ExecMainStatus,InvocationID,FragmentPath'] }}
+      changed_when: false
+      failed_when: false
+      register: molecule_vm_quadlet_diagnostic
+
+    - name: VM tests | Preserve unit status separately from subsequent cleanup observations
+      when: not (molecule_vm_quadlet_diagnostic.skipped | default(false))
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/quadlet-{{ molecule_vm_diagnostic_stage | default("current") }}.json'
+        content: >-
+          {{ {'rc': molecule_vm_quadlet_diagnostic.rc, 'stdout': molecule_vm_quadlet_diagnostic.stdout,
+              'stderr': molecule_vm_quadlet_diagnostic.stderr} | to_json }}
+        mode: '0600'
+      delegate_to: localhost
+      become: false

@@ -54,11 +54,13 @@ wallos:
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/wallos/db"
       target: /var/www/html/db
       read_only: false
+      selinux: private
     logos:
       type: bind
       source: "{{ hostvars[services_controller_host].container_host_appdata_root }}/wallos/logos"
       target: /var/www/html/images/uploads/logos
       read_only: false
+      selinux: private
   ################################
   # INTEGRATIONS
   ################################
@@ -78,7 +80,7 @@ wallos:
 
   deploy:
     type: container
-    host: "{{ services_controller_host }}"
+    hosts: "{{ services_controller_host }}"
     execution:
       mode: rootless
       host_user: podman-wallos

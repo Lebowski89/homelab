@@ -1,0 +1,35 @@
+---
+
+- name: Technitium native | Ensure resolved drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/systemd/resolved.conf.d
+    state: directory
+    mode: "0755"
+
+- name: Technitium native | Disable only the active resolved stub
+  ansible.builtin.copy:
+    dest: /etc/systemd/resolved.conf.d/technitium.conf
+    mode: "0644"
+    content: |
+      [Resolve]
+      DNS={{ technitium_native_resolved_dns_servers | join(' ') }}
+      FallbackDNS=1.1.1.1 9.9.9.9
+      DNSStubListener=no
+  notify: Restart systemd-resolved
+
+- name: Native services | Record the adopted Technitium resolver drop-in
+  ansible.builtin.include_tasks:
+    file: record_files.yml
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  tags: "{{ ansible_run_tags }}"
+  vars:
+    native_services_adopted_files: [/etc/systemd/resolved.conf.d/technitium.conf]
+
+- name: Technitium native | Preserve resolved DNS output without its stub
+  ansible.builtin.file:
+    src: /run/systemd/resolve/resolv.conf
+    dest: /etc/resolv.conf
+    state: link
+    force: true
+  notify: Restart systemd-resolved

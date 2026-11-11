@@ -1,0 +1,9 @@
+---
+
+- name: Podman | Install APT runtime packages
+  ansible.builtin.apt:
+    name: "{{ podman_packages + podman_install_extra_packages }}"
+    state: "{{ podman_state }}"
+    update_cache: "{{ podman_update_cache }}"
+    cache_valid_time: "{{ podman_cache_valid_time }}"
+    fail_on_autoremove: true

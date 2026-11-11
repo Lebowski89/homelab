@@ -4,4 +4,4 @@ After=skynet-mgt-firewall.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/bin/python3 {{ mgt_firewall_root }}/policy.py apply --allow-pending
+ExecStart={{ mgt_firewall_python | default('/usr/bin/python3') }} {{ mgt_firewall_root }}/policy.py apply --allow-pending

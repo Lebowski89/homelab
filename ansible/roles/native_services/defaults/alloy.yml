@@ -1,0 +1,22 @@
+---
+
+# Application aliases; operator application defaults live in the service catalogue.
+alloy_native_keyring_dir: '{{ native_services_config.keyring_dir }}'
+alloy_native_keyring_file: '{{ native_services_config.keyring_file }}'
+alloy_native_repo_url: '{{ native_services_config.repo_url }}'
+alloy_native_repo_suite: '{{ native_services_config.repo_suite }}'
+alloy_native_repo_filename: '{{ native_services_config.repo_filename }}'
+alloy_native_packages: '{{ native_services_config.packages }}'
+alloy_native_service_name: '{{ native_services_config.service_name }}'
+alloy_native_user: '{{ native_services_config.user }}'
+alloy_native_group: '{{ native_services_config.group }}'
+alloy_native_config_dir: '{{ native_services_config.config_dir }}'
+alloy_native_config_path: '{{ native_services_config.config_path }}'
+alloy_native_journal_groups: '{{ native_services_config.journal_groups }}'
+alloy_native_loki_url: '{{ native_services_config.loki_url }}'
+
+# RPM repository settings are platform installation inputs, not service fields.
+# Existing catalogue repository/keyring settings remain specific to APT.
+alloy_native_rpm_baseurl: https://rpm.grafana.com
+alloy_native_rpm_key_url: "{{ alloy_native_rpm_baseurl }}/gpg.key"
+alloy_native_rpm_key_fingerprint: B53AE77BADB630A683046005963FA27710458545

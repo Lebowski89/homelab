@@ -210,7 +210,9 @@ def test_firewall_native_binding_remains_uid_and_exact_persistent_slice(context)
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("opt_in,check_mode", [(False, False), (True, False), (True, True)])
+@pytest.mark.parametrize(
+    "opt_in,check_mode", [(False, False), (True, False), (True, True), ("controller-default", False), ("missing-wrapper", False)]
+)
 def test_actual_delegated_postgres_module_enters_only_opted_context(tmp_path, opt_in, check_mode):
     """Execute the real task/normalizer with a fake PG module and manager only."""
     fixture = tmp_path / "fixture"
@@ -225,7 +227,12 @@ def test_actual_delegated_postgres_module_enters_only_opted_context(tmp_path, op
     )
     filters = fixture / "filters"
     filters.mkdir()
-    wrapper = fixture / "postgres-python"
+    controller_default = isinstance(opt_in, str)
+    missing_wrapper = opt_in == "missing-wrapper"
+    enabled = controller_default or opt_in
+    installation = fixture / "operator"
+    installation.mkdir(mode=0o755)
+    wrapper = installation / "postgres-python"
     filter_source = (ROOT / "ansible/roles/service_common/filter_plugins/service_common.py").read_text()
     (filters / "service_common.py").write_text(
         filter_source.replace("/usr/local/libexec/skynet-mgt-operator/postgres-python", str(wrapper))
@@ -248,8 +255,32 @@ def test_actual_delegated_postgres_module_enters_only_opted_context(tmp_path, op
         'if __name__ == "__main__":',
         'require_root = lambda: None\nrequire_slice = lambda context: SLICES[context]\nif __name__ == "__main__":',
     )
-    wrapper.write_text(source)
-    wrapper.chmod(0o755)
+    (installation / "mgt-operator.py").write_text(source)
+    (installation / "mgt-operator.py").chmod(0o755)
+    if not missing_wrapper:
+        wrapper.symlink_to("mgt-operator.py")
+    prerequisites = (
+        (ROOT / "ansible/roles/service_common/tasks/postgres_operator.yml")
+        .read_text()
+        .replace("/usr/local/libexec/skynet-mgt-operator", str(installation))
+    )
+    prerequisites = yaml.safe_load(prerequisites)
+    # Inspect real fixture files; model root ownership without changing CI users.
+    for block in prerequisites:
+        for child in block.get("block", []):
+            if "ansible.builtin.stat" in child:
+                child["fixture_stat"] = child.pop("ansible.builtin.stat")
+    (fixture / "postgres_operator.yml").write_text(yaml.safe_dump(prerequisites))
+    actions = fixture / "actions"
+    actions.mkdir()
+    (actions / "fixture_stat.py").write_text(
+        "from ansible.plugins.action import ActionBase\n"
+        "class ActionModule(ActionBase):\n"
+        " def run(self,tmp=None,task_vars=None):\n"
+        "  r=self._execute_module(module_name='ansible.builtin.stat',module_args=self._task.args,task_vars=task_vars)\n"
+        "  if r.get('stat',{}).get('exists'): r['stat'].update(uid=0,gid=0)\n"
+        "  return r\n"
+    )
     tasks = yaml.safe_load((ROOT / "ansible/roles/service_common/tasks/postgres.yml").read_text())
     tasks[-1]["register"] = "fixture_result"
     tasks.append(
@@ -259,7 +290,7 @@ def test_actual_delegated_postgres_module_enters_only_opted_context(tmp_path, op
                 "that": [
                     "fixture_result.skipped | default(false)"
                     if check_mode
-                    else "fixture_result.results[0].native_context == '" + ("controller" if opt_in else "outside") + "'",
+                    else "fixture_result.results[0].native_context == '" + ("controller" if enabled else "outside") + "'",
                     "ansible_check_mode or fixture_result.results[0].destination == '192.0.2.48'",
                     "ansible_python_interpreter == '" + sys.executable + "'",
                 ]
@@ -287,6 +318,15 @@ def test_actual_delegated_postgres_module_enters_only_opted_context(tmp_path, op
                             "ansible_python_interpreter": sys.executable,
                             "ansible_become_exe": str(sudo),
                             "local_ip": ip,
+                            **(
+                                {
+                                    "service_common_postgres_operator_context": yaml.safe_load(
+                                        (ROOT / "ansible/host_vars/mgt.yml").read_text()
+                                    )["service_common_postgres_operator_context"]
+                                }
+                                if controller_default and host == "manager"
+                                else ({"service_common_postgres_operator_context": False} if controller_default else {})
+                            ),
                         }
                         for host, ip in [("manager", "192.0.2.48"), ("worker", "192.0.2.20")]
                     }
@@ -305,7 +345,7 @@ def test_actual_delegated_postgres_module_enters_only_opted_context(tmp_path, op
                     "gather_facts": False,
                     "vars": {
                         "service_common_controller_host": "manager",
-                        "service_common_postgres_operator_context": opt_in,
+                        **({} if controller_default else {"service_common_postgres_operator_context": opt_in}),
                         "service_common_service": {"postgres": {"enable": True, "databases": ["fixture_db"]}},
                         "service_common_infisical_values": {
                             "postgres_user": "NONPRODUCTION-user",
@@ -321,13 +361,19 @@ def test_actual_delegated_postgres_module_enters_only_opted_context(tmp_path, op
     config.write_text(
         f"[defaults]\ninventory={inventory}\nfilter_plugins={filters}\nvars_plugins_enabled=\n"
         f"collections_path={fixture / 'collections'}:{ROOT / 'ansible/collections'}\n"
-        f"local_tmp={fixture / 'tmp'}\n[connection]\npipelining=True\n[inventory]\nenable_plugins=yaml\n"
+        f"local_tmp={fixture / 'tmp'}\naction_plugins={actions}\ninject_facts_as_vars=false\n[connection]\npipelining=True\n[inventory]\nenable_plugins=yaml\n"
     )
     argv = [str(Path(sys.executable).parent / "ansible-playbook"), str(playbook)] + (["--check"] if check_mode else [])
     result = subprocess.run(argv, cwd=ROOT, text=True, capture_output=True, env={**os.environ, "ANSIBLE_CONFIG": str(config)})
-    assert result.returncode == 0, result.stdout + result.stderr
-    assert "failed=0" in result.stdout and "NONPRODUCTION-password" not in result.stdout + result.stderr
-    assert receipt.exists() is (opt_in and not check_mode)
+    output = result.stdout + result.stderr
+    assert "NONPRODUCTION-password" not in output
+    if missing_wrapper:
+        assert result.returncode != 0 and "requires the existing root-owned" in output
+        assert not receipt.exists()
+    else:
+        assert result.returncode == 0, output
+        assert "failed=0" in result.stdout
+        assert receipt.exists() is bool(enabled and not check_mode)
 
 
 def shell_fixture(tmp_path):

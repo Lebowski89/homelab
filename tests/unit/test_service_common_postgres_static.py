@@ -5,7 +5,7 @@ import pytest
 import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-COMMON_PREPARE_PATH = REPO_ROOT / "ansible/roles/service_common/tasks/prepare.yml"
+COMMON_PREPARE_PATH = REPO_ROOT / "ansible/roles/service_common/tasks/preflight.yml"
 COMMON_POSTGRES_PATH = REPO_ROOT / "ansible/roles/service_common/tasks/postgres.yml"
 DOCKER_PREP_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/prepare.yml"
 DOCKER_INIT_PATH = REPO_ROOT / "ansible/roles/docker_services/tasks/sub_tasks/init.yml"
@@ -23,7 +23,7 @@ COMMON_PREPARE = COMMON_PREPARE_PATH.read_text()
 COMMON_POSTGRES = COMMON_POSTGRES_PATH.read_text()
 DOCKER_PREP = DOCKER_PREP_PATH.read_text()
 DOCKER_INIT = DOCKER_INIT_PATH.read_text()
-DOCKER_SECRET_TASKS = DOCKER_SECRET_TASKS_PATH.read_text()
+DOCKER_SECRET_TASKS = DOCKER_SECRET_TASKS_PATH.read_text() + DOCKER_SECRET_TASKS_PATH.with_name("inspect.yml").read_text()
 COMMON_PREFLIGHT = COMMON_PREFLIGHT_PATH.read_text()
 PODMAN_MAIN = PODMAN_MAIN_PATH.read_text()
 PODMAN_INIT = PODMAN_INIT_PATH.read_text()

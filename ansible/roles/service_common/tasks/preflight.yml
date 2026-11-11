@@ -1,0 +1,66 @@
+---
+
+- name: Service common prepare | Reset managed configuration change output
+  ansible.builtin.set_fact:
+    service_common_config_changed: false
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service common prepare | Validate managed file restart policy
+  ansible.builtin.assert:
+    that:
+      - service_common_service | service_common_file_policy
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service common prepare | Include interface validation
+  ansible.builtin.include_tasks:
+    file: validate.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service common prepare | Include PostgreSQL database preparation
+  when:
+    - service_common_action in service_common_prepare_actions
+    - service_common_service.postgres is defined
+  ansible.builtin.include_tasks:
+    file: postgres.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service common prepare | Validate application templates before changing files
+  ansible.builtin.include_tasks:
+    file: templates_validate.yml
+    apply:
+      tags: [deploy, update, recreate, bootstrap]
+  vars:
+    service_common_templates: "{{ service_common_service.templates | default([]) }}"
+  loop: "{{ service_common_target_hosts }}"
+  loop_control:
+    loop_var: service_common_target_host
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service common prepare | Inspect static configuration sources before applying files
+  ansible.builtin.stat:
+    path: "{{ role_path }}/{{ service_common_source.src | string | trim }}"
+    get_checksum: false
+    get_mime: false
+    get_attributes: false
+  delegate_to: localhost
+  become: false
+  loop: "{{ service_common_service.copies | default([]) }}"
+  loop_control:
+    loop_var: service_common_source
+  register: service_common_configuration_sources
+  no_log: "{{ service_common_source.no_log | default(false) | bool }}"
+  tags: [deploy, update, recreate, bootstrap]
+
+- name: Service common prepare | Require static configuration sources to exist
+  ansible.builtin.assert:
+    that: service_common_source_status.stat.exists
+    fail_msg: A declared static configuration source is missing; configuration application was not started.
+  loop: "{{ service_common_configuration_sources.results }}"
+  loop_control:
+    loop_var: service_common_source_status
+  no_log: "{{ service_common_source_status.service_common_source.no_log | default(false) | bool }}"
+  tags: [deploy, update, recreate, bootstrap]

@@ -1,0 +1,82 @@
+---
+
+- name: Verify the exact disposable run before collecting diagnostics
+  ansible.builtin.import_playbook: guard.yml
+
+- name: Collect value-free state without changing applications
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Retain bounded diagnostic streams
+      ansible.builtin.include_tasks: diagnostics.tasks.yml
+
+    - name: VM tests | Read current daemon and socket states
+      ansible.builtin.command:
+        argv: [systemctl, show, docker.service, firewalld.service, podman.socket, '--property=Id,LoadState,ActiveState,UnitFileState,MainPID,InvocationID']
+      changed_when: false
+      register: molecule_vm_units
+      failed_when: molecule_vm_units.rc not in [0, 1, 4]
+
+    - name: VM tests | Read installed package versions
+      ansible.builtin.package_facts:
+        manager: auto
+
+    - name: VM tests | Observe the selected interpreter's SDK and stack-module dependencies
+      ansible.builtin.command:
+        argv:
+          - '{{ ansible_python_interpreter }}'
+          - '-c'
+          - |
+            import importlib.metadata as metadata,json
+            versions={}
+            for name in ('docker','jsondiff','pyyaml','requests'):
+                try: versions[name]=metadata.version(name)
+                except metadata.PackageNotFoundError: versions[name]=None
+            print(json.dumps(versions))
+      changed_when: false
+      failed_when: false
+      register: molecule_vm_python_modules
+
+    - name: VM tests | Observe only run-labelled fixtures and the harmless network listener log
+      when: "'docker-ce' in ansible_facts.packages"
+      ansible.builtin.command:
+        argv: '{{ molecule_vm_fixture_diagnostic }}'
+      loop:
+        - [docker, ps, '-a', --filter, 'label=homelab.molecule.run={{ molecule_vm_run_id }}', --format, '{{ "{{.Names}} {{.Image}} {{.Status}}" }}']
+        - [docker, ps, '-a', --filter, 'name=molecule-writer-{{ molecule_vm_run_id[:12] }}', --format, '{{ "{{.Names}} {{.Image}} {{.Status}}" }}']
+        - [docker, logs, --tail, '20', 'molecule-{{ molecule_vm_run_id[:12] }}-server']
+      loop_control:
+        loop_var: molecule_vm_fixture_diagnostic
+      changed_when: false
+      failed_when: false  # Best-effort evidence; never changes the scenario result.
+      register: molecule_vm_fixture_diagnostics
+
+    - name: VM tests | Retain bounded fixture evidence without environments or credential-bearing application logs
+      when: not (molecule_vm_fixture_diagnostics.skipped | default(false))
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/docker-fixture-diagnostics.json'
+        content: >-
+          {{ {'rc': molecule_vm_fixture_diagnostics.results | map(attribute='rc') | list,
+              'stdout': molecule_vm_fixture_diagnostics.results | map(attribute='stdout') | list,
+              'stderr': molecule_vm_fixture_diagnostics.results | map(attribute='stderr') | list} | to_json }}
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+
+    - name: VM tests | Retain selected platform and package evidence outside Molecule pruning
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/observed-system.json'
+        content: >-
+          {{ {'distribution': ansible_facts.distribution, 'version': ansible_facts.distribution_version,
+              'kernel': ansible_facts.kernel, 'selinux': ansible_facts.selinux.mode | default('disabled'),
+              'vcpus': ansible_facts.processor_vcpus, 'memory_mb': ansible_facts.memtotal_mb,
+              'root_filesystem': ansible_facts.mounts | selectattr('mount', 'equalto', '/') | list,
+              'python_modules': (molecule_vm_python_modules.stdout | from_json) if molecule_vm_python_modules.rc == 0 else {},
+              'units': molecule_vm_units.stdout_lines,
+              'packages': ansible_facts.packages | dict2items
+                | selectattr('key', 'in', ['docker-ce', 'docker-ce-cli', 'podman', 'netavark', 'firewalld', 'kernel-core'])
+                | items2dict} | to_json }}
+        mode: '0600'
+      delegate_to: localhost
+      become: false

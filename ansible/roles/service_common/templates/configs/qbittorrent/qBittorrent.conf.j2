@@ -1,4 +1,3 @@
-{% set qbittorrent_user = service_common_infisical_values.qbittorrent_user %}
 {% set service_common_qbittorrent_data_root = service_common_service.volumes.media.target %}
 [Application]
 FileLogger\Age=1
@@ -70,6 +69,7 @@ MigrationVersion=8
 Connection\ResolvePeerCountries=false
 General\Locale=en
 MailNotification\req_auth=true
+WebUI\APIKey={{ service_common_infisical_values.qbittorrent_api }}
 WebUI\Address=*
 WebUI\CSRFProtection=false
 WebUI\ClickjackingProtection=false
@@ -82,7 +82,7 @@ WebUI\Port={{ (service_common_service.ports | default({})).get('web_backend', {}
 WebUI\ReverseProxySupportEnabled=true
 WebUI\TrustedReverseProxiesList="172.98.0.0/24;{{ hostvars[services_controller_host].local_ip }}"
 WebUI\UseUPnP=false
-WebUI\Username={{ qbittorrent_user }}
+WebUI\Username={{ service_common_infisical_values.qbittorrent_user }}
 
 [RSS]
 AutoDownloader\DownloadRepacks=true

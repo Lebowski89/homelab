@@ -1,0 +1,66 @@
+---
+
+- name: Podman | Check installed version
+  ansible.builtin.command:
+    argv: [podman, --version]
+  register: podman_version_result
+  changed_when: false
+  failed_when: >-
+    not (ansible_check_mode and podman_version_result.rc != 0)
+    and podman_version_result.rc != 0
+  check_mode: false
+
+- name: Podman | Defer runtime validation in fresh-host check mode
+  when:
+    - ansible_check_mode
+    - podman_version_result.rc != 0
+  ansible.builtin.debug:
+    msg: "Podman is not installed yet; version and Quadlet generator validation will run after installation."
+
+- name: Podman | Assert Quadlet-capable version
+  when: not (ansible_check_mode and podman_version_result.rc != 0)
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          podman_version_result.stdout
+          | regex_search('[0-9]+\.[0-9]+\.[0-9]+')
+          | default('0.0.0', true)
+        ) is version(podman_min_version, '>=')
+    fail_msg: >-
+      Installed Podman must be at least {{ podman_min_version }} for system Quadlet support;
+      got {{ podman_version_result.stdout | default('unknown') }}.
+
+
+- name: Podman | Check system Quadlet generator
+  when: not (ansible_check_mode and podman_version_result.rc != 0)
+  ansible.builtin.stat:
+    path: "{{ podman_generator_candidate }}"
+    follow: true
+  loop: "{{ podman_quadlet_generator_paths }}"
+  loop_control:
+    loop_var: podman_generator_candidate
+  register: podman_quadlet_generator_stats
+
+- name: Podman | Record system Quadlet generator path
+  when: not (ansible_check_mode and podman_version_result.rc != 0)
+  ansible.builtin.set_fact:
+    podman_quadlet_generator_path: >-
+      {{
+        (
+          podman_quadlet_generator_stats.results
+          | selectattr('stat.exists')
+          | selectattr('stat.isreg')
+          | selectattr('stat.executable')
+          | map(attribute='stat.path')
+          | list
+          | first
+        ) | default('')
+      }}
+
+- name: Podman | Assert system Quadlet generator exists
+  when: not (ansible_check_mode and podman_version_result.rc != 0)
+  ansible.builtin.assert:
+    that:
+      - podman_quadlet_generator_path | length > 0
+    fail_msg: "Podman systemd Quadlet generator not found in {{ podman_quadlet_generator_paths | join(', ') }}."

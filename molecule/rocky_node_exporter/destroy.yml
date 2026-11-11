@@ -1,0 +1,12 @@
+---
+
+- name: Retain the externally managed VM after any Molecule outcome
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  tags: always
+  tasks:
+    - name: Molecule | Leave VM lifecycle with its external owner
+      ansible.builtin.debug:
+        msg: No VM is destroyed by this scenario. Only marker-owned Node Exporter cleanup is supported.

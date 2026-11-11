@@ -107,7 +107,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
           protocol: tcp
       deploy:
         type: container
-        host: localhost
+        hosts: localhost
         execution:
           mode: rootless
           host_user: {host_user}
@@ -240,7 +240,7 @@ def test_rootless_check_mode_renders_and_reports_a_non_mutating_artifact_plan(tm
     } in sanitized_plan
 
 
-def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, extra_env=None):
+def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, extra_env=None, run_tags=None):
     playbook = tmp_path / "behavior.yml"
     playbook.write_text(yaml.safe_dump(plays, sort_keys=False))
     env = os.environ.copy()
@@ -258,13 +258,114 @@ def run_local_playbook(tmp_path, plays, *, check_mode=True, structured=False, ex
     if extra_env:
         env.update(extra_env)
     return subprocess.run(
-        [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "localhost,", str(playbook), *(["--check"] if check_mode else [])],
+        [
+            str(Path(sys.executable).with_name("ansible-playbook")),
+            "-i",
+            "localhost,",
+            str(playbook),
+            *(["--check"] if check_mode else []),
+            *(["--tags", run_tags] if run_tags else []),
+        ],
         cwd=REPO_ROOT,
         env=env,
         text=True,
         capture_output=True,
         check=False,
     )
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("operation,declared,success", [("remove", False, True), ("deploy", False, False), ("deploy", True, True)])
+def test_widened_operation_tags_do_not_require_deployment_secrets_for_removal(tmp_path, operation, declared, success):
+    from ansible_task_cases import walk_tasks
+
+    tasks = yaml.safe_load((REPO_ROOT / "ansible/roles/podman_services/tasks/main.yml").read_text())
+    guard = next(
+        task
+        for task in walk_tasks(tasks)
+        if "ansible.builtin.assert" in task and "podman_services_effective_secret_declarations" in str(task["ansible.builtin.assert"])
+    )
+    selected = tmp_path / "secret-guard.yml"
+    selected.write_text(yaml.safe_dump([guard], sort_keys=False))
+    result = run_local_playbook(
+        tmp_path,
+        [
+            {
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "vars": {
+                    "podman_services_state": operation,
+                    "podman_services_service": {"secret_attachments": ["credential"]},
+                    "podman_services_effective_secret_declarations": [{"name": "credential"}] if declared else [],
+                },
+                "tasks": [{"ansible.builtin.include_tasks": {"file": str(selected), "apply": {"tags": ["remove"]}}, "tags": ["remove"]}],
+            }
+        ],
+        check_mode=False,
+        run_tags="remove",
+        extra_env={"ANSIBLE_INJECT_FACT_VARS": "false"},
+    )
+    assert (result.returncode == 0) is success, result.stdout + result.stderr
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("verification_fails", [False, True])
+def test_user_unit_verification_preserves_live_runtime_and_cleans_up(tmp_path, verification_fails):
+    tasks = yaml.safe_load((REPO_ROOT / "ansible/roles/podman_services/tasks/sub_tasks/service_state.yml").read_text())
+    verify = next(task for task in tasks if "block" in task and "podman_services_verify_runtime" in str(task))
+    verify["become"] = False
+    live = tmp_path / "live-runtime"
+    (live / "systemd").mkdir(parents=True)
+    private = live / "systemd/private"
+    private.write_bytes(b"LIVE_MANAGER_SOCKET")
+    recorded = tmp_path / "observed.json"
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    verifier = fake_bin / "systemd-analyze"
+    # Reproduce systemd 257's socket replacement, including a failing verify.
+    # The real task must contain it inside a disposable runtime directory.
+    verifier.write_text(
+        f"#!{sys.executable}\n"
+        "import json, os, sys\nfrom pathlib import Path\n"
+        "runtime = Path(os.environ['XDG_RUNTIME_DIR'])\n"
+        f"Path({str(recorded)!r}).write_text(json.dumps({{key: os.environ[key] for key in ['HOME', 'XDG_RUNTIME_DIR', 'DBUS_SESSION_BUS_ADDRESS']}}))\n"
+        "(runtime / 'systemd').mkdir(exist_ok=True)\n"
+        "(runtime / 'systemd/private').write_bytes(b'REPLACED')\n"
+        f"sys.exit({23 if verification_fails else 0})\n"
+    )
+    verifier.chmod(0o755)
+    result = run_local_playbook(
+        tmp_path,
+        [
+            {
+                "hosts": "localhost",
+                "connection": "local",
+                "gather_facts": False,
+                "vars": {
+                    "podman_services_state": "deploy",
+                    "podman_services_execution": {"mode": "rootless", "host_user": "unused-fixture-user"},
+                    "podman_services_unit_name": "fixture.service",
+                    "podman_services_runtime_environment": {
+                        "HOME": str(tmp_path / "actual-home"),
+                        "XDG_RUNTIME_DIR": str(live),
+                        "DBUS_SESSION_BUS_ADDRESS": "unix:path=" + str(live / "bus"),
+                        "PATH": str(fake_bin) + os.pathsep + os.environ["PATH"],
+                    },
+                },
+                "tasks": [verify],
+            }
+        ],
+        check_mode=False,
+        extra_env={"ANSIBLE_INJECT_FACT_VARS": "false"},
+    )
+    assert (result.returncode != 0) is verification_fails, result.stdout + result.stderr
+    observed = json.loads(recorded.read_text())
+    assert observed["HOME"] == str(tmp_path / "actual-home")
+    assert observed["XDG_RUNTIME_DIR"] != str(live)
+    assert observed["DBUS_SESSION_BUS_ADDRESS"] == "unix:path=" + observed["XDG_RUNTIME_DIR"] + "/bus"
+    assert not Path(observed["XDG_RUNTIME_DIR"]).exists()
+    assert private.read_bytes() == b"LIVE_MANAGER_SOCKET"
 
 
 @pytest.mark.integration
@@ -299,7 +400,7 @@ def test_execution_only_preparation_returns_before_service_work(tmp_path):
                 "runtime": "podman",
                 "operational_requirements": {"acl": ["mgt_backends"], "ownership_transition": True},
                 "image": "registry.example.invalid/test:1",
-                "deploy": {"type": "container", "execution": {"mode": "rootless", "host_user": account}},
+                "deploy": {"type": "container", "hosts": "localhost", "execution": {"mode": "rootless", "host_user": account}},
                 "named_networks": {"account-check": {"external": False}},
             },
             "podman_services_role_prefix": "account-check",
@@ -389,7 +490,7 @@ def test_rootless_check_mode_rejects_managed_files_outside_the_bind_tree(tmp_pat
         "ports": [{"published": 18081, "target": 8080, "protocol": "tcp"}],
         "deploy": {
             "type": "container",
-            "host": "localhost",
+            "hosts": "localhost",
             "execution": {
                 "mode": "rootless",
                 "host_user": "podman-check-invalid",
@@ -541,7 +642,7 @@ def test_execution_state_version_contract_is_enforced_before_runtime_work(tmp_pa
                     "podman_services_service_cfg": {
                         "runtime": "podman",
                         "image": "registry.example.invalid/synthetic:1.0",
-                        "deploy": {"type": "container", "host": "localhost"},
+                        "deploy": {"type": "container", "hosts": "localhost"},
                     },
                     "podman_services_role_prefix": "synthetic",
                     "podman_services_common_action": "remove",
@@ -632,7 +733,7 @@ def test_removal_requires_managed_marker_for_existing_rootful_and_rootless_files
                     "podman_services_service_cfg": {
                         "runtime": "podman",
                         "image": "registry.example.invalid/synthetic:1.0",
-                        "deploy": {"type": "container", "host": "localhost"},
+                        "deploy": {"type": "container", "hosts": "localhost"},
                     },
                     "podman_services_role_prefix": "synthetic",
                     "podman_services_common_action": "remove",
@@ -713,7 +814,7 @@ def test_versionless_cleanup_ignores_unproven_resource_metadata_but_version_two_
                         "podman_services_service_cfg": {
                             "runtime": "podman",
                             "image": "registry.example.invalid/synthetic:1.0",
-                            "deploy": {"type": "container", "host": "localhost"},
+                            "deploy": {"type": "container", "hosts": "localhost"},
                         },
                         "podman_services_role_prefix": "synthetic",
                         "podman_services_common_action": "remove",
@@ -823,7 +924,7 @@ def test_remove_and_drift_materialize_the_persisted_active_owner(
         "runtime": "podman",
         "name": "synthetic",
         "image": "registry.example.invalid/synthetic:1.0",
-        "deploy": {"type": "container", "host": "localhost", "execution": execution},
+        "deploy": {"type": "container", "hosts": "localhost", "execution": execution},
     }
     if desired_mode == "rootless":
         execution["host_user"] = "podman-synthetic"
@@ -1056,7 +1157,7 @@ def test_netbox_account_only_preparation_never_resolves_bootstrap_credentials(tm
                     "operational_requirements": {"acl": ["bootstrap"], "ownership_transition": True},
                     "deploy": {
                         "type": "container",
-                        "host": "localhost",
+                        "hosts": "localhost",
                         "execution": {"mode": "rootless", "host_user": "podman-check-netbox"},
                     },
                 }

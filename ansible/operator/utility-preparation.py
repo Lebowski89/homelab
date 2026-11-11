@@ -92,12 +92,14 @@ def read_stable_config(path, limit=4194304):
         raise ValueError("configuration must be a regular file, not a symlink")
     expected = identity(before)
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
-    with os.fdopen(descriptor, "rb") as stream:
+    with os.fdopen(descriptor, "rb", buffering=0) as stream:
         if identity(os.fstat(stream.fileno())) != expected:
             raise ValueError("configuration identity changed before reading")
         body = stream.read(limit + 1)
         if len(body) > limit:
             raise ValueError("configuration exceeds bounded read size")
+        if identity(os.fstat(stream.fileno())) != expected:
+            raise ValueError("configuration changed after its first read")
         stream.seek(0)
         if stream.read(limit + 1) != body or identity(os.fstat(stream.fileno())) != expected or identity(path.lstat()) != expected:
             raise ValueError("configuration identity, contents or write metadata changed during reading")
@@ -429,6 +431,8 @@ def project(services=SERVICES):
             return [render(item) for item in value]
         return templar.template(trust_as_template(value)) if isinstance(value, str) else value
 
+    inventory_groups = inventory.get_groups_dict()
+    placement = load("ansible/filter_plugins/service_catalog.py", "utility_placement")
     selected = {}
     for key in services:
         if bootstrap_role:
@@ -449,7 +453,9 @@ def project(services=SERVICES):
                 "name": cfg["name"],
                 "image": cfg["image"],
                 "user": cfg.get("user"),
-                "host": cfg["deploy"]["host"],
+                "host": placement.service_catalog_resolve_placement(
+                    {"runtime": "podman", "deploy": {"hosts": render(cfg["deploy"]["hosts"])}}, inventory_groups
+                )["deploy"]["hosts"][0],
                 "execution": cfg["deploy"]["execution"],
                 "ports": cfg["ports"],
                 "volumes": cfg.get("volumes", {}),

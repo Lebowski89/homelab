@@ -1,0 +1,19 @@
+---
+
+- name: Native services | Report check-mode restart plan
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: "Would restart {{ native_services_unit }} without changing installation or application data; listener readiness requires a real run."
+
+- name: Native services | Restart selected installed service
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: "{{ native_services_unit }}"
+    state: restarted
+    enabled: true
+
+- name: Native services | Verify Technitium readiness after restart
+  when:
+    - native_services_application == 'technitium'
+    - not ansible_check_mode
+  ansible.builtin.include_tasks: technitium_ready.yml

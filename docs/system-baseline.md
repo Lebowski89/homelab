@@ -118,8 +118,8 @@ normal become password file or `--ask-become-pass` when needed. Independent
 
 `system_resolved_enabled` defaults to false in the role; the ordinary repository
 inventory preserves its existing Ubuntu enablement. `system resolved` is an
-optional Debian/Ubuntu feature for NSS split DNS/MagicDNS and resolved lifecycle.
-It does not force resolved onto DNF hosts. `system_resolved_disable_stub` remains
+optional feature for resolved configuration and lifecycle. The existing
+Debian/Ubuntu APT and NSS behavior is retained. `system_resolved_disable_stub` remains
 explicitly scoped to `tags_dns` so Technitium can bind port 53; only this opt-in
 also defaults `system_resolved_manage_resolv_conf` to true. Ordinary baseline
 provisioning does not repoint resolv.conf. Technitium's native application-owned
@@ -128,6 +128,70 @@ wrapper aliases select this same feature; Ubuntu command/tag aliases are retired
 including network/netplan commands. Old `ubuntu_*` / `resolved_*` private variable
 overrides must be re-expressed using the retained `system_*` inputs. Package
 profiles have been replaced by native baseline lists and `system_extra_packages`.
+
+### Optional Fedora/Rocky resolver configuration
+
+Conventional Fedora 43–45 and Rocky 10 hosts with DNF4/DNF5 may explicitly enable
+the same feature. It installs the native `systemd-resolved` package with signature
+verification and `state: present`; package overrides remain authoritative. The
+package is available in [Fedora](https://packages.fedoraproject.org/pkgs/systemd/systemd-resolved/)
+and [Rocky BaseOS](https://dl.rockylinux.org/pub/rocky/10/BaseOS/x86_64/os/Packages/s/).
+Atomic/OSTree, LXC and other distributions are rejected on this RPM path.
+
+Prepare DNS ownership through the existing host network policy first. An active
+NetworkManager must report `systemd-resolved` as its selected DNS mode; a file on
+disk alone is insufficient. The role does not change that selection, connection
+profiles, addresses, routes, cloud-init or VPN settings. It uses the existing
+`ss`/`ps` tools to check port ownership. DNS-only republication through
+`nmcli general reload dns-full` occurs after resolver changes, without restarting
+NetworkManager or reactivating interfaces. This follows
+[NetworkManager's DNS configuration](https://networkmanager.dev/docs/api/latest/NetworkManager.conf.html)
+and [reload interface](https://networkmanager.dev/docs/api/latest/nmcli.html).
+
+`system_resolved_manage_nsswitch` defaults to false on RPM. Authselect and the
+existing NSS owner retain control; asking this role to edit RPM NSS is rejected.
+The ordinary RPM output defaults to `/run/systemd/resolve/stub-resolv.conf`.
+Disabling or bypassing that stub requires an existing NSS `resolve` entry before
+`dns`, and the installed provider is verified with a localhost-only lookup.
+The upstream resolv.conf alone cannot preserve per-link split DNS. See
+[systemd's NSS guidance](https://www.freedesktop.org/software/systemd/man/latest/nss-resolve.html)
+and [authselect ownership](https://github.com/authselect/authselect/blob/master/src/man/authselect.8.adoc).
+
+Replacing the resolver link remains explicit through
+`system_resolved_manage_resolv_conf: true`. Only NetworkManager/resolved-owned
+files and recognized links may be adopted; Tailscale-managed, manual and foreign
+paths fail preflight. Paths must be root-owned, and regular files must not be
+group/other-writable. Ownership/content changes during preparation stop link
+replacement. Without the management flag the existing link must already select
+the requested resolved output. Before relying on the stub, its TCP/UDP sockets
+must belong to the selected resolver, and its output file must exist.
+
+An existing Tailscale-managed guest needs an explicit DNS-owner handoff first.
+Tailscale may need a daemon restart to discover the new resolved backend; simply
+toggling DNS acceptance can retain its previous file-based manager. Preserve
+Tailscale DNS acceptance and verify public and MagicDNS lookups after the handoff,
+following [Tailscale's Linux DNS guidance](https://tailscale.com/docs/reference/linux-dns).
+This preparation remains separate from the System role and authselect/NSS policy.
+
+Rocky 10.2 AMD64 has passed live baseline, prepared resolver and 2 GiB emergency
+swap installation with zero-change repeats. The XFS-backed swap and public and
+MagicDNS resolution remained functional after reboot; authselect stayed valid
+and SELinux remained enforcing.
+
+Fedora's [initial package scripts](https://src.fedoraproject.org/rpms/systemd/raw/f43/f/systemd.spec)
+can replace `/etc/resolv.conf`. A fresh Fedora package installation therefore
+requires explicit management of that standard path, or prior package preparation
+through the OS/DNS owner. Native package scripts/presets still apply. Failures
+after installation may leave package, service or drop-in changes; inspect those
+effects before retrying rather than assuming a full rollback.
+
+The feature remains disabled by default on RPM. No application or inventory
+definition is changed to opt a host in. Check mode inspects prerequisites and
+shows a plan; RPM package/cache work, lifecycle, NSS-provider checks and output
+verification are deferred. It does not perform DNS lookups or change files.
+Validate normal resolution, VPN split DNS, native DNS coexistence, second-run
+convergence and reboot persistence on an isolated host before enabling it in
+production. This RPM path has repository-fixture coverage, not live acceptance.
 
 PostgreSQL owns ACL backup prerequisites and installs them before backup setup or
 execution under the existing PostgreSQL operation tags. Empty runtime package
@@ -227,8 +291,13 @@ the unit journal and read-back state after reactivation as well.
 Validate an isolated guest with check mode first, then explicitly authorize and
 inspect package/service changes, resolver behavior and a rerun. Repository tests
 mock host operations and cannot prove live package availability or kernel support.
-The production `podman` role still permits only Ubuntu 26.04+ or LMDE 7 with
-systemd; its DNF/runtime support is a separate migration. The mgt firewall policy
-explicitly requires Ubuntu 26.04; native Alloy, Technitium and Keepalived also
-remain Debian-family only. These owners need separate Rocky preparation.
+See [container host installation](container-runtimes.md) and
+[native service platform limits](ansible/native-services.md#protection-and-platform-limits)
+for Docker, Podman, native Alloy and native DNS support. Keepalived supports
+conventional Rocky 9/10; native Technitium requires Rocky 9.7+/10.1+ and uses
+distribution .NET 10 with a portable application install. DNS reachability,
+resolver recovery, SELinux access and peer VRRP failover still need isolated
+validation. The [service firewall RPM path](service-firewall.md#fedora-and-rocky-prerequisites)
+requires existing nf_tables tools, compatible firewalld configuration and separate
+live enforcement/persistence validation before application migration.
 Do not use a full homelab deployment as Rocky's baseline test or change SELinux/firewall/networking to work around these limits.

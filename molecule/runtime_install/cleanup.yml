@@ -1,0 +1,12 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Retain installed runtimes for failure evidence and explicit VM retirement
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Collect evidence before VM retirement
+      ansible.builtin.include_tasks: ../shared/diagnostics.tasks.yml

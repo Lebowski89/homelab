@@ -26,6 +26,9 @@ ROOT = Path(__file__).resolve().parents[2]
 ROLE = ROOT / "ansible/roles/service_firewall"
 
 
+INVENTORY = {"all": ["manager", "storage", "media", "blacktop", "dns03"]}
+
+
 def execute_account_probe(argv, read):
     """Execute the actual streamed probe with only its runtime calls replaced."""
     assert argv[:2] == ["/usr/bin/python3", "-c"]
@@ -72,6 +75,7 @@ def test_account_probe_shares_one_invocation_budget_and_stops_before_more_querie
 @pytest.fixture(autouse=True)
 def isolate_systemd_files(tmp_path, monkeypatch):
     monkeypatch.setattr(FW, "SYSTEMD", tmp_path / "systemd")
+    monkeypatch.setattr(FW.OWNED, "read_os_release", lambda: {"ID": "ubuntu", "VERSION_ID": "26.04"})
 
 
 def template(value, defaults=None):
@@ -104,21 +108,25 @@ def bootstrap():
     result = []
     for role in ["netbox", "infisical"]:
         defaults = yaml.safe_load((ROOT / f"ansible/roles/{role}/defaults/main.yml").read_text())
-        result.extend(PLAN.bootstrap_metadata(role, defaults, template))
+        result.extend(PLAN.bootstrap_metadata(role, defaults, template, INVENTORY))
     return result
 
 
 def test_real_catalog_and_bootstrap_project_only_metadata_and_ignore_tags():
     services = catalog()
     original = deepcopy(services)
-    result = PLAN.build_plan(services, "manager", template, bootstrap())
+    result = PLAN.build_plan(services, "manager", template, bootstrap(), INVENTORY)
     assert services == original
     for service in services.values():
         service["tags"] = []
+        if service["runtime"] == "native":
+            config = service["native"]["config"]
+            config[next(iter(config))] = "{{ lookup('must_never_run') }}"
+            continue
         service["environment"] = {**service.get("environment", {}), "POISON": "{{ lookup('must_never_run') }}"}
         for target in service.get("targets", {}).values():
             target["tags"] = []
-    assert PLAN.build_plan(services, "manager", template, bootstrap()) == result
+    assert PLAN.build_plan(services, "manager", template, bootstrap(), INVENTORY) == result
     # Every declared private publication is represented; ingress/protocol
     # exclusions are explicit and the plan never contains secret fields.
     assert "POISON" not in json.dumps(result)
@@ -130,7 +138,7 @@ def test_real_catalog_and_bootstrap_project_only_metadata_and_ignore_tags():
 @pytest.mark.parametrize("forgejo_already_selected", [True, False])
 def test_installed_policy_extension_retains_forgejo_aliases_and_all_bindings(forgejo_already_selected):
     services = catalog()
-    plan = PLAN.build_plan(services, "manager", template, bootstrap())
+    plan = PLAN.build_plan(services, "manager", template, bootstrap(), INVENTORY)
     active = ["homepage/backend", "forgejo/backend", "haproxy/postgres", "haproxy/metrics"]
     if not forgejo_already_selected:
         active.remove("forgejo/backend")
@@ -189,7 +197,7 @@ def synthetic():
         "example": {
             "runtime": "podman",
             "name": "example",
-            "deploy": {"host": "manager"},
+            "deploy": {"hosts": "manager"},
             "ports": {"backend": {"published": 21000, "target": 8000}},
             "traefik": {"port": 21000},
             "targets": {"selected": {"ports": {"metrics": {"published": 21001, "target": 9000}}}},
@@ -199,10 +207,10 @@ def synthetic():
 
 def test_effective_target_overrides_and_separate_proxy_metrics_callers():
     services = synthetic()
-    result = PLAN.build_plan(services, "manager", template, [])
+    result = PLAN.build_plan(services, "manager", template, [], INVENTORY)
     assert {entry["port"]: entry["callers"] for entry in result["endpoints"]} == {21000: ["traefik"], 21001: ["prometheus"]}
-    services["example"]["targets"]["selected"]["deploy"] = {"host": "media"}
-    assert not PLAN.build_plan(services, "manager", template, [])["endpoints"]
+    services["example"]["targets"]["selected"]["deploy"] = {"hosts": "media"}
+    assert not PLAN.build_plan(services, "manager", template, [], INVENTORY)["endpoints"]
 
 
 def test_direct_web_publication_without_proxy_cannot_invent_callers():
@@ -211,7 +219,7 @@ def test_direct_web_publication_without_proxy_cannot_invent_callers():
     services["example"].pop("traefik")
     services["example"]["ports"] = {"web": {"published": 21000, "target": 8000}}
     with pytest.raises(ValueError, match="no declared proxy"):
-        PLAN.build_plan(services, "manager", template, [])
+        PLAN.build_plan(services, "manager", template, [], INVENTORY)
 
 
 def test_unclassified_required_private_publication_cannot_silently_escape_policy():
@@ -219,7 +227,7 @@ def test_unclassified_required_private_publication_cannot_silently_escape_policy
     services["example"]["operational_requirements"] = {"acl": ["mgt_backends"]}
     services["example"]["ports"]["new_listener"] = {"published": 21002, "target": 9001}
     with pytest.raises(ValueError, match="unclassified"):
-        PLAN.build_plan(services, "manager", template, [])
+        PLAN.build_plan(services, "manager", template, [], INVENTORY)
 
 
 @pytest.mark.parametrize("target_port", [None, 26512])
@@ -230,7 +238,7 @@ def test_real_znc_irc_publication_keeps_exact_caller_across_target_override(targ
     if target_port is not None:
         services["znc"]["targets"] = {"cutover": {"ports": {"irc": {"published": target_port}}}}
     before = deepcopy(services)
-    plan = PLAN.build_plan(services, "manager", template, bootstrap())
+    plan = PLAN.build_plan(services, "manager", template, bootstrap(), INVENTORY)
     assert services == before
     irc = next(endpoint for endpoint in plan["endpoints"] if "znc/irc" in endpoint["ids"])
     web = next(endpoint for endpoint in plan["endpoints"] if "znc/backend" in endpoint["ids"])
@@ -257,7 +265,7 @@ def test_znc_irc_rejects_an_undeclared_caller(caller):
     else:
         del services["autobrr"]
     with pytest.raises(ValueError, match="Autobrr caller is not declared"):
-        PLAN.build_plan(services, "manager", template, bootstrap())
+        PLAN.build_plan(services, "manager", template, bootstrap(), INVENTORY)
 
 
 def test_irc_name_does_not_authorize_other_services_or_udp():
@@ -265,11 +273,11 @@ def test_irc_name_does_not_authorize_other_services_or_udp():
     services["example"]["operational_requirements"] = {"acl": ["mgt_backends"]}
     services["example"]["ports"]["irc"] = {"published": 26502, "target": 6502}
     with pytest.raises(ValueError, match="unclassified"):
-        PLAN.build_plan(services, "manager", template, [])
+        PLAN.build_plan(services, "manager", template, [], INVENTORY)
     services = catalog()
     services["znc"]["ports"]["irc"] = {"published": 26502, "target": 6502, "protocol": "udp"}
     with pytest.raises(ValueError, match="only explicit TCP"):
-        PLAN.build_plan(services, "manager", template, bootstrap())
+        PLAN.build_plan(services, "manager", template, bootstrap(), INVENTORY)
 
 
 def local(uid=2200, account="podman-proxy"):
@@ -1140,7 +1148,7 @@ def test_batched_preflight_projects_only_metadata_and_uses_nologin_accounts(monk
 
 
 def test_preflight_candidates_preserve_accepted_stage_and_block_shared_worker_routes():
-    plan = PLAN.build_plan(catalog(), "manager", template, bootstrap())
+    plan = PLAN.build_plan(catalog(), "manager", template, bootstrap(), INVENTORY)
     endpoint = next(entry for entry in plan["endpoints"] if "haproxy/postgres" in entry["ids"])
     worker_name = next(name for name in endpoint["callers"] if plan["principals"][name].get("future_runtime") == "docker")
     worker_host = plan["principals"][worker_name]["inventory_hosts"]
@@ -1296,7 +1304,7 @@ def test_actual_optional_network_projection_reaches_candidates_and_keeps_unknown
         )
         reports.append(report)
     existing = {"mgt_firewall_active_endpoints": ["homepage/backend"], "mgt_firewall_callers": {"traefik": [container()]}}
-    plan = PLAN.build_plan(catalog(), "manager", template, bootstrap())
+    plan = PLAN.build_plan(catalog(), "manager", template, bootstrap(), INVENTORY)
     # Bind the real catalog's inventory references to this fixture's distinct
     # host names, as the production playbook resolves the inventory groups.
     for principal in plan["principals"].values():
@@ -1322,8 +1330,8 @@ def test_actual_optional_network_projection_reaches_candidates_and_keeps_unknown
     elif not populated:
         assert worker[0]["routes"] == [{"kind": "unresolved"}]
     assert worker[-1]["routes"] == [{"kind": "unresolved"}]
-    assert result["candidate"]["mgt_firewall_callers"]["qui-alpha"] == []
-    assert any("qui-alpha@worker: unresolved" in message for message in result["pending"])
+    assert result["candidate"]["mgt_firewall_callers"]["qui"] == []
+    assert any("qui@worker: unresolved" in message for message in result["pending"])
     assert result["candidate"]["mgt_firewall_callers"]["traefik"] == existing["mgt_firewall_callers"]["traefik"]
     assert result["candidate"]["mgt_firewall_inputs_verified"] is False
     assert all(
@@ -1358,7 +1366,7 @@ def test_captured_technitium_addressless_vips_do_not_block_haproxy_candidates():
         {"name": "technitium-second", "vips": [{"NetworkID": "ooatvl1rjxogql9p7gtqwy9bo"}]},
     ]
     existing = {"mgt_firewall_active_endpoints": ["homepage/backend"], "mgt_firewall_callers": {"traefik": [container()]}}
-    plan = PLAN.build_plan(catalog(), "manager", template, bootstrap())
+    plan = PLAN.build_plan(catalog(), "manager", template, bootstrap(), INVENTORY)
     for principal in plan["principals"].values():
         hosts = principal["inventory_hosts"]
         if isinstance(hosts, str):
@@ -1390,7 +1398,7 @@ def test_captured_technitium_addressless_vips_do_not_block_haproxy_candidates():
     candidate = result["candidate"]
     assert candidate["mgt_firewall_callers"]["traefik"] == existing["mgt_firewall_callers"]["traefik"]
     assert candidate["mgt_firewall_inputs_verified"] is False
-    assert candidate["mgt_firewall_callers"]["qui-alpha"][0]["route_verified"] is False
+    assert candidate["mgt_firewall_callers"]["qui"][0]["route_verified"] is False
     for name, bindings in candidate["mgt_firewall_callers"].items():
         if name == "traefik":
             continue
@@ -1508,7 +1516,7 @@ class PreflightHost:
     def __init__(self, host):
         self.host = host
         self.pid = {"manager": 1234, "worker": 2345, "plex": 3456}[host]
-        self.name = {"manager": "infisical-infisical-1", "worker": "qui-alpha", "plex": "qui-bravo"}[host]
+        self.name = {"manager": "infisical-infisical-1", "worker": "qui", "plex": "fixture-db-client"}[host]
         self.calls = []
         self.host_network = False
         self.owned_socket = False
@@ -1747,6 +1755,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
                         },
                     },
                     "hosts": {
+                        "blacktop": {"ansible_host": "192.0.2.60", "local_ip": "192.0.2.60", "ansible_user": "fixture-user"},
                         "plex": {
                             "ansible_host": "192.0.2.59",
                             "local_ip": "192.0.2.59",
@@ -1754,7 +1763,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
                             "ansible_port": 2222,
                             "ansible_ssh_user": "plex-ssh-user",
                             "ansible_ssh_port": 2223,
-                        }
+                        },
                     },
                 }
             }
@@ -1835,6 +1844,9 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
         assert not output.exists() and not Path(str(output) + ".metadata.json").exists()
         if failure in {"inherited-local", "wrong-host", "global-host-override"}:
             assert "observed host identity does not match inventory address" in result.stdout
+        elif failure == "global-local-override":
+            assert "haproxy_preflight_host == services_controller_host or" in result.stdout
+            assert "Assertion failed" in result.stdout
         elif failure == "aggregation-label":
             assert "relabelled collection result" in result.stdout
         elif failure == "aggregation-identity":
@@ -1860,7 +1872,7 @@ def test_actual_batched_preflight_delegation_collection_and_aggregation(tmp_path
     candidate = json.loads(output.read_text())
     assert candidate["mgt_firewall_inputs_verified"] is False
     assert candidate["mgt_firewall_callers"]["traefik"] == [container()]
-    for name in ["qui-alpha"]:
+    for name in ["qui"]:
         assert candidate["mgt_firewall_callers"][name][0]["kind"] == "elsewhere"
         assert candidate["mgt_firewall_callers"][name][0]["route_verified"] is False
     assert candidate["mgt_firewall_callers"]["controller"] == candidate["mgt_firewall_callers"]["recovery"] == []
@@ -1972,7 +1984,7 @@ def test_worker_local_database_route_is_explicit_and_never_grants_mgt_access():
 
 
 def test_handoff_routes_wait_for_mgt_exclusion_and_idle_clients_without_confirming_inputs():
-    plan = PLAN.build_plan(catalog(), "manager", template, bootstrap())
+    plan = PLAN.build_plan(catalog(), "manager", template, bootstrap(), INVENTORY)
     reports = []
     for host in PreflightHost.addresses:
         fixture = PreflightHost(host)
@@ -2017,7 +2029,7 @@ def test_handoff_routes_wait_for_mgt_exclusion_and_idle_clients_without_confirmi
         )
 
     before = refresh()
-    assert before["candidate"]["mgt_firewall_callers"]["qui-alpha"] == []
+    assert before["candidate"]["mgt_firewall_callers"]["qui"] == []
     assert before["reports"][1]["containers"][0]["destinations"][0]["routes"][0]["worker_only"] is False
     baseline = deepcopy(provider)
     provider["tasks"].pop()  # Simulate only the mgt task leaving the existing VIP.
@@ -2027,8 +2039,8 @@ def test_handoff_routes_wait_for_mgt_exclusion_and_idle_clients_without_confirmi
     }
     assert provider["tasks"] == baseline["tasks"][:-1]
     callers = after["candidate"]["mgt_firewall_callers"]
-    assert callers["qui-alpha"][0]["kind"] == "elsewhere"
-    assert callers["qui-alpha"][0]["route_verified"] is False
+    assert callers["qui"][0]["kind"] == "elsewhere"
+    assert callers["qui"][0]["route_verified"] is False
     assert callers["bazarr"] == callers["romm"] == []
     assert any("bazarr@worker" in entry for entry in after["pending"])
     assert any("romm@worker" in entry for entry in after["pending"])
@@ -2038,7 +2050,7 @@ def test_handoff_routes_wait_for_mgt_exclusion_and_idle_clients_without_confirmi
     candidate = observed["candidate"]
     assert candidate["mgt_firewall_callers"]["traefik"] == existing["mgt_firewall_callers"]["traefik"]
     assert candidate["mgt_firewall_inputs_verified"] is False
-    for name in ["qui-alpha", "bazarr", "romm"]:
+    for name in ["qui", "bazarr", "romm"]:
         binding = candidate["mgt_firewall_callers"][name][0]
         assert binding["kind"] == "elsewhere" and binding["inventory_host"] == "worker"
         assert binding["route_verified"] is binding["verified"] is binding["restart_verified"] is False
@@ -2056,7 +2068,7 @@ def test_handoff_routes_wait_for_mgt_exclusion_and_idle_clients_without_confirmi
 
 
 def test_prepared_haproxy_metrics_requires_its_caller_before_policy_mutation():
-    plan = PLAN.build_plan(catalog(), "manager", template, bootstrap())
+    plan = PLAN.build_plan(catalog(), "manager", template, bootstrap(), INVENTORY)
     prepared = PLAN.select_policy(plan, ["haproxy/metrics"], {}, True, "192.0.2.48", "manager", {})
     FW.validate_policy(prepared, require_verified=False)
     kernel = Kernel()
@@ -2088,7 +2100,7 @@ def test_offline_handoff_stage_rollback_retains_homepage_and_shared_policy():
 
 
 def test_stage_selection_bootstrap_overrides_and_inventory_operator_address_precedence():
-    result = PLAN.build_plan(synthetic(), "manager", template, bootstrap())
+    result = PLAN.build_plan(synthetic(), "manager", template, bootstrap(), INVENTORY)
     remote = {
         "kind": "remote",
         "inventory_host": "recovery-host",
@@ -2112,8 +2124,8 @@ def test_stage_selection_bootstrap_overrides_and_inventory_operator_address_prec
         PLAN.select_policy(result, ["invented/port"], {}, False, "192.0.2.48", "manager", {})
     defaults = yaml.safe_load((ROOT / "ansible/roles/netbox/defaults/main.yml").read_text())
     defaults.update(netbox_name="custom-netbox", netbox_port=21003, netbox_redis_backend_port=21004, netbox_postgres_backend_port=21005)
-    projected = PLAN.bootstrap_metadata("netbox", defaults, template)
-    adapted = PLAN.build_plan({}, "manager", template, projected)
+    projected = PLAN.bootstrap_metadata("netbox", defaults, template, INVENTORY)
+    adapted = PLAN.build_plan({}, "manager", template, projected, INVENTORY)
     assert {entry["port"] for entry in adapted["endpoints"]} == {21003, 21004, 21005}
     assert next(entry for entry in adapted["endpoints"] if entry["port"] == 21004)["callers"] == ["custom-netbox"]
 
@@ -2240,7 +2252,11 @@ def test_actual_ansible_loader_guards_readme_and_offline_recovery(tmp_path, oper
     (service_dir / "README.md").write_text("# Catalog\nReal directories include documentation.\n")
     services = catalog() if operation == "install-real" else synthetic()
     for service in services.values():
-        service["environment"] = {**service.get("environment", {}), "POISON": "{{ lookup('must_never_run') }}"}
+        if service["runtime"] == "native":
+            config = service["native"]["config"]
+            config[next(iter(config))] = "{{ lookup('must_never_run') }}"
+        else:
+            service["environment"] = {**service.get("environment", {}), "POISON": "{{ lookup('must_never_run') }}"}
     (service_dir / "service.yml").write_text(yaml.safe_dump(services))
     if malformed:
         (service_dir / "malformed.yml").write_text("malformed: [unterminated\n")
@@ -2272,6 +2288,7 @@ def test_actual_ansible_loader_guards_readme_and_offline_recovery(tmp_path, oper
                 "manager": {"ansible_connection": "local", "local_ip": "192.0.2.48"},
                 "storage": {"ansible_connection": "local", "local_ip": "192.0.2.20"},
                 "media": {"ansible_connection": "local", "local_ip": "192.0.2.59"},
+                "blacktop": {"ansible_connection": "local", "local_ip": "192.0.2.70"},
             }
         }
     }

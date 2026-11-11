@@ -1,0 +1,19 @@
+---
+# Internal task aliases; operator defaults live in the service catalogue.
+node_exporter_version: '{{ native_services_config.version }}'
+node_exporter_arch: '{{ native_services_config.arch }}'
+node_exporter_user: '{{ native_services_config.user }}'
+node_exporter_group: '{{ native_services_config.group }}'
+node_exporter_release_url: '{{ native_services_config.release_url }}'
+node_exporter_archive_name: '{{ native_services_config.archive_name }}'
+node_exporter_download_url: '{{ native_services_config.download_url }}'
+node_exporter_archive_path: '{{ native_services_config.archive_path }}'
+node_exporter_extract_dir: '{{ native_services_config.extract_dir }}'
+node_exporter_checksum: '{{ native_services_config.checksum }}'
+node_exporter_install_dir: '{{ native_services_config.install_dir }}'
+node_exporter_textfile_dir: '{{ native_services_config.textfile_dir }}'
+node_exporter_listen_address: '{{ native_services_config.listen_address }}'
+node_exporter_enabled_collectors: '{{ native_services_config.enabled_collectors }}'
+node_exporter_disabled_collectors: '{{ native_services_config.disabled_collectors
+  }}'
+node_exporter_extra_args: '{{ native_services_config.extra_args }}'

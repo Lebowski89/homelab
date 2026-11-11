@@ -1,0 +1,6 @@
+{
+  "url": "https://dl.fedoraproject.org/pub/fedora/linux/releases/44/Server/x86_64/images/Fedora-Server-Guest-Generic-44-1.7.x86_64.qcow2",
+  "checksum": "446c01f71e3c6cd3889af66fec927b8d1160b8e0744243d7861c2b8b2ddd3f0e",
+  "source": "https://fedoraproject.org/releases.json",
+  "build": "https://koji.fedoraproject.org/koji/buildinfo?buildID=2985070"
+}

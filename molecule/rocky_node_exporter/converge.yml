@@ -1,0 +1,22 @@
+---
+
+- name: Validate the isolated inventory and guest
+  ansible.builtin.import_playbook: guard.yml
+
+- name: Require preparation before applying the catalogue
+  hosts: molecule_node_exporter
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tags: always
+  tasks:
+    - name: Molecule | Inspect ownership before installation
+      ansible.builtin.import_tasks: ownership.tasks.yml
+
+    - name: Molecule | Require an owned installation outside check mode
+      ansible.builtin.assert:
+        that: ansible_check_mode or molecule_node_exporter_marker.stat.exists
+        fail_msg: Run the scenario prepare step on a fresh disposable VM before converging.
+
+- name: Exercise the real catalogue and its Node Exporter tag boundary
+  ansible.builtin.import_playbook: ../../ansible/playbook.yml

@@ -54,10 +54,7 @@ def availability_model():
         "services_plex_host": "plex",
         "services_private_https_port": 8443,
         "services_internal_zone": "internal.example",
-        "keepalived_instances": {
-            "dns_vip_a": {"virtual_ip": "192.0.2.250"},
-            "dns_vip_b": {"virtual_ip": "192.0.2.251"},
-        },
+        "svcfiles": services,
     }
     prometheus_vars = render_structure(yaml.safe_load(PROMETHEUS_VARS_PATH.read_text()), variables)
     http = availability.availability_http_file_sd(
@@ -97,10 +94,8 @@ def test_catalogue_variants_special_urls_and_categories_are_preserved():
     for variant in (
         "radarr-4k",
         "sonarr-4k",
-        "qbittorrent-alpha",
-        "qbittorrent-bravo",
-        "qui-alpha",
-        "qui-bravo",
+        "qbittorrent",
+        "qui",
     ):
         assert f"http.{variant}-private" in targets
 
@@ -175,7 +170,9 @@ def test_dns_coverage_includes_all_configured_endpoints():
 
 def test_postgres_exporter_role_is_checksum_pinned_unprivileged_and_secret_safe():
     defaults = yaml.safe_load((REPO_ROOT / "ansible/roles/postgres_exporter/defaults/main.yml").read_text())
-    tasks = yaml.safe_load((REPO_ROOT / "ansible/roles/postgres_exporter/tasks/main.yml").read_text())
+    tasks = [
+        task for path in (REPO_ROOT / "ansible/roles/postgres_exporter/tasks").rglob("*.yml") for task in yaml.safe_load(path.read_text())
+    ]
     unit = (REPO_ROOT / "ansible/roles/postgres_exporter/templates/postgres_exporter.service.j2").read_text()
     environment = (REPO_ROOT / "ansible/roles/postgres_exporter/templates/environment.j2").read_text()
     playbook = yaml.safe_load((REPO_ROOT / "ansible/playbook.yml").read_text())

@@ -505,6 +505,9 @@ def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path,
         "all": {
             "children": {"tags_postgres": {"hosts": {"pg1": {"local_ip": "192.0.2.101"}}}},
             "hosts": {
+                "storage": {"local_ip": "192.0.2.20"},
+                "media": {"local_ip": "192.0.2.59"},
+                "blacktop": {"local_ip": "192.0.2.60"},
                 "manager": {
                     "ansible_connection": "local",
                     "ansible_python_interpreter": sys.executable,
@@ -512,7 +515,7 @@ def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path,
                     "container_host_appdata_root": "/tmp/NONPRODUCTION-apps",
                     "container_host_puid": 99,
                     "container_host_pgid": 99,
-                }
+                },
             },
         }
     }
@@ -564,6 +567,7 @@ def test_actual_optional_projection_and_renderer_without_secret_values(tmp_path,
     )
     if mode == "missing-patroni":
         assert result.returncode != 0 and "Assertion failed" in result.stdout, result.stdout + result.stderr
+        assert "groups.tags_postgres | default([]) | length > 0" in result.stdout
         assert not projection.exists() and not (tmp_path / "adapter.cfg").exists()
         return
     assert result.returncode == 0, result.stdout + result.stderr

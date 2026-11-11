@@ -1,0 +1,17 @@
+---
+
+- name: Technitium native | Retain the APT installation procedure
+  when: ansible_facts.pkg_mgr == 'apt'
+  ansible.builtin.include_tasks:
+    file: technitium/apt.yml
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  tags: "{{ ansible_run_tags }}"
+
+- name: Technitium native | Install the RPM native application
+  when: ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.include_tasks:
+    file: technitium/rpm.yml
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  tags: "{{ ansible_run_tags }}"

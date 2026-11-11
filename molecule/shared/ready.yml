@@ -1,0 +1,120 @@
+---
+
+- name: Wait within a bounded readiness window
+  hosts: molecule_guests
+  gather_facts: false
+  become: true
+  tasks:
+    - name: VM tests | Wait for verified SSH and Python
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+        connect_timeout: 5
+        sleep: 5
+
+    - name: VM tests | Wait for cloud-init completion and retain structured status
+      ansible.builtin.command:
+        argv: [timeout, '300', cloud-init, status, --wait, --format, json]
+      changed_when: false
+      register: molecule_vm_cloud_init
+      failed_when: molecule_vm_cloud_init.rc not in [0, 2]
+
+    - name: VM tests | Require completed bootstrap without operational errors
+      vars:
+        molecule_vm_cloud_status: '{{ molecule_vm_cloud_init.stdout | from_json }}'
+      ansible.builtin.assert:
+        that:
+          - molecule_vm_cloud_status.status == 'done'
+          - molecule_vm_cloud_status.errors | length == 0
+          - molecule_vm_cloud_status.recoverable_errors.keys() | difference(['DEPRECATED']) | length == 0
+        fail_msg: Bootstrap is incomplete or contains operational errors; no acceptance run is permitted.
+
+    - name: VM tests | Report cloud-init deprecations independently of operational success
+      when: (molecule_vm_cloud_init.stdout | from_json).recoverable_errors | length > 0
+      ansible.builtin.debug:
+        msg: Cloud-init completed with deprecation warnings in the Proxmox-generated user data; see private readiness evidence.
+
+- name: Validate readiness without accepting an arbitrary SSH host
+  ansible.builtin.import_playbook: guard.yml
+
+- name: Use the allocated disk on the prepared Fedora Server guest
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Complete the prepared Server image's root-volume growth
+      when:
+        - ansible_facts.distribution == 'Fedora'
+        - molecule_vm_prepared_image | default(false) is sameas true
+      ansible.builtin.include_tasks: ../vm/fedora-root.tasks.yml
+
+- name: Apply only the explicitly approved disposable Fedora tool selection
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  vars:
+    molecule_vm_nf_tools: [iptables-nft, ip6tables-nft, iptables-nft-save, ip6tables-nft-save, iptables-nft-restore, ip6tables-nft-restore]
+  tasks:
+    - name: VM tests | Select distribution nf_tables tools only under the allocation exception
+      # checkov:skip=CKV2_ANSIBLE_3:Allocation-gated tool selection and verification must fail acceptance on any error; no unverified fallback is allowed.
+      when:
+        - ansible_facts.distribution == 'Fedora'
+        - molecule_vm_allow_nf_tables_alternatives | default(false) is sameas true
+      block:
+        - name: VM tests | Install the signed distribution tool provider
+          ansible.builtin.dnf:
+            name: iptables-nft
+            state: present
+            use_backend: '{{ "dnf5" if ansible_facts.pkg_mgr == "dnf5" else "dnf4" }}'
+            disable_gpg_check: false
+            allowerasing: false
+
+        - name: VM tests | Inspect existing distribution alternatives registrations
+          ansible.builtin.command:
+            argv: [alternatives, --display, iptables]
+          changed_when: false
+          register: molecule_vm_alternative_groups
+
+        - name: VM tests | Refuse to invent an unregistered alternative
+          ansible.builtin.assert:
+            that: "('/usr/bin/' ~ molecule_vm_alternative) in molecule_vm_alternative_groups.stdout"
+          loop: '{{ molecule_vm_nf_tools }}'
+          loop_control:
+            loop_var: molecule_vm_alternative
+
+        - name: VM tests | Verify the actual RPM provider before selecting its tools
+          ansible.builtin.command:
+            argv: [rpm, '-qf', '/usr/bin/{{ molecule_vm_alternative }}']
+          loop: '{{ molecule_vm_nf_tools }}'
+          loop_control:
+            loop_var: molecule_vm_alternative
+          changed_when: false
+          register: molecule_vm_alternative_provider
+          failed_when: molecule_vm_alternative_provider.rc != 0 or not molecule_vm_alternative_provider.stdout.startswith('iptables-nft-')
+
+        - name: VM tests | Observe all selected tool variants before considering a change
+          ansible.builtin.command:
+            argv: ['{{ molecule_vm_selected_tool }}', --version]
+          loop: [iptables, ip6tables, iptables-save, ip6tables-save, iptables-restore, ip6tables-restore]
+          loop_control:
+            loop_var: molecule_vm_selected_tool
+          changed_when: false
+          register: molecule_vm_tools_before
+
+        # Fedora 44 registers one /usr/bin master with five followers, including
+        # ip6tables. Preserve auto selection when all tools already use nft.
+        - name: VM tests | Select the approved distribution master and its registered followers when needed
+          community.general.alternatives:
+            name: iptables
+            path: /usr/bin/iptables-nft
+            state: selected
+          when: molecule_vm_tools_before.results | selectattr('stdout', 'search', '\(nf_tables\)') | list | length != 6
+
+        - name: VM tests | Verify all six selected tools rather than assuming slave selection
+          ansible.builtin.command:
+            argv: ['{{ molecule_vm_selected_tool }}', --version]
+          loop: [iptables, ip6tables, iptables-save, ip6tables-save, iptables-restore, ip6tables-restore]
+          loop_control:
+            loop_var: molecule_vm_selected_tool
+          changed_when: false
+          register: molecule_vm_tool_version
+          failed_when: molecule_vm_tool_version.rc != 0 or '(nf_tables)' not in molecule_vm_tool_version.stdout

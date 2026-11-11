@@ -1,0 +1,47 @@
+---
+
+- name: Service firewall | Gather platform facts
+  ansible.builtin.setup:
+    gather_subset: ['!all', '!min', distribution, system, service_mgr, pkg_mgr, python]
+
+- name: Service firewall | Inspect the Unraid platform marker
+  ansible.builtin.stat:
+    path: /etc/unraid-version
+  register: service_firewall_unraid
+
+- name: Service firewall | Inspect the OSTree deployment marker
+  ansible.builtin.stat:
+    path: /run/ostree-booted
+  register: service_firewall_ostree
+
+- name: Service firewall | Validate the supported platform
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.system == 'Linux'
+      - not service_firewall_ostree.stat.exists
+      - ansible_facts.python.version.major == 3
+      - ansible_facts.python.version.minor >= 10
+      - >-
+        (service_firewall_profile == 'workers' and service_firewall_unraid.stat.exists) or
+        (ansible_facts.service_mgr == 'systemd' and (
+          (ansible_facts.distribution == 'Debian' and ansible_facts.pkg_mgr == 'apt' and
+           ansible_facts.distribution_major_version in ['12', '13']) or
+          (ansible_facts.distribution == 'Ubuntu' and ansible_facts.pkg_mgr == 'apt' and
+           ansible_facts.distribution_version == ('26.04' if service_firewall_profile == 'mgt' else '24.04')) or
+          (ansible_facts.pkg_mgr in ['dnf', 'dnf5'] and (
+            (ansible_facts.distribution == 'Fedora' and ansible_facts.distribution_major_version in ['43', '44', '45']) or
+            (ansible_facts.distribution == 'Rocky' and ansible_facts.distribution_major_version == '10')
+          ))
+        ))
+    fail_msg: >-
+      Service firewall requires conventional Debian 12/13 with APT, Fedora 43-45 or Rocky 10 with DNF/DNF5 and systemd,
+      or the existing Ubuntu 26.04 manager / Ubuntu 24.04 worker / Unraid worker platform.
+      Existing Python 3.10+ is required. Rocky 9's firewalld 1.x, Atomic/OSTree and other derivatives are unsupported.
+
+- name: Service firewall | Explain deferred check-mode verification
+  ansible.builtin.debug:
+    msg: >-
+      Check mode validates platform metadata and plans policy only. Installed nf_tables tools,
+      kernel matches, firewalld coexistence, caller identity and live enforcement remain unverified.
+      No packages, firewall configuration or services are changed.
+  when: ansible_check_mode

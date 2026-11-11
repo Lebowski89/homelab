@@ -1,0 +1,14 @@
+---
+
+- name: Validate the isolated inventory and guest
+  ansible.builtin.import_playbook: guard.yml
+
+- name: Verify that fresh-host check mode created no installation or account
+  hosts: molecule_node_exporter
+  become: true
+  gather_facts: false
+  any_errors_fatal: true
+  tags: always
+  tasks:
+    - name: Molecule | Verify the installation remains absent after check mode
+      ansible.builtin.import_tasks: fresh.tasks.yml

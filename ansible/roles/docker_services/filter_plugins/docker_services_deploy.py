@@ -75,6 +75,30 @@ def _normalize_constraints(value: Any) -> list[str]:
     return [str(item).strip() for item in raw_items if str(item).strip()]
 
 
+def docker_services_resolve_constraints(service: Mapping[str, Any], hostvars: Mapping[str, Any]) -> dict[str, Any]:
+    """Derive an omitted single-host constraint from its managed node label.
+
+    Explicit constraints (including an empty list) own scheduling completely:
+    preparation hosts need not describe eligible nodes. Never infer node names
+    from inventory aliases or turn multiple hosts into ANDed equalities.
+    """
+    deploy = service.get("deploy", {})
+    if service.get("runtime", "docker") != "docker" or _as_str(deploy.get("type") or "swarm") != "swarm" or "constraints" in deploy:
+        return dict(service)
+    hosts = deploy.get("hosts")
+    if not isinstance(hosts, list) or len(hosts) != 1:
+        raise AnsibleFilterError(
+            "Swarm constraint derivation requires one resolved deploy.hosts entry; declare explicit constraints for other scheduling"
+        )
+    label = hostvars[hosts[0]].get("docker_swarm_node_labels", {}).get("docker_services_host")
+    if not isinstance(label, str) or not re.fullmatch(r"[A-Za-z0-9_.-]+", label):
+        raise AnsibleFilterError(
+            f"Swarm host {hosts[0]!r} needs its existing docker_swarm_node_labels.docker_services_host identity "
+            "to derive placement; otherwise declare explicit constraints"
+        )
+    return {**service, "deploy": {**deploy, "constraints": [f"node.labels.docker_services_host == {label}"]}}
+
+
 def _normalize_profiles(value: Any) -> dict[str, Any]:
     if value is None:
         return {"none": {}}
@@ -333,10 +357,11 @@ class FilterModule:
         """Return the Jinja filters exposed by this plugin.
 
         Returns:
-            A mapping exposing ``docker_services_build_deploy_config`` and
-            ``docker_services_attach_deploy_config``.
+            A mapping exposing constraint resolution, deploy configuration
+            building and attachment.
         """
         return {
+            "docker_services_resolve_constraints": docker_services_resolve_constraints,
             "docker_services_build_deploy_config": docker_services_build_deploy_config,
             "docker_services_attach_deploy_config": docker_services_attach_deploy_config,
         }

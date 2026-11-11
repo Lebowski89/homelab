@@ -15,6 +15,9 @@ from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
 
+# Initialize controller plugins before the per-test process boundary. Ansible's
+# ctypes bootstrap may query ldconfig; the preparation operations stay guarded.
+import ansible.plugins.action  # noqa: F401
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -167,6 +170,28 @@ def test_stable_configuration_read_rejects_writer_or_identity_changes(tmp_path, 
         return original(descriptor)
 
     monkeypatch.setattr(UTILITY.os, "fstat", fstat)
+    with pytest.raises(ValueError, match="changed"):
+        UTILITY.read_stable_config(path)
+
+
+def test_stable_configuration_read_detects_same_size_write_even_with_coarse_metadata(tmp_path, monkeypatch):
+    path = tmp_path / "config.yml"
+    path.write_bytes(b"receivers: []\n")
+    before = path.lstat()
+    calls = 0
+    original_lstat = Path.lstat
+
+    def fstat(descriptor):
+        nonlocal calls
+        calls += 1
+        if calls == 2:
+            path.write_bytes(b"receivers: {}\n")
+        return before
+
+    monkeypatch.setattr(UTILITY.os, "fstat", fstat)
+    monkeypatch.setattr(
+        Path, "lstat", lambda selected, *args, **kwargs: before if selected == path else original_lstat(selected, *args, **kwargs)
+    )
     with pytest.raises(ValueError, match="changed"):
         UTILITY.read_stable_config(path)
 
@@ -394,7 +419,11 @@ def test_projection_real_catalog_never_templates_environment_secrets(monkeypatch
     monkeypatch.setattr(loader, "init_plugin_loader", lambda: None)
     host = SimpleNamespace(name="mgt")
     monkeypatch.setattr(
-        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_service_controller": SimpleNamespace(hosts=[host])})
+        manager,
+        "InventoryManager",
+        lambda **kw: SimpleNamespace(
+            groups={"tags_service_controller": SimpleNamespace(hosts=[host])}, get_groups_dict=lambda: {"all": [host.name]}
+        ),
     )
     monkeypatch.setattr(VariableManager, "__init__", lambda self, **kw: None)
     monkeypatch.setattr(
@@ -951,7 +980,11 @@ def test_alerting_projection_uses_inventory_and_keeps_credentials_value_free(mon
     monkeypatch.setattr(loader, "init_plugin_loader", lambda: None)
     host = SimpleNamespace(name="mgt")
     monkeypatch.setattr(
-        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_service_controller": SimpleNamespace(hosts=[host])})
+        manager,
+        "InventoryManager",
+        lambda **kw: SimpleNamespace(
+            groups={"tags_service_controller": SimpleNamespace(hosts=[host])}, get_groups_dict=lambda: {"all": [host.name]}
+        ),
     )
     monkeypatch.setattr(VariableManager, "__init__", lambda self, **kw: None)
     monkeypatch.setattr(
@@ -1219,7 +1252,11 @@ def test_bounded_batch_projection_and_cli_use_real_catalog_without_secret_resolu
     monkeypatch.setattr(loader, "init_plugin_loader", lambda: None)
     host = SimpleNamespace(name="mgt")
     monkeypatch.setattr(
-        manager, "InventoryManager", lambda **kw: SimpleNamespace(groups={"tags_service_controller": SimpleNamespace(hosts=[host])})
+        manager,
+        "InventoryManager",
+        lambda **kw: SimpleNamespace(
+            groups={"tags_service_controller": SimpleNamespace(hosts=[host])}, get_groups_dict=lambda: {"all": [host.name]}
+        ),
     )
     monkeypatch.setattr(VariableManager, "__init__", lambda self, **kw: None)
     monkeypatch.setattr(
@@ -1573,7 +1610,7 @@ def test_ownership_hardlink_apply_rejects_changed_identity_before_chown(tmp_path
     elif change == "contents":
         file.write_bytes(b"changed fixture contents\n")
     elif change == "mode":
-        file.chmod(0o600)
+        file.chmod(file.stat().st_mode ^ 0o100)
     else:
         (roots[0] / "new").write_bytes(b"new pathname")
     monkeypatch.setattr(UTILITY.os, "fchown", lambda *args: pytest.fail("changed identity was mutated"))

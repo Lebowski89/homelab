@@ -149,6 +149,33 @@
     owner: root
     group: root
     mode: "0755"
+    setype: _default
+
+- name: Backup restore validation | Prepare RPM temporary database labels
+  # checkov:skip=CKV2_ANSIBLE_3:Scoped SELinux preparation must abort on failure before enabling the restore job; do not run against partially labelled data.
+  when:
+    - postgres_backup_restore_validation_manage
+    - inventory_hostname == postgres_backup_restore_validation_host
+    - not ansible_check_mode
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  block:
+    - name: Backup restore validation | Validate current SELinux capability
+      ansible.builtin.import_tasks: "{{ role_path }}/tasks/selinux.yml"
+
+    - name: Backup restore validation | Declare only the isolated work-root context
+      when: ansible_facts.selinux.status == 'enabled'
+      community.general.sefcontext:
+        target: "{{ postgres_backup_restore_validation_work_root | regex_escape }}(/.*)?"
+        setype: postgresql_db_t
+        state: present
+
+    - name: Backup restore validation | Restore labels without crossing work-root mounts
+      when: ansible_facts.selinux.status == 'enabled'
+      community.general.serestorecon:
+        path: "{{ postgres_backup_restore_validation_work_root }}"
+        recurse: true
+        cross_filesystems: false
+        context: full
 
 - name: Backup restore validation | Manage systemd job
   ansible.builtin.include_role:

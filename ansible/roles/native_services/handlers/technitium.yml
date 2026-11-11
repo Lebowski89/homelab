@@ -1,0 +1,16 @@
+---
+
+- name: Restart systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: restarted
+  when:
+    - not ansible_check_mode
+    - technitium_native_disable_resolved_stub | bool
+
+- name: Restart Technitium DNS
+  when: not ansible_check_mode
+  ansible.builtin.systemd:
+    name: "{{ technitium_native_service_name }}"
+    state: restarted
+    daemon_reload: "{{ ansible_facts.pkg_mgr in ['dnf', 'dnf5'] }}"

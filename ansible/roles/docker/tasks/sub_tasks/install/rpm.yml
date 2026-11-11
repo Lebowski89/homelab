@@ -1,0 +1,34 @@
+---
+
+- name: Docker | Install RPM prerequisites
+  ansible.builtin.dnf:
+    name: "{{ docker_prereq_packages }}"
+    state: present
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    disable_gpg_check: false
+    allowerasing: false
+
+- name: Docker | Trust the Docker RPM signing key
+  ansible.builtin.rpm_key:
+    key: "{{ docker_rpm_key_url }}"
+    fingerprint: "{{ docker_rpm_key_fingerprint }}"
+    state: present
+
+- name: Docker | Configure the Docker RPM repository
+  ansible.builtin.yum_repository:
+    name: "docker-ce-{{ docker_repo_channel }}"
+    file: "{{ docker_repo_filename }}"
+    description: Docker CE
+    baseurl: "{{ docker_rpm_baseurl }}"
+    enabled: true
+    gpgcheck: true
+    gpgkey: "{{ docker_rpm_key_url }}"
+    state: present
+
+- name: Docker | Install RPM runtime packages
+  ansible.builtin.dnf:
+    name: "{{ docker_packages }}"
+    state: present
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    disable_gpg_check: false
+    allowerasing: false

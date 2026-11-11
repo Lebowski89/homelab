@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from collections.abc import Mapping
 from typing import Any
 
 from ansible.errors import AnsibleFilterError
@@ -145,6 +146,36 @@ def service_prepare_secret_declaration(var: Any, name: Any, update_policy: Any =
     }
 
 
+def service_prepare_storage_mounts(service, requests):
+    """Preparation containers share canonical storage and must not steal private labels."""
+    volumes = service.get("volumes", [])
+    volumes = list(volumes.values()) if isinstance(volumes, Mapping) else volumes
+    mounts = [volume for volume in volumes if isinstance(volume, Mapping) and volume.get("type", "bind") == "bind"]
+    result = []
+    for request in requests:
+        if not isinstance(request, str):
+            raise AnsibleFilterError("Temporary preparation mounts must use source:target[:ro|rw]")
+        parts = request.split(":")
+        if len(parts) not in {2, 3} or (len(parts) == 3 and parts[2] not in {"ro", "rw"}):
+            raise AnsibleFilterError("Temporary mount options must be ro/rw; SELinux options derive from canonical binds")
+        matches = [mount for mount in mounts if mount.get("source") == parts[0]]
+        if not matches:
+            raise AnsibleFilterError("Temporary preparation bind sources must be declared by the current service")
+        policies = [mount.get("selinux", "preserve") for mount in matches]
+        if any(not isinstance(policy, str) or policy not in {"preserve", "shared", "private"} for policy in policies):
+            raise AnsibleFilterError("Temporary preparation needs a valid canonical bind SELinux policy")
+        modes = set(policies)
+        if "private" in modes:
+            raise AnsibleFilterError(
+                "A preparation container cannot privately relabel permanent storage; use shared for this explicitly shared bind"
+            )
+        flags = [parts[2]] if len(parts) == 3 else []
+        if "shared" in modes:
+            flags.append("z")
+        result.append(":".join(parts[:2]) + (":" + ",".join(flags) if flags else ""))
+    return result
+
+
 class FilterModule:
     """Register application-preparation filters with Ansible."""
 
@@ -158,6 +189,7 @@ class FilterModule:
             ``service_prepare_secret_declaration``.
         """
         return {
+            "service_prepare_storage_mounts": service_prepare_storage_mounts,
             "service_prepare_runtime_executor": service_prepare_runtime_executor,
             "service_prepare_temporary_name": service_prepare_temporary_name,
             "service_prepare_extract_output": service_prepare_extract_output,

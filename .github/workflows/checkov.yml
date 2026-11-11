@@ -91,8 +91,51 @@ jobs:
             --output-file-path console,checkov.sarif \
             --soft-fail
 
-      - name: Upload Checkov SARIF
+      - name: Prepare Checkov SARIF upload copy
+        id: prepare_sarif
         if: (success() || failure()) && !fromJSON(steps.classify.outputs.renovate_docker_tag_only)
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+
+          def explicitly_suppressed(result):
+              suppressions = result.get("suppressions")
+              return isinstance(suppressions, list) and bool(suppressions) and all(
+                  isinstance(suppression, dict)
+                  and suppression.get("kind") in ("inSource", "external")
+                  and isinstance(suppression.get("justification"), str)
+                  and bool(suppression["justification"].strip())
+                  and (
+                      suppression.get("status") == "accepted"
+                      # Checkov emits this exact form for SKIPPED checks, without status.
+                      or set(suppression) == {"kind", "justification"}
+                  )
+                  for suppression in suppressions
+              )
+
+
+          report = json.loads(Path("checkov.sarif").read_text(encoding="utf-8"))
+          if report["version"] != "2.1.0" or not isinstance(report["runs"], list):
+              raise ValueError("Expected a SARIF 2.1.0 report with runs")
+          for run in report["runs"]:
+              if not isinstance(run["tool"]["driver"]["name"], str) or not run["tool"]["driver"]["name"]:
+                  raise ValueError("Expected a SARIF tool driver name")
+              results = run["results"]
+              if not isinstance(results, list) or any(
+                  not isinstance(result, dict) or not isinstance(result.get("message"), dict)
+                  for result in results
+              ):
+                  raise ValueError("Expected a SARIF results array with result messages")
+              run["results"] = [result for result in results if not explicitly_suppressed(result)]
+
+          # Keep the raw report and all run/rule metadata, even when no results remain.
+          Path("checkov-upload.sarif").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload Checkov SARIF
+        if: (success() || failure()) && steps.prepare_sarif.outcome == 'success' && !fromJSON(steps.classify.outputs.renovate_docker_tag_only)
         uses: github/codeql-action/upload-sarif@v4.38.3
         with:
-          sarif_file: checkov.sarif
+          sarif_file: checkov-upload.sarif

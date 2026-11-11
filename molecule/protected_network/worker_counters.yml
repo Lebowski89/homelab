@@ -1,0 +1,136 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Exercise actual worker rules and coalesced port counters
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Report the deliberate Ubuntu worker platform boundary
+      when: ansible_facts.distribution == 'Ubuntu'
+      ansible.builtin.debug:
+        msg: Ubuntu 26.04 covers the manager profile. Worker acceptance requires the separately supported Ubuntu 24.04 target.
+
+    - name: VM tests | Exercise the supported worker profile
+      # checkov:skip=CKV2_ANSIBLE_3:Groups supported worker acceptance; any policy, traffic or cleanup failure must remain fatal for retained evidence and controller retirement.
+      when: ansible_facts.distribution != 'Ubuntu'
+      block:
+        - name: VM tests | Retire only the owned manager policy before the worker case
+          ansible.builtin.include_role:
+            name: service_firewall
+            tasks_from: mgt/remove
+
+        - name: VM tests | Validate the real worker platform gate
+          ansible.builtin.include_role:
+            name: service_firewall
+            tasks_from: platform
+          vars:
+            service_firewall_profile: workers
+
+        - name: VM tests | Observe the actual separate peer's source route
+          ansible.builtin.command:
+            argv: [ip, netns, exec, 'molecule-{{ molecule_vm_run_id[:12] }}', ip, '-j', '{{ molecule_vm_route.0 }}', route, get, '{{ molecule_vm_route.1 }}']
+          loop: [['-4', '198.18.255.1', '198.18.255.2'], ['-6', '{{ molecule_vm_ipv6_prefix }}:1', '{{ molecule_vm_ipv6_prefix }}:2']]
+          loop_control:
+            loop_var: molecule_vm_route
+          changed_when: false
+          register: molecule_vm_peer_route
+
+        - name: VM tests | Require the qualified test source before allowing it
+          ansible.builtin.assert:
+            that: (molecule_vm_route_result.stdout | from_json)[0].prefsrc == molecule_vm_route_result.molecule_vm_route.2
+          loop: '{{ molecule_vm_peer_route.results }}'
+          loop_control:
+            loop_var: molecule_vm_route_result
+
+        - name: VM tests | Inspect the conventional worker marker
+          ansible.builtin.stat:
+            path: /etc/unraid-version
+          register: worker_backend_firewall_unraid
+
+        - name: VM tests | Select the exact observed sources and adjacent test publications
+          ansible.builtin.set_fact:
+            worker_backend_firewall_root: /etc/skynet-worker-backend-firewall
+            worker_backend_firewall_backend: nf_tables
+            worker_backend_firewall_python: /usr/bin/python3
+            worker_backend_firewall_policy:
+              schema: 1
+              lifecycle: true
+              inventory_host: subject
+              inventory_address: '{{ local_ip }}'
+              backend: nf_tables
+              ports: [18080, 18081]
+              sources: ['198.18.255.2', '{{ molecule_vm_ipv6_prefix }}:2']
+              sources_verified: true
+
+        # The catalogue's temporary migration planner requires two distinct
+        # workers. This one-guest case exercises its real policy transaction,
+        # persistence and counter reader without claiming placement coverage.
+        - name: VM tests | Install the real worker policy transaction
+          service_firewall_lifecycle:
+            phase: install
+            profile: workers
+            policy: '{{ worker_backend_firewall_policy }}'
+            inventory_host: subject
+
+        - name: VM tests | Install the real conventional worker persistence
+          ansible.builtin.include_role:
+            name: service_firewall
+            tasks_from: workers/systemd
+
+        - name: VM tests | Select the worker plan for the production counter reader
+          ansible.builtin.include_tasks: policy.tasks.yml
+
+        - name: VM tests | Supply the independently observed current peer sources
+          ansible.builtin.set_fact:
+            molecule_vm_worker_plan: >-
+              {{ molecule_vm_net_plan | combine({'profile': {'subject': 'workers'},
+                 'source_addresses': molecule_vm_peer_route.results | map(attribute='stdout')
+                   | map('from_json') | map('first') | map(attribute='prefsrc') | list}) }}
+
+        - name: VM tests | Read initial worker filter counters rather than pre-DNAT RETURN counters
+          service_firewall_lifecycle:
+            phase: counters
+            plan: '{{ molecule_vm_worker_plan }}'
+            inventory_host: subject
+          register: molecule_vm_worker_before
+
+        - name: VM tests | Send real HTTP through both coalesced ports and address families
+          ansible.builtin.command:
+            argv: [ip, netns, exec, 'molecule-{{ molecule_vm_run_id[:12] }}', python3,
+                   '/var/tmp/molecule-{{ molecule_vm_run_id }}-probe.py', '{{ molecule_vm_worker_probe.0 }}', '{{ molecule_vm_worker_probe.1 }}', allow]
+          loop: "{{ ['198.18.255.1', molecule_vm_ipv6_prefix ~ ':1'] | product([18080, 18081]) | list }}"
+          loop_control:
+            loop_var: molecule_vm_worker_probe
+          changed_when: false
+
+        - name: VM tests | Read actual post-traffic counters through the production reader
+          service_firewall_lifecycle:
+            phase: counters
+            plan: '{{ molecule_vm_worker_plan }}'
+            inventory_host: subject
+          register: molecule_vm_worker_after
+
+        - name: VM tests | Require both requested ports to map to increasing generated range counters
+          ansible.builtin.assert:
+            that:
+              - molecule_vm_worker_counter in molecule_vm_worker_before.counters
+              - molecule_vm_worker_after.counters[molecule_vm_worker_counter] > molecule_vm_worker_before.counters[molecule_vm_worker_counter]
+          loop: ['4:18080', '4:18081', '6:18080', '6:18081']
+          loop_control:
+            loop_var: molecule_vm_worker_counter
+
+        - name: VM tests | Preserve real worker counter evidence
+          ansible.builtin.copy:
+            dest: '{{ molecule_vm_evidence_directory }}/worker-counters.json'
+            content: '{{ {"before": molecule_vm_worker_before.counters, "after": molecule_vm_worker_after.counters} | to_json }}'
+            mode: '0600'
+          delegate_to: localhost
+          become: false
+
+        - name: VM tests | Remove only the worker policy through its real task path
+          ansible.builtin.include_role:
+            name: service_firewall
+            tasks_from: workers/remove

@@ -141,8 +141,12 @@
         'TAILSCALE_INSTALLED='
         in tailscale_bootstrap_install_probe_envelope.get('out-data', '')
     fail_msg: >-
-      The selected transport reached the guest, but the Tailscale installation probe did not
-      complete successfully.
+      The Tailscale installation probe failed using {{ tailscale_bootstrap_transport_effective }}
+      (exit {{ tailscale_bootstrap_install_probe_envelope.get('exitcode', 'unknown') }}).
+      {{ tailscale_bootstrap_install_probe_envelope.get('err-data', '') | trim }}
+      This result does not establish successful guest access. For SSH, verify the workstation's
+      trusted host key, authorized SSH identity and passwordless sudo for the selected guest user.
+      On a newly started VM, inspect cloud-init readiness through its console before retrying.
 
 - name: Tailscale Bootstrap | Record installation state
   ansible.builtin.set_fact:
@@ -208,7 +212,11 @@
             ca_bundle=/etc/ssl/certs/ca-certificates.crt
             export DEBIAN_FRONTEND=noninteractive
             ;;
-          fedora|rocky)
+          fedora)
+            package_manager=dnf
+            ca_bundle=/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem
+            ;;
+          rocky)
             package_manager=dnf
             ca_bundle=/etc/pki/tls/certs/ca-bundle.crt
             ;;

@@ -18,6 +18,38 @@ from jinja2.nativetypes import NativeEnvironment
 
 ROOT = Path(__file__).resolve().parents[2]
 ROLE = ROOT / "ansible/roles/service_firewall"
+pytest_plugins = ["test_system"]
+
+
+INVENTORY = {"all": ["storage", "media", "manager", "blacktop"]}
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("guard_installed", [True, False])
+def test_removal_keeps_docker_running_while_retiring_its_required_guard(system_run, guard_installed):
+    units = [
+        "skynet-worker-backend-firewall.timer",
+        "skynet-worker-backend-firewall.service",
+        "skynet-worker-backend-firewall-reconcile.service",
+    ]
+    result, calls, state = system_run(
+        role="service_firewall",
+        tasks_from="workers/remove",
+        tags="all",
+        state={"docker_running": True, "docker_requires_guard": guard_installed},
+        overrides={
+            "fixture_firewall_dependencies": True,
+            "fixture_files": {"/etc/systemd/system/" + unit: "fixture unit" for unit in units if guard_installed or unit != units[1]},
+            "worker_backend_firewall_unraid": {"stat": {"exists": False}},
+            "worker_backend_firewall_root": "/etc/skynet-worker-backend-firewall",
+            "worker_backend_firewall_python": "/usr/bin/python3",
+            "worker_backend_firewall_backend": "nf_tables",
+        },
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert state["docker_running"] and not state["docker_requires_guard"]
+    assert set(state["stopped_units"]) == {units[0], units[2]}
+    assert not any(call["module"] == "systemd_service" and call["options"].get("name") == "docker.service" for call in calls)
 
 
 def load(path, name):
@@ -30,6 +62,11 @@ def load(path, name):
 PLAN = load("ansible/action_plugins/worker_backend_firewall_plan.py", "worker_firewall_plan_test")
 VALIDATE = load("ansible/action_plugins/worker_backend_firewall_validate.py", "worker_firewall_validate_test")
 FW = load("ansible/roles/service_firewall/files/worker-backend-firewall.py", "worker_firewall_test")
+
+
+@pytest.fixture(autouse=True)
+def fixture_platform(monkeypatch):
+    monkeypatch.setattr(FW, "read_os_release", lambda: {"ID": "ubuntu", "VERSION_ID": "24.04"})
 
 
 def resolve(value):
@@ -58,7 +95,7 @@ def catalog():
 
 
 def plan(services):
-    return PLAN.build_plan(services, ["storage", "media"], "192.0.2.48", resolve)
+    return PLAN.build_plan(services, ["storage", "media"], "192.0.2.48", resolve, INVENTORY)
 
 
 def test_real_catalog_selects_physical_workers_without_templating_application_values():
@@ -67,22 +104,26 @@ def test_real_catalog_selects_physical_workers_without_templating_application_va
     observed = []
 
     def minimal_template(metadata):
-        assert set(metadata) == {"host", "backend", "ports"}
+        assert set(metadata) == {"hosts", "backend", "ports"}
         observed.append(metadata)
         return resolve(metadata)
 
-    result = PLAN.build_plan(services, ["storage", "media"], "192.0.2.48", minimal_template)
+    result = PLAN.build_plan(services, ["storage", "media"], "192.0.2.48", minimal_template, INVENTORY)
     # Whole catalog evaluated, but only host backend publications protected;
     # Syncthing/P2P/IRC/etc. listeners stay outside this temporary allocation.
-    assert len(result["storage"]["ports"]) == 22
+    assert len(result["storage"]["ports"]) == 20
     assert len(result["media"]["ports"]) == 2
     assert any(endpoint["service"] == "tautulli" for endpoint in result["media"]["endpoints"])
     assert any(endpoint["service"] == "blackbox_exporter" for endpoint in result["storage"]["endpoints"])
     assert all(22601 <= port <= 22623 for entry in result.values() for port in entry["ports"])
-    assert len(observed) == 23
+    assert len(observed) == 21
     assert services == original
     for service in services.values():
         service["tags"] = []
+        if service["runtime"] == "native":
+            config = service["native"]["config"]
+            config[next(iter(config))] = "{{ lookup('must_never_run') }}"
+            continue
         service["environment"] = {"POISON": "{{ lookup('must_never_run') }}"}
         for target in service.get("targets", {}).values():
             target["tags"] = []
@@ -93,7 +134,7 @@ def test_effective_target_ports_and_placement_override_base():
     service = catalog()["tautulli"]
     service["targets"] = {
         "new": {
-            "deploy": {"host": "storage"},
+            "deploy": {"hosts": "storage"},
             "traefik": {"backend_host_inventory": "storage"},
             "ports": {"web_backend": {"published": 22601}},
         },
@@ -112,7 +153,7 @@ def test_effective_target_ports_and_placement_override_base():
 @pytest.mark.parametrize(
     "change",
     [
-        {"deploy": {"host": "manager"}},
+        {"deploy": {"hosts": "manager"}},
         {"traefik": {"backend_host_inventory": "storage"}},
         {"ports": {"web_backend": {"published": 22, "target": 8181, "mode": "host"}}},
         {"ports": {"web_backend": {"published": True, "target": 8181, "mode": "host"}}},
@@ -134,7 +175,7 @@ def test_duplicate_host_publication_and_empty_worker_set_rejected():
     with pytest.raises(ValueError, match="duplicate"):
         plan({"a": service, "b": service})
     with pytest.raises(ValueError):
-        PLAN.build_plan({}, [], "192.0.2.48", resolve)
+        PLAN.build_plan({}, [], "192.0.2.48", resolve, INVENTORY)
 
 
 def policy(**overrides):
@@ -188,11 +229,27 @@ class Kernel:
             for family in [4, 6]
         }
         self.fail_test_family = None
+        self.native_rules = {"nftables": [{"table": {"family": "inet", "name": "firewalld"}}]}
 
     def run(self, argv, data=None):
         self.calls.append((argv, data))
         if argv[0] == "ip":
             return json.dumps([{"addr_info": [{"local": address} for address in self.addresses]}])
+        if argv[0] == "nft":
+            assert argv == ["nft", "--json", "list", "ruleset"]
+            native = deepcopy(self.native_rules)
+            for family, tables in self.state.items():
+                for name, chains in tables.items():
+                    if not chains:
+                        continue
+                    family_name = "ip6" if family == 6 else "ip"
+                    native["nftables"].append({"table": {"family": family_name, "name": name}})
+                    for chain in chains:
+                        metadata = {"family": family_name, "table": name, "name": chain}
+                        if chain in {"INPUT", "FORWARD", "OUTPUT", "PREROUTING"}:
+                            metadata["hook"] = chain.lower()
+                        native["nftables"].append({"chain": metadata})
+            return json.dumps(native)
         family = 6 if argv[0].startswith("ip6") else 4
         if argv[1:] == ["--version"]:
             return f"{argv[0]} v1.8.11 ({self.backend})"
@@ -227,6 +284,7 @@ class Kernel:
                     table[chain].append(rule)
                 else:
                     assert rule[0] == "1"
+                    table.setdefault(chain, [])
                     table[chain].insert(0, rule[1:])
         return ""
 
@@ -276,7 +334,8 @@ def test_both_families_tested_before_any_mutation_and_backend_is_never_switched(
     assert kernel.state == original
     with pytest.raises(ValueError, match="switching"):
         FW.reconcile(policy(backend="nf_tables"), run=kernel.run)
-    assert not any(argv[0] in {"update-alternatives", "nft"} for argv, _ in kernel.calls)
+    assert not any(argv[0] == "update-alternatives" for argv, _ in kernel.calls)
+    assert all(argv == ["nft", "--json", "list", "ruleset"] for argv, _ in kernel.calls if argv[0] == "nft")
 
 
 @pytest.mark.parametrize("operation", ["apply", "remove"])
@@ -832,11 +891,10 @@ def test_direct_helper_invalid_confirmation_creates_no_lock_or_state(tmp_path, m
 @pytest.mark.parametrize(
     "change",
     [
-        {"host": ["storage", "manager"]},
-        {"host": ["storage", "storage"]},
-        {"host": []},
-        {"host": ["storage", "media"], "mode": "replicated"},
-        {"host": ["storage", "media"], "type": "container"},
+        {"hosts": ["storage", "manager"]},
+        {"hosts": []},
+        {"hosts": ["storage", "media"], "mode": "replicated"},
+        {"hosts": ["storage", "media"], "type": "container"},
     ],
 )
 def test_global_worker_publication_rejects_ambiguous_or_non_worker_placement(change):

@@ -1,1 +1,6 @@
 38cdd48d2b7a53529ee7a9abb0b916ffc477c633:ansible/roles/service_common/filter_plugins/service_common.py:generic-api-key:506
+
+# Public Docker CE RPM signing-key fingerprint, verified from download.docker.com/linux/centos/gpg.
+8fdd66fb2c0a657f44a688ea15f95a001fcc7462:ansible/roles/docker/defaults/main.yml:generic-api-key:21
+# Public Grafana Labs RPM signing-key fingerprint, verified from rpm.grafana.com/gpg.key.
+5626d699336ed69d814d81f1b9a8d32292164b73:ansible/roles/native_services/defaults/alloy.yml:generic-api-key:22

@@ -1,0 +1,94 @@
+---
+
+- name: Podman compatibility | Explain deferred provider checks in check mode
+  when:
+    - ansible_check_mode
+    - podman_docker_iptables_compatibility or podman_docker_compat_file.stat.exists
+  ansible.builtin.debug:
+    msg: >-
+      Would {{ 'select Netavark iptables compatibility' if podman_docker_iptables_compatibility
+               else 'remove the role-owned provider choice' }}.
+      Runtime/provider, competing override, all-account quiescence and nf_tables tool verification are deferred.
+      No provider, network, container or firewall is changed; packet flow has not been verified.
+  changed_when: podman_docker_compat_change
+
+- name: Podman compatibility | Validate the selected installed provider
+  # checkov:skip=CKV2_ANSIBLE_3:Read-only provider and nf_tables checks must abort before persisting compatibility configuration.
+  when:
+    - not ansible_check_mode
+    - podman_docker_iptables_compatibility
+  block:
+    - name: Podman compatibility | Inspect only local rootful runtime metadata
+      ansible.builtin.command:
+        argv: [podman, --remote=false, info, --format, "{{ '{{json .Host}}' }}"]
+      register: podman_docker_compat_info
+      changed_when: false
+
+    - name: Podman compatibility | Resolve provider metadata
+      ansible.builtin.set_fact:
+        podman_docker_compat_host: "{{ podman_docker_compat_info.stdout | from_json }}"
+        podman_docker_compat_version: >-
+          {{ (podman_docker_compat_info.stdout | from_json).networkBackendInfo.version
+             | default('') | regex_search('[0-9]+[.][0-9]+[.][0-9]+') | default('0.0.0', true) }}
+
+    - name: Podman compatibility | Require the reviewed Netavark iptables provider
+      ansible.builtin.assert:
+        that:
+          - podman_docker_compat_host.networkBackend == 'netavark'
+          - podman_docker_compat_host.security.rootless is sameas false
+          - podman_docker_compat_version is version('1.14.0', '>=')
+          - podman_docker_compat_version is version('1.18.0', '<')
+        fail_msg: >-
+          Explicit Docker compatibility requires local rootful Netavark 1.14-1.17 with its iptables provider.
+          Later provider support must be reviewed before enabling this option; no alternative backend is selected automatically.
+
+    - name: Podman compatibility | Inspect both families of compatibility tools
+      ansible.builtin.command:
+        argv: ["{{ podman_docker_compat_tool }}", --version]
+      loop: [iptables, ip6tables, iptables-save, ip6tables-save, iptables-restore, ip6tables-restore]
+      loop_control:
+        loop_var: podman_docker_compat_tool
+      changed_when: false
+      register: podman_docker_compat_tools
+
+    - name: Podman compatibility | Require consistent nf_tables tools
+      ansible.builtin.assert:
+        that: "'(nf_tables)' in podman_docker_compat_tool_result.stdout"
+        fail_msg: Install matching distribution iptables-nft tools; this role never switches host alternatives or accepts mixed backends.
+      loop: "{{ podman_docker_compat_tools.results }}"
+      loop_control:
+        loop_var: podman_docker_compat_tool_result
+        label: "{{ podman_docker_compat_tool_result.podman_docker_compat_tool }}"
+
+- name: Podman compatibility | Ensure the system configuration directory
+  when:
+    - not ansible_check_mode
+    - podman_docker_iptables_compatibility
+  ansible.builtin.file:
+    path: /etc/containers/containers.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+    setype: _default
+
+- name: Podman compatibility | Persist the explicit compatibility provider
+  when:
+    - not ansible_check_mode
+    - podman_docker_iptables_compatibility
+  ansible.builtin.copy:
+    src: docker-iptables-compat.conf
+    dest: /etc/containers/containers.conf.d/40-skynet-docker-compat.conf
+    owner: root
+    group: root
+    mode: "0644"
+    setype: _default
+
+- name: Podman compatibility | Retire only this role's provider choice
+  when:
+    - not ansible_check_mode
+    - not podman_docker_iptables_compatibility
+    - podman_docker_compat_file.stat.exists
+  ansible.builtin.file:
+    path: /etc/containers/containers.conf.d/40-skynet-docker-compat.conf
+    state: absent

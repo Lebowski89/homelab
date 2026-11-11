@@ -47,6 +47,8 @@ class ActionModule(ActionBase):
                 for port in (values.values() if isinstance(values, dict) else values)
                 if isinstance(port, dict) and isinstance(port.get("callers", []), list)
             )
+            if entry["runtime"] == "native" and (ports or declared_caller):
+                raise ValueError("Protected native endpoints and callers require a verified host-listener/identity firewall adapter")
             if self._task.args["action"] == "drift" or (
                 legacy
                 and not ports
@@ -76,6 +78,10 @@ class ActionModule(ActionBase):
                 for target in base.get("targets", {None: {}}):
                     key = name + (":" + target if target else "")
                     cfg = CATALOG.service_catalog_merge_target(base, target)
+                    if cfg["runtime"] == "native":
+                        # No native runtime verifier exists yet. Native entries
+                        # cannot become container identities in another plan.
+                        continue
                     raw_configs[key] = cfg
                     # Project first. Templating a complete service would resolve
                     # environment/credential lookups belonging to other apps.
@@ -96,12 +102,20 @@ class ActionModule(ActionBase):
                     value["operational_requirements"] = cfg.get("operational_requirements", {})
                     value["deploy"] = {
                         field: cfg.get("deploy", {})[field]
-                        for field in ["host", "type", "mode", "replicas", "execution"]
+                        for field in ["hosts", "type", "mode", "replicas", "execution"]
                         if field in cfg.get("deploy", {})
                     }
                     value["_health_required"] = bool(cfg.get("healthcheck")) and not cfg.get("healthcheck", {}).get("disable", False)
                     value["enabled"] = base.get("enabled", True) and cfg.get("enabled", True)
-                    catalog[key] = self._templar.template(value, fail_on_undefined=True)
+                    concrete = self._templar.template(value, fail_on_undefined=True)
+                    try:
+                        catalog[key] = CATALOG.service_catalog_resolve_placement(concrete, variables["groups"])
+                    except CATALOG.AnsibleFilterError:
+                        if key == selected:
+                            raise
+                        # An unplaced unrelated entry cannot supply a protected
+                        # identity. Referencing it still fails declaration checks.
+                        continue
             catalog_keys = set(catalog)
             bootstrap = []
             for role in ["netbox", "infisical"]:
@@ -116,10 +130,10 @@ class ActionModule(ActionBase):
                         value, fail_on_undefined=True
                     )
 
-                bootstrap.extend(MGT.bootstrap_metadata(role, defaults, template_default))
+                bootstrap.extend(MGT.bootstrap_metadata(role, defaults, template_default, variables["groups"]))
                 for definition in defaults[f"{role}_podman_services"]:
                     metadata = COMMON.service_common_requirements_metadata({"runtime": "podman", **definition}, definition["name"])
-                    metadata = template_default(metadata, defaults)
+                    metadata = CATALOG.service_catalog_resolve_placement(template_default(metadata, defaults), variables["groups"])
                     name = metadata["name"]
                     if name not in catalog:
                         catalog[name] = metadata
@@ -127,6 +141,7 @@ class ActionModule(ActionBase):
             selected_metadata = COMMON.service_common_requirements_metadata(
                 entry["config"], entry["config"].get("name", entry["name"] + ("-" + entry["target"] if entry.get("target") else ""))
             )
+            selected_metadata = CATALOG.service_catalog_resolve_placement(selected_metadata, variables["groups"])
             catalog[selected] = {
                 **selected_metadata,
                 "deploy": {
@@ -142,19 +157,24 @@ class ActionModule(ActionBase):
             }
             controller = variables["services_controller_host"]
             workers = [variables["services_storage_host"], variables["services_plex_host"]]
-            protected = MGT.build_plan({key: catalog[key] for key in catalog_keys}, controller, lambda value, defaults: value, bootstrap)
+            protected = MGT.build_plan(
+                {key: catalog[key] for key in catalog_keys}, controller, lambda value, defaults: value, bootstrap, variables["groups"]
+            )
             provider_endpoints = [e | {"host": controller} for e in protected["endpoints"]]
             legacy_endpoints = None
             if legacy:
                 legacy_endpoints = []
                 actual = selected_metadata["name"]
-                hosts = selected_metadata.get("deploy", {}).get("host", controller)
-                hosts = [hosts] if isinstance(hosts, str) else hosts
+                hosts = selected_metadata["deploy"]["hosts"]
                 if hosts == [controller]:
                     legacy_endpoints = [e | {"host": controller} for e in protected["endpoints"] if e["service"] == actual]
                 elif set(hosts) <= set(workers):
                     worker_plan = WORKERS.build_plan(
-                        {selected: catalog[selected]}, workers, variables["hostvars"][controller]["local_ip"], lambda value: value
+                        {selected: catalog[selected]},
+                        workers,
+                        variables["hostvars"][controller]["local_ip"],
+                        lambda value: value,
+                        variables["groups"],
                     )
                     for host in hosts:
                         for endpoint in worker_plan[host]["endpoints"]:
@@ -196,8 +216,12 @@ class ActionModule(ActionBase):
             for record in plan["callers"].values():
                 binding = record.get("binding") or {}
                 if binding.get("runtime") == "podman" and binding.get("mode") == "rootless":
-                    record["metadata"] = self._templar.template(
-                        COMMON.service_common_requirements_metadata(raw_configs[record["name"]], record["service"]), fail_on_undefined=True
+                    record["metadata"] = CATALOG.service_catalog_resolve_placement(
+                        self._templar.template(
+                            COMMON.service_common_requirements_metadata(raw_configs[record["name"]], record["service"]),
+                            fail_on_undefined=True,
+                        ),
+                        variables["groups"],
                     )
             plan["metadata"] = selected_metadata
             plan["sources"] = variables.get("worker_backend_firewall_source_addresses")

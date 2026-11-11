@@ -135,7 +135,7 @@ netbox_podman_services:
       ownership_transition: true
     deploy:
       type: container
-      host: '{{ inventory_hostname }}'
+      hosts: '{{ inventory_hostname }}'
       execution:
         mode: rootless
         host_user: podman-netbox-postgres
@@ -194,7 +194,7 @@ netbox_podman_services:
       ownership_transition: true
     deploy:
       type: container
-      host: '{{ inventory_hostname }}'
+      hosts: '{{ inventory_hostname }}'
       execution:
         mode: rootless
         host_user: podman-netbox-redis
@@ -278,7 +278,7 @@ netbox_podman_services:
       ownership_transition: true
     deploy:
       type: container
-      host: '{{ inventory_hostname }}'
+      hosts: '{{ inventory_hostname }}'
       execution:
         mode: rootless
         host_user: podman-netbox

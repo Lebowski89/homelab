@@ -1,0 +1,33 @@
+---
+
+- name: Alloy native | Ensure apt keyring directory exists
+  ansible.builtin.file:
+    path: "{{ alloy_native_keyring_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Alloy native | Download Grafana package signing key
+  ansible.builtin.get_url:
+    url: "{{ alloy_native_repo_url }}/gpg-full.key"
+    dest: "{{ alloy_native_keyring_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Alloy native | Configure Grafana apt repository
+  ansible.builtin.apt_repository:
+    repo: >-
+      deb [signed-by={{ alloy_native_keyring_file }}]
+      {{ alloy_native_repo_url }} {{ alloy_native_repo_suite }} main
+    filename: "{{ alloy_native_repo_filename }}"
+    state: present
+    update_cache: true
+
+- name: Alloy native | Install APT packages
+  ansible.builtin.apt:
+    name: "{{ alloy_native_packages }}"
+    state: >-
+      {{ 'latest' if native_services_action == 'update'
+         and native_services_entry.config.native.update_policy == 'latest' else 'present' }}

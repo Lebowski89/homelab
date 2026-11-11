@@ -1,7 +1,9 @@
 """Run only the firewall-owned part of a normal service operation."""
 
+import base64
 import importlib.util
 import json
+import zlib
 from pathlib import Path
 
 from ansible.errors import AnsibleActionFail
@@ -51,6 +53,8 @@ def remote_source(profile):
 import json, sys
 try:
     print(json.dumps(remote.run_lifecycle(engine, helper, json.load(sys.stdin)), sort_keys=True))
+except remote.ProbeError as error:
+    print(json.dumps({'failed': True, 'changed': False, 'probe_retryable': error.retryable, 'msg': str(error)}))
 except (OSError, ValueError, RuntimeError, KeyError, TypeError, remote.subprocess.SubprocessError) as error:
     print('Service firewall: ' + str(error), file=sys.stderr)
     sys.exit(1)
@@ -117,7 +121,18 @@ class ActionModule(ActionBase):
         phase = self._task.args["phase"]
         try:
             profile = "mgt" if phase in {"probe", "addresses"} else plan["profile"][host]
-            unraid = host == variables["services_storage_host"]
+            unraid = False
+            if profile == "workers":
+                marker = self._execute_module(
+                    module_name="ansible.builtin.stat",
+                    module_args={"path": "/etc/unraid-version", "follow": False, "get_checksum": False},
+                    task_vars=variables,
+                )
+                if marker.get("failed") or marker.get("unreachable") or "stat" not in marker:
+                    raise ValueError("cannot inspect the worker platform marker before selecting policy storage")
+                unraid = marker["stat"].get("exists", False)
+                if unraid and host != variables["services_storage_host"]:
+                    raise ValueError("Unraid firewall persistence is restricted to the canonical storage host")
             request = {
                 "service": plan["service"],
                 "runtime": plan["runtime"],
@@ -148,10 +163,34 @@ class ActionModule(ActionBase):
             if phase == "probe":
                 request["endpoints"] = [{**e, "address": plan["inventory"][e["host"]]} for e in plan["endpoints"]]
             helper, source = remote_source(profile)
+            # On 4 KiB-page Linux each exec argument is limited to 128 KiB.
+            # The manager bundle exceeds that even though overall argv fits.
+            # Keep policy input on stdin and compress only repository code.
+            encoded_source = base64.b64encode(zlib.compress(source.encode())).decode("ascii")
+            bootstrap = (
+                "import base64,zlib;exec(compile(zlib.decompress(base64.b64decode("
+                + repr(encoded_source)
+                + ")), '<service-firewall>', 'exec'))"
+            )
+            facts = variables["hostvars"][host].get("ansible_facts", {})
+            configured = variables["hostvars"][host].get("ansible_python_interpreter", "")
+            interpreter = facts.get("python", {}).get("executable") or (
+                configured if configured.startswith("/") else facts.get("discovered_interpreter_python", "/usr/bin/python3")
+            )
+            if (
+                not isinstance(interpreter, str)
+                or not interpreter.startswith("/")
+                or any(character.isspace() or character in "%'\"\\" for character in interpreter)
+            ):
+                raise ValueError("firewall interpreter must be an absolute executable path without systemd specifiers or quoting")
             units = {}
             if profile == "mgt":
                 environment = Environment(undefined=StrictUndefined)
-                context = {"mgt_firewall_root": request["root"], "mgt_firewall_plan": {"endpoints": request["endpoints"]}}
+                context = {
+                    "mgt_firewall_root": request["root"],
+                    "mgt_firewall_plan": {"endpoints": request["endpoints"]},
+                    "mgt_firewall_python": interpreter,
+                }
                 for name in [
                     "skynet-mgt-firewall.service",
                     "skynet-mgt-firewall-reconcile.service",
@@ -166,9 +205,9 @@ class ActionModule(ActionBase):
                     )
             args = {
                 "argv": [
-                    variables["hostvars"][host].get("ansible_facts", {}).get("discovered_interpreter_python", "/usr/bin/python3"),
+                    interpreter,
                     "-c",
-                    source,
+                    bootstrap,
                 ],
                 "stdin": json.dumps(
                     {
@@ -187,7 +226,10 @@ class ActionModule(ActionBase):
                 # Never return the command module's invocation/embedded source.
                 message = observed.get("stderr", "remote firewall transaction failed").strip().splitlines()
                 raise ValueError(message[-1][:600] if message else "remote firewall transaction failed")
-            return dict(result, **json.loads(observed["stdout"]))
+            payload = json.loads(observed["stdout"])
+            if payload.get("failed"):
+                payload["msg"] = f"{host} {phase}: {payload['msg']}. Protection and the selected reservation are retained."
+            return dict(result, **payload)
         except (ValueError, KeyError, TypeError, OSError) as error:
             # A failed result participates in the task's bounded retry loop.
             # Raising an action exception would bypass health/removal polling.

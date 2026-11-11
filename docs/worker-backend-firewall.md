@@ -10,12 +10,14 @@ acceptance histories are retained outside Git under `/opt/ansible/migration/`.
 Keep verified policy and unchanged acceptance evidence; collect fresh source,
 listener, route and counter proof for changed paths. No application deployment,
 secret lookup or dependency installation is implied by policy-only operations.
-Rocky Linux and consolidated host firewall design remain separate work.
+Conventional Fedora 43–45 and Rocky 10 may fill either existing worker inventory
+role under the [RPM prerequisites](service-firewall.md#fedora-and-rocky-prerequisites).
+Consolidated host firewall design and application migration remain separate work.
 
 ## Scope and ownership
 
 The controller action uses the canonical base-plus-target merger and templates
-only value-free endpoint metadata. Physical placement comes from `deploy.host`,
+only value-free endpoint metadata. Physical placement comes from `deploy.hosts`,
 not the Swarm manager that dispatches a stack. The controller/storage groups and
 `services_plex_host` use the existing NetBox inventory contract; `local_ip` is
 NetBox's primary address, which may differ from the Tailscale `ansible_host`.
@@ -220,6 +222,9 @@ Removal disables only owned Plex units, removes only the owned Docker drop-in
 and Unraid boot block, stops the Unraid watcher and deletes only the owned
 policy files/rules. It leaves directories, other boot content, Docker and
 Tailscale intact. It does not restart Docker or restore a whole-host snapshot.
+On systemd hosts, removal disables the boot guard without stopping its active
+oneshot while Docker still requires it. Removing the owned drop-in and reloading
+unit definitions retires that dependency; reconciliation units are stopped.
 A missing persistent helper does not prevent kernel cleanup. Names/references
 that cannot be proven owned require operator review; do not flush the ruleset
 as a workaround.

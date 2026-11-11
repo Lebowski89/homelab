@@ -42,7 +42,7 @@
     detach: "{{ service_prepare_temporary_container.detach | default(true) }}"
     cleanup: false
     env: "{{ service_prepare_temporary_container.environment | default({}) }}"
-    volumes: "{{ service_prepare_temporary_container.mounts | default([]) }}"
+    volumes: "{{ service_prepare_temporary_mounts }}"
     restart_policy: "no"
   register: service_prepare_temporary_container_result
   delegate_to: "{{ service_prepare_temporary_container.host }}"

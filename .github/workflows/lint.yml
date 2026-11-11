@@ -6,18 +6,26 @@ on:
   push:
     branches: [main]
     paths:
+      - ".config/molecule/**"
       - "ansible/**"
+      - "molecule/**"
       - "scripts/ci/**"
+      - "scripts/testing/**"
       - "tests/**"
       - "pyproject.toml"
       - ".github/workflows/lint.yml"
+      - ".github/workflows/vm-tests.yml"
   pull_request:
     paths:
+      - ".config/molecule/**"
       - "ansible/**"
+      - "molecule/**"
       - "scripts/ci/**"
+      - "scripts/testing/**"
       - "tests/**"
       - "pyproject.toml"
       - ".github/workflows/lint.yml"
+      - ".github/workflows/vm-tests.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -59,7 +67,9 @@ jobs:
         with:
           python-version: "3.14.9"
           cache: pip
-          cache-dependency-path: ansible/requirements.txt
+          cache-dependency-path: |
+            ansible/requirements.txt
+            molecule/requirements.txt
 
       - name: Install fast-path tooling
         if: fromJSON(steps.classify.outputs.renovate_docker_tag_only)
@@ -70,11 +80,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
 
-          if [ -f ansible/requirements.txt ]; then
-            python -m pip install -r ansible/requirements.txt
-          fi
-
-          python -m pip install ansible-core ansible-lint yamllint ruff pytest
+          python -m pip install -r molecule/requirements.txt
 
       - name: Prepare ansible log dir
         if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
@@ -137,7 +143,10 @@ jobs:
             ansible/roles/service_prepare/filter_plugins \
             ansible/roles/service_prepare/library \
             scripts/ci \
+            scripts/testing \
+            molecule/shared \
             tests/unit \
+            tests/molecule \
             tests/conftest.py \
             tests/fixtures/haproxy_operator/commands.py \
             tests/fixtures/ansible/retry_playbook.py
@@ -155,7 +164,10 @@ jobs:
             ansible/roles/service_prepare/filter_plugins \
             ansible/roles/service_prepare/library \
             scripts/ci \
+            scripts/testing \
+            molecule/shared \
             tests/unit \
+            tests/molecule \
             tests/conftest.py \
             tests/fixtures/haproxy_operator/commands.py \
             tests/fixtures/ansible/retry_playbook.py
@@ -164,6 +176,17 @@ jobs:
         if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
         run: |
           ansible-lint --format=pep8 ansible
+
+      - name: Molecule CLI and syntax (no guest access)
+        if: ${{ !fromJSON(steps.classify.outputs.renovate_docker_tag_only) }}
+        run: |
+          ANSIBLE_FILTER_PLUGINS="$GITHUB_WORKSPACE/ansible/filter_plugins:$GITHUB_WORKSPACE/ansible/roles/service_common/filter_plugins" \
+            ANSIBLE_ACTION_PLUGINS="$GITHUB_WORKSPACE/ansible/action_plugins" \
+            ansible-lint --format=pep8 molecule
+          for scenario in rocky_node_exporter runtime_install application_lifecycle protected_network; do
+            molecule syntax -s "$scenario"
+          done
+          python -m pytest tests/molecule -q --tb=short
 
   tests:
     name: pytest (${{ matrix.name }})

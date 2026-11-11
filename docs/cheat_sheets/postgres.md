@@ -2,6 +2,9 @@
 
 This is a practical command cheat sheet for the Patroni + PostgreSQL cluster.
 
+For supported Debian/Ubuntu, Fedora and Rocky boundaries, package-only installation,
+RPM paths and safety limitations, see [PostgreSQL host platforms](../postgresql-platforms.md).
+
 Assumptions:
 
 - Patroni config: `/etc/patroni/config.yml`

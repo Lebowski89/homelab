@@ -735,39 +735,13 @@ def reconcile(
         payload = ""
         for table in OWNED.CHAINS:
             required = {"PREROUTING", "OUTPUT"} if table == "mangle" else {"INPUT", "FORWARD", "OUTPUT"}
-            family_name = "ip" if family == 4 else "ip6"
-            present = any(
-                entry.get("table", {}).get("family") == family_name and entry["table"].get("name") == table
-                for entry in native.get("nftables", [])
-            )
-            parents = {
-                entry["chain"]["name"]: entry["chain"]
-                for entry in native.get("nftables", [])
-                if entry.get("chain", {}).get("family") == family_name and entry["chain"].get("table") == table
-            }
-            # Avoid xtables-nft listing paths which initialize absent skeletons.
-            # Audits/removal inspect the read-only native snapshot first.
-            if not present:
+            state = OWNED.compatibility_table(tool, table, native, required, operation, run)
+            if state is None:
                 if operation == "remove":
                     continue
                 if operation == "check":
                     pending.append(f"{tool}: {table} table is absent")
                     continue
-                # First restore insertion creates the mapped parents in a new
-                # compatibility table. No default-policy declaration is emitted.
-                state = {parent: [] for parent in required}
-            else:
-                saved = run([f"{tool}-save", "-t", table])
-                state = OWNED.read_table(saved)
-                policies = {line.split()[0][1:]: line.split()[1] for line in saved.splitlines() if line.startswith(":")}
-                for parent in required:
-                    # xtables-nft-save includes logical built-ins even before
-                    # their native chains exist. Restore insertion materializes
-                    # the standard chain; audit/removal never insert into it.
-                    if policies.get(parent) not in {"ACCEPT", "DROP"} or (
-                        parent in parents and parents[parent].get("hook") != parent.lower()
-                    ):
-                        raise ValueError(f"{tool}: incompatible {table} built-in chain {parent}; refusing shared-policy repair")
             if not required <= state.keys():
                 raise ValueError(f"{tool}: required {table} base chains are unavailable")
             payload += OWNED.table_patch(table, state, desired)
@@ -853,6 +827,8 @@ def main():
         callers, pending = resolve_callers(policy, allow_pending=True)
         print(json.dumps({"callers": callers, "pending": pending}, sort_keys=True))
         return
+    if args.operation != "remove":
+        OWNED.rpm_firewall_preflight(wait_for_daemon=args.operation == "apply")
     # Audit and preflight never create directories/locks or write rules. Live
     # install preflight has run before persistence is touched. Reconciliation
     # failures remain fail closed for disappearing runtime bindings.

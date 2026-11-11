@@ -1,0 +1,98 @@
+---
+
+name: Controlled VM acceptance
+
+# checkov:skip=CKV_GHA_7:Fixed-choice suite/OS inputs select disposable acceptance tests, not release artifacts; trusted-ref and restricted-runner gates remain enforced.
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        type: choice
+        default: all
+        options: [all, rocky_node_exporter, runtime_install, application_lifecycle, protected_network]
+      os:
+        type: choice
+        default: all
+        options: [all, debian13, fedora44, rocky102, ubuntu2604]
+  schedule:
+    - cron: '30 18 * * 0'
+  push:
+    branches: [main]
+    paths:
+      - '.config/molecule/**'
+      - 'molecule/**'
+      - 'scripts/testing/**'
+      - 'ansible/roles/native_services/**'
+      - 'ansible/group_vars/all/services/node_exporter.yml'
+      - 'ansible/roles/docker*/**'
+      - 'ansible/roles/podman*/**'
+      - 'ansible/roles/service_*/**'
+      - 'ansible/action_plugins/**'
+      - 'ansible/filter_plugins/**'
+      - 'ansible/tasks/**'
+      - 'ansible/playbook.yml'
+      - 'terraform/proxmox/modules/cloudinit-vm/**'
+      - '.github/workflows/vm-tests.yml'
+
+permissions:
+  contents: read
+
+# Never cancel an executing controller and lose its resource/evidence handoff.
+concurrency:
+  group: disposable-vm-allocation
+  cancel-in-progress: false
+
+jobs:
+  acceptance:
+    # Disabled until a separate, restricted controller and protected environment
+    # have been established. No PR event, fork checkout, production mgt runner,
+    # production Docker socket, or repository-supplied credential file.
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'Lebowski89/homelab' &&
+      vars.MOLECULE_VM_TESTS_ENABLED == 'true'
+    environment: disposable-vm-tests
+    # This group MUST enforce selected-workflow/ref access outside repository
+    # code. Labels, job conditions and environment approval alone cannot stop
+    # a public PR from adding a different job targeting a standing runner.
+    runs-on:
+      group: restricted-disposable-vm-controller
+      labels: disposable-vm-controller
+    # The broad lane replaces guests serially across 32 cases; allow time for
+    # real package installation and reboots, while retaining a hard job bound.
+    timeout-minutes: 720
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Select and run serial cases on the approved allocation
+        env:
+          VM_SUITE: ${{ inputs.suite || 'all' }}
+          VM_OS: ${{ inputs.os || 'all' }}
+          VM_EVENT: ${{ github.event_name }}
+          VM_BEFORE: ${{ github.event.before }}
+          VM_PROFILE: ${{ vars.MOLECULE_CONTROLLER_PROFILE }}
+          VM_ALLOCATION: ${{ vars.MOLECULE_ALLOCATION_FILE }}
+          VM_STATE_ROOT: ${{ vars.MOLECULE_STATE_ROOT }}
+        run: |
+          set -euo pipefail
+          test -n "$VM_PROFILE" && test -n "$VM_ALLOCATION" && test -n "$VM_STATE_ROOT"
+          for private_path in "$VM_PROFILE" "$VM_ALLOCATION" "$VM_STATE_ROOT"; do
+            case "$private_path" in /*) ;; *) exit 1;; esac
+            private_path=$(realpath -m -- "$private_path")
+            case "$private_path" in "$GITHUB_WORKSPACE"|"$GITHUB_WORKSPACE"/*) exit 1;; esac
+          done
+          # Trusted controller-owned profile supplies pinned tooling and scoped
+          # provisioner authentication. vm.py strips it from guest execution.
+          source "$VM_PROFILE"
+          arguments=()
+          if [ "$VM_EVENT" = push ] && [ "$VM_BEFORE" != 0000000000000000000000000000000000000000 ]; then
+            git diff --name-only "$VM_BEFORE" HEAD > "$RUNNER_TEMP/vm-changed-paths"
+            arguments+=(--paths "$RUNNER_TEMP/vm-changed-paths")
+          fi
+          python scripts/testing/suite.py --execute --allocation "$VM_ALLOCATION" \
+            --state-root "$VM_STATE_ROOT" --suite "$VM_SUITE" --os "$VM_OS" "${arguments[@]}"
+      # State, provisioning logs, host private keys and synthetic credentials are
+      # private controller material, never public Actions artifacts. A failure
+      # retains its exact VM/run and stops subsequent allocation reuse.

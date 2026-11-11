@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/22 |
+| Readme update        | 2026/11/10 |
 
 
 
@@ -66,6 +66,8 @@
 | Podman services ¦ Reset this operation's firewall progress | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Prepare and run the scoped service operation | block | False |  |
 | Podman services ¦ Initialize service | ansible.builtin.include_tasks | False |  |
+| Podman services ¦ Validate explicit storage labeling before mutation | ansible.builtin.set_fact | True |  |
+| Podman services ¦ Validate and prepare declared storage contexts | ansible.builtin.include_role | True |  |
 | Podman services ¦ Validate managed file policy before mutation | ansible.builtin.include_role | False |  |
 | Podman services ¦ Build application preparation context | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Validate application settings | ansible.builtin.include_role | False |  |
@@ -75,15 +77,10 @@
 | Podman services ¦ Finish explicit account preparation | ansible.builtin.meta | True |  |
 | Podman services ¦ Check configured external network | ansible.builtin.command | True |  |
 | Podman services ¦ Verify configured external network exists | ansible.builtin.assert | True |  |
-| Podman services ¦ Stop shared-network services before recreate | ansible.builtin.include_tasks | True |  |
-| Podman services ¦ Check service before recreate | ansible.builtin.command | True |  |
-| Podman services ¦ Stop service before recreate | ansible.builtin.systemd_service | True |  |
-| Podman services ¦ Remove stopped container before recreate | ansible.builtin.include_tasks | True |  |
 | Podman services ¦ Generate application secrets | ansible.builtin.include_role | True |  |
 | Podman services ¦ Combine service secret values and definitions | ansible.builtin.set_fact | False |  |
-| Podman services ¦ Validate secret attachments | ansible.builtin.assert | False |  |
+| Podman services ¦ Validate secret attachments | ansible.builtin.assert | True |  |
 | Podman services ¦ Add Podman secret definitions | ansible.builtin.set_fact | False |  |
-| Podman services ¦ Manage Podman secrets | ansible.builtin.include_tasks | True |  |
 | Podman services ¦ Build application template values | ansible.builtin.include_role | True |  |
 | Podman services ¦ Store application template values | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Prepare service files and directories | ansible.builtin.include_role | False |  |
@@ -92,6 +89,11 @@
 | Podman services ¦ Parse ordered literal environment files | ansible.builtin.set_fact | True |  |
 | Podman services ¦ Apply explicit environment overrides | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Configure application | ansible.builtin.include_role | True |  |
+| Podman services ¦ Stop shared-network services before recreate | ansible.builtin.include_tasks | True |  |
+| Podman services ¦ Check service before recreate | ansible.builtin.command | True |  |
+| Podman services ¦ Stop service before recreate | ansible.builtin.systemd_service | True |  |
+| Podman services ¦ Remove stopped container before recreate | ansible.builtin.include_tasks | True |  |
+| Podman services ¦ Manage Podman secrets | ansible.builtin.include_tasks | True |  |
 | Podman services ¦ Write Quadlet files | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Prepare container image | ansible.builtin.include_tasks | False |  |
 | Podman services ¦ Check managed network changes | ansible.builtin.include_tasks | False |  |
@@ -315,7 +317,9 @@ batch. A changed desired account must not hide the old writer's manager. |
 | Service ¦ Validate system Quadlets with Podman generator | ansible.builtin.command | True |  |
 | Service ¦ Validate generated systemd service | ansible.builtin.command | True |  |
 | Service ¦ Validate user Quadlets with Podman generator | ansible.builtin.command | True |  |
-| Service ¦ Validate generated user systemd service | ansible.builtin.command | True |  |
+| Service ¦ Validate generated user systemd service | block | True |  |
+| Service ¦ Allocate a private verification runtime directory | ansible.builtin.tempfile | False |  |
+| Service ¦ Verify user units without the live manager socket | ansible.builtin.command | False |  |
 | Service ¦ Stop shared-network services before execution change | ansible.builtin.include_tasks | True |  |
 | Service ¦ Switch execution settings when needed | ansible.builtin.include_tasks | True |  |
 | Service ¦ Start system service | ansible.builtin.systemd_service | True |  |

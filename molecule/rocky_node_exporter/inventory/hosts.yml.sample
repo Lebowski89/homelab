@@ -1,0 +1,19 @@
+---
+
+# Copy outside Git and fill from the disposable VM's verified inventory identity.
+all:
+  children:
+    molecule_node_exporter:
+      hosts:
+        molecule-rocky-node-exporter:
+          ansible_host: 192.0.2.10
+          ansible_user: rocky
+          ansible_port: 22
+          ansible_connection: ssh
+          molecule_node_exporter_disposable: true
+    tags_skynet:
+      children:
+        molecule_node_exporter: {}
+    tags_node_exporter:
+      children:
+        molecule_node_exporter: {}

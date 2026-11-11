@@ -1,0 +1,54 @@
+---
+
+# Separate host-security preparation, authorized only for a guarded disposable
+# Ubuntu guest. The production installation/deployment defaults stay unchanged.
+- name: VM tests | Apply and repeat the existing reviewed pasta signal operation
+  ansible.builtin.include_tasks: ../shared/run.tasks.yml
+  vars:
+    molecule_vm_playbook: '{{ playbook_dir }}/../../ansible/operations.yml'
+    molecule_vm_tags: podman_pasta_signal
+    molecule_vm_overrides:
+      # operations.yml loads services.yml; explicitly retain this inventory's
+      # controller group instead of its production default host pattern.
+      services_controller_inventory_group: services_controller
+      # passt 0.0~git20260120.386b5f5-1, Ubuntu 26.04. Package drift must fail
+      # the existing operation's ownership/hash/parser guards, never widen it.
+      podman_pasta_signal_before_sha256: d5e1f27f6af84f6816e06dba396dffd5697f653efe4029175a972042853dfc21
+      podman_pasta_signal_after_sha256: 7fa16ae9e70ebd34d92b9b0aa81f022283046f28c1aef79659098a40bcefeefc
+  loop: [apply, repeat]
+  loop_control:
+    loop_var: molecule_vm_pasta_attempt
+
+- name: VM tests | Require the repeated host prerequisite to make no changes
+  vars:
+    molecule_vm_pasta_stats: '{{ lookup("ansible.builtin.file", molecule_vm_evidence_directory ~ "/nested-stats.json") | from_json }}'
+  ansible.builtin.assert:
+    that: molecule_vm_pasta_stats.hosts.values() | map(attribute='changed') | sum == 0
+
+- name: VM tests | Inspect actual loaded AppArmor profiles
+  ansible.builtin.command:
+    argv: [cat, /sys/kernel/security/apparmor/profiles]
+  changed_when: false
+  register: molecule_vm_pasta_profiles
+
+- name: VM tests | Require the package's pasta confinement to remain enforcing
+  ansible.builtin.assert:
+    that:
+      - "'pasta (enforce)' in molecule_vm_pasta_profiles.stdout_lines"
+      - "'podman (unconfined)' in molecule_vm_pasta_profiles.stdout_lines"
+
+- name: VM tests | Observe the exact prerequisite package versions
+  ansible.builtin.command:
+    argv: [dpkg-query, '-W', '-f=${Package} ${Version}\n', apparmor, passt, podman]
+  changed_when: false
+  register: molecule_vm_pasta_packages
+
+- name: VM tests | Preserve the actual profiles and prerequisite versions
+  ansible.builtin.copy:
+    dest: '{{ molecule_vm_evidence_directory }}/apparmor-prerequisite.json'
+    content: >-
+      {{ {'profiles': molecule_vm_pasta_profiles.stdout_lines | select('match', '^(pasta|podman) ') | list,
+          'packages': molecule_vm_pasta_packages.stdout_lines} | to_json }}
+    mode: '0600'
+  delegate_to: localhost
+  become: false

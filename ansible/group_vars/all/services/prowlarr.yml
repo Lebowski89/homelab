@@ -59,6 +59,8 @@ prowlarr:
   ################################
   ports:
     web_backend:
+      exposure: private
+      callers: [traefik]
       published: 22605
       target: 9696
       mode: host
@@ -108,6 +110,4 @@ prowlarr:
     mode: replicated
     replicas: 1
     profile: standard
-    host: "{{ services_storage_host }}"
-    constraints:
-      - node.labels.docker_services_host == docker_services_unraid_host
+    hosts: "{{ services_storage_host }}"

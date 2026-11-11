@@ -187,7 +187,7 @@ def test_concurrent_services_merge_current_policy_under_one_lock(tmp_path, monke
     assert {e["port"] for e in json.loads(store.path.read_text())["endpoints"]} == {18100, 18101, 18102}
 
 
-@pytest.mark.parametrize("service,host", [("wallos", "mgt"), ("whisparr", "unraid")])
+@pytest.mark.parametrize("service,host", [("wallos", "mgt"), ("whisparr", "unraid"), ("qbittorrent", "unraid"), ("qui", "unraid")])
 def test_real_canonical_endpoint_declarations_resolve_without_migration_flags(service, host):
     context = REAL.context()
     catalog = REAL.catalog()
@@ -207,13 +207,13 @@ def test_target_callers_collisions_and_unsupported_exposure_fail_before_a_transa
         "utility": {
             "runtime": "podman",
             "image": "nonproduction:1",
-            "deploy": {"host": "manager", "execution": {"mode": "rootless", "host_user": "podman-utility"}},
+            "deploy": {"hosts": "manager", "execution": {"mode": "rootless", "host_user": "podman-utility"}},
             "ports": {"web": {"exposure": "private", "callers": ["proxy:mgt"], "published": 18010, "target": 8080}},
         },
         "proxy:mgt": {
             "name": "proxy",
             "runtime": "podman",
-            "deploy": {"host": "manager", "execution": {"mode": "rootless", "host_user": "podman-proxy"}},
+            "deploy": {"hosts": "manager", "execution": {"mode": "rootless", "host_user": "podman-proxy"}},
         },
     }
     hosts = {"manager": {"local_ip": "192.0.2.48"}}
@@ -231,7 +231,7 @@ def test_target_callers_collisions_and_unsupported_exposure_fail_before_a_transa
 
 @pytest.mark.parametrize("runtime,mode", [("docker", None), ("podman", "rootful"), ("podman", "rootless")])
 def test_supported_identity_models_use_exact_selectors(runtime, mode):
-    cfg = {"name": "utility", "runtime": runtime, "deploy": {"host": "manager", "type": "container"}}
+    cfg = {"name": "utility", "runtime": runtime, "deploy": {"hosts": "manager", "type": "container"}}
     if mode:
         cfg["deploy"]["execution"] = {"mode": mode, "host_user": "podman-utility"}
     binding = DECL.identity("utility", cfg, "manager")["binding"]
@@ -244,7 +244,10 @@ def test_supported_identity_models_use_exact_selectors(runtime, mode):
         assert DECL.identity("utility", cfg, "manager")["binding"]["selector"] == "utility_utility"
 
 
-def test_bundled_remote_entrypoint_imports_without_accessing_the_host():
+def test_bundled_remote_entrypoint_imports_without_accessing_the_host(monkeypatch, capsys):
+    import io
+    import sys
+
     for profile in ["mgt", "workers"]:
         _, source = ACTION.remote_source(profile)
         definitions = source[: source.index("\nimport json, sys\ntry:")]
@@ -252,6 +255,56 @@ def test_bundled_remote_entrypoint_imports_without_accessing_the_host():
         exec(compile(definitions, "<isolated-bundle>", "exec"), namespace)
         assert callable(namespace["helper"].reconcile)
         assert callable(namespace["engine"].transact)
+
+        def refused(*args, namespace=namespace):
+            raise namespace["remote"].ProbeError("TCP connect: connection refused (ECONNREFUSED)", retryable=True)
+
+        namespace["remote"].run_lifecycle = refused
+        monkeypatch.setattr(sys, "stdin", io.StringIO("{}"))
+        exec(compile(source[len(definitions) :], "<isolated-entrypoint>", "exec"), namespace)
+        output = capsys.readouterr()
+        result = json.loads(output.out)
+        assert result["failed"] and result["probe_retryable"] and not result["changed"]
+        assert result["msg"] == "TCP connect: connection refused (ECONNREFUSED)" and not output.err
+
+
+@pytest.mark.integration
+def test_large_inline_transaction_crosses_exec_boundary_without_policy_in_argv(monkeypatch):
+    import subprocess
+    import sys
+
+    from ansible.plugins.action import ActionBase
+
+    monkeypatch.setattr(ActionBase, "run", lambda *args: {})
+    # Larger than a Linux exec argument; its only operation is reading stdin.
+    source = (
+        "# fixture padding\n" * 10000
+        + 'import json,sys\nprint(json.dumps({"changed": False, "observed": json.load(sys.stdin)["policy"]["schema"]}))'
+    )
+    monkeypatch.setattr(ACTION, "remote_source", lambda profile: ("fixture-helper", source))
+    action = object.__new__(ACTION.ActionModule)
+    action._task = SimpleNamespace(
+        args={
+            "phase": "install",
+            "profile": "mgt",
+            "inventory_host": "manager",
+            "policy": {"schema": 1, "inventory_address": "192.0.2.48"},
+        },
+        check_mode=False,
+    )
+    observed = []
+
+    def execute(**kwargs):
+        arguments = kwargs["module_args"]
+        observed.append(arguments)
+        result = subprocess.run(arguments["argv"], input=arguments["stdin"], text=True, capture_output=True, check=False)
+        return {"rc": result.returncode, "stdout": result.stdout, "stderr": result.stderr}
+
+    action._execute_module = execute
+    result = action.run(task_vars={"hostvars": {"manager": {"ansible_python_interpreter": sys.executable}}})
+    assert result["observed"] == 1 and not result["changed"]
+    assert len(observed) == 1
+    assert "192.0.2.48" not in str(observed[0]["argv"])
 
 
 def test_cleanup_failure_can_be_retried_after_the_runtime_is_already_absent(tmp_path, monkeypatch):
@@ -357,13 +410,44 @@ def test_remote_runtime_status_uses_correct_template_and_dedicated_home(monkeypa
         REMOTE.runtime_check(record, "absent", run)
 
 
+@pytest.mark.parametrize(
+    "runtime,declared,observed,accepted",
+    [
+        ("docker", "docker.io/library/demo@sha256:aaa", "demo@sha256:aaa", True),
+        ("docker", "docker.io/team/demo:one", "team/demo:one@sha256:aaa", True),
+        ("docker", "registry.invalid/library/demo@sha256:aaa", "demo@sha256:aaa", False),
+        ("docker", "docker.io/library/demo@sha256:aaa", "demo@sha256:bbb", False),
+        ("docker", "docker.io/library/demo:one", "demo:two@sha256:aaa", False),
+        ("docker", "docker.io/registry.invalid/demo:one", "registry.invalid/demo:one", False),
+        ("docker", "docker.io/localhost/demo:one", "localhost/demo:one", False),
+        ("docker", "docker.io/library/sha256:aaa", "sha256:aaa", False),
+        ("podman", "docker.io/library/demo@sha256:aaa", "demo@sha256:aaa", False),
+    ],
+)
+def test_runtime_image_check_accepts_only_equivalent_docker_hub_references(runtime, declared, observed, accepted):
+    record = identity("image-probe")
+    record["image"] = declared
+    record["binding"].update(runtime=runtime, mode="rootful")
+
+    def run(argv):
+        if "ps" in argv:
+            return "a" * 64
+        return json.dumps({"id": "a" * 64, "running": True, "pid": 321, "image": observed, "state": {}, "ports": {}})
+
+    if accepted:
+        REMOTE.runtime_check(record, "healthy", run)
+    else:
+        with pytest.raises(ValueError, match="image differs"):
+            REMOTE.runtime_check(record, "healthy", run)
+
+
 def test_qualified_probe_rejects_namespace_or_pid_replacement(monkeypatch):
     record = identity("proxy")
     record["binding"] = {"kind": "service", "runtime": "docker", "phase": "docker", "selector": "proxy_proxy"}
     req = request()
     req["callers"] = {"proxy": record}
     req["endpoints"][0]["address"] = "192.0.2.48"
-    snapshots = iter(["net:[1]", "net:[2]"])
+    snapshots = iter(["net:[1]", "user:[1]", "net:[2]", "user:[1]"])
 
     def run(argv, **kwargs):
         if "ps" in argv:
@@ -375,10 +459,20 @@ def test_qualified_probe_rejects_namespace_or_pid_replacement(monkeypatch):
             return "1234 (nonproduction) " + " ".join(["0"] * 20)
         if argv[0] == "readlink":
             return next(snapshots)
-        assert argv[:5] == ["nsenter", "--target", "1234", "--net", "--"]
-        return json.dumps({"namespace_source": "192.0.2.48", "connected": True})
+        raise AssertionError(argv)
 
     monkeypatch.setattr(REMOTE, "command", run)
+    monkeypatch.setattr(
+        REMOTE,
+        "namespace_probe",
+        lambda argv: {
+            "connected": False,
+            "error": "connection refused",
+            "errno": "ECONNREFUSED",
+            "net_namespace": "net:[1]",
+            "user_namespace": "user:[1]",
+        },
+    )
     with pytest.raises(ValueError, match="replaced during"):
         REMOTE.qualified_probes(req)
 
@@ -450,6 +544,8 @@ class ActionModule(fixture.ACTION.ActionModule):
                 assert not (root / 'writer').exists(), 'cleanup ran before writer removal'
         try:
             if phase == 'counters':
+                for endpoint in request['endpoints']:
+                    counts.setdefault('4:' + str(endpoint['port']), 0)
                 result = {{'changed': False, 'counters': counts}}
             elif phase == 'probe':
                 assert (root / 'writer').exists()
@@ -623,7 +719,7 @@ class ActionModule(fixture.ACTION.ActionModule):
     else:
         assert result.returncode == 0, output
         events = (tmp_path / "events").read_text().splitlines()
-        assert events == ["stage", "activate", "finish", "counters", "probe", "counters"]
+        assert events == ["stage", "activate", "counters", "probe", "counters", "finish"]
         assert not json.loads((tmp_path / "policy.json").read_text())["managed_services"]["utility"]["pending"]
 
     if failure in {"apply", "remove-delayed", "post-start-test"}:
@@ -634,12 +730,23 @@ class ActionModule(fixture.ACTION.ActionModule):
         assert all(seconds > 0 for seconds in sleeps)
 
 
-def test_all_real_mgt_targets_plan_without_templating_environments(monkeypatch):
+def test_publication_ports_reject_booleans_and_numeric_strings():
+    publication = REAL.catalog()["bazarr"]["ports"]["web_backend"]
+    for invalid in [True, "22601"]:
+        with pytest.raises(ValueError, match="numeric host and container ports"):
+            DECL.publication({**publication, "published": invalid})
+
+
+def test_real_mgt_and_arr_targets_plan_without_templating_environments(monkeypatch):
     from ansible.plugins.action import ActionBase
 
     planner = load("ansible/action_plugins/service_firewall_plan.py", "lifecycle_catalog_test")
     catalog, context = REAL.catalog(), REAL.context()
     for service in catalog.values():
+        if service["runtime"] == "native":
+            config = service["native"]["config"]
+            config[next(iter(config))] = "{{ lookup('must_never_run') }}"
+            continue
         service["environment"] = {"NEVER_EVALUATE": "{{ lookup('must_not_run') }}"}
         if service.get("runtime") == "podman" and not any(t.get("runtime") == "docker" for t in service.get("targets", {}).values()):
             service.setdefault("systemd", {})["service_add"] = ["{{ lookup('must_not_run') }}"]
@@ -650,10 +757,12 @@ def test_all_real_mgt_targets_plan_without_templating_environments(monkeypatch):
         "image": "registry.invalid/nonproduction:1",
         "named_networks": {"newapp": {"driver": "bridge", "external": False}},
         "postgres": {"enable": True},
-        "deploy": {"type": "container", "host": "mgt", "execution": {"mode": "rootless", "host_user": "podman-newapp"}},
+        "deploy": {"type": "container", "hosts": "mgt", "execution": {"mode": "rootless", "host_user": "podman-newapp"}},
     }
     planned = []
-    entries = REAL.mgt_entries(catalog)
+    entries = REAL.mgt_entries(catalog) + [
+        entry for entry in REAL.catalog_items(catalog) if "arrs" in entry["tags"] or entry["name"] in {"qbittorrent", "qui"}
+    ]
     for entry in entries:
         raw = REAL.CATALOG.service_catalog_merge_target(catalog[entry["name"]], entry.get("target"))
         actual = raw.get("name", entry["name"] + ("-" + entry["target"] if entry.get("target") else ""))
@@ -682,12 +791,19 @@ def test_all_real_mgt_targets_plan_without_templating_environments(monkeypatch):
         action._loader = SimpleNamespace(load_from_file=lambda path, **kwargs: yaml.safe_load(Path(path).read_text()))
         plan = action.run(task_vars=context | {"svcfiles": catalog})["ansible_facts"]["service_firewall_lifecycle_plan"]
         assert "must_not_run" not in json.dumps(plan)
+        if "arrs" in entry["tags"] or entry["name"] in {"qbittorrent", "qui"}:
+            assert not plan.get("legacy_publications", False)
+            if cfg.get("ports"):
+                assert plan["managed"] and plan["endpoints"]
+                assert all(endpoint["callers"] for endpoint in plan["endpoints"])
+            else:
+                assert not plan["managed"]
         for caller in plan.get("callers", {}).values():
             if "metadata" in caller:
                 REAL.PODMAN.podman_service_normalize(caller["metadata"], caller["service"])
         planned.append(plan)
     assert len(planned) == len(entries)
-    pg = next(plan for plan in planned if plan["service"] == "haproxy:mgt")
+    pg = next(plan for plan in planned if plan.get("service") == "haproxy:mgt")
     assert "infisical" in next(e for e in pg["endpoints"] if e["port"] == 5432)["callers"]
     assert any(plan.get("legacy_publications") and plan["managed"] for plan in planned)
     fresh = next(plan for plan in planned if plan["service"] == "newapp")
@@ -776,6 +892,34 @@ def test_worker_transactions_adopt_only_the_selected_ports_and_preserve_sources(
     with pytest.raises(ValueError, match="source declaration changed"):
         ENGINE.transact(store, invalid, "stage", "bad", baseline)
     assert store.path.read_bytes() == before
+
+
+def test_worker_probe_counters_follow_generated_allow_rules_and_port_ranges(monkeypatch):
+    import shlex
+
+    worker = load("tests/unit/test_worker_backend_firewall.py", "counter_worker_fixture").FW
+    policy = {"sources": ["192.0.2.48", "2001:db8::48"], "inventory_address": "192.0.2.20", "ports": [22601, 22602]}
+    rules = {family: worker.desired_rules(policy, family, {"192.0.2.20", "2001:db8::20"}) for family in [4, 6]}
+    observed = {"packets": 3}
+
+    def saved(argv):
+        assert argv[:2] in [["iptables-save", "-c"], ["ip6tables-save", "-c"]]
+        family = 6 if argv[0].startswith("ip6") else 4
+        chains = worker.CHAINS[argv[-1]]
+        return "\n".join(
+            f"[{observed['packets'] if family == 4 and chain == 'SKY-WBACK-FWD' and rule[-1] == 'ACCEPT' else 0}:60] "
+            + shlex.join(["-A", chain, *rule])
+            for chain in chains
+            for rule in rules[family][chain]
+        )
+
+    monkeypatch.setattr(REMOTE, "command", saved)
+    before = REMOTE.counters(worker, "workers", {22601, 22603})
+    observed["packets"] += 1
+    after = REMOTE.counters(worker, "workers", {22601, 22603})
+    assert after["4:22601"] > before["4:22601"]
+    assert after["6:22601"] == before["6:22601"] == 0
+    assert "4:22603" not in after and "6:22603" not in after
 
 
 def test_nat_collision_projection_is_read_only_and_rejects_opaque_rules():
@@ -931,7 +1075,11 @@ def test_unlisted_docker_project_members_are_rejected_before_lifecycle_mutation(
     check = load("ansible/action_plugins/service_operational_check.py", "lifecycle_membership_test")
     monkeypatch.setattr(ActionBase, "run", lambda *args: {})
     action = object.__new__(check.ActionModule)
-    metadata = {"name": "utility", "runtime": "docker", "deploy": {"host": "manager", "type": "container" if standalone else "swarm"}}
+    metadata = {
+        "name": "utility",
+        "runtime": "docker",
+        "deploy": {"hosts": "manager", "type": "container" if standalone else "swarm", "constraints": []},
+    }
     action._task = SimpleNamespace(check_mode=False, args={"phase": "placement", "metadata": metadata})
     calls = []
 
@@ -942,10 +1090,10 @@ def test_unlisted_docker_project_members_are_rejected_before_lifecycle_mutation(
     action.runtime = unexpected_runtime
     action.command = lambda argv: "unlisted-id\tother-service" if standalone else "utility_other-service"
     with pytest.raises(AnsibleActionFail, match="other"):
-        action.run(task_vars={})
+        action.run(task_vars={"groups": {"all": ["manager"]}})
     assert calls == []
     action.command = lambda argv: "selected-id\tutility" if standalone else "utility_utility"
-    assert action.run(task_vars={})["managed"] is False
+    assert action.run(task_vars={"groups": {"all": ["manager"]}})["managed"] is False
     assert calls == ["runtime"]
 
 
@@ -1078,13 +1226,90 @@ def test_provider_access_rejects_changed_or_missing_provider_and_preserves_rollb
     assert "newapp" not in store.current["endpoints"][0]["callers"]
 
 
+@pytest.mark.parametrize("drift", ["image", "health", "missing"])
+def test_client_removal_does_not_need_a_canonical_healthy_provider(tmp_path, monkeypatch, drift):
+    store = Store(tmp_path / "policy.json", monkeypatch)
+    client = provider_request(store)
+    provider_policy = deepcopy(store.current)
+    ENGINE.access_transact(store, client, "access_stage", "deploy", lambda _: None)
+    ENGINE.access_transact(store, client, "access_finish", "deploy", lambda _: None)
+    installed = deepcopy(store.current)
+    store.root, store.policy_path = tmp_path, store.path
+    monkeypatch.setattr(REMOTE, "Store", lambda *args: store)
+    monkeypatch.setattr(REMOTE, "runtime_command", lambda record: (["fixture-runtime", record["service"]], []))
+    running, calls = {"newapp": True}, []
+
+    def run(argv):
+        service = argv[1]
+        calls.append(service)
+        if argv[2] == "ps":
+            return "a" * 64 if running.get(service, drift != "missing") else ""
+        return json.dumps(
+            {
+                "id": "a" * 64,
+                "running": True,
+                "pid": 321,
+                "image": "registry.invalid/nonproduction:old" if drift == "image" else client["providers"][0]["runtime"]["image"],
+                "state": {"Health": {"Status": "unhealthy" if drift == "health" else "healthy"}},
+                "ports": {},
+            }
+        )
+
+    runtime_check = REMOTE.runtime_check
+    monkeypatch.setattr(REMOTE, "runtime_check", lambda record, expected: runtime_check(record, expected, run))
+
+    def execute(request, phase):
+        return REMOTE.run_lifecycle(ENGINE, None, {"request": request, "phase": phase, "token": "operation", "helper": "", "units": {}})
+
+    reason = {"image": "image differs", "health": "not become healthy", "missing": "missing or ambiguous"}[drift]
+    failures = []
+    for phase in ["access_inspect", "access_stage"]:
+        with pytest.raises(ValueError, match=reason) as failure:
+            execute(client, phase)
+        failures.append(str(failure.value))
+        assert store.current == installed
+
+    removal = client | {"action": "remove"}
+    calls.clear()
+    assert not execute(removal, "access_inspect")["changed"]
+    assert not calls and store.current == installed
+    # Cleanup must still fail closed until the selected client has stopped.
+    with pytest.raises(ValueError, match="running writer"):
+        execute(removal, "access_remove")
+    assert store.current == installed
+    running["newapp"] = False
+    assert execute(removal, "access_remove")["changed"]
+    assert store.current == provider_policy
+    assert not execute(removal, "access_remove")["changed"]
+    assert set(calls) == {"newapp"}  # No provider CLI or application lifecycle operation.
+    assert all(message.startswith("provider database:") for message in failures)
+
+
+@pytest.mark.parametrize("phase", ["access_inspect", "access_remove"])
+@pytest.mark.parametrize("change", ["placement", "publication"])
+def test_removal_keeps_provider_ownership_and_publication_checks(tmp_path, monkeypatch, phase, change):
+    store = Store(tmp_path / "policy.json", monkeypatch)
+    client = provider_request(store)
+    ENGINE.access_transact(store, client, "access_stage", "deploy", lambda _: None)
+    ENGINE.access_transact(store, client, "access_finish", "deploy", lambda _: None)
+    installed = deepcopy(store.current)
+    client["action"] = "remove"
+    if change == "placement":
+        client["providers"][0]["runtime"]["hosts"] = ["another-host"]
+    else:
+        client["providers"][0]["endpoints"][0]["destination"] = 5433
+    with pytest.raises(ValueError, match="ownership/placement differs|publication missing or changed"):
+        ENGINE.access_transact(store, client, phase, "remove", lambda _: None)
+    assert store.current == installed
+
+
 def test_inverse_provider_planner_selects_only_declared_client_access():
     catalog = {
         name: {
             "name": name,
             "runtime": "podman",
             "image": "nonproduction:1",
-            "deploy": {"host": "manager", "execution": {"mode": "rootless", "host_user": "podman-" + name}},
+            "deploy": {"hosts": "manager", "execution": {"mode": "rootless", "host_user": "podman-" + name}},
         }
         for name in ["database", "oldapp", "newapp", "irc"]
     }
@@ -1094,7 +1319,7 @@ def test_inverse_provider_planner_selects_only_declared_client_access():
     planner = load("ansible/action_plugins/mgt_firewall_plan.py", "provider_postgres_planner")
     for cfg in catalog.values():
         cfg["operational_requirements"] = {"acl": ["mgt_backends"]}
-    legacy = planner.build_plan(catalog, "manager", lambda value, _: value, [])
+    legacy = planner.build_plan(catalog, "manager", lambda value, _: value, [], {"all": ["manager"]})
     plan = DECL.plan(
         "newapp",
         catalog,
@@ -1108,48 +1333,104 @@ def test_inverse_provider_planner_selects_only_declared_client_access():
     assert all(e["callers"] == ["newapp"] for p in plan["providers"] for e in p["endpoints"])
 
 
-@pytest.mark.parametrize("mode,failure", [("global", None), ("global", "stop"), ("global", "wait"), ("replicated", None)])
-def test_swarm_failure_containment_is_mode_aware_scoped_and_retryable(mode, failure):
+def swarm_evidence_fixture(mode="replicated", failure=None):
     record = identity("selected") | {"binding": {"runtime": "docker", "selector": "selected_selected"}, "swarm_mode": mode}
-    calls = []
-    attempts = 0
+    inventory = {"manager": {"ansible_host": "manager", "docker_services_host": "fixture"}}
+    state, calls = {"stopped": False, "removed": False, "constraint": None}, []
 
     def run(argv):
-        nonlocal attempts
         calls.append(argv)
         cmd = argv[3:]
         if cmd[:2] == ["service", "inspect"]:
+            if state["removed"]:
+                return None
             return json.dumps(
-                {"id": "immutable-id", "name": "selected_selected", "mode": {"Global" if mode == "global" else "Replicated": {}}}
+                {
+                    "id": "replacement" if state.get("replaced") else "immutable-id",
+                    "name": "selected_selected",
+                    "version": 2 if state["stopped"] else 1,
+                    "labels": {"com.docker.stack.namespace": "selected"},
+                    "constraints": [state["constraint"]] if state["constraint"] else [],
+                    "mode": {"Global": {}} if mode == "global" else {"Replicated": {"Replicas": 0 if state["stopped"] else 1}},
+                }
             )
         if cmd[:2] == ["service", "ps"]:
             return "exact-task"
+        if cmd[:3] == ["inspect", "--type", "task"]:
+            if failure == "history" and state["stopped"]:
+                return None
+            return json.dumps(
+                {
+                    "id": "exact-task",
+                    "service_id": "immutable-id",
+                    "node_id": "actual-node-id",
+                    "state": "running" if failure == "wait" or not state["stopped"] else "shutdown",
+                }
+            )
         if cmd[:2] == ["node", "ls"]:
+            assert cmd == ["node", "ls", "-q"]
             return "actual-node-id"
-        if cmd[:2] in [["service", "update"], ["service", "rm"], ["service", "scale"]]:
+        if cmd[:2] == ["node", "inspect"]:
+            return json.dumps({"id": "actual-node-id", "host": "manager", "label": "fixture"})
+        if cmd[:2] in [["service", "update"], ["service", "scale"]]:
             if failure == "stop":
                 raise RuntimeError("contained command failed")
+            state["stopped"] = True
+            if "--constraint-add" in cmd:
+                state["constraint"] = cmd[cmd.index("--constraint-add") + 1]
             return ""
-        if cmd[:3] == ["inspect", "--type", "task"]:
-            attempts += 1
-            return json.dumps("running" if failure == "wait" or attempts == 1 else "shutdown")
+        if cmd[:2] == ["service", "rm"]:
+            state["removed"] = True
+            return ""
+        if cmd[0] == "info":
+            return json.dumps("actual-node-id")
+        if cmd[0] == "ps":
+            return "writer" if state.get("writer_remains") else ""
         raise AssertionError(argv)
 
-    if failure:
-        with pytest.raises((ValueError, RuntimeError), match="did not stop|command failed"):
-            CONTAIN.contain_swarm(record, run, sleep=lambda _: None)
-        failure = None
-    result = CONTAIN.contain_swarm(record, run, sleep=lambda _: None)
-    assert result["contained"]
+    return record, inventory, state, calls, run
+
+
+@pytest.mark.parametrize(
+    "mode,failure", [("global", None), ("global", "stop"), ("global", "wait"), ("replicated", None), ("replicated", "history")]
+)
+def test_swarm_failure_containment_is_mode_aware_scoped_and_retryable(mode, failure):
+    record, inventory, state, calls, run = swarm_evidence_fixture(mode, failure)
+    if failure in {"stop", "wait"}:
+        with pytest.raises((ValueError, RuntimeError), match="did not quiesce|command failed"):
+            CONTAIN.quiesce_swarm(record, inventory, run, sleep=lambda _: None)
+        return
+    staged = CONTAIN.quiesce_swarm(record, inventory, run, sleep=lambda _: None)
+    assert not staged["contained"]
+    snapshot = staged["snapshot"]
+    observed = [CONTAIN.observe_node(snapshot, node, run)["observation"] for node in snapshot["nodes"]]
+    assert CONTAIN.verify_swarm(snapshot, observed, inventory, run)["contained"]
     mutations = [a for a in calls if a[3:5] in [["service", "rm"], ["service", "scale"]]]
     assert all(a[-1] == ("immutable-id" if mode == "global" else "immutable-id=0") for a in mutations)
-    assert all(a[4] == ("rm" if mode == "global" else "scale") for a in mutations)
+    assert bool(state["removed"]) is (mode == "global")
+
+
+def test_swarm_missing_or_conflicting_node_evidence_cannot_authorize_absence():
+    record, inventory, state, calls, run = swarm_evidence_fixture(failure="history")
+    snapshot = CONTAIN.quiesce_swarm(record, inventory, run, sleep=lambda _: None)["snapshot"]
+    with pytest.raises(ValueError, match="evidence unavailable"):
+        CONTAIN.verify_swarm(snapshot, [], inventory, run)
+    state["writer_remains"] = True
+    observation = CONTAIN.observe_node(snapshot, snapshot["nodes"][0], run)["observation"]
+    with pytest.raises(ValueError, match="writer remains"):
+        CONTAIN.verify_swarm(snapshot, [observation], inventory, run)
+    state["writer_remains"] = False
+    observation = CONTAIN.observe_node(snapshot, snapshot["nodes"][0], run)["observation"]
+    state["replaced"] = True
+    with pytest.raises(ValueError, match="identity/spec replaced"):
+        CONTAIN.verify_swarm(snapshot, [observation], inventory, run)
 
 
 @pytest.mark.integration
 @pytest.mark.parametrize("mode,stop_fails", [("global", False), ("global", True), ("global", "after-stop"), ("replicated", False)])
 def test_production_stack_rescue_contains_exact_service_and_retains_original_failure(tmp_path, mode, stop_fails):
     import os
+    import shutil
     import subprocess
     import sys
 
@@ -1175,24 +1456,40 @@ class ActionModule(f.ACTION.ActionModule):
         data = json.loads(module_args['stdin'])
         root = Path(task_vars['fixture_root'])
         with (root / 'events').open('a') as log:
-            log.write(data['phase'] + '\\n')
+            log.write((data['phase'] + '-' + data['request']['phase'] if data['phase']=='contain' else data['phase']) + '\\n')
         try:
             if data['phase'] == 'contain':
+                evidence = data['request']
                 def run(argv):
                     cmd = argv[3:]
                     if cmd[:2] == ['service', 'inspect']:
-                        return json.dumps({{'id': 'exact-service-id', 'name': 'utility_utility', 'mode': {{task_vars['fixture_mode']: {{}}}}}})
+                        if (root / 'removed').exists(): return None
+                        mode = {{}} if task_vars['fixture_mode']=='Global' else {{'Replicas':0 if not (root/'writer').exists() else 1}}
+                        return json.dumps({{'id':'exact-service-id','name':'utility_utility','version':1,
+                                           'labels':{{'com.docker.stack.namespace':'utility'}},
+                                           'constraints':[(root/'constraint').read_text()] if (root/'constraint').exists() else [],
+                                           'mode':{{task_vars['fixture_mode']:mode}}}})
                     if cmd[:2] == ['service', 'ps']: return 'exact-task-id'
                     if cmd[:2] == ['node', 'ls']: return 'inventory-node-id'
+                    if cmd[:2] == ['node', 'inspect']: return json.dumps({{'id':'inventory-node-id','host':'manager','label':'fixture'}})
+                    if cmd[0]=='info': return json.dumps('inventory-node-id')
+                    if cmd[0]=='ps': return 'writer' if (root/'writer').exists() else ''
                     if cmd[:2] in [['service', 'scale'], ['service', 'update'], ['service', 'rm']]:
                         if task_vars['fixture_stop_fails']:
                             if task_vars['fixture_stop_fails'] == 'after-stop': (root / 'writer').unlink(missing_ok=True)
                             raise RuntimeError('NONPRODUCTION scoped stop failed')
                         (root / 'writer').unlink(missing_ok=True)
+                        if '--constraint-add' in cmd: (root/'constraint').write_text(cmd[cmd.index('--constraint-add')+1])
+                        if cmd[1]=='rm': (root/'removed').touch()
                         return ''
-                    if cmd[:3] == ['inspect', '--type', 'task']: return json.dumps('shutdown')
+                    if cmd[:3] == ['inspect', '--type', 'task']:
+                        return json.dumps({{'id':'exact-task-id','service_id':'exact-service-id','node_id':'inventory-node-id',
+                                           'state':'running' if (root/'writer').exists() else 'shutdown'}})
                     raise AssertionError(argv)
-                result = f.CONTAIN.contain_swarm(data['request']['runtime'], run, sleep=lambda _: None)
+                if evidence['phase']=='quiesce': result=f.CONTAIN.quiesce_swarm(evidence['runtime'],evidence['inventory'],run,sleep=lambda _:None)
+                elif evidence['phase']=='observe': result=f.CONTAIN.observe_node(evidence['snapshot'],evidence['node'],run)
+                else: result=f.CONTAIN.verify_swarm(evidence['snapshot'],evidence['observations'],evidence['inventory'],run)
+
             else:
                 store = f.Store(root / 'policy.json', SimpleNamespace(setattr=lambda obj, name, value: setattr(obj, name, value)))
                 store.current = json.loads(store.path.read_text())
@@ -1241,9 +1538,20 @@ class ActionModule(transport.f.CONTAIN_ACTION.ActionModule):
     task = next(
         entry
         for entry in walk_tasks(yaml.safe_load((ROOT / "ansible/roles/docker_services/tasks/sub_tasks/deploy/stack.yml").read_text()))
-        if any("docker_services_contain" in child for child in walk_tasks(entry.get("rescue", [])))
+        if any(
+            child.get("ansible.builtin.include_tasks", {}).get("file", "").endswith("/contain.yml")
+            for child in walk_tasks(entry.get("rescue", []))
+        )
     )
     task["block"] = [{"name": "NONPRODUCTION deployment failure", "ansible.builtin.fail": {"msg": "original deployment failure"}}]
+    # Exercise the final-batch helper outside the role and with role context.
+    # Do not rewrite paths: doing so previously hid a deploy-only failure.
+    tasks = tmp_path / "roles/docker_services/tasks/sub_tasks"
+    (tasks / "deploy").mkdir(parents=True)
+    shutil.copy(ROOT / "ansible/roles/docker_services/tasks/sub_tasks/deploy/all.yml", tasks / "deploy/all.yml")
+    shutil.copy(ROOT / "ansible/roles/docker_services/tasks/sub_tasks/contain.yml", tasks / "contain.yml")
+    (tasks / "deploy/stack.yml").write_text(yaml.safe_dump([task]))
+
     playbook = tmp_path / "rescue.yml"
     variables = {
         "fixture_root": str(tmp_path),
@@ -1253,18 +1561,52 @@ class ActionModule(transport.f.CONTAIN_ACTION.ActionModule):
         "docker_services_deploy_stack_type": "swarm",
         "docker_services_deploy_stack_host_effective": "manager",
         "docker_services_deploy_stack_name": "utility",
-        "_stack_def": {"firewall_plans": {"utility": plan}},
+        "docker_services_primary_manager": "manager",
+        "docker_services_compose_stacks": {"utility": {"type": "swarm", "firewall_plans": {"utility": plan}}},
     }
+    selected_tasks = [
+        {"ansible.builtin.set_fact": {"docker_services_compose_stacks": "{{ docker_services_compose_stacks }}"}},
+        {
+            "ansible.builtin.include_role": {"name": "docker_services", "tasks_from": "sub_tasks/deploy/stack"},
+            "vars": {"_stack_def": "{{ docker_services_compose_stacks.utility }}"},
+        }
+        if mode == "replicated"
+        else {"ansible.builtin.include_tasks": {"file": str(tasks / "deploy/all.yml")}},
+    ]
     playbook.write_text(
         yaml.safe_dump(
-            [{"hosts": "manager", "connection": "local", "gather_facts": False, "become": False, "vars": variables, "tasks": [task]}]
+            [
+                {
+                    "hosts": "manager",
+                    "connection": "local",
+                    "gather_facts": False,
+                    "become": False,
+                    "vars": variables,
+                    "tasks": selected_tasks,
+                }
+            ]
         )
     )
     config = tmp_path / "ansible.cfg"
     config.write_text(
-        f"[defaults]\ncollections_path={tmp_path / 'collections'}\nroles_path={ROOT / 'ansible/roles'}\naction_plugins={plugins}\nvars_plugins_enabled=\nstdout_callback=default\n[inventory]\nenable_plugins=host_list\n"
+        f"[defaults]\ncollections_path={tmp_path / 'collections'}\nroles_path={tmp_path / 'roles'}:{ROOT / 'ansible/roles'}\naction_plugins={plugins}\nvars_plugins_enabled=\ninject_facts_as_vars=false\nstdout_callback=default\n[inventory]\nenable_plugins=yaml\n"
     )
-    argv = [str(Path(sys.executable).parent / "ansible-playbook"), "-i", "manager,", str(playbook)]
+    inventory = tmp_path / "inventory.yml"
+    inventory.write_text(
+        yaml.safe_dump(
+            {
+                "all": {
+                    "hosts": {
+                        "manager": {
+                            "ansible_connection": "local",
+                            "docker_swarm_node_labels": {"ansible_host": "manager", "docker_services_host": "fixture"},
+                        }
+                    }
+                }
+            }
+        )
+    )
+    argv = [str(Path(sys.executable).parent / "ansible-playbook"), "-i", str(inventory), str(playbook)]
 
     def execute():
         return subprocess.run(
@@ -1278,17 +1620,27 @@ class ActionModule(transport.f.CONTAIN_ACTION.ActionModule):
     result = execute()
     assert result.returncode != 0 and "NONPRODUCTION deployment failure" in result.stdout, result.stdout + result.stderr
     saved = json.loads(store.path.read_text())["managed_services"]["utility"]
-    assert saved["pending"] is bool(stop_fails)
+    assert saved["pending"] is bool(stop_fails), result.stdout + result.stderr
     assert (tmp_path / "writer").exists() is (stop_fails is True)
-    assert (tmp_path / "events").read_text().splitlines() == ["contain", "abort"]
+    expected = ["contain-quiesce"] + ([] if stop_fails else ["contain-observe", "contain-verify"]) + ["abort"]
+    assert (tmp_path / "events").read_text().splitlines() == expected
     if stop_fails:
-        assert saved["containment_failed"] and "scoped stop failed" in result.stdout
+        assert saved["containment_failed"] and "Containment is inconclusive" in result.stdout
         # The same supported containment path succeeds after a transient stop
         # failure; no stale snapshot, node drain or daemon operation is needed.
         variables["fixture_stop_fails"] = False
         playbook.write_text(
             yaml.safe_dump(
-                [{"hosts": "manager", "connection": "local", "gather_facts": False, "become": False, "vars": variables, "tasks": [task]}]
+                [
+                    {
+                        "hosts": "manager",
+                        "connection": "local",
+                        "gather_facts": False,
+                        "become": False,
+                        "vars": variables,
+                        "tasks": selected_tasks,
+                    }
+                ]
             )
         )
         retry = execute()
@@ -1330,7 +1682,7 @@ def test_explicit_provider_relationship_is_discovered_without_a_legacy_catalog()
         name: {
             "runtime": "podman",
             "image": "registry.invalid/nonproduction:1",
-            "deploy": {"host": "manager", "execution": {"mode": "rootless", "host_user": "podman-" + name}},
+            "deploy": {"hosts": "manager", "execution": {"mode": "rootless", "host_user": "podman-" + name}},
         }
         for name in ["provider", "client", "unrelated"]
     }
@@ -1346,19 +1698,19 @@ def test_docker_containment_action_check_mode_and_transport_errors_are_safe(monk
     monkeypatch.setattr(ActionBase, "run", lambda *args: {})
     action = object.__new__(CONTAIN_ACTION.ActionModule)
     record = identity("utility") | {"binding": {"runtime": "docker", "selector": "utility_utility"}, "swarm_mode": "global"}
-    action._task = SimpleNamespace(args={"runtime": record, "inventory_host": "manager"}, check_mode=True)
+    action._task = SimpleNamespace(args={"phase": "quiesce", "runtime": record, "inventory_host": "manager"}, check_mode=True)
     calls = []
 
     def execute(**kwargs):
         calls.append(kwargs)
-        assert json.loads(kwargs["module_args"]["stdin"]) == {"runtime": record}
+        assert json.loads(kwargs["module_args"]["stdin"])["runtime"] == record
         return {"rc": 1, "stderr": "NONPRODUCTION containment failed", "invocation": {"must_not_escape": True}}
 
     action._execute_module = execute
     assert action.run()["skipped"] and not calls
     action._task.check_mode = False
     result = action.run(task_vars={"hostvars": {"manager": {}}})
-    assert result["failed"] and "NONPRODUCTION containment failed" in result["msg"]
+    assert result["failed"] and not result["contained"] and "evidence unavailable" in result["msg"]
     assert "invocation" not in result and "cmd" not in result
     assert len(calls) == 1
 
@@ -1444,3 +1796,232 @@ def test_cancel_releases_only_its_token_without_testing_or_stopping_providers(tm
     events = list(store.events)
     assert not ENGINE.access_transact(store, client, "access_cancel", "owner", forbidden)["changed"]
     assert store.events == events
+
+
+@pytest.mark.integration
+def test_tcp_refusal_is_reported_as_tcp_with_rootless_context_and_continuity(monkeypatch):
+    import os
+    import socket
+    import sys
+
+    desired = request()
+    name = next(iter(desired["callers"]))
+    desired["callers"][name]["binding"] = {"runtime": "podman", "mode": "rootless", "account": "fixture", "selector": "fixture"}
+    net, user = (os.readlink("/proc/self/ns/" + ns) for ns in ["net", "user"])
+    # Reserve a local port without listening; no external service is contacted.
+    with socket.socket() as reserved:
+        reserved.bind(("127.0.0.1", 0))
+        desired["endpoints"][0].update(address="127.0.0.1", port=reserved.getsockname()[1])
+
+        def command(argv, **kwargs):
+            if "ps" in argv:
+                return "fixture-container"
+            if "inspect" in argv:
+                return "1234"
+            if argv[0] == "cat":
+                return "1234 (fixture) " + " ".join(["0"] * 20)
+            return net if argv[-1].endswith("/net") else user
+
+        actual = REMOTE.namespace_probe
+
+        def probe(argv):
+            assert argv[:6] == ["nsenter", "--target", "1234", "--user", "--net", "--"]
+            # Execute the production Python TCP body locally. Namespace entry
+            # itself was separately observed on mgt and is not simulated as proof.
+            return actual([sys.executable, "-c", argv[-2], argv[-1]])
+
+        monkeypatch.setattr(REMOTE, "command", command)
+        monkeypatch.setattr(REMOTE, "runtime_command", lambda record: (["fixture-runtime"], []))
+        monkeypatch.setattr(REMOTE, "namespace_probe", probe)
+        monkeypatch.setattr(ENGINE, "future_caller", lambda *args: False)
+        with pytest.raises(REMOTE.ProbeError, match="TCP connect: connection refused.*ECONNREFUSED") as error:
+            REMOTE.qualified_probes(desired)
+        assert error.value.retryable
+        assert name in str(error.value) and "127.0.0.1" in str(error.value)
+
+
+def test_probe_startup_errors_are_distinct_sanitized_and_not_readiness_retries(monkeypatch):
+    import subprocess
+
+    for stderr, stage in [
+        ("nsenter: reassociate to namespace failed: Operation not permitted SECRET_SENTINEL", "namespace entry"),
+        ("nsenter: failed to execute /usr/bin/python3: No such file or directory SECRET_SENTINEL", "interpreter startup"),
+    ]:
+        monkeypatch.setattr(
+            REMOTE.subprocess, "run", lambda *args, diagnostic=stderr, **kwargs: subprocess.CompletedProcess([], 1, "", diagnostic)
+        )
+        with pytest.raises(REMOTE.ProbeError, match=stage) as error:
+            REMOTE.namespace_probe(["nsenter"])
+        assert not error.value.retryable and "SECRET_SENTINEL" not in str(error.value)
+
+
+def test_inconclusive_abort_reestablishes_reservation_even_after_a_premature_finish(tmp_path, monkeypatch):
+    store = Store(tmp_path / "policy.json", monkeypatch)
+    desired = request()
+    ENGINE.transact(store, desired, "stage", "operation", lambda _: None)
+    ENGINE.transact(store, desired, "finish", "operation", lambda _: None)
+    assert not store.current["managed_services"]["utility"]["pending"]
+    with pytest.raises(ValueError, match="containment was not proved"):
+        ENGINE.transact(store, desired | {"containment_verified": False}, "abort", "operation", lambda _: None)
+    saved = store.current["managed_services"]["utility"]
+    assert saved["pending"] and saved["manager_containment_failed"]
+    # Old buggy records could have pending=false despite a failed manager proof.
+    saved["pending"] = False
+    store.write(store.current)
+    with pytest.raises(ValueError, match="manager containment remains unproved"):
+        ENGINE.transact(store, desired, "stage", "another-operation", lambda _: None)
+    removal = desired | {"action": "remove"}
+    ENGINE.transact(store, removal, "prepare_remove", "scoped-removal", lambda _: None)
+    assert store.current["managed_services"]["utility"]["removing"]
+
+
+@pytest.mark.integration
+def test_production_probe_retry_keeps_reservation_until_success(tmp_path):
+    import os
+    import shutil
+    import subprocess
+    import sys
+
+    import yaml
+
+    roles, actions = tmp_path / "roles", tmp_path / "actions"
+    shutil.copytree(ROOT / "ansible/roles/service_firewall", roles / "service_firewall")
+    tasks = roles / "service_firewall/tasks/lifecycle_probes.yml"
+    body = yaml.safe_load(tasks.read_text())
+    for task in body:
+        if task.get("register") == "service_firewall_qualified_access":
+            task.update(retries=1, delay=0)
+    tasks.write_text(yaml.safe_dump(body))
+    actions.mkdir()
+    store = Store(tmp_path / "policy.json", SimpleNamespace(setattr=lambda obj, name, value: setattr(obj, name, value)))
+    desired = request() | {"dependents": [], "providers": [], "sources": None, "source_addresses": [], "root": "/etc/skynet-mgt-firewall"}
+    ENGINE.transact(store, desired, "stage", "operation", lambda _: None)
+    (tmp_path / "kernel.json").write_text(json.dumps(store.kernel.state))
+    (tmp_path / "mode").write_text("fail")
+    (tmp_path / "count").write_text("0")
+    (actions / "service_firewall_lifecycle.py").write_text(f"""
+import importlib.util,json
+from pathlib import Path
+from types import SimpleNamespace
+spec=importlib.util.spec_from_file_location('fixture',{str(Path(__file__).resolve())!r})
+f=importlib.util.module_from_spec(spec);spec.loader.exec_module(f)
+class ActionModule(f.ACTION.ActionModule):
+    def _execute_module(self,module_name,module_args,task_vars):
+        root=Path({str(tmp_path)!r});data=json.loads(module_args['stdin']);phase=data['phase']
+        store=f.Store(root/'policy.json',SimpleNamespace(setattr=lambda obj,name,value:setattr(obj,name,value)))
+        store.current=json.loads(store.path.read_text())
+        store.kernel.state={{int(k):v for k,v in json.loads((root/'kernel.json').read_text()).items()}}
+        with (root/'events').open('a') as out:out.write(phase+'\\n')
+        if phase=='probe':
+            assert store.current['managed_services']['utility']['pending'], 'reservation committed before probe'
+            count=int((root/'count').read_text())+1;(root/'count').write_text(str(count))
+            if (root/'mode').read_text()=='fail' or count==1:
+                result={{'changed':False,'failed':True,'probe_retryable':True,'msg':'caller proxy -> 192.0.2.48:18010: TCP connect: connection refused (ECONNREFUSED)'}}
+            else:
+                result={{'changed':False,'handshakes':[{{'caller':'proxy','port':18010,'connected':True,'namespace_source':'192.0.2.48'}}]}}
+        elif phase=='counters':
+            counts={{}} if (root/'mode').read_text()=='missing-counter' else {{'4:18010':int((root/'count').read_text())}}
+            result={{'changed':False,'counters':counts}}
+        else:
+            result=f.ENGINE.transact(store,data['request'],phase,data['token'],lambda _:None)
+            (root/'kernel.json').write_text(json.dumps(store.kernel.state))
+        return {{'rc':0,'stdout':json.dumps(result),'invocation':{{'source':'SECRET_SOURCE_MUST_NOT_ESCAPE'}}}}
+""")
+    plan = desired | {
+        "managed": True,
+        "controller": "manager",
+        "hosts": ["manager"],
+        "inventory": {"manager": "192.0.2.48"},
+        "profile": {"manager": "mgt"},
+        "token": "operation",
+        "providers": [],
+        "access_hosts": [],
+    }
+    plan["endpoints"] = [{**endpoint, "host": "manager"} for endpoint in desired["endpoints"]]
+    play = tmp_path / "play.yml"
+    play.write_text(
+        yaml.safe_dump(
+            [
+                {
+                    "hosts": "manager",
+                    "connection": "local",
+                    "gather_facts": False,
+                    "vars": {
+                        "service_firewall_adapter_plan": plan,
+                        "service_firewall_lifecycle_phase": "finish",
+                        "services_storage_host": "storage",
+                    },
+                    "tasks": [
+                        {
+                            "ansible.builtin.include_role": {
+                                "name": "service_firewall",
+                                "tasks_from": "lifecycle",
+                                "apply": {"tags": ["recreate"]},
+                            },
+                            "tags": ["recreate"],
+                        }
+                    ],
+                }
+            ]
+        )
+    )
+    config = tmp_path / "ansible.cfg"
+    config.write_text(
+        f"[defaults]\nroles_path={roles}\naction_plugins={actions}\nvars_plugins_enabled=\ninject_facts_as_vars=false\nstdout_callback=default\n[inventory]\nenable_plugins=host_list\n"
+    )
+
+    def execute():
+        return subprocess.run(
+            [str(Path(sys.executable).with_name("ansible-playbook")), "-i", "manager,", str(play), "--tags", "recreate"],
+            env={**os.environ, "ANSIBLE_CONFIG": str(config)},
+            capture_output=True,
+            text=True,
+        )
+
+    failed = execute()
+    output = failed.stdout + failed.stderr
+    assert failed.returncode != 0 and "TCP connect: connection refused" in output, output
+    assert "SECRET_SOURCE_MUST_NOT_ESCAPE" not in output
+    assert json.loads(store.path.read_text())["managed_services"]["utility"]["pending"]
+    assert "finish" not in (tmp_path / "events").read_text().splitlines()
+    (tmp_path / "mode").write_text("missing-counter")
+    (tmp_path / "count").write_text("0")
+    missing = execute()
+    assert missing.returncode != 0 and "missing -> missing" in missing.stdout, missing.stdout + missing.stderr
+    assert "SECRET_SOURCE_MUST_NOT_ESCAPE" not in missing.stdout + missing.stderr
+    assert json.loads(store.path.read_text())["managed_services"]["utility"]["pending"]
+    assert "finish" not in (tmp_path / "events").read_text().splitlines()
+    (tmp_path / "mode").write_text("ready")
+    (tmp_path / "count").write_text("0")
+    succeeded = execute()
+    assert succeeded.returncode == 0, succeeded.stdout + succeeded.stderr
+    assert (tmp_path / "count").read_text() == "2"
+    assert not json.loads(store.path.read_text())["managed_services"]["utility"]["pending"]
+    assert (tmp_path / "events").read_text().splitlines()[-1] == "finish"
+
+
+def test_missing_task_is_not_confused_with_an_unavailable_daemon(monkeypatch):
+    import subprocess
+
+    argv = CONTAIN.BASE + ["inspect", "--type", "task", "--format", CONTAIN.TASK, "task-id"]
+    monkeypatch.setattr(CONTAIN.subprocess, "run", lambda *a, **kw: subprocess.CompletedProcess(argv, 1, "", "task task-id not found"))
+    assert CONTAIN.command(argv) is None
+    monkeypatch.setattr(
+        CONTAIN.subprocess, "run", lambda *a, **kw: subprocess.CompletedProcess(argv, 1, "", "Cannot connect: SECRET_SENTINEL")
+    )
+    with pytest.raises(RuntimeError, match="required evidence unavailable") as error:
+        CONTAIN.command(argv)
+    assert "SECRET_SENTINEL" not in str(error.value)
+
+
+def test_missing_initial_task_location_never_becomes_empty_list_exit_proof():
+    record, inventory, state, calls, run = swarm_evidence_fixture()
+
+    def missing(argv):
+        if argv[3:6] == ["inspect", "--type", "task"]:
+            return None
+        return run(argv)
+
+    with pytest.raises(ValueError, match="task-to-node evidence unavailable"):
+        CONTAIN.quiesce_swarm(record, inventory, missing)
+    assert not state["stopped"] and not state["removed"]

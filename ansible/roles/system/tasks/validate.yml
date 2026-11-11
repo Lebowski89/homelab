@@ -1,4 +1,5 @@
 ---
+
 - name: System | Inspect image-based deployment marker
   ansible.builtin.stat:
     path: /run/ostree-booted
@@ -55,11 +56,7 @@
 
 - name: System | Validate optional resolver support
   when: system_resolved_enabled
-  ansible.builtin.assert:
-    that: ansible_facts.os_family == 'Debian'
-    fail_msg: >-
-      The optional resolver feature currently supports Debian/Ubuntu only.
-      Leave it disabled on DNF hosts to preserve their existing resolver ownership.
+  ansible.builtin.import_tasks: resolved_validate.yml
 
 - name: System | Validate swap inputs before discovery
   when: system_swap_enabled

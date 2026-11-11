@@ -152,7 +152,13 @@ def render_declaration_ids(declarations):
     environment = NativeEnvironment(undefined=StrictUndefined)
     variables = {
         "services_controller_host": "synthetic-controller",
-        "hostvars": {"synthetic-controller": {"container_host_puid": 1000, "container_host_pgid": 1000}},
+        "services_storage_host": "synthetic-storage",
+        "services_plex_host": "synthetic-plex",
+        "hostvars": {
+            "synthetic-controller": {"container_host_puid": 1000, "container_host_pgid": 1000},
+            "synthetic-storage": {"container_host_puid": 2000, "container_host_pgid": 2000},
+            "synthetic-plex": {"container_host_puid": 3000, "container_host_pgid": 3000},
+        },
     }
     for entry in result:
         for field in ("uid", "gid"):

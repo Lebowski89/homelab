@@ -1,0 +1,20 @@
+{
+  "approved_disposable": false,
+  "allow_nf_tables_alternatives": false,
+  "allow_image_preparation": false,
+  "allocation_id": "operator-approved-isolated-test-pool",
+  "endpoint": "https://proxmox-test.example.invalid:8006/",
+  "node": "test-node",
+  "ssh_host": "proxmox-test.example.invalid",
+  "ca_file": "/outside/repository/verified-proxmox-ca.pem",
+  "vm_ids": [980000, 980001],
+  "addresses": ["192.0.2.10/24"],
+  "gateway": "192.0.2.1",
+  "dns": ["192.0.2.1"],
+  "bridge": "isolated-test-bridge",
+  "storage": "test-disks",
+  "image_storage": "test-images",
+  "snippet_storage": "test-snippets",
+  "public_key_path": "/outside/repository/test-key.pub",
+  "private_key_path": "/outside/repository/test-key"
+}

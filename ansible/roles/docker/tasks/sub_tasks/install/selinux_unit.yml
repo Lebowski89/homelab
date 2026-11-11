@@ -1,0 +1,22 @@
+---
+
+- name: Docker SELinux | Inspect the effective systemd launch privately
+  ansible.builtin.command:
+    argv: [systemctl, show, docker.service, --property=ExecStart, --value]
+  register: docker_selinux_unit
+  changed_when: false
+  no_log: true
+  diff: false
+
+- name: Docker SELinux | Require direct dockerd and unambiguous configuration ownership
+  ansible.builtin.assert:
+    that:
+      - "'path=/usr/bin/dockerd ;' in docker_selinux_unit.stdout"
+      - "'--config-file' not in docker_selinux_unit.stdout"
+      - "'--selinux-enabled' not in docker_selinux_unit.stdout"
+      - "'--rootless' not in docker_selinux_unit.stdout"
+      - "'$' not in docker_selinux_unit.stdout"
+    fail_msg: >-
+      Docker SELinux management requires a direct /usr/bin/dockerd system service using the default configuration path,
+      without a SELinux CLI flag or environment-expanded arguments. Review custom service ownership before retrying;
+      the role does not replace ExecStart or manage an alternate configuration.

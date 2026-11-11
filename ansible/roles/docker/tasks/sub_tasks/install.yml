@@ -1,87 +1,83 @@
 ---
 
-- name: Assert supported OS
-  ansible.builtin.assert:
-    that:
-      - ansible_facts.os_family == "Debian"
-      - ansible_facts.distribution == "Ubuntu"
-    fail_msg: "This role currently supports Ubuntu only."
+- name: Docker | Validate platform and package conflicts
+  ansible.builtin.import_tasks: sub_tasks/install/validate.yml
 
-- name: Ensure apt prerequisites are installed
-  ansible.builtin.apt:
-    name: "{{ docker_prereq_packages }}"
-    state: present
-    update_cache: true
+- name: Docker | Inspect the explicit SELinux transition before installation
+  when: docker_selinux_enable
+  ansible.builtin.import_tasks: sub_tasks/install/selinux_preflight.yml
 
-- name: Ensure Docker keyring directory exists
-  ansible.builtin.file:
-    path: "{{ docker_keyring_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+- name: Docker | Prepare Rocky 10 bridge kernel support
+  when:
+    - ansible_facts.distribution == 'Rocky'
+    - ansible_facts.distribution_major_version == '10'
+  ansible.builtin.import_tasks: sub_tasks/install/rocky_kernel.yml
 
-- name: Download Docker GPG key
-  ansible.builtin.get_url:
-    url: "{{ docker_repo_url }}/gpg"
-    dest: "{{ docker_keyring_file }}"
-    owner: root
-    group: root
-    mode: "0644"
+- name: Docker | Preview installation in check mode
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg:
+      repository: "{{ docker_repo_url }}"
+      suite_or_release: "{{ docker_repo_suite if ansible_facts.pkg_mgr == 'apt' else ansible_facts.distribution_major_version }}"
+      prerequisites: "{{ docker_prereq_packages }}"
+      packages: "{{ docker_packages }}"
+      state: present
+      user_group: "{{ docker_user if docker_manage_user else 'No user management requested' }}"
+      service: Docker will be enabled and started; installation and service verification are deferred.
+      note: Repository and package changes require a normal run; no cache, key or repository is changed in check mode.
 
-- name: Add Docker apt repository
-  ansible.builtin.deb822_repository:
-    name: "{{ docker_repo_filename }}"
-    types: [deb]
-    uris: "{{ docker_repo_url }}"
-    suites: "{{ ansible_facts.distribution_release }}"
-    components: "{{ [docker_repo_channel] }}"
-    architectures: "{{ docker_apt_arch.split(',') | map('trim') | list }}"
-    signed_by: "{{ docker_keyring_file }}"
-    mode: "0644"
-    state: present
-  register: docker_apt_repository
+- name: Docker | Install APT repository and packages
+  when:
+    - ansible_facts.pkg_mgr == 'apt'
+    - not ansible_check_mode
+  ansible.builtin.import_tasks: sub_tasks/install/apt.yml
 
-- name: Find legacy APT source files
-  ansible.builtin.find:
-    paths: /etc/apt/sources.list.d
-    patterns: "*.list"
-    file_type: any
-  register: docker_apt_legacy_sources
+- name: Docker | Install RPM repository and packages
+  when:
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - not ansible_check_mode
+  ansible.builtin.import_tasks: sub_tasks/install/rpm.yml
 
-- name: Remove the previous Docker one-line repository entry
-  ansible.builtin.lineinfile:
-    path: "{{ docker_apt_legacy_source_file }}"
-    regexp: >-
-      ^\s*{{ docker_apt_legacy_source.split() | map('regex_escape') | join('\s+') }}\s*(?:#.*)?$
-    state: absent
-  vars:
-    # apt_repository reused matching entries in any .list file and retained comments.
-    docker_apt_legacy_source: >-
-      deb [arch={{ docker_apt_arch }} signed-by={{ docker_keyring_file }}]
-      {{ docker_repo_url }}
-      {{ ansible_facts.distribution_release }} {{ docker_repo_channel }}
-  loop: >-
-    {{ ['/etc/apt/sources.list'] +
-       (((docker_apt_legacy_sources.files | selectattr('isreg') | list) +
-         (docker_apt_legacy_sources.files | selectattr('islnk') | list))
-        | map(attribute='path') | list) }}
-  loop_control:
-    loop_var: docker_apt_legacy_source_file
-  register: docker_apt_legacy_repository
+- name: Docker | Apply the explicit SELinux configuration
+  when:
+    - docker_selinux_enable
+    - not ansible_check_mode
+  ansible.builtin.import_tasks: sub_tasks/install/selinux.yml
 
-- name: Refresh APT after Docker repository changes
-  when: docker_apt_repository.changed or docker_apt_legacy_repository.changed
-  ansible.builtin.apt:
-    update_cache: true
+- name: Docker | Enable and start the daemon
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: docker.service
+    enabled: true
+    state: started
 
-- name: Install Docker packages
-  ansible.builtin.apt:
-    name: "{{ docker_packages }}"
-    state: present
+- name: Docker | Verify the requested SELinux capability
+  when:
+    - docker_selinux_enable
+    - not ansible_check_mode
+  block:
+    - name: Docker SELinux | Verify the local daemon advertises SELinux privately
+      ansible.builtin.uri:
+        url: http://localhost/info
+        unix_socket: /var/run/docker.sock
+        use_proxy: false
+      register: docker_selinux_verified
+      failed_when: >-
+        docker_selinux_verified.status | default(0) != 200 or
+        'name=selinux' not in (docker_selinux_verified.json.SecurityOptions | default([]))
+      no_log: true
+      diff: false
+  rescue:
+    - name: Docker SELinux | Explain unverified daemon confinement
+      ansible.builtin.fail:
+        msg: >-
+          Docker did not advertise SELinux after applying the requested configuration, or the local API was unavailable.
+          Inspect docker.service and daemon configuration locally; runtime confinement has not been verified.
 
 - name: Ensure docker group exists
-  when: docker_manage_user
+  when:
+    - docker_manage_user
+    - not ansible_check_mode
   ansible.builtin.group:
     name: docker
     state: present
@@ -89,6 +85,7 @@
 - name: Add user to docker group
   when:
     - docker_manage_user
+    - not ansible_check_mode
     - docker_user | length > 0
   ansible.builtin.user:
     name: "{{ docker_user }}"

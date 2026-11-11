@@ -49,7 +49,7 @@ jdownloader2:
   ################################
   deploy:
     type: container
-    host: blacktop
+    hosts: blacktop
     execution:
       mode: rootful
   systemd:

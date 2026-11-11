@@ -1,20 +1,16 @@
 ---
+
 podman_install_enable: true
 podman_state: present
 podman_update_cache: true
 podman_cache_valid_time: 3600
 podman_min_version: "5.4.2"
+# Explicit Netavark provider choice for mixed Docker/Podman hosts; default stays unmanaged.
+podman_docker_iptables_compatibility: false
 podman_quadlet_generator_paths:
   - /usr/lib/systemd/system-generators/podman-system-generator
   - /lib/systemd/system-generators/podman-system-generator
-podman_packages:
-  - podman
-  - containernetworking-plugins
-  - uidmap
-  - slirp4netns
-  - passt
-  - fuse-overlayfs
-  - dbus-user-session
+podman_packages: "{{ podman_platform_packages[ansible_facts.os_family] }}"
 podman_install_extra_packages: []
 podman_shared_network_name: mgt-services
 podman_shared_network_dns_bind_port: 5533

@@ -1,79 +1,39 @@
 ---
 
-- name: System resolver | Assert supported host
-  ansible.builtin.assert:
-    that:
-      - ansible_facts.os_family | default("") == "Debian"
-      - ansible_facts.service_mgr | default("") == "systemd"
-    fail_msg: "The optional system resolver feature only supports Debian/Ubuntu hosts using systemd."
+- name: System resolver | Validate the direct task entry point
+  ansible.builtin.import_tasks: resolved_validate.yml
 
-- name: System resolver | Install NSS resolver packages
-  when: system_resolved_packages | length > 0
+- name: System resolver | Install APT resolver packages
+  when: ansible_facts.pkg_mgr == 'apt' and system_resolved_packages | length > 0
   ansible.builtin.apt:
     name: "{{ system_resolved_packages }}"
     state: present
     update_cache: true
   environment: "{{ system_apt_environment }}"
 
-- name: System resolver | Ensure systemd-resolved is enabled and running
-  ansible.builtin.systemd:
-    name: "{{ system_resolved_service_name }}"
-    enabled: true
-    state: started
-
-- name: System resolver | Ensure resolved config directory exists
-  ansible.builtin.file:
-    path: "{{ system_resolved_config_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-
-- name: System resolver | Remove stale unmanaged resolved drop-ins
-  when: system_resolved_cleanup_dropins | length > 0
-  ansible.builtin.file:
-    path: "{{ system_resolved_cleanup_dropin }}"
-    state: absent
-  loop: "{{ system_resolved_cleanup_dropins }}"
-  loop_control:
-    loop_var: system_resolved_cleanup_dropin
-  notify: System | Restart systemd-resolved
-
-- name: System resolver | Configure systemd-resolved drop-in
-  ansible.builtin.copy:
-    dest: "{{ system_resolved_dropin_path }}"
-    owner: root
-    group: root
-    mode: "0644"
-    content: |
-      [Resolve]
-      {% if system_resolved_fallback_dns | length > 0 %}
-      FallbackDNS={{ system_resolved_fallback_dns | join(' ') }}
-      {% endif %}
-      {% if system_resolved_disable_stub | bool %}
-      DNSStubListener=no
-      {% endif %}
-  notify: System | Restart systemd-resolved
-
-- name: System resolver | Apply DNS stub listener changes before dependent services
-  when: system_resolved_disable_stub | bool
-  ansible.builtin.meta: flush_handlers
-
-- name: System resolver | Point resolv.conf at resolved upstream file
+- name: System resolver | Install RPM resolver packages
   when:
-    - system_resolved_manage_resolv_conf | bool
-    - ansible_facts.virtualization_type | default("") != "lxc"
-  ansible.builtin.file:
-    src: "{{ system_resolved_resolv_conf_target }}"
-    dest: "{{ system_resolved_resolv_conf_path }}"
-    state: link
-    force: true
-    follow: false
+    - not ansible_check_mode
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - system_resolved_packages | length > 0
+  ansible.builtin.dnf:
+    name: "{{ system_resolved_packages }}"
+    state: present
+    use_backend: "{{ 'dnf5' if ansible_facts.pkg_mgr == 'dnf5' else 'dnf4' }}"
+    disable_gpg_check: false
+    allowerasing: false
 
-- name: System resolver | Ensure NSS uses systemd-resolved before plain DNS
-  when: system_resolved_manage_nsswitch | bool
-  ansible.builtin.lineinfile:
-    path: "{{ system_resolved_nsswitch_path }}"
-    regexp: '^hosts:'
-    line: "{{ system_resolved_nsswitch_hosts_line }}"
-    backup: "{{ system_resolved_nsswitch_backup | bool }}"
+- name: System resolver | Preview RPM setup without runtime or file mutations
+  when: ansible_check_mode and ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.debug:
+    msg: >-
+      Would install {{ system_resolved_packages }}, configure resolved and use {{ system_resolved_resolv_conf_target }}.
+      Package, service, NSS-provider and DNS-output verification are deferred.
+      NetworkManager profiles, DNS publisher selection and authselect/NSS files are retained.
+
+- name: System resolver | Configure the selected resolver
+  when: not ansible_check_mode or ansible_facts.pkg_mgr == 'apt'
+  ansible.builtin.include_tasks:
+    file: resolved_configure.yml
+    apply:
+      tags: [system, system_resolved]

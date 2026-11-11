@@ -75,3 +75,46 @@ The least-privilege `postgres_monitor` login is the sole application-neutral
 PostgreSQL monitoring role. It inherits the built-in `pg_monitor` role and is
 used by postgres_exporter against the `postgres` database. Its password is
 stored only in the encrypted Ansible vault as `postgres_monitor_role_pass`.
+
+The native exporter follows the [PostgreSQL host platform matrix](postgresql-platforms.md):
+Debian 12/13, Ubuntu 22.04/24.04/26.04/26.10, Fedora 43/44 AMD64, and Rocky
+9.7+/10.1+ within majors 9/10. Linux/systemd and the appropriate APT or DNF4/DNF5
+backend are required; Atomic/OSTree and other derivatives fail before changes.
+Fedora 45 remains outside this matrix until PostgreSQL's PGDG path supports it.
+The existing [upstream archive](https://github.com/prometheus-community/postgres_exporter/releases/tag/v0.20.1),
+version, SHA256 pin and AMD64 default are retained. No exporter repository is added.
+An ARM64 host requires explicit `postgres_exporter_arch: arm64` and the matching
+`postgres_exporter_checksum`; architecture mismatches and missing pins are rejected.
+Release, mirror/download, account, path, database and listener overrides remain.
+Unit/configuration paths must be absolute and contain no whitespace, quotes or
+systemd specifiers; the password and environment files must be distinct.
+
+Prerequisites are installed with `present`, using APT cache options only on APT.
+RPM installs retain signature verification and require an interpreter with the
+distribution DNF and SELinux bindings. SELinux keeps its current mode. Only the
+managed executable receives an exact `bin_t` mapping and label restoration;
+configuration and unit files use distribution default labels. This follows the
+[distribution executable policy](https://github.com/fedora-selinux/selinux-policy/blob/rawhide/policy/modules/kernel/corecommands.fc)
+and does not introduce a dedicated exporter confinement domain. No broad directory
+relabel, SELinux boolean or firewall change is performed. The existing dedicated
+account, protected credential files and hardened systemd unit are preserved.
+Unchanged configuration does not request a restart or daemon reload.
+
+On an existing PostgreSQL host with NetBox's `tags_postgres`, the existing command is:
+
+```bash
+skynet limit <postgres-host> run postgres-exporter install
+```
+
+`install`, `deploy` and `run` retain the same `postgres_admin_monitor,postgres_exporter`
+selection: they reconcile the monitoring database identity before configuring the
+exporter. This requires a configured, reachable Patroni cluster and existing vault
+credentials; it is not a packages-only operation. The raw `postgres_exporter` tag
+selects the exporter alone when the database identity has already been prepared.
+Check mode validates platform and non-sensitive installation inputs, then reports
+the plan without resolving/rendering credentials, downloading archives, preparing
+accounts/files/labels, connecting to the database or changing service lifecycle.
+It does not prove listener readiness, successful scrapes or SELinux access.
+After an authorised live run, verify the selected listener's metrics and collector
+health, inspect SELinux AVCs, and rerun to confirm convergence. Remote scrape
+reachability remains the existing host firewall policy's responsibility.

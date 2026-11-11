@@ -1,0 +1,108 @@
+---
+
+- name: Require the disposable current-run guest
+  ansible.builtin.import_playbook: ../shared/guard.yml
+
+- name: Verify actual HTTP, ownership, configuration and credential consumption
+  hosts: molecule_guests
+  become: true
+  gather_facts: false
+  tasks:
+    - name: VM tests | Require a successful application response after UID and input checks
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable synthetic application exposes HTTP only; loopback probe carries no credentials and verifies the actual listener.
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18080/health
+        use_proxy: false
+        return_content: true
+        status_code: 200
+      register: molecule_vm_http
+      until: molecule_vm_http is succeeded
+      retries: 30
+      delay: 2
+
+    - name: VM tests | Require the fixture's authenticated startup path
+      ansible.builtin.assert:
+        that: molecule_vm_http.content == 'ok'
+
+    - name: VM tests | Inspect the running writer
+      ansible.builtin.include_tasks: ../shared/app-state.tasks.yml
+
+    - name: VM tests | Inspect whether this run already recorded its initial application state
+      ansible.builtin.stat:
+        path: '{{ molecule_vm_evidence_directory }}/application-first.json'
+      register: molecule_vm_application_record
+      delegate_to: localhost
+      become: false
+
+    - name: VM tests | Write data as the application UID that startup cannot regenerate
+      when: not molecule_vm_application_record.stat.exists
+      become: true
+      become_user: '{{ molecule_vm_runtime_user }}'
+      environment: '{{ molecule_vm_runtime_env }}'
+      ansible.builtin.command:
+        argv:
+          - '{{ molecule_vm_engine }}'
+          - exec
+          - --user
+          - '1000:1000'
+          - '{{ molecule_vm_writer_ids.stdout }}'
+          - sh
+          - '-ec'
+          - 'test "$(id -u)" = 1000; printf "%s" "$1" > /data/persisted'
+          - molecule-write
+          - 'retained-after-start-{{ molecule_vm_run_id }}'
+      changed_when: true
+
+    - name: VM tests | Read the actual application's SELinux process label on enforcing hosts
+      when: molecule_vm_images[molecule_vm_platform].selinux
+      become_user: '{{ molecule_vm_runtime_user }}'
+      become: true
+      environment: '{{ molecule_vm_runtime_env }}'
+      ansible.builtin.command:
+        argv: ['{{ molecule_vm_engine }}', inspect, --format, '{{ "{{.ProcessLabel}}" }}', '{{ molecule_vm_writer_ids.stdout }}']
+      changed_when: false
+      register: molecule_vm_process_label
+      failed_when: molecule_vm_process_label.rc != 0 or ':container_t:' not in molecule_vm_process_label.stdout
+
+    - name: VM tests | Inspect the application's retained write
+      ansible.builtin.stat:
+        path: '/opt/molecule-apps/{{ molecule_vm_run_id }}/data/persisted'
+        checksum_algorithm: sha256
+      register: molecule_vm_app_data
+
+    - name: VM tests | Require a regular file written by the application account
+      ansible.builtin.assert:
+        that:
+          - molecule_vm_app_data.stat.isreg
+          - molecule_vm_app_data.stat.uid == (ansible_facts.getent_passwd['podman-molecule'][1] | int if molecule_vm_runtime == 'rootless' else 1000)
+          - molecule_vm_app_data.stat.checksum == ('retained-after-start-' ~ molecule_vm_run_id) | hash('sha256')
+
+    - name: VM tests | Read the retained application write through its real HTTP listener
+      # checkov:skip=CKV2_ANSIBLE_1:Disposable synthetic application exposes HTTP only; loopback probe carries no credentials and verifies the actual listener.
+      ansible.builtin.uri:
+        url: http://127.0.0.1:18080/persisted
+        use_proxy: false
+        return_content: true
+        status_code: 200
+      register: molecule_vm_persisted_http
+      failed_when: molecule_vm_persisted_http.content | default('') != 'retained-after-start-' ~ molecule_vm_run_id
+
+    - name: VM tests | Retain the first writer and data identities
+      ansible.builtin.copy:
+        dest: '{{ molecule_vm_evidence_directory }}/application-first.json'
+        content: '{{ {"identity": molecule_vm_writer_identity.stdout, "checksum": molecule_vm_app_data.stat.checksum} | to_json }}'
+        force: false
+        mode: '0600'
+      delegate_to: localhost
+      become: false
+
+    - name: VM tests | Require convergence to preserve the process and persistent data
+      vars:
+        molecule_vm_expected_file: >-
+          {{ lookup('ansible.builtin.first_found', {'files': [molecule_vm_evidence_directory ~ '/application-expected.json',
+                                                           molecule_vm_evidence_directory ~ '/application-first.json']}) }}
+        molecule_vm_first: "{{ lookup('ansible.builtin.file', molecule_vm_expected_file) | from_json }}"
+      ansible.builtin.assert:
+        that:
+          - molecule_vm_app_data.stat.checksum == molecule_vm_first.checksum
+          - molecule_vm_writer_identity.stdout == molecule_vm_first.identity

@@ -1,0 +1,91 @@
+---
+
+- name: VM tests | Select the actual runtime store
+  ansible.builtin.set_fact:
+    molecule_vm_store_engine: '{{ "podman" if molecule_vm_store == "rootless" else molecule_vm_store }}'
+    molecule_vm_store_user: '{{ ansible_user if molecule_vm_store == "rootless" else "root" }}'
+    molecule_vm_store_env: >-
+      {{ {'HOME': ansible_facts.getent_passwd[ansible_user][4],
+          'XDG_RUNTIME_DIR': '/run/user/' ~ ansible_facts.getent_passwd[ansible_user][1],
+          'DBUS_SESSION_BUS_ADDRESS': 'unix:path=/run/user/' ~ ansible_facts.getent_passwd[ansible_user][1] ~ '/bus'}
+         if molecule_vm_store == 'rootless' else {} }}
+    molecule_vm_smoke_server_id: {rc: 1}
+    molecule_vm_smoke_network_id: {rc: 1}
+    molecule_vm_smoke_network: 'molecule-{{ molecule_vm_run_id[:12] }}-{{ molecule_vm_store }}'
+
+- name: VM tests | Exercise real bridged peer traffic
+  become: true
+  become_user: '{{ molecule_vm_store_user }}'
+  environment: '{{ molecule_vm_store_env }}'
+  block:
+    - name: VM tests | Create a run-owned bridge with DNS
+      ansible.builtin.command:
+        argv: ['{{ molecule_vm_store_engine }}', network, create, --label, 'homelab.molecule.run={{ molecule_vm_run_id }}', '{{ molecule_vm_smoke_network }}']
+      changed_when: true
+      register: molecule_vm_smoke_network_id
+
+    - name: VM tests | Start a harmless unprivileged HTTP peer
+      ansible.builtin.command:
+        argv:
+          - '{{ molecule_vm_store_engine }}'
+          - run
+          - '-d'
+          - --name
+          - '{{ molecule_vm_smoke_network }}-server'
+          - --network
+          - '{{ molecule_vm_smoke_network }}'
+          - --label
+          - 'homelab.molecule.run={{ molecule_vm_run_id }}'
+          - --user
+          - '1000:1000'
+          - --cap-drop
+          - ALL
+          - '{{ molecule_vm_probe_image }}'
+          - sh
+          - -ec
+          - 'mkdir /tmp/web; echo molecule-http > /tmp/web/index.html; exec httpd -f -p 8080 -h /tmp/web'
+      changed_when: true
+      register: molecule_vm_smoke_server_id
+
+    - name: VM tests | Require actual network DNS and HTTP between separate containers
+      ansible.builtin.command:
+        argv: ['{{ molecule_vm_store_engine }}', run, --rm, --network, '{{ molecule_vm_smoke_network }}',
+               '{{ molecule_vm_probe_image }}', wget, -qO-, '-T', '5', 'http://{{ molecule_vm_smoke_network }}-server:8080/']
+      changed_when: true
+      register: molecule_vm_smoke_response
+      until: molecule_vm_smoke_response.rc == 0 and molecule_vm_smoke_response.stdout == 'molecule-http'
+      retries: 3
+      delay: 2
+  rescue:
+    - name: VM tests | Retain failure evidence before retiring owned peers
+      ansible.builtin.include_tasks:
+        file: ../shared/diagnostics.tasks.yml
+        apply:
+          become: true
+          become_user: root
+
+    - name: VM tests | Report failed real bridge traffic
+      ansible.builtin.fail:
+        msg: '{{ molecule_vm_store }} bridge DNS/HTTP failed; no coexistence acceptance is recorded.'
+  always:
+    - name: VM tests | Remove only the exact server created by this probe
+      when: molecule_vm_smoke_server_id.rc | default(1) == 0
+      ansible.builtin.command:
+        argv: ['{{ molecule_vm_store_engine }}', rm, '-f', '{{ molecule_vm_smoke_server_id.stdout }}']
+      changed_when: true
+
+    - name: VM tests | Remove only the exact network created by this probe
+      when: molecule_vm_smoke_network_id.rc | default(1) == 0
+      ansible.builtin.command:
+        argv: ['{{ molecule_vm_store_engine }}', network, rm, '{{ molecule_vm_smoke_network_id.stdout }}']
+      changed_when: true
+
+- name: VM tests | Require Ubuntu direct rootless cleanup to leave no pasta helper for this account
+  when:
+    - ansible_facts.distribution == 'Ubuntu'
+    - molecule_vm_store == 'rootless'
+  ansible.builtin.command:
+    argv: [pgrep, '-u', '{{ ansible_facts.getent_passwd[ansible_user][1] }}', '-x', 'pasta|pasta.avx2']
+  changed_when: false
+  register: molecule_vm_pasta_remaining
+  failed_when: molecule_vm_pasta_remaining.rc != 1

@@ -1,12 +1,41 @@
 ---
 
+- name: PostgreSQL | Validate platform for a direct Patroni task import
+  when: postgres_platform is not defined
+  ansible.builtin.include_tasks:
+    file: "{{ role_path }}/tasks/platform.yml"
+    apply:
+      tags: "{{ ansible_run_tags }}"
+  tags: [always]
+
+- name: PostgreSQL | Validate existing paths before Patroni configuration
+  ansible.builtin.import_tasks: "{{ role_path }}/tasks/sub_tasks/install/preflight.yml"
+  vars:
+    postgres_require_runtime: true
+  tags: [postgres, postgres_patroni]
+
+- name: PostgreSQL | Explain deferred Patroni configuration in check mode
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Would configure Patroni using {{ postgres_patroni_bin_dir }} and {{ postgres_patroni_data_dir }}.
+      Account-dependent filesystem work, service lifecycle, kernel/SELinux access and REST verification are deferred.
+  tags: [postgres, postgres_patroni]
+
+- name: PostgreSQL | Prepare RPM service ownership and SELinux labels
+  when: not ansible_check_mode and ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+  ansible.builtin.import_tasks: "{{ role_path }}/tasks/sub_tasks/install/patroni_rpm.yml"
+  tags: [postgres, postgres_patroni]
+
 - name: Ensure Patroni config directory exists
+  when: not ansible_check_mode
   ansible.builtin.file:
     path: "{{ postgres_patroni_config_dir }}"
     state: directory
     owner: root
     group: root
     mode: "0755"
+    setype: _default
   tags:
     - postgres
     - postgres_patroni
@@ -66,27 +95,44 @@
     - postgres_patroni_reset
 
 - name: Ensure Patroni PostgreSQL data directory exists
+  when: not ansible_check_mode
   ansible.builtin.file:
     path: "{{ postgres_patroni_data_dir }}"
     state: directory
     owner: postgres
     group: postgres
     mode: "0700"
+    setype: _default
   tags:
     - postgres
     - postgres_patroni
 
+- name: PostgreSQL | Restore the declared data directory labels without crossing mounts
+  when:
+    - not ansible_check_mode
+    - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+    - ansible_facts.selinux.status | default('disabled') == 'enabled'
+  community.general.serestorecon:
+    path: "{{ postgres_patroni_data_dir }}"
+    recurse: true
+    cross_filesystems: false
+    context: full
+  tags: [postgres, postgres_patroni]
+
 - name: Stop and disable default PostgreSQL service
+  when: not ansible_check_mode
   ansible.builtin.systemd_service:
-    name: postgresql
+    name: "{{ postgres_platform.postgresql_service }}"
     state: stopped
     enabled: false
-  failed_when: false
+  register: postgres_default_service_stop
+  failed_when: ansible_facts.pkg_mgr != 'apt' and postgres_default_service_stop.failed | default(false)
   tags:
     - postgres
     - postgres_patroni
 
 - name: Template Patroni config
+  when: not ansible_check_mode
   ansible.builtin.template:
     src: patroni.yml.j2
     dest: "{{ postgres_patroni_config_path }}"
@@ -94,22 +140,27 @@
     group: postgres
     mode: "0640"
     force: true
+    setype: _default
   no_log: true
+  diff: false
   notify: Restart patroni
   tags:
     - postgres
     - postgres_patroni
 
 - name: Enable and start Patroni
+  when: not ansible_check_mode
   ansible.builtin.systemd_service:
     name: patroni
     state: started
     enabled: true
+    daemon_reload: "{{ postgres_patroni_unit.changed | default(false) }}"
   tags:
     - postgres
     - postgres_patroni
 
 - name: Wait for Patroni REST API
+  when: not ansible_check_mode
   ansible.builtin.wait_for:
     host: "{{ local_ip }}"
     port: "{{ postgres_patroni_restapi_port }}"
