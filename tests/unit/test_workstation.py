@@ -242,8 +242,10 @@ def test_workstation_directory_tasks_preserve_existing_permissions():
 
 @pytest.mark.integration
 @pytest.mark.skipif(ANSIBLE_PLAYBOOK is None, reason="ansible-playbook is unavailable")
-@pytest.mark.parametrize("tag", sorted(WORKSTATION_TAGS | TOOL_TAGS))
+@pytest.mark.parametrize("tag", sorted(WORKSTATION_TAGS - {"workstation"}))
 def test_main_playbook_accepts_each_workstation_tag_with_synthetic_inventory(tmp_path: Path, tag: str):
+    # The broad workstation/tooling tags execute through the real main entry
+    # point below; retain listing probes only for the other granular tags.
     inventory = tmp_path / "inventory.ini"
     inventory.write_text(
         """[tags_skynet]
@@ -760,5 +762,6 @@ def test_inline_bootstrap_inventory_and_granular_tools(workstation_run, tag):
     assert "Recovery target |" not in result.stdout
     assert "Infisical" not in result.stdout
     assert sum(call["module"] == "setup" for call in calls) == 1
+    assert any(call["module"] == "getent" for call in calls)
     repos = [call["options"]["name"] for call in calls if call["module"] == "yum_repository"]
     assert ("opentofu" in repos) is (tag in {"workstation_tools", "workstation_opentofu"})

@@ -98,13 +98,12 @@ def test_all_repository_service_definitions_follow_canonical_layout():
         assert_service_document_style(document, filename=path.name)
 
 
-@pytest.mark.parametrize("enabled", [True, False])
-@pytest.mark.parametrize("runtime", ["docker", "podman"])
-def test_correctly_ordered_runtime_service_is_accepted(runtime, enabled):
+def test_correctly_ordered_runtime_service_is_accepted():
+    # Layout inspects keys; runtime/enabled values are validated by the catalog.
     document = {
         "example": {
-            "enabled": enabled,
-            "runtime": runtime,
+            "enabled": True,
+            "runtime": "docker",
             "tags": ["example"],
             "name": "example",
             "image": "example/image:1.0",
@@ -116,7 +115,7 @@ def test_correctly_ordered_runtime_service_is_accepted(runtime, enabled):
         }
     }
 
-    assert_service_document_style(document, filename=f"{runtime}.yml")
+    assert_service_document_style(document, filename="ordered.yml")
 
 
 def test_correctly_ordered_base_plus_target_service_is_accepted():

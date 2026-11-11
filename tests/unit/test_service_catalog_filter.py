@@ -330,18 +330,6 @@ def test_target_inherits_parent_runtime():
     assert "targets" not in merged
 
 
-def test_valid_target_runtime_override_is_allowed():
-    services = {
-        "svc": {
-            "deploy": {"hosts": "svc"},
-            "runtime": "docker",
-            "targets": {"portable": {"deploy": {"hosts": "portable"}, "runtime": "podman"}},
-        }
-    }
-
-    assert catalog_items(services, "manager")[0]["runtime"] == "podman"
-
-
 def test_top_level_systemd_is_valid_only_for_effective_podman_services():
     podman_cfg = {"runtime": "podman", "systemd": {"restart": "on-failure"}}
     docker_cfg = {"runtime": "docker", "systemd": {"restart": "on-failure"}}

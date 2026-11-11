@@ -4,6 +4,142 @@ Use `/opt/ansible/ansible-venv/bin/python -m pytest tests/unit` for the complete
 suite. Tests use synthetic inventories, fake external I/O and private temporary
 state. They do not establish live application or firewall acceptance.
 
+## Post-merge redundancy audit
+
+Separate branch from `origin/main` at `393d0aca`, containing PR #726's merge
+`9398db78`. This proposal was recorded before pruning. Production code,
+CI selections, markers and generated documentation remain unchanged.
+
+| Test/cases removed or consolidated | Retained replacement | Behavior preserved | Coverage limitation | Runtime evidence |
+| --- | --- | --- | --- | --- |
+| `test_workstation.py::test_main_playbook_accepts_each_workstation_tag_with_synthetic_inventory`: `workstation` and six tooling tags | `test_actual_main_bootstrap_without_netbox_or_application_inputs` and all six `test_inline_bootstrap_inventory_and_granular_tools` cases | Real main-entry selection without application inputs/collections; inline cases now require account lookup to prove role execution | Installation I/O remains synthetic; the other five granular listing probes stay | Seven Ansible processes eliminated; 3.862s cumulative baseline time |
+| `test_service_catalog_filter.py::test_valid_target_runtime_override_is_allowed` | `test_canonical_target_merge_contract` and `test_target_runtime_and_deploy_override_select_dispatch_host` | Docker-to-Podman override through catalog, effective merge and dispatch placement | No live acceptance; inherited/invalid runtime and portability cases stay | One pure filter call; negligible duration |
+| Four `test_service_definition_style.py::test_correctly_ordered_runtime_service_is_accepted` parameters become one ordered document | That single case and `test_all_repository_service_definitions_follow_canonical_layout` | Synthetic and real base/target key ordering | Layout ignores runtime/enabled values; catalog semantic and malformed-layout cases stay | Three equivalent traversals eliminated; negligible duration |
+| Task counts in `test_workstation_tooling.py::test_workstation_dynamic_includes_propagate_selection_without_unrelated_components` | All five `test_granular_tag_executes_validation_and_only_the_selected_tool` cases and granular platform/package execution | Selected payload plus validation; retain applied tags, clone-prerequisite wiring/opt-in guard and local OpenTofu ownership | Installation payloads are sentinels; cloning prerequisites retain wiring coverage because these cases do not opt into cloning | No case removed; delete the unused local count accumulator |
+
+Deferred: the five remaining listing probes need equivalent main-entry execution.
+Rootless firewall identity, transactions, rollback and retained protection remain:
+the VM lane is documented as disabled pending its protected controller and
+requires explicit enablement (server-side state was not queried). Its protected
+suite certifies Docker callers, not protected rootless Podman callers. Historical
+VM passes cannot replace routine coverage of each contract/failure mode.
+RomM/Bazarr/Authelia settings and data migration tests also stay; generic lifecycle
+success does not establish those preservation contracts.
+
+The unchanged environment uses Python 3.13.5, pytest 9.1.1, Ansible 2.21.5 and
+Ruff 0.17.2; nothing was installed/upgraded. Current pins differ for pytest
+(9.2.0), Ruff (0.17.3), Infisical SDK (installed/pinned 1.0.18/1.1.0), pytz
+(2026.5/2026.6), community.general (13.5.0/13.5.1) and community.postgresql
+(5.1.0/5.1.1). CI's Python 3.14.9 environment remains unverified locally.
+Raw argv, versions, phase durations, JUnit and collection/outcome audits are in
+ignored `.ansible/test-prune-393d0aca/`.
+
+The four affected modules were measured alone, with fresh private fixture trees
+and unchanged dependencies/parallelism; OS caches were not reset:
+
+```bash
+python -m pytest tests/unit/test_workstation.py tests/unit/test_workstation_tooling.py \
+  tests/unit/test_service_catalog_filter.py tests/unit/test_service_definition_style.py \
+  -q --tb=short --durations=0 --basetemp=... --junitxml=...
+```
+
+Before/final after: 181/170 passed; process wall 147.53s/144.98s; summed JUnit durations
+(including setup/teardown) 146.993s/144.436s. Eliminated baseline work is 3.862s;
+other variation is not attributed to pruning. No GitHub CI speedup is established.
+Baseline fast unit also passed 2,210 cases in 42.57s pytest time.
+
+Retained costs include repeated role-copy setup (up to 0.14s), Ansible dispatch,
+deb822 migrations (8.42s/8.16s), collection discovery (6.21s/6.13s), operator
+shared preparation (24.77s) and capture reuse (41.50s). Existing compiler and
+prepared-state caches preserve private mutable fixtures; no cache changes were made.
+
+The four CI selections below ran with profiling flags as above. Collection and
+JUnit confirm one outcome per selected case, with complete, disjoint coverage:
+
+| Group | Before collected | After collected | Final validation / pytest elapsed |
+| --- | ---: | ---: | --- |
+| Fast unit | 2,210 | 2,206 | 2,206 passed / 46.67s |
+| HAProxy operator | 73 | 73 | 73 passed / 522.61s |
+| Integration 0 | 495 | 495 | 486 passed, nine skipped / 636.78s |
+| Integration 1 | 757 | 750 | 749 passed, one skipped / 1,886.74s |
+
+`tests/unit` collection: **3,535 → 3,524** (net minus 11; 3,523 node IDs unchanged,
+four layout parameters replaced by one case). Total: **3,514 passed, ten existing
+environment-dependent skips**: four promtool, three local `postgres` OS-account
+and three ShellCheck checks. No helper/fixture became unused. The unit group was
+rechecked after refining the clone guard, briefly overlapping integration 0;
+the operator ran alone. Full-group timings are validation, not a before/after
+performance comparison.
+Ruff check/format passed all 100 unit-test Python files; `git diff --check` passed.
+
+## Fixture preparation and integration balancing
+
+Follow-up on `f8b8acd9` retains all 3,524 cases from the pruning change. Saved
+JUnit/duration reports show 636.78s versus 1,886.74s integration jobs: module-name
+hashing placed native services (389.35s), firewall preflight (258.31s), container
+installation (153.11s), repository migration (124.30s), workstation (113.90s) and
+system tests (112.02s) together. Reported setup/call costs were 77.63s/557.01s
+and 148.06s/1,736.17s respectively; teardown was below reporting resolution.
+
+The shared system fixture's consumers accounted for roughly 190s of setup,
+repeatedly copying and parsing/rewriting seven roles. A session fixture now
+prepares those immutable inputs once. Every case gets physical copies, fresh
+configuration, inventory, state, action/filter paths and Ansible processes.
+No loader, environment, runtime state or mutable task tree is shared. A regression
+check poisons copied role/plugin/filter files and verifies the source stays intact.
+
+The identical 23-case before/after sample passed in **150.29s/141.66s process wall
+time**. Shared-fixture consumers' reported setup fell **11.42s → 1.46s**, with
+execution **12.35s → 12.23s**. The sample includes native-service and repository
+migration controls and Bazarr's after-removal recovery. Eleven focused main-entry,
+isolation and partition checks also passed. Same Python 3.13.5, pytest 9.1.1,
+Ansible 2.21.5, dependencies and serial execution; fresh private fixture trees,
+OS caches not reset. No installations, new skips or removed cases.
+
+The two integration jobs now greedily balance measured module costs, keeping
+modules together. Estimates were generated by summing prior JUnit case times
+by module; unknown modules still run, and obsolete estimates cannot select tests.
+The two new regressions cover independent copies and deterministic balancing with
+unknown/stale module names. Collection is 3,526: unit 2,207, operator 73,
+integration 0/1 604/642; the four selections are complete and disjoint.
+
+Retained costs are deliberate: repository migration launches five independent
+Ansible runs per case for check mode, migration, convergence, legacy-only changes
+and fresh installation. Saved task timestamps attribute about 0.9s per real
+deb822 module call, not just startup. Native execution spends time loading the
+real catalog and planning namespaces; Bazarr's Swarm build/attach tasks take
+roughly 10–11s/7–9s per invocation. These real entry/rendering paths, recovery,
+ownership and secret isolation remain; none were replaced with YAML assertions
+or shortened waits. The disabled VM lane and missing protected rootless Podman
+certification do not replace any Python coverage. Production code is unchanged.
+
+Raw focused argv, reports and final collection evidence are retained locally in
+ignored `.ansible/test-performance-f8b8acd9/`. Existing dependency/pin differences
+and unavailable tools listed above remain. Published CI wall time is unmeasured.
+
+One final, serial four-group round passed **3,516 cases with ten existing skips**.
+JUnit outcomes match the complete, disjoint collection exactly once; all 3,524
+original cases remain. The skips are four promtool, three local `postgres`
+OS-account and three ShellCheck checks. Ruff check/format (101 files), JSON
+parsing, whitespace and the existing workflow/gate regressions passed.
+
+| Group | Reported baseline | Final local pytest elapsed | Final result |
+| --- | ---: | ---: | --- |
+| Unit | 46.67s | 41.67s | 2,207 passed |
+| Operator | 522.61s | 438.54s | 73 passed |
+| Integration 0 | 636.78s | 1,181.84s | 595 passed, nine skipped |
+| Integration 1 | 1,886.74s | 1,121.94s | 641 passed, one skipped |
+
+The longest measured group is now integration 0: **1,181.84s versus 1,886.74s**
+previously. Integration jobs are 59.90s apart. This is measured job balancing,
+not a claim about published CI end-to-end time, runner setup or quality jobs.
+Cumulative reported integration setup fell **225.69s → 50.59s**; that is summed
+phase cost, not parallel wall time. Cumulative execution was 2,293.18s/2,248.93s;
+execution savings are not attributed to this setup-only change. The unchanged
+operator also varied materially, so its faster run is not an optimization claim.
+The 16 focused rejection cases recorded identical operations after normalizing
+private paths. No production files, workflows or dependencies changed.
+
 ## Optional Molecule VM tests
 
 The [disposable VM system](../molecule/README.md) shares a serial Proxmox/cloud-init
@@ -108,10 +244,17 @@ python -m pytest tests/unit -m integration --ignore=tests/unit/test_haproxy_oper
 python -m pytest tests/unit -m integration --ignore=tests/unit/test_haproxy_operator_workflow.py --integration-shard=1/2 --durations=30 --durations-min=1
 ```
 
-The dominant HAProxy operator module has its own runner. Other integration tests
-are assigned by a stable hash of the module filename. All parameters and
-module-scoped immutable fixtures stay on the same runner. No third-party pytest
-scheduler is needed. Without selection arguments, pytest still runs every test.
+The dominant HAProxy operator module has its own runner. Other integration
+modules are assigned largest-estimate-first to the least-loaded shard, with
+module path and shard index breaking ties. `tests/integration-durations.json`
+records summed JUnit case durations from the prior validated run. It is a load
+estimate, not a selection allowlist: every collected module is assigned, and
+unseen modules use a one-second estimate. Stale entries are ignored. All
+parameters and module-scoped fixtures stay together. Both shards must use the
+same collection/selection arguments. No third-party scheduler is needed;
+without selection arguments, pytest still runs every test. Keep estimates fixed
+through a validation round; refresh them from measured JUnit reports when load
+changes materially, not from test counts.
 
 The existing required `lint` check depends on both `quality` and the entire test
 matrix. It runs even after failures/cancellation and rejects anything except

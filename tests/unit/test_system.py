@@ -18,15 +18,7 @@ ANSIBLE = shutil.which(str(Path(sys.executable).with_name("ansible-playbook")))
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def system_run(tmp_path):
-    roles = tmp_path / "roles"
-    fixture_roles = ("system", "postgres", "postgres_exporter", "docker", "podman", "service_common", "service_firewall")
-    for role in fixture_roles:
-        shutil.copytree(REPO / "ansible/roles" / role, roles / role, ignore=shutil.ignore_patterns("__pycache__"))
-    # Preserve the common role's canonical placement dependency in this copy.
-    (tmp_path / "filter_plugins").mkdir()
-    shutil.copyfile(REPO / "ansible/filter_plugins/service_catalog.py", tmp_path / "filter_plugins/service_catalog.py")
+def _instrument_system_tasks(tasks):
     modules = {
         "apt",
         "uri",
@@ -63,36 +55,47 @@ def system_run(tmp_path):
         "community.docker.docker_node",
     }
 
-    def instrument(tasks):
-        for task in tasks:
-            for branch in ("block", "rescue", "always"):
-                instrument(task.get(branch, []))
-            for module in modules:
-                key = module if "." in module else f"ansible.builtin.{module}"
-                if key in task:
-                    task["fixture_operation"] = {"module": module, "options": task.pop(key)}
-            if task.get("ansible.builtin.include_role", {}).get("name") == "systemd_jobs":
-                task["fixture_operation"] = {"module": "include_role", "options": task.pop("ansible.builtin.include_role")}
-            if isinstance(task.get("ansible.builtin.include_tasks"), dict) and task["ansible.builtin.include_tasks"].get(
-                "file", ""
-            ).startswith("sub_tasks/"):
-                include = task["ansible.builtin.include_tasks"]
-                if include["file"] not in {
-                    "sub_tasks/backup_prerequisites.yml",
-                    "sub_tasks/install.yml",
-                    "sub_tasks/swarm.yml",
-                    "sub_tasks/install/etcd.yml",
-                    "sub_tasks/install/patroni.yml",
-                    "sub_tasks/backup_remote_setup.yml",
-                }:
-                    task["fixture_operation"] = {"module": "include_tasks", "options": task.pop("ansible.builtin.include_tasks")}
+    for task in tasks:
+        for branch in ("block", "rescue", "always"):
+            _instrument_system_tasks(task.get(branch, []))
+        for module in modules:
+            key = module if "." in module else f"ansible.builtin.{module}"
+            if key in task:
+                task["fixture_operation"] = {"module": module, "options": task.pop(key)}
+        if task.get("ansible.builtin.include_role", {}).get("name") == "systemd_jobs":
+            task["fixture_operation"] = {"module": "include_role", "options": task.pop("ansible.builtin.include_role")}
+        if isinstance(task.get("ansible.builtin.include_tasks"), dict) and task["ansible.builtin.include_tasks"].get("file", "").startswith(
+            "sub_tasks/"
+        ):
+            include = task["ansible.builtin.include_tasks"]
+            if include["file"] not in {
+                "sub_tasks/backup_prerequisites.yml",
+                "sub_tasks/install.yml",
+                "sub_tasks/swarm.yml",
+                "sub_tasks/install/etcd.yml",
+                "sub_tasks/install/patroni.yml",
+                "sub_tasks/backup_remote_setup.yml",
+            }:
+                task["fixture_operation"] = {"module": "include_tasks", "options": task.pop("ansible.builtin.include_tasks")}
 
+
+@pytest.fixture(scope="session")
+def system_fixture_template(tmp_path_factory):
+    """Prepare immutable role/action inputs once; never run Ansible in this tree."""
+    tmp_path = tmp_path_factory.mktemp("system-fixture-template")
+    roles = tmp_path / "roles"
+    fixture_roles = ("system", "postgres", "postgres_exporter", "docker", "podman", "service_common", "service_firewall")
+    for role in fixture_roles:
+        shutil.copytree(REPO / "ansible/roles" / role, roles / role, ignore=shutil.ignore_patterns("__pycache__"))
+    # Preserve the common role's canonical placement dependency in this copy.
+    (tmp_path / "filter_plugins").mkdir()
+    shutil.copyfile(REPO / "ansible/filter_plugins/service_catalog.py", tmp_path / "filter_plugins/service_catalog.py")
     for role in fixture_roles:
         # Only PostgreSQL's entry point and the moved dependency file are selected.
         paths = list((roles / role / "tasks").rglob("*.yml")) + list((roles / role / "handlers").glob("*.yml"))
         for path in paths:
             tasks = yaml.safe_load(path.read_text())
-            instrument(tasks)
+            _instrument_system_tasks(tasks)
             path.write_text(yaml.safe_dump(tasks, sort_keys=False))
     plugins = tmp_path / "action_plugins"
     plugins.mkdir()
@@ -422,6 +425,15 @@ class ActionModule(ActionBase):
         state_path.write_text(json.dumps(state))
         return result
 """)
+    return tmp_path
+
+
+@pytest.fixture
+def system_run(tmp_path, system_fixture_template):
+    # Physical copies keep modified roles, plugin bytecode and all runtime state
+    # case-local. Only immutable preparation is shared, never an Ansible loader.
+    shutil.copytree(system_fixture_template, tmp_path, dirs_exist_ok=True)
+    plugins = tmp_path / "action_plugins"
     config = tmp_path / "ansible.cfg"
     config.write_text((REPO / "ansible/bootstrap.cfg").read_text().replace("[defaults]", f"[defaults]\naction_plugins = {plugins}"))
     state_file = tmp_path / "state.json"
@@ -531,7 +543,7 @@ class ActionModule(ActionBase):
         if main:
             plays = yaml.safe_load((REPO / "ansible/playbook.yml").read_text())
             for play in plays:
-                instrument(play.get("tasks", []))
+                _instrument_system_tasks(play.get("tasks", []))
             shutil.copytree(REPO / "ansible/tasks", tmp_path / "tasks", dirs_exist_ok=True)
             shutil.copytree(REPO / "ansible/filter_plugins", tmp_path / "filter_plugins", dirs_exist_ok=True)
             # Prove that application-wide Vault is never loaded with bootstrap.cfg.
@@ -559,6 +571,22 @@ class ActionModule(ActionBase):
         return result, calls, json.loads(state_file.read_text())
 
     return run
+
+
+def test_system_fixture_inputs_and_runtime_state_are_case_local(system_run, system_fixture_template, tmp_path):
+    # Mutations by one case must not poison the prepared source used by later
+    # cases, including executable plugin inputs and per-case loader bytecode.
+    for relative in ["roles/podman/tasks/main.yml", "action_plugins/fixture_operation.py", "filter_plugins/service_catalog.py"]:
+        source, private = system_fixture_template / relative, tmp_path / relative
+        before = source.read_bytes()
+        assert private.read_bytes() == before
+        assert private.stat().st_ino != source.stat().st_ino
+        private.write_text("case-local poison\n")
+        assert source.read_bytes() == before
+    assert not (tmp_path / "state.json").exists()
+    assert not (tmp_path / "calls.jsonl").exists()
+    assert not (system_fixture_template / "ansible.cfg").exists()
+    assert not list(system_fixture_template.rglob("__pycache__"))
 
 
 def successful(result):
