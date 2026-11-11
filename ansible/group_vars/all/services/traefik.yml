@@ -13,7 +13,7 @@ traefik:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: "docker.io/library/traefik:v3.7.16@sha256:c8a121e4bb1347e8fd52657fab12f2cb70b68f8a018895e2068f92c9e519b9c2"
+  image: "docker.io/library/traefik:v3.7.17@sha256:f4bb143d1135a579b630ed491e17ec50f6f7c9c6a30585ff3d385471d2a86f5a"
   ################################
   # ENVIRONMENT/SECRETS
   ################################
