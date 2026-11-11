@@ -14,7 +14,7 @@ autobrr:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/autobrr/autobrr:v1.89.0@sha256:03644017858c2e54fdc3138c2a13ae8ea8b142d1b9f2ac92e7a2c005b3f3958d
+  image: ghcr.io/autobrr/autobrr:v1.90.0@sha256:053cb81aaf32fbc875046351a918198f80532f88c50a8fe49f5973b75f6ebb76
   user: >-
     {{ hostvars[services_controller_host].container_host_puid }}:{{ hostvars[services_controller_host].container_host_pgid }}
   ################################
