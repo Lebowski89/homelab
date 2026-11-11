@@ -375,24 +375,17 @@ def test_bootstrap_entry_points_cannot_select_the_execution_machine():
 
 def test_workstation_dynamic_includes_propagate_selection_without_unrelated_components():
     tasks = yaml.safe_load((ROLE / "tasks/tools.yml").read_text())
-    selected = {}
     for task in tasks:
         include = task.get("ansible.builtin.include_tasks", task.get("ansible.builtin.include_role"))
         if include:
             assert set(include["apply"]["tags"]) == set(task["tags"])
-        for tag in task.get("tags", []):
-            if tag in {
-                "workstation_repository",
-                "workstation_ansible",
-                "workstation_collections",
-                "workstation_skynet",
-                "workstation_opentofu",
-            }:
-                selected.setdefault(tag, []).append(task["name"])
-    assert len(selected["workstation_ansible"]) == 2  # prerequisites and venv/dependencies
-    assert len(selected["workstation_repository"]) == 2
-    for component in ("collections", "skynet", "opentofu"):
-        assert len(selected[f"workstation_{component}"]) == 1
+    # Granular execution below proves selection without fixing include counts.
+    repository_prerequisites = next(
+        task
+        for task in tasks
+        if task.get("ansible.builtin.include_tasks", {}).get("file") == "packages.yml" and "workstation_repository" in task.get("tags", [])
+    )
+    assert "workstation_repository_clone" in repository_prerequisites["when"]
     tofu = next(t for t in tasks if t.get("ansible.builtin.include_tasks", {}).get("file") == "tools/opentofu.yml")
     assert "ansible.builtin.include_role" not in tofu
     assert "opentofu_pve_user" not in str(tofu)

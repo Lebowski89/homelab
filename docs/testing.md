@@ -4,6 +4,74 @@ Use `/opt/ansible/ansible-venv/bin/python -m pytest tests/unit` for the complete
 suite. Tests use synthetic inventories, fake external I/O and private temporary
 state. They do not establish live application or firewall acceptance.
 
+## Post-merge redundancy audit
+
+Separate branch from `origin/main` at `393d0aca`, containing PR #726's merge
+`9398db78`. This proposal was recorded before pruning. Production code,
+CI selections, markers and generated documentation remain unchanged.
+
+| Test/cases removed or consolidated | Retained replacement | Behavior preserved | Coverage limitation | Runtime evidence |
+| --- | --- | --- | --- | --- |
+| `test_workstation.py::test_main_playbook_accepts_each_workstation_tag_with_synthetic_inventory`: `workstation` and six tooling tags | `test_actual_main_bootstrap_without_netbox_or_application_inputs` and all six `test_inline_bootstrap_inventory_and_granular_tools` cases | Real main-entry selection without application inputs/collections; inline cases now require account lookup to prove role execution | Installation I/O remains synthetic; the other five granular listing probes stay | Seven Ansible processes eliminated; 3.862s cumulative baseline time |
+| `test_service_catalog_filter.py::test_valid_target_runtime_override_is_allowed` | `test_canonical_target_merge_contract` and `test_target_runtime_and_deploy_override_select_dispatch_host` | Docker-to-Podman override through catalog, effective merge and dispatch placement | No live acceptance; inherited/invalid runtime and portability cases stay | One pure filter call; negligible duration |
+| Four `test_service_definition_style.py::test_correctly_ordered_runtime_service_is_accepted` parameters become one ordered document | That single case and `test_all_repository_service_definitions_follow_canonical_layout` | Synthetic and real base/target key ordering | Layout ignores runtime/enabled values; catalog semantic and malformed-layout cases stay | Three equivalent traversals eliminated; negligible duration |
+| Task counts in `test_workstation_tooling.py::test_workstation_dynamic_includes_propagate_selection_without_unrelated_components` | All five `test_granular_tag_executes_validation_and_only_the_selected_tool` cases and granular platform/package execution | Selected payload plus validation; retain applied tags, clone-prerequisite wiring/opt-in guard and local OpenTofu ownership | Installation payloads are sentinels; cloning prerequisites retain wiring coverage because these cases do not opt into cloning | No case removed; delete the unused local count accumulator |
+
+Deferred: the five remaining listing probes need equivalent main-entry execution.
+Rootless firewall identity, transactions, rollback and retained protection remain:
+the VM lane is documented as disabled pending its protected controller and
+requires explicit enablement (server-side state was not queried). Its protected
+suite certifies Docker callers, not protected rootless Podman callers. Historical
+VM passes cannot replace routine coverage of each contract/failure mode.
+RomM/Bazarr/Authelia settings and data migration tests also stay; generic lifecycle
+success does not establish those preservation contracts.
+
+The unchanged environment uses Python 3.13.5, pytest 9.1.1, Ansible 2.21.5 and
+Ruff 0.17.2; nothing was installed/upgraded. Current pins differ for pytest
+(9.2.0), Ruff (0.17.3), Infisical SDK (installed/pinned 1.0.18/1.1.0), pytz
+(2026.5/2026.6), community.general (13.5.0/13.5.1) and community.postgresql
+(5.1.0/5.1.1). CI's Python 3.14.9 environment remains unverified locally.
+Raw argv, versions, phase durations, JUnit and collection/outcome audits are in
+ignored `.ansible/test-prune-393d0aca/`.
+
+The four affected modules were measured alone, with fresh private fixture trees
+and unchanged dependencies/parallelism; OS caches were not reset:
+
+```bash
+python -m pytest tests/unit/test_workstation.py tests/unit/test_workstation_tooling.py \
+  tests/unit/test_service_catalog_filter.py tests/unit/test_service_definition_style.py \
+  -q --tb=short --durations=0 --basetemp=... --junitxml=...
+```
+
+Before/final after: 181/170 passed; process wall 147.53s/144.98s; summed JUnit durations
+(including setup/teardown) 146.993s/144.436s. Eliminated baseline work is 3.862s;
+other variation is not attributed to pruning. No GitHub CI speedup is established.
+Baseline fast unit also passed 2,210 cases in 42.57s pytest time.
+
+Retained costs include repeated role-copy setup (up to 0.14s), Ansible dispatch,
+deb822 migrations (8.42s/8.16s), collection discovery (6.21s/6.13s), operator
+shared preparation (24.77s) and capture reuse (41.50s). Existing compiler and
+prepared-state caches preserve private mutable fixtures; no cache changes were made.
+
+The four CI selections below ran with profiling flags as above. Collection and
+JUnit confirm one outcome per selected case, with complete, disjoint coverage:
+
+| Group | Before collected | After collected | Final validation / pytest elapsed |
+| --- | ---: | ---: | --- |
+| Fast unit | 2,210 | 2,206 | 2,206 passed / 46.67s |
+| HAProxy operator | 73 | 73 | 73 passed / 522.61s |
+| Integration 0 | 495 | 495 | 486 passed, nine skipped / 636.78s |
+| Integration 1 | 757 | 750 | 749 passed, one skipped / 1,886.74s |
+
+`tests/unit` collection: **3,535 → 3,524** (net minus 11; 3,523 node IDs unchanged,
+four layout parameters replaced by one case). Total: **3,514 passed, ten existing
+environment-dependent skips**: four promtool, three local `postgres` OS-account
+and three ShellCheck checks. No helper/fixture became unused. The unit group was
+rechecked after refining the clone guard, briefly overlapping integration 0;
+the operator ran alone. Full-group timings are validation, not a before/after
+performance comparison.
+Ruff check/format passed all 100 unit-test Python files; `git diff --check` passed.
+
 ## Optional Molecule VM tests
 
 The [disposable VM system](../molecule/README.md) shares a serial Proxmox/cloud-init
