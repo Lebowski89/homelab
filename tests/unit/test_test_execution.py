@@ -1,6 +1,7 @@
 """Keep CI partitions complete and their required result gate fail-closed."""
 
 import importlib.util
+import json
 import os
 import re
 import subprocess
@@ -43,6 +44,20 @@ def test_module_shards_are_disjoint_complete_and_keep_parameter_cases_together()
     assert next(i for i, group in enumerate(partitions) if items[0] in group) == next(
         i for i, group in enumerate(partitions) if items[2] in group
     )
+
+
+def test_duration_partition_balances_modules_and_includes_new_modules(tmp_path, monkeypatch):
+    monkeypatch.setattr(GROUPS, "__file__", str(tmp_path / "conftest.py"))
+    (tmp_path / "integration-durations.json").write_text(
+        json.dumps({"modules": {"heavy.py": 9, "medium.py": 6, "small.py": 3, "no-longer-collected.py": 100}})
+    )
+    paths = [Path(name) for name in ["heavy.py", "medium.py", "small.py", "new.py", "heavy.py"]]
+    assignments = GROUPS.integration_shards(paths, 2)
+    assert assignments == GROUPS.integration_shards(reversed(paths), 2)
+    assert set(assignments) == set(paths)
+    assert assignments[Path("heavy.py")] != assignments[Path("medium.py")]
+    assert assignments[Path("small.py")] == assignments[Path("medium.py")]
+    assert assignments[Path("new.py")] == assignments[Path("heavy.py")]
 
 
 @pytest.mark.parametrize("value", ["bad", "1/0", "2/2", "-1/2", "0/-2"])

@@ -1,15 +1,24 @@
 """Keep process-level regressions explicit and CI shards disjoint by module."""
 
-import hashlib
+import json
 import subprocess
+from pathlib import Path
 
 import pytest
 
 
-def integration_shard(path, count):
-    # Keep module-scoped immutable fixtures together, independent of test ordering
-    # or parametrization. Each CI shard has its own VM, environment and files.
-    return int.from_bytes(hashlib.sha256(path.name.encode()).digest()[:4], "big") % count
+def integration_shards(paths, count):
+    # Estimates affect placement only: every collected module, including new
+    # modules without history, is assigned. Keep module-scoped caches together.
+    estimates = json.loads(Path(__file__).with_name("integration-durations.json").read_text())["modules"]
+    costs = {path: estimates.get(path.name, 1.0) for path in set(paths)}
+    loads = [0.0] * count
+    assignments = {}
+    for path in sorted(costs, key=lambda path: (-costs[path], path.as_posix())):
+        index = min(range(count), key=lambda index: (loads[index], index))
+        assignments[path] = index
+        loads[index] += costs[path]
+    return assignments
 
 
 def pytest_addoption(parser):
@@ -31,7 +40,9 @@ def pytest_collection_modifyitems(config, items):
     for item in items:
         if item.get_closest_marker("integration") is None:
             raise pytest.UsageError("--integration-shard requires selecting only -m integration")
-        (selected if integration_shard(item.path, count) == index else deselected).append(item)
+    assignments = integration_shards((item.path for item in items), count)
+    for item in items:
+        (selected if assignments[item.path] == index else deselected).append(item)
     items[:] = selected
     config.hook.pytest_deselected(items=deselected)
 
