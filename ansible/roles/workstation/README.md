@@ -344,6 +344,8 @@
 | ---- | ------ | -------------- |
 | Workstation Repository ¦ Inspect checkout destination | ansible.builtin.stat | False |
 | Workstation Repository ¦ Require existing checkout or explicit clone opt-in | ansible.builtin.assert | False |
+| Workstation Repository ¦ Inspect the parent before creating an optional clone | ansible.builtin.stat | True |
+| Workstation Repository ¦ Reject linked or non-directory clone parents | ansible.builtin.assert | True |
 | Workstation Repository ¦ Create parent for new optional clone | ansible.builtin.file | True |
 | Workstation Repository ¦ Clone only into an absent destination | ansible.builtin.git | True |
 | Workstation Repository ¦ Check existing repository interface without changing Git state | ansible.builtin.stat | True |
