@@ -307,10 +307,12 @@ agent loads the node key on boot; guest SSH credentials remain separate.
 
 Deploy/update validate the selected registration snapshot before any drain marker,
 credential replacement or installation changes. Instance URL, repository, UUID
-and token shape must match the current entry. That same snapshot supplies the
-installed receipt/configuration; transient authentication is cleared on every
-exit. The real workstation repository tasks preserve an existing private parent,
-so cloning beneath the runner home does not relax its required `0700` mode.
+and token shape must match the current entry. Only `url`, `repository`, `uuid`
+and `token` are accepted; additional fields are rejected before mutation. That
+snapshot supplies the installed receipt/configuration; transient authentication
+is cleared on every exit. The real workstation repository tasks preserve an
+existing private parent, so cloning beneath the runner home does not relax its
+required `0700` mode.
 
 Recreate uses the owned installed units/configuration and resident node key;
 registration, provisioning token, allocation and guest credentials are not restart
@@ -329,6 +331,10 @@ matching token, without leaving a stale maintenance lock after removal. Retire
 owned guests before removing the runner/agent; later recovery still needs the
 retained private inputs and dedicated SSH authentication. Failed or interrupted
 maintenance retains the marker and blocks new acceptance/recovery.
+
+Receipt creation failures remove only that acquisition's incomplete marker and
+receipt, checking their filesystem identities. Replacement state is retained;
+cleanup failures preserve the original acquisition error for diagnosis.
 
 After confirming the original Ansible operation has ended, inspect the root-owned
 `draining/owner.json` receipt (an ownership nonce, not runner authentication). Use

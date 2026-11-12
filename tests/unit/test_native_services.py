@@ -1127,7 +1127,7 @@ def test_runner_install_uses_guarded_signature_registration_and_owned_units(nati
         assert all(i < release for i, call in enumerate(calls) if call["handler"])
 
 
-@pytest.mark.parametrize("failure", ["json", "repository", "instance", "uuid", "token"])
+@pytest.mark.parametrize("failure", ["json", "repository", "instance", "uuid", "token", "extra"])
 def test_selected_registration_is_rejected_before_draining_or_replacing_installation(native_run, failure):
     registration = {
         "url": "https://forgejo.private.example.test:9443",
@@ -1137,6 +1137,8 @@ def test_selected_registration_is_rejected_before_draining_or_replacing_installa
     }
     if failure in ["repository", "instance", "uuid", "token"]:
         registration[{"instance": "url"}.get(failure, failure)] = "unrelated-or-invalid"
+    if failure == "extra":
+        registration["CI_API_TOKEN"] = "example-token"
     facts = rpm_alloy_facts("Rocky", "10.2") | {"virtualization_role": "guest", "virtualization_type": "kvm"}
     overrides = {"fixture_registration": registration, "native_services_forgejo_runner_private_source_dir": "/fixture/selected-receipt"}
     if failure == "json":
@@ -1150,6 +1152,28 @@ def test_selected_registration_is_rejected_before_draining_or_replacing_installa
     assert reads == ["/fixture/selected-receipt/registration.json"]
     snapshot = next(call["options"] for call in calls if call["module"] == "cleanup_snapshot")
     assert snapshot == {"registration_empty": True, "read_empty": True}
+
+
+def test_selected_four_field_registration_is_copied_without_other_authentication(native_run):
+    registration = {
+        "url": "https://forgejo.private.example.test:9443",
+        "repository": "homelab-ci/homelab-ci",
+        "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "token": "1" * 40,
+    }
+    facts = rpm_alloy_facts("Rocky", "10.2") | {"virtualization_role": "guest", "virtualization_type": "kvm"}
+    result, calls = native_run(
+        ["forgejo_runner"],
+        facts=facts,
+        overrides={"fixture_registration": registration, "native_services_forgejo_runner_private_source_dir": "/fixture/selected-receipt"},
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    copies = [
+        call["options"]
+        for call in calls
+        if call["module"] == "copy" and call["options"].get("dest") == "/etc/forgejo-runner/private/registration.json"
+    ]
+    assert copies and all(json.loads(copy["content"]) == registration and copy["mode"] == "0600" for copy in copies)
 
 
 @pytest.mark.parametrize("action", ["remove", "recreate"])

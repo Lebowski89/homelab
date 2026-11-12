@@ -24,10 +24,13 @@
   ansible.builtin.assert:
     that:
       - native_services_runner_registration is mapping
+      - native_services_runner_registration | list | difference(['url', 'repository', 'uuid', 'token']) | length == 0
       - native_services_runner_registration.url == native_services_config.server_url
       - native_services_runner_registration.repository == native_services_config.repository
       - native_services_runner_registration.uuid is string
       - native_services_runner_registration.uuid is match('^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$')
       - native_services_runner_registration.token is string
       - native_services_runner_registration.token is match('^[a-f0-9]{40}$')
-    fail_msg: The selected registration receipt is invalid or belongs to another instance/repository; installation is unchanged.
+    fail_msg: >-
+      Registration receipt must contain only url, repository, uuid and token,
+      with valid credentials and matching instance/repository; installation is unchanged.

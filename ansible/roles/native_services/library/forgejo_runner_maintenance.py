@@ -6,6 +6,7 @@ import json
 import os
 import stat
 import uuid
+from contextlib import suppress
 from pathlib import Path
 
 DOCUMENTATION = r"""
@@ -56,10 +57,23 @@ def acquire(path, home, uid, owner=0):
         path.mkdir(mode=0o700)
     except FileExistsError:
         raise ValueError("Another or interrupted maintenance operation owns the drain marker; inspect its receipt") from None
-    token = uuid.uuid4().hex
-    with os.fdopen(os.open(path / "owner.json", os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600), "w") as stream:
-        json.dump({"token": token}, stream)
+    marker = path.lstat()
+    receipt = path / "owner.json"
+    created_receipt = None
+    receipt_ready = False
     try:
+        token = uuid.uuid4().hex
+        fd = os.open(receipt, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            created_receipt = os.fstat(fd)
+            stream = os.fdopen(fd, "w")
+        except Exception:
+            with suppress(OSError):
+                os.close(fd)
+            raise
+        with stream:
+            json.dump({"token": token}, stream)
+        receipt_ready = True
         if home.exists():
             if uid is None or uid <= 0:
                 raise ValueError("The existing controller home requires its verified unprivileged account")
@@ -79,7 +93,23 @@ def acquire(path, home, uid, owner=0):
                     raise ValueError("Acceptance or retirement is active; no lifecycle mutation is allowed") from None
         return token
     except Exception:
-        release(path, token, owner)
+        try:
+            if receipt_ready:
+                release(path, token, owner)
+            elif os.path.samestat(marker, path.lstat()):
+                # Partial JSON cannot prove token ownership. Remove only the
+                # exact directory/file created here, never replacement state.
+                owned(path.lstat(), owner)
+                if created_receipt is not None:
+                    current_receipt = receipt.lstat()
+                    owned(current_receipt, owner)
+                    if not os.path.samestat(created_receipt, current_receipt):
+                        raise ValueError("The incomplete receipt was replaced; retain it for inspection")
+                    receipt.unlink()
+                path.rmdir()
+        except (OSError, ValueError):
+            # Cleanup failure must not replace the acquisition's original error.
+            pass
         raise
 
 

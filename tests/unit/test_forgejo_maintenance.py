@@ -73,3 +73,86 @@ def test_symlinked_runtime_lock_cannot_redirect_root_maintenance(tmp_path):
         MAINTENANCE.acquire(drain, home, os.getuid(), owner=os.getuid())
     assert foreign.read_text() == "retained"
     assert not drain.exists()
+
+
+@pytest.mark.parametrize("failure", ["open", "stream", "write"])
+def test_receipt_failure_removes_only_its_incomplete_marker_and_allows_retry(tmp_path, monkeypatch, failure):
+    home = tmp_path / "home"
+    home.mkdir(mode=0o700)
+    drain = tmp_path / "draining"
+    error = OSError("synthetic receipt failure")
+    real_open = os.open
+
+    def fail_open(path, *args, **kwargs):
+        if Path(path) == drain / "owner.json":
+            raise error
+        return real_open(path, *args, **kwargs)
+
+    def fail_write(value, stream):
+        stream.write('{"token":')
+        raise error
+
+    def fail_stream(fd, *args, **kwargs):
+        raise error
+
+    with monkeypatch.context() as patch:
+        if failure == "open":
+            patch.setattr(MAINTENANCE.os, "open", fail_open)
+        elif failure == "stream":
+            patch.setattr(MAINTENANCE.os, "fdopen", fail_stream)
+        else:
+            patch.setattr(MAINTENANCE.json, "dump", fail_write)
+        with pytest.raises(OSError) as caught:
+            MAINTENANCE.acquire(drain, home, os.getuid(), owner=os.getuid())
+    assert caught.value is error
+    assert not drain.exists()
+    assert not (home / "controller.lock").exists()
+    token = MAINTENANCE.acquire(drain, home, os.getuid(), owner=os.getuid())
+    MAINTENANCE.release(drain, token, owner=os.getuid())
+
+
+@pytest.mark.parametrize("replacement", ["directory", "receipt"])
+def test_failed_receipt_write_cannot_clean_up_replacement_state(tmp_path, monkeypatch, replacement):
+    drain = tmp_path / "draining"
+    error = OSError("synthetic receipt failure")
+
+    def fail_write(value, stream):
+        stream.write('{"token":')
+        if replacement == "directory":
+            drain.rename(tmp_path / "retained-original-marker")
+            drain.mkdir(mode=0o700)
+        else:
+            (drain / "owner.json").unlink()
+        receipt = drain / "owner.json"
+        receipt.touch(mode=0o600)
+        receipt.write_text('{"token":"another-operation"}')
+        raise error
+
+    monkeypatch.setattr(MAINTENANCE.json, "dump", fail_write)
+    with pytest.raises(OSError) as caught:
+        MAINTENANCE.acquire(drain, tmp_path / "absent-home", os.getuid(), owner=os.getuid())
+    assert caught.value is error
+    assert (drain / "owner.json").read_text() == '{"token":"another-operation"}'
+
+
+def test_incomplete_marker_cleanup_error_does_not_replace_receipt_error(tmp_path, monkeypatch):
+    drain = tmp_path / "draining"
+    error = OSError("synthetic receipt failure")
+    real_rmdir = Path.rmdir
+
+    def fail_write(value, stream):
+        stream.write('{"token":')
+        raise error
+
+    def fail_cleanup(path):
+        if path == drain:
+            raise PermissionError("synthetic cleanup failure")
+        return real_rmdir(path)
+
+    monkeypatch.setattr(MAINTENANCE.json, "dump", fail_write)
+    monkeypatch.setattr(Path, "rmdir", fail_cleanup)
+    with pytest.raises(OSError) as caught:
+        MAINTENANCE.acquire(drain, tmp_path / "absent-home", os.getuid(), owner=os.getuid())
+    assert caught.value is error
+    assert drain.is_dir()
+    assert not (drain / "owner.json").exists()
