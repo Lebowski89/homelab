@@ -14,7 +14,7 @@ variable "run" {
     id                  = string, node = string, template_id = number, bridge = string, ssh_host = string,
     storage             = string, image_storage = string, snippet_storage = string,
     gateway             = string, dns = list(string), public_key = string,
-    python_requirements = string,
+    python_requirements = string, disk_gb = number,
     image_file_id       = optional(string)
     image_local_path    = optional(string)
     image               = object({ url = string, checksum = string, algorithm = string, disk_gb = number, user = string, distribution = string }),
@@ -131,7 +131,7 @@ module "guest" {
   machine                            = "q35"
   memory_mb                          = 2048
   datastore_id                       = var.run.storage
-  disk_size_gb                       = 32
+  disk_size_gb                       = var.run.disk_gb
   snippet_datastore_id               = var.run.snippet_storage
   ipv4_address                       = each.value.address
   ipv4_gateway                       = var.run.gateway

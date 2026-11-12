@@ -1,0 +1,7 @@
+{{ {'data_dir': native_services_config.data_dir,
+    'python': workstation_ansible_venv_path ~ '/bin/python',
+    'collections': workstation_ansible_collections_path,
+    'allocation': '/etc/forgejo-runner/private/allocation.json',
+    'provisioning': '/etc/forgejo-runner/private/provisioning.json',
+    'tofurc': '/etc/forgejo-runner/tofurc',
+    'ssh_agent': '/run/forgejo-runner-agent/agent.sock'} | to_nice_json }}

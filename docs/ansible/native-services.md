@@ -1,11 +1,11 @@
 # Native services in the catalogue
 
-`native_services` manages Alloy, Node Exporter, Keepalived and Technitium through
+`native_services` manages Alloy, Node Exporter, Keepalived, Technitium and Forgejo Runner through
 `ansible/group_vars/all/services/`. It retains explicit installation procedures
 in `tasks/alloy.yml`, `tasks/node_exporter.yml`, `tasks/keepalived.yml` and
 `tasks/technitium.yml`, with application-specific defaults, handlers and templates.
 `tasks/main.yml` owns validation and lifecycle dispatch; it does not install all
-four applications. Infisical remains Podman bootstrap/recovery orchestration;
+applications. Infisical remains Podman bootstrap/recovery orchestration;
 PostgreSQL and the other native roles are unchanged.
 
 ## Declarations and selection
@@ -16,6 +16,7 @@ PostgreSQL and the other native roles are unchanged.
 | Node Exporter | `node_exporter.yml` | `node_exporter` / `node-exporter` | `tags_node_exporter` |
 | Keepalived | `keepalived.yml` | `keepalived` | `tags_keepalived` |
 | Technitium | `technitium.yml`, target `native` | `technitium_native` / `technitium-native` | `tags_technitium_native` |
+| Forgejo Runner | `forgejo_runner.yml` | `forgejo_runner` / `forgejo-runner` | explicit `molecule-controller` host |
 
 Alloy and Technitium keep their existing Docker/Podman targets in the same
 application definition. Use their explicit native selectors to select only the
@@ -285,3 +286,35 @@ dummy-link VIP. Keepalived's own DNS health script succeeded. These services and
 the previously validated Alloy installation recovered after reboot; real DNS,
 metrics and the test VIP were checked again. Removal retained persistent data and
 Technitium restored its recorded resolver link. This does not establish peer failover.
+
+
+## Dedicated Forgejo Runner
+
+Forgejo Runner is an unprivileged systemd host executor confined to the explicit
+Rocky 10 controller VM. `host_vars/molecule-controller.yml` selects workstation's
+`tools` entry point, with its Rocky headless opt-in; the desktop role entry point
+rejects that opt-in. It installs no desktop or VS Code components. Installation
+verifies the pinned runner's upstream detached signature against the repository
+public release key. Check mode validates placement/platform/ownership and shows
+an installation plan without downloading, reading authentication or starting units.
+
+Deploy/update reuse `/etc/forgejo-runner/private/registration.json`; registration
+is a separate approved, deployment-side action. Its receipt must match the HTTPS
+origin and exact owner/repository. The bootstrap API token stays in Infisical and
+never reaches this VM. An explicitly absent legacy registration path prevents a
+retained `.runner` file adding an unintended connection. A dedicated systemd SSH
+agent loads the node key on boot; guest SSH credentials remain separate.
+
+Lifecycle operations create a maintenance marker before checking the controller's
+job lock. Busy work makes maintenance fail before changing tooling or stopping
+services; the marker remains until the operator successfully reruns maintenance.
+Successful deploy/update/recreate clear it after synchronous handler completion.
+Remove stops both owned units and removes only recorded units/runner config;
+private authentication, the profile/launcher, checkout/tooling/cache, accounts,
+keys, run evidence and retained guest resources remain. Removal never unregisters
+or destroys guests implicitly. Idle repeated deployment does not re-register or
+restart unchanged units. Transient maintenance markers do not count as deployed
+configuration changes. Offline recorded-I/O tests cannot certify real systemd,
+boot authentication or package idempotency; those are rollout acceptance checks.
+See [the Molecule guide](../../molecule/README.md#dedicated-forgejo-controller-rollout-preparation-not-deployed)
+for allocation, credentials, operator use and scoped retirement.

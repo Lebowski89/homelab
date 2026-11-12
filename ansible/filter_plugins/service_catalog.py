@@ -135,8 +135,8 @@ def _native_merge(base, target):
     native = merged.get("native")
     if not isinstance(native, Mapping) or set(native) - {"application", "config", "update_policy"}:
         raise AnsibleFilterError("native must declare application/config and optional update_policy only")
-    if native.get("application") not in {"alloy", "node_exporter", "keepalived", "technitium"}:
-        raise AnsibleFilterError("native.application must select alloy, node_exporter, keepalived or technitium")
+    if native.get("application") not in {"alloy", "node_exporter", "keepalived", "technitium", "forgejo_runner"}:
+        raise AnsibleFilterError("native.application must select alloy, node_exporter, keepalived, technitium or forgejo_runner")
     if not isinstance(native.get("config"), Mapping):
         raise AnsibleFilterError("native.config must be a mapping")
     deploy = merged.get("deploy", {})

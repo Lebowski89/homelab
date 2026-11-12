@@ -65,8 +65,7 @@ def test_workstation_dynamic_includes_propagate_their_selection_tags():
     tasks = [
         task
         for task in load_yaml(MAIN_TASKS_PATH)
-        if task["name"]
-        not in {"Workstation | Configure automation tooling", "Workstation | Set up password files only when explicitly selected"}
+        if "ansible.builtin.include_tasks" in task and task["ansible.builtin.include_tasks"]["file"] not in {"tools.yml", "credentials.yml"}
     ]
 
     for task in tasks:
@@ -380,6 +379,7 @@ class ActionModule(ActionBase):
         managed=False,
         inline=False,
         apt_sources=None,
+        headless_entry=False,
     ):
         record.unlink(missing_ok=True)
         if apt_sources is not None:
@@ -414,7 +414,30 @@ class ActionModule(ActionBase):
         play = tmp_path / "play.yml"
         play.write_text(
             yaml.safe_dump(
-                [{"hosts": "localhost", "connection": "local", "gather_facts": False, "vars": variables, "roles": ["workstation"]}]
+                [
+                    {
+                        "hosts": "localhost",
+                        "connection": "local",
+                        "gather_facts": False,
+                        "vars": variables,
+                        **(
+                            {
+                                "tasks": [
+                                    {
+                                        "ansible.builtin.include_role": {
+                                            "name": "workstation",
+                                            "tasks_from": "tools",
+                                            "apply": {"tags": [tags]},
+                                        },
+                                        "tags": [tags],
+                                    }
+                                ]
+                            }
+                            if headless_entry
+                            else {"roles": ["workstation"]}
+                        ),
+                    }
+                ]
             )
         )
         inventory_args = ["-i", "localhost,"]
@@ -765,3 +788,35 @@ def test_inline_bootstrap_inventory_and_granular_tools(workstation_run, tag):
     assert any(call["module"] == "getent" for call in calls)
     repos = [call["options"]["name"] for call in calls if call["module"] == "yum_repository"]
     assert ("opentofu" in repos) is (tag in {"workstation_tools", "workstation_opentofu"})
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("enabled,major,tools_entry", [(True, "10", True), (False, "10", True), (True, "9", True), (True, "10", False)])
+def test_rocky_controller_opt_in_is_confined_to_headless_tools(workstation_run, enabled, major, tools_entry):
+    result, calls = workstation_run(
+        fedora=True,
+        tags="workstation_ansible",
+        headless_entry=tools_entry,
+        overrides={
+            "workstation_tools_headless": enabled,
+            "ansible_facts": {
+                "os_family": "RedHat",
+                "distribution": "Rocky",
+                "distribution_major_version": major,
+                "pkg_mgr": "dnf",
+                "service_mgr": "systemd",
+            },
+        },
+    )
+    accepted = enabled and major == "10" and tools_entry
+    assert (result.returncode == 0) is accepted, result.stdout + result.stderr
+    if accepted:
+        assert any(call["module"] == "pip" for call in calls)
+        # OpenTofu's signed RPM repository is headless tooling, whereas the
+        # VS Code repository/packages and desktop packages must stay absent.
+        assert not any(call["module"] == "yum_repository" and call["options"].get("name") == "code" for call in calls)
+        packages = [name for call in calls if call["module"] in {"apt", "dnf"} for name in call["options"].get("name", [])]
+        assert "code" not in packages and "xdg-user-dirs" not in packages
+    else:
+        assert not any(call["module"] not in {"stat"} for call in calls)
+        assert "unsupported" in result.stdout.lower() or "never the desktop entry point" in result.stdout

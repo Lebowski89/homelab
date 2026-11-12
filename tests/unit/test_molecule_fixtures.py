@@ -129,7 +129,7 @@ def test_quadlet_diagnostic_is_stored_for_completed_commands_and_skipped_for_abs
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("layout", ["expected", "foreign-root", "wrong-filesystem", "additional-volume"])
+@pytest.mark.parametrize("layout", ["expected", "foreign-root", "wrong-filesystem", "additional-volume", "wrong-capacity"])
 def test_fedora_growth_refuses_foreign_layout_before_mutation(tmp_path, layout):
     import yaml
     from ansible_task_cases import task_section
@@ -143,7 +143,9 @@ def test_fedora_growth_refuses_foreign_layout_before_mutation(tmp_path, layout):
         purpose="Fedora allocation growth guard",
     )
     root = {"mount": "/", "device": "/dev/mapper/systemVG-LVRoot", "fstype": "xfs"}
-    group = {"num_lvs": 1, "num_pvs": 1, "size_g": "29.55", "lvs": {"LVRoot": {"size_g": "3.12"}}}
+    group = {"num_lvs": 1, "num_pvs": 1, "size_g": "13.55", "lvs": {"LVRoot": {"size_g": "3.12"}}}
+    if layout == "wrong-capacity":
+        group["size_g"] = "29.55"
     if layout == "foreign-root":
         root["device"] = "/dev/mapper/production-root"
     if layout == "wrong-filesystem":
@@ -168,7 +170,11 @@ def test_fedora_growth_refuses_foreign_layout_before_mutation(tmp_path, layout):
                 "hosts": "localhost",
                 "connection": "local",
                 "gather_facts": False,
-                "vars": {"ansible_facts": {"mounts": [root], "lvm": {"vgs": {"systemVG": group}}}, "test_growth_marker": str(marker)},
+                "vars": {
+                    "ansible_facts": {"mounts": [root], "lvm": {"vgs": {"systemVG": group}}},
+                    "molecule_vm_disk_gb": 16,
+                    "test_growth_marker": str(marker),
+                },
                 "tasks": selected,
             }
         ],
@@ -177,3 +183,5 @@ def test_fedora_growth_refuses_foreign_layout_before_mutation(tmp_path, layout):
     )
     assert (result.returncode == 0) is (layout == "expected"), result.stdout + result.stderr
     assert marker.exists() is (layout == "expected")
+    if layout != "expected":
+        assert "no growth was attempted" in result.stdout

@@ -1,0 +1,21 @@
+[Unit]
+Description=Dedicated Molecule Proxmox SSH authentication
+
+[Service]
+Type=simple
+User={{ native_services_config.user }}
+Group={{ native_services_config.group }}
+RuntimeDirectory=forgejo-runner-agent
+RuntimeDirectoryMode=0700
+UMask=0077
+ExecStart=/usr/bin/ssh-agent -D -a /run/forgejo-runner-agent/agent.sock
+ExecStartPost=/usr/bin/env SSH_AUTH_SOCK=/run/forgejo-runner-agent/agent.sock /usr/bin/ssh-add /etc/forgejo-runner/private/node-key
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

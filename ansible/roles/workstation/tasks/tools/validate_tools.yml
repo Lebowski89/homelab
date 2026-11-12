@@ -5,6 +5,7 @@
 - name: Workstation | Validate platform and switches
   ansible.builtin.assert:
     that:
+      - workstation_tools_headless is boolean
       - workstation_tools_enabled is boolean
       - workstation_ansible_enabled is boolean
       - workstation_ansible_collections_enabled is boolean

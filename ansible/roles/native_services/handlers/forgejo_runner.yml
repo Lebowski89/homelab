@@ -1,0 +1,15 @@
+---
+# Flushed with this entry's configuration before removing its maintenance marker.
+- name: Restart Forgejo Runner SSH agent
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: forgejo-runner-agent
+    state: restarted
+    daemon_reload: true
+
+- name: Restart Forgejo Runner
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: forgejo-runner
+    state: restarted
+    daemon_reload: true

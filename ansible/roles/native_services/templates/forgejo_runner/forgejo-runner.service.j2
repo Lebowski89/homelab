@@ -1,0 +1,29 @@
+[Unit]
+Description=Repository-scoped Forgejo Molecule runner
+After=network-online.target forgejo-runner-agent.service
+Wants=network-online.target
+Requires=forgejo-runner-agent.service
+
+[Service]
+Type=simple
+User={{ native_services_config.user }}
+Group={{ native_services_config.group }}
+WorkingDirectory={{ native_services_config.data_dir }}
+Environment=HOME={{ native_services_config.data_dir }}
+Environment=TMPDIR={{ native_services_config.data_dir }}/tmp
+Environment=SSH_AUTH_SOCK=/run/forgejo-runner-agent/agent.sock
+ExecStart=/usr/local/bin/forgejo-runner --config /etc/forgejo-runner/config.yml daemon
+Restart=on-failure
+RestartSec=5
+# Runner drains on SIGTERM; systemd must not kill its active job subprocesses.
+KillMode=mixed
+TimeoutStopSec=13h
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={{ native_services_config.data_dir }}
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,16 @@
+---
+# Connection identity and addressing come from NetBox, never a production tag.
+native_services_forgejo_runner_controller: true
+workstation_tools_headless: true
+workstation_tools_enabled: true
+workstation_user: "{{ native_services_config.user }}"
+workstation_repository_clone: true
+workstation_repository_path: "{{ native_services_config.data_dir }}/homelab"
+workstation_ansible_tools_path: "{{ native_services_config.data_dir }}/.local/share/homelab"
+workstation_ansible_venv_path: "{{ workstation_ansible_tools_path }}/ansible-venv"
+workstation_ansible_collections_path: "{{ workstation_ansible_tools_path }}/collections"
+workstation_skynet_enabled: false
+workstation_opentofu_enabled: true
+workstation_vscode_enabled: false
+# Rocky uses the same supported RPM tooling path; no workstation desktop entry.
+workstation_ansible_prereq_packages: [python3, python3-pip, python3-devel, gcc, make, git, ca-certificates, openssh-clients]

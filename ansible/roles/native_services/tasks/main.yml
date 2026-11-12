@@ -54,12 +54,13 @@
   ansible.builtin.set_fact:
     native_services_unit: >-
       {{ {'alloy': native_services_config.service_name | default(''),
-          'node_exporter': 'node_exporter', 'keepalived': 'keepalived',
+          'node_exporter': 'node_exporter', 'keepalived': 'keepalived', 'forgejo_runner': 'forgejo-runner',
           'technitium': native_services_config.service_name | default('')}[native_services_application]
          | regex_replace('[.]service$', '') }}
     native_services_files: >-
       {{ {'alloy': [native_services_config.config_path | default('')],
           'node_exporter': ['/etc/systemd/system/node_exporter.service'],
+          'forgejo_runner': ['/etc/systemd/system/forgejo-runner.service', '/etc/systemd/system/forgejo-runner-agent.service', '/etc/forgejo-runner/config.yml'],
           'keepalived': [native_services_config.config_path | default(''), native_services_config.check_script_path | default('')],
           'technitium':
             (['/etc/systemd/resolved.conf.d/technitium.conf'] if native_services_technitium_manage_resolved | default(false) else [])
@@ -92,6 +93,10 @@
       - native_services_previous.unit | default(native_services_unit) == native_services_unit
     fail_msg: Another declaration or service unit owns this native installation; remove it before changing identity.
 
+- name: Native services | Validate dedicated controller and existing runner ownership
+  when: native_services_application == 'forgejo_runner'
+  ansible.builtin.include_tasks: forgejo_runner_validate.yml
+
 - name: Native services | Validate Keepalived before any installation or restart
   when:
     - native_services_application == 'keepalived'
@@ -117,13 +122,32 @@
     loop_var: native_services_file_stat
     label: "{{ native_services_file_stat.native_services_owned_file }}"
 
+- name: Native services | Protect active acceptance before runner lifecycle changes
+  when:
+    - native_services_application == 'forgejo_runner'
+    - not ansible_check_mode
+    - native_services_action in ['deploy', 'update'] or native_services_state_stat.stat.exists
+  ansible.builtin.include_tasks: forgejo_runner_drain.yml
+
 - name: Native services | Prepare installation ownership and resolver recovery
   when: native_services_action in ['deploy', 'update']
   ansible.builtin.include_tasks: ownership.yml
 
 - name: Native services | Apply the selected application
-  when: native_services_action in ['deploy', 'update']
+  when:
+    - native_services_action in ['deploy', 'update']
+    - native_services_application != 'forgejo_runner' or not ansible_check_mode
   ansible.builtin.include_tasks: "{{ native_services_application }}.yml"
+
+- name: Forgejo Runner | Explain validated check-mode installation plan
+  when:
+    - native_services_application == 'forgejo_runner'
+    - ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Would manage {{ native_services_config.repository }} as {{ native_services_config.user }}
+      using pinned Runner {{ native_services_config.version }} and persistent {{ native_services_config.data_dir }}.
+      Tool installation, credential reads, registration, maintenance locks and service changes are deferred.
 
 - name: Native services | Recreate the selected service without deleting data
   when: native_services_action == 'recreate'
@@ -137,3 +161,14 @@
 # entry must never supply values to a pending handler for this application.
 - name: Native services | Complete selected service notifications
   ansible.builtin.meta: flush_handlers
+
+- name: Forgejo Runner | Resume acceptance only after successful lifecycle completion
+  when:
+    - native_services_application == 'forgejo_runner'
+    - native_services_action != 'remove'
+    - not ansible_check_mode
+  ansible.builtin.file:
+    path: /etc/forgejo-runner/draining
+    state: absent
+  # Transient maintenance lock; not a deployed configuration change.
+  changed_when: false

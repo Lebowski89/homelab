@@ -134,7 +134,7 @@
         ignore_unknown_extensions: true
         extensions: [yml, yaml]
         name: svcfiles
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Assert svcfiles loaded
       ansible.builtin.assert:
@@ -143,7 +143,7 @@
           - (svcfiles | type_debug) == "dict"
           - (svcfiles | length) > 0
         fail_msg: "svcfiles is empty or not a dict. include_vars did not load your service files."
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Resolve requested service lifecycle before selection
       ansible.builtin.set_fact:
@@ -155,7 +155,7 @@
             ('drift' if 'drift' in (ansible_run_tags | default([])) else
             ('bootstrap' if 'bootstrap' in (ansible_run_tags | default([])) else 'deploy'))))
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Select catalogue identities before resolving runtime prerequisites
       ansible.builtin.set_fact:
@@ -165,7 +165,7 @@
                                       docker_services_run_all | default(false),
                                       'remove' in (ansible_run_tags | default([])),
                                       service_catalog_action) }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Identify a native-only operation without container prerequisites
       # A genuinely disabled native-only selection still needs no container
@@ -174,7 +174,7 @@
         service_catalog_native_only: >-
           {{ (service_catalog_requested.selected or service_catalog_requested.matched)
              | map(attribute='runtime') | unique | list == ['native'] }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Include runtime-neutral service host contract validation
       when: not (service_catalog_native_only | default(false))
@@ -424,7 +424,7 @@
     - name: Resolve runtime-neutral service controller host
       ansible.builtin.set_fact:
         service_catalog_controller_host: "{{ (ansible_play_hosts_all | first) if service_catalog_native_only else services_controller_host }}"
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Validate runtime-neutral service controller host
       ansible.builtin.assert:
@@ -433,7 +433,7 @@
           - service_catalog_controller_host in hostvars
         fail_msg: >-
           The runtime-neutral service controller host must name a host in the current inventory.
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Build service catalog processing list from service definitions
       when: inventory_hostname == service_catalog_controller_host
@@ -441,7 +441,7 @@
         service_catalog_effective: >-
           {{ svcfiles | service_catalog_effective(service_catalog_controller_host, groups, true,
                  ['native'] if service_catalog_native_only else ['docker', 'podman', 'native']) }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Assert service catalog processing list was built
       when: inventory_hostname == service_catalog_controller_host
@@ -451,7 +451,7 @@
           - service_catalog_effective is sequence
           - service_catalog_effective | length > 0
         fail_msg: "service_catalog_effective is empty. No service definitions were discovered."
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Drift | Initialise image drift summary
       when: inventory_hostname == service_catalog_controller_host
@@ -472,7 +472,7 @@
                 service_catalog_action
               )
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Extract service catalog selection facts
       when: inventory_hostname == service_catalog_controller_host
@@ -480,7 +480,7 @@
         service_catalog_matched: "{{ service_catalog_selection.matched }}"
         service_catalog_selected: "{{ service_catalog_selection.selected }}"
         service_catalog_disabled_only_selection: "{{ service_catalog_selection.disabled_only }}"
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Order selected Podman services by shared-network dependencies
       when: inventory_hostname == service_catalog_controller_host
@@ -495,7 +495,7 @@
                 )
             ).selected
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Validate selected service dispatch hosts
       when: inventory_hostname == service_catalog_controller_host
@@ -524,7 +524,7 @@
             if service_catalog_dispatch_item.target is defined
             else ''
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Share lightweight service catalog selection with play hosts
       ansible.builtin.set_fact:
@@ -533,7 +533,7 @@
         service_catalog_selected: "{{ hostvars[service_catalog_controller_host].service_catalog_selected }}"
         service_catalog_disabled_only_selection: >-
           {{ hostvars[service_catalog_controller_host].service_catalog_disabled_only_selection }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Report disabled service selection in check mode
       when:
@@ -551,14 +551,14 @@
             | join(', ')
           }}.
           Skipping in check mode.
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: End play for disabled service selection in check mode
       when:
         - ansible_check_mode
         - service_catalog_disabled_only_selection | bool
       ansible.builtin.meta: end_play
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Assert selected service processing list was built
       ansible.builtin.assert:
@@ -575,7 +575,7 @@
             else
             'No matching service or target definitions were found.'
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Gather facts on selected service dispatch hosts
       when:
@@ -585,13 +585,13 @@
            (service_catalog_selected | selectattr('runtime', 'equalto', 'native')
             | map(attribute='resolved_hosts') | flatten | list))
       ansible.builtin.setup:
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Process globally ordered service catalog
       ansible.builtin.include_tasks:
         file: tasks/service_catalog_dispatch.yml
         apply:
-          tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+          tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
       loop: "{{ service_catalog_selected }}"
       loop_control:
         loop_var: service_catalog_dispatch_entry
@@ -601,7 +601,7 @@
             if service_catalog_dispatch_entry.target is defined
             else ''
           }}
-      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, bootstrap, drift, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Drift | Report image drift summary
       when:

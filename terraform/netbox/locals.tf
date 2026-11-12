@@ -491,6 +491,13 @@ locals {
       ]
     }
 
+    molecule-controller = {
+      description     = "Dedicated unprivileged Forgejo runner for disposable Molecule VMs"
+      role_key        = "server"
+      device_type_key = "generic_vm"
+      tags            = ["skynet", "opentofu_managed"]
+    }
+
     rocky = {
       description     = "Application host, HAProxy endpoint, Technitium DNS primary"
       role_key        = "server"

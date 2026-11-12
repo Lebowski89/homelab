@@ -43,6 +43,7 @@ def test_real_native_targets_isolate_container_installation_and_selection():
     source = services()
     original = deepcopy(source)
     groups = {
+        "all": ["one", "two", "dns1", "dns2", "molecule-controller"],
         "tags_podman": ["one", "two"],
         "tags_node_exporter": ["one", "two"],
         "tags_keepalived": ["dns1", "dns2"],
@@ -52,12 +53,14 @@ def test_real_native_targets_isolate_container_installation_and_selection():
     selected = CATALOG.service_catalog_select(index, ["alloy_native"])["selected"]
     assert [(entry["name"], entry["runtime"]) for entry in selected] == [("alloy", "native")]
     native = CATALOG.service_catalog_effective(source, "one", groups, runtimes=["native"])
-    assert len(native) == 4
+    assert {entry["name"] for entry in native} == {"alloy", "node_exporter", "keepalived", "technitium", "forgejo_runner"}
     for entry in native:
         cfg = CATALOG.service_catalog_merge_target(source[entry["name"]], entry.get("target"))
         assert "image" not in cfg and "infisical" not in cfg and "environment" not in cfg
         assert "ports" not in cfg and "volumes" not in cfg and "systemd" not in cfg
-        assert len(entry["resolved_hosts"]) == 2
+        assert (
+            entry["resolved_hosts"] == ["molecule-controller"] if entry["name"] == "forgejo_runner" else len(entry["resolved_hosts"]) == 2
+        )
     assert source == original
 
 
@@ -163,3 +166,24 @@ def test_container_only_actions_preserve_mixed_targets_and_reject_explicit_nativ
             assert {(item["target"], item["runtime"]) for item in selected} == {("workers", "docker"), ("mgt", "podman")}
             with pytest.raises(AnsibleFilterError, match=f"alloy:native.*does not support {action}"):
                 CATALOG.service_catalog_select(effective, [action, "alloy_native", "grafana"], action=action)
+
+
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ("user", "root"),
+        ("group", "wheel"),
+        ("server_url", "http://forgejo.example.test"),
+        ("server_url", "https://user:password@forgejo.example.test"),
+        ("repository", "account-wide"),
+        ("label", "docker:docker://image"),
+        ("data_dir", "/etc"),
+        ("arbitrary_command", "unsupported"),
+    ],
+)
+def test_runner_rejects_privileged_or_ambiguous_execution_contracts(key, value):
+    native = deepcopy(services()["forgejo_runner"]["native"])
+    native["config"]["server_url"] = "https://forgejo.example.test"
+    native["config"][key] = value
+    with pytest.raises(AnsibleFilterError):
+        NATIVE.native_services_normalize(native)

@@ -1,0 +1,20 @@
+---
+
+forgejo_runner:
+  enabled: true
+  runtime: native
+  tags: [forgejo-runner]
+  native:
+    application: forgejo_runner
+    config:
+      version: 13.2.0
+      arch: amd64
+      user: molecule-ci
+      group: molecule-ci
+      data_dir: /var/lib/forgejo-runner
+      server_url: "https://forgejo.{{ services_internal_zone }}:{{ services_private_https_port }}"
+      repository: homelab-ci/homelab-ci
+      label: molecule-pve1-rocky
+    update_policy: pinned
+  deploy:
+    hosts: molecule-controller

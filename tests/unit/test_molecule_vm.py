@@ -114,16 +114,30 @@ def test_prepared_image_requires_matching_recipe_source_and_owned_bytes(tmp_path
     directory = tmp_path / run_id
     directory.mkdir(mode=0o700)
     image = directory / "fedora44.qcow2"
-    image.write_bytes(b"synthetic image bytes, not a guest acceptance test")
+    size = json.loads((ROOT / "molecule/vm/fedora-source.json").read_text())["disk_gb"] * 1024**3
+    header = b"QFI\xfb" + (3).to_bytes(4, "big") + bytes(16) + size.to_bytes(8, "big")
+    image.write_bytes(header + b"synthetic image body, not a guest acceptance test")
     provenance = {
         "builder_id": run_id,
         "source": json.loads((ROOT / "molecule/vm/fedora-source.json").read_text()),
         "recipe": VM.image_recipe(),
         "path": str(image),
         "checksum": hashlib.sha256(image.read_bytes()).hexdigest(),
+        "virtual_size_bytes": size,
     }
     VM.write_json(tmp_path / "fedora-image.json", provenance)
     assert VM.prepared_fedora(tmp_path) == provenance
+    provenance["virtual_size_bytes"] += 1024**3
+    with pytest.raises(ValueError, match="virtual size"):
+        VM.validate_prepared_image(provenance, tmp_path)
+    provenance["virtual_size_bytes"] -= 1024**3
+    original = image.read_bytes()
+    image.write_bytes(header[:24] + (size * 2).to_bytes(8, "big") + original[32:])
+    provenance["checksum"] = hashlib.sha256(image.read_bytes()).hexdigest()
+    with pytest.raises(ValueError, match="header differs"):
+        VM.validate_prepared_image(provenance, tmp_path)
+    image.write_bytes(original)
+    provenance["checksum"] = hashlib.sha256(original).hexdigest()
     image.write_bytes(b"changed")
     with pytest.raises(ValueError, match="checksum differs"):
         VM.prepared_fedora(tmp_path)
@@ -377,7 +391,7 @@ def test_saved_plan_enforces_budget_and_explicitly_stopped_template(prepared):
         "cpu": [{"cores": 2}],
         "memory": [{"dedicated": 2048}],
         "network_device": [{"bridge": manifest["run"]["bridge"]}],
-        "disk": [{"datastore_id": manifest["run"]["storage"], "size": 32}],
+        "disk": [{"datastore_id": manifest["run"]["storage"], "size": manifest["run"]["image"]["disk_gb"]}],
     }
     expression = {"constant_value": False}
     plan = {
@@ -398,6 +412,10 @@ def test_saved_plan_enforces_budget_and_explicitly_stopped_template(prepared):
     with pytest.raises(ValueError, match="disk storage or size"):
         VM.check_plan(plan, manifest)
     value["disk"].pop()
+    value["disk"][0]["size"] += 1
+    with pytest.raises(ValueError, match="disk storage or size"):
+        VM.check_plan(plan, manifest)
+    value["disk"][0]["size"] -= 1
     value["node_name"] = "unapproved-node"
     with pytest.raises(ValueError, match="foreign VM"):
         VM.check_plan(plan, manifest)
@@ -419,7 +437,7 @@ def test_guest_plan_cannot_clone_a_migration_vm_or_change_the_reserved_address(p
         "cpu": [{"cores": 2}],
         "memory": [{"dedicated": 2048}],
         "network_device": [{"bridge": run["bridge"]}],
-        "disk": [{"datastore_id": run["storage"], "size": 32}],
+        "disk": [{"datastore_id": run["storage"], "size": run["disk_gb"]}],
         "clone": [{"vm_id": run["template_id"], "full": True, "node_name": None}],
         "initialization": [
             {
@@ -431,6 +449,10 @@ def test_guest_plan_cannot_clone_a_migration_vm_or_change_the_reserved_address(p
     }
     plan = {"resource_changes": [{"mode": "managed", "type": "proxmox_virtual_environment_vm", "change": {"after": value}}]}
     VM.check_plan(plan, manifest)
+    value["disk"][0]["size"] += 1
+    with pytest.raises(ValueError, match="disk storage or size"):
+        VM.check_plan(plan, manifest)
+    value["disk"][0]["size"] -= 1
     # The real provider's no-op resume plan normalizes the implicit node to "".
     value["clone"][0]["node_name"] = ""
     VM.check_plan(plan, manifest)
@@ -660,3 +682,88 @@ def test_orphan_snippet_recovery_requires_saved_plan_scope_and_verified_bytes(pr
         with pytest.raises(ValueError):
             VM.retire_orphan_snippets(directory, manifest, client, {})
         assert "delete" not in events and client.present is True
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    "platform,builder", [("debian13", False), ("rocky102", False), ("ubuntu2604", False), ("fedora44", False), ("ubuntu2604", True)]
+)
+def test_new_run_carries_selected_capacity_through_manifest_provider_and_guest_inputs(tmp_path, platform, builder):
+    config = json.loads((ROOT / "molecule/vm/allocation.json.sample").read_text())
+    public_key = tmp_path / "test.pub"
+    public_key.write_text("ssh-ed25519 AAAATEST fixture-public-key")
+    config.update(approved_disposable=True, allow_image_preparation=True, public_key_path=str(public_key))
+    allocation = tmp_path / "allocation.json"
+    allocation.write_text(json.dumps(config))
+    args = SimpleNamespace(
+        allocation=allocation,
+        state_root=tmp_path / "runs",
+        os=platform,
+        suite="rocky_node_exporter",
+        order="docker-first",
+        runtime="rootless",
+        image_builder=builder,
+    )
+    VM.prepare(args)
+    directory = next(args.state_root.iterdir())
+    manifest = VM.load_run(directory)
+    selected = 32 if builder else 16
+    assert manifest["run"]["disk_gb"] == selected
+    assert manifest["run"]["image"]["disk_gb"] <= selected
+    assert json.loads((directory / "tofu/run.auto.tfvars.json").read_text())["run"]["disk_gb"] == selected
+    assert json.loads((directory / "guest-vars.json").read_text())["molecule_vm_disk_gb"] == selected
+    # A retained run cannot adopt a changed capacity. It remains retireable.
+    manifest["run"]["disk_gb"] = selected - 1
+    (directory / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="capacity changed"):
+        VM.load_run(directory)
+    assert VM.load_run(directory, retirement=True)["id"] == manifest["id"]
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("size", [9, 33, True])
+def test_invalid_or_shrinking_disk_selection_fails_before_creating_a_run(prepared, monkeypatch, size):
+    directory, manifest = prepared
+    config = dict(VM.IMAGES["rocky102"], guest_disk_gb=size)
+    monkeypatch.setitem(VM.IMAGES, "rocky102", config)
+    allocation = directory.parent.parent / "allocation.json"
+    args = SimpleNamespace(
+        allocation=allocation,
+        state_root=directory.parent.parent / "new-runs",
+        os="rocky102",
+        suite="rocky_node_exporter",
+        order="docker-first",
+        runtime="rootless",
+    )
+    with pytest.raises(ValueError, match="shrinking is forbidden"):
+        VM.prepare(args)
+    assert not args.state_root.exists()
+
+
+@pytest.mark.integration
+def test_legacy_disk_manifest_can_be_retired_without_resizing(prepared):
+    directory, manifest = prepared
+    manifest["run"].pop("disk_gb")
+    manifest["run"]["image"].pop("guest_disk_gb")
+    (directory / "manifest.json").write_text(json.dumps(manifest))
+    assert VM.load_run(directory, retirement=True)["id"] == manifest["id"]
+    with pytest.raises(ValueError, match="Image pin changed"):
+        VM.load_run(directory)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("separate", [False, True])
+def test_node_file_verification_uses_management_identity_without_changing_guest_identity(prepared, monkeypatch, separate):
+    _, manifest = prepared
+    if not separate:
+        manifest["allocation"].pop("node_private_key_path")
+    calls = []
+    monkeypatch.setattr(VM.subprocess, "run", lambda argv, **kwargs: calls.append(argv) or SimpleNamespace(returncode=0))
+    VM.verify_remote_files([], manifest, allow_missing=False)
+    expected = manifest["allocation"]["node_private_key_path" if separate else "private_key_path"]
+    assert calls[0][calls[0].index("-i") + 1] == expected
+    inventory = VM.inventory(manifest, Path("/private/run"))
+    assert (
+        inventory["all"]["children"]["molecule_guests"]["hosts"]["subject"]["ansible_ssh_private_key_file"]
+        == manifest["allocation"]["private_key_path"]
+    )

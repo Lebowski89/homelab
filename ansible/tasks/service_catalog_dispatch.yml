@@ -63,11 +63,11 @@
         defaults_from: "{{ service_catalog_host_materialized[0].config.native.application }}"
         handlers_from: "{{ service_catalog_host_materialized[0].config.native.application }}"
         apply:
-          tags: [deploy, update, remove, recreate, alloy_native, node_exporter, keepalived, technitium_native]
+          tags: [deploy, update, remove, recreate, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
       vars:
         native_services_entry: "{{ service_catalog_host_materialized[0] }}"
         native_services_action: "{{ service_catalog_action }}"
-      tags: [deploy, update, remove, recreate, alloy_native, node_exporter, keepalived, technitium_native]
+      tags: [deploy, update, remove, recreate, alloy_native, node_exporter, keepalived, technitium_native, forgejo_runner]
 
     - name: Service catalog dispatch | Process Docker entry
       when:

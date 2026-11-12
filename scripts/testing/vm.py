@@ -31,6 +31,7 @@ ROOT = Path(__file__).resolve().parents[2]
 IMAGES = json.loads((ROOT / "molecule/vm/images.json").read_text())
 SUITES = ("rocky_node_exporter", "runtime_install", "application_lifecycle", "protected_network")
 GUEST_PYTHON = "/opt/homelab-molecule-ansible/bin/python"
+MAX_DISK_GB = 32  # Existing approved per-disk ceiling, not a minimum.
 
 
 def require(condition, message):
@@ -228,17 +229,22 @@ def prepare(args):
         args.os != "fedora44" or prepared_image is not None or args.suite == "rocky_node_exporter",
         "Fedora Cloud bundles Podman. Run prepare-fedora-image first; never erase bundled runtimes to pass freshness checks",
     )
-    run_id = uuid.uuid4().hex
-    directory = args.state_root.resolve() / run_id
-    directory.mkdir(parents=True, mode=0o700)
     image = IMAGES[args.os]
     if prepared_image:
         image = image | {
             "url": prepared_image["source"]["url"],
             "source": prepared_image["source"]["source"],
             "checksum": prepared_image["checksum"],
-            "disk_gb": 32,
+            "disk_gb": prepared_image["source"]["disk_gb"],
         }
+    disk_gb = image["builder_disk_gb" if builder else "guest_disk_gb"]
+    require(
+        type(disk_gb) is int and image["disk_gb"] <= disk_gb <= MAX_DISK_GB,
+        "Selected guest disk must fit the image template within the approved disk ceiling; shrinking is forbidden",
+    )
+    run_id = uuid.uuid4().hex
+    directory = args.state_root.resolve() / run_id
+    directory.mkdir(parents=True, mode=0o700)
     (directory / "evidence").mkdir(mode=0o700)
     run = {
         "id": run_id,
@@ -246,6 +252,7 @@ def prepare(args):
         "template_id": config["vm_ids"][0],
         "image_file_id": None if prepared_image else config.get("image_file_ids", {}).get(args.os),
         "image": image | {"user": "molecule"},
+        "disk_gb": disk_gb,
         "public_key": Path(config["public_key_path"]).expanduser().read_text().strip(),
         "python_requirements": guest_requirements(),
         "guests": {
@@ -303,6 +310,7 @@ def prepare(args):
             "molecule_vm_suite": args.suite,
             "molecule_vm_prepared_image": prepared_image is not None,
             "molecule_vm_image_builder": builder,
+            "molecule_vm_disk_gb": disk_gb,
             "molecule_vm_order": args.order,
             "molecule_vm_runtime": args.runtime,
             "molecule_vm_images": IMAGES,
@@ -340,6 +348,10 @@ def validate_prepared_image(value, state_root):
     require(re.fullmatch(r"[a-f0-9]{32}", value["builder_id"]), "Invalid image builder identity")
     source = json.loads((ROOT / "molecule/vm/fedora-source.json").read_text())
     require(value["source"] == source and value["recipe"] == image_recipe(), "Prepared image source or recipe changed; rebuild it")
+    require(
+        value.get("virtual_size_bytes") == source["disk_gb"] * 1024**3,
+        "Prepared image virtual size differs from the selected capacity",
+    )
     path = Path(value["path"])
     require(path == state_root.resolve() / value["builder_id"] / "fedora44.qcow2", "Prepared image lies outside its builder run")
     require(
@@ -352,6 +364,17 @@ def validate_prepared_image(value, state_root):
     )
     require(
         re.fullmatch(r"[a-f0-9]{64}", value["checksum"]) and file_checksum(path) == value["checksum"], "Prepared image checksum differs"
+    )
+    # QEMU QCOW2 header, big-endian bytes 24..31: virtual disk size.
+    # Check the actual artifact as well as the builder's recorded qemu-img info.
+    with path.open("rb") as stream:
+        header = stream.read(32)
+    require(
+        len(header) == 32
+        and header[:4] == b"QFI\xfb"
+        and int.from_bytes(header[4:8], "big") in (2, 3)
+        and int.from_bytes(header[24:32], "big") == value["virtual_size_bytes"],
+        "Prepared image header differs from the selected virtual size",
     )
     return value
 
@@ -448,6 +471,7 @@ def prepare_fedora_image(args):
             "path": str(directory / "fedora44.qcow2"),
             "checksum": evidence["checksum"],
             "packages": evidence["packages"],
+            "virtual_size_bytes": evidence["virtual_size_bytes"],
         }
         validate_prepared_image(provenance, args.state_root)
         # Publish only after the builder's retirement is confirmed. A failed
@@ -509,9 +533,20 @@ def load_run(directory, retirement=False):
                 "url": artifact["source"]["url"],
                 "source": artifact["source"]["source"],
                 "checksum": artifact["checksum"],
-                "disk_gb": 32,
+                "disk_gb": artifact["source"]["disk_gb"],
             }
         require(manifest["run"]["image"] == expected_image, "Image pin changed since preparation; make a new run")
+        require(
+            manifest["run"].get("disk_gb") == expected_image["builder_disk_gb" if manifest.get("image_builder") else "guest_disk_gb"],
+            "Selected disk capacity changed since preparation; make a new run, never resize an existing guest",
+        )
+    # Old run manifests retain their original 32 GiB capacity for retirement.
+    # They cannot resume provisioning through the new, differently sized root.
+    disk_gb = manifest["run"].get("disk_gb", MAX_DISK_GB)
+    require(
+        type(disk_gb) is int and manifest["run"]["image"]["disk_gb"] <= disk_gb <= MAX_DISK_GB,
+        "Run disk capacity is outside the image and approved disk bounds",
+    )
     require(
         identities(manifest) == dict(zip(("template", "subject"), manifest["allocation"]["vm_ids"], strict=True)),
         "Resource IDs differ from the approved allocation",
@@ -984,7 +1019,7 @@ print('Trusted node SSH and requested file checks verified')
             "-o",
             "ConnectTimeout=10",
             "-i",
-            str(Path(config["private_key_path"]).expanduser()),
+            str(Path(config.get("node_private_key_path", config["private_key_path"])).expanduser()),
             "root@" + config["ssh_host"],
             "python3",
             "-",
@@ -1070,7 +1105,17 @@ def check_plan(plan, manifest):
             )
             require(
                 len(value["disk"]) == 1
-                and all(disk["datastore_id"] == manifest["run"]["storage"] and 0 < disk["size"] <= 32 for disk in value["disk"]),
+                and all(
+                    disk["datastore_id"] == manifest["run"]["storage"]
+                    and disk["size"]
+                    == (
+                        manifest["run"]["image"]["disk_gb"]
+                        if value["vm_id"] == manifest["run"]["template_id"]
+                        else manifest["run"].get("disk_gb", MAX_DISK_GB)
+                    )
+                    and 0 < disk["size"] <= MAX_DISK_GB
+                    for disk in value["disk"]
+                ),
                 "Plan exceeds approved disk storage or size",
             )
 

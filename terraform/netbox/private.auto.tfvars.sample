@@ -26,6 +26,14 @@ host_private_values = {
     }
   }
 
+  molecule-controller = {
+    mgmt_ip = "192.168.xx.xx/24"
+    custom_fields = {
+      ansible_user = "rocky"
+      ssh_port     = "22"
+    }
+  }
+
   rocky = {
     mgmt_ip = "192.168.xx.xx/24"
 

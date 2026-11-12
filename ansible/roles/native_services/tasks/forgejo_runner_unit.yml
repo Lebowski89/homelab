@@ -1,0 +1,17 @@
+---
+
+- name: Forgejo Runner | Install selected service unit
+  ansible.builtin.template:
+    src: 'forgejo_runner/{{ native_services_runner_unit }}.service.j2'
+    dest: '/etc/systemd/system/{{ native_services_runner_unit }}.service'
+    owner: root
+    group: root
+    mode: '0644'
+  notify:
+    - Restart Forgejo Runner SSH agent
+    - Restart Forgejo Runner
+
+- name: Forgejo Runner | Record the successfully installed unit immediately
+  ansible.builtin.include_tasks: record_files.yml
+  vars:
+    native_services_adopted_files: ['{{ "/etc/systemd/system/" ~ native_services_runner_unit ~ ".service" }}']
