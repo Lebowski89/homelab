@@ -1,6 +1,5 @@
 ---
-# Leave the drain marker in place on failure. The launcher checks it both before
-# and after taking the job lock. An active run prevents lifecycle mutation.
+# A token-owned directory excludes all other lifecycle operations and new jobs.
 - name: Forgejo Runner | Ensure controller configuration directory
   ansible.builtin.file:
     path: /etc/forgejo-runner
@@ -9,31 +8,14 @@
     group: root
     mode: '0755'
 
-- name: Forgejo Runner | Prevent new acceptance work during maintenance
-  ansible.builtin.copy:
-    content: ''
-    dest: /etc/forgejo-runner/draining
-    owner: root
-    group: root
-    mode: '0644'
-  # Transient maintenance lock; not a deployed configuration change.
-  changed_when: false
-
-- name: Forgejo Runner | Inspect persistent home before checking active work
-  ansible.builtin.stat:
-    path: '{{ native_services_config.data_dir }}'
-  register: native_services_runner_home
-
-- name: Forgejo Runner | Require an idle controller before lifecycle changes
-  when:
-    - not ansible_check_mode
-    - native_services_runner_home.stat.exists
-  become: true
-  become_user: '{{ native_services_config.user }}'
-  ansible.builtin.command:
-    argv: [flock, --nonblock, '{{ native_services_config.data_dir }}/controller.lock', 'true']
-  changed_when: false
-  # Nonzero remains fatal: never stop an active job to satisfy maintenance.
+- name: Forgejo Runner | Exclusively own maintenance until handlers and lifecycle complete
+  forgejo_runner_maintenance:
+    state: present
+    data_dir: '{{ native_services_config.data_dir }}'
+    uid: >-
+      {{ (native_services_runner_account.ansible_facts.getent_passwd[native_services_config.user]
+          | default(['', -1], true))[1] | int }}
+  register: native_services_runner_maintenance
 
 - name: Forgejo Runner | Stop the owned authentication agent during removal
   when:

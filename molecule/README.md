@@ -643,6 +643,15 @@ original checkout's `vm.py retire --confirm-run <id>`. Verify `retired.json` and
 absence of the run's exact VMIDs/files before retrying. Do not remove state,
 receipts or evidence merely to unlock the allocation.
 
+Runner maintenance is serialized by a root-owned, token-bearing drain directory
+across installation changes and handler completion. Acceptance and explicit
+retirement both honor it. A failed/interrupted operation retains its marker;
+confirm that operation ended, then release only its recorded ownership token
+through the [scoped maintenance recovery](../docs/ansible/native-services.md#dedicated-forgejo-runner)
+module before retrying. Do not blindly delete the marker or stop an active case.
+Removal remains available without provisioning credentials; recreate needs only
+resident restart inputs. Neither operation reads a new registration receipt.
+
 Rollback first drains the runner and refuses active work. Retire any failed
 owned test run explicitly; then use the ordinary runner removal path. It stops
 both owned units and removes only recorded unit/config files, retaining keys,

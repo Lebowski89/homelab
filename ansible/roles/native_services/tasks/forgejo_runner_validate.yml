@@ -38,6 +38,7 @@
   register: native_services_runner_legacy
 
 - name: Forgejo Runner | Refuse any legacy connection alongside the scoped registration
+  when: native_services_action != 'remove'
   ansible.builtin.assert:
     that:
       - not native_services_runner_legacy.stat.exists
@@ -72,13 +73,16 @@
     fail_msg: Existing controller data must be a private directory owned by the dedicated runner account; refusing adoption.
 
 - name: Forgejo Runner | Require an explicit absolute private input directory
+  when: native_services_action in ['deploy', 'update']
   ansible.builtin.assert:
     that:
       - native_services_forgejo_runner_private_source_dir is string
       - native_services_forgejo_runner_private_source_dir == '' or native_services_forgejo_runner_private_source_dir is match('^/')
 
 - name: Forgejo Runner | Inspect required private inputs before changing the host
-  when: not ansible_check_mode
+  when:
+    - not ansible_check_mode
+    - native_services_action in ['deploy', 'update']
   delegate_to: "{{ 'localhost' if native_services_forgejo_runner_private_source_dir | length > 0 else inventory_hostname }}"
   become: '{{ native_services_forgejo_runner_private_source_dir | length == 0 }}'
   no_log: true
@@ -96,7 +100,9 @@
   register: native_services_runner_inputs
 
 - name: Forgejo Runner | Require explicit regular credential files before installation
-  when: not ansible_check_mode
+  when:
+    - not ansible_check_mode
+    - native_services_action in ['deploy', 'update']
   no_log: true
   diff: false
   ansible.builtin.assert:
@@ -112,8 +118,7 @@
   loop_control:
     loop_var: native_services_runner_input_result
 
-# Root creates these directories; never follow a retained user's symlink while
-# changing ownership. Tooling beneath .local is instead created as that user.
+# Inspect root-created boundaries without following retained user symlinks; tooling beneath .local stays user-owned.
 - name: Forgejo Runner | Inspect installation directory boundaries without following links
   ansible.builtin.stat:
     path: '{{ native_services_runner_boundary.path }}'
@@ -150,3 +155,43 @@
   loop: '{{ native_services_runner_boundaries.results }}'
   loop_control:
     loop_var: native_services_runner_boundary_result
+
+- name: Forgejo Runner | Require an owned restartable installation
+  when: native_services_action == 'recreate'
+  ansible.builtin.assert:
+    that:
+      - native_services_state_stat.stat.exists
+      - native_services_files | difference(native_services_previous.files | default([])) | length == 0
+    fail_msg: Recreate requires this entry's recorded runner, agent and connection configuration.
+
+- name: Forgejo Runner | Inspect only resident restart inputs
+  when:
+    - native_services_action == 'recreate'
+    - not ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.stat:
+    path: '{{ native_services_runner_restart_input }}'
+    follow: false
+  loop: [/etc/forgejo-runner/config.yml, /etc/forgejo-runner/private/node-key]
+  loop_control:
+    loop_var: native_services_runner_restart_input
+  register: native_services_runner_restart_inputs
+
+- name: Forgejo Runner | Require private resident configuration and boot authentication for restart
+  when:
+    - native_services_action == 'recreate'
+    - not ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - native_services_runner_restart_result.stat.exists
+      - native_services_runner_restart_result.stat.isreg | default(false)
+      - not (native_services_runner_restart_result.stat.islnk | default(false))
+      - native_services_runner_restart_result.stat.mode == '0600'
+      - native_services_runner_restart_result.stat.uid == native_services_runner_account.ansible_facts.getent_passwd[native_services_config.user][1] | int
+    fail_msg: Recreate needs the installed private connection configuration and node key, not provisioning inputs.
+  loop: '{{ native_services_runner_restart_inputs.results }}'
+  loop_control:
+    loop_var: native_services_runner_restart_result

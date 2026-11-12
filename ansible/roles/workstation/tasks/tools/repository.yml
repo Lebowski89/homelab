@@ -10,6 +10,26 @@
       - workstation_repository_checkout.stat.exists or workstation_repository_clone
     fail_msg: Provide an existing checkout/worktree or explicitly enable workstation_repository_clone.
 
+- name: Workstation Repository | Inspect the parent before creating an optional clone
+  when:
+    - workstation_repository_clone
+    - not workstation_repository_checkout.stat.exists
+  ansible.builtin.stat:
+    path: "{{ workstation_repository_path | dirname }}"
+    follow: false
+  register: workstation_repository_parent
+
+- name: Workstation Repository | Reject linked or non-directory clone parents
+  when:
+    - workstation_repository_clone
+    - not workstation_repository_checkout.stat.exists
+    - workstation_repository_parent.stat.exists
+  ansible.builtin.assert:
+    that:
+      - workstation_repository_parent.stat.isdir
+      - not workstation_repository_parent.stat.islnk
+    fail_msg: The clone parent must be a real directory; existing ownership and permissions are retained.
+
 - name: Workstation Repository | Create parent for new optional clone
   when:
     - workstation_repository_clone
@@ -17,7 +37,7 @@
   ansible.builtin.file:
     path: "{{ workstation_repository_path | dirname }}"
     state: directory
-    mode: '0755'
+    mode: "{{ workstation_repository_parent.stat.mode | default('0755') }}"
 
 - name: Workstation Repository | Clone only into an absent destination
   when:

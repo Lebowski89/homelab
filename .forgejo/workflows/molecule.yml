@@ -5,12 +5,12 @@ name: Live VM acceptance
   workflow_dispatch:
     inputs:
       suite:
-        description: Existing acceptance suite
+        description: "Suite (all may exceed Forgejo's default 3h; verify ENDLESS_TASK_TIMEOUT before long runs)"
         type: choice
         default: rocky_node_exporter
         options: [rocky_node_exporter, runtime_install, application_lifecycle, protected_network, all]
       os:
-        description: Existing guest image
+        description: "Guest OS (all can exceed the server timeout; the 720-minute job limit does not override it)"
         type: choice
         default: rocky102
         options: [rocky102, debian13, fedora44, ubuntu2604, all]

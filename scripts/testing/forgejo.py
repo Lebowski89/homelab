@@ -124,6 +124,7 @@ def source_checkout(record, config):
 
 
 def recover(config, run_id):
+    require(not DRAIN.exists() and not DRAIN.is_symlink(), "Controller is draining for maintenance; retirement must wait")
     require(re.fullmatch(r"[a-f0-9]{32}", run_id), "Supply one exact retained run ID")
     run = Path(config["data_dir"]) / "runs" / run_id
     record = read_private(run / "controller-source.json")
@@ -138,7 +139,7 @@ def recover(config, run_id):
 
 
 def run(config, suite, platform):
-    require(not DRAIN.exists(), "Controller is draining for maintenance; retry after the operator completes it")
+    require(not DRAIN.exists() and not DRAIN.is_symlink(), "Controller is draining for maintenance; retry after the operator completes it")
     data = Path(config["data_dir"])
     scratch = data / "tmp"
     filesystem = subprocess.check_output(
@@ -229,6 +230,7 @@ def main():
     retirement.add_argument("run_id")
     args = parser.parse_args()
     config = profile()
+    require(not DRAIN.exists() and not DRAIN.is_symlink(), "Controller is draining for maintenance; retry after the operator completes it")
     with (Path(config["data_dir"]) / "controller.lock").open("a") as lock:
         # Queue acceptance requests; never cancel an active resource owner.
         fcntl.flock(lock, fcntl.LOCK_EX)

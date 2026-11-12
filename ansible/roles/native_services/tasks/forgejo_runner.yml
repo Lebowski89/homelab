@@ -134,7 +134,7 @@
   notify:
     - Restart Forgejo Runner SSH agent
     - Restart Forgejo Runner
-  loop: [registration.json, provisioning.json, allocation.json, node-key, guest-key, guest-key.pub, proxmox-ca.pem]
+  loop: [provisioning.json, allocation.json, node-key, guest-key, guest-key.pub, proxmox-ca.pem]
   loop_control:
     loop_var: native_services_runner_credential
 
@@ -176,44 +176,30 @@
     group: root
     mode: '0644'
 
-# checkov:skip=CKV2_ANSIBLE_3:Failure is fatal; always clears only in-memory registration authentication, never retained state or resources.
-- name: Forgejo Runner | Configure the existing repository-scoped registration privately
+- name: Forgejo Runner | Install only the validated registration snapshot
+  when:
+    - not ansible_check_mode
+    - native_services_forgejo_runner_private_source_dir | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.copy:
+    content: '{{ native_services_runner_registration | to_json }}'
+    dest: /etc/forgejo-runner/private/registration.json
+    owner: '{{ native_services_config.user }}'
+    group: '{{ native_services_config.group }}'
+    mode: '0600'
+
+- name: Forgejo Runner | Render the validated private runner connection
   when: not ansible_check_mode
   no_log: true
   diff: false
-  block:
-    - name: Forgejo Runner | Read existing private registration receipt
-      ansible.builtin.slurp:
-        src: /etc/forgejo-runner/private/registration.json
-      register: native_services_runner_registration_read
-
-    - name: Forgejo Runner | Resolve current registration only
-      ansible.builtin.set_fact:
-        native_services_runner_registration: '{{ native_services_runner_registration_read.content | b64decode | from_json }}'
-
-    - name: Forgejo Runner | Validate registration identity and scope before starting
-      ansible.builtin.assert:
-        that:
-          - native_services_runner_registration.url == native_services_config.server_url
-          - native_services_runner_registration.repository == native_services_config.repository
-          - native_services_runner_registration.uuid is match('^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$')
-          - native_services_runner_registration.token is string
-          - native_services_runner_registration.token is match('^[a-f0-9]{40}$')
-
-    - name: Forgejo Runner | Render private runner connection configuration
-      ansible.builtin.template:
-        src: forgejo_runner/config.yml.j2
-        dest: /etc/forgejo-runner/config.yml
-        owner: '{{ native_services_config.user }}'
-        group: '{{ native_services_config.group }}'
-        mode: '0600'
-      notify: Restart Forgejo Runner
-
-  always:
-    - name: Forgejo Runner | Clear current registration authentication from transient facts
-      ansible.builtin.set_fact:
-        native_services_runner_registration: {}
-        native_services_runner_registration_read: {}
+  ansible.builtin.template:
+    src: forgejo_runner/config.yml.j2
+    dest: /etc/forgejo-runner/config.yml
+    owner: '{{ native_services_config.user }}'
+    group: '{{ native_services_config.group }}'
+    mode: '0600'
+  notify: Restart Forgejo Runner
 
 - name: Forgejo Runner | Record adopted private runner configuration
   when: not ansible_check_mode

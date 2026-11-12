@@ -305,16 +305,53 @@ never reaches this VM. An explicitly absent legacy registration path prevents a
 retained `.runner` file adding an unintended connection. A dedicated systemd SSH
 agent loads the node key on boot; guest SSH credentials remain separate.
 
-Lifecycle operations create a maintenance marker before checking the controller's
-job lock. Busy work makes maintenance fail before changing tooling or stopping
-services; the marker remains until the operator successfully reruns maintenance.
-Successful deploy/update/recreate clear it after synchronous handler completion.
-Remove stops both owned units and removes only recorded units/runner config;
-private authentication, the profile/launcher, checkout/tooling/cache, accounts,
-keys, run evidence and retained guest resources remain. Removal never unregisters
-or destroys guests implicitly. Idle repeated deployment does not re-register or
-restart unchanged units. Transient maintenance markers do not count as deployed
-configuration changes. Offline recorded-I/O tests cannot certify real systemd,
-boot authentication or package idempotency; those are rollout acceptance checks.
+Deploy/update validate the selected registration snapshot before any drain marker,
+credential replacement or installation changes. Instance URL, repository, UUID
+and token shape must match the current entry. That same snapshot supplies the
+installed receipt/configuration; transient authentication is cleared on every
+exit. The real workstation repository tasks preserve an existing private parent,
+so cloning beneath the runner home does not relax its required `0700` mode.
+
+Recreate uses the owned installed units/configuration and resident node key;
+registration, provisioning token, allocation and guest credentials are not restart
+prerequisites. Removal requires installation ownership, not provisioning files or
+valid API authentication. It stops both owned units and removes only recorded
+units/runner configuration. Private authentication, profile/launcher, tooling,
+accounts, cached inputs, evidence and retained guests remain.
+
+An atomic, root-owned `/etc/forgejo-runner/draining` directory holds a unique
+operation token across mutations, synchronous handlers and completion. Competing
+maintenance fails without clearing it. Acceptance and explicit retirement both
+check the marker while holding `controller.lock`; an already active operation
+makes acquisition fail immediately, releasing only the failed acquisition's own
+marker. Successful lifecycle completion, including removal, releases only its
+matching token, without leaving a stale maintenance lock after removal. Retire
+owned guests before removing the runner/agent; later recovery still needs the
+retained private inputs and dedicated SSH authentication. Failed or interrupted
+maintenance retains the marker and blocks new acceptance/recovery.
+
+After confirming the original Ansible operation has ended, inspect the root-owned
+`draining/owner.json` receipt (an ownership nonce, not runner authentication). Use
+its exact token with the role's module and approved private inventory:
+
+```text
+ansible -i <controller-only-inventory> molecule-controller --become \
+  -M ansible/roles/native_services/library -m forgejo_runner_maintenance \
+  -a 'state=absent token=<exact-owner-token>'
+```
+
+Wrong tokens, foreign ownership and links are rejected. A missing/corrupt receipt
+requires inspection of the interrupted operation; it is never treated as an
+expired lock that can be taken over automatically. Do not remove another
+operation's marker or terminate active work to obtain a lock. Then retry the
+normal lifecycle command; it acquires a new operation token. No registration,
+guest retirement or resource destruction happens implicitly.
+
+Idle repeated deployment does not re-register or restart unchanged units.
+Transient maintenance ownership does not count as deployed configuration changes.
+Recorded-I/O tests do not certify real systemd, boot authentication or package
+idempotency; those remain rollout acceptance checks. The concurrency regressions
+use real local file locks/atomic directories, and the checkout regression uses
+real Git/Ansible repository tasks across installation and update.
 See [the Molecule guide](../../molecule/README.md#dedicated-forgejo-controller-rollout-preparation-not-deployed)
 for allocation, credentials, operator use and scoped retirement.

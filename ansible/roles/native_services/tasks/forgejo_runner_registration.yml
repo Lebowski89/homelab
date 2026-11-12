@@ -1,0 +1,33 @@
+---
+# Keep the validated snapshot through installation; never reread an unchecked source.
+- name: Forgejo Runner | Read the selected private registration before mutation
+  delegate_to: "{{ 'localhost' if native_services_forgejo_runner_private_source_dir | length > 0 else inventory_hostname }}"
+  become: '{{ native_services_forgejo_runner_private_source_dir | length == 0 }}'
+  no_log: true
+  diff: false
+  ansible.builtin.slurp:
+    src: >-
+      {{ native_services_forgejo_runner_private_source_dir ~ '/registration.json'
+         if native_services_forgejo_runner_private_source_dir | length > 0 else
+         '/etc/forgejo-runner/private/registration.json' }}
+  register: native_services_runner_registration_read
+
+- name: Forgejo Runner | Parse the selected registration snapshot privately
+  no_log: true
+  diff: false
+  ansible.builtin.set_fact:
+    native_services_runner_registration: '{{ native_services_runner_registration_read.content | b64decode | from_json }}'
+
+- name: Forgejo Runner | Require matching registration identity and repository before mutation
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - native_services_runner_registration is mapping
+      - native_services_runner_registration.url == native_services_config.server_url
+      - native_services_runner_registration.repository == native_services_config.repository
+      - native_services_runner_registration.uuid is string
+      - native_services_runner_registration.uuid is match('^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$')
+      - native_services_runner_registration.token is string
+      - native_services_runner_registration.token is match('^[a-f0-9]{40}$')
+    fail_msg: The selected registration receipt is invalid or belongs to another instance/repository; installation is unchanged.

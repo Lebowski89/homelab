@@ -41,5 +41,5 @@ skip-check:
   - "CKV2_ANSIBLE_3:molecule/protected_network/exercise[.]yml$"
   - "CKV2_ANSIBLE_3:molecule/rocky_node_exporter/cleanup[.]yml$"
   - "CKV2_ANSIBLE_3:molecule/application_lifecycle/cleanup[.]yml$"
-  # One fatal registration block: always clears transient authentication only.
-  - "CKV2_ANSIBLE_3:ansible/roles/native_services/tasks/forgejo_runner[.]yml$"
+  # Fatal lifecycle block; always clears transient authentication, retaining failed maintenance.
+  - "CKV2_ANSIBLE_3:ansible/roles/native_services/tasks/main[.]yml$"

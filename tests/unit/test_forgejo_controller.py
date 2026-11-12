@@ -2,6 +2,9 @@
 
 import importlib.util
 import json
+import re
+import subprocess
+from itertools import product
 from pathlib import Path
 
 import pytest
@@ -64,7 +67,6 @@ def test_workflow_is_manual_and_passes_fixed_choices_as_arguments():
     assert set(inputs["os"]["options"]) == {"all", *json.loads((ROOT / "molecule/vm/images.json").read_text())}
     assert workflow["concurrency"]["cancel-in-progress"] is False
     job = workflow["jobs"]["acceptance"]
-    assert all(part in job["if"] for part in ("homelab-ci/homelab-ci", "refs/heads/main", "workflow_dispatch"))
     step = job["steps"][0]
     assert "${{" not in step["run"] and '--suite "$VM_SUITE" --os "$VM_OS"' in step["run"]
     assert "always()" not in (ROOT / ".forgejo/workflows/molecule.yml").read_text()
@@ -73,7 +75,35 @@ def test_workflow_is_manual_and_passes_fixed_choices_as_arguments():
 @pytest.mark.integration
 def test_exact_main_checkout_is_retained_and_recovery_rejects_modified_source(tmp_path, monkeypatch):
     settings = config(tmp_path)
-    monkeypatch.setattr(CONTROLLER, "SOURCE", str(ROOT))
+    source = tmp_path / "origin"
+    source.mkdir()
+    environment = CONTROLLER.public_environment(settings)
+    subprocess.run(["git", "init", "--quiet", "--initial-branch=main", str(source)], env=environment, check=True)
+    for name in ["scripts/testing/suite.py", "scripts/testing/vm.py", "ansible/requirements.txt"]:
+        path = source / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("# Synthetic source; never execute infrastructure operations.\n")
+    subprocess.run(["git", "-C", str(source), "add", "."], env=environment, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--quiet",
+            "-m",
+            "Synthetic main",
+        ],
+        env=environment,
+        check=True,
+    )
+    monkeypatch.setattr(CONTROLLER, "SOURCE", str(source))
     checkout = tmp_path / "checkouts" / ("a" * 32)
     checkout.parent.mkdir()
     sha = CONTROLLER.checkout_main(checkout, CONTROLLER.public_environment(settings))
@@ -93,3 +123,35 @@ def test_maintenance_marker_prevents_a_job_before_any_subprocess_or_secret_read(
     monkeypatch.setattr(CONTROLLER, "DRAIN", drain)
     with pytest.raises(ValueError, match="draining"):
         CONTROLLER.run(config(tmp_path), "rocky_node_exporter", "rocky102")
+
+
+def workflow_allows(condition, context):
+    """Evaluate only this workflow's three equality fields and AND/OR operators."""
+    pattern = r"forgejo[.](repository|ref|event_name)\s*==\s*'([^']*)'"
+    boolean = re.sub(pattern, lambda match: str(context[match[1]] == match[2]), condition)
+    assert re.fullmatch(r"\s*(?:True|False)(?:\s*(?:&&|\|\|)\s*(?:True|False))*\s*", boolean)
+    return any(all(term.strip() == "True" for term in group.split("&&")) for group in boolean.split("||"))
+
+
+def test_workflow_restricts_repository_ref_and_event_and_detects_permissive_guard():
+    workflow = yaml.safe_load((ROOT / ".forgejo/workflows/molecule.yml").read_text())
+    condition = workflow["jobs"]["acceptance"]["if"]
+    rejected_by_weakened_guard = False
+    for repo, ref, event in product(
+        ["homelab-ci/homelab-ci", "another/repository"],
+        ["refs/heads/main", "refs/heads/unreviewed"],
+        ["workflow_dispatch", "pull_request"],
+    ):
+        context = dict(repository=repo, ref=ref, event_name=event)
+        expected = repo == "homelab-ci/homelab-ci" and ref == "refs/heads/main" and event == "workflow_dispatch"
+        assert workflow_allows(condition, context) is expected
+        rejected_by_weakened_guard |= workflow_allows(condition.replace("&&", "||", 1), context) != expected
+    assert rejected_by_weakened_guard
+
+
+def test_retirement_cannot_enter_during_owned_or_interrupted_maintenance(tmp_path, monkeypatch):
+    drain = tmp_path / "draining"
+    drain.mkdir()
+    monkeypatch.setattr(CONTROLLER, "DRAIN", drain)
+    with pytest.raises(ValueError, match="draining"):
+        CONTROLLER.recover(config(tmp_path), "a" * 32)
