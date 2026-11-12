@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/10/24 |
+| Readme update        | 2026/11/13 |
 
 
 
@@ -30,125 +30,126 @@
 | [workstation_user](defaults/main.yml#L4)   | str | `{{ ansible_user ¦ default((ansible_facts ¦ default({})).get('user_id', '')) }}` |    
 | [workstation_timezone](defaults/main.yml#L5)   | str | `Australia/Melbourne` |    
 | [workstation_tools_enabled](defaults/main.yml#L8)   | bool | `False` |    
-| [workstation_ansible_enabled](defaults/main.yml#L9)   | bool | `True` |    
-| [workstation_ansible_collections_enabled](defaults/main.yml#L10)   | bool | `True` |    
-| [workstation_skynet_enabled](defaults/main.yml#L11)   | bool | `True` |    
-| [workstation_opentofu_enabled](defaults/main.yml#L12)   | bool | `False` |    
-| [workstation_repository_clone](defaults/main.yml#L13)   | bool | `False` |    
-| [workstation_repository_url](defaults/main.yml#L14)   | str | `https://github.com/Lebowski89/homelab.git` |    
-| [workstation_repository_version](defaults/main.yml#L15)   | str | `main` |    
-| [workstation_repository_path](defaults/main.yml#L16)   | str | `{{ workstation_user_home }}/homelab` |    
-| [workstation_ansible_path](defaults/main.yml#L17)   | str | `{{ workstation_repository_path }}/ansible` |    
-| [workstation_ansible_tools_path](defaults/main.yml#L18)   | str | `{{ workstation_user_home }}/.local/share/homelab` |    
-| [workstation_ansible_venv_path](defaults/main.yml#L19)   | str | `{{ workstation_ansible_tools_path }}/ansible-venv` |    
-| [workstation_ansible_collections_path](defaults/main.yml#L20)   | str | `{{ workstation_ansible_tools_path }}/collections` |    
-| [workstation_secrets_path](defaults/main.yml#L21)   | str | `{{ workstation_user_home }}/.config/homelab` |    
-| [workstation_become_pass_file](defaults/main.yml#L22)   | str | `{{ workstation_secrets_path }}/.ansible_become_pass` |    
-| [workstation_vault_pass_file](defaults/main.yml#L23)   | str | `{{ workstation_secrets_path }}/.ansible_vault_pass` |    
-| [workstation_skynet_install_path](defaults/main.yml#L24)   | str | `{{ workstation_user_home }}/.local/bin/skynet` |    
-| [workstation_skynet_owner](defaults/main.yml#L25)   | str | `{{ workstation_user }}` |    
-| [workstation_skynet_group](defaults/main.yml#L26)   | str | `{{ workstation_user_gid }}` |    
-| [workstation_skynet_doctor_ping_target](defaults/main.yml#L27)   | str | `tags_skynet` |    
-| [workstation_ansible_log_path](defaults/main.yml#L28)   | str | `{{ workstation_user_home }}/.local/state/homelab/ansible.log` |    
-| [workstation_package_profiles](defaults/main.yml#L31)   | dict | `{}` |    
-| [workstation_package_profiles.**debian**](defaults/main.yml#L32)   | dict | `{}` |    
-| [workstation_package_profiles.debian.**baseline**](defaults/main.yml#L33)   | list | `[]` |    
-| [workstation_package_profiles.debian.baseline.**0**](defaults/main.yml#L33)   | str | `ca-certificates` |    
-| [workstation_package_profiles.debian.baseline.**1**](defaults/main.yml#L33)   | str | `curl` |    
-| [workstation_package_profiles.debian.baseline.**2**](defaults/main.yml#L33)   | str | `gnupg` |    
-| [workstation_package_profiles.debian.baseline.**3**](defaults/main.yml#L33)   | str | `jq` |    
-| [workstation_package_profiles.debian.baseline.**4**](defaults/main.yml#L33)   | str | `openssh-client` |    
-| [workstation_package_profiles.debian.baseline.**5**](defaults/main.yml#L33)   | str | `ripgrep` |    
-| [workstation_package_profiles.debian.baseline.**6**](defaults/main.yml#L33)   | str | `rsync` |    
-| [workstation_package_profiles.debian.baseline.**7**](defaults/main.yml#L33)   | str | `wget` |    
-| [workstation_package_profiles.debian.**development**](defaults/main.yml#L34)   | list | `[]` |    
-| [workstation_package_profiles.debian.development.**0**](defaults/main.yml#L34)   | str | `git` |    
-| [workstation_package_profiles.debian.development.**1**](defaults/main.yml#L34)   | str | `python3` |    
-| [workstation_package_profiles.debian.development.**2**](defaults/main.yml#L34)   | str | `python3-pip` |    
-| [workstation_package_profiles.debian.development.**3**](defaults/main.yml#L34)   | str | `python3-venv` |    
-| [workstation_package_profiles.debian.**desktop**](defaults/main.yml#L35)   | list | `[]` |    
-| [workstation_package_profiles.debian.desktop.**0**](defaults/main.yml#L35)   | str | `xdg-user-dirs` |    
-| [workstation_package_profiles.debian.**ansible**](defaults/main.yml#L36)   | list | `[]` |    
-| [workstation_package_profiles.debian.ansible.**0**](defaults/main.yml#L36)   | str | `python3` |    
-| [workstation_package_profiles.debian.ansible.**1**](defaults/main.yml#L36)   | str | `python3-venv` |    
-| [workstation_package_profiles.debian.ansible.**2**](defaults/main.yml#L36)   | str | `python3-pip` |    
-| [workstation_package_profiles.debian.ansible.**3**](defaults/main.yml#L36)   | str | `python3-dev` |    
-| [workstation_package_profiles.debian.ansible.**4**](defaults/main.yml#L36)   | str | `build-essential` |    
-| [workstation_package_profiles.debian.**signing**](defaults/main.yml#L37)   | list | `[]` |    
-| [workstation_package_profiles.debian.signing.**0**](defaults/main.yml#L37)   | str | `ca-certificates` |    
-| [workstation_package_profiles.debian.signing.**1**](defaults/main.yml#L37)   | str | `gnupg` |    
-| [workstation_package_profiles.debian.signing.**2**](defaults/main.yml#L37)   | str | `python3-apt` |    
-| [workstation_package_profiles.debian.signing.**3**](defaults/main.yml#L37)   | str | `python3-debian` |    
-| [workstation_package_profiles.debian.**opentofu**](defaults/main.yml#L38)   | list | `[]` |    
-| [workstation_package_profiles.debian.opentofu.**0**](defaults/main.yml#L38)   | str | `tofu=1.11.*` |    
-| [workstation_package_profiles.**fedora**](defaults/main.yml#L39)   | dict | `{}` |    
-| [workstation_package_profiles.fedora.**baseline**](defaults/main.yml#L40)   | list | `[]` |    
-| [workstation_package_profiles.fedora.baseline.**0**](defaults/main.yml#L40)   | str | `ca-certificates` |    
-| [workstation_package_profiles.fedora.baseline.**1**](defaults/main.yml#L40)   | str | `curl` |    
-| [workstation_package_profiles.fedora.baseline.**2**](defaults/main.yml#L40)   | str | `gnupg2` |    
-| [workstation_package_profiles.fedora.baseline.**3**](defaults/main.yml#L40)   | str | `jq` |    
-| [workstation_package_profiles.fedora.baseline.**4**](defaults/main.yml#L40)   | str | `openssh-clients` |    
-| [workstation_package_profiles.fedora.baseline.**5**](defaults/main.yml#L40)   | str | `ripgrep` |    
-| [workstation_package_profiles.fedora.baseline.**6**](defaults/main.yml#L40)   | str | `rsync` |    
-| [workstation_package_profiles.fedora.baseline.**7**](defaults/main.yml#L40)   | str | `wget` |    
-| [workstation_package_profiles.fedora.**development**](defaults/main.yml#L41)   | list | `[]` |    
-| [workstation_package_profiles.fedora.development.**0**](defaults/main.yml#L41)   | str | `git` |    
-| [workstation_package_profiles.fedora.development.**1**](defaults/main.yml#L41)   | str | `python3` |    
-| [workstation_package_profiles.fedora.development.**2**](defaults/main.yml#L41)   | str | `python3-pip` |    
-| [workstation_package_profiles.fedora.**desktop**](defaults/main.yml#L42)   | list | `[]` |    
-| [workstation_package_profiles.fedora.desktop.**0**](defaults/main.yml#L42)   | str | `xdg-user-dirs` |    
-| [workstation_package_profiles.fedora.**ansible**](defaults/main.yml#L43)   | list | `[]` |    
-| [workstation_package_profiles.fedora.ansible.**0**](defaults/main.yml#L43)   | str | `python3` |    
-| [workstation_package_profiles.fedora.ansible.**1**](defaults/main.yml#L43)   | str | `python3-pip` |    
-| [workstation_package_profiles.fedora.ansible.**2**](defaults/main.yml#L43)   | str | `python3-devel` |    
-| [workstation_package_profiles.fedora.ansible.**3**](defaults/main.yml#L43)   | str | `gcc` |    
-| [workstation_package_profiles.fedora.ansible.**4**](defaults/main.yml#L43)   | str | `make` |    
-| [workstation_package_profiles.fedora.**signing**](defaults/main.yml#L44)   | list | `[]` |    
-| [workstation_package_profiles.fedora.signing.**0**](defaults/main.yml#L44)   | str | `ca-certificates` |    
-| [workstation_package_profiles.fedora.signing.**1**](defaults/main.yml#L44)   | str | `gnupg2` |    
-| [workstation_package_profiles.fedora.**opentofu**](defaults/main.yml#L45)   | list | `[]` |    
-| [workstation_package_profiles.fedora.opentofu.**0**](defaults/main.yml#L45)   | str | `tofu-1.11.*` |    
-| [workstation_packages](defaults/main.yml#L47)   | str | `{{ workstation_package_profiles[workstation_platform].baseline }}` |    
-| [workstation_dev_packages](defaults/main.yml#L48)   | str | `{{ workstation_package_profiles[workstation_platform].development }}` |    
-| [workstation_desktop_packages](defaults/main.yml#L49)   | str | `{{ workstation_package_profiles[workstation_platform].desktop }}` |    
-| [workstation_ansible_prereq_packages](defaults/main.yml#L50)   | str | `{{ workstation_package_profiles[workstation_platform].ansible }}` |    
-| [workstation_apt_update_cache](defaults/main.yml#L52)   | bool | `True` |    
-| [workstation_dnf_update_cache](defaults/main.yml#L53)   | bool | `True` |    
-| [workstation_vscode_enabled](defaults/main.yml#L55)   | bool | `True` |    
-| [workstation_vscode_key_url](defaults/main.yml#L56)   | str | `https://packages.microsoft.com/keys/microsoft.asc` |    
-| [workstation_vscode_key_path](defaults/main.yml#L57)   | str | `/usr/share/keyrings/microsoft-vscode.asc` |    
-| [workstation_vscode_repository_path](defaults/main.yml#L58)   | str | `/etc/apt/sources.list.d/vscode.sources` |    
-| [workstation_vscode_extensions](defaults/main.yml#L59)   | list | `[]` |    
-| [workstation_vscode_extensions.**0**](defaults/main.yml#L60)   | str | `redhat.ansible` |    
-| [workstation_vscode_extensions.**1**](defaults/main.yml#L61)   | str | `ms-python.python` |    
-| [workstation_vscode_extensions.**2**](defaults/main.yml#L62)   | str | `ms-vscode-remote.remote-ssh` |    
-| [workstation_git_manage_config](defaults/main.yml#L64)   | bool | `False` |    
-| [workstation_git_user_name](defaults/main.yml#L65)   | str |  |    
-| [workstation_git_user_email](defaults/main.yml#L66)   | str |  |    
-| [workstation_shell_directories](defaults/main.yml#L68)   | list | `[]` |    
-| [workstation_shell_directories.**0**](defaults/main.yml#L69)   | str | `{{ workstation_user_home }}/.local/bin` |    
-| [workstation_xdg_directories](defaults/main.yml#L71)   | list | `[]` |    
-| [workstation_xdg_directories.**0**](defaults/main.yml#L72)   | str | `{{ workstation_user_home }}/Desktop` |    
-| [workstation_xdg_directories.**1**](defaults/main.yml#L73)   | str | `{{ workstation_user_home }}/Documents` |    
-| [workstation_xdg_directories.**2**](defaults/main.yml#L74)   | str | `{{ workstation_user_home }}/Downloads` |    
-| [workstation_xdg_directories.**3**](defaults/main.yml#L75)   | str | `{{ workstation_user_home }}/Music` |    
-| [workstation_xdg_directories.**4**](defaults/main.yml#L76)   | str | `{{ workstation_user_home }}/Pictures` |    
-| [workstation_xdg_directories.**5**](defaults/main.yml#L77)   | str | `{{ workstation_user_home }}/Public` |    
-| [workstation_xdg_directories.**6**](defaults/main.yml#L78)   | str | `{{ workstation_user_home }}/Templates` |    
-| [workstation_xdg_directories.**7**](defaults/main.yml#L79)   | str | `{{ workstation_user_home }}/Videos` |    
-| [workstation_opentofu_prereq_packages](defaults/main.yml#L81)   | str | `{{ workstation_package_profiles[workstation_platform].signing }}` |    
-| [workstation_opentofu_source_url](defaults/main.yml#L83)   | str | `https://packages.opentofu.org/opentofu/tofu/any/` |    
-| [workstation_opentofu_source_suite](defaults/main.yml#L84)   | str | `any` |    
-| [workstation_opentofu_keyring_dir](defaults/main.yml#L85)   | str | `/etc/apt/keyrings` |    
-| [workstation_opentofu_keyring_file](defaults/main.yml#L86)   | str | `/etc/apt/keyrings/opentofu.gpg` |    
-| [workstation_opentofu_keyring_file_repo](defaults/main.yml#L87)   | str | `/etc/apt/keyrings/opentofu-repo.gpg` |    
-| [workstation_opentofu_repo_filename](defaults/main.yml#L88)   | str | `opentofu` |    
-| [workstation_opentofu_packages](defaults/main.yml#L90)   | str | `{{ workstation_package_profiles[workstation_platform].opentofu }}` |    
-| [workstation_opentofu_rpm_baseurl](defaults/main.yml#L91)   | str | `https://packages.opentofu.org/opentofu/tofu/rpm_any/rpm_any/$basearch` |    
-| [workstation_opentofu_signing_keys](defaults/main.yml#L92)   | list | `[]` |    
-| [workstation_opentofu_signing_keys.**0**](defaults/main.yml#L93)   | str | `https://get.opentofu.org/opentofu.gpg` |    
-| [workstation_opentofu_signing_keys.**1**](defaults/main.yml#L94)   | str | `https://packages.opentofu.org/opentofu/tofu/gpgkey` |    
-| [workstation_vscode_rpm_baseurl](defaults/main.yml#L95)   | str | `https://packages.microsoft.com/yumrepos/vscode` |    
+| [workstation_tools_headless](defaults/main.yml#L10)   | bool | `False` |    
+| [workstation_ansible_enabled](defaults/main.yml#L11)   | bool | `True` |    
+| [workstation_ansible_collections_enabled](defaults/main.yml#L12)   | bool | `True` |    
+| [workstation_skynet_enabled](defaults/main.yml#L13)   | bool | `True` |    
+| [workstation_opentofu_enabled](defaults/main.yml#L14)   | bool | `False` |    
+| [workstation_repository_clone](defaults/main.yml#L15)   | bool | `False` |    
+| [workstation_repository_url](defaults/main.yml#L16)   | str | `https://github.com/Lebowski89/homelab.git` |    
+| [workstation_repository_version](defaults/main.yml#L17)   | str | `main` |    
+| [workstation_repository_path](defaults/main.yml#L18)   | str | `{{ workstation_user_home }}/homelab` |    
+| [workstation_ansible_path](defaults/main.yml#L19)   | str | `{{ workstation_repository_path }}/ansible` |    
+| [workstation_ansible_tools_path](defaults/main.yml#L20)   | str | `{{ workstation_user_home }}/.local/share/homelab` |    
+| [workstation_ansible_venv_path](defaults/main.yml#L21)   | str | `{{ workstation_ansible_tools_path }}/ansible-venv` |    
+| [workstation_ansible_collections_path](defaults/main.yml#L22)   | str | `{{ workstation_ansible_tools_path }}/collections` |    
+| [workstation_secrets_path](defaults/main.yml#L23)   | str | `{{ workstation_user_home }}/.config/homelab` |    
+| [workstation_become_pass_file](defaults/main.yml#L24)   | str | `{{ workstation_secrets_path }}/.ansible_become_pass` |    
+| [workstation_vault_pass_file](defaults/main.yml#L25)   | str | `{{ workstation_secrets_path }}/.ansible_vault_pass` |    
+| [workstation_skynet_install_path](defaults/main.yml#L26)   | str | `{{ workstation_user_home }}/.local/bin/skynet` |    
+| [workstation_skynet_owner](defaults/main.yml#L27)   | str | `{{ workstation_user }}` |    
+| [workstation_skynet_group](defaults/main.yml#L28)   | str | `{{ workstation_user_gid }}` |    
+| [workstation_skynet_doctor_ping_target](defaults/main.yml#L29)   | str | `tags_skynet` |    
+| [workstation_ansible_log_path](defaults/main.yml#L30)   | str | `{{ workstation_user_home }}/.local/state/homelab/ansible.log` |    
+| [workstation_package_profiles](defaults/main.yml#L33)   | dict | `{}` |    
+| [workstation_package_profiles.**debian**](defaults/main.yml#L34)   | dict | `{}` |    
+| [workstation_package_profiles.debian.**baseline**](defaults/main.yml#L35)   | list | `[]` |    
+| [workstation_package_profiles.debian.baseline.**0**](defaults/main.yml#L35)   | str | `ca-certificates` |    
+| [workstation_package_profiles.debian.baseline.**1**](defaults/main.yml#L35)   | str | `curl` |    
+| [workstation_package_profiles.debian.baseline.**2**](defaults/main.yml#L35)   | str | `gnupg` |    
+| [workstation_package_profiles.debian.baseline.**3**](defaults/main.yml#L35)   | str | `jq` |    
+| [workstation_package_profiles.debian.baseline.**4**](defaults/main.yml#L35)   | str | `openssh-client` |    
+| [workstation_package_profiles.debian.baseline.**5**](defaults/main.yml#L35)   | str | `ripgrep` |    
+| [workstation_package_profiles.debian.baseline.**6**](defaults/main.yml#L35)   | str | `rsync` |    
+| [workstation_package_profiles.debian.baseline.**7**](defaults/main.yml#L35)   | str | `wget` |    
+| [workstation_package_profiles.debian.**development**](defaults/main.yml#L36)   | list | `[]` |    
+| [workstation_package_profiles.debian.development.**0**](defaults/main.yml#L36)   | str | `git` |    
+| [workstation_package_profiles.debian.development.**1**](defaults/main.yml#L36)   | str | `python3` |    
+| [workstation_package_profiles.debian.development.**2**](defaults/main.yml#L36)   | str | `python3-pip` |    
+| [workstation_package_profiles.debian.development.**3**](defaults/main.yml#L36)   | str | `python3-venv` |    
+| [workstation_package_profiles.debian.**desktop**](defaults/main.yml#L37)   | list | `[]` |    
+| [workstation_package_profiles.debian.desktop.**0**](defaults/main.yml#L37)   | str | `xdg-user-dirs` |    
+| [workstation_package_profiles.debian.**ansible**](defaults/main.yml#L38)   | list | `[]` |    
+| [workstation_package_profiles.debian.ansible.**0**](defaults/main.yml#L38)   | str | `python3` |    
+| [workstation_package_profiles.debian.ansible.**1**](defaults/main.yml#L38)   | str | `python3-venv` |    
+| [workstation_package_profiles.debian.ansible.**2**](defaults/main.yml#L38)   | str | `python3-pip` |    
+| [workstation_package_profiles.debian.ansible.**3**](defaults/main.yml#L38)   | str | `python3-dev` |    
+| [workstation_package_profiles.debian.ansible.**4**](defaults/main.yml#L38)   | str | `build-essential` |    
+| [workstation_package_profiles.debian.**signing**](defaults/main.yml#L39)   | list | `[]` |    
+| [workstation_package_profiles.debian.signing.**0**](defaults/main.yml#L39)   | str | `ca-certificates` |    
+| [workstation_package_profiles.debian.signing.**1**](defaults/main.yml#L39)   | str | `gnupg` |    
+| [workstation_package_profiles.debian.signing.**2**](defaults/main.yml#L39)   | str | `python3-apt` |    
+| [workstation_package_profiles.debian.signing.**3**](defaults/main.yml#L39)   | str | `python3-debian` |    
+| [workstation_package_profiles.debian.**opentofu**](defaults/main.yml#L40)   | list | `[]` |    
+| [workstation_package_profiles.debian.opentofu.**0**](defaults/main.yml#L40)   | str | `tofu=1.11.*` |    
+| [workstation_package_profiles.**fedora**](defaults/main.yml#L41)   | dict | `{}` |    
+| [workstation_package_profiles.fedora.**baseline**](defaults/main.yml#L42)   | list | `[]` |    
+| [workstation_package_profiles.fedora.baseline.**0**](defaults/main.yml#L42)   | str | `ca-certificates` |    
+| [workstation_package_profiles.fedora.baseline.**1**](defaults/main.yml#L42)   | str | `curl` |    
+| [workstation_package_profiles.fedora.baseline.**2**](defaults/main.yml#L42)   | str | `gnupg2` |    
+| [workstation_package_profiles.fedora.baseline.**3**](defaults/main.yml#L42)   | str | `jq` |    
+| [workstation_package_profiles.fedora.baseline.**4**](defaults/main.yml#L42)   | str | `openssh-clients` |    
+| [workstation_package_profiles.fedora.baseline.**5**](defaults/main.yml#L42)   | str | `ripgrep` |    
+| [workstation_package_profiles.fedora.baseline.**6**](defaults/main.yml#L42)   | str | `rsync` |    
+| [workstation_package_profiles.fedora.baseline.**7**](defaults/main.yml#L42)   | str | `wget` |    
+| [workstation_package_profiles.fedora.**development**](defaults/main.yml#L43)   | list | `[]` |    
+| [workstation_package_profiles.fedora.development.**0**](defaults/main.yml#L43)   | str | `git` |    
+| [workstation_package_profiles.fedora.development.**1**](defaults/main.yml#L43)   | str | `python3` |    
+| [workstation_package_profiles.fedora.development.**2**](defaults/main.yml#L43)   | str | `python3-pip` |    
+| [workstation_package_profiles.fedora.**desktop**](defaults/main.yml#L44)   | list | `[]` |    
+| [workstation_package_profiles.fedora.desktop.**0**](defaults/main.yml#L44)   | str | `xdg-user-dirs` |    
+| [workstation_package_profiles.fedora.**ansible**](defaults/main.yml#L45)   | list | `[]` |    
+| [workstation_package_profiles.fedora.ansible.**0**](defaults/main.yml#L45)   | str | `python3` |    
+| [workstation_package_profiles.fedora.ansible.**1**](defaults/main.yml#L45)   | str | `python3-pip` |    
+| [workstation_package_profiles.fedora.ansible.**2**](defaults/main.yml#L45)   | str | `python3-devel` |    
+| [workstation_package_profiles.fedora.ansible.**3**](defaults/main.yml#L45)   | str | `gcc` |    
+| [workstation_package_profiles.fedora.ansible.**4**](defaults/main.yml#L45)   | str | `make` |    
+| [workstation_package_profiles.fedora.**signing**](defaults/main.yml#L46)   | list | `[]` |    
+| [workstation_package_profiles.fedora.signing.**0**](defaults/main.yml#L46)   | str | `ca-certificates` |    
+| [workstation_package_profiles.fedora.signing.**1**](defaults/main.yml#L46)   | str | `gnupg2` |    
+| [workstation_package_profiles.fedora.**opentofu**](defaults/main.yml#L47)   | list | `[]` |    
+| [workstation_package_profiles.fedora.opentofu.**0**](defaults/main.yml#L47)   | str | `tofu-1.11.*` |    
+| [workstation_packages](defaults/main.yml#L49)   | str | `{{ workstation_package_profiles[workstation_platform].baseline }}` |    
+| [workstation_dev_packages](defaults/main.yml#L50)   | str | `{{ workstation_package_profiles[workstation_platform].development }}` |    
+| [workstation_desktop_packages](defaults/main.yml#L51)   | str | `{{ workstation_package_profiles[workstation_platform].desktop }}` |    
+| [workstation_ansible_prereq_packages](defaults/main.yml#L52)   | str | `{{ workstation_package_profiles[workstation_platform].ansible }}` |    
+| [workstation_apt_update_cache](defaults/main.yml#L54)   | bool | `True` |    
+| [workstation_dnf_update_cache](defaults/main.yml#L55)   | bool | `True` |    
+| [workstation_vscode_enabled](defaults/main.yml#L57)   | bool | `True` |    
+| [workstation_vscode_key_url](defaults/main.yml#L58)   | str | `https://packages.microsoft.com/keys/microsoft.asc` |    
+| [workstation_vscode_key_path](defaults/main.yml#L59)   | str | `/usr/share/keyrings/microsoft-vscode.asc` |    
+| [workstation_vscode_repository_path](defaults/main.yml#L60)   | str | `/etc/apt/sources.list.d/vscode.sources` |    
+| [workstation_vscode_extensions](defaults/main.yml#L61)   | list | `[]` |    
+| [workstation_vscode_extensions.**0**](defaults/main.yml#L62)   | str | `redhat.ansible` |    
+| [workstation_vscode_extensions.**1**](defaults/main.yml#L63)   | str | `ms-python.python` |    
+| [workstation_vscode_extensions.**2**](defaults/main.yml#L64)   | str | `ms-vscode-remote.remote-ssh` |    
+| [workstation_git_manage_config](defaults/main.yml#L66)   | bool | `False` |    
+| [workstation_git_user_name](defaults/main.yml#L67)   | str |  |    
+| [workstation_git_user_email](defaults/main.yml#L68)   | str |  |    
+| [workstation_shell_directories](defaults/main.yml#L70)   | list | `[]` |    
+| [workstation_shell_directories.**0**](defaults/main.yml#L71)   | str | `{{ workstation_user_home }}/.local/bin` |    
+| [workstation_xdg_directories](defaults/main.yml#L73)   | list | `[]` |    
+| [workstation_xdg_directories.**0**](defaults/main.yml#L74)   | str | `{{ workstation_user_home }}/Desktop` |    
+| [workstation_xdg_directories.**1**](defaults/main.yml#L75)   | str | `{{ workstation_user_home }}/Documents` |    
+| [workstation_xdg_directories.**2**](defaults/main.yml#L76)   | str | `{{ workstation_user_home }}/Downloads` |    
+| [workstation_xdg_directories.**3**](defaults/main.yml#L77)   | str | `{{ workstation_user_home }}/Music` |    
+| [workstation_xdg_directories.**4**](defaults/main.yml#L78)   | str | `{{ workstation_user_home }}/Pictures` |    
+| [workstation_xdg_directories.**5**](defaults/main.yml#L79)   | str | `{{ workstation_user_home }}/Public` |    
+| [workstation_xdg_directories.**6**](defaults/main.yml#L80)   | str | `{{ workstation_user_home }}/Templates` |    
+| [workstation_xdg_directories.**7**](defaults/main.yml#L81)   | str | `{{ workstation_user_home }}/Videos` |    
+| [workstation_opentofu_prereq_packages](defaults/main.yml#L83)   | str | `{{ workstation_package_profiles[workstation_platform].signing }}` |    
+| [workstation_opentofu_source_url](defaults/main.yml#L85)   | str | `https://packages.opentofu.org/opentofu/tofu/any/` |    
+| [workstation_opentofu_source_suite](defaults/main.yml#L86)   | str | `any` |    
+| [workstation_opentofu_keyring_dir](defaults/main.yml#L87)   | str | `/etc/apt/keyrings` |    
+| [workstation_opentofu_keyring_file](defaults/main.yml#L88)   | str | `/etc/apt/keyrings/opentofu.gpg` |    
+| [workstation_opentofu_keyring_file_repo](defaults/main.yml#L89)   | str | `/etc/apt/keyrings/opentofu-repo.gpg` |    
+| [workstation_opentofu_repo_filename](defaults/main.yml#L90)   | str | `opentofu` |    
+| [workstation_opentofu_packages](defaults/main.yml#L92)   | str | `{{ workstation_package_profiles[workstation_platform].opentofu }}` |    
+| [workstation_opentofu_rpm_baseurl](defaults/main.yml#L93)   | str | `https://packages.opentofu.org/opentofu/tofu/rpm_any/rpm_any/$basearch` |    
+| [workstation_opentofu_signing_keys](defaults/main.yml#L94)   | list | `[]` |    
+| [workstation_opentofu_signing_keys.**0**](defaults/main.yml#L95)   | str | `https://get.opentofu.org/opentofu.gpg` |    
+| [workstation_opentofu_signing_keys.**1**](defaults/main.yml#L96)   | str | `https://packages.opentofu.org/opentofu/tofu/gpgkey` |    
+| [workstation_vscode_rpm_baseurl](defaults/main.yml#L97)   | str | `https://packages.microsoft.com/yumrepos/vscode` |    
 
 
 
@@ -216,6 +217,7 @@
 
 | Name | Module | Has Conditions | Tags |
 | ---- | ------ | -------------- | -----|
+| Workstation ¦ Keep headless automation separate from the desktop entry point | ansible.builtin.assert | False |  |
 | Workstation ¦ Set up password files only when explicitly selected | ansible.builtin.include_tasks | True |  |
 | Workstation ¦ Configure automation tooling | ansible.builtin.include_tasks | True |  |
 | Workstation ¦ Validate configuration and resolve user | ansible.builtin.include_tasks | False |  |
@@ -342,6 +344,8 @@
 | ---- | ------ | -------------- |
 | Workstation Repository ¦ Inspect checkout destination | ansible.builtin.stat | False |
 | Workstation Repository ¦ Require existing checkout or explicit clone opt-in | ansible.builtin.assert | False |
+| Workstation Repository ¦ Inspect the parent before creating an optional clone | ansible.builtin.stat | True |
+| Workstation Repository ¦ Reject linked or non-directory clone parents | ansible.builtin.assert | True |
 | Workstation Repository ¦ Create parent for new optional clone | ansible.builtin.file | True |
 | Workstation Repository ¦ Clone only into an absent destination | ansible.builtin.git | True |
 | Workstation Repository ¦ Check existing repository interface without changing Git state | ansible.builtin.stat | True |

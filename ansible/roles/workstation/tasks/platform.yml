@@ -13,12 +13,16 @@
         (ansible_facts.os_family | default('') == 'Debian' and
          ansible_facts.pkg_mgr | default('') == 'apt') or
         (ansible_facts.os_family | default('') == 'RedHat' and
-         ansible_facts.distribution | default('') == 'Fedora' and
+         (ansible_facts.distribution | default('') == 'Fedora' or
+          (workstation_tools_headless | default(false) is sameas true and
+           ansible_facts.distribution | default('') == 'Rocky' and
+           ansible_facts.distribution_major_version | default('') == '10')) and
          ansible_facts.pkg_mgr | default('') in ['dnf', 'dnf5'])
       - ansible_facts.service_mgr | default('') == 'systemd'
     fail_msg: >-
       Workstation supports Debian/Ubuntu/LMDE with APT and conventional Fedora
-      Desktop/KDE with DNF and systemd. Atomic/image-based hosts (including
+      Desktop/KDE with DNF and systemd. Rocky 10 supports only the explicitly
+      selected headless automation-tools entry point. Atomic/image-based hosts (including
       Bazzite, Silverblue and Kinoite) and other Fedora derivatives are unsupported;
       no host packages have been installed.
 

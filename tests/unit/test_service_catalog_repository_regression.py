@@ -50,7 +50,11 @@ def catalog_items(filters, services, manager, groups=None):
         for cfg in [service, *service.get("targets", {}).values()]:
             if "hosts" in cfg.get("deploy", {}):
                 cfg["deploy"]["hosts"] = render_structure(cfg["deploy"]["hosts"], variables)
-    inventory = {"all": [manager, "mgt", "unraid", "plex", "blacktop", "docker-a", "docker-b"], **NATIVE_GROUPS, **(groups or {})}
+    inventory = {
+        "all": [manager, "mgt", "unraid", "plex", "blacktop", "molecule-controller", "docker-a", "docker-b"],
+        **NATIVE_GROUPS,
+        **(groups or {}),
+    }
     return filters.service_catalog_effective(source, manager, inventory)
 
 

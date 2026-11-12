@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/11/10 |
+| Readme update        | 2026/11/13 |
 
 
 
@@ -43,6 +43,13 @@
 | [alloy_native_rpm_baseurl](defaults/alloy.yml#L20)   | str | `https://rpm.grafana.com` |    
 | [alloy_native_rpm_key_url](defaults/alloy.yml#L21)   | str | `{{ alloy_native_rpm_baseurl }}/gpg.key` |    
 | [alloy_native_rpm_key_fingerprint](defaults/alloy.yml#L22)   | str | `B53AE77BADB630A683046005963FA27710458545` |    
+
+#### File: defaults/forgejo_runner.yml
+
+| Var          | Type         | Value       |
+|--------------|--------------|-------------|
+| [native_services_forgejo_runner_controller](defaults/forgejo_runner.yml#L4)   | bool | `False` |    
+| [native_services_forgejo_runner_private_source_dir](defaults/forgejo_runner.yml#L5)   | str |  |    
 
 #### File: defaults/keepalived.yml
 
@@ -163,6 +170,80 @@
 | Native DNS ¦ Validate supported platform before changes | ansible.builtin.assert | False |
 | Native DNS ¦ Validate RPM Technitium runtime availability | ansible.builtin.assert | True |
 
+#### File: tasks/forgejo_runner.yml
+
+| Name | Module | Has Conditions | Tags |
+| ---- | ------ | -------------- | -----|
+| Forgejo Runner ¦ Create dedicated service group | ansible.builtin.group | False |  |
+| Forgejo Runner ¦ Create unprivileged persistent automation account | ansible.builtin.user | False |  |
+| Forgejo Runner ¦ Prepare private persistent controller directories | ansible.builtin.file | False |  |
+| Forgejo Runner ¦ Prepare private persistent credentials directory | ansible.builtin.file | False |  |
+| Forgejo Runner ¦ Install headless automation through the workstation tooling entry point | ansible.builtin.include_role | False |  |
+| Forgejo Runner ¦ Install signature verification prerequisites | ansible.builtin.dnf | False |  |
+| Forgejo Runner ¦ Prepare root-owned persistent release verification directory | ansible.builtin.file | False |  |
+| Forgejo Runner ¦ Install the pinned upstream public release key | ansible.builtin.copy | False |  |
+| Forgejo Runner ¦ Import only the repository-pinned release key into an isolated keyring | ansible.builtin.command | True |  |
+| Forgejo Runner ¦ Download pinned binary and detached signature over verified HTTPS | ansible.builtin.get_url | True |  |
+| Forgejo Runner ¦ Verify the upstream signature before installing executable bytes | ansible.builtin.command | True |  |
+| Forgejo Runner ¦ Install verified binary | ansible.builtin.copy | True |  |
+| Forgejo Runner ¦ Verify the installed release as the unprivileged account | ansible.builtin.command | True |  |
+| Forgejo Runner ¦ Provision only explicitly named private controller files | ansible.builtin.copy | True |  |
+| Forgejo Runner ¦ Install separately verified node SSH identities | ansible.builtin.copy | True |  |
+| Forgejo Runner ¦ Install the controller launcher without provisioning resources | ansible.builtin.copy | False |  |
+| Forgejo Runner ¦ Install persistent non-secret controller profile | ansible.builtin.template | False |  |
+| Forgejo Runner ¦ Install provider cache configuration outside Git | ansible.builtin.copy | False |  |
+| Forgejo Runner ¦ Install only the validated registration snapshot | ansible.builtin.copy | True |  |
+| Forgejo Runner ¦ Render the validated private runner connection | ansible.builtin.template | True |  |
+| Forgejo Runner ¦ Record adopted private runner configuration | ansible.builtin.include_tasks | True |  |
+| Forgejo Runner ¦ Install and record each owned systemd unit | ansible.builtin.include_tasks | True |  |
+| Forgejo Runner ¦ Start persistent boot authentication without a workstation agent | ansible.builtin.systemd_service | True |  |
+| Forgejo Runner ¦ Enable and start the repository runner | ansible.builtin.systemd_service | True |  |
+
+#### File: tasks/forgejo_runner_drain.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Forgejo Runner ¦ Ensure controller configuration directory | ansible.builtin.file | False | A token-owned directory excludes all other lifecycle operations and new jobs. |
+| Forgejo Runner ¦ Exclusively own maintenance until handlers and lifecycle complete | forgejo_runner_maintenance | False |  |
+| Forgejo Runner ¦ Stop the owned authentication agent during removal | ansible.builtin.systemd_service | True |  |
+
+#### File: tasks/forgejo_runner_registration.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Forgejo Runner ¦ Read the selected private registration before mutation | ansible.builtin.slurp | False | Keep the validated snapshot through installation; never reread an unchecked source. |
+| Forgejo Runner ¦ Parse the selected registration snapshot privately | ansible.builtin.set_fact | False |  |
+| Forgejo Runner ¦ Require matching registration identity and repository before mutation | ansible.builtin.assert | False |  |
+
+#### File: tasks/forgejo_runner_unit.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Forgejo Runner ¦ Install selected service unit | ansible.builtin.template | False |
+| Forgejo Runner ¦ Record the successfully installed unit immediately | ansible.builtin.include_tasks | False |
+
+#### File: tasks/forgejo_runner_validate.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Forgejo Runner ¦ Require the dedicated Rocky controller VM | ansible.builtin.assert | False |  |
+| Forgejo Runner ¦ Inspect existing account without creating it | ansible.builtin.getent | False |  |
+| Forgejo Runner ¦ Reject a conflicting account | ansible.builtin.assert | True |  |
+| Forgejo Runner ¦ Inspect existing units | ansible.builtin.service_facts | False |  |
+| Forgejo Runner ¦ Inspect the deliberately unused legacy registration path | ansible.builtin.stat | False |  |
+| Forgejo Runner ¦ Refuse any legacy connection alongside the scoped registration | ansible.builtin.assert | True |  |
+| Forgejo Runner ¦ Refuse to adopt unowned runner or SSH-agent units | ansible.builtin.assert | False |  |
+| Forgejo Runner ¦ Inspect persistent home ownership without following links | ansible.builtin.stat | False |  |
+| Forgejo Runner ¦ Reject foreign persistent controller state | ansible.builtin.assert | True |  |
+| Forgejo Runner ¦ Require an explicit absolute private input directory | ansible.builtin.assert | True |  |
+| Forgejo Runner ¦ Inspect required private inputs before changing the host | ansible.builtin.stat | True |  |
+| Forgejo Runner ¦ Require explicit regular credential files before installation | ansible.builtin.assert | True |  |
+| Forgejo Runner ¦ Inspect installation directory boundaries without following links | ansible.builtin.stat | False | Inspect root-created boundaries without following retained user symlinks; tooling beneath .local stays user-owned. |
+| Forgejo Runner ¦ Refuse linked or foreign installation directories | ansible.builtin.assert | True |  |
+| Forgejo Runner ¦ Require an owned restartable installation | ansible.builtin.assert | True |  |
+| Forgejo Runner ¦ Inspect only resident restart inputs | ansible.builtin.stat | True |  |
+| Forgejo Runner ¦ Require private resident configuration and boot authentication for restart | ansible.builtin.assert | True |  |
+
 #### File: tasks/keepalived.yml
 
 | Name | Module | Has Conditions |
@@ -211,15 +292,21 @@
 | Native services ¦ Read existing ownership record | ansible.builtin.slurp | True |  |  |
 | Native services ¦ Resolve existing ownership record | ansible.builtin.set_fact | True |  |  |
 | Native services ¦ Reject competing native installations | ansible.builtin.assert | False |  |  |
+| Native services ¦ Validate dedicated controller and existing runner ownership | ansible.builtin.include_tasks | True |  |  |
 | Native services ¦ Validate Keepalived before any installation or restart | ansible.builtin.include_tasks | True |  |  |
 | Native services ¦ Inspect managed file paths without following links | ansible.builtin.stat | False |  |  |
 | Native services ¦ Refuse directory deletion or replacement through file settings | ansible.builtin.assert | False |  |  |
+| Forgejo Runner ¦ Reset per-entry maintenance ownership and registration snapshots | ansible.builtin.set_fact | True |  |  |
+| Native services ¦ Complete the owned lifecycle with private snapshot cleanup | block | False |  | checkov:skip=CKV2_ANSIBLE_3:Failure propagates; always clears transient auth while retaining failed maintenance ownership. |
+| Forgejo Runner ¦ Validate the selected registration before installation changes | ansible.builtin.include_tasks | True |  |  |
+| Native services ¦ Protect active acceptance before runner lifecycle changes | ansible.builtin.include_tasks | True |  |  |
 | Native services ¦ Prepare installation ownership and resolver recovery | ansible.builtin.include_tasks | True |  |  |
 | Native services ¦ Apply the selected application | ansible.builtin.include_tasks | True |  |  |
+| Forgejo Runner ¦ Explain validated check-mode installation plan | ansible.builtin.debug | True |  |  |
 | Native services ¦ Recreate the selected service without deleting data | ansible.builtin.include_tasks | True |  |  |
 | Native services ¦ Remove the selected service's managed integrations | ansible.builtin.include_tasks | True |  |  |
-| Native services ¦ Complete selected service notifications | ansible.builtin.meta | False |  | Flush while this entry's configuration is still in scope. A later native
-entry must never supply values to a pending handler for this application. |
+| Native services ¦ Complete selected service notifications | ansible.builtin.meta | False |  | Flush notifications before another entry can replace this application's facts. |
+| Forgejo Runner ¦ Release only this completed operation's maintenance ownership | forgejo_runner_maintenance | True |  |  |
 
 #### File: tasks/node_exporter.yml
 

@@ -101,6 +101,19 @@
       changed_when: false
       register: molecule_vm_source_layout
 
+    - name: VM images | Inspect source virtual capacity without modifying it
+      ansible.builtin.command:
+        argv: [qemu-img, info, --output=json, '{{ molecule_vm_build_root }}/source.qcow2']
+      changed_when: false
+      register: molecule_vm_source_capacity
+
+    - name: VM images | Refuse image shrinking or expansion beyond the approved builder capacity
+      ansible.builtin.assert:
+        that:
+          - molecule_vm_fedora_source.disk_gb is integer
+          - molecule_vm_fedora_source.disk_gb <= molecule_vm_disk_gb
+          - (molecule_vm_source_capacity.stdout | from_json)['virtual-size'] <= molecule_vm_fedora_source.disk_gb * 1024 * 1024 * 1024
+
     - name: VM images | Require the pinned Server image's expected LVM layout
       ansible.builtin.assert:
         that:
@@ -109,7 +122,7 @@
 
     - name: VM images | Allocate a sparse image within the approved disk limit
       ansible.builtin.command:
-        argv: [qemu-img, create, '-f', qcow2, '{{ molecule_vm_build_root }}/expanded.qcow2', 32G]
+        argv: [qemu-img, create, '-f', qcow2, '{{ molecule_vm_build_root }}/expanded.qcow2', '{{ molecule_vm_fedora_source.disk_gb }}G']
       changed_when: true
 
     - name: VM images | Expand only the inspected image's PV and root LV
@@ -189,6 +202,17 @@
         checksum_algorithm: sha256
       register: molecule_vm_image_stat
 
+    - name: VM images | Inspect actual prepared virtual capacity
+      ansible.builtin.command:
+        argv: [qemu-img, info, --output=json, '{{ molecule_vm_build_export }}']
+      changed_when: false
+      register: molecule_vm_prepared_capacity
+
+    - name: VM images | Verify the prepared image matches the selected capacity
+      ansible.builtin.assert:
+        that:
+          - (molecule_vm_prepared_capacity.stdout | from_json)['virtual-size'] == molecule_vm_fedora_source.disk_gb * 1024 * 1024 * 1024
+
     # No become/slurp of a multi-gigabyte artifact: the generic output contains
     # no run credentials or host key. SSH/SFTP reads it as the dedicated account.
     - name: VM images | Fetch the verified generic artifact into private controller state
@@ -204,6 +228,7 @@
         dest: '{{ molecule_vm_evidence_directory }}/prepared-image.json'
         content: >-
           {{ {'checksum': molecule_vm_image_stat.stat.checksum, 'packages': molecule_vm_image_packages.stdout_lines,
+              'virtual_size_bytes': (molecule_vm_prepared_capacity.stdout | from_json)['virtual-size'],
               'layout': molecule_vm_source_layout.stdout_lines} | to_json }}
         mode: '0600'
       delegate_to: localhost

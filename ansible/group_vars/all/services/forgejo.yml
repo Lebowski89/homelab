@@ -46,7 +46,7 @@ forgejo:
     FORGEJO__session__COOKIE_SECURE: "true"
     FORGEJO__log__MODE: console
     FORGEJO__log__LEVEL: Info
-    FORGEJO__actions__ENABLED: "false"
+    FORGEJO__actions__ENABLED: "true"
   infisical:
     secrets_map:
       - var: postgres_user

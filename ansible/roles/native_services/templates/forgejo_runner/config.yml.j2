@@ -1,0 +1,27 @@
+# Managed by native_services. UUID/token come from one repository registration.
+log:
+  level: info
+  job_level: info
+runner:
+  # Prevent an old .runner file in the retained home adding another connection.
+  file: /etc/forgejo-runner/no-legacy-registration
+  capacity: 1
+  env_file: ""
+  timeout: 12h
+  shutdown_timeout: 12h
+  insecure: false
+  labels: [{{ (native_services_config.label ~ ':host') | to_json }}]
+cache:
+  enabled: false
+host:
+  workdir_parent: {{ (native_services_config.data_dir ~ '/work') | to_json }}
+container:
+  privileged: false
+  docker_host: "-"
+  valid_volumes: []
+server:
+  connections:
+    homelab-ci:
+      url: {{ native_services_config.server_url | to_json }}
+      uuid: {{ native_services_runner_registration.uuid | to_json }}
+      token: {{ native_services_runner_registration.token | to_json }}

@@ -1,0 +1,231 @@
+---
+
+- name: Forgejo Runner | Create dedicated service group
+  ansible.builtin.group:
+    name: '{{ native_services_config.group }}'
+    system: true
+
+- name: Forgejo Runner | Create unprivileged persistent automation account
+  ansible.builtin.user:
+    name: '{{ native_services_config.user }}'
+    group: '{{ native_services_config.group }}'
+    home: '{{ native_services_config.data_dir }}'
+    shell: /usr/sbin/nologin
+    system: true
+    create_home: true
+
+- name: Forgejo Runner | Prepare private persistent controller directories
+  ansible.builtin.file:
+    path: '{{ native_services_config.data_dir }}/{{ native_services_runner_directory }}'
+    state: directory
+    owner: '{{ native_services_config.user }}'
+    group: '{{ native_services_config.group }}'
+    mode: '0700'
+  loop: ['', .ssh, cache, cache/providers, tmp, runs, jobs, checkouts, work]
+  loop_control:
+    loop_var: native_services_runner_directory
+
+- name: Forgejo Runner | Prepare private persistent credentials directory
+  ansible.builtin.file:
+    path: /etc/forgejo-runner/private
+    state: directory
+    owner: '{{ native_services_config.user }}'
+    group: '{{ native_services_config.group }}'
+    mode: '0700'
+
+- name: Forgejo Runner | Install headless automation through the workstation tooling entry point
+  ansible.builtin.include_role:
+    name: workstation
+    tasks_from: tools
+    apply:
+      tags: '{{ ansible_run_tags }}'
+  tags: '{{ ansible_run_tags }}'
+
+- name: Forgejo Runner | Install signature verification prerequisites
+  ansible.builtin.dnf:
+    name: [gnupg2, util-linux]
+    state: present
+    use_backend: '{{ ansible_facts.pkg_mgr }}'
+
+- name: Forgejo Runner | Prepare root-owned persistent release verification directory
+  ansible.builtin.file:
+    path: '/var/cache/forgejo-runner/{{ native_services_config.version }}'
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Forgejo Runner | Install the pinned upstream public release key
+  ansible.builtin.copy:
+    src: forgejo_runner/release-key.asc
+    dest: /var/cache/forgejo-runner/release-key.asc
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Forgejo Runner | Import only the repository-pinned release key into an isolated keyring
+  ansible.builtin.command:
+    argv: [gpg, --batch, --homedir, '/var/cache/forgejo-runner/{{ native_services_config.version }}', --status-fd, '1', --import,
+           /var/cache/forgejo-runner/release-key.asc]
+  register: native_services_runner_key_import
+  changed_when: "'[GNUPG:] IMPORT_OK 1 ' in native_services_runner_key_import.stdout"
+  when: not ansible_check_mode
+
+- name: Forgejo Runner | Download pinned binary and detached signature over verified HTTPS
+  ansible.builtin.get_url:
+    url: 'https://code.forgejo.org/forgejo/runner/releases/download/v{{ native_services_config.version }}/forgejo-runner-{{ native_services_config.version }}-linux-{{ native_services_config.arch }}{{ native_services_runner_suffix }}'
+    dest: '/var/cache/forgejo-runner/{{ native_services_config.version }}/runner{{ native_services_runner_suffix }}'
+    owner: root
+    group: root
+    mode: '0644'
+    validate_certs: true
+  loop: ['', .asc]
+  loop_control:
+    loop_var: native_services_runner_suffix
+  when: not ansible_check_mode
+
+- name: Forgejo Runner | Verify the upstream signature before installing executable bytes
+  ansible.builtin.command:
+    argv: [gpg, --batch, --homedir, '/var/cache/forgejo-runner/{{ native_services_config.version }}', --status-fd, '1', --verify,
+           '/var/cache/forgejo-runner/{{ native_services_config.version }}/runner.asc',
+           '/var/cache/forgejo-runner/{{ native_services_config.version }}/runner']
+  register: native_services_runner_signature
+  changed_when: false
+  failed_when: >-
+    native_services_runner_signature.rc != 0 or
+    (native_services_runner_signature.stdout_lines | select('match', '^\[GNUPG:\] VALIDSIG .* EB114F5E6C0DC2BCDD183550A4B61A2DC5923710$') | list | length != 1)
+  when: not ansible_check_mode
+
+- name: Forgejo Runner | Install verified binary
+  ansible.builtin.copy:
+    src: '/var/cache/forgejo-runner/{{ native_services_config.version }}/runner'
+    dest: /usr/local/bin/forgejo-runner
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0755'
+  notify: Restart Forgejo Runner
+  when: not ansible_check_mode
+
+- name: Forgejo Runner | Verify the installed release as the unprivileged account
+  when: not ansible_check_mode
+  become: true
+  become_user: '{{ native_services_config.user }}'
+  ansible.builtin.command:
+    argv: [/usr/local/bin/forgejo-runner, --version]
+  register: native_services_runner_version
+  changed_when: false
+  failed_when: >-
+    native_services_runner_version.rc != 0 or
+    native_services_runner_version.stdout | trim != 'forgejo-runner version v' ~ native_services_config.version
+
+- name: Forgejo Runner | Provision only explicitly named private controller files
+  when:
+    - not ansible_check_mode
+    - native_services_forgejo_runner_private_source_dir | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.copy:
+    src: '{{ native_services_forgejo_runner_private_source_dir }}/{{ native_services_runner_credential }}'
+    dest: '/etc/forgejo-runner/private/{{ native_services_runner_credential }}'
+    owner: '{{ native_services_config.user }}'
+    group: '{{ native_services_config.group }}'
+    mode: '0600'
+  notify:
+    - Restart Forgejo Runner SSH agent
+    - Restart Forgejo Runner
+  loop: [provisioning.json, allocation.json, node-key, guest-key, guest-key.pub, proxmox-ca.pem]
+  loop_control:
+    loop_var: native_services_runner_credential
+
+- name: Forgejo Runner | Install separately verified node SSH identities
+  when:
+    - not ansible_check_mode
+    - native_services_forgejo_runner_private_source_dir | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.copy:
+    src: '{{ native_services_forgejo_runner_private_source_dir }}/known_hosts'
+    dest: '{{ native_services_config.data_dir }}/.ssh/known_hosts'
+    owner: '{{ native_services_config.user }}'
+    group: '{{ native_services_config.group }}'
+    mode: '0600'
+
+- name: Forgejo Runner | Install the controller launcher without provisioning resources
+  ansible.builtin.copy:
+    src: '{{ playbook_dir }}/../scripts/testing/forgejo.py'
+    dest: /usr/local/bin/homelab-molecule
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Forgejo Runner | Install persistent non-secret controller profile
+  ansible.builtin.template:
+    src: forgejo_runner/profile.json.j2
+    dest: /etc/forgejo-runner/profile.json
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Forgejo Runner | Install provider cache configuration outside Git
+  ansible.builtin.copy:
+    dest: /etc/forgejo-runner/tofurc
+    content: |
+      plugin_cache_dir = "{{ native_services_config.data_dir }}/cache/providers"
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Forgejo Runner | Install only the validated registration snapshot
+  when:
+    - not ansible_check_mode
+    - native_services_forgejo_runner_private_source_dir | length > 0
+  no_log: true
+  diff: false
+  ansible.builtin.copy:
+    content: '{{ native_services_runner_registration | to_json }}'
+    dest: /etc/forgejo-runner/private/registration.json
+    owner: '{{ native_services_config.user }}'
+    group: '{{ native_services_config.group }}'
+    mode: '0600'
+
+- name: Forgejo Runner | Render the validated private runner connection
+  when: not ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.template:
+    src: forgejo_runner/config.yml.j2
+    dest: /etc/forgejo-runner/config.yml
+    owner: '{{ native_services_config.user }}'
+    group: '{{ native_services_config.group }}'
+    mode: '0600'
+  notify: Restart Forgejo Runner
+
+- name: Forgejo Runner | Record adopted private runner configuration
+  when: not ansible_check_mode
+  ansible.builtin.include_tasks: record_files.yml
+  vars:
+    native_services_adopted_files: [/etc/forgejo-runner/config.yml]
+
+- name: Forgejo Runner | Install and record each owned systemd unit
+  when: not ansible_check_mode
+  ansible.builtin.include_tasks: forgejo_runner_unit.yml
+  loop: [forgejo-runner-agent, forgejo-runner]
+  loop_control:
+    loop_var: native_services_runner_unit
+
+- name: Forgejo Runner | Start persistent boot authentication without a workstation agent
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: forgejo-runner-agent
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: Forgejo Runner | Enable and start the repository runner
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: forgejo-runner
+    state: started
+    enabled: true
+    daemon_reload: true

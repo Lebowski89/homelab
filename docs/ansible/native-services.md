@@ -1,11 +1,11 @@
 # Native services in the catalogue
 
-`native_services` manages Alloy, Node Exporter, Keepalived and Technitium through
+`native_services` manages Alloy, Node Exporter, Keepalived, Technitium and Forgejo Runner through
 `ansible/group_vars/all/services/`. It retains explicit installation procedures
 in `tasks/alloy.yml`, `tasks/node_exporter.yml`, `tasks/keepalived.yml` and
 `tasks/technitium.yml`, with application-specific defaults, handlers and templates.
 `tasks/main.yml` owns validation and lifecycle dispatch; it does not install all
-four applications. Infisical remains Podman bootstrap/recovery orchestration;
+applications. Infisical remains Podman bootstrap/recovery orchestration;
 PostgreSQL and the other native roles are unchanged.
 
 ## Declarations and selection
@@ -16,6 +16,7 @@ PostgreSQL and the other native roles are unchanged.
 | Node Exporter | `node_exporter.yml` | `node_exporter` / `node-exporter` | `tags_node_exporter` |
 | Keepalived | `keepalived.yml` | `keepalived` | `tags_keepalived` |
 | Technitium | `technitium.yml`, target `native` | `technitium_native` / `technitium-native` | `tags_technitium_native` |
+| Forgejo Runner | `forgejo_runner.yml` | `forgejo_runner` / `forgejo-runner` | explicit `molecule-controller` host |
 
 Alloy and Technitium keep their existing Docker/Podman targets in the same
 application definition. Use their explicit native selectors to select only the
@@ -285,3 +286,78 @@ dummy-link VIP. Keepalived's own DNS health script succeeded. These services and
 the previously validated Alloy installation recovered after reboot; real DNS,
 metrics and the test VIP were checked again. Removal retained persistent data and
 Technitium restored its recorded resolver link. This does not establish peer failover.
+
+
+## Dedicated Forgejo Runner
+
+Forgejo Runner is an unprivileged systemd host executor confined to the explicit
+Rocky 10 controller VM. `host_vars/molecule-controller.yml` selects workstation's
+`tools` entry point, with its Rocky headless opt-in; the desktop role entry point
+rejects that opt-in. It installs no desktop or VS Code components. Installation
+verifies the pinned runner's upstream detached signature against the repository
+public release key. Check mode validates placement/platform/ownership and shows
+an installation plan without downloading, reading authentication or starting units.
+
+Deploy/update reuse `/etc/forgejo-runner/private/registration.json`; registration
+is a separate approved, deployment-side action. Its receipt must match the HTTPS
+origin and exact owner/repository. The bootstrap API token stays in Infisical and
+never reaches this VM. An explicitly absent legacy registration path prevents a
+retained `.runner` file adding an unintended connection. A dedicated systemd SSH
+agent loads the node key on boot; guest SSH credentials remain separate.
+
+Deploy/update validate the selected registration snapshot before any drain marker,
+credential replacement or installation changes. Instance URL, repository, UUID
+and token shape must match the current entry. Only `url`, `repository`, `uuid`
+and `token` are accepted; additional fields are rejected before mutation. That
+snapshot supplies the installed receipt/configuration; transient authentication
+is cleared on every exit. The real workstation repository tasks preserve an
+existing private parent, so cloning beneath the runner home does not relax its
+required `0700` mode.
+
+Recreate uses the owned installed units/configuration and resident node key;
+registration, provisioning token, allocation and guest credentials are not restart
+prerequisites. Removal requires installation ownership, not provisioning files or
+valid API authentication. It stops both owned units and removes only recorded
+units/runner configuration. Private authentication, profile/launcher, tooling,
+accounts, cached inputs, evidence and retained guests remain.
+
+An atomic, root-owned `/etc/forgejo-runner/draining` directory holds a unique
+operation token across mutations, synchronous handlers and completion. Competing
+maintenance fails without clearing it. Acceptance and explicit retirement both
+check the marker while holding `controller.lock`; an already active operation
+makes acquisition fail immediately, releasing only the failed acquisition's own
+marker. Successful lifecycle completion, including removal, releases only its
+matching token, without leaving a stale maintenance lock after removal. Retire
+owned guests before removing the runner/agent; later recovery still needs the
+retained private inputs and dedicated SSH authentication. Failed or interrupted
+maintenance retains the marker and blocks new acceptance/recovery.
+
+Receipt creation failures remove only that acquisition's incomplete marker and
+receipt, checking their filesystem identities. Replacement state is retained;
+cleanup failures preserve the original acquisition error for diagnosis.
+
+After confirming the original Ansible operation has ended, inspect the root-owned
+`draining/owner.json` receipt (an ownership nonce, not runner authentication). Use
+its exact token with the role's module and approved private inventory:
+
+```text
+ansible -i <controller-only-inventory> molecule-controller --become \
+  -M ansible/roles/native_services/library -m forgejo_runner_maintenance \
+  -a 'state=absent token=<exact-owner-token>'
+```
+
+Wrong tokens, foreign ownership and links are rejected. A missing/corrupt receipt
+requires inspection of the interrupted operation; it is never treated as an
+expired lock that can be taken over automatically. Do not remove another
+operation's marker or terminate active work to obtain a lock. Then retry the
+normal lifecycle command; it acquires a new operation token. No registration,
+guest retirement or resource destruction happens implicitly.
+
+Idle repeated deployment does not re-register or restart unchanged units.
+Transient maintenance ownership does not count as deployed configuration changes.
+Recorded-I/O tests do not certify real systemd, boot authentication or package
+idempotency; those remain rollout acceptance checks. The concurrency regressions
+use real local file locks/atomic directories, and the checkout regression uses
+real Git/Ansible repository tasks across installation and update.
+See [the Molecule guide](../../molecule/README.md#dedicated-forgejo-controller-rollout-preparation-not-deployed)
+for allocation, credentials, operator use and scoped retirement.

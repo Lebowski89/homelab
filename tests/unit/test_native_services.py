@@ -24,6 +24,8 @@ def native_run(tmp_path):
     shutil.copytree(ROLE, copied)
     operations = {
         "apt",
+        "pip",
+        "git",
         "apt_repository",
         "dnf",
         "rpm_key",
@@ -50,6 +52,8 @@ def native_run(tmp_path):
         for task in tasks:
             for branch in ("block", "rescue", "always"):
                 instrument(task.get(branch, []))
+            if "forgejo_runner_maintenance" in task:
+                task["fixture_operation"] = {"module": "forgejo_runner_maintenance", "options": task.pop("forgejo_runner_maintenance")}
             for module in operations:
                 key = f"ansible.builtin.{module}"
                 if key in task:
@@ -72,6 +76,9 @@ from ansible.playbook.handler import Handler
 from ansible.template import trust_as_template
 import json
 import base64
+import os
+import stat
+from pathlib import Path
 
 class ActionModule(ActionBase):
     def run(self, tmp=None, task_vars=None):
@@ -106,20 +113,33 @@ class ActionModule(ActionBase):
             if options['path'] == '/run/systemd/resolve/resolv.conf':
                 exists = v.get('fixture_resolved_output', True)
                 result['stat'] = {'exists': exists, 'isreg': exists}
+        if module == 'forgejo_runner_maintenance':
+            result['token']='a'*32
+            if options['state']=='present' and v.get('fixture_runner_busy'):
+                result.update(failed=True,msg='fixture acceptance is active')
         if module == 'slurp':
-            state = v.get('fixture_state', {})[v['native_services_application']]
-            result['content'] = base64.b64encode(json.dumps(state).encode()).decode()
+            state = (v.get('fixture_registration', {}) if options['src'].endswith('/registration.json')
+                     else v.get('fixture_state', {})[v['native_services_application']])
+            result['content'] = base64.b64encode((v.get('fixture_registration_raw',json.dumps(state)) if options['src'].endswith('/registration.json') else json.dumps(state)).encode()).decode()
         if module == 'service_facts':
             unit = v.get('native_services_unit', v.get('technitium_native_service_name', 'dns')).removesuffix('.service')
             result['ansible_facts'] = {'services': v.get('fixture_services', {unit + '.service': {'state': 'running'}})}
+        if module == 'systemd_service' and record['handler'] and v.get('fixture_runner_handler_failure'):
+            result.update(failed=True,msg='synthetic handler failure')
         if module == 'get_url' and v.get('fixture_download_failure', False):
             result.update(failed=True, msg='fixture download failure')
         if module == 'setup':
             result['ansible_facts'] = v['fixture_facts']
+        if module == 'file' and v.get('fixture_real_repository') and options.get('path','').rstrip('/')==v['native_services_config']['data_dir']:
+            home=Path(v['fixture_home']);home.mkdir(exist_ok=True,mode=0o700);home.chmod(int(options['mode'],8))
         if module == 'getent':
             if options['database'] == 'passwd':
-                accounts = {v['alloy_native_user']: ['x', '1001', '1001', '', '/fixture/alloy', '/usr/sbin/nologin']}
-                result['ansible_facts'] = {'getent_passwd': accounts if v['fixture_account'] else {}}
+                accounts = ({v['native_services_config']['user']: (['x', '1001', '1001', '', v['native_services_config']['data_dir'], '/usr/sbin/nologin'] if v['fixture_account'] else None)}
+                            if v['native_services_application']=='forgejo_runner' else
+                            {v['alloy_native_user']: ['x', '1001', '1001', '', '/fixture/alloy', '/usr/sbin/nologin']})
+                if v.get('fixture_real_repository') and options.get('key')==v.get('workstation_user'):
+                    accounts[options['key']]=['x',str(os.getuid()),str(os.getgid()),'',v['fixture_home'],'/usr/sbin/nologin']
+                result['ansible_facts'] = {'getent_passwd': accounts if v['fixture_account'] or v['native_services_application']=='forgejo_runner' else {}}
             else:
                 groups = {'systemd-journal': ['x', '999', '']}
                 if v['ansible_facts']['os_family'] == 'Debian':
@@ -127,6 +147,34 @@ class ActionModule(ActionBase):
                 if v['fixture_account']:
                     groups[v['alloy_native_group']] = ['x', '1001', '']
                 result['ansible_facts'] = {'getent_group': groups}
+        if module == 'command' and v['native_services_application']=='forgejo_runner':
+            argv = options.get('argv', [])
+            if '--verify' in argv:
+                result['stdout_lines']=['[GNUPG:] VALIDSIG subkey 2026-01-01 1 0 4 0 22 8 00 ' +
+                     ('0'*40 if v.get('fixture_bad_signature') else 'EB114F5E6C0DC2BCDD183550A4B61A2DC5923710')]
+            elif argv and argv[0]=='/usr/local/bin/forgejo-runner' and '--version' in argv:
+                result['stdout']='forgejo-runner version v'+('0.0.0' if v.get('fixture_bad_version') else v['native_services_config']['version'])
+            elif '--import' in argv:
+                result['stdout']='[GNUPG:] IMPORT_OK 1 EB114F5E6C0DC2BCDD183550A4B61A2DC5923710'
+            elif argv and argv[0]=='flock' and v.get('fixture_runner_busy'):
+                result.update(failed=True,rc=1,msg='fixture controller is busy')
+            elif 'sysconfig' in str(argv):
+                result['stdout']=v['workstation_ansible_venv_path']+'/lib64/python3.12/site-packages'
+            else:
+                result['stdout']='python3.12'
+        if module=='stat' and v['native_services_application']=='forgejo_runner':
+            path=options['path']; home=v['native_services_config']['data_dir']
+            if path=='/etc/forgejo-runner/no-legacy-registration': result['stat']={'exists':False}
+            elif path==home:
+                mode=format(stat.S_IMODE(Path(v['fixture_home']).stat().st_mode),'04o') if v.get('fixture_real_repository') else '0700'
+                result['stat']={'exists':v['fixture_account'],'isdir':True,'islnk':False,'uid':1001,'mode':mode}
+            elif path.startswith('/etc/forgejo-runner/private/') or path==home+'/.ssh/known_hosts' or path=='/etc/forgejo-runner/config.yml' or (v.get('native_services_forgejo_runner_private_source_dir') and path.startswith(v['native_services_forgejo_runner_private_source_dir']+'/')):
+                result['stat']={'exists':path.rsplit('/',1)[-1] not in v.get('fixture_missing_inputs',[]),'isreg':True,'islnk':False,'mode':'0600','uid':1001}
+            elif path.startswith(home+'/homelab'): result['stat']={'exists':True,'isdir':True,'islnk':False}
+            elif path in ['/etc/forgejo-runner','/var/cache/forgejo-runner'] or path.startswith('/var/cache/forgejo-runner/'):
+                result['stat']={'exists':True,'isdir':True,'islnk':False,'uid':0}
+            elif path=='/etc/forgejo-runner/private' or path.startswith(home+'/'):
+                result['stat']={'exists':v['fixture_account'],'isdir':True,'islnk':False,'uid':1001}
         return result
 """)
     cfg = tmp_path / "ansible.cfg"
@@ -208,6 +256,21 @@ class ActionModule(ActionBase):
             variables.update(
                 technitium_native_web_port=15380, technitium_native_dns_port=15353, technitium_native_resolved_dns_servers=["192.0.2.53"]
             )
+        if "forgejo_runner" in entries:
+            if not (tmp_path / "roles/workstation").exists():
+                shutil.copytree(ROOT / "ansible/roles/workstation", tmp_path / "roles/workstation")
+                for path in (tmp_path / "roles/workstation/tasks").rglob("*.yml"):
+                    tasks = yaml.safe_load(path.read_text())
+                    if not ((overrides or {}).get("fixture_real_repository") and path.name == "repository.yml"):
+                        instrument(tasks)
+                    path.write_text(yaml.safe_dump(tasks, sort_keys=False))
+            variables.update(yaml.safe_load((ROOT / "ansible/host_vars/molecule-controller.yml").read_text()))
+            variables.update(
+                services_internal_zone="private.example.test",
+                services_private_https_port=9443,
+                fixture_services={},
+                workstation_repository_clone=False,
+            )
         variables.update(overrides or {})
         if enabled is not None or update_policy is not None:
             for entry in entries:
@@ -219,12 +282,13 @@ class ActionModule(ActionBase):
                     config = declaration[entry].get("targets", {}).get("native", declaration[entry])
                     config["native"]["update_policy"] = update_policy
                 path.write_text(yaml.safe_dump(declaration))
+        selected_host = "molecule-controller" if "forgejo_runner" in entries else "selected"
         inventory = {
             "all": {
                 "children": {
                     "tags_skynet": {
                         "hosts": {
-                            "selected": {"ansible_connection": "local", **variables},
+                            selected_host: {"ansible_connection": "local", **variables},
                             "other": {
                                 "ansible_connection": "local",
                                 **(variables if multiple_hosts else {}),
@@ -235,9 +299,14 @@ class ActionModule(ActionBase):
                     },
                     "fixture_dns_peers": {"hosts": {"selected": {}, "other": {}}},
                     **{
-                        ("tags_podman" if entry == "alloy" else "tags_" + ENTRIES[entry]): {
+                        ("tags_podman" if entry == "alloy" else "tags_" + ENTRIES.get(entry, entry)): {
                             "hosts": dict.fromkeys(
-                                native_hosts if native_hosts is not None else ["selected", "other"] if multiple_hosts else ["selected"], {}
+                                native_hosts
+                                if native_hosts is not None
+                                else [selected_host, "other"]
+                                if multiple_hosts
+                                else [selected_host],
+                                {},
                             )
                         }
                         for entry in entries
@@ -319,6 +388,26 @@ class ActionModule(ActionBase):
         # by the recorder and there is deliberately no application controller.
         instrument(play["pre_tasks"])
         instrument(play["tasks"])
+        if "forgejo_runner" in entries:
+            play["tasks"] = [
+                {
+                    "block": play["tasks"],
+                    "always": [
+                        {
+                            "name": "Record only transient authentication cleanup booleans",
+                            "when": "fixture_record is defined",
+                            "fixture_operation": {
+                                "module": "cleanup_snapshot",
+                                "options": {
+                                    "registration_empty": "{{ native_services_runner_registration | default({}) == {} }}",
+                                    "read_empty": "{{ native_services_runner_registration_read | default({}) == {} }}",
+                                },
+                            },
+                            "tags": ["always"],
+                        }
+                    ],
+                }
+            ]
         playbook = tmp_path / "play.yml"
         playbook.write_text(yaml.safe_dump([play], sort_keys=False))
         record.unlink(missing_ok=True)
@@ -328,7 +417,7 @@ class ActionModule(ActionBase):
             str(inv),
             str(playbook),
             "--tags",
-            ",".join(([action] if action else []) + [ENTRIES[entry] for entry in entries]),
+            ",".join(([action] if action else []) + [ENTRIES.get(entry, entry) for entry in entries]),
         ]
         if check:
             args.append("--check")
@@ -934,3 +1023,302 @@ def test_technitium_rpm_incomplete_archive_cannot_claim_a_unit_or_restart_dns(na
     assert not any(call["module"] in {"template", "systemd", "systemd_service"} for call in calls)
     records = [json.loads(call["options"]["content"]) for call in calls if call["options"].get("dest", "").endswith(".json")]
     assert all(record["files"] == [] for record in records)
+
+
+@pytest.mark.parametrize("allowed", [True, False])
+def test_runner_check_mode_validates_dedicated_vm_without_authentication_or_installation(native_run, allowed):
+    facts = rpm_alloy_facts("Rocky", "10.2") | {"virtualization_role": "guest", "virtualization_type": "kvm"}
+    result, calls = native_run(
+        ["forgejo_runner"], check=True, account=False, facts=facts, overrides={"native_services_forgejo_runner_controller": allowed}
+    )
+    assert (result.returncode == 0) is allowed, result.stdout + result.stderr
+    assert not any(call["module"] in {"copy", "get_url", "slurp", "systemd_service", "pip", "user", "group"} for call in calls)
+    if allowed:
+        assert "Would manage homelab-ci/homelab-ci" in result.stdout
+    else:
+        assert "dedicated Rocky 10 controller VM" in result.stdout
+
+
+@pytest.mark.parametrize("busy", [False, True])
+def test_runner_removal_preserves_authentication_and_evidence_and_never_stops_active_work(native_run, busy):
+    owned = [
+        "/etc/systemd/system/forgejo-runner.service",
+        "/etc/systemd/system/forgejo-runner-agent.service",
+        "/etc/forgejo-runner/config.yml",
+    ]
+    state = {"identity": "forgejo_runner", "unit": "forgejo-runner", "files": owned}
+    facts = rpm_alloy_facts("Rocky", "10.2") | {"virtualization_role": "guest", "virtualization_type": "kvm"}
+    result, calls = native_run(
+        ["forgejo_runner"],
+        action="remove",
+        facts=facts,
+        overrides={
+            "fixture_state": {"forgejo_runner": state},
+            "fixture_runner_busy": busy,
+            "fixture_services": {"forgejo-runner.service": {"state": "running"}, "forgejo-runner-agent.service": {"state": "running"}},
+        },
+    )
+    assert (result.returncode == 0) is not busy, result.stdout + result.stderr
+    mutations = [call for call in calls if call["module"] == "systemd_service"]
+    if busy:
+        assert not mutations
+    else:
+        removed = [call["options"]["path"] for call in calls if call["module"] == "file" and call["options"].get("state") == "absent"]
+        assert removed == owned + ["/var/lib/native_services/forgejo_runner.json"]
+        assert {call["options"]["name"] for call in mutations if "name" in call["options"]} == {"forgejo-runner", "forgejo-runner-agent"}
+
+
+@pytest.mark.parametrize("failure", [None, "signature", "version", "scope"])
+def test_runner_install_uses_guarded_signature_registration_and_owned_units(native_run, failure):
+    facts = rpm_alloy_facts("Rocky", "10.2") | {"virtualization_role": "guest", "virtualization_type": "kvm"}
+    registration = {
+        "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "token": ("1" * 40),
+        "repository": "homelab-ci/homelab-ci",
+        "url": "https://forgejo.private.example.test:9443",
+    }
+    if failure == "scope":
+        registration["repository"] = "another/repository"
+    result, calls = native_run(
+        ["forgejo_runner"],
+        facts=facts,
+        overrides={
+            "fixture_registration": registration,
+            "fixture_bad_signature": failure == "signature",
+            "fixture_bad_version": failure == "version",
+        },
+    )
+    assert (result.returncode == 0) is (failure is None), result.stdout + result.stderr
+    installations = [call for call in calls if call["module"] == "copy" and call["options"].get("dest") == "/usr/local/bin/forgejo-runner"]
+    assert bool(installations) is (failure not in {"signature", "scope"})
+    assert any(call["module"] == "command" and "--verify" in call["options"].get("argv", []) for call in calls) is (failure != "scope")
+    registration_reads = [
+        call
+        for call in calls
+        if call["module"] == "slurp" and call["options"].get("src") == "/etc/forgejo-runner/private/registration.json"
+    ]
+    assert registration_reads
+    starts = [call for call in calls if call["module"] == "systemd_service" and call["options"].get("state") in {"started", "restarted"}]
+    if failure:
+        assert not starts
+    else:
+        config = next(
+            call["content"]
+            for call in calls
+            if call["module"] == "template" and call["options"]["dest"] == "/etc/forgejo-runner/config.yml"
+        )
+        assert yaml.safe_load(config)["server"]["connections"]["homelab-ci"]["uuid"] == registration["uuid"]
+        assert yaml.safe_load(config)["runner"]["capacity"] == 1
+        assert set(call["options"]["name"] for call in starts) == {"forgejo-runner", "forgejo-runner-agent"}
+        ownership = [
+            json.loads(call["options"]["content"])
+            for call in calls
+            if call["module"] == "copy" and call["options"].get("dest") == "/var/lib/native_services/forgejo_runner.json"
+        ]
+        assert set(ownership[-1]["files"]) == {
+            "/etc/forgejo-runner/config.yml",
+            "/etc/systemd/system/forgejo-runner.service",
+            "/etc/systemd/system/forgejo-runner-agent.service",
+        }
+        assert all(("1" * 40) not in json.dumps(record) for record in ownership)
+        release = next(
+            i for i, call in enumerate(calls) if call["module"] == "forgejo_runner_maintenance" and call["options"]["state"] == "absent"
+        )
+        assert all(i < release for i, call in enumerate(calls) if call["handler"])
+
+
+@pytest.mark.parametrize("failure", ["json", "repository", "instance", "uuid", "token", "extra"])
+def test_selected_registration_is_rejected_before_draining_or_replacing_installation(native_run, failure):
+    registration = {
+        "url": "https://forgejo.private.example.test:9443",
+        "repository": "homelab-ci/homelab-ci",
+        "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "token": "1" * 40,
+    }
+    if failure in ["repository", "instance", "uuid", "token"]:
+        registration[{"instance": "url"}.get(failure, failure)] = "unrelated-or-invalid"
+    if failure == "extra":
+        registration["CI_API_TOKEN"] = "example-token"
+    facts = rpm_alloy_facts("Rocky", "10.2") | {"virtualization_role": "guest", "virtualization_type": "kvm"}
+    overrides = {"fixture_registration": registration, "native_services_forgejo_runner_private_source_dir": "/fixture/selected-receipt"}
+    if failure == "json":
+        overrides["fixture_registration_raw"] = "malformed synthetic JSON"
+    result, calls = native_run(["forgejo_runner"], facts=facts, action="update", overrides=overrides)
+    assert result.returncode != 0
+    assert not any(
+        call["module"] in {"copy", "file", "template", "group", "user", "systemd_service", "forgejo_runner_maintenance"} for call in calls
+    )
+    reads = [call["options"]["src"] for call in calls if call["module"] == "slurp"]
+    assert reads == ["/fixture/selected-receipt/registration.json"]
+    snapshot = next(call["options"] for call in calls if call["module"] == "cleanup_snapshot")
+    assert snapshot == {"registration_empty": True, "read_empty": True}
+
+
+def test_selected_four_field_registration_is_copied_without_other_authentication(native_run):
+    registration = {
+        "url": "https://forgejo.private.example.test:9443",
+        "repository": "homelab-ci/homelab-ci",
+        "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "token": "1" * 40,
+    }
+    facts = rpm_alloy_facts("Rocky", "10.2") | {"virtualization_role": "guest", "virtualization_type": "kvm"}
+    result, calls = native_run(
+        ["forgejo_runner"],
+        facts=facts,
+        overrides={"fixture_registration": registration, "native_services_forgejo_runner_private_source_dir": "/fixture/selected-receipt"},
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    copies = [
+        call["options"]
+        for call in calls
+        if call["module"] == "copy" and call["options"].get("dest") == "/etc/forgejo-runner/private/registration.json"
+    ]
+    assert copies and all(json.loads(copy["content"]) == registration and copy["mode"] == "0600" for copy in copies)
+
+
+@pytest.mark.parametrize("action", ["remove", "recreate"])
+def test_runner_lifecycle_uses_only_required_resident_inputs(native_run, action):
+    owned = [
+        "/etc/systemd/system/forgejo-runner.service",
+        "/etc/systemd/system/forgejo-runner-agent.service",
+        "/etc/forgejo-runner/config.yml",
+    ]
+    facts = rpm_alloy_facts("Rocky", "10.2") | {"virtualization_role": "guest", "virtualization_type": "kvm"}
+    missing = ["registration.json", "provisioning.json", "allocation.json", "guest-key", "guest-key.pub", "proxmox-ca.pem", "known_hosts"]
+    if action == "remove":
+        missing += ["node-key", "config.yml"]
+    result, calls = native_run(
+        ["forgejo_runner"],
+        action=action,
+        facts=facts,
+        overrides={
+            "fixture_state": {"forgejo_runner": {"identity": "forgejo_runner", "unit": "forgejo-runner", "files": owned}},
+            "fixture_missing_inputs": missing,
+            "fixture_services": {"forgejo-runner.service": {"state": "running"}, "forgejo-runner-agent.service": {"state": "running"}},
+        },
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not any(call["module"] == "slurp" and call["options"]["src"].endswith("/registration.json") for call in calls)
+    assert not any(call["module"] in {"get_url", "pip", "git"} for call in calls)
+    assert any(
+        call["module"] == "systemd_service" and call["options"].get("state") == ("stopped" if action == "remove" else "restarted")
+        for call in calls
+    )
+
+
+def test_real_repository_preparation_preserves_private_home_on_first_install_and_update(native_run, tmp_path):
+    import pwd
+
+    home = tmp_path / "runner-home"
+    home.mkdir(mode=0o700)
+    origin = tmp_path / "source"
+    origin.mkdir()
+    source = origin / "ansible/requirements.txt"
+    source.parent.mkdir()
+    source.write_text("# Offline synthetic tooling interface\n")
+    for args in [
+        ["init", "--quiet", "--initial-branch=main"],
+        ["add", "."],
+        [
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--quiet",
+            "-m",
+            "Synthetic main",
+        ],
+    ]:
+        subprocess.run(["git", "-C", str(origin), *args], check=True, capture_output=True, text=True)
+    registration = {
+        "url": "https://forgejo.private.example.test:9443",
+        "repository": "homelab-ci/homelab-ci",
+        "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "token": "1" * 40,
+    }
+    facts = rpm_alloy_facts("Rocky", "10.2") | {"virtualization_role": "guest", "virtualization_type": "kvm"}
+    overrides = dict(
+        fixture_real_repository=True,
+        fixture_home=str(home),
+        fixture_registration=registration,
+        workstation_user=pwd.getpwuid(os.getuid()).pw_name,
+        workstation_repository_clone=True,
+        workstation_repository_path=str(home / "homelab"),
+        workstation_repository_url=str(origin),
+        workstation_ansible_path=str(home / "homelab/ansible"),
+        ansible_become=False,
+    )
+    first, calls = native_run(["forgejo_runner"], facts=facts, overrides=overrides)
+    assert first.returncode == 0, first.stdout + first.stderr
+    assert home.stat().st_mode & 0o777 == 0o700
+    checkout = home / "homelab/ansible/requirements.txt"
+    assert checkout.read_bytes() == source.read_bytes()
+    state = [
+        json.loads(call["options"]["content"])
+        for call in calls
+        if call["module"] == "copy" and call["options"].get("dest") == "/var/lib/native_services/forgejo_runner.json"
+    ][-1]
+    second, calls = native_run(
+        ["forgejo_runner"], facts=facts, action="update", overrides=overrides | {"fixture_state": {"forgejo_runner": state}}
+    )
+    assert second.returncode == 0, second.stdout + second.stderr
+    assert home.stat().st_mode & 0o777 == 0o700
+    assert checkout.read_bytes() == source.read_bytes()
+
+
+@pytest.mark.parametrize("action", ["remove", "recreate"])
+def test_runner_does_not_stop_foreign_units_even_without_provisioning_inputs(native_run, action):
+    facts = rpm_alloy_facts("Rocky", "10.2") | {"virtualization_role": "guest", "virtualization_type": "kvm"}
+    result, calls = native_run(
+        ["forgejo_runner"],
+        action=action,
+        facts=facts,
+        overrides={
+            "fixture_services": {"forgejo-runner.service": {"state": "running"}},
+            "fixture_missing_inputs": ["provisioning.json"],
+        },
+    )
+    assert result.returncode != 0 and "refusing adoption or removal" in result.stdout
+    assert not any(call["module"] in {"systemd_service", "forgejo_runner_maintenance", "file", "copy"} for call in calls)
+
+
+def test_runner_restart_rejects_missing_boot_key_before_drain_or_service_changes(native_run):
+    facts = rpm_alloy_facts("Rocky", "10.2") | {"virtualization_role": "guest", "virtualization_type": "kvm"}
+    owned = [
+        "/etc/systemd/system/forgejo-runner.service",
+        "/etc/systemd/system/forgejo-runner-agent.service",
+        "/etc/forgejo-runner/config.yml",
+    ]
+    result, calls = native_run(
+        ["forgejo_runner"],
+        action="recreate",
+        facts=facts,
+        overrides={
+            "fixture_state": {"forgejo_runner": {"identity": "forgejo_runner", "unit": "forgejo-runner", "files": owned}},
+            "fixture_missing_inputs": ["node-key"],
+        },
+    )
+    assert result.returncode != 0
+    assert not any(call["module"] in {"systemd_service", "forgejo_runner_maintenance", "file", "copy"} for call in calls)
+
+
+def test_handler_failure_retains_maintenance_ownership_and_clears_private_snapshots(native_run):
+    registration = {
+        "url": "https://forgejo.private.example.test:9443",
+        "repository": "homelab-ci/homelab-ci",
+        "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+        "token": "1" * 40,
+    }
+    facts = rpm_alloy_facts("Rocky", "10.2") | {"virtualization_role": "guest", "virtualization_type": "kvm"}
+    result, calls = native_run(
+        ["forgejo_runner"], facts=facts, overrides={"fixture_registration": registration, "fixture_runner_handler_failure": True}
+    )
+    assert result.returncode != 0 and "synthetic handler failure" in result.stdout
+    assert [call["options"]["state"] for call in calls if call["module"] == "forgejo_runner_maintenance"] == ["present"]
+    assert next(call["options"] for call in calls if call["module"] == "cleanup_snapshot") == {
+        "registration_empty": True,
+        "read_empty": True,
+    }

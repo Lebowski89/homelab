@@ -1,0 +1,28 @@
+---
+# A token-owned directory excludes all other lifecycle operations and new jobs.
+- name: Forgejo Runner | Ensure controller configuration directory
+  ansible.builtin.file:
+    path: /etc/forgejo-runner
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Forgejo Runner | Exclusively own maintenance until handlers and lifecycle complete
+  forgejo_runner_maintenance:
+    state: present
+    data_dir: '{{ native_services_config.data_dir }}'
+    uid: >-
+      {{ (native_services_runner_account.ansible_facts.getent_passwd[native_services_config.user]
+          | default(['', -1], true))[1] | int }}
+  register: native_services_runner_maintenance
+
+- name: Forgejo Runner | Stop the owned authentication agent during removal
+  when:
+    - not ansible_check_mode
+    - native_services_action == 'remove'
+    - "'/etc/systemd/system/forgejo-runner-agent.service' in (native_services_previous.files | default([]))"
+  ansible.builtin.systemd_service:
+    name: forgejo-runner-agent
+    state: stopped
+    enabled: false

@@ -1,0 +1,197 @@
+---
+
+- name: Forgejo Runner | Require the dedicated Rocky controller VM
+  ansible.builtin.assert:
+    that:
+      - native_services_forgejo_runner_controller is sameas true
+      - inventory_hostname not in ['mgt', 'blacktop', 'pve1']
+      - ansible_facts.distribution == 'Rocky'
+      - ansible_facts.distribution_major_version == '10'
+      - ansible_facts.pkg_mgr in ['dnf', 'dnf5']
+      - ansible_facts.service_mgr == 'systemd'
+      - ansible_facts.virtualization_role == 'guest'
+      - ansible_facts.virtualization_type in ['kvm', 'qemu']
+    fail_msg: The host executor is permitted only in the explicitly selected dedicated Rocky 10 controller VM.
+
+- name: Forgejo Runner | Inspect existing account without creating it
+  ansible.builtin.getent:
+    database: passwd
+    key: '{{ native_services_config.user }}'
+    fail_key: false
+  register: native_services_runner_account
+
+- name: Forgejo Runner | Reject a conflicting account
+  when: native_services_runner_account.ansible_facts.getent_passwd[native_services_config.user] is not none
+  ansible.builtin.assert:
+    that:
+      - native_services_runner_account.ansible_facts.getent_passwd[native_services_config.user][1] | int > 0
+      - native_services_runner_account.ansible_facts.getent_passwd[native_services_config.user][4] == native_services_config.data_dir
+    fail_msg: The runner account must be unprivileged with its dedicated persistent home.
+
+- name: Forgejo Runner | Inspect existing units
+  ansible.builtin.service_facts:
+
+- name: Forgejo Runner | Inspect the deliberately unused legacy registration path
+  ansible.builtin.stat:
+    path: /etc/forgejo-runner/no-legacy-registration
+    follow: false
+  register: native_services_runner_legacy
+
+- name: Forgejo Runner | Refuse any legacy connection alongside the scoped registration
+  when: native_services_action != 'remove'
+  ansible.builtin.assert:
+    that:
+      - not native_services_runner_legacy.stat.exists
+    fail_msg: The disabled legacy registration path must remain absent; refusing an additional unverified connection.
+
+- name: Forgejo Runner | Refuse to adopt unowned runner or SSH-agent units
+  ansible.builtin.assert:
+    that:
+      - >-
+        native_services_runner_unit ~ '.service' not in ansible_facts.services or
+        '/etc/systemd/system/' ~ native_services_runner_unit ~ '.service' in (native_services_previous.files | default([]))
+    fail_msg: A runner or SSH-agent unit exists without this catalogue entry's ownership; refusing adoption or removal.
+  loop: [forgejo-runner, forgejo-runner-agent]
+  loop_control:
+    loop_var: native_services_runner_unit
+
+- name: Forgejo Runner | Inspect persistent home ownership without following links
+  ansible.builtin.stat:
+    path: '{{ native_services_config.data_dir }}'
+    follow: false
+  register: native_services_runner_home_validation
+
+- name: Forgejo Runner | Reject foreign persistent controller state
+  when: native_services_runner_home_validation.stat.exists
+  ansible.builtin.assert:
+    that:
+      - native_services_runner_home_validation.stat.isdir
+      - not native_services_runner_home_validation.stat.islnk
+      - native_services_runner_account.ansible_facts.getent_passwd[native_services_config.user] is not none
+      - native_services_runner_home_validation.stat.uid == native_services_runner_account.ansible_facts.getent_passwd[native_services_config.user][1] | int
+      - native_services_runner_home_validation.stat.mode == '0700'
+    fail_msg: Existing controller data must be a private directory owned by the dedicated runner account; refusing adoption.
+
+- name: Forgejo Runner | Require an explicit absolute private input directory
+  when: native_services_action in ['deploy', 'update']
+  ansible.builtin.assert:
+    that:
+      - native_services_forgejo_runner_private_source_dir is string
+      - native_services_forgejo_runner_private_source_dir == '' or native_services_forgejo_runner_private_source_dir is match('^/')
+
+- name: Forgejo Runner | Inspect required private inputs before changing the host
+  when:
+    - not ansible_check_mode
+    - native_services_action in ['deploy', 'update']
+  delegate_to: "{{ 'localhost' if native_services_forgejo_runner_private_source_dir | length > 0 else inventory_hostname }}"
+  become: '{{ native_services_forgejo_runner_private_source_dir | length == 0 }}'
+  no_log: true
+  diff: false
+  ansible.builtin.stat:
+    path: >-
+      {{ native_services_forgejo_runner_private_source_dir ~ '/' ~ native_services_runner_input
+         if native_services_forgejo_runner_private_source_dir | length > 0 else
+         native_services_config.data_dir ~ '/.ssh/known_hosts' if native_services_runner_input == 'known_hosts' else
+         '/etc/forgejo-runner/private/' ~ native_services_runner_input }}
+    follow: false
+  loop: [registration.json, provisioning.json, allocation.json, node-key, guest-key, guest-key.pub, proxmox-ca.pem, known_hosts]
+  loop_control:
+    loop_var: native_services_runner_input
+  register: native_services_runner_inputs
+
+- name: Forgejo Runner | Require explicit regular credential files before installation
+  when:
+    - not ansible_check_mode
+    - native_services_action in ['deploy', 'update']
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - native_services_runner_input_result.stat.exists
+      - native_services_runner_input_result.stat.isreg | default(false)
+      - not (native_services_runner_input_result.stat.islnk | default(false))
+      - >-
+        native_services_runner_input_result.stat.mode == '0600' or
+        native_services_runner_input_result.native_services_runner_input in ['guest-key.pub', 'proxmox-ca.pem', 'known_hosts']
+    fail_msg: Required private controller files are absent, linked or insufficiently protected; no host changes are allowed.
+  loop: '{{ native_services_runner_inputs.results }}'
+  loop_control:
+    loop_var: native_services_runner_input_result
+
+# Inspect root-created boundaries without following retained user symlinks; tooling beneath .local stays user-owned.
+- name: Forgejo Runner | Inspect installation directory boundaries without following links
+  ansible.builtin.stat:
+    path: '{{ native_services_runner_boundary.path }}'
+    follow: false
+  loop: >-
+    {{ [{'path': '/etc/forgejo-runner', 'root': true},
+        {'path': '/etc/forgejo-runner/private', 'root': false},
+        {'path': '/var/cache/forgejo-runner', 'root': true},
+        {'path': '/var/cache/forgejo-runner/' ~ native_services_config.version, 'root': true}]
+       + [ {'path': native_services_config.data_dir ~ '/.ssh', 'root': false},
+           {'path': native_services_config.data_dir ~ '/cache', 'root': false},
+           {'path': native_services_config.data_dir ~ '/cache/providers', 'root': false},
+           {'path': native_services_config.data_dir ~ '/tmp', 'root': false},
+           {'path': native_services_config.data_dir ~ '/runs', 'root': false},
+           {'path': native_services_config.data_dir ~ '/jobs', 'root': false},
+           {'path': native_services_config.data_dir ~ '/checkouts', 'root': false},
+           {'path': native_services_config.data_dir ~ '/work', 'root': false}] }}
+  loop_control:
+    loop_var: native_services_runner_boundary
+  register: native_services_runner_boundaries
+
+- name: Forgejo Runner | Refuse linked or foreign installation directories
+  when: native_services_runner_boundary_result.stat.exists
+  ansible.builtin.assert:
+    that:
+      - native_services_runner_boundary_result.stat.isdir
+      - not native_services_runner_boundary_result.stat.islnk
+      - >-
+        native_services_runner_boundary_result.stat.uid ==
+        (0 if native_services_runner_boundary_result.native_services_runner_boundary.root else
+         ((native_services_runner_account.ansible_facts.getent_passwd[native_services_config.user]
+           | default(['', -1], true))[1] | int))
+    fail_msg: A controller directory is linked or owned outside its installation boundary; no ownership changes are allowed.
+  loop: '{{ native_services_runner_boundaries.results }}'
+  loop_control:
+    loop_var: native_services_runner_boundary_result
+
+- name: Forgejo Runner | Require an owned restartable installation
+  when: native_services_action == 'recreate'
+  ansible.builtin.assert:
+    that:
+      - native_services_state_stat.stat.exists
+      - native_services_files | difference(native_services_previous.files | default([])) | length == 0
+    fail_msg: Recreate requires this entry's recorded runner, agent and connection configuration.
+
+- name: Forgejo Runner | Inspect only resident restart inputs
+  when:
+    - native_services_action == 'recreate'
+    - not ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.stat:
+    path: '{{ native_services_runner_restart_input }}'
+    follow: false
+  loop: [/etc/forgejo-runner/config.yml, /etc/forgejo-runner/private/node-key]
+  loop_control:
+    loop_var: native_services_runner_restart_input
+  register: native_services_runner_restart_inputs
+
+- name: Forgejo Runner | Require private resident configuration and boot authentication for restart
+  when:
+    - native_services_action == 'recreate'
+    - not ansible_check_mode
+  no_log: true
+  diff: false
+  ansible.builtin.assert:
+    that:
+      - native_services_runner_restart_result.stat.exists
+      - native_services_runner_restart_result.stat.isreg | default(false)
+      - not (native_services_runner_restart_result.stat.islnk | default(false))
+      - native_services_runner_restart_result.stat.mode == '0600'
+      - native_services_runner_restart_result.stat.uid == native_services_runner_account.ansible_facts.getent_passwd[native_services_config.user][1] | int
+    fail_msg: Recreate needs the installed private connection configuration and node key, not provisioning inputs.
+  loop: '{{ native_services_runner_restart_inputs.results }}'
+  loop_control:
+    loop_var: native_services_runner_restart_result

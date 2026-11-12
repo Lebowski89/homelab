@@ -1,5 +1,12 @@
 ---
 
+- name: Workstation | Keep headless automation separate from the desktop entry point
+  ansible.builtin.assert:
+    that:
+      - not (workstation_tools_headless | default(false))
+    fail_msg: Headless controllers must include workstation tasks_from=tools, never the desktop entry point.
+  tags: always
+
 - name: Workstation | Set up password files only when explicitly selected
   when: "'workstation_credentials' in ansible_run_tags"
   ansible.builtin.include_tasks:

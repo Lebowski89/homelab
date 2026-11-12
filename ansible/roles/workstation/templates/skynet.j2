@@ -74,6 +74,7 @@ Aliases:
   skynet target   -> run
 
 Role/action examples:
+  skynet run forgejo-runner deploy
   skynet run netbox deploy
   skynet run netbox recreate
   skynet run workstation credentials
@@ -441,6 +442,10 @@ role_tag() {
     infisical-podman:remove)        echo "infisical_remove" ;;
 
     # Native aliases select catalogue entries through the same lifecycle path.
+    forgejo-runner:deploy|forgejo-runner:run|forgejo-runner:install)
+                                    echo "deploy,forgejo_runner" ;;
+    forgejo-runner:update|forgejo-runner:recreate|forgejo-runner:remove)
+                                    echo "${action},forgejo_runner" ;;
     keepalived:deploy|keepalived:run|keepalived:install)
                                     echo "deploy,keepalived" ;;
     technitium-native:deploy|technitium-native:install|technitium-native:run)

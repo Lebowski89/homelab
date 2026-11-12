@@ -1,13 +1,22 @@
-"""Validate the four native application contracts and preserve host overrides."""
+"""Validate native application contracts and preserve host overrides."""
 
+import re
 from collections.abc import Mapping
 from pathlib import PurePosixPath
+from urllib.parse import urlsplit
 
 from ansible.errors import AnsibleFilterError
 from ansible.template import trust_as_template
 
-PREFIXES = {"alloy": "alloy_native_", "node_exporter": "node_exporter_", "keepalived": "keepalived_", "technitium": "technitium_native_"}
+PREFIXES = {
+    "alloy": "alloy_native_",
+    "node_exporter": "node_exporter_",
+    "keepalived": "keepalived_",
+    "technitium": "technitium_native_",
+    "forgejo_runner": "forgejo_runner_",
+}
 FIELDS = {
+    "forgejo_runner": {"version", "arch", "user", "group", "data_dir", "server_url", "repository", "label"},
     "alloy": {
         "service_name",
         "user",
@@ -106,7 +115,13 @@ def native_services_normalize(native):
     app = native["application"]
     config = native_services_inputs(native, {})
     policy = native.get("update_policy")
-    policies = {"node_exporter": {"pinned"}, "technitium": {"present"}, "alloy": {"present", "latest"}, "keepalived": {"present", "latest"}}
+    policies = {
+        "forgejo_runner": {"pinned"},
+        "node_exporter": {"pinned"},
+        "technitium": {"present"},
+        "alloy": {"present", "latest"},
+        "keepalived": {"present", "latest"},
+    }
     if policy not in policies[app]:
         raise AnsibleFilterError(f"native.update_policy for {app} must be one of: {', '.join(sorted(policies[app]))}")
     lists = {"packages", "journal_groups", "enabled_collectors", "disabled_collectors", "extra_args", "resolved_dns_servers"}
@@ -146,6 +161,31 @@ def native_services_normalize(native):
             raise AnsibleFilterError(f"native.config.{key} must be an absolute non-root path without traversal")
     if app == "alloy" and not config["packages"]:
         raise AnsibleFilterError("native.config.packages must not be empty")
+    if app == "forgejo_runner":
+        url = urlsplit(config["server_url"])
+        if (
+            url.scheme != "https"
+            or not url.hostname
+            or url.username
+            or url.password
+            or url.query
+            or url.fragment
+            or url.path not in ("", "/")
+        ):
+            raise AnsibleFilterError("native.config.server_url must be a verified HTTPS origin")
+        if not re.fullmatch(r"[0-9]+[.][0-9]+[.][0-9]+", config["version"]) or config["arch"] != "amd64":
+            raise AnsibleFilterError("Forgejo Runner requires a pinned release and the supported amd64 architecture")
+        for key in ("user", "group"):
+            if not re.fullmatch(r"[a-z_][a-z0-9_-]{0,30}", config[key]) or config[key] == "root":
+                raise AnsibleFilterError("Forgejo Runner requires dedicated unprivileged user/group names")
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", config["repository"]):
+            raise AnsibleFilterError("Forgejo Runner requires one explicit owner/repository scope")
+        if not re.fullmatch(r"[a-z][a-z0-9_-]{0,63}", config["label"]):
+            raise AnsibleFilterError("Forgejo Runner requires a dedicated host label, without executor options")
+        if config["user"] != config["group"]:
+            raise AnsibleFilterError("Forgejo Runner must use its own dedicated primary group")
+        if not re.fullmatch(r"/var/lib/[a-z0-9][a-z0-9_-]*", config["data_dir"]):
+            raise AnsibleFilterError("Forgejo Runner data_dir must be a dedicated home immediately under /var/lib")
     return config
 
 

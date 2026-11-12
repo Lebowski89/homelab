@@ -1,0 +1,37 @@
+---
+# Copy only this manual workflow into private homelab-ci/homelab-ci after approval.
+name: Live VM acceptance
+"on":
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "Suite (all may exceed Forgejo's default 3h; verify ENDLESS_TASK_TIMEOUT before long runs)"
+        type: choice
+        default: rocky_node_exporter
+        options: [rocky_node_exporter, runtime_install, application_lifecycle, protected_network, all]
+      os:
+        description: "Guest OS (all can exceed the server timeout; the 720-minute job limit does not override it)"
+        type: choice
+        default: rocky102
+        options: [rocky102, debian13, fedora44, ubuntu2604, all]
+concurrency:
+  group: pve1-molecule-allocation
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    if: >-
+      forgejo.repository == 'homelab-ci/homelab-ci' &&
+      forgejo.ref == 'refs/heads/main' &&
+      forgejo.event_name == 'workflow_dispatch'
+    runs-on: molecule-pve1-rocky
+    timeout-minutes: 720
+    steps:
+      - name: Run trusted GitHub main on the dedicated controller
+        env:
+          VM_SUITE: ${{ inputs.suite }}
+          VM_OS: ${{ inputs.os }}
+        run: |
+          set -euo pipefail
+          homelab-molecule run --suite "$VM_SUITE" --os "$VM_OS"
+# No unconditional cleanup: vm.py retains failed resources and evidence. The
+# launcher prints the exact run ID and its explicit retirement command.

@@ -1,0 +1,5 @@
+---
+# Application-specific implementation paths. Public application settings live
+# in the catalogue; private inputs are explicitly copied from the deployment side.
+native_services_forgejo_runner_controller: false
+native_services_forgejo_runner_private_source_dir: ""
