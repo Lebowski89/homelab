@@ -1,5 +1,5 @@
 #!/usr/bin/python3
-"""Checkpoint/restore only the runner's first confined-policy installation.
+"""Checkpoint/restore only the runner's owned confined-policy installation.
 
 Recovery deliberately retains the failed operation's drain receipt. It never
 starts a service, registers a runner, reads a credential, or runs acceptance.
@@ -16,6 +16,7 @@ import re
 import stat
 import subprocess
 import sys
+import tempfile
 from contextlib import contextmanager
 from pathlib import Path
 
@@ -76,19 +77,35 @@ def listing():
 
 
 def unit_state(unit):
-    return dict(line.split("=", 1) for line in command("systemctl", "show", unit.name, "--property=ActiveState,UnitFileState").splitlines())
+    try:
+        output = command("systemctl", "show", unit.name, "--property=ActiveState,UnitFileState,LoadState")
+    except subprocess.CalledProcessError as error:
+        require(error.returncode == 1 and "LoadState=not-found" in error.output.splitlines())
+        output = error.output
+    state = dict(line.split("=", 1) for line in output.splitlines())
+    if state.get("LoadState") == "not-found":
+        require(state["ActiveState"] == "inactive")
+        state["UnitFileState"] = "not-found"
+    return state
 
 
 @contextmanager
 def maintenance():
-    account = pwd.getpwnam("molecule-ci")
-    require(account.pw_uid > 0 and account.pw_dir == str(HOME))
-    require(metadata(HOME)["uid"] == account.pw_uid and metadata(HOME)["mode"] == 0o700)
+    boundary(HOME)
+    if HOME.exists():
+        account = pwd.getpwnam("molecule-ci")
+        require(account.pw_uid > 0 and account.pw_dir == str(HOME))
+        require(metadata(HOME)["uid"] == account.pw_uid and metadata(HOME)["mode"] == 0o700)
     require(metadata(DRAIN)["uid"] == 0 and metadata(DRAIN)["mode"] == 0o700 and DRAIN.is_dir())
     receipt = read_owned(DRAIN / "owner.json")
     value = json.loads(receipt)
     require(set(value) == {"token"} and re.fullmatch("[0-9a-f]{32}", value["token"]) is not None)
     require(set(DRAIN.iterdir()) == {DRAIN / "owner.json"})
+    if not HOME.exists():
+        require(not OWNER.exists() and not any(unit.exists() for unit in UNITS) and not listing())
+        yield hashlib.sha256(receipt).hexdigest()
+        require(read_owned(DRAIN / "owner.json") == receipt)
+        return
     boundary(HOME / "controller.lock")
     fd = os.open(HOME / "controller.lock", os.O_RDWR | os.O_NOFOLLOW)
     with os.fdopen(fd, "r+") as lock:
@@ -99,46 +116,93 @@ def maintenance():
         require(read_owned(DRAIN / "owner.json") == receipt)
 
 
-def owned_record():
+def owned_record(require_units=True):
     raw = read_owned(OWNER)
     value = json.loads(raw)
     require(value["identity"] == "forgejo_runner" and value["unit"] == "forgejo-runner")
-    require(set(map(str, UNITS)) <= set(value["files"]))
+    require(isinstance(value["files"], list) and all(isinstance(name, str) for name in value["files"]))
+    if require_units:
+        require(set(map(str, UNITS)) <= set(value["files"]))
     return raw, value
+
+
+def sync_directory(path):
+    descriptor = os.open(path, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def save_file(path):
+    boundary(path)
+    if not path.exists():
+        return None
+    info = metadata(path)
+    require(path.is_file() and info["uid"] == 0)
+    return {
+        "metadata": info,
+        "bytes": base64.b64encode(path.read_bytes()).decode(),
+        "xattrs": {key: os.getxattr(path, key, follow_symlinks=False).hex() for key in os.listxattr(path)},
+    }
 
 
 def checkpoint(digest):
     with maintenance() as receipt_hash:
-        raw, record = owned_record()
-        require(not record.get("selinux") and not listing())
-        require(not RUNTIME.exists() and not RUNTIME.is_symlink())
+        record = owned_record()[1] if OWNER.exists() else {}
+        current = listing()
+        previous = record.get("selinux", {})
+        if current:
+            require(len(current) == 1 and current[0][:3] == ["400", MODULE, "pp"])
+            require(previous.get("name") == MODULE and previous.get("checksum") == current[0][-1])
+            require(re.fullmatch("[0-9a-f]{64}", previous.get("source_sha256", "")) is not None)
+            proof = package_proof(previous["source_sha256"])
+            require(proof["checksum"] == current[0][-1])
+        else:
+            require(not previous)
+        files = {str(path): save_file(path) for path in [OWNER, *UNITS]}
+        for unit in UNITS:
+            saved = files[str(unit)]
+            require((saved is not None) == (str(unit) in record.get("files", [])))
+            if saved:
+                require(saved["metadata"]["mode"] == 0o644)
+        states = {str(unit): unit_state(unit) for unit in UNITS}
+        for unit in UNITS:
+            state = states[str(unit)]
+            require(state["UnitFileState"] in ["enabled", "disabled", "not-found"])
+            if files[str(unit)] is None:
+                require(state["UnitFileState"] == "not-found" and state["ActiveState"] == "inactive")
+            if not current:
+                require(state["ActiveState"] in ["inactive", "failed"] and state["UnitFileState"] != "enabled")
+        if not current:
+            require(not RUNTIME.exists() and not RUNTIME.is_symlink())
         for path in PRIVATE:
             if path.exists() or path.is_symlink():
                 info = metadata(path)
                 require(path.is_file() and info["uid"] == metadata(HOME)["uid"] and info["mode"] == 0o600)
-        states = {str(unit): unit_state(unit) for unit in UNITS}
-        require(all(value["ActiveState"] in ["inactive", "failed"] and value["UnitFileState"] == "disabled" for value in states.values()))
-        # Snapshot labels only, never credential contents. Do not traverse symlinks.
         expected_units = json.load(sys.stdin)
         require(set(expected_units) == set(map(str, UNITS)))
         require(all(re.fullmatch("[0-9a-f]{64}", value) for value in expected_units.values()))
         paths = [HOME, *PRIVATE, RUNTIME]
-        for root, directories, files in os.walk(HOME, followlinks=False):
-            paths.extend(Path(root) / name for name in directories + files)
+        for root, directories, names in os.walk(HOME, followlinks=False):
+            paths.extend(Path(root) / name for name in directories + names)
         labels = {str(path): metadata(path, links=True) for path in paths if path.exists() or path.is_symlink()}
-        files = {
-            str(path): {
-                "metadata": metadata(path),
-                "bytes": base64.b64encode(path.read_bytes()).decode(),
-                "xattrs": {key: os.getxattr(path, key, follow_symlinks=False).hex() for key in os.listxattr(path)},
-            }
-            for path in [OWNER, *UNITS]
-        }
-        require(all(files[str(unit)]["metadata"]["uid"] == 0 and files[str(unit)]["metadata"]["mode"] == 0o644 for unit in UNITS))
         folder = CACHE / digest
         boundary(folder)
         folder.mkdir(mode=0o700, parents=True, exist_ok=True)
         require(metadata(folder)["uid"] == 0 and metadata(folder)["mode"] == 0o700)
+        # Refuse to overwrite evidence, including when the same payload is retried
+        # under a different receipt. The original owner must finish recovery first.
+        if (folder / "rollback.json").exists():
+            raise FileExistsError("Recovery checkpoint already exists; retain its original ownership")
+        if current:
+            package = CACHE / previous["source_sha256"] / (MODULE + ".pp")
+            with (folder / "previous.pp").open("xb") as stream:
+                os.chmod(stream.fileno(), 0o600)
+                stream.write(package.read_bytes())
+                stream.flush()
+                os.fsync(stream.fileno())
+            require(package_proof(digest, "previous.pp") == proof)
         payload = {
             "digest": digest,
             "receipt_sha256": receipt_hash,
@@ -146,41 +210,64 @@ def checkpoint(digest):
             "labels": labels,
             "states": states,
             "expected_units": expected_units,
-            "policy": [],
+            "policy": current,
+            "previous_proof": proof if current else {},
             "enforcing": command("getenforce"),
         }
         require(payload["enforcing"] == "Enforcing")
-        # Never replace an earlier checkpoint, including an interrupted operation.
         with (folder / "rollback.json").open("x") as stream:
             os.chmod(stream.fileno(), 0o600)
             json.dump(payload, stream)
             stream.flush()
             os.fsync(stream.fileno())
+        sync_directory(folder)
+        sync_directory(folder.parent)
 
 
 def restore_file(path, saved):
     boundary(path)
     require(path.is_file() and metadata(path)["uid"] == 0)
     value = saved["metadata"]
-    # Services are stopped and the controller lock is held. Keep inode/label
-    # handling explicit; no restore of credentials or persistent application data.
-    with path.open("wb") as stream:
-        stream.write(base64.b64decode(saved["bytes"], validate=True))
-        stream.flush()
-        os.fsync(stream.fileno())
-    os.chown(path, value["uid"], value["gid"])
-    os.chmod(path, value["mode"])
-    os.setxattr(path, "security.selinux", bytes.fromhex(value["label"]))
-    for key in os.listxattr(path):
-        if key not in saved["xattrs"]:
-            os.removexattr(path, key)
-    for key, data in saved["xattrs"].items():
-        os.setxattr(path, key, bytes.fromhex(data))
-    os.utime(path, ns=(value["atime_ns"], value["mtime_ns"]), follow_symlinks=False)
+    content = base64.b64decode(saved["bytes"], validate=True)
+    descriptor, name = tempfile.mkstemp(prefix="." + path.name + ".restore-", dir=path.parent)
+    temporary = Path(name)
+    staged = os.fstat(descriptor)
+    try:
+        with os.fdopen(descriptor, "w+b") as stream:
+            stream.write(content)
+            stream.flush()
+            stream.seek(0)
+            require(stream.read() == content)
+            os.chown(temporary, value["uid"], value["gid"])
+            os.chmod(temporary, value["mode"])
+            # Set ownership/mode before ACLs and labels; chown/chmod can clear
+            # attributes. Never expose a partly restored live ownership receipt.
+            for key in os.listxattr(temporary):
+                if key not in saved["xattrs"] and key != "security.selinux":
+                    os.removexattr(temporary, key)
+            for key, data in saved["xattrs"].items():
+                os.setxattr(temporary, key, bytes.fromhex(data))
+            os.setxattr(temporary, "security.selinux", bytes.fromhex(value["label"]))
+            require(
+                {key: os.getxattr(temporary, key).hex() for key in os.listxattr(temporary) if key != "security.selinux"}
+                == {key: data for key, data in saved["xattrs"].items() if key != "security.selinux"}
+            )
+            os.utime(temporary, ns=(value["atime_ns"], value["mtime_ns"]), follow_symlinks=False)
+            restored = metadata(temporary)
+            require(all(restored[key] == value[key] for key in value))
+            require(os.path.samestat(os.fstat(stream.fileno()), temporary.lstat()))
+            os.fsync(stream.fileno())
+            boundary(path)
+            require(path.is_file() and metadata(path)["uid"] == 0)
+            os.replace(temporary, path)
+            sync_directory(path.parent)
+    finally:
+        if temporary.exists() and os.path.samestat(staged, temporary.lstat()):
+            temporary.unlink()
 
 
-def package_proof(digest):
-    package = CACHE / digest / (MODULE + ".pp")
+def package_proof(digest, filename=MODULE + ".pp"):
+    package = CACHE / digest / filename
     require(metadata(package)["uid"] == 0 and package.is_file() and not metadata(package)["mode"] & 0o022)
     payload = package.read_bytes()
     # Use the same installed HLL compiler as semodule. Its CIL SHA256 is the
@@ -193,7 +280,7 @@ def package_proof(digest):
 def arm(digest):
     with maintenance() as receipt_hash:
         snapshot = json.loads(read_owned(CACHE / digest / "rollback.json"))
-        require(snapshot["digest"] == digest and snapshot["receipt_sha256"] == receipt_hash and not listing())
+        require(snapshot["digest"] == digest and snapshot["receipt_sha256"] == receipt_hash and listing() == snapshot["policy"])
         intent_path = CACHE / digest / "installation-intent.json"
         intent = json.loads(read_owned(intent_path))
         require(
@@ -202,6 +289,12 @@ def arm(digest):
             and intent["priority"] == 400
             and intent["source_sha256"] == digest
         )
+        saved_owner = snapshot["files"][str(OWNER)]
+        previous_record = json.loads(base64.b64decode(saved_owner["bytes"], validate=True)) if saved_owner else {}
+        record = owned_record(require_units=saved_owner is not None)[1] if OWNER.exists() else {}
+        require(record.get("selinux", {}) == previous_record.get("selinux", {}))
+        if snapshot["policy"]:
+            require(package_proof(digest, "previous.pp") == snapshot["previous_proof"])
         intent.update(package_proof(digest), receipt_sha256=receipt_hash)
         temporary = intent_path.with_name("armed-intent.json")
         with temporary.open("x") as stream:
@@ -210,44 +303,57 @@ def arm(digest):
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary, intent_path)
+        sync_directory(intent_path.parent)
 
 
 def rollback(digest):
     snapshot = json.loads(read_owned(CACHE / digest / "rollback.json"))
-    require(snapshot["digest"] == digest and snapshot["policy"] == [] and snapshot["enforcing"] == "Enforcing")
+    require(snapshot["digest"] == digest and snapshot["enforcing"] == "Enforcing")
     with maintenance() as receipt_hash:
         require(receipt_hash == snapshot["receipt_sha256"] and command("getenforce") == "Enforcing")
-        _, record = owned_record()
-        if record.get("selinux"):
-            require(record["selinux"].get("name") == MODULE and record["selinux"].get("source_sha256") == digest)
-        current = listing()
-        if current:
-            policy = record.get("selinux", {})
-            require(len(current) == 1 and current[0][:3] == ["400", MODULE, "pp"])
-            if not (policy.get("source_sha256") == digest and policy.get("name") == MODULE and policy.get("checksum") == current[0][-1]):
-                # This also covers interruption between semodule installation
-                # and the native receipt write, without adopting unknown policy.
-                intent_path = CACHE / digest / "installation-intent.json"
-                require(intent_path.exists())
-                intent = json.loads(read_owned(intent_path))
-                require(
-                    intent["identity"] == "forgejo_runner"
-                    and intent["name"] == MODULE
-                    and intent["priority"] == 400
-                    and intent["source_sha256"] == digest
-                    and intent["receipt_sha256"] == receipt_hash
-                )
-                proof = package_proof(digest)
-                require(intent["checksum"] == current[0][-1] == proof["checksum"] and intent["package_sha256"] == proof["package_sha256"])
-        # Validate all restore targets before the first mutation.
         require(set(snapshot["files"]) == set(map(str, [OWNER, *UNITS])))
-        for name in snapshot["files"]:
-            require(metadata(Path(name))["uid"] == 0 and Path(name).is_file())
-        for unit in UNITS:
-            saved = base64.b64decode(snapshot["files"][str(unit)]["bytes"], validate=True)
+        saved_owner = snapshot["files"][str(OWNER)]
+        prior_record = json.loads(base64.b64decode(saved_owner["bytes"], validate=True)) if saved_owner else {}
+        record = owned_record(require_units=saved_owner is not None)[1] if OWNER.exists() else {}
+        require(bool(record) or saved_owner is None)
+        previous_policy = prior_record.get("selinux", {})
+        policy = record.get("selinux", {})
+        if policy != previous_policy:
+            require(policy.get("name") == MODULE and policy.get("source_sha256") == digest)
+            require(policy.get("checksum") == package_proof(digest)["checksum"])
+        previous = snapshot["policy"]
+        if previous:
+            require(len(previous) == 1 and previous[0][:3] == ["400", MODULE, "pp"])
+            require(previous_policy.get("name") == MODULE and previous_policy.get("checksum") == previous[0][-1])
+            require(package_proof(digest, "previous.pp") == snapshot["previous_proof"])
+            require(snapshot["previous_proof"]["checksum"] == previous[0][-1])
+        current = listing()
+        if current != previous:
+            require(len(current) == 1 and current[0][:3] == ["400", MODULE, "pp"])
+            intent = json.loads(read_owned(CACHE / digest / "installation-intent.json"))
             require(
-                hashlib.sha256(unit.read_bytes()).hexdigest() in [hashlib.sha256(saved).hexdigest(), snapshot["expected_units"][str(unit)]]
+                intent["identity"] == "forgejo_runner"
+                and intent["name"] == MODULE
+                and intent["priority"] == 400
+                and intent["source_sha256"] == digest
+                and intent["receipt_sha256"] == receipt_hash
             )
+            proof = package_proof(digest)
+            require(intent["checksum"] == current[0][-1] == proof["checksum"] and intent["package_sha256"] == proof["package_sha256"])
+        # Validate every target before mutation. A retry accepts exact old or
+        # candidate unit bytes, never arbitrary truncated restoration output.
+        for path in [OWNER, *UNITS]:
+            boundary(path)
+            saved = snapshot["files"][str(path)]
+            if not path.exists():
+                require(saved is None)
+                continue
+            require(path.is_file() and metadata(path)["uid"] == 0)
+            if path in UNITS:
+                allowed = [snapshot["expected_units"][str(path)]]
+                if saved:
+                    allowed.append(hashlib.sha256(base64.b64decode(saved["bytes"], validate=True)).hexdigest())
+                require(hashlib.sha256(path.read_bytes()).hexdigest() in allowed)
         for name, saved in snapshot["labels"].items():
             path = Path(name)
             require(path in (HOME, RUNTIME) or HOME in path.parents or path in PRIVATE)
@@ -255,13 +361,16 @@ def rollback(digest):
                 info = metadata(path, links=True)
                 require(info["uid"] == saved["uid"] and info["kind"] == saved["kind"])
         for unit in UNITS:
-            require(snapshot["states"][str(unit)]["UnitFileState"] == "disabled")
-            command("systemctl", "disable", "--now", unit.name)
-        if current:
-            command("semodule", "-X", "400", "-r", MODULE)
-        # Reset newly created home objects to base policy, then put back exact
-        # pre-change labels for every retained object included in the checkpoint.
-        command("restorecon", "-R", str(HOME))
+            if unit.exists():
+                command("systemctl", "disable", "--now", unit.name)
+        if current != previous:
+            if previous:
+                command("semodule", "-X", "400", "-i", str(CACHE / digest / "previous.pp"))
+            else:
+                command("semodule", "-X", "400", "-r", MODULE)
+        require(listing() == previous)
+        if HOME.exists():
+            command("restorecon", "-R", str(HOME))
         for path in PRIVATE + [RUNTIME]:
             if path.exists():
                 boundary(path)
@@ -271,21 +380,33 @@ def rollback(digest):
             if path.exists() or path.is_symlink():
                 os.setxattr(path, "security.selinux", bytes.fromhex(saved["label"]), follow_symlinks=False)
         for name, saved in snapshot["files"].items():
-            restore_file(Path(name), saved)
+            path = Path(name)
+            if saved:
+                restore_file(path, saved)
+            elif path.exists():
+                # Only exact verified candidate files can reach this branch.
+                path.unlink()
+                sync_directory(path.parent)
         command("systemctl", "daemon-reload")
-        require(not listing() and command("getenforce") == "Enforcing")
-        require(
-            all(
-                unit_state(unit)["ActiveState"] in ["inactive", "failed"] and unit_state(unit)["UnitFileState"] == "disabled"
-                for unit in UNITS
-            )
-        )
-        # daemon-reload can read the restored units. Restore captured timestamps
-        # after systemd has consumed the bytes, without starting either unit.
+        for unit in UNITS:
+            if snapshot["states"][str(unit)]["UnitFileState"] == "enabled":
+                command("systemctl", "enable", unit.name)
+        require(listing() == previous and command("getenforce") == "Enforcing")
+        for unit in UNITS:
+            state = unit_state(unit)
+            require(state["ActiveState"] in ["inactive", "failed"])
+            require(state["UnitFileState"] == snapshot["states"][str(unit)]["UnitFileState"])
+        # Reload can read units. Restore and sync their recorded timestamps last.
         for name, saved in snapshot["files"].items():
-            value = saved["metadata"]
-            os.utime(name, ns=(value["atime_ns"], value["mtime_ns"]), follow_symlinks=False)
-        # No marker release and no service start, even when rollback succeeds.
+            if saved:
+                value = saved["metadata"]
+                os.utime(name, ns=(value["atime_ns"], value["mtime_ns"]), follow_symlinks=False)
+                descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW)
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+        # No marker release or service start, even when rollback succeeds.
 
 
 def main():

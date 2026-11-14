@@ -165,6 +165,7 @@ def permission_api(tmp_path, certificate):
             yaml.safe_dump(
                 {
                     "all": {
+                        "vars": {"ansible_python_interpreter": sys.executable},
                         "children": {"tags_opentofu": {"children": {"tags_opentofu_pve_user": {"hosts": {"pve1": variables}}}}},
                         "hosts": {"localhost": {"ansible_connection": "local"}},
                     }

@@ -1,7 +1,11 @@
 ---
-# Only the existing offline installation's first confined-policy migration.
-- name: Forgejo Runner | Resolve the policy migration payload
-  ansible.builtin.include_tasks: forgejo_runner_selinux_payload.yml
+# Snapshot first migration, fresh installation or owned policy upgrade.
+- name: Forgejo Runner | Preserve the retained legacy migration validation boundary
+  ansible.builtin.set_fact:
+    native_services_runner_policy_migration: >-
+      {{ native_services_previous.selinux is not defined and
+         native_services_previous.files | default([])
+         | intersect(['/etc/systemd/system/forgejo-runner.service', '/etc/systemd/system/forgejo-runner-agent.service']) | length == 2 }}
 
 - name: Forgejo Runner | Prepare the private policy recovery boundary
   ansible.builtin.file:
@@ -19,7 +23,7 @@
     group: root
     mode: '0700'
 
-- name: Forgejo Runner | Preserve the offline installation before any ownership or policy mutation
+- name: Forgejo Runner | Preserve prior policy and installation before any ownership or policy mutation
   no_log: true
   diff: false
   ansible.builtin.command:

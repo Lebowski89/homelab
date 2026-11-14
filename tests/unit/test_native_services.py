@@ -1436,21 +1436,34 @@ def test_owned_runner_policy_is_not_reinstalled_on_unchanged_deploy(native_run):
     assert not any(call["module"] == "command" and "-i" in call["options"].get("argv", []) for call in calls)
 
 
-def test_offline_runner_policy_checkpoint_precedes_ownership_policy_and_unit_changes(native_run):
+@pytest.mark.parametrize("installation", ["legacy", "fresh", "upgrade"])
+def test_runner_policy_checkpoint_and_arming_precede_each_installation(native_run, installation):
     facts = rpm_alloy_facts() | {"virtualization_role": "guest", "virtualization_type": "kvm"}
     units = ["/etc/systemd/system/forgejo-runner.service", "/etc/systemd/system/forgejo-runner-agent.service"]
+    overrides = {}
+    if installation != "fresh":
+        record = {"identity": "forgejo_runner", "unit": "forgejo-runner", "files": units}
+        if installation == "upgrade":
+            policy = {"name": "homelab_forgejo_runner", "source_sha256": "c" * 64, "checksum": "sha256:" + "c" * 64}
+            record["selinux"] = policy
+            overrides["fixture_selinux_module"] = policy
+        overrides["fixture_state"] = {"forgejo_runner": record}
     result, calls = native_run(
         ["forgejo_runner"],
         facts=facts,
-        overrides={
-            "fixture_state": {"forgejo_runner": {"identity": "forgejo_runner", "unit": "forgejo-runner", "files": units}},
+        overrides=overrides
+        | {
             "fixture_registration": {
                 "url": "https://forgejo.private.example.test:9443",
                 "repository": "homelab-ci/homelab-ci",
                 "uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
                 "token": "1" * 40,
             },
-            "fixture_services": {name + ".service": {"state": "stopped"} for name in ["forgejo-runner", "forgejo-runner-agent"]},
+            "fixture_services": (
+                {}
+                if installation == "fresh"
+                else {name + ".service": {"state": "stopped"} for name in ["forgejo-runner", "forgejo-runner-agent"]}
+            ),
         },
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -1469,5 +1482,7 @@ def test_offline_runner_policy_checkpoint_precedes_ownership_policy_and_unit_cha
         i for i, call in enumerate(calls) if call["module"] == "command" and call["options"].get("argv", [None, None, None])[2:3] == ["arm"]
     )
     assert checkpoint < owner_write < arm < policy_install
-    assert [call["options"]["state"] for call in calls if call["module"] == "forgejo_runner_maintenance"] == ["present"]
+    assert [call["options"]["state"] for call in calls if call["module"] == "forgejo_runner_maintenance"] == (
+        ["present"] if installation == "legacy" else ["present", "absent"]
+    )
     assert all(i > checkpoint for i, call in enumerate(calls) if call["module"] == "template" and call["options"].get("dest") in units)

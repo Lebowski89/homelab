@@ -64,12 +64,26 @@ def recovery(tmp_path, monkeypatch):
 
     def synthetic_ownership(path, **kwargs):
         info = metadata(path, **kwargs)
-        if path in [mod.OWNER, mod.DRAIN, receipt, *mod.UNITS] or path == mod.CACHE or mod.CACHE in path.parents:
+        if (
+            path in [mod.OWNER, mod.DRAIN, receipt, *mod.UNITS]
+            or path == mod.CACHE
+            or mod.CACHE in path.parents
+            or path.name.startswith(tuple("." + target.name + ".restore-" for target in [mod.OWNER, *mod.UNITS]))
+        ):
             info["uid"] = 0
         return info
 
     monkeypatch.setattr(mod, "metadata", synthetic_ownership)
     monkeypatch.setattr(mod.os, "chown", lambda *args: None)
+    replace = os.replace
+
+    def move(source, target):
+        replace(source, target)
+        if str(source) in labels:
+            labels[str(target)] = labels.pop(str(source))
+
+    monkeypatch.setattr(mod.os, "replace", move)
+    monkeypatch.setattr(mod.subprocess, "run", lambda argv, **kwargs: SimpleNamespace(stdout=b"cil:" + kwargs["input"]))
     monkeypatch.setattr(mod.pwd, "getpwnam", lambda name: SimpleNamespace(pw_uid=os.getuid(), pw_dir=str(mod.HOME)))
     state = {"module": False, "checksum": "sha256:" + "b" * 64, "active": "inactive"}
     calls = []
@@ -81,11 +95,19 @@ def recovery(tmp_path, monkeypatch):
         if argv[:2] == ("semodule", "--list-modules=full"):
             return "400 homelab_forgejo_runner pp " + state["checksum"] if state["module"] else ""
         if argv[:2] == ("systemctl", "show"):
-            return "ActiveState=" + state["active"] + "\nUnitFileState=disabled"
+            exists = any(unit.name == argv[2] and unit.exists() for unit in mod.UNITS)
+            enabled = state.get("enabled", {}).get(argv[2], False)
+            return "ActiveState=" + state["active"] + "\nUnitFileState=" + ("enabled" if enabled else "disabled" if exists else "not-found")
         if argv[:3] == ("systemctl", "disable", "--now"):
             state["active"] = "inactive"
+            state.setdefault("enabled", {})[argv[3]] = False
+        elif argv[:2] == ("systemctl", "enable"):
+            state.setdefault("enabled", {})[argv[2]] = True
         elif argv == ("semodule", "-X", "400", "-r", "homelab_forgejo_runner"):
             state["module"] = False
+        elif argv[:4] == ("semodule", "-X", "400", "-i"):
+            state["module"] = True
+            state["checksum"] = mod.package_proof(Path(argv[4]).parent.name, Path(argv[4]).name)["checksum"]
         elif argv[0] not in ["restorecon", "systemctl"]:
             pytest.fail("Unexpected recovery command: " + repr(argv))
         return ""
@@ -96,7 +118,22 @@ def recovery(tmp_path, monkeypatch):
     return mod, state, calls, labels
 
 
+def prepare_candidate(mod, digest="a" * 64):
+    folder = mod.CACHE / digest
+    package = folder / (mod.MODULE + ".pp")
+    package.write_bytes(b"synthetic public policy package")
+    package.chmod(0o600)
+    intent = folder / "installation-intent.json"
+    intent.write_text(json.dumps({"identity": "forgejo_runner", "name": mod.MODULE, "priority": 400, "source_sha256": digest}))
+    intent.chmod(0o600)
+    mod.arm(digest)
+
+
 def install_candidate(mod, state, labels):
+    intent = mod.CACHE / ("a" * 64) / "installation-intent.json"
+    if not intent.exists():
+        prepare_candidate(mod)
+    state["checksum"] = mod.package_proof("a" * 64)["checksum"]
     record = json.loads(mod.OWNER.read_text())
     record["selinux"] = {"name": mod.MODULE, "source_sha256": "a" * 64, "checksum": state["checksum"]}
     mod.OWNER.write_text(json.dumps(record))
@@ -233,3 +270,175 @@ def test_policy_checkpoint_rejects_online_state_and_never_overwrites(recovery):
     with pytest.raises(FileExistsError):
         mod.checkpoint("a" * 64)
     assert snapshot.read_bytes() == original
+
+
+@pytest.mark.parametrize("target", ["owner", "first_unit", "last_unit"])
+@pytest.mark.parametrize("boundary", ["staged", "replaced"])
+def test_atomic_restore_interruption_preserves_valid_live_files_and_retry(recovery, monkeypatch, target, boundary):
+    mod, state, _, labels = recovery
+    mod.checkpoint("a" * 64)
+    snapshot_path = mod.CACHE / ("a" * 64) / "rollback.json"
+    snapshot = snapshot_path.read_bytes()
+    receipt = (mod.DRAIN / "owner.json").read_bytes()
+    install_candidate(mod, state, labels)
+    path = {"owner": mod.OWNER, "first_unit": mod.UNITS[0], "last_unit": mod.UNITS[1]}[target]
+    live = path.read_bytes()
+    replace = mod.os.replace
+
+    def interrupt(source, destination):
+        if destination == path and boundary == "staged":
+            # Completed staged bytes/metadata must never require truncating live files.
+            assert Path(source).read_bytes() == base64.b64decode(json.loads(snapshot)["files"][str(path)]["bytes"])
+            raise InterruptedError("synthetic interruption before atomic replacement")
+        replace(source, destination)
+        if destination == path and boundary == "replaced":
+            raise InterruptedError("synthetic interruption after atomic replacement")
+
+    monkeypatch.setattr(mod.os, "replace", interrupt)
+    with pytest.raises(InterruptedError):
+        mod.rollback("a" * 64)
+    expected = base64.b64decode(json.loads(snapshot)["files"][str(path)]["bytes"])
+    assert path.read_bytes() == (live if boundary == "staged" else expected)
+    mod.owned_record()  # Even an interrupted ownership restoration is parseable.
+    assert snapshot_path.read_bytes() == snapshot and (mod.DRAIN / "owner.json").read_bytes() == receipt
+    monkeypatch.setattr(mod.os, "replace", replace)
+    mod.rollback("a" * 64)
+    assert all(
+        path.read_bytes() == base64.b64decode(saved["bytes"])
+        for name, saved in json.loads(snapshot)["files"].items()
+        for path in [Path(name)]
+    )
+    assert not state["module"] and mod.DRAIN.is_dir()
+
+
+def test_staging_metadata_failure_never_exposes_partial_ownership(recovery, monkeypatch):
+    mod, state, _, labels = recovery
+    mod.checkpoint("a" * 64)
+    install_candidate(mod, state, labels)
+    before = mod.OWNER.read_bytes()
+    setxattr = mod.os.setxattr
+
+    def fail_staged(path, key, value, **kwargs):
+        if Path(path).name.startswith("." + mod.OWNER.name + ".restore-"):
+            raise OSError("synthetic attribute failure")
+        return setxattr(path, key, value, **kwargs)
+
+    monkeypatch.setattr(mod.os, "setxattr", fail_staged)
+    with pytest.raises(OSError):
+        mod.rollback("a" * 64)
+    assert mod.OWNER.read_bytes() == before
+    mod.owned_record()
+    monkeypatch.setattr(mod.os, "setxattr", setxattr)
+    mod.rollback("a" * 64)
+    assert not state["module"]
+
+
+@pytest.mark.parametrize("installation", ["legacy", "fresh", "upgrade"])
+def test_every_policy_install_can_recover_before_candidate_ownership_is_persisted(recovery, installation):
+    mod, state, calls, labels = recovery
+    if installation == "upgrade":
+        old_folder = mod.CACHE / ("c" * 64)
+        old_folder.mkdir(mode=0o700)
+        old_package = old_folder / (mod.MODULE + ".pp")
+        old_package.write_bytes(b"synthetic previous policy")
+        old_package.chmod(0o600)
+        state["module"] = True
+        state["checksum"] = mod.package_proof("c" * 64)["checksum"]
+        record = json.loads(mod.OWNER.read_text())
+        record["selinux"] = {"name": mod.MODULE, "source_sha256": "c" * 64, "checksum": state["checksum"], "priority": 400}
+        mod.OWNER.write_text(json.dumps(record))
+    elif installation == "fresh":
+        for path in [mod.OWNER, *mod.UNITS, *mod.PRIVATE, *mod.HOME.iterdir()]:
+            path.unlink()
+        mod.HOME.rmdir()
+    original = {path: path.read_bytes() if path.exists() else None for path in [mod.OWNER, *mod.UNITS]}
+    prior_checksum = state["checksum"] if state["module"] else None
+    receipt = (mod.DRAIN / "owner.json").read_bytes()
+    mod.checkpoint("a" * 64)
+    if installation == "fresh":
+        # The normal installation creates its account/home and preliminary
+        # ownership before installing policy, but has no legacy installation.
+        mod.HOME.mkdir(mode=0o700)
+        (mod.HOME / "controller.lock").touch(mode=0o600)
+        (mod.HOME / "data").write_text("new retained evidence")
+        mod.OWNER.write_text(json.dumps({"identity": "forgejo_runner", "unit": "forgejo-runner", "files": []}))
+        mod.OWNER.chmod(0o600)
+        for path in mod.PRIVATE:
+            path.write_text("synthetic-new-private-material")
+            path.chmod(0o600)
+    private = {path: path.read_bytes() for path in mod.PRIVATE}
+    prepare_candidate(mod)
+    # semodule committed C1, but Ansible's native receipt is still C0 (or empty).
+    state.update(module=True, checksum=mod.package_proof("a" * 64)["checksum"])
+    if installation == "upgrade":
+        # Recovery uses its verified retained copy, not a mutable old build cache.
+        old_package.write_bytes(b"old cache changed after checkpoint")
+    mod.rollback("a" * 64)
+    assert state["module"] == (installation == "upgrade")
+    if prior_checksum:
+        assert state["checksum"] == prior_checksum
+        assert ("semodule", "-X", "400", "-i", str(mod.CACHE / ("a" * 64) / "previous.pp")) in calls
+    for path, content in original.items():
+        assert path.read_bytes() == content if content is not None else not path.exists()
+    assert {path: path.read_bytes() for path in mod.PRIVATE} == private
+    assert (mod.DRAIN / "owner.json").read_bytes() == receipt and (mod.HOME / "data").exists()
+    assert not any("start" in argv or "restart" in argv for argv in calls)
+    mod.rollback("a" * 64)
+
+
+@pytest.mark.parametrize("tampered", ["previous_package", "current_module"])
+def test_upgrade_checkpoint_rejects_unproven_previous_policy(recovery, tampered):
+    mod, state, calls, _ = recovery
+    folder = mod.CACHE / ("c" * 64)
+    folder.mkdir(mode=0o700)
+    package = folder / (mod.MODULE + ".pp")
+    package.write_bytes(b"synthetic old package")
+    package.chmod(0o600)
+    checksum = mod.package_proof("c" * 64)["checksum"]
+    record = json.loads(mod.OWNER.read_text())
+    record["selinux"] = {"name": mod.MODULE, "source_sha256": "c" * 64, "checksum": checksum}
+    mod.OWNER.write_text(json.dumps(record))
+    state.update(module=True, checksum=checksum)
+    if tampered == "previous_package":
+        package.write_bytes(b"tampered old package")
+    else:
+        state["checksum"] = "sha256:" + "d" * 64
+    before = mod.OWNER.read_bytes()
+    with pytest.raises(ValueError):
+        mod.checkpoint("a" * 64)
+    assert not (mod.CACHE / ("a" * 64) / "rollback.json").exists() and mod.OWNER.read_bytes() == before
+    assert not any("-i" in argv or "-r" in argv or "disable" in argv for argv in calls)
+
+
+def test_upgrade_retry_after_prior_policy_and_partial_file_restoration_preserves_enablement(recovery, monkeypatch):
+    mod, state, calls, labels = recovery
+    previous = mod.CACHE / ("c" * 64)
+    previous.mkdir(mode=0o700)
+    package = previous / (mod.MODULE + ".pp")
+    package.write_bytes(b"synthetic prior policy")
+    package.chmod(0o600)
+    old_checksum = mod.package_proof("c" * 64)["checksum"]
+    record = json.loads(mod.OWNER.read_text())
+    record["selinux"] = {"name": mod.MODULE, "source_sha256": "c" * 64, "checksum": old_checksum}
+    mod.OWNER.write_text(json.dumps(record))
+    original_owner = mod.OWNER.read_bytes()
+    state.update(module=True, checksum=old_checksum, active="active", enabled={unit.name: True for unit in mod.UNITS})
+    mod.checkpoint("a" * 64)
+    install_candidate(mod, state, labels)
+    replace = mod.os.replace
+
+    def fail_last_unit(source, target):
+        if target == mod.UNITS[-1]:
+            raise InterruptedError("synthetic interruption after earlier replacements")
+        replace(source, target)
+
+    monkeypatch.setattr(mod.os, "replace", fail_last_unit)
+    with pytest.raises(InterruptedError):
+        mod.rollback("a" * 64)
+    assert state["checksum"] == old_checksum and mod.OWNER.read_bytes() == original_owner
+    assert mod.UNITS[0].read_bytes() == b"original unit\n" and mod.UNITS[1].read_bytes() == b"candidate unit\n"
+    monkeypatch.setattr(mod.os, "replace", replace)
+    mod.rollback("a" * 64)
+    assert state["module"] and state["checksum"] == old_checksum and state["active"] == "inactive"
+    assert all(state["enabled"][unit.name] and unit.read_bytes() == b"original unit\n" for unit in mod.UNITS)
+    assert mod.DRAIN.is_dir() and not any("start" in argv or "restart" in argv for argv in calls)

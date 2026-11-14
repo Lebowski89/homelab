@@ -140,6 +140,28 @@ def test_host_pin_replacement_cannot_relabel_the_replacement(tmp_path, monkeypat
 
 
 @pytest.mark.integration
+def test_fifo_host_pin_is_rejected_without_waiting_for_a_writer(tmp_path):
+    os.mkfifo(tmp_path / "known_hosts", mode=0o600)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import runpy,sys; from pathlib import Path; "
+            "vm=runpy.run_path(sys.argv[1]); "
+            "vm['write_host_pins'](Path(sys.argv[2]), 'synthetic pin\\n')",
+            str(ROOT / "scripts/testing/vm.py"),
+            str(tmp_path),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=5,
+    )
+    assert result.returncode != 0
+    assert "Host pins must be an owned regular mode-0600 file" in result.stderr
+    assert (tmp_path / "known_hosts").is_fifo()
+
+
+@pytest.mark.integration
 @pytest.mark.parametrize(
     "family,option,value,key",
     [

@@ -595,7 +595,7 @@ def write_host_pins(directory, expected_keys):
             descriptor = os.open("known_hosts", os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent)
             created = True
         except FileExistsError:
-            descriptor = os.open("known_hosts", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent)
+            descriptor = os.open("known_hosts", os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
             created = False
         with os.fdopen(descriptor, "r+b" if created else "rb") as stream:
             if created:

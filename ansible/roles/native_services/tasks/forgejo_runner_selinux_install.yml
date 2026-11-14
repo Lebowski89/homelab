@@ -55,8 +55,7 @@
     mode: '0600'
 
 # A deferred handler would arm proof after semodule, leaving an unowned-install gap.
-- name: Forgejo Runner | Arm exact package ownership before the first live policy installation # noqa: no-handler
-  when: native_services_runner_policy_checkpoint.changed | default(false)
+- name: Forgejo Runner | Arm exact package ownership before every live policy installation # noqa: no-handler
   no_log: true
   diff: false
   ansible.builtin.command:

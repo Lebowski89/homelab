@@ -465,18 +465,27 @@ an unchanged deployment does not rebuild/reinstall the module. Check mode only
 inspects and plans. Interrupted installation retains its intent and maintenance
 ownership for review rather than silently adopting policy.
 
-The first migration of the retained offline installation checkpoints before
-rewriting its native ownership receipt, policy, labels or units. The role-owned
+Every policy installation or replacement checkpoints before rewriting native
+ownership, policy, labels or units: the retained legacy migration, a fresh
+installation, and an owned C0 → C1 upgrade all use the same recovery executable.
+An unchanged installed policy skips checkpointing, building and arming. The role-owned
 `files/forgejo_runner/selinux/rollback.py` executable is installed root-owned,
 mode `0700`, at `/var/cache/forgejo-runner/selinux/rollback.py`. Its immutable,
 root-only `<source-digest>/rollback.json` stores exact old unit/native-receipt
-bytes, UID/GID, modes, timestamps and extended attributes, disabled unit states,
-pre-existing home and named-file labels, enforcing state, and absence of this
-module. Credential contents are never copied into it. This checkpoint accepts
-only the current offline/disabled, owned installation with no previous module
-and no retained agent runtime directory; it is not a general upgrade rollback.
+bytes (or their verified absence), UID/GID, modes, timestamps and extended
+attributes, unit enablement states, pre-existing home and named-file labels,
+enforcing state and the prior module identity. For upgrades, `previous.pp` is a
+private copy of the prior owned package; its package hash and compiler-derived
+CIL checksum must match the installed C0 module before checkpointing and are
+checked again before recovery. Missing or mismatched prior packages fail closed.
+Credential contents are never copied into the snapshot. The legacy migration
+still requires offline/disabled units, no previous module and no retained agent
+runtime directory. A fresh installation records absent ownership/units without
+claiming existing foreign files or services. Upgrades require matching prior
+native policy ownership. Existing snapshots are never overwritten or rebound to
+a later maintenance receipt.
 
-The migration intentionally retains maintenance ownership after handler completion
+The legacy migration intentionally retains maintenance ownership after handler completion
 until the named agent/runner checks pass. Only then may the operator release that
 same receipt through the existing maintenance module. For the initial matching operation on
 **molecule-controller only**, the historical rollback command was:
@@ -490,18 +499,37 @@ The executable verifies hostname, account/home ownership, root-only snapshot,
 matching maintenance-receipt hash and native ownership. It holds `controller.lock`
 non-blockingly throughout recovery and rejects unexpected unit bytes, symlinks,
 foreign module priorities/checksums or a changed receipt before mutation. It
-stops/disables only the two owned units, removes only the recorded priority-400
-module, restores base labels on newly created paths and exact recorded labels on
-retained paths, restores old units and native ownership metadata, and reloads
-systemd. Both services remain offline/disabled. It does not start their old retry
+stops/disables only the owned units, restores the verified prior priority-400
+module (or removes the proven candidate when no prior module existed), restores
+base labels on newly created paths and exact recorded labels on retained paths,
+restores old units and native ownership metadata, and reloads systemd. Previously
+enabled units regain enablement without being started; legacy units remain
+offline/disabled. For fresh installs, only verified candidate unit/ownership
+files are removed; newly created credentials, home and evidence are retained.
+It does not start a retry
 loop, release maintenance, remove registration/credentials, delete run evidence,
 or invoke normal service removal. Failed/interrupted recovery retains its
-checkpoint and receipt for inspection/retry. Before installation the checkpoint owner arms the intent with the exact staged
+checkpoint and receipt for inspection/retry. File restoration stages a replacement
+in the destination directory, verifies its complete bytes and metadata, syncs
+the file, atomically replaces the live path, and syncs the directory. Recorded
+timestamps are restored after systemd reload and synced again. Interruption
+leaves each live file wholly old or wholly restored; retries accept those exact
+unit hashes, never arbitrary partial files. Checkpoints and maintenance receipts
+are retained throughout.
+
+Before **every** policy installation the checkpoint owner arms the intent with the exact staged
 package hash and CIL checksum from the installed HLL compiler. Recovery can
 therefore cover interruption before the native checksum receipt write: it must
 match the same maintenance receipt, source digest, retained package hash,
 recomputed CIL checksum and installed module checksum. A generic intent without
-this proof, or any mismatch, fails closed before mutation.
+this proof, or any mismatch, fails closed before mutation. This covers C0 still
+being recorded after C1 installation, and a fresh installation whose preliminary
+receipt has no policy yet. Recovery can be retried after some unit/ownership
+replacements have already completed or after the prior policy was restored.
+Ordinary successful fresh installs/upgrades release their own maintenance receipt
+after handlers as before; failure retains it. The legacy migration keeps its
+explicit validation/release boundary. Check mode never checkpoints, arms,
+installs, relabels, or changes service state.
 
 Focused validation links the candidate against this controller's installed CIL
 in an isolated temporary directory, queries the resulting binary policy and
