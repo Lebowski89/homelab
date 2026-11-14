@@ -14,6 +14,9 @@
       - workstation_repository_clone is boolean
       - workstation_user is string
       - workstation_user | trim | length > 0
+      - workstation_ansible_python_executable is string
+      - workstation_ansible_python_executable | trim | length > 0
+      - workstation_ansible_python_executable == workstation_ansible_python_executable | trim
     fail_msg: Workstation tooling requires strict boolean switches and an existing user.
 
 - name: Workstation | Resolve existing user account

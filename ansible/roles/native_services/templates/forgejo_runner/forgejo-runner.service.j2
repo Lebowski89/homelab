@@ -8,6 +8,8 @@ Requires=forgejo-runner-agent.service
 Type=simple
 User={{ native_services_config.user }}
 Group={{ native_services_config.group }}
+# Override bin_t's default unconfined_service_t transition; failures are fatal.
+SELinuxContext=user_u:user_r:user_t:s0
 WorkingDirectory={{ native_services_config.data_dir }}
 Environment=HOME={{ native_services_config.data_dir }}
 Environment=TMPDIR={{ native_services_config.data_dir }}/tmp

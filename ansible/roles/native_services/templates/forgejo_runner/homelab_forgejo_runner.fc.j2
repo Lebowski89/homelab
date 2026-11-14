@@ -1,0 +1,10 @@
+# Confined user_t needs a user-data label for this retained private home.
+{{ native_services_config.data_dir | regex_escape }} -d system_u:object_r:user_home_dir_t:s0
+{{ native_services_config.data_dir | regex_escape }}/.* system_u:object_r:user_home_t:s0
+{{ native_services_config.data_dir | regex_escape }}/\.ssh(/.*)? system_u:object_r:ssh_home_t:s0
+/run/forgejo-runner-agent(/.*)? system_u:object_r:homelab_forgejo_agent_run_t:s0
+/etc/forgejo-runner/private/node-key -- system_u:object_r:homelab_forgejo_node_key_t:s0
+/etc/forgejo-runner/private/provisioning\.json -- system_u:object_r:homelab_forgejo_provisioning_t:s0
+/etc/forgejo-runner/private/registration\.json -- system_u:object_r:homelab_forgejo_registration_t:s0
+/etc/forgejo-runner/config\.yml -- system_u:object_r:homelab_forgejo_registration_t:s0
+/etc/forgejo-runner/private/guest-key(\.pub)? -- system_u:object_r:homelab_forgejo_guest_key_t:s0

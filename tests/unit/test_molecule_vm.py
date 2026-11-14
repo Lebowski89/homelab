@@ -1,5 +1,6 @@
 """Controller ownership/environment failures; these are not guest acceptance."""
 
+import errno
 import hashlib
 import importlib.util
 import json
@@ -16,6 +17,126 @@ ROOT = Path(__file__).resolve().parents[2]
 spec = importlib.util.spec_from_file_location("molecule_vm", ROOT / "scripts/testing/vm.py")
 VM = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(VM)
+
+
+@pytest.mark.parametrize("existing", [False, True])
+def test_host_pins_label_new_and_retained_files_without_changing_trust(tmp_path, monkeypatch, existing):
+    directory = tmp_path / "run"
+    directory.mkdir(mode=0o700)
+    pin = directory / "known_hosts"
+    expected = "192.0.2.44 ssh-ed25519 c3ludGhldGlj\n"
+    if existing:
+        pin.write_text(expected)
+        pin.chmod(0o600)
+    context = [b"user_u:object_r:user_home_t:s0:c7\0"]
+    changes = []
+
+    def get_context(fd, name):
+        assert isinstance(fd, int) and name == "security.selinux"
+        return context[0]
+
+    def set_context(fd, name, value):
+        assert isinstance(fd, int) and name == "security.selinux"
+        changes.append(os.fstat(fd).st_ino)
+        context[0] = value
+
+    monkeypatch.setattr(VM.os, "getxattr", get_context)
+    monkeypatch.setattr(VM.os, "setxattr", set_context)
+    original = pin.stat() if existing else None
+    VM.write_host_pins(directory, expected)
+    after = pin.stat()
+    assert pin.read_text() == expected and after.st_mode & 0o777 == 0o600 and after.st_uid == os.getuid()
+    assert context[0] == b"user_u:object_r:ssh_home_t:s0:c7\0"
+    if original:
+        assert (after.st_ino, after.st_uid, after.st_gid, after.st_mode) == (
+            original.st_ino,
+            original.st_uid,
+            original.st_gid,
+            original.st_mode,
+        )
+    VM.write_host_pins(directory, expected)
+    assert changes == [after.st_ino]
+
+
+@pytest.mark.parametrize("foreign", ["pin_link", "parent_link", "hard_link", "mode", "contents"])
+def test_host_pins_reject_unsafe_paths_or_changed_trust_before_labeling(tmp_path, monkeypatch, foreign):
+    directory = tmp_path / "run"
+    directory.mkdir(mode=0o700)
+    expected = "192.0.2.44 ssh-ed25519 c3ludGhldGlj\n"
+    other = tmp_path / "other"
+    other.write_text(expected)
+    other.chmod(0o600)
+    pin = directory / "known_hosts"
+    if foreign == "parent_link":
+        alias = tmp_path / "alias"
+        alias.symlink_to(directory, target_is_directory=True)
+        directory = alias
+    elif foreign == "pin_link":
+        pin.symlink_to(other)
+    elif foreign == "hard_link":
+        os.link(other, pin)
+    else:
+        pin.write_text("different synthetic pin\n" if foreign == "contents" else expected)
+        pin.chmod(0o644 if foreign == "mode" else 0o600)
+    monkeypatch.setattr(VM.os, "setxattr", lambda *args: pytest.fail("Unsafe pins must not be relabeled"))
+    with pytest.raises((OSError, ValueError)):
+        VM.write_host_pins(directory, expected)
+    assert other.read_text() == expected and other.stat().st_mode & 0o777 == 0o600
+    if foreign == "contents":
+        assert pin.read_text() == "different synthetic pin\n"
+
+
+@pytest.mark.parametrize("failure", [errno.ENODATA, errno.ENOTSUP, errno.EACCES])
+def test_host_pins_skip_only_absent_filesystem_labels(tmp_path, monkeypatch, failure):
+    expected = "192.0.2.44 ssh-ed25519 c3ludGhldGlj\n"
+
+    def absent(*args):
+        raise OSError(failure, "synthetic xattr result")
+
+    monkeypatch.setattr(VM.os, "getxattr", absent)
+    monkeypatch.setattr(VM.os, "setxattr", lambda *args: pytest.fail("No label was available"))
+    if failure == errno.EACCES:
+        with pytest.raises(OSError):
+            VM.write_host_pins(tmp_path, expected)
+    else:
+        VM.write_host_pins(tmp_path, expected)
+    pin = tmp_path / "known_hosts"
+    assert pin.read_text() == expected and pin.stat().st_mode & 0o777 == 0o600
+
+
+def test_host_pin_label_failure_preserves_private_file_and_is_not_ignored(tmp_path, monkeypatch):
+    expected = "192.0.2.44 ssh-ed25519 c3ludGhldGlj\n"
+    monkeypatch.setattr(VM.os, "getxattr", lambda *args: b"user_u:object_r:user_home_t:s0")
+
+    def denied(*args):
+        raise PermissionError("synthetic relabel denial")
+
+    monkeypatch.setattr(VM.os, "setxattr", denied)
+    with pytest.raises(PermissionError):
+        VM.write_host_pins(tmp_path, expected)
+    assert (tmp_path / "known_hosts").read_text() == expected
+    assert (tmp_path / "known_hosts").stat().st_mode & 0o777 == 0o600
+
+
+def test_host_pin_replacement_cannot_relabel_the_replacement(tmp_path, monkeypatch):
+    expected = "192.0.2.44 ssh-ed25519 c3ludGhldGlj\n"
+    pin = tmp_path / "known_hosts"
+    replacement = tmp_path / "replacement"
+    replacement.write_text("foreign data\n")
+    replacement.chmod(0o600)
+    context = [b"user_u:object_r:user_home_t:s0"]
+    monkeypatch.setattr(VM.os, "getxattr", lambda *args: context[0])
+
+    def replace(fd, name, value):
+        original_inode = os.fstat(fd).st_ino
+        replacement.replace(pin)
+        assert pin.stat().st_ino != original_inode
+        context[0] = value
+
+    monkeypatch.setattr(VM.os, "setxattr", replace)
+    with pytest.raises(ValueError, match="metadata changed during preparation"):
+        VM.write_host_pins(tmp_path, expected)
+    assert pin.read_text() == "foreign data\n"
 
 
 @pytest.mark.integration

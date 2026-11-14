@@ -1,0 +1,33 @@
+---
+# Only the existing offline installation's first confined-policy migration.
+- name: Forgejo Runner | Resolve the policy migration payload
+  ansible.builtin.include_tasks: forgejo_runner_selinux_payload.yml
+
+- name: Forgejo Runner | Prepare the private policy recovery boundary
+  ansible.builtin.file:
+    path: /var/cache/forgejo-runner/selinux
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Forgejo Runner | Install the bounded policy checkpoint and rollback executable
+  ansible.builtin.copy:
+    src: forgejo_runner/selinux/rollback.py
+    dest: /var/cache/forgejo-runner/selinux/rollback.py
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Forgejo Runner | Preserve the offline installation before any ownership or policy mutation
+  no_log: true
+  diff: false
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, /var/cache/forgejo-runner/selinux/rollback.py, checkpoint, '{{ native_services_runner_selinux_digest }}']
+    stdin: >-
+      {{ {'/etc/systemd/system/forgejo-runner-agent.service':
+            lookup('ansible.builtin.template', 'forgejo_runner/forgejo-runner-agent.service.j2') | hash('sha256'),
+          '/etc/systemd/system/forgejo-runner.service':
+            lookup('ansible.builtin.template', 'forgejo_runner/forgejo-runner.service.j2') | hash('sha256')} | to_json }}
+  register: native_services_runner_policy_checkpoint
+  changed_when: true

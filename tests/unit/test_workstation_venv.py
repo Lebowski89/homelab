@@ -1,8 +1,12 @@
 import importlib.util
+import shlex
+import subprocess
+import sys
 from pathlib import Path
 
 import pytest
 import yaml
+from jinja2 import Environment, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VENV_TASKS = yaml.safe_load((REPO_ROOT / "ansible/roles/workstation/tasks/tools/ansible.yml").read_text())
@@ -119,14 +123,14 @@ def test_venv_tasks_consume_recovery_decision_without_check_mode_mutation(tmp_pa
     assert "workstation_venv_recovery_action" in recreate["when"][1]
     assert "workstation_venv_recovery_action" in create["when"][1]
     assert recreate["ansible.builtin.command"]["argv"] == [
-        "python3",
+        "{{ workstation_ansible_python_executable }}",
         "-m",
         "venv",
         "--clear",
         "{{ workstation_ansible_venv_path }}",
     ]
     assert create["ansible.builtin.command"]["argv"] == [
-        "python3",
+        "{{ workstation_ansible_python_executable }}",
         "-m",
         "venv",
         "{{ workstation_ansible_venv_path }}",
@@ -139,3 +143,42 @@ def test_venv_tasks_consume_recovery_decision_without_check_mode_mutation(tmp_pa
     assert pip_module["state"] == "present"
     assert pip_module["virtualenv"] == "{{ workstation_ansible_venv_path }}"
     assert VENV_TASKS.index(recreate) < VENV_TASKS.index(create) < VENV_TASKS.index(pip)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("alternate", [False, True])
+def test_selected_interpreter_drives_abi_library_path_and_environment_creation(tmp_path, alternate):
+    defaults = yaml.safe_load((REPO_ROOT / "ansible/roles/workstation/defaults/main.yml").read_text())
+    selected = defaults["workstation_ansible_python_executable"]
+    marker = tmp_path / "interpreter-calls"
+    if alternate:
+        executable = tmp_path / "selected-python"
+        executable.write_text(f"#!/bin/sh\nprintf 'called\\n' >> {shlex.quote(str(marker))}\nexec {shlex.quote(sys.executable)} \"$@\"\n")
+        executable.chmod(0o700)
+        selected = str(executable)
+    venv = tmp_path / "venv"
+    variables = dict(workstation_ansible_python_executable=selected, workstation_ansible_venv_path=str(venv))
+    environment = Environment(undefined=StrictUndefined)
+    commands = [task["ansible.builtin.command"]["argv"] for task in VENV_TASKS if "ansible.builtin.command" in task]
+
+    def invoke(argv):
+        rendered = [environment.from_string(argument).render(**variables) for argument in argv]
+        before = marker.read_text() if marker.exists() else ""
+        result = subprocess.check_output(rendered, text=True).strip()
+        if alternate and argv[0] != "{{ workstation_ansible_venv_path }}/bin/python":
+            assert marker.read_text() == before + "called\n"
+        return result
+
+    abi = invoke(next(argv for argv in commands if "sys.version_info" in str(argv) and argv[0].startswith("{{ workstation_ansible_python")))
+    library = Path(invoke(next(argv for argv in commands if "sysconfig" in str(argv))))
+    create = next(argv for argv in commands if "venv" in argv and "--clear" not in argv)
+    recreate = next(argv for argv in commands if "--clear" in argv)
+    invoke(create)
+    assert library.is_dir()
+    probe = next(argv for argv in commands if argv[0] == "{{ workstation_ansible_venv_path }}/bin/python")
+    assert invoke(probe) == abi
+    sentinel = venv / "old-environment"
+    sentinel.touch()
+    invoke(recreate)
+    assert not sentinel.exists() and library.is_dir()
+    assert invoke(probe) == abi

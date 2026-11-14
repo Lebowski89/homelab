@@ -1,0 +1,11 @@
+---
+- name: Forgejo Runner | Resolve the exact policy source and private file contexts
+  ansible.builtin.set_fact:
+    native_services_runner_selinux_source: >-
+      {{ lookup('ansible.builtin.file', role_path ~ '/files/forgejo_runner/selinux/homelab_forgejo_runner.te', rstrip=false) }}
+    native_services_runner_selinux_contexts: '{{ lookup("ansible.builtin.template", "forgejo_runner/homelab_forgejo_runner.fc.j2") }}'
+
+- name: Forgejo Runner | Identify the reviewed policy payload
+  ansible.builtin.set_fact:
+    native_services_runner_selinux_digest: >-
+      {{ (native_services_runner_selinux_source ~ '\n---\n' ~ native_services_runner_selinux_contexts) | hash('sha256') }}

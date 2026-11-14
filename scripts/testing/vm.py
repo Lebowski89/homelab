@@ -8,6 +8,7 @@ Failure leaves the exact run and evidence in place; retirement is explicit.
 
 import argparse
 import contextlib
+import errno
 import fcntl
 import hashlib
 import ipaddress
@@ -18,6 +19,7 @@ import secrets
 import shutil
 import signal
 import ssl
+import stat
 import subprocess
 import sys
 import time
@@ -583,6 +585,66 @@ def provisioning_environment(manifest):
     }
 
 
+def write_host_pins(directory, expected_keys):
+    """Create/verify only this private run's pins, using existing SSH SELinux policy."""
+    parent = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        owner = os.fstat(parent)
+        require(owner.st_uid == os.getuid() and owner.st_mode & 0o077 == 0, "Host-pin directory must be owned and private")
+        try:
+            descriptor = os.open("known_hosts", os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=parent)
+            created = True
+        except FileExistsError:
+            descriptor = os.open("known_hosts", os.O_RDONLY | os.O_NOFOLLOW, dir_fd=parent)
+            created = False
+        with os.fdopen(descriptor, "r+b" if created else "rb") as stream:
+            if created:
+                os.fchmod(stream.fileno(), 0o600)
+            before = os.fstat(stream.fileno())
+            require(
+                stat.S_ISREG(before.st_mode)
+                and before.st_uid == os.getuid()
+                and stat.S_IMODE(before.st_mode) == 0o600
+                and before.st_nlink == 1,
+                "Host pins must be an owned regular mode-0600 file without additional links",
+            )
+            expected = expected_keys.encode()
+            if created:
+                stream.write(expected)
+                stream.flush()
+                os.fsync(stream.fileno())
+            stream.seek(0)
+            require(stream.read() == expected, "Existing host-key trust differs; refusing overwrite")
+            try:
+                label = os.getxattr(stream.fileno(), "security.selinux")
+            except OSError as error:
+                if error.errno not in {errno.ENODATA, errno.ENOTSUP, errno.EOPNOTSUPP}:
+                    raise
+            else:
+                parts = label.rstrip(b"\0").split(b":", 3)
+                require(len(parts) == 4 and all(parts) and parts[1] == b"object_r", "Invalid host-pin SELinux context")
+                parts[2] = b"ssh_home_t"
+                target = b":".join(parts) + label[len(label.rstrip(b"\0")) :]
+                if label != target:
+                    os.setxattr(stream.fileno(), "security.selinux", target)
+                require(os.getxattr(stream.fileno(), "security.selinux") == target, "Host-pin SSH label did not converge")
+            after = os.fstat(stream.fileno())
+            require(
+                os.path.samestat(before, after)
+                and (after.st_uid, after.st_gid, after.st_mode, after.st_nlink)
+                == (before.st_uid, before.st_gid, before.st_mode, before.st_nlink),
+                "Host-pin metadata changed during preparation",
+            )
+            stream.seek(0)
+            require(stream.read() == expected, "Host pins changed during preparation")
+            require(
+                os.path.samestat(after, os.stat("known_hosts", dir_fd=parent, follow_symlinks=False)),
+                "Host-pin path was replaced during preparation",
+            )
+    finally:
+        os.close(parent)
+
+
 def inventory(manifest, directory):
     known = directory / "known_hosts"
     children = {}
@@ -695,12 +757,7 @@ def provision(directory, manifest):
         for guest in manifest["run"]["guests"].values():
             keys.append(str(ipaddress.ip_interface(guest["address"]).ip) + " " + (directory / "guest-host-key.pub").read_text().strip())
         expected_keys = "\n".join(keys) + "\n"
-        known_hosts = directory / "known_hosts"
-        if known_hosts.exists():
-            require(known_hosts.read_text() == expected_keys, "Existing host-key trust differs; refusing overwrite")
-        else:
-            known_hosts.write_text(expected_keys)
-            known_hosts.chmod(0o600)
+        write_host_pins(directory, expected_keys)
         inventory_file = directory / "inventory.yml"
         if inventory_file.exists():
             require(

@@ -1,0 +1,105 @@
+---
+- name: Forgejo Runner | Prepare private root-owned policy build storage
+  ansible.builtin.file:
+    path: '/var/cache/forgejo-runner/selinux/{{ native_services_runner_selinux_digest }}'
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Forgejo Runner | Materialize the reviewed policy source
+  ansible.builtin.copy:
+    dest: '/var/cache/forgejo-runner/selinux/{{ native_services_runner_selinux_digest }}/homelab_forgejo_runner.te'
+    content: '{{ native_services_runner_selinux_source }}'
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Forgejo Runner | Materialize only this controller's file-context declarations
+  ansible.builtin.copy:
+    dest: '/var/cache/forgejo-runner/selinux/{{ native_services_runner_selinux_digest }}/homelab_forgejo_runner.fc'
+    content: '{{ native_services_runner_selinux_contexts }}'
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Forgejo Runner | Compile the policy without installing it
+  ansible.builtin.command:
+    argv: [checkmodule, -M, -m, -o, homelab_forgejo_runner.mod, homelab_forgejo_runner.te]
+    chdir: '/var/cache/forgejo-runner/selinux/{{ native_services_runner_selinux_digest }}'
+  changed_when: true
+
+- name: Forgejo Runner | Package the exact module and scoped file contexts
+  ansible.builtin.command:
+    argv: [semodule_package, -o, homelab_forgejo_runner.pp, -m, homelab_forgejo_runner.mod, -f, homelab_forgejo_runner.fc]
+    chdir: '/var/cache/forgejo-runner/selinux/{{ native_services_runner_selinux_digest }}'
+  changed_when: true
+
+# Retained even if the subsequent install/ownership write is interrupted.
+- name: Forgejo Runner | Protect the exact staged policy package before recording its proof
+  ansible.builtin.file:
+    path: '/var/cache/forgejo-runner/selinux/{{ native_services_runner_selinux_digest }}/homelab_forgejo_runner.pp'
+    owner: root
+    group: root
+    mode: '0600'
+
+- name: Forgejo Runner | Preserve the scoped policy installation intent
+  ansible.builtin.copy:
+    dest: '/var/cache/forgejo-runner/selinux/{{ native_services_runner_selinux_digest }}/installation-intent.json'
+    content: >-
+      {{ {'identity': native_services_identity, 'name': 'homelab_forgejo_runner', 'priority': 400,
+          'source_sha256': native_services_runner_selinux_digest,
+          'previous': native_services_previous.selinux | default({})} | to_nice_json }}
+    owner: root
+    group: root
+    mode: '0600'
+
+# A deferred handler would arm proof after semodule, leaving an unowned-install gap.
+- name: Forgejo Runner | Arm exact package ownership before the first live policy installation # noqa: no-handler
+  when: native_services_runner_policy_checkpoint.changed | default(false)
+  no_log: true
+  diff: false
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, /var/cache/forgejo-runner/selinux/rollback.py, arm, '{{ native_services_runner_selinux_digest }}']
+  changed_when: true
+
+- name: Forgejo Runner | Install only the reviewed application module
+  ansible.builtin.command:
+    argv:
+      - semodule
+      - -X
+      - '400'
+      - -i
+      - '/var/cache/forgejo-runner/selinux/{{ native_services_runner_selinux_digest }}/homelab_forgejo_runner.pp'
+  changed_when: true
+  notify:
+    - Restart Forgejo Runner SSH agent
+    - Restart Forgejo Runner
+
+- name: Forgejo Runner | Read the installed module checksum before claiming ownership
+  ansible.builtin.command:
+    argv: [semodule, --list-modules=full, --checksum]
+  register: native_services_runner_selinux_installed
+  changed_when: false
+
+- name: Forgejo Runner | Require one exact installed module at the reviewed priority
+  ansible.builtin.assert:
+    that:
+      - >-
+        native_services_runner_selinux_installed.stdout_lines
+        | select('match', '^400\s+homelab_forgejo_runner\s+pp\s+sha256:[0-9a-f]{64}\s*$') | list | length == 1
+    fail_msg: Policy installation did not return its expected checksum; installation intent, package and maintenance ownership are retained.
+
+- name: Forgejo Runner | Record this installation's exact policy ownership
+  ansible.builtin.set_fact:
+    native_services_record: >-
+      {{ native_services_record | combine({'selinux': {
+           'name': 'homelab_forgejo_runner', 'priority': 400,
+           'source_sha256': native_services_runner_selinux_digest,
+           'checksum': (native_services_runner_selinux_installed.stdout_lines
+                       | select('match', '^400\s+homelab_forgejo_runner\s+') | first).split()[-1] }}) }}
+
+- name: Forgejo Runner | Persist policy ownership before changing labels or units
+  ansible.builtin.include_tasks: record_files.yml
+  vars:
+    native_services_adopted_files: []

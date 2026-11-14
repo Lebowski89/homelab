@@ -12,6 +12,48 @@ opentofu_api_token_name: "terraform-token"
 
 proxmox_api_bootstrap_user: "root@pam"
 
+# Opt in explicitly after approving the dedicated permissions; ordinary setup is unchanged.
+opentofu_pve_molecule_permissions_enabled: false
+opentofu_pve_molecule_roles:
+  MoleculeVM:
+    - VM.Allocate
+    - VM.Audit
+    - VM.Config.CDROM
+    - VM.Config.CPU
+    - VM.Config.Cloudinit
+    - VM.Config.Disk
+    - VM.Config.HWType
+    - VM.Config.Memory
+    - VM.Config.Network
+    - VM.Config.Options
+    - VM.PowerMgmt
+    - VM.GuestAgent.Audit
+  MoleculeClone: [VM.Clone, VM.Audit]
+  MoleculeNode: [Sys.Audit]
+  MoleculeStore: [Datastore.Audit, Datastore.AllocateSpace, Datastore.AllocateTemplate]
+  MoleculeBridge: [SDN.Use]
+  # The provider reads /storage/local to find the snippet directory. PVE couples
+  # this read with storage configuration management; grant it only on local.
+  MoleculeLocalConfig: [Datastore.Allocate]
+opentofu_pve_molecule_token_acls:
+  - {token: 'root@pam!molecule-controller-bootstrap', path: /vms/9300, role: MoleculeVM}
+  - {token: 'root@pam!molecule-controller-bootstrap', path: /vms/9004, role: MoleculeClone}
+  - {token: 'root@pam!molecule-controller-bootstrap', path: /nodes/pve1, role: MoleculeNode}
+  - {token: 'root@pam!molecule-controller-bootstrap', path: /storage/local, role: MoleculeStore}
+  - {token: 'root@pam!molecule-controller-bootstrap', path: /storage/local-zfs, role: MoleculeStore}
+  - {token: 'root@pam!molecule-controller-bootstrap', path: /sdn/zones/localnetwork/vmbr1, role: MoleculeBridge}
+  # PVE checks the source template's bridge during clone, before vmbr1 is applied.
+  - {token: 'root@pam!molecule-controller-bootstrap', path: /sdn/zones/localnetwork/vmbr0, role: MoleculeBridge}
+  - {token: 'root@pam!molecule-controller-bootstrap', path: /storage/local, role: MoleculeLocalConfig}
+  - {token: 'root@pam!molecule-vm-acceptance', path: /vms/980000, role: MoleculeVM}
+  - {token: 'root@pam!molecule-vm-acceptance', path: /vms/980001, role: MoleculeVM}
+  - {token: 'root@pam!molecule-vm-acceptance', path: /vms/980000, role: MoleculeClone}
+  - {token: 'root@pam!molecule-vm-acceptance', path: /nodes/pve1, role: MoleculeNode}
+  - {token: 'root@pam!molecule-vm-acceptance', path: /storage/local, role: MoleculeStore}
+  - {token: 'root@pam!molecule-vm-acceptance', path: /storage/local-zfs, role: MoleculeStore}
+  - {token: 'root@pam!molecule-vm-acceptance', path: /sdn/zones/localnetwork/vmbr1, role: MoleculeBridge}
+  - {token: 'root@pam!molecule-vm-acceptance', path: /storage/local, role: MoleculeLocalConfig}
+
 ################################
 # TAILSCALE BOOTSTRAP
 ################################

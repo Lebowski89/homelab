@@ -1,0 +1,45 @@
+---
+# forgejo_runner_drain.yml stops the owned agent; remove.yml stops the runner.
+# The validation entry already compared the installed checksum with the receipt.
+- name: Forgejo Runner | Remove only the unchanged recorded policy module
+  when:
+    - not ansible_check_mode
+    - native_services_runner_selinux_lines | length > 0
+  ansible.builtin.command:
+    argv: [semodule, -X, '400', -r, homelab_forgejo_runner]
+  changed_when: true
+
+- name: Forgejo Runner | Restore base-policy labels on retained controller data
+  when: not ansible_check_mode
+  ansible.builtin.command:
+    argv: [restorecon, -R, -v, '{{ native_services_config.data_dir }}']
+  register: native_services_runner_selinux_restored
+  changed_when: native_services_runner_selinux_restored.stdout | length > 0
+
+- name: Forgejo Runner | Restore the named credential files to base-policy labels
+  ansible.builtin.include_tasks: forgejo_runner_selinux_credentials.yml
+
+- name: Forgejo Runner | Inspect any retained runtime directory without following links
+  ansible.builtin.stat:
+    path: /run/forgejo-runner-agent
+    follow: false
+  register: native_services_runner_selinux_runtime
+
+- name: Forgejo Runner | Refuse relabeling a replaced runtime boundary
+  when: native_services_runner_selinux_runtime.stat.exists
+  ansible.builtin.assert:
+    that:
+      - native_services_runner_selinux_runtime.stat.isdir
+      - not native_services_runner_selinux_runtime.stat.islnk
+      - >-
+        native_services_runner_selinux_runtime.stat.uid ==
+        native_services_runner_account.ansible_facts.getent_passwd[native_services_config.user][1] | int
+
+- name: Forgejo Runner | Restore the base label on any retained owned runtime directory
+  when:
+    - not ansible_check_mode
+    - native_services_runner_selinux_runtime.stat.exists
+  ansible.builtin.command:
+    argv: [restorecon, -R, -v, /run/forgejo-runner-agent]
+  register: native_services_runner_selinux_runtime_restored
+  changed_when: native_services_runner_selinux_runtime_restored.stdout | length > 0

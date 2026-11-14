@@ -1,0 +1,29 @@
+---
+- name: Forgejo Runner | Resolve the reviewed payload
+  ansible.builtin.include_tasks: forgejo_runner_selinux_payload.yml
+
+- name: Forgejo Runner | Report confined policy preparation in check mode
+  when: ansible_check_mode
+  ansible.builtin.debug:
+    msg: >-
+      Would reconcile only owned homelab_forgejo_runner at priority 400, label the
+      private home/runtime paths, and keep enforcement and unit hardening enabled.
+      No policy build, install, removal, relabel or service operation runs in check mode.
+
+- name: Forgejo Runner | Prepare the owned policy package
+  when:
+    - not ansible_check_mode
+    - >-
+      native_services_runner_selinux_lines | length == 0 or
+      (native_services_previous.selinux | default({})).get('source_sha256', '') != native_services_runner_selinux_digest
+  ansible.builtin.include_tasks: forgejo_runner_selinux_install.yml
+
+- name: Forgejo Runner | Reconcile only the retained private home's declared labels
+  when: not ansible_check_mode
+  ansible.builtin.command:
+    argv: [restorecon, -R, -v, '{{ native_services_config.data_dir }}']
+  register: native_services_runner_selinux_relabel
+  changed_when: native_services_runner_selinux_relabel.stdout | length > 0
+
+- name: Forgejo Runner | Separate existing named credential files before running user tooling
+  ansible.builtin.include_tasks: forgejo_runner_selinux_credentials.yml

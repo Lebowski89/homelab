@@ -1,0 +1,73 @@
+module homelab_forgejo_runner 1.0;
+
+require {
+    type init_t, user_t, ssh_t, ssh_agent_exec_t, bin_t;
+    attribute domain, application_domain_type, nsswitch_domain, syslog_client_type;
+    attribute ssh_agent_type, file_type, pidfile;
+    role system_r;
+    class file { entrypoint execute execute_no_trans getattr ioctl lock map open read };
+    class process { fork setpgid sigchld transition };
+    class process2 nnp_transition;
+    class fd use;
+    class dir { add_name getattr mounton open read remove_name search write };
+    class sock_file { create getattr open read setattr unlink write };
+    class unix_stream_socket { accept bind connect connectto create getattr getopt ioctl listen read setopt shutdown write };
+}
+
+# Reuse the installed SSH-agent baseline without making a login domain or
+# systemd's init_t execute arbitrary agent requests. No unconfined attribute.
+type homelab_forgejo_agent_t;
+typeattribute homelab_forgejo_agent_t domain;
+typeattribute homelab_forgejo_agent_t application_domain_type;
+typeattribute homelab_forgejo_agent_t nsswitch_domain;
+typeattribute homelab_forgejo_agent_t syslog_client_type;
+typeattribute homelab_forgejo_agent_t ssh_agent_type;
+role system_r types homelab_forgejo_agent_t;
+
+type homelab_forgejo_agent_run_t;
+typeattribute homelab_forgejo_agent_run_t file_type;
+typeattribute homelab_forgejo_agent_run_t pidfile;
+allow init_t homelab_forgejo_agent_run_t:dir mounton;
+
+# No generic configuration/home attributes: these named files are not etc_t.
+type homelab_forgejo_node_key_t;
+typeattribute homelab_forgejo_node_key_t file_type;
+type homelab_forgejo_provisioning_t;
+typeattribute homelab_forgejo_provisioning_t file_type;
+type homelab_forgejo_registration_t;
+typeattribute homelab_forgejo_registration_t file_type;
+type homelab_forgejo_guest_key_t;
+typeattribute homelab_forgejo_guest_key_t file_type;
+# The harness also supplies this identity to its existing provider/SSH paths.
+allow { homelab_forgejo_agent_t user_t ssh_t } homelab_forgejo_node_key_t:file { getattr ioctl lock open read };
+allow user_t { homelab_forgejo_provisioning_t homelab_forgejo_registration_t homelab_forgejo_guest_key_t }:file { getattr ioctl lock open read };
+allow ssh_t homelab_forgejo_guest_key_t:file { getattr ioctl lock open read };
+# Keep this boundary checked when linking against future base-policy updates.
+neverallow homelab_forgejo_agent_t { homelab_forgejo_provisioning_t homelab_forgejo_registration_t homelab_forgejo_guest_key_t }:file { open read };
+
+# Explicit SELinuxContext= selects this transition. Deliberately do not grant
+# init_t execute_no_trans on ssh_agent_exec_t.
+allow init_t ssh_agent_exec_t:file { execute getattr map open read };
+allow init_t homelab_forgejo_agent_t:process transition;
+allow init_t homelab_forgejo_agent_t:process2 nnp_transition;
+allow homelab_forgejo_agent_t ssh_agent_exec_t:file { entrypoint execute execute_no_trans getattr map open read };
+
+# ExecStartPost invokes env/ssh-add, retaining the same restricted agent domain.
+# Both are bin_t on Rocky; no binary label or Linux capability is changed.
+allow homelab_forgejo_agent_t bin_t:file { entrypoint execute execute_no_trans getattr map open read };
+allow homelab_forgejo_agent_t self:process { fork setpgid sigchld };
+allow homelab_forgejo_agent_t self:fd use;
+allow homelab_forgejo_agent_t init_t:fd use;
+allow homelab_forgejo_agent_t init_t:unix_stream_socket { getattr ioctl read write };
+allow homelab_forgejo_agent_t self:unix_stream_socket { accept bind connect connectto create getattr getopt ioctl listen read setopt shutdown write };
+
+# Only the dedicated runtime directory/socket receives this file type.
+allow homelab_forgejo_agent_t homelab_forgejo_agent_run_t:dir { add_name getattr open read remove_name search write };
+allow homelab_forgejo_agent_t homelab_forgejo_agent_run_t:sock_file { create getattr open read setattr unlink write };
+allow { user_t ssh_t } homelab_forgejo_agent_run_t:dir { getattr search };
+allow { user_t ssh_t } homelab_forgejo_agent_run_t:sock_file { getattr open read write };
+allow user_t homelab_forgejo_agent_t:unix_stream_socket connectto;
+
+# The runner uses existing confined user_t. Its ordinary SSH client transition
+# is already allowed; permit it with the unit's NoNewPrivileges still enabled.
+allow user_t ssh_t:process2 nnp_transition;

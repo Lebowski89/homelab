@@ -1,0 +1,35 @@
+---
+- name: Forgejo Runner | Read installed module identities and checksums without changing policy
+  ansible.builtin.command:
+    argv: [semodule, --list-modules=full, --checksum]
+  register: native_services_runner_selinux_listing
+  changed_when: false
+  check_mode: false
+
+- name: Forgejo Runner | Resolve only this application's installed policy
+  ansible.builtin.set_fact:
+    native_services_runner_selinux_lines: >-
+      {{ native_services_runner_selinux_listing.stdout_lines
+         | select('match', '^[0-9]+\s+homelab_forgejo_runner\s+') | list }}
+
+- name: Forgejo Runner | Refuse replacement or removal of foreign or modified policy
+  when:
+    - native_services_runner_selinux_lines | length > 0
+    - native_services_action != 'remove' or native_services_previous.selinux is defined
+  ansible.builtin.assert:
+    that:
+      - native_services_runner_selinux_lines | length == 1
+      - native_services_runner_selinux_lines[0].split()[0] == '400'
+      - (native_services_previous.selinux | default({})).get('name', '') == 'homelab_forgejo_runner'
+      - (native_services_previous.selinux | default({})).get('checksum', '') == native_services_runner_selinux_lines[0].split()[-1]
+    fail_msg: >-
+      The installed homelab_forgejo_runner policy has no matching native ownership
+      receipt or its checksum changed. Retain it for review; never adopt or remove it silently.
+
+- name: Forgejo Runner | Require the recorded policy for a confined restart
+  when: native_services_action == 'recreate'
+  ansible.builtin.assert:
+    that:
+      - native_services_previous.selinux is defined
+      - native_services_runner_selinux_lines | length == 1
+    fail_msg: Deploy the confined installation before recreating it; restart does not install policy or require provisioning credentials.

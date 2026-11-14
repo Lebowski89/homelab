@@ -72,6 +72,22 @@ def test_workflow_is_manual_and_passes_fixed_choices_as_arguments():
     assert "always()" not in (ROOT / ".forgejo/workflows/molecule.yml").read_text()
 
 
+def test_runner_installs_acl_before_unprivileged_workstation_tooling():
+    tasks = yaml.safe_load((ROOT / "ansible/roles/native_services/tasks/forgejo_runner.yml").read_text())
+    tooling = next(
+        i
+        for i, task in enumerate(tasks)
+        if task.get("ansible.builtin.include_role", {}).get("name") == "workstation"
+        and task["ansible.builtin.include_role"].get("tasks_from") == "tools"
+    )
+    # SSH connects as rocky; the tooling switches to molecule-ci. Ansible needs
+    # setfacl before that switch to keep its transferred modules private.
+    assert any(
+        "acl" in task.get("ansible.builtin.dnf", {}).get("name", []) and task["ansible.builtin.dnf"].get("state") == "present"
+        for task in tasks[:tooling]
+    )
+
+
 @pytest.mark.integration
 def test_exact_main_checkout_is_retained_and_recovery_rejects_modified_source(tmp_path, monkeypatch):
     settings = config(tmp_path)
@@ -155,3 +171,34 @@ def test_retirement_cannot_enter_during_owned_or_interrupted_maintenance(tmp_pat
     monkeypatch.setattr(CONTROLLER, "DRAIN", drain)
     with pytest.raises(ValueError, match="draining"):
         CONTROLLER.recover(config(tmp_path), "a" * 32)
+
+
+def test_agent_and_runner_units_require_confined_domains_without_weakening_hardening():
+    import configparser
+
+    from jinja2 import Environment, StrictUndefined
+
+    settings = {"user": "fixture-ci", "group": "fixture-ci", "data_dir": "/var/lib/fixture-ci"}
+    units = {}
+    for name in ["forgejo-runner", "forgejo-runner-agent"]:
+        source = ROOT / f"ansible/roles/native_services/templates/forgejo_runner/{name}.service.j2"
+        rendered = Environment(undefined=StrictUndefined).from_string(source.read_text()).render(native_services_config=settings)
+        unit = configparser.ConfigParser(interpolation=None, strict=False)
+        unit.read_string(rendered)
+        service = unit["Service"]
+        assert service["User"] == settings["user"] and service["Group"] == settings["group"]
+        assert all(service[key] == "true" for key in ["NoNewPrivileges", "ProtectHome", "PrivateTmp"])
+        assert service["ProtectSystem"] == "strict" and service["UMask"] == "0077"
+        assert not service["SELinuxContext"].startswith("-") and "unconfined" not in service["SELinuxContext"]
+        units[name] = service
+    assert units["forgejo-runner"]["SELinuxContext"] == "user_u:user_r:user_t:s0"
+    agent = units["forgejo-runner-agent"]
+    assert agent["SELinuxContext"] == "system_u:system_r:homelab_forgejo_agent_t:s0"
+    assert agent["Type"] == "forking" and " -D " not in agent["ExecStart"]
+    assert agent["RuntimeDirectoryMode"] == "0700"
+    assert agent["ExecStartPost"].endswith("/usr/bin/ssh-add /etc/forgejo-runner/private/node-key")
+    policy = (ROOT / "ansible/roles/native_services/files/forgejo_runner/selinux/homelab_forgejo_runner.te").read_text()
+    statements = re.sub(r"#.*", "", policy)
+    assert not re.search(r"\b(permissive|dontaudit|unconfined_domain_type)\b", statements)
+    assert "execute_no_trans" not in re.search(r"allow init_t ssh_agent_exec_t:file ([^;]+);", statements)[1]
+    assert not re.search(r"allow [^;]+:(?:tcp_socket|udp_socket|capability)\b", statements)
