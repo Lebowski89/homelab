@@ -231,10 +231,10 @@
 
 | Name | Module | Has Conditions | Comments |
 | ---- | ------ | -------------- | -------- |
-| Forgejo Runner ¦ Resolve the policy migration payload | ansible.builtin.include_tasks | False | Only the existing offline installation's first confined-policy migration. |
+| Forgejo Runner ¦ Preserve the retained legacy migration validation boundary | ansible.builtin.set_fact | False | Snapshot first migration, fresh installation or owned policy upgrade. |
 | Forgejo Runner ¦ Prepare the private policy recovery boundary | ansible.builtin.file | False |  |
 | Forgejo Runner ¦ Install the bounded policy checkpoint and rollback executable | ansible.builtin.copy | False |  |
-| Forgejo Runner ¦ Preserve the offline installation before any ownership or policy mutation | ansible.builtin.command | False |  |
+| Forgejo Runner ¦ Preserve prior policy and installation before any ownership or policy mutation | ansible.builtin.command | False |  |
 
 #### File: tasks/forgejo_runner_selinux_credentials.yml
 
@@ -255,7 +255,7 @@
 | Forgejo Runner ¦ Package the exact module and scoped file contexts | ansible.builtin.command | False |  |
 | Forgejo Runner ¦ Protect the exact staged policy package before recording its proof | ansible.builtin.file | False | Retained even if the subsequent install/ownership write is interrupted. |
 | Forgejo Runner ¦ Preserve the scoped policy installation intent | ansible.builtin.copy | False |  |
-| Forgejo Runner ¦ Arm exact package ownership before the first live policy installation | ansible.builtin.command | True | A deferred handler would arm proof after semodule, leaving an unowned-install gap. |
+| Forgejo Runner ¦ Arm exact package ownership before every live policy installation | ansible.builtin.command | False | A deferred handler would arm proof after semodule, leaving an unowned-install gap. |
 | Forgejo Runner ¦ Install only the reviewed application module | ansible.builtin.command | False |  |
 | Forgejo Runner ¦ Read the installed module checksum before claiming ownership | ansible.builtin.command | False |  |
 | Forgejo Runner ¦ Require one exact installed module at the reviewed priority | ansible.builtin.assert | False |  |
@@ -376,7 +376,8 @@ The validation entry already compared the installed checksum with the receipt. |
 | Native services ¦ Complete the owned lifecycle with private snapshot cleanup | block | False |  | checkov:skip=CKV2_ANSIBLE_3:Failure propagates; always clears transient auth while retaining failed maintenance ownership. |
 | Forgejo Runner ¦ Validate the selected registration before installation changes | ansible.builtin.include_tasks | True |  |  |
 | Native services ¦ Protect active acceptance before runner lifecycle changes | ansible.builtin.include_tasks | True |  |  |
-| Forgejo Runner ¦ Checkpoint the retained offline installation before its first policy migration | ansible.builtin.include_tasks | True |  |  |
+| Forgejo Runner ¦ Resolve the candidate before policy checkpoint selection | ansible.builtin.include_tasks | True |  |  |
+| Forgejo Runner ¦ Checkpoint every policy replacement before ownership mutation | ansible.builtin.include_tasks | True |  |  |
 | Native services ¦ Prepare installation ownership and resolver recovery | ansible.builtin.include_tasks | True |  |  |
 | Native services ¦ Apply the selected application | ansible.builtin.include_tasks | True |  |  |
 | Forgejo Runner ¦ Explain validated check-mode installation plan | ansible.builtin.debug | True |  |  |
