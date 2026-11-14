@@ -11,7 +11,7 @@
 - name: Workstation Ansible | Determine Python ABI directory
   ansible.builtin.command:
     argv:
-      - python3
+      - '{{ workstation_ansible_python_executable }}'
       - -c
       - >-
         import sys; print(f"python{sys.version_info.major}.{sys.version_info.minor}")
@@ -27,7 +27,7 @@
 - name: Workstation Ansible | Determine virtualenv library directory
   ansible.builtin.command:
     argv:
-      - python3
+      - '{{ workstation_ansible_python_executable }}'
       - -c
       - >-
         import sys, sysconfig;
@@ -69,7 +69,7 @@
       } | workstation_venv_recovery_action) == 'recreate'
   ansible.builtin.command:
     argv:
-      - python3
+      - '{{ workstation_ansible_python_executable }}'
       - -m
       - venv
       - --clear
@@ -89,7 +89,7 @@
       } | workstation_venv_recovery_action) == 'create'
   ansible.builtin.command:
     argv:
-      - python3
+      - '{{ workstation_ansible_python_executable }}'
       - -m
       - venv
       - "{{ workstation_ansible_venv_path }}"

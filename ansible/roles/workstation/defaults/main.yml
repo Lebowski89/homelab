@@ -19,6 +19,7 @@ workstation_repository_path: "{{ workstation_user_home }}/homelab"
 workstation_ansible_path: "{{ workstation_repository_path }}/ansible"
 workstation_ansible_tools_path: "{{ workstation_user_home }}/.local/share/homelab"
 workstation_ansible_venv_path: "{{ workstation_ansible_tools_path }}/ansible-venv"
+workstation_ansible_python_executable: python3
 workstation_ansible_collections_path: "{{ workstation_ansible_tools_path }}/collections"
 workstation_secrets_path: "{{ workstation_user_home }}/.config/homelab"
 workstation_become_pass_file: "{{ workstation_secrets_path }}/.ansible_become_pass"

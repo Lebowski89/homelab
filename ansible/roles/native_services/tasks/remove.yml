@@ -18,6 +18,12 @@
     state: stopped
     enabled: false
 
+- name: Forgejo Runner | Retire only this installation's owned SELinux policy
+  when:
+    - native_services_application == 'forgejo_runner'
+    - native_services_previous.selinux is defined
+  ansible.builtin.include_tasks: forgejo_runner_selinux_remove.yml
+
 - name: Native services | Explain retained unclaimed installation files
   when: not native_services_state_stat.stat.exists
   ansible.builtin.debug:

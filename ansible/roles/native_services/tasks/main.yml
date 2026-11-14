@@ -130,6 +130,8 @@
     native_services_runner_registration: {}
     native_services_runner_registration_read: {}
     native_services_runner_maintenance: {}
+    native_services_runner_policy_checkpoint: {}
+    native_services_runner_policy_migration: false
 
 # checkov:skip=CKV2_ANSIBLE_3:Failure propagates; always clears transient auth while retaining failed maintenance ownership.
 - name: Native services | Complete the owned lifecycle with private snapshot cleanup
@@ -147,6 +149,24 @@
         - not ansible_check_mode
         - native_services_action in ['deploy', 'update'] or native_services_state_stat.stat.exists
       ansible.builtin.include_tasks: forgejo_runner_drain.yml
+
+    - name: Forgejo Runner | Resolve the candidate before policy checkpoint selection
+      when:
+        - native_services_application == 'forgejo_runner'
+        - native_services_action in ['deploy', 'update']
+        - ansible_facts.selinux.status | default('disabled') == 'enabled'
+      ansible.builtin.include_tasks: forgejo_runner_selinux_payload.yml
+
+    - name: Forgejo Runner | Checkpoint every policy replacement before ownership mutation
+      when:
+        - native_services_application == 'forgejo_runner'
+        - native_services_action in ['deploy', 'update']
+        - not ansible_check_mode
+        - ansible_facts.selinux.status | default('disabled') == 'enabled'
+        - >-
+          native_services_runner_selinux_lines | default([]) | length == 0 or
+          (native_services_previous.selinux | default({})).get('source_sha256', '') != native_services_runner_selinux_digest
+      ansible.builtin.include_tasks: forgejo_runner_selinux_checkpoint.yml
 
     - name: Native services | Prepare installation ownership and resolver recovery
       when: native_services_action in ['deploy', 'update']
@@ -185,9 +205,21 @@
         - native_services_application == 'forgejo_runner'
         - not ansible_check_mode
         - native_services_runner_maintenance.token is defined
+        - not (native_services_runner_policy_checkpoint.changed | default(false) and native_services_runner_policy_migration)
       forgejo_runner_maintenance:
         state: absent
         token: '{{ native_services_runner_maintenance.token }}'
+
+    - name: Forgejo Runner | Retain first-policy migration ownership for validation or exact rollback
+      when:
+        - native_services_application == 'forgejo_runner'
+        - native_services_runner_policy_checkpoint.changed | default(false)
+        - native_services_runner_policy_migration
+      ansible.builtin.debug:
+        msg: >-
+          The first confined-policy migration retains its maintenance receipt after handlers.
+          Validate the named agent/runner and release only that receipt through the managed
+          maintenance module, or run the recorded policy rollback. No acceptance may start yet.
   always:
     - name: Forgejo Runner | Clear registration authentication from transient facts on every exit
       when: native_services_application == 'forgejo_runner'

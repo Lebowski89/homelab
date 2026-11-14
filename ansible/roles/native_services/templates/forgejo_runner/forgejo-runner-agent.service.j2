@@ -2,13 +2,15 @@
 Description=Dedicated Molecule Proxmox SSH authentication
 
 [Service]
-Type=simple
+Type=forking
 User={{ native_services_config.user }}
 Group={{ native_services_config.group }}
 RuntimeDirectory=forgejo-runner-agent
 RuntimeDirectoryMode=0700
 UMask=0077
-ExecStart=/usr/bin/ssh-agent -D -a /run/forgejo-runner-agent/agent.sock
+# OpenSSH binds the socket before the parent exits, making key loading ordered.
+SELinuxContext=system_u:system_r:homelab_forgejo_agent_t:s0
+ExecStart=/usr/bin/ssh-agent -a /run/forgejo-runner-agent/agent.sock
 ExecStartPost=/usr/bin/env SSH_AUTH_SOCK=/run/forgejo-runner-agent/agent.sock /usr/bin/ssh-add /etc/forgejo-runner/private/node-key
 Restart=on-failure
 RestartSec=5

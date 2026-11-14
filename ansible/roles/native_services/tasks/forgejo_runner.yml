@@ -33,6 +33,16 @@
     group: '{{ native_services_config.group }}'
     mode: '0700'
 
+- name: Forgejo Runner | Install private delegation and signature verification prerequisites
+  ansible.builtin.dnf:
+    name: [acl, checkpolicy, gnupg2, policycoreutils, util-linux]
+    state: present
+    use_backend: '{{ ansible_facts.pkg_mgr }}'
+
+- name: Forgejo Runner | Reconcile the owned confined SELinux policy before tooling and units
+  when: ansible_facts.selinux.status | default('disabled') == 'enabled'
+  ansible.builtin.include_tasks: forgejo_runner_selinux.yml
+
 - name: Forgejo Runner | Install headless automation through the workstation tooling entry point
   ansible.builtin.include_role:
     name: workstation
@@ -40,12 +50,6 @@
     apply:
       tags: '{{ ansible_run_tags }}'
   tags: '{{ ansible_run_tags }}'
-
-- name: Forgejo Runner | Install signature verification prerequisites
-  ansible.builtin.dnf:
-    name: [gnupg2, util-linux]
-    state: present
-    use_backend: '{{ ansible_facts.pkg_mgr }}'
 
 - name: Forgejo Runner | Prepare root-owned persistent release verification directory
   ansible.builtin.file:
@@ -206,6 +210,10 @@
   ansible.builtin.include_tasks: record_files.yml
   vars:
     native_services_adopted_files: [/etc/forgejo-runner/config.yml]
+
+- name: Forgejo Runner | Reconcile named credentials after atomic installation
+  when: ansible_facts.selinux.status | default('disabled') == 'enabled'
+  ansible.builtin.include_tasks: forgejo_runner_selinux_credentials.yml
 
 - name: Forgejo Runner | Install and record each owned systemd unit
   when: not ansible_check_mode

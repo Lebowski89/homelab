@@ -1,0 +1,37 @@
+---
+# Snapshot first migration, fresh installation or owned policy upgrade.
+- name: Forgejo Runner | Preserve the retained legacy migration validation boundary
+  ansible.builtin.set_fact:
+    native_services_runner_policy_migration: >-
+      {{ native_services_previous.selinux is not defined and
+         native_services_previous.files | default([])
+         | intersect(['/etc/systemd/system/forgejo-runner.service', '/etc/systemd/system/forgejo-runner-agent.service']) | length == 2 }}
+
+- name: Forgejo Runner | Prepare the private policy recovery boundary
+  ansible.builtin.file:
+    path: /var/cache/forgejo-runner/selinux
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Forgejo Runner | Install the bounded policy checkpoint and rollback executable
+  ansible.builtin.copy:
+    src: forgejo_runner/selinux/rollback.py
+    dest: /var/cache/forgejo-runner/selinux/rollback.py
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Forgejo Runner | Preserve prior policy and installation before any ownership or policy mutation
+  no_log: true
+  diff: false
+  ansible.builtin.command:
+    argv: [/usr/bin/python3, /var/cache/forgejo-runner/selinux/rollback.py, checkpoint, '{{ native_services_runner_selinux_digest }}']
+    stdin: >-
+      {{ {'/etc/systemd/system/forgejo-runner-agent.service':
+            lookup('ansible.builtin.template', 'forgejo_runner/forgejo-runner-agent.service.j2') | hash('sha256'),
+          '/etc/systemd/system/forgejo-runner.service':
+            lookup('ansible.builtin.template', 'forgejo_runner/forgejo-runner.service.j2') | hash('sha256')} | to_json }}
+  register: native_services_runner_policy_checkpoint
+  changed_when: true

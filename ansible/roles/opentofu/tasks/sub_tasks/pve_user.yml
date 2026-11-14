@@ -1,5 +1,21 @@
 ---
 
+- name: Validate the optional Molecule permission-management switch
+  ansible.builtin.assert:
+    that:
+      - opentofu_pve_molecule_permissions_enabled | default(false) is boolean
+    fail_msg: Molecule permission management requires an explicit boolean opt-in.
+  tags: [opentofu_molecule_permissions]
+
+- name: Reconcile declared permissions for existing Molecule tokens
+  when: opentofu_pve_molecule_permissions_enabled | default(false)
+  ansible.builtin.include_tasks:
+    file: pve_molecule_permissions.yml
+    apply:
+      tags: [opentofu_molecule_permissions]
+      delegate_to: '{{ opentofu_primary_manager }}'
+  tags: [opentofu_molecule_permissions]
+
 - name: Assert required OpenTofu Proxmox user vars are defined
   ansible.builtin.assert:
     that:

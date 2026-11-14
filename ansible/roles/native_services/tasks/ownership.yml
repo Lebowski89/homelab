@@ -46,6 +46,13 @@
     group: root
     mode: "0700"
 
+- name: Native services | Preserve the runner's separately recorded policy ownership
+  when:
+    - native_services_application == 'forgejo_runner'
+    - native_services_previous.selinux is defined
+  ansible.builtin.set_fact:
+    native_services_record: '{{ native_services_record | combine({"selinux": native_services_previous.selinux}) }}'
+
 # Save recovery state before installation. Claim files only after their
 # successful template/copy task; a failed download must not adopt an old file.
 - name: Native services | Record the selected installation's owned files

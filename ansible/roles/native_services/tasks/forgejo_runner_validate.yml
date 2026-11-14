@@ -11,7 +11,8 @@
       - ansible_facts.service_mgr == 'systemd'
       - ansible_facts.virtualization_role == 'guest'
       - ansible_facts.virtualization_type in ['kvm', 'qemu']
-    fail_msg: The host executor is permitted only in the explicitly selected dedicated Rocky 10 controller VM.
+      - native_services_action == 'remove' or ansible_facts.selinux.mode | default('') == 'enforcing'
+    fail_msg: The host executor requires the explicitly selected dedicated Rocky 10 controller VM with enforcing SELinux.
 
 - name: Forgejo Runner | Inspect existing account without creating it
   ansible.builtin.getent:
@@ -127,6 +128,7 @@
     {{ [{'path': '/etc/forgejo-runner', 'root': true},
         {'path': '/etc/forgejo-runner/private', 'root': false},
         {'path': '/var/cache/forgejo-runner', 'root': true},
+        {'path': '/var/cache/forgejo-runner/selinux', 'root': true},
         {'path': '/var/cache/forgejo-runner/' ~ native_services_config.version, 'root': true}]
        + [ {'path': native_services_config.data_dir ~ '/.ssh', 'root': false},
            {'path': native_services_config.data_dir ~ '/cache', 'root': false},
@@ -135,7 +137,8 @@
            {'path': native_services_config.data_dir ~ '/runs', 'root': false},
            {'path': native_services_config.data_dir ~ '/jobs', 'root': false},
            {'path': native_services_config.data_dir ~ '/checkouts', 'root': false},
-           {'path': native_services_config.data_dir ~ '/work', 'root': false}] }}
+           {'path': native_services_config.data_dir ~ '/work', 'root': false},
+           {'path': '/run/forgejo-runner-agent', 'root': false}] }}
   loop_control:
     loop_var: native_services_runner_boundary
   register: native_services_runner_boundaries
@@ -155,6 +158,10 @@
   loop: '{{ native_services_runner_boundaries.results }}'
   loop_control:
     loop_var: native_services_runner_boundary_result
+
+- name: Forgejo Runner | Inspect SELinux module ownership before maintenance or host changes
+  when: ansible_facts.selinux.status | default('disabled') == 'enabled' or native_services_previous.selinux is defined
+  ansible.builtin.include_tasks: forgejo_runner_selinux_validate.yml
 
 - name: Forgejo Runner | Require an owned restartable installation
   when: native_services_action == 'recreate'

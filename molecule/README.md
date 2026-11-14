@@ -341,16 +341,403 @@ activity and boot enablement, preserving raw observations; an absent unit and a
 systemd `not-found` dependency stub are both inactive, rather than a policy change.
 
 
-## Dedicated Forgejo controller rollout (preparation, not deployed)
+## Dedicated Forgejo controller rollout (in progress)
 
 GitHub remains authoritative; its controlled live workflow stays disabled.
-The separate private Forgejo CI repository will expose manual selections only.
-Repository preparation precedes one rollout approval. Read-only authentication
-verified the dedicated non-admin `homelab-ci` account and installed Forgejo
-**15.0.9**. The proposed private repository `homelab-ci/homelab-ci` does not exist.
+The private Forgejo CI repository exposes manual selections only.
+The approved rollout created `homelab-ci/homelab-ci` and its repository-scoped
+runner **ID 1**; retain and reuse that registration rather than registering again.
+The dedicated non-admin setup identity is `homelab-ci`; installed Forgejo is
+**15.0.9**.
 Runner **13.2.0** was downloaded in isolation and its detached signature verified
 against the upstream release key; its configuration and workflow parser were
-exercised offline. No controller, repository or runner has been created.
+exercised offline. On 2026-11-14, the approved controller VM9300 was created
+in **72.15 seconds**, reusing its owned bootstrap snippet unchanged. Its actual
+configuration is `vmbr1`, 2 CPUs, 4096 MiB RAM, 32 GiB disk, on-boot and protected.
+Template 9004's configuration hash is unchanged. Strict first-boot SSH and the
+guest agent passed; cloud-init completed without execution errors but reports
+the PVE-generated string `user` field's deprecation. That warning is retained,
+not described as a clean cloud-init result. Runner ID 1 is now online under the
+approved mount amendment below, with a successful named restart. Its first
+Rocky case stopped at strict SSH readiness and retained its owned resources;
+Node Exporter production-role execution and acceptance retirement are not certified.
+
+The original clone failure and partial state are retained privately under
+`~/.config/homelab/molecule-controller/controller-stopped-1794584390423879413/`.
+The source-bridge grant below resolved that failure without changing template
+9004. First-install prerequisite failures are retained in the private
+`controller-service-deploy-*/` evidence. The native runner installs `acl` before
+switching to its unprivileged tooling account. Controller host variables select
+parallel Python 3.14 for the pinned Ansible 2.22 tooling, retaining `/usr/bin/python3`
+for host modules and Rocky's packaged bindings. No system Python replacement is
+required. The normal OpenTofu key host returned HTTP 403; this controller selects
+the armored copy from the official distribution repository at an immutable
+revision. Its fingerprints match that revision's binary key. Both signing keys,
+package-signature verification and normal TLS verification remain enabled.
+
+
+The original rollout stopped on an additional, then-unapproved security-policy requirement:
+SELinux in enforcing mode denies `init_t` **execute** access to
+`ssh_agent_exec_t` when systemd starts `/usr/bin/ssh-agent` (`203/EXEC`). At that
+checkpoint no allow rule, relabel, permissive mode or hardening relaxation had
+been applied. After
+verifying the native ownership record and unit bytes, only the newly owned agent
+was stopped and disabled to end its retry loop. At that original checkpoint
+the runner was inactive/disabled and its failed-operation marker was retained.
+Runner ID 1 was offline, no acceptance job had been dispatched and the disposable
+VMIDs were absent. Those historical checks did not prove boot persistence,
+authentication or a Rocky acceptance pass; current results are recorded below. The subsequently approved candidate was attempted and
+rolled back as recorded below. Any further policy permission requires review;
+do not generate broad policy from the new AVC. A host reboot is not authorized.
+
+### SELinux policy: initial rollback and approved mount amendment
+
+Read-only inspection of the installed policy established that `init_t` cannot
+execute `ssh_agent_exec_t` or transition directly to the existing login-user
+agent domain with `NoNewPrivileges`. The stock user unit is not a safe automatic
+replacement: this controller's default login mapping is unconfined. Also, the
+default system-service transition for the runner's `bin_t` binary is
+`unconfined_service_t`. Moving the unit or changing its Unix user alone would not
+establish confinement. Both existing system services and the dedicated Unix
+account are retained in the proposed correction.
+
+The exact candidate is
+`ansible/roles/native_services/files/forgejo_runner/selinux/homelab_forgejo_runner.te`
+with the role template `homelab_forgejo_runner.fc.j2`. It creates the
+application-specific agent domain `homelab_forgejo_agent_t`, runtime-file type
+`homelab_forgejo_agent_run_t` and four named credential-file types. The module permits systemd's explicit confined
+transition, including its `NoNewPrivileges` transition, and the existing
+`env`/`ssh-add` post-start command in that same domain. The agent inherits the
+installed SSH-agent, NSS and logging baseline attributes; its additional socket
+permissions cover its own runtime type and confined `user_t`/`ssh_t` clients.
+There are no explicit unconfined attributes, permissive declarations or denial
+suppression in this module. Its inherited permissions are broader than its
+explicit allow statements: the linked candidate has SELinux `setgid` permission
+from `ssh_agent_type`, TCP/UDP DNS and TCP DNSSEC access, enabled Kerberos/OCSP
+access, and route-netlink socket access through the NSS baseline. LDAP and NIS
+rules are present but their booleans are currently disabled. Node/interface
+permissions are generic, not restricted to particular destination IPs. Generic
+packet/peer/IPsec and inherited AFS socket permissions also remain. This is not
+a network-isolated agent. SELinux `setgid` permission does not itself supply a
+Linux capability; the units retain their existing capability configuration.
+`bin_t` execution remains broader than just the named env/ssh-add commands. The
+runner uses generic `user_t` permissions and its SSH transition permission is
+controller-wide. No system executable is copied or relabeled.
+
+The runner explicitly uses existing `user_u:user_r:user_t:s0`; the agent uses
+`system_u:system_r:homelab_forgejo_agent_t:s0`. The module additionally permits
+`user_t` to make its existing confined `ssh_t` transition under
+`NoNewPrivileges`. This permission applies to that domain pair on the controller,
+not just one PID. Home, descendant and `.ssh` labels become respectively
+`user_home_dir_t`, `user_home_t` and `ssh_home_t` only beneath the configured
+controller home; `/run/forgejo-runner-agent` receives the private runtime type.
+Unix ownership, `0700` directories, `0600` keys and all existing unit hardening
+remain unchanged. The agent changes to `Type=forking`: installed OpenSSH's agent
+binds its socket before the parent exits, so post-start key loading follows
+socket readiness without polling or a fixed sleep.
+
+Only these credential filenames receive new labels; their parent directories
+retain their labels and Unix permissions:
+
+| Files | SELinux type | Agent read/open | Runner `user_t` | Client `ssh_t` |
+| --- | --- | --- | --- | --- |
+| `/etc/forgejo-runner/private/node-key` | `homelab_forgejo_node_key_t` | Yes | Yes | Yes |
+| `/etc/forgejo-runner/private/provisioning.json` | `homelab_forgejo_provisioning_t` | No | Yes | No |
+| `/etc/forgejo-runner/private/registration.json`, `/etc/forgejo-runner/config.yml` | `homelab_forgejo_registration_t` | No | Yes | No |
+| `/etc/forgejo-runner/private/guest-key`, `guest-key.pub` | `homelab_forgejo_guest_key_t` | No | Yes | Yes |
+
+The node identity remains readable by the existing provisioner/SSH paths; this
+does not change the harness's authentication contract. The new credential types
+have only `file_type`, without generic configuration/home attributes. An isolated
+link against the installed policy confirms no agent read/open allow rules for
+provisioning, registration/configuration or guest keys, even among conditional
+rules. An explicit `neverallow` checks that boundary when linking. This is a
+file-access boundary, not complete isolation of processes
+sharing a Unix account or protection against a privileged policy administrator.
+
+The approved existing native lifecycle builds and installs only
+`homelab_forgejo_runner` at priority **400**, using root-owned `0700` storage under
+`/var/cache/forgejo-runner/selinux/<source-digest>/`. Source, file contexts,
+package and installation intent are retained. The existing native ownership
+receipt records the payload digest and installed module checksum before labels
+or units change. Foreign or modified modules are rejected before maintenance;
+an unchanged deployment does not rebuild/reinstall the module. Check mode only
+inspects and plans. Interrupted installation retains its intent and maintenance
+ownership for review rather than silently adopting policy.
+
+Every policy installation or replacement checkpoints before rewriting native
+ownership, policy, labels or units: the retained legacy migration, a fresh
+installation, and an owned C0 → C1 upgrade all use the same recovery executable.
+An unchanged installed policy skips checkpointing, building and arming. The role-owned
+`files/forgejo_runner/selinux/rollback.py` executable is installed root-owned,
+mode `0700`, at `/var/cache/forgejo-runner/selinux/rollback.py`. Its immutable,
+root-only `<source-digest>/rollback.json` stores exact old unit/native-receipt
+bytes (or their verified absence), UID/GID, modes, timestamps and extended
+attributes, unit enablement states, pre-existing home and named-file labels,
+enforcing state and the prior module identity. For upgrades, `previous.pp` is a
+private copy of the prior owned package; its package hash and compiler-derived
+CIL checksum must match the installed C0 module before checkpointing and are
+checked again before recovery. Missing or mismatched prior packages fail closed.
+Credential contents are never copied into the snapshot. The legacy migration
+still requires offline/disabled units, no previous module and no retained agent
+runtime directory. A fresh installation records absent ownership/units without
+claiming existing foreign files or services. Upgrades require matching prior
+native policy ownership. Existing snapshots are never overwritten or rebound to
+a later maintenance receipt.
+
+The legacy migration intentionally retains maintenance ownership after handler completion
+until the named agent/runner checks pass. Only then may the operator release that
+same receipt through the existing maintenance module. For the initial matching operation on
+**molecule-controller only**, the historical rollback command was:
+
+```sh
+sudo /usr/bin/python3 /var/cache/forgejo-runner/selinux/rollback.py rollback \
+  09dc0755c8eb9c24da44fbd3f38e6801ca394e14e20ebf68e0d41aa4be6a2c32
+```
+
+The executable verifies hostname, account/home ownership, root-only snapshot,
+matching maintenance-receipt hash and native ownership. It holds `controller.lock`
+non-blockingly throughout recovery and rejects unexpected unit bytes, symlinks,
+foreign module priorities/checksums or a changed receipt before mutation. It
+stops/disables only the owned units, restores the verified prior priority-400
+module (or removes the proven candidate when no prior module existed), restores
+base labels on newly created paths and exact recorded labels on retained paths,
+restores old units and native ownership metadata, and reloads systemd. Previously
+enabled units regain enablement without being started; legacy units remain
+offline/disabled. For fresh installs, only verified candidate unit/ownership
+files are removed; newly created credentials, home and evidence are retained.
+It does not start a retry
+loop, release maintenance, remove registration/credentials, delete run evidence,
+or invoke normal service removal. Failed/interrupted recovery retains its
+checkpoint and receipt for inspection/retry. File restoration stages a replacement
+in the destination directory, verifies its complete bytes and metadata, syncs
+the file, atomically replaces the live path, and syncs the directory. Recorded
+timestamps are restored after systemd reload and synced again. Interruption
+leaves each live file wholly old or wholly restored; retries accept those exact
+unit hashes, never arbitrary partial files. Checkpoints and maintenance receipts
+are retained throughout.
+
+Before **every** policy installation the checkpoint owner arms the intent with the exact staged
+package hash and CIL checksum from the installed HLL compiler. Recovery can
+therefore cover interruption before the native checksum receipt write: it must
+match the same maintenance receipt, source digest, retained package hash,
+recomputed CIL checksum and installed module checksum. A generic intent without
+this proof, or any mismatch, fails closed before mutation. This covers C0 still
+being recorded after C1 installation, and a fresh installation whose preliminary
+receipt has no policy yet. Recovery can be retried after some unit/ownership
+replacements have already completed or after the prior policy was restored.
+Ordinary successful fresh installs/upgrades release their own maintenance receipt
+after handlers as before; failure retains it. The legacy migration keeps its
+explicit validation/release boundary. Check mode never checkpoints, arms,
+installs, relabels, or changes service state.
+
+Focused validation links the candidate against this controller's installed CIL
+in an isolated temporary directory, queries the resulting binary policy and
+removes the compiler files without loading it. The active module listing stays
+unchanged and enforcement stays enabled. Filesystem/lock rollback tests exercise
+restoration, changed ownership, symlinks, active acceptance and interrupted
+recovery with synthetic systemd/policy commands. Role-entrypoint regressions
+cover checkpoint ordering, retained maintenance, foreign policy rejection,
+failed install, idempotency and check mode. These do not prove live systemd or
+SELinux rollback. The candidate was subsequently installed through the real role and rolled back
+after its startup failure. Named restart, actual process/key access, runner ID 1
+online, managed maintenance release and the one Rocky case remain unverified.
+
+The approved live attempt used payload digest
+`09dc0755c8eb9c24da44fbd3f38e6801ca394e14e20ebf68e0d41aa4be6a2c32`.
+Preflight confirmed enforcing mode, exact old unit bytes, the original failed
+maintenance receipt, no jobs/runs, and effective permissions matching the retained
+review. The isolated rebuild and staged package matched these fingerprints:
+
+| Artifact | SHA256 |
+| --- | --- |
+| Policy source | `42f0db437a8829a074afc44c111d1e891b4b1fe0a33333b5d61307e3a25f3c2d` |
+| Rendered file contexts | `7e119f82b30112589d3ec2007155d4b985f4df5f18236b2ad5b54a6cb0f14496` |
+| Package | `289e14382d7c5630e8a005ab8b6a25ece3696e9e081e9e28e900e3459d839d11` |
+| CIL / armed module checksum | `134e4327c90146c30acd552900e561941171b50a528d8f657c99082399c78475` |
+
+The managed checkpoint saved **22,256** label records before installation. The
+old failed receipt and checkpoint were archived privately before a guarded
+maintenance handoff; the full native lifecycle then created its own checkpoint
+and retained its own receipt. The controller-only Skynet deployment failed in
+**126.54 seconds** (`ok=189 changed=14 failed=1`, with dispatcher failure
+propagation). Agent startup hit this new enforcing AVC:
+
+```text
+avc: denied { mounton } comm="(sh-agent)"
+path="/run/systemd/mount-rootfs/run/forgejo-runner-agent"
+scontext=system_u:system_r:init_t:s0
+tcontext=system_u:object_r:homelab_forgejo_agent_run_t:s0
+tclass=dir permissive=0
+```
+
+Systemd exited with **226/NAMESPACE** while preparing the protected runtime mount,
+before executing the agent. This demonstrates a missing namespace mount permission
+in the candidate, not a successful agent-domain transition or key load. No policy
+permission was added after failure. The narrowly indicated additional permission
+is `init_t` `mounton` on only `homelab_forgejo_agent_run_t:dir`; it remains a
+proposal requiring review, not an installed or automatically accepted correction.
+Further runtime requirements remain unproven.
+
+The failure handler stopped/disabled only the owned units and executed the
+checksum/receipt-guarded rollback. A separate read-only audit verified exact old
+unit bytes/UID/GID/mode/mtime, all **22,256** saved labels, the original native
+ownership receipt and unchanged registration/credential/configuration hashes.
+The custom module is absent; both services are inactive/disabled, SELinux is
+Enforcing, and the failed migration's maintenance receipt remains held. No
+acceptance job or disposable VM was created; runner ID 1 was not brought online.
+No restart validation or fresh acceptance capacity check was attempted after
+failure. No Proxmox grant, template, VM allocation or unrelated service was
+changed by this attempt.
+
+Private evidence is under
+`~/.config/homelab/molecule-controller/selinux-approved-1794637570135986147/`
+(`before.json`, `package-proof.json`, `checkpoint-verified.json`,
+`guarded-handoff.json`, `failure-rollback.json`, `failure-audit.json`). The
+original managed failure is retained at
+`controller-service-deploy-1794637967358174134/run.log`. A concurrent staged
+inspection observed the module after rollback removal; that incomplete inspection
+is retained and is not presented as a successful active-module check. The retained
+package and armed intent were independently matched to the preflight proof.
+
+The approved `mounton` amendment adds only
+`allow init_t homelab_forgejo_agent_run_t:dir mounton;` and its required dir-class
+permission. Its active payload digest is
+`3f0f3172c174668f47a1c0171b27b2c30b49bb1b20f13ca97609113220053bb4`:
+
+| Artifact | SHA256 |
+| --- | --- |
+| Policy source | `4efa8f984ead4cd587d83d935eafb9b8123990bd65de9b25430d6ae20d1e85e5` |
+| Rendered file contexts | `7e119f82b30112589d3ec2007155d4b985f4df5f18236b2ad5b54a6cb0f14496` |
+| Package | `7b8bba9480172ba85b7ab80db5e394540fb833adedd7f4b410eaf3f7bc93b7c9` |
+| Active priority-400 CIL checksum | `3b688a4234dd69d67e92b072b3339f1eeb60fc67158ea52a9db9155d1f1312c9` |
+
+Fresh isolated linking confirmed the agent's credential restrictions, neverallow,
+network and capability permissions unchanged. The first amended deployment
+succeeded in 127.89 seconds, but a diagnostic used `runuser` without `/usr/sbin`
+in its PATH and triggered the conservative rollback. That instrumentation error
+was corrected to an absolute executable path. All evidence was retained; the
+identical approved candidate was then deployed successfully in **122.74 seconds**
+(`ok=193 changed=15 failed=0`). Both attempts had no new AVCs.
+
+Actual processes were verified in `homelab_forgejo_agent_t` and `user_t`, with
+exactly one dedicated node key loaded, private runtime/socket permissions,
+unchanged credential hashes and zero effective Linux capabilities. The named
+`systemctl restart forgejo-runner-agent.service forgejo-runner.service` replaced
+both PIDs and passed the same checks with no new AVCs. Enforcing mode,
+`ProtectSystem=strict`, `PrivateTmp`, `ProtectHome`, `NoNewPrivileges` and `0077`
+umasks remained intact. No reboot was performed. Forgejo confirmed repository
+runner **ID 1**, `repo_id=1`, `owner_id=0`, version `v13.2.0`, idle before and
+after the restart. Forgejo reports selector `molecule-pve1-rocky`; its configured
+`:host` executor suffix is separately verified in the private config, along
+with capacity 1 and `insecure: false`. Maintenance was then released through the
+original guarded module.
+
+Fresh capacity checks found `local-zfs` **sparse=1**, a healthy shared `rpool`,
+99,598,848,000 bytes available and 7,578,882,048 bytes free RAM. The conservative
+82,411,089,920-byte requirement included the **10 + 16 GiB** selected Rocky pair,
+the controller's 31,945,224,192 bytes of remaining unreserved logical space,
+5 GiB staging, 15 GiB pool headroom and 1 GiB metadata allowance. The two storage
+IDs share backing capacity and were not added together. Controller staging is
+persistent XFS, with 30,106,439,680 bytes free. This was a fresh single-run budget,
+not a guarantee against future unrelated thin-volume growth.
+
+Exactly one manual workflow was dispatched:
+[Forgejo run 1](https://forgejo.int.nosugarmaxtaste.com:8443/homelab-ci/homelab-ci/actions/runs/1),
+`rocky_node_exporter` / `rocky102`, using trusted GitHub main
+`06f3e27f78ea60defc60504221f22e1bea7ee519`. It failed after **389 seconds**
+(workflow) / **385.073 seconds** (harness execution), before Molecule tests.
+Infrastructure creation succeeded, but readiness waited 301 seconds because SSH
+could not open the generated host-pin file. The pin equals the generated guest
+public key and inventory selects its exact path; its label at failure was
+`user_u:object_r:user_home_t:s0`, UID 993, mode `0600`. A temporary, auto-collected
+probe reproduced this under `user_u:user_r:ssh_t:s0`, with strict checking still
+on: `load_hostkeys: fopen .../known_hosts: Permission denied`. The installed
+policy has no `open` allowance for that type and explicitly dontaudits it, so no
+AVC was emitted. This is a controller trust-file labeling failure, not evidence
+of a guest firewall defect. Guest-agent exec is disabled by the guest's existing
+policy; no agent setting was changed and independent guest boot/key inspection
+through that channel remains unavailable.
+
+On 2026-11-15 the approved correction was validated without expanding the custom
+policy. `vm.py` now creates/verifies only the current run's exact `known_hosts`
+file and sets its existing SELinux context's type to `ssh_home_t` through the
+open file descriptor. This uses existing `user_t` relabel permission. Each new
+run gets the same labeling step; it does not depend on a file-context mapping or
+an operator running `restorecon`. Symlinks, extra hard links, foreign ownership,
+incorrect modes and changed pins are rejected. Contents, owner, group, mode
+`0600` and the context's user/role/range are preserved. Unexpected label errors
+remain fatal; filesystems without SELinux labels continue to work. No generic
+SSH access to `user_home_t`, tree relabel, credential-type or policy change was
+introduced. The earlier uninstalled filename-transition proposal is superseded.
+
+A fresh managed maintenance receipt and ownership-guarded, label-only rollback
+checkpoint were prepared; the old installation receipt was never forced. An
+isolated copy of the candidate helper, outside the retained trusted checkout,
+validated both the failed run's pin and a newly created representative run pin
+under `user_u:user_r:user_t:s0` with the existing service hardening. Both became
+`user_u:object_r:ssh_home_t:s0`, UID/GID 993, mode `0600`. Each supported a bounded
+SSH connection to the already-owned guest, with `StrictHostKeyChecking=yes`,
+only its exact pin file, the dedicated guest key and no agent. SSH ran in
+`ssh_t`; both connections returned zero. The combined check took **0.502 seconds**,
+with no relevant new AVCs. Credential contents/metadata/labels, the custom
+policy checksum and the failed result were unchanged. The representative file
+and directory were then verified and removed individually.
+
+After guarded maintenance release, the installed `homelab-molecule retire
+88ce902dca0e47f8ac191805f7673ee7` entry point used the original clean checkout
+`06f3e27f` and its normal identity, state and file-byte guards. Retirement took
+**4.91 seconds** (**5.053 seconds** including service launch). Independent node
+queries confirmed VM980000/980001 and all their artifacts absent from `local`
+and `local-zfs`; the provider state has no resources. Cached images, protected
+controller9300 and source template9004 were preserved. The failed workflow/job
+result, logs, manifest, plan, source checkout and state backup remain retained;
+`retired.json` records cleanup, not a passing acceptance result.
+
+Initial diagnostic invocations stopped on a context string's trailing NUL,
+before labeling, and verified rollback retained maintenance. Two retirement
+launches never started: forwarding a private `var_t` output file descriptor to
+systemd caused an `init_t` file-write denial. Capturing output through pipes and
+then saving it privately resolved that diagnostic issue without changing labels,
+policy or hardening. No provider retirement operation was repeated.
+
+Fresh maintenance ownership is now held pending the trusted-source update.
+Public GitHub main was checked at `334bcd52fc4dbecbc8b32c4edff8169307abb0c6`;
+its `vm.py` lacks this fix. Merge the tested harness correction into GitHub main,
+verify the exact source SHA, release only the current managed maintenance receipt,
+and repeat fresh capacity/storage checks before dispatching the single approved
+Rocky case. No second workflow was dispatched; production-role acceptance and
+the new disk sizes remain uncertified. Clean-checkout and commit guards were
+preserved. The focused `test_molecule_vm.py -m 'not integration'` selection passed
+**21 cases** in **0.13 seconds**; the exact-main/recovery regression passed
+**1 case** in **0.12 seconds**. Ruff and whitespace checks passed. No full Python
+suite, live matrix or dependency installation was performed for this correction.
+
+Earlier live evidence is beneath
+`~/.config/homelab/molecule-controller/selinux-approved-1794645608659470587/`;
+capacity is in `acceptance-capacity-1794646871938875471.json`, retained VM
+identities in `acceptance-retained-audit-*.json`. Current pin validation, scoped
+rollback, retirement and independent absence evidence is in
+`~/.config/homelab/molecule-controller/hostpin-operation-1794683676492936205/`.
+Its controller-side counterpart is
+`/var/cache/forgejo-runner/hostpins/34344a3fc71047f1aa344e43c855745e/`, including
+the current `waiting-for-main-final.json` ownership proof. On-controller
+job/source evidence is `jobs/6a3078f4eb89449a8f82907af90214a8/` and all failed
+provisioning/readiness/state evidence remains in `runs/88ce902dca0e47f8ac191805f7673ee7/`.
+
+Recorded installed versions: Rocky **10.2**, system Python **3.12.15**, tooling
+Python **3.14.8** / Ansible Core **2.22.0**, OpenTofu **1.11.14**, Runner **13.2.0**;
+`selinux-policy-targeted-42.1.18-4.el10` and OpenSSH clients
+`9.9p1-23.el10_2.rocky.0.1`. The controller's staging directory is on persistent
+**XFS**, with approximately **28.09 GiB** free after installation. This is a
+checkpoint, not measured peak usage for the unrun suite. Normal HTTPS health
+(`/api/healthz`, status `pass`) and login return HTTP 200 from the controller;
+unauthenticated `/api/v1/version` returns the existing sign-in guard's HTTP 403.
+Private checkpoint records are `controller-final-audit-*.json`,
+`controller-security-audit-*.json`, `controller-platform-record-*.json` and
+`controller-containment-*/` beneath the deployment directory. The temporary
+operator bootstrap agent was stopped; recovery credentials, images and evidence
+were preserved. No unrelated service or host was restarted.
 
 Actions enablement on the existing Forgejo instance has separate, explicit
 authorization; it does not authorize the controller, CI repository or runner.
@@ -387,8 +774,9 @@ not exercised. The correct Actions Ping returned HTTP 200 with its expected
 restarted. The maintenance used `skynet limit mgt raw --tags recreate,forgejo
 -e @<private-operation.json>`; the value-free private operation catalogue froze
 the existing image and ownership rather than changing production defaults.
-Final evidence is `.ansible/forgejo-controller-prep/live/outcome.json`. No CI
-repository, runner registration or controller VM has been created.
+Final Actions-enablement evidence is
+`.ansible/forgejo-controller-prep/live/outcome.json`; controller rollout is
+tracked separately below.
 
 The runner's 12-hour job bound also requires the Forgejo server's
 `ENDLESS_TASK_TIMEOUT` to permit the selected suite. The read-only post-maintenance
@@ -504,7 +892,11 @@ installation or upgrade during this work:
   and a closed loopback endpoint. Real registration, controller boot persistence,
   node/API authentication and the new 16 GiB guest remain unverified until rollout.
 
-### Rollout scope and commands, pending approval
+### Rollout scope and commands (approved limits)
+
+The controller, private repository and registration already exist. Infrastructure
+creation commands below record the initial rollout; do not recreate those
+resources during the current blocked follow-up.
 
 - Infrastructure: only the new VM root `terraform/proxmox/vms/molecule-controller`,
   template 9004 clone into verified-free VMID 9300, and the four NetBox resource
@@ -558,6 +950,109 @@ separated dedicated tokens, never Administrator/privsep=0 or `ssh.root_ticket`:
 | Each token, `/storage/local-zfs` and `/storage/local` | Datastore audit, space allocation and template/file allocation |
 | Each token, `/sdn/zones/localnetwork/vmbr1` | Bridge audit/use required by the pinned provider |
 
+### Reproducible dedicated Proxmox permissions
+
+`ansible/host_vars/pve1.yml` declares the dedicated Molecule roles and token ACLs.
+The existing `opentofu` role reconciles them through
+`tasks/sub_tasks/pve_user.yml`; private preparation scripts create credentials,
+not permission roles or grants. The five preparation-created roles and thirteen
+ACLs are retained by these declarations. The additional `MoleculeLocalConfig`
+role contains only `Datastore.Allocate`, assigned to the two Molecule tokens on
+`/storage/local` only, with propagation enabled like the existing assignments.
+No additional configuration-management grant is made on `/storage/local-zfs`.
+The existing `MoleculeBridge` role contains only `SDN.Use`. Its additional
+`/sdn/zones/localnetwork/vmbr0` ACL is exclusively for
+`root@pam!molecule-controller-bootstrap`: Proxmox checks template 9004's source
+bridge during clone, before the provider configures the new controller on
+`vmbr1`. The acceptance token has no `vmbr0` grant. Preflight rejects an expanded
+bridge role or a `vmbr0` ACL for another token or role. Template 9004 is unchanged.
+
+The source-bridge grant was explicitly approved and applied on 2026-11-14 through
+the same managed entry point. Check mode changed nothing; application changed
+only one ACL, and the repeat reported `changed=0` in **5.58 seconds**. Effective
+`vmbr0` permissions are exactly `SDN.Use` for bootstrap and empty for acceptance.
+Both tokens still receive HTTP 403 for VM104. Complete before/after comparisons
+preserved all roles, prior ACLs, token metadata and private credential hashes.
+Evidence is under
+`~/.config/homelab/molecule-controller/managed-bridge-permissions-1794585273334213921/`.
+
+Before retrying, the installed PVE **9.2.21** clone/configuration/resize checks,
+source-template configuration and pinned provider **0.120.0** path were reviewed
+against the declared privileges. VM configuration, cloud-init, disk growth,
+node/storage reads and power operations use the existing scoped grants. No pool
+assignment, migration, custom CPU/device mapping, hook script or startup-order
+configuration is requested. No other predictable missing Proxmox grant was identified;
+an unexpected denial must still stop execution rather than broaden access.
+
+The pinned provider reads the `/storage/local` configuration to locate its
+snippet directory. Proxmox requires `Datastore.Allocate` for that read, even
+though it also permits storage-configuration changes. Audit, space and template
+privileges are insufficient. This coarse permission requires explicit approval;
+never substitute the general OpenTofu role, Administrator or a root-path grant.
+
+The optional path is disabled by default. After creating the two dedicated,
+privilege-separated tokens through the approved credential procedure, inspect
+the plan using the normal bootstrap API authentication and inventory:
+
+```text
+skynet limit pve1 raw --tags opentofu_molecule_permissions \
+  -e '{"opentofu_pve_molecule_permissions_enabled": true}' --check --diff
+```
+
+Only after approval, repeat without `--check --diff` to reconcile the declared
+permissions. This tag reaches only the dedicated permission tasks; it does not
+run the general OpenTofu user/token lifecycle. Ordinary `opentofu_pve_user` runs
+retain their existing behavior and do not require Molecule identities. The API
+delegate must trust the Proxmox certificate chain: the new path verifies TLS.
+Both tokens must already exist with privilege separation enabled. No token is
+created, replaced or modified, and unrelated roles/ACLs are retained.
+
+Repository validation for these changes used the existing environment; no local
+tooling was installed or upgraded:
+
+| Check | Result | Elapsed |
+| --- | --- | --- |
+| `pytest tests/unit/test_opentofu_molecule_permissions.py` | 16 passed | 52.44 s |
+| Focused controller/recorded native-runner checks | 17 passed | 95.33 s |
+| Real repository preparation, first install and update | 1 passed | 30.06 s |
+| `pytest tests/unit/test_workstation_venv.py tests/unit/test_workstation_tooling.py` | 34 passed | 40.50 s |
+| `pytest tests/unit -m 'not integration'` | 2230 passed | 50.23 s |
+| Ruff check/format, YAML lint, full offline Ansible lint, localhost syntax, whitespace | passed; existing YAML long-line warnings | recorded in private logs |
+| Checkov 3.4.3, repository configuration, public source snapshot | 508 passed, 0 failed, 25 skipped, 0 parsing errors | 15.81 s |
+| Gitleaks 8.24.3, changed source with repository configuration | 0 findings | 0.52 s |
+
+Elapsed values are command wall time, not summed test durations. Native lifecycle
+safety fixtures record host mutations; their passing results do not certify the
+blocked live runner. Repository preparation and virtualenv command checks execute
+the real Git/filesystem/interpreter paths against temporary inputs. New subprocess
+regressions use the existing `integration` selection. An initial validation run
+was blocked by the sandbox's local RPC restriction; the same workstation
+selection passed outside that restriction. An initial full-tree Gitleaks
+*directory* scan reported five matches in unchanged public-key/reference/template
+files; historical commit-fingerprint exclusions do not match directory-scan
+fingerprints. No exclusions or scanner policy were changed. Changed-source
+scanning is clean; this is not a new historical-range scan or a claim about CI.
+Operator/other integration groups and the live matrix were not repeated for this
+focused correction. Generated READMEs and controlled GitHub CI remain unchanged.
+
+Collection `community.proxmox` 2.1.0 supports role check mode but not ACL check
+mode. The entry point therefore reports the declared ACL targets in check mode
+and skips the ACL mutation module. An unchanged normal rerun is idempotent.
+
+On 2026-11-14, the explicitly approved correction was applied through this
+entry point, limiting its declarations to `MoleculeLocalConfig` and the two
+`/storage/local` ACLs. The existing vaulted bootstrap authentication was used
+on the operator's localhost delegate with the trusted Proxmox CA; the general
+OpenTofu token lacks `Permissions.Modify` and was not broadened. Check mode
+made no live changes; application reported two changed tasks, and the unchanged
+rerun reported `changed=0` (7.14 seconds). Complete before/after comparisons
+confirmed all existing roles, ACLs, token metadata and saved credential files
+were preserved. Both tokens can now read the local datastore configuration;
+neither has `Datastore.Allocate` on `/storage/local-zfs`, and both receive HTTP
+403 reading protected VM104's configuration. Both retain `privsep=1`.
+Private evidence is under
+`~/.config/homelab/molecule-controller/managed-permissions-1794584138728375641/`.
+
 Confirm exact privilege names against the installed PVE version and actual saved
 plan/API requests. A denied operation fails visibly; never fall back to a general
 admin token or broaden grants automatically. Storage privileges are not filename
@@ -584,6 +1079,9 @@ After the prerequisites and one approval:
    .53/.54. `private_key_path` is the guest key;
    `node_private_key_path` is the different management key. Store only the PVE
    token in `provisioning.json`. Registration credentials are a different file.
+   Reconcile permissions through the repository-managed entry point above after
+   its exact grants are approved. The private preparation helper does not create
+   roles or assign ACLs. Confirm all existing grants match before provider use.
 4. Run the private Forgejo preparation script with `--approved-rollout` after
    the global Actions prerequisite is satisfied. Inspect repository privacy,
    exact repository-scoped runner ID and the new receipts. No global/account
@@ -606,15 +1104,30 @@ After the prerequisites and one approval:
    production-host plays may execute.
 7. Verify HTTPS, private profile/allocation permissions, actual filesystem/free
    capacity, runner scope/label/capacity, units enabled/active and node/API access
-   without printing values. Reboot **only controller 9300**, reconnect with strict
-   SSH trust, and verify the dedicated SSH agent reloaded its key without an
-   interactive workstation agent. Dispatch exactly `rocky_node_exporter` /
+   without printing values. Under the current approval, perform a named restart
+   of only the owned runner/agent units and verify dedicated-key reload without
+   an interactive workstation agent. Do not reboot the controller or hosts;
+   actual reboot persistence remains unverified. Dispatch exactly `rocky_node_exporter` /
    `rocky102` on private CI `main`; record the fetched GitHub SHA, real role result,
    durations and confirmed VM/file retirement. Leave schedules disabled. Revoke
    only the transient bootstrap credentials after scoped recovery is no longer
    needed. Do not declare the new 16 GiB configurations fully certified.
 
 ### Operator use and scoped recovery
+
+Rollout status (2026-11-15): controller VM9300, its owned snippet/state, dedicated
+credentials, private CI repository and repository-scoped runner ID 1 exist.
+The approved mount amendment is installed at priority 400. Services are active,
+enabled and confined; the named restart and dedicated key reload passed.
+The first Rocky workflow failed before production-role tests because its public
+host-pin file could not be opened in `ssh_t`. The exact-file `ssh_home_t` fix
+passed retained/new-file and strict-SSH validation without a policy expansion.
+Run 88ce902dca0e47f8ac191805f7673ee7 was retired through the original guarded
+entry point; both VMIDs and owned artifacts are independently confirmed absent.
+Its failed result and evidence remain. Fresh managed maintenance is held pending
+the fix reaching trusted GitHub main. Do not dispatch another case until that
+source update and fresh capacity checks pass. Actual reboot persistence and a
+successful Rocky production-role acceptance remain unverified.
 
 Open the private Forgejo repository's **Actions → Live VM acceptance → Run
 workflow**, using CI branch `main`. Defaults select one Rocky Node Exporter case.

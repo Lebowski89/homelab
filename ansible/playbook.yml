@@ -355,6 +355,7 @@
       tags:
         - opentofu
         - opentofu_pve_user
+        - opentofu_molecule_permissions
 
     ################################
     # POSTGRES (CLUSTER)
