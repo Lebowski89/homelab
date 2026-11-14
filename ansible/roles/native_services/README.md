@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/11/13 |
+| Readme update        | 2026/11/15 |
 
 
 
@@ -178,8 +178,9 @@
 | Forgejo Runner ¦ Create unprivileged persistent automation account | ansible.builtin.user | False |  |
 | Forgejo Runner ¦ Prepare private persistent controller directories | ansible.builtin.file | False |  |
 | Forgejo Runner ¦ Prepare private persistent credentials directory | ansible.builtin.file | False |  |
+| Forgejo Runner ¦ Install private delegation and signature verification prerequisites | ansible.builtin.dnf | False |  |
+| Forgejo Runner ¦ Reconcile the owned confined SELinux policy before tooling and units | ansible.builtin.include_tasks | True |  |
 | Forgejo Runner ¦ Install headless automation through the workstation tooling entry point | ansible.builtin.include_role | False |  |
-| Forgejo Runner ¦ Install signature verification prerequisites | ansible.builtin.dnf | False |  |
 | Forgejo Runner ¦ Prepare root-owned persistent release verification directory | ansible.builtin.file | False |  |
 | Forgejo Runner ¦ Install the pinned upstream public release key | ansible.builtin.copy | False |  |
 | Forgejo Runner ¦ Import only the repository-pinned release key into an isolated keyring | ansible.builtin.command | True |  |
@@ -195,6 +196,7 @@
 | Forgejo Runner ¦ Install only the validated registration snapshot | ansible.builtin.copy | True |  |
 | Forgejo Runner ¦ Render the validated private runner connection | ansible.builtin.template | True |  |
 | Forgejo Runner ¦ Record adopted private runner configuration | ansible.builtin.include_tasks | True |  |
+| Forgejo Runner ¦ Reconcile named credentials after atomic installation | ansible.builtin.include_tasks | True |  |
 | Forgejo Runner ¦ Install and record each owned systemd unit | ansible.builtin.include_tasks | True |  |
 | Forgejo Runner ¦ Start persistent boot authentication without a workstation agent | ansible.builtin.systemd_service | True |  |
 | Forgejo Runner ¦ Enable and start the repository runner | ansible.builtin.systemd_service | True |  |
@@ -214,6 +216,79 @@
 | Forgejo Runner ¦ Read the selected private registration before mutation | ansible.builtin.slurp | False | Keep the validated snapshot through installation; never reread an unchecked source. |
 | Forgejo Runner ¦ Parse the selected registration snapshot privately | ansible.builtin.set_fact | False |  |
 | Forgejo Runner ¦ Require matching registration identity and repository before mutation | ansible.builtin.assert | False |  |
+
+#### File: tasks/forgejo_runner_selinux.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Forgejo Runner ¦ Resolve the reviewed payload | ansible.builtin.include_tasks | False |
+| Forgejo Runner ¦ Report confined policy preparation in check mode | ansible.builtin.debug | True |
+| Forgejo Runner ¦ Prepare the owned policy package | ansible.builtin.include_tasks | True |
+| Forgejo Runner ¦ Reconcile only the retained private home's declared labels | ansible.builtin.command | True |
+| Forgejo Runner ¦ Separate existing named credential files before running user tooling | ansible.builtin.include_tasks | False |
+
+#### File: tasks/forgejo_runner_selinux_checkpoint.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Forgejo Runner ¦ Resolve the policy migration payload | ansible.builtin.include_tasks | False | Only the existing offline installation's first confined-policy migration. |
+| Forgejo Runner ¦ Prepare the private policy recovery boundary | ansible.builtin.file | False |  |
+| Forgejo Runner ¦ Install the bounded policy checkpoint and rollback executable | ansible.builtin.copy | False |  |
+| Forgejo Runner ¦ Preserve the offline installation before any ownership or policy mutation | ansible.builtin.command | False |  |
+
+#### File: tasks/forgejo_runner_selinux_credentials.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Forgejo Runner ¦ Inspect only the named private credential files | ansible.builtin.stat | False |
+| Forgejo Runner ¦ Reject linked or replaced credential paths before relabeling | ansible.builtin.assert | True |
+| Forgejo Runner ¦ Reconcile exact credential labels without traversing their directory | ansible.builtin.command | True |
+
+#### File: tasks/forgejo_runner_selinux_install.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Forgejo Runner ¦ Prepare private root-owned policy build storage | ansible.builtin.file | False |  |
+| Forgejo Runner ¦ Materialize the reviewed policy source | ansible.builtin.copy | False |  |
+| Forgejo Runner ¦ Materialize only this controller's file-context declarations | ansible.builtin.copy | False |  |
+| Forgejo Runner ¦ Compile the policy without installing it | ansible.builtin.command | False |  |
+| Forgejo Runner ¦ Package the exact module and scoped file contexts | ansible.builtin.command | False |  |
+| Forgejo Runner ¦ Protect the exact staged policy package before recording its proof | ansible.builtin.file | False | Retained even if the subsequent install/ownership write is interrupted. |
+| Forgejo Runner ¦ Preserve the scoped policy installation intent | ansible.builtin.copy | False |  |
+| Forgejo Runner ¦ Arm exact package ownership before the first live policy installation | ansible.builtin.command | True | A deferred handler would arm proof after semodule, leaving an unowned-install gap. |
+| Forgejo Runner ¦ Install only the reviewed application module | ansible.builtin.command | False |  |
+| Forgejo Runner ¦ Read the installed module checksum before claiming ownership | ansible.builtin.command | False |  |
+| Forgejo Runner ¦ Require one exact installed module at the reviewed priority | ansible.builtin.assert | False |  |
+| Forgejo Runner ¦ Record this installation's exact policy ownership | ansible.builtin.set_fact | False |  |
+| Forgejo Runner ¦ Persist policy ownership before changing labels or units | ansible.builtin.include_tasks | False |  |
+
+#### File: tasks/forgejo_runner_selinux_payload.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Forgejo Runner ¦ Resolve the exact policy source and private file contexts | ansible.builtin.set_fact | False |
+| Forgejo Runner ¦ Identify the reviewed policy payload | ansible.builtin.set_fact | False |
+
+#### File: tasks/forgejo_runner_selinux_remove.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| Forgejo Runner ¦ Remove only the unchanged recorded policy module | ansible.builtin.command | True | forgejo_runner_drain.yml stops the owned agent; remove.yml stops the runner.
+The validation entry already compared the installed checksum with the receipt. |
+| Forgejo Runner ¦ Restore base-policy labels on retained controller data | ansible.builtin.command | True |  |
+| Forgejo Runner ¦ Restore the named credential files to base-policy labels | ansible.builtin.include_tasks | False |  |
+| Forgejo Runner ¦ Inspect any retained runtime directory without following links | ansible.builtin.stat | False |  |
+| Forgejo Runner ¦ Refuse relabeling a replaced runtime boundary | ansible.builtin.assert | True |  |
+| Forgejo Runner ¦ Restore the base label on any retained owned runtime directory | ansible.builtin.command | True |  |
+
+#### File: tasks/forgejo_runner_selinux_validate.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| Forgejo Runner ¦ Read installed module identities and checksums without changing policy | ansible.builtin.command | False |
+| Forgejo Runner ¦ Resolve only this application's installed policy | ansible.builtin.set_fact | False |
+| Forgejo Runner ¦ Refuse replacement or removal of foreign or modified policy | ansible.builtin.assert | True |
+| Forgejo Runner ¦ Require the recorded policy for a confined restart | ansible.builtin.assert | True |
 
 #### File: tasks/forgejo_runner_unit.yml
 
@@ -240,6 +315,7 @@
 | Forgejo Runner ¦ Require explicit regular credential files before installation | ansible.builtin.assert | True |  |
 | Forgejo Runner ¦ Inspect installation directory boundaries without following links | ansible.builtin.stat | False | Inspect root-created boundaries without following retained user symlinks; tooling beneath .local stays user-owned. |
 | Forgejo Runner ¦ Refuse linked or foreign installation directories | ansible.builtin.assert | True |  |
+| Forgejo Runner ¦ Inspect SELinux module ownership before maintenance or host changes | ansible.builtin.include_tasks | True |  |
 | Forgejo Runner ¦ Require an owned restartable installation | ansible.builtin.assert | True |  |
 | Forgejo Runner ¦ Inspect only resident restart inputs | ansible.builtin.stat | True |  |
 | Forgejo Runner ¦ Require private resident configuration and boot authentication for restart | ansible.builtin.assert | True |  |
@@ -300,6 +376,7 @@
 | Native services ¦ Complete the owned lifecycle with private snapshot cleanup | block | False |  | checkov:skip=CKV2_ANSIBLE_3:Failure propagates; always clears transient auth while retaining failed maintenance ownership. |
 | Forgejo Runner ¦ Validate the selected registration before installation changes | ansible.builtin.include_tasks | True |  |  |
 | Native services ¦ Protect active acceptance before runner lifecycle changes | ansible.builtin.include_tasks | True |  |  |
+| Forgejo Runner ¦ Checkpoint the retained offline installation before its first policy migration | ansible.builtin.include_tasks | True |  |  |
 | Native services ¦ Prepare installation ownership and resolver recovery | ansible.builtin.include_tasks | True |  |  |
 | Native services ¦ Apply the selected application | ansible.builtin.include_tasks | True |  |  |
 | Forgejo Runner ¦ Explain validated check-mode installation plan | ansible.builtin.debug | True |  |  |
@@ -307,6 +384,7 @@
 | Native services ¦ Remove the selected service's managed integrations | ansible.builtin.include_tasks | True |  |  |
 | Native services ¦ Complete selected service notifications | ansible.builtin.meta | False |  | Flush notifications before another entry can replace this application's facts. |
 | Forgejo Runner ¦ Release only this completed operation's maintenance ownership | forgejo_runner_maintenance | True |  |  |
+| Forgejo Runner ¦ Retain first-policy migration ownership for validation or exact rollback | ansible.builtin.debug | True |  |  |
 
 #### File: tasks/node_exporter.yml
 
@@ -332,6 +410,7 @@ procedure changes it. Never save credentials or application configuration. |
 | Native services ¦ Save original regular resolver content | ansible.builtin.slurp | True |  |
 | Native services ¦ Resolve installation ownership record | ansible.builtin.set_fact | False |  |
 | Native services ¦ Ensure private ownership directory exists | ansible.builtin.file | True |  |
+| Native services ¦ Preserve the runner's separately recorded policy ownership | ansible.builtin.set_fact | True |  |
 | Native services ¦ Record the selected installation's owned files | ansible.builtin.copy | True | Save recovery state before installation. Claim files only after their
 successful template/copy task; a failed download must not adopt an old file. |
 
@@ -357,6 +436,7 @@ successful template/copy task; a failed download must not adopt an old file. |
 | Native services ¦ Verify resolver ownership before stopping DNS | ansible.builtin.include_tasks | True |
 | Native services ¦ Inspect installed services | ansible.builtin.service_facts | False |
 | Native services ¦ Stop and disable the selected installed service | ansible.builtin.systemd_service | True |
+| Forgejo Runner ¦ Retire only this installation's owned SELinux policy | ansible.builtin.include_tasks | True |
 | Native services ¦ Explain retained unclaimed installation files | ansible.builtin.debug | True |
 | Native services ¦ Restore owned resolver integration | ansible.builtin.include_tasks | True |
 | Native services ¦ Remove only recorded managed configuration files | ansible.builtin.file | False |
