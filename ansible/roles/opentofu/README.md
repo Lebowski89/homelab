@@ -47,10 +47,14 @@
 | Require both existing Molecule tokens to remain privilege-separated | ansible.builtin.assert | False |  |
 | Inspect ownership and actual privileges before enabling the persistent pool | block | True |  |
 | Obtain a private operator API session for pool preflight | ansible.builtin.uri | False |  |
-| Read the actual roles that will govern pool members | ansible.builtin.uri | False |  |
-| Reject an existing pool role with different privileges | ansible.builtin.assert | False |  |
+| Discover existing roles through the role index | ansible.builtin.uri | False |  |
+| Validate role-index structure before discovering missing roles | ansible.builtin.assert | False |  |
+| Read the actual privileges of existing roles that will govern pool members | ansible.builtin.uri | True |  |
+| Reject an existing pool role with different privileges | ansible.builtin.assert | True |  |
 | Inspect existing pool identities | ansible.builtin.uri | False |  |
 | Inspect the selected existing pool before granting access | ansible.builtin.uri | True |  |
+| Require exactly one matching pool object in the selected-pool response | ansible.builtin.assert | True |  |
+| Select the validated pool object for ownership checks | ansible.builtin.set_fact | True |  |
 | Reject a foreign pool or non-disposable pool members | ansible.builtin.assert | True |  |
 | Ensure the owned persistent acceptance pool exists without assigning members | community.proxmox.proxmox_pool | True |  |
 | Reconcile only the declared Molecule roles | community.proxmox.proxmox_role | False |  |
