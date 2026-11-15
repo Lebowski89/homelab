@@ -47,6 +47,8 @@
   ansible.builtin.include_role:
     name: workstation
     tasks_from: tools
+    # The controller profile below consumes the workstation default tooling paths.
+    public: true
     apply:
       tags: '{{ ansible_run_tags }}'
   tags: '{{ ansible_run_tags }}'

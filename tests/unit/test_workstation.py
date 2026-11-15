@@ -793,11 +793,17 @@ def test_inline_bootstrap_inventory_and_granular_tools(workstation_run, tag):
 @pytest.mark.integration
 @pytest.mark.parametrize("enabled,major,tools_entry", [(True, "10", True), (False, "10", True), (True, "9", True), (True, "10", False)])
 def test_rocky_controller_opt_in_is_confined_to_headless_tools(workstation_run, enabled, major, tools_entry):
+    controller = load_yaml(REPO_ROOT / "ansible/host_vars/molecule-controller.yml")
+    config = load_yaml(REPO_ROOT / "ansible/group_vars/all/services/forgejo_runner.yml")["forgejo_runner"]["native"]["config"]
+    account, home = config["user"], config["data_dir"]
     result, calls = workstation_run(
         fedora=True,
-        tags="workstation_ansible",
+        tags="workstation_tools",
         headless_entry=tools_entry,
         overrides={
+            **controller,
+            "native_services_config": {"user": account, "data_dir": home},
+            "fixture_passwd": {account: ["x", "1001", "1001", "", home, "/usr/sbin/nologin"]},
             "workstation_tools_headless": enabled,
             "ansible_facts": {
                 "os_family": "RedHat",
@@ -811,12 +817,32 @@ def test_rocky_controller_opt_in_is_confined_to_headless_tools(workstation_run, 
     accepted = enabled and major == "10" and tools_entry
     assert (result.returncode == 0) is accepted, result.stdout + result.stderr
     if accepted:
-        assert any(call["module"] == "pip" for call in calls)
+        tools = home + "/.local/share/homelab"
+        assert any(call["module"] == "getent" and call["options"]["key"] == account for call in calls)
+        assert any(call["module"] == "stat" and call["options"]["path"] == home + "/homelab" for call in calls)
+        assert any(call["module"] == "file" and call["options"]["path"] == tools for call in calls)
+        assert any(
+            call["module"] == "pip" and call["options"]["virtualenv"] == tools + "/ansible-venv" and call["user"] == account
+            for call in calls
+        )
+        commands = [call["options"].get("argv", []) for call in calls if call["module"] == "command"]
+        assert any(argv[0] == "python3.14" for argv in commands if argv)
+        assert any(
+            argv[0] == tools + "/ansible-venv/bin/ansible-galaxy" and argv[-1] == tools + "/collections" for argv in commands if argv
+        )
+        assert not any(call["module"] == "template" for call in calls)  # Skynet remains disabled.
         # OpenTofu's signed RPM repository is headless tooling, whereas the
         # VS Code repository/packages and desktop packages must stay absent.
         assert not any(call["module"] == "yum_repository" and call["options"].get("name") == "code" for call in calls)
         packages = [name for call in calls if call["module"] in {"apt", "dnf"} for name in call["options"].get("name", [])]
         assert "code" not in packages and "xdg-user-dirs" not in packages
+        assert any(
+            call["module"] == "dnf"
+            and call["options"]["name"]
+            == ["python3.14", "python3.14-pip", "python3.14-devel", "gcc", "make", "git", "ca-certificates", "openssh-clients"]
+            for call in calls
+        )
+        assert any(call["module"] == "yum_repository" and call["options"]["name"] == "opentofu" for call in calls)
     else:
         assert not any(call["module"] not in {"stat"} for call in calls)
         assert "unsupported" in result.stdout.lower() or "never the desktop entry point" in result.stdout

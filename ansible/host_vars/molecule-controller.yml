@@ -7,17 +7,10 @@ workstation_tools_headless: true
 workstation_tools_enabled: true
 workstation_user: "{{ native_services_config.user }}"
 workstation_repository_clone: true
-workstation_repository_path: "{{ native_services_config.data_dir }}/homelab"
-workstation_ansible_tools_path: "{{ native_services_config.data_dir }}/.local/share/homelab"
-workstation_ansible_venv_path: "{{ workstation_ansible_tools_path }}/ansible-venv"
 # ansible-core 2.22 requires 3.13+; leave Rocky's system Python 3.12 unchanged.
 workstation_ansible_python_executable: python3.14
-workstation_ansible_collections_path: "{{ workstation_ansible_tools_path }}/collections"
 workstation_skynet_enabled: false
 workstation_opentofu_enabled: true
-workstation_vscode_enabled: false
-# Rocky uses the same supported RPM tooling path; no workstation desktop entry.
-workstation_ansible_prereq_packages: [python3.14, python3.14-pip, python3.14-devel, gcc, make, git, ca-certificates, openssh-clients]
 # The normal key host returns HTTP 403 here. Use the same upstream key at an
 # immutable official source revision; rpm_key requires its ASCII-armored form.
 workstation_opentofu_signing_keys:
