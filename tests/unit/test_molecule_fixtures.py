@@ -92,7 +92,7 @@ def test_diagnostic_storage_removes_sensitive_daemon_lines_but_keeps_failure_evi
             },
         },
     )
-    result = templar.template(storage["ansible.builtin.copy"]["content"])
+    result = templar.template(storage["molecule_evidence"]["content"])
     assert "SYNTHETIC_GOSSIP_VALUE" not in result and "SYNTHETIC_AUTH_VALUE" not in result
     assert "network fixture not found" in result and "ordinary diagnostic" in result
 
@@ -106,7 +106,7 @@ def test_quadlet_diagnostic_is_stored_for_completed_commands_and_skipped_for_abs
     from test_podman_rootless_check_mode import run_local_playbook
 
     tasks = yaml.safe_load((ROOT / "molecule/shared/diagnostics.tasks.yml").read_text())
-    storage = next(task for parent in tasks for task in parent.get("block", []) if "ansible.builtin.copy" in task)
+    storage = next(task for parent in tasks for task in parent.get("block", []) if "molecule_evidence" in task)
     observation = {"skipped": True} if skipped else {"rc": 1, "stdout": "ActiveState=failed", "stderr": "synthetic failure"}
     result = run_local_playbook(
         tmp_path,
