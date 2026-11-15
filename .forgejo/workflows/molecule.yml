@@ -7,8 +7,8 @@ name: Live VM acceptance
       suite:
         description: "Suite (all may exceed Forgejo's default 3h; verify ENDLESS_TASK_TIMEOUT before long runs)"
         type: choice
-        default: rocky_node_exporter
-        options: [rocky_node_exporter, runtime_install, application_lifecycle, protected_network, all]
+        default: node_exporter
+        options: [node_exporter, runtime_install, application_lifecycle, protected_network, all]
       os:
         description: "Guest OS (all can exceed the server timeout; the 720-minute job limit does not override it)"
         type: choice

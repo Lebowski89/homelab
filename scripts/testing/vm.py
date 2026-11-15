@@ -31,7 +31,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 IMAGES = json.loads((ROOT / "molecule/vm/images.json").read_text())
-SUITES = ("rocky_node_exporter", "runtime_install", "application_lifecycle", "protected_network")
+SUITES = ("node_exporter", "runtime_install", "application_lifecycle", "protected_network")
 GUEST_PYTHON = "/opt/homelab-molecule-ansible/bin/python"
 MAX_DISK_GB = 32  # Existing approved per-disk ceiling, not a minimum.
 
@@ -228,7 +228,7 @@ def prepare(args):
     )
     prepared_image = prepared_fedora(args.state_root) if args.os == "fedora44" else None
     require(
-        args.os != "fedora44" or prepared_image is not None or args.suite == "rocky_node_exporter",
+        args.os != "fedora44" or prepared_image is not None or args.suite == "node_exporter",
         "Fedora Cloud bundles Podman. Run prepare-fedora-image first; never erase bundled runtimes to pass freshness checks",
     )
     image = IMAGES[args.os]
@@ -321,7 +321,7 @@ def prepare(args):
             "docker_selinux_enable": image["selinux"],
             # Production opt-in for mixed-runtime bridge forwarding. Preserve the
             # role default; exercise the intended coexistence configuration here.
-            "podman_docker_iptables_compatibility": args.suite != "rocky_node_exporter",
+            "podman_docker_iptables_compatibility": args.suite != "node_exporter",
         },
     )
     (directory / "ansible.cfg").write_text(
@@ -413,7 +413,7 @@ def prepare_fedora_image(args):
             argparse.Namespace(
                 **vars(args),
                 os="ubuntu2604",
-                suite="rocky_node_exporter",
+                suite="node_exporter",
                 order="docker-first",
                 runtime="rootless",
                 image_builder=True,

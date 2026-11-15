@@ -41,7 +41,7 @@
     - name: Molecule | Record ownership before the real installation
       ansible.builtin.copy:
         dest: /var/lib/homelab-molecule-node-exporter
-        content: "homelab molecule rocky-node-exporter\n"
+        content: "homelab molecule node-exporter\n"
         owner: root
         group: root
         mode: '0600'

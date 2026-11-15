@@ -10,9 +10,17 @@ See the [recorded acceptance summary](#recorded-acceptance). The detailed run
 history, versions, durations and cleanup receipts are archived with the private
 controller evidence outside Git.
 
-The historical `rocky_node_exporter` scenario is shared across Debian 13,
-Fedora 44, Rocky 10.2 and Ubuntu 26.04 AMD64. There is one lifecycle root and one
-running guest per approved allocation, rather than a provisioning root per role.
+The reusable `node_exporter` scenario selects its OS separately with `--os`:
+`debian13`, `fedora44`, `rocky102` or `ubuntu2604`. All use the same scenario and
+real native-service catalogue entry point. The pinned image metadata selects
+platform/version/package-manager checks and SELinux enforcement; preparation uses
+APT or DNF only where required. Historical evidence retains the former
+`rocky_node_exporter` name; the rename does not certify another distribution.
+There is one lifecycle root and one running guest per approved allocation, rather than a provisioning root per role.
+Scenario playbooks remain in the repository after a run. Retirement removes only
+that run's verified disposable VMs/artifacts, retaining its private evidence and
+original source checkout. Scenario cleanup still removes its owned guest service
+before VM retirement.
 No Tailscale, NetBox registration, production inventory, application credentials
 or normal guest SSH configuration is needed.
 Molecule automatically loads the shared repository configuration from
@@ -141,7 +149,7 @@ From the repository root, with the trusted controller profile loaded:
 
 ```bash
 run=$(python scripts/testing/vm.py prepare --allocation /private/allocation.json \
-  --state-root /private/molecule-runs --os rocky102 --suite rocky_node_exporter)
+  --state-root /private/molecule-runs --os rocky102 --suite node_exporter)
 python scripts/testing/vm.py provision "$run"
 python scripts/testing/vm.py test "$run"
 python scripts/testing/vm.py retire "$run" --confirm-run "${run##*/}"
@@ -819,7 +827,8 @@ merged in PR #745; run 6 below exercised it through the real harness. Inspection
 VM9300's pinned Ansible **2.22.0** confirmed that `atomic_move()` chooses the
 policy-default SELinux context for a new destination, requesting `system_u`
 instead of retaining the confined writer's valid `user_u` identity. The six
-delegated evidence writes in `rocky_node_exporter/verify.yml`,
+delegated evidence writes in the former `rocky_node_exporter/verify.yml`
+(now `node_exporter/verify.yml`),
 `shared/diagnostics.tasks.yml` and `shared/diagnostics.yml` now use the narrow
 `molecule_evidence` action through the existing controller action-plugin path.
 It stages complete content as an owned mode-`0600` file inside the owned
@@ -1001,8 +1010,9 @@ availability, and budget the selected pair plus image staging and headroom.
 If that check cannot substantiate the budget, pause for additional approved
 capacity; do not shrink existing VMs, change shared-module defaults, erase old
 images/evidence or rely on unverified thin provisioning. No live matrix is
-needed for that decision. The first approved acceptance remains one
-`rocky_node_exporter` / `rocky102` case, now validating the candidate 16 GiB disk.
+needed for that decision. The originally approved first case was
+`rocky_node_exporter` / `rocky102`, validating the candidate 16 GiB disk.
+Current source uses selector `node_exporter` for that same focused case.
 
 
 ### Repository preparation validation
@@ -1307,11 +1317,65 @@ After the prerequisites and one approval:
    without printing values. Under the current approval, perform a named restart
    of only the owned runner/agent units and verify dedicated-key reload without
    an interactive workstation agent. Do not reboot the controller or hosts;
-   actual reboot persistence remains unverified. Dispatch exactly `rocky_node_exporter` /
-   `rocky102` on private CI `main`; record the fetched GitHub SHA, real role result,
+   actual reboot persistence remains unverified. For current source, dispatch
+   `node_exporter` / `rocky102` on private CI `main`; record the fetched GitHub SHA, real role result,
    durations and confirmed VM/file retirement. Leave schedules disabled. Revoke
    only the transient bootstrap credentials after scoped recovery is no longer
    needed. Do not declare the new 16 GiB configurations fully certified.
+
+### Scenario rename and coordinated delivery
+
+The `node_exporter` rename is prepared for repository review only. The last
+verified deployed launcher default and private Forgejo workflow used
+`rocky_node_exporter`. Both need a coordinated update: root-owned
+`/usr/local/bin/homelab-molecule` from `scripts/testing/forgejo.py`, and only
+`.forgejo/workflows/molecule.yml` in private `homelab-ci/homelab-ci`. The GitHub
+syntax loop/controlled workflow selectors are updated in source too; controlled
+live CI remains disabled pending its separately approved execution.
+
+Pause manual dispatches, verify current ownership/idle state, checkpoint the
+owned launcher/workflow, and hold fresh managed maintenance while applying the
+paired files from the same approved revision through the existing managed path.
+No unit, policy, credential, registration or permission-boundary change is needed.
+This document does not authorise that live update. Before a GitHub main merge,
+use the published reviewed branch and exact SHA with the new workflow; keep
+normal main dispatch paused until main contains the rename. Old source expects
+the old selector, and new source rejects it before provisioning. There is no
+compatibility alias. Recover retained historical runs only with their original
+clean checkout; never rewrite manifests or ownership markers to adopt them.
+
+After that separately approved update, existing external ACL reconciliation,
+fresh capacity checks and matched maintenance release, the next targeted command
+in the controller's normal confined job environment is:
+
+```bash
+homelab-molecule run --suite node_exporter --os rocky102 \
+  --source-branch "$REVIEWED_BRANCH" --source-sha "$REVIEWED_SHA" \
+  --candidate-approved true
+```
+
+`REVIEWED_BRANCH` and `REVIEWED_SHA` must identify the explicitly approved,
+published rename candidate in `Lebowski89/homelab`. The equivalent Forgejo manual
+inputs are suite `node_exporter`, OS `rocky102` and those exact source inputs.
+Changing only `--os` selects the other three existing guest configurations; it
+does not establish live acceptance. Direct Molecule calls must also receive the
+selected platform's generated `guest-vars.json` via `HOMELAB_MOLECULE_VARS`;
+the guest guard no longer defaults a missing OS to Rocky.
+
+The historical run 6 below passed **`rocky_node_exporter` on Rocky 10.2**, before
+this rename. No live run has exercised the renamed scenario, and no additional
+OS acceptance is claimed. Scenarios stay in Git when their disposable VMs retire.
+
+Repository-only refactor validation passed **140 distinct focused cases** across
+the controller, VM selection/configuration, scenario guards/ownership, evidence
+writer and existing Molecule CLI/syntax tests. Offline suite selection resolved
+all four OS pins to `node_exporter`; the former selector was rejected. Ruff,
+formatting, YAML lint, offline Ansible lint with CI's configured plugin paths,
+`molecule syntax -s node_exporter` and whitespace checks passed. Focused Checkov
+3.4.3 scanning of the public scenario/affected GitHub workflows reported 121 passed,
+0 failed, 2 scoped skips and 0 parsing errors. The sandbox's Ansible RPC
+restriction required the affected synthetic tests to run outside it.
+No dependency changes, live access, dispatch or full matrix were involved.
 
 ### Operator use and scoped recovery
 
@@ -1338,7 +1402,8 @@ still requires the external managed permission step described above. This is not
 fully automated, and controller reboot persistence remains unverified.
 
 Open the private Forgejo repository's **Actions → Live VM acceptance → Run
-workflow**, using CI branch `main`. Defaults select one Rocky Node Exporter case.
+workflow**, using CI branch `main`. After the coordinated update below, defaults
+select suite `node_exporter` and OS `rocky102`.
 Other choices are the four existing suites and four existing OS pins, or `all`;
 use the broad choice only after its capacity and server timeout are verified.
 There is one runner slot and one controller lock; requests never cancel active
@@ -1390,9 +1455,9 @@ Scoped launcher/workflow rollout procedure (completed for run 6):
    administrator authentication stays off the runner. Verify absence, fresh
    storage/RAM/address preflights and current maintenance ownership, then release
    only that owner through `forgejo_runner_maintenance`.
-5. Manually dispatch **one** `rocky_node_exporter` / `rocky102` with the approved
+5. For current source, manually dispatch **one** `node_exporter` / `rocky102` with the approved
    branch/SHA. Equivalent launcher arguments are `homelab-molecule run --suite
-   rocky_node_exporter --os rocky102 --source-branch <reviewed-branch>
+   node_exporter --os rocky102 --source-branch <reviewed-branch>
    --source-sha <exact-sha> --candidate-approved true`. The private workflow passes
    these as quoted arguments. Verify provisioning, real role execution, evidence,
    result and retirement, then independently verify owned VM/file absence and
@@ -1438,8 +1503,8 @@ any source fetch; neither run tested a GitHub commit.
 
 Exactly one new case was dispatched:
 [Forgejo run 6](https://forgejo.int.nosugarmaxtaste.com:8443/homelab-ci/homelab-ci/actions/runs/6),
-`rocky_node_exporter` / `rocky102`, **passed**. Its explicitly requested and resolved
-GitHub source was `6604888ca91a23f48441f276f444d15a5db2df69` (merged PR #745),
+the former `rocky_node_exporter` scenario / `rocky102`, **passed**. Its explicitly
+requested and resolved GitHub source was `6604888ca91a23f48441f276f444d15a5db2df69` (merged PR #745),
 distinct from the Forgejo workflow commit above. The detached checkout stayed
 clean and executable-input fingerprints matched before/after testing. This was
 an exact-SHA run after merge; it does not establish a live pre-merge branch run.

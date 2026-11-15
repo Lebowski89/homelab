@@ -290,7 +290,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="action", required=True)
     selected = sub.add_parser("run")
-    selected.add_argument("--suite", default="rocky_node_exporter")
+    selected.add_argument("--suite", default="node_exporter")
     selected.add_argument("--os", default="rocky102")
     selected.add_argument("--source-branch", default="main")
     selected.add_argument("--source-sha", default="")

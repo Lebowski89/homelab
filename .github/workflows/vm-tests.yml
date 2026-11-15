@@ -9,7 +9,7 @@ on:
       suite:
         type: choice
         default: all
-        options: [all, rocky_node_exporter, runtime_install, application_lifecycle, protected_network]
+        options: [all, node_exporter, runtime_install, application_lifecycle, protected_network]
       os:
         type: choice
         default: all
