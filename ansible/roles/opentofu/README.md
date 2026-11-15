@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/11/15 |
+| Readme update        | 2026/11/16 |
 
 
 
@@ -45,9 +45,19 @@
 | Reduce token metadata to a separation guard | ansible.builtin.set_fact | False |  |
 | Clear transient user and token metadata before validation or mutation | ansible.builtin.set_fact | False |  |
 | Require both existing Molecule tokens to remain privilege-separated | ansible.builtin.assert | False |  |
+| Inspect ownership and actual privileges before enabling the persistent pool | block | True |  |
+| Obtain a private operator API session for pool preflight | ansible.builtin.uri | False |  |
+| Read the actual roles that will govern pool members | ansible.builtin.uri | False |  |
+| Reject an existing pool role with different privileges | ansible.builtin.assert | False |  |
+| Inspect existing pool identities | ansible.builtin.uri | False |  |
+| Inspect the selected existing pool before granting access | ansible.builtin.uri | True |  |
+| Reject a foreign pool or non-disposable pool members | ansible.builtin.assert | True |  |
+| Ensure the owned persistent acceptance pool exists without assigning members | community.proxmox.proxmox_pool | True |  |
 | Reconcile only the declared Molecule roles | community.proxmox.proxmox_role | False |  |
 | Report the exact token ACL plan in check mode | ansible.builtin.debug | True | community.proxmox 2.1.0 ACL management does not support check mode. |
 | Ensure only the declared token ACL assignments | community.proxmox.proxmox_access_acl | True |  |
+| Remove superseded direct acceptance VMID grants | community.proxmox.proxmox_access_acl | True | Remove only the superseded acceptance-token VMID grants, after the pool ACLs
+exist. Keeping them would permit create/clone without specifying the pool. |
 
 #### File: tasks/sub_tasks/pve_user.yml
 
