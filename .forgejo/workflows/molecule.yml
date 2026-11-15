@@ -14,6 +14,18 @@ name: Live VM acceptance
         type: choice
         default: rocky102
         options: [rocky102, debian13, fedora44, ubuntu2604, all]
+      source_branch:
+        description: "GitHub Lebowski89/homelab branch; candidate requires exact SHA and explicit review approval below"
+        type: string
+        default: main
+      source_sha:
+        description: "Reviewed candidate's full lowercase 40-character GitHub commit SHA; leave empty for normal main"
+        type: string
+        default: ""
+      candidate_approved:
+        description: "I explicitly approve executing this reviewed branch/SHA with the live acceptance credentials"
+        type: boolean
+        default: false
 concurrency:
   group: pve1-molecule-allocation
   cancel-in-progress: false
@@ -26,12 +38,18 @@ jobs:
     runs-on: molecule-pve1-rocky
     timeout-minutes: 720
     steps:
-      - name: Run trusted GitHub main on the dedicated controller
+      - name: Run selected trusted GitHub source on the dedicated controller
         env:
           VM_SUITE: ${{ inputs.suite }}
           VM_OS: ${{ inputs.os }}
+          VM_SOURCE_BRANCH: ${{ inputs.source_branch }}
+          VM_SOURCE_SHA: ${{ inputs.source_sha }}
+          VM_CANDIDATE_APPROVED: ${{ inputs.candidate_approved }}
+          FORGEJO_LAUNCHER_SHA: ${{ forgejo.sha }}
         run: |
           set -euo pipefail
-          homelab-molecule run --suite "$VM_SUITE" --os "$VM_OS"
+          homelab-molecule run --suite "$VM_SUITE" --os "$VM_OS" \
+            --source-branch "$VM_SOURCE_BRANCH" --source-sha "$VM_SOURCE_SHA" \
+            --candidate-approved "$VM_CANDIDATE_APPROVED"
 # No unconditional cleanup: vm.py retains failed resources and evidence. The
 # launcher prints the exact run ID and its explicit retirement command.

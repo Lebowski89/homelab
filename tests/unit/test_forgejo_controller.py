@@ -2,10 +2,13 @@
 
 import importlib.util
 import json
+import os
 import re
 import subprocess
+import sys
 from itertools import product
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import yaml
@@ -62,7 +65,10 @@ def test_workflow_is_manual_and_passes_fixed_choices_as_arguments():
     trigger = workflow.get("on", workflow.get(True))
     assert set(trigger) == {"workflow_dispatch"}
     inputs = trigger["workflow_dispatch"]["inputs"]
-    assert set(inputs) == {"suite", "os"} and all(item["type"] == "choice" for item in inputs.values())
+    assert set(inputs) == {"suite", "os", "source_branch", "source_sha", "candidate_approved"}
+    assert inputs["suite"]["type"] == inputs["os"]["type"] == "choice"
+    assert inputs["source_branch"]["default"] == "main" and inputs["source_sha"]["default"] == ""
+    assert inputs["candidate_approved"]["type"] == "boolean" and inputs["candidate_approved"]["default"] is False
     assert inputs["suite"]["default"] == "rocky_node_exporter" and inputs["os"]["default"] == "rocky102"
     assert set(inputs["os"]["options"]) == {"all", *json.loads((ROOT / "molecule/vm/images.json").read_text())}
     assert workflow["concurrency"]["cancel-in-progress"] is False
@@ -88,8 +94,8 @@ def test_runner_installs_acl_before_unprivileged_workstation_tooling():
     )
 
 
-@pytest.mark.integration
-def test_exact_main_checkout_is_retained_and_recovery_rejects_modified_source(tmp_path, monkeypatch):
+@pytest.fixture
+def git_source(tmp_path, monkeypatch):
     settings = config(tmp_path)
     source = tmp_path / "origin"
     source.mkdir()
@@ -120,10 +126,17 @@ def test_exact_main_checkout_is_retained_and_recovery_rejects_modified_source(tm
         check=True,
     )
     monkeypatch.setattr(CONTROLLER, "SOURCE", str(source))
+    return settings, source, environment
+
+
+@pytest.mark.integration
+def test_exact_main_checkout_is_retained_and_recovery_rejects_modified_source(tmp_path, git_source):
+    settings, _, environment = git_source
     checkout = tmp_path / "checkouts" / ("a" * 32)
     checkout.parent.mkdir()
-    sha = CONTROLLER.checkout_main(checkout, CONTROLLER.public_environment(settings))
-    record = {"checkout": str(checkout), "sha": sha}
+    selected = CONTROLLER.checkout_source(checkout, environment)
+    assert selected["requested_source_sha"] is None and selected["source_branch"] == "main"
+    record = {"checkout": str(checkout), "sha": selected["resolved_source_sha"]}
     assert CONTROLLER.source_checkout(record, settings) == checkout
     (checkout / "scripts/testing/suite.py").write_text("raise RuntimeError('modified fixture')\n")
     with pytest.raises(ValueError, match="source checkout changed"):
@@ -202,3 +215,198 @@ def test_agent_and_runner_units_require_confined_domains_without_weakening_harde
     assert not re.search(r"\b(permissive|dontaudit|unconfined_domain_type)\b", statements)
     assert "execute_no_trans" not in re.search(r"allow init_t ssh_agent_exec_t:file ([^;]+);", statements)[1]
     assert not re.search(r"allow [^;]+:(?:tcp_socket|udp_socket|capability)\b", statements)
+
+
+@pytest.mark.parametrize(
+    ("branch", "sha", "approved"),
+    [
+        ("reviewed", "a" * 40, False),
+        ("reviewed", "", True),
+        ("reviewed", "short", True),
+        ("reviewed", "A" * 40, True),
+        ("https://github.com/foreign/repo", "a" * 40, True),
+        ("reviewed; touch /tmp/untrusted", "a" * 40, True),
+        ("--upload-pack=untrusted", "a" * 40, True),
+        ("main", "", True),
+    ],
+)
+def test_candidate_requires_explicit_approval_and_safe_exact_source_before_fetch(tmp_path, branch, sha, approved):
+    with pytest.raises(ValueError):
+        CONTROLLER.checkout_source(tmp_path / "checkout", {}, branch, sha, approved)
+    assert not (tmp_path / "checkout").exists()
+
+
+@pytest.mark.integration
+def test_reviewed_candidate_uses_exact_sha_even_when_branch_advances(tmp_path, git_source):
+    settings, source, environment = git_source
+    subprocess.run(["git", "-C", str(source), "branch", "reviewed/candidate"], env=environment, check=True)
+    requested = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], env=environment, text=True).strip()
+    subprocess.run(["git", "-C", str(source), "checkout", "--quiet", "reviewed/candidate"], env=environment, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--quiet",
+            "--allow-empty",
+            "-m",
+            "Unreviewed newer tip",
+        ],
+        env=environment,
+        check=True,
+    )
+    checkout = tmp_path / "checkouts" / ("b" * 32)
+    checkout.parent.mkdir()
+    selected = CONTROLLER.checkout_source(checkout, environment, "reviewed/candidate", requested, True)
+    assert selected["requested_source_sha"] == selected["resolved_source_sha"] == requested
+    assert selected["branch_tip_sha"] != requested and selected["source_branch"] == "reviewed/candidate"
+    assert CONTROLLER.source_checkout(selected | {"checkout": str(checkout), "sha": requested}, settings) == checkout
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("branch", ["main", "missing", "invalid..branch"])
+def test_candidate_from_other_branch_or_invalid_branch_is_never_checked_out(tmp_path, git_source, branch):
+    _, source, environment = git_source
+    subprocess.run(["git", "-C", str(source), "checkout", "--quiet", "-b", "other"], env=environment, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--quiet",
+            "--allow-empty",
+            "-m",
+            "Other branch only",
+        ],
+        env=environment,
+        check=True,
+    )
+    foreign = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], env=environment, text=True).strip()
+    checkout = tmp_path / "checkout"
+    if branch == "main":
+        with pytest.raises(ValueError, match="does not belong to the fetched GitHub branch"):
+            CONTROLLER.checkout_source(checkout, environment, branch, foreign, True)
+    else:
+        with pytest.raises(subprocess.CalledProcessError) as error:
+            CONTROLLER.checkout_source(checkout, environment, branch, foreign, True)
+        assert error.value.cmd[1 if branch == "invalid..branch" else 3] == ("check-ref-format" if branch == "invalid..branch" else "fetch")
+    assert not (checkout / "scripts/testing/suite.py").exists()
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("reachable", [False, True])
+def test_candidate_failure_retains_requested_resolved_and_workflow_identity(tmp_path, git_source, monkeypatch, reachable):
+    settings, source, environment = git_source
+    settings["python"] = sys.executable
+    # An actual local entry-point failure, before dependencies or credentials.
+    (source / "scripts/testing/suite.py").write_text("raise SystemExit(23)\n")
+    subprocess.run(["git", "-C", str(source), "add", "."], env=environment, check=True)
+    subprocess.run(
+        [
+            "git",
+            "-C",
+            str(source),
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.test",
+            "-c",
+            "commit.gpgsign=false",
+            "commit",
+            "--quiet",
+            "-m",
+            "Failing synthetic entry point",
+        ],
+        env=environment,
+        check=True,
+    )
+    requested = (
+        subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], env=environment, text=True).strip()
+        if reachable
+        else "a" * 40
+    )
+    for name in ["runs", "jobs", "checkouts", "tmp"]:
+        (tmp_path / name).mkdir(mode=0o700)
+    monkeypatch.setattr(CONTROLLER, "DRAIN", tmp_path / "draining")
+    monkeypatch.setattr(CONTROLLER.shutil, "disk_usage", lambda path: SimpleNamespace(free=7 * 1024**3))
+    output = subprocess.check_output
+    monkeypatch.setattr(
+        CONTROLLER.subprocess, "check_output", lambda argv, **kwargs: "ext4\n" if argv[0] == "findmnt" else output(argv, **kwargs)
+    )
+    monkeypatch.setattr(
+        CONTROLLER, "provisioning_environment", lambda config: pytest.fail("No credential access before validation/setup succeeds")
+    )
+    monkeypatch.setenv("FORGEJO_LAUNCHER_SHA", "c" * 40)
+    if reachable:
+        with pytest.raises(subprocess.CalledProcessError) as error:
+            CONTROLLER.run(settings, "rocky_node_exporter", "rocky102", "main", requested, True)
+        assert error.value.returncode == 23 and error.value.cmd[1].endswith("scripts/testing/suite.py")
+    else:
+        with pytest.raises(ValueError, match="does not belong to the fetched GitHub branch"):
+            CONTROLLER.run(settings, "rocky_node_exporter", "rocky102", "main", requested, True)
+    (job,) = (tmp_path / "jobs").iterdir()
+    request = json.loads((job / "request.json").read_text())
+    result = json.loads((job / "result.json").read_text())
+    assert request["requested_source_sha"] == result["requested_source_sha"] == requested
+    assert request["forgejo_workflow_sha"] == result["forgejo_workflow_sha"] == "c" * 40
+    assert result["exit_code"] == 1 and not list((tmp_path / "runs").iterdir())
+    if reachable:
+        record = json.loads((job / "source.json").read_text())
+        assert record["sha"] == record["resolved_source_sha"] == result["resolved_source_sha"] == requested
+        assert CONTROLLER.source_checkout(record, settings) == Path(record["checkout"])
+    else:
+        assert result["resolved_source_sha"] is None and not (job / "source.json").exists()
+
+
+@pytest.mark.integration
+def test_workflow_passes_candidate_inputs_as_literal_arguments(tmp_path):
+    workflow = yaml.safe_load((ROOT / ".forgejo/workflows/molecule.yml").read_text())
+    step = workflow["jobs"]["acceptance"]["steps"][0]
+    binary = tmp_path / "homelab-molecule"
+    binary.write_text(
+        f"#!{sys.executable}\nimport json,sys\nfrom pathlib import Path\nPath(sys.argv[0]+'.json').write_text(json.dumps(sys.argv[1:]))\n"
+    )
+    binary.chmod(0o700)
+    # Metacharacters remain a single argument for the launcher's strict validation.
+    branch = f"reviewed/$(touch {tmp_path}/executed)"
+    values = {
+        "suite": "rocky_node_exporter",
+        "os": "rocky102",
+        "source_branch": branch,
+        "source_sha": "d" * 40,
+        "candidate_approved": "true",
+    }
+    environment = {"PATH": str(tmp_path) + ":" + os.defpath}
+    for key, expression in step["env"].items():
+        environment[key] = (
+            "c" * 40 if expression == "${{ forgejo.sha }}" else values[expression.removeprefix("${{ inputs.").removesuffix(" }}")]
+        )
+    subprocess.run(["bash", "-c", step["run"]], env=environment, check=True, timeout=5)
+    assert json.loads(Path(str(binary) + ".json").read_text()) == [
+        "run",
+        "--suite",
+        "rocky_node_exporter",
+        "--os",
+        "rocky102",
+        "--source-branch",
+        branch,
+        "--source-sha",
+        "d" * 40,
+        "--candidate-approved",
+        "true",
+    ]
+    assert not (tmp_path / "executed").exists()

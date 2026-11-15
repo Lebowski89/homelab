@@ -54,7 +54,7 @@
 
     - name: VM tests | Retain bounded fixture evidence without environments or credential-bearing application logs
       when: not (molecule_vm_fixture_diagnostics.skipped | default(false))
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/docker-fixture-diagnostics.json'
         content: >-
           {{ {'rc': molecule_vm_fixture_diagnostics.results | map(attribute='rc') | list,
@@ -65,7 +65,7 @@
       become: false
 
     - name: VM tests | Retain selected platform and package evidence outside Molecule pruning
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/observed-system.json'
         content: >-
           {{ {'distribution': ansible_facts.distribution, 'version': ansible_facts.distribution_version,

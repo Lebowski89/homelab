@@ -701,17 +701,55 @@ systemd caused an `init_t` file-write denial. Capturing output through pipes and
 then saving it privately resolved that diagnostic issue without changing labels,
 policy or hardening. No provider retirement operation was repeated.
 
-Fresh maintenance ownership is now held pending the trusted-source update.
-Public GitHub main was checked at `334bcd52fc4dbecbc8b32c4edff8169307abb0c6`;
-its `vm.py` lacks this fix. Merge the tested harness correction into GitHub main,
-verify the exact source SHA, release only the current managed maintenance receipt,
-and repeat fresh capacity/storage checks before dispatching the single approved
-Rocky case. No second workflow was dispatched; production-role acceptance and
-the new disk sizes remain uncertified. Clean-checkout and commit guards were
+At that checkpoint maintenance was held pending the trusted-source update:
+GitHub main `334bcd52fc4dbecbc8b32c4edff8169307abb0c6` lacked the fix. The next
+attempt required the merged correction, verification of its exact SHA, managed
+release of the matching receipt, and fresh capacity/storage checks. No second
+workflow had yet been dispatched; production-role acceptance and the new disk
+sizes remained uncertified. Clean-checkout and commit guards were
 preserved. The focused `test_molecule_vm.py -m 'not integration'` selection passed
 **21 cases** in **0.13 seconds**; the exact-main/recovery regression passed
 **1 case** in **0.12 seconds**. Ruff and whitespace checks passed. No full Python
 suite, live matrix or dependency installation was performed for this correction.
+
+The controller evidence correction is now prepared for review; it has **not**
+been published as a reviewed candidate or exercised by another acceptance run. Inspection
+of VM9300's pinned Ansible **2.22.0** confirmed that `atomic_move()` chooses the
+policy-default SELinux context for a new destination, requesting `system_u`
+instead of retaining the confined writer's valid `user_u` identity. The six
+delegated evidence writes in `rocky_node_exporter/verify.yml`,
+`shared/diagnostics.tasks.yml` and `shared/diagnostics.yml` now use the narrow
+`molecule_evidence` action through the existing controller action-plugin path.
+It stages complete content as an owned mode-`0600` file inside the owned
+mode-`0700` evidence directory, then publishes atomically. Replacement preserves
+the existing valid SELinux context; new files inherit the writer's context.
+`force: false` uses atomic no-clobber publication and never precreates an empty
+destination. Existing first observations, content formatting, diagnostic
+redaction and unprivileged localhost delegation are preserved. Unsafe paths or
+label errors fail visibly. Controllers without SELinux need no label handling.
+
+A bounded synthetic check executed those six **real task bodies** twice on
+VM9300, covering new files, retained first observations and actual updates of
+existing destinations. It passed in **0.844 seconds** under
+`user_u:user_r:user_t:s0`, `NoNewPrivileges`, zero effective capabilities and the
+existing systemd hardening. All files remained UID/GID 993, mode `0600`, context
+`user_u:object_r:user_home_t:s0`; the directory stayed `0700`. Enforcement,
+policy checksum, Ansible implementation, maintenance receipt and failed-run
+evidence hashes were unchanged; no relevant new AVC appeared. The initial
+synthetic unit stopped before executing tasks because systemd could not directly
+execute the venv's home-labeled Python path. The completed check used the already
+supported system-Python entry into `user_t`, then the pinned Ansible CLI; no
+policy adjustment was made. Isolated synthetic logs are retained under
+`.ansible/evidence-writer-c07f64cfff764ea9bdb388820f8dd50e/` and
+`/var/lib/forgejo-runner/tmp/evidence-writer-c07f64cfff764ea9bdb388820f8dd50e/`.
+Focused repository checks passed: **23** fast fixture/publication tests, **4**
+real local evidence/Quadlet and bounded FIFO cases, **4** owned-cleanup cases, Ruff,
+YAML/Ansible lint and localhost-only syntax. Existing long-line/inventory warnings
+remain. No credentials, guest VMs, Proxmox operations, policy installation or
+maintenance release were involved. Publish the reviewed correction on a GitHub
+branch and use the exact candidate selection below for a separately approved
+Forgejo attempt; a main merge is not a prerequisite. The failed run records and
+current protection remain intact.
 
 Earlier live evidence is beneath
 `~/.config/homelab/molecule-controller/selinux-approved-1794645608659470587/`;
@@ -721,7 +759,8 @@ rollback, retirement and independent absence evidence is in
 `~/.config/homelab/molecule-controller/hostpin-operation-1794683676492936205/`.
 Its controller-side counterpart is
 `/var/cache/forgejo-runner/hostpins/34344a3fc71047f1aa344e43c855745e/`, including
-the current `waiting-for-main-final.json` ownership proof. On-controller
+the historical `waiting-for-main-final.json` ownership proof. The currently held
+receipt is recorded by `retry-1fbd6207-maintenance.json` in that same directory. On-controller
 job/source evidence is `jobs/6a3078f4eb89449a8f82907af90214a8/` and all failed
 provisioning/readiness/state evidence remains in `runs/88ce902dca0e47f8ac191805f7673ee7/`.
 
@@ -1124,10 +1163,18 @@ host-pin file could not be opened in `ssh_t`. The exact-file `ssh_home_t` fix
 passed retained/new-file and strict-SSH validation without a policy expansion.
 Run 88ce902dca0e47f8ac191805f7673ee7 was retired through the original guarded
 entry point; both VMIDs and owned artifacts are independently confirmed absent.
-Its failed result and evidence remain. Fresh managed maintenance is held pending
-the fix reaching trusted GitHub main. Do not dispatch another case until that
-source update and fresh capacity checks pass. Actual reboot persistence and a
-successful Rocky production-role acceptance remain unverified.
+Its failed result and evidence remain. Forgejo run 2 fetched the merged fix from
+GitHub main `e0e2c1c5`, but VM creation failed because prior deletion removed
+the reserved-VM ACLs; that partial run was retired. The approved managed repair
+restored those exact grants, and run 3 provisioned successfully and completed
+its first production-role deployment. It then failed on controller evidence
+copies attempting a forbidden SELinux user change. That run was also retired,
+and independent absence checks passed. Deletion removed the ACLs again; an
+authorised operator reconciliation restored them and verified VM104 denial.
+The allocation is free and permission-ready, but maintenance is held pending
+the evidence-copy correction and reviewed candidate launcher rollout. Reuse still requires the external
+managed permission step described above. The platform is not acceptance-certified
+or fully automated; actual reboot persistence remains unverified.
 
 Open the private Forgejo repository's **Actions → Live VM acceptance → Run
 workflow**, using CI branch `main`. Defaults select one Rocky Node Exporter case.
@@ -1136,8 +1183,93 @@ use the broad choice only after its capacity and server timeout are verified.
 There is one runner slot and one controller lock; requests never cancel active
 work. The GitHub controlled live workflow remains disabled.
 
-Job logs contain the GitHub SHA and private evidence location. On the controller,
-`/var/lib/forgejo-runner/jobs/<job-id>/source.json` preserves the checkout/SHA;
+The prepared pre-merge path keeps `source_branch: main`, empty `source_sha` and
+`candidate_approved: false` as the normal defaults. To test a reviewed candidate,
+select its branch **in `Lebowski89/homelab`**, supply its full lowercase
+40-character commit SHA, and explicitly approve executing that exact source with
+the live acceptance credentials. Only trusted private-repository operators may
+make this manual dispatch. The approval is an operator assertion after review;
+Git ancestry alone does not prove GitHub review or passing PR checks.
+The launcher fetches that fixed repository's explicit `refs/heads/<branch>` and
+verifies the requested commit is reachable from the fetched tip. It executes the
+requested SHA even if the branch advances; a force-push excluding it is rejected.
+No fork, URL, PR-ref or branch-only candidate selection is accepted. Recovery
+continues to use the original retained checkout and its clean-tree/SHA guards.
+
+Run 4's saved step log (`actions_log/homelab-ci/homelab-ci/04/4.log.zst`)
+was inspected on 2026-11-15. Its exact failure was `Controller is draining for
+maintenance; retry after the operator completes it`, then exit 1, **before any
+GitHub fetch or VM preparation**. Its Forgejo workflow SHA was
+`ae137edab31abbfd51ea6515de8b7b15e0edf755`; it tested no GitHub source SHA.
+Read-only checks confirmed the current receipt hash
+`c8c6c681de485e7d5607511e03a99692b6b1f3e64c7cf925c54802dc3c84c10d`,
+SELinux enforcing, all three earlier manifests retired, and both disposable
+VMIDs/disks absent. These checks are state evidence, not fresh capacity approval.
+
+Scoped rollout plan (prepared, **not applied**):
+
+1. Review/publish the candidate on GitHub, record its branch/full SHA and required
+   PR-check results. This correction was prepared from main
+   `e0e2c1c536b28ac18421cb6ef1a2252ad45b38d7`; use the published candidate
+   commit SHA for acceptance, without merging it first.
+2. After scoped approval, verify the existing ownership record and maintenance
+   receipt on VM9300; checkpoint the installed launcher's exact bytes, metadata,
+   xattrs/label and hash, and the private workflow's bytes/blob SHA. Install only
+   the reviewed `scripts/testing/forgejo.py` as root-owned mode `0755`
+   `/usr/local/bin/homelab-molecule`, using the existing native-services launcher
+   copy task under those guards. This file has no restart notification; neither
+   unit nor the policy/registration/credential files need replacement.
+3. Publish only the reviewed `.forgejo/workflows/molecule.yml` to private
+   `homelab-ci/homelab-ci` main, using its recorded blob SHA as a concurrency
+   guard. This is a separately authorised **private workflow commit**, not a
+   GitHub-main merge. Verify the remote bytes and new Forgejo workflow SHA.
+4. Use the external operator's managed `opentofu_molecule_permissions` path to
+   reconcile only existing grants; verify effective allocation permissions,
+   privilege separation, VM104 denial and an unchanged rerun. Bootstrap
+   administrator authentication stays off the runner. Verify absence, fresh
+   storage/RAM/address preflights and current maintenance ownership, then release
+   only that owner through `forgejo_runner_maintenance`.
+5. Manually dispatch **one** `rocky_node_exporter` / `rocky102` with the approved
+   branch/SHA. Equivalent launcher arguments are `homelab-molecule run --suite
+   rocky_node_exporter --os rocky102 --source-branch <reviewed-branch>
+   --source-sha <exact-sha> --candidate-approved true`. The private workflow passes
+   these as quoted arguments. Verify provisioning, real role execution, evidence,
+   result and retirement, then independently verify owned VM/file absence and
+   post-retirement allocation permissions. Stop and retain evidence on failure;
+   use only the original checkout's printed retirement command for scoped recovery.
+6. If launcher/workflow installation fails, retain maintenance; restore only the
+   verified checkpointed launcher and workflow with ownership/hash/blob guards.
+   Do not remove registration, credentials, failed evidence or state. Do not
+   trigger a second case automatically. VM deletion still removes VMID ACLs on
+   this Proxmox version; readiness requires the documented external reconciliation
+   unless a separately approved durable boundary is implemented.
+
+Local candidate-path validation: **23 tests passed** in 0.62 seconds (0.85 seconds
+command elapsed), using `python3 .ansible/pr736/run.py candidate-source-reviewed
+tests/unit/test_forgejo_controller.py`. This includes real temporary Git branch
+fetch/ancestry/detached-checkout execution, retained recovery guards, terminal
+source/setup failures and literal workflow argument handling. Ruff check/format,
+YAML lint, offline Ansible lint and localhost-only syntax checks passed; existing
+long-line/missing-guest-group warnings remain. Checkov 3.4.3's focused file scan
+reported 1 passed, 0 failed, 1 scoped skip, 0 parsing errors **for its recognised
+Ansible input**; it did not recognise this Forgejo workflow as a GitHub Actions
+report. Workflow restrictions were exercised by the focused tests. Gitleaks
+8.24.3 found zero findings in the changed-code snapshot; this was not a historical
+commit-range scan. Reused the unchanged evidence writer's completed 31 focused
+checks and bounded confined-controller check above. No full suite/matrix or
+GitHub PR CI was run for this prepared candidate.
+
+No launcher or private workflow update has been applied, maintenance remains held,
+and no new acceptance has run. Merge recommendation remains pending required
+repository CI **and** complete targeted candidate acceptance/cleanup.
+
+Job logs distinguish the Forgejo workflow commit from the requested/resolved
+GitHub source SHA and private evidence location. On the controller,
+`/var/lib/forgejo-runner/jobs/<job-id>/request.json` records the requested source
+and workflow SHA before fetching; `source.json` preserves the resolved source,
+branch tip and checkout. `result.json` records the terminal launcher outcome
+(including fetch/setup failures) and total elapsed time, separate from the
+harness's case duration;
 `runs/<run-id>` holds provider state, manifests and evidence. Each new run gets a
 `controller-source.json` mapping to its retained checkout. No private state,
 credentials or evidence are uploaded as public artifacts. If a controller process

@@ -19,7 +19,7 @@
 - name: VM tests | Retain diagnostics on the private controller
   vars:
     molecule_vm_diagnostic_redaction: '(?im)^.*(?:keys?[ ":=]|token|secret|password|auth|credential).*$'
-  ansible.builtin.copy:
+  molecule_evidence:
     dest: >-
       {{ (molecule_vm_evidence_directory | default(molecule_ephemeral_directory)) }}/diagnostics-{{
       (molecule_vm_diagnostic_stage ~ '-') if molecule_vm_diagnostic_stage is defined else '' }}{{ inventory_hostname }}.json
@@ -66,7 +66,7 @@
 
     - name: VM tests | Preserve unit status separately from subsequent cleanup observations
       when: not (molecule_vm_quadlet_diagnostic.skipped | default(false))
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/quadlet-{{ molecule_vm_diagnostic_stage | default("current") }}.json'
         content: >-
           {{ {'rc': molecule_vm_quadlet_diagnostic.rc, 'stdout': molecule_vm_quadlet_diagnostic.stdout,
