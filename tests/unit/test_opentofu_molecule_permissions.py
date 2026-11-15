@@ -101,7 +101,7 @@ def permission_api(tmp_path, certificate):
                 key: values[0] for key, values in parse_qs(self.rfile.read(int(self.headers.get("Content-Length", "0"))).decode()).items()
             }
             state["requests"].append((self.command, path))
-            result, status = None, 200
+            result, status, reason = None, 200, None
             if path == "/access/ticket" and self.command == "POST":
                 assert data == {"username": "fixture@pam", "password": "fixture-only-password"}
                 result = dict(ticket="fixture-ticket", CSRFPreventionToken="fixture-csrf", username="fixture@pam")
@@ -116,10 +116,15 @@ def permission_api(tmp_path, certificate):
                 )
             elif self.command == "GET" and path == "/access/users/terraform@pve":
                 result = dict(enable=1, comment="OpenTofu automation user")
+            elif self.command == "GET" and path == "/access/roles":
+                status = state.get("role_index_status", 200)
+                result = [dict(roleid=name, privs=",".join(sorted(privs))) for name, privs in state["roles"].items()]
             elif self.command == "GET" and path.startswith("/access/roles/"):
                 name = path.rsplit("/", 1)[1]
                 if name not in state["roles"]:
-                    status = 404
+                    status, reason = 500, f"role '{name}' does not exist"
+                elif state.get("role_detail_status") and name == "MoleculeVM":
+                    status = state["role_detail_status"]
                 else:
                     # Zero-valued API flags are not granted privileges.
                     result = {"Sys.Modify": 0} | {privilege: 1 for privilege in state["roles"][name]}
@@ -133,10 +138,12 @@ def permission_api(tmp_path, certificate):
                 poolid = parse_qs(parsed.query).get("poolid", [None])[0]
                 if poolid is None:
                     result = [dict(poolid=key, comment=value["comment"]) for key, value in state["pools"].items()]
+                elif "pool_response" in state:
+                    result = copy.deepcopy(state["pool_response"])
                 elif poolid not in state["pools"]:
-                    status = 404
+                    status, reason = 500, f"pool '{poolid}' does not exist"
                 else:
-                    result = state["pools"][poolid]
+                    result = [dict(poolid=poolid, **state["pools"][poolid])]
             elif self.command == "POST" and path == "/pools":
                 assert data["poolid"] not in state["pools"]
                 state["pools"][data["poolid"]] = dict(comment=data["comment"], members=[])
@@ -157,7 +164,10 @@ def permission_api(tmp_path, certificate):
                 state["mutations"].append((self.command, path, copy.deepcopy(data)))
             else:
                 status = 405
-            self.send_response(status, "not found" if status == 404 else "unsupported operation" if status == 405 else "OK")
+            self.send_response(
+                status,
+                reason or {403: "Permission check failed", 405: "unsupported operation", 500: "Internal Server Error"}.get(status, "OK"),
+            )
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(json.dumps({"data": result}).encode())
@@ -172,7 +182,7 @@ def permission_api(tmp_path, certificate):
     thread.start()
     original = copy.deepcopy(state)
 
-    def run(*, check=False, enabled=True, overrides=None, general=False, configured=True):
+    def run(*, check=False, enabled=True, overrides=None, general=False, configured=True, verify_cleanup=False):
         variables = copy.deepcopy(HOST)
         if not configured:
             variables = {key: value for key, value in variables.items() if not key.startswith("opentofu_pve_molecule_")}
@@ -208,7 +218,38 @@ def permission_api(tmp_path, certificate):
             t for play in plays for t in play.get("tasks", []) if t.get("ansible.builtin.include_role", {}).get("name") == "opentofu"
         )
         play = tmp_path / "play.yml"
-        play.write_text(yaml.safe_dump([dict(hosts="pve1", gather_facts=False, tasks=[entry])]))
+        tasks = [entry]
+        if verify_cleanup:
+            tasks = [
+                dict(
+                    block=tasks,
+                    rescue=[
+                        {
+                            "ansible.builtin.assert": {
+                                "that": [
+                                    f"{name} == {{}}"
+                                    for name in [
+                                        "opentofu_pve_molecule_pool_session",
+                                        "opentofu_pve_molecule_roles_index",
+                                        "opentofu_pve_molecule_pool_roles_info",
+                                        "opentofu_pve_molecule_pools_info",
+                                        "opentofu_pve_molecule_pool_info",
+                                        "opentofu_pve_molecule_selected_pool",
+                                    ]
+                                ]
+                            },
+                            "no_log": True,
+                            "diff": False,
+                            "tags": ["opentofu_molecule_permissions"],
+                        },
+                        {
+                            "ansible.builtin.fail": {"msg": "Fixture confirmed credential cleanup and preserves the original failure"},
+                            "tags": ["opentofu_molecule_permissions"],
+                        },
+                    ],
+                )
+            ]
+        play.write_text(yaml.safe_dump([dict(hosts="pve1", gather_facts=False, tasks=tasks)]))
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir(exist_ok=True)
         pveum = bin_dir / "pveum"
@@ -242,6 +283,7 @@ def permission_api(tmp_path, certificate):
         result = subprocess.run(command, cwd=tmp_path, env=environment, capture_output=True, text=True, timeout=120)
         assert "fixture-only-password" not in result.stdout + result.stderr
         assert "fixture-only-existing-token" not in result.stdout + result.stderr
+        assert "fixture-ticket" not in result.stdout + result.stderr
         return result
 
     try:
@@ -254,6 +296,7 @@ def permission_api(tmp_path, certificate):
 
 def test_real_entry_adds_only_approved_access_and_rerun_is_idempotent(permission_api):
     state, before, run = permission_api
+    assert "MoleculePoolAudit" not in state["roles"]
     result = run()
     assert result.returncode == 0, result.stdout + result.stderr
     assert state["roles"] == before["roles"] | {
@@ -276,10 +319,17 @@ def test_real_entry_adds_only_approved_access_and_rerun_is_idempotent(permission
     assert state["pools"] == {"molecule-acceptance": {"comment": "homelab-molecule:acceptance-pool", "members": []}}
     assert state["tokens"] == before["tokens"] and state["token_secrets"] == before["token_secrets"]
     previous = copy.deepcopy(state["mutations"])
+    # A later permission invocation may encounter the owned disposable members.
+    members = [
+        dict(type="qemu", vmid=vmid, node="pve1", name="molecule-" + "a" * 32 + "-" + role)
+        for vmid, role in [(980000, "template"), (980001, "subject")]
+    ]
+    state["pools"]["molecule-acceptance"]["members"] = copy.deepcopy(members)
     result = run()
     assert result.returncode == 0, result.stdout + result.stderr
     assert re.search(r"changed=0\b", result.stdout)
     assert state["mutations"] == previous
+    assert state["pools"]["molecule-acceptance"]["members"] == members
 
 
 def test_existing_role_and_partial_grant_are_reconciled_without_replacing_other_acls(permission_api):
@@ -469,6 +519,42 @@ def test_pool_preflight_rejects_foreign_members_and_actual_role_expansion_before
     assert result.returncode != 0
     assert not state["mutations"]
     assert "fixture-ticket" not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("invalid", ["object", "empty", "duplicate", "malformed_entry", "mismatched", "missing_poolid"])
+def test_selected_pool_response_must_contain_one_matching_object_before_mutation(permission_api, invalid):
+    state, _, run = permission_api
+    pool = dict(comment="homelab-molecule:acceptance-pool", members=[])
+    state["pools"]["molecule-acceptance"] = pool
+    valid = dict(poolid="molecule-acceptance", **pool)
+    state["pool_response"] = {
+        "object": valid,
+        "empty": [],
+        "duplicate": [valid, valid],
+        "malformed_entry": [None],
+        "mismatched": [valid | {"poolid": "production"}],
+        "missing_poolid": [pool],
+    }[invalid]
+    before = copy.deepcopy(state)
+    result = run()
+    assert result.returncode != 0
+    assert not state["mutations"]
+    assert state["pools"] == before["pools"] and state["roles"] == before["roles"]
+    assert state["acls"] == before["acls"] and state["tokens"] == before["tokens"]
+
+
+@pytest.mark.parametrize("endpoint,status", [("role_index_status", 403), ("role_index_status", 500), ("role_detail_status", 500)])
+def test_role_discovery_failure_is_fatal_and_clears_private_state(permission_api, endpoint, status):
+    state, _, run = permission_api
+    # Proxmox role IDs are case-sensitive; unrelated names must not block discovery.
+    state["roles"]["unrelatedrole"] = {"VM.Audit"}
+    state[endpoint] = status
+    result = run(verify_cleanup=True)
+    assert result.returncode != 0
+    assert "Fixture confirmed credential cleanup and preserves the original failure" in result.stdout
+    assert not state["mutations"]
+    if endpoint == "role_detail_status":
+        assert ("GET", "/access/roles/MoleculeVM") in state["requests"]
 
 
 def test_general_setup_remains_independent_of_molecule_tokens(permission_api):

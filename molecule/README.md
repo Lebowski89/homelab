@@ -1213,7 +1213,13 @@ The three propagated pool ACLs belong only to
 
 The role validates these exact privileges and reads existing VM/clone/audit
 roles before mutation; differing live roles are rejected rather than silently
-adopted. It checks an existing pool's ownership comment and rejects storage,
+adopted. Preflight discovers roles through `/access/roles` and reads details
+only for listed roles; missing-role detail requests return HTTP 500, which is
+not accepted as absence by preflight. Both consumers require
+`GET /pools?poolid=molecule-acceptance` to return a list containing exactly one
+object with that `poolid`. Empty, duplicate, malformed, mismatched and bare-object
+responses fail before ownership/membership checks or mutation.
+The role checks an existing pool's ownership comment and rejects storage,
 controller9300, production or other non-disposable members. Standard pinned
 `community.proxmox.proxmox_pool` creates an empty pool; Ansible never adds VMs
 or shared storage. Credential-bearing API session/results are private and
@@ -1300,6 +1306,21 @@ zero failed, 25 skipped, zero parsing errors. The one new read-only preflight
 block finding was reproduced without its scoped exception; fatal propagation
 and `always` credential cleanup were preserved. Normal GitHub CI and the two
 live pooled workflow runs remain unverified until candidate publication.
+
+The PR #748 follow-up corrects the synthetic API's former object-shaped pool
+response and missing-role HTTP404 model. The earlier 106-case record predates
+that correction and did not establish compatibility with those real API
+responses. Current regressions exercise list-shaped pool responses, HTTP500
+missing roles, initial migration, existing owned members/idempotency, fatal
+API failures with credential cleanup, and malformed/foreign pool rejection.
+The corrected candidate still requires normal publication and two consecutive
+Forgejo workflow runs before claiming live pooled allocation reuse.
+The two affected pytest families passed **122 cases in 186.42 seconds**; the
+refined case-sensitive role-discovery failure case passed again in 3.88 seconds.
+Ruff check/format, YAML/Ansible lint, localhost syntax and whitespace checks
+passed. Checkov 3.4.3 on tracked public source reported **513 passed, zero
+failed, 25 skipped and zero parsing errors**. These are local synthetic/static
+results, not live workflow acceptance or GitHub CI results for a published fix.
 
 The next Fedora attempt (`d422b833c5334682a8dea63678f63098`, source
 `80182a24f5dab53a3e7d421ae7e3b0aaa465b63f`) confirmed this reuse defect: VM

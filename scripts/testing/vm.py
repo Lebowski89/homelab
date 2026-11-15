@@ -214,15 +214,21 @@ class Proxmox:
         if pool is None:
             return  # Retained legacy runs keep their original retirement contract.
         require(pool == "molecule-acceptance", "Unapproved resource pool")
-        value = self.api("pools?poolid=" + pool)
+        response = self.api("pools?poolid=" + pool)
+        require(
+            isinstance(response, list) and len(response) == 1 and isinstance(response[0], dict) and response[0].get("poolid") == pool,
+            "Resource pool response must contain exactly one object with the approved poolid; refusing operation",
+        )
+        value = response[0]
         require(
             value.get("comment") == "homelab-molecule:acceptance-pool" and isinstance(value.get("members"), list),
             "Resource pool ownership differs; refusing operation",
         )
         roles = {vm_id: role for role, vm_id in identities(manifest).items()}
         for member in value["members"]:
+            require(isinstance(member, dict), "Resource pool contains a malformed member; refusing operation")
             vm_id = member.get("vmid")
-            role = roles.get(vm_id)
+            role = roles.get(vm_id) if type(vm_id) is int else None
             require(
                 member.get("type") == "qemu"
                 and role

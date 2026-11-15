@@ -716,13 +716,13 @@ def test_ownership_checks_every_current_disk_and_never_adopts_a_foreign_vm(prepa
 
 @pytest.mark.integration
 @pytest.mark.parametrize("prepared", ["molecule-acceptance"], indirect=True)
-@pytest.mark.parametrize("foreign", ["storage", "production", "controller", "other_run", "outside_pool"])
+@pytest.mark.parametrize("foreign", ["storage", "production", "controller", "other_run", "outside_pool", "malformed_member"])
 def test_pool_ownership_rejects_foreign_members_and_reserved_vms_outside_the_pool(prepared, foreign):
     _, manifest = prepared
-    pool = {"comment": "homelab-molecule:acceptance-pool", "members": []}
+    pool = {"poolid": "molecule-acceptance", "comment": "homelab-molecule:acceptance-pool", "members": []}
     rows = []
     client = object.__new__(VM.Proxmox)
-    client.api = lambda path: pool if path == "pools?poolid=molecule-acceptance" else rows
+    client.api = lambda path: [pool] if path == "pools?poolid=molecule-acceptance" else rows
     client.pool_ownership(manifest)  # An empty owned pool is ready for the next run.
     member = {"type": "qemu", "vmid": 980001, "node": manifest["run"]["node"], "name": f"molecule-{manifest['id']}-subject"}
     pool["members"].append(member)
@@ -736,9 +736,31 @@ def test_pool_ownership_rejects_foreign_members_and_reserved_vms_outside_the_poo
         member["vmid"] = 9300
     elif foreign == "other_run":
         member["name"] = "molecule-" + "f" * 32 + "-subject"
+    elif foreign == "malformed_member":
+        pool["members"].append(None)
     else:
         pool["members"].clear()
-    with pytest.raises(ValueError, match="foreign member|outside its approved pool"):
+    with pytest.raises(ValueError, match="foreign member|malformed member|outside its approved pool"):
+        client.pool_ownership(manifest)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("prepared", ["molecule-acceptance"], indirect=True)
+@pytest.mark.parametrize("invalid", ["object", "empty", "duplicate", "malformed_entry", "mismatched", "missing_poolid"])
+def test_pool_ownership_requires_exactly_one_matching_object_in_a_list(prepared, invalid):
+    _, manifest = prepared
+    pool = {"poolid": "molecule-acceptance", "comment": "homelab-molecule:acceptance-pool", "members": []}
+    response = {
+        "object": pool,
+        "empty": [],
+        "duplicate": [pool, pool],
+        "malformed_entry": [None],
+        "mismatched": [pool | {"poolid": "production"}],
+        "missing_poolid": [{key: value for key, value in pool.items() if key != "poolid"}],
+    }[invalid]
+    client = object.__new__(VM.Proxmox)
+    client.api = lambda path: response
+    with pytest.raises(ValueError, match="exactly one object with the approved poolid"):
         client.pool_ownership(manifest)
 
 

@@ -138,7 +138,38 @@
         ca_path: "{{ lookup('ansible.builtin.env', 'PROXMOX_CA_PATH') | default(omit, true) }}"
       register: opentofu_pve_molecule_pool_session
 
-    - name: Read the actual roles that will govern pool members
+    - name: Discover existing roles through the role index
+      no_log: true
+      diff: false
+      check_mode: false
+      ansible.builtin.uri:
+        url: '{{ opentofu_pve_molecule_api_url }}/access/roles'
+        headers:
+          Cookie: 'PVEAuthCookie={{ opentofu_pve_molecule_pool_session.json.data.ticket }}'
+        validate_certs: true
+        ca_path: "{{ lookup('ansible.builtin.env', 'PROXMOX_CA_PATH') | default(omit, true) }}"
+      register: opentofu_pve_molecule_roles_index
+
+    - name: Validate role-index structure before discovering missing roles
+      no_log: true
+      diff: false
+      ansible.builtin.assert:
+        that:
+          - opentofu_pve_molecule_roles_index.json.data is sequence
+          - opentofu_pve_molecule_roles_index.json.data is not string and opentofu_pve_molecule_roles_index.json.data is not mapping
+          - opentofu_pve_molecule_roles_index.json.data | reject('mapping') | list | length == 0
+          - >-
+            opentofu_pve_molecule_roles_index.json.data | map(attribute='roleid') | select('string') | list | length ==
+            opentofu_pve_molecule_roles_index.json.data | length
+          - >-
+            opentofu_pve_molecule_roles_index.json.data | map(attribute='roleid') | unique(case_sensitive=true) | list | length ==
+            opentofu_pve_molecule_roles_index.json.data | length
+        fail_msg: The role index must be a list of objects with unique string role IDs; API failures are not absent roles.
+
+    - name: Read the actual privileges of existing roles that will govern pool members
+      when: >-
+        opentofu_pve_molecule_pool_role in
+        (opentofu_pve_molecule_roles_index.json.data | map(attribute='roleid') | list)
       no_log: true
       diff: false
       check_mode: false
@@ -148,18 +179,17 @@
           Cookie: 'PVEAuthCookie={{ opentofu_pve_molecule_pool_session.json.data.ticket }}'
         validate_certs: true
         ca_path: "{{ lookup('ansible.builtin.env', 'PROXMOX_CA_PATH') | default(omit, true) }}"
-        status_code: [200, 404]
       loop: [MoleculeVM, MoleculeClone, MoleculePoolAudit]
       loop_control:
         loop_var: opentofu_pve_molecule_pool_role
       register: opentofu_pve_molecule_pool_roles_info
 
     - name: Reject an existing pool role with different privileges
+      when: not (opentofu_pve_molecule_pool_role_info.skipped | default(false))
       no_log: true
       diff: false
       ansible.builtin.assert:
         that: >-
-          opentofu_pve_molecule_pool_role_info.status == 404 or
           (opentofu_pve_molecule_pool_role_info.json.data | dict2items |
            selectattr('value') | map(attribute='key') | sort ==
            opentofu_pve_molecule_roles[opentofu_pve_molecule_pool_role_info.opentofu_pve_molecule_pool_role] | sort)
@@ -195,17 +225,40 @@
         ca_path: "{{ lookup('ansible.builtin.env', 'PROXMOX_CA_PATH') | default(omit, true) }}"
       register: opentofu_pve_molecule_pool_info
 
+    - name: Require exactly one matching pool object in the selected-pool response
+      when: opentofu_pve_molecule_pool_info is not skipped
+      no_log: true
+      diff: false
+      ansible.builtin.assert:
+        that:
+          - opentofu_pve_molecule_pool_info.json.data is sequence
+          - opentofu_pve_molecule_pool_info.json.data is not string and opentofu_pve_molecule_pool_info.json.data is not mapping
+          - opentofu_pve_molecule_pool_info.json.data | length == 1
+          - opentofu_pve_molecule_pool_info.json.data[0] is mapping
+          - opentofu_pve_molecule_pool_info.json.data[0].poolid | default('') == opentofu_pve_molecule_pool.id
+        fail_msg: The selected-pool response must be a list containing exactly one object with the approved poolid.
+
+    - name: Select the validated pool object for ownership checks
+      when: opentofu_pve_molecule_pool_info is not skipped
+      no_log: true
+      diff: false
+      ansible.builtin.set_fact:
+        opentofu_pve_molecule_selected_pool: '{{ opentofu_pve_molecule_pool_info.json.data[0] }}'
+
     - name: Reject a foreign pool or non-disposable pool members
       when: opentofu_pve_molecule_pool_info is not skipped
       ansible.builtin.assert:
         that:
-          - opentofu_pve_molecule_pool_info.json.data.comment | default('') == opentofu_pve_molecule_pool.comment
-          - opentofu_pve_molecule_pool_info.json.data.members | rejectattr('type', 'equalto', 'qemu') | list | length == 0
+          - opentofu_pve_molecule_selected_pool.comment | default('') == opentofu_pve_molecule_pool.comment
+          - opentofu_pve_molecule_selected_pool.members is sequence
+          - opentofu_pve_molecule_selected_pool.members is not string and opentofu_pve_molecule_selected_pool.members is not mapping
+          - opentofu_pve_molecule_selected_pool.members | reject('mapping') | list | length == 0
+          - opentofu_pve_molecule_selected_pool.members | rejectattr('type', 'equalto', 'qemu') | list | length == 0
           - >-
-            opentofu_pve_molecule_pool_info.json.data.members | map(attribute='vmid') | list |
+            opentofu_pve_molecule_selected_pool.members | map(attribute='vmid') | list |
             difference(opentofu_pve_molecule_pool.vm_ids) | length == 0
           - >-
-            opentofu_pve_molecule_pool_info.json.data.members | map(attribute='name') |
+            opentofu_pve_molecule_selected_pool.members | map(attribute='name') |
             reject('match', '^molecule-[a-f0-9]{32}-(template|subject)$') | list | length == 0
         fail_msg: >-
           The acceptance pool must be owned and contain only the reserved disposable VMs;
@@ -218,9 +271,11 @@
       diff: false
       ansible.builtin.set_fact:
         opentofu_pve_molecule_pool_session: {}
+        opentofu_pve_molecule_roles_index: {}
         opentofu_pve_molecule_pool_roles_info: {}
         opentofu_pve_molecule_pools_info: {}
         opentofu_pve_molecule_pool_info: {}
+        opentofu_pve_molecule_selected_pool: {}
 
 - name: Ensure the owned persistent acceptance pool exists without assigning members
   when: opentofu_pve_molecule_pool.id | default('') == 'molecule-acceptance'
