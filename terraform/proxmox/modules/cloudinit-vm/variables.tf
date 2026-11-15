@@ -270,3 +270,13 @@ variable "network_data_file_id" {
     error_message = "network_data_file_id must be null or a non-empty file identifier."
   }
 }
+
+variable "pool_id" {
+  description = "Optional existing resource pool, supplied in the initial clone request. Null preserves callers without a pool."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.pool_id == null ? true : can(regex("^[A-Za-z0-9_-]+$", var.pool_id))
+    error_message = "Use one explicit existing pool ID without a path or whitespace."
+  }
+}

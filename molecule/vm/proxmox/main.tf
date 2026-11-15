@@ -17,6 +17,7 @@ variable "run" {
     python_requirements = string, disk_gb = number,
     image_file_id       = optional(string)
     image_local_path    = optional(string)
+    pool_id             = optional(string)
     image               = object({ url = string, checksum = string, algorithm = string, disk_gb = number, user = string, distribution = string }),
     guests              = map(object({ vm_id = number, address = string }))
   })
@@ -72,6 +73,7 @@ resource "proxmox_virtual_environment_vm" "template" {
   name        = "molecule-${var.run.id}-template"
   description = "homelab-molecule:${var.run.id}:template"
   node_name   = var.run.node
+  pool_id     = var.run.pool_id
   tags        = ["molecule", "run-${var.run.id}"]
   template    = true
   started     = false
@@ -124,6 +126,7 @@ module "guest" {
   description                        = "homelab-molecule:${var.run.id}:${each.key}"
   vm_id                              = each.value.vm_id
   node_name                          = var.run.node
+  pool_id                            = var.run.pool_id
   clone_template_vm_id               = proxmox_virtual_environment_vm.template.vm_id
   tags                               = ["molecule", "run-${var.run.id}"]
   on_boot                            = false

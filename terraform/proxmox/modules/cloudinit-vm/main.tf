@@ -45,6 +45,7 @@ resource "proxmox_virtual_environment_vm" "this" {
   description = var.description
   vm_id       = var.vm_id
   node_name   = var.node_name
+  pool_id     = var.pool_id
 
   tags       = var.tags
   on_boot    = var.on_boot

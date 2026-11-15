@@ -78,6 +78,10 @@ def allocation(path):
     require(value["dns"] and all(ipaddress.ip_address(d) for d in value["dns"]), "Explicit DNS is required")
     for key in ("node", "bridge", "storage", "image_storage", "snippet_storage"):
         require(re.fullmatch(r"[a-zA-Z0-9_.-]+", value[key]), f"Invalid {key}")
+    require(
+        value.get("pool_id") is None or value["pool_id"] == "molecule-acceptance",
+        "Use only the explicitly approved molecule-acceptance pool",
+    )
     for platform, file_id in value.get("image_file_ids", {}).items():
         require(
             platform in IMAGES
@@ -175,6 +179,7 @@ class Proxmox:
         return self.api(f"nodes/{self.config['node']}/qemu/{vm_id}/config")
 
     def ownership(self, manifest):
+        self.pool_ownership(manifest)
         present = {int(item["vmid"]) for item in self.api("cluster/resources?type=vm")}
         for role, vm_id in identities(manifest).items():
             if vm_id not in present:
@@ -202,6 +207,35 @@ class Proxmox:
                         ),
                         f"VMID {vm_id} has a disk outside its allocation",
                     )
+
+    def pool_ownership(self, manifest):
+        """A persistent permission boundary must never contain unrelated guests or storage."""
+        pool = manifest["run"].get("pool_id")
+        if pool is None:
+            return  # Retained legacy runs keep their original retirement contract.
+        require(pool == "molecule-acceptance", "Unapproved resource pool")
+        value = self.api("pools?poolid=" + pool)
+        require(
+            value.get("comment") == "homelab-molecule:acceptance-pool" and isinstance(value.get("members"), list),
+            "Resource pool ownership differs; refusing operation",
+        )
+        roles = {vm_id: role for role, vm_id in identities(manifest).items()}
+        for member in value["members"]:
+            vm_id = member.get("vmid")
+            role = roles.get(vm_id)
+            require(
+                member.get("type") == "qemu"
+                and role
+                and member.get("node") == manifest["run"]["node"]
+                and member.get("name") == f"molecule-{manifest['id']}-{role}",
+                "Resource pool contains a foreign member; refusing operation",
+            )
+        present = {int(row["vmid"]): row for row in self.api("cluster/resources?type=vm")}
+        member_ids = {member["vmid"] for member in value["members"]}
+        require(
+            all(vm_id in member_ids for vm_id in roles if vm_id in present),
+            "Allocated VM exists outside its approved pool; refusing adoption",
+        )
 
 
 def identities(manifest):
@@ -253,6 +287,7 @@ def prepare(args):
         **{key: config[key] for key in ("node", "bridge", "storage", "image_storage", "snippet_storage", "gateway", "dns", "ssh_host")},
         "template_id": config["vm_ids"][0],
         "image_file_id": None if prepared_image else config.get("image_file_ids", {}).get(args.os),
+        "pool_id": config.get("pool_id"),
         "image": image | {"user": "molecule"},
         "disk_gb": disk_gb,
         "public_key": Path(config["public_key_path"]).expanduser().read_text().strip(),
@@ -566,6 +601,11 @@ def load_run(directory, retirement=False):
         == (None if manifest.get("prepared_image") else manifest["allocation"].get("image_file_ids", {}).get(manifest["os"])),
         "Run resources differ from the approved allocation",
     )
+    require(
+        manifest["run"].get("pool_id") == manifest["allocation"].get("pool_id")
+        and manifest["run"].get("pool_id") in (None, "molecule-acceptance"),
+        "Run pool differs from the approved allocation",
+    )
     return manifest
 
 
@@ -722,6 +762,8 @@ def provision(directory, manifest):
     verify_remote_files([], manifest, allow_missing=False)
     api = Proxmox(config)
     with locked(config):
+        if manifest["run"].get("pool_id") is not None:
+            api.pool_ownership(manifest)
         existing = {int(item["vmid"]) for item in api.api("cluster/resources?type=vm")}
         occupied = existing.intersection(identities(manifest).values())
         if occupied:
@@ -1208,6 +1250,10 @@ def check_state(state, manifest, planned=False):
                     and values["name"] == f"molecule-{manifest['id']}-{role}"
                     and values["description"] == f"homelab-molecule:{manifest['id']}:{role}",
                     "State contains a foreign VM",
+                )
+                require(
+                    (values.get("pool_id") or None) == manifest["run"].get("pool_id"),
+                    "VM plan/state changes the approved pool",
                 )
                 seen.add(role)
             elif resource["type"] in ("proxmox_download_file", "proxmox_virtual_environment_file"):

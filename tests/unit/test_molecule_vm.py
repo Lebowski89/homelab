@@ -361,11 +361,11 @@ def test_guest_module_requirements_use_repository_pins_without_secret_clients(tm
 
 
 @pytest.fixture
-def prepared(tmp_path):
+def prepared(tmp_path, request):
     config = json.loads((ROOT / "molecule/vm/allocation.json.sample").read_text())
     key = tmp_path / "test.pub"
     key.write_text("ssh-ed25519 AAAATEST fixture-public-key")
-    config.update(approved_disposable=True, public_key_path=str(key))
+    config.update(approved_disposable=True, public_key_path=str(key), pool_id=getattr(request, "param", None))
     path = tmp_path / "allocation.json"
     path.write_text(json.dumps(config))
     args = SimpleNamespace(
@@ -414,6 +414,9 @@ def test_preparation_is_offline_and_unique_with_no_production_inventory(prepared
         ("addresses", ["127.0.0.1/24"]),
         ("addresses", ["192.0.2.0/24"]),
         ("endpoint", "http://example.invalid"),
+        ("pool_id", "production"),
+        ("pool_id", ""),
+        ("pool_id", 1),
     ],
 )
 def test_allocation_refuses_invalid_or_ambiguous_inputs(tmp_path, field, value):
@@ -520,6 +523,7 @@ def test_retirement_refuses_power_control_when_current_ownership_differs(prepare
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("prepared", [None, "molecule-acceptance"], indirect=True)
 def test_saved_plan_enforces_budget_and_explicitly_stopped_template(prepared):
     _, manifest = prepared
     address = "proxmox_virtual_environment_vm.template"
@@ -528,6 +532,7 @@ def test_saved_plan_enforces_budget_and_explicitly_stopped_template(prepared):
         "node_name": manifest["run"]["node"],
         "name": f"molecule-{manifest['id']}-template",
         "description": f"homelab-molecule:{manifest['id']}:template",
+        "pool_id": manifest["run"].get("pool_id"),
         "template": True,
         "started": None,
         "on_boot": False,
@@ -543,6 +548,10 @@ def test_saved_plan_enforces_budget_and_explicitly_stopped_template(prepared):
     }
     # The actual provider's template plan has null started, despite literal false.
     VM.check_plan(plan, manifest)
+    value["pool_id"] = "production"
+    with pytest.raises(ValueError, match="approved pool"):
+        VM.check_plan(plan, manifest)
+    value["pool_id"] = manifest["run"].get("pool_id")
     expression["constant_value"] = True
     with pytest.raises(ValueError, match="stopped template"):
         VM.check_plan(plan, manifest)
@@ -565,6 +574,7 @@ def test_saved_plan_enforces_budget_and_explicitly_stopped_template(prepared):
 
 
 @pytest.mark.integration
+@pytest.mark.parametrize("prepared", [None, "molecule-acceptance"], indirect=True)
 def test_guest_plan_cannot_clone_a_migration_vm_or_change_the_reserved_address(prepared):
     _, manifest = prepared
     run = manifest["run"]
@@ -574,6 +584,7 @@ def test_guest_plan_cannot_clone_a_migration_vm_or_change_the_reserved_address(p
         "node_name": run["node"],
         "name": f"molecule-{manifest['id']}-subject",
         "description": f"homelab-molecule:{manifest['id']}:subject",
+        "pool_id": run.get("pool_id"),
         "template": False,
         "started": True,
         "on_boot": False,
@@ -592,6 +603,10 @@ def test_guest_plan_cannot_clone_a_migration_vm_or_change_the_reserved_address(p
     }
     plan = {"resource_changes": [{"mode": "managed", "type": "proxmox_virtual_environment_vm", "change": {"after": value}}]}
     VM.check_plan(plan, manifest)
+    value["pool_id"] = "production"
+    with pytest.raises(ValueError, match="approved pool"):
+        VM.check_plan(plan, manifest)
+    value["pool_id"] = run.get("pool_id")
     value["disk"][0]["size"] += 1
     with pytest.raises(ValueError, match="disk storage or size"):
         VM.check_plan(plan, manifest)
@@ -697,6 +712,45 @@ def test_ownership_checks_every_current_disk_and_never_adopts_a_foreign_vm(prepa
     values["description"] = "production"
     with pytest.raises(ValueError, match="ownership differs"):
         VM.Proxmox.ownership(client, manifest)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("prepared", ["molecule-acceptance"], indirect=True)
+@pytest.mark.parametrize("foreign", ["storage", "production", "controller", "other_run", "outside_pool"])
+def test_pool_ownership_rejects_foreign_members_and_reserved_vms_outside_the_pool(prepared, foreign):
+    _, manifest = prepared
+    pool = {"comment": "homelab-molecule:acceptance-pool", "members": []}
+    rows = []
+    client = object.__new__(VM.Proxmox)
+    client.api = lambda path: pool if path == "pools?poolid=molecule-acceptance" else rows
+    client.pool_ownership(manifest)  # An empty owned pool is ready for the next run.
+    member = {"type": "qemu", "vmid": 980001, "node": manifest["run"]["node"], "name": f"molecule-{manifest['id']}-subject"}
+    pool["members"].append(member)
+    rows.append({"vmid": 980001})
+    client.pool_ownership(manifest)
+    if foreign == "storage":
+        pool["members"].append({"type": "storage", "storage": "test-disks"})
+    elif foreign == "production":
+        member["vmid"] = 104
+    elif foreign == "controller":
+        member["vmid"] = 9300
+    elif foreign == "other_run":
+        member["name"] = "molecule-" + "f" * 32 + "-subject"
+    else:
+        pool["members"].clear()
+    with pytest.raises(ValueError, match="foreign member|outside its approved pool"):
+        client.pool_ownership(manifest)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("prepared", ["molecule-acceptance"], indirect=True)
+def test_pool_manifest_cannot_change_or_omit_its_approved_pool(prepared):
+    directory, manifest = prepared
+    assert manifest["run"]["pool_id"] == manifest["allocation"]["pool_id"] == "molecule-acceptance"
+    manifest["run"].pop("pool_id")
+    (directory / "manifest.json").write_text(json.dumps(manifest))
+    with pytest.raises(ValueError, match="pool differs"):
+        VM.load_run(directory, retirement=True)
 
 
 @pytest.mark.integration

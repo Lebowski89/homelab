@@ -14,6 +14,10 @@ proxmox_api_bootstrap_user: "root@pam"
 
 # Opt in explicitly after approving the dedicated permissions; ordinary setup is unchanged.
 opentofu_pve_molecule_permissions_enabled: false
+opentofu_pve_molecule_pool:
+  id: molecule-acceptance
+  comment: homelab-molecule:acceptance-pool
+  vm_ids: [980000, 980001]
 opentofu_pve_molecule_roles:
   MoleculeVM:
     - VM.Allocate
@@ -35,6 +39,10 @@ opentofu_pve_molecule_roles:
   # The provider reads /storage/local to find the snippet directory. PVE couples
   # this read with storage configuration management; grant it only on local.
   MoleculeLocalConfig: [Datastore.Allocate]
+  # Uncached images use PVE's node-side download-url API. This also permits
+  # fetching internal URLs; keep it separate from the audit-only node role.
+  MoleculeImageDownload: [Sys.AccessNetwork]
+  MoleculePoolAudit: [Pool.Audit]
 opentofu_pve_molecule_token_acls:
   - {token: 'root@pam!molecule-controller-bootstrap', path: /vms/9300, role: MoleculeVM}
   - {token: 'root@pam!molecule-controller-bootstrap', path: /vms/9004, role: MoleculeClone}
@@ -45,10 +53,12 @@ opentofu_pve_molecule_token_acls:
   # PVE checks the source template's bridge during clone, before vmbr1 is applied.
   - {token: 'root@pam!molecule-controller-bootstrap', path: /sdn/zones/localnetwork/vmbr0, role: MoleculeBridge}
   - {token: 'root@pam!molecule-controller-bootstrap', path: /storage/local, role: MoleculeLocalConfig}
-  - {token: 'root@pam!molecule-vm-acceptance', path: /vms/980000, role: MoleculeVM}
-  - {token: 'root@pam!molecule-vm-acceptance', path: /vms/980001, role: MoleculeVM}
-  - {token: 'root@pam!molecule-vm-acceptance', path: /vms/980000, role: MoleculeClone}
+  # Persistent ACLs survive disposal; every create/clone must name this pool.
+  - {token: 'root@pam!molecule-vm-acceptance', path: /pool/molecule-acceptance, role: MoleculeVM}
+  - {token: 'root@pam!molecule-vm-acceptance', path: /pool/molecule-acceptance, role: MoleculeClone}
+  - {token: 'root@pam!molecule-vm-acceptance', path: /pool/molecule-acceptance, role: MoleculePoolAudit}
   - {token: 'root@pam!molecule-vm-acceptance', path: /nodes/pve1, role: MoleculeNode}
+  - {token: 'root@pam!molecule-vm-acceptance', path: /nodes/pve1, role: MoleculeImageDownload}
   - {token: 'root@pam!molecule-vm-acceptance', path: /storage/local, role: MoleculeStore}
   - {token: 'root@pam!molecule-vm-acceptance', path: /storage/local-zfs, role: MoleculeStore}
   - {token: 'root@pam!molecule-vm-acceptance', path: /sdn/zones/localnetwork/vmbr1, role: MoleculeBridge}

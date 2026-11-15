@@ -3,6 +3,7 @@
   "allow_nf_tables_alternatives": false,
   "allow_image_preparation": false,
   "allocation_id": "operator-approved-isolated-test-pool",
+  "pool_id": "molecule-acceptance",
   "endpoint": "https://proxmox-test.example.invalid:8006/",
   "node": "test-node",
   "ssh_host": "proxmox-test.example.invalid",
