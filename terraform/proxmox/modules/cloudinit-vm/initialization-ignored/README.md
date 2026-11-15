@@ -33,6 +33,7 @@
 | <a name="input_network_data_file_id"></a> [network\_data\_file\_id](#input\_network\_data\_file\_id) | Optional custom cloud-init network data. When supplied, replaces the generated ip\_config; callers own its network contents. | `string` | `null` | no |
 | <a name="input_node_name"></a> [node\_name](#input\_node\_name) | Proxmox node on which to create the VM. | `string` | n/a | yes |
 | <a name="input_on_boot"></a> [on\_boot](#input\_on\_boot) | Start the VM automatically when the Proxmox node boots. | `bool` | `true` | no |
+| <a name="input_pool_id"></a> [pool\_id](#input\_pool\_id) | Optional existing resource pool, supplied in the initial clone request. Null preserves callers without a pool. | `string` | `null` | no |
 | <a name="input_protection"></a> [protection](#input\_protection) | Enable Proxmox VM protection. | `bool` | `false` | no |
 | <a name="input_qemu_agent_enabled"></a> [qemu\_agent\_enabled](#input\_qemu\_agent\_enabled) | Enable the QEMU guest agent integration. | `bool` | `true` | no |
 | <a name="input_qemu_guest_agent_bootstrap_enabled"></a> [qemu\_guest\_agent\_bootstrap\_enabled](#input\_qemu\_guest\_agent\_bootstrap\_enabled) | Install and start qemu-guest-agent through non-secret cloud-init vendor data. | `bool` | `true` | no |
