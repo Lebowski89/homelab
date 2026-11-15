@@ -1097,7 +1097,8 @@ separated dedicated tokens, never Administrator/privsep=0 or `ssh.root_ticket`:
 | Same token, `/vms/980000` only | Clone the owned stopped template |
 | Transient `root@pam!molecule-controller-bootstrap`, `/vms/9300` | Corresponding controller lifecycle/configuration privileges |
 | Bootstrap token, `/vms/9004` | Template audit and clone only |
-| Each token, `/nodes/pve1` | Node audit only |
+| Each token, `/nodes/pve1` | Node audit |
+| Acceptance token only, `/nodes/pve1` | `Sys.AccessNetwork` for uncached image downloads; permits node-side URL access, including internal endpoints |
 | Each token, `/storage/local-zfs` and `/storage/local` | Datastore audit, space allocation and template/file allocation |
 | Each token, `/sdn/zones/localnetwork/vmbr1` | Bridge audit/use required by the pinned provider |
 
@@ -1117,6 +1118,40 @@ The existing `MoleculeBridge` role contains only `SDN.Use`. Its additional
 bridge during clone, before the provider configures the new controller on
 `vmbr1`. The acceptance token has no `vmbr0` grant. Preflight rejects an expanded
 bridge role or a `vmbr0` ACL for another token or role. Template 9004 is unchanged.
+
+`MoleculeImageDownload` contains only `Sys.AccessNetwork`, assigned exclusively
+to `root@pam!molecule-vm-acceptance` on `/nodes/pve1`. PVE's `download-url` API
+requires this node permission in addition to `Datastore.AllocateTemplate` on
+the destination storage. It allows node-side fetching of arbitrary URLs,
+including internal endpoints; it is not restricted to the manifest's URLs by
+Proxmox ACLs. The harness still pins image URLs/checksums and validates ownership.
+Do not substitute `Sys.Modify` or a root-path grant, or add this privilege to the
+bootstrap token or the shared audit-only `MoleculeNode` role. The managed role
+rejects expanded download-role privileges, another token or another node path.
+An existing checksum-verified `allocation.image_file_ids` entry avoids this API.
+
+The first renamed `node_exporter` / `ubuntu2604` provisioning attempt against
+GitHub `80182a24f5dab53a3e7d421ae7e3b0aaa465b63f` reached this previously unexercised
+download path and received HTTP 403. Run `6deadea1887541baa3a42e7ae02ddf96`
+created only two cloud-init snippets; no VM or Molecule execution occurred.
+Its private logs, plan and state must remain available after guarded retirement.
+This failure does not establish Ubuntu Node Exporter acceptance.
+
+The download grant was explicitly approved and applied through the managed role
+on 2026-11-16: only the new role and its one ACL were added. Check mode left live
+permissions unchanged; application changed two tasks, and the unchanged rerun
+reported `changed=0` in 15.46 seconds. Existing roles/ACLs, token metadata,
+privilege separation and private credential hashes were preserved; acceptance
+still received HTTP 403 for VM104. The expired bootstrap token was unchanged.
+Guarded retirement through the original clean checkout took 2.852 seconds.
+Independent node queries confirmed both reserved VMIDs and the run's artifacts
+absent, with failed evidence retained and allocation permissions still ready
+without another repair. Fresh pool/RAM/controller-space/address checks passed;
+only the matching maintenance receipt was released. No case was retried.
+Private operator proofs are under
+`~/.config/homelab/molecule-controller/approved-image-download-1794759495962967616/`.
+Focused synthetic-HTTPS permission regressions: 21 passed in 96.54 seconds;
+Ruff, YAML lint, affected Ansible lint, localhost syntax and whitespace passed.
 
 The source-bridge grant was explicitly approved and applied on 2026-11-14 through
 the same managed entry point. Check mode changed nothing; application changed
@@ -1158,64 +1193,154 @@ delegate must trust the Proxmox certificate chain: the new path verifies TLS.
 Both tokens must already exist with privilege separation enabled. No token is
 created, replaced or modified, and unrelated roles/ACLs are retained.
 
-### Allocation reuse: preserve the permission boundary
+### Persistent acceptance pool and allocation reuse
 
-VM deletion on the installed Proxmox version removes VM-specific ACLs regardless
-of `purge`. Free VMIDs and empty provider state therefore do **not** establish
-allocation readiness. Check effective permissions after retirement, before
-repairing them, so a successful cleanup cannot conceal this lifecycle dependency.
+VM deletion removes VM-specific ACLs on the installed Proxmox version. The
+approved correction uses persistent pool `molecule-acceptance`, managed through
+`pve_user.yml` and the existing `opentofu_molecule_permissions` entry point.
+**Repository preparation is complete; live migration and two consecutive UI
+runs remain pending a published reviewed candidate.** Do not treat the recovery
+below as proof that permission repair between jobs has been eliminated.
 
-The minimal correction uses the existing authorised **operator-side** control
-path, not new privileges or a new permissions service:
+The three propagated pool ACLs belong only to
+`root@pam!molecule-vm-acceptance` on `/pool/molecule-acceptance`:
 
-1. Confirm the previous owned run is retired, its exact artifacts are absent,
-   and VM980000/980001 are free. Preserve failed results, state backups and logs.
-2. From the trusted operator environment, run the existing check command above,
-   then reconcile with the existing entry point:
+- `MoleculeVM`: `VM.Allocate`, `VM.Audit`, `VM.Config.CDROM`, `VM.Config.CPU`,
+  `VM.Config.Cloudinit`, `VM.Config.Disk`, `VM.Config.HWType`, `VM.Config.Memory`,
+  `VM.Config.Network`, `VM.Config.Options`, `VM.PowerMgmt`, `VM.GuestAgent.Audit`.
+- `MoleculeClone`: `VM.Audit`, `VM.Clone`.
+- `MoleculePoolAudit`: `Pool.Audit`, needed for provider membership reads.
 
-   ```text
-   skynet limit pve1 raw --tags opentofu_molecule_permissions \
-     -e '{"opentofu_pve_molecule_permissions_enabled": true}'
-   ```
+The role validates these exact privileges and reads existing VM/clone/audit
+roles before mutation; differing live roles are rejected rather than silently
+adopted. Preflight discovers roles through `/access/roles` and reads details
+only for listed roles; missing-role detail requests return HTTP 500, which is
+not accepted as absence by preflight. Both consumers require
+`GET /pools?poolid=molecule-acceptance` to return a list containing exactly one
+object with that `poolid`. Empty, duplicate, malformed, mismatched and bare-object
+responses fail before ownership/membership checks or mutation.
+The role checks an existing pool's ownership comment and rejects storage,
+controller9300, production or other non-disposable members. Standard pinned
+`community.proxmox.proxmox_pool` creates an empty pool; Ansible never adds VMs
+or shared storage. Credential-bearing API session/results are private and
+cleared in `always`, including on failure. Check mode performs no role, ACL,
+pool or token mutations. Ordinary OpenTofu setup remains unchanged and the
+Molecule permission path remains explicitly opt-in.
 
-3. Verify effective `MoleculeVM` privileges on both reserved VMIDs and `VM.Clone`
-   on 980000, unchanged role/ACL boundaries and token metadata, privilege
-   separation, VM104 denial, and an unchanged rerun reporting `changed=0`.
-4. Only then verify main or the explicitly approved exact candidate identity,
-   capacity, maintenance ownership and
-   the single manual Forgejo dispatch. After confirmed retirement, measure
-   readiness again and repeat the managed reconciliation from the operator
-   environment. Never repair permissions or release maintenance to bypass an
-   active/retained resource owner or a failed acceptance check.
+Pool ACLs replace only the three superseded acceptance-token VMID ACLs after
+the pool grants exist. Removing those direct grants makes an initial create or
+clone without `pool=molecule-acceptance` fail at the API. All existing node,
+storage and bridge restrictions and both tokens' privilege separation remain.
+The runner gets no `Pool.Allocate`, `Permissions.Modify`, root-path or bootstrap
+administrator grant. The bootstrap token has no pool access.
 
-This sequence reuses `pve_user.yml` and the canonical `pve1.yml` declarations.
-The regression `test_allocation_reuse_restores_deleted_vm_acls_without_changing_the_permission_boundary`
-models deletion of the reserved-VM ACLs, verifies check mode performs no repair,
-then exercises exact restoration and an idempotent rerun through the real role
-and pinned modules against synthetic HTTPS. No production permission code,
-credential, role or ACL path changes are needed. An operator invocation is still
-required; the private Forgejo workflow does not perform this reconciliation.
-Do not call the resulting platform fully automated.
+Both initial create and clone requests must include `pool_id`. The disposable
+root supplies it to the template and existing cloudinit-vm module; the shared
+module's new optional input defaults to null for all unchanged callers.
+`allocation.pool_id` is carried into each new manifest, with matching plan/state
+and live membership checks before provisioning, power operations and retirement.
+Only the current run's reserved VM980000/980001 may be members; foreign names,
+VMIDs, nodes, storage members and reserved VMs outside the pool stop execution.
+Retained legacy runs keep their original no-pool retirement contract and source.
+The persistent pool is outside disposable OpenTofu state and is never retired
+with its guests. Scenarios stay in Git when their disposable VMs are retired.
 
-| Option | Persistence and automation | Permission boundary / approval |
-| --- | --- | --- |
-| Existing operator reconciliation (recommended) | Recreates the exact declared ACLs before reuse and after verified retirement; currently operator-controlled | Keeps `/vms/980000`, `/vms/980001`, existing node/storage/network paths and privilege-separated tokens. Existing approved scope only. |
-| Dedicated persistent pool (proposal only) | A pool ACL can remain when its guest members are deleted; both template and subject would need explicit pool placement | Would grant access to every member of that pool instead of enforcing the two VMIDs as the API boundary. VM creation and membership permissions must be reviewed against the installed API. Requires a separately approved pool/path boundary and source changes; none are applied. |
+[Proxmox pool permissions](https://github.com/proxmox/pve-docs/blob/master/pveum.adoc#pools)
+are inherited by members. This is API access to **any VMID created in that
+pool**, plus clone access to every member, rather than an API limit to the two
+reserved VMIDs. Harness IDs/budgets/identity checks still enforce the allocation.
+An administrator adding an unrelated VM would expose it to the token;
+membership guards reject that condition but do not undo the inherited grant.
+The installed create/clone checks and pinned
+[provider 0.120.0](https://github.com/bpg/terraform-provider-proxmox/blob/v0.120.0/proxmoxtf/resource/vm/vm.go)
+were reviewed: both requests accept the destination pool immediately. Moving
+an existing VM between pools is not requested or permitted to the runner.
 
-[Proxmox's permission model](https://github.com/proxmox/pve-docs/blob/master/pveum.adoc#pools)
-documents that pool permissions are inherited by their members. Harness VMID,
-identity and resource guards would still be necessary with a pool; they are not
-an API restriction to the two reserved IDs. The current role deliberately rejects
-pool ACL paths. Do not relax that validation, create a pool, or assign pool
-permissions under the existing VMID-only approval.
+Rollout and acceptance:
+
+1. Publish a reviewed GitHub candidate branch/commit containing this correction.
+   Main `80182a24f5dab53a3e7d421ae7e3b0aaa465b63f` lacks pool support. Use the
+   existing exact-SHA candidate selector; do not edit a fetched checkout or merge
+   solely to unlock testing. No launcher or private workflow code update is needed.
+2. With all old owned runs retired and VMIDs/artifacts independently absent,
+   take fresh managed maintenance and checkpoint the current ACLs, tokens,
+   private allocation, ownership, labels and evidence. Preserve runner ID 1,
+   registration, keys, policy, service hardening and previous failed receipts.
+3. From the operator environment, run the existing permission entry with
+   `--check --diff`, apply only the approved pool/ACL migration, then require
+   an unchanged rerun. Verify exact effective pool privileges, no direct VMID
+   grants, no pool/ACL administration, unchanged node/storage/network grants,
+   and HTTP403 for protected VM104, controller9300 and template9004.
+4. Update only `pool_id` in the private allocation through the existing managed
+   native-service path, preserving private permissions/context and other values.
+   Verify trusted candidate identity and fresh capacity/address checks, then
+   release only the matching managed maintenance receipt. Keep administrator
+   authentication on the external operator path.
+5. Manually run `node_exporter` / `fedora44`, then `node_exporter` / `rocky102`,
+   using the same reviewed branch/full SHA and explicit candidate approval.
+   For **each** job, verify real provisioning/Molecule success, source SHA,
+   diagnostics and retirement. Independently confirm VMIDs and owned artifacts
+   absent and the persistent pool empty with unchanged ACLs. Do not reconcile
+   permissions between the jobs. Verify production access remains denied and
+   permission readiness persists after the second retirement.
+
+On failure retain exact evidence/resources and use the original checkout for
+scoped retirement. For rollback, hold owned maintenance, require the owned pool
+empty and all disposable resources absent, and restore the checkpointed
+allocation and exactly the prior three VMID ACLs before removing only this
+pool's three acceptance-token ACLs and the owned empty pool. Leave shared
+roles, credentials and historical evidence intact. Legacy operator-side VMID
+reconciliation remains covered by
+`test_allocation_reuse_restores_deleted_vm_acls_without_changing_the_permission_boundary`;
+it is a recovery option, not the intended normal pooled workflow.
+
+Repository validation covered 106 distinct affected cases across focused runs,
+including check mode, exact ACL migration/idempotency, legacy recovery, actual
+role expansion, foreign pool members, and pool plan/state/manifest guards.
+Six new subprocess-fixture cases initially hit the unit-process boundary;
+their integration classification was corrected and all six passed. Ruff,
+YAML/Ansible lint, localhost syntax, OpenTofu formatting, and initialized
+controller-root/shared-module validation passed using existing pinned tools.
+Checkov 3.4.3 scanned tracked public source with pending edits: 512 passed,
+zero failed, 25 skipped, zero parsing errors. The one new read-only preflight
+block finding was reproduced without its scoped exception; fatal propagation
+and `always` credential cleanup were preserved. Normal GitHub CI and the two
+live pooled workflow runs remain unverified until candidate publication.
+
+The PR #748 follow-up corrects the synthetic API's former object-shaped pool
+response and missing-role HTTP404 model. The earlier 106-case record predates
+that correction and did not establish compatibility with those real API
+responses. Current regressions exercise list-shaped pool responses, HTTP500
+missing roles, initial migration, existing owned members/idempotency, fatal
+API failures with credential cleanup, and malformed/foreign pool rejection.
+The corrected candidate still requires normal publication and two consecutive
+Forgejo workflow runs before claiming live pooled allocation reuse.
+The two affected pytest families passed **122 cases in 186.42 seconds**; the
+refined case-sensitive role-discovery failure case passed again in 3.88 seconds.
+Ruff check/format, YAML/Ansible lint, localhost syntax and whitespace checks
+passed. Checkov 3.4.3 on tracked public source reported **513 passed, zero
+failed, 25 skipped and zero parsing errors**. These are local synthetic/static
+results, not live workflow acceptance or GitHub CI results for a published fix.
+
+The next Fedora attempt (`d422b833c5334682a8dea63678f63098`, source
+`80182a24f5dab53a3e7d421ae7e3b0aaa465b63f`) confirmed this reuse defect: VM
+creation received HTTP 403 after Ubuntu run `68d3c7d5c58e474b9237cb53eeaf8bbf`
+passed Molecule and retired. Both VMID permission sets were empty; node, storage
+and bridge grants were intact. The managed operator path restored only the
+three declared VMID ACLs; its unchanged rerun reported `changed=0` in 15.05 s.
+Fedora's one owned snippet was retired in 2.486 s, with failed evidence unchanged.
+Independent cleanup, effective permissions, capacity and address checks passed;
+only the matching maintenance receipt was released. No retry was dispatched.
 
 Keep bootstrap administrator/Vault authentication on the operator control path.
 Never copy it into the runner or use the acceptance token, its workflow, or the
 node SSH credential to grant its own ACLs. No root-path grant,
 `Permissions.Modify`, general OpenTofu role or Administrator assignment is
-proposed for the acceptance token. Automatic dispatch-plus-reconciliation from
-an external trusted controller remains a separate integration, not implemented
-by the manual workflow or this documented operator sequence.
+proposed for the acceptance token. The existing node SSH identity remains
+root-equivalent; pool API restrictions do not turn that approved SSH channel
+into a restricted account. No additional pool/ACL administration capability is
+added through it. Normal pooled jobs must consume persistent ACLs without
+operator reconciliation between cases.
 
 Repository validation for these changes used the existing environment; no local
 tooling was installed or upgraded:

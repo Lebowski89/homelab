@@ -8,6 +8,12 @@
       - opentofu_pve_molecule_token_acls is sequence and opentofu_pve_molecule_token_acls is not string
       - opentofu_pve_molecule_token_acls | length > 0
       - opentofu_pve_molecule_roles.MoleculeLocalConfig == ['Datastore.Allocate']
+      - opentofu_pve_molecule_pool | default({}) is mapping
+      - >-
+        opentofu_pve_molecule_pool | default({}) | length == 0 or
+        (opentofu_pve_molecule_pool.id == 'molecule-acceptance' and
+         opentofu_pve_molecule_pool.comment == 'homelab-molecule:acceptance-pool' and
+         opentofu_pve_molecule_pool.vm_ids == [980000, 980001])
     fail_msg: Declare the dedicated Molecule roles and token ACLs; local configuration access must have only Datastore.Allocate.
 
 - name: Validate dedicated roles before changing permissions
@@ -18,7 +24,21 @@
       - opentofu_pve_molecule_role.value | length > 0
       - opentofu_pve_molecule_role.key == 'MoleculeLocalConfig' or 'Datastore.Allocate' not in opentofu_pve_molecule_role.value
       - opentofu_pve_molecule_role.key != 'MoleculeBridge' or opentofu_pve_molecule_role.value == ['SDN.Use']
-    fail_msg: Dedicated roles must preserve storage boundaries; MoleculeBridge must contain only SDN.Use.
+      - opentofu_pve_molecule_role.key == 'MoleculeImageDownload' or 'Sys.AccessNetwork' not in opentofu_pve_molecule_role.value
+      - opentofu_pve_molecule_role.key != 'MoleculeImageDownload' or opentofu_pve_molecule_role.value == ['Sys.AccessNetwork']
+      - opentofu_pve_molecule_role.value | intersect(['Pool.Allocate', 'Permissions.Modify', 'Sys.Modify']) | length == 0
+      - opentofu_pve_molecule_role.key != 'MoleculeClone' or opentofu_pve_molecule_role.value | sort == ['VM.Audit', 'VM.Clone']
+      - opentofu_pve_molecule_role.key != 'MoleculePoolAudit' or opentofu_pve_molecule_role.value == ['Pool.Audit']
+      - >-
+        opentofu_pve_molecule_role.key != 'MoleculeVM' or
+        opentofu_pve_molecule_role.value | sort ==
+        (['VM.Allocate', 'VM.Audit', 'VM.Config.CDROM', 'VM.Config.CPU', 'VM.Config.Cloudinit',
+          'VM.Config.Disk', 'VM.Config.HWType', 'VM.Config.Memory', 'VM.Config.Network',
+          'VM.Config.Options', 'VM.PowerMgmt', 'VM.GuestAgent.Audit'] | sort)
+    fail_msg: >-
+      Dedicated roles must preserve storage boundaries; MoleculeBridge must contain only SDN.Use,
+      and only MoleculeImageDownload may contain Sys.AccessNetwork, with no other privileges.
+      VM/clone privileges must match the reviewed boundary; no pool or ACL administration is permitted.
   loop: '{{ opentofu_pve_molecule_roles | dict2items }}'
   loop_control:
     loop_var: opentofu_pve_molecule_role
@@ -31,15 +51,31 @@
       - opentofu_pve_molecule_acl.role in opentofu_pve_molecule_roles
       - >-
         opentofu_pve_molecule_acl.path is match(
-          '^/(vms/[0-9]+|nodes/[A-Za-z0-9_-]+|storage/[A-Za-z0-9_-]+|sdn/zones/localnetwork/[A-Za-z0-9_-]+)$')
+          '^/(vms/[0-9]+|nodes/[A-Za-z0-9_-]+|storage/[A-Za-z0-9_-]+|sdn/zones/localnetwork/[A-Za-z0-9_-]+|pool/molecule-acceptance)$')
+      - >-
+        not opentofu_pve_molecule_acl.path.startswith('/pool/') or
+        (opentofu_pve_molecule_pool.id | default('') == 'molecule-acceptance' and
+         opentofu_pve_molecule_acl.token == 'root@pam!molecule-vm-acceptance' and
+         opentofu_pve_molecule_acl.role in ['MoleculeVM', 'MoleculeClone', 'MoleculePoolAudit'])
+      - >-
+        opentofu_pve_molecule_pool.id | default('') != 'molecule-acceptance' or
+        opentofu_pve_molecule_acl.token != 'root@pam!molecule-vm-acceptance' or
+        opentofu_pve_molecule_acl.role not in ['MoleculeVM', 'MoleculeClone', 'MoleculePoolAudit'] or
+        opentofu_pve_molecule_acl.path == '/pool/molecule-acceptance'
       - opentofu_pve_molecule_acl.role != 'MoleculeLocalConfig' or opentofu_pve_molecule_acl.path == '/storage/local'
+      - >-
+        opentofu_pve_molecule_acl.role != 'MoleculeImageDownload' or
+        (opentofu_pve_molecule_acl.token == 'root@pam!molecule-vm-acceptance' and
+         opentofu_pve_molecule_acl.path == '/nodes/pve1')
       - >-
         opentofu_pve_molecule_acl.path != '/sdn/zones/localnetwork/vmbr0' or
         (opentofu_pve_molecule_acl.token == 'root@pam!molecule-controller-bootstrap' and
          opentofu_pve_molecule_acl.role == 'MoleculeBridge')
     fail_msg: >-
       Molecule ACLs must retain scoped paths: local configuration access belongs
-      only on /storage/local, and source bridge vmbr0 belongs only to the bootstrap token with MoleculeBridge.
+      only on /storage/local, source bridge vmbr0 belongs only to the bootstrap token with MoleculeBridge,
+      and MoleculeImageDownload belongs only to the acceptance token on /nodes/pve1.
+      The acceptance pool permits only the reviewed VM/clone/audit roles; pooled allocations must not retain direct VMID grants.
   loop: '{{ opentofu_pve_molecule_token_acls }}'
   loop_control:
     loop_var: opentofu_pve_molecule_acl
@@ -78,6 +114,181 @@
     fail_msg: >-
       Both dedicated Molecule tokens must already exist with privilege separation enabled;
       no identities are created or changed here.
+
+- name: Inspect ownership and actual privileges before enabling the persistent pool
+  when: opentofu_pve_molecule_pool.id | default('') == 'molecule-acceptance'
+  vars:
+    opentofu_pve_molecule_api_url: >-
+      https://{{ hostvars[opentofu_pve_host].ansible_host }}{{ ':8006' if
+      ('https://' ~ hostvars[opentofu_pve_host].ansible_host) | urlsplit('port') is none else '' }}/api2/json
+  # checkov:skip=CKV2_ANSIBLE_3:Read-only preflight propagates every failure; always clears the API ticket and credential-bearing results.
+  block:
+    - name: Obtain a private operator API session for pool preflight
+      no_log: true
+      diff: false
+      check_mode: false
+      ansible.builtin.uri:
+        url: '{{ opentofu_pve_molecule_api_url }}/access/ticket'
+        method: POST
+        body_format: form-urlencoded
+        body:
+          username: '{{ hostvars[opentofu_pve_host].proxmox_api_bootstrap_user }}'
+          password: '{{ hostvars[opentofu_pve_host].proxmox_api_bootstrap_password }}'
+        validate_certs: true
+        ca_path: "{{ lookup('ansible.builtin.env', 'PROXMOX_CA_PATH') | default(omit, true) }}"
+      register: opentofu_pve_molecule_pool_session
+
+    - name: Discover existing roles through the role index
+      no_log: true
+      diff: false
+      check_mode: false
+      ansible.builtin.uri:
+        url: '{{ opentofu_pve_molecule_api_url }}/access/roles'
+        headers:
+          Cookie: 'PVEAuthCookie={{ opentofu_pve_molecule_pool_session.json.data.ticket }}'
+        validate_certs: true
+        ca_path: "{{ lookup('ansible.builtin.env', 'PROXMOX_CA_PATH') | default(omit, true) }}"
+      register: opentofu_pve_molecule_roles_index
+
+    - name: Validate role-index structure before discovering missing roles
+      no_log: true
+      diff: false
+      ansible.builtin.assert:
+        that:
+          - opentofu_pve_molecule_roles_index.json.data is sequence
+          - opentofu_pve_molecule_roles_index.json.data is not string and opentofu_pve_molecule_roles_index.json.data is not mapping
+          - opentofu_pve_molecule_roles_index.json.data | reject('mapping') | list | length == 0
+          - >-
+            opentofu_pve_molecule_roles_index.json.data | map(attribute='roleid') | select('string') | list | length ==
+            opentofu_pve_molecule_roles_index.json.data | length
+          - >-
+            opentofu_pve_molecule_roles_index.json.data | map(attribute='roleid') | unique(case_sensitive=true) | list | length ==
+            opentofu_pve_molecule_roles_index.json.data | length
+        fail_msg: The role index must be a list of objects with unique string role IDs; API failures are not absent roles.
+
+    - name: Read the actual privileges of existing roles that will govern pool members
+      when: >-
+        opentofu_pve_molecule_pool_role in
+        (opentofu_pve_molecule_roles_index.json.data | map(attribute='roleid') | list)
+      no_log: true
+      diff: false
+      check_mode: false
+      ansible.builtin.uri:
+        url: '{{ opentofu_pve_molecule_api_url }}/access/roles/{{ opentofu_pve_molecule_pool_role }}'
+        headers:
+          Cookie: 'PVEAuthCookie={{ opentofu_pve_molecule_pool_session.json.data.ticket }}'
+        validate_certs: true
+        ca_path: "{{ lookup('ansible.builtin.env', 'PROXMOX_CA_PATH') | default(omit, true) }}"
+      loop: [MoleculeVM, MoleculeClone, MoleculePoolAudit]
+      loop_control:
+        loop_var: opentofu_pve_molecule_pool_role
+      register: opentofu_pve_molecule_pool_roles_info
+
+    - name: Reject an existing pool role with different privileges
+      when: not (opentofu_pve_molecule_pool_role_info.skipped | default(false))
+      no_log: true
+      diff: false
+      ansible.builtin.assert:
+        that: >-
+          (opentofu_pve_molecule_pool_role_info.json.data | dict2items |
+           selectattr('value') | map(attribute='key') | sort ==
+           opentofu_pve_molecule_roles[opentofu_pve_molecule_pool_role_info.opentofu_pve_molecule_pool_role] | sort)
+        fail_msg: An existing pool role differs from its reviewed privileges; stop before changing permissions.
+      loop: '{{ opentofu_pve_molecule_pool_roles_info.results }}'
+      loop_control:
+        loop_var: opentofu_pve_molecule_pool_role_info
+
+    - name: Inspect existing pool identities
+      no_log: true
+      diff: false
+      check_mode: false
+      ansible.builtin.uri:
+        url: '{{ opentofu_pve_molecule_api_url }}/pools'
+        headers:
+          Cookie: 'PVEAuthCookie={{ opentofu_pve_molecule_pool_session.json.data.ticket }}'
+        validate_certs: true
+        ca_path: "{{ lookup('ansible.builtin.env', 'PROXMOX_CA_PATH') | default(omit, true) }}"
+      register: opentofu_pve_molecule_pools_info
+
+    - name: Inspect the selected existing pool before granting access
+      when: >-
+        opentofu_pve_molecule_pool.id in
+        (opentofu_pve_molecule_pools_info.json.data | map(attribute='poolid') | list)
+      no_log: true
+      diff: false
+      check_mode: false
+      ansible.builtin.uri:
+        url: '{{ opentofu_pve_molecule_api_url }}/pools?poolid={{ opentofu_pve_molecule_pool.id }}'
+        headers:
+          Cookie: 'PVEAuthCookie={{ opentofu_pve_molecule_pool_session.json.data.ticket }}'
+        validate_certs: true
+        ca_path: "{{ lookup('ansible.builtin.env', 'PROXMOX_CA_PATH') | default(omit, true) }}"
+      register: opentofu_pve_molecule_pool_info
+
+    - name: Require exactly one matching pool object in the selected-pool response
+      when: opentofu_pve_molecule_pool_info is not skipped
+      no_log: true
+      diff: false
+      ansible.builtin.assert:
+        that:
+          - opentofu_pve_molecule_pool_info.json.data is sequence
+          - opentofu_pve_molecule_pool_info.json.data is not string and opentofu_pve_molecule_pool_info.json.data is not mapping
+          - opentofu_pve_molecule_pool_info.json.data | length == 1
+          - opentofu_pve_molecule_pool_info.json.data[0] is mapping
+          - opentofu_pve_molecule_pool_info.json.data[0].poolid | default('') == opentofu_pve_molecule_pool.id
+        fail_msg: The selected-pool response must be a list containing exactly one object with the approved poolid.
+
+    - name: Select the validated pool object for ownership checks
+      when: opentofu_pve_molecule_pool_info is not skipped
+      no_log: true
+      diff: false
+      ansible.builtin.set_fact:
+        opentofu_pve_molecule_selected_pool: '{{ opentofu_pve_molecule_pool_info.json.data[0] }}'
+
+    - name: Reject a foreign pool or non-disposable pool members
+      when: opentofu_pve_molecule_pool_info is not skipped
+      ansible.builtin.assert:
+        that:
+          - opentofu_pve_molecule_selected_pool.comment | default('') == opentofu_pve_molecule_pool.comment
+          - opentofu_pve_molecule_selected_pool.members is sequence
+          - opentofu_pve_molecule_selected_pool.members is not string and opentofu_pve_molecule_selected_pool.members is not mapping
+          - opentofu_pve_molecule_selected_pool.members | reject('mapping') | list | length == 0
+          - opentofu_pve_molecule_selected_pool.members | rejectattr('type', 'equalto', 'qemu') | list | length == 0
+          - >-
+            opentofu_pve_molecule_selected_pool.members | map(attribute='vmid') | list |
+            difference(opentofu_pve_molecule_pool.vm_ids) | length == 0
+          - >-
+            opentofu_pve_molecule_selected_pool.members | map(attribute='name') |
+            reject('match', '^molecule-[a-f0-9]{32}-(template|subject)$') | list | length == 0
+        fail_msg: >-
+          The acceptance pool must be owned and contain only the reserved disposable VMs;
+          no storage or production members are allowed.
+      no_log: true
+      diff: false
+  always:
+    - name: Clear transient operator authentication and pool API results
+      no_log: true
+      diff: false
+      ansible.builtin.set_fact:
+        opentofu_pve_molecule_pool_session: {}
+        opentofu_pve_molecule_roles_index: {}
+        opentofu_pve_molecule_pool_roles_info: {}
+        opentofu_pve_molecule_pools_info: {}
+        opentofu_pve_molecule_pool_info: {}
+        opentofu_pve_molecule_selected_pool: {}
+
+- name: Ensure the owned persistent acceptance pool exists without assigning members
+  when: opentofu_pve_molecule_pool.id | default('') == 'molecule-acceptance'
+  no_log: true
+  diff: false
+  community.proxmox.proxmox_pool:
+    api_host: '{{ hostvars[opentofu_pve_host].ansible_host }}'
+    api_user: '{{ hostvars[opentofu_pve_host].proxmox_api_bootstrap_user }}'
+    api_password: '{{ hostvars[opentofu_pve_host].proxmox_api_bootstrap_password }}'
+    validate_certs: true
+    poolid: '{{ opentofu_pve_molecule_pool.id }}'
+    comment: '{{ opentofu_pve_molecule_pool.comment }}'
+    state: present
 
 - name: Reconcile only the declared Molecule roles
   no_log: true
@@ -125,3 +336,29 @@
   loop_control:
     loop_var: opentofu_pve_molecule_acl
     label: '{{ opentofu_pve_molecule_acl.token }} {{ opentofu_pve_molecule_acl.path }} {{ opentofu_pve_molecule_acl.role }}'
+
+# Remove only the superseded acceptance-token VMID grants, after the pool ACLs
+# exist. Keeping them would permit create/clone without specifying the pool.
+- name: Remove superseded direct acceptance VMID grants
+  when:
+    - not ansible_check_mode
+    - opentofu_pve_molecule_pool.id | default('') == 'molecule-acceptance'
+  no_log: true
+  diff: false
+  community.proxmox.proxmox_access_acl:
+    api_host: '{{ hostvars[opentofu_pve_host].ansible_host }}'
+    api_user: '{{ hostvars[opentofu_pve_host].proxmox_api_bootstrap_user }}'
+    api_password: '{{ hostvars[opentofu_pve_host].proxmox_api_bootstrap_password }}'
+    validate_certs: true
+    type: token
+    ugid: root@pam!molecule-vm-acceptance
+    path: '{{ opentofu_pve_molecule_old_acl.path }}'
+    roleid: '{{ opentofu_pve_molecule_old_acl.role }}'
+    propagate: true
+    state: absent
+  loop:
+    - {path: /vms/980000, role: MoleculeVM}
+    - {path: /vms/980000, role: MoleculeClone}
+    - {path: /vms/980001, role: MoleculeVM}
+  loop_control:
+    loop_var: opentofu_pve_molecule_old_acl

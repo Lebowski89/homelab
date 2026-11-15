@@ -26,6 +26,8 @@ framework:
 # exact files below and this rule; other files and checks remain scanned. Remove
 # these path exceptions when upstream block-local suppressions work.
 skip-check:
+  # Read-only pool preflight fails closed; always clears its private API session.
+  - "CKV2_ANSIBLE_3:ansible/roles/opentofu/tasks/sub_tasks/pve_molecule_permissions[.]yml$"
   - "CKV2_ANSIBLE_3:ansible/roles/service_common/tasks/postgres_operator[.]yml$"
   - "CKV2_ANSIBLE_3:ansible/roles/podman/tasks/firewall_compatibility[.]yml$"
   - "CKV2_ANSIBLE_3:ansible/roles/postgres/tasks/sub_tasks/backup_restore_validation_setup[.]yml$"

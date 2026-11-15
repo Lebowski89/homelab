@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/11/15 |
+| Readme update        | 2026/11/16 |
 
 
 
@@ -110,47 +110,57 @@
 | [workstation_package_profiles.fedora.signing.**1**](defaults/main.yml#L47)   | str | `gnupg2` |    
 | [workstation_package_profiles.fedora.**opentofu**](defaults/main.yml#L48)   | list | `[]` |    
 | [workstation_package_profiles.fedora.opentofu.**0**](defaults/main.yml#L48)   | str | `tofu-1.11.*` |    
-| [workstation_packages](defaults/main.yml#L50)   | str | `{{ workstation_package_profiles[workstation_platform].baseline }}` |    
-| [workstation_dev_packages](defaults/main.yml#L51)   | str | `{{ workstation_package_profiles[workstation_platform].development }}` |    
-| [workstation_desktop_packages](defaults/main.yml#L52)   | str | `{{ workstation_package_profiles[workstation_platform].desktop }}` |    
-| [workstation_ansible_prereq_packages](defaults/main.yml#L53)   | str | `{{ workstation_package_profiles[workstation_platform].ansible }}` |    
-| [workstation_apt_update_cache](defaults/main.yml#L55)   | bool | `True` |    
-| [workstation_dnf_update_cache](defaults/main.yml#L56)   | bool | `True` |    
-| [workstation_vscode_enabled](defaults/main.yml#L58)   | bool | `True` |    
-| [workstation_vscode_key_url](defaults/main.yml#L59)   | str | `https://packages.microsoft.com/keys/microsoft.asc` |    
-| [workstation_vscode_key_path](defaults/main.yml#L60)   | str | `/usr/share/keyrings/microsoft-vscode.asc` |    
-| [workstation_vscode_repository_path](defaults/main.yml#L61)   | str | `/etc/apt/sources.list.d/vscode.sources` |    
-| [workstation_vscode_extensions](defaults/main.yml#L62)   | list | `[]` |    
-| [workstation_vscode_extensions.**0**](defaults/main.yml#L63)   | str | `redhat.ansible` |    
-| [workstation_vscode_extensions.**1**](defaults/main.yml#L64)   | str | `ms-python.python` |    
-| [workstation_vscode_extensions.**2**](defaults/main.yml#L65)   | str | `ms-vscode-remote.remote-ssh` |    
-| [workstation_git_manage_config](defaults/main.yml#L67)   | bool | `False` |    
-| [workstation_git_user_name](defaults/main.yml#L68)   | str |  |    
-| [workstation_git_user_email](defaults/main.yml#L69)   | str |  |    
-| [workstation_shell_directories](defaults/main.yml#L71)   | list | `[]` |    
-| [workstation_shell_directories.**0**](defaults/main.yml#L72)   | str | `{{ workstation_user_home }}/.local/bin` |    
-| [workstation_xdg_directories](defaults/main.yml#L74)   | list | `[]` |    
-| [workstation_xdg_directories.**0**](defaults/main.yml#L75)   | str | `{{ workstation_user_home }}/Desktop` |    
-| [workstation_xdg_directories.**1**](defaults/main.yml#L76)   | str | `{{ workstation_user_home }}/Documents` |    
-| [workstation_xdg_directories.**2**](defaults/main.yml#L77)   | str | `{{ workstation_user_home }}/Downloads` |    
-| [workstation_xdg_directories.**3**](defaults/main.yml#L78)   | str | `{{ workstation_user_home }}/Music` |    
-| [workstation_xdg_directories.**4**](defaults/main.yml#L79)   | str | `{{ workstation_user_home }}/Pictures` |    
-| [workstation_xdg_directories.**5**](defaults/main.yml#L80)   | str | `{{ workstation_user_home }}/Public` |    
-| [workstation_xdg_directories.**6**](defaults/main.yml#L81)   | str | `{{ workstation_user_home }}/Templates` |    
-| [workstation_xdg_directories.**7**](defaults/main.yml#L82)   | str | `{{ workstation_user_home }}/Videos` |    
-| [workstation_opentofu_prereq_packages](defaults/main.yml#L84)   | str | `{{ workstation_package_profiles[workstation_platform].signing }}` |    
-| [workstation_opentofu_source_url](defaults/main.yml#L86)   | str | `https://packages.opentofu.org/opentofu/tofu/any/` |    
-| [workstation_opentofu_source_suite](defaults/main.yml#L87)   | str | `any` |    
-| [workstation_opentofu_keyring_dir](defaults/main.yml#L88)   | str | `/etc/apt/keyrings` |    
-| [workstation_opentofu_keyring_file](defaults/main.yml#L89)   | str | `/etc/apt/keyrings/opentofu.gpg` |    
-| [workstation_opentofu_keyring_file_repo](defaults/main.yml#L90)   | str | `/etc/apt/keyrings/opentofu-repo.gpg` |    
-| [workstation_opentofu_repo_filename](defaults/main.yml#L91)   | str | `opentofu` |    
-| [workstation_opentofu_packages](defaults/main.yml#L93)   | str | `{{ workstation_package_profiles[workstation_platform].opentofu }}` |    
-| [workstation_opentofu_rpm_baseurl](defaults/main.yml#L94)   | str | `https://packages.opentofu.org/opentofu/tofu/rpm_any/rpm_any/$basearch` |    
-| [workstation_opentofu_signing_keys](defaults/main.yml#L95)   | list | `[]` |    
-| [workstation_opentofu_signing_keys.**0**](defaults/main.yml#L96)   | str | `https://get.opentofu.org/opentofu.gpg` |    
-| [workstation_opentofu_signing_keys.**1**](defaults/main.yml#L97)   | str | `https://packages.opentofu.org/opentofu/tofu/gpgkey` |    
-| [workstation_vscode_rpm_baseurl](defaults/main.yml#L98)   | str | `https://packages.microsoft.com/yumrepos/vscode` |    
+| [workstation_package_profiles.**rocky10_headless**](defaults/main.yml#L50)   | dict | `{}` |    
+| [workstation_package_profiles.rocky10_headless.**ansible**](defaults/main.yml#L51)   | list | `[]` |    
+| [workstation_package_profiles.rocky10_headless.ansible.**0**](defaults/main.yml#L51)   | str | `python3.14` |    
+| [workstation_package_profiles.rocky10_headless.ansible.**1**](defaults/main.yml#L51)   | str | `python3.14-pip` |    
+| [workstation_package_profiles.rocky10_headless.ansible.**2**](defaults/main.yml#L51)   | str | `python3.14-devel` |    
+| [workstation_package_profiles.rocky10_headless.ansible.**3**](defaults/main.yml#L51)   | str | `gcc` |    
+| [workstation_package_profiles.rocky10_headless.ansible.**4**](defaults/main.yml#L51)   | str | `make` |    
+| [workstation_package_profiles.rocky10_headless.ansible.**5**](defaults/main.yml#L51)   | str | `git` |    
+| [workstation_package_profiles.rocky10_headless.ansible.**6**](defaults/main.yml#L51)   | str | `ca-certificates` |    
+| [workstation_package_profiles.rocky10_headless.ansible.**7**](defaults/main.yml#L51)   | str | `openssh-clients` |    
+| [workstation_packages](defaults/main.yml#L53)   | str | `{{ workstation_package_profiles[workstation_platform].baseline }}` |    
+| [workstation_dev_packages](defaults/main.yml#L54)   | str | `{{ workstation_package_profiles[workstation_platform].development }}` |    
+| [workstation_desktop_packages](defaults/main.yml#L55)   | str | `{{ workstation_package_profiles[workstation_platform].desktop }}` |    
+| [workstation_ansible_prereq_packages](defaults/main.yml#L56)   | str | `<multiline value: folded_strip>` |    
+| [workstation_apt_update_cache](defaults/main.yml#L63)   | bool | `True` |    
+| [workstation_dnf_update_cache](defaults/main.yml#L64)   | bool | `True` |    
+| [workstation_vscode_enabled](defaults/main.yml#L66)   | bool | `True` |    
+| [workstation_vscode_key_url](defaults/main.yml#L67)   | str | `https://packages.microsoft.com/keys/microsoft.asc` |    
+| [workstation_vscode_key_path](defaults/main.yml#L68)   | str | `/usr/share/keyrings/microsoft-vscode.asc` |    
+| [workstation_vscode_repository_path](defaults/main.yml#L69)   | str | `/etc/apt/sources.list.d/vscode.sources` |    
+| [workstation_vscode_extensions](defaults/main.yml#L70)   | list | `[]` |    
+| [workstation_vscode_extensions.**0**](defaults/main.yml#L71)   | str | `redhat.ansible` |    
+| [workstation_vscode_extensions.**1**](defaults/main.yml#L72)   | str | `ms-python.python` |    
+| [workstation_vscode_extensions.**2**](defaults/main.yml#L73)   | str | `ms-vscode-remote.remote-ssh` |    
+| [workstation_git_manage_config](defaults/main.yml#L75)   | bool | `False` |    
+| [workstation_git_user_name](defaults/main.yml#L76)   | str |  |    
+| [workstation_git_user_email](defaults/main.yml#L77)   | str |  |    
+| [workstation_shell_directories](defaults/main.yml#L79)   | list | `[]` |    
+| [workstation_shell_directories.**0**](defaults/main.yml#L80)   | str | `{{ workstation_user_home }}/.local/bin` |    
+| [workstation_xdg_directories](defaults/main.yml#L82)   | list | `[]` |    
+| [workstation_xdg_directories.**0**](defaults/main.yml#L83)   | str | `{{ workstation_user_home }}/Desktop` |    
+| [workstation_xdg_directories.**1**](defaults/main.yml#L84)   | str | `{{ workstation_user_home }}/Documents` |    
+| [workstation_xdg_directories.**2**](defaults/main.yml#L85)   | str | `{{ workstation_user_home }}/Downloads` |    
+| [workstation_xdg_directories.**3**](defaults/main.yml#L86)   | str | `{{ workstation_user_home }}/Music` |    
+| [workstation_xdg_directories.**4**](defaults/main.yml#L87)   | str | `{{ workstation_user_home }}/Pictures` |    
+| [workstation_xdg_directories.**5**](defaults/main.yml#L88)   | str | `{{ workstation_user_home }}/Public` |    
+| [workstation_xdg_directories.**6**](defaults/main.yml#L89)   | str | `{{ workstation_user_home }}/Templates` |    
+| [workstation_xdg_directories.**7**](defaults/main.yml#L90)   | str | `{{ workstation_user_home }}/Videos` |    
+| [workstation_opentofu_prereq_packages](defaults/main.yml#L92)   | str | `{{ workstation_package_profiles[workstation_platform].signing }}` |    
+| [workstation_opentofu_source_url](defaults/main.yml#L94)   | str | `https://packages.opentofu.org/opentofu/tofu/any/` |    
+| [workstation_opentofu_source_suite](defaults/main.yml#L95)   | str | `any` |    
+| [workstation_opentofu_keyring_dir](defaults/main.yml#L96)   | str | `/etc/apt/keyrings` |    
+| [workstation_opentofu_keyring_file](defaults/main.yml#L97)   | str | `/etc/apt/keyrings/opentofu.gpg` |    
+| [workstation_opentofu_keyring_file_repo](defaults/main.yml#L98)   | str | `/etc/apt/keyrings/opentofu-repo.gpg` |    
+| [workstation_opentofu_repo_filename](defaults/main.yml#L99)   | str | `opentofu` |    
+| [workstation_opentofu_packages](defaults/main.yml#L101)   | str | `{{ workstation_package_profiles[workstation_platform].opentofu }}` |    
+| [workstation_opentofu_rpm_baseurl](defaults/main.yml#L102)   | str | `https://packages.opentofu.org/opentofu/tofu/rpm_any/rpm_any/$basearch` |    
+| [workstation_opentofu_signing_keys](defaults/main.yml#L103)   | list | `[]` |    
+| [workstation_opentofu_signing_keys.**0**](defaults/main.yml#L104)   | str | `https://get.opentofu.org/opentofu.gpg` |    
+| [workstation_opentofu_signing_keys.**1**](defaults/main.yml#L105)   | str | `https://packages.opentofu.org/opentofu/tofu/gpgkey` |    
+| [workstation_vscode_rpm_baseurl](defaults/main.yml#L106)   | str | `https://packages.microsoft.com/yumrepos/vscode` |    
 
 
 
