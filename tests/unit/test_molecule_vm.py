@@ -714,6 +714,175 @@ def test_ownership_checks_every_current_disk_and_never_adopts_a_foreign_vm(prepa
         VM.Proxmox.ownership(client, manifest)
 
 
+@pytest.fixture
+def pending_pool_template(prepared):
+    _, manifest = prepared
+    run = manifest["run"]
+    client = object.__new__(VM.Proxmox)
+    client.config = manifest["allocation"]
+    values = {
+        "name": f"molecule-{manifest['id']}-template",
+        "description": f"homelab-molecule:{manifest['id']}:template",
+        "template": 1,
+        "digest": "synthetic-config-digest",
+        "scsi0": f"{run['storage']}:base-{run['template_id']}-disk-0,size=10G",
+    }
+    status = {"status": "stopped"}
+    pool = {
+        "poolid": "molecule-acceptance",
+        "comment": "homelab-molecule:acceptance-pool",
+        "members": [{"type": "qemu", "vmid": run["template_id"], "node": run["node"], "name": values["name"]}],
+    }
+    state = {
+        "values": {
+            "root_module": {
+                "resources": [
+                    {
+                        "address": "proxmox_virtual_environment_vm.template",
+                        "type": "proxmox_virtual_environment_vm",
+                        "values": {
+                            "id": str(run["template_id"]),
+                            "vm_id": run["template_id"],
+                            "node_name": run["node"],
+                            "pool_id": run["pool_id"],
+                            "name": values["name"],
+                            "description": values["description"],
+                            "template": True,
+                        },
+                    }
+                ]
+            }
+        }
+    }
+    writes = []
+
+    def api(path, data=None, *, method=None):
+        if path == "cluster/resources?type=vm":
+            return [{"vmid": run["template_id"]}]
+        if path == "pools?poolid=molecule-acceptance":
+            return [pool]
+        if path == f"nodes/{run['node']}/qemu/{run['template_id']}/status/current":
+            return status
+        if path == f"nodes/{run['node']}/qemu/{run['template_id']}/config":
+            if data is not None:
+                assert method == "POST" and data["digest"] == values["digest"]
+                writes.append(dict(data))
+                values["tags"] = data["tags"]
+            return dict(values)
+        pytest.fail("Unexpected API access")
+
+    client.api = api
+    return client, manifest, state, values, pool, status, writes
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("prepared", ["molecule-acceptance"], indirect=True)
+def test_pool_template_tag_initialization_is_guarded_and_retryable_after_an_uncertain_write(pending_pool_template, monkeypatch):
+    client, manifest, state, values, _, _, writes = pending_pool_template
+    with pytest.raises(ValueError, match="ownership differs"):
+        client.ownership(manifest)  # Ordinary operations still reject missing tags.
+    original_api = client.api
+
+    def interrupted(path, data=None, *, method=None):
+        result = original_api(path, data, method=method)
+        if data is not None:
+            raise ValueError("Synthetic connection loss after committed tag update")
+        return result
+
+    monkeypatch.setattr(client, "api", interrupted)
+    with pytest.raises(ValueError, match="connection loss"):
+        client.initialize_template_tags(manifest, state)
+    monkeypatch.setattr(client, "api", original_api)
+    client.initialize_template_tags(manifest, state)
+    client.ownership(manifest)
+    assert writes == [{"tags": f"molecule;run-{manifest['id']}", "digest": "synthetic-config-digest"}]
+    assert values["tags"] == f"molecule;run-{manifest['id']}"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("prepared", ["molecule-acceptance"], indirect=True)
+@pytest.mark.parametrize(
+    ("foreign", "error"),
+    [
+        ("untracked", "saved state"),
+        ("wrong_state_id", "exact saved resource"),
+        ("identity", "ownership differs"),
+        ("tags", "ownership differs"),
+        ("pool", "outside its approved pool"),
+        ("running", "remain stopped"),
+        ("digest", "current config digest"),
+    ],
+)
+def test_pool_template_tag_initialization_never_adopts_or_overwrites_unverified_resources(pending_pool_template, foreign, error):
+    client, manifest, state, values, pool, status, writes = pending_pool_template
+    if foreign == "untracked":
+        state["values"]["root_module"]["resources"].clear()
+    elif foreign == "wrong_state_id":
+        state["values"]["root_module"]["resources"][0]["values"]["id"] = "104"
+    elif foreign == "identity":
+        values["description"] = "unrelated"
+    elif foreign == "tags":
+        values["tags"] = "production"
+    elif foreign == "pool":
+        pool["members"].clear()
+    elif foreign == "running":
+        status["status"] = "running"
+    else:
+        values.pop("digest")
+    with pytest.raises(ValueError, match=error):
+        client.initialize_template_tags(manifest, state)
+    assert writes == [] and values.get("tags") != f"molecule;run-{manifest['id']}"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("prepared", ["molecule-acceptance"], indirect=True)
+def test_template_tag_update_rejects_a_config_race_without_retrying_the_write(pending_pool_template, monkeypatch):
+    client, manifest, state, values, _, _, writes = pending_pool_template
+    original_api = client.api
+
+    def raced(path, data=None, *, method=None):
+        if data is not None:
+            values["digest"] = "changed-by-another-writer"
+            assert data["digest"] != values["digest"]
+            raise ValueError("Synthetic PVE config digest conflict")
+        return original_api(path, data, method=method)
+
+    monkeypatch.setattr(client, "api", raced)
+    with pytest.raises(ValueError, match="digest conflict"):
+        client.initialize_template_tags(manifest, state)
+    assert writes == [] and not values.get("tags")
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("prepared", ["molecule-acceptance"], indirect=True)
+def test_retirement_completes_owned_template_identity_before_power_or_destroy(prepared, pending_pool_template, monkeypatch):
+    directory, manifest = prepared
+    client, _, state, values, _, _, writes = pending_pool_template
+    original_api = client.api
+    destroyed = False
+
+    def api(path, data=None, *, method=None):
+        if destroyed and (path == "cluster/resources?type=vm" or "/storage/" in path):
+            return []
+        return original_api(path, data, method=method)
+
+    def destroy(argv, *args):
+        nonlocal destroyed
+        assert argv[:2] == ["tofu", "destroy"]
+        assert len(writes) == 1 and values["tags"] == f"molecule;run-{manifest['id']}"
+        destroyed = True
+        return 0, 0.1
+
+    monkeypatch.setattr(client, "api", api)
+    monkeypatch.setattr(VM, "Proxmox", lambda _: client)
+    monkeypatch.setattr(VM, "locked", lambda _: nullcontext())
+    monkeypatch.setattr(VM.subprocess, "check_output", lambda *args, **kwargs: json.dumps(state))
+    monkeypatch.setattr(VM, "verify_remote_files", lambda *args, **kwargs: None)
+    monkeypatch.setattr(VM, "command", destroy)
+    VM.retire(directory, manifest, manifest["id"])
+    assert json.loads((directory / "retired.json").read_text())["id"] == manifest["id"] and destroyed
+
+
 @pytest.mark.integration
 @pytest.mark.parametrize("prepared", ["molecule-acceptance"], indirect=True)
 @pytest.mark.parametrize("foreign", ["storage", "production", "controller", "other_run", "outside_pool", "malformed_member"])

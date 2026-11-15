@@ -1332,6 +1332,58 @@ Fedora's one owned snippet was retired in 2.486 s, with failed evidence unchange
 Independent cleanup, effective permissions, capacity and address checks passed;
 only the matching maintenance receipt was released. No retry was dispatched.
 
+After PR #748 merged, Fedora run `3e8cbd21217a43aa86ed1e18b054d9af`
+tested source `bc2f90d1c15bd46a7e9828ddea298fe37d34a816` with Forgejo workflow
+`b32d42672ac37310e7b10613b7db1990fa4902e7`. Its retained provisioning log
+reported VM-create HTTP403 before Molecule started: the live pool migration
+had not been applied and the private allocation still lacked `pool_id`.
+On 16 November 2026, the original checkout retired its one owned bootstrap
+snippet in 2.420 s; independent checks confirmed both VMIDs and owned artifacts
+absent, with failed evidence retained. The managed OpenTofu permission entry
+then created the approved pool, `MoleculePoolAudit` role and three pool ACLs.
+Check mode preserved live state (14.91 s); apply completed in 19.87 s and an
+unchanged rerun reported `changed=0` in 20.67 s. Other roles, ACLs and token
+metadata remained unchanged. The existing native-services atomic-copy task,
+scoped to `allocation.json`, added only `pool_id: molecule-acceptance`; its
+rerun reported `changed=0` in 3.68 s. Private permissions/labels, registration,
+credentials, units and enforcing policy were preserved without service restarts.
+Both tokens' effective VM104 permissions remained empty; the acceptance token
+also received HTTP403 for VM104, VM9300 and template9004. Fresh shared-ZFS,
+RAM, persistent-controller-space and guest-address checks passed, the pool was
+empty with its grants intact, and only the owned maintenance receipt was
+released. No workflow was dispatched. Next, manually run `node_exporter` /
+`fedora44`, then `node_exporter` / `rocky102` without intervening permission
+repair. Two consecutive successful pooled runs and post-retirement permission
+readiness remain unverified; this deployment does not certify Fedora acceptance.
+
+Forgejo run [14](https://forgejo.int.nosugarmaxtaste.com:8443/homelab-ci/homelab-ci/actions/runs/14)
+then used the same GitHub/launcher commits and the configured pool, but failed
+while creating the template: `VM.Config.Options` was checked on `/vms/980000`.
+Installed `qemu-server 9.2.11` validates creation-time tags **before** adding
+the VM to its requested pool. The initial pool allocation check passed; the
+later tag check could not yet inherit the existing pool role. The failed
+run `4049af0c61204114ad29b961f18b804b` was retired through its original checkout;
+its private evidence is retained and managed maintenance remains held pending
+candidate delivery. No additional permissions were granted.
+
+New pooled manifests explicitly defer only the stopped template's tags until
+after creation. The controller requires the exact saved template resource,
+approved pool membership, run-specific name/description, allocated disks and
+stopped template state before its synchronous tag update, with the observed
+configuration digest to reject concurrent changes. Only this initialization
+step accepts empty template tags; foreign nonempty tags are always rejected.
+Ordinary ownership/power/removal checks still require both identity tags.
+The template resource ignores subsequent tag drift in OpenTofu because the
+controller owns and strictly checks those tags. Interrupted initialization
+is retryable during provisioning or scoped retirement, including a connection
+loss after the update committed. Legacy manifests retain their original path.
+No installed launcher/private workflow update is needed: publish the reviewed
+candidate, then select its branch, exact SHA and candidate approval for one
+`node_exporter` / `fedora44` dispatch. Do not alter a retained checkout or merge
+solely to test this correction. Local controller/launcher/scenario regressions
+passed 140 cases in 30.36 s; this is synthetic validation, not live acceptance
+of the deferred-tag correction.
+
 Keep bootstrap administrator/Vault authentication on the operator control path.
 Never copy it into the runner or use the acceptance token, its workflow, or the
 node SSH credential to grant its own ACLs. No root-path grant,
