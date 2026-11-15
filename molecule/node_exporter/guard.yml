@@ -30,6 +30,16 @@
           - molecule_node_exporter_target.ansible_host not in ['localhost', '127.0.0.1', '::1']
         fail_msg: Explicitly opt one disposable SSH VM into the Molecule scenario; local and unmarked targets are refused.
 
+    - name: Molecule | Require an explicit supported platform before guest access
+      ansible.builtin.assert:
+        that:
+          - molecule_vm_platform is defined
+          - molecule_vm_platform is string
+          - molecule_vm_images is defined
+          - molecule_vm_images is mapping
+          - molecule_vm_platform in molecule_vm_images
+        fail_msg: Select a supported OS with vm.py/suite.py --os and pass its generated guest variables.
+
 - name: Validate the selected guest without changing it
   hosts: molecule_node_exporter
   become: true
@@ -44,15 +54,15 @@
       ansible.builtin.assert:
         that:
           - ansible_facts.system == 'Linux'
-          - ansible_facts.distribution == (molecule_vm_images[molecule_vm_platform].distribution if molecule_vm_platform is defined else 'Rocky')
-          - ansible_facts.distribution_major_version == (molecule_vm_images[molecule_vm_platform].version.split('.')[0] if molecule_vm_platform is defined else '10')
+          - ansible_facts.distribution == molecule_vm_images[molecule_vm_platform].distribution
+          - ansible_facts.distribution_major_version == molecule_vm_images[molecule_vm_platform].version.split('.')[0]
           - ansible_facts.architecture == 'x86_64'
-          - ansible_facts.pkg_mgr == (molecule_vm_images[molecule_vm_platform].package_manager if molecule_vm_platform is defined else 'dnf')
+          - ansible_facts.pkg_mgr == molecule_vm_images[molecule_vm_platform].package_manager
           - ansible_facts.service_mgr == 'systemd'
           - ansible_facts.virtualization_role == 'guest'
           - ansible_facts.virtualization_type in ['kvm', 'qemu']
-          - not (molecule_vm_images[molecule_vm_platform].selinux if molecule_vm_platform is defined else true) or ansible_facts.selinux.mode | default('') == 'enforcing'
-        fail_msg: Use the selected supported AMD64 KVM/QEMU platform, with enforcing SELinux on RPM guests. Legacy manual runs require Rocky 10.
+          - not molecule_vm_images[molecule_vm_platform].selinux or ansible_facts.selinux.mode | default('') == 'enforcing'
+        fail_msg: Use the selected supported AMD64 KVM/QEMU platform, with enforcing SELinux on RPM guests.
 
     - name: Molecule | Inspect OSTree deployment
       ansible.builtin.stat:

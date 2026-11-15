@@ -69,7 +69,7 @@ def test_workflow_is_manual_and_passes_fixed_choices_as_arguments():
     assert inputs["suite"]["type"] == inputs["os"]["type"] == "choice"
     assert inputs["source_branch"]["default"] == "main" and inputs["source_sha"]["default"] == ""
     assert inputs["candidate_approved"]["type"] == "boolean" and inputs["candidate_approved"]["default"] is False
-    assert inputs["suite"]["default"] == "rocky_node_exporter" and inputs["os"]["default"] == "rocky102"
+    assert inputs["suite"]["default"] == "node_exporter" and inputs["os"]["default"] == "rocky102"
     assert set(inputs["os"]["options"]) == {"all", *json.loads((ROOT / "molecule/vm/images.json").read_text())}
     assert workflow["concurrency"]["cancel-in-progress"] is False
     job = workflow["jobs"]["acceptance"]
@@ -151,7 +151,7 @@ def test_maintenance_marker_prevents_a_job_before_any_subprocess_or_secret_read(
     drain.touch()
     monkeypatch.setattr(CONTROLLER, "DRAIN", drain)
     with pytest.raises(ValueError, match="draining"):
-        CONTROLLER.run(config(tmp_path), "rocky_node_exporter", "rocky102")
+        CONTROLLER.run(config(tmp_path), "node_exporter", "rocky102")
 
 
 def workflow_allows(condition, context):
@@ -353,11 +353,11 @@ def test_candidate_failure_retains_requested_resolved_and_workflow_identity(tmp_
     monkeypatch.setenv("FORGEJO_LAUNCHER_SHA", "c" * 40)
     if reachable:
         with pytest.raises(subprocess.CalledProcessError) as error:
-            CONTROLLER.run(settings, "rocky_node_exporter", "rocky102", "main", requested, True)
+            CONTROLLER.run(settings, "node_exporter", "rocky102", "main", requested, True)
         assert error.value.returncode == 23 and error.value.cmd[1].endswith("scripts/testing/suite.py")
     else:
         with pytest.raises(ValueError, match="does not belong to the fetched GitHub branch"):
-            CONTROLLER.run(settings, "rocky_node_exporter", "rocky102", "main", requested, True)
+            CONTROLLER.run(settings, "node_exporter", "rocky102", "main", requested, True)
     (job,) = (tmp_path / "jobs").iterdir()
     request = json.loads((job / "request.json").read_text())
     result = json.loads((job / "result.json").read_text())
@@ -384,7 +384,7 @@ def test_workflow_passes_candidate_inputs_as_literal_arguments(tmp_path):
     # Metacharacters remain a single argument for the launcher's strict validation.
     branch = f"reviewed/$(touch {tmp_path}/executed)"
     values = {
-        "suite": "rocky_node_exporter",
+        "suite": "node_exporter",
         "os": "rocky102",
         "source_branch": branch,
         "source_sha": "d" * 40,
@@ -399,7 +399,7 @@ def test_workflow_passes_candidate_inputs_as_literal_arguments(tmp_path):
     assert json.loads(Path(str(binary) + ".json").read_text()) == [
         "run",
         "--suite",
-        "rocky_node_exporter",
+        "node_exporter",
         "--os",
         "rocky102",
         "--source-branch",

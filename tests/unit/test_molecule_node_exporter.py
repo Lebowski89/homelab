@@ -13,7 +13,7 @@ import yaml
 from ansible.utils.vars import merge_hash
 
 ROOT = Path(__file__).resolve().parents[2]
-SCENARIO = ROOT / "molecule/rocky_node_exporter"
+SCENARIO = ROOT / "molecule/node_exporter"
 ANSIBLE = str(Path(sys.executable).with_name("ansible-playbook"))
 
 
@@ -39,7 +39,7 @@ def test_molecule_selects_only_node_exporter_without_provider_or_inventory_disco
 
 @pytest.fixture
 def molecule_run(tmp_path):
-    scenario = tmp_path / "project/molecule/rocky_node_exporter"
+    scenario = tmp_path / "project/molecule/node_exporter"
     shutil.copytree(SCENARIO, scenario)
     shutil.copytree(ROOT / "molecule/shared", scenario.parent / "shared")
     (tmp_path / "project/ansible").symlink_to(ROOT / "ansible", target_is_directory=True)
@@ -117,10 +117,7 @@ class ActionModule(ActionBase):
         if operation == 'setup':
             if not v.get('fixture_inspect', False):
                 return {'failed': True, 'msg': 'REMOTE_BOUNDARY_REACHED'}
-            return {'changed': False, 'ansible_facts': {
-                'system': 'Linux', 'distribution': 'Rocky', 'distribution_major_version': '10',
-                'architecture': 'x86_64', 'pkg_mgr': 'dnf', 'service_mgr': 'systemd',
-                'virtualization_role': 'guest', 'virtualization_type': 'kvm', 'selinux': {'mode': 'enforcing'}}}
+            return {'changed': False, 'ansible_facts': v['fixture_platform_facts']}
         if operation == 'stat':
             path = args['path']
             if path == '/var/lib/homelab-molecule-node-exporter':
@@ -163,13 +160,40 @@ class ActionModule(ActionBase):
         "[inventory]\nenable_plugins=yaml,ini,host_list\n"
     )
 
-    def run(playbook, *, target=None, extra_host=False, inspect=False, marker=None, existing=None, account=None, limit=None, empty=False):
+    def run(
+        playbook,
+        *,
+        target=None,
+        extra_host=False,
+        inspect=False,
+        marker=None,
+        existing=None,
+        account=None,
+        limit=None,
+        empty=False,
+        platform="rocky102",
+        fact_changes=None,
+    ):
+        images = json.loads((ROOT / "molecule/vm/images.json").read_text())
+        image = images.get(platform, images["rocky102"])
         host = {
             "ansible_host": "192.0.2.10",
             "ansible_user": "test-user",
             "ansible_connection": "ssh",
             "molecule_node_exporter_disposable": True,
             "fixture_inspect": inspect,
+            "fixture_platform_facts": {
+                "system": "Linux",
+                "distribution": image["distribution"],
+                "distribution_major_version": image["version"].split(".")[0],
+                "architecture": "x86_64",
+                "pkg_mgr": image["package_manager"],
+                "service_mgr": "systemd",
+                "virtualization_role": "guest",
+                "virtualization_type": "kvm",
+                "selinux": {"mode": "enforcing" if image["selinux"] else "disabled"},
+                **(fact_changes or {}),
+            },
             "molecule_ephemeral_directory": str(tmp_path),
             "molecule_vm_evidence_directory": str(tmp_path),
             "fixture_record": str(record),
@@ -182,6 +206,7 @@ class ActionModule(ActionBase):
             host["fixture_marker"] = marker
         inventory = {
             "all": {
+                "vars": {} if platform is None else {"molecule_vm_platform": platform, "molecule_vm_images": images},
                 "children": {
                     "molecule_node_exporter": {"hosts": {"test-vm": host}},
                     "tags_skynet": {"children": {"molecule_node_exporter": {}}},
@@ -289,12 +314,14 @@ def test_prepare_rejects_existing_installation_before_claiming_it(molecule_run, 
 
 
 @pytest.mark.integration
-def test_owned_marker_is_accepted_without_changing_the_guest(molecule_run):
+@pytest.mark.parametrize("platform", json.loads((ROOT / "molecule/vm/images.json").read_text()))
+def test_owned_marker_is_accepted_on_the_selected_platform_without_changing_the_guest(molecule_run, platform):
     result, operations = molecule_run(
         "ownership_check.yml",
         inspect=True,
+        platform=platform,
         marker={"exists": True, "isreg": True, "uid": 0, "mode": "0600"},
-        target={"fixture_marker_content": base64.b64encode(b"homelab molecule rocky-node-exporter\n").decode()},
+        target={"fixture_marker_content": base64.b64encode(b"homelab molecule node-exporter\n").decode()},
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert {operation["operation"] for operation in operations} == {"setup", "stat", "slurp"}
@@ -317,7 +344,7 @@ def test_owned_cleanup_uses_the_catalogue_and_preserves_existing_data(molecule_r
         inspect=True,
         marker={"exists": True, "isreg": True, "uid": 0, "mode": "0600"},
         target={
-            "fixture_marker_content": base64.b64encode(b"homelab molecule rocky-node-exporter\n").decode(),
+            "fixture_marker_content": base64.b64encode(b"homelab molecule node-exporter\n").decode(),
             "fixture_damage": damage,
         },
         existing=[]
@@ -335,3 +362,27 @@ def test_owned_cleanup_uses_the_catalogue_and_preserves_existing_data(molecule_r
     assert [operation["args"]["service"] for operation in dispatched] == ["node_exporter"]
     retired_claim = [operation for operation in operations if operation["operation"] == "file"]
     assert bool(retired_claim) is (damage is None)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("platform", [None, "unsupported"])
+def test_missing_or_unsupported_platform_is_rejected_before_guest_access(molecule_run, platform):
+    result, operations = molecule_run("guard.yml", platform=platform)
+    assert result.returncode != 0 and "Select a supported OS" in result.stdout, result.stdout + result.stderr
+    assert operations == []
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("platform", "facts"),
+    [
+        ("debian13", {"distribution": "Ubuntu"}),
+        ("ubuntu2604", {"distribution_major_version": "13"}),
+        ("fedora44", {"pkg_mgr": "dnf"}),
+        ("rocky102", {"selinux": {"mode": "disabled"}}),
+    ],
+)
+def test_mismatched_platform_or_disabled_rpm_selinux_is_rejected_before_mutation(molecule_run, platform, facts):
+    result, operations = molecule_run("guard.yml", inspect=True, platform=platform, fact_changes=facts)
+    assert result.returncode != 0 and "Use the selected supported AMD64" in result.stdout, result.stdout + result.stderr
+    assert [operation["operation"] for operation in operations] == ["setup"]

@@ -369,7 +369,7 @@ def prepared(tmp_path):
     path = tmp_path / "allocation.json"
     path.write_text(json.dumps(config))
     args = SimpleNamespace(
-        allocation=path, state_root=tmp_path / "runs", os="rocky102", suite="rocky_node_exporter", order="docker-first", runtime="rootless"
+        allocation=path, state_root=tmp_path / "runs", os="rocky102", suite="node_exporter", order="docker-first", runtime="rootless"
     )
     VM.prepare(args)
     directory = next(args.state_root.iterdir())
@@ -729,9 +729,13 @@ def test_path_selection_is_focused_and_broad_lane_includes_both_runtime_orders(m
     assert not suite.select(["molecule/README.md", "docs/testing.md"])
     assert suite.select(["molecule/protected_network/verify.yml"]) == {"protected_network"}
     assert suite.select(["ansible/roles/service_firewall/files/lifecycle_remote.py"]) == {"application_lifecycle", "protected_network"}
-    assert suite.select(["ansible/roles/native_services/templates/node_exporter.service.j2"]) == {"rocky_node_exporter"}
+    assert suite.select(["ansible/roles/native_services/templates/node_exporter.service.j2"]) == {"node_exporter"}
+    assert suite.select(["molecule/node_exporter/verify.yml"]) == {"node_exporter"}
+    node_cases = suite.plan({"node_exporter"}, list(VM.IMAGES))
+    assert {case["os"] for case in node_cases} == set(VM.IMAGES)
+    assert all(case["suite"] == "node_exporter" for case in node_cases)
     cases = suite.plan(suite.select(broad=True), ["debian13", "rocky102"])
-    assert cases[0]["suite"] == "rocky_node_exporter" and cases[0]["os"] == "rocky102"
+    assert cases[0]["suite"] == "node_exporter" and cases[0]["os"] == "rocky102"
     installs = [case for case in cases if case["suite"] == "runtime_install"]
     assert {(case["os"], case["order"]) for case in installs} == {
         (platform, order) for platform in ["debian13", "rocky102"] for order in ["docker-first", "podman-first"]
@@ -831,7 +835,7 @@ def test_orphan_snippet_recovery_requires_saved_plan_scope_and_verified_bytes(pr
 @pytest.mark.parametrize(
     "platform,builder", [("debian13", False), ("rocky102", False), ("ubuntu2604", False), ("fedora44", False), ("ubuntu2604", True)]
 )
-def test_new_run_carries_selected_capacity_through_manifest_provider_and_guest_inputs(tmp_path, platform, builder):
+def test_new_run_carries_selected_os_and_capacity_through_manifest_provider_and_guest_inputs(tmp_path, platform, builder):
     config = json.loads((ROOT / "molecule/vm/allocation.json.sample").read_text())
     public_key = tmp_path / "test.pub"
     public_key.write_text("ssh-ed25519 AAAATEST fixture-public-key")
@@ -842,7 +846,7 @@ def test_new_run_carries_selected_capacity_through_manifest_provider_and_guest_i
         allocation=allocation,
         state_root=tmp_path / "runs",
         os=platform,
-        suite="rocky_node_exporter",
+        suite="node_exporter",
         order="docker-first",
         runtime="rootless",
         image_builder=builder,
@@ -854,7 +858,15 @@ def test_new_run_carries_selected_capacity_through_manifest_provider_and_guest_i
     assert manifest["run"]["disk_gb"] == selected
     assert manifest["run"]["image"]["disk_gb"] <= selected
     assert json.loads((directory / "tofu/run.auto.tfvars.json").read_text())["run"]["disk_gb"] == selected
-    assert json.loads((directory / "guest-vars.json").read_text())["molecule_vm_disk_gb"] == selected
+    guest = json.loads((directory / "guest-vars.json").read_text())
+    assert guest["molecule_vm_disk_gb"] == selected
+    assert manifest["suite"] == guest["molecule_vm_suite"] == "node_exporter"
+    assert manifest["os"] == guest["molecule_vm_platform"] == platform
+    image = guest["molecule_vm_images"][guest["molecule_vm_platform"]]
+    assert manifest["run"]["image"] == image | {"user": "molecule"}
+    assert guest["docker_selinux_enable"] is image["selinux"]
+    assert guest["podman_docker_iptables_compatibility"] is False
+    assert VM.inventory(manifest, directory)["all"]["children"]["molecule_node_exporter"]["hosts"] == {"subject": {}}
     # A retained run cannot adopt a changed capacity. It remains retireable.
     manifest["run"]["disk_gb"] = selected - 1
     (directory / "manifest.json").write_text(json.dumps(manifest))
@@ -874,7 +886,7 @@ def test_invalid_or_shrinking_disk_selection_fails_before_creating_a_run(prepare
         allocation=allocation,
         state_root=directory.parent.parent / "new-runs",
         os="rocky102",
-        suite="rocky_node_exporter",
+        suite="node_exporter",
         order="docker-first",
         runtime="rootless",
     )

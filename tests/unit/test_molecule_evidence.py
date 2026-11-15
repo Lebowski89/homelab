@@ -22,7 +22,7 @@ spec.loader.exec_module(EVIDENCE)
 
 def evidence_play(root, directory):
     """Select unchanged evidence tasks; no guest commands or fake copy actions."""
-    verify = yaml.safe_load((root / "molecule/rocky_node_exporter/verify.yml").read_text())[1]["tasks"]
+    verify = yaml.safe_load((root / "molecule/node_exporter/verify.yml").read_text())[1]["tasks"]
     diagnostics = yaml.safe_load((root / "molecule/shared/diagnostics.tasks.yml").read_text())
     platform = yaml.safe_load((root / "molecule/shared/diagnostics.yml").read_text())[1]["tasks"]
     tasks = [task for task in verify + diagnostics + platform if "molecule_evidence" in task]

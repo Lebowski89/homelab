@@ -21,7 +21,7 @@ def select(paths=(), broad=False):
         elif path.startswith(("molecule/", ".config/molecule/", "scripts/testing/", ".github/workflows/vm-tests.yml")):
             families.update(vm.SUITES)
         elif path.startswith("ansible/roles/native_services/") or path.endswith("services/node_exporter.yml"):
-            families.add("rocky_node_exporter")
+            families.add("node_exporter")
         elif path.startswith(("ansible/roles/docker/", "ansible/roles/podman/")):
             families.update(vm.SUITES[1:])
         elif path.startswith(
@@ -90,7 +90,7 @@ def main():
     for case in cases:
         if (
             case["os"] == "fedora44"
-            and case["suite"] != "rocky_node_exporter"
+            and case["suite"] != "node_exporter"
             and vm.prepared_fedora(args.state_root) is None
             and subprocess.call(
                 controller + ["prepare-fedora-image", "--allocation", str(args.allocation), "--state-root", str(args.state_root)]

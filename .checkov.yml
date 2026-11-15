@@ -39,7 +39,7 @@ skip-check:
   - "CKV2_ANSIBLE_3:molecule/shared/diagnostics[.]tasks[.]yml$"
   - "CKV2_ANSIBLE_3:molecule/protected_network/worker_counters[.]yml$"
   - "CKV2_ANSIBLE_3:molecule/protected_network/exercise[.]yml$"
-  - "CKV2_ANSIBLE_3:molecule/rocky_node_exporter/cleanup[.]yml$"
+  - "CKV2_ANSIBLE_3:molecule/node_exporter/cleanup[.]yml$"
   - "CKV2_ANSIBLE_3:molecule/application_lifecycle/cleanup[.]yml$"
   # Fatal lifecycle block; always clears transient authentication, retaining failed maintenance.
   - "CKV2_ANSIBLE_3:ansible/roles/native_services/tasks/main[.]yml$"

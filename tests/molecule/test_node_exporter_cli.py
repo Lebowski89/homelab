@@ -11,11 +11,11 @@ import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
-SCENARIO = ROOT / "molecule/rocky_node_exporter"
+SCENARIO = ROOT / "molecule/node_exporter"
 pytestmark = pytest.mark.integration
 
 
-@pytest.mark.parametrize("scenario", ["rocky_node_exporter", "runtime_install", "application_lifecycle", "protected_network"])
+@pytest.mark.parametrize("scenario", ["node_exporter", "runtime_install", "application_lifecycle", "protected_network"])
 @pytest.mark.parametrize("override", [False, True], ids=["empty-default", "unmarked-override"])
 def test_cli_uses_the_intended_inventory_before_rejecting_guest_access(tmp_path, override, scenario):
     inventory = yaml.safe_load((SCENARIO / "inventory/hosts.yml.sample").read_text())
@@ -24,7 +24,7 @@ def test_cli_uses_the_intended_inventory_before_rejecting_guest_access(tmp_path,
     private_inventory = tmp_path / "inventory.yml"
     private_inventory.write_text(yaml.safe_dump(inventory))
     private_vars = tmp_path / "guest-vars.json"
-    if scenario != "rocky_node_exporter":
+    if scenario != "node_exporter":
         inventory = {
             "all": {
                 "children": {
@@ -73,7 +73,7 @@ def test_cli_uses_the_intended_inventory_before_rejecting_guest_access(tmp_path,
     )
     if override:
         env["HOMELAB_MOLECULE_INVENTORY"] = str(private_inventory)
-        if scenario != "rocky_node_exporter":
+        if scenario != "node_exporter":
             env["HOMELAB_MOLECULE_VARS"] = str(private_vars)
     result = subprocess.run(
         [str(Path(sys.executable).with_name("molecule")), "check", "-s", scenario],
