@@ -712,9 +712,111 @@ preserved. The focused `test_molecule_vm.py -m 'not integration'` selection pass
 **1 case** in **0.12 seconds**. Ruff and whitespace checks passed. No full Python
 suite, live matrix or dependency installation was performed for this correction.
 
-The controller evidence correction is now prepared for review; it has **not**
-been published as a reviewed candidate or exercised by another acceptance run. Inspection
-of VM9300's pinned Ansible **2.22.0** confirmed that `atomic_move()` chooses the
+On 2026-11-15, trusted GitHub main was verified at merged PR #744 commit
+`e0e2c1c536b28ac18421cb6ef1a2252ad45b38d7`, including the reviewed recovery,
+nonblocking pin-open and fixture corrections. The current maintenance receipt
+matched its retained proof, both services retained their contexts/hardening,
+and runner ID 1 was authenticated and idle. Fresh checks found an ONLINE shared
+pool with **99,567,251,456 bytes** available against the conservative
+**82,370,469,888-byte** budget, **9,036,247,040 bytes** free node RAM and
+**30,050,349,056 bytes** available on controller XFS. Both reserved VMIDs were
+absent. Only the matching receipt was released through the managed module.
+
+Exactly one retry was dispatched: [Forgejo run 2](https://forgejo.int.nosugarmaxtaste.com:8443/homelab-ci/homelab-ci/actions/runs/2),
+`rocky_node_exporter` / `rocky102`, with the exact GitHub SHA above. It failed
+after **5 seconds** (workflow), **2.247 seconds** (harness), creating the stopped
+template: the Proxmox create API returned HTTP 403. No VM was created and
+Molecule/production-role execution never started. At that failure the acceptance token had
+**no effective privileges** on `/vms/980000` or `/vms/980001`; the three declared
+VMID ACLs were absent (`MoleculeVM` on both paths and `MoleculeClone` on 980000).
+The earlier retirement's API log shows VM deletion with `purge=1`. Inspection of
+the installed `/usr/share/perl5/PVE/API2/Qemu.pm` also confirms that VM deletion
+calls `PVE::AccessControl::remove_vm_access($vmid)` independently of the purge
+option. Disabling purge alone cannot preserve these grants. The existing managed
+permission entry point must reconcile the exact declared VMID ACLs before an
+allocation is reused; the missing ACLs were not checked before this dispatch.
+No grants were changed and no further case was triggered.
+
+Failed run `b448fd8b0f6b42aa9d1a714730712e43` uploaded only its owned bootstrap
+snippet. The installed `homelab-molecule retire` entry point used its original
+clean `e0e2c1c5` checkout, verified state/file identity, and retired it in
+**2.29 seconds** (**2.458 seconds** including service launch). Independent node
+queries confirmed both VMIDs and all run-owned artifacts absent from `local`
+and `local-zfs`; provider state is empty. Failed result, logs, plan, state backup
+and source checkout remain retained. Controller9300, template9004, cached
+images, credentials, registration and policy were preserved. SELinux remains
+enforcing, runner ID 1 was idle, and fresh managed maintenance was held pending
+the permission lifecycle correction. **The platform was not yet accepted at that
+checkpoint.** No full matrix or Python suite was repeated.
+Run 2 evidence is beneath
+`~/.config/homelab/molecule-controller/rocky-retry-1794691919240098107/`;
+controller job evidence is `jobs/c3d4922fcbac4583b9a6297757db5154/`, and the
+retained run is `runs/b448fd8b0f6b42aa9d1a714730712e43/`. The controller-side
+maintenance proof is `retry-b448fd8b-maintenance.json` beneath the existing
+`/var/cache/forgejo-runner/hostpins/34344a3fc71047f1aa344e43c855745e/` boundary.
+
+The next approved operation reconciled only the canonical Molecule declarations
+through `opentofu_molecule_permissions`. Check mode reported `changed=0`; apply
+reported one changed task restoring the three missing ACLs; the unchanged rerun
+reported `changed=0` in **13.95 seconds**. Full comparisons preserved all prior
+roles/ACLs, token metadata and private credential hashes. Effective acceptance
+privileges matched `MoleculeVM` on 980000/980001 plus `VM.Clone` on 980000;
+the acceptance token still received HTTP 403 for VM104. Both tokens retain
+`privsep=1`. The transient controller-bootstrap API token has expired: its API
+access returns HTTP 401, while the operator's permission calculation confirms
+no VM104 rights. It was neither renewed nor replaced; the acceptance token is
+unexpired and does not use that bootstrap credential.
+
+Fresh maintenance ownership and capacity checks preceded exactly one further
+dispatch: [Forgejo run 3](https://forgejo.int.nosugarmaxtaste.com:8443/homelab-ci/homelab-ci/actions/runs/3),
+`rocky_node_exporter` / `rocky102`, again fetching trusted GitHub main
+`e0e2c1c536b28ac18421cb6ef1a2252ad45b38d7`. Provisioning and strict SSH readiness
+passed in **108.08 seconds**. The first production-role deployment completed
+(`subject: ok=66 changed=12 failed=0`), but the scenario failed while retaining
+`evidence/node-exporter-invocation` on the controller. Ansible attempted to change
+the file's SELinux user from `user_u` to `system_u` with type `user_home_t`;
+the confined process received `Permission denied`. Delegated diagnostic copies
+hit the same failure. This is not a passing acceptance result: Molecule exited
+**2** after **64.4 seconds**, the harness exited **1** after **177.387 seconds**,
+and the workflow failed after **180 seconds**. Source hashes before/after match
+and the retained checkout remains clean. No policy expansion, context bypass,
+hardening relaxation or second retry was performed.
+
+Owned run `1fbd62071d9d4b5ca9f06231f1164831` was explicitly retired through its
+original trusted checkout in **4.75 seconds** (**4.933 seconds** with service
+launch). Independent checks confirmed VM980000/980001 and all run-owned artifacts
+absent, empty provider state, and preserved controller9300, template9004 and image
+cache. Failed results, logs, plan, state backup and private evidence files remain.
+The invocation and diagnostic contents were written before the label failure;
+their files remain UID 993, mode `0600`, labeled `user_u:object_r:user_home_t:s0`.
+Their presence does not change the recorded diagnostic failure into success.
+
+Readiness was measured **before** repair: both VMID permission sets were empty
+again after deletion. The same authorised managed reconciliation restored only
+the same three ACLs (check `changed=0`, apply one changed task, unchanged rerun
+`changed=0` in **14.41 seconds**). Final effective-permission checks passed and
+VM104 remained HTTP 403. Thus the allocation is free and permission-ready after
+operator repair, but is **not automatically reusable** after retirement. Fresh
+maintenance was held for the separate evidence-copy defect. At that checkpoint
+the platform remained unaccepted pending the reviewed correction and a separately
+authorised passing case; no full matrix was run.
+
+Run 3 evidence is under
+`~/.config/homelab/molecule-controller/rocky-retry-1794693454313950888/`, including
+`readiness-before-reconcile.json`, `readiness-after-reconcile.json`, diagnosis,
+retirement and final-controller proofs. Managed permission evidence is under
+`managed-reconcile-1794692969367099495/` and
+`managed-reconcile-1794724804117849311/` beneath that private controller directory.
+Controller job evidence is `jobs/2712f5d10a7b4915951ae8ac0dbebb15/`; the retained
+run is `runs/1fbd62071d9d4b5ca9f06231f1164831/`. That operation's ownership proof was
+`retry-1fbd6207-maintenance.json` beneath the existing root-owned hostpin recovery
+boundary. The earlier allocation-reuse regression passed **1 case**, **31.66 seconds**,
+with synthetic credentials/HTTPS and the real managed role; Ruff check/format
+and whitespace checks passed. No full Python suite was repeated.
+
+The controller evidence correction was prepared for review and subsequently
+merged in PR #745; run 6 below exercised it through the real harness. Inspection of
+VM9300's pinned Ansible **2.22.0** confirmed that `atomic_move()` chooses the
 policy-default SELinux context for a new destination, requesting `system_u`
 instead of retaining the confined writer's valid `user_u` identity. The six
 delegated evidence writes in `rocky_node_exporter/verify.yml`,
@@ -759,8 +861,8 @@ rollback, retirement and independent absence evidence is in
 `~/.config/homelab/molecule-controller/hostpin-operation-1794683676492936205/`.
 Its controller-side counterpart is
 `/var/cache/forgejo-runner/hostpins/34344a3fc71047f1aa344e43c855745e/`, including
-the historical `waiting-for-main-final.json` ownership proof. The currently held
-receipt is recorded by `retry-1fbd6207-maintenance.json` in that same directory. On-controller
+the historical `waiting-for-main-final.json` ownership proof. Run 3's receipt was
+recorded by `retry-1fbd6207-maintenance.json` in that same directory. On-controller
 job/source evidence is `jobs/6a3078f4eb89449a8f82907af90214a8/` and all failed
 provisioning/readiness/state evidence remains in `runs/88ce902dca0e47f8ac191805f7673ee7/`.
 
@@ -1046,6 +1148,65 @@ delegate must trust the Proxmox certificate chain: the new path verifies TLS.
 Both tokens must already exist with privilege separation enabled. No token is
 created, replaced or modified, and unrelated roles/ACLs are retained.
 
+### Allocation reuse: preserve the permission boundary
+
+VM deletion on the installed Proxmox version removes VM-specific ACLs regardless
+of `purge`. Free VMIDs and empty provider state therefore do **not** establish
+allocation readiness. Check effective permissions after retirement, before
+repairing them, so a successful cleanup cannot conceal this lifecycle dependency.
+
+The minimal correction uses the existing authorised **operator-side** control
+path, not new privileges or a new permissions service:
+
+1. Confirm the previous owned run is retired, its exact artifacts are absent,
+   and VM980000/980001 are free. Preserve failed results, state backups and logs.
+2. From the trusted operator environment, run the existing check command above,
+   then reconcile with the existing entry point:
+
+   ```text
+   skynet limit pve1 raw --tags opentofu_molecule_permissions \
+     -e '{"opentofu_pve_molecule_permissions_enabled": true}'
+   ```
+
+3. Verify effective `MoleculeVM` privileges on both reserved VMIDs and `VM.Clone`
+   on 980000, unchanged role/ACL boundaries and token metadata, privilege
+   separation, VM104 denial, and an unchanged rerun reporting `changed=0`.
+4. Only then verify main or the explicitly approved exact candidate identity,
+   capacity, maintenance ownership and
+   the single manual Forgejo dispatch. After confirmed retirement, measure
+   readiness again and repeat the managed reconciliation from the operator
+   environment. Never repair permissions or release maintenance to bypass an
+   active/retained resource owner or a failed acceptance check.
+
+This sequence reuses `pve_user.yml` and the canonical `pve1.yml` declarations.
+The regression `test_allocation_reuse_restores_deleted_vm_acls_without_changing_the_permission_boundary`
+models deletion of the reserved-VM ACLs, verifies check mode performs no repair,
+then exercises exact restoration and an idempotent rerun through the real role
+and pinned modules against synthetic HTTPS. No production permission code,
+credential, role or ACL path changes are needed. An operator invocation is still
+required; the private Forgejo workflow does not perform this reconciliation.
+Do not call the resulting platform fully automated.
+
+| Option | Persistence and automation | Permission boundary / approval |
+| --- | --- | --- |
+| Existing operator reconciliation (recommended) | Recreates the exact declared ACLs before reuse and after verified retirement; currently operator-controlled | Keeps `/vms/980000`, `/vms/980001`, existing node/storage/network paths and privilege-separated tokens. Existing approved scope only. |
+| Dedicated persistent pool (proposal only) | A pool ACL can remain when its guest members are deleted; both template and subject would need explicit pool placement | Would grant access to every member of that pool instead of enforcing the two VMIDs as the API boundary. VM creation and membership permissions must be reviewed against the installed API. Requires a separately approved pool/path boundary and source changes; none are applied. |
+
+[Proxmox's permission model](https://github.com/proxmox/pve-docs/blob/master/pveum.adoc#pools)
+documents that pool permissions are inherited by their members. Harness VMID,
+identity and resource guards would still be necessary with a pool; they are not
+an API restriction to the two reserved IDs. The current role deliberately rejects
+pool ACL paths. Do not relax that validation, create a pool, or assign pool
+permissions under the existing VMID-only approval.
+
+Keep bootstrap administrator/Vault authentication on the operator control path.
+Never copy it into the runner or use the acceptance token, its workflow, or the
+node SSH credential to grant its own ACLs. No root-path grant,
+`Permissions.Modify`, general OpenTofu role or Administrator assignment is
+proposed for the acceptance token. Automatic dispatch-plus-reconciliation from
+an external trusted controller remains a separate integration, not implemented
+by the manual workflow or this documented operator sequence.
+
 Repository validation for these changes used the existing environment; no local
 tooling was installed or upgraded:
 
@@ -1171,10 +1332,10 @@ its first production-role deployment. It then failed on controller evidence
 copies attempting a forbidden SELinux user change. That run was also retired,
 and independent absence checks passed. Deletion removed the ACLs again; an
 authorised operator reconciliation restored them and verified VM104 denial.
-The allocation is free and permission-ready, but maintenance is held pending
-the evidence-copy correction and reviewed candidate launcher rollout. Reuse still requires the external
-managed permission step described above. The platform is not acceptance-certified
-or fully automated; actual reboot persistence remains unverified.
+The evidence correction and paired launcher/workflow update subsequently passed
+run 6 below. The manual Rocky acceptance path is operational; allocation reuse
+still requires the external managed permission step described above. This is not
+fully automated, and controller reboot persistence remains unverified.
 
 Open the private Forgejo repository's **Actions → Live VM acceptance → Run
 workflow**, using CI branch `main`. Defaults select one Rocky Node Exporter case.
@@ -1183,7 +1344,7 @@ use the broad choice only after its capacity and server timeout are verified.
 There is one runner slot and one controller lock; requests never cancel active
 work. The GitHub controlled live workflow remains disabled.
 
-The prepared pre-merge path keeps `source_branch: main`, empty `source_sha` and
+The installed manual candidate path keeps `source_branch: main`, empty `source_sha` and
 `candidate_approved: false` as the normal defaults. To test a reviewed candidate,
 select its branch **in `Lebowski89/homelab`**, supply its full lowercase
 40-character commit SHA, and explicitly approve executing that exact source with
@@ -1201,12 +1362,12 @@ was inspected on 2026-11-15. Its exact failure was `Controller is draining for
 maintenance; retry after the operator completes it`, then exit 1, **before any
 GitHub fetch or VM preparation**. Its Forgejo workflow SHA was
 `ae137edab31abbfd51ea6515de8b7b15e0edf755`; it tested no GitHub source SHA.
-Read-only checks confirmed the current receipt hash
+At that snapshot, read-only checks confirmed receipt hash
 `c8c6c681de485e7d5607511e03a99692b6b1f3e64c7cf925c54802dc3c84c10d`,
 SELinux enforcing, all three earlier manifests retired, and both disposable
 VMIDs/disks absent. These checks are state evidence, not fresh capacity approval.
 
-Scoped rollout plan (prepared, **not applied**):
+Scoped launcher/workflow rollout procedure (completed for run 6):
 
 1. Review/publish the candidate on GitHub, record its branch/full SHA and required
    PR-check results. This correction was prepared from main
@@ -1257,11 +1418,82 @@ report. Workflow restrictions were exercised by the focused tests. Gitleaks
 8.24.3 found zero findings in the changed-code snapshot; this was not a historical
 commit-range scan. Reused the unchanged evidence writer's completed 31 focused
 checks and bounded confined-controller check above. No full suite/matrix or
-GitHub PR CI was run for this prepared candidate.
+GitHub PR CI was run during that local preparation. Subsequently, PR #745
+[CI run 43711602425](https://github.com/Lebowski89/homelab/actions/runs/43711602425)
+passed quality, all four pytest groups and the final lint gate; Secret Scan and
+the Checkov workflow also completed successfully. That workflow status alone
+is not a claim that every scanner finding or review thread is resolved.
 
-No launcher or private workflow update has been applied, maintenance remains held,
-and no new acceptance has run. Merge recommendation remains pending required
-repository CI **and** complete targeted candidate acceptance/cleanup.
+On 2026-11-15, the approved continuation installed the merged launcher's exact
+bytes on VM9300 using the unchanged native-services launcher copy task with
+ownership/drain guards and a complete rollback checkpoint. Check/apply passed;
+the unchanged rerun reported `changed=0`. Only that launcher file changed. Both
+units kept their existing PIDs, contexts and hardening; policy, registration,
+private credential hashes and prior failed evidence remained unchanged. The
+private workflow was then updated with its owned blob guard to commit
+`03f98ed0c4ebf6605efbb7ba8f08e679860cc7e5`. Runner ID 1 was reused, without a
+new registration. Normal verified HTTPS and repository scope checks passed.
+Run 5's actual saved step log, like run 4's, reports the maintenance guard before
+any source fetch; neither run tested a GitHub commit.
+
+Exactly one new case was dispatched:
+[Forgejo run 6](https://forgejo.int.nosugarmaxtaste.com:8443/homelab-ci/homelab-ci/actions/runs/6),
+`rocky_node_exporter` / `rocky102`, **passed**. Its explicitly requested and resolved
+GitHub source was `6604888ca91a23f48441f276f444d15a5db2df69` (merged PR #745),
+distinct from the Forgejo workflow commit above. The detached checkout stayed
+clean and executable-input fingerprints matched before/after testing. This was
+an exact-SHA run after merge; it does not establish a live pre-merge branch run.
+The same branch/ancestry selector is covered by the focused temporary-Git tests.
+
+| Actual run 6 phase | Elapsed/result |
+| --- | --- |
+| Provisioning and strictly verified guest SSH | 110.84 s |
+| Molecule scenario | 96.97 s, exit 0; diagnostics collected |
+| Owned VM/artifact retirement | 4.82 s; provider state empty |
+| Complete launcher / Forgejo job | 220.755 s / 221 s |
+
+The real catalogue/role paths passed check mode, fresh-host validation,
+installation, loopback metrics, zero-change idempotence with the same service
+invocation, and ownership-gated removal retaining the binary/collector data.
+Guest evidence records Rocky 10.2, kernel
+`6.12.0-211.16.1.el10_2.0.1.x86_64`, Node Exporter 1.10.1 and enforcing SELinux.
+All five controller evidence files are UID/GID 993, mode `0600`, context
+`user_u:object_r:user_home_t:s0`; first-observation retention and later writes
+completed without a policy expansion or relevant new AVC. No full matrix,
+controller reboot or repeated full Python suite was performed.
+
+Independent Proxmox queries confirmed VM980000/980001 and all run-owned artifacts
+absent from `local` and `local-zfs`; controller9300, template9004 and the image
+cache were preserved. **Before repair**, both allocation permission sets were
+empty after retirement. The external managed role restored only the three
+already-declared VMID ACLs (check `changed=0`, apply one changed task, unchanged
+rerun `changed=0` in 14.41 s). Full role/ACL/token comparisons preserved unrelated
+permissions, token secrets and privilege separation; acceptance VM104 access
+remained HTTP 403. The expired bootstrap token was not renewed or replaced.
+Post-repair independent permissions, resource absence and fresh shared-pool/RAM/
+controller capacity passed, and only the matching post-run maintenance owner was
+released through the managed module. The allocation is currently ready for
+another authorised run, **after external operator reconciliation**.
+
+The manual Forgejo Rocky acceptance path is operational; it is not fully
+automated. Repeat the external readiness/reconciliation sequence before reuse
+and after retirement. Schedules and automatic triggers remain disabled.
+Controller reboot persistence, the other OS/suite combinations and protected
+rootless Podman callers are not certified by this single case.
+
+Run 6 controller evidence remains in
+`/var/lib/forgejo-runner/runs/07772ccd2bfd496e9f490873257285b2/` and
+`jobs/0eb4c7495aba47a6bd25899c004e4d48/`, including the original clean checkout
+mapping and retired provider state/backup. Operator proofs, before/after
+permission readiness, exact workflow/source records and scoped launcher rollback
+are retained under
+`~/.config/homelab/molecule-controller/rocky-retry-1794745597307097646/`.
+The controller's launcher checkpoint is
+`/var/cache/forgejo-runner/launcher/rocky-retry-1794745597307097646/`.
+The permission-reuse regression was rerun with synthetic HTTPS and the real
+managed role: **1 passed, 16 deselected**, 31.42 s (31.62 s command elapsed).
+The initial sandbox invocation could not bind localhost; the unchanged command
+passed outside that restriction. Ruff check/format and whitespace checks passed.
 
 Job logs distinguish the Forgejo workflow commit from the requested/resolved
 GitHub source SHA and private evidence location. On the controller,

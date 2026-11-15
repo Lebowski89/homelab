@@ -257,6 +257,32 @@ def test_existing_role_and_partial_grant_are_reconciled_without_replacing_other_
     }
 
 
+def test_allocation_reuse_restores_deleted_vm_acls_without_changing_the_permission_boundary(permission_api):
+    state, _, run = permission_api
+    result = run()
+    assert result.returncode == 0, result.stdout + result.stderr
+    approved = copy.deepcopy(state)
+    removed = [ace for ace in state["acls"] if ace["path"] in ["/vms/980000", "/vms/980001"]]
+    # The installed Proxmox VM-delete path removes ACLs even without purge.
+    state["acls"] = [ace for ace in state["acls"] if ace not in removed]
+    state["mutations"].clear()
+    result = run(check=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert not state["mutations"] and all(ace not in state["acls"] for ace in removed)
+    result = run()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert sorted(state["acls"], key=str) == sorted(approved["acls"], key=str)
+    assert state["roles"] == approved["roles"] and state["tokens"] == approved["tokens"]
+    assert state["token_secrets"] == approved["token_secrets"]
+    assert {(data["tokens"], data["path"], data["roles"]) for _, path, data in state["mutations"] if path == "/access/acl"} == {
+        (ace["ugid"], ace["path"], ace["roleid"]) for ace in removed
+    }
+    writes = copy.deepcopy(state["mutations"])
+    result = run()
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert re.search(r"changed=0\b", result.stdout) and state["mutations"] == writes
+
+
 def test_check_mode_does_not_mutate_permissions_or_tokens(permission_api):
     state, before, run = permission_api
     result = run(check=True)
