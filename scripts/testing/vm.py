@@ -178,17 +178,26 @@ class Proxmox:
     def config_for(self, vm_id):
         return self.api(f"nodes/{self.config['node']}/qemu/{vm_id}/config")
 
-    def ownership(self, manifest):
+    def ownership(self, manifest, *, initializing_template=False):
         self.pool_ownership(manifest)
         present = {int(item["vmid"]) for item in self.api("cluster/resources?type=vm")}
+        configs = {}
         for role, vm_id in identities(manifest).items():
             if vm_id not in present:
                 continue
             value = self.config_for(vm_id)
+            tags_match = set(value.get("tags", "").split(";")) == {"molecule", f"run-{manifest['id']}"}
+            pending_template = (
+                initializing_template
+                and role == "template"
+                and manifest["run"].get("template_tags_after_pool") is True
+                and manifest["run"].get("pool_id") == "molecule-acceptance"
+                and not value.get("tags")
+            )
             require(
                 value.get("name") == f"molecule-{manifest['id']}-{role}"
                 and value.get("description") == f"homelab-molecule:{manifest['id']}:{role}"
-                and set(value.get("tags", "").split(";")) == {"molecule", f"run-{manifest['id']}"},
+                and (tags_match or pending_template),
                 f"VMID {vm_id} ownership differs; refusing operation",
             )
             if role == "template":
@@ -207,6 +216,43 @@ class Proxmox:
                         ),
                         f"VMID {vm_id} has a disk outside its allocation",
                     )
+            configs[role] = value
+        return configs
+
+    def initialize_template_tags(self, manifest, state):
+        """Complete only a saved, stopped pool template's interrupted identity setup."""
+        if manifest["run"].get("template_tags_after_pool") is not True:
+            return
+        roles = check_state(state, manifest)
+        present = {int(item["vmid"]) for item in self.api("cluster/resources?type=vm")}.intersection(identities(manifest).values())
+        require(present <= {identities(manifest)[role] for role in roles}, "VM identity initialization requires this run's saved state")
+        if "template" not in roles:
+            return
+        records = [
+            resource
+            for resource in state.get("values", {}).get("root_module", {}).get("resources", [])
+            if resource.get("address") == "proxmox_virtual_environment_vm.template"
+            and resource.get("type") == "proxmox_virtual_environment_vm"
+        ]
+        require(
+            len(records) == 1
+            and records[0]["values"].get("id") == str(manifest["run"]["template_id"])
+            and records[0]["values"].get("template") is True,
+            "Template identity initialization requires its exact saved resource",
+        )
+        configs = self.ownership(manifest, initializing_template=True)
+        template = configs.get("template")
+        if template is None or template.get("tags"):
+            return  # Already completed, including interruption after the API write.
+        require(
+            isinstance(template.get("digest"), str) and template["digest"], "Template identity update requires its current config digest"
+        )
+        self.api(
+            f"nodes/{manifest['run']['node']}/qemu/{manifest['run']['template_id']}/config",
+            {"tags": f"molecule;run-{manifest['id']}", "digest": template["digest"]},
+            method="PUT",  # Synchronous config update; POST can return an unfinished worker's UPID.
+        )
+        self.ownership(manifest)
 
     def pool_ownership(self, manifest):
         """A persistent permission boundary must never contain unrelated guests or storage."""
@@ -294,6 +340,7 @@ def prepare(args):
         "template_id": config["vm_ids"][0],
         "image_file_id": None if prepared_image else config.get("image_file_ids", {}).get(args.os),
         "pool_id": config.get("pool_id"),
+        "template_tags_after_pool": config.get("pool_id") is not None,
         "image": image | {"user": "molecule"},
         "disk_gb": disk_gb,
         "public_key": Path(config["public_key_path"]).expanduser().read_text().strip(),
@@ -612,6 +659,11 @@ def load_run(directory, retirement=False):
         and manifest["run"].get("pool_id") in (None, "molecule-acceptance"),
         "Run pool differs from the approved allocation",
     )
+    require(
+        type(manifest["run"].get("template_tags_after_pool", False)) is bool
+        and (not manifest["run"].get("template_tags_after_pool") or manifest["run"].get("pool_id") == "molecule-acceptance"),
+        "Deferred template identity requires the approved pool",
+    )
     return manifest
 
 
@@ -783,6 +835,7 @@ def provision(directory, manifest):
                 occupied <= {identities(manifest)[role] for role in known_roles},
                 "Allocated VMID exists outside this run's state; never adopt or overwrite it",
             )
+            api.initialize_template_tags(manifest, state)
             api.ownership(manifest)
         if manifest["run"].get("image_file_id"):
             image = manifest["run"]["image"]
@@ -797,9 +850,10 @@ def provision(directory, manifest):
         check_plan(plan, manifest)
         code, _ = command(["tofu", "apply", "-input=false", str(plan_file)], directory / "tofu", directory / "provision.log", env)
         require(code == 0, "Provisioning failed; retain run state and inspect private provision.log")
-        api.ownership(manifest)
         state = json.loads(subprocess.check_output(["tofu", "show", "-json"], cwd=directory / "tofu", env=env, timeout=60))
         check_state(state, manifest)
+        api.initialize_template_tags(manifest, state)
+        api.ownership(manifest)
         verify_files(state, manifest)
         keys = []
         for guest in manifest["run"]["guests"].values():
@@ -1031,10 +1085,21 @@ def retire(directory, manifest, confirmation):
     api = Proxmox(manifest["allocation"])
     with locked(manifest["allocation"]):
         # Refresh and compare every VM, never a prefix query or wildcard delete.
+        state = None
+        if manifest["run"].get("template_tags_after_pool") is True:
+            state = json.loads(
+                subprocess.check_output(
+                    ["tofu", "show", "-json"], cwd=directory / "tofu", env=provisioning_environment(manifest), timeout=60
+                )
+            )
+            api.initialize_template_tags(manifest, state)
         api.ownership(manifest)
-        state = json.loads(
-            subprocess.check_output(["tofu", "show", "-json"], cwd=directory / "tofu", env=provisioning_environment(manifest), timeout=60)
-        )
+        if state is None:
+            state = json.loads(
+                subprocess.check_output(
+                    ["tofu", "show", "-json"], cwd=directory / "tofu", env=provisioning_environment(manifest), timeout=60
+                )
+            )
         roles = check_state(state, manifest)
         verify_files(state, manifest)
         stop_retiring_guests(api, manifest, roles)
