@@ -765,9 +765,12 @@ def pending_pool_template(prepared):
             return status
         if path == f"nodes/{run['node']}/qemu/{run['template_id']}/config":
             if data is not None:
-                assert method == "POST" and data["digest"] == values["digest"]
+                assert method in {"PUT", "POST"} and data["digest"] == values["digest"]
                 writes.append(dict(data))
+                if method == "POST":
+                    return "UPID:synthetic:qmconfig"  # Worker has not committed yet.
                 values["tags"] = data["tags"]
+                return None
             return dict(values)
         pytest.fail("Unexpected API access")
 
@@ -779,8 +782,16 @@ def pending_pool_template(prepared):
 @pytest.mark.parametrize("prepared", ["molecule-acceptance"], indirect=True)
 def test_pool_template_tag_initialization_is_guarded_and_retryable_after_an_uncertain_write(pending_pool_template, monkeypatch):
     client, manifest, state, values, _, _, writes = pending_pool_template
+    # POST can return successfully while strict ownership still sees no tags.
+    task = client.api(
+        f"nodes/{manifest['run']['node']}/qemu/{manifest['run']['template_id']}/config",
+        {"tags": f"molecule;run-{manifest['id']}", "digest": values["digest"]},
+        method="POST",
+    )
+    assert task == "UPID:synthetic:qmconfig" and not values.get("tags")
     with pytest.raises(ValueError, match="ownership differs"):
         client.ownership(manifest)  # Ordinary operations still reject missing tags.
+    writes.clear()
     original_api = client.api
 
     def interrupted(path, data=None, *, method=None):

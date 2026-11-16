@@ -1369,20 +1369,30 @@ candidate delivery. No additional permissions were granted.
 New pooled manifests explicitly defer only the stopped template's tags until
 after creation. The controller requires the exact saved template resource,
 approved pool membership, run-specific name/description, allocated disks and
-stopped template state before its synchronous tag update, with the observed
-configuration digest to reject concurrent changes. Only this initialization
-step accepts empty template tags; foreign nonempty tags are always rejected.
+stopped template state before its synchronous
+`PUT /nodes/{node}/qemu/{vmid}/config` tag update, with the observed configuration
+digest to reject concurrent changes. The official
+[qemu-server 9.2.11 implementation](https://github.com/proxmox/qemu-server/blob/c5399752ae859ac55148d8568e25c86e68c431ca/src/PVE/API2/Qemu.pm#L2454-L2625)
+completes PUT under the configuration lock; POST starts a worker and can return
+its task ID before tags are committed. Immediate strict ownership verification
+therefore follows PUT. Only this initialization step accepts empty template
+tags; foreign nonempty tags are always rejected.
 Ordinary ownership/power/removal checks still require both identity tags.
 The template resource ignores subsequent tag drift in OpenTofu because the
 controller owns and strictly checks those tags. Interrupted initialization
 is retryable during provisioning or scoped retirement, including a connection
 loss after the update committed. Legacy manifests retain their original path.
 No installed launcher/private workflow update is needed: publish the reviewed
-candidate, then select its branch, exact SHA and candidate approval for one
-`node_exporter` / `fedora44` dispatch. Do not alter a retained checkout or merge
-solely to test this correction. Local controller/launcher/scenario regressions
-passed 140 cases in 30.36 s; this is synthetic validation, not live acceptance
-of the deferred-tag correction.
+candidate, then select its branch, exact SHA and candidate approval for two
+consecutive targeted `node_exporter` runs (`fedora44`, then `rocky102`). Verify
+each result and retirement independently, with persistent grants intact and
+no ACL repair between runs, before claiming pooled workflow reuse. Do not
+alter a retained checkout or merge solely to test this correction.
+The initial candidate's controller/launcher/scenario regressions passed 140
+cases in 30.36 s before the fixture modeled asynchronous POST. With the PUT
+correction, controller/launcher regressions passed 113 cases in 3.14 s,
+including the corrected race/retry and retirement checks. These are local
+synthetic results; the two consecutive live runs remain required.
 
 Keep bootstrap administrator/Vault authentication on the operator control path.
 Never copy it into the runner or use the acceptance token, its workflow, or the

@@ -250,7 +250,7 @@ class Proxmox:
         self.api(
             f"nodes/{manifest['run']['node']}/qemu/{manifest['run']['template_id']}/config",
             {"tags": f"molecule;run-{manifest['id']}", "digest": template["digest"]},
-            method="POST",  # PVE's synchronous update; do not race an async task.
+            method="PUT",  # Synchronous config update; POST can return an unfinished worker's UPID.
         )
         self.ownership(manifest)
 
