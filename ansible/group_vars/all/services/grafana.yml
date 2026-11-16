@@ -13,7 +13,7 @@ grafana:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: "docker.io/grafana/grafana:13.3.0-ubuntu@sha256:c89c524ca215ce8909f3a481d830058f52fd94a6c94c94b6db92fe42e2bac7a4"
+  image: "docker.io/grafana/grafana:13.3.1-ubuntu@sha256:7c1ab0a497b14998fd2268d3b380034081551cc5b85452fb931ed4e5a6479d66"
   user: "0:0"
   ################################
   # ENVIRONMENT/SECRETS
