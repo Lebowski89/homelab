@@ -13,7 +13,7 @@ qui:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/autobrr/qui:v1.35.0
+  image: ghcr.io/autobrr/qui:v1.36.0
   hostname: qui.internal
 
   ################################

@@ -11,7 +11,7 @@ thelounge:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: lscr.io/linuxserver/thelounge:v4.5.2-ls235@sha256:59630756b16a9bc0dd7ebad7cf97748a73e2ef97612226afd81532743a54835a
+  image: lscr.io/linuxserver/thelounge:v4.5.2-ls236@sha256:998505e9aeb5cf33d13235515d9318911463b4b8ac64a8ea702cc1f9ae9b5ed7
   user: "0:0"
   ################################
   # ENVIRONMENT/SECRETS
