@@ -123,7 +123,7 @@
             loop_var: molecule_vm_worker_counter
 
         - name: VM tests | Preserve real worker counter evidence
-          ansible.builtin.copy:
+          molecule_evidence:
             dest: '{{ molecule_vm_evidence_directory }}/worker-counters.json'
             content: '{{ {"before": molecule_vm_worker_before.counters, "after": molecule_vm_worker_after.counters} | to_json }}'
             mode: '0600'

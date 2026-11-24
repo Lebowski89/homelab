@@ -224,7 +224,7 @@
         validate_checksum: true
 
     - name: VM images | Preserve value-free image preparation evidence
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/prepared-image.json'
         content: >-
           {{ {'checksum': molecule_vm_image_stat.stat.checksum, 'packages': molecule_vm_image_packages.stdout_lines,

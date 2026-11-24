@@ -170,7 +170,7 @@
       failed_when: molecule_vm_listener_recheck.rc != 0 or 'molecule-network' not in molecule_vm_listener_recheck.stdout
 
     - name: VM tests | Preserve actual generated rules, counters and namespace observations
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/network-{{ molecule_vm_network_phase | default("initial") }}.json'
         content: >-
           {{ {'before': molecule_vm_before_rules.results | map(attribute='stdout') | list,

@@ -157,7 +157,7 @@
           - molecule_vm_keeper_rebooted.stdout.split()[-1] == 'true'
 
     - name: VM tests | Retain the observer's expected post-reboot process for scoped removal
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/keeper-expected'
         content: '{{ molecule_vm_keeper_rebooted.stdout.split()[:2] | join(" ") }}'
         mode: '0600'
@@ -165,7 +165,7 @@
       become: false
 
     - name: VM tests | Advance only the expected writer identity after intentional recreation
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/application-expected.json'
         content: >-
           {{ (lookup('ansible.builtin.file', molecule_vm_evidence_directory ~ '/application-first.json') | from_json)

@@ -61,7 +61,7 @@
         that: ansible_facts.getent_passwd['podman-molecule'] is none
 
     - name: VM tests | Preserve the first daemon identity and runtime versions
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/runtime-identity.json'
         content: '{{ molecule_vm_runtime_results.results | map(attribute="stdout") | list | to_json }}'
         force: false
@@ -113,7 +113,7 @@
           - "'UnitFileState=disabled' in molecule_vm_podman_socket.stdout_lines or 'UnitFileState=static' in molecule_vm_podman_socket.stdout_lines"
 
     - name: VM tests | Retain exact version evidence
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/versions.json'
         content: >-
           {{ {"distribution": ansible_facts.distribution, "version": ansible_facts.distribution_version,
