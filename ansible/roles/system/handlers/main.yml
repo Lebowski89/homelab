@@ -9,3 +9,9 @@
   when: not ansible_check_mode
   ansible.builtin.systemd_service:
     daemon_reload: true
+
+- name: System | Apply persistent journal limits
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: systemd-journald.service
+    state: restarted

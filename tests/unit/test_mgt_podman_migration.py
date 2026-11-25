@@ -799,7 +799,7 @@ def test_rootless_signal_and_preparation_commands_use_the_declared_account(tmp_p
     assert "HOME=/var/lib/podman-traefik" in rendered
     assert "XDG_RUNTIME_DIR=" in rendered
     assert "/usr/bin/podman kill --signal USR1 traefik" in rendered
-    policy = env.get_template("configs/proxy/traefik/logrotate.j2").render(service_common_service=cfg)
+    policy = env.get_template("configs/proxy/traefik/logrotate.j2").render(service_common_service=cfg, service_common_runtime="podman")
     assert "create 0640 podman-traefik podman-traefik" in policy
     # Render every actual executor operation against two stores. Start, inspect,
     # logs, stale cleanup, and final cleanup must all select the same owner.
@@ -1173,6 +1173,32 @@ def test_rootless_log_reopen_changes_to_account_home_before_podman(tmp_path):
         "USR1",
         "traefik",
     ]
+
+    policy = env.get_template("configs/proxy/traefik/logrotate.j2").render(service_common_service=cfg, service_common_runtime="podman")
+    marker = tmp_path / "pending"
+    prerotate = policy.split("  prerotate\n", 1)[1].split("  endscript", 1)[0]
+    postrotate = policy.split("  postrotate\n", 1)[1].split("  endscript", 1)[0]
+    tasks = yaml.safe_load((ROOT / "ansible/roles/system/tasks/logging.yml").read_text())
+    dropin = next(
+        task["ansible.builtin.copy"]["content"]
+        for task in tasks
+        if "ansible.builtin.copy" in task and task["ansible.builtin.copy"]["dest"].endswith("60-skynet-traefik-retry.conf")
+    )
+    retry = shlex.split(dropin.split("ExecStartPre=", 1)[1])[2]
+
+    systemctl = tmp_path / "systemctl"
+    systemctl.write_text('#!/bin/sh\n[ "$*" = "start skynet-traefik-reopen-logs.service" ] || exit 2\nexit "$REOPEN_STATUS"\n')
+    systemctl.chmod(0o700)
+    prereq = prerotate.replace("/run/skynet-traefik-reopen-logs.pending", shlex.quote(str(marker)))
+    subprocess.run(["/bin/sh", "-ec", prereq], check=True)
+    assert marker.is_file()
+    # Failure remains visible and leaves a retry pending without any active log.
+    for script, status in [(postrotate, "1"), (retry, "1"), (retry, "0")]:
+        script = script.replace("/run/skynet-traefik-reopen-logs.pending", shlex.quote(str(marker)))
+        script = script.replace("/usr/bin/systemctl", shlex.quote(str(systemctl)))
+        result = subprocess.run(["/bin/sh", "-ec", script], env={"REOPEN_STATUS": status}, check=False)
+        assert result.returncode == int(status)
+        assert marker.exists() == (status == "1")
 
 
 @pytest.mark.integration

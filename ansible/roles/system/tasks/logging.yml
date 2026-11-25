@@ -1,0 +1,66 @@
+---
+
+- name: System | Resolve the Ubuntu cloud-init package split
+  when: ansible_facts.distribution == 'Ubuntu'
+  ansible.builtin.include_tasks: logging_cloud_init.yml
+
+- name: System | Create log capacity drop-in directories
+  ansible.builtin.file:
+    path: "{{ system_log_dropin_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /etc/systemd/journald.conf.d
+    - /etc/systemd/system/logrotate.timer.d
+    - /etc/systemd/system/logrotate.service.d
+  loop_control:
+    loop_var: system_log_dropin_dir
+
+- name: System | Configure persistent journal storage limits
+  ansible.builtin.copy:
+    dest: /etc/systemd/journald.conf.d/60-skynet-storage.conf
+    content: |
+      [Journal]
+      Storage=persistent
+      SystemMaxUse=1G
+      SystemKeepFree=5G
+    owner: root
+    group: root
+    mode: '0644'
+  notify: System | Apply persistent journal limits
+
+- name: System | Configure the 15-minute logrotate check
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/logrotate.timer.d/60-skynet-schedule.conf
+    content: |
+      [Timer]
+      OnCalendar=
+      OnCalendar=*:0/15
+      RandomizedDelaySec=0
+      AccuracySec=1s
+      Persistent=true
+    owner: root
+    group: root
+    mode: '0644'
+  register: system_logrotate_schedule
+
+- name: System | Retry a pending Traefik reopen before evaluating log sizes
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/logrotate.service.d/60-skynet-traefik-retry.conf
+    content: |
+      [Service]
+      ExecStartPre=/bin/sh -ec 'if test -e /run/skynet-traefik-reopen-logs.pending; then /usr/bin/systemctl start skynet-traefik-reopen-logs.service && /usr/bin/rm -f /run/skynet-traefik-reopen-logs.pending || exit 1; fi'
+    owner: root
+    group: root
+    mode: '0644'
+  register: system_logrotate_recovery
+
+- name: System | Enable and start the distribution logrotate timer
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: logrotate.timer
+    enabled: true
+    daemon_reload: "{{ system_logrotate_schedule.changed or system_logrotate_recovery.changed }}"
+    state: "{{ 'restarted' if system_logrotate_schedule.changed else 'started' }}"

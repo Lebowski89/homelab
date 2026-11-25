@@ -137,8 +137,24 @@ account, home and runtime directory for rootless Podman and signals only the
 managed Traefik container with `SIGUSR1`. Rootful Podman uses its system runtime.
 The retained Docker path selects exactly one local running container by
 `com.docker.swarm.service.name=traefik_traefik` and rejects zero/multiple matches.
-The signal reopens logs; it does not restart Traefik. Alloy matches only
+On mgt, the rootless rotation hook starts `skynet-traefik-reopen-logs.service`
+and waits for its result. This gives the helper a separate systemd execution
+context while the distribution's `logrotate.service` retains its namespace
+restrictions. A marker under `/run` is set before a rename and cleared only
+after a successful reopen. The next scheduled check retries a pending reopen
+before looking at the size of the replacement file. After fixing a reopen
+failure, run `sudo systemctl start logrotate.service` to retry immediately.
+Inspect both units with `journalctl -u logrotate.service -u skynet-traefik-reopen-logs.service`.
+The signal reopens logs without restarting Traefik. Alloy matches only
 `access.log`, never rotated or compressed names.
+
+The opt-in `system_logging` tag enables a persistent quarter-hour logrotate
+timer and caps the persistent journal at 1 GiB with `SystemKeepFree=5G`.
+Traefik still rotates daily or when its file exceeds 25 MiB at a check.
+On Ubuntu the role removes the duplicate cloud-init rule only when dpkg
+identifies it as obsolete and both definitions match the package checksum.
+Prometheus warns at 80% filesystem use, alerts critically at 90%, and reports
+failed logrotate and Traefik reopen units through Node Exporter.
 
 All file discovery starts at the current end and ignores files older than 24
 hours on first discovery. Once a target has a saved position, persistent Alloy

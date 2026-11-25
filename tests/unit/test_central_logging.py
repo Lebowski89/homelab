@@ -274,6 +274,7 @@ def test_traefik_access_log_has_bounded_reopen_safe_rotation():
         "group": "0",
         "mode": "0644",
         "force": True,
+        "restart": False,
     }
     assert declarations["configs/proxy/traefik/reopen-logs.sh.j2"] == {
         "src": "configs/proxy/traefik/reopen-logs.sh.j2",
@@ -282,6 +283,7 @@ def test_traefik_access_log_has_bounded_reopen_safe_rotation():
         "group": "0",
         "mode": "0755",
         "force": True,
+        "restart": False,
     }
     assert service["deploy"]["type"] == "container"
     assert service["deploy"]["hosts"] == "{{ services_controller_host }}"

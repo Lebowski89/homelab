@@ -91,18 +91,27 @@ traefik:
       mode: "0664"
       force: true
       restart: false
-    - src: configs/proxy/traefik/logrotate.j2
-      dest: /etc/logrotate.d/skynet-traefik
-      owner: "0"
-      group: "0"
-      mode: "0644"
-      force: true
     - src: configs/proxy/traefik/reopen-logs.sh.j2
       dest: /usr/local/sbin/skynet-traefik-reopen-logs
       owner: "0"
       group: "0"
       mode: "0755"
       force: true
+      restart: false
+    - src: configs/proxy/traefik/reopen-logs.service.j2
+      dest: /etc/systemd/system/skynet-traefik-reopen-logs.service
+      owner: "0"
+      group: "0"
+      mode: "0644"
+      force: true
+      restart: false
+    - src: configs/proxy/traefik/logrotate.j2
+      dest: /etc/logrotate.d/skynet-traefik
+      owner: "0"
+      group: "0"
+      mode: "0644"
+      force: true
+      restart: false
   volumes:
     config:
       type: bind

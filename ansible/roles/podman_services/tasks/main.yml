@@ -325,6 +325,20 @@
         service_common_template_vars: "{{ podman_services_application_template_vars }}"
       tags: [deploy, update, recreate, bootstrap]
 
+    - name: Podman services | Reload the host manager after updating the Traefik reopen unit
+      when:
+        - not ansible_check_mode
+        - podman_services_service.name == 'traefik'
+        - >-
+          service_common_template_changes.results | default([])
+          | selectattr('service_common_template_item', 'defined')
+          | selectattr('service_common_template_item.dest', 'equalto', '/etc/systemd/system/skynet-traefik-reopen-logs.service')
+          | selectattr('changed')
+          | list | length > 0
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      tags: [deploy, update, recreate, bootstrap]
+
     - name: Podman services | Snapshot managed configuration changes
       no_log: true
       diff: false

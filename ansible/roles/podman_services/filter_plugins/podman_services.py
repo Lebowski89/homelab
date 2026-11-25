@@ -987,9 +987,16 @@ def _validate_rootless_managed_files(cfg: Mapping[str, Any], *, name: str, bind_
             if cfg.get("name") == "traefik" and declaration.get("dest") in {
                 "/etc/logrotate.d/skynet-traefik",
                 "/usr/local/sbin/skynet-traefik-reopen-logs",
+                "/etc/systemd/system/skynet-traefik-reopen-logs.service",
             }:
                 if str(declaration.get("owner")) != "0" or str(declaration.get("group")) != "0":
                     raise AnsibleFilterError(f"{item_name} host logrotate integration must remain root-owned")
+                if declaration["dest"].endswith(".service") and (
+                    field != "templates"
+                    or declaration.get("src") != "configs/proxy/traefik/reopen-logs.service.j2"
+                    or declaration.get("mode") != "0644"
+                ):
+                    raise AnsibleFilterError(f"{item_name} must use the fixed Traefik log reopen unit template")
                 continue
             _proper_descendant(
                 declaration.get("dest"),

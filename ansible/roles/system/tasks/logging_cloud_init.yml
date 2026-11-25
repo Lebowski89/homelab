@@ -1,0 +1,53 @@
+---
+
+- name: System | Inspect both cloud-init rotation definitions
+  ansible.builtin.stat:
+    path: "/etc/logrotate.d/{{ system_cloud_log_name }}"
+    checksum_algorithm: md5
+    get_mime: false
+  loop: [cloud-init, cloud-init-base]
+  loop_control:
+    loop_var: system_cloud_log_name
+  register: system_cloud_log_rules
+
+- name: System | Check package conffile records for the duplicate
+  # checkov:skip=CKV2_ANSIBLE_3:Ownership or package lookup failures must stop before removing a conffile.
+  when: system_cloud_log_rules.results | selectattr('stat.exists') | list | length == 2
+  block:
+    - name: System | Read dpkg ownership and obsolete status
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/dpkg-query
+          - --show
+          - '--showformat=${db:Status-Status}\n${Conffiles}\n'
+          - "{{ system_cloud_log_package }}"
+      loop: [cloud-init, cloud-init-base]
+      loop_control:
+        loop_var: system_cloud_log_package
+      register: system_cloud_log_packages
+      check_mode: false
+      changed_when: false
+
+    - name: System | Require an unmodified obsolete rule and its installed replacement
+      vars:
+        system_cloud_log_legacy: "{{ system_cloud_log_rules.results[0].stat }}"
+        system_cloud_log_current: "{{ system_cloud_log_rules.results[1].stat }}"
+      ansible.builtin.assert:
+        that:
+          - system_cloud_log_legacy.isreg and system_cloud_log_current.isreg
+          - system_cloud_log_legacy.uid == 0 and system_cloud_log_current.uid == 0
+          - system_cloud_log_legacy.checksum == system_cloud_log_current.checksum
+          - system_cloud_log_packages.results[0].stdout_lines[0] == 'installed'
+          - system_cloud_log_packages.results[1].stdout_lines[0] == 'installed'
+          - >-
+            (' /etc/logrotate.d/cloud-init ' ~ system_cloud_log_legacy.checksum ~ ' obsolete')
+            in system_cloud_log_packages.results[0].stdout_lines
+          - >-
+            (' /etc/logrotate.d/cloud-init-base ' ~ system_cloud_log_current.checksum)
+            in system_cloud_log_packages.results[1].stdout_lines
+        fail_msg: Inspect the cloud-init logrotate rules and package ownership before removing either definition.
+
+    - name: System | Remove only the verified obsolete cloud-init rotation definition
+      ansible.builtin.file:
+        path: /etc/logrotate.d/cloud-init
+        state: absent

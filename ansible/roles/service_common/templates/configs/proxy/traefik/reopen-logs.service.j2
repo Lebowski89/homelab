@@ -1,0 +1,9 @@
+[Unit]
+Description=Reopen the managed Traefik access log
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/skynet-traefik-reopen-logs
+TimeoutStartSec=30s
+PrivateTmp=true
+ProtectSystem=full
