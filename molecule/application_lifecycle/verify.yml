@@ -88,7 +88,7 @@
       failed_when: molecule_vm_persisted_http.content | default('') != 'retained-after-start-' ~ molecule_vm_run_id
 
     - name: VM tests | Retain the first writer and data identities
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/application-first.json'
         content: '{{ {"identity": molecule_vm_writer_identity.stdout, "checksum": molecule_vm_app_data.stat.checksum} | to_json }}'
         force: false

@@ -1353,8 +1353,9 @@ RAM, persistent-controller-space and guest-address checks passed, the pool was
 empty with its grants intact, and only the owned maintenance receipt was
 released. No workflow was dispatched. Next, manually run `node_exporter` /
 `fedora44`, then `node_exporter` / `rocky102` without intervening permission
-repair. Two consecutive successful pooled runs and post-retirement permission
-readiness remain unverified; this deployment does not certify Fedora acceptance.
+repair. At that stage, two consecutive successful pooled runs and
+post-retirement permission readiness remained unverified; the deployment alone
+did not certify Fedora acceptance.
 
 Forgejo run [14](https://forgejo.int.nosugarmaxtaste.com:8443/homelab-ci/homelab-ci/actions/runs/14)
 then used the same GitHub/launcher commits and the configured pool, but failed
@@ -1363,8 +1364,8 @@ Installed `qemu-server 9.2.11` validates creation-time tags **before** adding
 the VM to its requested pool. The initial pool allocation check passed; the
 later tag check could not yet inherit the existing pool role. The failed
 run `4049af0c61204114ad29b961f18b804b` was retired through its original checkout;
-its private evidence is retained and managed maintenance remains held pending
-candidate delivery. No additional permissions were granted.
+its private evidence was retained and managed maintenance held pending candidate
+delivery. No additional permissions were granted.
 
 New pooled manifests explicitly defer only the stopped template's tags until
 after creation. The controller requires the exact saved template resource,
@@ -1391,8 +1392,73 @@ alter a retained checkout or merge solely to test this correction.
 The initial candidate's controller/launcher/scenario regressions passed 140
 cases in 30.36 s before the fixture modeled asynchronous POST. With the PUT
 correction, controller/launcher regressions passed 113 cases in 3.14 s,
-including the corrected race/retry and retirement checks. These are local
-synthetic results; the two consecutive live runs remain required.
+including the corrected race/retry and retirement checks. These local
+synthetic results preceded the live acceptance below.
+
+On 16 November 2026, two consecutive manual Forgejo dispatches passed against
+merged GitHub main `c2f11e74f454d181b57f5cb428ce3ed7a3b66a49`. The private
+Forgejo workflow remained `b32d42672ac37310e7b10613b7db1990fa4902e7`; neither
+it nor the installed launcher needed an update. Both runs used `node_exporter`,
+executed the production native-service deployment, passed idempotence and
+functional metrics/service checks, and collected private diagnostics.
+Recovery runs 21/22 below subsequently passed the same checks against that same
+GitHub source and Forgejo workflow, without ACL reconciliation.
+
+| Forgejo run | Guest | Provision (s) | Molecule (s) | Retirement (s) | Workflow elapsed (s) |
+| --- | --- | ---: | ---: | ---: | ---: |
+| [15](https://forgejo.int.nosugarmaxtaste.com:8443/homelab-ci/homelab-ci/actions/runs/15) | Fedora 44 | 111.66 | 99.12 | 4.78 | 224 |
+| [16](https://forgejo.int.nosugarmaxtaste.com:8443/homelab-ci/homelab-ci/actions/runs/16) | Rocky 10.2 | 113.90 | 95.56 | 4.91 | 223 |
+| [21](https://forgejo.int.nosugarmaxtaste.com:8443/homelab-ci/homelab-ci/actions/runs/21) | Debian 13.7 | 161.13 | 83.25 | 6.70 | 259 |
+| [22](https://forgejo.int.nosugarmaxtaste.com:8443/homelab-ci/homelab-ci/actions/runs/22) | Ubuntu 26.04 | 217.10 | 85.90 | 7.56 | 320 |
+
+The workflow column is Forgejo's elapsed time; stage durations were recorded
+separately. All four guests ran Node Exporter 1.10.1, built with Go 1.25.3, on
+x86_64. Fedora/Rocky guest SELinux was enforcing; Debian/Ubuntu reported their
+normal disabled SELinux state. No security-mode changes were made. Observed kernels were Fedora
+`6.19.10-300.fc44.x86_64` and Rocky `6.12.0-211.16.1.el10_2.0.1.x86_64`.
+Debian reported `6.12.115+deb13.1-amd64`; Ubuntu reported `7.0.0-38-generic`.
+The retained controller run directories are
+`/var/lib/forgejo-runner/runs/4497d222698243eebec55acca6ecab05` (Fedora) and
+`/var/lib/forgejo-runner/runs/c632fda45a9d4a0daf7cc11f408f84b4` (Rocky),
+`/var/lib/forgejo-runner/runs/f121e71669124e399df00d1badd21ca0` (Debian) and
+`/var/lib/forgejo-runner/runs/49de6d94ddc34e0285e841014eda2576` (Ubuntu).
+
+After each run, independent Proxmox checks confirmed VM980000/VM980001 and
+their owned artifacts absent, empty disposable OpenTofu state and an empty
+owned pool. Persistent pool grants, all other ACLs/roles and token metadata
+matched the saved managed snapshot; **no ACL reconciliation occurred between
+runs**. The acceptance token still received HTTP403 for VM104, VM9300 and
+template9004, and both tokens' calculated VM104 permissions remained empty.
+Runner ID 1, registration, credentials, service units/hardening, policy and
+prior failed evidence were unchanged. Controller SELinux remained enforcing,
+with no relevant new controller AVCs. Evidence files retained their
+private ownership, mode 0600 and valid SELinux labels; all four tested checkouts
+were clean and source fingerprints unchanged.
+
+Fresh capacity and guest-address checks passed after each successful retirement.
+Only the matching managed maintenance receipts were released. The allocation
+was confirmed clear after run 22 without permission repair. These passes cover
+Node Exporter on the four existing OS selections, not other scenario families.
+Schedules and the controlled GitHub live workflow remain disabled. Private
+operator verification evidence is retained under
+`~/.config/homelab/molecule-controller/pr749-two-run-1794806560515774110/` and
+`~/.config/homelab/molecule-controller/run17-validation-1794816115451813622/`.
+
+Between the two successful pairs, run 17 failed before Molecule while fetching
+the uncached Debian image: Proxmox could not resolve `cloud.debian.org`.
+Tailscale DNS recorded repeated forwarded SERVFAIL responses in that window;
+its observed system upstream was `192.168.80.53`. Runs 18–20 stopped at the
+retained-allocation guard and did not execute new guest tests. Run 17's exact
+owned bootstrap snippet was retired through its original checkout in 2.539 s,
+with failed evidence unchanged. Fresh DNS/HTTPS, capacity and identity checks
+preceded recovery run 21, which genuinely downloaded and checksum-verified the
+uncached Debian image; run 22 then verified Ubuntu using its existing cache.
+Runs 15/16 had used cached images and did not exercise this download path.
+No production DNS, firewall or permission changes were made. The underlying
+cause of the upstream SERVFAILs remains unestablished; a permanent DNS repair
+is not claimed. Successful cases retire automatically; a failed case retains
+its allocation until inspected and explicitly retired through the printed
+`homelab-molecule retire <run-id>` recovery command and original checkout.
 
 Keep bootstrap administrator/Vault authentication on the operator control path.
 Never copy it into the runner or use the acceptance token, its workflow, or the

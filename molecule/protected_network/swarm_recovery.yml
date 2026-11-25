@@ -117,7 +117,7 @@
           - molecule_vm_recovered_handshakes.handshakes | selectattr('connected', 'equalto', true) | list | length == 2
 
     - name: VM tests | Preserve actual pending-state and replacement-task evidence
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/swarm-recovery.json'
         content: >-
           {{ {'pending': (molecule_vm_missing_task.stdout | from_json).pending,

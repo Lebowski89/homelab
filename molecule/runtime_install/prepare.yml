@@ -61,7 +61,7 @@
 
     - name: VM tests | Record explicit kernel preparation separately from installation
       when: ansible_facts.distribution == 'Rocky'
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/kernel-preparation.json'
         content: >-
           {{ {'image_kernel': molecule_vm_image_kernel, 'running_kernel': ansible_facts.kernel,
@@ -74,7 +74,7 @@
       ansible.builtin.service_facts:
 
     - name: VM tests | Retain the initial security state on the controller
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/security.json'
         content: >-
           {{ {'selinux': ansible_facts.selinux.mode | default('disabled'),

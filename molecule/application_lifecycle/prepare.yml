@@ -53,7 +53,7 @@
       register: molecule_vm_keeper
 
     - name: VM tests | Retain the expected observer process
-      ansible.builtin.copy:
+      molecule_evidence:
         dest: '{{ molecule_vm_evidence_directory }}/keeper-identity'
         content: '{{ molecule_vm_keeper.stdout }}'
         mode: '0600'
