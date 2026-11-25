@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/11/10 |
+| Readme update        | 2026/11/26 |
 
 
 
@@ -84,6 +84,7 @@
 | Podman services ¦ Build application template values | ansible.builtin.include_role | True |  |
 | Podman services ¦ Store application template values | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Prepare service files and directories | ansible.builtin.include_role | False |  |
+| Podman services ¦ Reload the host manager after updating the Traefik reopen unit | ansible.builtin.systemd_service | True |  |
 | Podman services ¦ Snapshot managed configuration changes | ansible.builtin.set_fact | False |  |
 | Podman services ¦ Read declared environment files | ansible.builtin.slurp | True |  |
 | Podman services ¦ Parse ordered literal environment files | ansible.builtin.set_fact | True |  |
