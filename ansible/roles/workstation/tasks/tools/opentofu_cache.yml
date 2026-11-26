@@ -1,0 +1,55 @@
+---
+
+- name: Workstation OpenTofu | Inspect operator cache and CLI configuration paths
+  ansible.builtin.stat:
+    path: "{{ workstation_opentofu_cache_path.path }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+  loop:
+    - { path: "{{ workstation_user_home }}/.cache", directory: true }
+    - { path: "{{ workstation_user_home }}/.cache/opentofu", directory: true }
+    - { path: "{{ workstation_user_home }}/.cache/opentofu/providers", directory: true }
+    - { path: "{{ workstation_user_home }}/.terraform.d", directory: true }
+    - { path: "{{ workstation_user_home }}/.terraform.d/homelab-provider-cache.tfrc", directory: false }
+  loop_control:
+    loop_var: workstation_opentofu_cache_path
+    label: "{{ workstation_opentofu_cache_path.path }}"
+  register: workstation_opentofu_cache_paths
+
+- name: Workstation OpenTofu | Require owned paths and refuse symlink targets
+  ansible.builtin.assert:
+    that:
+      - >-
+        not workstation_opentofu_cache_entry.stat.exists
+        or (not workstation_opentofu_cache_entry.stat.islnk
+          and workstation_opentofu_cache_entry.stat.pw_name == workstation_user
+          and (workstation_opentofu_cache_entry.stat.isdir if workstation_opentofu_cache_entry.workstation_opentofu_cache_path.directory
+            else (workstation_opentofu_cache_entry.stat.isreg and workstation_opentofu_cache_entry.stat.nlink == 1)))
+    fail_msg: The provider cache and its CLI fragment require operator-owned, non-symlink paths of the expected types.
+  loop: "{{ workstation_opentofu_cache_paths.results }}"
+  loop_control:
+    loop_var: workstation_opentofu_cache_entry
+    label: "{{ workstation_opentofu_cache_entry.workstation_opentofu_cache_path.path }}"
+
+- name: Workstation OpenTofu | Create the private shared cache directory
+  ansible.builtin.file:
+    path: "{{ workstation_user_home }}/.cache/opentofu/providers"
+    state: directory
+    mode: '0700'
+
+- name: Workstation OpenTofu | Create the CLI configuration directory if absent
+  when: not workstation_opentofu_cache_paths.results[3].stat.exists
+  ansible.builtin.file:
+    path: "{{ workstation_user_home }}/.terraform.d"
+    state: directory
+    mode: '0700'
+
+- name: Workstation OpenTofu | Install the dedicated provider cache configuration
+  ansible.builtin.copy:
+    dest: "{{ workstation_user_home }}/.terraform.d/homelab-provider-cache.tfrc"
+    content: |
+      # Managed by Ansible workstation provisioning.
+      plugin_cache_dir = "$HOME/.cache/opentofu/providers"
+    mode: '0600'
+  diff: false

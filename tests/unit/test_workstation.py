@@ -352,8 +352,12 @@ class ActionModule(ActionBase):
                 module_name='fixture_deb822_repository' if module == 'deb822_repository' else 'ansible.builtin.lineinfile',
                 module_args=options, task_vars=task_vars)
         if module == 'stat':
-            result['stat'] = {'exists': task_vars['fixture_ostree'] if options['path'] == '/run/ostree-booted' else True,
-                              'isreg': True}
+            path = Path(options['path'])
+            if any(path.is_relative_to(parent) for parent in ('/fixture/home/.cache', '/fixture/home/.terraform.d')):
+                result['stat'] = {'exists': False}
+            else:
+                result['stat'] = {'exists': task_vars['fixture_ostree'] if str(path) == '/run/ostree-booted' else True,
+                                  'isreg': True}
         elif module == 'setup':
             result['ansible_facts'] = task_vars['fixture_system_facts']
         elif module == 'getent':
@@ -788,6 +792,13 @@ def test_inline_bootstrap_inventory_and_granular_tools(workstation_run, tag):
     assert any(call["module"] == "getent" for call in calls)
     repos = [call["options"]["name"] for call in calls if call["module"] == "yum_repository"]
     assert ("opentofu" in repos) is (tag in {"workstation_tools", "workstation_opentofu"})
+    cache_fragments = [
+        call
+        for call in calls
+        if call["module"] == "copy" and call["options"].get("dest") == "/fixture/home/.terraform.d/homelab-provider-cache.tfrc"
+    ]
+    assert bool(cache_fragments) is (tag in {"workstation_tools", "workstation_opentofu"})
+    assert all(call["user"] == "fixture" for call in cache_fragments)
 
 
 @pytest.mark.integration

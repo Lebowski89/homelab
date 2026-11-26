@@ -52,7 +52,7 @@ def test_direct_ansible_discovers_default_workstation_collections(tmp_path, conf
     assert str(module) in result.stdout
 
 
-def run_tasks(tmp_path, tasks, variables, *, host="localhost", connection="local"):
+def run_tasks(tmp_path, tasks, variables, *, host="localhost", connection="local", check=False):
     """Use only a temporary static inventory/config; never load repository Vault."""
     cfg = tmp_path / "ansible.cfg"
     cfg.write_text("[defaults]\nhost_key_checking = True\n")
@@ -61,7 +61,7 @@ def run_tasks(tmp_path, tasks, variables, *, host="localhost", connection="local
     play = tmp_path / "play.yml"
     play.write_text(yaml.safe_dump([{"hosts": "all", "gather_facts": False, "vars": variables, "tasks": tasks}]))
     return subprocess.run(
-        [ANSIBLE, "-i", str(inventory), str(play)],
+        [ANSIBLE, "-i", str(inventory), str(play), *(["--check"] if check else [])],
         env={
             **os.environ,
             "ANSIBLE_CONFIG": str(cfg),
@@ -72,6 +72,37 @@ def run_tasks(tmp_path, tasks, variables, *, host="localhost", connection="local
         text=True,
         check=False,
     )
+
+
+@pytest.mark.integration
+def test_opentofu_cache_provisions_only_owned_cache_and_config_fragment(tmp_path):
+    home = tmp_path / "operator"
+    home.mkdir()
+    config = home / ".tofurc"
+    config.write_text("provider_installation { direct {} }\n")
+    operator = pwd.getpwuid(os.getuid()).pw_name
+    tasks = [{"ansible.builtin.import_tasks": str(ROLE / "tasks/tools/opentofu_cache.yml")}]
+    variables = {"workstation_user_home": str(home), "workstation_user": operator}
+    fragment = home / ".terraform.d/homelab-provider-cache.tfrc"
+    cache = home / ".cache/opentofu/providers"
+    dry = run_tasks(tmp_path, tasks, variables, check=True)
+    assert dry.returncode == 0, dry.stdout + dry.stderr
+    assert not fragment.exists() and not cache.exists()
+    applied = run_tasks(tmp_path, tasks, variables)
+    assert applied.returncode == 0, applied.stdout + applied.stderr
+    assert cache.stat().st_mode & 0o777 == 0o700 and cache.stat().st_uid == os.getuid()
+    assert fragment.stat().st_mode & 0o777 == 0o600 and fragment.stat().st_uid == os.getuid()
+    assert 'plugin_cache_dir = "$HOME/.cache/opentofu/providers"' in fragment.read_text()
+    assert config.read_text() == "provider_installation { direct {} }\n"
+    repeated = run_tasks(tmp_path, tasks, variables)
+    assert repeated.returncode == 0 and "changed=0" in repeated.stdout, repeated.stdout + repeated.stderr
+    foreign = tmp_path / "foreign.tfrc"
+    foreign.write_text("disable_checkpoint = true\n")
+    fragment.unlink()
+    fragment.symlink_to(foreign)
+    refused = run_tasks(tmp_path, tasks, variables)
+    assert refused.returncode != 0 and fragment.is_symlink()
+    assert foreign.read_text() == "disable_checkpoint = true\n"
 
 
 @pytest.mark.integration

@@ -11,6 +11,7 @@
       - workstation_ansible_collections_enabled is boolean
       - workstation_skynet_enabled is boolean
       - workstation_opentofu_enabled is boolean
+      - workstation_opentofu_provider_cache_enabled is boolean
       - workstation_repository_clone is boolean
       - workstation_user is string
       - workstation_user | trim | length > 0

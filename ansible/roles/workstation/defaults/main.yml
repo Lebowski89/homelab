@@ -12,6 +12,8 @@ workstation_ansible_enabled: true
 workstation_ansible_collections_enabled: true
 workstation_skynet_enabled: true
 workstation_opentofu_enabled: false
+# Opt in to a shared user cache independently of system package installation.
+workstation_opentofu_provider_cache_enabled: false
 workstation_repository_clone: false
 workstation_repository_url: https://github.com/Lebowski89/homelab.git
 workstation_repository_version: main

@@ -87,3 +87,16 @@
       become: true
       tags: [workstation_tools, workstation_opentofu]
   tags: [workstation_tools, workstation_opentofu]
+
+- name: Workstation OpenTofu | Configure the operator's shared provider cache
+  when:
+    - workstation_tools_enabled
+    - workstation_opentofu_provider_cache_enabled
+    - not workstation_tools_headless
+  ansible.builtin.include_tasks:
+    file: tools/opentofu_cache.yml
+    apply:
+      become: true
+      become_user: "{{ workstation_user }}"
+      tags: [workstation_tools, workstation_opentofu]
+  tags: [workstation_tools, workstation_opentofu]

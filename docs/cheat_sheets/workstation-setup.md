@@ -164,6 +164,56 @@ repository in deb822 `.sources` format using both existing signing keys. It remo
 the previously managed entry from the corresponding `.list` file, preserves any
 unrelated entries there, and refreshes APT after repository changes.
 
+### Shared OpenTofu provider cache on Blacktop
+
+Blacktop opts in with `workstation_opentofu_provider_cache_enabled: true` in
+`ansible/host_vars/blacktop.yml`. Workstation tooling creates
+`~/.cache/opentofu/providers` (mode `0700`) and the operator-owned
+`~/.terraform.d/homelab-provider-cache.tfrc` (mode `0600`). OpenTofu reads
+that fragment alongside its usual CLI configuration. The cache is separate
+from the implied provider mirror at `~/.terraform.d/plugins`. The role leaves
+`.tofurc`, `.terraformrc`, credentials, and provider installation rules in place.
+
+Select `--tags workstation_opentofu` using the local bootstrap command above
+to provision just the cache on Blacktop. Omit the bootstrap example's
+`workstation_opentofu_enabled: true` extra var if you only want the cache and
+already have OpenTofu installed. An explicit `TF_CLI_CONFIG_FILE` can bypass
+the default fragment directory, and `TF_PLUGIN_CACHE_DIR` overrides the
+cache location. Keep those overrides unset for normal interactive use.
+Keep `plugin_cache_may_break_dependency_lock_file` and its environment
+equivalent disabled so the cache remains subject to the project's checksums.
+
+OpenTofu reuses the locked provider package from the cache and symlinks it
+into the working directory when possible. For a provider-only refresh of
+an existing root, use `tofu init -backend=false -input=false -lockfile=readonly`.
+Keep the existing backend metadata and workspace selection. To reclaim
+old standalone copies, verify the locked replacements first and retire
+only the generated `.terraform/providers` directories or individual
+packages. Leave the rest of `.terraform`, state and backups, lock files,
+saved plans and module configuration in place. The repository's
+`terraform/scripts/tofu-all.sh` runs roots sequentially and inherits the
+operator's CLI configuration. Its `upgrade` action deliberately changes
+version selections, so leave it out of a cache migration.
+
+OpenTofu 1.13.2 uses best-effort file locking for the cache. The guarantees
+depend on the filesystem. Use a local filesystem and run maintenance with
+all OpenTofu and Terraform operations stopped. OpenTofu does not evict old
+versions. To retire a cache entry, identify its full registry, provider,
+version and platform, then:
+
+1. Check the dependency lock files in the active checkout, other checkouts
+   and worktrees, and any other projects that share the cache.
+2. Inspect provider symlinks under each project's `.terraform/providers`
+   (or its explicit `TF_DATA_DIR/providers`). Resolve links into the cache
+   before deciding an entry is unused. Keep any version intentionally
+   retained for rollback.
+3. Remove only the exact unused provider version/platform directory after
+   confirming no operation is active. Leave mirrored packages and the
+   rest of the cache alone.
+
+See the [OpenTofu CLI cache documentation](https://opentofu.org/docs/cli/config/config-file/#provider-plugin-cache)
+for checksum verification and locking behavior.
+
 Before remote management, privately configure `ansible/netbox.yml`, the required
 encrypted Vault inputs, verified SSH access and the password-file paths under
 `~/.config/homelab/` (`.ansible_become_pass` and `.ansible_vault_pass`). Preserve
