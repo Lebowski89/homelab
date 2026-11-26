@@ -8,6 +8,7 @@ import json
 import os
 import re
 import shlex
+import shutil
 import subprocess
 import sys
 from copy import deepcopy
@@ -798,8 +799,10 @@ def test_rootless_signal_and_preparation_commands_use_the_declared_account(tmp_p
     assert "--login" not in rendered and "su -" not in rendered
     assert "HOME=/var/lib/podman-traefik" in rendered
     assert "XDG_RUNTIME_DIR=" in rendered
-    assert "/usr/bin/podman kill --signal USR1 traefik" in rendered
-    policy = env.get_template("configs/proxy/traefik/logrotate.j2").render(service_common_service=cfg)
+    assert 'podman_as_traefik kill --signal USR1 "$container"' in rendered
+    policy = env.get_template("configs/proxy/traefik/logrotate-rootless.j2").render(
+        service_common_service=cfg, service_common_runtime="podman"
+    )
     assert "create 0640 podman-traefik podman-traefik" in policy
     # Render every actual executor operation against two stores. Start, inspect,
     # logs, stale cleanup, and final cleanup must all select the same owner.
@@ -1145,8 +1148,25 @@ def test_rootless_log_reopen_changes_to_account_home_before_podman(tmp_path):
     home.mkdir(mode=0o700)
     private = tmp_path / "private operator cwd"
     private.mkdir(mode=0o700)
+    cfg["volumes"]["logs"]["source"] = str(tmp_path)
+    active = tmp_path / "access.log"
+    rotated = tmp_path / "access.log.1"
+    active.touch()
+    rotated.write_text("still being written")
+    fd = tmp_path / "fd"
+    fd.mkdir()
+    (fd / "5").symlink_to(active)
+    old_fd = fd / "6"
+    old_fd.symlink_to(rotated)
     child = tmp_path / "podman"
-    child.write_text('#!/bin/sh\nprintf "%s\\n" "$PWD" "$HOME" "$XDG_RUNTIME_DIR" "$DBUS_SESSION_BUS_ADDRESS" "$@"\n')
+    child.write_text(
+        "#!/bin/sh\n"
+        'case "$*" in\n'
+        '  "inspect --format {{.State.Pid}} traefik") echo 12345;;\n'
+        '  "kill --signal USR1 traefik") printf "%s\\n" "$PWD" "$HOME" "$XDG_RUNTIME_DIR" "$DBUS_SESSION_BUS_ADDRESS" > "$CALLS";;\n'
+        "  *) exit 3;;\n"
+        "esac\n"
+    )
     child.chmod(0o700)
     runuser = tmp_path / "runuser"
     runuser.write_text('#!/bin/sh\n[ "$1" = -u ] && [ "$2" = podman-traefik ] && [ "$3" = -- ] || exit 2\nshift 3\nexec "$@"\n')
@@ -1160,19 +1180,78 @@ def test_rootless_log_reopen_changes_to_account_home_before_podman(tmp_path):
         rendered.replace("/usr/bin/id -u podman-traefik", "printf 12345")
         .replace("/usr/sbin/runuser", shlex.quote(str(runuser)))
         .replace("/usr/bin/podman", shlex.quote(str(child)))
-        .replace(" >/dev/null", "")
+        .replace('/proc/"$pid"/fd', shlex.quote(str(fd)))
+        .replace("  sleep 1", "  :")
     )
-    result = subprocess.run(["/bin/sh", "-c", rendered], cwd=private, capture_output=True, text=True, check=True)
-    assert result.stdout.splitlines() == [
-        str(home),
-        str(home),
-        "/run/user/12345",
-        "unix:path=/run/user/12345/bus",
-        "kill",
-        "--signal",
-        "USR1",
-        "traefik",
-    ]
+    calls = tmp_path / "calls"
+    fixture_env = {**os.environ, "CALLS": str(calls)}
+    result = subprocess.run(["/bin/sh", "-c", rendered], cwd=private, env=fixture_env, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 1 and "did not release" in result.stderr
+    old_fd.unlink()
+    subprocess.run(["/bin/sh", "-c", rendered], cwd=private, env=fixture_env, check=True, timeout=10)
+    assert calls.read_text().splitlines() == [str(home), str(home), "/run/user/12345", "unix:path=/run/user/12345/bus"]
+
+    policy = env.get_template("configs/proxy/traefik/logrotate-rootless.j2").render(
+        service_common_service=cfg, service_common_runtime="podman"
+    )
+    host_policy = env.get_template("configs/proxy/traefik/logrotate.j2").render(service_common_service=cfg, service_common_runtime="podman")
+    marker = tmp_path / "pending"
+    service = (ROOT / "ansible/roles/system/files/skynet-traefik-logrotate.service").read_text()
+    retry = shlex.split(next(line for line in service.splitlines() if line.startswith("ExecStartPre=")).split("=", 1)[1])[2]
+    systemctl = tmp_path / "systemctl"
+    systemctl.write_text('#!/bin/sh\n[ "$*" = "start skynet-traefik-reopen-logs.service" ] || exit 2\nexit "$REOPEN_STATUS"\n')
+    systemctl.chmod(0o700)
+
+    def relocate(script):
+        return script.replace("/run/skynet-traefik-reopen-logs.pending", shlex.quote(str(marker))).replace(
+            "/usr/bin/systemctl", shlex.quote(str(systemctl))
+        )
+
+    rotate = shutil.which("logrotate")
+    if rotate is None:
+        pytest.skip("logrotate is required for isolated rotation and retention checks")
+    config = tmp_path / "traefik.conf"
+    config.write_text(relocate(policy).replace("create 0640 podman-traefik podman-traefik", "create 0640"))
+    unrelated = tmp_path / "unrelated.log"
+    unrelated.write_text("other host logs")
+    distro = tmp_path / "host.conf"
+    distro.write_text(host_policy + f"\n{unrelated} {{\n  rotate 2\n  create 0600\n}}\n")
+
+    def run_rotation(path, status):
+        return subprocess.run(
+            [rotate, "--force", "--state", str(path.with_suffix(".state")), str(path)],
+            env={**os.environ, "REOPEN_STATUS": status},
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+
+    active.write_text("before failed reopen")
+    failure = run_rotation(config, "1")
+    assert failure.returncode == 1 and marker.is_file()
+    assert active.stat().st_size == 0 and rotated.read_text() == "before failed reopen"
+
+    # Recovery runs even with an empty active log. Host rotation succeeds with
+    # Traefik's failure still pending. A direct attempt cannot advance archives.
+    def recover(status):
+        return subprocess.run(["/bin/sh", "-ec", relocate(retry)], env={**os.environ, "REOPEN_STATUS": status}, timeout=10).returncode
+
+    assert recover("1") == 1 and marker.is_file()
+    result = run_rotation(distro, "1")
+    assert result.returncode == 0, result.stderr
+    assert unrelated.with_suffix(".log.1").read_text() == "other host logs"
+    active.write_text("new traffic before recovery")
+    before = {path.name: (path.stat().st_ino, path.read_bytes()) for path in tmp_path.glob("access.log*")}
+    deferred = run_rotation(config, "1")
+    assert deferred.returncode == 1 and "deferring rotation" in deferred.stderr
+    assert before == {path.name: (path.stat().st_ino, path.read_bytes()) for path in tmp_path.glob("access.log*")}
+    active.write_text("")
+    assert recover("0") == 0 and not marker.exists()
+    assert rotated.read_text() == "before failed reopen"
+    active.write_text("after successful recovery")
+    result = run_rotation(config, "0")
+    assert result.returncode == 0 and not marker.exists(), result.stderr
+    assert rotated.read_text() == "after successful recovery"
 
 
 @pytest.mark.integration

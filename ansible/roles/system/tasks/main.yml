@@ -14,6 +14,7 @@
         - system_resolved
         - system_cleanup
         - system_nic
+        - system_logging
   tags: *system_feature_tags
 
 - name: System | Install baseline packages
@@ -31,6 +32,14 @@
     apply:
       tags: [system, system_sysctl]
   tags: [system, system_sysctl]
+
+- name: System | Bound persistent logs and schedule rotation checks
+  when: system_log_capacity_enabled
+  ansible.builtin.include_tasks:
+    file: logging.yml
+    apply:
+      tags: [system, system_logging]
+  tags: [system, system_logging]
 
 - name: System | Configure login-session limits
   when: system_limits_enabled

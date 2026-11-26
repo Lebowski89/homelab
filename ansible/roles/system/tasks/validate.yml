@@ -33,6 +33,7 @@
     fail_msg: System feature flags must be YAML booleans.
   loop:
     - "{{ system_packages_enabled }}"
+    - "{{ system_log_capacity_enabled }}"
     - "{{ system_sysctl_enabled }}"
     - "{{ system_limits_enabled }}"
     - "{{ system_guest_agent_enabled }}"

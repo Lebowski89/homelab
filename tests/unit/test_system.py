@@ -129,6 +129,20 @@ class ActionModule(ActionBase):
         state_path = Path(v['fixture_state'])
         state = json.loads(state_path.read_text())
         result = {'changed': False, 'rc': 0, 'stdout': '', 'stdout_lines': []}
+        journal_settings = '/etc/systemd/journald.conf.d/60-skynet-storage.conf'
+        journal_receipt = '/var/lib/skynet-journald-storage.applied'
+        if module == 'copy' and options.get('dest') in (journal_settings, journal_receipt):
+            files = state.setdefault('journal_files', {})
+            content = options.get('content') if options['dest'] == journal_settings else files[journal_settings]
+            result['changed'] = files.get(options['dest']) != content
+            if not self._play_context.check_mode:
+                files[options['dest']] = content
+                state_path.write_text(json.dumps(state))
+            return result
+        if module == 'stat' and options.get('path') in (journal_settings, journal_receipt):
+            content = state.get('journal_files', {}).get(options['path'])
+            return dict(result, stat={'exists': False} if content is None else
+                        {'exists': True, 'checksum': hashlib.sha1(content.encode()).hexdigest()})
         if v.get('fixture_firewall_dependencies', False):
             if module == 'file' and options.get('state') == 'absent':
                 result['changed'] = options['path'] in v.get('fixture_files', {})
@@ -827,6 +841,39 @@ def test_rocky_prior_major_and_dnf_autoclean_are_rejected_before_packages(system
     assert result.returncode != 0 and not package_calls(calls)
     result, calls, _ = system_run(tags="system_updates", overrides={"system_updates_autoclean": True})
     assert result.returncode != 0 and not package_calls(calls)
+
+
+def test_logging_activation_recovers_unapplied_files_and_flushes_without_restarting_on_repeat(system_run):
+    def operations(calls):
+        return [
+            call["options"]
+            for call in calls
+            if call["module"] == "systemd_service" or call["options"].get("argv") == ["/usr/bin/journalctl", "--flush"]
+        ]
+
+    options = {"tags": "system_logging", "overrides": {"system_log_capacity_enabled": True}}
+    result, calls, state = system_run(**options)
+    successful(result)
+    expected = [
+        {"name": "systemd-journald.service", "state": "restarted"},
+        {"argv": ["/usr/bin/journalctl", "--flush"]},
+        {"daemon_reload": True},
+        {"name": "logrotate.timer", "enabled": True, "state": "started"},
+        {"name": "skynet-traefik-logrotate.timer", "enabled": True, "state": "started"},
+    ]
+    assert operations(calls) == expected
+
+    # The files were written but the previous invocation never activated them.
+    del state["journal_files"]["/var/lib/skynet-journald-storage.applied"]
+    result, calls, _ = system_run(**options, state=state, check=True)
+    successful(result)
+    assert not operations(calls)
+    result, calls, _ = system_run(**options)
+    successful(result)
+    assert operations(calls) == expected
+    result, calls, _ = system_run(**options)
+    successful(result)
+    assert operations(calls) == expected[1:]
 
 
 @pytest.mark.parametrize(("changed", "drift", "expected"), [(False, [], []), (True, [], ["p0", "p1"]), (False, ["p1"], ["p1"])])

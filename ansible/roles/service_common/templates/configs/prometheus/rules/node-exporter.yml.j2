@@ -28,7 +28,7 @@ groups:
                 mountpoint!~"^/(boot|dev|proc|sys|run)($|/)|^/var/lib/docker($|/)"
               }
             )
-          ) * 100 > 85
+          ) * 100 >= 80
           and on(instance, device, mountpoint, fstype)
           node_filesystem_size_bytes{
             job="node-exporter",
@@ -60,7 +60,7 @@ groups:
                 mountpoint!~"^/(boot|dev|proc|sys|run)($|/)|^/var/lib/docker($|/)"
               }
             )
-          ) * 100 > 95
+          ) * 100 >= 90
           and on(instance, device, mountpoint, fstype)
           node_filesystem_size_bytes{
             job="node-exporter",
@@ -74,6 +74,15 @@ groups:
           summary: "Disk usage critical on {{ '{{' }} $labels.instance {{ '}}' }}: {{ '{{' }} $labels.mountpoint {{ '}}' }}"
           description: "Filesystem {{ '{{' }} $labels.mountpoint {{ '}}' }} on {{ '{{' }} $labels.instance {{ '}}' }} is {{ '{{' }} humanize $value {{ '}}' }}% full."
           priority: "9"
+
+      - alert: HostLogrotateFailed
+        expr: node_systemd_unit_state{job="node-exporter", name=~"logrotate[.]service|skynet-traefik-(logrotate|reopen-logs)[.]service", state="failed"} == 1
+        labels:
+          severity: warning
+        annotations:
+          summary: "Log rotation failed on {{ '{{' }} $labels.instance {{ '}}' }}"
+          description: "{{ '{{' }} $labels.name {{ '}}' }} is failed. Inspect its journal and check that Traefik has reopened its active access log."
+          priority: "6"
 
       - alert: DockerFilesystemHigh
         expr: |

@@ -1,0 +1,4 @@
+{% set execution = (service_common_template_vars | default({})).runtime_execution | default((service_common_service.deploy | default({})).execution | default({'mode': 'rootful'})) %}
+{% if service_common_runtime | default('docker') == 'podman' and execution.mode == 'rootless' %}
+{% include 'configs/proxy/traefik/logrotate-policy.j2' %}
+{% endif %}

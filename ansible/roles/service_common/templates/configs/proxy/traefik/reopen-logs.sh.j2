@@ -5,12 +5,40 @@ set -eu
 {% set execution = (service_common_template_vars | default({})).runtime_execution | default((service_common_service.deploy | default({})).execution | default({'mode': 'rootful'})) %}
 {% if execution.mode == "rootless" %}
 runtime_uid="$(/usr/bin/id -u {{ execution.host_user | quote }})"
-/usr/sbin/runuser -u {{ execution.host_user | quote }} -- /usr/bin/env \
+podman_as_traefik() {
+  /usr/sbin/runuser -u {{ execution.host_user | quote }} -- /usr/bin/env \
   HOME={{ (service_common_template_vars | default({})).runtime_home | default('/var/lib/' ~ execution.host_user) | quote }} \
   XDG_RUNTIME_DIR="/run/user/${runtime_uid}" \
   DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${runtime_uid}/bus" \
   /bin/sh -c 'cd "$HOME" || exit; exec "$@"' skynet-traefik \
-  /usr/bin/podman kill --signal USR1 {{ service_common_service.name | quote }} >/dev/null
+  /usr/bin/podman "$@"
+}
+
+container={{ service_common_service.name | quote }}
+pid="$(podman_as_traefik inspect --format '{{ "{{.State.Pid}}" }}' "$container")"
+case "$pid" in
+  ''|*[!0-9]*|0|1) echo "Traefik container has no valid running PID" >&2; exit 1 ;;
+esac
+
+active={{ (service_common_service.volumes.logs.source ~ '/access.log') | quote }}
+rotated_inode=
+if [ -e "$active.1" ]; then
+  rotated_inode="$(/usr/bin/stat -Lc '%d:%i' "$active.1")"
+fi
+podman_as_traefik kill --signal USR1 "$container" >/dev/null
+
+# Signal delivery alone does not prove that the application reopened its file.
+for attempt in 1 2 3 4 5 6 7 8 9 10; do
+  current_inode="$(/usr/bin/stat -Lc '%d:%i' "$active" 2>/dev/null || :)"
+  open_inodes="$(/usr/bin/stat -Lc '%d:%i' /proc/"$pid"/fd/* 2>/dev/null || :)"
+  if [ -n "$current_inode" ] && printf '%s\n' "$open_inodes" | /usr/bin/grep -Fxq "$current_inode" &&
+     { [ -z "$rotated_inode" ] || ! printf '%s\n' "$open_inodes" | /usr/bin/grep -Fxq "$rotated_inode"; }; then
+    exit 0
+  fi
+  sleep 1
+done
+echo "Traefik did not release the rotated log and open the replacement" >&2
+exit 1
 {% else %}
 /usr/bin/podman kill --signal USR1 {{ service_common_service.name }} >/dev/null
 {% endif %}

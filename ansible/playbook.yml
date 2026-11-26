@@ -65,6 +65,7 @@
         - system_resolved
         - system_cleanup
         - system_nic
+        - system_logging
 
     - name: Include shared system role
       # Preserve full-run Ubuntu scope; other platforms explicitly opt in.
