@@ -1,0 +1,100 @@
+---
+
+- name: Workstation OpenTofu | Check for the legacy CLI configuration directory
+  ansible.builtin.stat:
+    path: "{{ workstation_user_home }}/.terraform.d"
+    follow: false
+    get_checksum: false
+    get_mime: false
+  register: workstation_opentofu_legacy_cli_dir
+
+- name: Workstation OpenTofu | Resolve XDG configuration from the operator context
+  ansible.builtin.set_fact:
+    workstation_opentofu_cache_xdg_home: >-
+      {{ '' if workstation_opentofu_legacy_cli_dir.stat.exists else
+         workstation_opentofu_xdg_config_home | default(
+           workstation_opentofu_operator_env.get('XDG_CONFIG_HOME', '')
+           if (ansible_facts.get('effective_user_id', -1) | int ==
+               workstation_user_account.ansible_facts.getent_passwd[workstation_user][1] | int
+               and workstation_opentofu_operator_env.get('HOME') == workstation_user_home)
+           else none) }}
+  vars:
+    # The play collects these facts before become. Never read XDG from root
+    # or the become session; provide an explicit override for noninteractive runs.
+    workstation_opentofu_operator_env: "{{ ansible_facts.get('env', {}) }}"
+
+- name: Workstation OpenTofu | Require an absolute XDG configuration path when set
+  ansible.builtin.assert:
+    that:
+      - workstation_opentofu_cache_xdg_home is string
+      - >-
+        workstation_opentofu_cache_xdg_home == ''
+        or (workstation_opentofu_cache_xdg_home is match('^/[^/]')
+            and not workstation_opentofu_cache_xdg_home is search('(^|/)\.\.?(/|$)')
+            and '\n' not in workstation_opentofu_cache_xdg_home)
+    fail_msg: >-
+      Use the operator's environment or set workstation_opentofu_xdg_config_home
+      to the operator's absolute XDG_CONFIG_HOME, or an empty string if it is unset.
+
+- name: Workstation OpenTofu | Select the CLI fragment directory
+  ansible.builtin.set_fact:
+    workstation_opentofu_cache_cli_dir: >-
+      {{ workstation_opentofu_cache_xdg_home | regex_replace('/+$', '') ~ '/opentofu'
+         if workstation_opentofu_cache_xdg_home else workstation_user_home ~ '/.terraform.d' }}
+
+- name: Workstation OpenTofu | Inspect operator cache and CLI configuration paths
+  ansible.builtin.stat:
+    path: "{{ workstation_opentofu_cache_path.path }}"
+    follow: false
+    get_checksum: false
+    get_mime: false
+  loop: >-
+    {{ [
+         {'path': workstation_user_home ~ '/.cache', 'directory': true},
+         {'path': workstation_user_home ~ '/.cache/opentofu', 'directory': true},
+         {'path': workstation_user_home ~ '/.cache/opentofu/providers', 'directory': true},
+         {'path': workstation_opentofu_cache_cli_dir, 'directory': true},
+         {'path': workstation_opentofu_cache_cli_dir ~ '/homelab-provider-cache.tfrc', 'directory': false}
+       ] + ([{'path': workstation_opentofu_cache_xdg_home | regex_replace('/+$', ''), 'directory': true}]
+            if workstation_opentofu_cache_xdg_home else []) }}
+  loop_control:
+    loop_var: workstation_opentofu_cache_path
+    label: "{{ workstation_opentofu_cache_path.path }}"
+  register: workstation_opentofu_cache_paths
+
+- name: Workstation OpenTofu | Require owned paths and refuse symlink targets
+  ansible.builtin.assert:
+    that:
+      - >-
+        not workstation_opentofu_cache_entry.stat.exists
+        or (not workstation_opentofu_cache_entry.stat.islnk
+          and workstation_opentofu_cache_entry.stat.pw_name == workstation_user
+          and (workstation_opentofu_cache_entry.stat.isdir if workstation_opentofu_cache_entry.workstation_opentofu_cache_path.directory
+            else (workstation_opentofu_cache_entry.stat.isreg and workstation_opentofu_cache_entry.stat.nlink == 1)))
+    fail_msg: The provider cache and its CLI fragment require operator-owned, non-symlink paths of the expected types.
+  loop: "{{ workstation_opentofu_cache_paths.results }}"
+  loop_control:
+    loop_var: workstation_opentofu_cache_entry
+    label: "{{ workstation_opentofu_cache_entry.workstation_opentofu_cache_path.path }}"
+
+- name: Workstation OpenTofu | Create the private shared cache directory
+  ansible.builtin.file:
+    path: "{{ workstation_user_home }}/.cache/opentofu/providers"
+    state: directory
+    mode: '0700'
+
+- name: Workstation OpenTofu | Create the CLI configuration directory if absent
+  when: not workstation_opentofu_cache_paths.results[3].stat.exists
+  ansible.builtin.file:
+    path: "{{ workstation_opentofu_cache_cli_dir }}"
+    state: directory
+    mode: '0700'
+
+- name: Workstation OpenTofu | Install the dedicated provider cache configuration
+  ansible.builtin.copy:
+    dest: "{{ workstation_opentofu_cache_cli_dir }}/homelab-provider-cache.tfrc"
+    content: |
+      # Managed by Ansible workstation provisioning.
+      plugin_cache_dir = "$HOME/.cache/opentofu/providers"
+    mode: '0600'
+  diff: false
