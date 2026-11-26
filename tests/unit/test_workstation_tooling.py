@@ -75,25 +75,76 @@ def run_tasks(tmp_path, tasks, variables, *, host="localhost", connection="local
 
 
 @pytest.mark.integration
-def test_opentofu_cache_provisions_only_owned_cache_and_config_fragment(tmp_path):
+@pytest.mark.parametrize("config_layout", ["fallback", "xdg", "legacy-with-xdg"])
+def test_opentofu_cache_provisions_only_owned_cache_and_config_fragment(tmp_path, config_layout):
     home = tmp_path / "operator"
     home.mkdir()
     config = home / ".tofurc"
     config.write_text("provider_installation { direct {} }\n")
     operator = pwd.getpwuid(os.getuid()).pw_name
     tasks = [{"ansible.builtin.import_tasks": str(ROLE / "tasks/tools/opentofu_cache.yml")}]
-    variables = {"workstation_user_home": str(home), "workstation_user": operator}
-    fragment = home / ".terraform.d/homelab-provider-cache.tfrc"
+    legacy = home / ".terraform.d"
+    xdg = home / "interactive config"
+    xdg_dir = xdg / "opentofu"
+    existing_xdg = xdg_dir / "registry.tfrc"
+    existing_content = "registry_protocols { retry_count = 2 }\n"
+    if config_layout != "fallback":
+        xdg_dir.mkdir(parents=True)
+        existing_xdg.write_text(existing_content)
+    if config_layout == "legacy-with-xdg":
+        legacy.mkdir(mode=0o750)
+    operator_env = {"HOME": str(home), "XDG_CONFIG_HOME": str(xdg)}
+    facts = {"effective_user_id": os.getuid(), "env": operator_env}
+    if config_layout == "fallback":
+        facts = {"effective_user_id": os.getuid(), "env": {"HOME": str(home)}}
+    variables = {
+        "workstation_user_home": str(home),
+        "workstation_user": operator,
+        "workstation_user_account": {"ansible_facts": {"getent_passwd": {operator: ["x", str(os.getuid())]}}},
+        "ansible_facts": facts,
+    }
+    fragment_dir = xdg_dir if config_layout == "xdg" else legacy
+    fragment = fragment_dir / "homelab-provider-cache.tfrc"
     cache = home / ".cache/opentofu/providers"
+    if config_layout == "fallback":
+        # Unverified environment facts must not create a legacy directory
+        # that could hide the operator's interactive XDG configuration.
+        other_facts = {"effective_user_id": os.getuid() + 1, "env": operator_env}
+        refused = run_tasks(tmp_path, tasks, variables | {"ansible_facts": other_facts})
+        assert refused.returncode != 0 and not legacy.exists() and not cache.exists()
     dry = run_tasks(tmp_path, tasks, variables, check=True)
     assert dry.returncode == 0, dry.stdout + dry.stderr
     assert not fragment.exists() and not cache.exists()
+    assert legacy.exists() is (config_layout == "legacy-with-xdg")
     applied = run_tasks(tmp_path, tasks, variables)
     assert applied.returncode == 0, applied.stdout + applied.stderr
     assert cache.stat().st_mode & 0o777 == 0o700 and cache.stat().st_uid == os.getuid()
     assert fragment.stat().st_mode & 0o777 == 0o600 and fragment.stat().st_uid == os.getuid()
     assert 'plugin_cache_dir = "$HOME/.cache/opentofu/providers"' in fragment.read_text()
     assert config.read_text() == "provider_installation { direct {} }\n"
+    if config_layout != "fallback":
+        assert existing_xdg.read_text() == existing_content
+    if config_layout == "legacy-with-xdg":
+        assert legacy.stat().st_mode & 0o777 == 0o750
+        assert not (xdg_dir / fragment.name).exists()
+    if config_layout == "xdg":
+        assert not legacy.exists()
+        if tofu := shutil.which("tofu"):
+            loaded = subprocess.run(
+                [tofu, "version"],
+                cwd=tmp_path,
+                env={"PATH": os.environ["PATH"], **operator_env, "TF_LOG": "DEBUG", "CHECKPOINT_DISABLE": "1"},
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=15,
+            )
+            assert loaded.returncode == 0, loaded.stdout + loaded.stderr
+            for path in (existing_xdg, fragment):
+                assert f"Loading CLI configuration from {path}" in loaded.stderr
+        # Provisioners without the operator session can declare the same XDG path.
+        variables["ansible_facts"] = {"effective_user_id": os.getuid() + 1, "env": {"HOME": "/root"}}
+        variables["workstation_opentofu_xdg_config_home"] = str(xdg)
     repeated = run_tasks(tmp_path, tasks, variables)
     assert repeated.returncode == 0 and "changed=0" in repeated.stdout, repeated.stdout + repeated.stderr
     foreign = tmp_path / "foreign.tfrc"

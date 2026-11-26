@@ -169,10 +169,18 @@ unrelated entries there, and refreshes APT after repository changes.
 Blacktop opts in with `workstation_opentofu_provider_cache_enabled: true` in
 `ansible/host_vars/blacktop.yml`. Workstation tooling creates
 `~/.cache/opentofu/providers` (mode `0700`) and the operator-owned
-`~/.terraform.d/homelab-provider-cache.tfrc` (mode `0600`). OpenTofu reads
-that fragment alongside its usual CLI configuration. The cache is separate
-from the implied provider mirror at `~/.terraform.d/plugins`. The role leaves
-`.tofurc`, `.terraformrc`, credentials, and provider installation rules in place.
+`homelab-provider-cache.tfrc` fragment (mode `0600`). An existing
+`~/.terraform.d` takes precedence. If it is absent, the role uses
+`$XDG_CONFIG_HOME/opentofu` when the operator has set `XDG_CONFIG_HOME`,
+and falls back to `~/.terraform.d` otherwise. The role reads XDG from facts
+collected as the operator before privilege escalation. If the provisioning
+session does not see the interactive setting, set
+`workstation_opentofu_xdg_config_home` in workstation host vars to the
+operator's absolute XDG base path, or `""` if the operator leaves it unset.
+With no existing `~/.terraform.d`, provisioning requires operator facts
+or this explicit setting to choose a directory. The cache is separate from
+provider mirrors. The role leaves other CLI files, credentials, and provider
+installation rules in place.
 
 Select `--tags workstation_opentofu` using the local bootstrap command above
 to provision just the cache on Blacktop. Omit the bootstrap example's
@@ -180,18 +188,43 @@ to provision just the cache on Blacktop. Omit the bootstrap example's
 already have OpenTofu installed. An explicit `TF_CLI_CONFIG_FILE` can bypass
 the default fragment directory, and `TF_PLUGIN_CACHE_DIR` overrides the
 cache location. Keep those overrides unset for normal interactive use.
+Even with both unset, a `plugin_cache_dir` in the effective primary config
+(`.tofurc`, legacy `.terraformrc`, or the XDG `opentofu/tofurc`) can take
+precedence over a fragment. From the operator's normal shell, list the loaded
+files without showing their contents:
+
+```bash
+env -u TF_LOG_PATH TF_LOG=DEBUG tofu version 2>&1 | grep -F 'Loading CLI configuration from'
+```
+
+Inspect the loaded files privately for `plugin_cache_dir`. If a setting
+conflicts, decide which cache to use and manually remove the competing
+assignment or set it to the intended path. The role never edits other CLI
+files to resolve a conflict.
 Keep `plugin_cache_may_break_dependency_lock_file` and its environment
 equivalent disabled so the cache remains subject to the project's checksums.
 
 OpenTofu reuses the locked provider package from the cache and symlinks it
-into the working directory when possible. For a provider-only refresh of
-an existing root, use `tofu init -backend=false -input=false -lockfile=readonly`.
-Keep the existing backend metadata and workspace selection. To reclaim
-old standalone copies, verify the locked replacements first and retire
-only the generated `.terraform/providers` directories or individual
-packages. Leave the rest of `.terraform`, state and backups, lock files,
-saved plans and module configuration in place. The repository's
-`terraform/scripts/tofu-all.sh` runs roots sequentially and inherits the
+into the working directory when possible. Ordinary `tofu init` can reuse
+a provider already installed locally, so it may leave the standalone copy
+in place. To migrate an existing root, work from that root and keep its
+existing `TF_DATA_DIR` setting throughout:
+
+1. Stop all OpenTofu and Terraform operations that could access the project
+   or cache.
+2. Move only the generated `.terraform/providers` directory, or
+   `TF_DATA_DIR/providers` when configured, to a temporary backup on the same
+   filesystem. Leave backend metadata, workspace selection, downloaded modules,
+   state and backups, lock files, and saved plans in place.
+3. Run `tofu init -backend=false -input=false -lockfile=readonly`.
+4. Verify each required provider and platform against the lock file. Check
+   that the replacement links resolve into the intended cache, then run
+   `tofu validate`.
+5. Remove the provider backup only after those checks succeed.
+6. If initialisation or validation fails, move the incomplete replacement out
+   of the way and restore the backed-up provider directory to its original path.
+
+The repository's `terraform/scripts/tofu-all.sh` runs roots sequentially and inherits the
 operator's CLI configuration. Its `upgrade` action deliberately changes
 version selections, so leave it out of a cache migration.
 

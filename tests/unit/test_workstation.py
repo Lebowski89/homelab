@@ -401,6 +401,8 @@ class ActionModule(ActionBase):
             "os_family": "RedHat" if fedora else "Debian",
             "pkg_mgr": "dnf5" if fedora else "apt",
             "service_mgr": "systemd",
+            "effective_user_id": 1001,
+            "env": {"HOME": "/fixture/home"},
             "getent_passwd": {"fixture": ["x", "1001", "1001", "", "/fixture/home", "/bin/bash"]},
         }
         variables = {
