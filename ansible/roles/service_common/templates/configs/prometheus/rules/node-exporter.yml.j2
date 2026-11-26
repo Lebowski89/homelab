@@ -76,7 +76,7 @@ groups:
           priority: "9"
 
       - alert: HostLogrotateFailed
-        expr: node_systemd_unit_state{job="node-exporter", name=~"logrotate[.]service|skynet-traefik-reopen-logs[.]service", state="failed"} == 1
+        expr: node_systemd_unit_state{job="node-exporter", name=~"logrotate[.]service|skynet-traefik-(logrotate|reopen-logs)[.]service", state="failed"} == 1
         labels:
           severity: warning
         annotations:

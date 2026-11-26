@@ -325,16 +325,28 @@
         service_common_template_vars: "{{ podman_services_application_template_vars }}"
       tags: [deploy, update, recreate, bootstrap]
 
-    - name: Podman services | Reload the host manager after updating the Traefik reopen unit
+    - name: Podman services | Retire the blocking host logrotate start hook after switching Traefik policies
+      when:
+        - podman_services_service.name == 'traefik'
+        - podman_services_execution.mode == 'rootless'
+        - >-
+          '/etc/skynet-traefik-logrotate.conf' in
+          (podman_services_service_cfg.templates | default([]) | map(attribute='dest') | list)
+        - >-
+          '/etc/logrotate.d/skynet-traefik' in
+          (podman_services_service_cfg.templates | default([]) | map(attribute='dest') | list)
+      ansible.builtin.file:
+        path: /etc/systemd/system/logrotate.service.d/60-skynet-traefik-retry.conf
+        state: absent
+      tags: [deploy, update, recreate, bootstrap]
+
+    - name: Podman services | Load the Traefik reopen unit and reconcile removal of the legacy hook
       when:
         - not ansible_check_mode
         - podman_services_service.name == 'traefik'
         - >-
-          service_common_template_changes.results | default([])
-          | selectattr('service_common_template_item', 'defined')
-          | selectattr('service_common_template_item.dest', 'equalto', '/etc/systemd/system/skynet-traefik-reopen-logs.service')
-          | selectattr('changed')
-          | list | length > 0
+          '/etc/systemd/system/skynet-traefik-reopen-logs.service' in
+          (podman_services_service_cfg.templates | default([]) | map(attribute='dest') | list)
       ansible.builtin.systemd_service:
         daemon_reload: true
       tags: [deploy, update, recreate, bootstrap]

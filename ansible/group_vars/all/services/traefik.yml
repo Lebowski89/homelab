@@ -112,6 +112,13 @@ traefik:
       mode: "0644"
       force: true
       restart: false
+    - src: configs/proxy/traefik/logrotate-rootless.j2
+      dest: /etc/skynet-traefik-logrotate.conf
+      owner: "0"
+      group: "0"
+      mode: "0644"
+      force: true
+      restart: false
   volumes:
     config:
       type: bind

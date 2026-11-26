@@ -1,0 +1,15 @@
+[Unit]
+Description=Recover and rotate the rootless Traefik access log
+ConditionFileNotEmpty=/etc/skynet-traefik-logrotate.conf
+RequiresMountsFor=/var/log
+# Finish any already queued host rotation before the dedicated path starts.
+After=logrotate.service
+
+[Service]
+Type=oneshot
+ExecCondition=/usr/bin/grep -Fxq '# Managed independently by skynet-traefik-logrotate.service.' /etc/logrotate.d/skynet-traefik
+ExecStartPre=/bin/sh -ec 'if test -e /run/skynet-traefik-reopen-logs.pending; then /usr/bin/systemctl start skynet-traefik-reopen-logs.service && /usr/bin/rm -f /run/skynet-traefik-reopen-logs.pending || exit 1; fi'
+ExecStart=/usr/sbin/logrotate --state /var/lib/skynet-traefik-logrotate.status /etc/skynet-traefik-logrotate.conf
+PrivateTmp=true
+ProtectSystem=full
+RestrictNamespaces=true

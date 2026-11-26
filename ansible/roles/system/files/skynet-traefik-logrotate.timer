@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the rootless Traefik access log every 15 minutes
+
+[Timer]
+OnCalendar=*:0/15
+AccuracySec=1s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

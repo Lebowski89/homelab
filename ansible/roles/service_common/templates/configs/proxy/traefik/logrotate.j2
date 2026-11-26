@@ -1,26 +1,6 @@
-{{ service_common_service.volumes.logs.source }}/access.log {
-  daily
-  maxsize 25M
-  rotate 7
-  maxage 7
-  missingok
-  notifempty
-  compress
-  delaycompress
 {% set execution = (service_common_template_vars | default({})).runtime_execution | default((service_common_service.deploy | default({})).execution | default({'mode': 'rootful'})) %}
-  create 0640 {{ execution.host_user if execution.mode == 'rootless' else 'root' }} {{ execution.host_user if execution.mode == 'rootless' else 'root' }}
-  sharedscripts
 {% if service_common_runtime | default('docker') == 'podman' and execution.mode == 'rootless' %}
-  prerotate
-    /usr/bin/touch /run/skynet-traefik-reopen-logs.pending
-  endscript
-  postrotate
-    /usr/bin/systemctl start skynet-traefik-reopen-logs.service &&
-      /usr/bin/rm -f /run/skynet-traefik-reopen-logs.pending
-  endscript
+# Managed independently by skynet-traefik-logrotate.service.
 {% else %}
-  postrotate
-    /usr/local/sbin/skynet-traefik-reopen-logs
-  endscript
+{% include 'configs/proxy/traefik/logrotate-policy.j2' %}
 {% endif %}
-}

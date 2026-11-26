@@ -986,6 +986,7 @@ def _validate_rootless_managed_files(cfg: Mapping[str, Any], *, name: str, bind_
                 raise AnsibleFilterError(f"{item_name} must be a mapping")
             if cfg.get("name") == "traefik" and declaration.get("dest") in {
                 "/etc/logrotate.d/skynet-traefik",
+                "/etc/skynet-traefik-logrotate.conf",
                 "/usr/local/sbin/skynet-traefik-reopen-logs",
                 "/etc/systemd/system/skynet-traefik-reopen-logs.service",
             }:

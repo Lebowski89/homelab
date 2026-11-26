@@ -249,6 +249,13 @@ def test_traefik_access_log_has_bounded_reopen_safe_rotation():
     )
     assert "/usr/bin/podman kill --signal USR1 traefik" in podman_reopen
     assert "docker" not in podman_reopen
+    rootless_template = environment.get_template("configs/proxy/traefik/logrotate-rootless.j2")
+    assert not rootless_template.render(service_common_service=template_context, service_common_runtime="podman").strip()
+    assert not rootless_template.render(service_common_service=template_context, service_common_runtime="docker").strip()
+    rootful_policy = environment.get_template("configs/proxy/traefik/logrotate.j2").render(
+        service_common_service=template_context, service_common_runtime="podman"
+    )
+    assert rootful_policy == policy
     declarations = {item["src"]: item for item in service["templates"]}
     alloy_config = render_docker_alloy()
 

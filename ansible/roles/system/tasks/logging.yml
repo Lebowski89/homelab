@@ -14,7 +14,6 @@
   loop:
     - /etc/systemd/journald.conf.d
     - /etc/systemd/system/logrotate.timer.d
-    - /etc/systemd/system/logrotate.service.d
   loop_control:
     loop_var: system_log_dropin_dir
 
@@ -29,7 +28,45 @@
     owner: root
     group: root
     mode: '0644'
-  notify: System | Apply persistent journal limits
+  register: system_journal_limits
+
+- name: System | Compare installed journal settings with the last applied copy
+  ansible.builtin.stat:
+    path: "{{ system_journal_settings_path }}"
+  loop:
+    - /etc/systemd/journald.conf.d/60-skynet-storage.conf
+    - /var/lib/skynet-journald-storage.applied
+  loop_control:
+    loop_var: system_journal_settings_path
+  register: system_journal_settings
+
+- name: System | Apply persistent journal limits
+  when:
+    - not ansible_check_mode
+    - >-
+      system_journal_limits.changed
+      or (system_journal_settings.results[1].stat.checksum | default(''))
+      != system_journal_settings.results[0].stat.checksum
+  ansible.builtin.systemd_service:
+    name: systemd-journald.service
+    state: restarted
+
+# Flush is idempotent and creates persistent storage when needed.
+- name: System | Flush the journal to persistent storage
+  when: not ansible_check_mode
+  ansible.builtin.command:
+    argv: [/usr/bin/journalctl, --flush]
+  changed_when: false
+
+- name: System | Record journal configuration only after activation and flush
+  when: not ansible_check_mode
+  ansible.builtin.copy:
+    src: /etc/systemd/journald.conf.d/60-skynet-storage.conf
+    dest: /var/lib/skynet-journald-storage.applied
+    remote_src: true
+    owner: root
+    group: root
+    mode: '0644'
 
 - name: System | Configure the 15-minute logrotate check
   ansible.builtin.copy:
@@ -44,23 +81,33 @@
     owner: root
     group: root
     mode: '0644'
-  register: system_logrotate_schedule
 
-- name: System | Retry a pending Traefik reopen before evaluating log sizes
+- name: System | Install the independent Traefik rotation units
   ansible.builtin.copy:
-    dest: /etc/systemd/system/logrotate.service.d/60-skynet-traefik-retry.conf
-    content: |
-      [Service]
-      ExecStartPre=/bin/sh -ec 'if test -e /run/skynet-traefik-reopen-logs.pending; then /usr/bin/systemctl start skynet-traefik-reopen-logs.service && /usr/bin/rm -f /run/skynet-traefik-reopen-logs.pending || exit 1; fi'
+    src: "{{ system_logrotate_unit }}"
+    dest: "/etc/systemd/system/{{ system_logrotate_unit }}"
     owner: root
     group: root
     mode: '0644'
-  register: system_logrotate_recovery
+  loop:
+    - skynet-traefik-logrotate.service
+    - skynet-traefik-logrotate.timer
+  loop_control:
+    loop_var: system_logrotate_unit
 
-- name: System | Enable and start the distribution logrotate timer
+- name: System | Load logging units even when retrying an unchanged deployment
   when: not ansible_check_mode
   ansible.builtin.systemd_service:
-    name: logrotate.timer
+    daemon_reload: true
+
+- name: System | Enable and start both logrotate schedules
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: "{{ system_logrotate_timer }}"
     enabled: true
-    daemon_reload: "{{ system_logrotate_schedule.changed or system_logrotate_recovery.changed }}"
-    state: "{{ 'restarted' if system_logrotate_schedule.changed else 'started' }}"
+    state: started
+  loop:
+    - logrotate.timer
+    - skynet-traefik-logrotate.timer
+  loop_control:
+    loop_var: system_logrotate_timer

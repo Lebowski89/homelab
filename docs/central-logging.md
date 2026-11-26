@@ -137,19 +137,28 @@ account, home and runtime directory for rootless Podman and signals only the
 managed Traefik container with `SIGUSR1`. Rootful Podman uses its system runtime.
 The retained Docker path selects exactly one local running container by
 `com.docker.swarm.service.name=traefik_traefik` and rejects zero/multiple matches.
-On mgt, the rootless rotation hook starts `skynet-traefik-reopen-logs.service`
-and waits for its result. This gives the helper a separate systemd execution
-context while the distribution's `logrotate.service` retains its namespace
-restrictions. A marker under `/run` is set before a rename and cleared only
-after a successful reopen. The next scheduled check retries a pending reopen
-before looking at the size of the replacement file. After fixing a reopen
-failure, run `sudo systemctl start logrotate.service` to retry immediately.
-Inspect both units with `journalctl -u logrotate.service -u skynet-traefik-reopen-logs.service`.
+On mgt, `skynet-traefik-logrotate.timer` schedules the rootless Traefik policy
+separately from the distribution's `logrotate.timer`. The Traefik rotation
+unit waits for `skynet-traefik-reopen-logs.service`, which runs the helper in its
+own execution context. Systemd serializes timer and manual starts of the
+Traefik rotation unit. A marker under `/run` blocks further Traefik rotation
+and retention until the helper confirms the process opened the new inode
+and released the old one. Pending recovery runs before checking the active
+file size, even if the active log is empty. After correcting a reopen failure,
+run `sudo systemctl start skynet-traefik-logrotate.service` to retry immediately.
+Inspect `journalctl -u skynet-traefik-logrotate.service -u skynet-traefik-reopen-logs.service`.
+The distribution logrotate service keeps its namespace restrictions and
+checks unrelated policies independently.
 The signal reopens logs without restarting Traefik. Alloy matches only
 `access.log`, never rotated or compressed names.
 
-The opt-in `system_logging` tag enables a persistent quarter-hour logrotate
-timer and caps the persistent journal at 1 GiB with `SystemKeepFree=5G`.
+The `system_logging` tag selects these logging tasks.
+`system_log_capacity_enabled: true` enables them, and mgt already opts in.
+The tasks enable both persistent quarter-hour timers and cap the persistent
+journal at 1 GiB with `SystemKeepFree=5G`. The role flushes volatile journal
+entries after applying the settings. Deploy the updated Traefik artifacts
+alongside the system logging tasks to move its policy outside
+`/etc/logrotate.d` and retire the old blocking hook.
 Traefik still rotates daily or when its file exceeds 25 MiB at a check.
 On Ubuntu the role removes the duplicate cloud-init rule only when dpkg
 identifies it as obsolete and both definitions match the package checksum.
