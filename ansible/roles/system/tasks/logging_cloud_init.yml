@@ -11,7 +11,6 @@
   register: system_cloud_log_rules
 
 - name: System | Check package conffile records for the duplicate
-  # checkov:skip=CKV2_ANSIBLE_3:Ownership or package lookup failures must stop before removing a conffile.
   when: system_cloud_log_rules.results | selectattr('stat.exists') | list | length == 2
   block:
     - name: System | Read dpkg ownership and obsolete status
@@ -51,3 +50,11 @@
       ansible.builtin.file:
         path: /etc/logrotate.d/cloud-init
         state: absent
+
+  rescue:
+    - name: System | Stop on cloud-init rotation reconciliation failure
+      ansible.builtin.fail:
+        msg: >-
+          Cloud-init logrotate reconciliation failed at "{{ ansible_failed_task.name }}".
+          Check the failed task, then verify that dpkg marks /etc/logrotate.d/cloud-init
+          obsolete and both rules match their package checksums before retrying.
