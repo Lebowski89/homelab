@@ -355,6 +355,10 @@
 
 | Name | Module | Has Conditions |
 | ---- | ------ | -------------- |
+| Workstation OpenTofu ¦ Check for the legacy CLI configuration directory | ansible.builtin.stat | False |
+| Workstation OpenTofu ¦ Resolve XDG configuration from the operator context | ansible.builtin.set_fact | False |
+| Workstation OpenTofu ¦ Require an absolute XDG configuration path when set | ansible.builtin.assert | False |
+| Workstation OpenTofu ¦ Select the CLI fragment directory | ansible.builtin.set_fact | False |
 | Workstation OpenTofu ¦ Inspect operator cache and CLI configuration paths | ansible.builtin.stat | False |
 | Workstation OpenTofu ¦ Require owned paths and refuse symlink targets | ansible.builtin.assert | False |
 | Workstation OpenTofu ¦ Create the private shared cache directory | ansible.builtin.file | False |
