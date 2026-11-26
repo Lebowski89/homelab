@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/11/26 |
+| Readme update        | 2026/11/27 |
 
 
 
@@ -165,14 +165,19 @@ may retire the exact unit and generated script previously owned by ubuntu. |
 
 #### File: tasks/logging.yml
 
-| Name | Module | Has Conditions |
-| ---- | ------ | -------------- |
-| System ¦ Resolve the Ubuntu cloud-init package split | ansible.builtin.include_tasks | True |
-| System ¦ Create log capacity drop-in directories | ansible.builtin.file | False |
-| System ¦ Configure persistent journal storage limits | ansible.builtin.copy | False |
-| System ¦ Configure the 15-minute logrotate check | ansible.builtin.copy | False |
-| System ¦ Retry a pending Traefik reopen before evaluating log sizes | ansible.builtin.copy | False |
-| System ¦ Enable and start the distribution logrotate timer | ansible.builtin.systemd_service | True |
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| System ¦ Resolve the Ubuntu cloud-init package split | ansible.builtin.include_tasks | True |  |
+| System ¦ Create log capacity drop-in directories | ansible.builtin.file | False |  |
+| System ¦ Configure persistent journal storage limits | ansible.builtin.copy | False |  |
+| System ¦ Compare installed journal settings with the last applied copy | ansible.builtin.stat | False |  |
+| System ¦ Apply persistent journal limits | ansible.builtin.systemd_service | True |  |
+| System ¦ Flush the journal to persistent storage | ansible.builtin.command | True | Flush is idempotent and creates persistent storage when needed. |
+| System ¦ Record journal configuration only after activation and flush | ansible.builtin.copy | True |  |
+| System ¦ Configure the 15-minute logrotate check | ansible.builtin.copy | False |  |
+| System ¦ Install the independent Traefik rotation units | ansible.builtin.copy | False |  |
+| System ¦ Load logging units even when retrying an unchanged deployment | ansible.builtin.systemd_service | True |  |
+| System ¦ Enable and start both logrotate schedules | ansible.builtin.systemd_service | True |  |
 
 #### File: tasks/logging_cloud_init.yml
 
