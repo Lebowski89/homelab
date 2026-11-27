@@ -10,7 +10,7 @@
 
 | Field                | Value           |
 |--------------------- |-----------------|
-| Readme update        | 2026/11/15 |
+| Readme update        | 2026/11/27 |
 
 
 
@@ -40,9 +40,10 @@
 | [alloy_native_config_path](defaults/alloy.yml#L14)   | str | `{{ native_services_config.config_path }}` |    
 | [alloy_native_journal_groups](defaults/alloy.yml#L15)   | str | `{{ native_services_config.journal_groups }}` |    
 | [alloy_native_loki_url](defaults/alloy.yml#L16)   | str | `{{ native_services_config.loki_url }}` |    
-| [alloy_native_rpm_baseurl](defaults/alloy.yml#L20)   | str | `https://rpm.grafana.com` |    
-| [alloy_native_rpm_key_url](defaults/alloy.yml#L21)   | str | `{{ alloy_native_rpm_baseurl }}/gpg.key` |    
-| [alloy_native_rpm_key_fingerprint](defaults/alloy.yml#L22)   | str | `B53AE77BADB630A683046005963FA27710458545` |    
+| [alloy_native_prometheus_url](defaults/alloy.yml#L17)   | str | `{{ native_services_config.prometheus_url ¦ default('') }}` |    
+| [alloy_native_rpm_baseurl](defaults/alloy.yml#L21)   | str | `https://rpm.grafana.com` |    
+| [alloy_native_rpm_key_url](defaults/alloy.yml#L22)   | str | `{{ alloy_native_rpm_baseurl }}/gpg.key` |    
+| [alloy_native_rpm_key_fingerprint](defaults/alloy.yml#L23)   | str | `B53AE77BADB630A683046005963FA27710458545` |    
 
 #### File: defaults/forgejo_runner.yml
 
@@ -133,6 +134,8 @@
 | Alloy native ¦ Grant journal access to package service account | ansible.builtin.user | True |
 | Alloy native ¦ Ensure configuration directory exists | ansible.builtin.file | True |
 | Alloy native ¦ Render collector configuration | ansible.builtin.template | True |
+| Alloy native ¦ Ensure the package unit drop-in directory exists | ansible.builtin.file | True |
+| Alloy native ¦ Limit journal writes from this unit | ansible.builtin.copy | True |
 | Native services ¦ Record adopted alloy configuration | ansible.builtin.include_tasks | True |
 | Alloy native ¦ Enable and start service | ansible.builtin.systemd_service | True |
 

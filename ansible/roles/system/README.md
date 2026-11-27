@@ -29,76 +29,78 @@
 |--------------|--------------|-------------|
 | [system_packages_enabled](defaults/main.yml#L3)   | bool | `True` |    
 | [system_log_capacity_enabled](defaults/main.yml#L5)   | bool | `False` |    
-| [system_sysctl_enabled](defaults/main.yml#L6)   | bool | `True` |    
-| [system_limits_enabled](defaults/main.yml#L7)   | bool | `True` |    
-| [system_guest_agent_enabled](defaults/main.yml#L8)   | bool | `True` |    
-| [system_extra_packages](defaults/main.yml#L9)   | list | `[]` |    
-| [system_package_cache_valid_time](defaults/main.yml#L10)   | int | `3600` |    
-| [system_sysctl_file](defaults/main.yml#L13)   | str | `/etc/sysctl.d/99-ubuntu-tuning.conf` |    
-| [system_limits_file](defaults/main.yml#L14)   | str | `/etc/security/limits.d/99-ubuntu.conf` |    
-| [system_limits](defaults/main.yml#L15)   | list | `[]` |    
-| [system_limits.**0**](defaults/main.yml#L16)   | dict | `{}` |    
-| [system_limits.0.**domain**](defaults/main.yml#L16)   | str | `*` |    
-| [system_limits.0.**type**](defaults/main.yml#L17)   | str | `-` |    
-| [system_limits.0.**item**](defaults/main.yml#L18)   | str | `nofile` |    
-| [system_limits.0.**value**](defaults/main.yml#L19)   | int | `100000` |    
-| [system_swap_enabled](defaults/main.yml#L23)   | bool | `False` |    
-| [system_swap_path](defaults/main.yml#L24)   | str | `/swapfile` |    
-| [system_swap_size_mb](defaults/main.yml#L25)   | int | `2048` |    
-| [system_nic_interfaces](defaults/main.yml#L28)   | dict | `{}` |    
-| [system_nic_migrate_legacy](defaults/main.yml#L30)   | bool | `False` |    
-| [system_updates_upgrade](defaults/main.yml#L33)   | bool | `True` |    
-| [system_updates_autoremove](defaults/main.yml#L34)   | bool | `False` |    
-| [system_updates_autoclean](defaults/main.yml#L35)   | bool | `False` |    
-| [system_resolved_enabled](defaults/main.yml#L39)   | bool | `False` |    
-| [system_resolved_disable_stub](defaults/main.yml#L40)   | bool | `False` |    
-| [system_resolved_manage_resolv_conf](defaults/main.yml#L41)   | str | `{{ system_resolved_disable_stub }}` |    
-| [system_resolved_manage_nsswitch](defaults/main.yml#L42)   | str | `{{ ansible_facts.pkg_mgr ¦ default('') == 'apt' }}` |    
-| [system_resolved_nsswitch_path](defaults/main.yml#L43)   | str | `/etc/nsswitch.conf` |    
-| [system_resolved_nsswitch_backup](defaults/main.yml#L44)   | bool | `True` |    
-| [system_resolved_nsswitch_hosts_line](defaults/main.yml#L45)   | str | `hosts:          files resolve [!UNAVAIL=return] dns` |    
-| [system_resolved_packages](defaults/main.yml#L46)   | str | `{{ ['libnss-resolve'] if ansible_facts.pkg_mgr == 'apt' else ['systemd-resolved'] }}` |    
-| [system_resolved_service_name](defaults/main.yml#L47)   | str | `systemd-resolved` |    
-| [system_resolved_config_dir](defaults/main.yml#L48)   | str | `/etc/systemd/resolved.conf.d` |    
-| [system_resolved_dropin_path](defaults/main.yml#L49)   | str | `{{ system_resolved_config_dir }}/99-skynet.conf` |    
-| [system_resolved_resolv_conf_path](defaults/main.yml#L50)   | str | `/etc/resolv.conf` |    
-| [system_resolved_resolv_conf_target](defaults/main.yml#L51)   | str | `<multiline value: folded_strip>` |    
-| [system_resolved_fallback_dns](defaults/main.yml#L55)   | list | `[]` |    
-| [system_resolved_fallback_dns.**0**](defaults/main.yml#L55)   | str | `1.1.1.1` |    
-| [system_resolved_fallback_dns.**1**](defaults/main.yml#L55)   | str | `9.9.9.9` |    
-| [system_resolved_cleanup_dropins](defaults/main.yml#L56)   | str | `{{ ['/etc/systemd/resolved.conf.d/no-stub-listener.conf'] if ansible_facts.pkg_mgr == 'apt' else [] }}` |    
-| [system_apt_environment](defaults/main.yml#L58)   | dict | `{}` |    
-| [system_apt_environment.**DEBIAN_FRONTEND**](defaults/main.yml#L59)   | str | `noninteractive` |    
-| [system_apt_environment.**DEBIAN_PRIORITY**](defaults/main.yml#L60)   | str | `critical` |    
-| [system_sysctl_settings](defaults/main.yml#L62)   | dict | `{}` |    
-| [system_sysctl_settings.fs.inotify.**max_user_watches**](defaults/main.yml#L63)   | int | `524288` |    
-| [system_sysctl_settings.net.core.**default_qdisc**](defaults/main.yml#L64)   | str | `fq` |    
-| [system_sysctl_settings.net.core.**rmem_max**](defaults/main.yml#L65)   | int | `67108864` |    
-| [system_sysctl_settings.net.core.**somaxconn**](defaults/main.yml#L66)   | int | `4096` |    
-| [system_sysctl_settings.net.core.**wmem_max**](defaults/main.yml#L67)   | int | `67108864` |    
-| [system_sysctl_settings.net.ipv4.conf.all.**accept_redirects**](defaults/main.yml#L68)   | int | `0` |    
-| [system_sysctl_settings.net.ipv4.conf.all.**accept_source_route**](defaults/main.yml#L69)   | int | `0` |    
-| [system_sysctl_settings.net.ipv4.conf.all.**secure_redirects**](defaults/main.yml#L70)   | int | `0` |    
-| [system_sysctl_settings.net.ipv4.**tcp_congestion_control**](defaults/main.yml#L71)   | str | `bbr` |    
-| [system_sysctl_settings.net.ipv4.**tcp_fin_timeout**](defaults/main.yml#L72)   | int | `10` |    
-| [system_sysctl_settings.net.ipv4.**tcp_max_syn_backlog**](defaults/main.yml#L73)   | int | `30000` |    
-| [system_sysctl_settings.net.ipv4.**tcp_max_tw_buckets**](defaults/main.yml#L74)   | int | `2000000` |    
-| [system_sysctl_settings.net.ipv4.**tcp_mtu_probing**](defaults/main.yml#L75)   | int | `1` |    
-| [system_sysctl_settings.net.ipv4.**tcp_rfc1337**](defaults/main.yml#L76)   | int | `1` |    
-| [system_sysctl_settings.net.ipv4.**tcp_rmem**](defaults/main.yml#L77)   | str | `4096 87380 33554432` |    
-| [system_sysctl_settings.net.ipv4.**tcp_sack**](defaults/main.yml#L78)   | int | `1` |    
-| [system_sysctl_settings.net.ipv4.**tcp_slow_start_after_idle**](defaults/main.yml#L79)   | int | `0` |    
-| [system_sysctl_settings.net.ipv4.**tcp_tw_reuse**](defaults/main.yml#L80)   | int | `2` |    
-| [system_sysctl_settings.net.ipv4.**tcp_window_scaling**](defaults/main.yml#L81)   | int | `1` |    
-| [system_sysctl_settings.net.ipv4.**tcp_wmem**](defaults/main.yml#L82)   | str | `4096 87380 33554432` |    
-| [system_sysctl_settings.net.ipv4.**udp_rmem_min**](defaults/main.yml#L83)   | int | `8192` |    
-| [system_sysctl_settings.net.ipv4.**udp_wmem_min**](defaults/main.yml#L84)   | int | `8192` |    
-| [system_sysctl_settings.net.ipv4.neigh.default.**gc_thresh1**](defaults/main.yml#L85)   | int | `1024` |    
-| [system_sysctl_settings.net.ipv4.neigh.default.**gc_thresh2**](defaults/main.yml#L86)   | int | `2048` |    
-| [system_sysctl_settings.net.ipv4.neigh.default.**gc_thresh3**](defaults/main.yml#L87)   | int | `4096` |    
-| [system_sysctl_settings.vm.**dirty_background_ratio**](defaults/main.yml#L88)   | int | `10` |    
-| [system_sysctl_settings.vm.**dirty_ratio**](defaults/main.yml#L89)   | int | `15` |    
-| [system_sysctl_settings.vm.**swappiness**](defaults/main.yml#L90)   | int | `10` |    
+| [system_journal_only_enabled](defaults/main.yml#L7)   | bool | `False` |    
+| [system_alloy_journal_probe_enabled](defaults/main.yml#L9)   | bool | `False` |    
+| [system_sysctl_enabled](defaults/main.yml#L10)   | bool | `True` |    
+| [system_limits_enabled](defaults/main.yml#L11)   | bool | `True` |    
+| [system_guest_agent_enabled](defaults/main.yml#L12)   | bool | `True` |    
+| [system_extra_packages](defaults/main.yml#L13)   | list | `[]` |    
+| [system_package_cache_valid_time](defaults/main.yml#L14)   | int | `3600` |    
+| [system_sysctl_file](defaults/main.yml#L17)   | str | `/etc/sysctl.d/99-ubuntu-tuning.conf` |    
+| [system_limits_file](defaults/main.yml#L18)   | str | `/etc/security/limits.d/99-ubuntu.conf` |    
+| [system_limits](defaults/main.yml#L19)   | list | `[]` |    
+| [system_limits.**0**](defaults/main.yml#L20)   | dict | `{}` |    
+| [system_limits.0.**domain**](defaults/main.yml#L20)   | str | `*` |    
+| [system_limits.0.**type**](defaults/main.yml#L21)   | str | `-` |    
+| [system_limits.0.**item**](defaults/main.yml#L22)   | str | `nofile` |    
+| [system_limits.0.**value**](defaults/main.yml#L23)   | int | `100000` |    
+| [system_swap_enabled](defaults/main.yml#L27)   | bool | `False` |    
+| [system_swap_path](defaults/main.yml#L28)   | str | `/swapfile` |    
+| [system_swap_size_mb](defaults/main.yml#L29)   | int | `2048` |    
+| [system_nic_interfaces](defaults/main.yml#L32)   | dict | `{}` |    
+| [system_nic_migrate_legacy](defaults/main.yml#L34)   | bool | `False` |    
+| [system_updates_upgrade](defaults/main.yml#L37)   | bool | `True` |    
+| [system_updates_autoremove](defaults/main.yml#L38)   | bool | `False` |    
+| [system_updates_autoclean](defaults/main.yml#L39)   | bool | `False` |    
+| [system_resolved_enabled](defaults/main.yml#L43)   | bool | `False` |    
+| [system_resolved_disable_stub](defaults/main.yml#L44)   | bool | `False` |    
+| [system_resolved_manage_resolv_conf](defaults/main.yml#L45)   | str | `{{ system_resolved_disable_stub }}` |    
+| [system_resolved_manage_nsswitch](defaults/main.yml#L46)   | str | `{{ ansible_facts.pkg_mgr ¦ default('') == 'apt' }}` |    
+| [system_resolved_nsswitch_path](defaults/main.yml#L47)   | str | `/etc/nsswitch.conf` |    
+| [system_resolved_nsswitch_backup](defaults/main.yml#L48)   | bool | `True` |    
+| [system_resolved_nsswitch_hosts_line](defaults/main.yml#L49)   | str | `hosts:          files resolve [!UNAVAIL=return] dns` |    
+| [system_resolved_packages](defaults/main.yml#L50)   | str | `{{ ['libnss-resolve'] if ansible_facts.pkg_mgr == 'apt' else ['systemd-resolved'] }}` |    
+| [system_resolved_service_name](defaults/main.yml#L51)   | str | `systemd-resolved` |    
+| [system_resolved_config_dir](defaults/main.yml#L52)   | str | `/etc/systemd/resolved.conf.d` |    
+| [system_resolved_dropin_path](defaults/main.yml#L53)   | str | `{{ system_resolved_config_dir }}/99-skynet.conf` |    
+| [system_resolved_resolv_conf_path](defaults/main.yml#L54)   | str | `/etc/resolv.conf` |    
+| [system_resolved_resolv_conf_target](defaults/main.yml#L55)   | str | `<multiline value: folded_strip>` |    
+| [system_resolved_fallback_dns](defaults/main.yml#L59)   | list | `[]` |    
+| [system_resolved_fallback_dns.**0**](defaults/main.yml#L59)   | str | `1.1.1.1` |    
+| [system_resolved_fallback_dns.**1**](defaults/main.yml#L59)   | str | `9.9.9.9` |    
+| [system_resolved_cleanup_dropins](defaults/main.yml#L60)   | str | `{{ ['/etc/systemd/resolved.conf.d/no-stub-listener.conf'] if ansible_facts.pkg_mgr == 'apt' else [] }}` |    
+| [system_apt_environment](defaults/main.yml#L62)   | dict | `{}` |    
+| [system_apt_environment.**DEBIAN_FRONTEND**](defaults/main.yml#L63)   | str | `noninteractive` |    
+| [system_apt_environment.**DEBIAN_PRIORITY**](defaults/main.yml#L64)   | str | `critical` |    
+| [system_sysctl_settings](defaults/main.yml#L66)   | dict | `{}` |    
+| [system_sysctl_settings.fs.inotify.**max_user_watches**](defaults/main.yml#L67)   | int | `524288` |    
+| [system_sysctl_settings.net.core.**default_qdisc**](defaults/main.yml#L68)   | str | `fq` |    
+| [system_sysctl_settings.net.core.**rmem_max**](defaults/main.yml#L69)   | int | `67108864` |    
+| [system_sysctl_settings.net.core.**somaxconn**](defaults/main.yml#L70)   | int | `4096` |    
+| [system_sysctl_settings.net.core.**wmem_max**](defaults/main.yml#L71)   | int | `67108864` |    
+| [system_sysctl_settings.net.ipv4.conf.all.**accept_redirects**](defaults/main.yml#L72)   | int | `0` |    
+| [system_sysctl_settings.net.ipv4.conf.all.**accept_source_route**](defaults/main.yml#L73)   | int | `0` |    
+| [system_sysctl_settings.net.ipv4.conf.all.**secure_redirects**](defaults/main.yml#L74)   | int | `0` |    
+| [system_sysctl_settings.net.ipv4.**tcp_congestion_control**](defaults/main.yml#L75)   | str | `bbr` |    
+| [system_sysctl_settings.net.ipv4.**tcp_fin_timeout**](defaults/main.yml#L76)   | int | `10` |    
+| [system_sysctl_settings.net.ipv4.**tcp_max_syn_backlog**](defaults/main.yml#L77)   | int | `30000` |    
+| [system_sysctl_settings.net.ipv4.**tcp_max_tw_buckets**](defaults/main.yml#L78)   | int | `2000000` |    
+| [system_sysctl_settings.net.ipv4.**tcp_mtu_probing**](defaults/main.yml#L79)   | int | `1` |    
+| [system_sysctl_settings.net.ipv4.**tcp_rfc1337**](defaults/main.yml#L80)   | int | `1` |    
+| [system_sysctl_settings.net.ipv4.**tcp_rmem**](defaults/main.yml#L81)   | str | `4096 87380 33554432` |    
+| [system_sysctl_settings.net.ipv4.**tcp_sack**](defaults/main.yml#L82)   | int | `1` |    
+| [system_sysctl_settings.net.ipv4.**tcp_slow_start_after_idle**](defaults/main.yml#L83)   | int | `0` |    
+| [system_sysctl_settings.net.ipv4.**tcp_tw_reuse**](defaults/main.yml#L84)   | int | `2` |    
+| [system_sysctl_settings.net.ipv4.**tcp_window_scaling**](defaults/main.yml#L85)   | int | `1` |    
+| [system_sysctl_settings.net.ipv4.**tcp_wmem**](defaults/main.yml#L86)   | str | `4096 87380 33554432` |    
+| [system_sysctl_settings.net.ipv4.**udp_rmem_min**](defaults/main.yml#L87)   | int | `8192` |    
+| [system_sysctl_settings.net.ipv4.**udp_wmem_min**](defaults/main.yml#L88)   | int | `8192` |    
+| [system_sysctl_settings.net.ipv4.neigh.default.**gc_thresh1**](defaults/main.yml#L89)   | int | `1024` |    
+| [system_sysctl_settings.net.ipv4.neigh.default.**gc_thresh2**](defaults/main.yml#L90)   | int | `2048` |    
+| [system_sysctl_settings.net.ipv4.neigh.default.**gc_thresh3**](defaults/main.yml#L91)   | int | `4096` |    
+| [system_sysctl_settings.vm.**dirty_background_ratio**](defaults/main.yml#L92)   | int | `10` |    
+| [system_sysctl_settings.vm.**dirty_ratio**](defaults/main.yml#L93)   | int | `15` |    
+| [system_sysctl_settings.vm.**swappiness**](defaults/main.yml#L94)   | int | `10` |    
 
 
 ### Vars
@@ -165,19 +167,23 @@ may retire the exact unit and generated script previously owned by ubuntu. |
 
 #### File: tasks/logging.yml
 
-| Name | Module | Has Conditions | Comments |
-| ---- | ------ | -------------- | -------- |
-| System ¦ Resolve the Ubuntu cloud-init package split | ansible.builtin.include_tasks | True |  |
-| System ¦ Create log capacity drop-in directories | ansible.builtin.file | False |  |
-| System ¦ Configure persistent journal storage limits | ansible.builtin.copy | False |  |
-| System ¦ Compare installed journal settings with the last applied copy | ansible.builtin.stat | False |  |
-| System ¦ Apply persistent journal limits | ansible.builtin.systemd_service | True |  |
-| System ¦ Flush the journal to persistent storage | ansible.builtin.command | True | Flush is idempotent and creates persistent storage when needed. |
-| System ¦ Record journal configuration only after activation and flush | ansible.builtin.copy | True |  |
-| System ¦ Configure the 15-minute logrotate check | ansible.builtin.copy | False |  |
-| System ¦ Install the independent Traefik rotation units | ansible.builtin.copy | False |  |
-| System ¦ Load logging units even when retrying an unchanged deployment | ansible.builtin.systemd_service | True |  |
-| System ¦ Enable and start both logrotate schedules | ansible.builtin.systemd_service | True |  |
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| System ¦ Resolve the Ubuntu cloud-init package split | ansible.builtin.include_tasks | True |
+| System ¦ Configure the journal and its local consumers | ansible.builtin.import_tasks | False |
+| System ¦ Create the host logrotate timer drop-in directory | ansible.builtin.file | False |
+| System ¦ Configure the 15-minute logrotate check | ansible.builtin.copy | False |
+| System ¦ Install the independent Traefik rotation units | ansible.builtin.copy | False |
+| System ¦ Load logging units even when retrying an unchanged deployment | ansible.builtin.systemd_service | True |
+| System ¦ Enable and start both logrotate schedules | ansible.builtin.systemd_service | True |
+
+#### File: tasks/logging_alloy_probe.yml
+
+| Name | Module | Has Conditions |
+| ---- | ------ | -------------- |
+| System ¦ Install the journal probe | ansible.builtin.copy | False |
+| System ¦ Install the journal probe units | ansible.builtin.copy | False |
+| System ¦ Enable the independent journal probe | ansible.builtin.systemd_service | True |
 
 #### File: tasks/logging_cloud_init.yml
 
@@ -188,6 +194,28 @@ may retire the exact unit and generated script previously owned by ubuntu. |
 | System ¦ Read dpkg ownership and obsolete status | ansible.builtin.command | False |
 | System ¦ Require an unmodified obsolete rule and its installed replacement | ansible.builtin.assert | False |
 | System ¦ Remove only the verified obsolete cloud-init rotation definition | ansible.builtin.file | False |
+
+#### File: tasks/logging_journal.yml
+
+| Name | Module | Has Conditions | Comments |
+| ---- | ------ | -------------- | -------- |
+| System ¦ Create the journal configuration drop-in directory | ansible.builtin.file | False |  |
+| System ¦ Configure persistent journal storage limits | ansible.builtin.copy | False |  |
+| System ¦ Retire the previous managed journal drop-in | ansible.builtin.file | False |  |
+| System ¦ Read effective journal configuration before retiring syslog | ansible.builtin.command | True |  |
+| System ¦ Require the managed forwarding setting to win | ansible.builtin.assert | True |  |
+| System ¦ Compare installed journal settings with the last applied copy | ansible.builtin.stat | False |  |
+| System ¦ Apply persistent journal limits | ansible.builtin.systemd_service | True |  |
+| System ¦ Flush the journal to persistent storage | ansible.builtin.command | True | Flush is idempotent and creates persistent storage when needed. |
+| System ¦ Record journal configuration only after activation and flush | ansible.builtin.copy | True |  |
+| System ¦ Discover the local syslog service | ansible.builtin.service_facts | True |  |
+| System ¦ Inspect active and retained rsyslog rotation configurations | ansible.builtin.stat | True |  |
+| System ¦ Retain the legacy rotation configuration without running its reopen hook | block | True |  |
+| System ¦ Require an unconflicted legacy rotation file | ansible.builtin.assert | False |  |
+| System ¦ Preserve the exact legacy rule outside logrotate's include directory | ansible.builtin.copy | False |  |
+| System ¦ Remove the saved legacy rule from logrotate scheduling | ansible.builtin.file | False |  |
+| System ¦ Retire redundant syslog storage after activating journald | ansible.builtin.systemd_service | True |  |
+| System ¦ Configure the independent native Alloy journal probe | ansible.builtin.import_tasks | True |  |
 
 #### File: tasks/main.yml
 
