@@ -89,6 +89,7 @@ NODE_DERIVED = {
     "extract_dir": "/tmp/node_exporter-{{ node_exporter_version }}.linux-{{ node_exporter_arch }}",
     "checksum": "sha256:{{ node_exporter_release_url }}/sha256sums.txt",
 }
+OPTIONAL_FIELDS = {"alloy": {"prometheus_url"}}
 
 
 def native_services_inputs(native, inventory):
@@ -96,12 +97,14 @@ def native_services_inputs(native, inventory):
         raise AnsibleFilterError("native needs a supported application and config mapping")
     app = native["application"]
     config = dict(native["config"])
-    unknown = set(config) - FIELDS[app]
+    optional = OPTIONAL_FIELDS.get(app, set())
+    fields = FIELDS[app] | optional
+    unknown = set(config) - fields
     if unknown:
         raise AnsibleFilterError(f"native.config has unsupported {app} settings: {', '.join(sorted(unknown))}")
     if app == "node_exporter":
         config = {**{key: trust_as_template(value) for key, value in NODE_DERIVED.items()}, **config}
-    for key in FIELDS[app]:
+    for key in fields:
         variable = PREFIXES[app] + key
         if variable in inventory:
             config[key] = inventory[variable]
@@ -161,6 +164,10 @@ def native_services_normalize(native):
             raise AnsibleFilterError(f"native.config.{key} must be an absolute non-root path without traversal")
     if app == "alloy" and not config["packages"]:
         raise AnsibleFilterError("native.config.packages must not be empty")
+    if app == "alloy" and "prometheus_url" in config:
+        url = urlsplit(config["prometheus_url"])
+        if url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment:
+            raise AnsibleFilterError("native.config.prometheus_url must use verified HTTPS without inline credentials")
     if app == "forgejo_runner":
         url = urlsplit(config["server_url"])
         if (

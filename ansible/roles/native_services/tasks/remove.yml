@@ -50,7 +50,9 @@
   when:
     - >-
       native_services_application == 'node_exporter' or
-      ('/etc/systemd/system/' ~ native_services_unit ~ '.service') in (native_services_previous.files | default([]))
+      ('/etc/systemd/system/' ~ native_services_unit ~ '.service') in (native_services_previous.files | default([])) or
+      ('/etc/systemd/system/' ~ native_services_unit ~ '.service.d/60-skynet-log-rate.conf')
+      in (native_services_previous.files | default([]))
     - native_services_state_stat.stat.exists
     - not ansible_check_mode
   ansible.builtin.systemd_service:

@@ -1,0 +1,9 @@
+[Unit]
+Description=Sample journal activity every two minutes
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=2min
+
+[Install]
+WantedBy=timers.target

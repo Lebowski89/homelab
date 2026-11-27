@@ -472,7 +472,7 @@ def test_selected_service_preserves_target_overrides_and_handler_isolation(nativ
     managed = set()
     for call in calls:
         destination = call["options"].get("dest", "")
-        if call["module"] == "template" or destination == "/etc/systemd/resolved.conf.d/technitium.conf":
+        if call["module"] == "template" or (call["module"] == "copy" and destination.endswith(".conf")):
             managed.add(destination)
         if call["module"] == "copy" and destination.endswith(".json"):
             assert set(json.loads(call["options"]["content"])["files"]) <= managed
@@ -808,7 +808,7 @@ def test_alloy_selects_signed_platform_repository_and_preserves_update_policy(na
     assert user["groups"] == ["systemd-journal"] and user["append"] is True
     assert not any(call["module"] == "group" for call in calls)
     services = [call["options"] for call in calls if call["module"] == "systemd_service" and not call["handler"]]
-    assert services == [{"name": "fixture-alloyd", "enabled": True, "state": "started"}]
+    assert services == [{"name": "fixture-alloyd", "enabled": True, "state": "started", "daemon_reload": True}]
 
 
 def test_alloy_preserves_rpm_repository_and_package_overrides(native_run):

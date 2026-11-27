@@ -129,8 +129,16 @@ class ActionModule(ActionBase):
         state_path = Path(v['fixture_state'])
         state = json.loads(state_path.read_text())
         result = {'changed': False, 'rc': 0, 'stdout': '', 'stdout_lines': []}
-        journal_settings = '/etc/systemd/journald.conf.d/60-skynet-storage.conf'
+        journal_settings = '/etc/systemd/journald.conf.d/zz-skynet-storage.conf'
         journal_receipt = '/var/lib/skynet-journald-storage.applied'
+        syslog_rule = '/etc/logrotate.d/rsyslog'
+        retained_syslog_rule = '/etc/rsyslog.logrotate.skynet-retired'
+        if module == 'stat' and options.get('path') in (syslog_rule, retained_syslog_rule):
+            content = v.get('fixture_syslog_rules', {}).get(options['path'])
+            return dict(result, stat={'exists': False} if content is None else {
+                'exists': True, 'isreg': True, 'uid': 0, 'checksum': hashlib.sha1(content.encode()).hexdigest()})
+        if module == 'command' and options.get('argv') == ['/usr/bin/systemd-analyze', 'cat-config', 'systemd/journald.conf']:
+            return dict(result, stdout_lines=['ForwardToSyslog=yes', 'ForwardToSyslog=no'] + v.get('fixture_journal_overrides', []))
         if module == 'copy' and options.get('dest') in (journal_settings, journal_receipt):
             files = state.setdefault('journal_files', {})
             content = options.get('content') if options['dest'] == journal_settings else files[journal_settings]
@@ -874,6 +882,33 @@ def test_logging_activation_recovers_unapplied_files_and_flushes_without_restart
     result, calls, _ = system_run(**options)
     successful(result)
     assert operations(calls) == expected[1:]
+
+    options["overrides"].update(
+        system_journal_only_enabled=True,
+        fixture_services={"rsyslog.service": {"state": "running", "status": "enabled"}},
+        fixture_syslog_rules={"/etc/logrotate.d/rsyslog": "fixture vendor rotation rule"},
+    )
+    result, calls, _ = system_run(**options, check=True)
+    successful(result)
+    assert not operations(calls)
+    rejected = {**options["overrides"], "fixture_journal_overrides": ["ForwardToSyslog=yes"]}
+    result, calls, _ = system_run(tags=options["tags"], overrides=rejected)
+    assert result.returncode != 0 and not operations(calls)
+    result, calls, _ = system_run(**options)
+    successful(result)
+    assert operations(calls) == [
+        *expected[:2],
+        {"name": "rsyslog.service", "state": "stopped", "enabled": False, "masked": True},
+        *expected[2:],
+    ]
+    saved = next(i for i, call in enumerate(calls) if call["options"].get("dest") == "/etc/rsyslog.logrotate.skynet-retired")
+    withdrawn = next(
+        i
+        for i, call in enumerate(calls)
+        if call["options"].get("path") == "/etc/logrotate.d/rsyslog" and call["options"].get("state") == "absent"
+    )
+    stopped = next(i for i, call in enumerate(calls) if call["options"].get("name") == "rsyslog.service")
+    assert saved < withdrawn < stopped
 
 
 @pytest.mark.parametrize(("changed", "drift", "expected"), [(False, [], []), (True, [], ["p0", "p1"]), (False, ["p1"], ["p1"])])

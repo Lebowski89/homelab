@@ -1,6 +1,10 @@
+import json
+import runpy
 from pathlib import Path
 
+import pytest
 import yaml
+from jinja2 import Environment, StrictUndefined
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ROLE_DIR = REPO_ROOT / "ansible/roles/native_services"
@@ -24,6 +28,7 @@ def test_native_alloy_configuration_and_service_permissions_are_safe():
         "owner": "root",
         "group": "{{ alloy_native_group }}",
         "mode": "0640",
+        "validate": "/usr/bin/alloy validate %s",
     }
     assert service["ansible.builtin.systemd_service"]["enabled"] is True
     assert service["ansible.builtin.systemd_service"]["state"] == "started"
@@ -31,6 +36,37 @@ def test_native_alloy_configuration_and_service_permissions_are_safe():
         "name": "{{ alloy_native_service_name }}",
         "state": "restarted",
     }
+
+
+def test_independent_journal_probe_observes_other_units_and_keeps_last_good_sample(tmp_path, monkeypatch):
+    probe_path = REPO_ROOT / "ansible/roles/system/files/skynet-alloy-journal-probe.py"
+    main = runpy.run_path(probe_path)["main"]
+    output = tmp_path / "alloy_journal_probe.prom"
+    unit = "skynet-alloy-journal-probe.service"
+    monkeypatch.setitem(main.__globals__, "OUTPUT", output)
+    activity = [{"UNIT": unit}, {"_SYSTEMD_UNIT": unit}]
+    errors = [{"MESSAGE": "failed to read journal entry"}, {"MESSAGE": "unrelated notice"}]
+
+    def query(*args):
+        return [json.dumps(entry) for entry in (errors if "--unit=alloy.service" in args else activity)]
+
+    monkeypatch.setitem(main.__globals__, "query", query)
+    main()
+    assert "skynet_alloy_journal_recent_activity 0\n" in output.read_text()
+    activity.append({"_SYSTEMD_UNIT": "example.service"})
+    main()
+    valid_sample = output.read_text()
+    assert "skynet_alloy_journal_recent_activity 1\n" in valid_sample
+    assert "skynet_alloy_journal_recent_read_errors 1\n" in valid_sample
+    assert "failed to read" not in valid_sample and "unrelated notice" not in valid_sample
+
+    def failed_query(*args):
+        raise RuntimeError("journal unavailable")
+
+    monkeypatch.setitem(main.__globals__, "query", failed_query)
+    with pytest.raises(RuntimeError, match="journal unavailable"):
+        main()
+    assert output.read_text() == valid_sample
 
 
 def test_native_alloy_collects_journal_without_podman_socket_or_root_service_override():
@@ -98,7 +134,16 @@ def test_native_alloy_keeps_privacy_stack_visibility_to_systemd_lifecycle():
     assert "loki.process" not in config
     assert "local.file_match" not in config
     assert "loki.source.file" not in config
-    assert "prometheus." not in config
+    template = Environment(undefined=StrictUndefined).from_string(config)
+    assert "prometheus." not in template.render(alloy_native_loki_url="https://loki.example.test/loki/api/v1/push")
+    monitored = template.render(
+        alloy_native_loki_url="https://loki.example.test/loki/api/v1/push",
+        alloy_native_prometheus_url="https://prometheus.example.test/api/v1/write",
+    )
+    assert 'prometheus.scrape "native_metrics"' in monitored
+    assert '"127.0.0.1:12345"' in monitored
+    assert "https://prometheus.example.test/api/v1/write" in monitored
+    assert "insecure_skip_verify" not in monitored
     assert "output.log" not in config
 
     forbidden_observability_keys = {

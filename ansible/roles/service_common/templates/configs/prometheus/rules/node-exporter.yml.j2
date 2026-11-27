@@ -227,3 +227,91 @@ groups:
           summary: "Load average high on {{ '{{' }} $labels.instance {{ '}}' }}"
           description: "15-minute load average on {{ '{{' }} $labels.instance {{ '}}' }} is high relative to CPU count."
           priority: "6"
+
+  - name: native-alloy.rules
+    rules:
+      - alert: NativeAlloyUnavailable
+        expr: |
+          (
+            node_systemd_unit_state{job="node-exporter",name="alloy.service",state="active"} == 1
+            or on(instance) up{job="node-exporter",instance="{{ services_controller_host }}"} == 1
+          )
+          unless on(instance) (
+            up{job="alloy-native"} == 1
+            and on(instance) loki_source_journal_target_lines_total{job="alloy-native"}
+            and on(instance) loki_write_sent_entries_total{job="alloy-native"}
+          )
+          or on(instance) node_systemd_unit_state{job="node-exporter",name="alloy.service",state=~"inactive|failed"} == 1
+        for: 5m
+        labels:
+          severity: warning
+          collector: alloy-native
+        annotations:
+          summary: "Native Alloy metrics missing or service inactive on {{ '{{' }} $labels.instance {{ '}}' }}"
+          priority: "6"
+
+      - alert: NativeAlloyJournalProbeMissing
+        expr: |
+          up{job="node-exporter",instance="{{ services_controller_host }}"} == 1
+          unless on(instance) (time() - skynet_alloy_journal_probe_timestamp_seconds{job="node-exporter"} < 300)
+        for: 5m
+        labels:
+          severity: warning
+          collector: alloy-native
+        annotations:
+          summary: "Native Alloy journal probe stale or missing on {{ '{{' }} $labels.instance {{ '}}' }}"
+          priority: "6"
+
+      - alert: NativeAlloyJournalErrors
+        expr: |
+          (
+            skynet_alloy_journal_recent_read_errors{job="node-exporter"} >= 2
+            and on(instance) (time() - skynet_alloy_journal_probe_timestamp_seconds{job="node-exporter"} < 300)
+          )
+          or on(instance)
+          sum by(instance) (increase(loki_source_journal_target_parsing_errors_total{job="alloy-native",error="no_message"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          collector: alloy-native
+        annotations:
+          summary: "Sustained native Alloy journal errors on {{ '{{' }} $labels.instance {{ '}}' }}"
+          priority: "6"
+
+      - alert: NativeAlloyLokiDrops
+        expr: sum by(instance) (increase(loki_write_dropped_entries_total{job="alloy-native"}[5m])) > 0
+        labels:
+          severity: warning
+          collector: alloy-native
+        annotations:
+          summary: "Native Alloy dropped Loki entries on {{ '{{' }} $labels.instance {{ '}}' }}"
+          priority: "6"
+
+      - alert: NativeAlloyLokiRetries
+        expr: sum by(instance) (increase(loki_write_batch_retries_total{job="alloy-native"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+          collector: alloy-native
+        annotations:
+          summary: "Sustained native Alloy Loki retries on {{ '{{' }} $labels.instance {{ '}}' }}"
+          priority: "6"
+
+      - alert: NativeAlloyIngestionStalled
+        expr: |
+          (
+            increase(loki_source_journal_target_lines_total{job="alloy-native"}[5m]) == 0
+            and on(instance) skynet_alloy_journal_recent_activity{job="node-exporter"} == 1
+            and on(instance) (time() - skynet_alloy_journal_probe_timestamp_seconds{job="node-exporter"} < 300)
+          )
+          or on(instance) (
+            increase(loki_source_journal_target_lines_total{job="alloy-native"}[5m]) > 0
+            unless on(instance) increase(loki_write_sent_entries_total{job="alloy-native"}[5m]) > 0
+          )
+        for: 10m
+        labels:
+          severity: warning
+          collector: alloy-native
+        annotations:
+          summary: "Native Alloy ingestion stalled despite activity on {{ '{{' }} $labels.instance {{ '}}' }}"
+          priority: "6"

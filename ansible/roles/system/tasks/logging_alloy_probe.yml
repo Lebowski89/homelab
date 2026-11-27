@@ -1,0 +1,30 @@
+---
+
+- name: System | Install the journal probe
+  ansible.builtin.copy:
+    src: skynet-alloy-journal-probe.py
+    dest: /usr/local/bin/skynet-alloy-journal-probe
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: System | Install the journal probe units
+  ansible.builtin.copy:
+    src: "{{ system_alloy_probe_unit }}"
+    dest: "/etc/systemd/system/{{ system_alloy_probe_unit }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - skynet-alloy-journal-probe.service
+    - skynet-alloy-journal-probe.timer
+  loop_control:
+    loop_var: system_alloy_probe_unit
+
+- name: System | Enable the independent journal probe
+  when: not ansible_check_mode
+  ansible.builtin.systemd_service:
+    name: skynet-alloy-journal-probe.timer
+    daemon_reload: true
+    enabled: true
+    state: started

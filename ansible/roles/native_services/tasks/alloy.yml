@@ -89,6 +89,29 @@
     owner: root
     group: "{{ alloy_native_group }}"
     mode: "0640"
+    validate: /usr/bin/alloy validate %s
+  notify: Restart Alloy
+
+- name: Alloy native | Ensure the package unit drop-in directory exists
+  when: alloy_native_service_account_available
+  ansible.builtin.file:
+    path: "/etc/systemd/system/{{ native_services_unit }}.service.d"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Alloy native | Limit journal writes from this unit
+  when: alloy_native_service_account_available
+  ansible.builtin.copy:
+    dest: "/etc/systemd/system/{{ native_services_unit }}.service.d/60-skynet-log-rate.conf"
+    content: |
+      [Service]
+      LogRateLimitIntervalSec=30s
+      LogRateLimitBurst=30
+    owner: root
+    group: root
+    mode: "0644"
   notify: Restart Alloy
 
 - name: Native services | Record adopted alloy configuration
@@ -99,6 +122,7 @@
   vars:
     native_services_adopted_files:
       - "{{ alloy_native_config_path }}"
+      - "/etc/systemd/system/{{ native_services_unit }}.service.d/60-skynet-log-rate.conf"
 
 - name: Alloy native | Enable and start service
   when:
@@ -106,5 +130,6 @@
     - alloy_native_service_account_available
   ansible.builtin.systemd_service:
     name: "{{ alloy_native_service_name }}"
+    daemon_reload: true
     enabled: true
     state: started

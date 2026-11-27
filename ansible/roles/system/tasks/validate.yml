@@ -34,6 +34,8 @@
   loop:
     - "{{ system_packages_enabled }}"
     - "{{ system_log_capacity_enabled }}"
+    - "{{ system_journal_only_enabled }}"
+    - "{{ system_alloy_journal_probe_enabled }}"
     - "{{ system_sysctl_enabled }}"
     - "{{ system_limits_enabled }}"
     - "{{ system_guest_agent_enabled }}"

@@ -155,15 +155,90 @@ The signal reopens logs without restarting Traefik. Alloy matches only
 The `system_logging` tag selects these logging tasks.
 `system_log_capacity_enabled: true` enables them, and mgt already opts in.
 The tasks enable both persistent quarter-hour timers and cap the persistent
-journal at 1 GiB with `SystemKeepFree=5G`. The role flushes volatile journal
-entries after applying the settings. Deploy the updated Traefik artifacts
-alongside the system logging tasks to move its policy outside
+journal at 1 GiB with `SystemKeepFree=5G`, compress entries, and set a
+128 MiB runtime journal limit. The normal journal severity and sync interval
+stay in effect. Retention limits govern journal files and cannot reserve space
+against other writers or immediately shrink active files. The role flushes
+volatile journal entries after applying the settings. Deploy the updated
+Traefik artifacts alongside the system logging tasks to move its policy outside
 `/etc/logrotate.d` and retire the old blocking hook.
 Traefik still rotates daily or when its file exceeds 25 MiB at a check.
 On Ubuntu the role removes the duplicate cloud-init rule only when dpkg
 identifies it as obsolete and both definitions match the package checksum.
 Prometheus warns at 80% filesystem use, alerts critically at 90%, and reports
 failed logrotate and Traefik reopen units through Node Exporter.
+
+### Journald-first hosts and native Alloy
+
+Set `system_journal_only_enabled: true` only after checking local file
+consumers, remote syslog listeners and forwarding, security agents and backups.
+mgt opts in. The system role activates persistent journald before stopping,
+disabling and masking rsyslog. It saves its legacy logrotate policy outside the
+include directory so it cannot rotate historical files or signal a stopped
+service. The package and log files remain in place. Use
+`journalctl -u ssh.service`, `journalctl -t sudo`, and
+`journalctl -k` for authentication and kernel records. The opt-in does not
+change the audit subsystem. To restore rsyslog, remove the opt-in, reapply
+journald settings, restore `/etc/rsyslog.logrotate.skynet-retired` to
+`/etc/logrotate.d/rsyslog` if no file already exists there, then unmask
+and enable/start rsyslog.
+
+Native Alloy keeps the existing journal position, privacy filters and verified
+Loki HTTPS endpoint. Deploy and reconciliation keep installed packages;
+`skynet update alloy-native` is the explicit package upgrade. The package
+unit permits 30 messages per 30 seconds before journald's disk-space multiplier.
+Rate limiting can drop messages during a burst. Check the journal for
+suppression notices, inspect the first Alloy error with
+`journalctl -u alloy.service`, and check the files with `journalctl --verify`.
+Retain journal files and Alloy positions for diagnosis.
+
+Alloy scrapes its existing loopback endpoint and remote-writes only journal
+and Loki delivery counters and scrape availability over the existing internal
+Prometheus HTTPS route. `system_alloy_journal_probe_enabled` adds an independent
+observation using the standard native Node Exporter account and textfile
+collector. The probe publishes only counts, activity and freshness. It detects
+journal read failures that the Alloy parsing counter does not cover. A stalled
+reader alert requires recent independent journal activity; a stalled delivery
+alert requires lines read without entries sent. A quiet host does not fire
+either. Use the `collector=alloy-native` alerts and inspect
+`alloy.service` and `skynet-alloy-journal-probe.service` locally. The
+alloy-mgt container keeps its separate file and container metrics duties.
+
+### Container and application log sources
+
+On mgt, Podman 5.7.0 supports health events but lacks
+`healthcheck_events_on_change`. Blacktop's packaged 5.4.2 also predates the
+option. Keep existing health check schedules, local health result history
+(five entries of up to 500 characters by default), and lifecycle and health
+events on these releases.
+Once a supported package ships transition-only events, verify rootful and
+rootless configuration precedence and healthy/unhealthy/recovery events before
+enabling the two engine options. No health events are disabled to approximate
+that behavior.
+
+Retain Traefik's full existing access-log coverage. A sample of 2,108 requests
+contained only 18 on common probe paths, so a global status or latency filter
+would discard useful traffic for little demonstrated benefit. If a specific
+probe becomes a significant source, evaluate a dedicated probe route before
+reducing access-log coverage.
+
+For Technitium, seven days is a candidate for **operational log files** after
+confirming incident review and cluster troubleshooting needs. The mgt persisted
+setting was 365 days during the November 2026 inspection. Set the new value
+through Technitium's logging settings and leave DNS query logging disabled.
+Review statistics retention independently; changing the operational log
+setting does not change statistics or query log storage.
+
+Loki keeps its 168-hour retention, compaction, and WAL. Check compaction with
+`loki_compactor_apply_retention_last_successful_run_timestamp_seconds` and
+compare ingestion counters over the same interval before tuning log producers.
+
+On mgt, the two one-minute samples on 27 November 2026 showed 115,027 bytes of
+growth across active syslog, auth and kernel files before retirement and zero
+after. Journal traffic was 532 and 594 entries respectively. Alloy had no drops,
+retries or deleted journal descriptors in either window. The windows capture
+different workload, so this measures elimination of the duplicate file writes
+and does not establish a reduction in total I/O or long-term stability.
 
 All file discovery starts at the current end and ignores files older than 24
 hours on first discovery. Once a target has a saved position, persistent Alloy
