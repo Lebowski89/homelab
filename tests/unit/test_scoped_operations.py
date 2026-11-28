@@ -1,15 +1,108 @@
 """Exercise explicit operation selection without inventory, secrets or runtimes."""
 
+import json
 import os
 import subprocess
 import sys
 from copy import deepcopy
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
+from threading import Thread
+from urllib.parse import parse_qs
 
 import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.integration
+def test_technitium_logging_reconciles_only_changed_fields_on_the_local_api(tmp_path):
+    current = {
+        "maxLogFileDays": 365,
+        "maxStatFileDays": 30,
+        "logQueries": True,
+        "enableInMemoryStats": False,
+        "loggingType": "File",
+        "ignoreResolverLogs": False,
+    }
+    reads, writes = [], []
+
+    class SettingsHandler(BaseHTTPRequestHandler):
+        def respond(self, status):
+            payload = json.dumps({"status": status, "response": current}).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+
+        def do_GET(self):
+            reads.append(self.path)
+            self.respond("ok" if self.path == "/api/settings/get" else "error")
+
+        def do_POST(self):
+            fields = parse_qs(self.rfile.read(int(self.headers["Content-Length"])).decode())
+            writes.append((self.path, fields))
+            if self.path != "/api/settings/set" or fields != {"maxLogFileDays": ["7"], "logQueries": ["False"]}:
+                self.respond("error")
+                return
+            current.update(maxLogFileDays=7, logQueries=False)
+            self.respond("ok")
+
+    with HTTPServer(("127.0.0.1", 0), SettingsHandler) as server:
+        worker = Thread(target=server.serve_forever, daemon=True)
+        worker.start()
+        try:
+            # Run the real tagged operation with only its public inventory inputs.
+            for relative in ("operations.yml", "operations/technitium-logging.yml", "group_vars/all/services.yml"):
+                target = tmp_path / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text((ROOT / "ansible" / relative).read_text())
+            inventory = tmp_path / "inventory.yml"
+            inventory.write_text(
+                yaml.safe_dump(
+                    {
+                        "tags_service_controller": {
+                            "hosts": {
+                                "fixture": {
+                                    "ansible_connection": "local",
+                                    "ansible_python_interpreter": sys.executable,
+                                    "technitium_logging_port": server.server_port,
+                                }
+                            }
+                        }
+                    }
+                )
+            )
+            config = tmp_path / "ansible.cfg"
+            config.write_text("[defaults]\nretry_files_enabled=False\n")
+            env = {**os.environ, "ANSIBLE_CONFIG": str(config), "TECHNITIUM_LOGGING_API_TOKEN": "synthetic-test-token"}
+            command = [
+                str(Path(sys.executable).with_name("ansible-playbook")),
+                "-i",
+                str(inventory),
+                str(tmp_path / "operations.yml"),
+                "--tags",
+                "technitium_logging",
+            ]
+            offline_env = {**env, "TECHNITIUM_LOGGING_API_TOKEN": ""}
+            preview = subprocess.run(command + ["--check"], env=offline_env, capture_output=True, text=True, timeout=30)
+            assert preview.returncode == 0 and not reads and not writes
+            for check, expected_changes in ((True, 1), (False, 1), (False, 0)):
+                result = subprocess.run(command + (["--check"] if check else []), env=env, capture_output=True, text=True, timeout=30)
+                assert result.returncode == 0, result.stdout + result.stderr
+                assert f"changed={expected_changes}" in result.stdout
+                assert "synthetic-test-token" not in result.stdout + result.stderr
+                assert len(writes) == (0 if check else 1)
+            assert reads == ["/api/settings/get"] * 3
+            del current["logQueries"]
+            invalid = subprocess.run(command, env=env, capture_output=True, text=True, timeout=30)
+            assert invalid.returncode != 0 and len(writes) == 1
+            assert "Technitium logging reconciliation failed on fixture" in invalid.stdout
+        finally:
+            server.shutdown()
+            worker.join(timeout=3)
 
 
 @pytest.mark.integration

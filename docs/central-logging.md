@@ -115,18 +115,15 @@ compressed, backup, debug, trace, and unrelated log trees.
 | ImageMaid | `/config/logs/imagemaid.log` | `<plex-appdata>/imagemaid/logs/imagemaid.log` | text | ImageMaid v1.2.0 logger |
 | Seerr | `/app/config/logs/seerr.log` | `<controller-appdata>/seerr/logs/seerr.log` | text | stable active symlink to Seerr dated log; archives excluded |
 | UniFi | `/var/log/unifi/server.log` | `<controller-appdata>/unifi-os/var-log/unifi/server.log` | text | selected active Network Server operational log |
-| Technitium | `/etc/dns/logs/*.log` | `<local-appdata>/technitium/logs/*.log` | text | daily application logs; 30-day application default; query logging is not enabled |
+| Technitium | `/etc/dns/logs/*.log` | `<local-appdata>/technitium/logs/*.log` | text | daily operational logs, seven-day managed retention |
 
 The less-obvious selections were checked against the versions pinned by the
 catalog: NZBHydra2 Hotio `release-v8.9.0` uses its `/config/app` data folder,
 ImageMaid v1.2.0 creates `logs/imagemaid.log`, Seerr v3.4.1 maintains the
 `seerr.log` active symlink, UniFi OS Server v1.7.0 persists `/var/log` with the
-Network application at `unifi/server.log`, and Technitium 15.5 stores daily logs
-under `/etc/dns/logs`. Technitium's query-log option remains disabled in the
-repository; its `*.log` pattern excludes compressed archives and Alloy ignores
-files older than 24 hours when first discovered. Existing persisted Technitium
-settings should still be confirmed after deployment because image environment
-defaults do not override an already-created DNS configuration.
+Network application at `unifi/server.log`. For Technitium, the `*.log` pattern
+collects daily operational logs and excludes compressed archives. Alloy ignores
+files older than 24 hours when first discovered.
 
 Traefik uses rename/create rotation rather than `copytruncate`. The policy
 recreates the active file as mode `0640`, keeps at most seven rotations/seven
@@ -234,12 +231,39 @@ would discard useful traffic for little demonstrated benefit. If a specific
 probe becomes a significant source, evaluate a dedicated probe route before
 reducing access-log coverage.
 
-For Technitium, seven days is a candidate for **operational log files** after
-confirming incident review and cluster troubleshooting needs. The mgt persisted
-setting was 365 days during the November 2026 inspection. Set the new value
-through Technitium's logging settings and leave DNS query logging disabled.
-Review statistics retention independently; changing the operational log
-setting does not change statistics or query log storage.
+### Technitium DNS telemetry
+
+Use the `technitium_logging` operation in `ansible/operations.yml` to enforce
+seven days of operational files and 30 days of disk-backed dashboard
+statistics. It keeps built-in per-query logging and in-memory statistics
+disabled. In-memory mode is optional upstream and offers only the last hour
+of dashboard data. DNS apps with independent query logging and retention
+require separate review.
+
+Run `ansible-playbook ansible/operations.yml -i <inventory> --tags technitium_logging
+--limit <dns-host>` for one member at a time. Use a scoped API token with
+Settings View and Modify from Infisical `/Technitium/LOGGING_API_TOKEN` or supply
+it through the operator's private `TECHNITIUM_LOGGING_API_TOKEN` environment.
+Check mode previews policy without a token and compares live settings when an
+explicit token is available. Reconciliation uses the node's loopback settings
+API on port 5380 by default, reads the four settings, and posts only drift.
+Each node needs its own reconciliation. Fresh container environment defaults
+are bootstrap-only, so use the same API operation for new installs.
+
+Keep file logging for operational errors, audit records, and the web console's
+file listing and viewing. The existing container file sources preserve Loki's
+`service="technitium", source="file"` streams. Console-only output could go
+through journald or Docker Alloy, but new records would leave the web console's
+file history and require different Loki queries. Avoid enabling both sinks for
+ordinary operational messages.
+
+The server expires date-named `.log`, `.stat`, and `.dstat` files on its
+own timers using UTC date cutoffs. In 15.6.2, setting either retention period
+schedules its first cleanup after about one minute and repeats it hourly.
+Check storage after cleanup and preserve unrelated files. Retention reclaims
+older data. New operational entries and dashboard statistics continue at the
+normal write cadence. Review DNS, VIPs, and cluster health before proceeding
+from one member to the next.
 
 Loki keeps its 168-hour retention, compaction, and WAL. Check compaction with
 `loki_compactor_apply_retention_last_successful_run_timestamp_seconds` and
