@@ -11,7 +11,7 @@ jdownloader2:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: docker.io/jlesage/jdownloader-2:v26.09.1
+  image: docker.io/jlesage/jdownloader-2:v26.11.1
   ################################
   # ENVIRONMENT/SECRETS
   ################################

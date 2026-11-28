@@ -11,7 +11,7 @@ homepage:
   ################################
   # IMAGE/PROCESS
   ################################
-  image: ghcr.io/gethomepage/homepage:v2.7.0
+  image: ghcr.io/gethomepage/homepage:v2.8.0
   ################################
   # ENVIRONMENT/SECRETS
   ################################
