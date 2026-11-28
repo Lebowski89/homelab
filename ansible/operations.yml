@@ -1,6 +1,21 @@
 ---
 
 # Every manual workflow requires its explicit tag; all/default selects none.
+- name: Reconcile Technitium logging and statistics retention
+  hosts: '{{ services_controller_inventory_group }}:{{ services_plex_host }}:tags_technitium_native'
+  vars_files:
+    - group_vars/all/services.yml
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  tasks:
+    - name: Reconcile settings on the selected DNS server
+      ansible.builtin.include_tasks:
+        file: operations/technitium-logging.yml
+        apply:
+          tags: [technitium_logging]
+      tags: [never, technitium_logging]
+
 - name: Manage mgt private endpoint policy independently of applications
   hosts: '{{ services_controller_inventory_group }}'
   vars_files:

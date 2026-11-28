@@ -1,0 +1,145 @@
+---
+
+- name: Technitium | Validate the local web port
+  ansible.builtin.assert:
+    that:
+      - technitium_logging_port | default(5380) is integer
+      - technitium_logging_port | default(5380) >= 1
+      - technitium_logging_port | default(5380) <= 65535
+
+- name: Technitium | Preview retention policy without credentials in check mode
+  when:
+    - ansible_check_mode
+    - not lookup('ansible.builtin.env', 'TECHNITIUM_LOGGING_API_TOKEN')
+  ansible.builtin.debug:
+    msg: >-
+      Would enforce seven days of operational logs, 30 days of disk-backed dashboard
+      statistics and disabled per-query logging. Set an explicit API token for a live check-mode comparison.
+
+- name: Technitium | Reconcile only node-local logging and statistics settings
+  when: not ansible_check_mode or lookup('ansible.builtin.env', 'TECHNITIUM_LOGGING_API_TOKEN') | length > 0
+  vars:
+    technitium_logging_api: "http://127.0.0.1:{{ technitium_logging_port | default(5380) }}/api/settings"
+    technitium_logging_policy:
+      maxLogFileDays: 7
+      maxStatFileDays: 30
+      logQueries: false
+      enableInMemoryStats: false
+  block:
+    - name: Technitium | Resolve the scoped Settings API credential
+      ansible.builtin.set_fact:
+        technitium_logging_token: >-
+          {{ lookup('ansible.builtin.env', 'TECHNITIUM_LOGGING_API_TOKEN')
+             or lookup('infisical.vault.read_secrets',
+                       **(infisical_lookup_default_params | combine({'path': '/Technitium', 'secret_name': 'LOGGING_API_TOKEN'}))).value }}
+      no_log: true
+      diff: false
+
+    - name: Technitium | Verify the credential and retention policy
+      ansible.builtin.assert:
+        that:
+          - technitium_logging_token is string
+          - technitium_logging_token | trim | length > 0
+          - technitium_logging_policy.keys() | sort == ['enableInMemoryStats', 'logQueries', 'maxLogFileDays', 'maxStatFileDays']
+          - technitium_logging_policy.enableInMemoryStats is sameas false
+          - technitium_logging_policy.logQueries is sameas false
+          - technitium_logging_policy.maxLogFileDays is integer
+          - technitium_logging_policy.maxLogFileDays > 0
+          - technitium_logging_policy.maxStatFileDays is integer
+          - technitium_logging_policy.maxStatFileDays > 0
+      no_log: true
+      diff: false
+
+    - name: Technitium | Read the node's settings
+      # checkov:skip=CKV2_ANSIBLE_1:Member-local loopback API reached over authenticated SSH.
+      ansible.builtin.uri:
+        url: "{{ technitium_logging_api }}/get"
+        headers:
+          Authorization: "Bearer {{ technitium_logging_token }}"
+        use_proxy: false
+        follow_redirects: none
+        unredirected_headers: [Authorization]
+        timeout: 10
+      register: technitium_logging_current
+      failed_when: technitium_logging_current.status != 200 or technitium_logging_current.json.status | default('') != 'ok'
+      check_mode: false
+      no_log: true
+      diff: false
+
+    - name: Technitium | Require the supported settings response
+      ansible.builtin.assert:
+        that:
+          - technitium_logging_current.json.response is mapping
+          - technitium_logging_current.json.response.maxLogFileDays is integer
+          - technitium_logging_current.json.response.maxStatFileDays is integer
+          - technitium_logging_current.json.response.logQueries is boolean
+          - technitium_logging_current.json.response.enableInMemoryStats is boolean
+          - technitium_logging_current.json.response.loggingType in ['File', 'Console', 'FileAndConsole']
+      no_log: true
+      diff: false
+
+    - name: Technitium | Compute the changes to managed fields
+      ansible.builtin.set_fact:
+        technitium_logging_delta: >-
+          {%- set changes = namespace(delta={}) -%}
+          {%- for key, value in technitium_logging_policy.items() if technitium_logging_current.json.response[key] != value -%}
+          {%- set changes.delta = changes.delta | combine({key: value}) -%}
+          {%- endfor -%}
+          {{ changes.delta }}
+      no_log: true
+      diff: false
+
+    - name: Technitium | Show managed changes in check mode
+      when: ansible_check_mode
+      ansible.builtin.debug:
+        var: technitium_logging_delta
+      changed_when: technitium_logging_delta | length > 0
+
+    - name: Technitium | Write only changed fields
+      when:
+        - not ansible_check_mode
+        - technitium_logging_delta | length > 0
+      # checkov:skip=CKV2_ANSIBLE_1:Member-local loopback API reached over authenticated SSH.
+      ansible.builtin.uri:
+        url: "{{ technitium_logging_api }}/set"
+        method: POST
+        body_format: form-urlencoded
+        body: "{{ technitium_logging_delta }}"
+        headers:
+          Authorization: "Bearer {{ technitium_logging_token }}"
+        use_proxy: false
+        follow_redirects: none
+        unredirected_headers: [Authorization]
+        timeout: 10
+      register: technitium_logging_result
+      failed_when: technitium_logging_result.status != 200 or technitium_logging_result.json.status | default('') != 'ok'
+      changed_when: true
+      no_log: true
+      diff: false
+
+    - name: Technitium | Verify the API returned the desired settings
+      when:
+        - not ansible_check_mode
+        - technitium_logging_delta | length > 0
+      ansible.builtin.assert:
+        that: technitium_logging_result.json.response[technitium_logging_setting.key] == technitium_logging_setting.value
+      loop: "{{ technitium_logging_policy | dict2items }}"
+      loop_control:
+        loop_var: technitium_logging_setting
+      no_log: true
+      diff: false
+  rescue:
+    - name: Technitium | Preserve failure for this node
+      ansible.builtin.fail:
+        msg: >-
+          Technitium logging reconciliation failed on {{ inventory_hostname }}.
+          Verify the local web port, Settings View/Modify permission and server settings.
+          Inspect the node before retrying or proceeding to another member.
+  always:
+    - name: Technitium | Clear credentials and raw API responses
+      ansible.builtin.set_fact:
+        technitium_logging_token: ""
+        technitium_logging_current: {}
+        technitium_logging_result: {}
+      no_log: true
+      diff: false
