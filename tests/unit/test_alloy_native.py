@@ -1,6 +1,9 @@
 import json
 import runpy
+import subprocess
+from io import BytesIO
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import pytest
 import yaml
@@ -45,7 +48,7 @@ def test_independent_journal_probe_observes_other_units_and_keeps_last_good_samp
     output = tmp_path / "alloy_journal_probe.prom"
     unit = "skynet-alloy-journal-probe.service"
     monkeypatch.setitem(main.__globals__, "OUTPUT", output)
-    activity = [
+    excluded = [
         {"UNIT": unit, "MESSAGE": "probe service started"},
         {"_SYSTEMD_UNIT": unit, "MESSAGE": "probe service output"},
         {"OBJECT_SYSTEMD_UNIT": "skynet-alloy-journal-probe.timer", "MESSAGE": "probe timer started"},
@@ -53,26 +56,56 @@ def test_independent_journal_probe_observes_other_units_and_keeps_last_good_samp
         {"CONTAINER_NAME": "mullvad-browser", "MESSAGE": "filtered container log"},
         {"_SYSTEMD_UNIT": "example.service"},
     ]
+    activity = []
+    status = 0
+    suffix = b""
     errors = [{"MESSAGE": "failed to read journal entry"}, {"MESSAGE": "unrelated notice"}]
+    journal = MagicMock()
+    journal.__enter__.return_value = journal
+    journal.wait.side_effect = lambda: status
+
+    def start_journal(command, *, stdout):
+        assert {"--since=-5min", "--reverse", "--no-tail"} <= set(command)
+        assert stdout == subprocess.PIPE
+        data = b"".join(json.dumps(entry).encode() + b"\n" for entry in activity) + suffix
+        journal.stdout = BytesIO(data)
+        journal.poll.side_effect = lambda: None if journal.stdout.tell() < len(data) else status
+        return journal
 
     def query(*args):
-        return [json.dumps(entry) for entry in (errors if "--unit=alloy.service" in args else activity)]
+        assert "--unit=alloy.service" in args
+        return [json.dumps(entry) for entry in errors]
 
+    monkeypatch.setattr(subprocess, "Popen", start_journal)
     monkeypatch.setitem(main.__globals__, "query", query)
     main()
     assert "skynet_alloy_journal_recent_activity 0\n" in output.read_text()
+
+    activity[:] = excluded
+    main()
+    assert "skynet_alloy_journal_recent_activity 0\n" in output.read_text()
+
+    activity[:] = excluded * 12
     activity.append({"_SYSTEMD_UNIT": "example.service", "MESSAGE": "forwardable journal entry"})
+    suffix = b"intentionally unread data"
     main()
     valid_sample = output.read_text()
     assert "skynet_alloy_journal_recent_activity 1\n" in valid_sample
     assert "skynet_alloy_journal_recent_read_errors 1\n" in valid_sample
-    assert "failed to read" not in valid_sample and "unrelated notice" not in valid_sample
+    assert not any(message in valid_sample for message in ("failed to read", "unrelated notice", "forwardable journal entry"))
+    journal.kill.assert_called_once()
 
-    def failed_query(*args):
-        raise RuntimeError("journal unavailable")
+    activity[:] = excluded
+    suffix = b""
+    status = -9
+    with pytest.raises(subprocess.CalledProcessError) as failure:
+        main()
+    assert failure.value.returncode == -9
+    assert output.read_text() == valid_sample
 
-    monkeypatch.setitem(main.__globals__, "query", failed_query)
-    with pytest.raises(RuntimeError, match="journal unavailable"):
+    status = 0
+    suffix = b'{"MESSAGE":'
+    with pytest.raises(RuntimeError, match="Incomplete journal activity record"):
         main()
     assert output.read_text() == valid_sample
 
@@ -175,9 +208,13 @@ def test_native_alloy_keeps_privacy_stack_visibility_to_systemd_lifecycle():
     monitored = template.render(
         alloy_native_loki_url="https://loki.example.test/loki/api/v1/push",
         alloy_native_prometheus_url="https://prometheus.example.test/api/v1/write",
+        inventory_hostname="edge-inventory",
+        ansible_facts={"hostname": "edge-os"},
     )
     assert 'prometheus.scrape "native_metrics"' in monitored
     assert '"127.0.0.1:12345"' in monitored
+    assert 'instance    = "edge-inventory",' in monitored
+    assert "host   = constants.hostname" in monitored
     assert "https://prometheus.example.test/api/v1/write" in monitored
     assert "insecure_skip_verify" not in monitored
     assert "output.log" not in config

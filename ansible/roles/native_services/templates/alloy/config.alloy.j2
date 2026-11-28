@@ -60,7 +60,7 @@ loki.source.journal "system" {
 prometheus.scrape "native_metrics" {
   targets = [{
     __address__ = "127.0.0.1:12345",
-    instance    = constants.hostname,
+    instance    = {{ inventory_hostname | tojson }},
   }]
   job_name        = "alloy-native"
   scrape_interval = "30s"

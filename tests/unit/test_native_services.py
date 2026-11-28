@@ -491,6 +491,7 @@ def test_selected_service_preserves_target_overrides_and_handler_isolation(nativ
     if entry == "alloy":
         assert templates[0]["options"]["dest"] == "/fixture/alloy/config"
         assert "https://loki.private.example.test:9443/loki/api/v1/push" in templates[0]["content"]
+        assert 'instance    = "selected",' in templates[0]["content"]
         user = next(call["options"] for call in calls if call["module"] == "user")
         assert user["name"] == "fixture-alloy" and user["append"] is True
         assert user["groups"] == ["systemd-journal"]
